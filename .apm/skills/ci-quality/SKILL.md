@@ -11,6 +11,9 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 
 - primary lintはoxlint。
 - primary formatterはoxfmt。
+- Oxlint設定はrootに共通・基礎だけを置き、Next/React/Tailwindなどpackage固有設定は各packageからroot configを `extends` して分ける。
+- Oxfmt設定はroot一括にする。
+- Tailwind v4をOxlintで見る場合は `oxlint-tailwindcss` と `@tailwindcss/node` を一緒に入れる。
 - unit/integrationはVitest。
 - UI state、a11y、interactionはStorybook + Storybook test runner。
 - browser E2EはPlaywright。
@@ -38,6 +41,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - cache可能なtaskとpersistentなdev/storybookを分ける。
 - `check` はlint/format/typecheck/unit testの集合にする。
 - E2Eはbuild済みapp/APIを前提にし、artifactとして `test-results` と `playwright-report` を残す。
+- package cwdから `oxfmt .` を走らせるため、ignoreは `.next/**` だけでなく `**/.next/**` のようにmonorepo全体を覆う。
 
 ## Bun + Vitest
 

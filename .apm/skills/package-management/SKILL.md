@@ -9,6 +9,8 @@ description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追
 
 ## まず守る判断基準
 
+- Bun workspaceの外部依存versionはroot `workspaces.catalog` にexact versionで集約し、各packageでは `catalog:` を使う。
+- `bunfig.toml` の `[install] exact = true` と `.npmrc` の `save-exact=true` で `bun add` 時のexact保存を強制する。
 - `apps/*` は実行単位。Next.js web、Elysia API、将来のagent serverなどを置く。
 - `packages/*` は下位の共有ライブラリ。実行環境を持たない。
 - `apps/* -> packages/*` は許可。
