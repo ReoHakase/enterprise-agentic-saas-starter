@@ -1,0 +1,8 @@
+name: enterprise-agentic-saas-starter
+version: 1.0.0
+description: APM project for enterprise-agentic-saas-starter
+author: Reo Hakuta
+dependencies:
+  apm: []
+  mcp: []
+scripts: {}
