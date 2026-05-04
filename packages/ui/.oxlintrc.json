@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["../../.oxlintrc.json"],
+  "plugins": ["jsx-a11y", "react", "react-perf"],
+  "jsPlugins": ["oxlint-tailwindcss"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "tailwindcss/enforce-canonical": "warn",
+    "tailwindcss/enforce-shorthand": "warn",
+    "tailwindcss/enforce-sort-order": "warn",
+    "tailwindcss/no-conflicting-classes": "error",
+    "tailwindcss/no-deprecated-classes": "error",
+    "tailwindcss/no-duplicate-classes": "error",
+    "tailwindcss/no-hardcoded-colors": "warn",
+    "tailwindcss/no-unknown-classes": "error",
+    "tailwindcss/no-unnecessary-arbitrary-value": "warn",
+    "tailwindcss/no-unnecessary-whitespace": "error"
+  },
+  "env": {
+    "browser": true
+  },
+  "settings": {
+    "react": {
+      "version": "19.2.5"
+    },
+    "tailwindcss": {
+      "entryPoint": "src/styles/globals.css",
+      "callees": ["cn", "cva", "clsx"]
+    }
+  }
+}

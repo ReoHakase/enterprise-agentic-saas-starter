@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "node", "promise", "typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "**/.next/**",
+    ".turbo/**",
+    "**/.turbo/**",
+    "coverage/**",
+    "**/coverage/**",
+    "dist/**",
+    "**/dist/**",
+    "node_modules/**",
+    "**/node_modules/**",
+    "storybook-static/**",
+    "**/storybook-static/**",
+    "test-results/**",
+    "**/test-results/**",
+    "playwright-report/**"
+  ],
+  "env": {
+    "builtin": true,
+    "es2024": true
+  }
+}

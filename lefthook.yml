@@ -1,0 +1,16 @@
+pre-commit:
+  commands:
+    oxfmt:
+      glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
+      run: bunx oxfmt {staged_files}
+      stage_fixed: true
+      priority: 1
+    oxlint:
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: bunx oxlint {staged_files}
+      priority: 2
+
+pre-push:
+  commands:
+    check:
+      run: bun run check
