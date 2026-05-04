@@ -39,9 +39,10 @@
     "build": "turbo build",
     "check": "turbo check",
     "dev": "turbo dev",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
-    "lint": "oxlint .",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "format:skills": "oxfmt --config .oxfmtrc.skills.json",
+    "lint": "oxlint",
     "prepare": "lefthook install",
     "typecheck": "turbo typecheck"
   },

@@ -11,9 +11,9 @@
     "./hooks/*": "./src/hooks/*.ts"
   },
   "scripts": {
-    "lint": "oxlint .",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

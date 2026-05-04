@@ -7,9 +7,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "oxlint .",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

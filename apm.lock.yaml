@@ -12,6 +12,7 @@ local_deployed_files:
 - .agents/skills/error-handling
 - .agents/skills/frontend
 - .agents/skills/package-management
+- .agents/skills/shadcn
 - .cursor/skills/auth-email
 - .cursor/skills/backend-api
 - .cursor/skills/ci-quality
@@ -22,13 +23,4 @@ local_deployed_files:
 - .cursor/skills/error-handling
 - .cursor/skills/frontend
 - .cursor/skills/package-management
-- .github/skills/auth-email
-- .github/skills/backend-api
-- .github/skills/ci-quality
-- .github/skills/database
-- .github/skills/developer-environment
-- .github/skills/e2e-test
-- .github/skills/email
-- .github/skills/error-handling
-- .github/skills/frontend
-- .github/skills/package-management
+- .cursor/skills/shadcn
