@@ -14,6 +14,8 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - Oxlint設定はrootに共通・基礎だけを置き、Next/React/Tailwindなどpackage固有設定は各packageからroot configを `extends` して分ける。
 - Oxfmt設定はroot一括にする。
 - Tailwind v4をOxlintで見る場合は `oxlint-tailwindcss` と `@tailwindcss/node` を一緒に入れる。
+- backend/API/DB/Auth packageはReact/Next/Tailwind/jsx-a11y pluginを足さず、server TypeScript向けpluginに寄せる。
+- React Email packageはReact componentを書くため `react` / `react-perf` を使うが、Next/Tailwind/browser前提にはしない。
 - unit/integrationはVitest。
 - UI state、a11y、interactionはStorybook + Storybook test runner。
 - browser E2EはPlaywright。
@@ -46,6 +48,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 ## Bun + Vitest
 
 - Vitestを使うなら `bun run test`。`bun test` はBun自身のtest runnerなので混同しない。
+- 新規workspaceにはREADMEとVitest testを必ず置き、root `check` はlint/format/typecheck/testを含める。
 
 ## GitHub Actions
 

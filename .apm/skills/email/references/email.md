@@ -3,14 +3,14 @@
 ## render helper
 
 ```ts
-import { render } from "@react-email/render";
-import type { ReactElement } from "react";
+import { render } from "@react-email/render"
+import type { ReactElement } from "react"
 
 export async function renderEmail(component: ReactElement) {
-  const html = await render(component);
-  const text = await render(component, { plainText: true });
+  const html = await render(component)
+  const text = await render(component, { plainText: true })
 
-  return { html, text };
+  return { html, text }
 }
 ```
 
@@ -26,12 +26,12 @@ import {
   Preview,
   Section,
   Text,
-} from "@react-email/components";
+} from "@react-email/components"
 
 export type MagicLinkEmailProps = {
-  appName: string;
-  url: string;
-};
+  appName: string
+  url: string
+}
 
 export function MagicLinkEmail({ appName, url }: MagicLinkEmailProps) {
   return (
@@ -48,31 +48,25 @@ export function MagicLinkEmail({ appName, url }: MagicLinkEmailProps) {
         </Container>
       </Body>
     </Html>
-  );
+  )
 }
 ```
 
-## Resend sender
+## console sender
 
 ```ts
-import { Resend } from "resend";
-import type { SendEmail, SendEmailInput } from "../types";
+import type { SendEmail, SendEmailInput } from "../types"
 
-export function createResendSender(options: {
-  apiKey: string;
-  from: string;
-}): SendEmail {
-  const resend = new Resend(options.apiKey);
+export type ConsoleEmailLogger = (input: SendEmailInput) => void
 
+export function createConsoleSender(
+  logger: ConsoleEmailLogger = (input) => {
+    console.info("email:send", input)
+  }
+): SendEmail {
   return async (input: SendEmailInput) => {
-    await resend.emails.send({
-      from: options.from,
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      text: input.text,
-    });
-  };
+    logger(input)
+  }
 }
 ```
 
@@ -80,16 +74,12 @@ export function createResendSender(options: {
 
 ```ts
 import {
-  createResendSender,
+  createConsoleSender,
   MagicLinkEmail,
   renderEmail,
-} from "@repo/email";
-import { env } from "../env";
+} from "@enterprise-agentic-saas/email";
 
-const sendEmail = createResendSender({
-  apiKey: env.RESEND_API_KEY,
-  from: env.EMAIL_FROM,
-});
+const sendEmail = createConsoleSender();
 
 export async function sendMagicLinkEmail(input: {
   email: string;

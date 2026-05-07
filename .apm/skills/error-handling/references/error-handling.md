@@ -11,28 +11,28 @@ export type PublicErrorCode =
   | "CONFLICT"
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
-  | "INTERNAL_SERVER_ERROR";
+  | "INTERNAL_SERVER_ERROR"
 
 export class AppError extends Error {
-  readonly name = "AppError";
+  readonly name = "AppError"
 
   constructor(
     readonly code: PublicErrorCode,
     readonly status: number,
     readonly publicMessage: string,
     options?: {
-      publicContext?: Record<string, string>;
-      privateContext?: unknown;
-      cause?: unknown;
-    },
+      publicContext?: Record<string, string>
+      privateContext?: unknown
+      cause?: unknown
+    }
   ) {
-    super(publicMessage, { cause: options?.cause });
-    this.publicContext = options?.publicContext;
-    this.privateContext = options?.privateContext;
+    super(publicMessage, { cause: options?.cause })
+    this.publicContext = options?.publicContext
+    this.privateContext = options?.privateContext
   }
 
-  readonly publicContext?: Record<string, string>;
-  readonly privateContext?: unknown;
+  readonly publicContext?: Record<string, string>
+  readonly privateContext?: unknown
 }
 ```
 
@@ -46,14 +46,14 @@ export function toHttpError(error: unknown) {
       code: error.code,
       message: error.publicMessage,
       context: sanitizePublicContext(error.publicContext),
-    };
+    }
   }
 
   return {
     status: 500,
     code: "INTERNAL_SERVER_ERROR",
     message: "Internal server error",
-  };
+  }
 }
 ```
 

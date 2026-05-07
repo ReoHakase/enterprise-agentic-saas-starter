@@ -16,9 +16,9 @@ description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追
 - `apps/* -> packages/*` は許可。
 - `packages/* -> apps/*` は禁止。
 - backend内部を早期に細かいpackageへ分けない。Elysiaの型推論・Eden・`app.handle()` testを活かすため、featureはまず `apps/api` に寄せる。
-- `packages/api-client` は作らない。Eden clientは `apps/api` から `@repo/api/client` としてexportする。
-- `packages/config` は作らない。envは実行単位ごとに違うため、各appの `src/env.ts` に閉じる。
-- `packages/validators` は「複数app/packageで同じValibot schemaを共有する」実需要が出てから作る。
+- `packages/api-client` は作らない。Eden clientは `apps/api` から `@enterprise-agentic-saas/api/client` としてexportする。
+- `packages/config` は作らない。envは実行単位ごとに違うため、`apps/api` は `src/env.ts`（envin + Valibot）に集約する。CLI向けの package（例: `packages/db`）も同様に `src/env.ts` で `export const env` する。
+- `packages/validators` は「複数app/packageで同じvalidation schemaを共有する」実需要が出てから作る。
 - `packages/shared` はpure TS utility/typeに限定し、SaaS固有の便利箱にしない。
 
 ## 推奨初期構成
@@ -45,7 +45,7 @@ packages/
 `apps/api/src/client.ts` に置く。`apps/api/src/index.ts` は `app.listen()` 専用なのでimport禁止。
 
 ```ts
-import { treaty } from "@elysiajs/eden";
+import { treaty } from "@elysia/eden";
 import type { App } from "./app";
 
 export function createApiClient(baseUrl: string) {
@@ -59,7 +59,7 @@ export type ApiClient = ReturnType<typeof createApiClient>;
 
 ## 迷ったとき
 
-- app固有の実行時設定が必要なら `apps/<app>/src/env.ts`。
+- app固有の実行時設定が必要なら `apps/<app>/src/env.ts`（envin + Valibot）。
 - 複数server appから使うauth/session/roleなら `packages/auth`。
 - DB schema/client/migrationなら `packages/db`。
 - React Email templateやResend adapterなら `packages/email`。

@@ -1,86 +1,75 @@
 # Auth Reference
 
-## createAuth
+## singleton auth
 
 ```ts
-export type CreateAuthOptions = {
-  db: Db;
-  appUrl: string;
-  apiUrl: string;
-  trustedOrigins: string[];
-  sendMagicLinkEmail: (input: { email: string; url: string }) => Promise<void>;
-  sendInvitationEmail: (input: {
-    email: string;
-    organizationName: string;
-  }) => Promise<void>;
-  google: { clientId: string; clientSecret: string };
-  github: { clientId: string; clientSecret: string };
-};
+// packages/auth/src/index.ts
+import { db } from "@enterprise-agentic-saas/db"
+import * as schema from "@enterprise-agentic-saas/db/schema"
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { magicLink, organization } from "better-auth/plugins"
 
-export function createAuth(options: CreateAuthOptions) {
-  return betterAuth({
-    database: drizzleAdapter(options.db, {
-      provider: "sqlite",
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "sqlite", schema }),
+  trustedOrigins:
+    process.env.TRUSTED_ORIGINS?.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean) ?? [],
+  plugins: [
+    magicLink({
+      sendMagicLink: async ({ email, url }) => {
+        console.log(`[auth] magic link for ${email}: ${url}`)
+      },
     }),
-    trustedOrigins: options.trustedOrigins,
-    socialProviders: {
-      google: options.google,
-      github: options.github,
-    },
-    plugins: [
-      magicLink({
-        sendMagicLink: async ({ email, url }) => {
-          await options.sendMagicLinkEmail({ email, url });
-        },
-      }),
-      passkey(),
-      organization({
-        async sendInvitationEmail(data) {
-          await options.sendInvitationEmail({
-            email: data.email,
-            organizationName: data.organization.name,
-          });
-        },
-      }),
-    ],
-  });
-}
+    organization({
+      sendInvitationEmail: async (data) => {
+        console.log(
+          `[auth] invitation for ${data.email} to ${data.organization.name}`
+        )
+      },
+    }),
+  ],
+})
 ```
 
-## email callback境界
+`BETTER_AUTH_SECRET` と `BETTER_AUTH_URL` は Better Auth が `process.env` から自動読み込みする。
 
-`packages/auth` はReact EmailやResendをimportしない。callback typeだけを受ける。
+## auth client
 
 ```ts
-export type SendMagicLinkEmail = (input: {
-  email: string;
-  url: string;
-}) => Promise<void>;
+// packages/auth/src/client.ts
+import { createAuthClient } from "better-auth/client"
+import { magicLinkClient, organizationClient } from "better-auth/client/plugins"
 
-export type SendInvitationEmail = (input: {
-  email: string;
-  organizationName: string;
-}) => Promise<void>;
+export const authClient = createAuthClient({
+  plugins: [magicLinkClient(), organizationClient()],
+})
 ```
-
-`apps/api` が `packages/email` のtemplate/render/senderを組み合わせ、このcallbackとして `createAuth()` に渡す。
 
 ## client export
 
 ```json
 {
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./client": {
-      "types": "./src/client.ts",
-      "default": "./src/client.ts"
-    }
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
   }
 }
 ```
+
+## auth schema 生成
+
+`packages/db/src/schema/auth.ts` は手書きせず Better Auth CLI で生成する。
+
+```sh
+bunx @better-auth/cli generate \
+  --config packages/auth/src/index.ts \
+  --output packages/db/src/schema/auth.ts \
+  --yes
+```
+
+plugin構成（magicLink, organization 等）を変えたら再生成 → git diff で確認 → commit。
 
 ## permission境界
 

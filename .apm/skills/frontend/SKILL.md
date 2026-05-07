@@ -37,8 +37,12 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 
 ## 実装時の確認
 
-- webからAPIを呼ぶときは `@repo/api/client` または明示的なHTTP clientを使い、DB packageへショートカットしない。
+- webからAPIを呼ぶときは `@enterprise-agentic-saas/api/client` または明示的なHTTP clientを使い、DB packageへショートカットしない。
 - public envだけがbrowser bundleに入ることを確認する。
 - UI追加時は既存のshadcn/ui・Tailwind・`packages/ui` の構成に寄せる。
+- portless local dev のweb originは `https://enterprise-agentic-saas.localhost`、API originは `https://api.enterprise-agentic-saas.localhost`。Next.js `allowedDevOrigins` も `.localhost` に合わせる。
+- auth必須画面はNext.js Server Componentでsessionを検証し、未ログインなら `/auth/sign-in` にredirectする。session検証やSSR prefetchはwebからDBへ触らず、cookie headerをAPIへ転送するserver-side HTTP/Eden callに限定する。
+- todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
+- App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
 
 Cloudflare/OpenNextやenv schemaの具体例が必要なときだけ `references/frontend.md` を読む。

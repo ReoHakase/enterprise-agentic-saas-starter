@@ -1,6 +1,28 @@
 lockfile_version: '1'
 generated_at: '2026-05-04T18:54:33.712072+00:00'
 dependencies: []
+mcp_servers:
+- chrome-devtools-mcp
+- next-devtools-mcp
+mcp_configs:
+  chrome-devtools-mcp:
+    name: chrome-devtools-mcp
+    transport: stdio
+    args:
+    - -lic
+    - -c
+    - exec bunx -y chrome-devtools-mcp
+    registry: false
+    command: /bin/zsh
+  next-devtools-mcp:
+    name: next-devtools-mcp
+    transport: stdio
+    args:
+    - -lic
+    - -c
+    - exec bunx -y next-devtools-mcp
+    registry: false
+    command: /bin/zsh
 local_deployed_files:
 - .agents/skills/auth-email
 - .agents/skills/backend-api
@@ -13,14 +35,4 @@ local_deployed_files:
 - .agents/skills/frontend
 - .agents/skills/package-management
 - .agents/skills/shadcn
-- .cursor/skills/auth-email
-- .cursor/skills/backend-api
-- .cursor/skills/ci-quality
-- .cursor/skills/database
-- .cursor/skills/developer-environment
-- .cursor/skills/e2e-test
-- .cursor/skills/email
-- .cursor/skills/error-handling
-- .cursor/skills/frontend
-- .cursor/skills/package-management
-- .cursor/skills/shadcn
+- .agents/skills/turborepo

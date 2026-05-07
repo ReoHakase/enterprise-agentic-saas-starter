@@ -6,7 +6,7 @@
 
 ```json
 {
-  "name": "@repo/api",
+  "name": "@enterprise-agentic-saas/api",
   "private": true,
   "type": "module",
   "exports": {
@@ -24,7 +24,7 @@
 web側:
 
 ```ts
-import { createApiClient } from "@repo/api/client";
+import { createApiClient } from "@enterprise-agentic-saas/api/client";
 import { clientEnv } from "./env.client";
 
 export const api = createApiClient(clientEnv.NEXT_PUBLIC_API_URL);
@@ -43,7 +43,7 @@ export const api = createApiClient(clientEnv.NEXT_PUBLIC_API_URL);
 
 - `packages/api-client`: `apps/api` からexportする。
 - `packages/config`: envは各appが持つ。
-- `packages/contracts`: Eden/Valibot/OpenAPIで足りなくなったあと。
+- `packages/contracts`: Eden/Elysia t/OpenAPIで足りなくなったあと。
 - `packages/validators`: 複数箇所で同じschema共有が発生したあと。
 
 ## 将来拡張

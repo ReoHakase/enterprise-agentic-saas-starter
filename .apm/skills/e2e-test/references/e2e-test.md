@@ -16,10 +16,10 @@ apps/web/
 
 ```ts
 test("別organizationのtodoは見えない", async ({ page }) => {
-  await signInAs(page, "member-a@example.com");
-  await page.goto("/todos");
-  await expect(page.getByText("Org B private todo")).not.toBeVisible();
-});
+  await signInAs(page, "member-a@example.com")
+  await page.goto("/todos")
+  await expect(page.getByText("Org B private todo")).not.toBeVisible()
+})
 ```
 
 ## webServer確認

@@ -15,6 +15,11 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、APM、direnv�
 - direnvでrepoに入ったときの環境読込を行う。
 - dotenvxでsecretをenvファイルから安全に読み込む。secretをsourceやdocsへ書かない。
 - MCPはNext.js、Playwright、Turso、context7など、実装確認や最新仕様確認に使う。
+- workspaceのパッケージ名は `@enterprise-agentic-saas/*`（`apps/*`・`packages/*`）。portlessで固定したいホスト名は `apps/web`・`apps/api`・`packages/db` の `package.json` の `portless.name` で指定する（ルートの `portless.json` は使わない）。
+- portlessのTLDは `.localhost` を使う。webは `https://enterprise-agentic-saas.localhost`、APIは `https://api.enterprise-agentic-saas.localhost`、DBは `https://db.enterprise-agentic-saas.localhost`。
+- `.localhost` はportlessのデフォルトTLDなので、`package.json` の `portless.tld` は書かない。`tld` は未知のkeyとして警告される。
+- このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きの `turbo dev` に戻す。
+- `turso dev` は `PORT` envを読まないため、DBのportless scriptは `turso dev --port ${PORT:-8080}` のようにportlessが割り当てた `PORT` を明示的に渡す。
 
 ## agent向けドキュメント化
 
