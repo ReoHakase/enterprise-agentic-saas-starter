@@ -67,6 +67,10 @@ The Nix dev shell’s `bun` is whatever [`nixpkgs`](https://github.com/NixOS/nix
 
 If you use lefthook and Nix, commits that touch `flake.nix` or `flake.lock` run `nix flake check`; if `nix` is not on your `PATH`, that hook is skipped.
 
+**Quieter direnv:** Nix dev shells set many variables, so direnv prints a huge `direnv: export +…` line. Copy or merge [`config/direnv/direnv.toml`](config/direnv/direnv.toml) into `~/.config/direnv/direnv.toml` (add `[global]` / `hide_env_diff` if you already have settings there).
+
+For faster downloads of `llm-agents` packages, configure the Numtide cache in your user or system `nix.conf` as described in [llm-agents.nix](https://github.com/numtide/llm-agents.nix#binary-cache) (this flake does not set `nixConfig`, so non-trusted Nix installs avoid repeated “trusted-public-keys” warnings).
+
 ```sh
 bun install --frozen-lockfile
 ```

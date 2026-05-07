@@ -9,6 +9,7 @@ nix develop / direnv (use flake):
 
 direnv:
   .envrc は `use flake` のみ。portless 用の `NODE_EXTRA_CA_CERTS`（`~/.portless/ca.pem`）は `flake.nix` の devShell `shellHook` で設定する。
+  長い `direnv: export` 行を抑えるには `config/direnv/direnv.toml` を `~/.config/direnv/direnv.toml` にコピーまたはマージ（`hide_env_diff`）。
 
 dotenvx:
   secretをenvファイルから読み込む（devShell に nixpkgs の dotenvx を含める）

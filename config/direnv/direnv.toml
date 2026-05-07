@@ -1,0 +1,5 @@
+# Optional: copy or merge this file into ~/.config/direnv/direnv.toml (direnv ≥ 2.34).
+# Hides the very long `direnv: export +VAR ...` line when using Nix / nix-direnv.
+
+[global]
+hide_env_diff = true
