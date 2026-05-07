@@ -41,6 +41,9 @@ npm-debug.log*
 .DS_Store
 *.pem
 
+# VS Code / Cursor — local MCP config (often machine-specific or contains secrets)
+.vscode/mcp.json
+
 
 # APM dependencies
 apm_modules/
