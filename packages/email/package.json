@@ -1,0 +1,35 @@
+{
+  "name": "@enterprise-agentic-saas/email",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./templates": {
+      "types": "./src/templates/index.ts",
+      "default": "./src/templates/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-email/components": "catalog:",
+    "@react-email/render": "catalog:",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@types/react": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
