@@ -1,6 +1,16 @@
 lockfile_version: '1'
-generated_at: '2026-05-04T18:54:33.712072+00:00'
-dependencies: []
+generated_at: '2026-05-07T22:51:19.098133+00:00'
+apm_version: 0.12.4
+dependencies:
+- repo_url: vercel-labs/next-skills
+  host: github.com
+  resolved_commit: dc1de9caf7612d73f56a8dec3cb1bd6c9ec096b9
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/next-best-practices
+  - .agents/skills/next-cache-components
+  - .agents/skills/next-upgrade
+  content_hash: sha256:524391eec997ae98ab7483e115e53521d0692b5eb4f176b69cbd325f9df816a8
 mcp_servers:
 - chrome-devtools-mcp
 - next-devtools-mcp
