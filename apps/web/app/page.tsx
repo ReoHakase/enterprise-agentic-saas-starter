@@ -1,19 +1,36 @@
-import { Button } from "@workspace/ui/components/button"
+import { dehydrate, QueryClient } from "@tanstack/react-query"
 
-export default function Page() {
+import { QueryHydrationBoundary } from "@/components/query-hydration-boundary"
+import { TodosDashboard } from "@/components/todos-dashboard"
+import { createServerApiClient } from "@/lib/server/api-client"
+import { getCookieHeader, verifySession } from "@/lib/server/auth"
+import { listOrganizations, listTodos, todoQueryKeys } from "@/lib/todos"
+
+export default async function Page() {
+  const session = await verifySession()
+  const cookie = await getCookieHeader()
+  const apiClient = createServerApiClient(cookie)
+  const queryClient = new QueryClient()
+
+  const organizations = await queryClient.fetchQuery({
+    queryKey: todoQueryKeys.organizations,
+    queryFn: () => listOrganizations(apiClient),
+  })
+  const initialOrganizationId = organizations[0]?.id
+
+  if (initialOrganizationId) {
+    await queryClient.prefetchQuery({
+      queryKey: todoQueryKeys.todos(initialOrganizationId),
+      queryFn: () => listTodos(apiClient, initialOrganizationId),
+    })
+  }
+
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
+    <QueryHydrationBoundary state={dehydrate(queryClient)}>
+      <TodosDashboard
+        initialOrganizationId={initialOrganizationId}
+        userLabel={session.user.email}
+      />
+    </QueryHydrationBoundary>
   )
 }

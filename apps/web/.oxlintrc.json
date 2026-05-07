@@ -3,9 +3,11 @@
   "extends": ["../../.oxlintrc.json"],
   "plugins": ["jsx-a11y", "nextjs", "react", "react-perf"],
   "jsPlugins": ["oxlint-tailwindcss"],
+  "ignorePatterns": ["components/auth/**", "lib/auth/auth-plugin.ts"],
   "rules": {
     "import/no-unassigned-import": "off",
     "react/react-in-jsx-scope": "off",
+    "react-perf/jsx-no-jsx-as-prop": "off",
     "tailwindcss/enforce-canonical": "warn",
     "tailwindcss/enforce-shorthand": "warn",
     "tailwindcss/enforce-sort-order": "warn",
