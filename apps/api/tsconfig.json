@@ -1,0 +1,12 @@
+{
+  "extends": "@enterprise-agentic-saas/typescript-config/base.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "outDir": "dist",
+    "types": ["bun"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

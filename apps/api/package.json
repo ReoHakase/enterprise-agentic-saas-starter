@@ -1,0 +1,54 @@
+{
+  "name": "@enterprise-agentic-saas/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": {
+      "types": "./src/client.ts",
+      "default": "./src/client.ts"
+    },
+    "./types": {
+      "types": "./src/app.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "portless run bun run src/index.ts",
+    "dev:portless": "bun run dev",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "start": "NODE_ENV=production bun run src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysia/cors": "catalog:",
+    "@elysia/eden": "catalog:",
+    "@elysia/openapi": "catalog:",
+    "@elysiajs/opentelemetry": "catalog:",
+    "@elysiajs/server-timing": "catalog:",
+    "@enterprise-agentic-saas/auth": "workspace:*",
+    "@enterprise-agentic-saas/db": "workspace:*",
+    "@enterprise-agentic-saas/email": "workspace:*",
+    "@opentelemetry/api": "catalog:",
+    "@sinclair/typebox": "catalog:",
+    "drizzle-orm": "catalog:",
+    "elysia": "catalog:",
+    "envin": "catalog:",
+    "logixlysia": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@libsql/client": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "portless": {
+    "name": "api.enterprise-agentic-saas"
+  }
+}
