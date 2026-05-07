@@ -1,19 +1,17 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: bun commitlint --edit {1}
+
 pre-commit:
   commands:
     oxfmt:
       glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
       run: bun run format -- {staged_files}
       stage_fixed: true
-      priority: 1
-    oxfmt-skills:
-      glob: ".apm/skills/**/*.{md,mdx,json,jsonc,yml,yaml}"
-      run: bun run format:skills -- {staged_files}
-      stage_fixed: true
-      priority: 2
     oxlint:
       glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
       run: bun run lint -- {staged_files}
-      priority: 3
 
 pre-push:
   commands:

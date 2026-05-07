@@ -1,8 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "ui": "tui",
+  "ui": "stream",
   "tasks": {
     "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": []
+    },
+    "@enterprise-agentic-saas/web#build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"]
@@ -19,15 +24,36 @@
       "dependsOn": ["^format:check"],
       "outputs": []
     },
+    "test": {
+      "dependsOn": ["^test"],
+      "outputs": []
+    },
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "outputs": []
     },
     "check": {
-      "dependsOn": ["lint", "format:check", "typecheck"],
+      "dependsOn": ["lint", "format:check", "typecheck", "test"],
       "outputs": []
     },
     "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:portless": {
+      "cache": false,
+      "persistent": true
+    },
+    "@enterprise-agentic-saas/db#dev": {
+      "cache": false,
+      "persistent": true,
+      "with": ["@enterprise-agentic-saas/db#db:turso"]
+    },
+    "@enterprise-agentic-saas/db#db:turso": {
+      "cache": false,
+      "persistent": true
+    },
+    "@enterprise-agentic-saas/db#db:studio": {
       "cache": false,
       "persistent": true
     }

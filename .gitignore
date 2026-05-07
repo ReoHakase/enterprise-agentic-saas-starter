@@ -8,12 +8,18 @@ node_modules
 # Local env files
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
 
 # Testing
 coverage
+
+# Local databases and generated runtime state
+.local/
 
 # Turbo
 .turbo
