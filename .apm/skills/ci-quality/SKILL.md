@@ -52,6 +52,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 
 ## GitHub Actions
 
+- PR では **Quality**（Bun: lint / format / typecheck / test / build）と **Nix**（`nix flake check`）を **並列ジョブ**で実行する。
 - CI内のsecretはdotenvx/GitHub Secretsから注入する。
 - TursoやOAuth providerを使うE2EはPRではmock/smoke、mainでは実環境寄りなど段階化する。
 - Playwright browser install/cacheを考慮する。

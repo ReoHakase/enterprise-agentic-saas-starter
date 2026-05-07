@@ -13,7 +13,7 @@ gates, and agent-facing project knowledge.
 
 | Layer     | Stack                                                                                                                     |
 | --------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Runtime   | Bun `1.3.12`                                                                                                              |
+| Runtime   | Bun `1.3.13`                                                                                                              |
 | Monorepo  | Bun workspaces, Turborepo                                                                                                 |
 | Web       | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/ui                                                                     |
 | API       | Elysia on Bun, Eden client, Elysia `t` / TypeBox (routes); [envin](https://github.com/turbostarter/envin) + Valibot (env) |
@@ -53,6 +53,19 @@ Package boundaries are intentional:
 ## Getting Started
 
 ### 1. Install
+
+With [Nix](https://nixos.org/) and [direnv](https://direnv.net/), use the dev shell from the repo flake:
+
+```sh
+direnv allow    # once per clone; loads `use flake` from `.envrc`
+# or: nix develop
+```
+
+The shell provides `bun`, `turso`, `sqld` (for `turso dev`), `dotenvx`, and `apm` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+The Nix dev shell’s `bun` is whatever [`nixpkgs`](https://github.com/NixOS/nixpkgs) provides at the revision recorded in [`flake.lock`](flake.lock) (no per-platform zip hashes in this repo). After `nix flake lock --update-input nixpkgs`, match [`package.json`](package.json) `packageManager` / `engines` to `nix develop -c bun --version`.
+
+If you use lefthook and Nix, commits that touch `flake.nix` or `flake.lock` run `nix flake check`; if `nix` is not on your `PATH`, that hook is skipped.
 
 ```sh
 bun install --frozen-lockfile
@@ -111,7 +124,7 @@ This also applies the current Drizzle schema with `drizzle-kit push`, inserts
 development seed data on first run, and starts Drizzle Studio.
 
 > [!NOTE]
-> `turso dev` requires `sqld` on `PATH`. Turso Cloud database creation also
+> `turso dev` expects the **`sqld`** binary on `PATH` (provided by the Nix dev shell as `pkgs.sqld`, or install Turso’s tooling by other means). Turso Cloud database creation also
 > requires `turso auth login` before running `turso db create ...`.
 
 > [!WARNING]

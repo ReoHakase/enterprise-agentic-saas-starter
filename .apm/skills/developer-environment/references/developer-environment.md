@@ -3,17 +3,24 @@
 ## 役割
 
 ```txt
-nix develop:
-  Bun, Node系CLI, apm, dotenvx, turso CLI, sqld, playwright dependenciesなどを定義
+nix develop / direnv (use flake):
+  flake.nix の devShell: bun（flake.lock 固定の nixpkgs の `pkgs.bun`）, turso-cli (turso), sqld, dotenvx, apm（[numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix) の `packages.<system>.apm`）
+  checks.devShell で `nix flake check` が devShell ビルドを検証
 
 direnv:
-  repoに入ったときnix developやenv読込を有効化
+  .envrc は `use flake` のみ。portless 用の `NODE_EXTRA_CA_CERTS`（`~/.portless/ca.pem`）は `flake.nix` の devShell `shellHook` で設定する。
 
 dotenvx:
-  secretをenvファイルから読み込む
+  secretをenvファイルから読み込む（devShell に nixpkgs の dotenvx を含める）
 
 Turso local dev:
   `turso dev` は `sqld` をPATHから起動する。Turso CLIがあっても `sqld` が無いとlocal dev DBは起動しない。Cloud DB作成は `turso auth login` が前提。
+
+品質ゲート（ローカル）:
+  flake 変更時、lefthook pre-commit で Nix がある場合のみ `nix flake check`
+
+CI:
+  GitHub Actions の `nix` ジョブが `nix flake check` を Quality ジョブと並列実行
 
 APM:
   .apm/skills, instructions, promptsを管理
