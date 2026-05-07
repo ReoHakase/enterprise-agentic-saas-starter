@@ -61,6 +61,7 @@
       "zod": "4.4.2"
     }
   },
+  "type": "module",
   "scripts": {
     "build": "turbo build",
     "check": "turbo check",

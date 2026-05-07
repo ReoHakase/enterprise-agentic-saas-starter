@@ -1,9 +1,12 @@
-{
-  "$schema": "../../node_modules/oxlint/configuration_schema.json",
-  "extends": ["../../.oxlintrc.json"],
-  "plugins": ["jsx-a11y", "react", "react-perf"],
-  "jsPlugins": ["oxlint-tailwindcss"],
-  "ignorePatterns": [
+import { defineConfig } from "oxlint"
+
+import rootConfig from "../../oxlint.config.ts"
+
+export default defineConfig({
+  extends: [rootConfig],
+  plugins: ["jsx-a11y", "react", "react-perf"],
+  jsPlugins: ["oxlint-tailwindcss"],
+  ignorePatterns: [
     "src/components/calendar.tsx",
     "src/components/card.tsx",
     "src/components/checkbox.tsx",
@@ -19,9 +22,9 @@
     "src/components/sonner.tsx",
     "src/components/spinner.tsx",
     "src/components/switch.tsx",
-    "src/components/textarea.tsx"
+    "src/components/textarea.tsx",
   ],
-  "rules": {
+  rules: {
     "react/react-in-jsx-scope": "off",
     "react-perf/jsx-no-jsx-as-prop": "off",
     "tailwindcss/enforce-canonical": "warn",
@@ -33,18 +36,18 @@
     "tailwindcss/no-hardcoded-colors": "warn",
     "tailwindcss/no-unknown-classes": "error",
     "tailwindcss/no-unnecessary-arbitrary-value": "warn",
-    "tailwindcss/no-unnecessary-whitespace": "error"
+    "tailwindcss/no-unnecessary-whitespace": "error",
   },
-  "env": {
-    "browser": true
+  env: {
+    browser: true,
   },
-  "settings": {
-    "react": {
-      "version": "19.2.5"
+  settings: {
+    react: {
+      version: "19.2.5",
     },
-    "tailwindcss": {
-      "entryPoint": "src/styles/globals.css",
-      "callees": ["cn", "cva", "clsx"]
-    }
-  }
-}
+    tailwindcss: {
+      entryPoint: "src/styles/globals.css",
+      callees: ["cn", "cva", "clsx"],
+    },
+  },
+})
