@@ -1,0 +1,44 @@
+{
+  "name": "@enterprise-agentic-saas/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} drizzle-kit push",
+    "db:seed": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/seed.ts",
+    "db:wait": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} wait-on -t 120000 https-get://db.enterprise-agentic-saas.localhost/health",
+    "db:bootstrap": "bun run db:wait && bun run db:push && bun run db:seed",
+    "db:studio": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} drizzle-kit studio",
+    "db:turso": "portless run bun run db:turso:serve",
+    "db:turso:serve": "turso dev --db-file .local/turso/dev.db --port ${PORT:-8080}",
+    "dev": "bun run db:bootstrap && bun run db:studio",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "catalog:",
+    "drizzle-orm": "catalog:",
+    "envin": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "drizzle-seed": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "portless": {
+    "name": "db.enterprise-agentic-saas"
+  }
+}
