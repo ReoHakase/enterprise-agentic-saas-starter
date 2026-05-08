@@ -3,6 +3,7 @@ import { Elysia, t } from "elysia"
 
 import { createOrganizationsModule } from "./modules/organizations"
 import { createTodosModule } from "./modules/todos"
+import { createUsersModule } from "./modules/users"
 import { errorPlugin } from "./plugins/error"
 import { openApiPlugin } from "./plugins/openapi"
 import { requestIdPlugin } from "./plugins/request-id"
@@ -23,6 +24,7 @@ export const createApp = (db: Db) =>
         }),
       }
     )
+    .use(createUsersModule(db))
     .use(createOrganizationsModule(db))
     .use(createTodosModule(db))
     .use(openApiPlugin)

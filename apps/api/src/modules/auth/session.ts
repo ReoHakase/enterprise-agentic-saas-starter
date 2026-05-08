@@ -5,17 +5,37 @@ export type SessionUser = {
   id: string
   email: string
   name?: string | null
+  image?: string | null
+}
+
+export type SessionContext = {
+  id: string
+  activeOrganizationId?: string | null
 }
 
 export const getSessionUser = async (
   request: Request
 ): Promise<SessionUser> => {
+  const { user } = await getSessionContext(request)
+  return user
+}
+
+export const getSessionContext = async (
+  request: Request
+): Promise<{ session: SessionContext; user: SessionUser }> => {
   const testUserId = request.headers.get("x-test-user-id")
   if (env.NODE_ENV === "test" && testUserId) {
     return {
-      id: testUserId,
-      email: `${testUserId}@example.test`,
-      name: "Test User",
+      session: {
+        id: request.headers.get("x-test-session-id") ?? "test_session",
+        activeOrganizationId:
+          request.headers.get("x-test-active-organization-id") ?? null,
+      },
+      user: {
+        id: testUserId,
+        email: `${testUserId}@example.test`,
+        name: "Test User",
+      },
     }
   }
 
@@ -32,5 +52,11 @@ export const getSessionUser = async (
     throw publicErrors.unauthorized()
   }
 
-  return session.user
+  return {
+    session: {
+      id: session.session.id,
+      activeOrganizationId: session.session.activeOrganizationId,
+    },
+    user: session.user,
+  }
 }
