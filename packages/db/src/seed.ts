@@ -60,7 +60,7 @@ const main = async () => {
       columns: {
         id: f.uuid(),
         role: f.valuesFromArray({
-          values: ["owner", "admin", "member", "member", "member"],
+          values: ["super_admin", "admin", "member", "member", "member"],
         }),
       },
     },

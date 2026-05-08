@@ -9,12 +9,40 @@ import {
 } from "@enterprise-agentic-saas/email"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
-import { magicLink, organization } from "better-auth/plugins"
+import {
+  createAccessControl,
+  magicLink,
+  organization,
+  role,
+} from "better-auth/plugins"
 
 import { env } from "./env"
 
 const sendEmail: SendEmail =
   env.EMAIL_PROVIDER === "noop" ? createNoopSender() : createConsoleSender()
+
+const organizationAccessControl = createAccessControl({
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+  team: ["create", "update", "delete"],
+  ac: ["create", "read", "update", "delete"],
+} as const)
+
+const superAdmin = organizationAccessControl.newRole({
+  organization: ["update", "delete"],
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+  team: ["create", "update", "delete"],
+  ac: ["create", "read", "update", "delete"],
+})
+
+const admin = organizationAccessControl.newRole({
+  member: ["create", "update", "delete"],
+  invitation: ["create", "cancel"],
+})
+
+const member = role({})
 
 export const auth = betterAuth({
   appName: env.APP_NAME,
@@ -46,6 +74,13 @@ export const auth = betterAuth({
       },
     }),
     organization({
+      ac: organizationAccessControl,
+      creatorRole: "super_admin",
+      roles: {
+        super_admin: superAdmin,
+        admin,
+        member,
+      },
       async sendInvitationEmail(data) {
         const rendered = await renderOrganizationInvitationEmail({
           appName: env.APP_NAME,
