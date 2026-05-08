@@ -51,6 +51,8 @@ export const OrganizationInvitationEmail = ({
   )
 }
 
+export default OrganizationInvitationEmail // email devで表示するために必要
+
 export const renderOrganizationInvitationEmail = async (
   props: OrganizationInvitationEmailProps
 ): Promise<RenderedEmail> => {

@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint",
@@ -24,12 +25,17 @@
   "dependencies": {
     "@react-email/components": "catalog:",
     "@react-email/render": "catalog:",
-    "react": "catalog:"
+    "react": "catalog:",
+    "react-email": "6.0.5"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@react-email/ui": "6.0.5",
     "@types/react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "portless": {
+    "name": "email.enterprise-agentic-saas"
   }
 }
