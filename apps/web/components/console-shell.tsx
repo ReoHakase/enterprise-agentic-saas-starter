@@ -39,14 +39,17 @@ import {
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import {
   Building2Icon,
+  EllipsisVerticalIcon,
   LayoutDashboardIcon,
   ListTodoIcon,
   MonitorIcon,
   MoonIcon,
   SettingsIcon,
   ShieldIcon,
+  UserCircleIcon,
   SunIcon,
-  UserIcon,
+  LogOutIcon,
+  type LucideIcon,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
@@ -61,15 +64,9 @@ type ConsoleShellProps = {
   children: ReactNode
 }
 
-const navItems = [
+const dashboardNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
   { href: "/dashboard/todos", label: "Todos", icon: ListTodoIcon },
-  { href: "/settings/profile", label: "User settings", icon: UserIcon },
-  {
-    href: "/settings/organizations",
-    label: "Organizations",
-    icon: Building2Icon,
-  },
 ] as const
 
 export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
@@ -93,10 +90,10 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar className="border-sidebar-border/70 bg-sidebar/95">
         <SidebarHeader>
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-8 items-center justify-center rounded-2xl bg-sidebar-primary text-sidebar-primary-foreground">
+            <div className="flex size-9 items-center justify-center rounded-4xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm shadow-sidebar-primary/20">
               <Building2Icon />
             </div>
             <div className="min-w-0">
@@ -115,53 +112,47 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {navItems.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex h-9 min-w-0 items-center gap-2 rounded-2xl px-3 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        pathname === item.href &&
-                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <item.icon />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  </SidebarMenuItem>
+                {dashboardNavItems.map((item) => (
+                  <NavMenuItem
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    active={pathname === item.href}
+                  />
                 ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup>
+            <SidebarGroupLabel>Organization</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <NavMenuItem
+                  href="/settings/organizations"
+                  label="Organizations"
+                  icon={Building2Icon}
+                  active={pathname === "/settings/organizations"}
+                />
                 {activeOrganization ? (
-                  <SidebarMenuItem>
-                    <Link
-                      href={`/organization/${activeOrganization.id}/members`}
-                      className={cn(
-                        "flex h-9 min-w-0 items-center gap-2 rounded-2xl px-3 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        pathname?.includes("/members") &&
-                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <ShieldIcon />
-                      <span className="truncate">Members</span>
-                    </Link>
-                  </SidebarMenuItem>
+                  <NavMenuItem
+                    href={`/organization/${activeOrganization.id}/members`}
+                    label="Members"
+                    icon={ShieldIcon}
+                    active={pathname?.includes("/members") ?? false}
+                  />
                 ) : null}
                 {activeOrganization?.permissions.canEditOrganization ? (
-                  <SidebarMenuItem>
-                    <Link
-                      href={`/organization/${activeOrganization.id}/settings`}
-                      className={cn(
-                        "flex h-9 min-w-0 items-center gap-2 rounded-2xl px-3 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        pathname?.endsWith("/settings") &&
-                          "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <SettingsIcon />
-                      <span className="truncate">Org settings</span>
-                    </Link>
-                  </SidebarMenuItem>
+                  <NavMenuItem
+                    href={`/organization/${activeOrganization.id}/settings`}
+                    label="Org settings"
+                    icon={SettingsIcon}
+                    active={pathname?.endsWith("/settings") ?? false}
+                  />
                 ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
@@ -172,8 +163,8 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
           <UserMenu user={me.user} />
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4 md:px-6">
+      <SidebarInset className="bg-[linear-gradient(135deg,var(--background)_0%,color-mix(in_oklab,var(--primary)_7%,var(--background))_48%,var(--background)_100%)]">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-xl md:px-6">
           <SidebarTrigger className="md:hidden" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
@@ -187,11 +178,36 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
             </Badge>
           ) : null}
         </header>
-        <div className="min-w-0 flex-1 p-4 md:p-8">{children}</div>
+        <div className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-8">
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )
 }
+
+type NavMenuItemProps = {
+  href: string
+  label: string
+  icon: LucideIcon
+  active: boolean
+}
+
+const NavMenuItem = ({ href, label, icon: Icon, active }: NavMenuItemProps) => (
+  <SidebarMenuItem>
+    <Link
+      href={href}
+      className={cn(
+        "flex h-9 min-w-0 items-center gap-2 rounded-4xl px-3 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        active &&
+          "bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm"
+      )}
+    >
+      <Icon className="size-4" />
+      <span className="truncate">{label}</span>
+    </Link>
+  </SidebarMenuItem>
+)
 
 type OrganizationSwitcherProps = {
   organizations: OrganizationSummary[]
@@ -273,23 +289,33 @@ const ThemeSelector = () => {
 const UserMenu = ({ user }: Pick<Me, "user">) => (
   <DropdownMenu>
     <DropdownMenuTrigger
-      render={<Button variant="ghost" className="w-full justify-start" />}
+      render={
+        <Button
+          variant="ghost"
+          className="h-auto w-full justify-start px-2 py-2"
+        />
+      }
     >
-      <Avatar size="sm">
+      <Avatar className="size-10">
         <AvatarFallback>{user.name.slice(0, 1).toUpperCase()}</AvatarFallback>
       </Avatar>
-      <span className="min-w-0 flex-1 truncate text-left">{user.email}</span>
+      <span className="grid min-w-0 flex-1 text-left">
+        <span className="truncate text-sm font-medium">{user.name}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {user.email}
+        </span>
+      </span>
+      <EllipsisVerticalIcon className="size-4 text-muted-foreground" />
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="start" side="top" className="w-56">
+    <DropdownMenuContent align="start" side="top" className="w-64">
       <DropdownMenuGroup>
-        <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
-        <DropdownMenuItem render={<Link href="/settings/profile" />}>
-          Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/settings/sessions" />}>
-          Sessions
+        <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+        <DropdownMenuItem render={<Link href="/settings/account" />}>
+          <UserCircleIcon data-icon="inline-start" />
+          Account settings
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link href="/auth/sign-out" />}>
+          <LogOutIcon data-icon="inline-start" />
           Sign out
         </DropdownMenuItem>
       </DropdownMenuGroup>

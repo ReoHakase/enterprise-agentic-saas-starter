@@ -46,5 +46,6 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
 - SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。todoなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
 - Console sidebarはviewport固定（desktopはsticky `h-svh`、mobileはdrawer）を前提にし、page contentだけをscrollさせる。
+- Auth画面は `apps/web/app/auth/[path]/page.tsx` のpage-level compositionで背景・ブランド・previewを作り、`components/auth/*` はBetter Auth UIのview componentとして保つ。passwordlessが主導線なので、サインインの見た目調整はまず `MagicLink` fallbackにも反映する。
 
 Cloudflare/OpenNextやenv schemaの具体例が必要なときだけ `references/frontend.md` を読む。

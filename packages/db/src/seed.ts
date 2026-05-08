@@ -95,6 +95,59 @@ const main = async () => {
     .select({ id: schema.user.id })
     .from(schema.user)
     .orderBy(schema.user.id)
+
+  const existingMembers = await db
+    .select({
+      organizationId: schema.member.organizationId,
+      userId: schema.member.userId,
+    })
+    .from(schema.member)
+
+  const membershipsByUser = new Map<string, Set<string>>()
+  for (const { organizationId, userId } of existingMembers) {
+    const organizationIds = membershipsByUser.get(userId) ?? new Set<string>()
+    organizationIds.add(organizationId)
+    membershipsByUser.set(userId, organizationIds)
+  }
+
+  const organizations = await db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .orderBy(schema.organization.id)
+
+  const additionalMembers: Array<{
+    id: string
+    organizationId: string
+    userId: string
+    role: "member"
+    createdAt: Date
+  }> = []
+
+  if (organizations.length > 1) {
+    const orgIds = organizations.map(({ id }) => id)
+    for (const { id: userId } of users) {
+      const joinedOrgIds = membershipsByUser.get(userId) ?? new Set<string>()
+      const candidateOrgIds = orgIds.filter((id) => !joinedOrgIds.has(id))
+      if (candidateOrgIds.length === 0) continue
+
+      // すべてのユーザーが最低2つの組織に所属するように追加する
+      const organizationId = faker.helpers.arrayElement(candidateOrgIds)
+      additionalMembers.push({
+        id: faker.string.uuid(),
+        organizationId,
+        userId,
+        role: "member",
+        createdAt: new Date(),
+      })
+      joinedOrgIds.add(organizationId)
+      membershipsByUser.set(userId, joinedOrgIds)
+    }
+  }
+
+  if (additionalMembers.length > 0) {
+    await db.insert(schema.member).values(additionalMembers)
+  }
+
   const userUpdates = users.map(({ id }) => ({
     id,
     image: faker.image.avatar(),
@@ -105,10 +158,6 @@ const main = async () => {
     )
   )
 
-  const organizations = await db
-    .select({ id: schema.organization.id })
-    .from(schema.organization)
-    .orderBy(schema.organization.id)
   const organizationUpdates = organizations.map(({ id }) => ({
     id,
     logo: `https://api.dicebear.com/9.x/shapes/svg?size=256&seed=${faker.string.alphanumeric(12)}`,

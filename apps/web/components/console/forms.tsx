@@ -20,6 +20,7 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@enterprise-agentic-saas/ui/components/card"
@@ -62,7 +63,13 @@ import {
   TableHeader,
   TableRow,
 } from "@enterprise-agentic-saas/ui/components/table"
-import { Building2Icon, MailPlusIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import {
+  Building2Icon,
+  LaptopIcon,
+  MailPlusIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useTransition, type FormEvent } from "react"
 import { toast } from "sonner"
@@ -85,6 +92,52 @@ const isInvitationRole = (value: string | null): value is "admin" | "member" =>
 
 const isOrganizationRole = (value: string | null): value is OrganizationRole =>
   value === "super_admin" || value === "admin" || value === "member"
+
+const describeUserAgent = (userAgent: string | null) => {
+  if (!userAgent) {
+    return {
+      friendly: "Unknown device",
+      raw: "No user agent was recorded.",
+    }
+  }
+
+  const browser = detectBrowser(userAgent)
+  const device = detectDevice(userAgent)
+
+  return {
+    friendly: `${device} (${browser})`,
+    raw: userAgent,
+  }
+}
+
+const detectDevice = (userAgent: string) => {
+  if (/iPhone/i.test(userAgent)) return "Apple iPhone"
+  if (/iPad/i.test(userAgent)) return "Apple iPad"
+  if (/Macintosh|Mac OS X/i.test(userAgent)) return "Apple MacBook"
+  if (/Windows NT/i.test(userAgent)) return "Windows PC"
+  if (/Android/i.test(userAgent)) return "Android device"
+  if (/Linux/i.test(userAgent)) return "Linux device"
+
+  return "Unknown device"
+}
+
+const detectBrowser = (userAgent: string) => {
+  const edge = userAgent.match(/Edg\/([\d.]+)/i)
+  if (edge?.[1]) return `Edge ${majorVersion(edge[1])}`
+
+  const chrome = userAgent.match(/Chrome\/([\d.]+)/i)
+  if (chrome?.[1]) return `Chrome ${majorVersion(chrome[1])}`
+
+  const firefox = userAgent.match(/Firefox\/([\d.]+)/i)
+  if (firefox?.[1]) return `Firefox ${majorVersion(firefox[1])}`
+
+  const safari = userAgent.match(/Version\/([\d.]+).*Safari/i)
+  if (safari?.[1]) return `Safari ${majorVersion(safari[1])}`
+
+  return "Unknown browser"
+}
+
+const majorVersion = (version: string) => version.split(".")[0]
 
 export const OnboardingForm = () => {
   const router = useRouter()
@@ -220,8 +273,17 @@ export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <Card className="border-foreground/10 bg-card/85">
+      <CardHeader>
+        <div className="flex size-10 items-center justify-center rounded-4xl bg-primary/10 text-primary">
+          <LaptopIcon aria-hidden="true" />
+        </div>
+        <CardTitle>Signed-in devices</CardTitle>
+        <CardDescription>
+          Review friendly device labels and raw browser user agents.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
         <div className="mb-4 flex justify-end">
           <Button variant="outline" onClick={revokeOthers} disabled={pending}>
             Revoke other sessions
@@ -236,31 +298,53 @@ export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sessions.map((session) => (
-              <TableRow key={session.id}>
-                <TableCell>
-                  <div className="font-medium">
-                    {session.current ? "Current session" : session.id}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {session.userAgent ?? "Unknown device"}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {new Date(session.updatedAt).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pending || session.current}
-                    onClick={() => revoke(session.id)}
-                  >
-                    Revoke
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {sessions.map((session) => {
+              const userAgent = describeUserAgent(session.userAgent)
+
+              return (
+                <TableRow key={session.id}>
+                  <TableCell className="max-w-136 whitespace-normal">
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-4xl bg-muted text-muted-foreground">
+                        <LaptopIcon aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{userAgent.friendly}</p>
+                          {session.current ? (
+                            <Badge variant="secondary">Current</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {session.id}
+                        </p>
+                        <p className="mt-2 rounded-3xl bg-muted/70 px-3 py-2 font-mono text-xs break-all text-muted-foreground">
+                          {userAgent.raw}
+                        </p>
+                        {session.ipAddress ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            IP {session.ipAddress}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(session.updatedAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending || session.current}
+                      onClick={() => revoke(session.id)}
+                    >
+                      Revoke
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </CardContent>

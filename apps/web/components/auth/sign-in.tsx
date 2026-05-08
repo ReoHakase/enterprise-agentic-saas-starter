@@ -10,6 +10,7 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@enterprise-agentic-saas/ui/components/card"
@@ -26,6 +27,7 @@ import { Label } from "@enterprise-agentic-saas/ui/components/label"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
+import { ArrowRightIcon, LockKeyholeIcon } from "lucide-react"
 import { type ComponentType, type SyntheticEvent, useState } from "react"
 import { toast } from "sonner"
 
@@ -139,14 +141,27 @@ export function SignIn({
     emailAndPassword?.enabled && socialProviders && socialProviders.length > 0
 
   return (
-    <Card className={cn("w-full max-w-sm", className)}>
-      <CardHeader>
-        <CardTitle className="text-xl font-semibold">
-          {localization.auth.signIn}
-        </CardTitle>
+    <Card
+      className={cn(
+        "w-full max-w-sm border border-foreground/10 bg-card/85 shadow-2xl shadow-primary/10 backdrop-blur-xl",
+        className
+      )}
+    >
+      <CardHeader className="gap-3 px-7 pt-7">
+        <div className="flex size-11 items-center justify-center rounded-4xl bg-primary/10 text-primary">
+          <LockKeyholeIcon aria-hidden="true" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <CardTitle className="text-2xl font-semibold tracking-normal">
+            {localization.auth.signIn}
+          </CardTitle>
+          <CardDescription>
+            Sign in to continue to your organization workspace.
+          </CardDescription>
+        </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="px-7 pb-7">
         <div className="flex flex-col gap-6">
           {socialPosition === "top" && (
             <>
@@ -155,7 +170,7 @@ export function SignIn({
               )}
 
               {showSeparator && (
-                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
+                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
                   {localization.auth.or}
                 </FieldSeparator>
               )}
@@ -259,10 +274,11 @@ export function SignIn({
                 )}
 
                 <div className="flex flex-col gap-3">
-                  <Button type="submit" disabled={isPending}>
+                  <Button type="submit" size="lg" disabled={isPending}>
                     {signInEmailPending && <Spinner />}
 
                     {localization.auth.signIn}
+                    <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
                   </Button>
 
                   {plugins.flatMap((plugin) =>
@@ -281,7 +297,7 @@ export function SignIn({
           {socialPosition === "bottom" && (
             <>
               {showSeparator && (
-                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
+                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
                   {localization.auth.or}
                 </FieldSeparator>
               )}
