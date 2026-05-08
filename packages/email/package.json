@@ -26,11 +26,11 @@
     "@react-email/components": "catalog:",
     "@react-email/render": "catalog:",
     "react": "catalog:",
-    "react-email": "6.0.5"
+    "react-email": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
-    "@react-email/ui": "6.0.5",
+    "@react-email/ui": "catalog:",
     "@types/react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
