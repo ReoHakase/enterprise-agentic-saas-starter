@@ -22,4 +22,5 @@ dependencies:
     - exec bunx -y chrome-devtools-mcp
   apm:
   - vercel-labs/next-skills
+  - emilkowalski/skill
 scripts: {}

@@ -184,6 +184,14 @@ npx shadcn@latest docs button dialog select
    - **Skip**: `npx shadcn@latest init --preset <code> --force --no-reinstall`. Only updates config and CSS, leaves components as-is.
    - **Important**: Always run preset commands inside the user's project directory. `apply` only works in an existing project with a `components.json` file. The CLI automatically preserves the current base (`base` vs `radix`) from `components.json`. If you must use a scratch/temp directory (e.g. for `--dry-run` comparisons), pass `--base <current-base>` explicitly — preset codes do not encode the base.
 
+## enterprise-agentic-saas-starter notes
+
+- このrepoでは `bunx --bun shadcn@latest docs ...` でcomponent docsを確認してから使う。現行CLIの `search` はregistry namespaceやitem名の扱いが厳しく、素の `search sidebar` のような呼び出しは失敗することがある。
+- `add sidebar` などは既存 `button.tsx` / `input.tsx` / `separator.tsx` のoverwrite確認を出すことがある。既存componentを無条件overwriteせず、まず `--dry-run` と `--view` で追加対象を確認し、必要な新規componentだけ追加・手当てする。
+- このrepoのshadcn configは `base-luma` / Base UI / lucide / Tailwind v4 / `packages/ui` 共有component配置。app固有compositionは `apps/web/components` に置く。
+- Base UI版の `DropdownMenuLabel` は `MenuPrimitive.GroupLabel` なので、必ず `DropdownMenuGroup` の内側に置く。Radix版の感覚で `DropdownMenuContent` 直下に置くと `MenuGroupRootContext is missing` でruntime errorになる。
+- Base UI版の `SelectValue` はprimitiveのvalue文字列を表示しやすい。UUIDなど内部IDを `value` に使うorg switcherでは、trigger内に明示的な表示用text（organization nameなど）を置き、itemの `value` はIDのままにする。
+
 ## Updating Components
 
 When the user asks to update a component from upstream while keeping their local changes, use `--dry-run` and `--diff` to intelligently merge. **NEVER fetch raw files from GitHub manually — always use the CLI.**

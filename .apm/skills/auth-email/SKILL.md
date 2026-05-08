@@ -65,6 +65,10 @@ bunx @better-auth/cli generate \
 - identity/session/org membershipはauth。
 - todo/project/group/billingなどresource permissionは `apps/api/modules/authorization` などapp側。
 - audit logを意識し、permission deniedはE2EとAPI integrationで確認する。
+- このrepoのorganization roleはBetter Auth標準の `owner/admin/member` ではなく、`super_admin/admin/member` を使う。
+- `packages/auth` のorganization pluginでは `creatorRole: "super_admin"` と custom `roles` を設定し、plugin構成を変えたら `packages/db/src/schema/auth.generated.ts` をBetter Auth CLIで再生成する。
+- `super_admin` はorganizationごとに必ず一人だけにする。Better Authのrole定義だけに任せず、`apps/api` 側のmember role更新で昇格時に旧 `super_admin` を `admin` へ落とし、最後の `super_admin` の降格・削除を拒否する。
+- UI上の操作非表示は補助であり、`admin` が `super_admin` を触れないこと、`member` がmutationできないことはAPI integration testで確認する。
 
 ## package品質
 

@@ -2,6 +2,13 @@ lockfile_version: '1'
 generated_at: '2026-05-07T22:51:19.098133+00:00'
 apm_version: 0.12.4
 dependencies:
+- repo_url: emilkowalski/skill
+  host: github.com
+  resolved_commit: ecf66bbd1fb33c25332b6b0e454d08049978284c
+  package_type: skill_bundle
+  deployed_files:
+  - .agents/skills/emil-design-eng
+  content_hash: sha256:868048cfbded5b6e87cc8ae601faac0ee0afc60bb9aeaa6989d55c7bfa704e28
 - repo_url: vercel-labs/next-skills
   host: github.com
   resolved_commit: dc1de9caf7612d73f56a8dec3cb1bd6c9ec096b9
