@@ -21,7 +21,7 @@ React Email template、render helper、provider adapterを持つworkspace。
 
 ## Env境界
 
-このpackageはenvを直接読まない。local devではapp側が `createConsoleSender()` を選び、メール本文をconsoleへlogする。
+このpackageはenvを直接読まない。local devでは呼び出し側が `createConsoleSender()` を選ぶ。デフォルトの console ログは `to` / `subject` / 本文の長さと `renderProps` のみで、`text`・`html` 全文は出さない（`renderProps` はデバッグ用にテンプレ引数をそのまま含み、token 等が載り得る）。
 
 ## テスト
 
@@ -29,7 +29,7 @@ React Email template、render helper、provider adapterを持つworkspace。
 bun run test
 ```
 
-template renderではHTMLとplain textを確認する。senderはconsole loggerのpayload境界とnoopの副作用なしを検証し、実メール送信は行わない。
+template renderではHTML・plain text・`renderProps` を確認する。senderは注入loggerへのフル入力、デフォルトloggerのメタ＋`renderProps`、noopの副作用なしを検証し、実メール送信は行わない。
 
 ## 入れてはいけないもの
 

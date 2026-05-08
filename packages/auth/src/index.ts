@@ -65,12 +65,7 @@ export const auth = betterAuth({
           appName: env.APP_NAME,
           url,
         })
-        await sendEmail({
-          to: email,
-          subject: rendered.subject,
-          text: rendered.text,
-          html: rendered.html,
-        })
+        await sendEmail({ to: email, ...rendered })
       },
     }),
     organization({
@@ -88,12 +83,7 @@ export const auth = betterAuth({
           invitationUrl: `${env.BETTER_AUTH_URL}/accept-invitation/${data.id}`,
           inviterName: data.inviter.user.name ?? data.inviter.user.email,
         })
-        await sendEmail({
-          to: data.email,
-          subject: rendered.subject,
-          text: rendered.text,
-          html: rendered.html,
-        })
+        await sendEmail({ to: data.email, ...rendered })
       },
     }),
   ],

@@ -30,25 +30,32 @@ packages/email/
 ## 依存境界
 
 - `packages/email` はReact Emailに依存してよい。初期導入では実メールprovider SDKは入れず、dev log用console senderとtest用noop senderだけを持つ。
-- `packages/auth -> packages/email` は原則避ける。
-- `packages/auth` は `sendMagicLinkEmail` や `sendInvitationEmail` のcallback typeだけを受ける。
-- `apps/api` が `packages/auth` と `packages/email` を組み合わせる。
-- `packages/email` は `packages/auth` や `apps/api` に依存しない。
+- `packages/auth` と `apps/api` は `render*Email` と `SendEmail` を組み合わせてよい。`packages/email` は逆依存しない。
 
 ## 型
 
 `SendEmail` はprovider非依存の最小interfaceにする。
 
 ```ts
+export type RenderedEmail<P = unknown> = {
+  subject: string;
+  text: string;
+  html: string;
+  renderProps: P;
+};
+
 export type SendEmailInput = {
   to: string;
   subject: string;
   text: string;
   html?: string;
+  renderProps?: unknown;
 };
 
 export type SendEmail = (input: SendEmailInput) => Promise<void>;
 ```
+
+- 各 `render*Email` は入力propsを `renderProps` として返す。送信は `sendEmail({ to, ...rendered })` でよい。
 
 ## React Email
 
@@ -60,9 +67,9 @@ export type SendEmail = (input: SendEmailInput) => Promise<void>;
 
 ## sender adapter
 
-- `senders/console.ts`: local devで本文をconsoleへ出す。
+- `senders/console.ts`: local dev用。デフォルトは `text`/`html` 全文を出さず、`to`・`subject`・長さ・`renderProps` を出す（デバッグ向け、`renderProps` にtokenが含まれ得る）。注入 `logger` にはフルの `SendEmailInput` が渡る。
 - `senders/noop.ts`: testで送信副作用を避ける。
-- app側でenvに応じてsenderを選ぶ。`packages/email` がenvを直接読まない。
+- app/auth側でenvに応じてsenderを選ぶ。`packages/email` がenvを直接読まない。
 
 ## preview/test
 
@@ -74,8 +81,8 @@ export type SendEmail = (input: SendEmailInput) => Promise<void>;
 ## 実装時の確認
 
 - `packages/email` のpublic exportが `SendEmail`, `renderEmail`, templates, sender factoriesに整理されているか。
-- `packages/auth` がtemplateやemail senderに直接依存していないか。
-- `apps/api` がenvからsenderを構成し、auth callbackへ渡しているか。
+- `render*Email` が `renderProps` を返し、送信側が `sendEmail({ to, ...rendered })` で揃っているか。
+- `apps/api` / `packages/auth` がenvからsenderを選んでいるか。
 - plain text fallbackがあるか。
 - `packages/email/.oxlintrc.json` はReact Email template用に `react` / `react-perf` を使うが、Next/Tailwind/browser/jsx-a11y前提にしない。
 - READMEには役割、公開entrypoint、依存方向、env境界、test方法、入れないものを書く。

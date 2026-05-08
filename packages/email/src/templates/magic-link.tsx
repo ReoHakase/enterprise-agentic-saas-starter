@@ -37,12 +37,13 @@ export default MagicLinkEmail // email devで表示するために必要
 
 export const renderMagicLinkEmail = async (
   props: MagicLinkEmailProps
-): Promise<RenderedEmail> => {
+): Promise<RenderedEmail<MagicLinkEmailProps>> => {
   const { html, text } = await renderEmail(<MagicLinkEmail {...props} />)
 
   return {
     subject: `Sign in to ${props.appName}`,
     html,
     text,
+    renderProps: props,
   }
 }

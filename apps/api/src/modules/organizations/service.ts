@@ -277,12 +277,7 @@ export const createInvitation = async (
     inviterName: input.userId,
   })
 
-  await sendEmail({
-    to: invitation.email,
-    subject: rendered.subject,
-    text: rendered.text,
-    html: rendered.html,
-  })
+  await sendEmail({ to: invitation.email, ...rendered })
 
   return invitation
 }

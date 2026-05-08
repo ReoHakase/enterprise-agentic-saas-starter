@@ -59,10 +59,19 @@ import type { SendEmail, SendEmailInput } from "../types"
 
 export type ConsoleEmailLogger = (input: SendEmailInput) => void
 
-export function createConsoleSender(
-  logger: ConsoleEmailLogger = (input) => {
-    console.info("email:send", input)
+const defaultConsoleLogger: ConsoleEmailLogger = (input: SendEmailInput) => {
+  const payload: Record<string, unknown> = {
+    to: input.to,
+    subject: input.subject,
+    textLength: input.text.length,
   }
+  if (input.html !== undefined) payload.htmlLength = input.html.length
+  if (input.renderProps !== undefined) payload.renderProps = input.renderProps
+  console.info("email:send", payload)
+}
+
+export function createConsoleSender(
+  logger: ConsoleEmailLogger = defaultConsoleLogger
 ): SendEmail {
   return async (input: SendEmailInput) => {
     logger(input)
@@ -73,11 +82,7 @@ export function createConsoleSender(
 ## app側composition
 
 ```ts
-import {
-  createConsoleSender,
-  MagicLinkEmail,
-  renderEmail,
-} from "@enterprise-agentic-saas/email";
+import { createConsoleSender, renderMagicLinkEmail } from "@enterprise-agentic-saas/email";
 
 const sendEmail = createConsoleSender();
 
@@ -85,16 +90,12 @@ export async function sendMagicLinkEmail(input: {
   email: string;
   url: string;
 }) {
-  const { html, text } = await renderEmail(
-    <MagicLinkEmail appName="Todo SaaS" url={input.url} />,
-  );
-
-  await sendEmail({
-    to: input.email,
-    subject: "Sign in",
-    html,
-    text,
+  const rendered = await renderMagicLinkEmail({
+    appName: "Todo SaaS",
+    url: input.url,
   });
+
+  await sendEmail({ to: input.email, ...rendered });
 }
 ```
 

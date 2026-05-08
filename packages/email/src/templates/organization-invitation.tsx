@@ -55,7 +55,7 @@ export default OrganizationInvitationEmail // email devで表示するために�
 
 export const renderOrganizationInvitationEmail = async (
   props: OrganizationInvitationEmailProps
-): Promise<RenderedEmail> => {
+): Promise<RenderedEmail<OrganizationInvitationEmailProps>> => {
   const { html, text } = await renderEmail(
     <OrganizationInvitationEmail {...props} />
   )
@@ -64,5 +64,6 @@ export const renderOrganizationInvitationEmail = async (
     subject: `Join ${props.organizationName}`,
     html,
     text,
+    renderProps: props,
   }
 }
