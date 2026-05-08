@@ -1,5 +1,8 @@
 "use client"
 
+/* oxlint-disable eslint-plugin-react-perf(jsx-no-new-function-as-prop) */
+
+import { useAuth } from "@better-auth-ui/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +17,7 @@ import {
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
 } from "@enterprise-agentic-saas/ui/components/avatar"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
@@ -65,15 +69,27 @@ import {
 } from "@enterprise-agentic-saas/ui/components/table"
 import {
   Building2Icon,
+  KeyRoundIcon,
   LaptopIcon,
+  Unlink2Icon,
   MailPlusIcon,
   PlusIcon,
+  ShieldCheckIcon,
   Trash2Icon,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState, useTransition, type FormEvent } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react"
 import { toast } from "sonner"
 
+import { createAuthCallbackURL } from "@/lib/auth/callback-url"
+import { getSafeAvatarUrl } from "@/lib/avatar-url"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   roleLabel,
@@ -92,6 +108,139 @@ const isInvitationRole = (value: string | null): value is "admin" | "member" =>
 
 const isOrganizationRole = (value: string | null): value is OrganizationRole =>
   value === "super_admin" || value === "admin" || value === "member"
+
+type AuthResult<T> = {
+  data?: T | null
+  error?: { message?: string } | null
+}
+
+type LinkedAccount = {
+  id?: string
+  accountId?: string
+  providerId: string
+  createdAt?: string | Date | null
+}
+
+type UserPasskey = {
+  id: string
+  name?: string | null
+  createdAt?: string | Date | null
+  deviceType?: string | null
+  backedUp?: boolean | null
+}
+
+type SecurityAuthCapabilities = {
+  listAccounts?: () => Promise<AuthResult<LinkedAccount[]> | LinkedAccount[]>
+  linkSocial?: (input: {
+    provider: "github"
+    callbackURL: string
+  }) => Promise<AuthResult<unknown>>
+  unlinkAccount?: (input: {
+    providerId: string
+    accountId?: string
+  }) => Promise<AuthResult<unknown>>
+  passkey?: {
+    listUserPasskeys?: () => Promise<AuthResult<UserPasskey[]> | UserPasskey[]>
+    addPasskey?: (input: {
+      name?: string
+      authenticatorAttachment?: "platform" | "cross-platform"
+    }) => Promise<AuthResult<unknown>>
+    deletePasskey?: (input: { id: string }) => Promise<AuthResult<unknown>>
+  }
+}
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null
+
+const isPropertyContainer = (
+  value: unknown
+): value is Record<string, unknown> | ((...args: unknown[]) => unknown) =>
+  (typeof value === "object" && value !== null) || typeof value === "function"
+
+const getProperty = (target: unknown, key: string): unknown => {
+  if (!isPropertyContainer(target)) {
+    return undefined
+  }
+  return Reflect.get(target, key)
+}
+
+const hasAuthError = (
+  value: unknown
+): value is { error: { message?: string } | null } =>
+  isObjectRecord(value) && "error" in value
+
+const hasAuthData = <T,>(value: unknown): value is { data?: T | null } =>
+  isObjectRecord(value) && "data" in value
+
+const createSecurityAuthCapabilities = (
+  value: unknown
+): SecurityAuthCapabilities => {
+  if (!isPropertyContainer(value)) {
+    return {}
+  }
+
+  const capabilities: SecurityAuthCapabilities = {}
+  const listAccountsCandidate = getProperty(value, "listAccounts")
+  if (typeof listAccountsCandidate === "function") {
+    capabilities.listAccounts = () =>
+      Reflect.apply(listAccountsCandidate, value, [])
+  }
+  const linkSocialCandidate = getProperty(value, "linkSocial")
+  if (typeof linkSocialCandidate === "function") {
+    capabilities.linkSocial = (input) =>
+      Reflect.apply(linkSocialCandidate, value, [input])
+  }
+  const unlinkAccountCandidate = getProperty(value, "unlinkAccount")
+  if (typeof unlinkAccountCandidate === "function") {
+    capabilities.unlinkAccount = (input) =>
+      Reflect.apply(unlinkAccountCandidate, value, [input])
+  }
+
+  const passkey = getProperty(value, "passkey")
+  if (isPropertyContainer(passkey)) {
+    const passkeyCapabilities: NonNullable<
+      SecurityAuthCapabilities["passkey"]
+    > = {}
+    const listUserPasskeysCandidate = getProperty(passkey, "listUserPasskeys")
+    if (typeof listUserPasskeysCandidate === "function") {
+      passkeyCapabilities.listUserPasskeys = () =>
+        Reflect.apply(listUserPasskeysCandidate, passkey, [])
+    }
+    const addPasskeyCandidate = getProperty(passkey, "addPasskey")
+    if (typeof addPasskeyCandidate === "function") {
+      passkeyCapabilities.addPasskey = (input) =>
+        Reflect.apply(addPasskeyCandidate, passkey, [input])
+    }
+    const deletePasskeyCandidate = getProperty(passkey, "deletePasskey")
+    if (typeof deletePasskeyCandidate === "function") {
+      passkeyCapabilities.deletePasskey = (input) =>
+        Reflect.apply(deletePasskeyCandidate, passkey, [input])
+    }
+    capabilities.passkey = passkeyCapabilities
+  }
+
+  return capabilities
+}
+
+const unwrapAuthResult = <T,>(result: AuthResult<T> | T): T | undefined => {
+  if (hasAuthError(result) && result.error) {
+    throw new Error(result.error.message ?? "Authentication request failed")
+  }
+
+  if (hasAuthData<T>(result)) {
+    return result.data ?? undefined
+  }
+
+  return result
+}
+
+const formatSecurityDate = (value?: string | Date | null) => {
+  if (!value) {
+    return "Unknown"
+  }
+
+  return new Date(value).toLocaleString()
+}
 
 const describeUserAgent = (userAgent: string | null) => {
   if (!userAgent) {
@@ -138,6 +287,17 @@ const detectBrowser = (userAgent: string) => {
 }
 
 const majorVersion = (version: string) => version.split(".")[0]
+
+const GitHubMarkIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+    className={className}
+  >
+    <path d="M12 .5a12 12 0 0 0-3.79 23.38c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.42-4.04-1.42-.55-1.38-1.33-1.75-1.33-1.75-1.08-.75.08-.74.08-.74 1.2.08 1.83 1.22 1.83 1.22 1.06 1.8 2.8 1.28 3.49.98.11-.76.42-1.28.76-1.58-2.67-.3-5.47-1.32-5.47-5.88 0-1.3.47-2.37 1.23-3.2-.12-.3-.53-1.52.12-3.17 0 0 1.01-.32 3.3 1.22a11.6 11.6 0 0 1 6 0c2.3-1.54 3.3-1.22 3.3-1.22.66 1.65.25 2.87.13 3.17.77.83 1.23 1.9 1.23 3.2 0 4.58-2.8 5.57-5.48 5.87.43.37.82 1.1.82 2.22v3.3c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" />
+  </svg>
+)
 
 export const OnboardingForm = () => {
   const router = useRouter()
@@ -246,6 +406,335 @@ export const ProfileForm = ({ user }: Pick<Me, "user">) => {
   )
 }
 
+export const SecurityMethodsPanel = () => {
+  const { authClient } = useAuth()
+  const router = useRouter()
+  const securityAuthClient = useMemo(
+    () => createSecurityAuthCapabilities(authClient),
+    [authClient]
+  )
+  const canListAccounts = Boolean(securityAuthClient.listAccounts)
+  const canLinkGithub = Boolean(securityAuthClient.linkSocial)
+  const canUnlinkGithub = Boolean(securityAuthClient.unlinkAccount)
+  const canListPasskeys = Boolean(securityAuthClient.passkey?.listUserPasskeys)
+  const canAddPasskey = Boolean(securityAuthClient.passkey?.addPasskey)
+  const canDeletePasskey = Boolean(securityAuthClient.passkey?.deletePasskey)
+  const securityMethodsAvailable =
+    canListAccounts ||
+    canLinkGithub ||
+    canUnlinkGithub ||
+    canListPasskeys ||
+    canAddPasskey ||
+    canDeletePasskey
+  const [loading, setLoading] = useState(true)
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([])
+  const [passkeys, setPasskeys] = useState<UserPasskey[]>([])
+
+  const loadSecurityMethods = useCallback(async () => {
+    if (!securityMethodsAvailable) {
+      setLoading(false)
+      setAccounts([])
+      setPasskeys([])
+      return
+    }
+
+    setLoading(true)
+    try {
+      const [nextAccounts, nextPasskeys] = await Promise.all([
+        canListAccounts && securityAuthClient.listAccounts
+          ? securityAuthClient.listAccounts()
+          : Promise.resolve([]),
+        canListPasskeys && securityAuthClient.passkey?.listUserPasskeys
+          ? securityAuthClient.passkey.listUserPasskeys()
+          : Promise.resolve([]),
+      ])
+      setAccounts(unwrapAuthResult(nextAccounts) ?? [])
+      setPasskeys(unwrapAuthResult(nextPasskeys) ?? [])
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to load security methods"
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [
+    canListAccounts,
+    canListPasskeys,
+    securityAuthClient,
+    securityMethodsAvailable,
+  ])
+
+  useEffect(() => {
+    void loadSecurityMethods()
+  }, [loadSecurityMethods])
+
+  const githubAccount = accounts.find(
+    (account) => account.providerId === "github"
+  )
+
+  const runSecurityAction = async (
+    actionId: string,
+    action: () => Promise<void>
+  ) => {
+    if (!securityMethodsAvailable) {
+      return
+    }
+
+    setPendingAction(actionId)
+    try {
+      await action()
+      await loadSecurityMethods()
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Request failed")
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  const linkGithub = () =>
+    runSecurityAction("github-link", async () => {
+      if (!securityAuthClient.linkSocial) {
+        return
+      }
+      unwrapAuthResult(
+        await securityAuthClient.linkSocial({
+          provider: "github",
+          callbackURL: createAuthCallbackURL("/settings/account"),
+        })
+      )
+    })
+
+  const unlinkGithub = () =>
+    runSecurityAction("github-unlink", async () => {
+      if (!securityAuthClient.unlinkAccount) {
+        return
+      }
+      if (!githubAccount) {
+        throw new Error("GitHub account is not linked")
+      }
+
+      unwrapAuthResult(
+        await securityAuthClient.unlinkAccount({
+          providerId: "github",
+          accountId: githubAccount.accountId,
+        })
+      )
+      toast.success("GitHub account unlinked")
+    })
+
+  const addPasskey = () =>
+    runSecurityAction("passkey-add", async () => {
+      if (!securityAuthClient.passkey?.addPasskey) {
+        return
+      }
+      unwrapAuthResult(
+        await securityAuthClient.passkey.addPasskey({
+          name: "Enterprise Agentic SaaS",
+          authenticatorAttachment: "platform",
+        })
+      )
+      toast.success("Passkey added")
+    })
+
+  const deletePasskey = (passkeyId: string) =>
+    runSecurityAction(`passkey-delete-${passkeyId}`, async () => {
+      if (!securityAuthClient.passkey?.deletePasskey) {
+        return
+      }
+      unwrapAuthResult(
+        await securityAuthClient.passkey.deletePasskey({ id: passkeyId })
+      )
+      toast.success("Passkey deleted")
+    })
+
+  return (
+    <Card className="border-foreground/10 bg-card/85">
+      <CardHeader>
+        <div className="flex size-10 items-center justify-center rounded-4xl bg-primary/10 text-primary">
+          <ShieldCheckIcon aria-hidden="true" />
+        </div>
+        <CardTitle>Security methods</CardTitle>
+        <CardDescription>
+          Manage linked sign-in methods. At least one sign-in method must remain
+          connected.
+        </CardDescription>
+        {!securityMethodsAvailable ? (
+          <p className="text-sm text-muted-foreground">
+            Security methods are currently unavailable in this session.
+          </p>
+        ) : null}
+      </CardHeader>
+      <CardContent className="grid gap-6">
+        <div className="grid gap-3">
+          <div className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-4xl bg-muted text-muted-foreground">
+                <GitHubMarkIcon className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium">GitHub</p>
+                  {githubAccount ? (
+                    <Badge variant="secondary">Linked</Badge>
+                  ) : (
+                    <Badge variant="outline">Not linked</Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {githubAccount
+                    ? `Linked ${formatSecurityDate(githubAccount.createdAt)}`
+                    : "Connect GitHub for OAuth sign-in and account recovery."}
+                </p>
+              </div>
+            </div>
+            {githubAccount ? (
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="destructive"
+                      disabled={!canUnlinkGithub || loading}
+                    />
+                  }
+                >
+                  <span data-icon="inline-start">
+                    <Unlink2Icon className="size-4" />
+                  </span>
+                  Unlink
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Unlink GitHub?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You can unlink GitHub only when another sign-in method
+                      remains connected.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      disabled={pendingAction === "github-unlink"}
+                      onClick={unlinkGithub}
+                    >
+                      Unlink GitHub
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <Button
+                variant="outline"
+                disabled={
+                  !canLinkGithub || loading || pendingAction === "github-link"
+                }
+                onClick={linkGithub}
+              >
+                <span data-icon="inline-start">
+                  <GitHubMarkIcon className="size-4" />
+                </span>
+                Link GitHub
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Passkeys</p>
+              <p className="text-sm text-muted-foreground">
+                Use platform biometrics, device PINs, or security keys.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              disabled={
+                !canAddPasskey || loading || pendingAction === "passkey-add"
+              }
+              onClick={addPasskey}
+            >
+              <KeyRoundIcon data-icon="inline-start" />
+              Add passkey
+            </Button>
+          </div>
+
+          {passkeys.length > 0 ? (
+            <div className="grid gap-3">
+              {passkeys.map((passkey) => (
+                <div
+                  key={passkey.id}
+                  className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-4xl bg-muted text-muted-foreground">
+                      <KeyRoundIcon aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">
+                          {passkey.name ?? "Unnamed passkey"}
+                        </p>
+                        {passkey.backedUp ? (
+                          <Badge variant="secondary">Backed up</Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {passkey.deviceType ?? "Unknown device"} · Created{" "}
+                        {formatSecurityDate(passkey.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={<Button variant="destructive" />}
+                    >
+                      <Trash2Icon data-icon="inline-start" />
+                      Delete
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete passkey?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This passkey will no longer be available for sign-in.
+                          Keep at least one working sign-in method connected.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          variant="destructive"
+                          disabled={
+                            !canDeletePasskey ||
+                            pendingAction === `passkey-delete-${passkey.id}`
+                          }
+                          onClick={() => deletePasskey(passkey.id)}
+                        >
+                          Delete passkey
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
+              {loading
+                ? "Loading passkeys..."
+                : "No passkeys are registered yet."}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -285,7 +774,11 @@ export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
       </CardHeader>
       <CardContent>
         <div className="mb-4 flex justify-end">
-          <Button variant="outline" onClick={revokeOthers} disabled={pending}>
+          <Button
+            variant="destructive"
+            onClick={revokeOthers}
+            disabled={pending}
+          >
             Revoke other sessions
           </Button>
         </div>
@@ -315,17 +808,12 @@ export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
                             <Badge variant="secondary">Current</Badge>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {session.id}
-                        </p>
                         <p className="mt-2 rounded-3xl bg-muted/70 px-3 py-2 font-mono text-xs break-all text-muted-foreground">
                           {userAgent.raw}
                         </p>
-                        {session.ipAddress ? (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            IP {session.ipAddress}
-                          </p>
-                        ) : null}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Expires {new Date(session.expiresAt).toLocaleString()}
+                        </p>
                       </div>
                     </div>
                   </TableCell>
@@ -334,7 +822,7 @@ export const SessionsPanel = ({ sessions }: { sessions: UserSession[] }) => {
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
-                      variant="outline"
+                      variant="destructive"
                       size="sm"
                       disabled={pending || session.current}
                       onClick={() => revoke(session.id)}
@@ -522,6 +1010,10 @@ export const MembersPanel = ({
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar>
+                        <AvatarImage
+                          src={getSafeAvatarUrl(member.image)}
+                          alt={member.name}
+                        />
                         <AvatarFallback>
                           {member.name.slice(0, 1).toUpperCase()}
                         </AvatarFallback>

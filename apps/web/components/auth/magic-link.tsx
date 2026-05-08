@@ -34,6 +34,7 @@ import { toast } from "sonner"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
+import { PasskeySignInButton } from "./passkey-sign-in-button"
 import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 
 export type MagicLinkProps = {
@@ -180,6 +181,7 @@ export function MagicLink({
                   {magicLinkLocalization.sendMagicLink}
                   <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
                 </Button>
+                <PasskeySignInButton />
 
                 {plugins.flatMap((plugin) =>
                   (plugin.authButtons ?? []).map((AuthButton, index) => (

@@ -12,7 +12,9 @@ Better Auth による認証・認可パッケージ。
 ## Plugin 構成
 
 - `magicLink` — マジックリンク認証
+- `passkey` — WebAuthn/passkey 認証
 - `organization` — マルチテナント組織管理
+- `socialProviders.github` — GitHub OAuth sign-in / account linking
 
 ## 依存方向
 
@@ -29,18 +31,20 @@ Better Auth が `process.env` から自動読み込みする。`apps/api/.env` �
 |---|---|---|
 | `BETTER_AUTH_SECRET` | Yes | セッション署名用シークレット |
 | `BETTER_AUTH_URL` | Yes | Better Auth のベース URL |
+| `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App の Client ID |
+| `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App の Client Secret |
 | `TRUSTED_ORIGINS` | No | カンマ区切りの信頼オリジン |
 
 ## Auth Schema
 
-`packages/db/src/schema/auth.ts` に Better Auth CLI で生成する（**手書き禁止**）。
+`packages/db/src/schema/auth.generated.ts` に Better Auth CLI で生成する（**手書き禁止**）。
 
 plugin 構成を変更したら再生成する:
 
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.ts \
+  --output packages/db/src/schema/auth.generated.ts \
   --yes
 ```
 

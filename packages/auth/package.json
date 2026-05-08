@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@enterprise-agentic-saas/db": "workspace:*",
     "@enterprise-agentic-saas/email": "workspace:*",
     "better-auth": "catalog:",

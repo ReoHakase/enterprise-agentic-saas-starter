@@ -81,6 +81,7 @@
       "name": "@enterprise-agentic-saas/auth",
       "version": "0.0.0",
       "dependencies": {
+        "@better-auth/passkey": "catalog:",
         "@enterprise-agentic-saas/db": "workspace:*",
         "@enterprise-agentic-saas/email": "workspace:*",
         "better-auth": "catalog:",
@@ -171,6 +172,7 @@
     "@base-ui/react": "1.4.1",
     "@better-auth-ui/core": "1.6.4",
     "@better-auth-ui/react": "1.6.4",
+    "@better-auth/passkey": "1.6.9",
     "@elysia/cors": "1.4.2",
     "@elysia/eden": "1.4.10",
     "@elysia/openapi": "1.4.15",

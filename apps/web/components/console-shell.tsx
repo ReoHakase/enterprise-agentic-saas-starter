@@ -3,6 +3,7 @@
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
 } from "@enterprise-agentic-saas/ui/components/avatar"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
@@ -54,8 +55,15 @@ import {
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { type ReactNode, useEffect, useState, useTransition } from "react"
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+  useTransition,
+} from "react"
 
+import { getSafeAvatarUrl } from "@/lib/avatar-url"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
 
@@ -77,16 +85,19 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
     me.organizations.find((organization) => organization.active) ??
     me.organizations[0]
 
-  const handleOrganizationChange = (organizationId: string | null) => {
-    if (!organizationId) {
-      return
-    }
+  const handleOrganizationChange = useCallback(
+    (organizationId: string | null) => {
+      if (!organizationId) {
+        return
+      }
 
-    startTransition(async () => {
-      await browserConsoleApi.activateOrganization(organizationId)
-      router.refresh()
-    })
-  }
+      startTransition(async () => {
+        await browserConsoleApi.activateOrganization(organizationId)
+        router.refresh()
+      })
+    },
+    [router]
+  )
 
   return (
     <SidebarProvider>
@@ -248,6 +259,9 @@ const ThemeSelector = () => {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const displayTheme = mounted ? theme : "system"
+  const setLightTheme = useCallback(() => setTheme("light"), [setTheme])
+  const setDarkTheme = useCallback(() => setTheme("dark"), [setTheme])
+  const setSystemTheme = useCallback(() => setTheme("system"), [setTheme])
 
   useEffect(() => {
     setMounted(true)
@@ -268,15 +282,15 @@ const ThemeSelector = () => {
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => setTheme("light")}>
+          <DropdownMenuItem onClick={setLightTheme}>
             <SunIcon data-icon="inline-start" />
             Light
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("dark")}>
+          <DropdownMenuItem onClick={setDarkTheme}>
             <MoonIcon data-icon="inline-start" />
             Dark
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme("system")}>
+          <DropdownMenuItem onClick={setSystemTheme}>
             <MonitorIcon data-icon="inline-start" />
             System
           </DropdownMenuItem>
@@ -297,6 +311,7 @@ const UserMenu = ({ user }: Pick<Me, "user">) => (
       }
     >
       <Avatar className="size-10">
+        <AvatarImage src={getSafeAvatarUrl(user.image)} alt={user.name} />
         <AvatarFallback>{user.name.slice(0, 1).toUpperCase()}</AvatarFallback>
       </Avatar>
       <span className="grid min-w-0 flex-1 text-left">

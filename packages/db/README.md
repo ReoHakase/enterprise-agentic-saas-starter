@@ -11,7 +11,7 @@ Turso/libSQL + Drizzle ORM によるデータベースパッケージ。
 
 ## Schema
 
-- `src/schema/auth.ts` — Better Auth CLI で生成（**手書き禁止**）
+- `src/schema/auth.generated.ts` — Better Auth CLI で生成（**手書き禁止**）
 - `src/schema/app.ts` — アプリ固有テーブル（todos 等）
 
 ### auth schema の再生成
@@ -21,7 +21,7 @@ auth plugin 構成を変更したら以下を実行する:
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.ts \
+  --output packages/db/src/schema/auth.generated.ts \
   --yes
 ```
 

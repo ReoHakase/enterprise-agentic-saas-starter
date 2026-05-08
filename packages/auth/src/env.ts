@@ -21,6 +21,8 @@ export const env = defineEnv({
     ),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(1)),
     BETTER_AUTH_URL: v.pipe(v.string(), v.minLength(1)),
+    GITHUB_CLIENT_ID: v.pipe(v.string(), v.minLength(1)),
+    GITHUB_CLIENT_SECRET: v.pipe(v.string(), v.minLength(1)),
     TRUSTED_ORIGINS: commaSeparatedList,
     EMAIL_PROVIDER: v.pipe(
       v.optional(v.string(), "console"),

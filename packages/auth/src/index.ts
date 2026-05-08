@@ -1,3 +1,4 @@
+import { passkey } from "@better-auth/passkey"
 import { db } from "@enterprise-agentic-saas/db"
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import {
@@ -51,6 +52,18 @@ export const auth = betterAuth({
   basePath: "/auth",
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
   trustedOrigins: env.TRUSTED_ORIGINS,
+  socialProviders: {
+    github: {
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
+    },
+  },
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["github"],
+    },
+  },
   advanced: {
     crossSubDomainCookies: {
       enabled: true,
@@ -59,6 +72,10 @@ export const auth = betterAuth({
     useSecureCookies: true,
   },
   plugins: [
+    passkey({
+      rpID: "enterprise-agentic-saas.localhost",
+      rpName: env.APP_NAME,
+    }),
     magicLink({
       async sendMagicLink({ email, url }) {
         const rendered = await renderMagicLinkEmail({

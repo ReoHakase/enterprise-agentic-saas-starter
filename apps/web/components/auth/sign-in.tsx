@@ -34,6 +34,7 @@ import { toast } from "sonner"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { useFetchOptions } from "@/lib/auth/fetch-options"
 
+import { PasskeySignInButton } from "./passkey-sign-in-button"
 import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 
 export type SignInProps = {
@@ -280,6 +281,7 @@ export function SignIn({
                     {localization.auth.signIn}
                     <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
                   </Button>
+                  <PasskeySignInButton />
 
                   {plugins.flatMap((plugin) =>
                     (plugin.authButtons ?? []).map((AuthButton, index) => (

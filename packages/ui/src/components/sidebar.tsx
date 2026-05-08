@@ -60,11 +60,13 @@ function SidebarProvider({
 
     setOpen(!open)
   }, [open, setOpen])
+  const contextValue = React.useMemo(
+    () => ({ open, openMobile, setOpen, setOpenMobile, toggleSidebar }),
+    [open, openMobile, setOpen, toggleSidebar]
+  )
 
   return (
-    <SidebarContext.Provider
-      value={{ open, openMobile, setOpen, setOpenMobile, toggleSidebar }}
-    >
+    <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
         data-state={open ? "expanded" : "collapsed"}
@@ -83,6 +85,9 @@ function Sidebar({
   ...props
 }: React.ComponentProps<"aside">) {
   const { open, openMobile, setOpenMobile } = useSidebar()
+  const closeMobileSidebar = React.useCallback(() => {
+    setOpenMobile(false)
+  }, [setOpenMobile])
 
   return (
     <>
@@ -91,7 +96,7 @@ function Sidebar({
           aria-label="Close sidebar"
           className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
           type="button"
-          onClick={() => setOpenMobile(false)}
+          onClick={closeMobileSidebar}
         />
       ) : null}
       <aside
@@ -131,6 +136,18 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar()
+  const handleClick: React.ComponentProps<typeof Button>["onClick"] =
+    React.useCallback(
+      (
+        event: Parameters<
+          NonNullable<React.ComponentProps<typeof Button>["onClick"]>
+        >[0]
+      ) => {
+        onClick?.(event)
+        toggleSidebar()
+      },
+      [onClick, toggleSidebar]
+    )
 
   return (
     <Button
@@ -139,10 +156,7 @@ function SidebarTrigger({
       variant="ghost"
       size="icon-sm"
       className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
+      onClick={handleClick}
       {...props}
     >
       <PanelLeftIcon />

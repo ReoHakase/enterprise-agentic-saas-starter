@@ -31,6 +31,8 @@ export const Providers = ({ children }: PropsWithChildren) => {
           organization: "/organization",
         }}
         queryClient={queryClient}
+        // oxlint-disable-next-line react_perf/jsx-no-new-array-as-prop
+        socialProviders={["github"]}
         // oxlint-disable-next-line react_perf/jsx-no-new-object-as-prop
         emailAndPassword={{ enabled: false }}
         // oxlint-disable-next-line react_perf/jsx-no-new-array-as-prop

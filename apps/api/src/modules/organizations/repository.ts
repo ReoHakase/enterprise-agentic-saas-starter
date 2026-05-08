@@ -325,7 +325,11 @@ export const listMembersByOrganization = async (
       .orderBy(user.name)
 
     return rows.map((row) => ({
-      ...row,
+      id: row.id,
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      image: row.image,
       role: normalizeOrganizationRole(row.role),
       createdAt: row.createdAt.toISOString(),
     }))
