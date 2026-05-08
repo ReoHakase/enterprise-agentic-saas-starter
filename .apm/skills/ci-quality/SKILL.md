@@ -13,6 +13,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - primary formatterはoxfmt。
 - Oxlint/Oxfmt configはTS形式（root `oxlint.config.ts` / `oxfmt.config.ts`、package固有 `oxlint.config.ts`）にする。Oxlint TS configの `extends` はパス文字列ではなく、root configをimportしてconfig objectを渡す。
 - root `package.json` は `"type": "module"` にし、NodeのTS config ESM読込warningを出さない。
+- Oxlint TS configはrootをimportする際、Node ESM loader都合で `.ts` 拡張子を明示する（`import rootConfig from "../../oxlint.config.ts"`）。`tsc --noEmit` がTS5097で落ちないよう、`oxlint.config.ts` を拾うpackage（`include: ["."]` や `**/*.ts` を持つもの）の `tsconfig.json` の `exclude` に `oxlint.config.ts` を加える。
 - Oxlint設定はrootに共通・基礎だけを置き、Next/React/Tailwindなどpackage固有設定は各packageからroot configを `extends` して分ける。
 - Oxfmt設定はroot一括にする。
 - Tailwind v4をOxlintで見る場合は `oxlint-tailwindcss` と `@tailwindcss/node` を一緒に入れる。
