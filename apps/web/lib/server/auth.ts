@@ -30,7 +30,11 @@ export const getSession = async (): Promise<Session | null> => {
   const response = await fetch(`${serverEnv.API_PUBLIC_URL}/auth/get-session`, {
     headers: cookie ? { cookie } : undefined,
     cache: "no-store",
-  })
+  }).catch(() => null)
+
+  if (!response) {
+    return null
+  }
 
   if (!response.ok) {
     return null

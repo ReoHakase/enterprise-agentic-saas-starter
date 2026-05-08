@@ -1,57 +1,36 @@
 "use client"
 
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   TodoWorkspace,
   type TodoUiItem,
-  type TodoUiOrganization,
 } from "@enterprise-agentic-saas/ui/components/todos"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { apiClient } from "@/lib/api-client"
 import {
   createTodo,
   deleteTodo,
-  listOrganizations,
   listTodos,
   todoQueryKeys,
-  updateTodo,
-  type OrganizationSummary,
   type Todo,
+  updateTodo,
 } from "@/lib/todos"
 
 type TodosDashboardProps = {
-  initialOrganizationId?: string
-  userLabel: string
+  organizationId: string
 }
 
-const EMPTY_ORGANIZATIONS: OrganizationSummary[] = []
-
-export const TodosDashboard = ({
-  initialOrganizationId,
-  userLabel,
-}: TodosDashboardProps) => {
+export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
   const queryClient = useQueryClient()
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState(
-    initialOrganizationId ?? ""
-  )
+  const [selectedOrganizationId, setSelectedOrganizationId] =
+    useState(organizationId)
   const [title, setTitle] = useState("")
   const [busyTodoId, setBusyTodoId] = useState<string>()
 
-  const organizationsQuery = useQuery({
-    queryKey: todoQueryKeys.organizations,
-    queryFn: () => listOrganizations(apiClient),
-  })
-
-  const organizations = organizationsQuery.data ?? EMPTY_ORGANIZATIONS
-
   useEffect(() => {
-    if (!selectedOrganizationId && organizations[0]) {
-      setSelectedOrganizationId(organizations[0].id)
-    }
-  }, [organizations, selectedOrganizationId])
+    setSelectedOrganizationId(organizationId)
+  }, [organizationId])
 
   const todosQuery = useQuery({
     queryKey: todoQueryKeys.todos(selectedOrganizationId),
@@ -104,10 +83,6 @@ export const TodosDashboard = ({
     },
   })
 
-  const uiOrganizations = useMemo(
-    () => organizations.map(toUiOrganization),
-    [organizations]
-  )
   const uiTodos = useMemo(
     () => (todosQuery.data ?? []).map(toUiTodo),
     [todosQuery.data]
@@ -132,35 +107,17 @@ export const TodosDashboard = ({
 
   return (
     <TodoWorkspace
-      organizations={uiOrganizations}
-      selectedOrganizationId={selectedOrganizationId}
       todos={uiTodos}
       pending={createMutation.isPending}
       busyTodoId={busyTodoId}
       title={title}
-      userLabel={userLabel}
-      onOrganizationChange={setSelectedOrganizationId}
       onTitleChange={setTitle}
       onCreate={handleCreate}
       onToggle={handleToggle}
       onDelete={handleDelete}
-    >
-      <Button
-        variant="outline"
-        nativeButton={false}
-        render={<Link href="/auth/sign-out">Sign out</Link>}
-      />
-    </TodoWorkspace>
+    />
   )
 }
-
-const toUiOrganization = (
-  organization: OrganizationSummary
-): TodoUiOrganization => ({
-  id: organization.id,
-  name: organization.name,
-  role: organization.role,
-})
 
 const toUiTodo = (todo: Todo): TodoUiItem => ({
   id: todo.id,
