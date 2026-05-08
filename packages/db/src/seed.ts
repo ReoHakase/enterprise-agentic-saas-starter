@@ -1,18 +1,23 @@
+import { faker } from "@faker-js/faker"
 import { createClient } from "@libsql/client"
+import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 import { seed, reset } from "drizzle-seed"
 
 import { env } from "./env"
 import * as schema from "./schema/index"
 
+const SEED = 42 as const
+
 const db = drizzle(
   createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN })
 )
 
 const main = async () => {
+  faker.seed(SEED)
   await reset(db, schema)
 
-  await seed(db, schema, { seed: 42 }).refine((f) => ({
+  await seed(db, schema, { seed: SEED }).refine((f) => ({
     user: {
       count: 20,
       columns: {
@@ -20,6 +25,7 @@ const main = async () => {
         name: f.fullName(),
         email: f.email(),
         emailVerified: f.default({ defaultValue: true }),
+        image: f.default({ defaultValue: "" }),
       },
       with: {
         account: 1,
@@ -31,6 +37,7 @@ const main = async () => {
         id: f.uuid(),
         name: f.companyName(),
         slug: f.string({ isUnique: true }),
+        logo: f.default({ defaultValue: "" }),
       },
       with: {
         member: [
@@ -83,6 +90,37 @@ const main = async () => {
       },
     },
   }))
+
+  const users = await db
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .orderBy(schema.user.id)
+  const userUpdates = users.map(({ id }) => ({
+    id,
+    image: faker.image.avatar(),
+  }))
+  await Promise.all(
+    userUpdates.map(({ id, image }) =>
+      db.update(schema.user).set({ image }).where(eq(schema.user.id, id))
+    )
+  )
+
+  const organizations = await db
+    .select({ id: schema.organization.id })
+    .from(schema.organization)
+    .orderBy(schema.organization.id)
+  const organizationUpdates = organizations.map(({ id }) => ({
+    id,
+    logo: `https://api.dicebear.com/9.x/shapes/svg?size=256&seed=${faker.string.alphanumeric(12)}`,
+  }))
+  await Promise.all(
+    organizationUpdates.map(({ id, logo }) =>
+      db
+        .update(schema.organization)
+        .set({ logo })
+        .where(eq(schema.organization.id, id))
+    )
+  )
 
   console.log("Seed completed.")
 }

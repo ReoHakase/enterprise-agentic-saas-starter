@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@faker-js/faker": "10.4.0",
     "@types/node": "catalog:",
     "drizzle-kit": "catalog:",
     "drizzle-seed": "catalog:",
