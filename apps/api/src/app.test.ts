@@ -203,6 +203,23 @@ const createSeededDb = async () => {
   return db
 }
 
+const updateRoleRequest = (input: {
+  userId: string
+  memberId: string
+  role: string
+}) =>
+  new Request(
+    `http://localhost/organizations/org_1/members/${input.memberId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-test-user-id": input.userId,
+      },
+      body: JSON.stringify({ role: input.role }),
+    }
+  )
+
 describe("createApp", () => {
   it("responds to health checks", async () => {
     const app = createApp(testDb())
@@ -245,9 +262,26 @@ describe("createApp", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual([
       {
-        active: false,
+        active: true,
         id: "org_1",
         memberCount: 3,
+        memberAvatars: [
+          {
+            image: null,
+            name: "User Four",
+            userId: "user_4",
+          },
+          {
+            image: null,
+            name: "User One",
+            userId: "user_1",
+          },
+          {
+            image: null,
+            name: "User Three",
+            userId: "user_3",
+          },
+        ],
         name: "Org One",
         permissions: {
           canEditOrganization: true,
@@ -287,13 +321,10 @@ describe("createApp", () => {
     const app = createApp(await createSeededDb())
 
     const response = await app.handle(
-      new Request("http://localhost/organizations/org_1/members/member_3", {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-test-user-id": "user_1",
-        },
-        body: JSON.stringify({ role: "super_admin" }),
+      updateRoleRequest({
+        userId: "user_1",
+        memberId: "member_3",
+        role: "super_admin",
       })
     )
 
@@ -309,21 +340,141 @@ describe("createApp", () => {
     ).toBe("super_admin")
   })
 
-  it("blocks admin users from managing super admins", async () => {
+  it("blocks admin users from promoting members", async () => {
     const app = createApp(await createSeededDb())
 
     const response = await app.handle(
-      new Request("http://localhost/organizations/org_1/members/member_1", {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-          "x-test-user-id": "user_3",
-        },
-        body: JSON.stringify({ role: "member" }),
+      updateRoleRequest({
+        userId: "user_3",
+        memberId: "member_4",
+        role: "admin",
       })
     )
 
     expect(response.status).toBe(403)
+  })
+
+  it("blocks admin users from transferring super admin", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_3",
+        memberId: "member_4",
+        role: "super_admin",
+      })
+    )
+
+    expect(response.status).toBe(403)
+  })
+
+  it("blocks admin users from demoting admins", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_3",
+        memberId: "member_3",
+        role: "member",
+      })
+    )
+
+    expect(response.status).toBe(403)
+  })
+
+  it("blocks admin users from managing super admins", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_3",
+        memberId: "member_1",
+        role: "member",
+      })
+    )
+
+    expect(response.status).toBe(403)
+  })
+
+  it("allows admin users to keep a member role unchanged", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_3",
+        memberId: "member_4",
+        role: "member",
+      })
+    )
+
+    expect(response.status).toBe(200)
+  })
+
+  it("allows super admins to promote and demote admins", async () => {
+    const app = createApp(await createSeededDb())
+
+    const promoteResponse = await app.handle(
+      updateRoleRequest({
+        userId: "user_1",
+        memberId: "member_4",
+        role: "admin",
+      })
+    )
+    expect(promoteResponse.status).toBe(200)
+    expect(
+      (await promoteResponse.json()).find(
+        (member: { id: string }) => member.id === "member_4"
+      )?.role
+    ).toBe("admin")
+
+    const demoteResponse = await app.handle(
+      updateRoleRequest({
+        userId: "user_1",
+        memberId: "member_3",
+        role: "member",
+      })
+    )
+    expect(demoteResponse.status).toBe(200)
+    expect(
+      (await demoteResponse.json()).find(
+        (member: { id: string }) => member.id === "member_3"
+      )?.role
+    ).toBe("member")
+  })
+
+  it("allows super admins to transfer ownership to members", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_1",
+        memberId: "member_4",
+        role: "super_admin",
+      })
+    )
+
+    expect(response.status).toBe(200)
+    const members = await response.json()
+    expect(
+      members.find((member: { id: string }) => member.id === "member_4")?.role
+    ).toBe("super_admin")
+    expect(
+      members.find((member: { id: string }) => member.id === "member_1")?.role
+    ).toBe("admin")
+  })
+
+  it("blocks demoting the final super admin", async () => {
+    const app = createApp(await createSeededDb())
+
+    const response = await app.handle(
+      updateRoleRequest({
+        userId: "user_1",
+        memberId: "member_1",
+        role: "admin",
+      })
+    )
+
+    expect(response.status).toBe(400)
   })
 
   it("blocks member users from organization mutations", async () => {

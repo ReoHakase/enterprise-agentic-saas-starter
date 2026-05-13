@@ -23,6 +23,11 @@ export type OrganizationSummary = {
   role: OrganizationRole
   active: boolean
   memberCount: number
+  memberAvatars: Array<{
+    userId: string
+    name: string
+    image: string | null
+  }>
   permissions: OrganizationPermissions
 }
 
@@ -60,6 +65,11 @@ const toSummary = (input: {
   role: string
   activeOrganizationId?: string | null
   memberCount: number
+  memberAvatars: Array<{
+    userId: string
+    name: string
+    image: string | null
+  }>
 }): OrganizationSummary => {
   const role = normalizeOrganizationRole(input.role)
 
@@ -70,6 +80,7 @@ const toSummary = (input: {
     role,
     active: input.activeOrganizationId === input.id,
     memberCount: input.memberCount,
+    memberAvatars: input.memberAvatars,
     permissions: permissionsForRole(role),
   }
 }
@@ -101,18 +112,64 @@ export const listOrganizationsForUser = async (
       })
     )
     const countByOrganization = new Map(memberCounts)
+    const avatarRows = await db
+      .select({
+        organizationId: member.organizationId,
+        userId: user.id,
+        name: user.name,
+        image: user.image,
+      })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .orderBy(user.name)
+    const avatarsByOrganization = new Map<
+      string,
+      Array<{ userId: string; name: string; image: string | null }>
+    >()
+    for (const avatar of avatarRows) {
+      const existing = avatarsByOrganization.get(avatar.organizationId) ?? []
+      existing.push({
+        userId: avatar.userId,
+        name: avatar.name,
+        image: avatar.image,
+      })
+      avatarsByOrganization.set(avatar.organizationId, existing)
+    }
 
     return rows.map((row) =>
       toSummary({
         ...row,
         activeOrganizationId: input.activeOrganizationId,
         memberCount: countByOrganization.get(row.id) ?? 0,
+        memberAvatars: avatarsByOrganization.get(row.id) ?? [],
       })
     )
   } catch (cause) {
     throw publicErrors.internal(cause, {
       module: "organizations",
       operation: "listOrganizationsForUser",
+    })
+  }
+}
+
+export const findFallbackActiveOrganizationIdForUser = async (
+  db: Db,
+  userId: string
+) => {
+  try {
+    const rows = await db
+      .select({ id: organization.id })
+      .from(member)
+      .innerJoin(organization, eq(member.organizationId, organization.id))
+      .where(eq(member.userId, userId))
+      .orderBy(organization.name)
+      .limit(1)
+
+    return rows[0]?.id ?? null
+  } catch (cause) {
+    throw publicErrors.internal(cause, {
+      module: "organizations",
+      operation: "findFallbackActiveOrganizationIdForUser",
     })
   }
 }
@@ -172,6 +229,7 @@ export const findOrganizationForUser = async (
         role: row.role,
         activeOrganizationId: input.activeOrganizationId,
         memberCount: memberCountRows[0]?.value ?? 0,
+        memberAvatars: [],
       }),
       logo: row.logo,
       createdAt: row.createdAt.toISOString(),
@@ -224,6 +282,7 @@ export const insertOrganizationWithSuperAdmin = async (
       role: "super_admin",
       active: false,
       memberCount: 1,
+      memberAvatars: [],
       invitationCount: 0,
       createdAt: created.createdAt.toISOString(),
       permissions: permissionsForRole("super_admin"),
@@ -292,6 +351,7 @@ export const updateOrganizationById = async (
       role: "super_admin",
       active: false,
       memberCount: memberCountRows[0]?.value ?? 0,
+      memberAvatars: [],
       invitationCount: 0,
       createdAt: row.createdAt.toISOString(),
       permissions: permissionsForRole("super_admin"),

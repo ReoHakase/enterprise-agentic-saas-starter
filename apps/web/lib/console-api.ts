@@ -15,6 +15,11 @@ export type OrganizationSummary = {
   role: OrganizationRole
   active: boolean
   memberCount: number
+  memberAvatars: Array<{
+    userId: string
+    name: string
+    image: string | null
+  }>
   permissions: OrganizationPermissions
 }
 

@@ -192,7 +192,7 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="sidebar-footer"
-      className={cn("flex flex-col gap-2 p-4", className)}
+      className={cn("flex flex-col gap-2 p-2", className)}
       {...props}
     />
   )
@@ -295,7 +295,10 @@ function SidebarSeparator({
   return (
     <Separator
       data-slot="sidebar-separator"
-      className={cn("mx-2 w-auto bg-sidebar-border", className)}
+      className={cn(
+        "mx-2 bg-sidebar-border data-horizontal:w-[calc(100%-1rem)]",
+        className
+      )}
       {...props}
     />
   )

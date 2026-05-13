@@ -17,6 +17,7 @@ import {
   cancelInvitationById,
   countSuperAdmins,
   deleteMemberById,
+  findFallbackActiveOrganizationIdForUser,
   findMemberById,
   findOrganizationForUser,
   insertInvitation,
@@ -49,7 +50,16 @@ const normalizeSlug = (slug: string) =>
 export const listOrganizations = async (
   db: Db,
   input: { userId: string; activeOrganizationId?: string | null }
-) => listOrganizationsForUser(db, input)
+) => {
+  const fallbackActiveOrganizationId =
+    input.activeOrganizationId ??
+    (await findFallbackActiveOrganizationIdForUser(db, input.userId))
+
+  return listOrganizationsForUser(db, {
+    userId: input.userId,
+    activeOrganizationId: fallbackActiveOrganizationId,
+  })
+}
 
 export const createOrganization = async (
   db: Db,
@@ -177,8 +187,10 @@ export const updateMemberRole = async (
   }
 
   if (actor.role === "admin") {
-    if (target.role !== "member" || input.role === "super_admin") {
-      throw publicErrors.forbidden("Admins can only manage members")
+    if (target.role !== "member" || input.role !== "member") {
+      throw publicErrors.forbidden(
+        "Only super admins can promote or demote roles"
+      )
     }
   }
 

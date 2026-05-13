@@ -17,7 +17,7 @@ export const ConsolePage = async ({
   const me = await api.getMe()
 
   if (requireOrganization && me.organizations.length === 0) {
-    redirect("/onboarding")
+    redirect("/settings/organizations")
   }
 
   return <ConsoleShell me={me}>{children}</ConsoleShell>

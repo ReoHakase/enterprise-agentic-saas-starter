@@ -306,7 +306,7 @@ const UserMenu = ({ user }: Pick<Me, "user">) => (
       render={
         <Button
           variant="ghost"
-          className="h-auto w-full justify-start px-2 py-2"
+          className="h-auto w-full justify-start gap-3 py-2 pr-4 pl-2"
         />
       }
     >

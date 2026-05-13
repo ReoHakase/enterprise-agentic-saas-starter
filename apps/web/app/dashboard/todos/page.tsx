@@ -22,7 +22,7 @@ export default async function TodosPage() {
     me.organizations[0]
 
   if (!activeOrganization) {
-    redirect("/onboarding")
+    redirect("/settings/organizations")
   }
 
   await queryClient.prefetchQuery({

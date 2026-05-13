@@ -37,6 +37,13 @@ const organizationSummaryModel = t.Object({
   role: organizationRoleModel,
   active: t.Boolean(),
   memberCount: t.Number(),
+  memberAvatars: t.Array(
+    t.Object({
+      userId: t.String(),
+      name: t.String(),
+      image: t.Nullable(t.String()),
+    })
+  ),
   permissions: permissionsModel,
 })
 

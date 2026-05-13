@@ -299,7 +299,7 @@ const GitHubMarkIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-export const OnboardingForm = () => {
+const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [name, setName] = useState("")
@@ -310,7 +310,11 @@ export const OnboardingForm = () => {
     startTransition(async () => {
       try {
         await browserConsoleApi.createOrganization({ name, slug })
-        router.replace("/dashboard")
+        setName("")
+        setSlug("")
+        if (redirectTo) {
+          router.replace(redirectTo)
+        }
         router.refresh()
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed")
@@ -319,10 +323,13 @@ export const OnboardingForm = () => {
   }
 
   return (
-    <form className="w-full max-w-md" onSubmit={handleSubmit}>
+    <form className="w-full" onSubmit={handleSubmit}>
       <Card>
         <CardHeader>
           <CardTitle>Create organization</CardTitle>
+          <CardDescription>
+            Create a workspace before using dashboards and todos.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <FieldGroup>
@@ -379,7 +386,7 @@ export const ProfileForm = ({ user }: Pick<Me, "user">) => {
   return (
     <form onSubmit={handleSubmit}>
       <Card>
-        <CardContent className="pt-6">
+        <CardContent>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="profile-name">Name</FieldLabel>
@@ -860,35 +867,88 @@ export const OrganizationsPanel = ({
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="grid gap-3">
-          {organizations.map((organization) => (
-            <div
-              key={organization.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border p-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{organization.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {organization.slug} · {roleLabel(organization.role)}
-                </p>
-              </div>
-              <Button
-                variant={organization.active ? "secondary" : "outline"}
-                disabled={pending || organization.active}
-                onClick={() => activate(organization.id)}
-              >
-                {organization.active ? "Active" : "Switch"}
-              </Button>
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Your organizations</CardTitle>
+          <CardDescription>
+            Switch the active organization for this session.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {organizations.length > 0 ? (
+            <div className="grid gap-3">
+              {organizations.map((organization) => (
+                <div
+                  key={organization.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{organization.name}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {organization.slug}
+                      </p>
+                      <Badge variant="secondary">
+                        {roleLabel(organization.role)}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex -space-x-2">
+                        {organization.memberAvatars
+                          .slice(0, 10)
+                          .map((memberAvatar) => (
+                            <Avatar
+                              key={`${organization.id}-${memberAvatar.userId}`}
+                              className="size-6 border-2 border-background"
+                            >
+                              <AvatarImage
+                                src={getSafeAvatarUrl(memberAvatar.image)}
+                                alt={memberAvatar.name}
+                              />
+                              <AvatarFallback className="text-[10px]">
+                                {memberAvatar.name.slice(0, 1).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          ))}
+                        {organization.memberAvatars.length > 10 ? (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ...
+                          </span>
+                        ) : null}
+                      </div>
+                      <span>{organization.memberCount} members</span>
+                    </div>
+                  </div>
+                  <Button
+                    variant={organization.active ? "secondary" : "outline"}
+                    disabled={pending || organization.active}
+                    onClick={() => activate(organization.id)}
+                  >
+                    {organization.active ? "Active" : "Switch"}
+                  </Button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Building2Icon />
+                </EmptyMedia>
+                <EmptyTitle>No organizations yet</EmptyTitle>
+                <EmptyDescription>
+                  Create an organization to unlock the console workspace.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
+      <OrganizationCreateForm />
+    </div>
   )
 }
-
 export const MembersPanel = ({
   organization,
   members,
@@ -902,7 +962,39 @@ export const MembersPanel = ({
   const [pending, startTransition] = useTransition()
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<"admin" | "member">("member")
+  const [pendingSuperAdminTransfer, setPendingSuperAdminTransfer] =
+    useState<OrganizationMember | null>(null)
   const canManage = organization.permissions.canManageMembers
+  const canManageRoles = organization.permissions.canManageAdmins
+  const superAdminCount = members.filter(
+    (member) => member.role === "super_admin"
+  ).length
+
+  const getRoleDisabledReason = () => {
+    if (canManageRoles) {
+      return null
+    }
+
+    return "Only Super Admins can change organization roles."
+  }
+
+  const isOnlySuperAdmin = (member: OrganizationMember) =>
+    member.role === "super_admin" && superAdminCount <= 1
+
+  const canSelectRole = (
+    member: OrganizationMember,
+    nextRole: OrganizationRole
+  ) => {
+    if (!canManageRoles) {
+      return nextRole === member.role
+    }
+
+    if (isOnlySuperAdmin(member) && nextRole !== "super_admin") {
+      return false
+    }
+
+    return true
+  }
 
   const updateRole = (memberId: string, nextRole: OrganizationRole) => {
     startTransition(async () => {
@@ -917,6 +1009,22 @@ export const MembersPanel = ({
         toast.error(error instanceof Error ? error.message : "Failed")
       }
     })
+  }
+
+  const changeRole = (
+    member: OrganizationMember,
+    nextRole: OrganizationRole
+  ) => {
+    if (nextRole === member.role) {
+      return
+    }
+
+    if (nextRole === "super_admin") {
+      setPendingSuperAdminTransfer(member)
+      return
+    }
+
+    updateRole(member.id, nextRole)
   }
 
   const invite = (event: FormEvent<HTMLFormElement>) => {
@@ -995,7 +1103,42 @@ export const MembersPanel = ({
         </Dialog>
       ) : null}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent>
+          <AlertDialog
+            open={pendingSuperAdminTransfer !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPendingSuperAdminTransfer(null)
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Transfer Super Admin</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingSuperAdminTransfer
+                    ? `${pendingSuperAdminTransfer.name} will become the Super Admin. The current Super Admin will be downgraded to Admin.`
+                    : "The selected member will become the Super Admin. The current Super Admin will be downgraded to Admin."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={pending}
+                  onClick={() => {
+                    const target = pendingSuperAdminTransfer
+                    if (!target) {
+                      return
+                    }
+                    setPendingSuperAdminTransfer(null)
+                    updateRole(target.id, "super_admin")
+                  }}
+                >
+                  Transfer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Table>
             <TableHeader>
               <TableRow>
@@ -1005,85 +1148,105 @@ export const MembersPanel = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage
-                          src={getSafeAvatarUrl(member.image)}
-                          alt={member.name}
-                        />
-                        <AvatarFallback>
-                          {member.name.slice(0, 1).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{member.name}</p>
-                        <p className="truncate text-sm text-muted-foreground">
-                          {member.email}
-                        </p>
+              {members.map((member) => {
+                const disabledReason = getRoleDisabledReason()
+                const onlySuperAdmin = isOnlySuperAdmin(member)
+
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage
+                            src={getSafeAvatarUrl(member.image)}
+                            alt={member.name}
+                          />
+                          <AvatarFallback>
+                            {member.name.slice(0, 1).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{member.name}</p>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {member.email}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {canManage ? (
+                    </TableCell>
+                    <TableCell>
                       <Select
                         value={member.role}
-                        disabled={pending}
+                        disabled={pending || disabledReason !== null}
                         onValueChange={(value) => {
                           if (isOrganizationRole(value)) {
-                            updateRole(member.id, value)
+                            changeRole(member, value)
                           }
                         }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-40">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="member">Member</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            {organization.permissions.canTransferSuperAdmin ? (
-                              <SelectItem value="super_admin">
-                                Super Admin
-                              </SelectItem>
-                            ) : null}
+                            <SelectItem
+                              value="member"
+                              disabled={!canSelectRole(member, "member")}
+                            >
+                              Member
+                            </SelectItem>
+                            <SelectItem
+                              value="admin"
+                              disabled={!canSelectRole(member, "admin")}
+                            >
+                              Admin
+                            </SelectItem>
+                            <SelectItem
+                              value="super_admin"
+                              disabled={!canSelectRole(member, "super_admin")}
+                            >
+                              Super Admin
+                            </SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>
-                    ) : (
-                      <Badge variant="secondary">
-                        {roleLabel(member.role)}
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canManage ? (
-                      <RemoveMemberButton
-                        disabled={pending || member.role === "super_admin"}
-                        onRemove={() => {
-                          startTransition(async () => {
-                            try {
-                              await browserConsoleApi.removeMember(
-                                organization.id,
-                                member.id
-                              )
-                              router.refresh()
-                            } catch (error) {
-                              toast.error(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Failed"
-                              )
-                            }
-                          })
-                        }}
-                      />
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
+                      {disabledReason ? (
+                        <p className="mt-2 max-w-56 text-xs text-muted-foreground">
+                          {disabledReason}
+                        </p>
+                      ) : null}
+                      {canManageRoles && onlySuperAdmin ? (
+                        <p className="mt-2 max-w-56 text-xs text-muted-foreground">
+                          Transfer Super Admin before demoting this member.
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {canManage ? (
+                        <RemoveMemberButton
+                          disabled={pending || member.role === "super_admin"}
+                          onRemove={() => {
+                            startTransition(async () => {
+                              try {
+                                await browserConsoleApi.removeMember(
+                                  organization.id,
+                                  member.id
+                                )
+                                router.refresh()
+                              } catch (error) {
+                                toast.error(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Failed"
+                                )
+                              }
+                            })
+                          }}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -1186,7 +1349,7 @@ export const OrganizationSettingsForm = ({
   return (
     <form onSubmit={handleSubmit}>
       <Card>
-        <CardContent className="pt-6">
+        <CardContent>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="org-name">Name</FieldLabel>
