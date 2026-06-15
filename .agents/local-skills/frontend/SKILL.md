@@ -48,5 +48,6 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - organization未所属ユーザーは `/onboarding` ではなく `/settings/organizations` に誘導する。org作成はorg一覧画面の作成formに集約し、auth必須ページのno-org guardも同じURLへredirectする。
 - Console sidebarはviewport固定（desktopはsticky `h-svh`、mobileはdrawer）を前提にし、page contentだけをscrollさせる。
 - Auth画面は `apps/web/app/auth/[path]/page.tsx` のpage-level compositionで背景・ブランド・previewを作り、`components/auth/*` はBetter Auth UIのview componentとして保つ。passwordlessが主導線なので、サインインの見た目調整はまず `MagicLink` fallbackにも反映する。
+- Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
 
 Cloudflare/OpenNextやenv schemaの具体例が必要なときだけ `references/frontend.md` を読む。
