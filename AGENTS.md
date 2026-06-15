@@ -4,13 +4,15 @@
 
 ## Skillsを優先する
 
-設計判断、実装規約、失敗から得た知見、環境依存の注意点は、通常の長い `docs/` より先に `.apm/skills/` へ反映する。
+設計判断、実装規約、失敗から得た知見、環境依存の注意点は、通常の長い `docs/` より先に `.agents/local-skills/` へ反映する。
+
+`.agents/local-skills` はrepo-local skillの正本、`.agents/skills` はNixが生成するagent実行用ディレクトリ。`.agents/skills` は直接編集しない。
 
 次に該当する情報を得たら、作業の一部として自発的に関連skillを更新する:
 
 - 次回のagentも同じ判断をする必要がある。
 - 一般的なモデル知識だけでは、このrepoの方針を誤りやすい。
-- Nix、APM、direnv、dotenvx、MCP、Turso、Better Auth、Cloudflare、CIなど環境差分で失敗しやすい。
+- Nix、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、Turso、Better Auth、Cloudflare、CIなど環境差分で失敗しやすい。
 - テンプレート利用者に再利用される可能性がある。
 
 既存skillに入らない関心ごとは、`description` で自然に発火できる単位の新しいskillとして追加する。巨大なumbrella skillにまとめない。
@@ -22,7 +24,7 @@
 ## Skill一覧
 
 - `package-management`: workspace layout、依存方向、package exports、API client配置。
-- `developer-environment`: `nix develop`、Bun、APM、direnv、dotenvx、MCP、secret読込、agent向け記録。
+- `developer-environment`: `nix develop`、Bun、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、secret読込、agent向け記録。
 - `frontend`: Next.js、Cloudflare/OpenNext、web env、`packages/ui`、Storybook配置。
 - `backend-api`: Elysia、`apps/api`、feature modules、Valibot、Eden、OpenAPI、OpenTelemetry。
 - `database`: Turso/libSQL、Drizzle、SQLite schema、migration、DB plugin。

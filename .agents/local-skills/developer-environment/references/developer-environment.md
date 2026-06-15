@@ -4,8 +4,10 @@
 
 ```txt
 nix develop / direnv (use flake):
-  flake.nix の devShell: bun（flake.lock 固定の nixpkgs の `pkgs.bun`）, turso-cli (turso), sqld, dotenvx, apm（[numtide/llm-agents.nix](https://github.com/numtide/llm-agents.nix) の `packages.<system>.apm`）
-  checks.devShell で `nix flake check` が devShell ビルドを検証
+  flake.nix の devShell: bun（flake.lock 固定の nixpkgs の `pkgs.bun`）, turso-cli (turso), sqld, dotenvx
+  flake.nix は inputs / skill bundle / MCP config / sync-agent-config / devShell / public outputs を1ファイルにまとめ、各blockの担当をコメントで明示する
+  `sync-agent-config`: agent-skills-nix の local install script + mcp-servers-nix flake-parts module の VS Code workspace shellHook + Codex/Cursor向け symlink を合成する
+  checks.devShell / checks.agent-skills で `nix flake check` が検証
 
 direnv:
   .envrc は `use flake` のみ。portless 用の `NODE_EXTRA_CA_CERTS`（`~/.portless/ca.pem`）は `flake.nix` の devShell `shellHook` で設定する。
@@ -23,11 +25,13 @@ Turso local dev:
 CI:
   GitHub Actions の `nix` ジョブが `nix flake check` を Quality ジョブと並列実行
 
-APM:
-  .apm/skills, instructions, promptsを管理
+agent skills:
+  repo固有skillは `.agents/local-skills` が正本。`.agents/skills` はrepo-local skillと外部skillをまとめたNix生成物なので、repo内で直接編集しない。
 
 MCP:
-  nextjs, playwright, turso, context7などで実装確認
+  VS Code workspace の `.vscode/mcp.json` は `mcp-servers-nix.flakeModule` の `config.mcp-servers.shellHook` に任せる
+  Codex の `.mcp.toml` と Cursor の `.cursor/mcp.json` は module の自動 symlink 対象外なので、`mcp-servers-nix.lib.mkConfig` と `sync-agent-config` 内の薄い symlink で補助生成する
+  next-devtools-mcp, chrome-devtools-mcpなどは nixpkgs の `pkgs.bun` から `bunx` を起動する
 ```
 
 ## secret
@@ -42,7 +46,7 @@ MCP:
 
 ## agent向け記録
 
-実装中にrepo固有の判断が増えたら、関連skillの `SKILL.md` に短く追加する。長いコード例や設定例は `references/` に移す。
+実装中にrepo固有の判断が増えたら、`.agents/local-skills` にある関連skillの `SKILL.md` に短く追加する。長いコード例や設定例は `references/` に移す。
 
 新規skillにする目安:
 

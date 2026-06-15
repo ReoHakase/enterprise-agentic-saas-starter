@@ -44,24 +44,16 @@ npm-debug.log*
 .DS_Store
 *.pem
 
-# VS Code / Cursor — local MCP config (often machine-specific or contains secrets)
+# Nix-generated MCP config
+.mcp.toml
 .vscode/mcp.json
-
-
-# APM dependencies
-apm_modules/
-config/apm/.apm
-config/apm/.agents
-config/apm/.claude
-config/apm/.codex
-config/apm/.cursor
-
-# APM generated target outputs
-.agents/
+.cursor/
 .claude/
 .codex/
-.cursor/
 .github/agents/
 .github/instructions/
 .github/prompts/
 .github/skills/
+
+# Nix-generated agent skills runtime target
+.agents/skills/

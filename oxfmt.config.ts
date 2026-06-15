@@ -16,7 +16,7 @@ export default defineConfig({
   ignorePatterns: [
     ".next/**",
     "**/.next/**",
-    ".apm/**",
+    ".agents/skills/**",
     ".turbo/**",
     "**/.turbo/**",
     "**/*.md",

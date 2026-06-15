@@ -21,7 +21,7 @@ gates, and agent-facing project knowledge.
 | Database  | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                                    |
 | Email     | React Email, console dev logger, noop test sender                                                                         |
 | Quality   | Oxlint, Oxfmt, Vitest, GitHub Actions                                                                                     |
-| Agent ops | APM skills under `.apm/skills`                                                                                            |
+| Agent ops | repo skills under `.agents/local-skills`, runtime skills and MCP config via Nix                                           |
 
 > [!NOTE]
 > Dependency versions are pinned in the root `workspaces.catalog`. Workspace
@@ -61,7 +61,7 @@ direnv allow    # once per clone; loads `use flake` from `.envrc`
 # or: nix develop
 ```
 
-The shell provides `bun`, `turso`, `sqld` (for `turso dev`), `dotenvx`, and `apm` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+The shell provides `bun`, `turso`, `sqld` (for `turso dev`), and `dotenvx` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 The Nix dev shell’s `bun` is whatever [`nixpkgs`](https://github.com/NixOS/nixpkgs) provides at the revision recorded in [`flake.lock`](flake.lock) (no per-platform zip hashes in this repo). After `nix flake lock --update-input nixpkgs`, match [`package.json`](package.json) `packageManager` / `engines` to `nix develop -c bun --version`.
 
@@ -69,7 +69,13 @@ If you use lefthook and Nix, commits that touch `flake.nix` or `flake.lock` run 
 
 **Quieter direnv:** Nix dev shells set many variables, so direnv prints a huge `direnv: export +…` line. Copy or merge [`config/direnv/direnv.toml`](config/direnv/direnv.toml) into `~/.config/direnv/direnv.toml` (add `[global]` / `hide_env_diff` if you already have settings there).
 
-For faster downloads of `llm-agents` packages, configure the Numtide cache in your user or system `nix.conf` as described in [llm-agents.nix](https://github.com/numtide/llm-agents.nix#binary-cache) (this flake does not set `nixConfig`, so non-trusted Nix installs avoid repeated “trusted-public-keys” warnings).
+The dev shell also runs `sync-agent-config`, which syncs repo-local and
+Nix-pinned external skills into ignored `.agents/skills/*` directories and
+writes local MCP config for Codex, VS Code, and Cursor. Run it manually with:
+
+```sh
+nix run .#sync-agent-config
+```
 
 ```sh
 bun install --frozen-lockfile
@@ -174,8 +180,10 @@ bun run build
 ```
 
 Each new workspace should carry its own README, Oxlint config, and focused
-Vitest coverage. Agent-facing conventions belong in `.apm/skills` when the
-decision should survive the current task.
+Vitest coverage. Agent-facing conventions belong in `.agents/local-skills`
+when the decision should survive the current task. `.agents/local-skills` is
+the source of truth; generated runtime skills under `.agents/skills` should not
+be edited in this repo.
 
 ## API Surface
 

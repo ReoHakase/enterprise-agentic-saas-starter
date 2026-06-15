@@ -1,6 +1,6 @@
 ---
 name: developer-environment
-description: enterprise-agentic-saas-starterのnix develop、Bun、APM、direnv、dotenvx、secret読み込み、MCP設定(nextjs/playwright/turso/context7)、開発環境bootstrap、agent向けドキュメント化ルールを変更するときに使う。
+description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、secret読み込み、MCP設定(nextjs/playwright/turso/context7)、開発環境bootstrap、agent向けドキュメント化ルールを変更するときに使う。
 ---
 
 # Developer Environment
@@ -11,7 +11,10 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、APM、direnv�
 
 - 開発環境は `nix develop` で定義する。
 - Bunはpackage manager/runtimeとして使う。
-- APMはagent skills/instructions/promptsの管理に使う。
+- repo固有skillは `.agents/local-skills` を正本としてgit管理する。
+- `.agents/skills` は `agent-skills-nix` が生成するagent実行用ディレクトリとして扱い、直接編集しない。
+- 外部skillとMCP設定は `agent-skills-nix` / `mcp-servers-nix` を `flake.lock` でpinし、`nix develop` の `sync-agent-config` で生成する。
+- 生成されたskill（例: `.agents/skills/next-best-practices`, `.agents/skills/developer-environment`）はこのrepoで直接編集しない。
 - direnvでrepoに入ったときの環境読込を行う。
 - dotenvxでsecretをenvファイルから安全に読み込む。secretをsourceやdocsへ書かない。
 - MCPはNext.js、Playwright、Turso、context7など、実装確認や最新仕様確認に使う。
@@ -23,7 +26,7 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、APM、direnv�
 
 ## agent向けドキュメント化
 
-このrepoで設計判断・実装規約・失敗から得た運用知識が増えたら、通常の長い `docs/` より先に `.apm/skills/<topic>` へ反映する。
+このrepoで設計判断・実装規約・失敗から得た運用知識が増えたら、通常の長い `docs/` より先に `.agents/local-skills/<topic>` へ反映する。
 
 追加・更新の基準:
 
@@ -31,6 +34,8 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、APM、direnv�
 - modelが一般知識だけでは間違えやすいrepo固有ルールである。
 - CI、secret、MCP、Nix、Turso、Better Authなど、環境差分で失敗しやすい。
 - 一度きりの説明ではなく、テンプレート利用者にも再利用される。
+
+外部skillの更新はskill本文を直接編集せず、`flake.lock` の input 更新で行う。
 
 既存skillに入らない新しい関心ごとは、description発火が明確になる単位で新しいskillを作る。
 
