@@ -146,6 +146,13 @@ export const member = sqliteTable(
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
+    uniqueIndex("member_organization_user_uidx").on(
+      table.organizationId,
+      table.userId
+    ),
+    uniqueIndex("member_organization_super_admin_uidx")
+      .on(table.organizationId)
+      .where(sql`${table.role} = 'super_admin'`),
   ]
 )
 
@@ -170,8 +177,18 @@ export const invitation = sqliteTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+    uniqueIndex("invitation_pending_organization_email_uidx")
+      .on(table.organizationId, sql`lower(${table.email})`)
+      .where(sql`${table.status} = 'pending'`),
   ]
 )
+
+export const rateLimit = sqliteTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: integer("last_request").notNull(),
+})
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
