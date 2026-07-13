@@ -1,5 +1,3 @@
-/* oxlint-disable eslint(func-style) */
-
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {

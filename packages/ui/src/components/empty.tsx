@@ -1,5 +1,3 @@
-/* oxlint-disable eslint(func-style) */
-
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 

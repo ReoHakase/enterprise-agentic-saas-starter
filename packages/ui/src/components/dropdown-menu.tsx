@@ -1,7 +1,5 @@
 "use client"
 
-/* oxlint-disable eslint(func-style) */
-
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { ChevronRightIcon, CheckIcon } from "lucide-react"
