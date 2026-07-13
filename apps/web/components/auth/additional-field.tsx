@@ -29,7 +29,6 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@enterprise-agentic-saas/ui/components/input-group"
-import { Label } from "@enterprise-agentic-saas/ui/components/label"
 import {
   Popover,
   PopoverContent,
@@ -38,6 +37,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -147,7 +147,7 @@ export function AdditionalField({
   if (inputType === "textarea") {
     return (
       <Field>
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <Textarea
           id={name}
@@ -171,7 +171,7 @@ export function AdditionalField({
 
     return (
       <Field>
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <Input
           id={name}
@@ -246,28 +246,42 @@ export function AdditionalField({
   }
 
   if (inputType === "select") {
+    const selectItems = [
+      { label: field.placeholder ?? "Select an option", value: null },
+      ...(field.options ?? []),
+    ]
+
     return (
       <Field>
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <Select
+          items={selectItems}
           name={name}
           defaultValue={
-            field.defaultValue != null ? String(field.defaultValue) : undefined
+            field.defaultValue != null ? String(field.defaultValue) : null
           }
           required={field.required}
           disabled={isPending || field.readOnly}
         >
           <SelectTrigger id={name} className="w-full">
-            <SelectValue placeholder={field.placeholder} />
+            <SelectValue>
+              {(value) =>
+                selectItems.find((item) => item.value === value)?.label ??
+                field.placeholder ??
+                "Select an option"
+              }
+            </SelectValue>
           </SelectTrigger>
 
           <SelectContent>
-            {field.options?.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              {field.options?.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
 
@@ -279,7 +293,7 @@ export function AdditionalField({
   if (inputType === "combobox") {
     return (
       <Field>
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <Combobox
           items={field.options ?? []}
@@ -334,7 +348,7 @@ export function AdditionalField({
   if (hasPrefix || hasSuffix) {
     return (
       <Field>
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <InputGroup>
           {hasPrefix && (
@@ -384,7 +398,7 @@ export function AdditionalField({
 
   return (
     <Field>
-      <Label htmlFor={name}>{field.label}</Label>
+      <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
       <Input
         id={name}
@@ -431,7 +445,7 @@ function SliderField({ name, field, isPending }: AdditionalFieldProps) {
   return (
     <Field>
       <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={name}>{field.label}</Label>
+        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
         <span className="text-sm text-muted-foreground tabular-nums">
           {formatter.format(value)}
         </span>
@@ -496,7 +510,7 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
 
   return (
     <Field data-invalid={!!error}>
-      <Label htmlFor={`${name}-date`}>{field.label}</Label>
+      <FieldLabel htmlFor={`${name}-date`}>{field.label}</FieldLabel>
 
       <div className="relative flex gap-2">
         {/* Visually-hidden input so required constraint validation fires on submit.
@@ -555,9 +569,9 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
 
         {isDateTime && (
           <Field className="w-32">
-            <Label htmlFor={`${name}-time`} className="sr-only">
+            <FieldLabel htmlFor={`${name}-time`} className="sr-only">
               {localization.settings.time}
-            </Label>
+            </FieldLabel>
 
             <Input
               type="time"

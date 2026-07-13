@@ -2,6 +2,7 @@
 
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import { Toaster } from "@enterprise-agentic-saas/ui/components/sonner"
+import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -48,7 +49,9 @@ export const Providers = ({ children }: PropsWithChildren) => {
           router.push(to)
         }}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <TooltipProvider delay={350}>{children}</TooltipProvider>
+        </ThemeProvider>
         <Toaster />
       </AuthProvider>
     </QueryClientProvider>

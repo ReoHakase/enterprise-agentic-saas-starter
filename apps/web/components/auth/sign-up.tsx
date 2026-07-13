@@ -178,7 +178,11 @@ export function SignUp({
   return (
     <Card className={cn("w-full max-w-sm", className)}>
       <CardHeader>
-        <CardTitle className="text-xl font-semibold">
+        <CardTitle
+          className="text-xl font-semibold"
+          role="heading"
+          aria-level={1}
+        >
           {localization.auth.signUp}
         </CardTitle>
       </CardHeader>

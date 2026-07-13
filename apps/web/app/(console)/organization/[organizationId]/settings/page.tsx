@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation"
 
-import { ConsolePage } from "@/components/console/console-page"
 import { OrganizationSettingsForm } from "@/components/console/forms"
 import { PageShell } from "@/components/page-shell"
-import { verifySession } from "@/lib/server/auth"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type OrganizationSettingsPageProps = {
@@ -14,7 +12,6 @@ export default async function OrganizationSettingsPage({
   params,
 }: OrganizationSettingsPageProps) {
   const { organizationId } = await params
-  await verifySession()
   const api = await createServerConsoleApi()
   const organization = await api.getOrganization(organizationId)
 
@@ -23,13 +20,11 @@ export default async function OrganizationSettingsPage({
   }
 
   return (
-    <ConsolePage>
-      <PageShell
-        title="Organization settings"
-        description="Update organization identity. Deletion is intentionally outside v1."
-      >
-        <OrganizationSettingsForm organization={organization} />
-      </PageShell>
-    </ConsolePage>
+    <PageShell
+      title="Organization settings"
+      description="Update organization identity. Deletion is intentionally outside v1."
+    >
+      <OrganizationSettingsForm organization={organization} />
+    </PageShell>
   )
 }

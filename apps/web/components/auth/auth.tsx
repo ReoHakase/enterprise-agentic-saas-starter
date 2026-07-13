@@ -5,6 +5,7 @@ import { useAuth } from "@better-auth-ui/react"
 import { type ComponentType, useEffect } from "react"
 
 import { ForgotPassword } from "./forgot-password"
+import { MagicLink } from "./magic-link"
 import type { SocialLayout } from "./provider-buttons"
 import { ResetPassword } from "./reset-password"
 import { SignIn } from "./sign-in"
@@ -25,7 +26,7 @@ export type AuthProps = {
  * When it's disabled, the `<Auth>` router redirects these to `signIn` so a
  * plugin's `fallbackViews.auth.signIn` (e.g. magic link) takes over.
  */
-const PASSWORD_ONLY_VIEWS = ["signUp", "forgotPassword", "resetPassword"]
+const PASSWORD_ONLY_VIEWS = ["forgotPassword", "resetPassword"]
 
 const AUTH_VIEWS: Partial<Record<AuthView, ComponentType<AuthProps>>> = {
   signIn: SignIn,
@@ -89,6 +90,17 @@ export function Auth({
 
   if (shouldRedirectToSignIn) {
     return null
+  }
+
+  if (authView === "signUp" && !emailAndPassword?.enabled) {
+    return (
+      <MagicLink
+        className={className}
+        mode="sign-up"
+        socialLayout={socialLayout}
+        socialPosition={socialPosition}
+      />
+    )
   }
 
   // 1. Plugin overrides (`views.auth[currentView]`) — first plugin wins,

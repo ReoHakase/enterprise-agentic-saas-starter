@@ -27,7 +27,7 @@ import { Label } from "@enterprise-agentic-saas/ui/components/label"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
-import { ArrowRightIcon, MailIcon } from "lucide-react"
+import { ArrowRightIcon } from "lucide-react"
 import { type SyntheticEvent, useState } from "react"
 import { toast } from "sonner"
 
@@ -39,6 +39,7 @@ import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 
 export type MagicLinkProps = {
   className?: string
+  mode?: "sign-in" | "sign-up"
   socialLayout?: SocialLayout
   socialPosition?: "top" | "bottom"
 }
@@ -53,13 +54,13 @@ export type MagicLinkProps = {
  */
 export function MagicLink({
   className,
+  mode = "sign-in",
   socialLayout,
   socialPosition = "bottom",
 }: MagicLinkProps) {
   const {
     authClient,
     basePaths,
-    emailAndPassword,
     localization,
     plugins,
     redirectTo,
@@ -100,29 +101,22 @@ export function MagicLink({
   }
 
   const showSeparator = socialProviders && socialProviders.length > 0
+  const creatingAccount = mode === "sign-up"
 
   return (
-    <Card
-      className={cn(
-        "w-full max-w-sm border border-foreground/10 bg-card/85 shadow-2xl shadow-primary/10 backdrop-blur-xl",
-        className
-      )}
-    >
-      <CardHeader className="gap-3 px-7 pt-7">
-        <div className="flex size-11 items-center justify-center rounded-4xl bg-primary/10 text-primary">
-          <MailIcon aria-hidden="true" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <CardTitle className="text-2xl font-semibold tracking-normal">
-            {localization.auth.signIn}
-          </CardTitle>
-          <CardDescription>
-            Enter your email and we will send a secure sign-in link.
-          </CardDescription>
-        </div>
+    <Card className={cn("w-full max-w-sm", className)}>
+      <CardHeader className="text-center">
+        <CardTitle className="text-xl" role="heading" aria-level={1}>
+          {creatingAccount ? "Create account" : localization.auth.signIn}
+        </CardTitle>
+        <CardDescription>
+          {creatingAccount
+            ? "Enter your email to create an account with a secure magic link."
+            : "Enter your email and we will send a secure sign-in link."}
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="px-7 pb-7">
+      <CardContent>
         <div className="flex flex-col gap-6">
           {socialPosition === "top" && (
             <>
@@ -131,7 +125,7 @@ export function MagicLink({
               )}
 
               {showSeparator && (
-                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
+                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
                   {localization.auth.or}
                 </FieldSeparator>
               )}
@@ -181,16 +175,22 @@ export function MagicLink({
                   {magicLinkLocalization.sendMagicLink}
                   <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
                 </Button>
-                <PasskeySignInButton />
-
-                {plugins.flatMap((plugin) =>
-                  (plugin.authButtons ?? []).map((AuthButton, index) => (
-                    <AuthButton
-                      key={`${plugin.id}-${index.toString()}`}
-                      view="magicLink"
-                    />
-                  ))
-                )}
+                {!creatingAccount ? (
+                  <>
+                    <PasskeySignInButton />
+                    {plugins.flatMap((plugin) =>
+                      (plugin.id === magicLinkPlugin.id
+                        ? []
+                        : (plugin.authButtons ?? [])
+                      ).map((AuthButton, index) => (
+                        <AuthButton
+                          key={`${plugin.id}-${index.toString()}`}
+                          view="magicLink"
+                        />
+                      ))
+                    )}
+                  </>
+                ) : null}
               </div>
             </FieldGroup>
           </form>
@@ -198,7 +198,7 @@ export function MagicLink({
           {socialPosition === "bottom" && (
             <>
               {showSeparator && (
-                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
+                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
                   {localization.auth.or}
                 </FieldSeparator>
               )}
@@ -210,19 +210,31 @@ export function MagicLink({
           )}
         </div>
 
-        {emailAndPassword?.enabled && (
-          <div className="mt-4 flex w-full flex-col items-center gap-3">
-            <FieldDescription className="text-center">
-              {localization.auth.needToCreateAnAccount}{" "}
-              <Link
-                href={`${basePaths.auth}/${viewPaths.auth.signUp}`}
-                className="underline underline-offset-4"
-              >
-                {localization.auth.signUp}
-              </Link>
-            </FieldDescription>
-          </div>
-        )}
+        <div className="mt-4 flex w-full flex-col items-center gap-3">
+          <FieldDescription className="text-center">
+            {creatingAccount ? (
+              <>
+                Already have an account?{" "}
+                <Link
+                  href={`${basePaths.auth}/${viewPaths.auth.signIn}`}
+                  className="underline underline-offset-4"
+                >
+                  {localization.auth.signIn}
+                </Link>
+              </>
+            ) : (
+              <>
+                {localization.auth.needToCreateAnAccount}{" "}
+                <Link
+                  href={`${basePaths.auth}/${viewPaths.auth.signUp}`}
+                  className="underline underline-offset-4"
+                >
+                  {localization.auth.signUp}
+                </Link>
+              </>
+            )}
+          </FieldDescription>
+        </div>
       </CardContent>
     </Card>
   )

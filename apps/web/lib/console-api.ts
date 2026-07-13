@@ -83,6 +83,81 @@ type RequestOptions = {
   body?: unknown
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null
+
+const isErrorContextValue = (
+  value: unknown
+): value is string | number | boolean | null | undefined =>
+  value === null ||
+  value === undefined ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean"
+
+const getErrorContext = (
+  value: unknown
+): ConsoleApiErrorContext | undefined => {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  const context: ConsoleApiErrorContext = {}
+  for (const [key, contextValue] of Object.entries(value)) {
+    if (isErrorContextValue(contextValue)) {
+      context[key] = contextValue
+    }
+  }
+  return context
+}
+
+const getErrorPayload = (value: unknown) => {
+  if (!isRecord(value) || !isRecord(value.error)) {
+    return {}
+  }
+
+  const { code, context, message } = value.error
+  return {
+    code: typeof code === "string" ? code : undefined,
+    context: getErrorContext(context),
+    message: typeof message === "string" ? message : undefined,
+  }
+}
+
+export type ConsoleApiErrorContext = Record<
+  string,
+  string | number | boolean | null | undefined
+>
+
+export class ConsoleApiError extends Error {
+  readonly code: string
+  readonly context: ConsoleApiErrorContext
+  readonly status: number
+
+  constructor({
+    code,
+    context,
+    message,
+    status,
+  }: {
+    code: string
+    context?: ConsoleApiErrorContext
+    message: string
+    status: number
+  }) {
+    super(message)
+    this.name = "ConsoleApiError"
+    this.code = code
+    this.context = context ?? {}
+    this.status = status
+  }
+}
+
+export const isStepUpRequiredError = (
+  error: unknown
+): error is ConsoleApiError =>
+  error instanceof ConsoleApiError && error.code === "step_up_required"
+
 export const roleLabel = (role: OrganizationRole) => {
   if (role === "super_admin") {
     return "Super Admin"
@@ -112,8 +187,13 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
     })
 
     if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      throw new Error(payload?.error?.message ?? "Request failed")
+      const payload = getErrorPayload(await response.json().catch(() => null))
+      throw new ConsoleApiError({
+        code: payload.code ?? "request_failed",
+        context: payload.context,
+        message: payload.message ?? "Request failed",
+        status: response.status,
+      })
     }
 
     const payload: T = await response.json()
@@ -158,16 +238,28 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
     updateMemberRole: (
       organizationId: string,
       memberId: string,
-      role: OrganizationRole
+      role: Exclude<OrganizationRole, "super_admin">
     ) =>
       request<OrganizationMember[]>(
         `/organizations/${organizationId}/members/${memberId}`,
         { method: "PATCH", body: { role } }
       ),
-    removeMember: (organizationId: string, memberId: string) =>
+    transferSuperAdmin: (
+      organizationId: string,
+      body: { memberId: string; confirmation: string }
+    ) =>
+      request<OrganizationMember[]>(
+        `/organizations/${organizationId}/ownership-transfer`,
+        { method: "POST", body }
+      ),
+    removeMember: (
+      organizationId: string,
+      memberId: string,
+      confirmation: string
+    ) =>
       request<{ id: string }>(
         `/organizations/${organizationId}/members/${memberId}`,
-        { method: "DELETE" }
+        { method: "DELETE", body: { confirmation } }
       ),
     listInvitations: (organizationId: string) =>
       request<OrganizationInvitation[]>(

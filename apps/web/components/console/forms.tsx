@@ -57,8 +57,8 @@ import {
   SelectGroup,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@enterprise-agentic-saas/ui/components/select"
+import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import {
   Table,
   TableBody,
@@ -92,6 +92,7 @@ import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { getSafeAvatarUrl } from "@/lib/avatar-url"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
+  isStepUpRequiredError,
   roleLabel,
   type Me,
   type OrganizationDetail,
@@ -108,6 +109,23 @@ const isInvitationRole = (value: string | null): value is "admin" | "member" =>
 
 const isOrganizationRole = (value: string | null): value is OrganizationRole =>
   value === "super_admin" || value === "admin" || value === "member"
+
+const invitationRoleOptions = [
+  { label: "Member", value: "member" },
+  { label: "Admin", value: "admin" },
+]
+
+const organizationRoleOptions = [
+  ...invitationRoleOptions,
+  { label: "Super Admin", value: "super_admin" },
+]
+
+const toOrganizationSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 
 type AuthResult<T> = {
   data?: T | null
@@ -304,6 +322,7 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
   const [pending, startTransition] = useTransition()
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
+  const [slugEdited, setSlugEdited] = useState(false)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -312,6 +331,8 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
         await browserConsoleApi.createOrganization({ name, slug })
         setName("")
         setSlug("")
+        setSlugEdited(false)
+        toast.success("Organization created")
         if (redirectTo) {
           router.replace(redirectTo)
         }
@@ -328,7 +349,7 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
         <CardHeader>
           <CardTitle>Create organization</CardTitle>
           <CardDescription>
-            Create a workspace before using dashboards and todos.
+            Create a tenant-isolated workspace for members and issues.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -338,7 +359,15 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
               <Input
                 id="organization-name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  const nextName = event.target.value
+                  setName(nextName)
+                  if (!slugEdited) {
+                    setSlug(toOrganizationSlug(nextName))
+                  }
+                }}
+                placeholder="Acme Operations"
+                autoComplete="organization"
                 required
               />
             </Field>
@@ -347,7 +376,15 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
               <Input
                 id="organization-slug"
                 value={slug}
-                onChange={(event) => setSlug(event.target.value)}
+                onChange={(event) => {
+                  setSlugEdited(true)
+                  setSlug(toOrganizationSlug(event.target.value))
+                }}
+                placeholder="acme-operations"
+                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                minLength={2}
+                maxLength={48}
+                spellCheck={false}
                 required
               />
               <FieldDescription>
@@ -355,7 +392,11 @@ const OrganizationCreateForm = ({ redirectTo }: { redirectTo?: string }) => {
               </FieldDescription>
             </Field>
             <Button disabled={pending} type="submit">
-              <PlusIcon data-icon="inline-start" />
+              {pending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <PlusIcon data-icon="inline-start" />
+              )}
               Create organization
             </Button>
           </FieldGroup>
@@ -945,7 +986,9 @@ export const OrganizationsPanel = ({
           )}
         </CardContent>
       </Card>
-      <OrganizationCreateForm />
+      <OrganizationCreateForm
+        redirectTo={organizations.length === 0 ? "/dashboard" : undefined}
+      />
     </div>
   )
 }
@@ -964,6 +1007,11 @@ export const MembersPanel = ({
   const [role, setRole] = useState<"admin" | "member">("member")
   const [pendingSuperAdminTransfer, setPendingSuperAdminTransfer] =
     useState<OrganizationMember | null>(null)
+  const [superAdminConfirmation, setSuperAdminConfirmation] = useState("")
+  const [stepUpRequest, setStepUpRequest] = useState<{
+    action?: string
+    maxAgeSeconds?: number
+  } | null>(null)
   const canManage = organization.permissions.canManageMembers
   const canManageRoles = organization.permissions.canManageAdmins
   const superAdminCount = members.filter(
@@ -996,7 +1044,28 @@ export const MembersPanel = ({
     return true
   }
 
-  const updateRole = (memberId: string, nextRole: OrganizationRole) => {
+  const handleMutationError = (error: unknown) => {
+    if (isStepUpRequiredError(error)) {
+      setStepUpRequest({
+        action:
+          typeof error.context.action === "string"
+            ? error.context.action
+            : undefined,
+        maxAgeSeconds:
+          typeof error.context.maxAgeSeconds === "number"
+            ? error.context.maxAgeSeconds
+            : undefined,
+      })
+      return
+    }
+
+    toast.error(error instanceof Error ? error.message : "Failed")
+  }
+
+  const updateRole = (
+    memberId: string,
+    nextRole: Exclude<OrganizationRole, "super_admin">
+  ) => {
     startTransition(async () => {
       try {
         await browserConsoleApi.updateMemberRole(
@@ -1006,7 +1075,26 @@ export const MembersPanel = ({
         )
         router.refresh()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed")
+        handleMutationError(error)
+      }
+    })
+  }
+
+  const transferSuperAdmin = (
+    member: OrganizationMember,
+    confirmation: string
+  ) => {
+    startTransition(async () => {
+      try {
+        await browserConsoleApi.transferSuperAdmin(organization.id, {
+          memberId: member.id,
+          confirmation,
+        })
+        setPendingSuperAdminTransfer(null)
+        setSuperAdminConfirmation("")
+        router.refresh()
+      } catch (error) {
+        handleMutationError(error)
       }
     })
   }
@@ -1038,7 +1126,7 @@ export const MembersPanel = ({
         setEmail("")
         router.refresh()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed")
+        handleMutationError(error)
       }
     })
   }
@@ -1074,6 +1162,7 @@ export const MembersPanel = ({
                 <Field>
                   <FieldLabel>Role</FieldLabel>
                   <Select
+                    items={invitationRoleOptions}
                     value={role}
                     onValueChange={(value) => {
                       if (isInvitationRole(value)) {
@@ -1082,12 +1171,16 @@ export const MembersPanel = ({
                     }}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        {roleLabel(role)}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
                         <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="admin" disabled={!canManageRoles}>
+                          Admin
+                        </SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -1105,10 +1198,47 @@ export const MembersPanel = ({
       <Card>
         <CardContent>
           <AlertDialog
+            open={stepUpRequest !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setStepUpRequest(null)
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm it is really you</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This security-sensitive change needs a recent sign-in
+                  {stepUpRequest?.maxAgeSeconds
+                    ? ` from the last ${Math.floor(stepUpRequest.maxAgeSeconds / 60)} minutes`
+                    : ""}
+                  . Sign in again, then retry the change.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Not now</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    const redirectTo = `${window.location.pathname}${window.location.search}`
+                    const action =
+                      stepUpRequest?.action ?? "organization.manage"
+                    window.location.assign(
+                      `/auth/sign-in?reauth=1&action=${encodeURIComponent(action)}&redirectTo=${encodeURIComponent(redirectTo)}`
+                    )
+                  }}
+                >
+                  Sign in again
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog
             open={pendingSuperAdminTransfer !== null}
             onOpenChange={(open) => {
               if (!open) {
                 setPendingSuperAdminTransfer(null)
+                setSuperAdminConfirmation("")
               }
             }}
           >
@@ -1121,17 +1251,41 @@ export const MembersPanel = ({
                     : "The selected member will become the Super Admin. The current Super Admin will be downgraded to Admin."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              <Field>
+                <FieldLabel htmlFor="super-admin-confirmation">
+                  Confirm the new Super Admin email
+                </FieldLabel>
+                <Input
+                  id="super-admin-confirmation"
+                  type="email"
+                  value={superAdminConfirmation}
+                  onChange={(event) =>
+                    setSuperAdminConfirmation(event.target.value)
+                  }
+                  placeholder={pendingSuperAdminTransfer?.email}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <FieldDescription>
+                  Type {pendingSuperAdminTransfer?.email ?? "the target email"}{" "}
+                  to acknowledge that ownership and destructive authority will
+                  move to this account.
+                </FieldDescription>
+              </Field>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  disabled={pending}
+                  variant="destructive"
+                  disabled={
+                    pending ||
+                    superAdminConfirmation !== pendingSuperAdminTransfer?.email
+                  }
                   onClick={() => {
                     const target = pendingSuperAdminTransfer
                     if (!target) {
                       return
                     }
-                    setPendingSuperAdminTransfer(null)
-                    updateRole(target.id, "super_admin")
+                    transferSuperAdmin(target, superAdminConfirmation)
                   }}
                 >
                   Transfer
@@ -1175,6 +1329,7 @@ export const MembersPanel = ({
                     </TableCell>
                     <TableCell>
                       <Select
+                        items={organizationRoleOptions}
                         value={member.role}
                         disabled={pending || disabledReason !== null}
                         onValueChange={(value) => {
@@ -1184,7 +1339,9 @@ export const MembersPanel = ({
                         }}
                       >
                         <SelectTrigger className="w-40">
-                          <SelectValue />
+                          <span className="min-w-0 flex-1 truncate text-left">
+                            {roleLabel(member.role)}
+                          </span>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
@@ -1223,21 +1380,24 @@ export const MembersPanel = ({
                     <TableCell className="text-right">
                       {canManage ? (
                         <RemoveMemberButton
-                          disabled={pending || member.role === "super_admin"}
-                          onRemove={() => {
+                          member={member}
+                          disabled={
+                            pending ||
+                            member.role === "super_admin" ||
+                            (organization.role === "admin" &&
+                              member.role !== "member")
+                          }
+                          onRemove={(confirmation) => {
                             startTransition(async () => {
                               try {
                                 await browserConsoleApi.removeMember(
                                   organization.id,
-                                  member.id
+                                  member.id,
+                                  confirmation
                                 )
                                 router.refresh()
                               } catch (error) {
-                                toast.error(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Failed"
-                                )
+                                handleMutationError(error)
                               }
                             })
                           }}
@@ -1254,7 +1414,7 @@ export const MembersPanel = ({
       {invitations.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Pending invitations</CardTitle>
+            <CardTitle>Invitations</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
             {invitations.map((invitation) => (
@@ -1264,21 +1424,30 @@ export const MembersPanel = ({
               >
                 <div>
                   <p className="font-medium">{invitation.email}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {roleLabel(invitation.role)}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      {roleLabel(invitation.role)}
+                    </p>
+                    <Badge variant="outline" className="capitalize">
+                      {invitation.status}
+                    </Badge>
+                  </div>
                 </div>
-                {canManage ? (
+                {canManage && invitation.status === "pending" ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       startTransition(async () => {
-                        await browserConsoleApi.cancelInvitation(
-                          organization.id,
-                          invitation.id
-                        )
-                        router.refresh()
+                        try {
+                          await browserConsoleApi.cancelInvitation(
+                            organization.id,
+                            invitation.id
+                          )
+                          router.refresh()
+                        } catch (error) {
+                          handleMutationError(error)
+                        }
                       })
                     }}
                   >
@@ -1295,35 +1464,73 @@ export const MembersPanel = ({
 }
 
 const RemoveMemberButton = ({
+  member,
   disabled,
   onRemove,
 }: {
+  member: OrganizationMember
   disabled: boolean
-  onRemove: () => void
-}) => (
-  <AlertDialog>
-    <AlertDialogTrigger
-      render={<Button variant="ghost" size="icon-sm" disabled={disabled} />}
+  onRemove: (confirmation: string) => void
+}) => {
+  const [open, setOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState("")
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (!nextOpen) {
+          setConfirmation("")
+        }
+      }}
     >
-      <Trash2Icon />
-      <span className="sr-only">Remove member</span>
-    </AlertDialogTrigger>
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>Remove member?</AlertDialogTitle>
-        <AlertDialogDescription>
-          This immediately removes the user from the organization.
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel>Cancel</AlertDialogCancel>
-        <AlertDialogAction variant="destructive" onClick={onRemove}>
-          Remove
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
-)
+      <AlertDialogTrigger
+        render={<Button variant="ghost" size="icon-sm" disabled={disabled} />}
+      >
+        <Trash2Icon />
+        <span className="sr-only">Remove {member.name}</span>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove {member.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This immediately removes the user from the organization. Type their
+            email to confirm.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Field>
+          <FieldLabel htmlFor={`remove-member-${member.id}`}>
+            Member email
+          </FieldLabel>
+          <Input
+            id={`remove-member-${member.id}`}
+            type="email"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            placeholder={member.email}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <FieldDescription>Type {member.email} exactly.</FieldDescription>
+        </Field>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={confirmation !== member.email}
+            onClick={() => {
+              onRemove(confirmation)
+              setOpen(false)
+            }}
+          >
+            Remove member
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
 
 export const OrganizationSettingsForm = ({
   organization,

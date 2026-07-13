@@ -27,7 +27,7 @@ import { Label } from "@enterprise-agentic-saas/ui/components/label"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
-import { ArrowRightIcon, LockKeyholeIcon } from "lucide-react"
+import { ArrowRightIcon } from "lucide-react"
 import { type ComponentType, type SyntheticEvent, useState } from "react"
 import { toast } from "sonner"
 
@@ -142,27 +142,17 @@ export function SignIn({
     emailAndPassword?.enabled && socialProviders && socialProviders.length > 0
 
   return (
-    <Card
-      className={cn(
-        "w-full max-w-sm border border-foreground/10 bg-card/85 shadow-2xl shadow-primary/10 backdrop-blur-xl",
-        className
-      )}
-    >
-      <CardHeader className="gap-3 px-7 pt-7">
-        <div className="flex size-11 items-center justify-center rounded-4xl bg-primary/10 text-primary">
-          <LockKeyholeIcon aria-hidden="true" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <CardTitle className="text-2xl font-semibold tracking-normal">
-            {localization.auth.signIn}
-          </CardTitle>
-          <CardDescription>
-            Sign in to continue to your organization workspace.
-          </CardDescription>
-        </div>
+    <Card className={cn("w-full max-w-sm", className)}>
+      <CardHeader className="text-center">
+        <CardTitle className="text-xl" role="heading" aria-level={1}>
+          {localization.auth.signIn}
+        </CardTitle>
+        <CardDescription>
+          Sign in to continue to your organization workspace.
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="px-7 pb-7">
+      <CardContent>
         <div className="flex flex-col gap-6">
           {socialPosition === "top" && (
             <>
@@ -171,7 +161,7 @@ export function SignIn({
               )}
 
               {showSeparator && (
-                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
+                <FieldSeparator className="m-0 flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
                   {localization.auth.or}
                 </FieldSeparator>
               )}
@@ -299,7 +289,7 @@ export function SignIn({
           {socialPosition === "bottom" && (
             <>
               {showSeparator && (
-                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card/85">
+                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
                   {localization.auth.or}
                 </FieldSeparator>
               )}

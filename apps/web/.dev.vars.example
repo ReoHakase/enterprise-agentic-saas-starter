@@ -1,0 +1,18 @@
+NEXTJS_ENV=development
+NEXT_INC_CACHE_R2_PREFIX=incremental-cache
+
+# `bun run dev:spotlight` injects both Spotlight variables automatically.
+# Keep them unset for the normal local development command.
+# SENTRY_SPOTLIGHT=http://localhost:8969/stream
+# NEXT_PUBLIC_SENTRY_SPOTLIGHT=http://localhost:8969/stream
+
+# Production Sentry values are injected by Cloudflare/build CI. Do not commit
+# a real DSN or auth token to this file.
+# SENTRY_DSN=https://public-key@o0.ingest.sentry.io/project-id
+# NEXT_PUBLIC_SENTRY_DSN=https://public-key@o0.ingest.sentry.io/project-id
+# SENTRY_ENVIRONMENT=staging
+# NEXT_PUBLIC_SENTRY_ENVIRONMENT=staging
+# SENTRY_ERROR_SAMPLE_RATE=1
+# NEXT_PUBLIC_SENTRY_ERROR_SAMPLE_RATE=1
+# SENTRY_TRACES_SAMPLE_RATE=0.1
+# NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE=0.1

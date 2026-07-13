@@ -1,16 +1,33 @@
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 
 import "@enterprise-agentic-saas/ui/globals.css"
-import { Geist, Geist_Mono } from "next/font/google"
+import type { Metadata, Viewport } from "next"
+import { Geist_Mono, Inter } from "next/font/google"
 
 import { Providers } from "@/components/providers"
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
+
+export const metadata: Metadata = {
+  title: {
+    default: "Enterprise SaaS",
+    template: "%s · Enterprise SaaS",
+  },
+  description:
+    "A secure multi-tenant workspace for organizations, members, and issues.",
+  applicationName: "Enterprise SaaS",
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "light dark",
+}
 
 export default function RootLayout({
   children,
@@ -25,10 +42,10 @@ export default function RootLayout({
         "antialiased",
         fontMono.variable,
         "font-sans",
-        geist.variable
+        inter.variable
       )}
     >
-      <body>
+      <body className="min-h-svh">
         <Providers>{children}</Providers>
       </body>
     </html>
