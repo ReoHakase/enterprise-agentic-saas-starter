@@ -11,6 +11,11 @@
     "./templates": {
       "types": "./src/templates/index.ts",
       "default": "./src/templates/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/types.ts",
+      "workerd": "./src/runtime/workerd.ts",
+      "default": "./src/runtime/default.ts"
     }
   },
   "scripts": {

@@ -20,6 +20,7 @@
     "@enterprise-agentic-saas/db": "workspace:*",
     "@enterprise-agentic-saas/email": "workspace:*",
     "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "envin": "catalog:",
     "valibot": "catalog:"
   },
@@ -27,7 +28,6 @@
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@libsql/client": "catalog:",
     "@types/node": "catalog:",
-    "drizzle-orm": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

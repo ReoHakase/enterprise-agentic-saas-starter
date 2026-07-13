@@ -9,6 +9,9 @@ node_modules
 .pnp.js
 
 # Local env files
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 .env
 .env.local
 .env.development
@@ -17,9 +20,12 @@ node_modules
 .env.test.local
 .env.production
 .env.production.local
+!.env.test.example
 
 # Testing
 coverage
+playwright-report/
+test-results/
 
 # Local databases and generated runtime state
 .local/
@@ -31,6 +37,9 @@ coverage
 .vercel
 
 # Build Outputs
+.open-next/
+.wrangler/
+storybook-static/
 .next/
 **/next-env.d.ts
 out/

@@ -140,6 +140,15 @@
                 "next-devtools-mcp"
               ];
             };
+
+            sentry-spotlight = {
+              command = "${pkgs.bun}/bin/bunx";
+              args = [
+                "-y"
+                "@spotlightjs/spotlight@4.11.7"
+                "mcp"
+              ];
+            };
           };
 
           # MCP: Cursor は Claude Code 互換の stdio type を付ける。
@@ -191,7 +200,13 @@
               pkgs.turso-cli
               pkgs.sqld
               pkgs.dotenvx
+              # health/OpenAPI/Worker outputを同じshellで検査する。
+              pkgs.curl
+              pkgs.jq
             ];
+
+            # Wrangler/OpenNext/Playwright/Storybookはroot catalogで固定し、
+            # Bun workspaceから実行する。flake側でversion sourceを重ねない。
 
             # dev shell: Portless の local CA を Node/Bun 系 tooling に渡す。
             shellHook = ''

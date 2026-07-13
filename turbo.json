@@ -2,48 +2,151 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
   "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": []
+      "outputs": [],
+      "env": [
+        "NODE_ENV",
+        "APP_NAME",
+        "APP_BASE_URL",
+        "API_PUBLIC_URL",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_SECRET",
+        "AUTH_COOKIE_DOMAIN",
+        "TRUSTED_ORIGINS",
+        "CORS_ORIGIN",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "TURSO_DATABASE_URL",
+        "TURSO_AUTH_TOKEN",
+        "EMAIL_PROVIDER",
+        "EMAIL_FROM",
+        "SENTRY_DSN",
+        "SENTRY_ENVIRONMENT",
+        "SENTRY_ERROR_SAMPLE_RATE",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT",
+        "SENTRY_RELEASE",
+        "SENTRY_TRACES_SAMPLE_RATE",
+        "NEXT_PUBLIC_*"
+      ],
+      "passThroughEnv": ["SENTRY_AUTH_TOKEN"]
     },
-    "@enterprise-agentic-saas/web#build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
+    "build:cloudflare": {
+      "cache": false,
+      "outputs": [".open-next/**", "dist/worker/**"],
+      "env": [
+        "NODE_ENV",
+        "APP_NAME",
+        "APP_BASE_URL",
+        "API_PUBLIC_URL",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_SECRET",
+        "AUTH_COOKIE_DOMAIN",
+        "TRUSTED_ORIGINS",
+        "CORS_ORIGIN",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "TURSO_DATABASE_URL",
+        "TURSO_AUTH_TOKEN",
+        "EMAIL_PROVIDER",
+        "EMAIL_FROM",
+        "SENTRY_DSN",
+        "SENTRY_ENVIRONMENT",
+        "SENTRY_ERROR_SAMPLE_RATE",
+        "SENTRY_RELEASE",
+        "SENTRY_TRACES_SAMPLE_RATE",
+        "NEXT_PUBLIC_*"
+      ],
+      "passThroughEnv": [
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT"
+      ]
     },
-    "@enterprise-agentic-saas/api#build": {
+    "build:storybook": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**"]
+      "outputs": ["storybook-static/**"]
     },
     "lint": {
-      "dependsOn": ["^lint"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "format": {
-      "dependsOn": ["^format"],
       "outputs": []
     },
     "format:check": {
-      "dependsOn": ["^format:check"],
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^test"],
+      "dependsOn": ["transit"],
+      "env": [
+        "NODE_ENV",
+        "APP_NAME",
+        "APP_BASE_URL",
+        "API_PUBLIC_URL",
+        "BETTER_AUTH_URL",
+        "BETTER_AUTH_SECRET",
+        "AUTH_COOKIE_DOMAIN",
+        "TRUSTED_ORIGINS",
+        "CORS_ORIGIN",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "TURSO_DATABASE_URL",
+        "TURSO_AUTH_TOKEN",
+        "EMAIL_PROVIDER",
+        "EMAIL_FROM"
+      ],
       "outputs": []
+    },
+    "test:storybook": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "outputs": ["test-results/**", "playwright-report/**"]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
-    "check": {
-      "dependsOn": ["lint", "format:check", "typecheck", "test"],
-      "outputs": []
+    "deploy": {
+      "dependsOn": ["build:cloudflare"],
+      "cache": false,
+      "passThroughEnv": [
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT",
+        "SENTRY_RELEASE"
+      ]
+    },
+    "storybook": {
+      "cache": false,
+      "persistent": true
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "SENTRY_DSN",
+        "SENTRY_ENVIRONMENT",
+        "SENTRY_ERROR_SAMPLE_RATE",
+        "SENTRY_RELEASE",
+        "SENTRY_SPOTLIGHT",
+        "SENTRY_TRACES_SAMPLE_RATE",
+        "NEXT_PUBLIC_SENTRY_DSN",
+        "NEXT_PUBLIC_SENTRY_ENVIRONMENT",
+        "NEXT_PUBLIC_SENTRY_SPOTLIGHT"
+      ]
     },
     "dev:portless": {
       "cache": false,

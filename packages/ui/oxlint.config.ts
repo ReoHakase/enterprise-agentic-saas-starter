@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: ["jsx-a11y", "react", "react-perf"],
   jsPlugins: ["oxlint-tailwindcss"],
   ignorePatterns: [
+    ".turbo/**",
+    "coverage/**",
+    "dist/**",
+    "node_modules/**",
+    "storybook-static/**",
+    "test-results/**",
     "src/components/calendar.tsx",
     "src/components/card.tsx",
     "src/components/checkbox.tsx",
@@ -25,6 +31,8 @@ export default defineConfig({
     "src/components/textarea.tsx",
   ],
   rules: {
+    "func-style": "off",
+    "import/no-unassigned-import": "off",
     "react/react-in-jsx-scope": "off",
     "react-perf/jsx-no-jsx-as-prop": "off",
     "tailwindcss/enforce-canonical": "warn",

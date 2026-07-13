@@ -14,7 +14,7 @@ pre-commit:
       stage_fixed: true
     oxlint:
       glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
-      run: bun run lint -- {staged_files}
+      run: bun run lint
 
 pre-push:
   commands:

@@ -11,15 +11,20 @@
     "./hooks/*": "./src/hooks/*.ts"
   },
   "scripts": {
-    "lint": "oxlint",
+    "build:storybook": "storybook build --output-dir storybook-static",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
+    "lint": "oxlint",
+    "storybook": "storybook dev --port 6006 --no-open",
+    "test": "vitest run --project=unit",
+    "test:storybook": "vitest run --project=storybook-light --project=storybook-dark",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "date-fns": "catalog:",
     "lucide-react": "catalog:",
     "next-themes": "catalog:",
     "react": "catalog:",
@@ -33,13 +38,28 @@
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@storybook/addon-a11y": "catalog:",
+    "@storybook/addon-docs": "catalog:",
+    "@storybook/addon-themes": "catalog:",
+    "@storybook/addon-vitest": "catalog:",
+    "@storybook/react-vite": "catalog:",
     "@tailwindcss/postcss": "catalog:",
+    "@testing-library/dom": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@turbo/gen": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "happy-dom": "catalog:",
     "oxlint-tailwindcss": "catalog:",
+    "storybook": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }
