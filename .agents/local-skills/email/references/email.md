@@ -55,36 +55,62 @@ export function MagicLinkEmail({ appName, url }: MagicLinkEmailProps) {
 ## console sender
 
 ```ts
-import type { SendEmail, SendEmailInput } from "../types"
+import type { EmailTemplate, SendEmail, SendEmailInput } from "../types"
 
-export type ConsoleEmailLogger = (input: SendEmailInput) => void
+export type ConsoleEmailEvent = {
+  template: EmailTemplate
+  recipientDomain: string | null
+  subject: string
+  textLength: number
+  htmlLength?: number
+  renderPropKeys: string[]
+}
 
-const defaultConsoleLogger: ConsoleEmailLogger = (input: SendEmailInput) => {
-  const payload: Record<string, unknown> = {
-    to: input.to,
+export type ConsoleEmailLogger = (event: ConsoleEmailEvent) => void
+
+const defaultConsoleLogger: ConsoleEmailLogger = (event) => {
+  console.info("email:send", event)
+}
+
+const eventFromInput = (input: SendEmailInput): ConsoleEmailEvent => {
+  const separator = input.to.lastIndexOf("@")
+  return {
+    template: input.template,
+    recipientDomain:
+      separator < 0 ? null : input.to.slice(separator + 1).toLowerCase(),
     subject: input.subject,
     textLength: input.text.length,
+    ...(input.html === undefined ? {} : { htmlLength: input.html.length }),
+    renderPropKeys:
+      input.renderProps && typeof input.renderProps === "object"
+        ? Object.keys(input.renderProps)
+        : [],
   }
-  if (input.html !== undefined) payload.htmlLength = input.html.length
-  if (input.renderProps !== undefined) payload.renderProps = input.renderProps
-  console.info("email:send", payload)
 }
 
 export function createConsoleSender(
   logger: ConsoleEmailLogger = defaultConsoleLogger
 ): SendEmail {
   return async (input: SendEmailInput) => {
-    logger(input)
+    logger(eventFromInput(input))
   }
 }
 ```
 
+loggerへ`SendEmailInput`そのものを渡さない。`renderProps`の値、recipient全文、text/htmlにはtokenや認証URLが含まれる。
+
 ## app側composition
 
 ```ts
-import { createConsoleSender, renderMagicLinkEmail } from "@enterprise-agentic-saas/email";
+import { renderMagicLinkEmail } from "@enterprise-agentic-saas/email";
+import { createRuntimeEmailSender } from "@enterprise-agentic-saas/email/runtime";
 
-const sendEmail = createConsoleSender();
+const sendEmail = createRuntimeEmailSender({
+  provider: env.EMAIL_PROVIDER,
+  runtime: env.NODE_ENV,
+  from: env.EMAIL_FROM,
+  fromName: env.APP_NAME,
+});
 
 export async function sendMagicLinkEmail(input: {
   email: string;
@@ -111,7 +137,14 @@ export async function sendMagicLinkEmail(input: {
     "./templates": {
       "types": "./src/templates/index.ts",
       "default": "./src/templates/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/types.ts",
+      "workerd": "./src/runtime/workerd.ts",
+      "default": "./src/runtime/default.ts"
     }
   }
 }
 ```
+
+Wranglerは`workerd` conditionを選ぶ。ここだけで`cloudflare:workers`の`env.EMAIL`と`waitUntil`を解決し、通常のBun/Node importではdefault runtimeを使う。

@@ -38,16 +38,16 @@ export const env = defineEnv({
 
 ## auth schema 生成
 
-`src/schema/auth.ts` は手書きせず、Better Auth CLI で生成する。
+`src/schema/auth.generated.ts` はBetter Auth CLIを起点に生成する。
 
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.ts \
+  --output packages/db/src/schema/auth.generated.ts \
   --yes
 ```
 
-auth pluginの構成を変えたら再生成 → git diff で確認 → commit。
+auth pluginの構成を変えたら再生成 → repo固有index/default差分を確認 → `db:generate` → SQL review → commit。pending invitation partial unique、memberのorganization/user unique、organizationごとのsuper admin partial uniqueなど、Better Authの標準生成外制約を消さない。
 
 ## app schema
 
@@ -71,7 +71,25 @@ export const todos = sqliteTable("todos", {
 })
 ```
 
-multi-tenant tableは `organizationId` などtenant境界をqueryで必ず使う。timestamp は `mode: "timestamp_ms"`（ミリ秒）に統一する。
+multi-tenant tableは `organizationId` などtenant境界をqueryで必ず使う。timestamp は `mode: "timestamp_ms"`（ミリ秒）に統一する。childがtenant IDを持つ場合はparentの `(id, organizationId)` へ複合外部キーを作り、DBでもcross-tenant参照を拒否する。
+
+## migration-first script
+
+```sh
+bun run --cwd packages/db db:generate
+bun run --cwd packages/db db:check
+bun run --cwd packages/db db:migrate
+bun run --cwd packages/db test
+```
+
+通常の開発起動に `drizzle-kit push` や暗黙resetを入れない。manual resetは次だけに限定する。
+
+```sh
+CONFIRM_DB_RESET=reset-local-development \
+  bun run --cwd packages/db db:reset
+```
+
+reset実装はlocal URLを検証し、`__drizzle_migrations` を含めて初期化した後に `drizzle-orm/libsql/migrator` で保存済みmigrationを全適用してからseedする。
 
 ## drizzle.config.ts
 

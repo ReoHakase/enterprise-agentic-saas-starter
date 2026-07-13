@@ -33,7 +33,8 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 
 - `packages/ui` の再利用componentは `packages/ui` 側にstoriesを置く。
 - Next.js依存の強いcomponentは `apps/web` 側にstoriesを置く。
-- a11yとinteractionはStorybook test runnerの責務に寄せる。E2Eに細かいcomponent状態を持ち込まない。
+- Storybook 10は `@storybook/addon-vitest` + `@vitest/browser-playwright` を標準経路にする。旧standalone test-runnerを新規追加しない。
+- a11yとinteractionはStorybook browser testの責務に寄せ、a11y violationをtest errorにする。light/darkを別projectで実行し、E2Eに細かいcomponent状態を持ち込まない。
 
 ## 実装時の確認
 
@@ -45,9 +46,27 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
 - App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
 - SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。todoなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
+- `activeOrganizationId = null` で複数membershipがある場合、`organizations[0]` をactive扱いしない。tenant data pageは `/settings/organizations` へ誘導し、sidebarは明示選択を表示する。switcherのno-op判定は選択target自身の `active === true` のときだけにする。
 - organization未所属ユーザーは `/onboarding` ではなく `/settings/organizations` に誘導する。org作成はorg一覧画面の作成formに集約し、auth必須ページのno-org guardも同じURLへredirectする。
 - Console sidebarはviewport固定（desktopはsticky `h-svh`、mobileはdrawer）を前提にし、page contentだけをscrollさせる。
+- Console routeはURLを変えない `app/(console)/layout.tsx` に集約し、`ConsoleShell` を各pageでwrapしない。これによりroute navigation中もsidebar・account・organization contextを維持し、nested `loading.tsx` / `error.tsx` はshell内のcontentだけを置換する。
+- Server Componentのcookie、session、console API、`me` は `react cache()` を使う `lib/server/*` helperでrequest内dedupeする。session endpointは401または200-nullだけを未認証とし、network errorと5xxをsign-in redirectへ変換せずerror boundaryへ送る。
 - Auth画面は `apps/web/app/auth/[path]/page.tsx` のpage-level compositionで背景・ブランド・previewを作り、`components/auth/*` はBetter Auth UIのview componentとして保つ。passwordlessが主導線なので、サインインの見た目調整はまず `MagicLink` fallbackにも反映する。
+- Authの `redirectTo` は先頭 `/` のlocal pathだけを許可し、`//`、backslash、encoded protocol-relative path、control characterをserver側で除外してからBetter Auth UIへ渡す。
+- shadcn preset/registry commandはframeworkを検出できる `apps/web` から実行する。`packages/ui` の `components.json` 相当設定は `apps/web/components.json` が共有packageのalias/CSSへ向けるため、`packages/ui` 直下からpreset applyしない。
+- `packages/ui/src/styles/globals.css` からworkspace appをscanする `@source` は `../../../../apps/**/*.{ts,tsx}`。`packages/apps` を指す `../../../apps` にしない。
+- TanStack Tableを使うissue/member等のpage-level compositionは `apps/web` に置き、`packages/ui` はTable、Dialog、Select等のprimitiveに留める。assignee selectorはmember APIの表示名/emailを候補にし、member/user idの手入力UIを作らない。
 - Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
+- OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
+- API Workerの `ATTACHMENTS` R2 bindingは将来の添付機能用予約であり、endpoint/storage module実装前に機能提供済みとdocumentしない。
+- Elysia Cloudflare adapterはexperimentalなので、Bun runtimeのunit testだけでproduction互換と判断しない。
+
+## SentryとSpotlight
+
+- Next App Routerは`instrumentation-client.ts`、`instrumentation.ts`、server/edge config、`global-error.tsx`を揃え、`onRequestError`とrouter transitionをSentryへ接続する。
+- `next.config.mjs`は既存OpenNext configを`withSentryConfig`でwrapする。source map uploadは`SENTRY_AUTH_TOKEN`、`SENTRY_ORG`、`SENTRY_PROJECT`が全てあるCIだけで有効にし、auth tokenをruntime/public envへ入れない。
+- browser/server/edgeは共通scrubber方針を使い、`sendDefaultPii: false`、user/cookie/header/body/email/tenant ID非送信を維持する。Session Replayはprivacy reviewなしに有効化しない。
+- developmentはproduction DSNへ送らず、Spotlight flagがある場合だけlocalhost sidecarへerror/log/traceを100%送る。`NEXT_PUBLIC_SENTRY_SPOTLIGHT`はbrowser、`SENTRY_SPOTLIGHT`はserver用。
+- clientの`tracePropagationTargets`は検証済みAPI originだけ、serverは`API_PUBLIC_URL`だけに限定する。変更後はNext buildだけでなくOpenNext `build:cloudflare`を通す。
 
 Cloudflare/OpenNextやenv schemaの具体例が必要なときだけ `references/frontend.md` を読む。

@@ -84,4 +84,6 @@ libsql://... token-like query
 - AppErrorをsafe responseへ変換する。
 - unknown errorを500へ丸める。
 - request idを必ず含める。
-- logとOpenTelemetryにはredacted errorだけを渡す。
+- structured log、Sentry error/transaction/breadcrumb/spanにはredacted errorだけを渡す。
+- `beforeSend`だけでなく`beforeSendTransaction`、`beforeBreadcrumb`、`beforeSendLog`へ同じkey/value/path scrubberを適用する。
+- Sentry requestにはmethodと正規化URLだけを残し、user、cookie/header/body/query、dynamic tenant/resource IDをdropする。

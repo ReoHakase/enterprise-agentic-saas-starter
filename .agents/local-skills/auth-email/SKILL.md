@@ -25,7 +25,7 @@ description: enterprise-agentic-saas-starterのBetter Auth、packages/auth、ses
 `packages/auth/client`:
 
 - `export const authClient` — フロントエンド用 Better Auth client
-- magicLinkClient + organizationClient plugin
+- passkeyClient + magicLinkClient + multiSessionClient + organizationClient plugin
 
 `apps/api`:
 
@@ -44,13 +44,13 @@ description: enterprise-agentic-saas-starterのBetter Auth、packages/auth、ses
 
 - singleton exportする。ファクトリは作らない。
 - Turso/libSQLなのでDrizzle adapterは `provider: "sqlite"`。
-- auth schemaは `packages/db/src/schema/auth.ts` に置き、Better Auth CLIで生成する（手書き禁止）。
+- auth schemaは `packages/db/src/schema/auth.generated.ts` に置き、Better Auth CLIで生成する（手書き禁止）。
 - plugin構成を変えたら必ず再生成する:
 
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.ts \
+  --output packages/db/src/schema/auth.generated.ts \
   --yes
 ```
 
@@ -58,7 +58,21 @@ bunx @better-auth/cli generate \
 - auth migrationと主要auth flowはTurso環境で実検証する。
 - API hostを `api.enterprise-agentic-saas.localhost`、web hostを `enterprise-agentic-saas.localhost` に分ける場合、Better Authは `basePath: "/auth"` としてElysiaに `/auth/*` でmountする。`/api` prefixは使わない。
 - web/API subdomain間でSSRとbrowser fetchのsession cookieを共有するため、Better Authでは `advanced.crossSubDomainCookies.enabled = true`、`domain = "enterprise-agentic-saas.localhost"`、`useSecureCookies = true` を設定する。`trustedOrigins` はweb originを明示する。
-- `better-auth-ui` / Better Auth client の `baseURL` はAPI originにするが、magic link・verification・OAuth の `callbackURL` はweb originで作る。client componentでは `window.location.origin` と `redirectTo` から絶対URL化し、`api.enterprise-agentic-saas.localhost` へ戻さない。
+- `better-auth-ui` / Better Auth client の `baseURL` はAPI originにするが、magic link・verification・OAuth の `callbackURL` はweb originで作る。client componentでは `window.location.origin` と `redirectTo` から絶対URL化し、`api.enterprise-agentic-saas.localhost` へ戻さない。server側invitation URLは必須 `TRUSTED_ORIGINS` の先頭web origin + `/organization/invitations/:id` で作り、`BETTER_AUTH_URL`（API origin）へ向けない。
+- magic link、email verification、organization invitationは `@enterprise-agentic-saas/email/runtime` の `createRuntimeEmailSender` で統一する。workerd exportはCloudflare `EMAIL` binding、default exportはconsole/noopを使い、productionのconsole providerはfail-closedにする。
+- Better Authの`advanced.backgroundTasks.handler`はworkerdでだけ`waitUntil`へ接続する。console logへraw URL/tokenやrecipient全文を出さない。
+- organization招待の作成・送信はtenant guard/auditを持つ`apps/api`だけを正本にする。Better Auth organization pluginへ別の`sendInvitationEmail`を設定して二重配送経路を作らない。
+- email送信eventはtemplate/domain/message ID/error code/retryableだけを許可し、magic link、verification URL、招待URL、recipient全文、HTML/text、provider raw errorをauth loggerやSentryへ渡さない。
+- 複数account切替はBetter Auth公式の `multiSession` / `multiSessionClient` をserver/clientの両方に入れる。同一browserでは最大5 accountとし、`listDeviceSessions` / `setActive` / `revoke` を使う。通常の `signOut` は保持中accountをすべてrevokeするため、個別削除と区別する。
+- Better Auth core/plugin endpointの仕様は `openAPI({ path: "/reference" })` で `/auth/reference` に公開し、app側Elysia OpenAPIから認証referenceへ誘導する。必要なら `auth.api.generateOpenAPISchema()` でOpenAPI 3.1 schemaを取得する。
+- Cloudflare Workersではin-memory rate limitを使わず、Better Authの `rateLimit.storage = "database"` でTursoへ永続化する。本番のclient IPはCloudflareが上書きする `cf-connecting-ip` だけを信頼し、magic link・multi-session切替・招待には個別ruleを置く。rate limit導入後はauth schemaを再生成し、`rateLimit` tableのmigrationを保存する。
+- Passkeyの `rpID` をlocal hostnameへhardcodeしない。必須 `TRUSTED_ORIGINS` 先頭のhostnameをRP ID、配列全体をpasskey verificationの許可originに使い、deploy先でも一致させる。
+- cross-subdomain cookie domainもlocal hostnameへhardcodeしない。productionでは `AUTH_COOKIE_DOMAIN` にweb/API共通の親domainを必須指定する。`.localhost` 開発だけはweb hostnameへfallbackしてよい。
+- organization所有権移管などの高リスク操作は `session.freshAge = 15分` とし、app側APIもsessionの `createdAt` を使って同じstep-up境界を強制する。UIの確認modalだけを認可境界にしない。
+- app側の `step_up_required` は403とし、public contextに `action`, `maxAgeSeconds`, `reason` を返す。専用の疑似reauth tokenは作らず、passkey・magic link等で新しいBetter Auth sessionを作ってからmutationをretryする。
+- 新規sessionの `activeOrganizationId` は、同じuserの未失効sessionで使われた最新のorganizationをmembership付きで再検証して継承する。該当contextがなくmembershipが1件だけなら自動選択し、複数ならnullのまま明示選択を要求する。`/me` は同じ規則でstale/null contextをtransaction内で永続修復し、表示だけのfallbackをactive扱いしない。
+- member削除transactionでは、削除されたuserが当該organizationをactiveにしている全sessionも、残る最新valid context、単一membership、nullの順でreconcileする。membership削除後にsessionだけを旧tenantへ残さない。
+- magic linkは `storeToken: "hashed"`、Better Auth全体のverification identifierもhashed保存にする。auth loggerはmessage、error args、SQL params、token、cookie、bodyを出さず固定metadataだけを出し、routerのunsafe fallback loggerへ非API errorを渡さずapp error boundaryへthrowする。DB障害を使ったdummy token非出力testを必須にする。
 
 ## 認可
 
@@ -69,7 +83,14 @@ bunx @better-auth/cli generate \
 - `packages/auth` のorganization pluginでは `creatorRole: "super_admin"` と custom `roles` を設定し、plugin構成を変えたら `packages/db/src/schema/auth.generated.ts` をBetter Auth CLIで再生成する。
 - `super_admin` はorganizationごとに必ず一人だけにする。Better Authのrole定義だけに任せず、`apps/api` 側のmember role更新で昇格時に旧 `super_admin` を `admin` へ落とし、最後の `super_admin` の降格・削除を拒否する。
 - organization memberのrole変更はapp側で強制する。`admin` は招待や通常member管理はできるが、`member -> admin`、`admin -> member`、`super_admin` 関連変更はできない。role昇格/降格と `super_admin` 移譲は `super_admin` だけ許可する。
+- `admin` が招待できるroleは `member` だけ。`super_admin` が招待で `admin` を付与する場合もfresh sessionを要求する。
+- `super_admin` 移管は通常role更新から分離し、target member emailのtyped confirmationとfresh sessionを要求する。移管、member削除、role変更とaudit insertは同一transactionにする。
+- `member` はDBで `(organization_id, user_id)` unique、`role = 'super_admin'` はorganizationごとのpartial uniqueを持つ。所有権移管transactionは旧super_adminを先にadminへ降格してからtargetを昇格し、前後のcountを検証する。逆順はpartial uniqueに違反する。
 - UI上の操作非表示は補助であり、`admin` が `super_admin` を触れないこと、`member` がmutationできないことはAPI integration testで確認する。
+- organizationの管理・参照APIは `apps/api` が正本。Better Auth organization pluginはdeny-by-defaultとし、招待recipient本人に必要な `get-invitation` / `list-user-invitations` / `accept-invitation` / `reject-invitation` の4 endpointだけを残す。organization/member/invitation/team/custom roleの他endpointは、readもmutationもtop-level `disabledPaths` で404にしてtenant guardや監査境界を迂回させない。
+- `disabledPaths` は `basePath` を除いた `/organization/...` のnormalized pathで指定する。各endpointの実methodでdirect `auth.handler` が404を返すこと、`/auth/open-api/generate-schema` のorganization pathが上記4つだけになることを回帰testにする。Better Auth更新でendpointが増えた場合もtestをfailさせ、公開可否を明示判断する。
+- 招待取消は`pending`かつ期限内だけを許可する。accepted/canceled/expiredを上書きせず409 `conflict` + `reason: invitation_not_pending` を返し、他tenantや不存在IDは同じ404にする。保存値がpendingでも期限切れなら一覧responseは`expired`として扱う。
+- invitation acceptanceはBetter Authの `organizationHooks.beforeAcceptInvitation` でもroleを `admin | member` にallowlistする。`owner`、`super_admin`、null、未知roleはstable errorでfail-closedにし、migrationでも該当する既存pending invitationをexpiredへ変換する。
 
 ## package品質
 

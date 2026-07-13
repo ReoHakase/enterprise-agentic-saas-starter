@@ -27,11 +27,11 @@ packages/db/
       auth.ts        # Better Auth CLI で生成 — 手書き禁止
       app.ts         # アプリ固有テーブル (todos 等)
       index.ts       # re-export
-    seed/
-      dev.ts         # 開発用seed
+    seed.ts          # 非破壊・決定的な開発用seed
+    reset.ts         # local限定のmigration-first手動reset
+    wait.ts          # local Turso接続待機
     index.ts         # singleton db export
-  scripts/
-    dev.ts           # turso dev → push → seed → studio
+  drizzle/           # commitするSQL、snapshot、migration journal
   drizzle.config.ts
 ```
 
@@ -71,10 +71,22 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - Tursoの現在仕様やCLI/APIの確認が必要なときはTurso MCPまたは公式情報を優先する。
 - Drizzle/Tursoのバージョン差分は変わりやすいので、依存追加やmigration設定変更前に確認する。
 - 開発用DBは `packages/db/.local/turso/dev.db` に永続化する。gitには入れない。
-- local dev bootstrapは `turso dev -> drizzle-kit push -> seed -> drizzle-kit studio` の順に `packages/db` の `dev` scriptでまとめる。
-- 開発中の即時反映は `drizzle-kit push` を使う。migration artifactをレビュー・保存する段階になったら `generate` / migration運用へ移す。
+- local dev bootstrapは `turso dev -> wait -> generate -> migrate -> seed -> studio` の順にする。開発起動でも `drizzle-kit push` は使わない。
+- schema変更は `db:generate` でSQL/snapshotを保存し、SQLとdata backfillをレビューしてから `db:migrate` する。CIは `db:check` とfresh/legacy migration testを通す。
 - seedは `drizzle-seed` を使う。auth/appの `text("id")` primary key は実アプリの生成と合わせて `f.uuid()` を明示し、整数風や任意文字列のIDを混ぜない。
+- seedは既存userがいるDBを破壊せずskipする。seed自体も `file:` またはlocalhost URLだけを許可し、Cloud Tursoへ開発用fake dataを投入しない。本番provisioningはmigrationと実ユーザーの明示的な初期管理者作成を別経路で行う。
+- 作り直しはlocal URLかつ `CONFIRM_DB_RESET=reset-local-development` の明示時だけ許可し、migration ledgerを含むtableをdrop → 保存済みmigration全適用 → seedの順にする。
 - local devで `turso dev` を使う場合、Turso CLIだけでなく `sqld` が `PATH` に必要。Cloud DB作成は `turso auth login` 済みでないと実行できない。
+
+## Tenant DB制約
+
+- tenant tableのrepository queryは常に `id + organizationId` を条件にする。
+- `todo_comments(todo_id, organization_id)` は `todos(id, organization_id)` への複合外部キーを持たせる。単独todo IDだけのFKでtenant整合性を表現しない。
+- pending invitationは `(organization_id, lower(email)) WHERE status='pending'` のpartial unique indexで同時duplicateを防ぐ。insert前にemailをlowercase保存し、expiredを更新しても、raceの最終防御はDBへ置く。
+- membershipは `(organization_id, user_id)` をuniqueにする。既存duplicateは最古の `(created_at, id)` rowをsurvivorにし、roleは `super_admin > admin > member` の最強値を引き継いでから削除する。
+- memberがいるorganizationはmigrationで最古のsuper adminだけを残し、ゼロならadmin優先・次にmember・最後に `(created_at, id)` の安定順で1名を昇格する。`role='super_admin'` のorganization partial unique indexはat-most-oneだけを保証するため、通常mutationはtransaction内でat-least-oneも維持する。memberがいないorganizationへmigrationがidentityを捏造してはならず、accessはfail closedにする。
+- pending invitationのroleは `admin` / `member` だけを許可し、migration時の `owner` / `super_admin` / null /未知roleはfail closedでexpiredにする。
+- SQLite table rebuildやunique index追加は既存dataのbackfill/dedupをmigration SQLに含め、legacy fixtureで変換をtestする。
 
 具体的なschema/client/migration例が必要なときだけ `references/database.md` を読む。
 

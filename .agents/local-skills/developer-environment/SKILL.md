@@ -23,6 +23,22 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - `.localhost` はportlessのデフォルトTLDなので、`package.json` の `portless.tld` は書かない。`tld` は未知のkeyとして警告される。
 - このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きの `turbo dev` に戻す。
 - `turso dev` は `PORT` envを読まないため、DBのportless scriptは `turso dev --port ${PORT:-8080}` のようにportlessが割り当てた `PORT` を明示的に渡す。
+- Wrangler/OpenNext/Playwright/Storybookはroot catalogと各workspaceのdevDependencyに固定し、flakeへ別versionのglobal CLIを重ねない。`nix develop` のBunから `bun run --cwd <workspace> ...` で起動する。
+- Cloudflare local envは各appの `.dev.vars`、共有key一覧は `.dev.vars.example` に置く。production secretはCloudflare/GitHub secretへ置き、`.dev.vars` をcommitしない。
+- 人向けrunbookの入口は `docs/README.md`。repo固有の判断をskillへ先に反映し、実行手順と運用checklistを `/docs` に展開する。
+
+## Spotlight
+
+- local observabilityは`bun run dev:spotlight`を入口にし、Spotlight sidecarとTurbo devを同時起動する。UI/sidecarは`http://localhost:8969`。
+- browserは`NEXT_PUBLIC_SENTRY_SPOTLIGHT`、Next server/APIは`SENTRY_SPOTLIGHT`を使う。値`1`またはlocalhost系の`/stream` URLだけをdevelopmentで受け入れ、production/remote hostでは無効化する。
+- Spotlight利用中は実Sentry DSNを使わずerror/log/traceを100% localへ送る。通常の`bun run dev`はSentry外送を行わない。
+- `flake.nix`のSpotlight MCP packageはexact versionで固定し、`sync-agent-config`で他MCPと一緒に生成する。MCPを使う前にsidecarを起動する。
+
+## Bun security scanner障害
+
+- `bunfig.toml`のSocket scannerはdependency installをfail-closedにする。scanner APIの5xxを脆弱性なしとして扱わず、設定を恒久的に削除しない。
+- localで外部scannerが繰り返し5xxになり作業継続が必要な場合だけ、`exact/linker/linkWorkspacePackages/saveTextLockfile/minimumReleaseAge`を同じ値にした一時bunfigを`bun install --config=<path>`へ渡す。一時fileは直後に削除し、通常configの`bun install --frozen-lockfile`を後で再実行する。
+- CI/release installはscannerを迂回しない。外部障害ならdependency gateを失敗のまま保ち、復旧後に再実行する。
 
 ## agent向けドキュメント化
 

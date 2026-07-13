@@ -23,7 +23,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - form部品の細かい状態。
 - pure function。
 - Valibot schemaの細かいvalidation。
-- component単体のa11y/interaction。これはStorybook test runnerへ寄せる。
+- component単体のa11y/interaction。これはStorybook Vitest browser testへ寄せる。
 
 ## 方針
 
@@ -32,13 +32,16 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - auth/session/org/permissionはE2Eで最低1本ずつ代表失敗ケースを置く。
 - test dataはtenant境界が見える名前にする。
 - flakyな外部OAuthやmail providerはPRではmock/smoke、mainでは実環境寄りに分ける。
+- PRの標準harnessは `apps/web/e2e/fixtures/mock-api.ts` とNext.jsをPlaywright `webServer` で同時起動する。mock stateをtestごとにresetし、並列実行しない。
+- 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
+- 動画はPlaywrightの `use.video` を `"on"` にし、成功・失敗・再試行を問わずすべてのrunを保持する。traceとscreenshotは失敗時のみ保持する。
 - Playwright MCPが使える場合はlocal UI確認、locator調査、失敗スクリーンショット確認に使う。
 
 ## 実装時の確認
 
-- `webServer` でNext.jsとAPIが起動するか。
+- `webServer` でNext.jsとmock/実APIが起動し、server/client両方のAPI URLが同じoriginを指すか。
 - envはdotenvx/direnv/GitHub Secretsから入り、secretをtest artifactへ出さないか。
-- trace、screenshot、video、HTML reportをCI artifactに残すか。
+- videoはすべてのrun、traceとscreenshotは失敗時に保持し、HTML reportとあわせてCI artifactに残すか。
 - tenant Aのユーザーがtenant Bのtodoを見られないことを確認しているか。
 
 具体的なPlaywright configやテスト例が必要なときだけ `references/e2e-test.md` を読む。

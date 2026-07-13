@@ -1,6 +1,6 @@
 ---
 name: error-handling
-description: enterprise-agentic-saas-starterのAppError、Error.cause、public/private context、Elysia onError、request id、validation error、redaction、OpenTelemetry error記録、secret漏洩防止を変更するときに使う。
+description: enterprise-agentic-saas-starterのAppError、Error.cause、public/private context、Elysia onError、request id、validation error、redaction、Sentry error記録、secret漏洩防止を変更するときに使う。
 ---
 
 # Error Handling
@@ -21,11 +21,15 @@ description: enterprise-agentic-saas-starterのAppError、Error.cause、public/p
 
 public context:
 
+- `action`
 - `field`
 - `reason`
 - `resource`
 - `constraint`
 - `retryAfter`
+- `maxAgeSeconds`
+
+public contextのkeyは上記allowlistに型で限定する。`organizationId`, `memberId`, `userId`, `invitationId`, `todoId` 等をrequestからresponseへ反射しない。tenant resourceの404は `{ resource: "organization" }` のような復旧用分類だけを返す。
 
 private context:
 
@@ -35,14 +39,19 @@ private context:
 - external response metadata
 - validation issues詳細
 
-private contextはlog/trace向け。responseには出さない。
+private contextは内部診断向け。responseには出さず、log/Sentryへ渡す場合も必ずallowlist化またはredactionする。
 
-## OpenTelemetry
+## Sentry
 
 - request idとtrace idを関連付ける。
 - `AppError` はstatus/codeをspan属性に残す。
 - unknown errorはgeneric 500としてresponseし、span/logにはredacted detailsだけ残す。
 - secret-looking attributeをspanへ載せない。
+- `beforeSend`だけでなくtransaction、breadcrumb、structured logにも同じscrubberを適用する。`sendDefaultPii`はfalse、local variables/server nameは収集しない。
+- requestはmethodとquery/hash/dynamic IDを除いたURLだけ残す。user object、cookie/header/body/form data、email/IP、tenant/resource IDはdropまたはredactする。
+- route未解決の404でもtenant slugや短いresource IDをtransaction名へ残さない。既知resource collection直下のsegmentは形式に依存せず`:id`へ正規化する。
+- exception message、stack frame URL、span description、tag/extra/context/log attribute内の自由文もcredential、DB URL、email、UUID、token patternをscrubする。
+- providerのraw errorを`captureException`へ直接渡さず、code/retryable等のallowlist metadataを持つapplication errorへ変換する。scrubber自体のVitestを必須にする。
 
 ## 実装時の確認
 

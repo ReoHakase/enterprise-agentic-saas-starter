@@ -9,12 +9,14 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import { Elysia, t } from "elysia"
 
 import { errorPlugin } from "./plugins/error"
+import { observabilityPlugin } from "./plugins/observability"
 import { openApiPlugin } from "./plugins/openapi"
 import { requestIdPlugin } from "./plugins/request-id"
 
 export const createApp = (db: Db) =>
   new Elysia()
     .use(requestIdPlugin)
+    .use(observabilityPlugin)
     .use(errorPlugin)
     .decorate("db", db)
     .get("/health", () => ({ status: "ok" as const }), {
@@ -27,24 +29,32 @@ export type App = ReturnType<typeof createApp>
 
 ## index.ts — 本番合成 + listen
 
-本番固有 plugin は `index.ts` で合成する。テストからは import しない。
+SentryをDBやappより先に初期化してから、本番固有pluginを合成する。テストからはimportしない。
 
 ```ts
-import { db } from "@enterprise-agentic-saas/db"
+import { initializeBunObservability } from "./observability/sentry-bun"
 
-import { createApp } from "./app"
-import { env } from "./env"
-import { authPlugin } from "./plugins/auth"
-import { corsPlugin } from "./plugins/cors"
-import { logixPlugin } from "./plugins/logix"
-import { serverTimingPlugin } from "./plugins/server-timing"
-import { telemetryPlugin } from "./plugins/telemetry"
+initializeBunObservability()
+
+const [
+  { db },
+  { createApp },
+  { env },
+  { authPlugin },
+  { corsPlugin },
+  { serverTimingPlugin },
+] = await Promise.all([
+  import("@enterprise-agentic-saas/db"),
+  import("./app"),
+  import("./env"),
+  import("./plugins/auth"),
+  import("./plugins/cors"),
+  import("./plugins/server-timing"),
+])
 
 const app = createApp(db)
   .use(authPlugin)
   .use(corsPlugin)
-  .use(telemetryPlugin)
-  .use(logixPlugin)
   .use(serverTimingPlugin)
 
 app.listen(env.PORT)
@@ -140,8 +150,9 @@ describe("createApp", () => {
 })
 ```
 
-## OpenAPI / OpenTelemetry
+## OpenAPI / observability
 
 - OpenAPI は API 確認・client integration 確認用。実装の source of truth を二重管理しすぎない。
-- OpenTelemetry は request id、route、status、duration、error code を追えるようにする。
-- secret や raw body を span attribute に載せない。
+- Bunはapp import前に`@sentry/bun`、CloudflareはWorker handlerを`@sentry/cloudflare`の`withSentry`でwrapする。`createApp(db)`へruntime clientを渡さない。
+- Sentry trace/logはrequest id、正規化route、status、duration、error codeを追えるようにする。CloudflareのSentry OTLP destinationと二重送信しない。
+- secret、raw body/header/query、email、tenant/resource IDをspan/log attributeに載せず、送信直前のscrubberでも除去する。

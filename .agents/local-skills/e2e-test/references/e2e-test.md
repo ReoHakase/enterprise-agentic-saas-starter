@@ -6,9 +6,7 @@
 apps/web/
   e2e/
     auth.spec.ts
-    organization.spec.ts
-    permissions.spec.ts
-    todos.spec.ts
+    fixtures/mock-api.ts
   playwright.config.ts
 ```
 
@@ -25,9 +23,13 @@ test("別organizationのtodoは見えない", async ({ page }) => {
 ## webServer確認
 
 - Next.js webを起動する。
-- Elysia APIを起動する。
+- PRでは決定的なmock API、stagingではElysia APIを起動する。
+- mock APIとNext.jsを2つの `webServer` entryで起動し、mock stateを各test前にresetする。
 - test用envをdotenvx/direnvから渡す。
-- trace/screenshot/video/reportをartifactへ残す。
+- `use.video` は `"on"` にし、成功・失敗・再試行を問わずすべてのrunをartifactへ残す。
+- traceとscreenshotは失敗時に保持し、HTML reportとあわせてartifactへ残す。
+
+mock harnessではcookie session、organization membership、tenantごとのIssueを最低限再現する。外部mail deliveryはpackage test、実認可はAPI integration testへ分担し、mockの403だけでsecurityを完了扱いにしない。
 
 ## Playwright MCP
 

@@ -4,7 +4,7 @@
 
 ```txt
 nix develop / direnv (use flake):
-  flake.nix の devShell: bun（flake.lock 固定の nixpkgs の `pkgs.bun`）, turso-cli (turso), sqld, dotenvx
+  flake.nix の devShell: bun（flake.lock 固定の nixpkgs の `pkgs.bun`）, turso-cli (turso), sqld, dotenvx, curl, jq
   flake.nix は inputs / skill bundle / MCP config / sync-agent-config / devShell / public outputs を1ファイルにまとめ、各blockの担当をコメントで明示する
   `sync-agent-config`: agent-skills-nix の local install script + mcp-servers-nix flake-parts module の VS Code workspace shellHook + Codex/Cursor向け symlink を合成する
   checks.devShell / checks.agent-skills で `nix flake check` が検証
@@ -18,6 +18,9 @@ dotenvx:
 
 Turso local dev:
   `turso dev` は `sqld` をPATHから起動する。Turso CLIがあっても `sqld` が無いとlocal dev DBは起動しない。Cloud DB作成は `turso auth login` が前提。
+
+workspace CLI:
+  Wrangler/OpenNext/Playwright/Storybookはroot catalogでversion固定し、package scriptから実行する。Nix dev shellへ同じCLIを追加してversion sourceを二重化しない。
 
 品質ゲート（ローカル）:
   flake 変更時、lefthook pre-commit で Nix がある場合のみ `nix flake check`
@@ -42,6 +45,7 @@ MCP:
 - ローカルでは API と DB で `TURSO_DATABASE_URL` を揃える（`apps/api` と `packages/db` に同じ値を書く）。
 - secret値をskill/reference/docsに書かない。
 - CIではGitHub Secretsやdotenvxの安全な注入を使う。
+- Cloudflare Worker local envは `apps/*/.dev.vars`、key templateは `.dev.vars.example`。productionはCloudflare vars/secretsとGitHub Environmentを使う。
 - public envは `NEXT_PUBLIC_*` だけ。
 
 ## agent向け記録

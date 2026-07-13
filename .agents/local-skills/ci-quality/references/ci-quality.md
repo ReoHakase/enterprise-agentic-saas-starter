@@ -7,14 +7,14 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "check": "turbo check",
-    "lint": "oxlint .",
+    "check": "bun run lint && bun run format:check && bun run typecheck && bun run test",
+    "lint": "turbo run lint",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "test": "turbo test",
     "test:unit": "turbo test:unit",
     "test:e2e": "turbo test:e2e",
-    "test:storybook": "turbo test:storybook",
+    "test:storybook": "turbo run test:storybook --filter=@enterprise-agentic-saas/ui",
     "typecheck": "turbo typecheck",
     "storybook": "turbo storybook"
   }
@@ -36,18 +36,14 @@
     "typecheck": { "dependsOn": ["^build"], "outputs": [] },
     "test:unit": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "test:e2e": {
-      "dependsOn": ["build"],
+      "cache": false,
       "outputs": ["test-results/**", "playwright-report/**"]
     },
     "test:storybook": {
-      "dependsOn": ["build-storybook"],
-      "outputs": ["test-results/**"]
-    },
-    "check": {
-      "dependsOn": ["lint", "format:check", "typecheck", "test:unit"],
+      "dependsOn": ["transit"],
       "outputs": []
     }
   }
@@ -69,3 +65,9 @@ playwright
 ```
 
 PRではPlaywright smoke、mainではfull E2Eに分けてもよい。
+
+現行Storybookは `storybook build` と `vitest run --project=storybook-light --project=storybook-dark` を別々に実行する。Cloudflareは `turbo run build:cloudflare` でdeployせずbundleまで検証する。
+
+root `bun run lint` はTurbo経由で各workspaceのcwdからpackage-local `oxlint.config.ts` を読む。rootで単一 `oxlint` を再帰実行しない。
+
+Lefthookのpre-commitでも `bun run lint` を引数なしで実行する。`{staged_files}` をroot lintへ渡すとTurboがfile pathをtask名として扱い、`Missing tasks in project` で失敗する。
