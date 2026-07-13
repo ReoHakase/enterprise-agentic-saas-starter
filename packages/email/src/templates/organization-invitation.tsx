@@ -1,14 +1,4 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components"
-
+import { AppEmail, EmailParagraph } from "../components/app-email"
 import { renderEmail } from "../render"
 import type { RenderedEmail } from "../types"
 
@@ -30,24 +20,23 @@ export const OrganizationInvitationEmail = ({
     : "You were invited"
 
   return (
-    <Html>
-      <Head />
-      <Preview>
-        {inviterText} to join {organizationName}
-      </Preview>
-      <Body>
-        <Container>
-          <Text>{inviterText}</Text>
-          <Text>
-            Join {organizationName} on {appName}.
-          </Text>
-          <Section>
-            <Button href={invitationUrl}>Accept invitation</Button>
-          </Section>
-          <Text>If you did not expect this invitation, you can ignore it.</Text>
-        </Container>
-      </Body>
-    </Html>
+    <AppEmail
+      appName={appName}
+      preview={`${inviterText} to join ${organizationName}`}
+      eyebrow="Organization invitation"
+      title={`Join ${organizationName}`}
+      actionLabel="Review invitation"
+      actionUrl={invitationUrl}
+      securityNote="Only accept this invitation if you recognize the organization and inviter. The link is intended for the invited email address and should not be forwarded."
+    >
+      <EmailParagraph>
+        {inviterText} to collaborate in {organizationName} on {appName}.
+      </EmailParagraph>
+      <EmailParagraph>
+        Review the organization before joining. Your access is scoped to the
+        role selected by its administrator and can be changed later.
+      </EmailParagraph>
+    </AppEmail>
   )
 }
 
@@ -61,7 +50,8 @@ export const renderOrganizationInvitationEmail = async (
   )
 
   return {
-    subject: `Join ${props.organizationName}`,
+    template: "organization_invitation",
+    subject: `Invitation to join ${props.organizationName}`,
     html,
     text,
     renderProps: props,

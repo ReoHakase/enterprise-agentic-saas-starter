@@ -1,14 +1,4 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components"
-
+import { AppEmail, EmailParagraph } from "../components/app-email"
 import { renderEmail } from "../render"
 import type { RenderedEmail } from "../types"
 
@@ -18,19 +8,23 @@ export type MagicLinkEmailProps = {
 }
 
 export const MagicLinkEmail = ({ appName, url }: MagicLinkEmailProps) => (
-  <Html>
-    <Head />
-    <Preview>Sign in to {appName}</Preview>
-    <Body>
-      <Container>
-        <Text>Sign in to {appName}</Text>
-        <Section>
-          <Button href={url}>Sign in</Button>
-        </Section>
-        <Text>If you did not request this, you can ignore this email.</Text>
-      </Container>
-    </Body>
-  </Html>
+  <AppEmail
+    appName={appName}
+    preview={`Your secure sign-in link for ${appName}`}
+    eyebrow="Secure sign in"
+    title="Continue to your workspace"
+    actionLabel="Sign in securely"
+    actionUrl={url}
+    securityNote="This one-time link is tied to your sign-in request. If you did not request it, you can safely ignore this email. Never forward this message."
+  >
+    <EmailParagraph>
+      Use the button below to finish signing in to {appName}. You will return to
+      the organization and task workspace you were using.
+    </EmailParagraph>
+    <EmailParagraph>
+      For your security, this link may expire and can only be used as intended.
+    </EmailParagraph>
+  </AppEmail>
 )
 
 export default MagicLinkEmail // email devで表示するために必要
@@ -41,7 +35,8 @@ export const renderMagicLinkEmail = async (
   const { html, text } = await renderEmail(<MagicLinkEmail {...props} />)
 
   return {
-    subject: `Sign in to ${props.appName}`,
+    template: "magic_link",
+    subject: `Your secure sign-in link for ${props.appName}`,
     html,
     text,
     renderProps: props,

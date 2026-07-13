@@ -14,20 +14,32 @@ const commaSeparatedList = v.pipe(
 )
 
 export const env = defineEnv({
+  shared: {
+    NODE_ENV: v.pipe(
+      v.optional(v.string(), "development"),
+      v.picklist(["development", "test", "production"])
+    ),
+  },
   server: {
     APP_NAME: v.fallback(
       v.pipe(v.string(), v.minLength(1)),
       "Enterprise Agentic SaaS"
     ),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(1)),
-    BETTER_AUTH_URL: v.pipe(v.string(), v.minLength(1)),
+    BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
+    AUTH_COOKIE_DOMAIN: v.optional(v.pipe(v.string(), v.minLength(1))),
     GITHUB_CLIENT_ID: v.pipe(v.string(), v.minLength(1)),
     GITHUB_CLIENT_SECRET: v.pipe(v.string(), v.minLength(1)),
-    TRUSTED_ORIGINS: commaSeparatedList,
+    TRUSTED_ORIGINS: v.pipe(
+      commaSeparatedList,
+      v.array(v.pipe(v.string(), v.url())),
+      v.minLength(1, "At least one trusted web origin is required")
+    ),
     EMAIL_PROVIDER: v.pipe(
       v.optional(v.string(), "console"),
-      v.picklist(["console", "noop"])
+      v.picklist(["cloudflare", "console", "noop"])
     ),
+    EMAIL_FROM: v.pipe(v.string(), v.email()),
   },
   isServer: true,
   env: process.env,
