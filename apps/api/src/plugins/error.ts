@@ -1,7 +1,10 @@
-import { SpanStatusCode, trace } from "@opentelemetry/api"
 import { Elysia } from "elysia"
 
 import { AppError } from "../errors/app-error"
+import {
+  captureObservedException,
+  recordObservedHttpStatus,
+} from "../observability/runtime"
 
 const statusCodeFor = (code: string, error: unknown) => {
   if (error instanceof AppError) {
@@ -35,34 +38,25 @@ const attributeCodeFor = (elysiaCode: string, error: unknown): string => {
   return "internal_error"
 }
 
-const recordSpan = (httpStatus: number, elysiaCode: string, error: unknown) => {
-  const span = trace.getActiveSpan()
-  if (!span) {
-    return
-  }
-
-  span.setAttribute("http.response.status_code", httpStatus)
-
+const recordError = (
+  httpStatus: number,
+  elysiaCode: string,
+  error: unknown,
+  request: Request,
+  requestId: string | null,
+  route: string
+) => {
   const appCode = attributeCodeFor(elysiaCode, error)
-  span.setAttribute("app.error.code", appCode)
+  recordObservedHttpStatus(httpStatus, appCode)
 
-  if (error instanceof AppError) {
-    if (error.statusCode >= 500) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error.code,
-      })
-      span.recordException(error)
-    }
-    return
-  }
-
-  if (httpStatus >= 500) {
-    span.setStatus({
-      code: SpanStatusCode.ERROR,
-      message: "internal_error",
+  if (httpStatus >= 500 && requestId) {
+    captureObservedException(error, {
+      errorCode: appCode,
+      method: request.method,
+      requestId,
+      route: route || "unmatched",
+      statusCode: httpStatus,
     })
-    span.recordException(new Error("internal_error"))
   }
 }
 
@@ -112,14 +106,18 @@ const responseBody = (
 }
 
 export const errorPlugin = new Elysia({ name: "error" })
-  .onError(({ code, error, request, set }) => {
+  .onError(({ code, error, request, route, set }) => {
+    const responseRequestId = set.headers["x-request-id"]
     const requestId =
-      request.headers.get("x-request-id") ?? set.headers["x-request-id"] ?? null
+      typeof responseRequestId === "string"
+        ? responseRequestId
+        : crypto.randomUUID()
+    set.headers["x-request-id"] = requestId
 
     const errorCode = String(code)
     const httpStatus = statusCodeFor(errorCode, error)
 
-    recordSpan(httpStatus, errorCode, error)
+    recordError(httpStatus, errorCode, error, request, requestId, route)
 
     set.status = httpStatus
 

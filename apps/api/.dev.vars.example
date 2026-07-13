@@ -1,23 +1,20 @@
-PORT=3001
+NODE_ENV=development
 APP_NAME="Enterprise Agentic SaaS"
 APP_BASE_URL=https://enterprise-agentic-saas.localhost
 API_PUBLIC_URL=https://api.enterprise-agentic-saas.localhost
 BETTER_AUTH_URL=https://api.enterprise-agentic-saas.localhost
-NEXT_PUBLIC_API_BASE_URL=https://api.enterprise-agentic-saas.localhost
-BETTER_AUTH_SECRET="replace-me"
+BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
 AUTH_COOKIE_DOMAIN=enterprise-agentic-saas.localhost
 TRUSTED_ORIGINS=https://enterprise-agentic-saas.localhost
 CORS_ORIGIN=https://enterprise-agentic-saas.localhost
-GITHUB_CLIENT_ID="replace-me"
-GITHUB_CLIENT_SECRET="replace-me"
+GITHUB_CLIENT_ID=replace-me
+GITHUB_CLIENT_SECRET=replace-me
 TURSO_DATABASE_URL=https://db.enterprise-agentic-saas.localhost
-# TURSO_AUTH_TOKEN=
-EMAIL_PROVIDER=console
+TURSO_AUTH_TOKEN=
+EMAIL_PROVIDER=cloudflare
 EMAIL_FROM=noreply@example.com
-
-# Sentry SaaS。localでSpotlightを使う場合、DSNは不要。
-# SENTRY_DSN=https://public-key@o0.ingest.sentry.io/project-id
 SENTRY_ENVIRONMENT=development
-# SENTRY_RELEASE=git-sha-or-release-name
-SENTRY_SPOTLIGHT=false
-SENTRY_TRACES_SAMPLE_RATE=0.1
+# Set this to 1 only while a local Spotlight sidecar is running.
+SENTRY_SPOTLIGHT=0
+SENTRY_TRACES_SAMPLE_RATE=1
+# SENTRY_DSN is not used in development. Production provides it as a secret.

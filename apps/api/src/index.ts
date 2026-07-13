@@ -1,18 +1,26 @@
-import { db } from "@enterprise-agentic-saas/db"
+import { initializeBunObservability } from "./observability/sentry-bun"
 
-import { createApp } from "./app"
-import { env } from "./env"
-import { authPlugin } from "./plugins/auth"
-import { corsPlugin } from "./plugins/cors"
-import { logixPlugin } from "./plugins/logix"
-import { serverTimingPlugin } from "./plugins/server-timing"
-import { telemetryPlugin } from "./plugins/telemetry"
+initializeBunObservability()
+
+const [
+  { db },
+  { createApp },
+  { env },
+  { authPlugin },
+  { corsPlugin },
+  { serverTimingPlugin },
+] = await Promise.all([
+  import("@enterprise-agentic-saas/db"),
+  import("./app"),
+  import("./env"),
+  import("./plugins/auth"),
+  import("./plugins/cors"),
+  import("./plugins/server-timing"),
+])
 
 const app = createApp(db)
   .use(authPlugin)
   .use(corsPlugin)
-  .use(telemetryPlugin)
-  .use(logixPlugin)
   .use(serverTimingPlugin)
 
 app.listen(env.PORT)

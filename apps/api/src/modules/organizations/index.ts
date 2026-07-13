@@ -1,7 +1,11 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { Elysia, t } from "elysia"
 
-import { getSessionContext } from "../auth/session"
+import {
+  authenticatedErrorResponses,
+  tenantErrorResponses,
+} from "../../models/api"
+import { createAccessControlModule } from "../authorization/access-control"
 import {
   activateOrganization,
   cancelInvitation,
@@ -12,6 +16,7 @@ import {
   listMembers,
   listOrganizations,
   removeMember,
+  transferSuperAdmin,
   updateMemberRole,
   updateOrganization,
 } from "./service"
@@ -63,7 +68,7 @@ const memberModel = t.Object({
   email: t.String(),
   image: t.Nullable(t.String()),
   role: organizationRoleModel,
-  createdAt: t.String(),
+  createdAt: t.String({ format: "date-time" }),
 })
 
 const invitationModel = t.Object({
@@ -73,197 +78,368 @@ const invitationModel = t.Object({
   status: t.String(),
   organizationId: t.String(),
   inviterId: t.String(),
-  expiresAt: t.String(),
-  createdAt: t.String(),
+  expiresAt: t.String({ format: "date-time" }),
+  createdAt: t.String({ format: "date-time" }),
+})
+
+const destructiveConfirmationModel = t.String({
+  minLength: 1,
+  description:
+    "誤操作防止の確認文字列。ownership transferとmember削除は対象member emailを完全一致で送る。",
+  examples: ["new-owner@example.com"],
 })
 
 export const createOrganizationsModule = (db: Db) =>
   new Elysia({ name: "organizations" })
+    .use(createAccessControlModule(db))
     .get(
       "/organizations",
-      async ({ request }) => {
-        const { session, user } = await getSessionContext(request)
-        return listOrganizations(db, {
+      async ({ authContext: { session, user } }) =>
+        listOrganizations(db, {
           userId: user.id,
           activeOrganizationId: session.activeOrganizationId,
-        })
-      },
+        }),
       {
-        response: t.Array(organizationSummaryModel),
+        authenticated: true,
+        response: {
+          200: t.Array(organizationSummaryModel),
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "listOrganizations",
+          summary: "所属organization一覧を取得",
+          description:
+            "認証userが所属するorganizationだけを返す。他tenantは列挙しない。",
+          tags: ["Organizations"],
+        },
       }
     )
     .post(
       "/organizations",
-      async ({ body, request }) => {
-        const { session, user } = await getSessionContext(request)
-        return createOrganization(db, {
-          userId: user.id,
-          sessionId: session.id,
-          name: body.name,
-          slug: body.slug,
-          keepCurrentActiveOrganization: body.keepCurrentActiveOrganization,
-        })
-      },
+      async ({ authContext: { session, user }, body, status }) =>
+        status(
+          201,
+          await createOrganization(db, {
+            userId: user.id,
+            sessionId: session.id,
+            name: body.name,
+            slug: body.slug,
+            keepCurrentActiveOrganization: body.keepCurrentActiveOrganization,
+          })
+        ),
       {
+        authenticated: true,
         body: t.Object({
           name: t.String({ minLength: 1 }),
-          slug: t.String({ minLength: 1 }),
+          slug: t.String({ minLength: 1, maxLength: 100 }),
           keepCurrentActiveOrganization: t.Optional(t.Boolean()),
         }),
-        response: organizationDetailModel,
+        response: {
+          201: organizationDetailModel,
+          400: tenantErrorResponses[400],
+          409: tenantErrorResponses[409],
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "createOrganization",
+          summary: "organizationを作成",
+          description:
+            "作成者を唯一のsuper_adminとして登録し、既定では作成したorganizationをactiveにする。",
+          tags: ["Organizations"],
+        },
       }
     )
     .post(
       "/organizations/:organizationId/activate",
-      async ({ params, request }) => {
-        const { session, user } = await getSessionContext(request)
-        return activateOrganization(db, {
+      async ({ authContext: { session, user }, organizationAccess }) =>
+        activateOrganization(db, {
           userId: user.id,
           sessionId: session.id,
-          organizationId: params.organizationId,
-        })
-      },
+          organizationId: organizationAccess.id,
+        }),
       {
+        organizationAccess: {
+          action: "organization.activate",
+          requireActive: false,
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
-        response: t.Object({ activeOrganizationId: t.String() }),
+        response: {
+          200: t.Object({ activeOrganizationId: t.String() }),
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "activateOrganization",
+          summary: "active organizationを切り替え",
+          description:
+            "所属確認後に現在のsessionだけを切り替える。別accountや別sessionのcontextは変更しない。",
+          tags: ["Organizations"],
+        },
       }
     )
     .get(
       "/organizations/:organizationId",
-      async ({ params, request }) => {
-        const { session, user } = await getSessionContext(request)
-        return getOrganization(db, {
+      async ({ authContext: { session, user }, organizationAccess }) =>
+        getOrganization(db, {
           userId: user.id,
-          organizationId: params.organizationId,
+          organizationId: organizationAccess.id,
           activeOrganizationId: session.activeOrganizationId,
-        })
-      },
+        }),
       {
+        organizationAccess: {
+          action: "organization.read",
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
-        response: organizationDetailModel,
+        response: { 200: organizationDetailModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getOrganization",
+          summary: "active organization詳細を取得",
+          description:
+            "active organizationと一致し、現在のuserが所属するorganizationの詳細だけを返す。",
+          tags: ["Organizations"],
+        },
       }
     )
     .patch(
       "/organizations/:organizationId",
-      async ({ body, params, request }) => {
-        const { user } = await getSessionContext(request)
-        return updateOrganization(db, {
+      async ({ authContext: { user }, body, organizationAccess }) =>
+        updateOrganization(db, {
           userId: user.id,
-          organizationId: params.organizationId,
+          organizationId: organizationAccess.id,
           name: body.name,
           slug: body.slug,
-        })
-      },
+        }),
       {
+        organizationAccess: {
+          action: "organization.update",
+          allow: ["super_admin"],
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
         body: t.Object({
           name: t.Optional(t.String()),
-          slug: t.Optional(t.String()),
+          slug: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
         }),
-        response: organizationDetailModel,
+        response: { 200: organizationDetailModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "updateOrganization",
+          summary: "organization設定を更新",
+          description: "active organizationのsuper_adminだけが実行できる。",
+          tags: ["Organizations"],
+        },
       }
     )
     .get(
       "/organizations/:organizationId/members",
-      async ({ params, request }) => {
-        const { user } = await getSessionContext(request)
-        return listMembers(db, {
+      async ({ authContext: { user }, organizationAccess }) =>
+        listMembers(db, {
           userId: user.id,
-          organizationId: params.organizationId,
-        })
-      },
+          organizationId: organizationAccess.id,
+        }),
       {
+        organizationAccess: {
+          action: "organization.member.list",
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
-        response: t.Array(memberModel),
+        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        detail: {
+          operationId: "listOrganizationMembers",
+          summary: "member一覧を取得",
+          description:
+            "検証済みorganization scope内のmemberとeffective roleを返す。",
+          tags: ["Organization members"],
+        },
       }
     )
     .patch(
       "/organizations/:organizationId/members/:memberId",
-      async ({ body, params, request }) => {
-        const { user } = await getSessionContext(request)
-        return updateMemberRole(db, {
-          userId: user.id,
-          organizationId: params.organizationId,
+      async ({ authContext, body, organizationAccess, params }) =>
+        updateMemberRole(db, {
+          userId: authContext.user.id,
+          session: authContext.session,
+          organizationId: organizationAccess.id,
           memberId: params.memberId,
           role: body.role,
-        })
-      },
+        }),
       {
+        organizationAccess: {
+          action: "organization.member.role_update",
+          allow: ["super_admin"],
+          fresh: true,
+          source: "params",
+        },
         params: t.Object({
           organizationId: t.String(),
           memberId: t.String(),
         }),
-        body: t.Object({ role: organizationRoleModel }),
-        response: t.Array(memberModel),
+        body: t.Object({
+          role: t.Union([t.Literal("admin"), t.Literal("member")]),
+        }),
+        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        detail: {
+          operationId: "updateOrganizationMemberRole",
+          summary: "member roleを変更",
+          description:
+            "fresh sessionを持つsuper_admin専用。super_admin移管はownership transfer endpointを使う。",
+          tags: ["Organization members"],
+        },
+      }
+    )
+    .post(
+      "/organizations/:organizationId/ownership-transfer",
+      async ({ authContext, body, organizationAccess }) =>
+        transferSuperAdmin(db, {
+          userId: authContext.user.id,
+          session: authContext.session,
+          organizationId: organizationAccess.id,
+          memberId: body.memberId,
+          confirmation: body.confirmation,
+        }),
+      {
+        organizationAccess: {
+          action: "organization.transfer_super_admin",
+          allow: ["super_admin"],
+          fresh: true,
+          source: "params",
+        },
+        params: t.Object({ organizationId: t.String() }),
+        body: t.Object({
+          memberId: t.String(),
+          confirmation: destructiveConfirmationModel,
+        }),
+        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        detail: {
+          operationId: "transferOrganizationSuperAdmin",
+          summary: "super_adminを移管",
+          description:
+            "fresh sessionと対象member emailの完全一致確認を要求する。transaction内で移管し、完了時にsuper_adminが必ず一人になる。",
+          tags: ["Organization members"],
+        },
       }
     )
     .delete(
       "/organizations/:organizationId/members/:memberId",
-      async ({ params, request }) => {
-        const { user } = await getSessionContext(request)
-        return removeMember(db, {
-          userId: user.id,
-          organizationId: params.organizationId,
+      async ({ authContext, body, organizationAccess, params }) =>
+        removeMember(db, {
+          userId: authContext.user.id,
+          session: authContext.session,
+          organizationId: organizationAccess.id,
           memberId: params.memberId,
-        })
-      },
+          confirmation: body.confirmation,
+        }),
       {
+        organizationAccess: {
+          action: "organization.member.remove",
+          allow: ["super_admin", "admin"],
+          fresh: true,
+          source: "params",
+        },
         params: t.Object({
           organizationId: t.String(),
           memberId: t.String(),
         }),
-        response: t.Object({ id: t.String() }),
+        body: t.Object({ confirmation: destructiveConfirmationModel }),
+        response: {
+          200: t.Object({ id: t.String() }),
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "removeOrganizationMember",
+          summary: "memberを削除",
+          description:
+            "fresh sessionと対象member emailの完全一致確認を要求する。adminはmemberだけを削除できる。",
+          tags: ["Organization members"],
+        },
       }
     )
     .get(
       "/organizations/:organizationId/invitations",
-      async ({ params, request }) => {
-        const { user } = await getSessionContext(request)
-        return listInvitations(db, {
+      async ({ authContext: { user }, organizationAccess }) =>
+        listInvitations(db, {
           userId: user.id,
-          organizationId: params.organizationId,
-        })
-      },
+          organizationId: organizationAccess.id,
+        }),
       {
+        organizationAccess: {
+          action: "invitation.list",
+          allow: ["super_admin", "admin"],
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
-        response: t.Array(invitationModel),
+        response: { 200: t.Array(invitationModel), ...tenantErrorResponses },
+        detail: {
+          operationId: "listOrganizationInvitations",
+          summary: "招待一覧を取得",
+          description:
+            "admin以上に、検証済みorganization scope内の招待と期限状態を返す。",
+          tags: ["Organization invitations"],
+        },
       }
     )
     .post(
       "/organizations/:organizationId/invitations",
-      async ({ body, params, request }) => {
-        const { user } = await getSessionContext(request)
-        return createInvitation(db, {
-          userId: user.id,
-          organizationId: params.organizationId,
-          email: body.email,
-          role: body.role,
-        })
-      },
+      async ({ authContext, body, organizationAccess, status }) =>
+        status(
+          201,
+          await createInvitation(db, {
+            userId: authContext.user.id,
+            session: authContext.session,
+            organizationId: organizationAccess.id,
+            email: body.email,
+            role: body.role,
+          })
+        ),
       {
+        organizationAccess: {
+          action: "invitation.create",
+          allow: ["super_admin", "admin"],
+          source: "params",
+        },
         params: t.Object({ organizationId: t.String() }),
         body: t.Object({
           email: t.String({ format: "email" }),
           role: t.Union([t.Literal("admin"), t.Literal("member")]),
         }),
-        response: invitationModel,
+        response: { 201: invitationModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "createOrganizationInvitation",
+          summary: "memberを招待",
+          description:
+            "adminはmemberだけを招待できる。admin roleの付与はfresh sessionを持つsuper_adminだけに許可し、super_admin roleは招待では付与できない。",
+          tags: ["Organization invitations"],
+        },
       }
     )
     .delete(
       "/organizations/:organizationId/invitations/:invitationId",
-      async ({ params, request }) => {
-        const { user } = await getSessionContext(request)
-        return cancelInvitation(db, {
+      async ({ authContext: { user }, organizationAccess, params }) =>
+        cancelInvitation(db, {
           userId: user.id,
-          organizationId: params.organizationId,
+          organizationId: organizationAccess.id,
           invitationId: params.invitationId,
-        })
-      },
+        }),
       {
+        organizationAccess: {
+          action: "invitation.cancel",
+          allow: ["super_admin", "admin"],
+          source: "params",
+        },
         params: t.Object({
           organizationId: t.String(),
           invitationId: t.String(),
         }),
-        response: t.Object({ id: t.String(), status: t.String() }),
+        response: {
+          200: t.Object({ id: t.String(), status: t.String() }),
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "cancelOrganizationInvitation",
+          summary: "pending招待を取消",
+          description:
+            "期限内のpending招待だけを取消し、terminal stateの上書きや他tenantの参照を拒否する。",
+          tags: ["Organization invitations"],
+        },
       }
     )

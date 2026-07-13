@@ -1,7 +1,11 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { Elysia, t } from "elysia"
 
-import { getSessionContext } from "../auth/session"
+import {
+  authenticatedErrorResponses,
+  tenantErrorResponses,
+} from "../../models/api"
+import { createAccessControlModule } from "../authorization/access-control"
 import {
   getMe,
   listUserSessions,
@@ -48,82 +52,132 @@ const userModel = t.Object({
 
 export const createUsersModule = (db: Db) =>
   new Elysia({ name: "users" })
+    .use(createAccessControlModule(db))
     .get(
       "/me",
-      async ({ request }) => {
-        const { session, user } = await getSessionContext(request)
-        return getMe(db, {
+      async ({ authContext: { session, user } }) =>
+        getMe(db, {
+          sessionId: session.id,
           userId: user.id,
           activeOrganizationId: session.activeOrganizationId,
-        })
-      },
-      {
-        response: t.Object({
-          user: userModel,
-          activeOrganizationId: t.Nullable(t.String()),
-          organizations: t.Array(organizationSummaryModel),
         }),
+      {
+        authenticated: true,
+        response: {
+          200: t.Object({
+            user: userModel,
+            activeOrganizationId: t.Nullable(t.String()),
+            organizations: t.Array(organizationSummaryModel),
+          }),
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "getCurrentUser",
+          summary: "現在のユーザーと組織contextを取得",
+          description:
+            "session user、active organization、所属組織と権限を返す。staleなactive organizationは有効なrecent session、単一membership、明示選択の順にtransaction内で修復する。",
+          tags: ["Users"],
+        },
       }
     )
     .patch(
       "/me",
-      async ({ body, request }) => {
-        const { user } = await getSessionContext(request)
-        return updateMe(db, { userId: user.id, name: body.name })
-      },
+      async ({ authContext: { user }, body }) =>
+        updateMe(db, { userId: user.id, name: body.name }),
       {
+        authenticated: true,
         body: t.Object({ name: t.String({ minLength: 1 }) }),
-        response: userModel,
+        response: {
+          200: userModel,
+          400: tenantErrorResponses[400],
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "updateCurrentUser",
+          summary: "プロフィールを更新",
+          description:
+            "現在のuserの表示名を更新する。emailやsession、organization membershipは変更しない。",
+          tags: ["Users"],
+        },
       }
     )
     .get(
       "/me/sessions",
-      async ({ request }) => {
-        const { session, user } = await getSessionContext(request)
-        return listUserSessions(db, {
+      async ({ authContext: { session, user } }) =>
+        listUserSessions(db, {
           userId: user.id,
           currentSessionId: session.id,
-        })
-      },
+        }),
       {
-        response: t.Array(
-          t.Object({
-            id: t.String(),
-            current: t.Boolean(),
-            expiresAt: t.String(),
-            createdAt: t.String(),
-            updatedAt: t.String(),
-            ipAddress: t.Nullable(t.String()),
-            userAgent: t.Nullable(t.String()),
-          })
-        ),
+        authenticated: true,
+        response: {
+          200: t.Array(
+            t.Object({
+              id: t.String(),
+              current: t.Boolean(),
+              expiresAt: t.String({ format: "date-time" }),
+              createdAt: t.String({ format: "date-time" }),
+              updatedAt: t.String({ format: "date-time" }),
+              ipAddress: t.Nullable(t.String()),
+              userAgent: t.Nullable(t.String()),
+            })
+          ),
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "listCurrentUserSessions",
+          summary: "ログインsession一覧を取得",
+          description:
+            "現在のuserに属するsessionを列挙し、現在のsessionを識別して返す。",
+          tags: ["Sessions"],
+        },
       }
     )
     .delete(
       "/me/sessions",
-      async ({ request }) => {
-        const { session, user } = await getSessionContext(request)
-        return revokeOtherUserSessions(db, {
+      async ({ authContext: { session, user } }) =>
+        revokeOtherUserSessions(db, {
           userId: user.id,
           currentSessionId: session.id,
-        })
-      },
+        }),
       {
-        response: t.Object({ revoked: t.Number() }),
+        authenticated: true,
+        response: {
+          200: t.Object({ revoked: t.Number({ minimum: 0 }) }),
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "revokeOtherCurrentUserSessions",
+          summary: "現在以外のsessionをすべて失効",
+          description:
+            "複数アカウント切替用のdevice sessionとは別に、現在のuserに属する他sessionを失効する。",
+          tags: ["Sessions"],
+        },
       }
     )
     .delete(
       "/me/sessions/:sessionId",
-      async ({ params, request }) => {
-        const { session, user } = await getSessionContext(request)
-        return revokeUserSession(db, {
+      async ({ authContext: { session, user }, params }) =>
+        revokeUserSession(db, {
           userId: user.id,
           currentSessionId: session.id,
           sessionId: params.sessionId,
-        })
-      },
+        }),
       {
+        authenticated: true,
         params: t.Object({ sessionId: t.String() }),
-        response: t.Object({ id: t.String() }),
+        response: {
+          200: t.Object({ id: t.String() }),
+          400: tenantErrorResponses[400],
+          404: tenantErrorResponses[404],
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "revokeCurrentUserSession",
+          summary: "指定sessionを失効",
+          description:
+            "現在のsessionはこのendpointでは失効できない。別userのsession idはnot foundとして扱う。",
+          tags: ["Sessions"],
+        },
       }
     )

@@ -10,7 +10,18 @@ export type SessionUser = {
 
 export type SessionContext = {
   id: string
+  createdAt: Date
   activeOrganizationId?: string | null
+}
+
+const parseTestSessionCreatedAt = (request: Request) => {
+  const value = request.headers.get("x-test-session-created-at")
+  if (!value) {
+    return new Date(0)
+  }
+
+  const createdAt = new Date(value)
+  return Number.isNaN(createdAt.getTime()) ? new Date(0) : createdAt
 }
 
 export const getSessionUser = async (
@@ -28,6 +39,7 @@ export const getSessionContext = async (
     return {
       session: {
         id: request.headers.get("x-test-session-id") ?? "test_session",
+        createdAt: parseTestSessionCreatedAt(request),
         activeOrganizationId:
           request.headers.get("x-test-active-organization-id") ?? null,
       },
@@ -55,6 +67,7 @@ export const getSessionContext = async (
   return {
     session: {
       id: session.session.id,
+      createdAt: new Date(session.session.createdAt),
       activeOrganizationId: session.session.activeOrganizationId,
     },
     user: session.user,

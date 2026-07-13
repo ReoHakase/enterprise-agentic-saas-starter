@@ -25,6 +25,19 @@ const nodeEnvSchema = v.pipe(
   v.picklist(["development", "test", "production"])
 )
 
+const optionalNonEmptyString = v.pipe(
+  v.optional(v.string()),
+  v.transform((input) => input?.trim() || undefined)
+)
+
+const sampleRate = v.pipe(
+  v.optional(v.string(), "0.1"),
+  v.transform(Number),
+  v.number(),
+  v.minValue(0),
+  v.maxValue(1)
+)
+
 export const env = defineEnv({
   shared: {
     NODE_ENV: nodeEnvSchema,
@@ -54,6 +67,16 @@ export const env = defineEnv({
         return list.length > 0 ? list : [base]
       })
     ),
+    EMAIL_PROVIDER: v.pipe(
+      v.optional(v.string(), "console"),
+      v.picklist(["cloudflare", "console", "noop"])
+    ),
+    EMAIL_FROM: v.pipe(v.string(), v.email()),
+    SENTRY_DSN: optionalNonEmptyString,
+    SENTRY_ENVIRONMENT: optionalNonEmptyString,
+    SENTRY_RELEASE: optionalNonEmptyString,
+    SENTRY_SPOTLIGHT: optionalNonEmptyString,
+    SENTRY_TRACES_SAMPLE_RATE: sampleRate,
   },
   isServer: true,
   env: process.env,

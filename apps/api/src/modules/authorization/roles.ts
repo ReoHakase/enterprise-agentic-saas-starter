@@ -24,11 +24,11 @@ export const normalizeOrganizationRole = (role: string): OrganizationRole => {
     return role
   }
 
-  if (role === "owner") {
-    return "super_admin"
-  }
-
-  return "member"
+  throw publicErrors.internal(new Error("Invalid organization role"), {
+    module: "authorization",
+    operation: "normalizeOrganizationRole",
+    role,
+  })
 }
 
 export const permissionsForRole = (role: string): OrganizationPermissions => {
@@ -78,12 +78,10 @@ export const requireMembership = async (
   const membership = await getMembership(db, input)
 
   if (!membership) {
-    throw publicErrors.forbidden(
-      "You do not have access to this organization",
-      {
-        organizationId: input.organizationId,
-      }
-    )
+    // organizationの存在と「他tenantに存在する」ことを区別させない。
+    throw publicErrors.notFound("Organization not found", {
+      resource: "organization",
+    })
   }
 
   return membership
@@ -94,7 +92,7 @@ export const requireOrganizationRole = async (
   input: {
     userId: string
     organizationId: string
-    allow: OrganizationRole[]
+    allow: readonly OrganizationRole[]
     action: string
   }
 ) => {
@@ -103,7 +101,6 @@ export const requireOrganizationRole = async (
   if (!input.allow.includes(membership.role)) {
     throw publicErrors.forbidden("You are not allowed to perform this action", {
       action: input.action,
-      organizationId: input.organizationId,
     })
   }
 

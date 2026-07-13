@@ -1,11 +1,6 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import {
-  member,
-  organization,
-  session,
-  user,
-} from "@enterprise-agentic-saas/db/schema"
-import { and, eq } from "drizzle-orm"
+import { member, session, user } from "@enterprise-agentic-saas/db/schema"
+import { and, desc, eq, gt, isNotNull } from "drizzle-orm"
 
 import { publicErrors } from "../../errors/app-error"
 
@@ -141,24 +136,95 @@ export const deleteOtherSessionsForUser = async (
   return { revoked: targets.length }
 }
 
-export const findFallbackActiveOrganizationId = async (
+export const resolveAndPersistActiveOrganizationId = async (
   db: Db,
-  userId: string
+  input: {
+    sessionId: string
+    userId: string
+    activeOrganizationId?: string | null
+  }
 ) => {
   try {
-    const rows = await db
-      .select({ id: organization.id })
-      .from(member)
-      .innerJoin(organization, eq(member.organizationId, organization.id))
-      .where(eq(member.userId, userId))
-      .orderBy(organization.name)
-      .limit(1)
+    return await db.transaction(async (tx) => {
+      if (input.activeOrganizationId) {
+        const currentMembershipRows = await tx
+          .select({ id: member.id })
+          .from(member)
+          .where(
+            and(
+              eq(member.userId, input.userId),
+              eq(member.organizationId, input.activeOrganizationId)
+            )
+          )
+          .limit(1)
+        if (currentMembershipRows[0]) {
+          return input.activeOrganizationId
+        }
+      }
 
-    return rows[0]?.id ?? null
+      const recentRows = await tx
+        .select({ organizationId: session.activeOrganizationId })
+        .from(session)
+        .innerJoin(
+          member,
+          and(
+            eq(member.userId, input.userId),
+            eq(member.organizationId, session.activeOrganizationId)
+          )
+        )
+        .where(
+          and(
+            eq(session.userId, input.userId),
+            gt(session.expiresAt, new Date()),
+            isNotNull(session.activeOrganizationId)
+          )
+        )
+        .orderBy(
+          desc(session.updatedAt),
+          desc(session.createdAt),
+          desc(session.id)
+        )
+        .limit(1)
+
+      let resolvedOrganizationId = recentRows[0]?.organizationId ?? null
+      if (!resolvedOrganizationId) {
+        const membershipRows = await tx
+          .selectDistinct({ organizationId: member.organizationId })
+          .from(member)
+          .where(eq(member.userId, input.userId))
+          .orderBy(member.organizationId)
+          .limit(2)
+        resolvedOrganizationId =
+          membershipRows.length === 1
+            ? (membershipRows[0]?.organizationId ?? null)
+            : null
+      }
+
+      if (input.sessionId !== "test_session") {
+        const updatedRows = await tx
+          .update(session)
+          .set({
+            activeOrganizationId: resolvedOrganizationId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(session.id, input.sessionId),
+              eq(session.userId, input.userId)
+            )
+          )
+          .returning({ id: session.id })
+        if (!updatedRows[0]) {
+          throw new Error("Session not found during organization recovery")
+        }
+      }
+
+      return resolvedOrganizationId
+    })
   } catch (cause) {
     throw publicErrors.internal(cause, {
       module: "users",
-      operation: "findFallbackActiveOrganizationId",
+      operation: "resolveAndPersistActiveOrganizationId",
     })
   }
 }

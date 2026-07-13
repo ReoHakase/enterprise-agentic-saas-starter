@@ -1,4 +1,15 @@
-export type PublicErrorContext = Record<string, string | number | boolean>
+export type PublicErrorContext = Partial<
+  Record<
+    | "action"
+    | "constraint"
+    | "field"
+    | "maxAgeSeconds"
+    | "reason"
+    | "resource"
+    | "retryAfter",
+    string | number | boolean
+  >
+>
 export type PrivateErrorContext = Record<string, unknown>
 
 export type AppErrorOptions = {
@@ -40,6 +51,69 @@ export const publicErrors = {
       message,
       statusCode: 403,
       publicContext,
+    })
+  },
+  csrfOriginForbidden(reason: "missing_origin" | "untrusted_origin") {
+    return new AppError({
+      code: "csrf_origin_forbidden",
+      message: "Request origin is not allowed",
+      statusCode: 403,
+      publicContext: { reason },
+    })
+  },
+  conflict(message = "Conflict", publicContext: PublicErrorContext = {}) {
+    return new AppError({
+      code: "conflict",
+      message,
+      statusCode: 409,
+      publicContext,
+    })
+  },
+  activeOrganizationRequired() {
+    return new AppError({
+      code: "active_organization_required",
+      message: "Select an active organization",
+      statusCode: 409,
+      publicContext: {
+        action: "organization.activate",
+        reason: "missing_active_organization",
+      },
+    })
+  },
+  activeOrganizationMismatch() {
+    return new AppError({
+      code: "active_organization_mismatch",
+      message: "Switch to this organization before continuing",
+      statusCode: 409,
+      publicContext: {
+        action: "organization.activate",
+        reason: "active_organization_mismatch",
+      },
+    })
+  },
+  confirmationRequired(action: string, publicContext: PublicErrorContext = {}) {
+    return new AppError({
+      code: "confirmation_required",
+      message: "Confirmation does not match",
+      statusCode: 400,
+      publicContext: {
+        action,
+        field: "confirmation",
+        reason: "mismatch",
+        ...publicContext,
+      },
+    })
+  },
+  stepUpRequired(action: string, maxAgeSeconds: number) {
+    return new AppError({
+      code: "step_up_required",
+      message: "Recent authentication required",
+      statusCode: 403,
+      publicContext: {
+        action,
+        maxAgeSeconds,
+        reason: "session_not_fresh",
+      },
     })
   },
   internal(cause: unknown, privateContext: PrivateErrorContext = {}) {

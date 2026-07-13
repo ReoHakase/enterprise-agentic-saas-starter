@@ -5,32 +5,37 @@ import { listOrganizationsForUser } from "../organizations/repository"
 import {
   deleteOtherSessionsForUser,
   deleteSessionForUser,
-  findFallbackActiveOrganizationId,
   findUserProfile,
   listSessionsForUser,
+  resolveAndPersistActiveOrganizationId,
   updateUserProfile,
 } from "./repository"
 
 export const getMe = async (
   db: Db,
-  input: { userId: string; activeOrganizationId?: string | null }
+  input: {
+    sessionId: string
+    userId: string
+    activeOrganizationId?: string | null
+  }
 ) => {
   const user = await findUserProfile(db, input.userId)
   if (!user) {
-    throw publicErrors.notFound("User not found", { userId: input.userId })
+    throw publicErrors.notFound("User not found", { resource: "user" })
   }
 
-  const fallbackActiveOrganizationId =
-    input.activeOrganizationId ??
-    (await findFallbackActiveOrganizationId(db, input.userId))
+  const activeOrganizationId = await resolveAndPersistActiveOrganizationId(
+    db,
+    input
+  )
   const organizations = await listOrganizationsForUser(db, {
     userId: input.userId,
-    activeOrganizationId: fallbackActiveOrganizationId,
+    activeOrganizationId,
   })
 
   return {
     user,
-    activeOrganizationId: fallbackActiveOrganizationId,
+    activeOrganizationId,
     organizations,
   }
 }
@@ -46,7 +51,7 @@ export const updateMe = async (
 
   const user = await updateUserProfile(db, { userId: input.userId, name })
   if (!user) {
-    throw publicErrors.notFound("User not found", { userId: input.userId })
+    throw publicErrors.notFound("User not found", { resource: "user" })
   }
   return user
 }
@@ -67,7 +72,7 @@ export const revokeUserSession = async (
   const deleted = await deleteSessionForUser(db, input)
   if (!deleted) {
     throw publicErrors.notFound("Session not found", {
-      sessionId: input.sessionId,
+      resource: "session",
     })
   }
 
