@@ -1,71 +1,76 @@
 # @enterprise-agentic-saas/db
 
-Turso/libSQL + Drizzle ORM によるデータベースパッケージ。
+Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを提供します。
 
 ## Entrypoints
 
 | import | 内容 |
-|---|---|
-| `@enterprise-agentic-saas/db` | singleton `db` インスタンス、`Db` 型 |
-| `@enterprise-agentic-saas/db/schema` | 全テーブル定義（auth + app） |
+| --- | --- |
+| `@enterprise-agentic-saas/db` | singleton `db`、`Db`型 |
+| `@enterprise-agentic-saas/db/schema` | auth/app table定義 |
 
-## Schema
+`packages/auth` と `apps/api` からの依存を許可し、DB packageからauth/app/UIへの逆依存は禁止します。PostgreSQLや `DB_PROVIDER` 分岐は明示要求まで追加しません。
 
-- `src/schema/auth.generated.ts` — Better Auth CLI で生成（**手書き禁止**）
-- `src/schema/app.ts` — アプリ固有テーブル（todos 等）
+## Schemaとmigration
 
-### auth schema の再生成
+- `src/schema/auth.generated.ts`: Better Auth CLI生成を起点とするauth schema
+- `src/schema/app.ts`: Issue/comment/auditなどapp schema
+- `drizzle/`: commitするSQL、snapshot、journal
 
-auth plugin 構成を変更したら以下を実行する:
+auth plugin変更時:
 
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
   --output packages/db/src/schema/auth.generated.ts \
   --yes
+bun run --cwd packages/db db:generate
+git diff -- packages/db/src/schema/auth.generated.ts packages/db/drizzle
 ```
 
-## 依存方向
+repo固有のindex/defaultがgenerator差分で消えていないことを確認します。開発中も `drizzle-kit push` は使いません。
 
-- `packages/auth -> packages/db` — 許可
-- `apps/api -> packages/db` — 許可
-- `packages/db -> packages/auth` — **禁止**
-
-## 環境変数
-
-`packages/db/.env` に設定する（`src/env.ts` で envin + Valibot 検証）。
+## Env
 
 | 変数 | 必須 | 説明 |
-|---|---|---|
-| `TURSO_DATABASE_URL` | Yes | Turso / libSQL の接続 URL |
-| `TURSO_AUTH_TOKEN` | No | Turso Cloud 用の認証トークン |
+| --- | --- | --- |
+| `TURSO_DATABASE_URL` | Yes | Turso/libSQL URL |
+| `TURSO_AUTH_TOKEN` | Cloudのみ | Turso token |
+
+APIとDB workspaceで同じURL/tokenを使います。実値はpackage直下のignored `.env*` に置きます。
 
 ## Scripts
 
+通常はrepo rootからTurbo経由で起動します。これにより `db:turso` も同時に起動します。
+
 ```sh
-bun run dev        # turso dev → push → seed → studio を一括起動
-bun run push       # drizzle-kit push（開発中の即時反映）
-bun run generate   # drizzle-kit generate（migration artifact 生成）
-bun run seed       # 開発用 seed データ投入
-bun run studio     # Drizzle Studio 起動
-bun run test       # Vitest 実行
+bunx turbo run dev --filter=@enterprise-agentic-saas/db
 ```
 
-## テスト
+package directoryで `bun run dev` だけを実行してもTurboの `with` 関係は適用されません。個別scriptは手動実行や診断用です。
 
-実 Turso 接続は要求しない。`file::memory:` で client 境界と schema export を確認する。
-
-```ts
-import { createClient } from "@libsql/client"
-import * as schema from "@enterprise-agentic-saas/db/schema"
-import { drizzle } from "drizzle-orm/libsql"
-
-const testDb = () =>
-  drizzle(createClient({ url: "file::memory:?cache=shared" }), { schema })
+```sh
+bun run --cwd packages/db db:turso      # 永続化local Turso
+bun run --cwd packages/db db:bootstrap  # wait → generate → migrate → seed
+bun run --cwd packages/db db:generate
+bun run --cwd packages/db db:check
+bun run --cwd packages/db db:migrate
+bun run --cwd packages/db db:seed       # local URL限定、既存userがいれば非破壊skip
+bun run --cwd packages/db db:studio
+bun run --cwd packages/db test
 ```
 
-## 入れないもの
+local DBを手動で作り直す場合だけ:
 
-- PostgreSQL / `DB_PROVIDER` / dialect 分岐
-- `createDb()` ファクトリ — singleton で十分
-- React / Browser 系の依存
+```sh
+CONFIRM_DB_RESET=reset-local-development \
+  bun run --cwd packages/db db:reset
+```
+
+seedとresetは `file:` またはlocalhost URLだけを許可します。resetはさらに確認文字列を要求し、migration ledgerを含むtableを削除、保存済みmigrationを全適用してからseedします。Cloud/staging/production URLはどちらも拒否します。本番provisioningでは `db:seed` を使わず、migration適用後に実ユーザーを通常の認証・organization作成フローから初期管理者にします。
+
+詳細は [`../../docs/database-lifecycle.md`](../../docs/database-lifecycle.md) を参照してください。
+
+## Test
+
+`src/migrations.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、cross-tenant comment FK、pending invitation unique、remote seed拒否、実file DB resetを検証します。外部Tursoは必要ありません。

@@ -4,6 +4,9 @@ Multi-tenant SaaS starter for teams that want the boring parts to be
 deliberate: auth, organizations, database boundaries, email delivery, quality
 gates, and agent-facing project knowledge.
 
+Developer setup, architecture, security, testing, and deployment runbooks are
+indexed in [`docs/README.md`](docs/README.md).
+
 > [!IMPORTANT]
 > The demo domain is intentionally small, but the architecture is not a toy.
 > Treat this repository as a starter for a SaaS product with organizations,
@@ -19,7 +22,8 @@ gates, and agent-facing project knowledge.
 | API       | Elysia on Bun, Eden client, Elysia `t` / TypeBox (routes); [envin](https://github.com/turbostarter/envin) + Valibot (env) |
 | Auth      | Better Auth, magic link, organization plugin                                                                              |
 | Database  | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                                    |
-| Email     | React Email, console dev logger, noop test sender                                                                         |
+| Email     | React Email, Cloudflare Email Sending, console dev logger, noop test sender                                               |
+| Telemetry | Sentry for Next.js/Bun/Cloudflare Workers, Spotlight for local development                                                |
 | Quality   | Oxlint, Oxfmt, Vitest, GitHub Actions                                                                                     |
 | Agent ops | repo skills under `.agents/local-skills`, runtime skills and MCP config via Nix                                           |
 
@@ -46,8 +50,10 @@ Package boundaries are intentional:
 
 - `apps/* -> packages/*` is allowed.
 - `packages/* -> apps/*` is not allowed.
-- `packages/auth -> packages/email` is not allowed; `apps/api` composes auth
-  callbacks with email templates and senders.
+- `packages/auth` may compose the shared DB singleton and `packages/email`
+  templates/sender for Better Auth callbacks. `packages/email` must never
+  depend back on auth or an app. API-owned invitation flows compose the same
+  email package from `apps/api`.
 - `apps/api` uses Elysia `t` / TypeBox for **route** schemas. **Environment** variables use Valibot via [envin](https://github.com/turbostarter/envin) in [`apps/api/src/env.ts`](apps/api/src/env.ts); do not add Valibot for HTTP bodies in the API package unless the project standard changes.
 
 ## Getting Started
@@ -61,7 +67,7 @@ direnv allow    # once per clone; loads `use flake` from `.envrc`
 # or: nix develop
 ```
 
-The shell provides `bun`, `turso`, `sqld` (for `turso dev`), and `dotenvx` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+The shell provides `bun`, `turso`, `sqld` (for `turso dev`), `dotenvx`, `curl`, and `jq` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 The Nix dev shell’s `bun` is whatever [`nixpkgs`](https://github.com/NixOS/nixpkgs) provides at the revision recorded in [`flake.lock`](flake.lock) (no per-platform zip hashes in this repo). After `nix flake lock --update-input nixpkgs`, match [`package.json`](package.json) `packageManager` / `engines` to `nix develop -c bun --version`.
 
@@ -85,7 +91,7 @@ bun install --frozen-lockfile
 
 Environment variables are validated with [envin](https://github.com/turbostarter/envin) and [Valibot](https://valibot.dev/) per runnable package. Bun loads `.env`, then mode-specific files (for example `.env.development` when `NODE_ENV=development`), then `.env.local`, from the **current working directory** of the command (`apps/api`, `packages/db`, and so on).
 
-**Template index** (also at repo root [`.env.example`](.env.example)):
+**Template index:**
 
 - **API:** copy [`apps/api/.env.example`](apps/api/.env.example) to `apps/api/.env.development` and `apps/api/.env.local` as needed. For Vitest, copy [`apps/api/.env.test.example`](apps/api/.env.test.example) to `apps/api/.env.test`.
 - **Database / Drizzle:** copy [`packages/db/.env.example`](packages/db/.env.example) to `packages/db/.env.development` (and `.env.local` if needed). Keep `TURSO_DATABASE_URL` in sync with the API package for local dev.
@@ -108,7 +114,8 @@ Vitest for the API expects `apps/api/.env.test`. From the template:
 cp apps/api/.env.test.example apps/api/.env.test
 ```
 
-CI performs this copy automatically in workflows.
+CI does not create this file. The workflow injects the equivalent test
+environment variables directly into each job.
 
 Optional variables (see `apps/api/.env.example`). Local dev is **portless**: HTTPS on `.localhost` hostnames (not `http://localhost:3000` / `:3001`).
 
@@ -127,11 +134,16 @@ Start the local Turso dev server from `@enterprise-agentic-saas/db` when using t
 URL:
 
 ```sh
-bun --cwd packages/db run dev
+bunx turbo run dev --filter=@enterprise-agentic-saas/db
 ```
 
-This also applies the current Drizzle schema with `drizzle-kit push`, inserts
-development seed data on first run, and starts Drizzle Studio.
+Run this from the repository root. Turbo starts the local Turso process through
+the package task's `with` relationship, waits for the database, applies
+committed Drizzle migrations with
+`generate + migrate`, inserts development seed data idempotently, and starts
+Drizzle Studio. It never resets existing data. See
+[`docs/database-lifecycle.md`](docs/database-lifecycle.md) for the explicit
+local-only reset command.
 
 > [!NOTE]
 > `turso dev` expects the **`sqld`** binary on `PATH` (provided by the Nix dev shell as `pkgs.sqld`, or install Turso’s tooling by other means). Turso Cloud database creation also
@@ -154,6 +166,14 @@ Common direct commands:
 bun --cwd apps/web run dev
 bun --cwd apps/api run dev
 ```
+
+Sentry-compatible errors, traces, and structured logsをlocalだけで確認する場合:
+
+```sh
+bun run dev:spotlight
+```
+
+Spotlight UIは`http://localhost:8969`。production DSN、Cloudflare Email domain/binding、monitor/alertの設定は[`docs/deployment-operations.md`](docs/deployment-operations.md)、telemetryのprivacy/sampling/runbookは[`docs/observability.md`](docs/observability.md)を参照してください。
 
 ### 4. Verify the workspace
 
@@ -191,7 +211,7 @@ be edited in this repo.
 - `@enterprise-agentic-saas/auth`: Better Auth server factory.
 - `@enterprise-agentic-saas/auth/client`: Better Auth browser client factory.
 - `@enterprise-agentic-saas/db`: Drizzle/libSQL client and schema exports.
-- `@enterprise-agentic-saas/email`: React Email render helpers, templates, and local sender adapters.
+- `@enterprise-agentic-saas/email`: React Email render helpers, templates, Cloudflare/console/noop adapters, and runtime selector.
 - `@enterprise-agentic-saas/ui`: shared UI components, hooks, utilities, and global styles.
 
 ## Adding shadcn/ui Components
