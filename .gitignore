@@ -41,6 +41,7 @@ test-results/
 .wrangler/
 storybook-static/
 .next/
+.next-e2e/
 **/next-env.d.ts
 out/
 build

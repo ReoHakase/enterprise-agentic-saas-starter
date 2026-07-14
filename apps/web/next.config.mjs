@@ -3,6 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   allowedDevOrigins: [
     "enterprise-agentic-saas.localhost",
     "*.enterprise-agentic-saas.localhost",

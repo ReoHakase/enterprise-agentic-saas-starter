@@ -55,6 +55,8 @@ mockは認可そのものの証明ではありません。ただし本番契約�
 
 mock stateとreset endpointは全projectで共有されるため、標準設定はlocal/CIとも `workers: 1` でjourneyを直列実行します。tenant切替時は旧tenantのmount済みqueryを再取得せず、cancelしてから遷移し、切替途中の409をbrowser errorとして発生させないこともE2Eで固定します。
 
+Playwrightが起動するNext.jsは`NEXT_DIST_DIR=.next-e2e`を使い、通常の`bun run dev`が使う`.next`からbuild artifactとdevelopment lockを分離します。portless開発serverを動かしたまま`bun run test:e2e`を実行できるため、testのためにdeveloper-owned processを停止しません。
+
 Streaming boundaryはmock APIのbounded one-shot `POST /__e2e/request-delays` で対象requestだけを遅延し、`POST /__e2e/reset`でstate、fault、delayを同時に初期化します。`console-boundaries.spec.ts`は3 projectでready/loading/errorの実`boundingBox()`を1px以内で比較し、desktop sidebar 256px、mobile drawerの幅非予約、横overflowなし、error headingのfocus、再試行後の復帰を確認します。WebKitがclient navigation中のRSC fallbackをDOMへcommitしない場合はhard navigation streamで同じroute skeletonを測定し、Chromiumでは既存shell DOMのidentityも確認します。
 
 標準matrixはDesktop Chrome（viewport 1280×720）、Pixel 7 Chrome、iPhone 13 WebKitです。Desktop Chromeのemulated screenはdevice presetどおり1920×1080、device scale factorは1です。動画sizeやreporterの`show`は指定せず、Playwright既定へ任せます。
