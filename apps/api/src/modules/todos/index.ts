@@ -1,5 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
 
 import { tenantErrorResponses } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
@@ -10,7 +10,9 @@ import {
   deleteTodoCommentBodyModel,
   deleteTodoParamsModel,
   getTodoQueryModel,
+  listTodoCommentsResponseModel,
   listTodosQueryModel,
+  listTodosResponseModel,
   todoCommentModel,
   todoCommentParamsModel,
   todoModel,
@@ -54,7 +56,7 @@ export const createTodosModule = (db: Db) =>
           source: "query",
         },
         query: listTodosQueryModel,
-        response: { 200: t.Array(todoModel), ...tenantErrorResponses },
+        response: { 200: listTodosResponseModel, ...tenantErrorResponses },
         detail: {
           operationId: "listTodos",
           summary: "issue一覧を検索・filter・sort",
@@ -194,7 +196,7 @@ export const createTodosModule = (db: Db) =>
         params: updateTodoParamsModel,
         query: getTodoQueryModel,
         response: {
-          200: t.Array(todoCommentModel),
+          200: listTodoCommentsResponseModel,
           ...tenantErrorResponses,
         },
         detail: {

@@ -1,16 +1,39 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
 
 import {
   authenticatedErrorResponses,
   tenantErrorResponses,
 } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
+import { createOrganizationDeletionAccessModule } from "./deletion-access"
+import {
+  activateOrganizationResponseModel,
+  canceledInvitationResponseModel,
+  createInvitationBodyModel,
+  createOrganizationBodyModel,
+  deleteOrganizationBodyModel,
+  deleteOrganizationResponseModel,
+  idResponseModel,
+  invitationListModel,
+  invitationModel,
+  memberListModel,
+  organizationDetailModel,
+  organizationIdParamsModel,
+  organizationInvitationParamsModel,
+  organizationListModel,
+  organizationMemberParamsModel,
+  removeMemberBodyModel,
+  transferSuperAdminBodyModel,
+  updateMemberRoleBodyModel,
+  updateOrganizationBodyModel,
+} from "./model"
 import {
   activateOrganization,
   cancelInvitation,
   createInvitation,
   createOrganization,
+  deleteOrganization,
   getOrganization,
   listInvitations,
   listMembers,
@@ -21,77 +44,10 @@ import {
   updateOrganization,
 } from "./service"
 
-const organizationRoleModel = t.Union([
-  t.Literal("super_admin"),
-  t.Literal("admin"),
-  t.Literal("member"),
-])
-
-const permissionsModel = t.Object({
-  canEditOrganization: t.Boolean(),
-  canInviteMembers: t.Boolean(),
-  canManageMembers: t.Boolean(),
-  canManageAdmins: t.Boolean(),
-  canTransferSuperAdmin: t.Boolean(),
-})
-
-const organizationSummaryModel = t.Object({
-  id: t.String(),
-  name: t.String(),
-  slug: t.String(),
-  role: organizationRoleModel,
-  active: t.Boolean(),
-  memberCount: t.Number(),
-  memberAvatars: t.Array(
-    t.Object({
-      userId: t.String(),
-      name: t.String(),
-      image: t.Nullable(t.String()),
-    })
-  ),
-  permissions: permissionsModel,
-})
-
-const organizationDetailModel = t.Composite([
-  organizationSummaryModel,
-  t.Object({
-    logo: t.Nullable(t.String()),
-    createdAt: t.String(),
-    invitationCount: t.Number(),
-  }),
-])
-
-const memberModel = t.Object({
-  id: t.String(),
-  userId: t.String(),
-  name: t.String(),
-  email: t.String(),
-  image: t.Nullable(t.String()),
-  role: organizationRoleModel,
-  createdAt: t.String({ format: "date-time" }),
-})
-
-const invitationModel = t.Object({
-  id: t.String(),
-  email: t.String(),
-  role: organizationRoleModel,
-  status: t.String(),
-  organizationId: t.String(),
-  inviterId: t.String(),
-  expiresAt: t.String({ format: "date-time" }),
-  createdAt: t.String({ format: "date-time" }),
-})
-
-const destructiveConfirmationModel = t.String({
-  minLength: 1,
-  description:
-    "誤操作防止の確認文字列。ownership transferとmember削除は対象member emailを完全一致で送る。",
-  examples: ["new-owner@example.com"],
-})
-
 export const createOrganizationsModule = (db: Db) =>
   new Elysia({ name: "organizations" })
     .use(createAccessControlModule(db))
+    .use(createOrganizationDeletionAccessModule(db))
     .get(
       "/organizations",
       async ({ authContext: { session, user } }) =>
@@ -102,7 +58,7 @@ export const createOrganizationsModule = (db: Db) =>
       {
         authenticated: true,
         response: {
-          200: t.Array(organizationSummaryModel),
+          200: organizationListModel,
           ...authenticatedErrorResponses,
         },
         detail: {
@@ -129,11 +85,7 @@ export const createOrganizationsModule = (db: Db) =>
         ),
       {
         authenticated: true,
-        body: t.Object({
-          name: t.String({ minLength: 1 }),
-          slug: t.String({ minLength: 1, maxLength: 100 }),
-          keepCurrentActiveOrganization: t.Optional(t.Boolean()),
-        }),
+        body: createOrganizationBodyModel,
         response: {
           201: organizationDetailModel,
           400: tenantErrorResponses[400],
@@ -163,9 +115,9 @@ export const createOrganizationsModule = (db: Db) =>
           requireActive: false,
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
+        params: organizationIdParamsModel,
         response: {
-          200: t.Object({ activeOrganizationId: t.String() }),
+          200: activateOrganizationResponseModel,
           ...tenantErrorResponses,
         },
         detail: {
@@ -190,7 +142,7 @@ export const createOrganizationsModule = (db: Db) =>
           action: "organization.read",
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
+        params: organizationIdParamsModel,
         response: { 200: organizationDetailModel, ...tenantErrorResponses },
         detail: {
           operationId: "getOrganization",
@@ -216,16 +168,50 @@ export const createOrganizationsModule = (db: Db) =>
           allow: ["super_admin"],
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
-        body: t.Object({
-          name: t.Optional(t.String()),
-          slug: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
-        }),
+        params: organizationIdParamsModel,
+        body: updateOrganizationBodyModel,
         response: { 200: organizationDetailModel, ...tenantErrorResponses },
         detail: {
           operationId: "updateOrganization",
           summary: "organization設定を更新",
           description: "active organizationのsuper_adminだけが実行できる。",
+          tags: ["Organizations"],
+        },
+      }
+    )
+    .delete(
+      "/organizations/:organizationId",
+      async ({ authContext, body, organizationDeletionAccess }) => {
+        if (organizationDeletionAccess.replayDeletionId) {
+          return {
+            deletionId: organizationDeletionAccess.replayDeletionId,
+            organizationId: organizationDeletionAccess.organizationId,
+            status: "deleted" as const,
+          }
+        }
+
+        return deleteOrganization(db, {
+          userId: authContext.user.id,
+          session: authContext.session,
+          organizationId: organizationDeletionAccess.organizationId,
+          slug: body.slug,
+          confirmation: body.confirmation,
+          idempotencyKey: body.idempotencyKey,
+        })
+      },
+      {
+        organizationDeletionAccess: true,
+        params: organizationIdParamsModel,
+        body: deleteOrganizationBodyModel,
+        response: {
+          200: deleteOrganizationResponseModel,
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "deleteOrganization",
+          summary: "organizationを即時削除",
+          description:
+            "active organizationのsuper_adminがfresh session、slug完全一致、DELETE確認、冪等性keyを提示した場合だけ実行する。tenant dataはtransaction内で即時削除し、R2 attachmentはdurable background jobで再試行する。同じuser・organization・keyの再送は同じreceiptを返す。",
           tags: ["Organizations"],
         },
       }
@@ -242,8 +228,8 @@ export const createOrganizationsModule = (db: Db) =>
           action: "organization.member.list",
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
-        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        params: organizationIdParamsModel,
+        response: { 200: memberListModel, ...tenantErrorResponses },
         detail: {
           operationId: "listOrganizationMembers",
           summary: "member一覧を取得",
@@ -270,14 +256,9 @@ export const createOrganizationsModule = (db: Db) =>
           fresh: true,
           source: "params",
         },
-        params: t.Object({
-          organizationId: t.String(),
-          memberId: t.String(),
-        }),
-        body: t.Object({
-          role: t.Union([t.Literal("admin"), t.Literal("member")]),
-        }),
-        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        params: organizationMemberParamsModel,
+        body: updateMemberRoleBodyModel,
+        response: { 200: memberListModel, ...tenantErrorResponses },
         detail: {
           operationId: "updateOrganizationMemberRole",
           summary: "member roleを変更",
@@ -304,12 +285,9 @@ export const createOrganizationsModule = (db: Db) =>
           fresh: true,
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
-        body: t.Object({
-          memberId: t.String(),
-          confirmation: destructiveConfirmationModel,
-        }),
-        response: { 200: t.Array(memberModel), ...tenantErrorResponses },
+        params: organizationIdParamsModel,
+        body: transferSuperAdminBodyModel,
+        response: { 200: memberListModel, ...tenantErrorResponses },
         detail: {
           operationId: "transferOrganizationSuperAdmin",
           summary: "super_adminを移管",
@@ -336,13 +314,10 @@ export const createOrganizationsModule = (db: Db) =>
           fresh: true,
           source: "params",
         },
-        params: t.Object({
-          organizationId: t.String(),
-          memberId: t.String(),
-        }),
-        body: t.Object({ confirmation: destructiveConfirmationModel }),
+        params: organizationMemberParamsModel,
+        body: removeMemberBodyModel,
         response: {
-          200: t.Object({ id: t.String() }),
+          200: idResponseModel,
           ...tenantErrorResponses,
         },
         detail: {
@@ -367,8 +342,8 @@ export const createOrganizationsModule = (db: Db) =>
           allow: ["super_admin", "admin"],
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
-        response: { 200: t.Array(invitationModel), ...tenantErrorResponses },
+        params: organizationIdParamsModel,
+        response: { 200: invitationListModel, ...tenantErrorResponses },
         detail: {
           operationId: "listOrganizationInvitations",
           summary: "招待一覧を取得",
@@ -385,6 +360,7 @@ export const createOrganizationsModule = (db: Db) =>
           201,
           await createInvitation(db, {
             userId: authContext.user.id,
+            inviterName: authContext.user.name,
             session: authContext.session,
             organizationId: organizationAccess.id,
             email: body.email,
@@ -397,11 +373,8 @@ export const createOrganizationsModule = (db: Db) =>
           allow: ["super_admin", "admin"],
           source: "params",
         },
-        params: t.Object({ organizationId: t.String() }),
-        body: t.Object({
-          email: t.String({ format: "email" }),
-          role: t.Union([t.Literal("admin"), t.Literal("member")]),
-        }),
+        params: organizationIdParamsModel,
+        body: createInvitationBodyModel,
         response: { 201: invitationModel, ...tenantErrorResponses },
         detail: {
           operationId: "createOrganizationInvitation",
@@ -426,12 +399,9 @@ export const createOrganizationsModule = (db: Db) =>
           allow: ["super_admin", "admin"],
           source: "params",
         },
-        params: t.Object({
-          organizationId: t.String(),
-          invitationId: t.String(),
-        }),
+        params: organizationInvitationParamsModel,
         response: {
-          200: t.Object({ id: t.String(), status: t.String() }),
+          200: canceledInvitationResponseModel,
           ...tenantErrorResponses,
         },
         detail: {

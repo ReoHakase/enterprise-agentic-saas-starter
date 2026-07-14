@@ -1,11 +1,27 @@
+import { createServer } from "node:http"
+
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
 import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+const { invitationEmailRenderSpy } = vi.hoisted(() => ({
+  invitationEmailRenderSpy: vi.fn(async () => ({
+    subject: "Organization invitation",
+    html: "<p>Organization invitation</p>",
+    text: "Organization invitation",
+  })),
+}))
+
+vi.mock("@enterprise-agentic-saas/email", () => ({
+  renderOrganizationInvitationEmail: invitationEmailRenderSpy,
+}))
 
 import { createApp } from "./app"
+import { createApiClient } from "./client"
 import { env } from "./env"
+import { deleteOrganization } from "./modules/organizations/service"
 import { resolveAndPersistActiveOrganizationId } from "./modules/users/repository"
 import { corsPlugin } from "./plugins/cors"
 
@@ -14,9 +30,11 @@ const testDb = () =>
 
 const createSeededDb = async () => {
   const db = testDb()
+  await db.run(sql`pragma foreign_keys = on`)
 
   await Promise.all(
     [
+      "organization_deletion_jobs",
       "todo_comments",
       "audit_logs",
       "todos",
@@ -68,7 +86,8 @@ const createSeededDb = async () => {
       organization_id text not null,
       user_id text not null,
       role text not null default 'member',
-      created_at integer not null
+      created_at integer not null,
+      foreign key (organization_id) references organization(id) on delete cascade
     )
   `)
   await db.run(sql`
@@ -89,7 +108,8 @@ const createSeededDb = async () => {
       status text not null default 'pending',
       expires_at integer not null,
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      inviter_id text not null
+      inviter_id text not null,
+      foreign key (organization_id) references organization(id) on delete cascade
     )
   `)
   await db.run(sql`
@@ -107,6 +127,7 @@ const createSeededDb = async () => {
       due_date integer,
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      foreign key (organization_id) references organization(id) on delete cascade,
       unique (organization_id, number)
     )
   `)
@@ -118,7 +139,9 @@ const createSeededDb = async () => {
       author_id text not null,
       body text not null,
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      foreign key (organization_id) references organization(id) on delete cascade,
+      foreign key (todo_id) references todos(id) on delete cascade
     )
   `)
   await db.run(sql`
@@ -130,8 +153,28 @@ const createSeededDb = async () => {
       target_type text not null,
       target_id text,
       metadata text not null default '{}',
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      foreign key (organization_id) references organization(id) on delete cascade
     )
+  `)
+  await db.run(sql`
+    create table organization_deletion_jobs (
+      id text primary key,
+      organization_id text not null,
+      requested_by_user_id text not null,
+      idempotency_key text not null,
+      status text not null default 'pending',
+      attempts integer not null default 0,
+      last_error_code text,
+      locked_at integer,
+      next_attempt_at integer,
+      requested_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      completed_at integer
+    )
+  `)
+  await db.run(sql`
+    create unique index organization_deletion_jobs_request_uidx
+    on organization_deletion_jobs (requested_by_user_id, idempotency_key)
   `)
 
   const now = new Date()
@@ -227,11 +270,13 @@ const authHeaders = (
     activeOrganizationId?: string
     fresh?: boolean
     json?: boolean
+    sessionId?: string
   } = {}
 ) => ({
   ...(options.json === false ? {} : { "content-type": "application/json" }),
   "x-test-user-id": userId,
   "x-test-active-organization-id": options.activeOrganizationId ?? "org_1",
+  ...(options.sessionId ? { "x-test-session-id": options.sessionId } : {}),
   "x-test-session-created-at": (options.fresh === false
     ? new Date(0)
     : new Date()
@@ -247,6 +292,7 @@ const jsonRequest = (
     userId: string
     activeOrganizationId?: string
     fresh?: boolean
+    sessionId?: string
   }
 ) =>
   new Request(`http://localhost${path}`, {
@@ -254,9 +300,79 @@ const jsonRequest = (
     headers: authHeaders(input.userId, {
       activeOrganizationId: input.activeOrganizationId,
       fresh: input.fresh,
+      sessionId: input.sessionId,
     }),
     ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
   })
+
+const startHttpServer = async (app: ReturnType<typeof createApp>) => {
+  const server = createServer(async (incoming, outgoing) => {
+    try {
+      const chunks: Uint8Array[] = []
+      for await (const chunk of incoming) {
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
+      }
+
+      const headers = new Headers()
+      for (const [name, value] of Object.entries(incoming.headers)) {
+        for (const item of Array.isArray(value) ? value : [value]) {
+          if (item !== undefined) {
+            headers.append(name, item)
+          }
+        }
+      }
+
+      const body =
+        chunks.length > 0
+          ? new Uint8Array(
+              Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)))
+            )
+          : undefined
+      const response = await app.handle(
+        new Request(
+          `http://${incoming.headers.host ?? "127.0.0.1"}${incoming.url ?? "/"}`,
+          {
+            method: incoming.method,
+            headers,
+            body,
+          }
+        )
+      )
+
+      outgoing.statusCode = response.status
+      response.headers.forEach((value, name) => {
+        outgoing.setHeader(name, value)
+      })
+      outgoing.end(Buffer.from(await response.arrayBuffer()))
+    } catch {
+      outgoing.statusCode = 500
+      outgoing.end()
+    }
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", resolve)
+  })
+  const address = server.address()
+  if (!address || typeof address === "string") {
+    throw new Error("Test HTTP server did not expose a TCP port")
+  }
+
+  return {
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      }),
+    origin: `http://127.0.0.1:${address.port}`,
+  }
+}
 
 describe("createApp security and OpenAPI", () => {
   it("applies credentialed CORS to existing routes and mounted auth handlers", async () => {
@@ -367,6 +483,15 @@ describe("createApp security and OpenAPI", () => {
         .security
     ).toEqual([{ sessionCookie: [] }])
     expect(spec.paths["/todos/{id}"].get.operationId).toBe("getTodo")
+    expect(
+      spec.paths["/todos"].post.requestBody.content["application/json"].schema
+        .properties.dueDate
+    ).toMatchObject({ format: "date", nullable: true, type: "string" })
+    expect(
+      spec.paths["/todos"].get.parameters.find(
+        (parameter: { name: string }) => parameter.name === "limit"
+      ).schema
+    ).toMatchObject({ maximum: 100, minimum: 1, type: "integer" })
     const createOrganizationResponses =
       spec.paths["/organizations"].post.responses
     expect(createOrganizationResponses["201"]).toBeDefined()
@@ -375,10 +500,30 @@ describe("createApp security and OpenAPI", () => {
         .properties.error.properties.code.examples
     ).toContain("csrf_origin_forbidden")
     expect(
+      createOrganizationResponses["403"].content["application/json"].schema
+        .properties.error.properties.fieldErrors
+    ).toBeDefined()
+    expect(
       spec.paths["/todos/{id}/comments"].post.responses["201"].content[
         "application/json"
       ].schema.properties.author.required
     ).toEqual(["id", "name", "image"])
+    const deleteOrganizationOperation =
+      spec.paths["/organizations/{organizationId}"].delete
+    expect(deleteOrganizationOperation.security).toEqual([
+      { sessionCookie: [] },
+    ])
+    expect(new Set(Object.keys(deleteOrganizationOperation.responses))).toEqual(
+      new Set(["200", "400", "401", "403", "404", "409", "500"])
+    )
+    expect(
+      deleteOrganizationOperation.requestBody.content["application/json"].schema
+        .required
+    ).toEqual(["slug", "confirmation", "idempotencyKey"])
+    expect(
+      deleteOrganizationOperation.responses["400"].content["application/json"]
+        .schema.properties.error.properties.fieldErrors
+    ).toBeDefined()
 
     const operationMethods = ["get", "post", "put", "patch", "delete"] as const
     type OpenApiOperation = {
@@ -603,6 +748,440 @@ describe("createApp security and OpenAPI", () => {
     expect(duplicateUpdate.status).toBe(409)
   })
 
+  it("rejects unsafe organization deletion attempts with field-level recovery contracts", async () => {
+    const app = createApp(await createSeededDb())
+    const validBody = {
+      slug: "org-one",
+      confirmation: "DELETE",
+      idempotencyKey: "delete_org_1_request_01",
+    }
+
+    const admin = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_3",
+        body: validBody,
+      })
+    )
+    expect(admin.status).toBe(403)
+    expect(await admin.json()).toMatchObject({
+      error: {
+        code: "forbidden",
+        context: { action: "organization.delete" },
+      },
+    })
+
+    const stale = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        fresh: false,
+        body: validBody,
+      })
+    )
+    expect(stale.status).toBe(403)
+    expect(await stale.json()).toMatchObject({
+      error: {
+        code: "step_up_required",
+        context: { action: "organization.delete", maxAgeSeconds: 900 },
+      },
+    })
+
+    const wrongSlug = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        sessionId: "session_1",
+        body: { ...validBody, slug: "org-two" },
+      })
+    )
+    expect(wrongSlug.status).toBe(400)
+    expect(await wrongSlug.json()).toMatchObject({
+      error: {
+        code: "confirmation_required",
+        context: { action: "organization.delete", field: "slug" },
+        fieldErrors: { slug: ["Confirmation does not match"] },
+      },
+    })
+
+    const invalidBodies = [
+      { ...validBody, confirmation: "delete" },
+      { ...validBody, idempotencyKey: "short" },
+    ]
+    const invalidResponses = await Promise.all(
+      invalidBodies.map((body) =>
+        app.handle(
+          jsonRequest("/organizations/org_1", {
+            method: "DELETE",
+            userId: "user_1",
+            body,
+          })
+        )
+      )
+    )
+    expect(invalidResponses.map((response) => response.status)).toEqual([
+      400, 400,
+    ])
+    const [invalidConfirmation, invalidKey] = await Promise.all(
+      invalidResponses.map((response) => response.json())
+    )
+    expect(invalidConfirmation).toMatchObject({
+      error: {
+        code: "validation_error",
+        fieldErrors: { confirmation: ["Invalid value"] },
+      },
+    })
+    expect(invalidKey).toMatchObject({
+      error: {
+        code: "validation_error",
+        fieldErrors: { idempotencyKey: ["Invalid value"] },
+      },
+    })
+
+    const otherTenant = await app.handle(
+      jsonRequest("/organizations/org_2", {
+        method: "DELETE",
+        userId: "user_1",
+        activeOrganizationId: "org_2",
+        body: { ...validBody, slug: "org-two" },
+      })
+    )
+    expect(otherTenant.status).toBe(404)
+    expect(await otherTenant.json()).toMatchObject({
+      error: { code: "not_found", context: { resource: "organization" } },
+    })
+  })
+
+  it("keeps organization deletion authorization defensive in the service", async () => {
+    const db = await createSeededDb()
+    const freshSession = {
+      id: "session_1",
+      activeOrganizationId: "org_1",
+      createdAt: new Date(),
+    }
+    const input = {
+      organizationId: "org_1",
+      slug: "org-one",
+      confirmation: "DELETE",
+      idempotencyKey: "delete_org_1_service_01",
+    }
+
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_3",
+        session: freshSession,
+      })
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      publicContext: { action: "organization.delete" },
+    })
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: { ...freshSession, activeOrganizationId: "org_2" },
+      })
+    ).rejects.toMatchObject({
+      code: "active_organization_mismatch",
+    })
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: { ...freshSession, createdAt: new Date(0) },
+      })
+    ).rejects.toMatchObject({
+      code: "step_up_required",
+      publicContext: { action: "organization.delete" },
+    })
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: freshSession,
+        confirmation: "delete",
+      })
+    ).rejects.toMatchObject({
+      code: "confirmation_required",
+      publicContext: { field: "confirmation" },
+    })
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: freshSession,
+        slug: "org-two",
+      })
+    ).rejects.toMatchObject({
+      code: "confirmation_required",
+      publicContext: { field: "slug" },
+    })
+
+    await db
+      .update(schema.member)
+      .set({ role: "admin" })
+      .where(eq(schema.member.id, "member_1"))
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: freshSession,
+      })
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      publicContext: { action: "organization.delete" },
+    })
+    await db
+      .update(schema.member)
+      .set({ role: "super_admin" })
+      .where(eq(schema.member.id, "member_1"))
+
+    await db
+      .update(schema.session)
+      .set({ expiresAt: new Date(0) })
+      .where(eq(schema.session.id, "session_1"))
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: freshSession,
+      })
+    ).rejects.toMatchObject({ code: "active_organization_mismatch" })
+
+    await db
+      .update(schema.session)
+      .set({
+        activeOrganizationId: "org_2",
+        expiresAt: new Date(Date.now() + 60_000),
+      })
+      .where(eq(schema.session.id, "session_1"))
+    await expect(
+      deleteOrganization(db, {
+        ...input,
+        userId: "user_1",
+        session: freshSession,
+      })
+    ).rejects.toMatchObject({ code: "active_organization_mismatch" })
+
+    expect(
+      await db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, "org_1"))
+    ).toEqual([{ id: "org_1" }])
+    expect(await db.select().from(schema.organizationDeletionJobs)).toEqual([])
+  })
+
+  it("deletes a tenant atomically and replays only the exact deletion receipt", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
+    await db.insert(schema.organization).values({
+      id: "org_3",
+      name: "Org Three",
+      slug: "org-three",
+      createdAt: now,
+    })
+    await db.insert(schema.member).values({
+      id: "member_org_3_owner",
+      userId: "user_1",
+      organizationId: "org_3",
+      role: "super_admin",
+      createdAt: now,
+    })
+    await db.insert(schema.session).values([
+      {
+        id: "session_org_1_member",
+        userId: "user_4",
+        token: "token_org_1_member",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        updatedAt: now,
+        activeOrganizationId: "org_1",
+      },
+      {
+        id: "session_org_2_owner",
+        userId: "user_2",
+        token: "token_org_2_owner",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        updatedAt: now,
+        activeOrganizationId: "org_2",
+      },
+    ])
+    await db.insert(schema.invitation).values({
+      id: "invitation_org_1",
+      organizationId: "org_1",
+      email: "pending@example.test",
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(now.getTime() + 60_000),
+      createdAt: now,
+      inviterId: "user_1",
+    })
+    await db.insert(schema.todoComments).values({
+      id: "comment_org_1",
+      todoId: "todo_1",
+      organizationId: "org_1",
+      authorId: "user_1",
+      body: "Delete with the tenant",
+      createdAt: now,
+      updatedAt: now,
+    })
+    await db.insert(schema.auditLogs).values({
+      id: "audit_org_1",
+      organizationId: "org_1",
+      actorUserId: "user_1",
+      action: "organization.test",
+      targetType: "organization",
+      targetId: "org_1",
+      metadata: {},
+      createdAt: now,
+    })
+
+    const app = createApp(db)
+    const body = {
+      slug: "org-one",
+      confirmation: "DELETE",
+      idempotencyKey: "delete_org_1_request_01",
+    }
+    const first = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        sessionId: "session_1",
+        body,
+      })
+    )
+    expect(first.status).toBe(200)
+    const receipt = await first.json()
+    expect(receipt).toMatchObject({
+      organizationId: "org_1",
+      status: "deleted",
+    })
+    expect(receipt.deletionId).toEqual(expect.any(String))
+
+    const [organizations, members, invitations, todos, comments, audits] =
+      await Promise.all([
+        db.select().from(schema.organization),
+        db.select().from(schema.member),
+        db.select().from(schema.invitation),
+        db.select().from(schema.todos),
+        db.select().from(schema.todoComments),
+        db.select().from(schema.auditLogs),
+      ])
+    expect(organizations.map((item) => item.id)).toEqual(["org_2", "org_3"])
+    for (const rows of [members, invitations, todos, comments, audits]) {
+      expect(rows.some((item) => item.organizationId === "org_1")).toBe(false)
+    }
+
+    const sessions = await db
+      .select({
+        id: schema.session.id,
+        activeOrganizationId: schema.session.activeOrganizationId,
+      })
+      .from(schema.session)
+    expect(
+      sessions.find((item) => item.id === "session_1")?.activeOrganizationId
+    ).toBeNull()
+    expect(
+      sessions.find((item) => item.id === "session_org_1_member")
+        ?.activeOrganizationId
+    ).toBeNull()
+    expect(
+      sessions.find((item) => item.id === "session_org_2_owner")
+        ?.activeOrganizationId
+    ).toBe("org_2")
+
+    const jobs = await db.select().from(schema.organizationDeletionJobs)
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]).toMatchObject({
+      id: receipt.deletionId,
+      organizationId: "org_1",
+      requestedByUserId: "user_1",
+      idempotencyKey: body.idempotencyKey,
+      status: "pending",
+    })
+    expect(JSON.stringify(jobs[0])).not.toContain("org-one")
+    expect(JSON.stringify(jobs[0])).not.toContain("@example.test")
+
+    const staleReplay = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        fresh: false,
+        body,
+      })
+    )
+    expect(staleReplay.status).toBe(403)
+    expect(await staleReplay.json()).toMatchObject({
+      error: {
+        code: "step_up_required",
+        context: { action: "organization.delete" },
+      },
+    })
+
+    const otherActorReplay = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_4",
+        body,
+      })
+    )
+    expect(otherActorReplay.status).toBe(404)
+
+    const replay = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        sessionId: "session_1",
+        body,
+      })
+    )
+    expect(replay.status).toBe(200)
+    expect(await replay.json()).toEqual(receipt)
+
+    const wrongKey = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "DELETE",
+        userId: "user_1",
+        body: { ...body, idempotencyKey: "delete_org_1_request_02" },
+      })
+    )
+    expect(wrongKey.status).toBe(404)
+
+    const collision = await app.handle(
+      jsonRequest("/organizations/org_3", {
+        method: "DELETE",
+        userId: "user_1",
+        activeOrganizationId: "org_3",
+        body: { ...body, slug: "org-three" },
+      })
+    )
+    expect(collision.status).toBe(409)
+    expect(await collision.json()).toMatchObject({
+      error: {
+        code: "conflict",
+        context: {
+          constraint: "idempotency_key",
+          field: "idempotencyKey",
+        },
+        fieldErrors: {
+          idempotencyKey: ["Idempotency key has already been used"],
+        },
+      },
+    })
+    expect(
+      await db
+        .select({ id: schema.organization.id })
+        .from(schema.organization)
+        .where(eq(schema.organization.id, "org_3"))
+    ).toEqual([{ id: "org_3" }])
+    expect(
+      await db.select().from(schema.organizationDeletionJobs)
+    ).toHaveLength(1)
+  })
+
   it("returns 403 when an admin attempts a super-admin-only role change", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
@@ -710,6 +1289,7 @@ describe("createApp security and OpenAPI", () => {
   it("prevents admin invitations from granting admin", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
+    invitationEmailRenderSpy.mockClear()
     const forbidden = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
@@ -728,6 +1308,15 @@ describe("createApp security and OpenAPI", () => {
     )
     expect(allowed.status).toBe(201)
     const createdInvitation = await allowed.json()
+    expect(invitationEmailRenderSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inviterName: "Test User",
+        organizationName: "Org One",
+      })
+    )
+    expect(invitationEmailRenderSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ inviterName: "user_3" })
+    )
 
     const duplicate = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
@@ -937,12 +1526,26 @@ describe("issue-like todos", () => {
           priority: "urgent",
           assigneeId: "user_4",
           labels: ["bug", "auth"],
+          dueDate: "2026-08-15",
         },
       })
     )
     expect(createResponse.status).toBe(201)
     const created = await createResponse.json()
-    expect(created).toMatchObject({ number: 2, title: "Login bug" })
+    expect(created).toMatchObject({
+      number: 2,
+      title: "Login bug",
+      dueDate: "2026-08-15",
+    })
+    expect(typeof created.dueDate).toBe("string")
+
+    const storedTodo = await db
+      .select({ dueDate: schema.todos.dueDate })
+      .from(schema.todos)
+      .where(eq(schema.todos.id, created.id))
+    expect(storedTodo[0]?.dueDate?.toISOString()).toBe(
+      "2026-08-15T00:00:00.000Z"
+    )
 
     const filtered = await app.handle(
       jsonRequest(
@@ -969,6 +1572,7 @@ describe("issue-like todos", () => {
       })
     )
     expect(detail.status).toBe(200)
+    expect((await detail.json()).dueDate).toBe("2026-08-15")
 
     const comment = await app.handle(
       jsonRequest(`/todos/${created.id}/comments`, {
@@ -997,6 +1601,84 @@ describe("issue-like todos", () => {
         "todo.comment.created",
       ])
     )
+  })
+
+  it("keeps non-null date fields as strings over the real Eden HTTP transport", async () => {
+    const app = createApp(await createSeededDb())
+    const server = await startHttpServer(app)
+
+    try {
+      const client = createApiClient(server.origin, {
+        headers: authHeaders("user_1"),
+      })
+      const response = await client.todos.post({
+        organizationId: "org_1",
+        title: "Date contract",
+        dueDate: "2026-09-30",
+      })
+
+      expect(response.status).toBe(201)
+      expect(response.error).toBeNull()
+      expect(response.data).toMatchObject({
+        dueDate: "2026-09-30",
+      })
+      expect(response.data?.dueDate).toBeTypeOf("string")
+      expect(response.data?.createdAt).toBeTypeOf("string")
+      expect(response.data?.updatedAt).toBeTypeOf("string")
+    } finally {
+      await server.close()
+    }
+  })
+
+  it("returns safe field errors without reflecting invalid input", async () => {
+    const app = createApp(await createSeededDb())
+    const response = await app.handle(
+      jsonRequest("/todos", {
+        method: "POST",
+        userId: "user_1",
+        body: {
+          organizationId: "org_1",
+          title: "",
+          dueDate: "private-value-that-must-not-be-reflected",
+        },
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toMatchObject({
+      error: {
+        code: "validation_error",
+        message: "Invalid request",
+        fieldErrors: {
+          title: ["Invalid value"],
+          dueDate: ["Invalid value"],
+        },
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain(
+      "private-value-that-must-not-be-reflected"
+    )
+
+    const serviceValidation = await app.handle(
+      jsonRequest("/todos", {
+        method: "POST",
+        userId: "user_1",
+        body: {
+          organizationId: "org_1",
+          title: "Tenant-scoped assignee",
+          assigneeId: "user_2",
+        },
+      })
+    )
+    expect(await serviceValidation.json()).toMatchObject({
+      error: {
+        code: "validation_error",
+        fieldErrors: {
+          assigneeId: ["Assignee must be a member of the organization"],
+        },
+      },
+    })
   })
 
   it("allocates unique organization-local numbers under concurrent creates", async () => {

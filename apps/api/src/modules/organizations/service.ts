@@ -5,7 +5,10 @@ import { createRuntimeEmailSender } from "@enterprise-agentic-saas/email/runtime
 import { env } from "../../env"
 import { publicErrors } from "../../errors/app-error"
 import type { SessionContext } from "../auth/session"
-import { requireFreshSession } from "../authorization/access-control"
+import {
+  requireActiveOrganization,
+  requireFreshSession,
+} from "../authorization/access-control"
 import {
   isOrganizationRole,
   requireMembership,
@@ -16,6 +19,7 @@ import {
   cancelInvitationById,
   countSuperAdmins,
   deleteMemberById,
+  deleteOrganizationById,
   findMemberById,
   findOrganizationForUser,
   insertInvitation,
@@ -183,6 +187,59 @@ export const updateOrganization = async (
   }
 
   return { ...updated, active: true }
+}
+
+export const deleteOrganization = async (
+  db: Db,
+  input: {
+    userId: string
+    session: SessionContext
+    organizationId: string
+    slug: string
+    confirmation: string
+    idempotencyKey: string
+  }
+) => {
+  const action = "organization.delete"
+  requireActiveOrganization(input.session, input.organizationId)
+  requireFreshSession(input.session, action)
+
+  if (input.confirmation !== "DELETE") {
+    throw publicErrors.confirmationRequired(action)
+  }
+
+  const result = await deleteOrganizationById(db, {
+    actorUserId: input.userId,
+    organizationId: input.organizationId,
+    sessionId: input.session.id,
+    slug: input.slug,
+    idempotencyKey: input.idempotencyKey,
+  })
+
+  if (result.kind === "active_organization_mismatch") {
+    throw publicErrors.activeOrganizationMismatch()
+  }
+  if (result.kind === "forbidden") {
+    throw publicErrors.forbidden("You are not allowed to perform this action", {
+      action,
+    })
+  }
+  if (result.kind === "idempotency_conflict") {
+    throw publicErrors.conflict("Idempotency key has already been used", {
+      constraint: "idempotency_key",
+      field: "idempotencyKey",
+    })
+  }
+  if (result.kind === "not_found") {
+    throw publicErrors.notFound("Organization not found", {
+      resource: "organization",
+    })
+  }
+  if (result.kind === "slug_mismatch") {
+    throw publicErrors.confirmationRequired(action, { field: "slug" })
+  }
+
+  return result.receipt
 }
 
 export const listMembers = async (
@@ -373,6 +430,7 @@ export const createInvitation = async (
   input: {
     userId: string
     session: SessionContext
+    inviterName?: string | null
     organizationId: string
     email: string
     role: Exclude<OrganizationRole, "super_admin">
@@ -402,7 +460,7 @@ export const createInvitation = async (
     appName: env.APP_NAME,
     organizationName: organization.name,
     invitationUrl: `${env.APP_BASE_URL}/organization/invitations/${invitation.id}`,
-    inviterName: input.userId,
+    inviterName: input.inviterName?.trim() || undefined,
   })
 
   await sendEmail({ to: invitation.email, ...rendered })

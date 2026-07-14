@@ -1,4 +1,5 @@
 import { openapi } from "@elysia/openapi"
+import { toJsonSchema } from "@valibot/to-json-schema"
 import { Elysia } from "elysia"
 
 import { env } from "../env"
@@ -7,6 +8,14 @@ export const openApiPlugin = new Elysia({ name: "openapi" }).use(
   openapi({
     path: "/openapi",
     provider: "swagger-ui",
+    mapJsonSchema: {
+      valibot: (schema: Parameters<typeof toJsonSchema>[0]) =>
+        toJsonSchema(schema, {
+          ignoreActions: ["to_number"],
+          target: "openapi-3.0",
+          typeMode: "output",
+        }),
+    },
     documentation: {
       openapi: "3.0.3",
       info: {

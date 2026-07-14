@@ -1,7 +1,13 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { Elysia, t } from "elysia"
+import { sql } from "drizzle-orm"
+import { Elysia } from "elysia"
 
-import { apiErrorModel } from "./models/api"
+import { publicErrors } from "./errors/app-error"
+import {
+  apiErrorModel,
+  healthResponseModel,
+  readinessResponseModel,
+} from "./models/api"
 import { createAuditModule } from "./modules/audit"
 import { createOrganizationsModule } from "./modules/organizations"
 import { createTodosModule } from "./modules/todos"
@@ -34,15 +40,45 @@ export const createApp = (db: Db) =>
         ),
       {
         response: {
-          200: t.Object({
-            status: t.Literal("ok"),
-          }),
+          200: healthResponseModel,
           500: apiErrorModel,
         },
         detail: {
           operationId: "healthCheck",
           summary: "API health check",
           description: "processがHTTP requestを処理できることを確認する。",
+          tags: ["System"],
+        },
+      }
+    )
+    .get(
+      "/ready",
+      () =>
+        withObservedSpan(
+          {
+            name: "API readiness check",
+            op: "readiness.check",
+          },
+          async () => {
+            try {
+              await db.run(sql`select 1`)
+              return { status: "ready" as const }
+            } catch (cause) {
+              throw publicErrors.unavailable(cause)
+            }
+          }
+        ),
+      {
+        response: {
+          200: readinessResponseModel,
+          500: apiErrorModel,
+          503: apiErrorModel,
+        },
+        detail: {
+          operationId: "readinessCheck",
+          summary: "API readiness check",
+          description:
+            "processがrequestを処理でき、Turso/libSQLへqueryできることを確認する。失敗時は依存先詳細を公開しない。",
           tags: ["System"],
         },
       }

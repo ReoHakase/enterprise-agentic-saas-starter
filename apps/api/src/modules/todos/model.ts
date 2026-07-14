@@ -1,135 +1,144 @@
-import { t } from "elysia"
+import * as v from "valibot"
 
-export const todoStatusModel = t.Union([
-  t.Literal("open"),
-  t.Literal("in_progress"),
-  t.Literal("closed"),
+import {
+  dateOnlyModel,
+  isoTimestampModel,
+  nonEmptyStringModel,
+  positiveIntegerQueryModel,
+} from "../../models/common"
+
+export const todoStatusModel = v.picklist(["open", "in_progress", "closed"])
+
+export const todoPriorityModel = v.picklist([
+  "no_priority",
+  "low",
+  "medium",
+  "high",
+  "urgent",
 ])
 
-export const todoPriorityModel = t.Union([
-  t.Literal("no_priority"),
-  t.Literal("low"),
-  t.Literal("medium"),
-  t.Literal("high"),
-  t.Literal("urgent"),
-])
+const organizationIdModel = v.pipe(
+  nonEmptyStringModel,
+  v.metadata({
+    description: "active organization id",
+    examples: ["org_01JQ8YF2J7Q0J2X8R8S3Q9M6P4"],
+  })
+)
 
-const organizationIdModel = t.String({
-  minLength: 1,
-  description: "active organization id",
-  examples: ["org_01JQ8YF2J7Q0J2X8R8S3Q9M6P4"],
-})
+const labelsModel = v.pipe(
+  v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(40))),
+  v.maxLength(20)
+)
 
-const labelsModel = t.Array(t.String({ minLength: 1, maxLength: 40 }), {
-  maxItems: 20,
-  uniqueItems: true,
-})
-
-export const todoModel = t.Object(
-  {
-    id: t.String(),
-    organizationId: t.String(),
-    number: t.Integer({ minimum: 1 }),
-    title: t.String(),
-    description: t.String(),
+export const todoModel = v.pipe(
+  v.object({
+    id: v.string(),
+    organizationId: v.string(),
+    number: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    title: v.string(),
+    description: v.string(),
     status: todoStatusModel,
     priority: todoPriorityModel,
-    assigneeId: t.Nullable(t.String()),
-    creatorId: t.String(),
+    assigneeId: v.nullable(v.string()),
+    creatorId: v.string(),
     labels: labelsModel,
-    dueDate: t.Nullable(t.String({ format: "date-time" })),
-    createdAt: t.String({ format: "date-time" }),
-    updatedAt: t.String({ format: "date-time" }),
-  },
-  {
-    $id: "TodoIssue",
+    dueDate: v.nullable(dateOnlyModel),
+    createdAt: isoTimestampModel,
+    updatedAt: isoTimestampModel,
+  }),
+  v.metadata({
+    title: "TodoIssue",
     description: "organization内で連番を持つissue相当のtodo",
-  }
+  })
 )
 
-export const listTodosQueryModel = t.Object({
+export const listTodosResponseModel = v.array(todoModel)
+
+export const listTodosQueryModel = v.object({
   organizationId: organizationIdModel,
-  search: t.Optional(t.String({ maxLength: 200 })),
-  status: t.Optional(todoStatusModel),
-  priority: t.Optional(todoPriorityModel),
-  assigneeId: t.Optional(t.String()),
-  label: t.Optional(t.String({ maxLength: 40 })),
-  sortBy: t.Optional(
-    t.Union([
-      t.Literal("number"),
-      t.Literal("createdAt"),
-      t.Literal("updatedAt"),
-      t.Literal("dueDate"),
-      t.Literal("priority"),
-      t.Literal("status"),
+  search: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  status: v.optional(todoStatusModel),
+  priority: v.optional(todoPriorityModel),
+  assigneeId: v.optional(v.string()),
+  label: v.optional(v.pipe(v.string(), v.maxLength(40))),
+  sortBy: v.optional(
+    v.picklist([
+      "number",
+      "createdAt",
+      "updatedAt",
+      "dueDate",
+      "priority",
+      "status",
     ])
   ),
-  sortDirection: t.Optional(t.Union([t.Literal("asc"), t.Literal("desc")])),
-  limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100 })),
+  sortDirection: v.optional(v.picklist(["asc", "desc"])),
+  limit: v.optional(positiveIntegerQueryModel(100)),
 })
 
-export const getTodoQueryModel = t.Object({
+export const getTodoQueryModel = v.object({
   organizationId: organizationIdModel,
 })
 
-export const createTodoBodyModel = t.Object({
+export const createTodoBodyModel = v.object({
   organizationId: organizationIdModel,
-  title: t.String({ minLength: 1, maxLength: 200 }),
-  description: t.Optional(t.String({ maxLength: 50_000 })),
-  status: t.Optional(todoStatusModel),
-  priority: t.Optional(todoPriorityModel),
-  assigneeId: t.Optional(t.Nullable(t.String())),
-  labels: t.Optional(labelsModel),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date-time" }))),
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  description: v.optional(v.pipe(v.string(), v.maxLength(50_000))),
+  status: v.optional(todoStatusModel),
+  priority: v.optional(todoPriorityModel),
+  assigneeId: v.optional(v.nullable(v.string())),
+  labels: v.optional(labelsModel),
+  dueDate: v.optional(v.nullable(dateOnlyModel)),
 })
 
-export const updateTodoParamsModel = t.Object({ id: t.String() })
+export const updateTodoParamsModel = v.object({ id: nonEmptyStringModel })
 
-export const updateTodoBodyModel = t.Object({
+export const updateTodoBodyModel = v.object({
   organizationId: organizationIdModel,
-  title: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
-  description: t.Optional(t.String({ maxLength: 50_000 })),
-  status: t.Optional(todoStatusModel),
-  priority: t.Optional(todoPriorityModel),
-  assigneeId: t.Optional(t.Nullable(t.String())),
-  labels: t.Optional(labelsModel),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date-time" }))),
+  title: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
+  description: v.optional(v.pipe(v.string(), v.maxLength(50_000))),
+  status: v.optional(todoStatusModel),
+  priority: v.optional(todoPriorityModel),
+  assigneeId: v.optional(v.nullable(v.string())),
+  labels: v.optional(labelsModel),
+  dueDate: v.optional(v.nullable(dateOnlyModel)),
 })
 
-export const deleteTodoParamsModel = t.Object({ id: t.String() })
-export const deleteTodoBodyModel = t.Object({
+export const deleteTodoParamsModel = updateTodoParamsModel
+export const deleteTodoBodyModel = v.object({
   organizationId: organizationIdModel,
 })
 
-export const todoCommentModel = t.Object(
-  {
-    id: t.String(),
-    organizationId: t.String(),
-    todoId: t.String(),
-    authorId: t.String(),
-    author: t.Object({
-      id: t.String(),
-      name: t.String(),
-      image: t.Nullable(t.String()),
+export const todoCommentModel = v.pipe(
+  v.object({
+    id: v.string(),
+    organizationId: v.string(),
+    todoId: v.string(),
+    authorId: v.string(),
+    author: v.object({
+      id: v.string(),
+      name: v.string(),
+      image: v.nullable(v.string()),
     }),
-    body: t.String(),
-    createdAt: t.String({ format: "date-time" }),
-    updatedAt: t.String({ format: "date-time" }),
-  },
-  { $id: "TodoComment" }
+    body: v.string(),
+    createdAt: isoTimestampModel,
+    updatedAt: isoTimestampModel,
+  }),
+  v.metadata({ title: "TodoComment" })
 )
 
-export const todoCommentParamsModel = t.Object({
-  id: t.String(),
-  commentId: t.String(),
+export const listTodoCommentsResponseModel = v.array(todoCommentModel)
+
+export const todoCommentParamsModel = v.object({
+  id: nonEmptyStringModel,
+  commentId: nonEmptyStringModel,
 })
 
-export const createTodoCommentBodyModel = t.Object({
+export const createTodoCommentBodyModel = v.object({
   organizationId: organizationIdModel,
-  body: t.String({ minLength: 1, maxLength: 20_000 }),
+  body: v.pipe(v.string(), v.minLength(1), v.maxLength(20_000)),
 })
 
 export const updateTodoCommentBodyModel = createTodoCommentBodyModel
-export const deleteTodoCommentBodyModel = t.Object({
+export const deleteTodoCommentBodyModel = v.object({
   organizationId: organizationIdModel,
 })

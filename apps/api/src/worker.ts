@@ -4,6 +4,10 @@ import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 
 import { createApp } from "./app"
+import {
+  processOrganizationDeletionJobs,
+  type OrganizationAttachmentBucket,
+} from "./modules/organizations/deletion-jobs"
 import { configureObservability } from "./observability/runtime"
 import { createSentryObservabilityRuntime } from "./observability/sentry-adapter"
 import {
@@ -18,12 +22,22 @@ import { corsPlugin } from "./plugins/cors"
 import { serverTimingPlugin } from "./plugins/server-timing"
 
 type WorkerSentryEnv = {
+  ATTACHMENTS: OrganizationAttachmentBucket
   NODE_ENV?: string
   SENTRY_DSN?: string
   SENTRY_ENVIRONMENT?: string
   SENTRY_RELEASE?: string
   SENTRY_SPOTLIGHT?: string
   SENTRY_TRACES_SAMPLE_RATE?: string
+}
+
+type WorkerExecutionContext = {
+  waitUntil: (promise: Promise<unknown>) => void
+}
+
+type WorkerScheduledController = {
+  cron: string
+  scheduledTime: number
 }
 
 const tracesSampleRate = (value: string | undefined): number => {
@@ -45,6 +59,46 @@ const worker = new Elysia({ adapter: CloudflareAdapter })
   .use(corsPlugin)
   .use(serverTimingPlugin)
   .compile()
+
+const workerWithScheduled = Object.assign(worker, {
+  scheduled(
+    _controller: WorkerScheduledController,
+    workerEnv: WorkerSentryEnv,
+    context: WorkerExecutionContext
+  ) {
+    context.waitUntil(
+      processOrganizationDeletionJobs({
+        bucket: workerEnv.ATTACHMENTS,
+        database: db,
+        onFailure: ({ attempts }) => {
+          const error = new Error("Organization attachment cleanup failed")
+          Sentry.captureException(error, {
+            tags: {
+              component: "organization-deletion",
+              errorCode: "r2_cleanup_failed",
+            },
+            extra: { attempts },
+          })
+          console.error({
+            attempts,
+            component: "organization-deletion",
+            errorCode: "r2_cleanup_failed",
+            event: "cleanup_job_failed",
+            level: "error",
+          })
+        },
+      }).then((result) => {
+        console.info({
+          component: "organization-deletion",
+          event: "cleanup_batch_completed",
+          level: "info",
+          ...result,
+        })
+        return result
+      })
+    )
+  },
+})
 
 export default Sentry.withSentry<WorkerSentryEnv>((workerEnv) => {
   const development = workerEnv.NODE_ENV === "development"
@@ -73,4 +127,4 @@ export default Sentry.withSentry<WorkerSentryEnv>((workerEnv) => {
       ? 1
       : tracesSampleRate(workerEnv.SENTRY_TRACES_SAMPLE_RATE),
   }
-}, worker)
+}, workerWithScheduled)

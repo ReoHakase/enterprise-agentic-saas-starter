@@ -125,6 +125,16 @@ export const publicErrors = {
       privateContext,
     })
   },
+  unavailable(cause: unknown, retryAfter = 30) {
+    return new AppError({
+      code: "service_unavailable",
+      message: "Service temporarily unavailable",
+      statusCode: 503,
+      cause,
+      publicContext: { retryAfter },
+      privateContext: { operation: "readiness" },
+    })
+  },
   validation(
     message = "Invalid request",
     publicContext: PublicErrorContext = {}

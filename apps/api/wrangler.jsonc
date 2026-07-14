@@ -17,6 +17,9 @@
       "bucket_name": "enterprise-agentic-saas-attachments",
     },
   ],
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
   "observability": {
     "enabled": true,
     "logs": {

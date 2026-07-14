@@ -1,5 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
 
 import {
   authenticatedErrorResponses,
@@ -7,48 +7,21 @@ import {
 } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
 import {
+  currentUserModel,
+  revokedSessionResponseModel,
+  revokedSessionsResponseModel,
+  updateUserBodyModel,
+  userModel,
+  userSessionListModel,
+  userSessionParamsModel,
+} from "./model"
+import {
   getMe,
   listUserSessions,
   revokeOtherUserSessions,
   revokeUserSession,
   updateMe,
 } from "./service"
-
-const permissionsModel = t.Object({
-  canEditOrganization: t.Boolean(),
-  canInviteMembers: t.Boolean(),
-  canManageMembers: t.Boolean(),
-  canManageAdmins: t.Boolean(),
-  canTransferSuperAdmin: t.Boolean(),
-})
-
-const organizationSummaryModel = t.Object({
-  id: t.String(),
-  name: t.String(),
-  slug: t.String(),
-  role: t.Union([
-    t.Literal("super_admin"),
-    t.Literal("admin"),
-    t.Literal("member"),
-  ]),
-  active: t.Boolean(),
-  memberCount: t.Number(),
-  memberAvatars: t.Array(
-    t.Object({
-      userId: t.String(),
-      name: t.String(),
-      image: t.Nullable(t.String()),
-    })
-  ),
-  permissions: permissionsModel,
-})
-
-const userModel = t.Object({
-  id: t.String(),
-  name: t.String(),
-  email: t.String(),
-  image: t.Nullable(t.String()),
-})
 
 export const createUsersModule = (db: Db) =>
   new Elysia({ name: "users" })
@@ -64,11 +37,7 @@ export const createUsersModule = (db: Db) =>
       {
         authenticated: true,
         response: {
-          200: t.Object({
-            user: userModel,
-            activeOrganizationId: t.Nullable(t.String()),
-            organizations: t.Array(organizationSummaryModel),
-          }),
+          200: currentUserModel,
           ...authenticatedErrorResponses,
         },
         detail: {
@@ -86,7 +55,7 @@ export const createUsersModule = (db: Db) =>
         updateMe(db, { userId: user.id, name: body.name }),
       {
         authenticated: true,
-        body: t.Object({ name: t.String({ minLength: 1 }) }),
+        body: updateUserBodyModel,
         response: {
           200: userModel,
           400: tenantErrorResponses[400],
@@ -111,17 +80,7 @@ export const createUsersModule = (db: Db) =>
       {
         authenticated: true,
         response: {
-          200: t.Array(
-            t.Object({
-              id: t.String(),
-              current: t.Boolean(),
-              expiresAt: t.String({ format: "date-time" }),
-              createdAt: t.String({ format: "date-time" }),
-              updatedAt: t.String({ format: "date-time" }),
-              ipAddress: t.Nullable(t.String()),
-              userAgent: t.Nullable(t.String()),
-            })
-          ),
+          200: userSessionListModel,
           ...authenticatedErrorResponses,
         },
         detail: {
@@ -143,7 +102,7 @@ export const createUsersModule = (db: Db) =>
       {
         authenticated: true,
         response: {
-          200: t.Object({ revoked: t.Number({ minimum: 0 }) }),
+          200: revokedSessionsResponseModel,
           ...authenticatedErrorResponses,
         },
         detail: {
@@ -165,9 +124,9 @@ export const createUsersModule = (db: Db) =>
         }),
       {
         authenticated: true,
-        params: t.Object({ sessionId: t.String() }),
+        params: userSessionParamsModel,
         response: {
-          200: t.Object({ id: t.String() }),
+          200: revokedSessionResponseModel,
           400: tenantErrorResponses[400],
           404: tenantErrorResponses[404],
           ...authenticatedErrorResponses,

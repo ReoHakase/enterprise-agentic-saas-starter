@@ -54,7 +54,7 @@ type TodoCommentWithAuthorRow = TodoCommentRow & {
 
 const toTodoDto = (todo: TodoRow): TodoDto => ({
   ...todo,
-  dueDate: todo.dueDate?.toISOString() ?? null,
+  dueDate: todo.dueDate?.toISOString().slice(0, 10) ?? null,
   createdAt: todo.createdAt.toISOString(),
   updatedAt: todo.updatedAt.toISOString(),
 })

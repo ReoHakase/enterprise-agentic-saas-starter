@@ -41,8 +41,11 @@ const parseDueDate = (value: string | null | undefined) => {
     return null
   }
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
     throw publicErrors.validation("Invalid due date", { field: "dueDate" })
   }
   return date
