@@ -50,6 +50,13 @@
       "when": 1783956094613,
       "tag": "0006_membership_invariants",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783973802788,
+      "tag": "0007_ordinary_george_stacy",
+      "breakpoints": true
     }
   ]
 }

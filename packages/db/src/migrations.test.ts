@@ -43,6 +43,7 @@ describe("database migrations", () => {
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
           "audit_logs",
+          "organization_deletion_jobs",
           "rate_limit",
           "todo_comments",
           "todos",
@@ -422,6 +423,77 @@ describe("database migrations", () => {
           args: ["comment-1", "todo-a", "org-b", "user-1", "cross tenant"],
         })
       ).rejects.toThrow(/foreign key/i)
+    } finally {
+      client.close()
+    }
+  })
+
+  it("keeps organization deletion jobs durable and idempotent", async () => {
+    const client = createClient({ url: "file::memory:" })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["actor-1", "Actor", "actor@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["org-delete", "Delete Me", "delete-me", now],
+        },
+        {
+          sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
+          args: [
+            "deletion-job-1",
+            "org-delete",
+            "actor-1",
+            "delete-org-delete",
+            "pending",
+          ],
+        },
+      ])
+
+      await expect(
+        client.execute({
+          sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
+          args: [
+            "deletion-job-invalid-status",
+            "org-delete",
+            "actor-1",
+            "invalid-status",
+            "cancelled",
+          ],
+        })
+      ).rejects.toThrow(/check constraint/i)
+
+      await expect(
+        client.execute({
+          sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
+          args: [
+            "deletion-job-duplicate",
+            "org-delete",
+            "actor-1",
+            "delete-org-delete",
+            "pending",
+          ],
+        })
+      ).rejects.toThrow(/unique/i)
+
+      await client.execute("delete from organization where id = 'org-delete'")
+      const jobs = await client.execute(
+        "select id, organization_id as organizationId, requested_by_user_id as requestedByUserId, idempotency_key as idempotencyKey, status from organization_deletion_jobs"
+      )
+      expect(jobs.rows).toMatchObject([
+        {
+          id: "deletion-job-1",
+          organizationId: "org-delete",
+          requestedByUserId: "actor-1",
+          idempotencyKey: "delete-org-delete",
+          status: "pending",
+        },
+      ])
     } finally {
       client.close()
     }

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+  check,
   foreignKey,
   index,
   integer,
@@ -23,6 +24,15 @@ export const todoPriorities = [
 export type TodoPriority = (typeof todoPriorities)[number]
 
 export type AuditLogMetadata = Record<string, string | number | boolean | null>
+
+export const organizationDeletionJobStatuses = [
+  "pending",
+  "processing",
+  "failed",
+  "completed",
+] as const
+export type OrganizationDeletionJobStatus =
+  (typeof organizationDeletionJobStatuses)[number]
 
 export const todos = sqliteTable(
   "todos",
@@ -154,6 +164,52 @@ export const auditLogs = sqliteTable(
       table.organizationId,
       table.action,
       table.createdAt
+    ),
+  ]
+)
+
+// organization本体を即時削除した後も、R2 cleanupを安全に再試行するための
+// PIIを含まないdurable job。organizationへの外部キーは意図的に持たない。
+export const organizationDeletionJobs = sqliteTable(
+  "organization_deletion_jobs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    requestedByUserId: text("requested_by_user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status")
+      .$type<OrganizationDeletionJobStatus>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+    nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }),
+    requestedAt: integer("requested_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("organization_deletion_jobs_request_uidx").on(
+      table.requestedByUserId,
+      table.idempotencyKey
+    ),
+    index("organization_deletion_jobs_organization_idx").on(
+      table.organizationId
+    ),
+    index("organization_deletion_jobs_retry_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.requestedAt
+    ),
+    check(
+      "organization_deletion_jobs_status_check",
+      sql`${table.status} in ('pending', 'processing', 'failed', 'completed')`
+    ),
+    check(
+      "organization_deletion_jobs_attempts_check",
+      sql`${table.attempts} >= 0`
     ),
   ]
 )
