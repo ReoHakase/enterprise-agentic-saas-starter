@@ -22,7 +22,11 @@ import {
   parseDueDateInput,
   updateIssueFormSchema,
 } from "@/features/issues/schema"
-import { ConsoleApiError } from "@/lib/console-api"
+import {
+  clearConsoleApiFieldError,
+  getConsoleApiFieldErrors,
+  hasConsoleApiFieldError,
+} from "@/lib/console-api"
 
 import {
   selectSubmitState,
@@ -63,6 +67,16 @@ import type {
   IssueUiItem,
   IssueUpdate,
 } from "./types"
+
+const issueUpdateFields = [
+  "title",
+  "description",
+  "status",
+  "priority",
+  "assigneeId",
+  "labels",
+  "dueDate",
+] as const
 
 export const IssueDetailDialog = ({
   issue,
@@ -134,11 +148,12 @@ export const IssueDetailDialog = ({
           dueDate: value.dueDate,
         })
       } catch (error) {
-        setSaveFieldErrors(
-          error instanceof ConsoleApiError ? error.fieldErrors : {}
-        )
+        const nextFieldErrors = getConsoleApiFieldErrors(error)
+        setSaveFieldErrors(nextFieldErrors)
         setSaveError(
-          getActionErrorMessage(error, "The issue could not be updated.")
+          hasConsoleApiFieldError(nextFieldErrors, issueUpdateFields)
+            ? undefined
+            : getActionErrorMessage(error, "The issue could not be updated.")
         )
       }
     },
@@ -155,13 +170,24 @@ export const IssueDetailDialog = ({
         await onCreateComment(issue, value.body)
         commentForm.reset()
       } catch (error) {
-        setCommentFieldError(getActionFieldError(error, "body"))
+        const fieldError = getActionFieldError(error, "body")
+        setCommentFieldError(fieldError)
         setCommentError(
-          getActionErrorMessage(error, "The comment could not be added.")
+          fieldError
+            ? undefined
+            : getActionErrorMessage(error, "The comment could not be added.")
         )
       }
     },
   })
+  const clearSaveFieldError = useCallback((field: string) => {
+    setSaveFieldErrors((current) => clearConsoleApiFieldError(current, field))
+    setSaveError(undefined)
+  }, [])
+  const clearCommentError = useCallback(() => {
+    setCommentFieldError(undefined)
+    setCommentError(undefined)
+  }, [])
 
   const saveIssue = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -179,36 +205,43 @@ export const IssueDetailDialog = ({
   )
   const renderIssueTitleField = useCallback(
     (field: StringFieldApi) => (
-      <IssueTitleFormField field={field} serverErrors={saveFieldErrors.title} />
+      <IssueTitleFormField
+        field={field}
+        onEdit={clearSaveFieldError}
+        serverErrors={saveFieldErrors.title}
+      />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueDescriptionField = useCallback(
     (field: StringFieldApi) => (
       <IssueDescriptionFormField
         field={field}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.description}
       />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueStatusField = useCallback(
     (field: IssueStatusFieldApi) => (
       <IssueStatusFormField
         field={field}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.status}
       />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssuePriorityField = useCallback(
     (field: IssuePriorityFieldApi) => (
       <IssuePriorityFormField
         field={field}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.priority}
       />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueAssigneeField = useCallback(
     (field: NullableStringFieldApi) => (
@@ -216,28 +249,31 @@ export const IssueDetailDialog = ({
         field={field}
         assignees={assignees}
         items={assigneeItems}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.assigneeId}
       />
     ),
-    [assigneeItems, assignees, saveFieldErrors]
+    [assigneeItems, assignees, clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueLabelsField = useCallback(
     (field: LabelsFieldApi) => (
       <IssueLabelsFormField
         field={field}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.labels}
       />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueDueDateField = useCallback(
     (field: NullableStringFieldApi) => (
       <IssueDueDateFormField
         field={field}
+        onEdit={clearSaveFieldError}
         serverErrors={saveFieldErrors.dueDate}
       />
     ),
-    [saveFieldErrors]
+    [clearSaveFieldError, saveFieldErrors]
   )
   const renderIssueSubmit = useCallback(
     ([canSubmit, isSubmitting]: SubmitSelection) => (
@@ -259,10 +295,11 @@ export const IssueDetailDialog = ({
         label="Add comment"
         placeholder="Share an update or decision."
         className="min-h-24"
+        onEdit={clearCommentError}
         serverError={commentFieldError}
       />
     ),
-    [commentFieldError]
+    [clearCommentError, commentFieldError]
   )
   const renderCommentSubmit = useCallback(
     ([canSubmit, isSubmitting]: SubmitSelection) => (

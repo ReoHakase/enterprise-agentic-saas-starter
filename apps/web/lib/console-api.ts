@@ -1,10 +1,16 @@
 export {
+  clearConsoleApiFieldError,
   ConsoleApiError,
-  createConsoleApi,
+  getConsoleApiErrorText,
+  getConsoleApiFieldError,
+  getConsoleApiFieldErrors,
+  hasConsoleApiFieldError,
   isStepUpRequiredError,
+  shouldRetryConsoleQuery,
   type ConsoleApiErrorContext,
   type ConsoleApiFieldErrors,
-} from "@/features/console/api"
+} from "@/features/console/error"
+export { createConsoleApi } from "@/features/console/api"
 export {
   type Me,
   type UserProfile,

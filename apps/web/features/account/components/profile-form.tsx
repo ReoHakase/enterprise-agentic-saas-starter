@@ -20,7 +20,10 @@ import { UserIdentity } from "@/components/user-identity"
 import { profileFormSchema, type UserProfile } from "@/features/account/schema"
 import { consoleKeys } from "@/features/console/queries"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { ConsoleApiError } from "@/lib/console-api"
+import {
+  getConsoleApiErrorText,
+  getConsoleApiFieldError,
+} from "@/lib/console-api"
 
 const selectProfileSubmitState = (state: {
   canSubmit: boolean
@@ -55,17 +58,20 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
         const updated = await updateMutation.mutateAsync(value)
         form.reset({ name: updated.name })
       } catch (error) {
-        setNameError(
-          error instanceof ConsoleApiError
-            ? error.fieldErrors.name?.[0]
-            : undefined
-        )
+        const fieldError = getConsoleApiFieldError(error, "name")
+        setNameError(fieldError)
         setSubmitError(
-          error instanceof Error ? error.message : "The profile was not saved."
+          fieldError
+            ? undefined
+            : getConsoleApiErrorText(error, "The profile was not saved.")
         )
       }
     },
   })
+  const clearErrors = useCallback(() => {
+    setNameError(undefined)
+    setSubmitError(undefined)
+  }, [])
   const submitProfile = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
@@ -94,8 +100,19 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
         <FieldGroup className="max-w-2xl">
           <form.Field name="name">
             {(field) => {
-              const invalid =
+              const locallyInvalid =
                 field.state.meta.isTouched && !field.state.meta.isValid
+              const invalid = locallyInvalid || Boolean(nameError)
+              const descriptionId = `${field.name}-description`
+              const localErrorId = locallyInvalid
+                ? `${field.name}-local-error`
+                : undefined
+              const serverErrorId = nameError
+                ? `${field.name}-server-error`
+                : undefined
+              const describedBy = [descriptionId, localErrorId, serverErrorId]
+                .filter((value): value is string => Boolean(value))
+                .join(" ")
               return (
                 <Field data-invalid={invalid} orientation="responsive">
                   <FieldLabel htmlFor={field.name}>Display name</FieldLabel>
@@ -106,19 +123,26 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onValueChange={field.handleChange}
+                      onEdit={clearErrors}
+                      aria-describedby={describedBy}
                       aria-invalid={invalid}
                     />
-                    <FieldDescription className="mt-2">
+                    <FieldDescription id={descriptionId} className="mt-2">
                       Email is managed by your authentication account.
                     </FieldDescription>
-                    {invalid ? (
+                    {locallyInvalid ? (
                       <FieldError
+                        id={localErrorId}
                         className="mt-2"
                         errors={field.state.meta.errors}
                       />
                     ) : null}
                     {nameError ? (
-                      <FieldError className="mt-2" role="alert">
+                      <FieldError
+                        id={serverErrorId}
+                        className="mt-2"
+                        role="alert"
+                      >
                         {nameError}
                       </FieldError>
                     ) : null}
@@ -149,14 +173,19 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
 }
 
 const ProfileNameInput = ({
+  onEdit,
   onValueChange,
   ...props
 }: Omit<React.ComponentProps<typeof Input>, "autoComplete" | "onChange"> & {
+  onEdit: () => void
   onValueChange: (value: string) => void
 }) => {
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => onValueChange(event.target.value),
-    [onValueChange]
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onEdit()
+      onValueChange(event.target.value)
+    },
+    [onEdit, onValueChange]
   )
 
   return <Input {...props} autoComplete="name" onChange={handleChange} />

@@ -86,5 +86,42 @@ describe("ProfileForm", () => {
       await screen.findByText("Use a recognizable display name.")
     ).toBeInTheDocument()
     expect(name).toHaveValue("Draft name")
+    expect(name).toHaveAccessibleDescription(
+      /Use a recognizable display name\./u
+    )
+    expect(
+      screen.queryByText("Fix the highlighted field.")
+    ).not.toBeInTheDocument()
+
+    await actor.type(name, " updated")
+
+    expect(
+      screen.queryByText("Use a recognizable display name.")
+    ).not.toBeInTheDocument()
+    expect(name).toHaveAttribute("aria-invalid", "false")
+    expect(name).not.toHaveAccessibleDescription(
+      /Use a recognizable display name\./u
+    )
+  })
+
+  it("keeps an unknown failure at form level without exposing its message", async () => {
+    const actor = userEvent.setup()
+    mocks.updateMe.mockRejectedValueOnce(
+      new Error("libsql://secret-token@private.example.test")
+    )
+    renderProfile()
+
+    const name = screen.getByLabelText("Display name")
+    await actor.clear(name)
+    await actor.type(name, "Safe draft")
+    await actor.click(screen.getByRole("button", { name: "Save profile" }))
+
+    expect(
+      await screen.findByText(
+        "The profile was not saved. Check your connection and try again."
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/secret-token/u)).not.toBeInTheDocument()
+    expect(name).toHaveAttribute("aria-invalid", "false")
   })
 })

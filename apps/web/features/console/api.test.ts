@@ -100,6 +100,7 @@ describe("console Eden API", () => {
     expect(error).toMatchObject<Partial<ConsoleApiError>>({
       code: "confirmation_required",
       message: "Confirmation does not match",
+      requestId: "request-1",
       status: 400,
     })
     expect(error.context).toEqual({

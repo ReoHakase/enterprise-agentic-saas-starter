@@ -215,7 +215,7 @@ describe("MembersPanel", () => {
           maxAgeSeconds: 600,
         },
         message: "Recent authentication required",
-        status: 401,
+        status: 403,
       })
     )
     renderMembers()
@@ -249,7 +249,7 @@ describe("MembersPanel", () => {
         code: "confirmation_mismatch",
         fieldErrors: { confirmation: ["Confirmation is no longer valid."] },
         message: "Confirmation mismatch",
-        status: 422,
+        status: 400,
       })
     )
     renderMembers()

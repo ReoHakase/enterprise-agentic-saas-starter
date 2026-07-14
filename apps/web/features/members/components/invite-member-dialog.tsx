@@ -30,7 +30,10 @@ import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { MailPlusIcon } from "lucide-react"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 
-import { ConsoleApiError } from "@/features/console/api"
+import {
+  getConsoleApiErrorText,
+  getConsoleApiFieldError,
+} from "@/features/console/error"
 import {
   invitationFormSchema,
   type InvitationFormValues,
@@ -58,19 +61,6 @@ const selectSubmitState = (state: {
 const isInvitationRole = (value: string | null): value is "admin" | "member" =>
   value === "admin" || value === "member"
 
-const getInvitationError = (error: unknown) => {
-  if (error instanceof ConsoleApiError) {
-    const fieldError = error.fieldErrors.email?.[0]
-    if (fieldError) {
-      return fieldError
-    }
-  }
-
-  return error instanceof Error
-    ? error.message
-    : "The invitation could not be sent."
-}
-
 export const InviteMemberDialog = ({
   canInviteAdmins,
   pending,
@@ -81,22 +71,33 @@ export const InviteMemberDialog = ({
   onInvite: (value: InvitationFormValues) => Promise<unknown>
 }) => {
   const [open, setOpen] = useState(false)
+  const [emailError, setEmailError] = useState<string>()
   const [submitError, setSubmitError] = useState<string>()
   const form = useForm({
     defaultValues: invitationDefaultValues,
     validators: { onSubmit: invitationFormSchema },
     onSubmit: async ({ value }) => {
+      setEmailError(undefined)
       setSubmitError(undefined)
       try {
         await onInvite(value)
         form.reset()
         setOpen(false)
       } catch (error) {
-        setSubmitError(getInvitationError(error))
+        const fieldError = getConsoleApiFieldError(error, "email")
+        setEmailError(fieldError)
+        if (!fieldError) {
+          setSubmitError(
+            getConsoleApiErrorText(error, "The invitation could not be sent.")
+          )
+        }
       }
     },
   })
-  const clearSubmitError = useCallback(() => setSubmitError(undefined), [])
+  const clearErrors = useCallback(() => {
+    setEmailError(undefined)
+    setSubmitError(undefined)
+  }, [])
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen && form.state.isSubmitting) {
@@ -105,6 +106,7 @@ export const InviteMemberDialog = ({
       setOpen(nextOpen)
       if (!nextOpen) {
         form.reset()
+        setEmailError(undefined)
         setSubmitError(undefined)
       }
     },
@@ -144,8 +146,8 @@ export const InviteMemberDialog = ({
               {(field) => (
                 <InvitationEmailField
                   field={field}
-                  submitError={submitError}
-                  onEdit={clearSubmitError}
+                  serverError={emailError}
+                  onEdit={clearErrors}
                 />
               )}
             </form.Field>
@@ -157,6 +159,9 @@ export const InviteMemberDialog = ({
                 />
               )}
             </form.Field>
+            {submitError ? (
+              <FieldError role="alert">{submitError}</FieldError>
+            ) : null}
           </FieldGroup>
           <DialogFooter>
             <Button
@@ -188,16 +193,26 @@ export const InviteMemberDialog = ({
 
 const InvitationEmailField = ({
   field,
-  submitError,
+  serverError,
   onEdit,
 }: {
   field: AnyFieldApi
-  submitError?: string
+  serverError?: string
   onEdit: () => void
 }) => {
   const invalid =
     (field.state.meta.isTouched && !field.state.meta.isValid) ||
-    Boolean(submitError)
+    Boolean(serverError)
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const localErrorId = locallyInvalid
+    ? "invitation-email-local-error"
+    : undefined
+  const serverErrorId = serverError
+    ? "invitation-email-server-error"
+    : undefined
+  const describedBy = [localErrorId, serverErrorId]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
   const value = typeof field.state.value === "string" ? field.state.value : ""
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -217,15 +232,20 @@ const InvitationEmailField = ({
         value={value}
         onBlur={field.handleBlur}
         onChange={handleChange}
+        aria-describedby={describedBy || undefined}
         aria-invalid={invalid}
         autoCapitalize="none"
         autoComplete="email"
         spellCheck={false}
       />
-      {field.state.meta.isTouched && !field.state.meta.isValid ? (
-        <FieldError errors={field.state.meta.errors} />
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
       ) : null}
-      {submitError ? <FieldError>{submitError}</FieldError> : null}
+      {serverError ? (
+        <FieldError id={serverErrorId} role="alert">
+          {serverError}
+        </FieldError>
+      ) : null}
     </Field>
   )
 }
@@ -242,6 +262,9 @@ const InvitationRoleField = ({
   )
     ? field.state.value
     : "member"
+  const descriptionId = canInviteAdmins
+    ? undefined
+    : "invitation-role-description"
   const handleValueChange = useCallback(
     (nextValue: string | null) => {
       if (isInvitationRole(nextValue)) {
@@ -263,6 +286,7 @@ const InvitationRoleField = ({
           id="invitation-role"
           className="w-full"
           aria-label="Invitation role"
+          aria-describedby={descriptionId}
         >
           <span className="min-w-0 flex-1 truncate text-left">
             {roleLabel(value)}
@@ -278,7 +302,7 @@ const InvitationRoleField = ({
         </SelectContent>
       </Select>
       {!canInviteAdmins ? (
-        <FieldDescription>
+        <FieldDescription id={descriptionId}>
           Only the Super Admin can invite another Admin.
         </FieldDescription>
       ) : null}

@@ -84,17 +84,23 @@ export const createSecurityAuthCapabilities = (
 
 const unwrapAuthResult = (result: unknown): unknown => {
   if (isObjectRecord(result) && "error" in result && result.error) {
-    const message = isObjectRecord(result.error)
-      ? getProperty(result.error, "message")
-      : undefined
-    throw new Error(
-      typeof message === "string" ? message : "Authentication request failed"
-    )
+    throw new Error("Authentication request failed")
   }
   if (isObjectRecord(result) && "data" in result) {
     return result.data
   }
   return result
+}
+
+const authenticationRequestFailed = () =>
+  new Error("Authentication request failed")
+
+const settleAuthRequest = async (request: Promise<unknown>) => {
+  try {
+    return await request
+  } catch {
+    throw authenticationRequestFailed()
+  }
 }
 
 export const hasSecurityMethodsCapability = (
@@ -113,8 +119,10 @@ export const loadSecurityMethods = async (
   capabilities: SecurityAuthCapabilities
 ): Promise<SecurityMethods> => {
   const [accountResult, passkeyResult] = await Promise.all([
-    capabilities.listAccounts?.() ?? Promise.resolve([]),
-    capabilities.passkey?.listUserPasskeys?.() ?? Promise.resolve([]),
+    settleAuthRequest(capabilities.listAccounts?.() ?? Promise.resolve([])),
+    settleAuthRequest(
+      capabilities.passkey?.listUserPasskeys?.() ?? Promise.resolve([])
+    ),
   ])
 
   return parseSecurityMethods({
@@ -124,5 +132,5 @@ export const loadSecurityMethods = async (
 }
 
 export const completeSecurityMutation = async (result: Promise<unknown>) => {
-  unwrapAuthResult(await result)
+  unwrapAuthResult(await settleAuthRequest(result))
 }

@@ -91,10 +91,8 @@ export const AccountSwitcherDialog = ({
       router.refresh()
       toast.success(`Switched to ${account.user.email}`)
     },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Could not switch account"
-      )
+    onError: () => {
+      toast.error("Could not switch account. Try again.")
     },
   })
   const revokeMutation = useMutation({
@@ -115,10 +113,8 @@ export const AccountSwitcherDialog = ({
         queryKey: deviceAccountKey(currentUser.id),
       })
     },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Could not remove account"
-      )
+    onError: () => {
+      toast.error("Could not remove account. Try again.")
     },
   })
   const accounts = accountsQuery.data ?? []
@@ -170,9 +166,8 @@ export const AccountSwitcherDialog = ({
                   </EmptyMedia>
                   <EmptyTitle>Accounts could not be loaded</EmptyTitle>
                   <EmptyDescription>
-                    {accountsQuery.error instanceof Error
-                      ? accountsQuery.error.message
-                      : "Try the request again."}
+                    Try the request again. Your signed-in accounts were not
+                    changed.
                   </EmptyDescription>
                   <Button variant="outline" onClick={retryAccounts}>
                     Try again

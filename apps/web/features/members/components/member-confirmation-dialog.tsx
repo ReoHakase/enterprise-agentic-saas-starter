@@ -34,7 +34,11 @@ import {
   useState,
 } from "react"
 
-import { ConsoleApiError } from "@/features/console/api"
+import {
+  getConsoleApiErrorText,
+  getConsoleApiFieldError,
+  isStepUpRequiredError,
+} from "@/features/console/error"
 import {
   createMemberConfirmationFormSchema,
   type MemberConfirmationFormValues,
@@ -60,26 +64,6 @@ const selectConfirmationSubmitState = (state: {
   isSubmitting: state.isSubmitting,
 })
 
-const getConfirmationError = (
-  error: unknown,
-  action: "remove" | "transfer"
-) => {
-  if (error instanceof ConsoleApiError) {
-    const fieldError = error.fieldErrors.confirmation?.[0]
-    if (fieldError) {
-      return fieldError
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return action === "transfer"
-    ? "Super Admin could not be transferred."
-    : "The member could not be removed."
-}
-
 export const MemberConfirmationDialog = ({
   action,
   member,
@@ -96,6 +80,7 @@ export const MemberConfirmationDialog = ({
     confirmation: string
   ) => Promise<unknown>
 }) => {
+  const [confirmationError, setConfirmationError] = useState<string>()
   const [submitError, setSubmitError] = useState<string>()
   const schema = useMemo(
     () => createMemberConfirmationFormSchema(member.email, action),
@@ -105,13 +90,27 @@ export const MemberConfirmationDialog = ({
     defaultValues: confirmationDefaultValues,
     validators: { onSubmit: schema },
     onSubmit: async ({ value }) => {
+      setConfirmationError(undefined)
       setSubmitError(undefined)
       try {
         await onConfirm(member, value.confirmation)
         form.reset()
         onClose()
       } catch (error) {
-        setSubmitError(getConfirmationError(error, action))
+        if (isStepUpRequiredError(error)) return
+
+        const fieldError = getConsoleApiFieldError(error, "confirmation")
+        setConfirmationError(fieldError)
+        if (!fieldError) {
+          setSubmitError(
+            getConsoleApiErrorText(
+              error,
+              action === "transfer"
+                ? "Super Admin could not be transferred."
+                : "The member could not be removed."
+            )
+          )
+        }
       }
     },
   })
@@ -119,13 +118,17 @@ export const MemberConfirmationDialog = ({
     (open: boolean) => {
       if (!open && !form.state.isSubmitting) {
         form.reset()
+        setConfirmationError(undefined)
         setSubmitError(undefined)
         onClose()
       }
     },
     [form, onClose]
   )
-  const clearSubmitError = useCallback(() => setSubmitError(undefined), [])
+  const clearErrors = useCallback(() => {
+    setConfirmationError(undefined)
+    setSubmitError(undefined)
+  }, [])
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
@@ -163,11 +166,14 @@ export const MemberConfirmationDialog = ({
               <ConfirmationField
                 field={field}
                 memberEmail={member.email}
-                submitError={submitError}
-                onEdit={clearSubmitError}
+                serverError={confirmationError}
+                onEdit={clearErrors}
               />
             )}
           </form.Field>
+          {submitError ? (
+            <FieldError role="alert">{submitError}</FieldError>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <form.Subscribe selector={selectConfirmationSubmitState}>
@@ -203,17 +209,28 @@ export const MemberConfirmationDialog = ({
 const ConfirmationField = ({
   field,
   memberEmail,
-  submitError,
+  serverError,
   onEdit,
 }: {
   field: AnyFieldApi
   memberEmail: string
-  submitError?: string
+  serverError?: string
   onEdit: () => void
 }) => {
   const invalid =
     (field.state.meta.isTouched && !field.state.meta.isValid) ||
-    Boolean(submitError)
+    Boolean(serverError)
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const descriptionId = "member-confirmation-description"
+  const localErrorId = locallyInvalid
+    ? "member-confirmation-local-error"
+    : undefined
+  const serverErrorId = serverError
+    ? "member-confirmation-server-error"
+    : undefined
+  const describedBy = [descriptionId, localErrorId, serverErrorId]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
   const value = typeof field.state.value === "string" ? field.state.value : ""
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -233,19 +250,24 @@ const ConfirmationField = ({
         value={value}
         onBlur={field.handleBlur}
         onChange={handleChange}
+        aria-describedby={describedBy}
         aria-invalid={invalid}
         placeholder={memberEmail}
         autoCapitalize="none"
         autoComplete="off"
         spellCheck={false}
       />
-      <FieldDescription>
+      <FieldDescription id={descriptionId}>
         Type <strong>{memberEmail}</strong> exactly.
       </FieldDescription>
-      {field.state.meta.isTouched && !field.state.meta.isValid ? (
-        <FieldError errors={field.state.meta.errors} />
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
       ) : null}
-      {submitError ? <FieldError>{submitError}</FieldError> : null}
+      {serverError ? (
+        <FieldError id={serverErrorId} role="alert">
+          {serverError}
+        </FieldError>
+      ) : null}
     </Field>
   )
 }

@@ -11,6 +11,8 @@ import {
   type IssueUiItem,
   type IssueUpdate,
 } from "@/components/todos/issues-workspace"
+import { getConsoleApiErrorText } from "@/features/console/error"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { membersQueryOptions } from "@/features/console/queries"
 import {
   createIssue,
@@ -73,9 +75,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
       toast.success("Issue created")
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Issue creation failed"
-      )
+      showConsoleApiErrorToast(error, "Issue creation failed")
     },
   })
 
@@ -94,9 +94,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
     },
     onSettled: () => setBusyIssueId(undefined),
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Issue update failed"
-      )
+      showConsoleApiErrorToast(error, "Issue update failed")
     },
   })
 
@@ -113,9 +111,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
     },
     onSettled: () => setBusyIssueId(undefined),
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Issue deletion failed"
-      )
+      showConsoleApiErrorToast(error, "Issue deletion failed")
     },
   })
 
@@ -131,7 +127,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
       toast.success("Comment added")
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Comment failed")
+      showConsoleApiErrorToast(error, "Comment failed")
     },
   })
 
@@ -156,9 +152,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
       toast.success("Comment updated")
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Comment update failed"
-      )
+      showConsoleApiErrorToast(error, "Comment update failed")
     },
   })
 
@@ -180,9 +174,7 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
       toast.success("Comment deleted")
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Comment deletion failed"
-      )
+      showConsoleApiErrorToast(error, "Comment deletion failed")
     },
   })
 
@@ -268,9 +260,10 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
   }, [refetchIssues])
 
   const errorMessage = issuesQuery.error
-    ? issuesQuery.error instanceof Error
-      ? issuesQuery.error.message
-      : "The issue list request failed."
+    ? getConsoleApiErrorText(
+        issuesQuery.error,
+        "The issue list request failed."
+      )
     : undefined
 
   return (
@@ -295,11 +288,12 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
       comments={commentsQuery.data}
       commentsPending={commentsQuery.isPending && Boolean(selectedIssueId)}
       commentsError={
-        commentsQuery.error instanceof Error
-          ? commentsQuery.error.message
-          : commentsQuery.error
-            ? "Comments could not be loaded."
-            : undefined
+        commentsQuery.error
+          ? getConsoleApiErrorText(
+              commentsQuery.error,
+              "Comments could not be loaded."
+            )
+          : undefined
       }
       onCreateComment={handleCreateComment}
       onUpdateComment={handleUpdateComment}

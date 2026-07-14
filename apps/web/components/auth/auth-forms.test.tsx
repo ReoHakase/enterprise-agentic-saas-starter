@@ -227,9 +227,7 @@ describe("email and password authentication forms", () => {
     ).toBeVisible()
     expect(email).toHaveValue("user@example.test")
     expect(password).toHaveValue("correct-password")
-    expect(authMocks.toastError).toHaveBeenCalledWith(
-      "The email or password is incorrect."
-    )
+    expect(authMocks.toastError).not.toHaveBeenCalled()
   })
 
   it("shows sign-up confirmation errors without submitting", async () => {
@@ -279,8 +277,6 @@ describe("email and password authentication forms", () => {
     expect(email).toHaveValue("user@example.test")
     expect(password).toHaveValue("correct-password")
     expect(confirmation).toHaveValue("correct-password")
-    expect(authMocks.toastError).toHaveBeenCalledWith(
-      "An account already exists for this email address."
-    )
+    expect(authMocks.toastError).not.toHaveBeenCalled()
   })
 })

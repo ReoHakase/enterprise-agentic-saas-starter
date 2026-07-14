@@ -25,6 +25,7 @@ export default defineConfig({
         "features/account/multi-session-client.ts",
         "features/account/schema.ts",
         "features/account/security-client.ts",
+        "features/auth/error.ts",
         "features/auth/schema.ts",
         "features/console/api.ts",
         "features/issues/api.ts",

@@ -51,13 +51,20 @@ export const CreateIssueDialog = ({
         form.reset()
         setOpen(false)
       } catch (cause) {
-        setTitleError(getActionFieldError(cause, "title"))
+        const fieldError = getActionFieldError(cause, "title")
+        setTitleError(fieldError)
         setCreateError(
-          getActionErrorMessage(cause, "The issue could not be created.")
+          fieldError
+            ? undefined
+            : getActionErrorMessage(cause, "The issue could not be created.")
         )
       }
     },
   })
+  const clearCreateError = useCallback(() => {
+    setCreateError(undefined)
+    setTitleError(undefined)
+  }, [])
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -83,9 +90,13 @@ export const CreateIssueDialog = ({
   )
   const renderTitleField = useCallback(
     (field: StringFieldApi) => (
-      <CreateIssueTitleField field={field} serverError={titleError} />
+      <CreateIssueTitleField
+        field={field}
+        onEdit={clearCreateError}
+        serverError={titleError}
+      />
     ),
-    [titleError]
+    [clearCreateError, titleError]
   )
   const renderSubmit = useCallback(
     ([canSubmit, isSubmitting]: SubmitSelection) => (

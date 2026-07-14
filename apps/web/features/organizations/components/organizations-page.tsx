@@ -64,6 +64,7 @@ import { toast } from "sonner"
 
 import { PageShell } from "@/components/page-shell"
 import { UserAvatar } from "@/components/user-identity"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
   consoleKeys,
   organizationsQueryOptions,
@@ -75,7 +76,14 @@ import {
   type OrganizationSummary,
 } from "@/features/organizations/schema"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { ConsoleApiError } from "@/lib/console-api"
+import {
+  clearConsoleApiFieldError,
+  getConsoleApiErrorText,
+  getConsoleApiFieldErrors,
+  hasConsoleApiFieldError,
+} from "@/lib/console-api"
+
+const organizationCreateFields = ["name", "slug"] as const
 
 const selectCreateSubmitState = (state: {
   canSubmit: boolean
@@ -106,9 +114,7 @@ export const OrganizationsPage = ({
       toast.success("Organization switched")
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Could not switch organization"
-      )
+      showConsoleApiErrorToast(error, "Could not switch organization")
     },
   })
   const { isPending: activatePending, mutate: activateOrganization } =
@@ -139,13 +145,15 @@ export const OrganizationsPage = ({
         form.reset()
         setSlugEdited(false)
       } catch (error) {
-        setFieldErrors(
-          error instanceof ConsoleApiError ? error.fieldErrors : {}
-        )
+        const nextFieldErrors = getConsoleApiFieldErrors(error)
+        setFieldErrors(nextFieldErrors)
         setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "The organization could not be created."
+          hasConsoleApiFieldError(nextFieldErrors, organizationCreateFields)
+            ? undefined
+            : getConsoleApiErrorText(
+                error,
+                "The organization could not be created."
+              )
         )
       }
     },
@@ -232,7 +240,20 @@ export const OrganizationsPage = ({
     },
     [form, slugEdited]
   )
-  const markSlugEdited = useCallback(() => setSlugEdited(true), [])
+  const editOrganizationName = useCallback(() => {
+    setFieldErrors((current) => {
+      const withoutName = clearConsoleApiFieldError(current, "name")
+      return slugEdited
+        ? withoutName
+        : clearConsoleApiFieldError(withoutName, "slug")
+    })
+    setSubmitError(undefined)
+  }, [slugEdited])
+  const editOrganizationSlug = useCallback(() => {
+    setSlugEdited(true)
+    setFieldErrors((current) => clearConsoleApiFieldError(current, "slug"))
+    setSubmitError(undefined)
+  }, [])
 
   return (
     <PageShell
@@ -256,8 +277,16 @@ export const OrganizationsPage = ({
               <FieldGroup className="py-5">
                 <form.Field name="name">
                   {(field) => {
-                    const invalid =
+                    const locallyInvalid =
                       field.state.meta.isTouched && !field.state.meta.isValid
+                    const invalid =
+                      locallyInvalid || Boolean(fieldErrors.name?.length)
+                    const localErrorId = locallyInvalid
+                      ? "organization-create-name-local-error"
+                      : undefined
+                    const serverErrorId = fieldErrors.name?.length
+                      ? "organization-create-name-server-error"
+                      : undefined
                     return (
                       <Field data-invalid={invalid}>
                         <FieldLabel htmlFor={field.name}>Name</FieldLabel>
@@ -268,13 +297,24 @@ export const OrganizationsPage = ({
                           onBlur={field.handleBlur}
                           onValueChange={field.handleChange}
                           onNameChange={syncSlugFromName}
+                          onEdit={editOrganizationName}
+                          aria-describedby={
+                            [localErrorId, serverErrorId]
+                              .filter((value): value is string =>
+                                Boolean(value)
+                              )
+                              .join(" ") || undefined
+                          }
                           aria-invalid={invalid}
                         />
-                        {invalid ? (
-                          <FieldError errors={field.state.meta.errors} />
+                        {locallyInvalid ? (
+                          <FieldError
+                            id={localErrorId}
+                            errors={field.state.meta.errors}
+                          />
                         ) : null}
                         {fieldErrors.name ? (
-                          <FieldError role="alert">
+                          <FieldError id={serverErrorId} role="alert">
                             {fieldErrors.name.join(" ")}
                           </FieldError>
                         ) : null}
@@ -284,8 +324,17 @@ export const OrganizationsPage = ({
                 </form.Field>
                 <form.Field name="slug">
                   {(field) => {
-                    const invalid =
+                    const locallyInvalid =
                       field.state.meta.isTouched && !field.state.meta.isValid
+                    const invalid =
+                      locallyInvalid || Boolean(fieldErrors.slug?.length)
+                    const descriptionId = "organization-create-slug-description"
+                    const localErrorId = locallyInvalid
+                      ? "organization-create-slug-local-error"
+                      : undefined
+                    const serverErrorId = fieldErrors.slug?.length
+                      ? "organization-create-slug-server-error"
+                      : undefined
                     return (
                       <Field data-invalid={invalid}>
                         <FieldLabel htmlFor={field.name}>Slug</FieldLabel>
@@ -295,18 +344,28 @@ export const OrganizationsPage = ({
                           value={field.state.value}
                           onBlur={field.handleBlur}
                           onValueChange={field.handleChange}
-                          onEdited={markSlugEdited}
+                          onEdit={editOrganizationSlug}
+                          aria-describedby={[
+                            descriptionId,
+                            localErrorId,
+                            serverErrorId,
+                          ]
+                            .filter((value): value is string => Boolean(value))
+                            .join(" ")}
                           aria-invalid={invalid}
                         />
-                        <FieldDescription>
+                        <FieldDescription id={descriptionId}>
                           Used in URLs and API references. Lowercase letters,
                           numbers, and hyphens only.
                         </FieldDescription>
-                        {invalid ? (
-                          <FieldError errors={field.state.meta.errors} />
+                        {locallyInvalid ? (
+                          <FieldError
+                            id={localErrorId}
+                            errors={field.state.meta.errors}
+                          />
                         ) : null}
                         {fieldErrors.slug ? (
-                          <FieldError role="alert">
+                          <FieldError id={serverErrorId} role="alert">
                             {fieldErrors.slug.join(" ")}
                           </FieldError>
                         ) : null}
@@ -350,9 +409,10 @@ export const OrganizationsPage = ({
             </EmptyMedia>
             <EmptyTitle>Organizations could not be loaded</EmptyTitle>
             <EmptyDescription>
-              {organizationsQuery.error instanceof Error
-                ? organizationsQuery.error.message
-                : "Try the request again."}
+              {getConsoleApiErrorText(
+                organizationsQuery.error,
+                "Try the request again."
+              )}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -463,20 +523,23 @@ const OrganizationIdentity = ({
 )
 
 const OrganizationNameInput = ({
+  onEdit,
   onNameChange,
   onValueChange,
   ...props
 }: Omit<React.ComponentProps<typeof Input>, "autoComplete" | "onChange"> & {
+  onEdit: () => void
   onNameChange: (name: string) => void
   onValueChange: (value: string) => void
 }) => {
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const name = event.target.value
+      onEdit()
       onValueChange(name)
       onNameChange(name)
     },
-    [onNameChange, onValueChange]
+    [onEdit, onNameChange, onValueChange]
   )
 
   return (
@@ -485,22 +548,22 @@ const OrganizationNameInput = ({
 }
 
 const OrganizationSlugInput = ({
-  onEdited,
+  onEdit,
   onValueChange,
   ...props
 }: Omit<
   React.ComponentProps<typeof Input>,
   "autoCapitalize" | "autoComplete" | "onChange" | "spellCheck"
 > & {
-  onEdited: () => void
+  onEdit: () => void
   onValueChange: (value: string) => void
 }) => {
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      onEdited()
+      onEdit()
       onValueChange(event.target.value)
     },
-    [onEdited, onValueChange]
+    [onEdit, onValueChange]
   )
 
   return (

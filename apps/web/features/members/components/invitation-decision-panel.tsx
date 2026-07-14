@@ -9,7 +9,11 @@ import { useCallback } from "react"
 import { toast } from "sonner"
 
 import { consoleKeys } from "@/features/console/queries"
-import { decideInvitation } from "@/features/members/api"
+import {
+  decideInvitation,
+  InvitationDecisionError,
+  invitationFallbacks,
+} from "@/features/members/api"
 import { clientEnv } from "@/lib/env.client"
 
 export const InvitationDecisionPanel = ({
@@ -36,11 +40,11 @@ export const InvitationDecisionPanel = ({
       )
       router.refresh()
     },
-    onError: (error) => {
+    onError: (error, action) => {
       toast.error(
-        error instanceof Error
+        error instanceof InvitationDecisionError
           ? error.message
-          : "Invitation could not be updated"
+          : invitationFallbacks[action]
       )
     },
   })

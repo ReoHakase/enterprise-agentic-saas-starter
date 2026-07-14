@@ -79,6 +79,7 @@ export const SecurityMethodsPanel = () => {
     queryKey: [...securityMethodsKey, capabilities],
     queryFn: () => loadSecurityMethods(capabilities),
     enabled: available,
+    retry: false,
   })
   const mutation = useMutation<unknown, Error, SecurityMutation>({
     mutationFn: async (action) => {

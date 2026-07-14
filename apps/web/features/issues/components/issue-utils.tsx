@@ -6,7 +6,10 @@ import {
   FlagIcon,
 } from "lucide-react"
 
-import { ConsoleApiError } from "@/lib/console-api"
+import {
+  getConsoleApiErrorText,
+  getConsoleApiFieldError,
+} from "@/lib/console-api"
 
 import type {
   IssueAssigneeOption,
@@ -62,12 +65,10 @@ export const formatIssueDate = (value?: string) => {
 export const issueNumber = (issue: IssueUiItem) => `#${issue.number}`
 
 export const getActionErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error && error.message && error.message !== "[object Object]"
-    ? error.message
-    : fallback
+  getConsoleApiErrorText(error, fallback)
 
 export const getActionFieldError = (error: unknown, field: string) =>
-  error instanceof ConsoleApiError ? error.fieldErrors[field]?.[0] : undefined
+  getConsoleApiFieldError(error, field)
 
 export const safelyRunAction = (action: void | Promise<void>) => {
   if (action instanceof Promise) {

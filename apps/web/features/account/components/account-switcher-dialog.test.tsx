@@ -131,4 +131,23 @@ describe("AccountSwitcherDialog", () => {
     ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled()
   })
+
+  it("shows one operation fallback when account switching rejects", async () => {
+    const actor = userEvent.setup()
+    mocks.setActive.mockRejectedValueOnce(
+      new Error("BETTER_AUTH_SECRET=provider-secret")
+    )
+    renderDialog()
+
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledOnce()
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "Could not switch account. Try again."
+    )
+    expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
+  })
 })

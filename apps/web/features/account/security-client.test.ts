@@ -50,9 +50,23 @@ describe("security auth client boundary", () => {
     ).rejects.toThrow("Invalid type")
     await expect(
       completeSecurityMutation(
-        Promise.resolve({ error: { message: "Provider rejected request" } })
+        Promise.resolve({
+          error: { message: "TURSO_AUTH_TOKEN=provider-secret" },
+        })
       )
-    ).rejects.toThrow("Provider rejected request")
+    ).rejects.toThrow("Authentication request failed")
+    await expect(
+      completeSecurityMutation(
+        Promise.reject(new Error("SELECT token FROM account"))
+      )
+    ).rejects.toThrow("Authentication request failed")
+    await expect(
+      loadSecurityMethods({
+        listAccounts: async () => {
+          throw new Error("DATABASE_URL=file:private.db")
+        },
+      })
+    ).rejects.toThrow("Authentication request failed")
   })
 
   it("reports unavailable clients without inventing capabilities", () => {

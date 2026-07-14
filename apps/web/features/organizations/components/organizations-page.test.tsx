@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   createOrganization: vi.fn<(input: unknown) => Promise<unknown>>(),
   listOrganizations: vi.fn<() => Promise<unknown>>(),
   refresh: vi.fn<() => void>(),
+  toastError:
+    vi.fn<(message: string, options?: { description?: string }) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
@@ -29,7 +31,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("sonner", () => ({
   toast: {
-    error: vi.fn<(message: string) => void>(),
+    error: mocks.toastError,
     success: mocks.toastSuccess,
   },
 }))
@@ -129,6 +131,45 @@ describe("OrganizationsPage", () => {
       await screen.findByText("This slug is already in use.")
     ).toBeInTheDocument()
     expect(screen.getByLabelText("Name")).toHaveValue("New Team")
-    expect(screen.getByLabelText("Slug")).toHaveValue("new-team")
+    const slug = screen.getByLabelText("Slug")
+    expect(slug).toHaveValue("new-team")
+    expect(slug).toHaveAccessibleDescription(/This slug is already in use\./u)
+    expect(
+      screen.queryByText("Fix the highlighted field.")
+    ).not.toBeInTheDocument()
+
+    await actor.type(slug, "-edited")
+
+    expect(
+      screen.queryByText("This slug is already in use.")
+    ).not.toBeInTheDocument()
+    expect(slug).not.toHaveAccessibleDescription(
+      /This slug is already in use\./u
+    )
+  })
+
+  it("shows a safe retry and support reference when switching fails", async () => {
+    const actor = userEvent.setup()
+    mocks.activateOrganization.mockRejectedValueOnce(
+      new ConsoleApiError({
+        code: "service_unavailable",
+        context: { retryAfter: 4 },
+        message: "Organization service is temporarily unavailable.",
+        requestId: "req_switch_01",
+        status: 503,
+      })
+    )
+    renderOrganizations()
+
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Organization service is temporarily unavailable.",
+        {
+          description: "Try again in 4 seconds. Reference ID: req_switch_01",
+        }
+      )
+    })
   })
 })

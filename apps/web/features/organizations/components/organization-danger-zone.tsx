@@ -32,7 +32,15 @@ import {
   type OrganizationDetail,
 } from "@/features/organizations/schema"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { ConsoleApiError, isStepUpRequiredError } from "@/lib/console-api"
+import {
+  clearConsoleApiFieldError,
+  getConsoleApiErrorText,
+  getConsoleApiFieldErrors,
+  hasConsoleApiFieldError,
+  isStepUpRequiredError,
+} from "@/lib/console-api"
+
+const organizationDeletionFields = ["slug", "confirmation"] as const
 
 const createDeletionIdempotencyKey = () =>
   `delete_org_${globalThis.crypto.randomUUID().replaceAll("-", "")}`
@@ -95,10 +103,8 @@ export const OrganizationDangerZone = ({
         router.replace("/settings/organizations")
         router.refresh()
       } catch (error) {
-        setFieldErrors(
-          error instanceof ConsoleApiError ? error.fieldErrors : {}
-        )
         if (isStepUpRequiredError(error)) {
+          setFieldErrors({})
           const action =
             typeof error.context.action === "string"
               ? error.context.action
@@ -110,12 +116,16 @@ export const OrganizationDangerZone = ({
           return
         }
 
-        const message =
-          error instanceof Error
-            ? error.message
-            : "The organization could not be deleted."
-        setSubmitError(message)
-        toast.error(message)
+        const nextFieldErrors = getConsoleApiFieldErrors(error)
+        setFieldErrors(nextFieldErrors)
+        setSubmitError(
+          hasConsoleApiFieldError(nextFieldErrors, organizationDeletionFields)
+            ? undefined
+            : getConsoleApiErrorText(
+                error,
+                "The organization could not be deleted."
+              )
+        )
       }
     },
   })
@@ -145,12 +155,18 @@ export const OrganizationDangerZone = ({
     },
     [form]
   )
+  const clearFieldError = useCallback((field: string) => {
+    setFieldErrors((current) => clearConsoleApiFieldError(current, field))
+    setSubmitError(undefined)
+    setReauthenticationHref(undefined)
+  }, [])
   const renderSlugField = useCallback(
     (field: AnyFieldApi) => (
       <FormTextField
         field={field}
         id="organization-delete-slug"
         label="Type the organization slug"
+        onEdit={clearFieldError}
         serverErrors={fieldErrors.slug}
         description={
           <>
@@ -162,7 +178,7 @@ export const OrganizationDangerZone = ({
         spellCheck={false}
       />
     ),
-    [fieldErrors.slug, organization.slug]
+    [clearFieldError, fieldErrors.slug, organization.slug]
   )
   const renderConfirmationField = useCallback(
     (field: AnyFieldApi) => (
@@ -170,13 +186,14 @@ export const OrganizationDangerZone = ({
         field={field}
         id="organization-delete-confirmation"
         label="Type DELETE to confirm"
+        onEdit={clearFieldError}
         serverErrors={fieldErrors.confirmation}
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
       />
     ),
-    [fieldErrors.confirmation]
+    [clearFieldError, fieldErrors.confirmation]
   )
   const selectDeleteState = useCallback(
     (state: typeof form.state) => ({

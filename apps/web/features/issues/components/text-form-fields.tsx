@@ -16,19 +16,30 @@ import { useCallback, type ChangeEvent } from "react"
 
 import type { StringFieldApi } from "./form-types"
 
+const describedByIds = (...ids: Array<string | undefined>) =>
+  ids.filter((id): id is string => Boolean(id)).join(" ") || undefined
+
 export const CreateIssueTitleField = ({
   field,
+  onEdit,
   serverError,
 }: {
   field: StringFieldApi
+  onEdit?: (field: string) => void
   serverError?: string
 }) => {
-  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const invalid = locallyInvalid || Boolean(serverError)
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      field.handleChange(event.target.value),
-    [field]
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onEdit?.(field.name)
+      field.handleChange(event.target.value)
+    },
+    [field, onEdit]
   )
+  const descriptionId = `${field.name}-description`
+  const localErrorId = locallyInvalid ? `${field.name}-local-error` : undefined
+  const serverErrorId = serverError ? `${field.name}-server-error` : undefined
 
   return (
     <Field data-invalid={invalid}>
@@ -42,29 +53,51 @@ export const CreateIssueTitleField = ({
           onChange={handleChange}
           placeholder="What needs to be done?"
           autoComplete="off"
+          aria-describedby={describedByIds(
+            descriptionId,
+            localErrorId,
+            serverErrorId
+          )}
           aria-invalid={invalid}
         />
       </InputGroup>
-      <FieldDescription>Use a short, actionable sentence.</FieldDescription>
-      {invalid ? <FieldError errors={field.state.meta.errors} /> : null}
-      {serverError ? <FieldError role="alert">{serverError}</FieldError> : null}
+      <FieldDescription id={descriptionId}>
+        Use a short, actionable sentence.
+      </FieldDescription>
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
+      ) : null}
+      {serverError ? (
+        <FieldError id={serverErrorId} role="alert">
+          {serverError}
+        </FieldError>
+      ) : null}
     </Field>
   )
 }
 
 export const IssueTitleFormField = ({
   field,
+  onEdit,
   serverErrors,
 }: {
   field: StringFieldApi
+  onEdit?: (field: string) => void
   serverErrors?: string[]
 }) => {
-  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const invalid = locallyInvalid || Boolean(serverErrors?.length)
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) =>
-      field.handleChange(event.target.value),
-    [field]
+    (event: ChangeEvent<HTMLInputElement>) => {
+      onEdit?.(field.name)
+      field.handleChange(event.target.value)
+    },
+    [field, onEdit]
   )
+  const localErrorId = locallyInvalid ? `${field.name}-local-error` : undefined
+  const serverErrorId = serverErrors?.length
+    ? `${field.name}-server-error`
+    : undefined
 
   return (
     <Field data-invalid={invalid}>
@@ -75,12 +108,17 @@ export const IssueTitleFormField = ({
         value={field.state.value}
         onBlur={field.handleBlur}
         onChange={handleChange}
+        aria-describedby={describedByIds(localErrorId, serverErrorId)}
         aria-invalid={invalid}
         maxLength={200}
       />
-      {invalid ? <FieldError errors={field.state.meta.errors} /> : null}
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
+      ) : null}
       {serverErrors ? (
-        <FieldError role="alert">{serverErrors.join(" ")}</FieldError>
+        <FieldError id={serverErrorId} role="alert">
+          {serverErrors.join(" ")}
+        </FieldError>
       ) : null}
     </Field>
   )
@@ -88,17 +126,26 @@ export const IssueTitleFormField = ({
 
 export const IssueDescriptionFormField = ({
   field,
+  onEdit,
   serverErrors,
 }: {
   field: StringFieldApi
+  onEdit?: (field: string) => void
   serverErrors?: string[]
 }) => {
-  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const invalid = locallyInvalid || Boolean(serverErrors?.length)
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLTextAreaElement>) =>
-      field.handleChange(event.target.value),
-    [field]
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      onEdit?.(field.name)
+      field.handleChange(event.target.value)
+    },
+    [field, onEdit]
   )
+  const localErrorId = locallyInvalid ? `${field.name}-local-error` : undefined
+  const serverErrorId = serverErrors?.length
+    ? `${field.name}-server-error`
+    : undefined
 
   return (
     <Field data-invalid={invalid}>
@@ -109,13 +156,18 @@ export const IssueDescriptionFormField = ({
         value={field.state.value}
         onBlur={field.handleBlur}
         onChange={handleChange}
+        aria-describedby={describedByIds(localErrorId, serverErrorId)}
         aria-invalid={invalid}
         placeholder="Add context, acceptance criteria, or links."
         className="min-h-28"
       />
-      {invalid ? <FieldError errors={field.state.meta.errors} /> : null}
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
+      ) : null}
       {serverErrors ? (
-        <FieldError role="alert">{serverErrors.join(" ")}</FieldError>
+        <FieldError id={serverErrorId} role="alert">
+          {serverErrors.join(" ")}
+        </FieldError>
       ) : null}
     </Field>
   )
@@ -126,6 +178,7 @@ export const CommentBodyFormField = ({
   id,
   label,
   labelClassName,
+  onEdit,
   placeholder,
   className,
   ariaLabel,
@@ -135,17 +188,23 @@ export const CommentBodyFormField = ({
   id: string
   label: string
   labelClassName?: string
+  onEdit?: (field: string) => void
   placeholder?: string
   className?: string
   ariaLabel?: string
   serverError?: string
 }) => {
-  const invalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
+  const invalid = locallyInvalid || Boolean(serverError)
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLTextAreaElement>) =>
-      field.handleChange(event.target.value),
-    [field]
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      onEdit?.(field.name)
+      field.handleChange(event.target.value)
+    },
+    [field, onEdit]
   )
+  const localErrorId = locallyInvalid ? `${id}-local-error` : undefined
+  const serverErrorId = serverError ? `${id}-server-error` : undefined
 
   return (
     <Field data-invalid={invalid}>
@@ -161,10 +220,17 @@ export const CommentBodyFormField = ({
         placeholder={placeholder}
         className={className}
         aria-label={ariaLabel}
+        aria-describedby={describedByIds(localErrorId, serverErrorId)}
         aria-invalid={invalid}
       />
-      {invalid ? <FieldError errors={field.state.meta.errors} /> : null}
-      {serverError ? <FieldError role="alert">{serverError}</FieldError> : null}
+      {locallyInvalid ? (
+        <FieldError id={localErrorId} errors={field.state.meta.errors} />
+      ) : null}
+      {serverError ? (
+        <FieldError id={serverErrorId} role="alert">
+          {serverError}
+        </FieldError>
+      ) : null}
     </Field>
   )
 }

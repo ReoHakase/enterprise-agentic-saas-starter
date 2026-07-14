@@ -64,13 +64,20 @@ export const IssueComment = ({
         await onUpdateComment(issue, comment.id, value.body)
         setEditing(false)
       } catch (error) {
-        setEditFieldError(getActionFieldError(error, "body"))
+        const fieldError = getActionFieldError(error, "body")
+        setEditFieldError(fieldError)
         setEditError(
-          getActionErrorMessage(error, "The comment could not be updated.")
+          fieldError
+            ? undefined
+            : getActionErrorMessage(error, "The comment could not be updated.")
         )
       }
     },
   })
+  const clearEditError = useCallback(() => {
+    setEditError(undefined)
+    setEditFieldError(undefined)
+  }, [])
 
   useEffect(
     () => editForm.reset({ body: comment.body }),
@@ -101,10 +108,11 @@ export const IssueComment = ({
         label="Edit comment"
         labelClassName="sr-only"
         ariaLabel="Edit comment"
+        onEdit={clearEditError}
         serverError={editFieldError}
       />
     ),
-    [comment.id, editFieldError]
+    [clearEditError, comment.id, editFieldError]
   )
   const renderEditSubmit = useCallback(
     ([canSubmit, isSubmitting]: SubmitSelection) => (

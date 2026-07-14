@@ -113,6 +113,53 @@ test("dashboardからIssue作成とtenant切替を迷わず完了できる", asy
   await expect(page.getByText("Review tenant audit log")).toHaveCount(0)
 })
 
+test("tenant切替のserver errorは安全な詳細を示して再試行できる", async ({
+  allowClientErrors,
+  context,
+  page,
+}) => {
+  allowClientErrors(/Failed to load resource.*500/)
+  await useSession(context, "admin")
+  const faultResponse = await context.request.post(
+    `${mockApiUrl}/__e2e/faults`,
+    {
+      data: {
+        path: "/organizations/org-b/activate",
+        method: "POST",
+        status: 500,
+        code: "internal_error",
+        message: "provider failure sk_live_must_never_render",
+        requestId: "req_e2e_org_switch_01",
+      },
+    }
+  )
+  expect(faultResponse.status()).toBe(201)
+
+  await page.goto("/dashboard/todos")
+  await openOrganizationSwitcher(page)
+  const failedActivation = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/organizations/org-b/activate") &&
+      response.request().method() === "POST"
+  )
+  await page.getByRole("menuitem", { name: "Beta Support" }).click()
+  expect((await failedActivation).status()).toBe(500)
+
+  await expect(page.getByText("Could not switch organization")).toBeVisible()
+  await expect(
+    page.getByText(
+      "Try again. If the problem continues, contact support. Reference ID: req_e2e_org_switch_01"
+    )
+  ).toBeVisible()
+  await expect(page.getByText(/sk_live_must_never_render/)).toHaveCount(0)
+  await expect(page.getByText("Alpha Operations").first()).toBeVisible()
+
+  await openOrganizationSwitcher(page)
+  await page.getByRole("menuitem", { name: "Beta Support" }).click()
+  await expect(page.getByText("Organization switched")).toBeVisible()
+  await expect(page.getByText("Beta Support").first()).toBeVisible()
+})
+
 test("複数organizationでactive未選択なら明示選択を要求する", async ({
   context,
   page,
@@ -653,6 +700,7 @@ test("organization・member・invitation・session・一時faultを決定的に�
     error: {
       code: "dependency_unavailable",
       message: "Injected temporary outage",
+      requestId: "req_e2e_default",
     },
   })
   expect((await context.request.get(`${mockApiUrl}/me`)).ok()).toBeTruthy()

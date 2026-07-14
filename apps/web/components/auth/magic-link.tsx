@@ -76,7 +76,6 @@ export function MagicLink({
       onError: (error) => {
         const message = safeAuthErrorMessage(error, requestFailedMessage)
         setSubmitError(message)
-        toast.error(message)
       },
       onSuccess: () => {
         setSentTo(requestedEmail.current)

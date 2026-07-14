@@ -8,7 +8,11 @@ import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
+import { safeAuthErrorMessage } from "@/features/auth/error"
+
 import { requirePasskeyAuthClient } from "./runtime-guards"
+
+const passkeySignInFallback = "Passkey sign-in failed. Try again."
 
 export function PasskeySignInButton() {
   const { authClient, redirectTo } = useAuth()
@@ -16,18 +20,20 @@ export function PasskeySignInButton() {
   const [pending, setPending] = useState(false)
 
   const signInWithPasskey = useCallback(async () => {
+    let errorPresented = false
     setPending(true)
     try {
       await requirePasskeyAuthClient(authClient).signIn.passkey({
         fetchOptions: {
           onSuccess: () => router.push(redirectTo),
           onError: ({ error }) => {
-            toast.error(error.message ?? "Passkey sign-in failed")
+            errorPresented = true
+            toast.error(safeAuthErrorMessage(error, passkeySignInFallback))
           },
         },
       })
     } catch {
-      toast.error("Passkey sign-in failed")
+      if (!errorPresented) toast.error(passkeySignInFallback)
     } finally {
       setPending(false)
     }

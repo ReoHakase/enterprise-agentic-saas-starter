@@ -71,5 +71,20 @@ describe("multi-session client boundary", () => {
         },
       })()
     ).rejects.toThrow("Accounts could not be loaded. Try again.")
+    await expect(
+      createDeviceAccountsQueryFn({
+        multiSession: {
+          listDeviceSessions: async () => {
+            throw new Error("BETTER_AUTH_SECRET=provider-secret")
+          },
+        },
+      })()
+    ).rejects.toThrow("Accounts could not be loaded. Try again.")
+    await expect(
+      completeMultiSessionAction(
+        Promise.reject(new Error("SELECT token FROM session")),
+        "Could not switch account. Try again."
+      )
+    ).rejects.toThrow("Could not switch account. Try again.")
   })
 })

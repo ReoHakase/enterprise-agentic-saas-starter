@@ -4,8 +4,6 @@ import {
 } from "@better-auth-ui/react"
 import type { ComponentType, PropsWithChildren, ReactNode } from "react"
 
-import { ErrorToaster } from "./error-toaster"
-
 declare module "@better-auth-ui/core" {
   interface AuthConfig {
     /**
@@ -24,17 +22,11 @@ declare module "@better-auth-ui/core" {
 }
 
 /**
- * Provides an authentication context by rendering an auth provider with the sonner toast handler injected, forwarding remaining configuration and rendering `children` inside it.
+ * Provides the configured authentication context and renders `children` inside it.
  *
  * @param children - React nodes to render inside the authentication provider
  * @returns A React element that renders an authentication provider configured with the provided props and toast handler
  */
 export function AuthProvider({ children, ...config }: AuthProviderProps) {
-  return (
-    <AuthProviderPrimitive {...config}>
-      {children}
-
-      <ErrorToaster />
-    </AuthProviderPrimitive>
-  )
+  return <AuthProviderPrimitive {...config}>{children}</AuthProviderPrimitive>
 }

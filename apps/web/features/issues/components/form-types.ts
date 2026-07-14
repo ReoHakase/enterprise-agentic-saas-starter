@@ -17,11 +17,13 @@ export type StringFieldApi = {
 }
 
 export type IssueStatusFieldApi = {
+  name: string
   state: { value: IssueStatus }
   handleChange: (value: IssueStatus) => void
 }
 
 export type IssuePriorityFieldApi = {
+  name: string
   state: { value: IssuePriority }
   handleChange: (value: IssuePriority) => void
 }

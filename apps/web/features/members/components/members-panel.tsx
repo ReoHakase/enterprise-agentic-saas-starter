@@ -6,6 +6,7 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { isStepUpRequiredError } from "@/features/console/api"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { consoleKeys } from "@/features/console/queries"
 import { InvitationsSection } from "@/features/members/components/invitations-section"
 import { InviteMemberDialog } from "@/features/members/components/invite-member-dialog"
@@ -119,7 +120,7 @@ export const MembersPanel = ({
     [organization.id]
   )
   const handleMutationError = useCallback(
-    (error: Error, input: MemberMutationInput) => {
+    (error: unknown, input: MemberMutationInput) => {
       if (isStepUpRequiredError(error)) {
         setStepUpRequest({
           action:
@@ -139,7 +140,7 @@ export const MembersPanel = ({
         input.type !== "remove" &&
         input.type !== "transfer"
       ) {
-        toast.error(error.message)
+        showConsoleApiErrorToast(error, "The member update failed.")
       }
     },
     []
@@ -159,7 +160,7 @@ export const MembersPanel = ({
     },
     [organization.id, queryClient, router]
   )
-  const memberMutation = useMutation<unknown, Error, MemberMutationInput>({
+  const memberMutation = useMutation<unknown, unknown, MemberMutationInput>({
     mutationFn,
     onError: handleMutationError,
     onSuccess: handleMutationSuccess,

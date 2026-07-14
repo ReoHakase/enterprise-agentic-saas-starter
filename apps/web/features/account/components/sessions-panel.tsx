@@ -27,8 +27,10 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import type { UserSession } from "@/features/account/schema"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { consoleKeys, sessionsQueryOptions } from "@/features/console/queries"
 import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getConsoleApiErrorText } from "@/lib/console-api"
 
 export const SessionsPanel = () => {
   const queryClient = useQueryClient()
@@ -49,9 +51,7 @@ export const SessionsPanel = () => {
       )
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "The session was not revoked."
-      )
+      showConsoleApiErrorToast(error, "The session was not revoked.")
     },
   })
   const { isPending: revokePending, mutate: revoke } = revokeMutation
@@ -111,9 +111,10 @@ export const SessionsPanel = () => {
             </EmptyMedia>
             <EmptyTitle>Sessions could not be loaded</EmptyTitle>
             <EmptyDescription>
-              {sessionsQuery.error instanceof Error
-                ? sessionsQuery.error.message
-                : "Try the request again."}
+              {getConsoleApiErrorText(
+                sessionsQuery.error,
+                "Try the request again."
+              )}
             </EmptyDescription>
             <Button variant="outline" onClick={retrySessions}>
               <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />

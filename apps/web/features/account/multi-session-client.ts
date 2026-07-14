@@ -50,6 +50,17 @@ const unwrapAuthResult = (result: unknown, fallback: string): unknown => {
   return isRecord(result) && "data" in result ? result.data : result
 }
 
+const settleAuthRequest = async (
+  request: Promise<unknown>,
+  fallback: string
+) => {
+  try {
+    return await request
+  } catch {
+    throw new Error(fallback)
+  }
+}
+
 export const createDeviceAccountsQueryFn =
   (authClientValue: unknown) => async () => {
     const listDeviceSessions =
@@ -59,7 +70,10 @@ export const createDeviceAccountsQueryFn =
     }
     return parseDeviceAccounts(
       unwrapAuthResult(
-        await listDeviceSessions(),
+        await settleAuthRequest(
+          listDeviceSessions(),
+          "Accounts could not be loaded. Try again."
+        ),
         "Accounts could not be loaded. Try again."
       ) ?? []
     )
@@ -69,5 +83,5 @@ export const completeMultiSessionAction = async (
   result: Promise<unknown>,
   fallback: string
 ) => {
-  unwrapAuthResult(await result, fallback)
+  unwrapAuthResult(await settleAuthRequest(result, fallback), fallback)
 }

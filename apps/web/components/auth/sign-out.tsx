@@ -6,6 +6,8 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 
+import { safeAuthErrorMessage } from "@/features/auth/error"
+
 export type SignOutProps = {
   className?: string
 }
@@ -21,7 +23,7 @@ export function SignOut({ className }: SignOutProps) {
 
   const { mutate: signOut } = useSignOut(authClient, {
     onError: (error) => {
-      toast.error(error.error?.message || error.message)
+      toast.error(safeAuthErrorMessage(error, "Sign out failed. Try again."))
 
       navigate({
         to: `${basePaths.auth}/${viewPaths.auth.signIn}`,

@@ -79,7 +79,6 @@ export function ResetPassword({ className }: ResetPasswordProps) {
     onError: (error) => {
       const message = safeAuthErrorMessage(error, requestFailedMessage)
       setSubmitError(message)
-      toast.error(message)
     },
     onSuccess: () => {
       toast.success(localization.auth.passwordResetSuccess)
@@ -93,7 +92,6 @@ export function ResetPassword({ className }: ResetPasswordProps) {
       if (!token) {
         const message = localization.auth.invalidResetPasswordToken
         setSubmitError(message)
-        toast.error(message)
         return
       }
       setSubmitError(undefined)

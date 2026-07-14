@@ -105,7 +105,6 @@ export function SignUp({
       onError: (error) => {
         const message = safeAuthErrorMessage(error, signUpFailedMessage)
         setSubmitError(message)
-        toast.error(message)
         resetFetchOptions()
       },
       onSuccess: () => {
@@ -156,7 +155,6 @@ export function SignUp({
         )
       } catch {
         setSubmitError(additionalFieldFailedMessage)
-        toast.error(additionalFieldFailedMessage)
         return
       }
       const additionalFieldValues = Object.fromEntries(additionalFieldEntries)

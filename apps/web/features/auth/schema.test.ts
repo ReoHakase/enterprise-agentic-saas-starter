@@ -77,5 +77,25 @@ describe("authentication form schemas", () => {
         "fallback"
       )
     ).toBe("The email or password is incorrect.")
+    expect(
+      safeAuthErrorMessage(
+        {
+          code: "INVITATION_NOT_FOUND",
+          message: "SELECT token FROM invitation",
+        },
+        "fallback"
+      )
+    ).toBe("This invitation is no longer available.")
+    expect(
+      safeAuthErrorMessage(
+        {
+          error: {
+            code: "internal_error",
+            message: "BETTER_AUTH_SECRET=do-not-render",
+          },
+        },
+        "Operation failed safely."
+      )
+    ).toBe("Operation failed safely.")
   })
 })

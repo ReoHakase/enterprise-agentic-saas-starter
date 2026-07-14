@@ -147,7 +147,7 @@ describe("OrganizationDangerZone", () => {
         code: "step_up_required",
         context: { action: "organization.delete", maxAgeSeconds: 600 },
         message: "Recent authentication required",
-        status: 401,
+        status: 403,
       })
     )
     renderDangerZone()
@@ -172,5 +172,33 @@ describe("OrganizationDangerZone", () => {
     expect(screen.getByLabelText("Type DELETE to confirm")).toHaveValue(
       "DELETE"
     )
+    expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it("owns a server failure in the destructive dialog without a duplicate toast", async () => {
+    const user = userEvent.setup()
+    mocks.deleteOrganization.mockRejectedValueOnce(
+      new ConsoleApiError({
+        code: "internal_error",
+        message: "Internal server error",
+        requestId: "req_delete_01",
+        status: 500,
+      })
+    )
+    renderDangerZone()
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete organization" })
+    )
+    await user.type(screen.getByLabelText("Type the organization slug"), "acme")
+    await user.type(screen.getByLabelText("Type DELETE to confirm"), "DELETE")
+    await user.click(screen.getByRole("button", { name: "Permanently delete" }))
+
+    expect(
+      await screen.findByText(
+        "The organization could not be deleted. Try again. If the problem continues, contact support. Reference ID: req_delete_01"
+      )
+    ).toBeInTheDocument()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 })

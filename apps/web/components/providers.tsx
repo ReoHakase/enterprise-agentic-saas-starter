@@ -11,6 +11,7 @@ import { useCallback, useState, type PropsWithChildren } from "react"
 
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider"
+import { shouldRetryConsoleQuery } from "@/features/console/error"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 import { clientEnv } from "@/lib/env.client"
 
@@ -28,7 +29,7 @@ const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: shouldRetryConsoleQuery,
         staleTime: 30_000,
       },
     },

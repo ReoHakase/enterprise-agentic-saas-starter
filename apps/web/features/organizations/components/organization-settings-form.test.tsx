@@ -109,5 +109,18 @@ describe("OrganizationSettingsForm", () => {
       await screen.findByText("This slug is already in use.")
     ).toBeInTheDocument()
     expect(slug).toHaveValue("acme-new")
+    expect(slug).toHaveAccessibleDescription(/This slug is already in use\./u)
+    expect(
+      screen.queryByText("Fix the highlighted field.")
+    ).not.toBeInTheDocument()
+
+    await actor.type(slug, "-edited")
+
+    expect(
+      screen.queryByText("This slug is already in use.")
+    ).not.toBeInTheDocument()
+    expect(slug).not.toHaveAccessibleDescription(
+      /This slug is already in use\./u
+    )
   })
 })

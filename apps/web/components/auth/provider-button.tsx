@@ -7,7 +7,9 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useIsMutating } from "@tanstack/react-query"
 import type { SocialProvider } from "better-auth/social-providers"
 import { type ComponentProps, useCallback } from "react"
+import { toast } from "sonner"
 
+import { safeAuthErrorMessage } from "@/features/auth/error"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
 export type ProviderButtonProps = {
@@ -32,7 +34,16 @@ export function ProviderButton({
   const callbackURL = createAuthCallbackURL(redirectTo)
 
   const { mutate: signInSocial, isPending: signInSocialPending } =
-    useSignInSocial(authClient)
+    useSignInSocial(authClient, {
+      onError: (error) => {
+        toast.error(
+          safeAuthErrorMessage(
+            error,
+            `${getProviderName(provider)} sign-in could not be started. Try again.`
+          )
+        )
+      },
+    })
 
   const ProviderIcon = providerIcons[provider]
 

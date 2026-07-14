@@ -25,14 +25,45 @@ describe("authentication runtime guards", () => {
     )
   })
 
-  it("normalizes form values and nested Better Auth errors without casts", () => {
+  it("normalizes form values and only exposes allowlisted auth codes", () => {
     const formData = new FormData()
     formData.set("email", "user@example.test")
 
     expect(formDataString(formData, "email")).toBe("user@example.test")
     expect(formDataString(formData, "missing")).toBe("")
-    expect(authErrorMessage({ error: { message: "Sign-in failed" } })).toBe(
-      "Sign-in failed"
+    expect(
+      authErrorMessage(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "TURSO_AUTH_TOKEN=provider-secret",
+          },
+        },
+        "Sign-in failed safely"
+      )
+    ).toBe("Sign-in failed safely")
+    expect(
+      authErrorMessage({ code: "SESSION_EXPIRED" }, "Sign-in failed safely")
+    ).toBe("Your session expired. Sign in again.")
+    expect(
+      authErrorMessage(
+        { error: { message: "Sign-in failed" } },
+        "Sign-in failed safely"
+      )
+    ).toBe("Sign-in failed safely")
+  })
+
+  it("falls back when an error object has an unsafe accessor", () => {
+    const error = Object.create(null, {
+      error: {
+        get: () => {
+          throw new Error("DATABASE_URL=file:private.db")
+        },
+      },
+    })
+
+    expect(authErrorMessage(error, "Request failed safely")).toBe(
+      "Request failed safely"
     )
   })
 })

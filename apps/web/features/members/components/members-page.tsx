@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query"
 import { RefreshCwIcon, UsersRoundIcon } from "lucide-react"
 import { useCallback } from "react"
 
+import { getConsoleApiErrorText } from "@/features/console/error"
 import {
   invitationsQueryOptions,
   membersQueryOptions,
@@ -60,9 +61,10 @@ export const MembersPage = ({
           </EmptyMedia>
           <EmptyTitle>Members could not be loaded</EmptyTitle>
           <EmptyDescription>
-            {membersQuery.error instanceof Error
-              ? membersQuery.error.message
-              : "Try the request again."}
+            {getConsoleApiErrorText(
+              membersQuery.error,
+              "Try the request again."
+            )}
           </EmptyDescription>
           <Button variant="outline" onClick={retryMembers}>
             <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
@@ -82,11 +84,12 @@ export const MembersPage = ({
         organization.permissions.canInviteMembers && invitationsQuery.isPending
       }
       invitationsError={
-        invitationsQuery.error instanceof Error
-          ? invitationsQuery.error.message
-          : invitationsQuery.error
-            ? "Invitations could not be loaded."
-            : undefined
+        invitationsQuery.error
+          ? getConsoleApiErrorText(
+              invitationsQuery.error,
+              "Invitations could not be loaded."
+            )
+          : undefined
       }
       onRetryInvitations={
         organization.permissions.canInviteMembers ? retryInvitations : undefined

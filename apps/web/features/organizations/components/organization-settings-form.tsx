@@ -24,7 +24,14 @@ import {
   type OrganizationDetail,
 } from "@/features/organizations/schema"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { ConsoleApiError } from "@/lib/console-api"
+import {
+  clearConsoleApiFieldError,
+  getConsoleApiErrorText,
+  getConsoleApiFieldErrors,
+  hasConsoleApiFieldError,
+} from "@/lib/console-api"
+
+const organizationIdentityFields = ["name", "slug"] as const
 
 export const OrganizationSettingsForm = ({
   organization,
@@ -62,17 +69,23 @@ export const OrganizationSettingsForm = ({
         const updated = await updateMutation.mutateAsync(value)
         form.reset({ name: updated.name, slug: updated.slug })
       } catch (error) {
-        setFieldErrors(
-          error instanceof ConsoleApiError ? error.fieldErrors : {}
-        )
+        const nextFieldErrors = getConsoleApiFieldErrors(error)
+        setFieldErrors(nextFieldErrors)
         setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "The organization could not be updated."
+          hasConsoleApiFieldError(nextFieldErrors, organizationIdentityFields)
+            ? undefined
+            : getConsoleApiErrorText(
+                error,
+                "The organization could not be updated."
+              )
         )
       }
     },
   })
+  const clearFieldError = useCallback((field: string) => {
+    setFieldErrors((current) => clearConsoleApiFieldError(current, field))
+    setSubmitError(undefined)
+  }, [])
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
@@ -86,12 +99,13 @@ export const OrganizationSettingsForm = ({
         field={field}
         id="organization-name"
         label="Name"
+        onEdit={clearFieldError}
         serverErrors={fieldErrors.name}
         orientation="responsive"
         autoComplete="organization"
       />
     ),
-    [fieldErrors.name]
+    [clearFieldError, fieldErrors.name]
   )
   const renderSlugField = useCallback(
     (field: AnyFieldApi) => (
@@ -100,6 +114,7 @@ export const OrganizationSettingsForm = ({
         id="organization-slug"
         label="Slug"
         description="Lowercase letters, numbers, and single hyphens only."
+        onEdit={clearFieldError}
         serverErrors={fieldErrors.slug}
         orientation="responsive"
         autoCapitalize="none"
@@ -107,7 +122,7 @@ export const OrganizationSettingsForm = ({
         spellCheck={false}
       />
     ),
-    [fieldErrors.slug]
+    [clearFieldError, fieldErrors.slug]
   )
   const selectSubmitState = useCallback(
     (state: typeof form.state) => ({

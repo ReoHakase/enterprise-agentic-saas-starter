@@ -106,6 +106,7 @@ type FaultRule = {
   status: number
   code: string
   message: string
+  requestId?: string
   remaining: number
 }
 
@@ -437,8 +438,25 @@ const apiError = (
   code: string,
   message: string,
   status: number,
-  context?: Record<string, unknown>
-) => json({ error: { code, message, ...(context ? { context } : {}) } }, status)
+  {
+    context,
+    requestId = "req_e2e_default",
+  }: {
+    context?: Record<string, unknown>
+    requestId?: string
+  } = {}
+) =>
+  json(
+    {
+      error: {
+        code,
+        message,
+        ...(context ? { context } : {}),
+        requestId,
+      },
+    },
+    status
+  )
 
 const unauthorized = () =>
   apiError("unauthorized", "Authentication required", 401)
@@ -537,7 +555,9 @@ const consumeFault = (pathname: string, method: string) => {
     faults.splice(index, 1)
   }
 
-  return apiError(fault.code, fault.message, fault.status)
+  return apiError(fault.code, fault.message, fault.status, {
+    requestId: fault.requestId,
+  })
 }
 
 const consumeRequestDelay = async (pathname: string, method: string) => {
@@ -621,6 +641,7 @@ Bun.serve({
         status,
         code: nonEmptyString(body.code) ?? "e2e_fault",
         message: nonEmptyString(body.message) ?? "Injected E2E failure",
+        requestId: nonEmptyString(body.requestId) ?? undefined,
         remaining:
           typeof body.remaining === "number" &&
           Number.isInteger(body.remaining) &&

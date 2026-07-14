@@ -91,9 +91,9 @@ export function SignIn({
     {
       onError: (error, { email }) => {
         const message = safeAuthErrorMessage(error, signInFailedMessage)
-        setSubmitError(message)
 
         if (error.error?.code === "EMAIL_NOT_VERIFIED") {
+          setSubmitError(undefined)
           toast.error(message, {
             action: {
               label: localization.auth.resend,
@@ -105,7 +105,7 @@ export function SignIn({
             },
           })
         } else {
-          toast.error(message)
+          setSubmitError(message)
         }
         resetFetchOptions()
       },

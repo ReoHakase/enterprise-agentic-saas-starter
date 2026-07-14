@@ -4,7 +4,7 @@ import { decideInvitation } from "./api"
 
 type InvitationDecisionResult = {
   data: unknown
-  error: { message?: string } | null
+  error: { code?: string; message?: string } | null
 }
 type DecideInvitation = (input: {
   invitationId: string
@@ -57,10 +57,13 @@ describe("invitation decision API", () => {
     }
   )
 
-  it("surfaces the safe Better Auth error message", async () => {
+  it("surfaces an allowlisted Better Auth error code", async () => {
     mocks.acceptInvitation.mockResolvedValueOnce({
       data: null,
-      error: { message: "Invitation has expired" },
+      error: {
+        code: "INVITATION_NOT_FOUND",
+        message: "SELECT token FROM invitation",
+      },
     })
 
     await expect(
@@ -69,6 +72,47 @@ describe("invitation decision API", () => {
         apiBaseUrl: "https://api.example.test",
         invitationId: "invitation-1",
       })
-    ).rejects.toThrow("Invitation has expired")
+    ).rejects.toThrow("This invitation is no longer available.")
+  })
+
+  it.each(["accept", "reject"] as const)(
+    "hides unknown provider details when an invitation cannot be %sed",
+    async (action) => {
+      const request =
+        action === "accept" ? mocks.acceptInvitation : mocks.rejectInvitation
+      request.mockRejectedValueOnce(
+        new Error("BETTER_AUTH_SECRET=provider-secret")
+      )
+
+      await expect(
+        decideInvitation({
+          action,
+          apiBaseUrl: "https://api.example.test",
+          invitationId: "invitation-1",
+        })
+      ).rejects.toThrow(
+        action === "accept"
+          ? "Invitation could not be accepted. Try again."
+          : "Invitation could not be rejected. Try again."
+      )
+    }
+  )
+
+  it("uses an operation fallback for an unknown returned error code", async () => {
+    mocks.acceptInvitation.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "TURSO_AUTH_TOKEN=provider-secret",
+      },
+    })
+
+    await expect(
+      decideInvitation({
+        action: "accept",
+        apiBaseUrl: "https://api.example.test",
+        invitationId: "invitation-1",
+      })
+    ).rejects.toThrow("Invitation could not be accepted. Try again.")
   })
 })

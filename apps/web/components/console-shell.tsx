@@ -69,6 +69,7 @@ import { toast } from "sonner"
 import { ConsoleFrame } from "@/components/console-frame"
 import { UserAvatar } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { consoleKeys } from "@/features/console/queries"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
@@ -140,9 +141,7 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
       toast.success("Organization switched")
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Could not switch organization"
-      )
+      showConsoleApiErrorToast(error, "Could not switch organization")
     },
   })
   const { isPending: organizationPending, mutate: activateOrganization } =

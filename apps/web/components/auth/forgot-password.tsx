@@ -49,7 +49,6 @@ export function ForgotPassword({ className }: ForgotPasswordProps) {
       onError: (error) => {
         const message = safeAuthErrorMessage(error, requestFailedMessage)
         setSubmitError(message)
-        toast.error(message)
         resetFetchOptions()
       },
       onSuccess: () => {
