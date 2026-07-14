@@ -9,6 +9,7 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
 import { RESET_CONFIRMATION, resetLocalDevelopmentDatabase } from "./reset"
+import { invitationEmailJobStatuses } from "./schema/app"
 import { seedDevelopmentDatabase } from "./seed"
 
 const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
@@ -43,6 +44,7 @@ describe("database migrations", () => {
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
           "audit_logs",
+          "invitation_email_jobs",
           "organization_deletion_jobs",
           "rate_limit",
           "todo_comments",
@@ -55,6 +57,146 @@ describe("database migrations", () => {
           "member_organization_user_uidx",
         ])
       )
+    } finally {
+      client.close()
+    }
+  })
+
+  it("enforces durable invitation email job ownership and claim invariants", async () => {
+    const client = createClient({ url: "file::memory:" })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["inviter", "Inviter", "inviter@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["invitation-org", "Invitation Org", "invitation-org", now],
+        },
+        {
+          sql: "insert into invitation(id,organization_id,email,role,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "invitation-email-job",
+            "invitation-org",
+            "recipient@example.com",
+            "member",
+            "pending",
+            now + 60_000,
+            now,
+            "inviter",
+          ],
+        },
+        {
+          sql: "insert into invitation_email_jobs(id,invitation_id) values(?,?)",
+          args: ["email-job", "invitation-email-job"],
+        },
+      ])
+
+      const [columns, foreignKeys, indexes, claimIndex] = await Promise.all([
+        client.execute("pragma table_info('invitation_email_jobs')"),
+        client.execute("pragma foreign_key_list('invitation_email_jobs')"),
+        client.execute(
+          "select name from sqlite_master where type = 'index' and tbl_name = 'invitation_email_jobs' order by name"
+        ),
+        client.execute("pragma index_info('invitation_email_jobs_claim_idx')"),
+      ])
+      expect(columns.rows.map(({ name }) => name)).toEqual([
+        "id",
+        "invitation_id",
+        "status",
+        "attempts",
+        "last_error_code",
+        "locked_at",
+        "next_attempt_at",
+        "created_at",
+        "completed_at",
+      ])
+      expect(foreignKeys.rows).toMatchObject([
+        {
+          table: "invitation",
+          from: "invitation_id",
+          to: "id",
+          on_delete: "CASCADE",
+        },
+      ])
+      expect(indexes.rows.map(({ name }) => name)).toEqual(
+        expect.arrayContaining([
+          "invitation_email_jobs_claim_idx",
+          "invitation_email_jobs_invitation_uidx",
+        ])
+      )
+      expect(claimIndex.rows.map(({ name }) => name)).toEqual([
+        "status",
+        "next_attempt_at",
+        "created_at",
+      ])
+      const initialJob = await client.execute(
+        "select status, attempts, created_at as createdAt from invitation_email_jobs where id = 'email-job'"
+      )
+      expect(initialJob.rows).toMatchObject([
+        { status: "pending", attempts: 0 },
+      ])
+      expect(Number(initialJob.rows[0]?.createdAt)).toBeGreaterThan(0)
+
+      await expect(
+        client.batch(
+          invitationEmailJobStatuses.map((status) => ({
+            sql: "update invitation_email_jobs set status = ? where id = ?",
+            args: [status, "email-job"],
+          }))
+        )
+      ).resolves.toBeDefined()
+      await expect(
+        client.execute(
+          "update invitation_email_jobs set status = 'cancelled' where id = 'email-job'"
+        )
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute(
+          "update invitation_email_jobs set attempts = -1 where id = 'email-job'"
+        )
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute(
+          "update invitation_email_jobs set last_error_code = 'provider.temporary_failure' where id = 'email-job'"
+        )
+      ).resolves.toBeDefined()
+      await expect(
+        client.execute(
+          "update invitation_email_jobs set last_error_code = 'recipient@example.com' where id = 'email-job'"
+        )
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute({
+          sql: "update invitation_email_jobs set last_error_code = ? where id = 'email-job'",
+          args: ["a".repeat(97)],
+        })
+      ).rejects.toThrow(/check constraint/i)
+
+      await expect(
+        client.execute({
+          sql: "insert into invitation_email_jobs(id,invitation_id) values(?,?)",
+          args: ["duplicate-email-job", "invitation-email-job"],
+        })
+      ).rejects.toThrow(/unique/i)
+      await expect(
+        client.execute({
+          sql: "insert into invitation_email_jobs(id,invitation_id) values(?,?)",
+          args: ["orphan-email-job", "missing-invitation"],
+        })
+      ).rejects.toThrow(/foreign key/i)
+
+      await client.execute(
+        "delete from invitation where id = 'invitation-email-job'"
+      )
+      const jobs = await client.execute(
+        "select id from invitation_email_jobs where id = 'email-job'"
+      )
+      expect(jobs.rows).toHaveLength(0)
     } finally {
       client.close()
     }

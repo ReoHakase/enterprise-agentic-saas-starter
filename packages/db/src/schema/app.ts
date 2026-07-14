@@ -9,7 +9,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 
-import { organization, user } from "./auth.generated"
+import { invitation, organization, user } from "./auth.generated"
 
 export const todoStatuses = ["open", "in_progress", "closed"] as const
 export type TodoStatus = (typeof todoStatuses)[number]
@@ -33,6 +33,16 @@ export const organizationDeletionJobStatuses = [
 ] as const
 export type OrganizationDeletionJobStatus =
   (typeof organizationDeletionJobStatuses)[number]
+
+export const invitationEmailJobStatuses = [
+  "pending",
+  "processing",
+  "failed",
+  "completed",
+  "canceled",
+] as const
+export type InvitationEmailJobStatus =
+  (typeof invitationEmailJobStatuses)[number]
 
 export const todos = sqliteTable(
   "todos",
@@ -164,6 +174,51 @@ export const auditLogs = sqliteTable(
       table.organizationId,
       table.action,
       table.createdAt
+    ),
+  ]
+)
+
+// recipient、token、URL、tenant/user IDはauth invitationから送信時に解決し、
+// durable jobには再送制御に必要な非機密metadataだけを保存する。
+export const invitationEmailJobs = sqliteTable(
+  "invitation_email_jobs",
+  {
+    id: text("id").primaryKey(),
+    invitationId: text("invitation_id")
+      .notNull()
+      .references(() => invitation.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<InvitationEmailJobStatus>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+    nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("invitation_email_jobs_invitation_uidx").on(table.invitationId),
+    index("invitation_email_jobs_claim_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt
+    ),
+    check(
+      "invitation_email_jobs_status_check",
+      sql`${table.status} in ('pending', 'processing', 'failed', 'completed', 'canceled')`
+    ),
+    check("invitation_email_jobs_attempts_check", sql`${table.attempts} >= 0`),
+    check(
+      "invitation_email_jobs_last_error_code_check",
+      sql`${table.lastErrorCode} is null or (
+        length(${table.lastErrorCode}) between 1 and 96
+        and ${table.lastErrorCode} glob '[A-Za-z]*'
+        and ${table.lastErrorCode} not glob '*[^A-Za-z0-9_.:-]*'
+      )`
     ),
   ]
 )
