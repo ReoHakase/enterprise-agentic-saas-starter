@@ -3,6 +3,12 @@ import { beforeAll, describe, expect, it, vi } from "vitest"
 import type { auth as Auth } from "./index"
 
 type AuthInstance = typeof Auth
+type AuthSessionResult = NonNullable<
+  Awaited<ReturnType<AuthInstance["api"]["getSession"]>>
+>
+
+const readActiveOrganizationId = (result: AuthSessionResult) =>
+  result.session.activeOrganizationId
 
 let auth: AuthInstance
 let blockedOrganizationPluginEndpoints: ReadonlyArray<{
@@ -168,5 +174,46 @@ describe("verification secret handling", () => {
       errorSpy.mockRestore()
       warnSpy.mockRestore()
     }
+  })
+})
+
+describe("built-in GitHub OAuth boundary", () => {
+  it("keeps the built-in provider and callback when the emulator is disabled", async () => {
+    expect(auth.options.socialProviders).toMatchObject({
+      github: {
+        clientId: "test-github-client",
+        clientSecret: "test-github-secret",
+      },
+    })
+    expect(
+      auth.options.plugins?.filter((plugin) => plugin.id === "generic-oauth")
+    ).toHaveLength(0)
+
+    const context = await auth.$context
+    const githubProvider = context.socialProviders.find(
+      (provider) => provider.id === "github"
+    )
+    if (!githubProvider) {
+      throw new Error("Expected the built-in GitHub provider")
+    }
+    const authorizationUrl = await githubProvider.createAuthorizationURL({
+      state: "test-state",
+      codeVerifier: "test-code-verifier",
+      redirectURI: "http://api.localhost/auth/callback/github",
+    })
+
+    expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
+      "http://api.localhost/auth/callback/github"
+    )
+    expect(auth.options.advanced?.useSecureCookies).toBe(false)
+  })
+})
+
+describe("plugin inference contract", () => {
+  it("retains organization fields on the core getSession result", async () => {
+    const session = await auth.api.getSession({ headers: new Headers() })
+
+    expect(session).toBeNull()
+    expect(readActiveOrganizationId).toBeTypeOf("function")
   })
 })

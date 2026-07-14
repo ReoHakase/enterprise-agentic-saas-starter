@@ -10,4 +10,11 @@ describe("auth client plugins", () => {
     expect(client.multiSession.setActive).toBeTypeOf("function")
     expect(client.multiSession.revoke).toBeTypeOf("function")
   })
+
+  it("keeps the core social sign-in and account-linking capabilities", () => {
+    const client = createAuthClientForBaseUrl("https://api.example.test")
+
+    expect(client.signIn.social).toBeTypeOf("function")
+    expect(client.linkSocial).toBeTypeOf("function")
+  })
 })

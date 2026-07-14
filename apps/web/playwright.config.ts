@@ -5,6 +5,7 @@ const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000"
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["oauth/**"],
   outputDir: "./test-results",
   // The local mock API intentionally keeps per-session state in memory. Keep
   // journeys serial so reset/setup is deterministic in CI and on laptops.

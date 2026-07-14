@@ -12,6 +12,7 @@
     "dev:e2e": "next dev --hostname 127.0.0.1 --port 3000",
     "dev:portless": "bun run dev",
     "dev:spotlight": "spotlight run -p 8969 bun run dev",
+    "e2e:github-emulator": "bun run --cwd ../github-emulator dev:http",
     "e2e:mock-api": "bun run e2e/fixtures/mock-api.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -19,7 +20,9 @@
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "bun run test:e2e:app && bun run test:e2e:oauth",
+    "test:e2e:app": "playwright test",
+    "test:e2e:oauth": "playwright test --config playwright.oauth.config.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

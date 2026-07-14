@@ -10,10 +10,11 @@ import {
   backgroundTaskHandler,
   createRuntimeEmailSender,
 } from "@enterprise-agentic-saas/email/runtime"
-import { APIError, betterAuth } from "better-auth"
+import { APIError, betterAuth, type BetterAuthPlugin } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import {
   createAccessControl,
+  genericOAuth,
   magicLink,
   multiSession,
   openAPI,
@@ -21,7 +22,8 @@ import {
   role,
 } from "better-auth/plugins"
 
-import { env } from "./env"
+import { env, githubOAuthEnvironment } from "./env"
+import { createGithubOAuthEmulatorProvider } from "./github-oauth-provider"
 import { createSessionOrganizationDatabaseHooks } from "./session-organization"
 
 const sendEmail: SendEmail = createRuntimeEmailSender({
@@ -39,10 +41,23 @@ if (!webAppOrigin) {
 const webAppHostname = new URL(webAppOrigin).hostname
 const authCookieDomain =
   env.AUTH_COOKIE_DOMAIN ??
-  (webAppHostname.endsWith(".localhost") ? webAppHostname : undefined)
+  (env.NODE_ENV !== "production" && webAppHostname.endsWith(".localhost")
+    ? webAppHostname
+    : undefined)
 if (!authCookieDomain) {
   throw new Error("AUTH_COOKIE_DOMAIN is required outside local development")
 }
+const useSecureCookies = new URL(env.BETTER_AUTH_URL).protocol === "https:"
+
+const githubSocialProviders =
+  githubOAuthEnvironment.mode === "github"
+    ? {
+        github: {
+          clientId: githubOAuthEnvironment.clientId,
+          clientSecret: githubOAuthEnvironment.clientSecret,
+        },
+      }
+    : {}
 
 const organizationAccessControl = createAccessControl({
   organization: ["update", "delete"],
@@ -140,6 +155,54 @@ export const authLogger = {
   },
 }
 
+const defineAuthPlugins = <const Plugins extends BetterAuthPlugin[]>(
+  ...plugins: Plugins
+) => plugins
+
+const commonAuthPlugins = defineAuthPlugins(
+  passkey({
+    rpID: webAppHostname,
+    rpName: env.APP_NAME,
+    origin: env.TRUSTED_ORIGINS,
+  }),
+  magicLink({
+    storeToken: "hashed",
+    async sendMagicLink({ email, url }) {
+      const rendered = await renderMagicLinkEmail({
+        appName: env.APP_NAME,
+        url,
+      })
+      await sendEmail({ to: email, ...rendered })
+    },
+  }),
+  multiSession({
+    maximumSessions: 5,
+  }),
+  openAPI({
+    path: "/reference",
+  }),
+  organization({
+    ac: organizationAccessControl,
+    creatorRole: "super_admin",
+    organizationHooks: organizationSecurityHooks,
+    roles: {
+      super_admin: superAdmin,
+      admin,
+      member,
+    },
+  })
+)
+
+const authPlugins =
+  githubOAuthEnvironment.mode === "emulator"
+    ? defineAuthPlugins(
+        genericOAuth({
+          config: [createGithubOAuthEmulatorProvider(githubOAuthEnvironment)],
+        }),
+        ...commonAuthPlugins
+      )
+    : commonAuthPlugins
+
 export const auth = betterAuth({
   appName: env.APP_NAME,
   secret: env.BETTER_AUTH_SECRET,
@@ -178,12 +241,7 @@ export const auth = betterAuth({
       "/organization/invite-member": { window: 60 * 60, max: 30 },
     },
   },
-  socialProviders: {
-    github: {
-      clientId: env.GITHUB_CLIENT_ID,
-      clientSecret: env.GITHUB_CLIENT_SECRET,
-    },
-  },
+  socialProviders: githubSocialProviders,
   account: {
     accountLinking: {
       enabled: true,
@@ -207,39 +265,7 @@ export const auth = betterAuth({
       enabled: true,
       domain: authCookieDomain,
     },
-    useSecureCookies: true,
+    useSecureCookies,
   },
-  plugins: [
-    passkey({
-      rpID: webAppHostname,
-      rpName: env.APP_NAME,
-      origin: env.TRUSTED_ORIGINS,
-    }),
-    magicLink({
-      storeToken: "hashed",
-      async sendMagicLink({ email, url }) {
-        const rendered = await renderMagicLinkEmail({
-          appName: env.APP_NAME,
-          url,
-        })
-        await sendEmail({ to: email, ...rendered })
-      },
-    }),
-    multiSession({
-      maximumSessions: 5,
-    }),
-    openAPI({
-      path: "/reference",
-    }),
-    organization({
-      ac: organizationAccessControl,
-      creatorRole: "super_admin",
-      organizationHooks: organizationSecurityHooks,
-      roles: {
-        super_admin: superAdmin,
-        admin,
-        member,
-      },
-    }),
-  ],
+  plugins: authPlugins,
 })

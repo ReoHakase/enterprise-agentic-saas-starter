@@ -1,0 +1,16 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "env": [
+        "NODE_ENV",
+        "DEBUG",
+        "EMULATE_DEBUG",
+        "GITHUB_OAUTH_EMULATOR_CLIENT_ID",
+        "GITHUB_OAUTH_EMULATOR_CLIENT_SECRET",
+        "GITHUB_OAUTH_CALLBACK_URL",
+        "GITHUB_OAUTH_EMULATOR_URL"
+      ]
+    }
+  }
+}

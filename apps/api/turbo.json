@@ -1,6 +1,9 @@
 {
   "extends": ["//"],
   "tasks": {
+    "dev": {
+      "with": ["@enterprise-agentic-saas/github-emulator#dev"]
+    },
     "build": {
       "outputs": ["dist/**"]
     },

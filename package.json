@@ -59,6 +59,7 @@
       "drizzle-orm": "0.45.2",
       "drizzle-seed": "0.3.1",
       "elysia": "1.4.28",
+      "emulate": "0.9.0",
       "envin": "1.2.0",
       "happy-dom": "20.10.6",
       "@axe-core/playwright": "4.12.1",
@@ -108,6 +109,7 @@
     "prepare": "lefthook install",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
+    "test:e2e:oauth": "turbo run test:e2e:oauth --filter=@enterprise-agentic-saas/web",
     "test:storybook": "turbo run test:storybook --filter=@enterprise-agentic-saas/ui",
     "typecheck": "turbo run typecheck"
   },

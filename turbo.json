@@ -111,7 +111,13 @@
     },
     "test:e2e": {
       "cache": false,
-      "outputs": ["test-results/**", "playwright-report/**"]
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "passThroughEnv": ["CI", "PLAYWRIGHT_BASE_URL"]
+    },
+    "test:e2e:oauth": {
+      "cache": false,
+      "outputs": ["test-results/oauth/**", "playwright-report/oauth/**"],
+      "passThroughEnv": ["CI"]
     },
     "typecheck": {
       "dependsOn": ["transit"],
@@ -140,6 +146,10 @@
         "EMAIL_PROVIDER",
         "EMAIL_FROM",
         "MAILPIT_URL",
+        "GITHUB_OAUTH_EMULATOR_URL",
+        "GITHUB_OAUTH_EMULATOR_CLIENT_ID",
+        "GITHUB_OAUTH_EMULATOR_CLIENT_SECRET",
+        "GITHUB_OAUTH_CALLBACK_URL",
         "SENTRY_DSN",
         "SENTRY_ENVIRONMENT",
         "SENTRY_ERROR_SAMPLE_RATE",
