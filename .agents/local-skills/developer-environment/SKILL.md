@@ -21,8 +21,12 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - workspaceのパッケージ名は `@enterprise-agentic-saas/*`（`apps/*`・`packages/*`）。portlessで固定したいホスト名は `apps/web`・`apps/api`・`packages/db` の `package.json` の `portless.name` で指定する（ルートの `portless.json` は使わない）。
 - portlessのTLDは `.localhost` を使う。webは `https://enterprise-agentic-saas.localhost`、APIは `https://api.enterprise-agentic-saas.localhost`、DBは `https://db.enterprise-agentic-saas.localhost`。
 - `.localhost` はportlessのデフォルトTLDなので、`package.json` の `portless.tld` は書かない。`tld` は未知のkeyとして警告される。
-- このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きの `turbo dev` に戻す。
+- このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo run dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo run dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きへ戻す。
 - `turso dev` は `PORT` envを読まないため、DBのportless scriptは `turso dev --port ${PORT:-8080}` のようにportlessが割り当てた `PORT` を明示的に渡す。
+- local email inboxはNix dev shellの`pkgs.mailpit`を使う。`packages/email`の`dev`はReact Email previewを維持し、package-local `turbo.json`の`with`で`dev:mailpit`を並走させる。root `turbo.json`へpackage固有taskを増やさない。
+- Mailpit UI/Send APIはmain checkoutで `https://mailpit.enterprise-agentic-saas.localhost`、React Email previewは `https://email.enterprise-agentic-saas.localhost` にする。linked worktreeではPortless prefixを分離境界にし、別worktreeの固定URLへ配送しない。MailpitのSMTP listenerは外部公開せず、loopbackのephemeral portを使う。
+- APIの`dev`/`dev:spotlight` scriptは、明示`MAILPIT_URL`がなければouter `portless run`より先に `portless get mailpit.enterprise-agentic-saas` を実行し、同じworktree-aware URLを子processへ注入する。共通resolverの固定URLはPortlessを介さない単体起動用fallbackに限定する。通常のlocal起動にemail envの複製を要求せず、明示envは別のlocal instanceやconsole fallbackを選ぶ場合だけ使う。
+- Mailpit DBはgit管理外の `packages/email/.local/mailpit.db` に保存する。手動resetはroot devを停止してから `bun run --cwd packages/email mailpit:reset` を明示実行し、通常起動では削除しない。
 - Wrangler/OpenNext/Playwright/Storybookはroot catalogと各workspaceのdevDependencyに固定し、flakeへ別versionのglobal CLIを重ねない。`nix develop` のBunから `bun run --cwd <workspace> ...` で起動する。
 - `flake.nix`から`bunx`で起動するMCP packageもbare nameにせずexact versionを指定する。生成configだけがNix storeにあっても、bare npm specでは同期時に取得versionが変わる。
 - Cloudflare local envは各appの `.dev.vars`、共有key一覧は `.dev.vars.example` に置く。production secretはCloudflare/GitHub secretへ置き、`.dev.vars` をcommitしない。
