@@ -46,6 +46,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - auth必須画面はNext.js Server Componentでsessionを検証し、未ログインなら `/auth/sign-in` にredirectする。session検証やSSR prefetchはwebからDBへ触らず、cookie headerをAPIへ転送するserver-side HTTP/Eden callに限定する。
 - todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
 - browserのGET/mutationはTanStack Queryのquery/mutationへ集約する。フォームはTanStack Formと`apps/web`内のValibot schemaを使い、field errorをinput直下、action失敗を安全なtoast/form errorに出す。Jotaiは選択中dialogなど再取得不要な一時UI状態だけに使い、server data cacheを複製しない。
+- bulk invitation formはTextareaへカンマまたは改行区切りで入力させ、Web-local Valibotでraw token 1〜20件、各254文字以下、email形式を検証してからtrim/lowercase/case-insensitive重複排除する。Edenへは`{ emails, role }`だけを渡し、batch responseもWeb-local schemaでparseする。409/429/step-upでは入力を保持し、field errorはTextarea直下、form errorはdialog内、成功はqueueされたunique件数をtoastで示す。
 - Elysia errorはWeb-local Valibot schemaでparseし、成功した`ConsoleApiError`のpublic messageだけを信頼する。任意のJavaScript/Valibot/network errorや不正responseの`message`はUIへ出さず、操作別の固定fallbackへ変換する。
 - 5xxは復旧できる案内を主文にし、検証済みrequest IDがある場合だけreferenceとして添える。`fieldErrors`は一致するfieldだけをinvalidにし、入力変更でclearする。`aria-invalid`と`aria-describedby`を同期し、field外の失敗やstep-upを無関係なinputへ付けない。
 - mutation/formごとにerror表示ownerを一つ決め、global Query handlerとlocal handlerから二重toastしない。TanStack Queryのdefault retry/error policyは`QueryClient`生成時に設定し、observer mount後の`useEffect`でcache defaultを変更しない。

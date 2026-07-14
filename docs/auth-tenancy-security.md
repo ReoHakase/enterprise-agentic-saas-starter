@@ -44,6 +44,14 @@ Better Auth organization pluginの管理・参照APIは直接公開しません�
 
 招待メールの送信者表示には認証済みsession userの表示名を使います。内部user IDを人向けの`inviterName`へ流用せず、表示名が空の場合だけtemplateの一般的なfallback文言へ倒します。
 
+### Atomic bulk invitation
+
+`POST /organizations/:organizationId/invitations`は、1〜20件のemailと全件共通の`admin | member` roleを受け取ります。emailはtrim・lowercase化して大小文字を無視して重複排除します。`admin`は`member`だけを招待でき、`super_admin`が`admin`を付与するときはfresh sessionが必要です。
+
+既存memberまたは期限内pending invitationが1件でも含まれる場合、全件を同じ409で拒否し、どのaddressが該当したかはresponseへ反映しません。全invitation、各audit event、各email jobは同じDB transactionで作るため、一部だけが保存・送信される状態はありません。actor+organizationは30 recipient/時、organization全体は100 recipient/時です。quotaは競合したbatchも消費し、生のuser/organization IDを保存しないhash keyでTursoへ永続化します。
+
+APIはjobをqueueした時点で201を返します。local BunではprocessorをawaitしてMailpitへ直ちに反映し、Cloudflare Workersでは`waitUntil`と毎分cronで処理します。配送失敗は招待をrollbackせず、安全なerror codeとbackoffだけをjobへ保存します。取消・期限切れは未送信/retry jobをterminalな`canceled`へ移します。providerが受け付けた直後にWorkerが停止した場合は同じメールが再送される可能性があるため、配送保証はexactly-onceではなくat-least-onceです。
+
 ## Destructive / privilege transfer
 
 - role変更、member削除、ownership transferは確認dialogを使う。

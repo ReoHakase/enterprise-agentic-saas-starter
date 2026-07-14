@@ -52,7 +52,7 @@ PR用E2Eは `apps/web/e2e/fixtures/mock-api.ts` をNext.jsと一緒に起動し�
 
 1. magic link登録 → organization作成 → dashboard
 2. dashboard → Issue作成/編集/comment/削除 → active tenant切り替え
-3. member role編集・削除、招待、session revokeを実画面から完了する管理導線
+3. member role編集・削除、comma/newline bulk招待、session revokeを実画面から完了する管理導線。bulk招待は大小文字を含む重複排除、POST body、queued件数、409時のatomic rollbackと入力保持を確認する
 4. mobile sidebarを閉じたaccount切替と、切替後sessionの反映
 5. Super Adminの即時organization削除と二重確認
 6. member権限拒否、active organization不一致、未所属tenant非開示、設定画面guard、失敗時のretry/error表示

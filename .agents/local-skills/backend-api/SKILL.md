@@ -114,6 +114,7 @@ apps/api/src/
 - `@elysia/openapi`には`@valibot/to-json-schema`のmapperを設定する。transformを含むquery schemaはOpenAPI生成testを必須にし、変換不能actionでroute schema全体が欠落しないことを確認する。
 - unsafe methodはglobal CSRF guardで`Origin`を必須にし、`CORS_ORIGIN` / `API_PUBLIC_URL`との完全一致だけを許可する。CSRFの403と`csrf_origin_forbidden` exampleを各mutationのOpenAPI responseにも含める。
 - resource作成は201へ統一する。このrepoではorganization、invitation、issue、issue commentのPOSTが対象で、実response、route schema、OpenAPI、client testを同時に変更する。
+- `POST /organizations/:organizationId/invitations`は1〜20件のemail配列と共通roleを受けるatomic batchにする。trim/lowercase/case-insensitive重複排除後、既存memberまたは有効pending invitationが1件でもあれば全件rollbackし、どのaddressが該当したかを反映しない同一の409 `fieldErrors.emails`を返す。quotaはrecipient件数でactor+organization 30件/時、organization 100件/時をDBへ原子的に予約し、競合探索も消費して429 `retryAfter`を返す。quota keyには生のuser/organization IDを保存せずnamespaced hashを使う。
 - Elysia/Valibotのrequest validationはruntimeで400 `validation_error`へ統一し、安全な`fieldErrors`を返す。OpenAPIも400を正本にし、runtimeが返さない422を追加しない。
 - response validationはAPI実装のcontract違反として500 `internal_error`へ変換し、内部issue/field pathをresponseへ出さずobservability bridgeで記録・captureする。integration testは宣言したresponse schemaを実routeが破る形で境界を通す。
 - 共通`ApiError`は安全なcode/message、必須request ID、allowlist済みcontext、必要な場合だけ`fieldErrors`を持つ。`Error.message`、入力値、tenant/resource ID、provider raw errorをschemaへ広げない。
@@ -126,6 +127,7 @@ apps/api/src/
 - organization内issue連番は `(organization_id, number)` uniqueを最終防波堤にし、process内organization別queueと、そのunique競合だけを対象にした限定retryを組み合わせる。
 - issue commentは`authorId`だけでなく `author: { id, name, image }` を返す。user profileのjoinはcommentの`organizationId`と同じmemberだけに制限し、tenant外または退会済みauthorのname/imageを漏らさずfallback表示にする。
 - organization削除はDB transaction内でactor membershipが`super_admin`であることと、request sessionが未失効かつ対象organizationをactiveにしていることをmutation直前に再確認する。その後PIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteする。tenant rowはDB cascadeで即時削除し、organization外部keyを持たないjobは残す。Cloudflare scheduled handlerが毎分R2 prefixを冪等削除し、list結果の各keyも同じencoded prefix内か再検証してからdeleteする。lease・指数backoff付きで再試行し、job完了/失敗の更新は`attempts + locked_at`をfencing tokenにして、lease期限切れの旧workerが再取得後の状態を上書きできないようにする。batch結果は`claimed/completed/failed/stale`の件数だけを記録し、job/organization/user IDをlogやSentry属性へ出さない。
+- invitation email processorも毎分cronとrequest後background taskの両方から同じdurable jobを処理する。`pending`、retry可能な`failed`、lease切れ`processing`だけをclaimし、`attempts + locked_at`で完了/失敗をfenceする。取消・期限切れ・delivery context欠落は再claimしないterminal状態へ移し、送信失敗は201でcommit済みの招待responseを500へ巻き戻さない。provider受付直後のworker crashでは厳密なexactly-onceを保証できないため、少なくとも1回配送と狭い重複可能性をrunbookへ明記する。
 
 ## package 品質
 

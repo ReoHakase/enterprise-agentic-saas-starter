@@ -45,6 +45,10 @@ local Bun developmentは既定で`EMAIL_PROVIDER=mailpit`を使い、portlessの
 
 通常の`wrangler dev`はEmail bindingをlocal simulationし、本文をlocal fileへ保存するが実配送しない。bindingへ`remote: true`を一時指定すると実メールを送るため、共通設定へcommitせず、検証済みtest recipientだけで実行する。送信eventにはtemplate、recipient domain、message ID、Cloudflare error code、retryableだけを残し、URL/token/本文/recipient全文を記録しない。
 
+organization invitationは`invitation_email_jobs`から配送します。jobはrecipient、token、URL、organization/user IDを持たず、送信時にinvitation・organization・inviterをjoinします。API request後の`waitUntil`と毎分scheduled handlerは同じprocessorを呼び、1回25件、5分lease、30秒から最大1時間の指数backoffで処理します。`attempts + locked_at`をfencing tokenにするため、lease切れ後の旧workerは新しい結果を上書きできません。
+
+監視対象はbatchの`claimed/completed/failed/canceled/stale`件数、失敗時のattempt・固定error code・retryableだけです。job/invitation/organization/user ID、email、URL、provider raw errorをlog/Sentryへ出しません。`failed`増加、`stale`、最古pending ageをalertにし、bindingやsender domainを修復後はcronの再試行へ任せます。provider受付とjob完了の間でWorkerが停止すると重複配送の可能性が残るため、運用上はat-least-onceとして扱います。
+
 ## Sentry
 
 WebとAPIに別projectを作り、projectごとにDSNを設定する。Web browserは`NEXT_PUBLIC_SENTRY_DSN`、Web server/APIは`SENTRY_DSN`を使う。同じcommit SHAを`SENTRY_RELEASE`、deploy先を`SENTRY_ENVIRONMENT`へ設定し、browserからAPIへのdistributed traceをつなぐ。

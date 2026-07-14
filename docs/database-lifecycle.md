@@ -71,6 +71,12 @@ bun run --cwd packages/db db:migrate
 - repository queryも `id + organization_id` を条件にする。
 - migration testで異なるtenantのcomment挿入が失敗することを確認する。
 
+## Invitation email job
+
+`invitation_email_jobs`は各invitationに最大1件だけ存在し、`invitation_id`へ`ON DELETE CASCADE`するdurable outboxです。invitation・audit・jobは同じtransactionで作成します。job自体にはemail、token、URL、organization/user IDを保存せず、status、attempt、lease、next retry、allowlist済みerror codeだけを置きます。
+
+schema変更時は`db:generate`でmigrationとsnapshotを生成し、migration testで列allowlist、unique invitation、cascade、status/attempt/error code check、claim indexを確認します。emailの取消・期限切れやinvitation削除後にorphan jobを残さず、retry可能な失敗だけをscheduled processorが再claimします。
+
 ## Organization削除job
 
 `organization_deletion_jobs`はorganization本体をhard deleteした後もR2 cleanupとHTTP retry receiptを保持するため、意図的にorganizationへの外部キーを持ちません。代わりに次の不変条件をschema・repository・migration testで維持します。

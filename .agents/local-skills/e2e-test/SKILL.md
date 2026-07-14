@@ -53,6 +53,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - mock APIもtenant境界のresponse契約を本番へ揃える。未所属または存在しないorganization/resourceは404、所属済みだがactive organization不一致は409、active organization内のrole不足だけを403にする。先にrole判定して未所属tenantの存在を漏らさない。
 - active organization切替時はmount済みの旧tenant queryをinvalidate/refetchしない。`consoleKeys.all` をcancelしてからroute replace/refreshし、切替途中の旧tenant requestが409にならないことを3 projectで確認する。
 - member role編集・削除、招待、session revoke、multi-account切替はAPI requestだけで済ませず、実画面のdialog/form/toastとmobile sidebarの閉鎖まで代表journeyで確認する。account切替後はsession cookieと遷移先の両方を確認する。
+- bulk招待はカンマ/改行入力、大小文字を含む重複排除、実POST body、queued件数toast、一覧への全件反映を3 projectで確認する。さらに既存memberまたはpending invitationを1件混ぜた409で他のaddressも一切保存されないこと、入力とinline errorが保持され、one-shot fault後に同じformから再送できることを固定する。
 - Playwright MCPが使える場合はlocal UI確認、locator調査、失敗スクリーンショット確認に使う。
 
 ## 実装時の確認

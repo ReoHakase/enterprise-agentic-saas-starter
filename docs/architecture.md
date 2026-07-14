@@ -36,6 +36,7 @@ flowchart LR
 - Better Auth callbackのprovider選択は `packages/auth`、API独自メールのprovider選択は `apps/api` で行う。
 - routeは入力/出力schemaとHTTP責務、serviceはユースケース、repositoryは永続化に限定する。
 - Elysia Contextをserviceへ丸ごと渡さない。認証・tenant・権限を検証済みの値として渡す。
+- organizationのbulk invitationはapp-owned Elysia routeを正本にし、invitation・audit・PII非保持の`invitation_email_jobs`を同じtransactionで作る。email本文、recipient、token、URLはjobへ複製せず、processorが送信時にauth tableから解決する。Cloudflareでは`waitUntil`とscheduled handler、localではawaitした同じprocessorを使う。
 
 ## Tenant境界
 

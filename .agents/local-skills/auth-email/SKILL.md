@@ -96,6 +96,7 @@ bunx @better-auth/cli generate \
 - `super_admin` はorganizationごとに必ず一人だけにする。Better Authのrole定義だけに任せず、`apps/api` 側のmember role更新で昇格時に旧 `super_admin` を `admin` へ落とし、最後の `super_admin` の降格・削除を拒否する。
 - organization memberのrole変更はapp側で強制する。`admin` は招待や通常member管理はできるが、`member -> admin`、`admin -> member`、`super_admin` 関連変更はできない。role昇格/降格と `super_admin` 移譲は `super_admin` だけ許可する。
 - `admin` が招待できるroleは `member` だけ。`super_admin` が招待で `admin` を付与する場合もfresh sessionを要求する。
+- organization招待はBetter Authの`/organization/invite-member`ではなくapp所有のElysia batch routeだけを使う。Better Auth側に到達不能な招待用custom rate ruleや別送信callbackを残さず、app側でtenant guard、fresh session、recipient-count quota、atomic audit/outboxを一続きに強制する。
 - organization招待メールの`inviterName`には認証済みuserの表示名を渡す。user idを人向け表示へ流用せず、名前が空の場合だけtemplate側の安全なfallbackを使う。
 - `super_admin` 移管は通常role更新から分離し、target member emailのtyped confirmationとfresh sessionを要求する。移管、member削除、role変更とaudit insertは同一transactionにする。
 - `member` はDBで `(organization_id, user_id)` unique、`role = 'super_admin'` はorganizationごとのpartial uniqueを持つ。所有権移管transactionは旧super_adminを先にadminへ降格してからtargetを昇格し、前後のcountを検証する。逆順はpartial uniqueに違反する。
@@ -103,6 +104,7 @@ bunx @better-auth/cli generate \
 - organizationの管理・参照APIは `apps/api` が正本。Better Auth organization pluginはdeny-by-defaultとし、招待recipient本人に必要な `get-invitation` / `list-user-invitations` / `accept-invitation` / `reject-invitation` の4 endpointだけを残す。organization/member/invitation/team/custom roleの他endpointは、readもmutationもtop-level `disabledPaths` で404にしてtenant guardや監査境界を迂回させない。
 - `disabledPaths` は `basePath` を除いた `/organization/...` のnormalized pathで指定する。各endpointの実methodでdirect `auth.handler` が404を返すこと、`/auth/open-api/generate-schema` のorganization pathが上記4つだけになることを回帰testにする。Better Auth更新でendpointが増えた場合もtestをfailさせ、公開可否を明示判断する。
 - 招待取消は`pending`かつ期限内だけを許可する。accepted/canceled/expiredを上書きせず409 `conflict` + `reason: invitation_not_pending` を返し、他tenantや不存在IDは同じ404にする。保存値がpendingでも期限切れなら一覧responseは`expired`として扱う。
+- 招待取消transactionでは未送信・retry待ちのemail jobもterminalな`canceled`へ移す。送信中とのraceはlease fencingで後続のcompleted/failed更新を拒否するが、providerへ既に渡った配送そのものは取り消せないことを運用仕様として扱う。
 - invitation acceptanceはBetter Authの `organizationHooks.beforeAcceptInvitation` でもroleを `admin | member` にallowlistする。`owner`、`super_admin`、null、未知roleはstable errorでfail-closedにし、migrationでも該当する既存pending invitationをexpiredへ変換する。
 
 ## package品質

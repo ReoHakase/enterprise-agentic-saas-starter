@@ -85,6 +85,7 @@ export type SendEmail = (input: SendEmailInput) => Promise<void>;
 - `createRuntimeEmailSender`: app/auth側から検証済みのprovider/runtime/from/Mailpit URLを受け取る。workerd productionでは`EMAIL_PROVIDER=cloudflare`と`EMAIL` bindingを必須にし、productionのMailpit/consoleをfail-closedにする。
 - `@enterprise-agentic-saas/email/config`のresolverは未指定providerをdevelopment=`mailpit`、test=`noop`、production=`cloudflare`へ揃える。API dev scriptは`portless get`でworktree-awareなMailpit URLを注入し、resolverの固定URLはPortlessを介さない単体起動用fallbackに限定する。`resolveEmailFrom`はlocal/testで未設定のときだけ配送不能な`noreply@example.test`を返し、本番は`undefined`を返してenv validationを失敗させる。`apps/api`と`packages/auth`で独自fallbackを二重実装せず、envだけのimportでtemplate runtimeを読み込まない。
 - Better Authのbackground taskはworkerd entrypointが公開する`waitUntil` handlerへ接続する。organization invitationはapp APIのtransaction/audit境界を維持するためAPI側senderを正本にする。
+- organization invitationはtransactionで作ったPII非保持のdurable jobから、送信時にinvitation/organization/inviterをjoinしてrenderする。workerdでは`waitUntil`へprocessor Promiseを渡し、default local runtimeではprocessorをawaitしてMailpitへ直ちに反映する。request中の配送失敗はjobへ安全なcodeとbackoffだけを保存し、201 responseを失敗へ変えない。
 - app/auth側でenvに応じてsenderを選ぶ。`packages/email` がenvを直接読まない。
 
 ## preview/test
@@ -96,6 +97,7 @@ export type SendEmail = (input: SendEmailInput) => Promise<void>;
 - Cloudflare senderはbinding payloadのfield allowlist、provider raw message非出力、retry分類、不正addressの送信前拒否を確認する。
 - `wrangler dev`のEmail bindingは既定でlocal simulationする。`remote: true`は実配送なので共有設定へ安易に入れない。
 - E2Eで実メール送信に依存しすぎない。magic linkはtest helperやmock inboxで扱う。
+- invitation outbox testは成功、retryable/terminal failure、取消・期限切れskip、lease再取得後に旧workerが上書きしないこと、job/telemetryへrecipient・URL・token・raw provider errorが残らないことを確認する。provider受付とjob完了の間では厳密なexactly-onceにできないため、重複耐性のある文面と短いlease/retry運用を前提にする。
 
 ## 実装時の確認
 
