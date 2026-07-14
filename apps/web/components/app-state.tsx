@@ -11,6 +11,8 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import type { LucideIcon } from "lucide-react"
 import { type ReactNode, useId } from "react"
 
+import { PageHeader } from "@/components/page-shell"
+
 export const AppState = ({
   icon: Icon,
   title,
@@ -86,16 +88,11 @@ export const RouteLoading = ({
 )
 
 const RouteHeadingSkeleton = ({ showAction }: { showAction: boolean }) => (
-  <div
-    data-slot="page-header"
-    className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-  >
-    <div className="flex min-w-0 flex-col gap-1">
-      <Skeleton className="h-8 w-44 max-w-full" />
-      <Skeleton className="h-10 w-96 max-w-full sm:h-5" />
-    </div>
-    {showAction ? <Skeleton className="h-9 w-36" /> : null}
-  </div>
+  <PageHeader
+    heading={<Skeleton className="h-8 w-44 max-w-full" />}
+    description={<Skeleton className="h-10 w-96 max-w-full sm:h-5" />}
+    actions={showAction ? <Skeleton className="h-9 w-36" /> : null}
+  />
 )
 
 const RouteBodySkeleton = ({ variant }: { variant: RouteLoadingVariant }) => {

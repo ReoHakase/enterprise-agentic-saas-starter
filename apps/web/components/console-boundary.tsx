@@ -27,6 +27,7 @@ import {
   type RouteLoadingVariant,
 } from "@/components/app-state"
 import { ConsoleFrame } from "@/components/console-frame"
+import { PageHeader } from "@/components/page-shell"
 import { useBoundaryRetry } from "@/hooks/use-boundary-retry"
 
 type ConsoleBoundaryState = "error" | "loading"
@@ -91,11 +92,8 @@ export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
       aria-live="assertive"
       role="alert"
     >
-      <div
-        data-slot="page-header"
-        className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-      >
-        <div className="min-w-0">
+      <PageHeader
+        heading={
           <h1
             ref={headingRef}
             id={headingId}
@@ -104,12 +102,14 @@ export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
           >
             {presentation.title}
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+        }
+        description={
+          <p className="max-w-2xl text-sm text-muted-foreground">
             {presentation.description}
           </p>
-        </div>
-        {presentation.showAction ? retryButton : null}
-      </div>
+        }
+        actions={presentation.showAction ? retryButton : null}
+      />
       <div data-slot="page-body">
         <AppState
           className="min-h-[min(32rem,60svh)] p-0"
