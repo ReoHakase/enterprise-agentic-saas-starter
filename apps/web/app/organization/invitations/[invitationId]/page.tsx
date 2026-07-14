@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
-import { InvitationDecisionPanel } from "@/components/console/forms"
+import { InvitationRouteFrame } from "@/components/public-route-frame"
+import { InvitationDecisionPanel } from "@/features/members/components/invitation-decision-panel"
 import { getSession } from "@/lib/server/auth"
 
 type InvitationPageProps = {
@@ -18,8 +19,8 @@ export default async function InvitationPage({ params }: InvitationPageProps) {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-6">
+    <InvitationRouteFrame>
       <InvitationDecisionPanel invitationId={invitationId} />
-    </main>
+    </InvitationRouteFrame>
   )
 }

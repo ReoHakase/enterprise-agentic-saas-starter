@@ -48,7 +48,14 @@ import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { format } from "date-fns"
 import { CalendarIcon, Check, ChevronDownIcon, Copy } from "lucide-react"
-import { useRef, useState } from "react"
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { toast } from "sonner"
 
 export type AdditionalFieldProps = {
@@ -56,6 +63,10 @@ export type AdditionalFieldProps = {
   field: AdditionalFieldConfig
   isPending?: boolean
 }
+
+const padTimePart = (value: number) => value.toString().padStart(2, "0")
+const emptyOptions: NonNullable<AdditionalFieldConfig["options"]> = []
+const ignoreInputChange = () => undefined
 
 /** Convert a `defaultValue` into a `Date` for the calendar. */
 function toDate(value: unknown): Date | undefined {
@@ -69,8 +80,7 @@ function toDate(value: unknown): Date | undefined {
 
 /** Format a Date as `HH:mm:ss` for an `<input type="time">`. */
 function formatTime(date: Date) {
-  const pad = (n: number) => n.toString().padStart(2, "0")
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`
 }
 
 /**
@@ -88,7 +98,7 @@ function CopyButton({
   const { localization } = useAuth()
   const [copied, setCopied] = useState(false)
 
-  async function handleCopy() {
+  const handleCopy = useCallback(async () => {
     const value = getValue()
     if (!value) return
 
@@ -96,10 +106,10 @@ function CopyButton({
       await navigator.clipboard.writeText(value)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
+    } catch {
+      toast.error("The value could not be copied.")
     }
-  }
+  }, [getValue])
 
   return (
     <InputGroupButton
@@ -123,6 +133,15 @@ export function AdditionalField({
   // Used by `inputType: "input"` with `copyable: true` so the copy button
   // reads the input's *live* value rather than a stale `defaultValue`.
   const inputRef = useRef<HTMLInputElement>(null)
+  const fieldOptions = field.options ?? emptyOptions
+  const selectItems = useMemo(
+    () => [
+      { label: field.placeholder ?? "Select an option", value: null },
+      ...fieldOptions,
+    ],
+    [field.placeholder, fieldOptions]
+  )
+  const getInputValue = useCallback(() => inputRef.current?.value, [])
 
   if (field.render) {
     return <>{field.render({ name, field, isPending })}</>
@@ -246,11 +265,6 @@ export function AdditionalField({
   }
 
   if (inputType === "select") {
-    const selectItems = [
-      { label: field.placeholder ?? "Select an option", value: null },
-      ...(field.options ?? []),
-    ]
-
     return (
       <Field>
         <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
@@ -276,7 +290,7 @@ export function AdditionalField({
 
           <SelectContent>
             <SelectGroup>
-              {field.options?.map((option) => (
+              {fieldOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
@@ -296,7 +310,7 @@ export function AdditionalField({
         <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
 
         <Combobox
-          items={field.options ?? []}
+          items={fieldOptions}
           name={name}
           defaultValue={
             field.defaultValue != null ? String(field.defaultValue) : undefined
@@ -377,10 +391,7 @@ export function AdditionalField({
 
           {field.copyable ? (
             <InputGroupAddon align="inline-end">
-              <CopyButton
-                getValue={() => inputRef.current?.value}
-                isDisabled={isPending}
-              />
+              <CopyButton getValue={getInputValue} isDisabled={isPending} />
             </InputGroupAddon>
           ) : (
             field.suffix != null && (
@@ -439,8 +450,18 @@ function SliderField({ name, field, isPending }: AdditionalFieldProps) {
         : min
 
   const [value, setValue] = useState<number>(initial)
-
-  const formatter = new Intl.NumberFormat(undefined, field.formatOptions)
+  const formatter = useMemo(
+    () => new Intl.NumberFormat(undefined, field.formatOptions),
+    [field.formatOptions]
+  )
+  const sliderValue = useMemo(() => [value], [value])
+  const handleValueChange = useCallback(
+    (nextValue: number | readonly number[]) => {
+      const next = Array.isArray(nextValue) ? nextValue[0] : nextValue
+      setValue(next ?? min)
+    },
+    [min]
+  )
 
   return (
     <Field>
@@ -454,11 +475,8 @@ function SliderField({ name, field, isPending }: AdditionalFieldProps) {
       <Slider
         id={name}
         name={name}
-        value={[value]}
-        onValueChange={(nextValue) => {
-          const next = Array.isArray(nextValue) ? nextValue[0] : nextValue
-          setValue(next ?? min)
-        }}
+        value={sliderValue}
+        onValueChange={handleValueChange}
         min={min}
         max={max}
         step={step}
@@ -486,6 +504,22 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
   )
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
+  const handleInvalid = useCallback((event: FormEvent<HTMLInputElement>) => {
+    event.preventDefault()
+    setError(event.currentTarget.validationMessage)
+  }, [])
+  const handleSelect = useCallback(
+    (value: Date | undefined) => {
+      setDate(value)
+      if (value) setError(undefined)
+      if (!isDateTime) setOpen(false)
+    },
+    [isDateTime]
+  )
+  const handleTimeChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => setTime(event.target.value),
+    []
+  )
 
   // Compose the hidden form value: ISO date for "date", ISO datetime for
   // "datetime" (date + time).
@@ -521,15 +555,12 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
           type="text"
           name={name}
           value={formValue}
-          onChange={() => {}}
+          onChange={ignoreInputChange}
           required={field.required}
           tabIndex={-1}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
-          onInvalid={(e) => {
-            e.preventDefault()
-            setError((e.target as HTMLInputElement).validationMessage)
-          }}
+          className="pointer-events-none absolute inset-0 size-full opacity-0"
+          onInvalid={handleInvalid}
         />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
@@ -558,11 +589,7 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
               selected={date}
               defaultMonth={date}
               captionLayout="dropdown"
-              onSelect={(value) => {
-                setDate(value)
-                if (value) setError(undefined)
-                if (!isDateTime) setOpen(false)
-              }}
+              onSelect={handleSelect}
             />
           </PopoverContent>
         </Popover>
@@ -578,7 +605,7 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
               id={`${name}-time`}
               step="1"
               value={time}
-              onChange={(e) => setTime(e.target.value)}
+              onChange={handleTimeChange}
               disabled={isPending || field.readOnly}
               className="appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
             />

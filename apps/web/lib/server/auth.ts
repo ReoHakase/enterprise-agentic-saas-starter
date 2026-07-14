@@ -1,10 +1,11 @@
 import "server-only"
+import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { cache } from "react"
 
 import { serverEnv } from "@/lib/env.server"
-import { readAuthSessionResponse } from "@/lib/server/auth-session-response"
+import { readAuthSessionResult } from "@/lib/server/auth-session-response"
 
 export type SessionUser = {
   id: string
@@ -35,6 +36,8 @@ const isSession = (value: unknown): value is Session =>
   typeof value.user.id === "string" &&
   typeof value.user.email === "string"
 
+const serverAuthClient = createAuthClientForBaseUrl(serverEnv.API_PUBLIC_URL)
+
 export const getCookieHeader = cache(async () => {
   const requestHeaders = await headers()
   return requestHeaders.get("cookie") ?? ""
@@ -43,12 +46,14 @@ export const getCookieHeader = cache(async () => {
 export const getSession = cache(async (): Promise<Session | null> => {
   const cookie = await getCookieHeader()
 
-  const response = await fetch(`${serverEnv.API_PUBLIC_URL}/auth/get-session`, {
-    headers: cookie ? { cookie } : undefined,
-    cache: "no-store",
+  const result = await serverAuthClient.getSession({
+    fetchOptions: {
+      headers: cookie ? { cookie } : undefined,
+      cache: "no-store",
+    },
   })
 
-  const session = await readAuthSessionResponse(response)
+  const session = readAuthSessionResult(result)
   return isSession(session) ? session : null
 })
 

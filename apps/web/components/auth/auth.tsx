@@ -26,7 +26,18 @@ export type AuthProps = {
  * When it's disabled, the `<Auth>` router redirects these to `signIn` so a
  * plugin's `fallbackViews.auth.signIn` (e.g. magic link) takes over.
  */
-const PASSWORD_ONLY_VIEWS = ["forgotPassword", "resetPassword"]
+const PASSWORD_ONLY_VIEWS = new Set<AuthView>([
+  "forgotPassword",
+  "resetPassword",
+])
+
+const AUTH_VIEW_KEYS: AuthView[] = [
+  "signIn",
+  "signOut",
+  "signUp",
+  "forgotPassword",
+  "resetPassword",
+]
 
 const AUTH_VIEWS: Partial<Record<AuthView, ComponentType<AuthProps>>> = {
   signIn: SignIn,
@@ -65,19 +76,14 @@ export function Auth({
   }
 
   const authView =
-    view ||
-    (Object.keys(viewPaths.auth) as AuthView[]).find(
-      (key) => viewPaths.auth[key] === path
-    )
+    view || AUTH_VIEW_KEYS.find((key) => viewPaths.auth[key] === path)
 
   // When email + password auth is disabled, password-only views (signUp,
   // forgotPassword, resetPassword) have no meaning. Redirect them to signIn,
   // where a plugin's `fallbackViews.auth.signIn` (e.g. magic link) takes
   // over as the primary entry point.
   const shouldRedirectToSignIn =
-    !emailAndPassword?.enabled &&
-    authView &&
-    PASSWORD_ONLY_VIEWS.includes(authView)
+    !emailAndPassword?.enabled && authView && PASSWORD_ONLY_VIEWS.has(authView)
 
   useEffect(() => {
     if (shouldRedirectToSignIn) {

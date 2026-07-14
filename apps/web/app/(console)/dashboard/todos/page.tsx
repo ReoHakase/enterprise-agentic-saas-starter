@@ -5,10 +5,10 @@ import { redirect } from "next/navigation"
 import { PageShell } from "@/components/page-shell"
 import { QueryHydrationBoundary } from "@/components/query-hydration-boundary"
 import { TodosDashboard } from "@/components/todos-dashboard"
+import { issuesQueryOptions } from "@/features/issues/queries"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
 import { getConsoleContext } from "@/lib/server/console-context"
-import { listTodos, todoQueryKeys } from "@/lib/todos"
 
 export const metadata: Metadata = {
   title: "Issues",
@@ -30,10 +30,9 @@ export default async function TodosPage() {
     redirect("/settings/organizations")
   }
 
-  await queryClient.prefetchQuery({
-    queryKey: todoQueryKeys.todos(activeOrganization.id),
-    queryFn: () => listTodos(apiClient, activeOrganization.id),
-  })
+  await queryClient.prefetchQuery(
+    issuesQueryOptions(apiClient, activeOrganization.id)
+  )
 
   return (
     <PageShell

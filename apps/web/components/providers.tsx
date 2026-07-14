@@ -4,56 +4,74 @@ import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client
 import { Toaster } from "@enterprise-agentic-saas/ui/components/sonner"
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { Provider as JotaiProvider } from "jotai"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, type PropsWithChildren } from "react"
+import { useCallback, useState, type PropsWithChildren } from "react"
 
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 import { clientEnv } from "@/lib/env.client"
 
+const authBasePaths = {
+  auth: "/auth",
+  settings: "/settings",
+  organization: "/organization",
+} as const
+
+const socialProviders: Array<"github"> = ["github"]
+const emailAndPassword = { enabled: false } as const
+const authPlugins = [magicLinkPlugin()]
+
+const createQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 1,
+        staleTime: 30_000,
+      },
+    },
+  })
+
 export const Providers = ({ children }: PropsWithChildren) => {
   const router = useRouter()
-  const [queryClient] = useState(() => new QueryClient())
+  const [queryClient] = useState(createQueryClient)
   const [authClient] = useState(() =>
     createAuthClientForBaseUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL)
+  )
+  const navigate = useCallback(
+    ({ to, replace }: { to: string; replace?: boolean }) => {
+      if (replace) {
+        router.replace(to)
+        return
+      }
+
+      router.push(to)
+    },
+    [router]
   )
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider
-        authClient={authClient}
-        baseURL={clientEnv.NEXT_PUBLIC_API_BASE_URL}
-        // oxlint-disable-next-line react_perf/jsx-no-new-object-as-prop
-        basePaths={{
-          auth: "/auth",
-          settings: "/settings",
-          organization: "/organization",
-        }}
-        queryClient={queryClient}
-        // oxlint-disable-next-line react_perf/jsx-no-new-array-as-prop
-        socialProviders={["github"]}
-        // oxlint-disable-next-line react_perf/jsx-no-new-object-as-prop
-        emailAndPassword={{ enabled: false }}
-        // oxlint-disable-next-line react_perf/jsx-no-new-array-as-prop
-        plugins={[magicLinkPlugin()]}
-        Link={Link}
-        // oxlint-disable-next-line react_perf/jsx-no-new-function-as-prop
-        navigate={({ to, replace }) => {
-          if (replace) {
-            router.replace(to)
-            return
-          }
-
-          router.push(to)
-        }}
-      >
-        <ThemeProvider>
-          <TooltipProvider delay={350}>{children}</TooltipProvider>
-        </ThemeProvider>
-        <Toaster />
-      </AuthProvider>
+      <JotaiProvider>
+        <AuthProvider
+          authClient={authClient}
+          baseURL={clientEnv.NEXT_PUBLIC_API_BASE_URL}
+          basePaths={authBasePaths}
+          queryClient={queryClient}
+          socialProviders={socialProviders}
+          emailAndPassword={emailAndPassword}
+          plugins={authPlugins}
+          Link={Link}
+          navigate={navigate}
+        >
+          <ThemeProvider>
+            <TooltipProvider delay={350}>{children}</TooltipProvider>
+          </ThemeProvider>
+          <Toaster />
+        </AuthProvider>
+      </JotaiProvider>
     </QueryClientProvider>
   )
 }

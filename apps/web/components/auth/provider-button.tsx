@@ -6,7 +6,7 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useIsMutating } from "@tanstack/react-query"
 import type { SocialProvider } from "better-auth/social-providers"
-import type { ComponentProps } from "react"
+import { type ComponentProps, useCallback } from "react"
 
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
@@ -43,13 +43,17 @@ export function ProviderButton({
     mutationKey: authMutationKeys.signUp.all,
   })
   const isPending = signInMutating + signUpMutating > 0
+  const handleSignIn = useCallback(
+    () => signInSocial({ provider, callbackURL }),
+    [callbackURL, provider, signInSocial]
+  )
 
   return (
     <Button
       type="button"
       variant={variant}
       disabled={isPending}
-      onClick={() => signInSocial({ provider, callbackURL })}
+      onClick={handleSignIn}
       {...props}
       aria-label={getProviderName(provider)}
     >

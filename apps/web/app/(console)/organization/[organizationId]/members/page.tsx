@@ -1,5 +1,5 @@
-import { MembersPanel } from "@/components/console/forms"
 import { PageShell } from "@/components/page-shell"
+import { MembersPage as MembersPageContent } from "@/features/members/components/members-page"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type MembersPageProps = {
@@ -9,10 +9,9 @@ type MembersPageProps = {
 export default async function MembersPage({ params }: MembersPageProps) {
   const { organizationId } = await params
   const api = await createServerConsoleApi()
-  const [organization, members, invitations] = await Promise.all([
+  const [organization, members] = await Promise.all([
     api.getOrganization(organizationId),
     api.listMembers(organizationId),
-    api.listInvitations(organizationId).catch(() => []),
   ])
 
   return (
@@ -20,10 +19,9 @@ export default async function MembersPage({ params }: MembersPageProps) {
       title="Members"
       description={`Manage users and permissions for ${organization.name}.`}
     >
-      <MembersPanel
+      <MembersPageContent
         organization={organization}
-        members={members}
-        invitations={invitations}
+        initialMembers={members}
       />
     </PageShell>
   )

@@ -8,15 +8,18 @@ export class AuthSessionRequestError extends Error {
   }
 }
 
-export const readAuthSessionResponse = async (response: Response) => {
-  if (response.status === 401) {
+type AuthSessionResult =
+  | { data: null; error: { status: number } }
+  | { data: unknown; error: null }
+
+export const readAuthSessionResult = (result: AuthSessionResult) => {
+  if (result.error?.status === 401) {
     return null
   }
 
-  if (!response.ok) {
-    throw new AuthSessionRequestError(response.status)
+  if (result.error) {
+    throw new AuthSessionRequestError(result.error.status)
   }
 
-  const payload: unknown = await response.json()
-  return payload
+  return result.data
 }

@@ -5,39 +5,41 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@enterprise-agentic-saas/ui/components/card"
 import {
-  Field,
   FieldDescription,
   FieldError,
   FieldGroup,
 } from "@enterprise-agentic-saas/ui/components/field"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@enterprise-agentic-saas/ui/components/input-group"
-import { Label } from "@enterprise-agentic-saas/ui/components/label"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
-import { Eye, EyeOff } from "lucide-react"
-import { type SyntheticEvent, useEffect, useState } from "react"
+import { useForm } from "@tanstack/react-form"
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import { toast } from "sonner"
+
+import { safeAuthErrorMessage } from "@/features/auth/error"
+import { createResetPasswordFormSchema } from "@/features/auth/schema"
+
+import { AuthPasswordField, selectCanSubmit } from "./auth-form-field"
 
 export type ResetPasswordProps = {
   className?: string
 }
 
-/**
- * Render a password reset form that validates the reset token from the URL, accepts a new password (and optional confirmation), and submits it to the auth client.
- *
- * The component checks for a `token` query parameter on mount and, if missing, shows an error toast and navigates to the sign-in page. It exposes per-field validation messages, toggles for password visibility, and disables inputs while the reset request is pending.
- *
- * @returns The password reset form UI ready to be mounted in the app layout.
- */
+const defaultMinimumPasswordLength = 8
+const defaultMaximumPasswordLength = 128
+const requestFailedMessage =
+  "We could not reset your password. Request a new reset link and try again."
+
 export function ResetPassword({ className }: ResetPasswordProps) {
   const {
     authClient,
@@ -48,61 +50,87 @@ export function ResetPassword({ className }: ResetPasswordProps) {
     navigate,
     Link,
   } = useAuth()
+  const [token, setToken] = useState<string | null>()
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
+    useState(false)
+  const [submitError, setSubmitError] = useState<string>()
+  const minimumPasswordLength =
+    emailAndPassword?.minPasswordLength ?? defaultMinimumPasswordLength
+  const maximumPasswordLength =
+    emailAndPassword?.maxPasswordLength ?? defaultMaximumPasswordLength
+  const formSchema = useMemo(
+    () =>
+      createResetPasswordFormSchema({
+        confirmPassword: emailAndPassword?.confirmPassword ?? false,
+        minimumPasswordLength,
+        maximumPasswordLength,
+        passwordsDoNotMatchMessage: localization.auth.passwordsDoNotMatch,
+      }),
+    [
+      emailAndPassword?.confirmPassword,
+      localization.auth.passwordsDoNotMatch,
+      maximumPasswordLength,
+      minimumPasswordLength,
+    ]
+  )
 
   const { mutate: resetPassword, isPending } = useResetPassword(authClient, {
+    onError: (error) => {
+      const message = safeAuthErrorMessage(error, requestFailedMessage)
+      setSubmitError(message)
+      toast.error(message)
+    },
     onSuccess: () => {
       toast.success(localization.auth.passwordResetSuccess)
       navigate({ to: `${basePaths.auth}/${viewPaths.auth.signIn}` })
     },
   })
-
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
-  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] =
-    useState(false)
-
-  const [fieldErrors, setFieldErrors] = useState<{
-    password?: string
-    confirmPassword?: string
-  }>({})
+  const form = useForm({
+    defaultValues: { password: "", confirmPassword: "" },
+    validators: { onSubmit: formSchema },
+    onSubmit: ({ value }) => {
+      if (!token) {
+        const message = localization.auth.invalidResetPasswordToken
+        setSubmitError(message)
+        toast.error(message)
+        return
+      }
+      setSubmitError(undefined)
+      resetPassword({ token, newPassword: value.password })
+    },
+  })
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    const token = searchParams.get("token") as string
-
-    if (!token) {
+    const resetToken = new URLSearchParams(window.location.search).get("token")
+    setToken(resetToken)
+    if (!resetToken) {
       toast.error(localization.auth.invalidResetPasswordToken)
       navigate({ to: `${basePaths.auth}/${viewPaths.auth.signIn}` })
     }
   }, [
     basePaths.auth,
     localization.auth.invalidResetPasswordToken,
-    viewPaths.auth.signIn,
     navigate,
+    viewPaths.auth.signIn,
   ])
 
-  function handleSubmit(e: SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault()
-
-    const searchParams = new URLSearchParams(window.location.search)
-    const token = searchParams.get("token") as string
-
-    if (!token) {
-      toast.error(localization.auth.invalidResetPasswordToken)
-      navigate({ to: `${basePaths.auth}/${viewPaths.auth.signIn}` })
-      return
-    }
-
-    const formData = new FormData(e.currentTarget)
-    const password = formData.get("password") as string
-    const confirmPassword = formData.get("confirmPassword") as string
-
-    if (emailAndPassword?.confirmPassword && password !== confirmPassword) {
-      toast.error(localization.auth.passwordsDoNotMatch)
-      return
-    }
-
-    resetPassword({ token, newPassword: password })
-  }
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      void form.handleSubmit()
+    },
+    [form]
+  )
+  const clearSubmitError = useCallback(() => setSubmitError(undefined), [])
+  const togglePassword = useCallback(
+    () => setIsPasswordVisible((visible) => !visible),
+    []
+  )
+  const toggleConfirmPassword = useCallback(
+    () => setIsConfirmPasswordVisible((visible) => !visible),
+    []
+  )
 
   return (
     <Card className={cn("w-full max-w-sm", className)}>
@@ -110,136 +138,89 @@ export function ResetPassword({ className }: ResetPasswordProps) {
         <CardTitle className="text-xl font-semibold">
           {localization.auth.resetPassword}
         </CardTitle>
+        <CardDescription>
+          Choose a unique password you do not use elsewhere.
+        </CardDescription>
       </CardHeader>
 
       <CardContent>
-        <form onSubmit={handleSubmit}>
-          <FieldGroup>
-            <Field data-invalid={!!fieldErrors.password}>
-              <Label htmlFor="password">{localization.auth.password}</Label>
+        {token === null ? (
+          <FieldError>{localization.auth.invalidResetPasswordToken}</FieldError>
+        ) : (
+          <form onSubmit={handleSubmit} noValidate>
+            <FieldGroup>
+              <form.Field name="password">
+                {(field) => {
+                  const invalid =
+                    field.state.meta.isTouched && !field.state.meta.isValid
+                  return (
+                    <AuthPasswordField
+                      name={field.name}
+                      autoComplete="new-password"
+                      label={localization.auth.password}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onEdit={clearSubmitError}
+                      onValueChange={field.handleChange}
+                      placeholder={localization.auth.newPasswordPlaceholder}
+                      disabled={isPending || token === undefined}
+                      invalid={invalid}
+                      errors={field.state.meta.errors}
+                      visible={isPasswordVisible}
+                      onToggleVisibility={togglePassword}
+                      hidePasswordLabel={localization.auth.hidePassword}
+                      showPasswordLabel={localization.auth.showPassword}
+                    />
+                  )
+                }}
+              </form.Field>
 
-              <InputGroup>
-                <InputGroupInput
-                  id="password"
-                  name="password"
-                  type={isPasswordVisible ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder={localization.auth.newPasswordPlaceholder}
-                  required
-                  minLength={emailAndPassword?.minPasswordLength}
-                  maxLength={emailAndPassword?.maxPasswordLength}
-                  disabled={isPending}
-                  onChange={() => {
-                    setFieldErrors((prev) => ({
-                      ...prev,
-                      password: undefined,
-                    }))
+              {emailAndPassword?.confirmPassword ? (
+                <form.Field name="confirmPassword">
+                  {(field) => {
+                    const invalid =
+                      field.state.meta.isTouched && !field.state.meta.isValid
+                    return (
+                      <AuthPasswordField
+                        name={field.name}
+                        autoComplete="new-password"
+                        label={localization.auth.confirmPassword}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onEdit={clearSubmitError}
+                        onValueChange={field.handleChange}
+                        placeholder={
+                          localization.auth.confirmPasswordPlaceholder
+                        }
+                        disabled={isPending || token === undefined}
+                        invalid={invalid}
+                        errors={field.state.meta.errors}
+                        visible={isConfirmPasswordVisible}
+                        onToggleVisibility={toggleConfirmPassword}
+                        hidePasswordLabel={localization.auth.hidePassword}
+                        showPasswordLabel={localization.auth.showPassword}
+                      />
+                    )
                   }}
-                  onInvalid={(e) => {
-                    e.preventDefault()
+                </form.Field>
+              ) : null}
 
-                    setFieldErrors((prev) => ({
-                      ...prev,
-                      password: (e.target as HTMLInputElement)
-                        .validationMessage,
-                    }))
-                  }}
-                  aria-invalid={!!fieldErrors.password}
-                />
+              {submitError ? <FieldError>{submitError}</FieldError> : null}
 
-                <InputGroupAddon align="inline-end">
-                  <InputGroupButton
-                    aria-label={
-                      isPasswordVisible
-                        ? localization.auth.hidePassword
-                        : localization.auth.showPassword
-                    }
-                    title={
-                      isPasswordVisible
-                        ? localization.auth.hidePassword
-                        : localization.auth.showPassword
-                    }
-                    onClick={() => {
-                      setIsPasswordVisible(!isPasswordVisible)
-                    }}
+              <form.Subscribe selector={selectCanSubmit}>
+                {(canSubmit) => (
+                  <Button
+                    type="submit"
+                    disabled={isPending || token === undefined || !canSubmit}
                   >
-                    {isPasswordVisible ? <EyeOff /> : <Eye />}
-                  </InputGroupButton>
-                </InputGroupAddon>
-              </InputGroup>
-
-              <FieldError>{fieldErrors.password}</FieldError>
-            </Field>
-
-            {emailAndPassword?.confirmPassword && (
-              <Field data-invalid={!!fieldErrors.confirmPassword}>
-                <Label htmlFor="confirmPassword">
-                  {localization.auth.confirmPassword}
-                </Label>
-
-                <InputGroup>
-                  <InputGroupInput
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type={isConfirmPasswordVisible ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder={localization.auth.confirmPasswordPlaceholder}
-                    required
-                    minLength={emailAndPassword?.minPasswordLength}
-                    maxLength={emailAndPassword?.maxPasswordLength}
-                    disabled={isPending}
-                    onChange={() => {
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        confirmPassword: undefined,
-                      }))
-                    }}
-                    onInvalid={(e) => {
-                      e.preventDefault()
-
-                      setFieldErrors((prev) => ({
-                        ...prev,
-                        confirmPassword: (e.target as HTMLInputElement)
-                          .validationMessage,
-                      }))
-                    }}
-                    aria-invalid={!!fieldErrors.confirmPassword}
-                  />
-
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton
-                      aria-label={
-                        isConfirmPasswordVisible
-                          ? localization.auth.hidePassword
-                          : localization.auth.showPassword
-                      }
-                      title={
-                        isConfirmPasswordVisible
-                          ? localization.auth.hidePassword
-                          : localization.auth.showPassword
-                      }
-                      onClick={() => {
-                        setIsConfirmPasswordVisible(!isConfirmPasswordVisible)
-                      }}
-                    >
-                      {isConfirmPasswordVisible ? <EyeOff /> : <Eye />}
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                </InputGroup>
-
-                <FieldError>{fieldErrors.confirmPassword}</FieldError>
-              </Field>
-            )}
-
-            <div className="flex flex-col gap-3">
-              <Button type="submit" disabled={isPending}>
-                {isPending && <Spinner />}
-
-                {localization.auth.resetPassword}
-              </Button>
-            </div>
-          </FieldGroup>
-        </form>
+                    {isPending ? <Spinner /> : null}
+                    {localization.auth.resetPassword}
+                  </Button>
+                )}
+              </form.Subscribe>
+            </FieldGroup>
+          </form>
+        )}
 
         <div className="mt-4 flex w-full flex-col items-center gap-3">
           <FieldDescription className="text-center">

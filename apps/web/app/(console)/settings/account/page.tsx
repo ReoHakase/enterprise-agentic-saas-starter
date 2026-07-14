@@ -1,17 +1,11 @@
-import {
-  ProfileForm,
-  SecurityMethodsPanel,
-  SessionsPanel,
-} from "@/components/console/forms"
 import { PageShell } from "@/components/page-shell"
-import { createServerConsoleApi } from "@/lib/server/console-api"
+import { ProfileForm } from "@/features/account/components/profile-form"
+import { SecurityMethodsPanel } from "@/features/account/components/security-methods-panel"
+import { SessionsPanel } from "@/features/account/components/sessions-panel"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 export default async function AccountSettingsPage() {
-  const [{ me }, sessions] = await Promise.all([
-    getConsoleContext(),
-    createServerConsoleApi().then((api) => api.listSessions()),
-  ])
+  const { me } = await getConsoleContext()
 
   return (
     <PageShell
@@ -21,7 +15,7 @@ export default async function AccountSettingsPage() {
       <div className="grid min-w-0 gap-6">
         <ProfileForm user={me.user} />
         <SecurityMethodsPanel />
-        <SessionsPanel sessions={sessions} />
+        <SessionsPanel />
       </div>
     </PageShell>
   )

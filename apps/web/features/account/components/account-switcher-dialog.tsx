@@ -1,0 +1,325 @@
+"use client"
+
+import { useAuth } from "@better-auth-ui/react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@enterprise-agentic-saas/ui/components/alert-dialog"
+import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
+import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@enterprise-agentic-saas/ui/components/dialog"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@enterprise-agentic-saas/ui/components/empty"
+import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { CircleUserRoundIcon, LogOutIcon, PlusIcon } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useCallback, useMemo, useState } from "react"
+import { toast } from "sonner"
+
+import { UserAvatar } from "@/components/user-identity"
+import {
+  completeMultiSessionAction,
+  createDeviceAccountsQueryFn,
+  createMultiSessionCapabilities,
+} from "@/features/account/multi-session-client"
+import type { DeviceAccount } from "@/features/account/schema"
+import type { Me } from "@/lib/console-api"
+
+const deviceAccountKey = (userId: string) =>
+  ["auth", "device-accounts", userId] as const
+
+type AccountSwitcherDialogProps = {
+  currentUser: Me["user"]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export const AccountSwitcherDialog = ({
+  currentUser,
+  open,
+  onOpenChange,
+}: AccountSwitcherDialogProps) => {
+  const { authClient: authClientValue } = useAuth()
+  const multiSession = useMemo(
+    () => createMultiSessionCapabilities(authClientValue),
+    [authClientValue]
+  )
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const [revokeTarget, setRevokeTarget] = useState<DeviceAccount>()
+  const accountsQuery = useQuery({
+    queryKey: deviceAccountKey(currentUser.id),
+    queryFn: createDeviceAccountsQueryFn(authClientValue),
+    enabled: open,
+    retry: false,
+  })
+  const switchMutation = useMutation({
+    mutationFn: async (account: DeviceAccount) => {
+      if (!multiSession.setActive) {
+        throw new Error("Account switching is not available")
+      }
+      await completeMultiSessionAction(
+        multiSession.setActive({
+          sessionToken: account.session.token,
+        }),
+        "Could not switch account. Try again."
+      )
+      return account
+    },
+    onSuccess: (account) => {
+      onOpenChange(false)
+      router.refresh()
+      toast.success(`Switched to ${account.user.email}`)
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not switch account"
+      )
+    },
+  })
+  const revokeMutation = useMutation({
+    mutationFn: async (account: DeviceAccount) => {
+      if (!multiSession.revoke) {
+        throw new Error("Account switching is not available")
+      }
+      await completeMultiSessionAction(
+        multiSession.revoke({ sessionToken: account.session.token }),
+        "Could not remove account. Try again."
+      )
+      return account
+    },
+    onSuccess: async (account) => {
+      toast.success(`${account.user.email} was removed`)
+      setRevokeTarget(undefined)
+      await queryClient.invalidateQueries({
+        queryKey: deviceAccountKey(currentUser.id),
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Could not remove account"
+      )
+    },
+  })
+  const accounts = accountsQuery.data ?? []
+  const pendingToken =
+    switchMutation.variables?.session.token ??
+    revokeMutation.variables?.session.token
+  const { mutate: revokeDeviceAccount } = revokeMutation
+  const { refetch: refetchAccounts } = accountsQuery
+  const retryAccounts = useCallback(() => {
+    void refetchAccounts()
+  }, [refetchAccounts])
+  const revokeAccount = useCallback(() => {
+    if (!revokeTarget) {
+      return
+    }
+    revokeDeviceAccount(revokeTarget)
+  }, [revokeDeviceAccount, revokeTarget])
+  const handleRevokeDialogOpenChange = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      setRevokeTarget(undefined)
+    }
+  }, [])
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Switch account</DialogTitle>
+            <DialogDescription>
+              Move between signed-in accounts on this device without mixing
+              organization data.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+            {accountsQuery.isPending ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                <Spinner />
+                Loading accounts
+              </div>
+            ) : null}
+
+            {accountsQuery.isError ? (
+              <Empty role="alert">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <CircleUserRoundIcon aria-hidden="true" />
+                  </EmptyMedia>
+                  <EmptyTitle>Accounts could not be loaded</EmptyTitle>
+                  <EmptyDescription>
+                    {accountsQuery.error instanceof Error
+                      ? accountsQuery.error.message
+                      : "Try the request again."}
+                  </EmptyDescription>
+                  <Button variant="outline" onClick={retryAccounts}>
+                    Try again
+                  </Button>
+                </EmptyHeader>
+              </Empty>
+            ) : null}
+
+            {!accountsQuery.isPending &&
+            !accountsQuery.isError &&
+            accounts.length === 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <CircleUserRoundIcon aria-hidden="true" />
+                  </EmptyMedia>
+                  <EmptyTitle>No additional accounts</EmptyTitle>
+                  <EmptyDescription>
+                    Add another account to switch without signing out.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : null}
+
+            {!accountsQuery.isPending && !accountsQuery.isError
+              ? accounts.map((account) => (
+                  <DeviceAccountRow
+                    key={account.session.token}
+                    account={account}
+                    current={account.user.id === currentUser.id}
+                    pending={pendingToken === account.session.token}
+                    mutationsPending={
+                      switchMutation.isPending || revokeMutation.isPending
+                    }
+                    onSwitch={switchMutation.mutate}
+                    onRequestRevoke={setRevokeTarget}
+                  />
+                ))
+              : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              nativeButton={false}
+              variant="outline"
+              render={<Link href="/auth/sign-in?add_account=1" />}
+            >
+              <PlusIcon data-icon="inline-start" />
+              Add account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={revokeTarget !== undefined}
+        onOpenChange={handleRevokeDialogOpenChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove account from this device?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {revokeTarget?.user.email} will be signed out on this device. The
+              account and its organization data will not be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revokeMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={revokeMutation.isPending}
+              onClick={revokeAccount}
+            >
+              {revokeMutation.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : null}
+              Remove account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+const DeviceAccountRow = ({
+  account,
+  current,
+  pending,
+  mutationsPending,
+  onSwitch,
+  onRequestRevoke,
+}: {
+  account: DeviceAccount
+  current: boolean
+  pending: boolean
+  mutationsPending: boolean
+  onSwitch: (account: DeviceAccount) => void
+  onRequestRevoke: (account: DeviceAccount) => void
+}) => {
+  const switchAccount = useCallback(
+    () => onSwitch(account),
+    [account, onSwitch]
+  )
+  const requestRevocation = useCallback(
+    () => onRequestRevoke(account),
+    [account, onRequestRevoke]
+  )
+
+  return (
+    <div className="flex min-w-0 items-center gap-3 rounded-xl border p-3">
+      <UserAvatar user={account.user} className="size-10" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">{account.user.name}</p>
+          {current ? <Badge variant="secondary">Current</Badge> : null}
+        </div>
+        <p className="truncate text-xs text-muted-foreground">
+          {account.user.email}
+        </p>
+      </div>
+      {current ? null : (
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={mutationsPending}
+            onClick={switchAccount}
+          >
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            Switch
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={mutationsPending}
+            aria-label={`Remove ${account.user.email} from this device`}
+            onClick={requestRevocation}
+          >
+            <LogOutIcon aria-hidden="true" />
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}

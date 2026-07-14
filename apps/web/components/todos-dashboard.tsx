@@ -1,7 +1,8 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useAtom } from "jotai"
+import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
@@ -10,20 +11,23 @@ import {
   type IssueUiItem,
   type IssueUpdate,
 } from "@/components/todos/issues-workspace"
-import { apiClient } from "@/lib/api-client"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { membersQueryOptions } from "@/features/console/queries"
 import {
-  createTodo,
-  createTodoComment,
-  deleteTodoComment,
-  deleteTodo,
-  listTodoComments,
-  listTodos,
-  todoQueryKeys,
-  type Todo,
-  updateTodoComment,
-  updateTodo,
-} from "@/lib/todos"
+  createIssue,
+  createIssueComment,
+  deleteIssue,
+  deleteIssueComment,
+  updateIssue,
+  updateIssueComment,
+} from "@/features/issues/api"
+import {
+  issueCommentsQueryOptions,
+  issueKeys,
+  issuesQueryOptions,
+} from "@/features/issues/queries"
+import type { Issue } from "@/features/issues/schema"
+import { selectedIssueAtom } from "@/features/issues/state"
+import { apiClient } from "@/lib/api-client"
 
 type TodosDashboardProps = {
   organizationId: string
@@ -31,63 +35,42 @@ type TodosDashboardProps = {
 
 export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
   const queryClient = useQueryClient()
-  const [selectedOrganizationId, setSelectedOrganizationId] =
-    useState(organizationId)
-  const [busyTodoId, setBusyTodoId] = useState<string>()
-  const [selectedTodoId, setSelectedTodoId] = useState<string>()
+  const [busyIssueId, setBusyIssueId] = useState<string>()
+  const [selectedIssue, setSelectedIssue] = useAtom(selectedIssueAtom)
+  const selectedIssueId =
+    selectedIssue.organizationId === organizationId
+      ? selectedIssue.issueId
+      : undefined
 
-  useEffect(() => {
-    setSelectedOrganizationId(organizationId)
-  }, [organizationId])
+  const issuesQuery = useQuery(issuesQueryOptions(apiClient, organizationId))
+  const membersQuery = useQuery(membersQueryOptions(organizationId))
+  const commentsQuery = useQuery(
+    issueCommentsQueryOptions(apiClient, organizationId, selectedIssueId ?? "")
+  )
 
-  const todosQuery = useQuery({
-    queryKey: todoQueryKeys.todos(selectedOrganizationId),
-    queryFn: () => listTodos(apiClient, selectedOrganizationId),
-    enabled: selectedOrganizationId.length > 0,
-  })
-  const membersQuery = useQuery({
-    queryKey: ["organizations", selectedOrganizationId, "members"],
-    queryFn: () => browserConsoleApi.listMembers(selectedOrganizationId),
-    enabled: selectedOrganizationId.length > 0,
-  })
-
-  const invalidateTodos = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: todoQueryKeys.todos(selectedOrganizationId),
-    })
-  }, [queryClient, selectedOrganizationId])
-
-  const commentsQuery = useQuery({
-    queryKey: todoQueryKeys.comments(
-      selectedOrganizationId,
-      selectedTodoId ?? "none"
-    ),
-    queryFn: () =>
-      listTodoComments(apiClient, {
-        id: selectedTodoId ?? "",
-        organizationId: selectedOrganizationId,
+  const invalidateIssues = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.list(organizationId),
       }),
-    enabled: Boolean(selectedOrganizationId && selectedTodoId),
-  })
-
-  const invalidateComments = useCallback(async () => {
-    if (!selectedTodoId) {
-      return
+    [organizationId, queryClient]
+  )
+  const invalidateComments = useCallback(() => {
+    if (!selectedIssueId) {
+      return Promise.resolve()
     }
-    await queryClient.invalidateQueries({
-      queryKey: todoQueryKeys.comments(selectedOrganizationId, selectedTodoId),
+
+    return queryClient.invalidateQueries({
+      queryKey: issueKeys.comments(organizationId, selectedIssueId),
     })
-  }, [queryClient, selectedOrganizationId, selectedTodoId])
+  }, [organizationId, queryClient, selectedIssueId])
 
   const createMutation = useMutation({
     mutationFn: (title: string) =>
-      createTodo(apiClient, {
-        organizationId: selectedOrganizationId,
-        title,
-      }),
+      createIssue(apiClient, { organizationId, title }),
     onSuccess: async () => {
+      await invalidateIssues()
       toast.success("Issue created")
-      await invalidateTodos()
     },
     onError: (error) => {
       toast.error(
@@ -98,22 +81,18 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
 
   const updateMutation = useMutation({
     mutationFn: ({
-      todo,
+      issue,
       update,
     }: {
-      todo: IssueUiItem
+      issue: IssueUiItem
       update: IssueUpdate
-    }) =>
-      updateTodo(apiClient, {
-        id: todo.id,
-        organizationId: selectedOrganizationId,
-        ...update,
-      }),
-    onMutate: ({ todo }) => setBusyTodoId(todo.id),
-    onSettled: async () => {
-      setBusyTodoId(undefined)
-      await invalidateTodos()
+    }) => updateIssue(apiClient, { id: issue.id, organizationId, ...update }),
+    onMutate: ({ issue }) => setBusyIssueId(issue.id),
+    onSuccess: async () => {
+      await invalidateIssues()
+      toast.success("Issue updated")
     },
+    onSettled: () => setBusyIssueId(undefined),
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : "Issue update failed"
@@ -121,16 +100,35 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (issue: IssueUiItem) =>
+      deleteIssue(apiClient, { id: issue.id, organizationId }),
+    onMutate: (issue) => setBusyIssueId(issue.id),
+    onSuccess: async (_, issue) => {
+      if (selectedIssueId === issue.id) {
+        setSelectedIssue({})
+      }
+      await invalidateIssues()
+      toast.success("Issue deleted")
+    },
+    onSettled: () => setBusyIssueId(undefined),
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Issue deletion failed"
+      )
+    },
+  })
+
   const createCommentMutation = useMutation({
-    mutationFn: ({ todo, body }: { todo: IssueUiItem; body: string }) =>
-      createTodoComment(apiClient, {
-        id: todo.id,
-        organizationId: selectedOrganizationId,
+    mutationFn: ({ issue, body }: { issue: IssueUiItem; body: string }) =>
+      createIssueComment(apiClient, {
+        id: issue.id,
+        organizationId,
         body,
       }),
     onSuccess: async () => {
-      toast.success("Comment added")
       await invalidateComments()
+      toast.success("Comment added")
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Comment failed")
@@ -139,21 +137,24 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
 
   const updateCommentMutation = useMutation({
     mutationFn: ({
-      todo,
+      issue,
       commentId,
       body,
     }: {
-      todo: IssueUiItem
+      issue: IssueUiItem
       commentId: string
       body: string
     }) =>
-      updateTodoComment(apiClient, {
-        id: todo.id,
+      updateIssueComment(apiClient, {
+        id: issue.id,
         commentId,
-        organizationId: selectedOrganizationId,
+        organizationId,
         body,
       }),
-    onSuccess: invalidateComments,
+    onSuccess: async () => {
+      await invalidateComments()
+      toast.success("Comment updated")
+    },
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : "Comment update failed"
@@ -163,18 +164,21 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
 
   const deleteCommentMutation = useMutation({
     mutationFn: ({
-      todo,
+      issue,
       commentId,
     }: {
-      todo: IssueUiItem
+      issue: IssueUiItem
       commentId: string
     }) =>
-      deleteTodoComment(apiClient, {
-        id: todo.id,
+      deleteIssueComment(apiClient, {
+        id: issue.id,
         commentId,
-        organizationId: selectedOrganizationId,
+        organizationId,
       }),
-    onSuccess: invalidateComments,
+    onSuccess: async () => {
+      await invalidateComments()
+      toast.success("Comment deleted")
+    },
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : "Comment deletion failed"
@@ -182,30 +186,22 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (todo: IssueUiItem) =>
-      deleteTodo(apiClient, {
-        id: todo.id,
-        organizationId: selectedOrganizationId,
-      }),
-    onMutate: (todo) => setBusyTodoId(todo.id),
-    onSettled: async () => {
-      setBusyTodoId(undefined)
-      await invalidateTodos()
-    },
-    onSuccess: () => {
-      toast.success("Issue deleted")
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Issue deletion failed"
-      )
-    },
-  })
+  const { isPending: createPending, mutateAsync: createIssueAsync } =
+    createMutation
+  const { isPending: updatePending, mutateAsync: updateIssueAsync } =
+    updateMutation
+  const { mutateAsync: deleteIssueAsync } = deleteMutation
+  const { isPending: createCommentPending, mutateAsync: createCommentAsync } =
+    createCommentMutation
+  const { isPending: updateCommentPending, mutateAsync: updateCommentAsync } =
+    updateCommentMutation
+  const { isPending: deleteCommentPending, mutateAsync: deleteCommentAsync } =
+    deleteCommentMutation
+  const { refetch: refetchIssues } = issuesQuery
 
-  const uiTodos = useMemo(
-    () => (todosQuery.data ?? []).map(toUiTodo),
-    [todosQuery.data]
+  const issues = useMemo(
+    () => (issuesQuery.data ?? []).map(toIssueViewModel),
+    [issuesQuery.data]
   )
   const assignees = useMemo<IssueAssigneeOption[]>(
     () =>
@@ -213,62 +209,91 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
         id: member.userId,
         name: member.name,
         email: member.email,
+        image: member.image,
       })),
     [membersQuery.data]
   )
   const handleCreate = useCallback(
-    (title: string) => {
-      if (selectedOrganizationId && title.trim()) {
-        createMutation.mutate(title.trim())
-      }
+    async (title: string) => {
+      await createIssueAsync(title.trim())
     },
-    [createMutation, selectedOrganizationId]
+    [createIssueAsync]
   )
   const handleToggle = useCallback(
-    (todo: IssueUiItem) => {
-      updateMutation.mutate({
-        todo,
-        update: { status: todo.status === "closed" ? "open" : "closed" },
+    async (issue: IssueUiItem) => {
+      await updateIssueAsync({
+        issue,
+        update: { status: issue.status === "closed" ? "open" : "closed" },
       })
     },
-    [updateMutation]
+    [updateIssueAsync]
   )
   const handleUpdate = useCallback(
-    (todo: IssueUiItem, update: IssueUpdate) => {
-      updateMutation.mutate({ todo, update })
+    async (issue: IssueUiItem, update: IssueUpdate) => {
+      await updateIssueAsync({ issue, update })
     },
-    [updateMutation]
+    [updateIssueAsync]
   )
   const handleDelete = useCallback(
-    (todo: IssueUiItem) => {
-      deleteMutation.mutate(todo)
+    async (issue: IssueUiItem) => {
+      await deleteIssueAsync(issue)
     },
-    [deleteMutation]
+    [deleteIssueAsync]
+  )
+  const handleSelectIssue = useCallback(
+    (issue?: IssueUiItem) =>
+      setSelectedIssue(issue ? { organizationId, issueId: issue.id } : {}),
+    [organizationId, setSelectedIssue]
+  )
+  const handleCreateComment = useCallback(
+    async (issue: IssueUiItem, body: string) => {
+      await createCommentAsync({ issue, body })
+    },
+    [createCommentAsync]
+  )
+  const handleUpdateComment = useCallback(
+    async (issue: IssueUiItem, commentId: string, body: string) => {
+      await updateCommentAsync({ issue, commentId, body })
+    },
+    [updateCommentAsync]
+  )
+  const handleDeleteComment = useCallback(
+    async (issue: IssueUiItem, commentId: string) => {
+      await deleteCommentAsync({ issue, commentId })
+    },
+    [deleteCommentAsync]
   )
   const handleRetry = useCallback(() => {
-    void todosQuery.refetch()
-  }, [todosQuery])
+    void refetchIssues()
+  }, [refetchIssues])
 
-  const errorMessage = todosQuery.error
-    ? todosQuery.error instanceof Error
-      ? todosQuery.error.message
+  const errorMessage = issuesQuery.error
+    ? issuesQuery.error instanceof Error
+      ? issuesQuery.error.message
       : "The issue list request failed."
     : undefined
 
   return (
     <IssuesWorkspace
-      issues={uiTodos}
-      pending={createMutation.isPending}
-      busyIssueId={busyTodoId}
+      issues={issues}
+      pending={
+        createPending ||
+        updatePending ||
+        createCommentPending ||
+        updateCommentPending ||
+        deleteCommentPending
+      }
+      busyIssueId={busyIssueId}
       error={errorMessage}
       onCreate={handleCreate}
       onToggle={handleToggle}
       onUpdate={handleUpdate}
       assignees={assignees}
       onDelete={handleDelete}
-      onSelectIssue={(todo) => setSelectedTodoId(todo?.id)}
+      selectedIssueId={selectedIssueId ?? null}
+      onSelectIssue={handleSelectIssue}
       comments={commentsQuery.data}
-      commentsPending={commentsQuery.isPending && Boolean(selectedTodoId)}
+      commentsPending={commentsQuery.isPending && Boolean(selectedIssueId)}
       commentsError={
         commentsQuery.error instanceof Error
           ? commentsQuery.error.message
@@ -276,31 +301,25 @@ export const TodosDashboard = ({ organizationId }: TodosDashboardProps) => {
             ? "Comments could not be loaded."
             : undefined
       }
-      onCreateComment={(todo, body) =>
-        createCommentMutation.mutate({ todo, body })
-      }
-      onUpdateComment={(todo, commentId, body) =>
-        updateCommentMutation.mutate({ todo, commentId, body })
-      }
-      onDeleteComment={(todo, commentId) =>
-        deleteCommentMutation.mutate({ todo, commentId })
-      }
+      onCreateComment={handleCreateComment}
+      onUpdateComment={handleUpdateComment}
+      onDeleteComment={handleDeleteComment}
       onRetry={handleRetry}
     />
   )
 }
 
-const toUiTodo = (todo: Todo): IssueUiItem => ({
-  id: todo.id,
-  number: todo.number,
-  title: todo.title,
-  description: todo.description,
-  status: todo.status,
-  priority: todo.priority,
-  assigneeId: todo.assigneeId,
-  creatorId: todo.creatorId,
-  labels: todo.labels,
-  dueDate: todo.dueDate,
-  createdAt: todo.createdAt,
-  updatedAt: todo.updatedAt,
+const toIssueViewModel = (issue: Issue): IssueUiItem => ({
+  id: issue.id,
+  number: issue.number,
+  title: issue.title,
+  description: issue.description,
+  status: issue.status,
+  priority: issue.priority,
+  assigneeId: issue.assigneeId,
+  creatorId: issue.creatorId,
+  labels: issue.labels,
+  dueDate: issue.dueDate,
+  createdAt: issue.createdAt,
+  updatedAt: issue.updatedAt,
 })

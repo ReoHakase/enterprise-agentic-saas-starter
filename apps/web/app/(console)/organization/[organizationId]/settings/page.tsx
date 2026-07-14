@@ -1,7 +1,10 @@
-import { redirect } from "next/navigation"
+import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import { ShieldAlertIcon } from "lucide-react"
+import Link from "next/link"
 
-import { OrganizationSettingsForm } from "@/components/console/forms"
+import { AppState } from "@/components/app-state"
 import { PageShell } from "@/components/page-shell"
+import { OrganizationSettingsForm } from "@/features/organizations/components/organization-settings-form"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type OrganizationSettingsPageProps = {
@@ -16,13 +19,34 @@ export default async function OrganizationSettingsPage({
   const organization = await api.getOrganization(organizationId)
 
   if (!organization.permissions.canEditOrganization) {
-    redirect(`/organization/${organizationId}/members`)
+    return (
+      <PageShell
+        title="Organization settings"
+        description={`Manage identity and sensitive controls for ${organization.name}.`}
+      >
+        <AppState
+          className="min-h-96"
+          icon={ShieldAlertIcon}
+          title="You cannot edit this organization"
+          description="Your current role can view members but cannot change organization identity or sensitive settings."
+          actions={
+            <Button
+              nativeButton={false}
+              variant="outline"
+              render={<Link href={`/organization/${organizationId}/members`} />}
+            >
+              View members
+            </Button>
+          }
+        />
+      </PageShell>
+    )
   }
 
   return (
     <PageShell
       title="Organization settings"
-      description="Update organization identity. Deletion is intentionally outside v1."
+      description={`Manage identity and sensitive controls for ${organization.name}.`}
     >
       <OrganizationSettingsForm organization={organization} />
     </PageShell>
