@@ -25,6 +25,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
+    "dev:mailpit": "portless run --name mailpit.enterprise-agentic-saas sh -c 'mkdir -p .local && exec mailpit --listen \"${HOST:-127.0.0.1}:$PORT\" --smtp 127.0.0.1:0 --database .local/mailpit.db --disable-version-check'",
+    "mailpit:reset": "rm -f .local/mailpit.db .local/mailpit.db-shm .local/mailpit.db-wal .local/mailpit.db-journal",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",

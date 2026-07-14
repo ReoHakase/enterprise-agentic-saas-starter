@@ -1,0 +1,12 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "with": ["@enterprise-agentic-saas/email#dev:mailpit"]
+    },
+    "dev:mailpit": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

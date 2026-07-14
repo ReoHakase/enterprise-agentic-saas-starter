@@ -200,6 +200,7 @@
               pkgs.turso-cli
               pkgs.sqld
               pkgs.dotenvx
+              pkgs.mailpit
               # health/OpenAPI/Worker outputを同じshellで検査する。
               pkgs.curl
               pkgs.jq

@@ -137,6 +137,9 @@
       "cache": false,
       "persistent": true,
       "env": [
+        "EMAIL_PROVIDER",
+        "EMAIL_FROM",
+        "MAILPIT_URL",
         "SENTRY_DSN",
         "SENTRY_ENVIRONMENT",
         "SENTRY_ERROR_SAMPLE_RATE",
