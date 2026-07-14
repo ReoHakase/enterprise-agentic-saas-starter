@@ -8,6 +8,7 @@ import {
   processOrganizationDeletionJobs,
   type OrganizationAttachmentBucket,
 } from "./modules/organizations/deletion-jobs"
+import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { configureObservability } from "./observability/runtime"
 import { createSentryObservabilityRuntime } from "./observability/sentry-adapter"
 import {
@@ -66,36 +67,68 @@ const workerWithScheduled = Object.assign(worker, {
     workerEnv: WorkerSentryEnv,
     context: WorkerExecutionContext
   ) {
-    context.waitUntil(
-      processOrganizationDeletionJobs({
-        bucket: workerEnv.ATTACHMENTS,
-        database: db,
-        onFailure: ({ attempts }) => {
-          const error = new Error("Organization attachment cleanup failed")
-          Sentry.captureException(error, {
-            tags: {
-              component: "organization-deletion",
-              errorCode: "r2_cleanup_failed",
-            },
-            extra: { attempts },
-          })
-          console.error({
-            attempts,
+    const deletionJobs = processOrganizationDeletionJobs({
+      bucket: workerEnv.ATTACHMENTS,
+      database: db,
+      onFailure: ({ attempts }) => {
+        const error = new Error("Organization attachment cleanup failed")
+        Sentry.captureException(error, {
+          tags: {
             component: "organization-deletion",
             errorCode: "r2_cleanup_failed",
-            event: "cleanup_job_failed",
-            level: "error",
-          })
-        },
-      }).then((result) => {
-        console.info({
-          component: "organization-deletion",
-          event: "cleanup_batch_completed",
-          level: "info",
-          ...result,
+          },
+          extra: { attempts },
         })
-        return result
+        console.error({
+          attempts,
+          component: "organization-deletion",
+          errorCode: "r2_cleanup_failed",
+          event: "cleanup_job_failed",
+          level: "error",
+        })
+      },
+    }).then((result) => {
+      console.info({
+        component: "organization-deletion",
+        event: "cleanup_batch_completed",
+        level: "info",
+        ...result,
       })
+      return result
+    })
+    const invitationJobs = processInvitationEmailJobs({
+      database: db,
+      onFailure: ({ attempts, errorCode, retryable }) => {
+        const error = new Error("Organization invitation delivery failed")
+        Sentry.captureException(error, {
+          tags: {
+            component: "invitation-email",
+            errorCode,
+            retryable,
+          },
+          extra: { attempts },
+        })
+        console.error({
+          attempts,
+          component: "invitation-email",
+          errorCode,
+          event: "delivery_job_failed",
+          level: "error",
+          retryable,
+        })
+      },
+    }).then((result) => {
+      console.info({
+        component: "invitation-email",
+        event: "delivery_batch_completed",
+        level: "info",
+        ...result,
+      })
+      return result
+    })
+
+    context.waitUntil(
+      Promise.all([deletionJobs, invitationJobs]).then(() => undefined)
     )
   },
 })

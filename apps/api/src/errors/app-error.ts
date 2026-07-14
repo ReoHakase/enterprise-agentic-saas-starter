@@ -193,6 +193,18 @@ export const publicErrors = {
       privateContext: { operation: "readiness" },
     })
   },
+  rateLimited(retryAfter: number) {
+    return new AppError({
+      code: "rate_limited",
+      publicMessage: "Too many invitations requested. Try again later",
+      statusCode: 429,
+      publicContext: {
+        reason: "quota_exceeded",
+        resource: "invitation",
+        retryAfter,
+      },
+    })
+  },
   validation(
     publicMessage = "Invalid request",
     publicContext: PublicErrorContext = {}

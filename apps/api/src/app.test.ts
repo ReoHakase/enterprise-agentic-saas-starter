@@ -1,21 +1,38 @@
 import { createServer } from "node:http"
 
 import * as schema from "@enterprise-agentic-saas/db/schema"
+import type {
+  OrganizationInvitationEmailProps,
+  RenderedEmail,
+  SendEmail,
+} from "@enterprise-agentic-saas/email"
 import { createClient } from "@libsql/client"
 import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { invitationEmailRenderSpy } = vi.hoisted(() => ({
-  invitationEmailRenderSpy: vi.fn(async () => ({
+const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
+  invitationEmailRenderSpy: vi.fn<
+    (
+      props: OrganizationInvitationEmailProps
+    ) => Promise<RenderedEmail<OrganizationInvitationEmailProps>>
+  >(async (props) => ({
+    template: "organization_invitation",
     subject: "Organization invitation",
     html: "<p>Organization invitation</p>",
     text: "Organization invitation",
+    renderProps: props,
   })),
+  invitationEmailSendSpy: vi.fn<SendEmail>(async () => undefined),
 }))
 
-vi.mock("@enterprise-agentic-saas/email", () => ({
+vi.mock(import("@enterprise-agentic-saas/email"), async (importOriginal) => ({
+  ...(await importOriginal()),
   renderOrganizationInvitationEmail: invitationEmailRenderSpy,
+}))
+vi.mock("@enterprise-agentic-saas/email/runtime", () => ({
+  backgroundTaskHandler: undefined,
+  createRuntimeEmailSender: () => invitationEmailSendSpy,
 }))
 
 import { createApp } from "./app"
@@ -29,6 +46,12 @@ import { corsPlugin } from "./plugins/cors"
 const testDb = () =>
   drizzle(createClient({ url: "file::memory:?cache=shared" }), { schema })
 
+beforeEach(() => {
+  invitationEmailRenderSpy.mockClear()
+  invitationEmailSendSpy.mockReset()
+  invitationEmailSendSpy.mockResolvedValue(undefined)
+})
+
 const createSeededDb = async () => {
   const db = testDb()
   await db.run(sql`pragma foreign_keys = on`)
@@ -36,10 +59,12 @@ const createSeededDb = async () => {
   await Promise.all(
     [
       "organization_deletion_jobs",
+      "invitation_email_jobs",
       "todo_comments",
       "audit_logs",
       "todos",
       "invitation",
+      "rate_limit",
       "session",
       "member",
       "organization",
@@ -111,6 +136,28 @@ const createSeededDb = async () => {
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       inviter_id text not null,
       foreign key (organization_id) references organization(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create table invitation_email_jobs (
+      id text primary key,
+      invitation_id text not null unique,
+      status text not null default 'pending',
+      attempts integer not null default 0,
+      last_error_code text,
+      locked_at integer,
+      next_attempt_at integer,
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      completed_at integer,
+      foreign key (invitation_id) references invitation(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create table rate_limit (
+      id text primary key,
+      key text not null unique,
+      count integer not null,
+      last_request integer not null
     )
   `)
   await db.run(sql`
@@ -528,6 +575,29 @@ describe("createApp security and OpenAPI", () => {
         "application/json"
       ].schema.properties.author.required
     ).toEqual(["id", "name", "image"])
+    const invitationOperation =
+      spec.paths["/organizations/{organizationId}/invitations"].post
+    expect(
+      invitationOperation.requestBody.content["application/json"].schema
+        .properties.emails
+    ).toMatchObject({
+      items: { format: "email", type: "string" },
+      maxItems: 20,
+      minItems: 1,
+      type: "array",
+    })
+    expect(
+      invitationOperation.responses["201"].content["application/json"]
+    ).toMatchObject({
+      schema: {
+        properties: {
+          delivery: { enum: ["queued"] },
+          queuedCount: { maximum: 20, minimum: 1, type: "integer" },
+        },
+        required: ["invitations", "queuedCount", "delivery"],
+      },
+    })
+    expect(invitationOperation.responses["429"]).toBeDefined()
     const deleteOrganizationOperation =
       spec.paths["/organizations/{organizationId}"].delete
     expect(deleteOrganizationOperation.security).toEqual([
@@ -1313,23 +1383,29 @@ describe("createApp security and OpenAPI", () => {
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "new@example.test", role: "admin" },
+        body: { emails: ["new@example.test"], role: "admin" },
       })
     )
     expect(forbidden.status).toBe(403)
+    expect(await db.select().from(schema.rateLimit)).toHaveLength(0)
 
     const allowed = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "new@example.test", role: "member" },
+        body: { emails: ["new@example.test"], role: "member" },
       })
     )
     expect(allowed.status).toBe(201)
-    const createdInvitation = await allowed.json()
+    const createdBatch = await allowed.json()
+    const createdInvitation = createdBatch.invitations[0]
+    expect(createdBatch).toMatchObject({
+      queuedCount: 1,
+      delivery: "queued",
+    })
     expect(invitationEmailRenderSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        inviterName: "Test User",
+        inviterName: "User 3",
         organizationName: "Org One",
       })
     )
@@ -1341,7 +1417,7 @@ describe("createApp security and OpenAPI", () => {
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "new@example.test", role: "member" },
+        body: { emails: ["new@example.test"], role: "member" },
       })
     )
     expect(duplicate.status).toBe(409)
@@ -1350,14 +1426,14 @@ describe("createApp security and OpenAPI", () => {
       error: {
         code: "conflict",
         context: {
-          field: "email",
-          reason: "pending",
+          field: "emails",
+          reason: "conflict",
           resource: "invitation",
         },
         fieldErrors: {
-          email: ["A pending invitation already exists"],
+          emails: ["One or more emails cannot be invited"],
         },
-        message: "A pending invitation already exists",
+        message: "One or more emails cannot be invited",
       },
     })
     expect(JSON.stringify(duplicateBody)).not.toContain("new@example.test")
@@ -1366,7 +1442,7 @@ describe("createApp security and OpenAPI", () => {
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "user4@example.test", role: "member" },
+        body: { emails: ["user4@example.test"], role: "member" },
       })
     )
     expect(existingMember.status).toBe(409)
@@ -1375,14 +1451,14 @@ describe("createApp security and OpenAPI", () => {
       error: {
         code: "conflict",
         context: {
-          constraint: "unique",
-          field: "email",
-          resource: "member",
+          field: "emails",
+          reason: "conflict",
+          resource: "invitation",
         },
         fieldErrors: {
-          email: ["User is already a member"],
+          emails: ["One or more emails cannot be invited"],
         },
-        message: "User is already a member",
+        message: "One or more emails cannot be invited",
       },
     })
     expect(JSON.stringify(existingMemberBody)).not.toContain(
@@ -1399,11 +1475,19 @@ describe("createApp security and OpenAPI", () => {
       createdAt: new Date(0),
       inviterId: "user_3",
     })
+    await db.insert(schema.invitationEmailJobs).values({
+      id: "expired_invitation_job",
+      invitationId: "expired_invitation",
+      status: "failed",
+      attempts: 1,
+      nextAttemptAt: new Date(0),
+      createdAt: new Date(0),
+    })
     const replacement = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "expired@example.test", role: "member" },
+        body: { emails: ["expired@example.test"], role: "member" },
       })
     )
     expect(replacement.status).toBe(201)
@@ -1412,6 +1496,12 @@ describe("createApp security and OpenAPI", () => {
       .from(schema.invitation)
       .where(sql`${schema.invitation.id} = 'expired_invitation'`)
     expect(expiredRows[0]?.status).toBe("expired")
+    expect(
+      await db
+        .select({ status: schema.invitationEmailJobs.status })
+        .from(schema.invitationEmailJobs)
+        .where(eq(schema.invitationEmailJobs.id, "expired_invitation_job"))
+    ).toEqual([{ status: "canceled" }])
 
     const canceled = await app.handle(
       jsonRequest(`/organizations/org_1/invitations/${createdInvitation.id}`, {
@@ -1435,6 +1525,333 @@ describe("createApp security and OpenAPI", () => {
         context: { reason: "invitation_not_pending" },
       },
     })
+  })
+
+  it("normalizes and deduplicates a bulk invitation before durable enqueue", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_3",
+        body: {
+          emails: [
+            " First@Example.test ",
+            "first@example.test",
+            "SECOND@example.test",
+          ],
+          role: "member",
+        },
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body).toMatchObject({ delivery: "queued", queuedCount: 2 })
+    expect(
+      body.invitations.map((item: { email: string }) => item.email)
+    ).toEqual(["first@example.test", "second@example.test"])
+    expect(invitationEmailSendSpy).toHaveBeenCalledTimes(2)
+    expect(
+      invitationEmailSendSpy.mock.calls.map(([input]) => input.to)
+    ).toEqual(
+      expect.arrayContaining(["first@example.test", "second@example.test"])
+    )
+
+    const invitations = await db.select().from(schema.invitation)
+    const jobs = await db.select().from(schema.invitationEmailJobs)
+    const audits = await db.select().from(schema.auditLogs)
+    const quotas = await db.select().from(schema.rateLimit)
+    expect(invitations).toHaveLength(2)
+    expect(jobs).toHaveLength(2)
+    expect(jobs.every(({ status }) => status === "completed")).toBe(true)
+    expect(
+      audits.filter(
+        ({ action }) => action === "organization.invitation.created"
+      )
+    ).toHaveLength(2)
+    expect(quotas.map(({ count: value }) => value)).toEqual([2, 2])
+  })
+
+  it("rolls back the entire batch on a safe email conflict but keeps quota probes", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_3",
+        body: {
+          emails: [
+            "first-fresh@example.test",
+            "USER4@example.test",
+            "second-fresh@example.test",
+          ],
+          role: "member",
+        },
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toMatchObject({
+      error: {
+        code: "conflict",
+        context: {
+          field: "emails",
+          reason: "conflict",
+          resource: "invitation",
+        },
+        fieldErrors: { emails: ["One or more emails cannot be invited"] },
+        message: "One or more emails cannot be invited",
+      },
+    })
+    expect(JSON.stringify(body)).not.toMatch(/first-fresh|user4|second-fresh/i)
+    expect(await db.select().from(schema.invitation)).toHaveLength(0)
+    expect(await db.select().from(schema.invitationEmailJobs)).toHaveLength(0)
+    expect(await db.select().from(schema.auditLogs)).toHaveLength(0)
+    expect(
+      (await db.select().from(schema.rateLimit)).map(
+        ({ count: value }) => value
+      )
+    ).toEqual([3, 3])
+    expect(invitationEmailSendSpy).not.toHaveBeenCalled()
+  })
+
+  it("enforces the 1 to 20 recipient contract before reserving quota", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    const emails = Array.from(
+      { length: 20 },
+      (_, index) => `bulk-${index}@example.test`
+    )
+
+    for (const invalidEmails of [[], [...emails, "overflow@example.test"]]) {
+      // oxlint-disable-next-line no-await-in-loop -- each request proves validation leaves the same database untouched.
+      const invalid = await app.handle(
+        jsonRequest("/organizations/org_1/invitations", {
+          method: "POST",
+          userId: "user_3",
+          body: { emails: invalidEmails, role: "member" },
+        })
+      )
+      expect(invalid.status).toBe(400)
+    }
+    expect(await db.select().from(schema.rateLimit)).toHaveLength(0)
+
+    const maximum = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_3",
+        body: { emails, role: "member" },
+      })
+    )
+    expect(maximum.status).toBe(201)
+    expect(await maximum.json()).toMatchObject({ queuedCount: 20 })
+    expect(await db.select().from(schema.invitation)).toHaveLength(20)
+    expect(await db.select().from(schema.invitationEmailJobs)).toHaveLength(20)
+  })
+
+  it("keeps overlapping bulk invitations deterministic and atomic", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    const responses = await Promise.all(
+      [
+        ["overlap@example.test", "first-only@example.test"],
+        ["overlap@example.test", "second-only@example.test"],
+      ].map((emails) =>
+        app.handle(
+          jsonRequest("/organizations/org_1/invitations", {
+            method: "POST",
+            userId: "user_3",
+            body: { emails, role: "member" },
+          })
+        )
+      )
+    )
+    expect(responses.filter(({ status }) => status === 201)).toHaveLength(1)
+    expect(responses.filter(({ status }) => status === 409)).toHaveLength(1)
+
+    const success = responses.find(({ status }) => status === 201)
+    const conflict = responses.find(({ status }) => status === 409)
+    if (!success || !conflict) {
+      throw new Error("Expected one complete batch and one conflict")
+    }
+    const successBody = await success.json()
+    const successEmails = successBody.invitations.map(
+      ({ email }: { email: string }) => email
+    )
+    expect(successEmails).toHaveLength(2)
+    expect(await conflict.json()).toMatchObject({
+      error: {
+        context: { field: "emails", reason: "conflict" },
+        fieldErrors: { emails: ["One or more emails cannot be invited"] },
+      },
+    })
+
+    const storedEmails = (await db.select().from(schema.invitation)).map(
+      ({ email }) => email
+    )
+    expect(storedEmails).toHaveLength(2)
+    expect(storedEmails).toEqual(expect.arrayContaining(successEmails))
+    expect(await db.select().from(schema.invitationEmailJobs)).toHaveLength(2)
+    expect(await db.select().from(schema.auditLogs)).toHaveLength(2)
+    expect(
+      (await db.select().from(schema.rateLimit)).map(
+        ({ count: value }) => value
+      )
+    ).toEqual([4, 4])
+  })
+
+  it("returns 201 after a safe durable email failure", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    invitationEmailSendSpy.mockRejectedValueOnce(
+      new Error("provider detail private-recipient@example.test")
+    )
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_3",
+        body: {
+          emails: ["private-recipient@example.test"],
+          role: "member",
+        },
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body).toMatchObject({ delivery: "queued", queuedCount: 1 })
+    expect(JSON.stringify(body)).not.toMatch(/provider detail/i)
+    expect(await db.select().from(schema.invitation)).toMatchObject([
+      { email: "private-recipient@example.test", status: "pending" },
+    ])
+    expect(await db.select().from(schema.invitationEmailJobs)).toMatchObject([
+      {
+        attempts: 1,
+        lastErrorCode: "email_delivery_failed",
+        status: "failed",
+      },
+    ])
+    expect(
+      JSON.stringify(await db.select().from(schema.invitationEmailJobs))
+    ).not.toMatch(/provider detail|private-recipient/i)
+  })
+
+  it("persists blocked quota probes and returns a safe retry interval", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    const invite = (prefix: string, length: number) =>
+      app.handle(
+        jsonRequest("/organizations/org_1/invitations", {
+          method: "POST",
+          userId: "user_3",
+          body: {
+            emails: Array.from(
+              { length },
+              (_, index) => `${prefix}-${index}@example.test`
+            ),
+            role: "member",
+          },
+        })
+      )
+
+    await expect(invite("quota-a", 20)).resolves.toMatchObject({ status: 201 })
+    await expect(invite("quota-b", 10)).resolves.toMatchObject({ status: 201 })
+    const blocked = await invite("quota-c", 1)
+    const body = await blocked.json()
+
+    expect(blocked.status).toBe(429)
+    expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0)
+    expect(body).toMatchObject({
+      error: {
+        code: "rate_limited",
+        context: { retryAfter: expect.any(Number) },
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain("quota-c-0@example.test")
+    expect(
+      (await db.select().from(schema.rateLimit)).map(
+        ({ count: value }) => value
+      )
+    ).toEqual([31, 31])
+    expect(
+      (await db.select().from(schema.invitation)).some(
+        ({ email }) => email === "quota-c-0@example.test"
+      )
+    ).toBe(false)
+  })
+
+  it("cancels retryable and in-flight delivery jobs with the invitation", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
+    await db.insert(schema.invitation).values([
+      {
+        id: "failed_delivery_invitation",
+        organizationId: "org_1",
+        email: "failed-delivery@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_3",
+      },
+      {
+        id: "processing_delivery_invitation",
+        organizationId: "org_1",
+        email: "processing-delivery@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_3",
+      },
+    ])
+    await db.insert(schema.invitationEmailJobs).values([
+      {
+        id: "failed_delivery_job",
+        invitationId: "failed_delivery_invitation",
+        status: "failed",
+        attempts: 1,
+        nextAttemptAt: new Date(now.getTime() + 30_000),
+        createdAt: now,
+      },
+      {
+        id: "processing_delivery_job",
+        invitationId: "processing_delivery_invitation",
+        status: "processing",
+        attempts: 1,
+        lockedAt: now,
+        createdAt: now,
+      },
+    ])
+    const app = createApp(db)
+
+    for (const invitationId of [
+      "failed_delivery_invitation",
+      "processing_delivery_invitation",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- each cancellation must commit before its durable state is asserted.
+      const response = await app.handle(
+        jsonRequest(`/organizations/org_1/invitations/${invitationId}`, {
+          method: "DELETE",
+          userId: "user_3",
+        })
+      )
+      expect(response.status).toBe(200)
+    }
+
+    expect(
+      (await db.select().from(schema.invitation)).map(({ status }) => status)
+    ).toEqual(["canceled", "canceled"])
+    expect(
+      (await db.select().from(schema.invitationEmailJobs)).map(
+        ({ status }) => status
+      )
+    ).toEqual(["canceled", "canceled"])
   })
 
   it("reports expired invitations consistently and preserves terminal states", async () => {
@@ -1544,7 +1961,7 @@ describe("createApp security and OpenAPI", () => {
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_3",
-        body: { email: "fallback@example.test", role: "member" },
+        body: { emails: ["fallback@example.test"], role: "member" },
       })
     )
     const body = await response.json()
@@ -1554,12 +1971,12 @@ describe("createApp security and OpenAPI", () => {
       error: {
         code: "conflict",
         context: {
-          field: "email",
-          reason: "pending",
+          field: "emails",
+          reason: "conflict",
           resource: "invitation",
         },
         fieldErrors: {
-          email: ["A pending invitation already exists"],
+          emails: ["One or more emails cannot be invited"],
         },
       },
     })
@@ -1574,7 +1991,7 @@ describe("createApp security and OpenAPI", () => {
           jsonRequest("/organizations/org_1/invitations", {
             method: "POST",
             userId: "user_3",
-            body: { email: "race@example.test", role: "member" },
+            body: { emails: ["race@example.test"], role: "member" },
           })
         )
       )
@@ -1591,26 +2008,49 @@ describe("createApp security and OpenAPI", () => {
     }
     expect(await conflict.json()).toMatchObject({
       error: {
-        context: { field: "email", reason: "pending" },
+        context: { field: "emails", reason: "conflict" },
         fieldErrors: {
-          email: ["A pending invitation already exists"],
+          emails: ["One or more emails cannot be invited"],
         },
       },
     })
   })
 
-  it("requires step-up when a super admin grants admin by invitation", async () => {
-    const app = createApp(await createSeededDb())
-    const response = await app.handle(
+  it("checks invitation role and freshness before reserving quota", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    const stale = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
         method: "POST",
         userId: "user_1",
         fresh: false,
-        body: { email: "new-admin@example.test", role: "admin" },
+        body: { emails: ["new-admin@example.test"], role: "admin" },
       })
     )
-    expect(response.status).toBe(403)
-    expect((await response.json()).error.code).toBe("step_up_required")
+    expect(stale.status).toBe(403)
+    expect((await stale.json()).error.code).toBe("step_up_required")
+
+    const member = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_4",
+        body: { emails: ["member-probe@example.test"], role: "member" },
+      })
+    )
+    expect(member.status).toBe(403)
+    expect(await db.select().from(schema.rateLimit)).toHaveLength(0)
+
+    const fresh = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_1",
+        body: { emails: ["new-admin@example.test"], role: "admin" },
+      })
+    )
+    expect(fresh.status).toBe(201)
+    expect(await fresh.json()).toMatchObject({
+      invitations: [{ email: "new-admin@example.test", role: "admin" }],
+    })
   })
 })
 

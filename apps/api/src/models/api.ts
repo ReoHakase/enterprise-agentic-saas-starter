@@ -118,6 +118,11 @@ export const tenantErrorResponses = {
   500: apiErrorModel,
 } as const
 
+export const invitationErrorResponses = {
+  ...tenantErrorResponses,
+  429: apiErrorModel,
+} as const
+
 type SecurityRequirement = Record<string, string[]>
 
 export const sessionCookieSecurity: SecurityRequirement[] = [

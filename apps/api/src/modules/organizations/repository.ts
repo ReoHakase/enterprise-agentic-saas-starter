@@ -2,6 +2,7 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import {
   auditLogs,
   invitation,
+  invitationEmailJobs,
   member,
   organization,
   organizationDeletionJobs,
@@ -55,20 +56,12 @@ const isDeletionRequestConflict = (cause: unknown) => {
 const invitationQueues = new Map<string, Promise<void>>()
 const noop = () => {}
 
-const invitationEmailErrors = {
-  existingMember: () =>
-    publicErrors.conflict("User is already a member", {
-      constraint: "unique",
-      field: "email",
-      resource: "member",
-    }),
-  pendingInvitation: () =>
-    publicErrors.conflict("A pending invitation already exists", {
-      field: "email",
-      reason: "pending",
-      resource: "invitation",
-    }),
-}
+const invitationEmailConflict = () =>
+  publicErrors.conflict("One or more emails cannot be invited", {
+    field: "emails",
+    reason: "conflict",
+    resource: "invitation",
+  })
 
 const withInvitationLock = async <T>(
   key: string,
@@ -90,6 +83,36 @@ const withInvitationLock = async <T>(
       invitationQueues.delete(key)
     }
   }
+}
+
+const orderedUniqueKeys = (keys: readonly string[]) => {
+  const seen = new Set<string>()
+  const ordered: string[] = []
+  for (const key of keys) {
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    let index = 0
+    while (index < ordered.length && (ordered[index] ?? "") < key) {
+      index += 1
+    }
+    ordered.splice(index, 0, key)
+  }
+  return ordered
+}
+
+const withInvitationLocks = <T>(
+  keys: readonly string[],
+  operation: () => Promise<T>,
+  index = 0
+): Promise<T> => {
+  const key = keys[index]
+  return key
+    ? withInvitationLock(key, () =>
+        withInvitationLocks(keys, operation, index + 1)
+      )
+    : operation()
 }
 
 export type OrganizationSummary = {
@@ -1090,95 +1113,132 @@ export const listInvitationsByOrganization = async (
   }
 }
 
-export const insertInvitation = async (
+export const insertInvitations = async (
   db: Db,
   input: {
     organizationId: string
     inviterId: string
-    email: string
+    emails: readonly string[]
     role: Exclude<OrganizationRole, "super_admin">
   }
-): Promise<OrganizationInvitation> => {
+): Promise<OrganizationInvitation[]> => {
   try {
-    const rows = await withInvitationLock(
-      `${input.organizationId}:${input.email}`,
-      () =>
-        db.transaction(async (tx) => {
-          const existingMembers = await tx
-            .select({ id: member.id })
-            .from(member)
-            .innerJoin(user, eq(member.userId, user.id))
-            .where(
-              and(
-                eq(member.organizationId, input.organizationId),
-                sql`lower(${user.email}) = ${input.email}`
-              )
+    const lockKeys = orderedUniqueKeys(
+      input.emails.map((email) => `${input.organizationId}:${email}`)
+    )
+    const rows = await withInvitationLocks(lockKeys, () =>
+      db.transaction(async (tx) => {
+        const existingMembers = await tx
+          .select({ id: member.id })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            and(
+              eq(member.organizationId, input.organizationId),
+              inArray(sql<string>`lower(${user.email})`, input.emails)
             )
-            .limit(1)
-          if (existingMembers[0]) {
-            throw invitationEmailErrors.existingMember()
-          }
+          )
+          .limit(1)
+        if (existingMembers[0]) {
+          throw invitationEmailConflict()
+        }
 
-          const pendingRows = await tx
-            .select({ id: invitation.id, expiresAt: invitation.expiresAt })
-            .from(invitation)
+        const pendingRows = await tx
+          .select({ id: invitation.id, expiresAt: invitation.expiresAt })
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.organizationId, input.organizationId),
+              eq(invitation.status, "pending"),
+              inArray(sql<string>`lower(${invitation.email})`, input.emails)
+            )
+          )
+        const now = new Date()
+        const validPending = pendingRows.some(
+          ({ expiresAt }) => expiresAt.getTime() > now.getTime()
+        )
+        if (validPending) {
+          throw invitationEmailConflict()
+        }
+        const expiredIds = pendingRows.map(({ id }) => id)
+        if (expiredIds.length > 0) {
+          await tx
+            .update(invitation)
+            .set({ status: "expired" })
             .where(
               and(
                 eq(invitation.organizationId, input.organizationId),
-                eq(invitation.status, "pending"),
-                sql`lower(${invitation.email}) = ${input.email}`
+                inArray(invitation.id, expiredIds)
               )
             )
-            .limit(1)
-          const pending = pendingRows[0]
-          if (pending && pending.expiresAt.getTime() > Date.now()) {
-            throw invitationEmailErrors.pendingInvitation()
-          }
-          if (pending) {
-            await tx
-              .update(invitation)
-              .set({ status: "expired" })
-              .where(
-                and(
-                  eq(invitation.id, pending.id),
-                  eq(invitation.organizationId, input.organizationId)
-                )
+          await tx
+            .update(invitationEmailJobs)
+            .set({
+              status: "canceled",
+              completedAt: now,
+              lockedAt: null,
+              nextAttemptAt: null,
+            })
+            .where(
+              and(
+                inArray(invitationEmailJobs.invitationId, expiredIds),
+                inArray(invitationEmailJobs.status, [
+                  "pending",
+                  "failed",
+                  "processing",
+                ])
               )
-          }
+            )
+        }
 
-          const insertedRows = await tx
-            .insert(invitation)
-            .values({
-              id: crypto.randomUUID(),
-              organizationId: input.organizationId,
-              inviterId: input.inviterId,
-              email: input.email,
-              role: input.role,
-              status: "pending",
-              expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-            })
-            .returning()
-          if (insertedRows[0]) {
-            await tx.insert(auditLogs).values({
-              id: crypto.randomUUID(),
-              organizationId: input.organizationId,
-              actorUserId: input.inviterId,
-              action: "organization.invitation.created",
-              targetType: "invitation",
-              targetId: insertedRows[0].id,
-              metadata: { role: input.role },
-            })
+        const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+        const invitationValues = input.emails.map((email) => ({
+          id: crypto.randomUUID(),
+          organizationId: input.organizationId,
+          inviterId: input.inviterId,
+          email,
+          role: input.role,
+          status: "pending",
+          expiresAt,
+        }))
+        const insertedRows = await tx
+          .insert(invitation)
+          .values(invitationValues)
+          .returning()
+        if (insertedRows.length !== input.emails.length) {
+          throw new Error("Invitation batch insert returned missing rows")
+        }
+        await tx.insert(auditLogs).values(
+          insertedRows.map((row) => ({
+            id: crypto.randomUUID(),
+            organizationId: input.organizationId,
+            actorUserId: input.inviterId,
+            action: "organization.invitation.created",
+            targetType: "invitation",
+            targetId: row.id,
+            metadata: { role: input.role },
+          }))
+        )
+        await tx.insert(invitationEmailJobs).values(
+          insertedRows.map((row) => ({
+            id: crypto.randomUUID(),
+            invitationId: row.id,
+          }))
+        )
+        const rowByEmail = new Map(
+          insertedRows.map((row) => [row.email.toLowerCase(), row])
+        )
+        return input.emails.map((email) => {
+          const row = rowByEmail.get(email)
+          if (!row) {
+            throw new Error("Invitation batch ordering failed")
           }
-          return insertedRows
+          return row
         })
+      })
     )
 
-    const row = rows[0]
-    if (!row) {
-      throw new Error("insert returned no invitation")
-    }
-
-    return toOrganizationInvitation(row)
+    return rows.map(toOrganizationInvitation)
   } catch (cause) {
     if (cause instanceof AppError) {
       throw cause
@@ -1188,11 +1248,11 @@ export const insertInvitation = async (
       details.includes("invitation_pending_organization_email_uidx") ||
       details.includes("invitation.organization_id, lower(email)")
     ) {
-      throw invitationEmailErrors.pendingInvitation()
+      throw invitationEmailConflict()
     }
     throw publicErrors.internal(cause, {
       module: "organizations",
-      operation: "insertInvitation",
+      operation: "insertInvitations",
     })
   }
 }
@@ -1237,6 +1297,24 @@ export const cancelInvitationById = async (
               )
             )
         }
+        await tx
+          .update(invitationEmailJobs)
+          .set({
+            status: "canceled",
+            completedAt: new Date(),
+            lockedAt: null,
+            nextAttemptAt: null,
+          })
+          .where(
+            and(
+              eq(invitationEmailJobs.invitationId, input.invitationId),
+              inArray(invitationEmailJobs.status, [
+                "pending",
+                "failed",
+                "processing",
+              ])
+            )
+          )
         return { kind: "not_pending" as const }
       }
 
@@ -1255,6 +1333,24 @@ export const cancelInvitationById = async (
       if (!updated) {
         return { kind: "not_pending" as const }
       }
+      await tx
+        .update(invitationEmailJobs)
+        .set({
+          status: "canceled",
+          completedAt: new Date(),
+          lockedAt: null,
+          nextAttemptAt: null,
+        })
+        .where(
+          and(
+            eq(invitationEmailJobs.invitationId, input.invitationId),
+            inArray(invitationEmailJobs.status, [
+              "pending",
+              "failed",
+              "processing",
+            ])
+          )
+        )
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
         organizationId: input.organizationId,

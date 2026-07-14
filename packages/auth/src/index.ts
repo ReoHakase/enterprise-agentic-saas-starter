@@ -238,7 +238,6 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/magic-link": { window: 60, max: 5 },
       "/multi-session/set-active": { window: 60, max: 10 },
-      "/organization/invite-member": { window: 60 * 60, max: 30 },
     },
   },
   socialProviders: githubSocialProviders,

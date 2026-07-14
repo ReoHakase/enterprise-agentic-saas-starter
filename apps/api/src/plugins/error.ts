@@ -240,6 +240,14 @@ export const errorPlugin = new Elysia({ name: "error" })
     const errorCode = String(code)
     const httpStatus = statusCodeFor(errorCode, error)
 
+    if (
+      error instanceof AppError &&
+      error.code === "rate_limited" &&
+      typeof error.publicContext.retryAfter === "number"
+    ) {
+      set.headers["retry-after"] = String(error.publicContext.retryAfter)
+    }
+
     recordError(httpStatus, errorCode, error, request, requestId, route)
 
     set.status = httpStatus

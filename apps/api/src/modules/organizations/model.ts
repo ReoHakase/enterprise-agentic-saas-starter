@@ -67,6 +67,12 @@ export const invitationModel = v.object({
 
 export const invitationListModel = v.array(invitationModel)
 
+export const invitationBatchModel = v.object({
+  invitations: invitationListModel,
+  queuedCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
+  delivery: v.literal("queued"),
+})
+
 const manageableRoleModel = v.picklist(["admin", "member"])
 
 const destructiveConfirmationModel = v.pipe(
@@ -150,7 +156,11 @@ export const removeMemberBodyModel = v.object({
 export const idResponseModel = v.object({ id: v.string() })
 
 export const createInvitationBodyModel = v.object({
-  email: v.pipe(v.string(), v.email()),
+  emails: v.pipe(
+    v.array(v.pipe(v.string(), v.trim(), v.email())),
+    v.minLength(1),
+    v.maxLength(20)
+  ),
   role: manageableRoleModel,
 })
 

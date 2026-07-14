@@ -3,6 +3,7 @@ import { Elysia } from "elysia"
 
 import {
   authenticatedErrorResponses,
+  invitationErrorResponses,
   tenantErrorResponses,
 } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
@@ -16,7 +17,7 @@ import {
   deleteOrganizationResponseModel,
   idResponseModel,
   invitationListModel,
-  invitationModel,
+  invitationBatchModel,
   memberListModel,
   organizationDetailModel,
   organizationIdParamsModel,
@@ -360,10 +361,9 @@ export const createOrganizationsModule = (db: Db) =>
           201,
           await createInvitation(db, {
             userId: authContext.user.id,
-            inviterName: authContext.user.name,
             session: authContext.session,
             organizationId: organizationAccess.id,
-            email: body.email,
+            emails: body.emails,
             role: body.role,
           })
         ),
@@ -375,12 +375,12 @@ export const createOrganizationsModule = (db: Db) =>
         },
         params: organizationIdParamsModel,
         body: createInvitationBodyModel,
-        response: { 201: invitationModel, ...tenantErrorResponses },
+        response: { 201: invitationBatchModel, ...invitationErrorResponses },
         detail: {
           operationId: "createOrganizationInvitation",
-          summary: "memberを招待",
+          summary: "memberを一括招待",
           description:
-            "adminはmemberだけを招待できる。admin roleの付与はfresh sessionを持つsuper_adminだけに許可し、super_admin roleは招待では付与できない。",
+            "1〜20件のemailをcase-insensitiveに正規化・重複排除し、全件を同じroleでatomicにqueueする。adminはmemberだけを招待できる。admin roleの付与はfresh sessionを持つsuper_adminだけに許可し、actor+organizationは30件/時、organization全体は100件/時に制限する。",
           tags: ["Organization invitations"],
         },
       }

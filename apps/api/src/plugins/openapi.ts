@@ -11,7 +11,7 @@ export const openApiPlugin = new Elysia({ name: "openapi" }).use(
     mapJsonSchema: {
       valibot: (schema: Parameters<typeof toJsonSchema>[0]) =>
         toJsonSchema(schema, {
-          ignoreActions: ["to_number"],
+          ignoreActions: ["to_number", "trim"],
           target: "openapi-3.0",
           typeMode: "output",
         }),

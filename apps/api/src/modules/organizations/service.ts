@@ -1,8 +1,6 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { renderOrganizationInvitationEmail } from "@enterprise-agentic-saas/email"
-import { createRuntimeEmailSender } from "@enterprise-agentic-saas/email/runtime"
+import { backgroundTaskHandler } from "@enterprise-agentic-saas/email/runtime"
 
-import { env } from "../../env"
 import { publicErrors } from "../../errors/app-error"
 import type { SessionContext } from "../auth/session"
 import {
@@ -15,6 +13,8 @@ import {
   requireOrganizationRole,
   type OrganizationRole,
 } from "../authorization/roles"
+import { processConfiguredInvitationEmailJobs } from "./invitation-email-jobs"
+import { reserveInvitationQuota } from "./invitation-rate-limit"
 import {
   cancelInvitationById,
   countSuperAdmins,
@@ -22,7 +22,7 @@ import {
   deleteOrganizationById,
   findMemberById,
   findOrganizationForUser,
-  insertInvitation,
+  insertInvitations,
   insertOrganizationWithSuperAdmin,
   listInvitationsByOrganization,
   listMembersByOrganization,
@@ -32,14 +32,6 @@ import {
   updateSessionActiveOrganization,
   transferSuperAdminById,
 } from "./repository"
-
-const sendEmail = createRuntimeEmailSender({
-  provider: env.EMAIL_PROVIDER,
-  runtime: env.NODE_ENV,
-  from: env.EMAIL_FROM,
-  fromName: env.APP_NAME,
-  mailpitUrl: env.MAILPIT_URL,
-})
 
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
@@ -431,9 +423,8 @@ export const createInvitation = async (
   input: {
     userId: string
     session: SessionContext
-    inviterName?: string | null
     organizationId: string
-    email: string
+    emails: readonly string[]
     role: Exclude<OrganizationRole, "super_admin">
   }
 ) => {
@@ -450,23 +441,46 @@ export const createInvitation = async (
     requireFreshSession(input.session, "organization.invitation.grant_admin")
   }
 
-  const invitation = await insertInvitation(db, {
+  const emails = Array.from(
+    new Set(
+      input.emails.map((email) =>
+        normalizeRequired(email, "emails").toLowerCase()
+      )
+    )
+  )
+  if (emails.length === 0 || emails.length > 20) {
+    throw publicErrors.validation("Provide between 1 and 20 email addresses", {
+      field: "emails",
+      reason: "invalid_length",
+    })
+  }
+
+  await reserveInvitationQuota(db, {
+    actorUserId: input.userId,
+    organizationId: input.organizationId,
+    recipientCount: emails.length,
+  })
+
+  const invitations = await insertInvitations(db, {
     organizationId: input.organizationId,
     inviterId: input.userId,
-    email: normalizeRequired(input.email, "email").toLowerCase(),
+    emails,
     role: input.role,
   })
-  const organization = await getOrganization(db, input)
-  const rendered = await renderOrganizationInvitationEmail({
-    appName: env.APP_NAME,
-    organizationName: organization.name,
-    invitationUrl: `${env.APP_BASE_URL}/organization/invitations/${invitation.id}`,
-    inviterName: input.inviterName?.trim() || undefined,
-  })
+  const deliveryTask = processConfiguredInvitationEmailJobs(db).catch(
+    () => undefined
+  )
+  if (backgroundTaskHandler) {
+    backgroundTaskHandler(deliveryTask)
+  } else {
+    await deliveryTask
+  }
 
-  await sendEmail({ to: invitation.email, ...rendered })
-
-  return invitation
+  return {
+    invitations,
+    queuedCount: invitations.length,
+    delivery: "queued" as const,
+  }
 }
 
 export const cancelInvitation = async (
