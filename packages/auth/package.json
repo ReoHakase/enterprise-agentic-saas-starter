@@ -11,7 +11,7 @@
     "build": "tsc --noEmit",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
@@ -28,6 +28,7 @@
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@libsql/client": "catalog:",
     "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

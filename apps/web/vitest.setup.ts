@@ -6,16 +6,20 @@ afterEach(() => cleanup())
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+  value: vi
+    .fn<(query: string) => MediaQueryList>()
+    .mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn<MediaQueryList["addEventListener"]>(),
+      removeEventListener: vi.fn<MediaQueryList["removeEventListener"]>(),
+      addListener: vi.fn<MediaQueryList["addListener"]>(),
+      removeListener: vi.fn<MediaQueryList["removeListener"]>(),
+      dispatchEvent: vi
+        .fn<MediaQueryList["dispatchEvent"]>()
+        .mockReturnValue(false),
+    })),
 })
 
 class ResizeObserverMock {

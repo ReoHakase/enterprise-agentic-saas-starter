@@ -4,8 +4,23 @@ import rootConfig from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
-  plugins: ["jsx-a11y", "react", "react-perf"],
-  jsPlugins: ["oxlint-tailwindcss"],
+  plugins: [
+    "import",
+    "node",
+    "promise",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "vitest",
+    "jsx-a11y",
+    "react",
+    "react-perf",
+  ],
+  jsPlugins: [
+    "oxlint-tailwindcss",
+    { name: "storybook", specifier: "eslint-plugin-storybook" },
+    { name: "testing-library", specifier: "eslint-plugin-testing-library" },
+  ],
   ignorePatterns: [
     ".turbo/**",
     "coverage/**",
@@ -13,22 +28,6 @@ export default defineConfig({
     "node_modules/**",
     "storybook-static/**",
     "test-results/**",
-    "src/components/calendar.tsx",
-    "src/components/card.tsx",
-    "src/components/checkbox.tsx",
-    "src/components/combobox.tsx",
-    "src/components/field.tsx",
-    "src/components/input-group.tsx",
-    "src/components/input.tsx",
-    "src/components/label.tsx",
-    "src/components/popover.tsx",
-    "src/components/select.tsx",
-    "src/components/separator.tsx",
-    "src/components/slider.tsx",
-    "src/components/sonner.tsx",
-    "src/components/spinner.tsx",
-    "src/components/switch.tsx",
-    "src/components/textarea.tsx",
   ],
   rules: {
     "func-style": "off",
@@ -46,6 +45,47 @@ export default defineConfig({
     "tailwindcss/no-unnecessary-arbitrary-value": "warn",
     "tailwindcss/no-unnecessary-whitespace": "error",
   },
+  overrides: [
+    {
+      files: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+      rules: {
+        "vitest/no-disabled-tests": "warn",
+        "vitest/no-focused-tests": "error",
+        "vitest/valid-expect": "error",
+        "testing-library/await-async-events": [
+          "error",
+          { eventModule: "userEvent" },
+        ],
+        "testing-library/await-async-queries": "error",
+        "testing-library/await-async-utils": "error",
+        "testing-library/no-container": "error",
+        "testing-library/no-node-access": "error",
+        "testing-library/prefer-screen-queries": "error",
+        "testing-library/prefer-user-event": "error",
+      },
+    },
+    {
+      files: ["src/**/*.stories.ts", "src/**/*.stories.tsx"],
+      rules: {
+        "storybook/await-interactions": "error",
+        "storybook/context-in-play-function": "error",
+        "storybook/default-exports": "error",
+        "storybook/no-redundant-story-name": "warn",
+        "storybook/no-renderer-packages": "error",
+        "storybook/prefer-pascal-case": "warn",
+        "storybook/story-exports": "error",
+        "storybook/use-storybook-expect": "error",
+        "storybook/use-storybook-testing-library": "error",
+      },
+    },
+    {
+      files: ["src/components/label.tsx"],
+      rules: {
+        // このprimitiveはhtmlForまたはchildrenによる関連付けを呼び出し側へ委譲する。
+        "jsx-a11y/label-has-associated-control": "off",
+      },
+    },
+  ],
   env: {
     browser: true,
   },

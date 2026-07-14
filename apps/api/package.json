@@ -7,9 +7,6 @@
     "./client": {
       "types": "./src/client.ts",
       "default": "./src/client.ts"
-    },
-    "./types": {
-      "types": "./src/app.ts"
     }
   },
   "scripts": {
@@ -23,7 +20,7 @@
     "dev:worker": "wrangler dev",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "start": "NODE_ENV=production bun ./dist/index.js",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject ./dist/worker && sentry-cli sourcemaps upload --release \"$SENTRY_RELEASE\" --validate --strict --wait ./dist/worker",
     "test": "vitest run",
@@ -39,7 +36,7 @@
     "@enterprise-agentic-saas/email": "workspace:*",
     "@sentry/bun": "catalog:",
     "@sentry/cloudflare": "catalog:",
-    "@sinclair/typebox": "catalog:",
+    "@valibot/to-json-schema": "catalog:",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
     "envin": "catalog:",
@@ -51,6 +48,7 @@
     "@sentry/cli": "catalog:",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

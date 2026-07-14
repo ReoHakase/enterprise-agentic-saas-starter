@@ -6,6 +6,7 @@ import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
+const unitCoverageEnabled = process.argv.includes("--project=unit")
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -28,7 +29,27 @@ const storybookProject = (theme: "light" | "dark") => ({
 })
 
 export default defineConfig({
+  optimizeDeps: {
+    include: ["@base-ui/react/alert-dialog", "@base-ui/react/drawer"],
+  },
   test: {
+    coverage: {
+      enabled: unitCoverageEnabled,
+      provider: "v8",
+      reporter: ["text", "json-summary"],
+      reportsDirectory: "./coverage",
+      include: [
+        "src/components/button.tsx",
+        "src/components/dialog.tsx",
+        "src/lib/utils.ts",
+      ],
+      thresholds: {
+        statements: 70,
+        branches: 60,
+        functions: 65,
+        lines: 70,
+      },
+    },
     projects: [
       {
         test: {

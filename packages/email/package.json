@@ -12,6 +12,10 @@
       "types": "./src/templates/index.ts",
       "default": "./src/templates/index.ts"
     },
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
+    },
     "./runtime": {
       "types": "./src/runtime/types.ts",
       "workerd": "./src/runtime/workerd.ts",
@@ -23,7 +27,7 @@
     "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -37,6 +41,7 @@
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@react-email/ui": "catalog:",
     "@types/react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

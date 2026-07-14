@@ -23,7 +23,7 @@
     "dev": "bun run db:bootstrap && bun run db:studio",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -37,6 +37,7 @@
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@faker-js/faker": "catalog:",
     "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "drizzle-kit": "catalog:",
     "drizzle-seed": "catalog:",
     "typescript": "catalog:",

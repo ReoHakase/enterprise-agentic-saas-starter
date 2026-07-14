@@ -11,8 +11,18 @@ export default defineConfig({
     "typescript",
     "unicorn",
     "oxc",
+    "vitest",
     "react",
     "react-perf",
+  ],
+  overrides: [
+    {
+      files: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+      rules: {
+        // sender binding/logger mockはconsumer側interfaceから型を推論する。
+        "vitest/require-mock-type-parameters": "off",
+      },
+    },
   ],
   rules: {
     "react/react-in-jsx-scope": "off",

@@ -129,7 +129,7 @@
               command = "${pkgs.bun}/bin/bunx";
               args = [
                 "-y"
-                "chrome-devtools-mcp"
+                "chrome-devtools-mcp@1.5.0"
               ];
             };
 
@@ -137,7 +137,7 @@
               command = "${pkgs.bun}/bin/bunx";
               args = [
                 "-y"
-                "next-devtools-mcp"
+                "next-devtools-mcp@0.4.0"
               ];
             };
 

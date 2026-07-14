@@ -14,7 +14,7 @@
     "build:storybook": "storybook build --output-dir storybook-static",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "storybook": "storybook dev --port 6006 --no-open",
     "test": "vitest run --project=unit",
     "test:storybook": "vitest run --project=storybook-light --project=storybook-dark",
@@ -33,8 +33,7 @@
     "shadcn": "catalog:",
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",
-    "tw-animate-css": "catalog:",
-    "zod": "catalog:"
+    "tw-animate-css": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
@@ -54,6 +53,9 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitest/browser-playwright": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "eslint-plugin-storybook": "catalog:",
+    "eslint-plugin-testing-library": "catalog:",
     "happy-dom": "catalog:",
     "oxlint-tailwindcss": "catalog:",
     "storybook": "catalog:",
