@@ -41,6 +41,13 @@ bunx playwright install chromium webkit
 bun run test:e2e
 ```
 
+`bun run test:e2e`は高速なapplication journey suiteと実OAuth suiteを順に実行します。片方だけを調査するときは次を使います。
+
+```sh
+bun run --cwd apps/web test:e2e:app
+bun run test:e2e:oauth
+```
+
 PR用E2Eは `apps/web/e2e/fixtures/mock-api.ts` をNext.jsと一緒に起動します。外部mail/OAuth/Tursoへ依存せず、次の導線を決定的に検証します。
 
 1. magic link登録 → organization作成 → dashboard
@@ -53,7 +60,20 @@ PR用E2Eは `apps/web/e2e/fixtures/mock-api.ts` をNext.jsと一緒に起動し�
 
 mockは認可そのものの証明ではありません。ただし本番契約と食い違う成功・失敗を隠さないよう、未所属/存在しないtenantは404、所属済みだがactiveでないtenantは409、active tenant内のrole不足だけを403として再現します。API Vitestで実service/repositoryのpermission matrixとtenant-scoped queryを検証し、staging smokeでは実Cloudflare/Turso構成を確認します。
 
+GitHub OAuthだけは`playwright.oauth.config.ts`で別process群を起動します。`apps/github-emulator`のstrict OAuth App、migrationを適用したrunごとのfile DB、実Elysia API、専用Next distを使い、外部GitHubや実credentialなしで次を一続きに確認します。
+
+1. `signIn.social`からemulator authorizeへ遷移する。
+2. `oauth-alice`を選択し、state付きcallbackとone-time code交換を完了する。
+3. GitHub profileとverified primary emailからuser/session/accountがDBへ保存される。
+4. organization未所属の新規userが最初のorganization画面へ戻る。
+5. reload後もsessionを維持し、account providerが`github`である。
+6. HttpOnly、SameSite、共有cookie domainが維持される。
+
+OAuth suiteはDesktop Chromium 1280×720、`workers: 1`で実行します。標準mock matrixのmobile/WebKitを重複実行しません。suite runごとに新しいemulator processとfresh DBを使い、fixture `finally`とPlaywright `globalTeardown`でrun固有のDB、WAL、SHMを二重cleanupします。Playwright retryは同じfixture userを再認証しても結果が変わらないjourneyにし、途中成功を`failOnFlakyTests`でCI失敗として検出します。`emulate.reset()`は発行済みtoken mapを完全には消さないためtest isolation境界に使いません。
+
 mock stateとreset endpointは全projectで共有されるため、標準設定はlocal/CIとも `workers: 1` でjourneyを直列実行します。tenant切替時は旧tenantのmount済みqueryを再取得せず、cancelしてから遷移し、切替途中の409をbrowser errorとして発生させないこともE2Eで固定します。
+
+Turboのstrict envでは`CI`も暗黙には透過されません。rootのE2E taskは`CI`を`passThroughEnv`へ明示し、GitHub Actionsでもretry、`forbidOnly`、既存server非再利用を有効にします。標準suiteの外部server実行に使う`PLAYWRIGHT_BASE_URL`も同じtaskから透過します。
 
 Playwrightが起動するNext.jsは`NEXT_DIST_DIR=.next-e2e`を使い、通常の`bun run dev`が使う`.next`からbuild artifactとdevelopment lockを分離します。portless開発serverを動かしたまま`bun run test:e2e`を実行できるため、testのためにdeveloper-owned processを停止しません。
 
@@ -61,7 +81,7 @@ Streaming boundaryはmock APIのbounded one-shot `POST /__e2e/request-delays` �
 
 標準matrixはDesktop Chrome（viewport 1280×720）、Pixel 7 Chrome、iPhone 13 WebKitです。Desktop Chromeのemulated screenはdevice presetどおり1920×1080、device scale factorは1です。動画sizeやreporterの`show`は指定せず、Playwright既定へ任せます。
 
-videoは成功・失敗・再試行を問わずすべてのrunを `apps/web/test-results` に残します。traceとscreenshotは失敗時に保持し、HTML reportとあわせて `apps/web/test-results` / `apps/web/playwright-report` からCI artifactへuploadします。
+videoは成功・失敗・再試行を問わずすべてのrunを `apps/web/test-results` に残します。OAuth suiteは`test-results/oauth`、HTMLは`playwright-report/oauth`へ分離します。traceとscreenshotは失敗時に保持し、親directoryからまとめてCI artifactへuploadします。
 
 ## CI gate
 

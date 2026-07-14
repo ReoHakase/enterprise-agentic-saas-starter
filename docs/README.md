@@ -21,6 +21,6 @@ bun run check
 bun run build
 ```
 
-local applicationは別terminalの `bun run dev` 1つで起動します。このcommandにlocal Turso、`generate + migrate`、非破壊seed、Drizzle Studio、Mailpit、React Email previewも含まれます。main checkoutの送信メールは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `portless get mailpit.enterprise-agentic-saas` の出力で確認できます。DBだけが必要な場合は[ローカル開発](./local-development.md)のDB-only commandを使います。
+local applicationは別terminalの `bun run dev` 1つで起動します。このcommandにlocal Turso、`generate + migrate`、非破壊seed、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorも含まれます。main checkoutの送信メールは `https://mailpit.enterprise-agentic-saas.localhost`、GitHub user pickerは`https://github.emulate.enterprise-agentic-saas.localhost`で確認できます。linked worktreeでは各`portless get`の出力を使います。DBだけが必要な場合は[ローカル開発](./local-development.md)のDB-only commandを使います。
 
 破壊的なDB resetと本番deployは通常の開発コマンドへ混ぜていません。各runbookの確認条件を満たしてから明示実行してください。

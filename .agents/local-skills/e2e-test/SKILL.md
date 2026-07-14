@@ -31,8 +31,15 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - API/backendの細かい分岐はVitest + `app.handle()` で押さえ、E2Eは主要導線に絞る。
 - auth/session/org/permissionはE2Eで最低1本ずつ代表失敗ケースを置く。
 - test dataはtenant境界が見える名前にする。
-- flakyな外部OAuthやmail providerはPRではmock/smoke、mainでは実環境寄りに分ける。
+- 外部GitHubや実credentialには接続しない。標準mock suiteとは別に、`vercel-labs/emulate`、実Elysia API、fresh file DBを起動するChromium専用OAuth suiteをPR/CIで通す。authorize、state、callback、token、userinfo、session/account保存までをこのsuiteの責務にする。
 - PRの標準harnessは `apps/web/e2e/fixtures/mock-api.ts` とNext.jsをPlaywright `webServer` で同時起動する。mock stateとreset endpointは全projectで共有されるため、local/CIとも `workers: 1` で直列実行する。`fullyParallel: false` だけではproject間の並列実行を止められない。
+- OAuth harnessは`playwright.oauth.config.ts`へ分離し、`apps/github-emulator`、migration適用済みの実API、専用Next distを`webServer`で所有する。標準`playwright.config.ts`では`e2e/oauth`をignoreし、同じjourneyをmockとemulatorで二重実行しない。
+- `emulate@0.9.0`は`oauth_apps`を省略するとclient/secret/redirect URI検証をskipするため、OAuth E2Eではcallbackを含むstrict appを必ずseedする。user pickerは標準`admin`/`ghost`の順序に依存せず、fixture loginを含むrole locatorで選ぶ。
+- `emulate`の`reset()`後もStore外のaccess token mapが残るため、HTTP reset endpointを追加してtest isolation境界にしない。suite run開始時はfresh process/DBにし、Playwright retryは同じfixture userで再sign-inしても結果が変わらないidempotent journeyにする。retry成功も`failOnFlakyTests`でCI失敗にする。`DEBUG`/`EMULATE_DEBUG`はtoken requestを出力し得るためOAuth harnessへ渡さない。
+- Better Auth 1.6.9のlocal Generic OAuth callbackは`/auth/oauth2/callback/github`、production built-in GitHub callbackは`/auth/callback/github`で異なる。OAuth E2Eは前者をcontractとして固定し、Better Auth upgrade時に見直す。
+- OAuth Playwright `webServer.env`へ`...process.env`を渡さない。PATH/HOME/CI等だけをallowlistし、Bun childは`--no-env-file`、Turso/GitHub/Better Auth/Sentryはtest fixture値または明示的な空値で上書きする。developerの実OAuth secretやSentry credentialをemulator process・trace・videoへ持ち込まない。
+- Turboのstrict envではGitHub Actionsの`CI`も自動透過されない。rootの`test:e2e` / `test:e2e:oauth` taskで`CI`を`passThroughEnv`へ明示し、retry、`forbidOnly`、`failOnFlakyTests`、既存server非再利用をCIでも有効にする。外部server向け`PLAYWRIGHT_BASE_URL`も標準suiteのtaskだけ透過し、`turbo --dry=json`で解決値を確認する。
+- OAuth API fixtureはpackage scriptを多段起動せずPlaywrightから直接起動し、signalを受けたfixtureの`finally`とPlaywright `globalTeardown`の両方で、run固有のtemporary DB本体・WAL・SHMを削除する。削除対象はtmp直下の固定prefixとPID形式に限定し、run後に残留fileとlistenerがないことを確認する。
 - Playwright管理のNext.jsには`NEXT_DIST_DIR=.next-e2e`を渡し、通常のportless開発serverが使う`.next`とdevelopment lockを共有しない。E2Eのためにdeveloper-owned `next dev`をkillせず、両方を同時実行できる状態を維持する。`.next-e2e/`はgitignoreする。
 - 標準browser matrixはDesktop Chrome（1280x720）、Pixel 7 Chrome、iPhone 13 WebKitの3 projectとする。詳細CRUDの重複実行は避けてもよいが、主要journeyはdesktop/mobile両方を通す。
 - 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
@@ -51,10 +58,12 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 ## 実装時の確認
 
 - `webServer` でNext.jsとmock/実APIが起動し、server/client両方のAPI URLが同じoriginを指すか。
+- Turbo経由のCI runに`CI`が透過され、retry、`forbidOnly`、既存server非再利用が解決後configでも有効か。
 - envはdotenvx/direnv/GitHub Secretsから入り、secretをtest artifactへ出さないか。
 - videoはすべてのrun、traceとscreenshotは失敗時に保持し、HTML reportとあわせてCI artifactに残すか。
 - ChromiumとWebKitをCIへinstallし、3 projectを実際に実行しているか。
 - 正常journeyでconsole error/page errorが0件か。mock faultの消費後に正常responseへ戻るか。
 - tenant Aのユーザーがtenant Bのtodoを見られないことを確認しているか。
+- OAuth run後に一時DB、WAL、SHM、3100/3101/4101のlistenerが残っていないか。
 
 具体的なPlaywright configやテスト例が必要なときだけ `references/e2e-test.md` を読む。

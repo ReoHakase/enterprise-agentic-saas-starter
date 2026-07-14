@@ -52,7 +52,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - PR用Playwrightは自身の `webServer` でNext dev + mock APIを起動するため、Turbo `test:e2e` からproduction buildへ依存させない。production build/OpenNext dry-runは別jobでgateし、E2E artifactとして `test-results` と `playwright-report` を残す。
 - `build:cloudflare` はcacheせず、Web OpenNext artifactとAPI Wrangler dry-run artifactを検証する。
 - package cwdから `oxfmt .` を走らせるため、ignoreは `.next/**` だけでなく `**/.next/**` のようにmonorepo全体を覆う。
-- formatter/linterは `.open-next/**`、`storybook-static/**`、`playwright-report/**`、`test-results/**`、`**/next-env.d.ts` も生成物として除外する。artifact生成後にも `format:check` / `lint` がsourceだけを見ることを確認する。
+- formatter/linterは `.next-e2e/**`、`.next-e2e-oauth/**`、`.open-next/**`、`storybook-static/**`、`playwright-report/**`、`test-results/**`、`**/next-env.d.ts` もroot直下・package配下の生成物として除外する。artifact生成後にも `format:check` / `lint` がsourceだけを見ることを確認する。
 
 ## Sentry/Cloudflare build
 

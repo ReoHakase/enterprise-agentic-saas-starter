@@ -30,6 +30,7 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - DB: `https://db.enterprise-agentic-saas.localhost`
 - Mailpit inbox: `https://mailpit.enterprise-agentic-saas.localhost`
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
+- GitHub OAuth emulator: `https://github.emulate.enterprise-agentic-saas.localhost`
 
 上記はmain checkoutのURLです。linked worktreeではPortlessがworktree prefixを付け、APIの`dev` scriptも`portless get mailpit.enterprise-agentic-saas`で同じMailpit URLを解決します。別worktreeの受信箱へ誤配送しないため、固定URLをlocal envへ複製しません。
 
@@ -66,7 +67,7 @@ DB-only taskとroot `bun run dev`は同時に起動しません。同じportとl
 bun run dev
 ```
 
-この1commandでWeb、API、local Turso、migration/seed、Drizzle Studio、Mailpit、React Email previewを起動します。
+この1commandでWeb、API、local Turso、migration/seed、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。
 
 Mailpitの受信データはgit管理外の `packages/email/.local/mailpit.db` へ保存され、開発serverを再起動しても残ります。受信箱だけを手動resetするときは、先に `bun run dev` を停止してから次を実行します。
 
@@ -84,7 +85,29 @@ bun run --cwd apps/web dev
 bun run --cwd packages/ui storybook
 ```
 
-filtered Turbo commandはAPIに加えてlocal DB、migration/seed、Mailpit、React Email previewを起動します。`bun run --cwd apps/api dev`はAPI processだけを起動するため、DBとMailpitがすでに動作している場合に限って使います。
+filtered Turbo commandはAPIに加えてlocal DB、migration/seed、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。`bun run --cwd apps/api dev`はAPI processだけを起動するため、DB、Mailpit、GitHub OAuth emulatorがすでに動作している場合に限って使います。
+
+## ローカルGitHub OAuth
+
+rootの`bun run dev`では、APIがworktree-awareなemulator URLを受け取り、Better AuthのGitHub providerをlocal Generic OAuthへ切り替えます。sign-in画面のGitHub buttonから`oauth-alice`を選ぶと、実GitHubへ接続せずauthorize、callback、token、userinfo、session保存を確認できます。
+
+このrepoの代表導線では、emulate標準userの並び順に依存せず、次の追加local fixtureを選びます。
+
+- login: `oauth-alice`
+- name: `OAuth Alice`
+- email: `oauth-alice@example.test`
+
+実GitHubのclient ID/secretは不要です。local `.env`に実credentialが残っていてもemulator modeでは読みません。別fixture credentialを試す場合だけ、`GITHUB_OAUTH_EMULATOR_CLIENT_ID`と`GITHUB_OAUTH_EMULATOR_CLIENT_SECRET`の両方を設定します。
+
+Better Auth 1.6.9でemulatorへ登録するcallbackは`/auth/oauth2/callback/github`です。production built-in providerの`/auth/callback/github`とは異なります。emulatorのstateはmemoryだけにあり、完全にresetするときはroot devを停止して再起動します。production起動、remote URL、debug raw request logは起動時に拒否されます。
+
+emulatorだけを調査するときは、callbackを解決できるAPI Portless aliasを先に用意してから次を実行します。
+
+```sh
+bun run --cwd apps/github-emulator dev
+```
+
+upstreamの`emulate --portless`は固定aliasをforce登録するため使いません。このrepoでは外側のPortlessがmain checkoutとlinked worktreeを分離します。
 
 ## Sentry Spotlight
 
@@ -129,6 +152,8 @@ bun run build:cloudflare
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。
 - Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `portless get mailpit.enterprise-agentic-saas` の出力を開く。
 - Mailpitにメールが届かない: `NODE_ENV=development`であること、APIのlocal envが既定値を`console`等で上書きしていないこと、`MAILPIT_URL`がlocal URLであることを確認する。React Email previewにはapplicationから送ったメールは保存されない。
+- GitHub OAuth user pickerが開かない: `portless get github.emulate.enterprise-agentic-saas`と`portless get api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
+- emulatorが起動を拒否する: `NODE_ENV=production`、remote URL、`DEBUG=1`、`EMULATE_DEBUG=1`をlocal shellへ残していないか確認する。実credentialをdebug logへ出す設定で回避しない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。
 - Spotlightにeventが出ない: `http://localhost:8969` が開けること、browser/server両方のSpotlight env、SDK initより前にerrorが起きていないことを確認する。
 - `bun install`がsecurity scannerの5xxで止まる: scannerは意図的にfail-closed。恒久的に無効化せず、まず再試行する。localの一時回避条件とreleaseで禁止する理由は`developer-environment` skillを参照する。

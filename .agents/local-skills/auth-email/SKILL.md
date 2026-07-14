@@ -68,7 +68,12 @@ bunx @better-auth/cli generate \
 - Better Auth core/plugin endpointの仕様は `openAPI({ path: "/reference" })` で `/auth/reference` に公開し、app側Elysia OpenAPIから認証referenceへ誘導する。必要なら `auth.api.generateOpenAPISchema()` でOpenAPI 3.1 schemaを取得する。
 - Cloudflare Workersではin-memory rate limitを使わず、Better Authの `rateLimit.storage = "database"` でTursoへ永続化する。本番のclient IPはCloudflareが上書きする `cf-connecting-ip` だけを信頼し、magic link・multi-session切替・招待には個別ruleを置く。rate limit導入後はauth schemaを再生成し、`rateLimit` tableのmigrationを保存する。
 - Passkeyの `rpID` をlocal hostnameへhardcodeしない。必須 `TRUSTED_ORIGINS` 先頭のhostnameをRP ID、配列全体をpasskey verificationの許可originに使い、deploy先でも一致させる。
+- GitHub OAuthのproductionはBetter Auth built-in providerを維持する。`GITHUB_OAUTH_EMULATOR_URL`が設定されたdevelopment/testだけ、同じ`providerId = "github"`の`genericOAuth`へ切り替え、built-inと同時登録しない。productionでemulator URLがあれば起動時に拒否する。
+- emulator URLはlocalhost、loopback、`*.localhost`のoriginだけを許可し、credential、path、query、hashを拒否する。emulator modeでは`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`を読まず、公開して問題ない固定fixtureまたは専用`GITHUB_OAUTH_EMULATOR_CLIENT_ID` / `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET`を使う。local `.env`の実GitHub secretをseedへ流さない。
+- Better Auth 1.6.9のGeneric OAuth callbackは`/auth/oauth2/callback/github`、production built-in callbackは`/auth/callback/github`。Generic OAuthはemulatorのauthorize/token/user/email endpointだけへ向け、GitHub形式のprofileとverified primary emailをValibotでparseして`id/name/email/image/emailVerified`へ正規化する。raw profile、code、token、provider errorをlogしない。
+- local Generic OAuthでも現行UIの`signIn.social({ provider: "github" })`と`linkSocial`が同じproviderへ到達することをintegration testで固定する。これはBetter Auth 1.6.9のprovider injectionに依存するため、library upgrade時はcallback pathとclient methodを同時に再確認する。
 - cross-subdomain cookie domainもlocal hostnameへhardcodeしない。productionでは `AUTH_COOKIE_DOMAIN` にweb/API共通の親domainを必須指定する。`.localhost` 開発だけはweb hostnameへfallbackしてよい。
+- `advanced.useSecureCookies`は`BETTER_AUTH_URL`のprotocolに合わせる。productionはHTTPS以外を起動時に拒否し、Portless HTTPSではSecureを維持する。isolated HTTP OAuth E2EだけはSecure=falseとなるが、HttpOnly、SameSite、共有domainの回帰確認を行う。
 - organization所有権移管などの高リスク操作は `session.freshAge = 15分` とし、app側APIもsessionの `createdAt` を使って同じstep-up境界を強制する。UIの確認modalだけを認可境界にしない。
 - app側の `step_up_required` は403とし、public contextに `action`, `maxAgeSeconds`, `reason` を返す。専用の疑似reauth tokenは作らず、passkey・magic link等で新しいBetter Auth sessionを作ってからmutationをretryする。
 - 新規sessionの `activeOrganizationId` は、同じuserの未失効sessionで使われた最新のorganizationをmembership付きで再検証して継承する。該当contextがなくmembershipが1件だけなら自動選択し、複数ならnullのまま明示選択を要求する。`/me` は同じ規則でstale/null contextをtransaction内で永続修復し、表示だけのfallbackをactive扱いしない。
@@ -85,6 +90,7 @@ bunx @better-auth/cli generate \
 - audit logを意識し、permission deniedはE2EとAPI integrationで確認する。
 - このrepoのorganization roleはBetter Auth標準の `owner/admin/member` ではなく、`super_admin/admin/member` を使う。
 - `packages/auth` のorganization pluginでは `creatorRole: "super_admin"` と custom `roles` を設定し、plugin構成を変えたら `packages/db/src/schema/auth.generated.ts` をBetter Auth CLIで再生成する。
+- Better Auth CLIの上書きはrepo固有unique/partial indexを出力しない。生成後は`database` skillのoverlay一覧とdiffし、member/invitation/super admin制約の削除をschema変更として採用しない。Generic OAuth provider追加だけなら最終schemaはno-diffになる。
 - `super_admin` はorganizationごとに必ず一人だけにする。Better Authのrole定義だけに任せず、`apps/api` 側のmember role更新で昇格時に旧 `super_admin` を `admin` へ落とし、最後の `super_admin` の降格・削除を拒否する。
 - organization memberのrole変更はapp側で強制する。`admin` は招待や通常member管理はできるが、`member -> admin`、`admin -> member`、`super_admin` 関連変更はできない。role昇格/降格と `super_admin` 移譲は `super_admin` だけ許可する。
 - `admin` が招待できるroleは `member` だけ。`super_admin` が招待で `admin` を付与する場合もfresh sessionを要求する。

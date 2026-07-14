@@ -68,6 +68,19 @@ Better Authのmulti-session pluginをserver/client双方に設定します。acc
 
 Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 
+## GitHub OAuth
+
+productionはBetter Auth組み込みGitHub providerを使います。ローカル開発とOAuth E2Eで`GITHUB_OAUTH_EMULATOR_URL`が設定された場合だけ、同じ`providerId: "github"`を持つGeneric OAuth providerへ切り替えます。両providerを同時登録せず、productionでemulator URLが設定されていたら起動を拒否します。
+
+emulator modeは実GitHub credentialを読みません。固定fixtureまたは`GITHUB_OAUTH_EMULATOR_CLIENT_ID` / `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET`だけを使い、localhost系originに限定したauthorize、token、`/user`、`/user/emails`へ接続します。profileとverified primary emailはValibotで検証し、raw response、authorization code、access token、provider errorをlog/traceへ出しません。
+
+Better Auth 1.6.9ではcallback pathが異なります。
+
+- production built-in GitHub: `/auth/callback/github`
+- local/test Generic OAuth: `/auth/oauth2/callback/github`
+
+`apps/github-emulator`は後者をstrict OAuth Appとしてseedします。この差はOAuth E2Eで固定し、Better Authをupgradeするときにclient methodと一緒に再確認します。
+
 ## Cookieとorigin
 
 本番はHTTPSを前提に、app/APIを共通の親domainへ置きます（例: `app.example.com` と `api.example.com`）。`AUTH_COOKIE_DOMAIN=example.com` を必須設定し、次を同じdeploymentとして管理します。

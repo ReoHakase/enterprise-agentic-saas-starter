@@ -21,6 +21,7 @@ flowchart LR
 
 - `apps/web`: App Router、Server Components、TanStack Query hydration、shadcn/Base UI。
 - `apps/api`: Elysia route、Better Auth、認可macro/service/repository、OpenAPI。
+- `apps/github-emulator`: `vercel-labs/emulate`をprogrammaticに起動するlocal/CI専用GitHub OAuth process。本番bundleには含めない。
 - `packages/auth`: Better Auth factoryとbrowser client。Better Auth callbackではshared DB singletonと `packages/email` を直接composeする。
 - `packages/db`: Turso/libSQL singleton、SQLite schema、migration、seed。
 - `packages/email`: React Email template、render helper、sender interface。

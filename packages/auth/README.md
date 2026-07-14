@@ -8,6 +8,7 @@ Better Auth による認証・認可パッケージ。
 |---|---|
 | `@enterprise-agentic-saas/auth` | singleton `auth` インスタンス（server-only） |
 | `@enterprise-agentic-saas/auth/client` | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
+| `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential |
 
 ## Plugin 構成
 
@@ -16,7 +17,10 @@ Better Auth による認証・認可パッケージ。
 - `organization` — マルチテナント組織管理
 - `multiSession` — 同一browserで最大5 accountを保持し、再ログインなしで切り替える
 - `openAPI` — `/auth/reference` でauth endpointのScalar referenceを公開する
-- `socialProviders.github` — GitHub OAuth sign-in / account linking
+- `socialProviders.github` — productionおよびemulator未使用時のGitHub OAuth sign-in / account linking
+- `genericOAuth` — development/testで明示したlocal emulatorだけをGitHub providerとして登録
+
+local emulator使用時も既存clientの `signIn.social({ provider: "github" })` と `linkSocial({ provider: "github" })` を維持する。Better Auth 1.6.9はgeneric providerをcore social providerへ注入するため、`genericOAuthClient` は追加しない。callbackだけがlocal emulator時は `/auth/oauth2/callback/github`、通常のbuilt-in GitHub providerでは従来どおり `/auth/callback/github` になる。built-in providerとgeneric providerは同時登録しない。
 
 通常のsign-outは保持中のaccount sessionをすべてrevokeする。1つだけ外す場合はclientの `multiSession.revoke` を使う。organization所有権移管などの高リスク操作は15分以内に作成されたfresh sessionを要求する。
 
@@ -24,7 +28,7 @@ Better Auth による認証・認可パッケージ。
 
 PasskeyのRP IDは `TRUSTED_ORIGINS` 先頭のhostname、許可originは同配列全体から組み立てるため、local用hostnameをproductionへ持ち込まない。
 
-cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、web/APIが共有する親domainを指定する。localの `.localhost` だけはweb hostnameへ自動fallbackする。
+cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、web/APIが共有する親domainを指定する。localの `.localhost` だけはweb hostnameへ自動fallbackする。cookieのSecure属性は `BETTER_AUTH_URL` のprotocolへ合わせ、productionはHTTPS以外を起動時に拒否する。これによりlocal HTTP E2EだけSecure属性を外せる。
 
 Better Auth organization pluginは招待recipient向けの `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` だけを公開する。organization/member/invitation/team/custom roleの管理・参照endpointは `disabledPaths` で404にし、tenant guard・fresh session・確認入力・auditを持つ `apps/api` のrouteへ集約する。
 
@@ -52,12 +56,19 @@ Better Auth が `process.env` から自動読み込みする。`apps/api/.env` �
 | `BETTER_AUTH_SECRET` | Yes | セッション署名用シークレット |
 | `BETTER_AUTH_URL` | Yes | Better Auth のベース URL |
 | `AUTH_COOKIE_DOMAIN` | Production | web/APIでsessionを共有する親domain |
-| `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App の Client ID |
-| `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App の Client Secret |
+| `GITHUB_CLIENT_ID` | Emulator未使用時 | GitHub OAuth App の Client ID |
+| `GITHUB_CLIENT_SECRET` | Emulator未使用時 | GitHub OAuth App の Client Secret |
+| `GITHUB_OAUTH_EMULATOR_URL` | No | development/testだけで許可するemulatorのroot URL。`localhost`、`*.localhost`、IPv4/IPv6 loopback以外、userinfo/path/query/hash付きURLを拒否 |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_ID` | No | emulator専用Client ID override。Secretと必ず同時指定 |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No | emulator専用Client Secret override。Client IDと必ず同時指定 |
 | `TRUSTED_ORIGINS` | Yes | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う |
 | `EMAIL_PROVIDER` | No | 未指定時はdevelopment=`mailpit`、test=`noop`、production=`cloudflare` |
 | `EMAIL_FROM` | Production | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address |
 | `MAILPIT_URL` | No | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可 |
+
+emulator URL指定時は通常の `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` を意図的に無視し、本番credentialをseedやlocal requestへ流さない。emulator専用overrideがなければ `@enterprise-agentic-saas/auth/github-oauth` の公開固定値を使う。この値はlocal emulator識別用でありsecretではない。productionではemulator URLをfail-closedで拒否する。
+
+emulator providerは `read:user` / `user:email`、PKCE、POST client authenticationを使用し、`/user` と `/user/emails` をValibotで検証する。primaryかつverifiedなemailを優先し、verified emailがなければsign-inを拒否する。token、provider response、raw errorはloggerへ渡さない。
 
 ## Auth Schema
 
@@ -79,6 +90,16 @@ import { auth } from "@enterprise-agentic-saas/auth"
 // Elysia で mount
 app.mount(auth.handler)
 ```
+
+## Test
+
+```sh
+bun run --cwd packages/auth typecheck
+bun run --cwd packages/auth lint
+bun run --cwd packages/auth test
+```
+
+unit testはemulator URL・credential境界・profile mapping・非漏洩を検証する。integration testはBetter Authのcore `signIn.social` / `linkSocial` がgeneric GitHub providerへ解決され、callbackが `/auth/oauth2/callback/github` になることを実際のhandlerで検証する。
 
 ## 入れないもの
 

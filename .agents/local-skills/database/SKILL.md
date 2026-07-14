@@ -51,6 +51,8 @@ env変数は `src/env.ts`（envin + Valibot）で検証し、`src/index.ts` が 
 
 `src/schema/auth.generated.ts` は Better Auth CLI で生成する。手で書かない。
 
+ただしCLIはrepo固有の`member_organization_user_uidx`、organizationごとのsuper admin partial unique、pending invitation partial uniqueを生成できず、既存fileを上書きすると削除する。再生成前後を必ずdiffし、formatterだけの差分を除いたうえで、これらの標準生成外制約を消した結果を採用しない。具体的なoverlay一覧は`references/database.md`を正本にする。OAuth provider追加のようにDB modelを増やさないplugin変更は、最終的にschema no-diffであることを確認する。
+
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
