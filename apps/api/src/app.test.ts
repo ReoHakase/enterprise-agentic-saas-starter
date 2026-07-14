@@ -21,6 +21,7 @@ vi.mock("@enterprise-agentic-saas/email", () => ({
 import { createApp } from "./app"
 import { createApiClient } from "./client"
 import { env } from "./env"
+import { publicErrors } from "./errors/app-error"
 import { deleteOrganization } from "./modules/organizations/service"
 import { resolveAndPersistActiveOrganizationId } from "./modules/users/repository"
 import { corsPlugin } from "./plugins/cors"
@@ -503,6 +504,25 @@ describe("createApp security and OpenAPI", () => {
       createOrganizationResponses["403"].content["application/json"].schema
         .properties.error.properties.fieldErrors
     ).toBeDefined()
+    const documentedError =
+      createOrganizationResponses["403"].content["application/json"].schema
+        .properties.error
+    expect(documentedError.required).toContain("requestId")
+    expect(documentedError.properties.requestId).toMatchObject({
+      type: "string",
+    })
+    expect(Object.keys(documentedError.properties.context.properties)).toEqual([
+      "action",
+      "constraint",
+      "field",
+      "maxAgeSeconds",
+      "reason",
+      "resource",
+      "retryAfter",
+    ])
+    expect(
+      documentedError.properties.context.properties.organizationId
+    ).toBeUndefined()
     expect(
       spec.paths["/todos/{id}/comments"].post.responses["201"].content[
         "application/json"
@@ -571,7 +591,6 @@ describe("createApp security and OpenAPI", () => {
       error: {
         code: "unauthorized",
         message: "Authentication required",
-        context: {},
         requestId: "req_unauthorized",
       },
     })
@@ -1326,6 +1345,22 @@ describe("createApp security and OpenAPI", () => {
       })
     )
     expect(duplicate.status).toBe(409)
+    const duplicateBody = await duplicate.json()
+    expect(duplicateBody).toMatchObject({
+      error: {
+        code: "conflict",
+        context: {
+          field: "email",
+          reason: "pending",
+          resource: "invitation",
+        },
+        fieldErrors: {
+          email: ["A pending invitation already exists"],
+        },
+        message: "A pending invitation already exists",
+      },
+    })
+    expect(JSON.stringify(duplicateBody)).not.toContain("new@example.test")
 
     const existingMember = await app.handle(
       jsonRequest("/organizations/org_1/invitations", {
@@ -1335,6 +1370,24 @@ describe("createApp security and OpenAPI", () => {
       })
     )
     expect(existingMember.status).toBe(409)
+    const existingMemberBody = await existingMember.json()
+    expect(existingMemberBody).toMatchObject({
+      error: {
+        code: "conflict",
+        context: {
+          constraint: "unique",
+          field: "email",
+          resource: "member",
+        },
+        fieldErrors: {
+          email: ["User is already a member"],
+        },
+        message: "User is already a member",
+      },
+    })
+    expect(JSON.stringify(existingMemberBody)).not.toContain(
+      "user4@example.test"
+    )
 
     await db.insert(schema.invitation).values({
       id: "expired_invitation",
@@ -1475,6 +1528,44 @@ describe("createApp security and OpenAPI", () => {
     ).toBe("expired")
   })
 
+  it("maps the database invitation uniqueness fallback to the email field", async () => {
+    const db = await createSeededDb()
+    await db.run(sql`
+      create trigger invitation_unique_fallback_test
+      before insert on invitation
+      when new.email = 'fallback@example.test'
+      begin
+        select raise(abort, 'invitation_pending_organization_email_uidx');
+      end
+    `)
+    const app = createApp(db)
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", {
+        method: "POST",
+        userId: "user_3",
+        body: { email: "fallback@example.test", role: "member" },
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body).toMatchObject({
+      error: {
+        code: "conflict",
+        context: {
+          field: "email",
+          reason: "pending",
+          resource: "invitation",
+        },
+        fieldErrors: {
+          email: ["A pending invitation already exists"],
+        },
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain("fallback@example.test")
+  })
+
   it("serializes concurrent duplicate invitations", async () => {
     const app = createApp(await createSeededDb())
     const responses = await Promise.all(
@@ -1494,6 +1585,18 @@ describe("createApp security and OpenAPI", () => {
     expect(
       responses.filter((response) => response.status === 409)
     ).toHaveLength(1)
+    const conflict = responses.find((response) => response.status === 409)
+    if (!conflict) {
+      throw new Error("Expected one invitation conflict response")
+    }
+    expect(await conflict.json()).toMatchObject({
+      error: {
+        context: { field: "email", reason: "pending" },
+        fieldErrors: {
+          email: ["A pending invitation already exists"],
+        },
+      },
+    })
   })
 
   it("requires step-up when a super admin grants admin by invitation", async () => {
@@ -1762,5 +1865,43 @@ describe("issue-like todos", () => {
     expect(body).toContain("Internal server error")
     expect(body).toContain("req_test")
     expect(body).not.toContain("super-secret-value")
+  })
+
+  it("filters AppError context again at the HTTP boundary", async () => {
+    const error = publicErrors.validation("Choose a valid email", {
+      action: "invitation.create",
+      field: "email",
+    })
+    Object.defineProperty(error, "publicContext", {
+      value: {
+        action: "invitation.create",
+        field: "email",
+        organizationId: "org_private",
+        reason: "token=super-secret-value",
+        retryAfter: -1,
+      },
+    })
+    error.message = "TURSO_AUTH_TOKEN=super-secret-message"
+    const app = createApp(testDb()).get("/_test/public-error", () => {
+      throw error
+    })
+
+    const response = await app.handle(
+      new Request("http://localhost/_test/public-error")
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body).toMatchObject({
+      error: {
+        code: "validation_error",
+        context: { action: "invitation.create", field: "email" },
+        fieldErrors: { email: ["Choose a valid email"] },
+      },
+    })
+    expect(body.error.requestId).toBe(response.headers.get("x-request-id"))
+    expect(JSON.stringify(body)).not.toMatch(
+      /org_private|super-secret-message|super-secret-value|organizationId/
+    )
   })
 })

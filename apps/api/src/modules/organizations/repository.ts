@@ -55,6 +55,21 @@ const isDeletionRequestConflict = (cause: unknown) => {
 const invitationQueues = new Map<string, Promise<void>>()
 const noop = () => {}
 
+const invitationEmailErrors = {
+  existingMember: () =>
+    publicErrors.conflict("User is already a member", {
+      constraint: "unique",
+      field: "email",
+      resource: "member",
+    }),
+  pendingInvitation: () =>
+    publicErrors.conflict("A pending invitation already exists", {
+      field: "email",
+      reason: "pending",
+      resource: "invitation",
+    }),
+}
+
 const withInvitationLock = async <T>(
   key: string,
   operation: () => Promise<T>
@@ -1101,10 +1116,7 @@ export const insertInvitation = async (
             )
             .limit(1)
           if (existingMembers[0]) {
-            throw publicErrors.conflict("User is already a member", {
-              resource: "member",
-              constraint: "unique",
-            })
+            throw invitationEmailErrors.existingMember()
           }
 
           const pendingRows = await tx
@@ -1120,10 +1132,7 @@ export const insertInvitation = async (
             .limit(1)
           const pending = pendingRows[0]
           if (pending && pending.expiresAt.getTime() > Date.now()) {
-            throw publicErrors.conflict("A pending invitation already exists", {
-              resource: "invitation",
-              reason: "pending",
-            })
+            throw invitationEmailErrors.pendingInvitation()
           }
           if (pending) {
             await tx
@@ -1179,10 +1188,7 @@ export const insertInvitation = async (
       details.includes("invitation_pending_organization_email_uidx") ||
       details.includes("invitation.organization_id, lower(email)")
     ) {
-      throw publicErrors.conflict("A pending invitation already exists", {
-        resource: "invitation",
-        reason: "pending",
-      })
+      throw invitationEmailErrors.pendingInvitation()
     }
     throw publicErrors.internal(cause, {
       module: "organizations",

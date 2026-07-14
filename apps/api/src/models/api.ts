@@ -1,9 +1,8 @@
 import * as v from "valibot"
 
-const publicContextValueModel = v.union([v.string(), v.number(), v.boolean()])
-
 const errorCodeModel = v.pipe(
   v.string(),
+  v.regex(/^[A-Za-z0-9_-]{1,64}$/),
   v.metadata({
     description: "機械判定に使う安定したエラーコード",
     examples: ["unauthorized", "step_up_required", "csrf_origin_forbidden"],
@@ -12,23 +11,48 @@ const errorCodeModel = v.pipe(
 
 const errorMessageModel = v.pipe(
   v.string(),
+  v.minLength(1),
+  v.maxLength(500),
   v.metadata({
     description: "利用者へ表示できる安全なメッセージ",
     examples: ["Authentication required"],
   })
 )
 
+const publicContextIdentifierModel = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(96),
+  v.regex(/^[A-Za-z][A-Za-z0-9_.:-]*$/)
+)
+
+const publicContextNumberModel = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(Number.MAX_SAFE_INTEGER)
+)
+
 const publicContextModel = v.pipe(
-  v.record(v.string(), publicContextValueModel),
+  v.object({
+    action: v.optional(publicContextIdentifierModel),
+    constraint: v.optional(publicContextIdentifierModel),
+    field: v.optional(publicContextIdentifierModel),
+    maxAgeSeconds: v.optional(publicContextNumberModel),
+    reason: v.optional(publicContextIdentifierModel),
+    resource: v.optional(publicContextIdentifierModel),
+    retryAfter: v.optional(publicContextNumberModel),
+  }),
   v.metadata({
-    description: "secretを含まない、UIの復旧導線用context",
+    description:
+      "secretやtenant IDを含まない、allowlist済みのUI復旧導線用context",
   })
 )
 
 const fieldErrorsModel = v.pipe(
   v.record(
     v.string(),
-    v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(20))
+    v.pipe(v.array(errorMessageModel), v.minLength(1), v.maxLength(20))
   ),
   v.metadata({
     description:
@@ -39,6 +63,7 @@ const fieldErrorsModel = v.pipe(
 
 const requestIdModel = v.pipe(
   v.string(),
+  v.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   v.metadata({
     description: "問い合わせとtraceの突合に使うrequest id",
     examples: ["req_01JQ8YF2J7Q0J2X8R8S3Q9M6P4"],
@@ -52,7 +77,7 @@ export const apiErrorModel = v.pipe(
       message: errorMessageModel,
       context: v.optional(publicContextModel),
       fieldErrors: v.optional(fieldErrorsModel),
-      requestId: v.nullable(requestIdModel),
+      requestId: requestIdModel,
     }),
   }),
   v.metadata({

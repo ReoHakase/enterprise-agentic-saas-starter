@@ -1,10 +1,15 @@
 import { Elysia, ValidationError } from "elysia"
 
-import { AppError } from "../errors/app-error"
+import { AppError, sanitizePublicErrorContext } from "../errors/app-error"
 import {
   captureObservedException,
   recordObservedHttpStatus,
 } from "../observability/runtime"
+
+const isResponseValidationError = (code: string, error: unknown) =>
+  code === "VALIDATION" &&
+  error instanceof ValidationError &&
+  error.type === "response"
 
 const statusCodeFor = (code: string, error: unknown) => {
   if (error instanceof AppError) {
@@ -13,6 +18,10 @@ const statusCodeFor = (code: string, error: unknown) => {
 
   if (code === "NOT_FOUND") {
     return 404
+  }
+
+  if (isResponseValidationError(code, error)) {
+    return 500
   }
 
   if (code === "VALIDATION") {
@@ -29,6 +38,10 @@ const attributeCodeFor = (elysiaCode: string, error: unknown): string => {
 
   if (elysiaCode === "NOT_FOUND") {
     return "not_found"
+  }
+
+  if (isResponseValidationError(elysiaCode, error)) {
+    return "internal_error"
   }
 
   if (elysiaCode === "VALIDATION") {
@@ -112,7 +125,7 @@ const fieldErrorsFor = (
       return undefined
     }
     const safeField = fieldPathFrom([field])
-    return safeField ? { [safeField]: [error.message] } : undefined
+    return safeField ? { [safeField]: [error.publicMessage] } : undefined
   }
 
   if (
@@ -142,7 +155,7 @@ const recordError = (
   elysiaCode: string,
   error: unknown,
   request: Request,
-  requestId: string | null,
+  requestId: string,
   route: string
 ) => {
   const appCode = attributeCodeFor(elysiaCode, error)
@@ -159,19 +172,26 @@ const recordError = (
   }
 }
 
-const responseBody = (
-  code: string,
-  error: unknown,
-  requestId: string | null
-) => {
+const responseBody = (code: string, error: unknown, requestId: string) => {
   const fieldErrors = fieldErrorsFor(code, error)
 
+  if (isResponseValidationError(code, error)) {
+    return {
+      error: {
+        code: "internal_error",
+        message: "Internal server error",
+        requestId,
+      },
+    }
+  }
+
   if (error instanceof AppError) {
+    const context = sanitizePublicErrorContext(error.publicContext)
     return {
       error: {
         code: error.code,
-        message: error.message,
-        context: error.publicContext,
+        message: error.publicMessage,
+        ...(Object.keys(context).length > 0 ? { context } : {}),
         ...(fieldErrors ? { fieldErrors } : {}),
         requestId,
       },

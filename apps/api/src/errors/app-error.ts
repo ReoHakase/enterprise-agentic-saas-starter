@@ -1,20 +1,67 @@
-export type PublicErrorContext = Partial<
-  Record<
-    | "action"
-    | "constraint"
-    | "field"
-    | "maxAgeSeconds"
-    | "reason"
-    | "resource"
-    | "retryAfter",
-    string | number | boolean
-  >
->
+export type PublicErrorContext = Partial<{
+  action: string
+  constraint: string
+  field: string
+  maxAgeSeconds: number
+  reason: string
+  resource: string
+  retryAfter: number
+}>
 export type PrivateErrorContext = Record<string, unknown>
+
+const publicStringContextKeys = [
+  "action",
+  "constraint",
+  "field",
+  "reason",
+  "resource",
+] as const
+const publicNumberContextKeys = ["maxAgeSeconds", "retryAfter"] as const
+const publicContextIdentifierPattern = /^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/
+
+const ownValue = (value: object, key: string): unknown => {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)
+  return descriptor && "value" in descriptor ? descriptor.value : undefined
+}
+
+/**
+ * AppErrorの型を迂回した値もHTTP responseへ出る直前に安全な契約へ絞る。
+ * free-text、URL、email、token、tenant IDをcontextへ載せる用途には使わない。
+ */
+export const sanitizePublicErrorContext = (
+  value: unknown
+): PublicErrorContext => {
+  if (!value || typeof value !== "object") {
+    return {}
+  }
+
+  const output: PublicErrorContext = {}
+  for (const key of publicStringContextKeys) {
+    const contextValue = ownValue(value, key)
+    if (
+      typeof contextValue === "string" &&
+      publicContextIdentifierPattern.test(contextValue)
+    ) {
+      output[key] = contextValue
+    }
+  }
+  for (const key of publicNumberContextKeys) {
+    const contextValue = ownValue(value, key)
+    if (
+      typeof contextValue === "number" &&
+      Number.isSafeInteger(contextValue) &&
+      contextValue >= 0
+    ) {
+      output[key] = contextValue
+    }
+  }
+
+  return output
+}
 
 export type AppErrorOptions = {
   code: string
-  message: string
+  publicMessage: string
   statusCode: number
   cause?: unknown
   publicContext?: PublicErrorContext
@@ -23,32 +70,43 @@ export type AppErrorOptions = {
 
 export class AppError extends Error {
   readonly code: string
+  readonly publicMessage: string
   readonly statusCode: number
   readonly publicContext: PublicErrorContext
   readonly privateContext: PrivateErrorContext
 
   constructor(options: AppErrorOptions) {
-    super(options.message, { cause: options.cause })
+    super(options.publicMessage, { cause: options.cause })
     this.name = "AppError"
     this.code = options.code
+    this.publicMessage = options.publicMessage
+    Object.defineProperty(this, "publicMessage", {
+      configurable: false,
+      writable: false,
+    })
     this.statusCode = options.statusCode
-    this.publicContext = options.publicContext ?? {}
+    this.publicContext = Object.freeze(
+      sanitizePublicErrorContext(options.publicContext)
+    )
     this.privateContext = options.privateContext ?? {}
   }
 }
 
 export const publicErrors = {
-  unauthorized(message = "Authentication required") {
+  unauthorized(publicMessage = "Authentication required") {
     return new AppError({
       code: "unauthorized",
-      message,
+      publicMessage,
       statusCode: 401,
     })
   },
-  forbidden(message = "Forbidden", publicContext: PublicErrorContext = {}) {
+  forbidden(
+    publicMessage = "Forbidden",
+    publicContext: PublicErrorContext = {}
+  ) {
     return new AppError({
       code: "forbidden",
-      message,
+      publicMessage,
       statusCode: 403,
       publicContext,
     })
@@ -56,15 +114,15 @@ export const publicErrors = {
   csrfOriginForbidden(reason: "missing_origin" | "untrusted_origin") {
     return new AppError({
       code: "csrf_origin_forbidden",
-      message: "Request origin is not allowed",
+      publicMessage: "Request origin is not allowed",
       statusCode: 403,
       publicContext: { reason },
     })
   },
-  conflict(message = "Conflict", publicContext: PublicErrorContext = {}) {
+  conflict(publicMessage = "Conflict", publicContext: PublicErrorContext = {}) {
     return new AppError({
       code: "conflict",
-      message,
+      publicMessage,
       statusCode: 409,
       publicContext,
     })
@@ -72,7 +130,7 @@ export const publicErrors = {
   activeOrganizationRequired() {
     return new AppError({
       code: "active_organization_required",
-      message: "Select an active organization",
+      publicMessage: "Select an active organization",
       statusCode: 409,
       publicContext: {
         action: "organization.activate",
@@ -83,7 +141,7 @@ export const publicErrors = {
   activeOrganizationMismatch() {
     return new AppError({
       code: "active_organization_mismatch",
-      message: "Switch to this organization before continuing",
+      publicMessage: "Switch to this organization before continuing",
       statusCode: 409,
       publicContext: {
         action: "organization.activate",
@@ -94,7 +152,7 @@ export const publicErrors = {
   confirmationRequired(action: string, publicContext: PublicErrorContext = {}) {
     return new AppError({
       code: "confirmation_required",
-      message: "Confirmation does not match",
+      publicMessage: "Confirmation does not match",
       statusCode: 400,
       publicContext: {
         action,
@@ -107,7 +165,7 @@ export const publicErrors = {
   stepUpRequired(action: string, maxAgeSeconds: number) {
     return new AppError({
       code: "step_up_required",
-      message: "Recent authentication required",
+      publicMessage: "Recent authentication required",
       statusCode: 403,
       publicContext: {
         action,
@@ -119,7 +177,7 @@ export const publicErrors = {
   internal(cause: unknown, privateContext: PrivateErrorContext = {}) {
     return new AppError({
       code: "internal_error",
-      message: "Internal server error",
+      publicMessage: "Internal server error",
       statusCode: 500,
       cause,
       privateContext,
@@ -128,7 +186,7 @@ export const publicErrors = {
   unavailable(cause: unknown, retryAfter = 30) {
     return new AppError({
       code: "service_unavailable",
-      message: "Service temporarily unavailable",
+      publicMessage: "Service temporarily unavailable",
       statusCode: 503,
       cause,
       publicContext: { retryAfter },
@@ -136,20 +194,23 @@ export const publicErrors = {
     })
   },
   validation(
-    message = "Invalid request",
+    publicMessage = "Invalid request",
     publicContext: PublicErrorContext = {}
   ) {
     return new AppError({
       code: "validation_error",
-      message,
+      publicMessage,
       statusCode: 400,
       publicContext,
     })
   },
-  notFound(message = "Not found", publicContext: PublicErrorContext = {}) {
+  notFound(
+    publicMessage = "Not found",
+    publicContext: PublicErrorContext = {}
+  ) {
     return new AppError({
       code: "not_found",
-      message,
+      publicMessage,
       statusCode: 404,
       publicContext,
     })
