@@ -36,9 +36,13 @@ DBは `(organization_id, user_id)` のmembership重複と、同じorganization�
 
 member削除時はmembership、auditだけでなく、対象userが削除organizationをactiveにしている全sessionも同じtransactionでreconcileします。残る最新valid context、単一membership、nullの順に更新するため、削除済みtenantを指すsessionを残しません。
 
+clientのactivate成功直後に旧tenantのTanStack Queryを一括invalidateしません。session contextだけが新tenantへ変わった状態で旧member/issue queryを再取得すると409/404になるため、in-flight queryをcancelし、route replaceまたはServer Component refreshで新tenantのquery keyを構築します。
+
 Better Auth organization pluginの管理・参照APIは直接公開しません。`/auth/organization/*` はdeny-by-defaultとし、招待recipient本人に必要な `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` の4 pathだけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths` で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
 
 招待accept直前にも `organizationHooks.beforeAcceptInvitation` でroleを `admin | member` に限定します。legacy `owner`、`super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
+
+招待メールの送信者表示には認証済みsession userの表示名を使います。内部user IDを人向けの`inviterName`へ流用せず、表示名が空の場合だけtemplateの一般的なfallback文言へ倒します。
 
 ## Destructive / privilege transfer
 
@@ -50,9 +54,19 @@ Better Auth organization pluginの管理・参照APIは直接公開しません�
 - 成功した操作のactor、tenant、target、action、resultをaudit logへ残す。拒否はrequest ID付きoperational logへ残す。tokenやsecretはどちらにも入れない。
 - invitation cancelは期限内pendingだけに許可する。accepted/rejected/cancelled/expiredは409 `invitation_not_pending`、期限を過ぎたpendingは一覧取得時にexpiredへ遷移する。
 
+### Organization即時削除
+
+`DELETE /organizations/:organizationId`は汎用tenant guardとは別の専用guardを使います。通常requestはmembership、active organization、`super_admin`、900秒以内のfresh sessionを要求し、bodyのslug完全一致、`confirmation: "DELETE"`、16〜128文字のopaqueな`idempotencyKey`がすべて必要です。route guardに加えてserviceでもrole/fresh/確認値を再検証します。
+
+削除transactionでは、同じactorとkeyのcleanup jobを最初に確認します。同じorganizationなら既存receiptを返し、別organizationで使われたkeyなら409にします。新規削除はactorが現在も`super_admin`であること、request sessionが未失効かつ対象organizationをactiveにしていること、organizationとslugが一致することをmutation直前に再確認します。その後slug/emailを持たないjobを作成し、対象organizationをactiveにしている全sessionをnullへ戻してからorganizationをhard deleteします。member、invitation、todo、comment、audit等のtenant rowはDBの`ON DELETE CASCADE`でも即時削除します。
+
+削除成功後はmembership自体がなくなるため、同じHTTP requestのretryだけを限定的に許可します。専用guardがmembership 404時に `(actor user id, organization id, idempotency key)` の完全一致jobを確認し、fresh sessionを再要求してactive organization検証だけをskipします。別actor・別organization・別keyは404のままです。疑似membershipは作らず、replay handlerは削除serviceを再実行せず同じreceiptを返します。
+
 ## 複数アカウント
 
 Better Authのmulti-session pluginをserver/client双方に設定します。account menuから現在のsessionを維持したまま別アカウントを追加し、保存済みsessionを切り替えられます。切り替え後はServer Componentをrefreshし、active organizationとpermissionを新sessionから再取得します。
+
+Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 
 ## Cookieとorigin
 

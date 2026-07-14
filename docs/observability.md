@@ -39,7 +39,7 @@ sampling rateは0から1の範囲だけを受け付け、範囲外は安全な�
 
 ## Healthとalert
 
-APIの`GET /health`はprocess/Workerのliveness endpointで、認証不要、side effectなし、200 JSONを返す。Sentry Uptime monitorはproduction APIのこのURLを監視し、Webは公開rootまたは専用の軽量pageを別monitorにする。Turso疎通はlivenessへ混ぜず、DB span latency/error rateのmonitorで検知する。
+APIの`GET /health`はprocess/Workerのliveness endpointで、依存サービスへ接続せず200 JSONを返す。`GET /ready`はTurso/libSQLへ軽量な`select 1`を行い、利用不能ならprivate causeを含まない503を返す。Sentry Uptime monitorはliveness、readiness、Web公開URLを分け、単なるDB障害をWorker停止として扱わない。
 
 production開始時の最小monitorは次の通り。
 
@@ -49,6 +49,7 @@ production開始時の最小monitorは次の通り。
 - auth failure、permission denial、CSRF failureの急増
 - `email_failed`、特にrate limit/internal errorの継続
 - Turso request latency/error
+- organization削除R2 cleanupのfailed件数と最古job age。eventへjob/organization/user IDやobject keyを載せない
 
 Monitorは検知条件、Alertは通知先として分離する。production high priorityはSlackとemailへ通知し、test notificationを実行する。閾値、owner、runbook URL、通知抑制時間を設定し、staging eventでproduction alertを鳴らさない。
 

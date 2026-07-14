@@ -6,13 +6,15 @@ Elysia on Bun の API app workspace。
 
 - `createApp(db)` で Elysia app を組み立てる（テスト可能な最小ファクトリ）。
 - `index.ts` は本番 plugin を合成して listen する。
-- `client.ts` は Eden client を export する。
+- `client.ts` は`parseDate: false`固定のEden clientをexportする。
+- `worker.ts`はCloudflare request handlerとorganization削除後のR2 cleanup cronを合成する。
 - 本番固有の関心事（auth, cors, Sentry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
 
 ## 公開 entrypoint
 
 - `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`
-- `@enterprise-agentic-saas/api/types`: `App`
+
+Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だけです。`App`型はEden client内部で保持し、rootや`./types` entrypointは公開しません。
 
 ## 依存方向
 
@@ -22,7 +24,7 @@ Elysia on Bun の API app workspace。
 
 ## Env 境界
 
-環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。`EMAIL_FROM`はfail-fastのため必須で、未設定や不正なaddressでは起動しない。
+環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。local/testで`EMAIL_FROM`を省略した場合だけ、配送不能な`noreply@example.test`を使う。本番では`EMAIL_FROM`を必須にし、未設定や不正なaddressならfail-fastする。
 
 主な env:
 
@@ -51,13 +53,17 @@ Elysiaのrequest trace/logはSentry SDKとPII-safeなstructured console sinkへ�
 
 ## Validation
 
-API **route** schema は Elysia の `t` / TypeBox に寄せる。**環境変数** 用に限り Valibot を `src/env.ts` で使う。
+API routeのbody/query/params/responseと環境変数はValibotへ統一します。route modelはStandard SchemaとしてElysiaへ直接渡し、OpenAPIは`@valibot/to-json-schema` mapperで生成します。request validationは400 `validation_error`と安全な`fieldErrors`へ正規化し、422は返しません。
+
+Eden clientはoptionsをspreadした後で`parseDate: false`を固定し、consumerから上書きできません。todo due dateの公開値は`YYYY-MM-DD | null`、DB内部はUTC midnightです。実HTTP transport testでdue dateとtimestampが文字列のまま届くことを確認します。
 
 ## API documentation
 
 - Swagger UI: `/openapi`
 - OpenAPI 3.0 JSON: `/openapi/json`
 - Better Auth reference: `/auth/reference`
+- liveness: `/health`
+- Turso/libSQL readiness: `/ready`
 
 各routeは `operationId`、tag、request/response schema、共通error schema、cookie securityを持つ。browserからSwagger UIのtry-outを使う場合、Better AuthのSecure/HttpOnly cookieはUIへ貼り付けず、同一browserのcredentialとして送る。
 
@@ -88,6 +94,10 @@ Better Authのfresh sessionは15分。`step_up_required` (403) を受けたclien
 
 `super_admin`移管は通常のmember role PATCHから分離する。`POST /organizations/:organizationId/ownership-transfer` へtarget `memberId` とtarget member emailの完全一致 `confirmation` を送り、fresh sessionを要求する。member削除もtarget email確認とfresh sessionが必要。
 
+organization削除は`DELETE /organizations/:organizationId`と専用`organizationDeletionAccess` macroを使います。通常はactive organization、`super_admin`、fresh session、slug完全一致、`DELETE`確認、opaqueな冪等性keyを必須にします。削除済みorganizationへの同一request retryだけはactor・organization・key完全一致のjobを確認し、fresh sessionを再要求して同じreceiptを返します。別actor/key/organizationは許可しません。
+
+DB transactionはPIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteします。tenant rowはcascadeで即時削除し、外部keyを持たないjobは残します。Cloudflare cronがR2のorganization prefixをlease/backoff付きで冪等削除します。job/tenant/user IDをlogやSentryへ出しません。
+
 ## Audit
 
 organization/member/invitation/issue/comment mutationは `audit_logs` へappend-only eventを残す。重要mutationとevent insertは同じDB transactionに含め、audit失敗後にmutationだけ成功したように見える状態を作らない。admin以上は `/organizations/:organizationId/audit-logs` でtenant内eventを取得できる。
@@ -104,11 +114,12 @@ bun run test
 
 API integration は `createApp(testDb())` と `app.handle(new Request(...))` を使う。テストは `@enterprise-agentic-saas/auth` / `@enterprise-agentic-saas/db` を import しないため起動が軽い。
 
-security testでは401/403/404、active tenant不一致、tenant leak非開示、stale session、admin権限昇格、single `super_admin` invariant、同時issue採番、cross-tenant commentを確認する。
+security testでは401/403/404、active tenant不一致、tenant leak非開示、stale session、admin権限昇格、single `super_admin` invariant、同時issue採番、cross-tenant commentを確認する。organization削除は非super admin、stale session、確認不一致、exact replay、key衝突、cascade、session null、job残存、R2 retryを別々に固定する。
 
 ## 入れてはいけないもの
 
 - `packages/api-client`
-- Valibot route schema（環境変数の Valibot は `src/env.ts` のみ）
+- TypeBoxとのroute schema二重管理
+- Web feature内のfirst-party API用raw `fetch` wrapper
 - packages から apps への逆依存
 - raw secret や DB URL を error response へ返す処理

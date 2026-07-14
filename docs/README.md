@@ -17,10 +17,10 @@
 
 ```sh
 bun install --frozen-lockfile
-bun run --cwd packages/db db:prepare
-bun run --cwd packages/db db:seed
 bun run check
 bun run build
 ```
+
+local applicationは別terminalの `bun run dev` 1つで起動します。このcommandにlocal Turso、`generate + migrate`、非破壊seed、Drizzle Studioも含まれます。DBだけが必要な場合は[ローカル開発](./local-development.md)のDB-only commandを使います。
 
 破壊的なDB resetと本番deployは通常の開発コマンドへ混ぜていません。各runbookの確認条件を満たしてから明示実行してください。

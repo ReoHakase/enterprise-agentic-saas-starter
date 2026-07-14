@@ -56,7 +56,7 @@ Better Auth が `process.env` から自動読み込みする。`apps/api/.env` �
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App の Client Secret |
 | `TRUSTED_ORIGINS` | Yes | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う |
 | `EMAIL_PROVIDER` | Yes | localは`console`、testは`noop`、Cloudflare Worker本番は`cloudflare` |
-| `EMAIL_FROM` | Yes | Cloudflare Email Sendingで検証済みdomainのsender address |
+| `EMAIL_FROM` | Production | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address |
 
 ## Auth Schema
 

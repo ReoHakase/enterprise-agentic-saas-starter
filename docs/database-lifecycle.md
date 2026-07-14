@@ -50,7 +50,7 @@ CONFIRM_DB_RESET=reset-local-development \
 2. deploy concurrencyを1本に制限する。
 3. `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` をproduction secretから注入する。
 4. API deployより先に `db:migrate` を一度だけ実行する。
-5. `/health`、認証、tenant境界をsmoke testする。
+5. `/health`、`/ready`、認証、tenant境界をsmoke testする。
 
 ```sh
 bun run --cwd packages/db db:migrate
@@ -70,3 +70,12 @@ bun run --cwd packages/db db:migrate
 - pending invitationは `admin` / `member` roleだけを許可し、legacyの `owner` / `super_admin` / null /未知roleはmigrationでexpiredにする。
 - repository queryも `id + organization_id` を条件にする。
 - migration testで異なるtenantのcomment挿入が失敗することを確認する。
+
+## Organization削除job
+
+`organization_deletion_jobs`はorganization本体をhard deleteした後もR2 cleanupとHTTP retry receiptを保持するため、意図的にorganizationへの外部キーを持ちません。代わりに次の不変条件をschema・repository・migration testで維持します。
+
+- actor user IDとidempotency keyをuniqueにし、同じkeyの別organization利用を409にする。
+- jobにはslug、email、token、本文を保存せず、削除に必要なopaque IDと低cardinality status/error codeだけを置く。
+- transactionはjob作成、対象organizationを指す全sessionのactive organization解除、organization cascade deleteを一体で行う。
+- scheduled workerはlease期限、attempt数、next retry時刻を使い、失敗jobをhot loopさせない。完了/失敗更新はclaim時の`attempts + locked_at`が一致する場合だけ行い、lease期限切れの旧workerが新workerの状態を上書きしない。

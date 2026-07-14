@@ -18,13 +18,13 @@ indexed in [`docs/README.md`](docs/README.md).
 | --------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Runtime   | Bun `1.3.13`                                                                                                              |
 | Monorepo  | Bun workspaces, Turborepo                                                                                                 |
-| Web       | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/ui                                                                     |
-| API       | Elysia on Bun, Eden client, Elysia `t` / TypeBox (routes); [envin](https://github.com/turbostarter/envin) + Valibot (env) |
+| Web       | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/Base UI, TanStack Query/Form/Table, Jotai                               |
+| API       | Elysia on Bun/Cloudflare, Eden client, Valibot Standard Schema; [envin](https://github.com/turbostarter/envin) + Valibot |
 | Auth      | Better Auth, magic link, organization plugin                                                                              |
 | Database  | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                                    |
 | Email     | React Email, Cloudflare Email Sending, console dev logger, noop test sender                                               |
 | Telemetry | Sentry for Next.js/Bun/Cloudflare Workers, Spotlight for local development                                                |
-| Quality   | Oxlint, Oxfmt, Vitest, GitHub Actions                                                                                     |
+| Quality   | Oxlint, Oxfmt, Vitest/Testing Library, Storybook a11y/interaction, Playwright, GitHub Actions                            |
 | Agent ops | repo skills under `.agents/local-skills`, runtime skills and MCP config via Nix                                           |
 
 > [!NOTE]
@@ -54,7 +54,7 @@ Package boundaries are intentional:
   templates/sender for Better Auth callbacks. `packages/email` must never
   depend back on auth or an app. API-owned invitation flows compose the same
   email package from `apps/api`.
-- `apps/api` uses Elysia `t` / TypeBox for **route** schemas. **Environment** variables use Valibot via [envin](https://github.com/turbostarter/envin) in [`apps/api/src/env.ts`](apps/api/src/env.ts); do not add Valibot for HTTP bodies in the API package unless the project standard changes.
+- `apps/api`はAPI-localなValibot Standard SchemaをElysia routeへ直接渡します。`apps/web`はbrowser-localなValibot schemaを持ち、API packageからimportしてよい公開面は`@enterprise-agentic-saas/api/client`だけです。schema共有だけを目的に`packages/validators`を追加しません。
 
 ## Getting Started
 
@@ -89,14 +89,20 @@ bun install --frozen-lockfile
 
 ### 2. Configure environment (per package)
 
-Environment variables are validated with [envin](https://github.com/turbostarter/envin) and [Valibot](https://valibot.dev/) per runnable package. Bun loads `.env`, then mode-specific files (for example `.env.development` when `NODE_ENV=development`), then `.env.local`, from the **current working directory** of the command (`apps/api`, `packages/db`, and so on).
+API、auth、DBのruntime環境変数は、それぞれを所有するpackageで
+[envin](https://github.com/turbostarter/envin) +
+[Valibot](https://valibot.dev/) により検証します。Webは
+[`apps/web/lib/env.server.ts`](apps/web/lib/env.server.ts) と
+[`apps/web/lib/env.client.ts`](apps/web/lib/env.client.ts) の明示的なallowlistを
+server/browserで分離し、browserへ公開する値を`NEXT_PUBLIC_*`に限定します。
+Bunはcommandの**current working directory**（`apps/api`、`packages/db`など）から
+`.env`、mode別のfile（`NODE_ENV=development`なら`.env.development`）、
+`.env.local`の順に読み込みます。
 
 **Template index:**
 
 - **API:** copy [`apps/api/.env.example`](apps/api/.env.example) to `apps/api/.env.development` and `apps/api/.env.local` as needed. For Vitest, copy [`apps/api/.env.test.example`](apps/api/.env.test.example) to `apps/api/.env.test`.
 - **Database / Drizzle:** copy [`packages/db/.env.example`](packages/db/.env.example) to `packages/db/.env.development` (and `.env.local` if needed). Keep `TURSO_DATABASE_URL` in sync with the API package for local dev.
-
-Optional live preview: `bunx envin dev` (see [`@envin/cli`](https://www.npmjs.com/package/@envin/cli)).
 
 Quick start — copy the committed examples:
 
@@ -119,6 +125,8 @@ environment variables directly into each job.
 
 Optional variables (see `apps/api/.env.example`). Local dev is **portless**: HTTPS on `.localhost` hostnames (not `http://localhost:3000` / `:3001`).
 
+`EMAIL_FROM`はlocal/testでは省略でき、その場合は配送不能な`noreply@example.test`を使います。productionではCloudflare Email Sendingで検証済みのsender addressが必須で、未設定なら起動時にfail-fastします。
+
 ```sh
 # in apps/api/.env.development
 PORT=3001
@@ -130,20 +138,13 @@ TRUSTED_ORIGINS=https://enterprise-agentic-saas.localhost
 CORS_ORIGIN=https://enterprise-agentic-saas.localhost
 ```
 
-Start the local Turso dev server from `@enterprise-agentic-saas/db` when using the default local
-URL:
-
-```sh
-bunx turbo run dev --filter=@enterprise-agentic-saas/db
-```
-
-Run this from the repository root. Turbo starts the local Turso process through
-the package task's `with` relationship, waits for the database, applies
-committed Drizzle migrations with
-`generate + migrate`, inserts development seed data idempotently, and starts
-Drizzle Studio. It never resets existing data. See
-[`docs/database-lifecycle.md`](docs/database-lifecycle.md) for the explicit
-local-only reset command.
+The root development command in the next step also starts the persistent local
+Turso process through the DB task's `with` relationship, waits for the
+database, applies committed Drizzle migrations with `generate + migrate`,
+inserts development seed data idempotently, and starts Drizzle Studio. It never
+resets existing data. See
+[`docs/database-lifecycle.md`](docs/database-lifecycle.md) for DB-only commands
+and the explicit local-only reset command.
 
 > [!NOTE]
 > `turso dev` expects the **`sqld`** binary on `PATH` (provided by the Nix dev shell as `pkgs.sqld`, or install Turso’s tooling by other means). Turso Cloud database creation also
@@ -160,11 +161,23 @@ local-only reset command.
 bun run dev
 ```
 
+Wait for the DB task to report that migration and seed have completed before
+opening the application for the first time. Do not keep a separate DB-only
+Turbo dev task running alongside this command; both would try to own the same
+local port and database process.
+
 Common direct commands:
 
 ```sh
 bun --cwd apps/web run dev
 bun --cwd apps/api run dev
+```
+
+When you intentionally need only Turso, migrations, seed, and Drizzle Studio,
+run this from the repository root instead of `bun run dev`:
+
+```sh
+bunx turbo run dev --filter=@enterprise-agentic-saas/db
 ```
 
 Sentry-compatible errors, traces, and structured logsをlocalだけで確認する場合:

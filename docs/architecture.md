@@ -14,7 +14,9 @@ flowchart LR
   API --> Turso["Turso / libSQL"]
   API --> Mail["Transactional email adapter"]
   Web --> WebCache["R2 incremental cache"]
-  API -. reserved binding .-> Attachments["R2 attachments (future)"]
+  API --> DeletionJobs["Turso deletion jobs"]
+  DeletionJobs --> Cleanup["Cloudflare scheduled cleanup"]
+  Cleanup --> Attachments["R2 organization prefixes"]
 ```
 
 - `apps/web`: App Router、Server Components、TanStack Query hydration、shadcn/Base UI。
@@ -28,7 +30,7 @@ flowchart LR
 
 - `apps/* -> packages/*` は許可する。
 - `packages/* -> apps/*` は禁止する。
-- `apps/web` は `packages/db` を直接importせず、HTTP/EdenでAPIを呼ぶ。
+- `apps/web` は `packages/db` を直接importせず、first-party Elysia routeには`@enterprise-agentic-saas/api/client`のEden clientだけを使う。API packageのschema/typeはdeep importしない。Better Auth固有endpointはauth clientを使う。
 - `packages/auth -> packages/db` と `packages/auth -> packages/email` は許可する。`packages/email` からauth/appへの逆依存は禁止する。
 - Better Auth callbackのprovider選択は `packages/auth`、API独自メールのprovider選択は `apps/api` で行う。
 - routeは入力/出力schemaとHTTP責務、serviceはユースケース、repositoryは永続化に限定する。
@@ -45,7 +47,8 @@ flowchart LR
 - server側でcookieをAPIへ転送してprefetchし、TanStack Queryへhydrateする。
 - root/dashboardに `loading.tsx`、`error.tsx`、`global-error.tsx`、`not-found.tsx` を置く。
 - active organizationはsidebarのswitcherを正本とし、機能画面に別scope selectorを重ねない。
+- browserのGET/mutationはTanStack Queryへ集約し、フォームはTanStack FormとWeb-local Valibot schema、Issue/member一覧はTanStack Tableを使う。Jotaiはdialog選択など再取得不要な一時UI状態だけに使う。
 
 ## Production runtime
 
-WebとAPIはCloudflare Workers、静的assetとincremental cacheはCloudflare/R2、primary DBだけはTursoを利用します。APIの `ATTACHMENTS` は将来の添付機能用に予約したbindingで、現時点ではendpoint/storage moduleを実装していません。ローカルのBun版APIとCloudflare版entrypointはcompositionを共有しますが、ElysiaのCloudflare adapterはexperimentalです。`build:cloudflare` と主要導線E2Eをrelease gateから外さないでください。
+WebとAPIはCloudflare Workers、静的assetとincremental cacheはCloudflare/R2、primary DBだけはTursoを利用します。APIの`ATTACHMENTS`にはまだupload/download endpointがありませんが、organization削除後のprefix cleanupをscheduled handlerが実行します。tenant DB rowはtransactionとcascadeで即時削除し、R2だけをdurable jobで再試行します。ローカルのBun版APIとCloudflare版entrypointはcompositionを共有しますが、ElysiaのCloudflare adapterはexperimentalです。`build:cloudflare` と主要導線E2Eをrelease gateから外さないでください。
