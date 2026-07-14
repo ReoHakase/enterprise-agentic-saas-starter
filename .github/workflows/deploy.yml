@@ -61,9 +61,14 @@ jobs:
 
       - name: Validate production configuration
         run: |
+          test -n "$APP_NAME"
           test -n "$APP_BASE_URL"
           test -n "$API_PUBLIC_URL"
           test -n "$AUTH_COOKIE_DOMAIN"
+          test -n "$BETTER_AUTH_SECRET"
+          test -n "$GITHUB_CLIENT_ID"
+          test -n "$GITHUB_CLIENT_SECRET"
+          test "$EMAIL_PROVIDER" = "cloudflare"
           test -n "$EMAIL_FROM"
           test -n "$SENTRY_API_DSN"
           test -n "$SENTRY_WEB_DSN"
@@ -73,7 +78,9 @@ jobs:
           test -n "$SENTRY_API_PROJECT"
           test -n "$SENTRY_WEB_PROJECT"
           test -n "$TURSO_DATABASE_URL"
+          test -n "$TURSO_AUTH_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
 
       - name: Apply Turso migrations
         run: bun run --cwd packages/db db:migrate

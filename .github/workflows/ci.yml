@@ -77,6 +77,16 @@ jobs:
       - name: Unit and integration tests
         run: bun run test
 
+      - name: Upload Vitest coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-coverage
+          path: |
+            apps/*/coverage
+            packages/*/coverage
+          if-no-files-found: error
+
       - name: Build
         run: bun run build
         env:
@@ -119,7 +129,7 @@ jobs:
   e2e:
     name: Playwright smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -133,8 +143,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
+      - name: Install Chromium and WebKit
+        run: bunx playwright install --with-deps chromium webkit
 
       - name: Run browser smoke tests
         run: bun run test:e2e
@@ -149,7 +159,7 @@ jobs:
           path: |
             apps/web/playwright-report
             apps/web/test-results
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   cloudflare:
     name: Cloudflare dry run
