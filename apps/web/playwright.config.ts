@@ -9,9 +9,10 @@ export default defineConfig({
   // The local mock API intentionally keeps per-session state in memory. Keep
   // journeys serial so reset/setup is deterministic in CI and on laptops.
   fullyParallel: false,
+  failOnFlakyTests: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: [["list"], ["html", { outputFolder: "playwright-report" }]],
   use: {
     baseURL,
@@ -21,8 +22,19 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: "desktop-chrome",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 720 },
+      },
+    },
+    {
+      name: "pixel-7-chrome",
+      use: { ...devices["Pixel 7"] },
+    },
+    {
+      name: "iphone-13-webkit",
+      use: { ...devices["iPhone 13"] },
     },
   ],
   webServer: externalBaseUrl
