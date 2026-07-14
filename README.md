@@ -67,7 +67,10 @@ direnv allow    # once per clone; loads `use flake` from `.envrc`
 # or: nix develop
 ```
 
-The shell provides `bun`, `turso`, `sqld` (for `turso dev`), `dotenvx`, `curl`, and `jq` (see [`flake.nix`](flake.nix)). CI runs `nix flake check` in parallel with the Bun quality job (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+The shell provides `bun`, `turso`, `sqld` (for `turso dev`), `mailpit`,
+`dotenvx`, `curl`, and `jq` (see [`flake.nix`](flake.nix)). CI runs
+`nix flake check` in parallel with the Bun quality job (see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 The Nix dev shell’s `bun` is whatever [`nixpkgs`](https://github.com/NixOS/nixpkgs) provides at the revision recorded in [`flake.lock`](flake.lock) (no per-platform zip hashes in this repo). After `nix flake lock --update-input nixpkgs`, match [`package.json`](package.json) `packageManager` / `engines` to `nix develop -c bun --version`.
 
@@ -166,12 +169,24 @@ opening the application for the first time. Do not keep a separate DB-only
 Turbo dev task running alongside this command; both would try to own the same
 local port and database process.
 
+The same command starts the persistent Mailpit inbox at
+`https://mailpit.enterprise-agentic-saas.localhost` and the React Email template
+preview at `https://email.enterprise-agentic-saas.localhost` in the main
+checkout. Portless adds the current worktree prefix in linked worktrees, and the
+API resolves that effective Mailpit URL automatically. Development email
+defaults to Mailpit, so magic links, verification messages, and invitations are
+visible without adding a provider override.
+
 Common direct commands:
 
 ```sh
 bun --cwd apps/web run dev
-bun --cwd apps/api run dev
+bunx turbo run dev --filter=@enterprise-agentic-saas/api...
 ```
+
+The first command starts only the web process. The filtered Turbo command starts
+the API and its local DB and email dependencies, including Mailpit. Running the
+API package script directly assumes those dependencies are already running.
 
 When you intentionally need only Turso, migrations, seed, and Drizzle Studio,
 run this from the repository root instead of `bun run dev`:
@@ -224,7 +239,7 @@ be edited in this repo.
 - `@enterprise-agentic-saas/auth`: Better Auth server factory.
 - `@enterprise-agentic-saas/auth/client`: Better Auth browser client factory.
 - `@enterprise-agentic-saas/db`: Drizzle/libSQL client and schema exports.
-- `@enterprise-agentic-saas/email`: React Email render helpers, templates, Cloudflare/console/noop adapters, and runtime selector.
+- `@enterprise-agentic-saas/email`: React Email render helpers, templates, Cloudflare/Mailpit/console/noop adapters, and runtime selector.
 - `@enterprise-agentic-saas/ui`: shared UI components, hooks, utilities, and global styles.
 
 ## Adding shadcn/ui Components

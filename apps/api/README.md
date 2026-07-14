@@ -24,7 +24,7 @@ Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だ
 
 ## Env 境界
 
-環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。local/testで`EMAIL_FROM`を省略した場合だけ、配送不能な`noreply@example.test`を使う。本番では`EMAIL_FROM`を必須にし、未設定や不正なaddressならfail-fastする。
+環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。email providerはdevelopment=`mailpit`、test=`noop`、production=`cloudflare`を既定にする。developmentの`dev` scriptは`portless get`でworktree-awareな`MAILPIT_URL`を注入し、単体起動時だけmain checkout URLへfallbackする。local/testで`EMAIL_FROM`を省略した場合は配送不能な`noreply@example.test`を使う。本番では`EMAIL_FROM`を必須にし、未設定や不正なaddressならfail-fastする。
 
 主な env:
 
@@ -33,6 +33,9 @@ Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だ
 - `APP_BASE_URL`
 - `API_PUBLIC_URL`
 - `CORS_ORIGIN`
+- `EMAIL_PROVIDER`
+- `EMAIL_FROM`
+- `MAILPIT_URL`
 - `NODE_ENV`
 
 SentryはBunとCloudflare WorkerのSDKをruntime entrypointで分離する。productionでは`SENTRY_DSN`、`SENTRY_ENVIRONMENT`、`SENTRY_RELEASE`、`SENTRY_TRACES_SAMPLE_RATE`を設定する。Cloudflareでは`SENTRY_DSN`を`wrangler secret put SENTRY_DSN`で登録し、releaseはdeploy時のversion/commitへ揃える。
