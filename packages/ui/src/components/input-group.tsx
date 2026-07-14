@@ -40,6 +40,16 @@ const inputGroupAddonVariants = cva(
   }
 )
 
+const focusInputFromAddon: React.PointerEventHandler<HTMLDivElement> = (
+  event
+) => {
+  if (event.target instanceof Element && event.target.closest("button")) {
+    return
+  }
+
+  event.currentTarget.parentElement?.querySelector("input")?.focus()
+}
+
 function InputGroupAddon({
   className,
   align = "inline-start",
@@ -51,12 +61,7 @@ function InputGroupAddon({
       data-slot="input-group-addon"
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest("button")) {
-          return
-        }
-        e.currentTarget.parentElement?.querySelector("input")?.focus()
-      }}
+      onPointerDown={focusInputFromAddon}
       {...props}
     />
   )

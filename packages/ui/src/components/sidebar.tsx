@@ -18,7 +18,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@enterprise-agentic-saas/ui/components/tooltip"
-import { useIsMobile } from "@enterprise-agentic-saas/ui/hooks/use-mobile"
+import {
+  MOBILE_BREAKPOINT,
+  useIsMobile,
+} from "@enterprise-agentic-saas/ui/hooks/use-mobile"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeftIcon } from "lucide-react"
@@ -35,6 +38,10 @@ type SidebarStyle = React.CSSProperties & {
   "--sidebar-width"?: string
   "--sidebar-width-icon"?: string
   "--skeleton-width"?: string
+}
+
+const MOBILE_SIDEBAR_STYLE: SidebarStyle = {
+  "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
 }
 
 type SidebarContextProps = {
@@ -94,13 +101,16 @@ function SidebarProvider({
   )
 
   // Helper to toggle the sidebar.
-  const toggleSidebar = React.useCallback(
-    () =>
-      isMobile
-        ? setOpenMobile((currentOpen) => !currentOpen)
-        : setOpen((currentOpen) => !currentOpen),
-    [isMobile, setOpen, setOpenMobile]
-  )
+  const toggleSidebar = React.useCallback(() => {
+    const isMobileViewport = window.innerWidth < MOBILE_BREAKPOINT
+
+    if (isMobile || isMobileViewport) {
+      setOpenMobile((currentOpen) => !currentOpen)
+      return
+    }
+
+    setOpen((currentOpen) => !currentOpen)
+  }, [isMobile, setOpen, setOpenMobile])
 
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
@@ -134,11 +144,14 @@ function SidebarProvider({
     }),
     [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
   )
-  const sidebarStyle: SidebarStyle = {
-    "--sidebar-width": SIDEBAR_WIDTH,
-    "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-    ...style,
-  }
+  const sidebarStyle = React.useMemo<SidebarStyle>(
+    () => ({
+      "--sidebar-width": SIDEBAR_WIDTH,
+      "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+      ...style,
+    }),
+    [style]
+  )
 
   return (
     <SidebarContext.Provider value={contextValue}>
@@ -171,9 +184,6 @@ function Sidebar({
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
-  const mobileSidebarStyle: SidebarStyle = {
-    "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-  }
 
   if (collapsible === "none") {
     return (
@@ -199,14 +209,14 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={mobileSidebarStyle}
+          style={MOBILE_SIDEBAR_STYLE}
           side={side}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex size-full flex-col">{children}</div>
         </SheetContent>
       </Sheet>
     )
@@ -237,7 +247,7 @@ function Sidebar({
         data-slot="sidebar-container"
         data-side={side}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:-left-(--sidebar-width) data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:-right-(--sidebar-width) md:flex",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -264,6 +274,15 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar()
+  const handleClick = React.useCallback<
+    NonNullable<React.ComponentProps<typeof Button>["onClick"]>
+  >(
+    (event) => {
+      onClick?.(event)
+      toggleSidebar()
+    },
+    [onClick, toggleSidebar]
+  )
 
   return (
     <Button
@@ -272,10 +291,7 @@ function SidebarTrigger({
       variant="ghost"
       size="icon-sm"
       className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
+      onClick={handleClick}
       {...props}
     >
       <PanelLeftIcon />
@@ -296,7 +312,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-0.5 hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
@@ -618,7 +634,10 @@ function SidebarMenuSkeleton({
   const [width] = React.useState(
     () => `${Math.floor(Math.random() * 40) + 50}%`
   )
-  const skeletonStyle: SidebarStyle = { "--skeleton-width": width }
+  const skeletonStyle = React.useMemo<SidebarStyle>(
+    () => ({ "--skeleton-width": width }),
+    [width]
+  )
 
   return (
     <div

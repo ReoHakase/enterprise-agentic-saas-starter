@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { LayoutDashboardIcon, ListTodoIcon, UsersRoundIcon } from "lucide-react"
+import { type FormEvent, useCallback } from "react"
 import { expect, fn, userEvent, within } from "storybook/test"
 
 import { Badge } from "./badge"
@@ -46,12 +47,12 @@ const members = [
 ]
 
 const SidebarPattern = () => (
-  <div className="h-[34rem] w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border">
+  <div className="h-136 w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border">
     <SidebarProvider className="min-h-full" defaultOpen>
       <Sidebar
         data-testid="workspace-sidebar"
         collapsible="icon"
-        className="absolute h-[34rem]"
+        className="absolute h-136"
       >
         <SidebarHeader>
           <SidebarMenu>
@@ -136,77 +137,83 @@ const MembersPattern = ({
   onInvite,
 }: {
   onInvite: (email: string) => void
-}) => (
-  <div className="w-[min(46rem,calc(100vw-2rem))] rounded-2xl border bg-card p-5">
-    <div className="mb-5 flex items-start justify-between gap-4">
-      <div>
-        <h2 className="font-semibold">Organization members</h2>
-        <p className="text-sm text-muted-foreground">
-          Roles apply only to this tenant.
-        </p>
+}) => {
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      const form = new FormData(event.currentTarget)
+      onInvite(String(form.get("email")))
+    },
+    [onInvite]
+  )
+
+  return (
+    <div className="w-[min(46rem,calc(100vw-2rem))] rounded-2xl border bg-card p-5">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Organization members</h2>
+          <p className="text-sm text-muted-foreground">
+            Roles apply only to this tenant.
+          </p>
+        </div>
+        <Dialog>
+          <DialogTrigger render={<Button />}>Invite member</DialogTrigger>
+          <DialogContent>
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Invite member</DialogTitle>
+                <DialogDescription>
+                  Send access to a verified email address.
+                </DialogDescription>
+              </DialogHeader>
+              <FieldGroup className="py-5">
+                <Field>
+                  <FieldLabel htmlFor="story-invite-email">Email</FieldLabel>
+                  <Input
+                    id="story-invite-email"
+                    name="email"
+                    type="email"
+                    placeholder="teammate@example.com"
+                    required
+                  />
+                </Field>
+              </FieldGroup>
+              <DialogFooter>
+                <Button type="submit">Send invitation</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
-      <Dialog>
-        <DialogTrigger render={<Button />}>Invite member</DialogTrigger>
-        <DialogContent>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              const form = new FormData(event.currentTarget)
-              onInvite(String(form.get("email")))
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Invite member</DialogTitle>
-              <DialogDescription>
-                Send access to a verified email address.
-              </DialogDescription>
-            </DialogHeader>
-            <FieldGroup className="py-5">
-              <Field>
-                <FieldLabel htmlFor="story-invite-email">Email</FieldLabel>
-                <Input
-                  id="story-invite-email"
-                  name="email"
-                  type="email"
-                  placeholder="teammate@example.com"
-                  required
-                />
-              </Field>
-            </FieldGroup>
-            <DialogFooter>
-              <Button type="submit">Send invitation</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Member</TableHead>
-          <TableHead>Role</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {members.map((member) => (
-          <TableRow key={member.email}>
-            <TableCell>
-              <p className="font-medium">{member.name}</p>
-              <p className="text-sm text-muted-foreground">{member.email}</p>
-            </TableCell>
-            <TableCell>
-              <Badge variant="outline">{member.role}</Badge>
-            </TableCell>
+      <Table aria-label="Organization members">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Member</TableHead>
+            <TableHead>Role</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </div>
-)
+        </TableHeader>
+        <TableBody>
+          {members.map((member) => (
+            <TableRow key={member.email}>
+              <TableCell>
+                <p className="font-medium">{member.name}</p>
+                <p className="text-sm text-muted-foreground">{member.email}</p>
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline">{member.role}</Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
 
 const meta = {
   title: "Patterns/SaaS Console",
   component: SidebarPattern,
+  tags: ["autodocs"],
   parameters: { layout: "centered" },
 } satisfies Meta<typeof SidebarPattern>
 
@@ -222,8 +229,15 @@ export const ResponsiveSidebar: Story = {
       throw new Error("Sidebar state container was not rendered")
     }
     await expect(sidebar).toHaveAttribute("data-state", "expanded")
+    await expect(
+      within(canvasElement).getByRole("button", {
+        name: "Overview",
+      })
+    ).toBeVisible()
     await userEvent.keyboard("{Control>}b{/Control}")
     await expect(sidebar).toHaveAttribute("data-state", "collapsed")
+    await userEvent.keyboard("{Control>}b{/Control}")
+    await expect(sidebar).toHaveAttribute("data-state", "expanded")
   },
 }
 
@@ -231,8 +245,15 @@ export const MemberTableAndDialog: StoryObj<typeof MembersPattern> = {
   render: (args) => <MembersPattern {...args} />,
   args: { onInvite: fn() },
   play: async ({ args, canvas }) => {
+    await expect(canvas.getByRole("table")).toHaveAccessibleName(
+      "Organization members"
+    )
+    await expect(canvas.getAllByRole("row")).toHaveLength(members.length + 1)
     await userEvent.click(canvas.getByRole("button", { name: "Invite member" }))
     const body = within(document.body)
+    await expect(
+      body.getByRole("dialog", { name: "Invite member" })
+    ).toHaveAccessibleDescription("Send access to a verified email address.")
     await userEvent.type(
       body.getByRole("textbox", { name: "Email" }),
       "new-member@example.com"
