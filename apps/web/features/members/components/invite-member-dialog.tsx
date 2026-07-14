@@ -17,7 +17,6 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@enterprise-agentic-saas/ui/components/field"
-import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -26,6 +25,7 @@ import {
   SelectTrigger,
 } from "@enterprise-agentic-saas/ui/components/select"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
+import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { MailPlusIcon } from "lucide-react"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
@@ -33,9 +33,12 @@ import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
+  isStepUpRequiredError,
 } from "@/features/console/error"
 import {
   invitationFormSchema,
+  normalizeInvitationEmails,
+  type BulkInvitationInput,
   type InvitationFormValues,
 } from "@/features/members/schema"
 import { roleLabel } from "@/features/organizations/schema"
@@ -46,7 +49,7 @@ const invitationRoleOptions = [
 ]
 
 const invitationDefaultValues: InvitationFormValues = {
-  email: "",
+  emails: "",
   role: "member",
 }
 
@@ -68,7 +71,7 @@ export const InviteMemberDialog = ({
 }: {
   canInviteAdmins: boolean
   pending: boolean
-  onInvite: (value: InvitationFormValues) => Promise<unknown>
+  onInvite: (value: BulkInvitationInput) => Promise<unknown>
 }) => {
   const [open, setOpen] = useState(false)
   const [emailError, setEmailError] = useState<string>()
@@ -80,11 +83,16 @@ export const InviteMemberDialog = ({
       setEmailError(undefined)
       setSubmitError(undefined)
       try {
-        await onInvite(value)
+        await onInvite({
+          emails: normalizeInvitationEmails(value.emails),
+          role: value.role,
+        })
         form.reset()
         setOpen(false)
       } catch (error) {
-        const fieldError = getConsoleApiFieldError(error, "email")
+        if (isStepUpRequiredError(error)) return
+
+        const fieldError = getConsoleApiFieldError(error, "emails")
         setEmailError(fieldError)
         if (!fieldError) {
           setSubmitError(
@@ -130,21 +138,22 @@ export const InviteMemberDialog = ({
         render={<Button className="w-full sm:w-auto" disabled={pending} />}
       >
         <MailPlusIcon data-icon="inline-start" aria-hidden="true" />
-        Invite member
+        Invite members
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Invite member</DialogTitle>
+            <DialogTitle>Invite members</DialogTitle>
             <DialogDescription>
-              Send access to this workspace. Super Admin is transferred from the
-              member table after additional confirmation.
+              Queue invitations for up to 20 people with one shared role. Super
+              Admin is transferred from the member table after additional
+              confirmation.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-5">
-            <form.Field name="email">
+            <form.Field name="emails">
               {(field) => (
-                <InvitationEmailField
+                <InvitationEmailsField
                   field={field}
                   serverError={emailError}
                   onEdit={clearErrors}
@@ -180,7 +189,7 @@ export const InviteMemberDialog = ({
                   ) : (
                     <MailPlusIcon data-icon="inline-start" aria-hidden="true" />
                   )}
-                  Send invitation
+                  Send invitations
                 </Button>
               )}
             </form.Subscribe>
@@ -191,7 +200,7 @@ export const InviteMemberDialog = ({
   )
 }
 
-const InvitationEmailField = ({
+const InvitationEmailsField = ({
   field,
   serverError,
   onEdit,
@@ -205,17 +214,18 @@ const InvitationEmailField = ({
     Boolean(serverError)
   const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
   const localErrorId = locallyInvalid
-    ? "invitation-email-local-error"
+    ? "invitation-emails-local-error"
     : undefined
   const serverErrorId = serverError
-    ? "invitation-email-server-error"
+    ? "invitation-emails-server-error"
     : undefined
-  const describedBy = [localErrorId, serverErrorId]
+  const descriptionId = "invitation-emails-description"
+  const describedBy = [descriptionId, localErrorId, serverErrorId]
     .filter((value): value is string => Boolean(value))
     .join(" ")
   const value = typeof field.state.value === "string" ? field.state.value : ""
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
       onEdit()
       field.handleChange(event.target.value)
     },
@@ -224,20 +234,24 @@ const InvitationEmailField = ({
 
   return (
     <Field data-invalid={invalid}>
-      <FieldLabel htmlFor="invitation-email">Email</FieldLabel>
-      <Input
-        id="invitation-email"
+      <FieldLabel htmlFor="invitation-emails">Email addresses</FieldLabel>
+      <Textarea
+        id="invitation-emails"
         name={field.name}
-        type="email"
         value={value}
         onBlur={field.handleBlur}
         onChange={handleChange}
-        aria-describedby={describedBy || undefined}
+        aria-describedby={describedBy}
         aria-invalid={invalid}
+        className="min-h-32 resize-y"
         autoCapitalize="none"
-        autoComplete="email"
+        autoComplete="off"
+        placeholder={"alex@example.com, sam@example.com\nteam@example.com"}
         spellCheck={false}
       />
+      <FieldDescription id={descriptionId}>
+        Separate addresses with commas or new lines. Duplicates are removed.
+      </FieldDescription>
       {locallyInvalid ? (
         <FieldError id={localErrorId} errors={field.state.meta.errors} />
       ) : null}

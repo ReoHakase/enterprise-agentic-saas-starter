@@ -62,6 +62,61 @@ describe("console Eden API", () => {
     })
   })
 
+  it("sends normalized bulk invitations through Eden and parses the queued response", async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        invitations: [
+          {
+            id: "invitation-1",
+            email: "first@example.com",
+            role: "member",
+            status: "pending",
+            organizationId: "org-acme",
+            inviterId: "user-owner",
+            expiresAt: "2026-07-22T00:00:00.000Z",
+            createdAt: "2026-07-15T00:00:00.000Z",
+          },
+          {
+            id: "invitation-2",
+            email: "second@example.com",
+            role: "member",
+            status: "pending",
+            organizationId: "org-acme",
+            inviterId: "user-owner",
+            expiresAt: "2026-07-22T00:00:00.000Z",
+            createdAt: "2026-07-15T00:00:00.000Z",
+          },
+        ],
+        queuedCount: 2,
+        delivery: "queued",
+      })
+    )
+    const api = createConsoleApi({ baseUrl: "https://api.example.test" })
+
+    await expect(
+      api.createInvitations("org-acme", {
+        emails: ["first@example.com", "second@example.com"],
+        role: "member",
+      })
+    ).resolves.toMatchObject({
+      queuedCount: 2,
+      delivery: "queued",
+    })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const call = fetchMock.mock.calls[0]
+    if (!call) throw new Error("Expected an Eden request")
+    const request = requestFrom(...call)
+    expect(request.url).toBe(
+      "https://api.example.test/organizations/org-acme/invitations"
+    )
+    expect(request.method).toBe("POST")
+    await expect(request.json()).resolves.toEqual({
+      emails: ["first@example.com", "second@example.com"],
+      role: "member",
+    })
+  })
+
   it("maps typed Eden errors without losing safe field recovery data", async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json(

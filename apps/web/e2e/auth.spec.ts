@@ -244,10 +244,26 @@ test("member権限とtenant境界をAPIと画面の両方で拒否する", async
 })
 
 test("member招待・role編集・削除とsession revokeを画面から完了できる", async ({
+  allowClientErrors,
   context,
   page,
 }) => {
+  allowClientErrors(/Failed to load resource.*409/)
   await useSession(context, "admin")
+  const invitationFaultResponse = await context.request.post(
+    `${mockApiUrl}/__e2e/faults`,
+    {
+      data: {
+        path: "/organizations/org-a/invitations",
+        method: "POST",
+        status: 409,
+        code: "conflict",
+        message: "One or more email addresses cannot be invited.",
+        requestId: "req_e2e_bulk_invitation_01",
+      },
+    }
+  )
+  expect(invitationFaultResponse.status()).toBe(201)
   await page.goto("/organization/org-a/members")
 
   await expect(
@@ -287,21 +303,46 @@ test("member招待・role編集・削除とsession revokeを画面から完了�
   await expect(page.getByText("Member removed")).toBeVisible()
   await expect(page.getByText("Kai Brooks", { exact: true })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Invite member" }).click()
-  const inviteDialog = page.getByRole("dialog", { name: "Invite member" })
-  await inviteDialog
-    .getByRole("textbox", { name: "Email" })
-    .fill("browser-e2e@example.com")
+  await page.getByRole("button", { name: "Invite members" }).click()
+  const inviteDialog = page.getByRole("dialog", { name: "Invite members" })
+  const invitationEmails = inviteDialog.getByRole("textbox", {
+    name: "Email addresses",
+  })
+  const rawInvitationEmails =
+    "Browser-One@Example.com, browser-two@example.com\nbrowser-one@example.com"
+  await invitationEmails.fill(rawInvitationEmails)
+
+  const failedInvitationResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/organizations/org-a/invitations") &&
+      response.request().method() === "POST"
+  )
+  await inviteDialog.getByRole("button", { name: "Send invitations" }).click()
+  expect((await failedInvitationResponsePromise).status()).toBe(409)
+  await expect(
+    inviteDialog.getByText("One or more email addresses cannot be invited.")
+  ).toBeVisible()
+  await expect(invitationEmails).toHaveValue(rawInvitationEmails)
+  await expect(invitationEmails).toHaveAttribute("aria-invalid", "false")
+
   const invitationResponsePromise = page.waitForResponse(
     (response) =>
       response.url().endsWith("/organizations/org-a/invitations") &&
       response.request().method() === "POST"
   )
-  await inviteDialog.getByRole("button", { name: "Send invitation" }).click()
-  expect((await invitationResponsePromise).status()).toBe(201)
-  await expect(page.getByText("Invitation sent")).toBeVisible()
+  await inviteDialog.getByRole("button", { name: "Send invitations" }).click()
+  const invitationResponse = await invitationResponsePromise
+  expect(invitationResponse.status()).toBe(201)
+  expect(invitationResponse.request().postDataJSON()).toEqual({
+    emails: ["browser-one@example.com", "browser-two@example.com"],
+    role: "member",
+  })
+  await expect(page.getByText("2 invitations queued")).toBeVisible()
   await expect(
-    page.getByText("browser-e2e@example.com", { exact: true })
+    page.getByText("browser-one@example.com", { exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByText("browser-two@example.com", { exact: true })
   ).toBeVisible()
 
   await openMobileSidebar(page)
@@ -647,16 +688,68 @@ test("organization・member・invitation・session・一時faultを決定的に�
 
   const invitationResponse = await context.request.post(
     `${mockApiUrl}/organizations/org-a/invitations`,
-    { data: { email: "browser-e2e@example.com", role: "member" } }
+    {
+      data: {
+        emails: [
+          "Browser-E2E@example.com",
+          "second-e2e@example.com",
+          "browser-e2e@example.com",
+        ],
+        role: "member",
+      },
+    }
   )
   expect(invitationResponse.status()).toBe(201)
   expect(await invitationResponse.json()).toEqual(
     expect.objectContaining({
-      id: "invitation-admin-2",
-      email: "browser-e2e@example.com",
-      status: "pending",
+      invitations: [
+        expect.objectContaining({
+          id: "invitation-admin-2",
+          email: "browser-e2e@example.com",
+          status: "pending",
+        }),
+        expect.objectContaining({
+          id: "invitation-admin-3",
+          email: "second-e2e@example.com",
+          status: "pending",
+        }),
+      ],
+      queuedCount: 2,
+      delivery: "queued",
     })
   )
+
+  const atomicConflictResponse = await context.request.post(
+    `${mockApiUrl}/organizations/org-a/invitations`,
+    {
+      data: {
+        emails: ["pending@example.com", "must-not-persist@example.com"],
+        role: "member",
+      },
+    }
+  )
+  expect(atomicConflictResponse.status()).toBe(409)
+  expect(await atomicConflictResponse.json()).toEqual(
+    expect.objectContaining({
+      error: expect.objectContaining({
+        code: "conflict",
+        fieldErrors: {
+          emails: ["One or more email addresses cannot be invited."],
+        },
+        requestId: "req_e2e_default",
+      }),
+    })
+  )
+  const invitationsAfterConflict = await context.request.get(
+    `${mockApiUrl}/organizations/org-a/invitations`
+  )
+  expect(
+    (await invitationsAfterConflict.json()).some(
+      (invitation: { email?: unknown }) =>
+        invitation.email === "must-not-persist@example.com"
+    )
+  ).toBe(false)
+
   const cancelInvitationResponse = await context.request.delete(
     `${mockApiUrl}/organizations/org-a/invitations/invitation-admin-2`
   )

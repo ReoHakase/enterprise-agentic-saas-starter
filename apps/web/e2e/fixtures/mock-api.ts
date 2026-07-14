@@ -137,6 +137,32 @@ const isInvitationRole = (
 ): value is Exclude<OrganizationRole, "super_admin"> =>
   value === "admin" || value === "member"
 
+const normalizeInvitationEmails = (value: unknown) => {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 20) {
+    return null
+  }
+
+  const emails: string[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    if (typeof entry !== "string") return null
+    const email = entry.trim().toLowerCase()
+    if (
+      email.length < 1 ||
+      email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
+    ) {
+      return null
+    }
+    if (!seen.has(email)) {
+      seen.add(email)
+      emails.push(email)
+    }
+  }
+
+  return emails.length > 0 ? emails : null
+}
+
 const isIssueStatus = (value: unknown): value is IssueStatus =>
   value === "open" || value === "in_progress" || value === "closed"
 
@@ -440,9 +466,11 @@ const apiError = (
   status: number,
   {
     context,
+    fieldErrors,
     requestId = "req_e2e_default",
   }: {
     context?: Record<string, unknown>
+    fieldErrors?: Record<string, string[]>
     requestId?: string
   } = {}
 ) =>
@@ -452,6 +480,7 @@ const apiError = (
         code,
         message,
         ...(context ? { context } : {}),
+        ...(fieldErrors ? { fieldErrors } : {}),
         requestId,
       },
     },
@@ -894,27 +923,64 @@ Bun.serve({
       if (request.method === "GET") return json(invitations)
       if (request.method === "POST") {
         const body = await readBody(request)
-        const email = nonEmptyString(body.email)
-        if (!email || !isInvitationRole(body.role)) {
-          return invalid("email and role are required")
+        const emails = normalizeInvitationEmails(body.emails)
+        const role = body.role
+        if (!emails || !isInvitationRole(role)) {
+          return invalid("emails and role are required")
         }
-        if (body.role === "admin" && organization.role !== "super_admin") {
+        if (role === "admin" && organization.role !== "super_admin") {
           return forbidden()
         }
-        const invitation: OrganizationInvitation = {
-          id: `invitation-${sessionKey}-${state.nextInvitationId}`,
-          email,
-          role: body.role,
-          status: "pending",
-          organizationId: organization.id,
-          inviterId: state.user.id,
-          expiresAt: FIXED_EXPIRES_AT,
-          createdAt: FIXED_NOW,
+
+        const members = membersFor(state, organization.id)
+        const hasExistingMember = emails.some((email) =>
+          members.some((member) => member.email.toLowerCase() === email)
+        )
+        const hasPendingInvitation = emails.some((email) =>
+          invitations.some(
+            (invitation) =>
+              invitation.status === "pending" &&
+              invitation.email.toLowerCase() === email
+          )
+        )
+        if (hasExistingMember || hasPendingInvitation) {
+          return apiError(
+            "conflict",
+            hasExistingMember
+              ? "One or more emails already belong to members"
+              : "One or more emails already have pending invitations",
+            409,
+            {
+              fieldErrors: {
+                emails: ["One or more email addresses cannot be invited."],
+              },
+            }
+          )
         }
-        state.nextInvitationId += 1
-        invitations.push(invitation)
+
+        const createdInvitations = emails.map(
+          (email, index): OrganizationInvitation => ({
+            id: `invitation-${sessionKey}-${state.nextInvitationId + index}`,
+            email,
+            role,
+            status: "pending",
+            organizationId: organization.id,
+            inviterId: state.user.id,
+            expiresAt: FIXED_EXPIRES_AT,
+            createdAt: FIXED_NOW,
+          })
+        )
+        state.nextInvitationId += createdInvitations.length
+        invitations.push(...createdInvitations)
         state.invitationsByOrganization.set(organization.id, invitations)
-        return json(invitation, 201)
+        return json(
+          {
+            invitations: createdInvitations,
+            queuedCount: createdInvitations.length,
+            delivery: "queued",
+          },
+          201
+        )
       }
     }
 

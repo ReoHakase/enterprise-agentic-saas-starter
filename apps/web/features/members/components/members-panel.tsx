@@ -17,7 +17,7 @@ import {
 } from "@/features/members/components/member-confirmation-dialog"
 import { MembersTable } from "@/features/members/components/members-table"
 import type {
-  InvitationFormValues,
+  BulkInvitationInput,
   OrganizationInvitation,
   OrganizationMember,
 } from "@/features/members/schema"
@@ -34,9 +34,15 @@ type MemberMutationInput =
       role: Exclude<OrganizationRole, "super_admin">
     }
   | { type: "transfer"; memberId: string; confirmation: string }
-  | { type: "invite"; email: string; role: "admin" | "member" }
+  | { type: "invite"; emails: string[]; role: "admin" | "member" }
   | { type: "remove"; memberId: string; confirmation: string }
   | { type: "cancel-invitation"; invitationId: string }
+
+type MemberMutationOutcome =
+  | { type: "invite"; queuedCount: number }
+  | {
+      type: "role" | "transfer" | "remove" | "cancel-invitation"
+    }
 
 type MembersPanelProps = {
   organization: OrganizationDetail
@@ -47,50 +53,55 @@ type MembersPanelProps = {
   onRetryInvitations?: () => void
 }
 
-const runMemberMutation = (
+const runMemberMutation = async (
   organizationId: string,
   input: MemberMutationInput
-) => {
+): Promise<MemberMutationOutcome> => {
   if (input.type === "role") {
-    return browserConsoleApi.updateMemberRole(
+    await browserConsoleApi.updateMemberRole(
       organizationId,
       input.memberId,
       input.role
     )
+    return { type: "role" }
   }
   if (input.type === "transfer") {
-    return browserConsoleApi.transferSuperAdmin(organizationId, {
+    await browserConsoleApi.transferSuperAdmin(organizationId, {
       memberId: input.memberId,
       confirmation: input.confirmation,
     })
+    return { type: "transfer" }
   }
   if (input.type === "invite") {
-    return browserConsoleApi.createInvitation(organizationId, {
-      email: input.email,
+    const result = await browserConsoleApi.createInvitations(organizationId, {
+      emails: input.emails,
       role: input.role,
     })
+    return { type: "invite", queuedCount: result.queuedCount }
   }
   if (input.type === "remove") {
-    return browserConsoleApi.removeMember(
+    await browserConsoleApi.removeMember(
       organizationId,
       input.memberId,
       input.confirmation
     )
+    return { type: "remove" }
   }
-  return browserConsoleApi.cancelInvitation(organizationId, input.invitationId)
+  await browserConsoleApi.cancelInvitation(organizationId, input.invitationId)
+  return { type: "cancel-invitation" }
 }
 
-const mutationSuccessMessage = (input: MemberMutationInput) => {
-  if (input.type === "invite") {
-    return "Invitation sent"
+const mutationSuccessMessage = (outcome: MemberMutationOutcome) => {
+  if (outcome.type === "invite") {
+    return `${outcome.queuedCount} ${outcome.queuedCount === 1 ? "invitation" : "invitations"} queued`
   }
-  if (input.type === "cancel-invitation") {
+  if (outcome.type === "cancel-invitation") {
     return "Invitation canceled"
   }
-  if (input.type === "remove") {
+  if (outcome.type === "remove") {
     return "Member removed"
   }
-  if (input.type === "transfer") {
+  if (outcome.type === "transfer") {
     return "Super Admin transferred"
   }
   return "Role updated"
@@ -146,7 +157,7 @@ export const MembersPanel = ({
     []
   )
   const handleMutationSuccess = useCallback(
-    async (_: unknown, input: MemberMutationInput) => {
+    async (outcome: MemberMutationOutcome) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: consoleKeys.members(organization.id),
@@ -156,11 +167,15 @@ export const MembersPanel = ({
         }),
       ])
       router.refresh()
-      toast.success(mutationSuccessMessage(input))
+      toast.success(mutationSuccessMessage(outcome))
     },
     [organization.id, queryClient, router]
   )
-  const memberMutation = useMutation<unknown, unknown, MemberMutationInput>({
+  const memberMutation = useMutation<
+    MemberMutationOutcome,
+    unknown,
+    MemberMutationInput
+  >({
     mutationFn,
     onError: handleMutationError,
     onSuccess: handleMutationSuccess,
@@ -171,7 +186,7 @@ export const MembersPanel = ({
     mutateAsync: mutateMemberAsync,
   } = memberMutation
   const inviteMember = useCallback(
-    (value: InvitationFormValues) =>
+    (value: BulkInvitationInput) =>
       mutateMemberAsync({ type: "invite", ...value }),
     [mutateMemberAsync]
   )

@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConsoleApiError } from "@/features/console/api"
 import type {
-  InvitationFormValues,
+  BulkInvitationInput,
+  BulkInvitationResponse,
   OrganizationInvitation,
   OrganizationMember,
 } from "@/features/members/schema"
@@ -25,10 +26,10 @@ type TransferSuperAdmin = (
   organizationId: string,
   input: { memberId: string; confirmation: string }
 ) => Promise<unknown>
-type CreateInvitation = (
+type CreateInvitations = (
   organizationId: string,
-  input: InvitationFormValues
-) => Promise<unknown>
+  input: BulkInvitationInput
+) => Promise<BulkInvitationResponse>
 type RemoveMember = (
   organizationId: string,
   memberId: string,
@@ -41,7 +42,7 @@ type CancelInvitation = (
 
 const mocks = vi.hoisted(() => ({
   cancelInvitation: vi.fn<CancelInvitation>(),
-  createInvitation: vi.fn<CreateInvitation>(),
+  createInvitations: vi.fn<CreateInvitations>(),
   refresh: vi.fn<() => void>(),
   removeMember: vi.fn<RemoveMember>(),
   toastError: vi.fn<(message: string) => void>(),
@@ -53,7 +54,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: {
     cancelInvitation: mocks.cancelInvitation,
-    createInvitation: mocks.createInvitation,
+    createInvitations: mocks.createInvitations,
     removeMember: mocks.removeMember,
     transferSuperAdmin: mocks.transferSuperAdmin,
     updateMemberRole: mocks.updateMemberRole,
@@ -134,6 +135,24 @@ const invitations: OrganizationInvitation[] = [
   },
 ]
 
+const bulkInvitationResult = (
+  emails: string[],
+  role: "admin" | "member" = "member"
+): BulkInvitationResponse => ({
+  invitations: emails.map((email, index) => ({
+    id: `created-invitation-${index + 1}`,
+    email,
+    role,
+    status: "pending",
+    organizationId: organization.id,
+    inviterId: "user-owner",
+    expiresAt: "2026-07-21T00:00:00.000Z",
+    createdAt: "2026-07-14T00:00:00.000Z",
+  })),
+  queuedCount: emails.length,
+  delivery: "queued",
+})
+
 const renderMembers = (
   value: OrganizationDetail = organization,
   memberValues = members,
@@ -171,38 +190,156 @@ describe("MembersPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.cancelInvitation.mockResolvedValue({})
-    mocks.createInvitation.mockResolvedValue({})
+    mocks.createInvitations.mockResolvedValue(
+      bulkInvitationResult(["new@example.com"])
+    )
     mocks.removeMember.mockResolvedValue({})
     mocks.transferSuperAdmin.mockResolvedValue(members)
     mocks.updateMemberRole.mockResolvedValue(members)
   })
 
-  it("keeps invitation values and renders a safe API field error", async () => {
+  it("normalizes comma and newline separated emails, removes duplicates, and reports the queued count", async () => {
     const user = userEvent.setup()
-    mocks.createInvitation.mockRejectedValueOnce(
+    mocks.createInvitations.mockResolvedValueOnce(
+      bulkInvitationResult(["first@example.com", "second@example.com"])
+    )
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Invite members" }))
+    await user.type(
+      screen.getByRole("textbox", { name: "Email addresses" }),
+      "First@Example.com, second@example.com\nfirst@example.com"
+    )
+    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+
+    await waitFor(() => {
+      expect(mocks.createInvitations).toHaveBeenCalledWith(organization.id, {
+        emails: ["first@example.com", "second@example.com"],
+        role: "member",
+      })
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("2 invitations queued")
+    expect(
+      screen.queryByRole("dialog", { name: "Invite members" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("blocks malformed bulk email input without making a request", async () => {
+    const user = userEvent.setup()
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Invite members" }))
+    const emails = screen.getByRole("textbox", { name: "Email addresses" })
+    await user.type(emails, "valid@example.com, not-an-email")
+    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+
+    expect(
+      await screen.findByText(
+        "Enter valid email addresses separated by commas or new lines."
+      )
+    ).toBeInTheDocument()
+    expect(emails).toHaveAttribute("aria-invalid", "true")
+    expect(emails).toHaveAttribute(
+      "aria-describedby",
+      expect.stringContaining("invitation-emails-local-error")
+    )
+    expect(emails).toHaveValue("valid@example.com, not-an-email")
+    expect(mocks.createInvitations).not.toHaveBeenCalled()
+  })
+
+  it("keeps invitation values and renders a safe 409 field error", async () => {
+    const user = userEvent.setup()
+    mocks.createInvitations.mockRejectedValueOnce(
       new ConsoleApiError({
         code: "invitation_exists",
-        fieldErrors: { email: ["This address already has an invitation."] },
+        fieldErrors: { emails: ["An address already has an invitation."] },
         message: "Invitation could not be created",
         status: 409,
       })
     )
     renderMembers()
 
-    await user.click(screen.getByRole("button", { name: "Invite member" }))
-    const email = screen.getByRole("textbox", { name: "Email" })
-    await user.type(email, "pending@example.com")
-    await user.click(screen.getByRole("button", { name: "Send invitation" }))
+    await user.click(screen.getByRole("button", { name: "Invite members" }))
+    const emails = screen.getByRole("textbox", { name: "Email addresses" })
+    await user.type(emails, "pending@example.com, next@example.com")
+    await user.click(screen.getByRole("button", { name: "Send invitations" }))
 
     expect(
-      await screen.findByText("This address already has an invitation.")
+      await screen.findByText("An address already has an invitation.")
     ).toBeInTheDocument()
-    expect(email).toHaveValue("pending@example.com")
-    expect(mocks.createInvitation).toHaveBeenCalledWith(organization.id, {
-      email: "pending@example.com",
+    expect(emails).toHaveAttribute("aria-invalid", "true")
+    expect(emails).toHaveValue("pending@example.com, next@example.com")
+    expect(mocks.createInvitations).toHaveBeenCalledWith(organization.id, {
+      emails: ["pending@example.com", "next@example.com"],
       role: "member",
     })
     expect(mocks.toastError).not.toHaveBeenCalled()
+  })
+
+  it("keeps bulk input after a safe 429 response and clears the error on edit", async () => {
+    const user = userEvent.setup()
+    mocks.createInvitations.mockRejectedValueOnce(
+      new ConsoleApiError({
+        code: "rate_limited",
+        context: { retryAfter: 30 },
+        message: "Too many invitation requests",
+        status: 429,
+      })
+    )
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Invite members" }))
+    const emails = screen.getByRole("textbox", { name: "Email addresses" })
+    await user.type(emails, "first@example.com\nsecond@example.com")
+    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+
+    expect(
+      await screen.findByText(
+        "Too many invitation requests Try again in 30 seconds."
+      )
+    ).toBeInTheDocument()
+    expect(emails).toHaveValue("first@example.com\nsecond@example.com")
+    expect(emails).toHaveAttribute("aria-invalid", "false")
+    expect(mocks.toastError).not.toHaveBeenCalled()
+
+    await user.type(emails, ", third@example.com")
+    expect(
+      screen.queryByText(
+        "Too many invitation requests Try again in 30 seconds."
+      )
+    ).not.toBeInTheDocument()
+  })
+
+  it("keeps bulk input while step-up is handled only by the confirmation dialog", async () => {
+    const user = userEvent.setup()
+    mocks.createInvitations.mockRejectedValueOnce(
+      new ConsoleApiError({
+        code: "step_up_required",
+        context: {
+          action: "organization.invite_members",
+          maxAgeSeconds: 600,
+        },
+        message: "Recent authentication required",
+        status: 403,
+      })
+    )
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Invite members" }))
+    const emails = screen.getByRole("textbox", { name: "Email addresses" })
+    await user.type(emails, "first@example.com, second@example.com")
+    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+
+    expect(
+      await screen.findByRole("heading", { name: "Confirm it is really you" })
+    ).toBeInTheDocument()
+    expect(emails).toHaveValue("first@example.com, second@example.com")
+    expect(
+      screen.queryByText("Recent authentication required")
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Not now" }))
+    expect(emails).toHaveValue("first@example.com, second@example.com")
   })
 
   it("retains the ownership confirmation across a step-up challenge", async () => {

@@ -15,7 +15,7 @@ export const organizationMemberSchema = v.object({
 export const organizationInvitationSchema = v.object({
   id: v.string(),
   email: v.pipe(v.string(), v.email()),
-  role: organizationRoleSchema,
+  role: v.picklist(["admin", "member"]),
   status: v.string(),
   organizationId: v.string(),
   inviterId: v.string(),
@@ -26,10 +26,61 @@ export const organizationInvitationSchema = v.object({
 export const memberListSchema = v.array(organizationMemberSchema)
 export const invitationListSchema = v.array(organizationInvitationSchema)
 
+const invitationEmailSchema = v.pipe(
+  v.string(),
+  v.email("Enter valid email addresses separated by commas or new lines.")
+)
+
+const invitationEmailTokens = (value: string) =>
+  value
+    .split(/[,\n]/u)
+    .map((token) => token.trim())
+    .filter(Boolean)
+
+export const normalizeInvitationEmails = (value: string) => [
+  ...new Set(invitationEmailTokens(value).map((email) => email.toLowerCase())),
+]
+
+const invitationEmailsInputSchema = v.pipe(
+  v.string(),
+  v.check(
+    (value) => invitationEmailTokens(value).length > 0,
+    "Enter at least one email address."
+  ),
+  v.check(
+    (value) => invitationEmailTokens(value).length <= 20,
+    "Enter no more than 20 email addresses at a time."
+  ),
+  v.check(
+    (value) =>
+      invitationEmailTokens(value).every((email) => email.length <= 254),
+    "Use 254 characters or fewer for each email address."
+  ),
+  v.check(
+    (value) =>
+      invitationEmailTokens(value).every(
+        (email) => v.safeParse(invitationEmailSchema, email).success
+      ),
+    "Enter valid email addresses separated by commas or new lines."
+  )
+)
+
 export const invitationFormSchema = v.object({
-  email: v.pipe(v.string(), v.trim(), v.email("Enter a valid email address.")),
+  emails: invitationEmailsInputSchema,
   role: v.picklist(["admin", "member"]),
 })
+
+export const bulkInvitationResponseSchema = v.pipe(
+  v.object({
+    invitations: invitationListSchema,
+    queuedCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
+    delivery: v.literal("queued"),
+  }),
+  v.check(
+    ({ invitations, queuedCount }) => invitations.length === queuedCount,
+    "Invitation response count does not match its records."
+  )
+)
 
 export const memberConfirmationFormSchema = v.object({
   confirmation: v.string(),
@@ -57,6 +108,13 @@ export type OrganizationInvitation = v.InferOutput<
   typeof organizationInvitationSchema
 >
 export type InvitationFormValues = v.InferOutput<typeof invitationFormSchema>
+export type BulkInvitationInput = {
+  emails: string[]
+  role: InvitationFormValues["role"]
+}
+export type BulkInvitationResponse = v.InferOutput<
+  typeof bulkInvitationResponseSchema
+>
 export type MemberConfirmationFormValues = v.InferOutput<
   typeof memberConfirmationFormSchema
 >
@@ -64,5 +122,5 @@ export type MemberConfirmationFormValues = v.InferOutput<
 export const parseMembers = (value: unknown) => v.parse(memberListSchema, value)
 export const parseInvitations = (value: unknown) =>
   v.parse(invitationListSchema, value)
-export const parseInvitation = (value: unknown) =>
-  v.parse(organizationInvitationSchema, value)
+export const parseBulkInvitationResponse = (value: unknown) =>
+  v.parse(bulkInvitationResponseSchema, value)

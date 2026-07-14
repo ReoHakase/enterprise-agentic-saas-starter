@@ -7,7 +7,7 @@ import {
 } from "@/features/account/schema"
 import { ConsoleApiError, toConsoleApiError } from "@/features/console/error"
 import {
-  parseInvitation,
+  parseBulkInvitationResponse,
   parseInvitations,
   parseMembers,
 } from "@/features/members/schema"
@@ -152,11 +152,14 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
       parseInvitations(
         unwrap(await client.organizations({ organizationId }).invitations.get())
       ),
-    createInvitation: async (
+    createInvitations: async (
       organizationId: string,
-      body: { email: string; role: Exclude<OrganizationRole, "super_admin"> }
+      body: {
+        emails: string[]
+        role: Exclude<OrganizationRole, "super_admin">
+      }
     ) =>
-      parseInvitation(
+      parseBulkInvitationResponse(
         unwrap(
           await client.organizations({ organizationId }).invitations.post(body)
         )
