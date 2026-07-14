@@ -33,6 +33,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - test dataはtenant境界が見える名前にする。
 - flakyな外部OAuthやmail providerはPRではmock/smoke、mainでは実環境寄りに分ける。
 - PRの標準harnessは `apps/web/e2e/fixtures/mock-api.ts` とNext.jsをPlaywright `webServer` で同時起動する。mock stateとreset endpointは全projectで共有されるため、local/CIとも `workers: 1` で直列実行する。`fullyParallel: false` だけではproject間の並列実行を止められない。
+- Playwright管理のNext.jsには`NEXT_DIST_DIR=.next-e2e`を渡し、通常のportless開発serverが使う`.next`とdevelopment lockを共有しない。E2Eのためにdeveloper-owned `next dev`をkillせず、両方を同時実行できる状態を維持する。`.next-e2e/`はgitignoreする。
 - 標準browser matrixはDesktop Chrome（1280x720）、Pixel 7 Chrome、iPhone 13 WebKitの3 projectとする。詳細CRUDの重複実行は避けてもよいが、主要journeyはdesktop/mobile両方を通す。
 - 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
 - 動画はPlaywrightの `use.video` を `"on"` にし、成功・失敗・再試行を問わずすべてのrunを保持する。traceとscreenshotは失敗時のみ保持する。
