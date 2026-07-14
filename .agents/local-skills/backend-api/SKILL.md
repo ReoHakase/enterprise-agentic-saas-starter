@@ -68,6 +68,7 @@ apps/api/src/
 - service へ Elysia Context 丸ごとを渡さない。
 - repository は Drizzle/libSQL access を持ち、DB error を `cause/privateContext` 付きに包む。
 - Effect は使わない。通常の `async` / `Promise` / `AppError` / `Error.cause` で揃える。
+- `AppError.publicMessage`だけをHTTP公開用のtrust markerにする。変更可能な`Error.message`は診断用であり、response serializerは参照しない。`publicContext`はconstructorとHTTP境界の両方でallowlist検証する。
 
 ## Elysia plugin
 
@@ -114,6 +115,8 @@ apps/api/src/
 - unsafe methodはglobal CSRF guardで`Origin`を必須にし、`CORS_ORIGIN` / `API_PUBLIC_URL`との完全一致だけを許可する。CSRFの403と`csrf_origin_forbidden` exampleを各mutationのOpenAPI responseにも含める。
 - resource作成は201へ統一する。このrepoではorganization、invitation、issue、issue commentのPOSTが対象で、実response、route schema、OpenAPI、client testを同時に変更する。
 - Elysia/Valibotのrequest validationはruntimeで400 `validation_error`へ統一し、安全な`fieldErrors`を返す。OpenAPIも400を正本にし、runtimeが返さない422を追加しない。
+- response validationはAPI実装のcontract違反として500 `internal_error`へ変換し、内部issue/field pathをresponseへ出さずobservability bridgeで記録・captureする。integration testは宣言したresponse schemaを実routeが破る形で境界を通す。
+- 共通`ApiError`は安全なcode/message、必須request ID、allowlist済みcontext、必要な場合だけ`fieldErrors`を持つ。`Error.message`、入力値、tenant/resource ID、provider raw errorをschemaへ広げない。
 
 ## Auditとtransaction
 

@@ -68,6 +68,8 @@ Better Authのmulti-session pluginをserver/client双方に設定します。acc
 
 Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 
+Better AuthやOAuth/passkey providerのclient errorは、Web-local Valibotでstable codeだけを読み、既知codeのallowlistを安全な固定文言へ対応付けます。未知codeやraw `message`、nested causeにはprovider response、token、内部障害が含まれ得るため表示せず、操作別fallbackを使います。表示ownerは操作componentまたはglobal ownerの一方に決め、同じ失敗を二重toastしません。
+
 ## GitHub OAuth
 
 productionはBetter Auth組み込みGitHub providerを使います。ローカル開発とOAuth E2Eで`GITHUB_OAUTH_EMULATOR_URL`が設定された場合だけ、同じ`providerId: "github"`を持つGeneric OAuth providerへ切り替えます。両providerを同時登録せず、productionでemulator URLが設定されていたら起動を拒否します。

@@ -38,7 +38,9 @@ modules/<feature>/
 
 ## Error contract
 
-公開responseは安定した `error.code`、安全なmessage、request ID、必要最小限のcontextを返します。raw SQL、stack、token、email provider responseなどprivate causeはresponseへ出しません。request validationは400 `validation_error`へ統一し、安全なfield名と固定messageだけを`fieldErrors`へ載せます。runtimeが返さない422はOpenAPIにも定義しません。未認証は401、権限不足は403、tenantの存在を隠すresourceは404、競合は409を使います。
+公開responseは安定した `error.code`、`AppError.publicMessage`、必須request ID、runtime allowlist済みcontext、必要な場合だけ安全な`fieldErrors`を返します。`publicMessage`はapplication側が公開可と明示した値であり、変更可能な`Error.message`、raw SQL、stack、token、入力値、tenant/resource ID、email/provider responseはresponseへ出しません。
+
+request validationは400 `validation_error`へ統一し、安全なfield pathと固定messageだけを`fieldErrors`へ載せます。response validationはserver contract違反なので500 `internal_error`としてcaptureし、内部issueやfield pathを公開しません。runtimeが返さない422はOpenAPIにも定義しません。未認証は401、権限不足は403、tenantの存在を隠すresourceは404、競合は409を使います。
 
 ## Eden / 日付契約
 

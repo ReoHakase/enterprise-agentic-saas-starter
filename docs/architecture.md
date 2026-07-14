@@ -49,6 +49,8 @@ flowchart LR
 - root/dashboardに `loading.tsx`、`error.tsx`、`global-error.tsx`、`not-found.tsx` を置く。
 - active organizationはsidebarのswitcherを正本とし、機能画面に別scope selectorを重ねない。
 - browserのGET/mutationはTanStack Queryへ集約し、フォームはTanStack FormとWeb-local Valibot schema、Issue/member一覧はTanStack Tableを使う。Jotaiはdialog選択など再取得不要な一時UI状態だけに使う。
+- API errorはWeb-local Valibotでparseし、公開契約を満たすmessageだけを表示する。unknown/network/provider errorは操作別fallbackへ変換し、5xxのrequest IDは安全な問い合わせreferenceとしてだけ使う。inline errorは一致するfieldに限定し、action失敗は一箇所のform alertまたはtoastが所有する。
+- TanStack Queryのdefault retry/error policyは`QueryClient`生成時に確定し、component mount後のeffectで書き換えない。
 
 ## Production runtime
 

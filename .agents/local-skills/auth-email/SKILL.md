@@ -66,6 +66,8 @@ bunx @better-auth/cli generate \
 - 複数account切替はBetter Auth公式の `multiSession` / `multiSessionClient` をserver/clientの両方に入れる。同一browserでは最大5 accountとし、`listDeviceSessions` / `setActive` / `revoke` を使う。通常の `signOut` は保持中accountをすべてrevokeするため、個別削除と区別する。
 - `better-auth-ui` の `useAuth().authClient` は通常objectに見えてもfunction/proxyになり得る。client capability検出を `typeof value === "object"` だけに限定せず、object/functionのproperty containerからmethodをbindする。`listDeviceSessions` のresponseはcastや手書きtype guardで通さず、`apps/web`ローカルのValibot schemaで検証してからaccount switcherへ渡す。
 - Better Auth core/plugin endpointの仕様は `openAPI({ path: "/reference" })` で `/auth/reference` に公開し、app側Elysia OpenAPIから認証referenceへ誘導する。必要なら `auth.api.generateOpenAPISchema()` でOpenAPI 3.1 schemaを取得する。
+- Better Auth client/provider errorはWeb-local Valibotでstable codeだけを抽出し、明示したcode allowlistを固定文言へ対応付ける。未知code、providerのraw `message`、nested causeはtoast/formへ出さず、sign-in・sign-out・passkey等の操作別fallbackを表示する。
+- auth errorの表示ownerは操作componentかglobal ownerの一方に限定し、同じ失敗を二重toastしない。QueryClientのdefault handlerをmount後のeffectで差し替えてprovider errorを拾う設計にはしない。
 - Cloudflare Workersではin-memory rate limitを使わず、Better Authの `rateLimit.storage = "database"` でTursoへ永続化する。本番のclient IPはCloudflareが上書きする `cf-connecting-ip` だけを信頼し、magic link・multi-session切替・招待には個別ruleを置く。rate limit導入後はauth schemaを再生成し、`rateLimit` tableのmigrationを保存する。
 - Passkeyの `rpID` をlocal hostnameへhardcodeしない。必須 `TRUSTED_ORIGINS` 先頭のhostnameをRP ID、配列全体をpasskey verificationの許可originに使い、deploy先でも一致させる。
 - GitHub OAuthのproductionはBetter Auth built-in providerを維持する。`GITHUB_OAUTH_EMULATOR_URL`が設定されたdevelopment/testだけ、同じ`providerId = "github"`の`genericOAuth`へ切り替え、built-inと同時登録しない。productionでemulator URLがあれば起動時に拒否する。

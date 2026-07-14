@@ -16,9 +16,9 @@
 bun run test
 ```
 
-APIは `app.handle()` でHTTP境界まで検証します。日付契約はreal HTTP server + Edenでも確認し、`parseDate: false`によってdue date/timestampが文字列のまま届くことを固定します。request validationは400とsanitized `fieldErrors`、OpenAPIも400 responseを検証します。DB migration testはfresh DB、legacy data変換、tenant複合FKを確認します。外部TursoやOAuth providerをunit testの必須条件にしません。
+APIは `app.handle()` でHTTP境界まで検証します。日付契約はreal HTTP server + Edenでも確認し、`parseDate: false`によってdue date/timestampが文字列のまま届くことを固定します。request validationは400とsanitized `fieldErrors`、OpenAPIも400 responseを検証します。response validationは実routeが宣言schemaを破るcaseで500、内部issue非公開、Sentry captureを確認します。`AppError` testでは`Error.message`や型外`publicContext`を変更しても、HTTPへは`publicMessage`、runtime allowlist済みcontext、request IDだけが出ることを固定します。DB migration testはfresh DB、legacy data変換、tenant複合FKを確認します。外部TursoやOAuth providerをunit testの必須条件にしません。
 
-Web coverageはschema/helperだけに限定せず、profile、session、security method、multi-account、organization作成/切替/設定、member destructive flow、Issue CRUD/commentのactive componentも対象にします。Testing Libraryでは成功だけでなく、field errorがinput直下に出ること、入力が失敗後も残ること、retry/step-up導線を確認します。
+Web coverageはschema/helperだけに限定せず、profile、session、security method、multi-account、organization作成/切替/設定、member destructive flow、Issue CRUD/commentのactive componentも対象にします。Testing Libraryでは成功だけでなく、field errorが対応input直下に出て入力変更で消えること、`aria-invalid` / `aria-describedby`、入力が失敗後も残ること、retry/step-up導線を確認します。unknown JS/network/provider messageやsecret風文字列が表示されず操作別fallbackになること、5xxの検証済みrequest IDだけがreferenceとして残ること、同じ失敗が二重toastされないことも回帰testにします。
 
 organization削除はroute/専用guard/service/repository/R2 processorに分け、非`super_admin`、stale session、slug/DELETE不一致、他tenant非開示、同一receipt replay、actor-key衝突、tenant cascade、active sessionのnull化、外部keyを持たないjob残存、R2 pagination/lease/backoffをVitestで検証します。Playwrightだけで認可やDB原子性を証明しません。
 
