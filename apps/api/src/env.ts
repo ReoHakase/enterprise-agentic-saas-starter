@@ -1,4 +1,8 @@
-import { resolveEmailFrom } from "@enterprise-agentic-saas/email/config"
+import {
+  resolveEmailFrom,
+  resolveEmailProvider,
+  resolveMailpitUrl,
+} from "@enterprise-agentic-saas/email/config"
 import { defineEnv } from "envin"
 import * as v from "valibot"
 
@@ -29,6 +33,18 @@ const nodeEnvSchema = v.pipe(
 const optionalNonEmptyString = v.pipe(
   v.optional(v.string()),
   v.transform((input) => input?.trim() || undefined)
+)
+
+const emailProviderSchema = v.pipe(
+  v.optional(v.string()),
+  v.transform((input) => resolveEmailProvider(input, process.env.NODE_ENV)),
+  v.picklist(["cloudflare", "console", "mailpit", "noop"])
+)
+
+const mailpitUrlSchema = v.pipe(
+  v.optional(v.string()),
+  v.transform((input) => resolveMailpitUrl(input, process.env.NODE_ENV)),
+  v.optional(v.pipe(v.string(), v.url()))
 )
 
 const sampleRate = v.pipe(
@@ -75,11 +91,9 @@ export const env = defineEnv({
         return list.length > 0 ? list : [base]
       })
     ),
-    EMAIL_PROVIDER: v.pipe(
-      v.optional(v.string(), "console"),
-      v.picklist(["cloudflare", "console", "noop"])
-    ),
+    EMAIL_PROVIDER: emailProviderSchema,
     EMAIL_FROM: emailFromSchema,
+    MAILPIT_URL: mailpitUrlSchema,
     SENTRY_DSN: optionalNonEmptyString,
     SENTRY_ENVIRONMENT: optionalNonEmptyString,
     SENTRY_RELEASE: optionalNonEmptyString,

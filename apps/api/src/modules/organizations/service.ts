@@ -38,6 +38,7 @@ const sendEmail = createRuntimeEmailSender({
   runtime: env.NODE_ENV,
   from: env.EMAIL_FROM,
   fromName: env.APP_NAME,
+  mailpitUrl: env.MAILPIT_URL,
 })
 
 const normalizeRequired = (value: string, field: string) => {

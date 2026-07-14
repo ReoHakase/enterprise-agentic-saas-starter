@@ -29,6 +29,7 @@ const sendEmail: SendEmail = createRuntimeEmailSender({
   runtime: env.NODE_ENV,
   from: env.EMAIL_FROM,
   fromName: env.APP_NAME,
+  mailpitUrl: env.MAILPIT_URL,
 })
 
 const webAppOrigin = env.TRUSTED_ORIGINS[0]
