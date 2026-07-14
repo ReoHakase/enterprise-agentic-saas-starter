@@ -38,9 +38,10 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
 - 動画はPlaywrightの `use.video` を `"on"` にし、成功・失敗・再試行を問わずすべてのrunを保持する。traceとscreenshotは失敗時のみ保持する。
 - `failOnFlakyTests` を有効にし、auto fixtureで予期しない `console.error` と `pageerror` をtest failureにする。意図したHTTP error分岐はbrowser consoleを汚さないAPI requestで検証する。
+- SSRされたcontrolled auth inputを操作するE2Eは、`toBeEnabled()`をhydration同期点にしてから入力する。固定waitやtimeout延長でhydration競合を隠さず、server markup側もhydration完了までinputをdisabledにする。
 - mock APIの時刻・ID・seedは固定し、`/__e2e/reset` でstateとfault ruleを同時に初期化する。一時障害は `__e2e/faults` で回数付きに注入し、成功系seedをtest内で書き換えて再現しない。
 - Streaming loadingを決定的に検証するときは、mock APIのbounded one-shot request delayを使う。`/__e2e/request-delays` は`/__e2e/reset`で必ず消去し、最大遅延を制限する。hard navigationではconsole context endpoint、nested navigationでは対象page endpointを遅延させ、loading表示後にruleが消費済みであることまで確認する。
-- Layout stabilityはTailwind classの一致だけで証明しない。ready/loading/errorで`sidebar-gap`、`sidebar-inset`、console header/scroll/content、PageShell header/bodyの`boundingBox()`をdesktop/mobileごとに比較し、横overflow、desktop sidebar幅、mobile drawer非予約、header高さ、single content paddingを確認する。hard boundaryとshellを維持するnested boundaryは別testにする。
+- Layout stabilityはTailwind classの一致だけで証明しない。ready/loading/errorで`sidebar-gap`、`sidebar-inset`、console header/scroll/content、PageShell header/bodyの`boundingBox()`をdesktop/mobileごとに比較し、横overflow、desktop sidebar幅、mobile drawer非予約、header高さ、single content paddingを確認する。LinuxとmacOSでは同じfontでも折返し境界が変わるため、PageShellのdescription slotはmobile 2行、desktop 1行の固定高にし、文字列の長さや許容値緩和でgeometry testを通さない。hard boundaryとshellを維持するnested boundaryは別testにする。
 - Error boundaryはframeの矩形だけでなく、実headingへのfocus、one-shot fault消費後のreset、ready画面への復帰まで確認する。stream中は同じstate属性を持つfallbackとRSC payloadが一時的に重なる場合があるため、shell-levelとpage-levelのstable slotを明示してlocatorを曖昧にしない。
 - mock APIもtenant境界のresponse契約を本番へ揃える。未所属または存在しないorganization/resourceは404、所属済みだがactive organization不一致は409、active organization内のrole不足だけを403にする。先にrole判定して未所属tenantの存在を漏らさない。
 - active organization切替時はmount済みの旧tenant queryをinvalidate/refetchしない。`consoleKeys.all` をcancelしてからroute replace/refreshし、切替途中の旧tenant requestが409にならないことを3 projectで確認する。
