@@ -3,9 +3,9 @@
 import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 
-import { RootRouteError } from "@/components/public-boundary"
+import { InvitationRouteError } from "@/components/public-boundary"
 
-export default function ErrorPage({
+export default function InvitationError({
   error,
   reset,
 }: {
@@ -16,5 +16,5 @@ export default function ErrorPage({
     Sentry.captureException(error)
   }, [error])
 
-  return <RootRouteError reset={reset} />
+  return <InvitationRouteError reset={reset} />
 }

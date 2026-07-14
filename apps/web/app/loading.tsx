@@ -1,5 +1,5 @@
-import { RouteLoading } from "@/components/app-state"
+import { RootRouteLoading } from "@/components/public-boundary"
 
 export default function Loading() {
-  return <RouteLoading />
+  return <RootRouteLoading />
 }

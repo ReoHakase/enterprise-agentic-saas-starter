@@ -1,11 +1,9 @@
 "use client"
 
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import * as Sentry from "@sentry/nextjs"
-import { RefreshCwIcon, ShieldAlertIcon } from "lucide-react"
 import { useEffect } from "react"
 
-import { AppState } from "@/components/app-state"
+import { StandaloneRouteError } from "@/components/public-boundary"
 
 export default function GlobalError({
   error,
@@ -21,17 +19,7 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body>
-        <AppState
-          icon={ShieldAlertIcon}
-          title="The application needs to recover"
-          description="A protected application boundary failed. Reload the workspace to establish a fresh session."
-          actions={
-            <Button onClick={reset}>
-              <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-              Reload workspace
-            </Button>
-          }
-        />
+        <StandaloneRouteError reset={reset} />
       </body>
     </html>
   )
