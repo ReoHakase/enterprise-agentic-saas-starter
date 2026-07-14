@@ -30,6 +30,7 @@ import { toast } from "sonner"
 
 import { safeAuthErrorMessage } from "@/features/auth/error"
 import { magicLinkFormSchema } from "@/features/auth/schema"
+import { useIsHydrated } from "@/hooks/use-is-hydrated"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
@@ -65,6 +66,7 @@ export function MagicLink({
     Link,
   } = useAuth()
   const { localization: magicLinkLocalization } = useAuthPlugin(magicLinkPlugin)
+  const isHydrated = useIsHydrated()
   const requestedEmail = useRef("")
   const [sentTo, setSentTo] = useState<string>()
   const [submitError, setSubmitError] = useState<string>()
@@ -102,6 +104,7 @@ export function MagicLink({
   })
   const isPending =
     signInMagicLinkPending || signInMutating + signUpMutating > 0
+  const formDisabled = !isHydrated || isPending
   const showSeparator = socialProviders && socialProviders.length > 0
   const creatingAccount = mode === "sign-up"
 
@@ -185,7 +188,7 @@ export function MagicLink({
                         onEdit={clearSubmitError}
                         onValueChange={field.handleChange}
                         placeholder={localization.auth.emailPlaceholder}
-                        disabled={isPending}
+                        disabled={formDisabled}
                         invalid={invalid}
                         errors={field.state.meta.errors}
                       />
@@ -200,7 +203,7 @@ export function MagicLink({
                     <Button
                       type="submit"
                       size="lg"
-                      disabled={isPending || !canSubmit}
+                      disabled={formDisabled || !canSubmit}
                     >
                       {signInMagicLinkPending ? <Spinner /> : null}
                       {magicLinkLocalization.sendMagicLink}

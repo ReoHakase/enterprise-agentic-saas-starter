@@ -53,6 +53,7 @@ test("magic link登録から最初のorganizationとdashboardへ到達できる"
 
   await expect(page.getByText("Sign In", { exact: true })).toBeVisible()
   const email = page.getByRole("textbox", { name: "Email" })
+  await expect(email).toBeEnabled()
   await email.fill("new@example.com")
   const magicLinkResponse = page.waitForResponse(
     (response) =>

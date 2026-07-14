@@ -1,13 +1,16 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { MagicLink } from "./magic-link"
 import { SignIn } from "./sign-in"
 import { SignUp } from "./sign-up"
 
 const authMocks = vi.hoisted(() => ({
   failSignIn: true,
   failSignUp: true,
+  magicLinkRequest: vi.fn<(input: unknown) => void>(),
   navigate: vi.fn<(input: { to: string }) => void>(),
   signInRequest: vi.fn<(input: unknown) => void>(),
   signUpRequest: vi.fn<(input: unknown) => void>(),
@@ -53,11 +56,20 @@ vi.mock("@better-auth-ui/react", () => {
     onError: (error: { error: { code: string; message: string } }) => void
     onSuccess: () => void
   }
+  type MagicLinkInput = {
+    callbackURL: string
+    email: string
+  }
+  type MagicLinkOptions = {
+    onSuccess: () => void
+  }
 
   return {
     useAuth: () => ({
       additionalFields: [],
-      authClient: {},
+      authClient: {
+        signIn: { magicLink: () => undefined },
+      },
       basePaths: { auth: "/auth" },
       emailAndPassword: {
         enabled: true,
@@ -107,8 +119,21 @@ vi.mock("@better-auth-ui/react", () => {
         },
       },
     }),
+    useAuthPlugin: () => ({
+      localization: {
+        magicLinkSent: "Magic link sent",
+        sendMagicLink: "Send magic link",
+      },
+    }),
     useSendVerificationEmail: () => ({
       mutate: vi.fn<(input: unknown) => void>(),
+    }),
+    useSignInMagicLink: (_client: unknown, options: MagicLinkOptions) => ({
+      isPending: false,
+      mutate: (input: MagicLinkInput) => {
+        authMocks.magicLinkRequest(input)
+        options.onSuccess()
+      },
     }),
     useSignInEmail: (_client: unknown, options: SignInOptions) => ({
       isPending: false,
@@ -155,6 +180,27 @@ beforeEach(() => {
 })
 
 describe("email and password authentication forms", () => {
+  it("keeps the magic-link form inert until hydration", async () => {
+    const container = document.createElement("div")
+    container.innerHTML = renderToString(<MagicLink />)
+    document.body.append(container)
+
+    expect(within(container).getByLabelText("Email")).toBeDisabled()
+
+    const user = userEvent.setup()
+    render(<MagicLink />, { container, hydrate: true })
+    const email = screen.getByLabelText("Email")
+    await waitFor(() => expect(email).toBeEnabled())
+
+    await user.type(email, "new@example.com")
+    await user.click(screen.getByRole("button", { name: "Send magic link" }))
+
+    expect(authMocks.magicLinkRequest).toHaveBeenCalledWith({
+      callbackURL: "http://localhost:3000/dashboard",
+      email: "new@example.com",
+    })
+  })
+
   it("validates sign-in fields and preserves credentials after a safe failure", async () => {
     const user = userEvent.setup()
     render(<SignIn />)
