@@ -1,3 +1,4 @@
+import { resolveEmailFrom } from "@enterprise-agentic-saas/email/config"
 import { defineEnv } from "envin"
 import * as v from "valibot"
 
@@ -11,6 +12,13 @@ const commaSeparatedList = v.pipe(
           .filter(Boolean)
       : []
   )
+)
+
+const emailFromSchema = v.pipe(
+  v.optional(v.string()),
+  v.transform((input) => resolveEmailFrom(input, process.env.NODE_ENV)),
+  v.string(),
+  v.email()
 )
 
 export const env = defineEnv({
@@ -39,7 +47,7 @@ export const env = defineEnv({
       v.optional(v.string(), "console"),
       v.picklist(["cloudflare", "console", "noop"])
     ),
-    EMAIL_FROM: v.pipe(v.string(), v.email()),
+    EMAIL_FROM: emailFromSchema,
   },
   isServer: true,
   env: process.env,

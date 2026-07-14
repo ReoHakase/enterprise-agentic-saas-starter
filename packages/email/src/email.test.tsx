@@ -8,7 +8,24 @@ import {
   renderMagicLinkEmail,
   renderOrganizationInvitationEmail,
   renderVerificationEmail,
+  resolveEmailFrom,
 } from "./index"
+
+describe("email configuration", () => {
+  it("uses a non-deliverable local address when EMAIL_FROM is omitted locally", () => {
+    expect(resolveEmailFrom(undefined, "development")).toBe(
+      "noreply@example.test"
+    )
+    expect(resolveEmailFrom("  ", "test")).toBe("noreply@example.test")
+  })
+
+  it("keeps EMAIL_FROM required in production", () => {
+    expect(resolveEmailFrom(undefined, "production")).toBeUndefined()
+    expect(resolveEmailFrom("auth@example.com", "production")).toBe(
+      "auth@example.com"
+    )
+  })
+})
 
 describe("email rendering", () => {
   it("renders magic link html and plain text", async () => {
@@ -69,7 +86,7 @@ describe("email senders", () => {
   const input = {
     to: "user@example.com",
     template: "magic_link" as const,
-    subject: "Subject",
+    subject: "Invitation to join Private Organization",
     text: "Text",
     html: "<p>Text</p>",
     renderProps: { appName: "App", url: "https://example.com/token?secret=1" },
@@ -87,11 +104,10 @@ describe("email senders", () => {
     expect(logger).toHaveBeenCalledWith({
       template: "magic_link",
       recipientDomain: "example.com",
-      subject: "Subject",
-      textLength: 4,
-      htmlLength: 11,
-      renderPropKeys: ["appName", "url"],
     })
+    expect(JSON.stringify(logger.mock.calls)).not.toContain(
+      "Private Organization"
+    )
     expect(JSON.stringify(logger.mock.calls)).not.toContain("token?secret=1")
     expect(JSON.stringify(logger.mock.calls)).not.toContain("user@example.com")
   })
@@ -102,7 +118,7 @@ describe("email senders", () => {
       await createConsoleSender()({
         to: "user@example.com",
         template: "magic_link",
-        subject: "Subject",
+        subject: "Invitation to join Private Organization",
         text: "Text body",
         html: "<p>Text body</p>",
         renderProps: {
@@ -115,10 +131,6 @@ describe("email senders", () => {
         expect.objectContaining({
           template: "magic_link",
           recipientDomain: "example.com",
-          subject: "Subject",
-          textLength: 9,
-          htmlLength: 16,
-          renderPropKeys: ["appName", "url"],
         })
       )
       const payload = spy.mock.calls[0]?.[1]
@@ -129,6 +141,11 @@ describe("email senders", () => {
       expect(payload).not.toHaveProperty("html")
       expect(payload).not.toHaveProperty("to")
       expect(payload).not.toHaveProperty("renderProps")
+      expect(payload).not.toHaveProperty("subject")
+      expect(payload).not.toHaveProperty("textLength")
+      expect(payload).not.toHaveProperty("htmlLength")
+      expect(payload).not.toHaveProperty("renderPropKeys")
+      expect(JSON.stringify(payload)).not.toContain("Private Organization")
       expect(JSON.stringify(payload)).not.toContain("token=abc")
       expect(JSON.stringify(payload)).not.toContain("https://")
     } finally {
@@ -170,7 +187,7 @@ describe("email senders", () => {
         email: "auth@example.com",
         name: "Enterprise Agentic SaaS",
       },
-      subject: "Subject",
+      subject: "Invitation to join Private Organization",
       text: "Text",
       html: "<p>Text</p>",
     })

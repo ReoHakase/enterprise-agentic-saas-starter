@@ -1,3 +1,4 @@
+export { resolveEmailFrom } from "./config"
 export { renderEmail } from "./render"
 export * from "./senders/index"
 export * from "./templates/index"
