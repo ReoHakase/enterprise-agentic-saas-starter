@@ -179,6 +179,7 @@ const commonAuthPlugins = defineAuthPlugins(
     maximumSessions: 5,
   }),
   openAPI({
+    disableDefaultReference: true,
     path: "/reference",
   }),
   organization({

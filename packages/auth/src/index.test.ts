@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import type { auth as Auth } from "./index"
+import type { AuthOpenApiSchema } from "./openapi"
 
 type AuthInstance = typeof Auth
 type AuthSessionResult = NonNullable<
@@ -20,6 +21,7 @@ let organizationSecurityHooks: {
     invitation: { role?: string | null }
   }): Promise<void>
 }
+let generateAuthOpenApiSchema: () => Promise<AuthOpenApiSchema>
 
 beforeAll(async () => {
   Object.assign(process.env, {
@@ -39,6 +41,8 @@ beforeAll(async () => {
   blockedOrganizationPluginEndpoints =
     authModule.blockedOrganizationPluginEndpoints
   organizationSecurityHooks = authModule.organizationSecurityHooks
+  const authOpenApiModule = await import("./openapi")
+  generateAuthOpenApiSchema = authOpenApiModule.generateAuthOpenApiSchema
 })
 
 describe("organization invitation acceptance", () => {
@@ -92,13 +96,17 @@ describe("app-owned organization boundary", () => {
     )
   })
 
-  it("publishes only invitation-recipient routes in the auth reference", async () => {
-    const response = await auth.handler(
-      new Request("http://api.localhost/auth/open-api/generate-schema")
-    )
-    expect(response.status).toBe(200)
-    const schema = await response.json()
+  it("generates the enabled auth routes and only recipient-facing organization routes", async () => {
+    const schema = await generateAuthOpenApiSchema()
     const paths = Object.keys(schema.paths)
+
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "/sign-in/magic-link",
+        "/passkey/generate-register-options",
+        "/multi-session/list-device-sessions",
+      ])
+    )
 
     const organizationPaths = paths.filter((path) =>
       path.startsWith("/organization/")
@@ -118,6 +126,14 @@ describe("app-owned organization boundary", () => {
         blockedOrganizationPluginEndpoints.map(({ path }) => path)
       )
     )
+  })
+
+  it("disables the separate Better Auth reference page", async () => {
+    const response = await auth.handler(
+      new Request("http://api.localhost/auth/reference")
+    )
+
+    expect(response.status).toBe(404)
   })
 })
 

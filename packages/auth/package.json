@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./github-oauth": "./src/github-oauth.ts"
+    "./github-oauth": "./src/github-oauth.ts",
+    "./openapi": "./src/openapi.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

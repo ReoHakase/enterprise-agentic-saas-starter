@@ -526,6 +526,33 @@ describe("createApp security and OpenAPI", () => {
       in: "cookie",
       type: "apiKey",
     })
+    expect(spec.components.securitySchemes.apiKeyCookie).toMatchObject({
+      in: "cookie",
+      type: "apiKey",
+    })
+    expect(spec.components.securitySchemes.bearerAuth).toMatchObject({
+      scheme: "bearer",
+      type: "http",
+    })
+    expect(spec.components.schemas.AuthUser.properties.displayName).toEqual({
+      nullable: true,
+      type: "string",
+    })
+    expect(
+      spec.paths["/auth/passkey/generate-register-options"].get.responses["200"]
+        .content["application/json"].schema
+    ).toEqual({
+      allOf: [{ $ref: "#/components/schemas/AuthUser" }, { type: "object" }],
+    })
+    expect(spec.paths["/auth/sign-in/magic-link"].post.tags).toEqual([
+      "Auth / Magic link",
+    ])
+    expect(
+      spec.paths["/auth/multi-session/list-device-sessions"].get.operationId
+    ).toBe("betterAuthGetAuthMultiSessionListDeviceSessions")
+    expect(spec.paths["/auth/organization/accept-invitation"]).toBeDefined()
+    expect(spec.paths["/auth/organization/list-user-invitations"]).toBeDefined()
+    expect(spec.paths["/auth/organization/invite-member"]).toBeUndefined()
     expect(
       spec.paths["/organizations/{organizationId}/ownership-transfer"].post
         .security
@@ -647,6 +674,22 @@ describe("createApp security and OpenAPI", () => {
       }
     }
     expect(new Set(operationIds).size).toBe(operationIds.length)
+  })
+
+  it("serves Scalar without local auth persistence, telemetry, or agent upload", async () => {
+    const app = createApp(testDb())
+    const response = await app.handle(new Request("http://localhost/openapi"))
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toContain("text/html")
+    expect(html).toContain("@scalar/api-reference")
+    expect(html).not.toContain("SwaggerUIBundle")
+    expect(html).toContain('"agent":{"disabled":true}')
+    expect(html).toContain('"persistAuth":false')
+    expect(html).toContain('"showOperationId":true')
+    expect(html).toContain('"telemetry":false')
+    expect(html).toContain('"withDefaultFonts":false')
   })
 
   it("returns a safe 401 for unauthenticated protected routes", async () => {
