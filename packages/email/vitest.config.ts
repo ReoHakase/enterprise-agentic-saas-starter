@@ -14,6 +14,7 @@ export default defineConfig({
         "src/senders/cloudflare.ts",
         "src/senders/configured.ts",
         "src/senders/console.ts",
+        "src/senders/mailpit.ts",
         "src/senders/noop.ts",
         "src/templates/magic-link.tsx",
         "src/templates/organization-invitation.tsx",

@@ -11,4 +11,14 @@ export type { ConsoleEmailEvent, ConsoleEmailLogger } from "./console"
 export { toConsoleEmailEvent } from "./console"
 export { createConfiguredEmailSender } from "./configured"
 export type { EmailProvider, EmailRuntime } from "./configured"
+export {
+  createMailpitEmailSender,
+  MailpitConfigurationError,
+  MailpitDeliveryError,
+} from "./mailpit"
+export type {
+  MailpitDeliveryErrorCode,
+  MailpitEmailAddress,
+  MailpitSendMessage,
+} from "./mailpit"
 export { createNoopSender } from "./noop"

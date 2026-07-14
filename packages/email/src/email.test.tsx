@@ -4,11 +4,15 @@ import {
   createCloudflareEmailSender,
   createConsoleSender,
   createConfiguredEmailSender,
+  createMailpitEmailSender,
   createNoopSender,
+  MailpitConfigurationError,
   renderMagicLinkEmail,
   renderOrganizationInvitationEmail,
   renderVerificationEmail,
   resolveEmailFrom,
+  resolveEmailProvider,
+  resolveMailpitUrl,
 } from "./index"
 
 describe("email configuration", () => {
@@ -23,6 +27,28 @@ describe("email configuration", () => {
     expect(resolveEmailFrom(undefined, "production")).toBeUndefined()
     expect(resolveEmailFrom("auth@example.com", "production")).toBe(
       "auth@example.com"
+    )
+  })
+
+  it("selects safe runtime-specific email providers by default", () => {
+    expect(resolveEmailProvider(undefined, "development")).toBe("mailpit")
+    expect(resolveEmailProvider("  ", undefined)).toBe("mailpit")
+    expect(resolveEmailProvider(undefined, "test")).toBe("noop")
+    expect(resolveEmailProvider(undefined, "production")).toBe("cloudflare")
+    expect(resolveEmailProvider(" console ", "production")).toBe("console")
+  })
+
+  it("defaults the Mailpit URL only in local development", () => {
+    expect(resolveMailpitUrl(undefined, "development")).toBe(
+      "https://mailpit.enterprise-agentic-saas.localhost"
+    )
+    expect(resolveMailpitUrl("  ", undefined)).toBe(
+      "https://mailpit.enterprise-agentic-saas.localhost"
+    )
+    expect(resolveMailpitUrl(undefined, "test")).toBeUndefined()
+    expect(resolveMailpitUrl(undefined, "production")).toBeUndefined()
+    expect(resolveMailpitUrl(" http://localhost:8025 ", "production")).toBe(
+      "http://localhost:8025"
     )
   })
 })
@@ -168,6 +194,195 @@ describe("email senders", () => {
         input
       )
     ).resolves.toBeUndefined()
+  })
+
+  it("sends only the rendered transport fields to a local Mailpit inbox", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('{"ID":"message_123"}'))
+
+    await createMailpitEmailSender({
+      baseUrl: "https://mailpit.enterprise-agentic-saas.localhost",
+      from: "auth@example.com",
+      fromName: "Enterprise Agentic SaaS",
+      runtime: "development",
+      fetch: request,
+    })(input)
+
+    expect(request).toHaveBeenCalledWith(
+      "https://mailpit.enterprise-agentic-saas.localhost/api/v1/send",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          From: {
+            Email: "auth@example.com",
+            Name: "Enterprise Agentic SaaS",
+          },
+          To: [{ Email: "user@example.com" }],
+          Subject: "Invitation to join Private Organization",
+          Text: "Text",
+          HTML: "<p>Text</p>",
+          Tags: ["magic_link"],
+        }),
+        redirect: "error",
+        signal: expect.any(AbortSignal),
+      }
+    )
+    expect(JSON.stringify(request.mock.calls)).not.toContain("renderProps")
+    expect(JSON.stringify(request.mock.calls)).not.toContain("token?secret=1")
+  })
+
+  it("omits optional Mailpit HTML and accepts a loopback URL", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(undefined, { status: 200 }))
+
+    await createMailpitEmailSender({
+      baseUrl: "http://127.0.0.1:8025/custom/path?ignored=yes",
+      from: "auth@example.com",
+      runtime: "development",
+      fetch: request,
+    })({ ...input, html: undefined })
+
+    const options = request.mock.calls[0]?.[1]
+    expect(request.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8025/api/v1/send")
+    expect(JSON.parse(String(options?.body))).toEqual({
+      From: { Email: "auth@example.com" },
+      To: [{ Email: "user@example.com" }],
+      Subject: "Invitation to join Private Organization",
+      Text: "Text",
+      Tags: ["magic_link"],
+    })
+  })
+
+  it.each([
+    "not a URL",
+    "https://mailpit.example.com",
+    "https://mailpit.localhost.example.com",
+    "https://127.evil.example.com",
+    "ftp://localhost/inbox",
+    "http://user:secret@localhost:8025",
+  ])("rejects a non-local Mailpit URL: %s", (baseUrl) => {
+    expect(() =>
+      createMailpitEmailSender({
+        baseUrl,
+        from: "auth@example.com",
+        runtime: "development",
+      })
+    ).toThrow(MailpitConfigurationError)
+  })
+
+  it.each(["production", "test"] as const)(
+    "rejects Mailpit in the %s runtime",
+    (runtime) => {
+      expect(() =>
+        createMailpitEmailSender({
+          baseUrl: "http://localhost:8025",
+          from: "auth@example.com",
+          runtime,
+        })
+      ).toThrow(/only in development/)
+    }
+  )
+
+  it("selects Mailpit only with complete development configuration", async () => {
+    expect(() =>
+      createConfiguredEmailSender({
+        provider: "mailpit",
+        runtime: "development",
+      })
+    ).toThrow(/EMAIL_FROM and MAILPIT_URL are required/)
+
+    expect(() =>
+      createConfiguredEmailSender({
+        provider: "mailpit",
+        runtime: "production",
+        from: "auth@example.com",
+        mailpitUrl: "http://localhost:8025",
+      })
+    ).toThrow(/only in development/)
+
+    expect(
+      createConfiguredEmailSender({
+        provider: "mailpit",
+        runtime: "development",
+        from: "auth@example.com",
+        mailpitUrl: "http://localhost:8025",
+      })
+    ).toBeTypeOf("function")
+  })
+
+  it("maps Mailpit network failures without retaining provider details", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(
+        new Error(
+          "provider failed for user@example.com at https://example.com/token=abc"
+        )
+      )
+    const sender = createMailpitEmailSender({
+      baseUrl: "http://localhost:8025",
+      from: "auth@example.com",
+      runtime: "development",
+      fetch: request,
+    })
+
+    const delivery = sender(input)
+    await expect(delivery).rejects.toMatchObject({
+      name: "MailpitDeliveryError",
+      message: "Local email delivery failed",
+      code: "E_NETWORK",
+      retryable: true,
+    })
+    await expect(delivery).rejects.not.toHaveProperty("cause")
+    await expect(delivery).rejects.not.toHaveProperty("to")
+    await expect(delivery).rejects.not.toHaveProperty("body")
+  })
+
+  it("maps Mailpit HTTP failures without reading the raw response", async () => {
+    const response = new Response(
+      "provider error containing user@example.com and token=abc",
+      { status: 503 }
+    )
+    const text = vi.spyOn(response, "text")
+    const request = vi.fn<typeof fetch>().mockResolvedValue(response)
+    const sender = createMailpitEmailSender({
+      baseUrl: "http://[::1]:8025",
+      from: "auth@example.com",
+      runtime: "development",
+      fetch: request,
+    })
+
+    await expect(sender(input)).rejects.toMatchObject({
+      name: "MailpitDeliveryError",
+      message: "Local email delivery failed",
+      code: "E_HTTP",
+      retryable: true,
+      status: 503,
+    })
+    expect(text).not.toHaveBeenCalled()
+  })
+
+  it("rejects a malformed Mailpit recipient before making a request", async () => {
+    const request = vi.fn<typeof fetch>()
+    const sender = createMailpitEmailSender({
+      baseUrl: "http://localhost:8025",
+      from: "auth@example.com",
+      runtime: "development",
+      fetch: request,
+    })
+
+    await expect(
+      sender({ ...input, to: "not-an-email" })
+    ).rejects.toMatchObject({
+      name: "MailpitDeliveryError",
+      message: "Local email delivery failed",
+      code: "E_VALIDATION_ERROR",
+      retryable: false,
+      field: "to",
+    })
+    expect(request).not.toHaveBeenCalled()
   })
 
   it("sends only the rendered transport fields through Cloudflare", async () => {

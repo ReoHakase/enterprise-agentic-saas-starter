@@ -6,6 +6,7 @@ export type RuntimeEmailSenderOptions = {
   runtime: EmailRuntime
   from: string
   fromName?: string
+  mailpitUrl?: string
 }
 
 export declare const createRuntimeEmailSender: (
