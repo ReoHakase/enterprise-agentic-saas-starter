@@ -58,7 +58,7 @@ export const auth = betterAuth({
       },
     }),
     multiSession({ maximumSessions: 5 }),
-    openAPI({ path: "/reference" }),
+    openAPI({ disableDefaultReference: true }),
     organization({ /* custom roles and fail-closed hooks */ }),
   ],
 })
@@ -88,10 +88,13 @@ export const authClient = createAuthClient({
 {
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./openapi": "./src/openapi.ts"
   }
 }
 ```
+
+`./openapi`はserver-onlyとし、singletonの実plugin構成から`auth.api.generateOpenAPISchema()`を呼ぶ。apps/apiが結果を統合Scalar `/openapi`へ載せるため、Better Auth既定の`/auth/reference`は404にする。Webからこのsubpathをimportしない。
 
 ## auth schema 生成
 

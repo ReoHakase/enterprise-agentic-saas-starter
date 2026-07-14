@@ -63,13 +63,14 @@ Eden clientはoptionsをspreadした後で`parseDate: false`を固定し、consu
 
 ## API documentation
 
-- Swagger UI: `/openapi`
-- OpenAPI 3.0 JSON: `/openapi/json`
-- Better Auth reference: `/auth/reference`
+- Scalar API Reference: `/openapi`
+- app routeとBetter Auth routeを統合したOpenAPI 3.0.3 JSON: `/openapi/json`
 - liveness: `/health`
 - Turso/libSQL readiness: `/ready`
 
-各routeは `operationId`、tag、request/response schema、共通error schema、cookie securityを持つ。browserからSwagger UIのtry-outを使う場合、Better AuthのSecure/HttpOnly cookieはUIへ貼り付けず、同一browserのcredentialとして送る。
+各routeは `operationId`、tag、request/response schema、共通error schema、cookie securityを持つ。Better Authの実plugin構成から生成したpathは `/auth` prefixで同じdocumentへ統合し、`disabledPaths` のrouteは掲載しない。個別の `/auth/reference` は404にしてdocumentationの正本を増やさない。
+
+Scalarはagent upload、telemetry、local auth persistence、外部default fontを無効化する。try-outではBetter AuthのSecure/HttpOnly cookieをUIへ貼り付けず、同一originのbrowser credentialとして送る。
 
 ## 認証・tenant・権限境界
 

@@ -9,6 +9,7 @@ Better Auth による認証・認可パッケージ。
 | `@enterprise-agentic-saas/auth` | singleton `auth` インスタンス（server-only） |
 | `@enterprise-agentic-saas/auth/client` | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
 | `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential |
+| `@enterprise-agentic-saas/auth/openapi` | 実plugin構成からauth OpenAPIを生成するserver-only境界 |
 
 ## Plugin 構成
 
@@ -16,7 +17,7 @@ Better Auth による認証・認可パッケージ。
 - `passkey` — WebAuthn/passkey 認証
 - `organization` — マルチテナント組織管理
 - `multiSession` — 同一browserで最大5 accountを保持し、再ログインなしで切り替える
-- `openAPI` — `/auth/reference` でauth endpointのScalar referenceを公開する
+- `openAPI` — auth OpenAPI schemaを生成する。既定reference pageは無効化し、`apps/api`の`/openapi`へ統合する
 - `socialProviders.github` — productionおよびemulator未使用時のGitHub OAuth sign-in / account linking
 - `genericOAuth` — development/testで明示したlocal emulatorだけをGitHub providerとして登録
 
@@ -31,6 +32,8 @@ PasskeyのRP IDは `TRUSTED_ORIGINS` 先頭のhostname、許可originは同配�
 cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、web/APIが共有する親domainを指定する。localの `.localhost` だけはweb hostnameへ自動fallbackする。cookieのSecure属性は `BETTER_AUTH_URL` のprotocolへ合わせ、productionはHTTPS以外を起動時に拒否する。これによりlocal HTTP E2EだけSecure属性を外せる。
 
 Better Auth organization pluginは招待recipient向けの `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` だけを公開する。organization/member/invitation/team/custom roleの管理・参照endpointは `disabledPaths` で404にし、tenant guard・fresh session・確認入力・auditを持つ `apps/api` のrouteへ集約する。
+
+`@enterprise-agentic-saas/auth/openapi`の`generateAuthOpenApiSchema()`はsingletonの実plugin構成と`disabledPaths`を正本にする。`apps/api`は結果へ`/auth` prefixを付け、app routeと同じ`/openapi/json`へ統合する。別の`/auth/reference`は404にし、documentationのdriftとScalar設定の二重管理を防ぐ。
 
 招待accept直前のhookでもroleを `admin | member` に限定し、legacy `owner`、`super_admin`、null、未知roleを拒否する。membershipはDBのtenant/user複合一意制約でreplay・同時acceptによる重複を防ぐ。
 

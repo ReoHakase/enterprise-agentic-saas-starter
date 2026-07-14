@@ -107,7 +107,11 @@ apps/api/src/
 
 ## OpenAPI
 
-- `/openapi` はSwagger UI、`/openapi/json` はOpenAPI 3.0 JSON。Better Auth固有endpointは `/auth/reference` の公式OpenAPIへ誘導する。
+- `/openapi` はScalar、`/openapi/json` はapp routeとBetter Auth routeを統合したOpenAPI 3.0.3 JSONを返す。Better Auth既定の`/auth/reference`は無効化し、documentationの正本を増やさない。
+- Better Auth routeは`@enterprise-agentic-saas/auth/openapi`から実plugin構成のschemaを生成し、pathへ`/auth`を付けて統合する。auth routeをapps/apiで手書き複製しない。`disabledPaths`は生成結果にも反映されるため、app所有のorganization管理routeが含まれないことをauth/API双方のtestで固定する。
+- Elysia 1.4はOpenAPI 3.0.3、Better Auth 1.6は3.1.1を生成する。実schemaに存在する`type: [T, "null"]`だけを`type: T, nullable: true`へ変換し、`$ref` siblingsは`allOf`へ保持する。未対応union/security schemeは黙って落とさず起動時にfail-fastする。
+- Better Auth由来のoperationにもpath+methodから一意な`operationId`、summary、description、`Auth / ...` tagを補完する。app routeと合わせて重複operation IDをtestする。
+- Scalarはagent upload、telemetry、auth永続化、default font、developer toolsを無効化する。同一originのtry-outはHttpOnly cookieをbrowser credentialとして使い、cookie値をUI設定やdocumentへ保存しない。
 - route追加時は `operationId`、summary、description、tag、全request schema、status別response schema、securityを同時に追加する。
 - protected routeのsecurity metadataはauth macroから付け、実行時guardとdocumentationが乖離しないようにする。
 - error responseは共通 `ApiError` schemaを使う。examplesへ実ID、cookie、token、DB情報を入れない。

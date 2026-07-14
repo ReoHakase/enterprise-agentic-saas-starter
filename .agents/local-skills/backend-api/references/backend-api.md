@@ -155,7 +155,10 @@ describe("createApp", () => {
 
 ## OpenAPI / observability
 
-- OpenAPI は API 確認・client integration 確認用。実装の source of truth を二重管理しすぎない。
+- OpenAPI は API 確認・client integration 確認用。`/openapi`のScalarと`/openapi/json`だけを正本にし、Better Authの別referenceを公開しない。
+- Better Authの実生成schemaはserver-onlyな`@enterprise-agentic-saas/auth/openapi`から取得し、`/auth` prefixを付けてapp routeと統合する。API testではこのsubpathを最小fixtureへmockし、auth package testで実plugin構成と`disabledPaths`を検証する。
+- ElysiaのOpenAPI 3.0 fragmentへBetter Authの3.1 fragmentを混在させない。観測済みnullable type arrayと`$ref` siblingsだけを明示変換し、未対応dialectはfail-fastする。
+- Scalarのagent、telemetry、auth persistence、default font、developer toolsを無効にする。
 - Bunはapp import前に`@sentry/bun`、CloudflareはWorker handlerを`@sentry/cloudflare`の`withSentry`でwrapする。`createApp(db)`へruntime clientを渡さない。
 - Sentry trace/logはrequest id、正規化route、status、duration、error codeを追えるようにする。CloudflareのSentry OTLP destinationと二重送信しない。
 - secret、raw body/header/query、email、tenant/resource IDをspan/log attributeに載せず、送信直前のscrubberでも除去する。
