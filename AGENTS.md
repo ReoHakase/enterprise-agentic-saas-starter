@@ -28,6 +28,9 @@
 - Web/APIのCloudflare構成を変えたら `bun run build:cloudflare` を通す。Elysia Cloudflare adapterはexperimentalなのでBun buildだけで完了扱いにしない。
 - application error/log/traceはSentry SDKを正本にし、localはSpotlightを使う。CloudflareのSentry OTLP exportを同時に有効化して二重送信しない。
 - production emailはCloudflare `EMAIL` bindingを使い、本文、URL/token、recipient全文、provider raw errorをlog/telemetryへ出さない。
+- API route schemaは`apps/api`のValibot Standard Schemaへ閉じる。WebがAPI packageからimportしてよいのは`@enterprise-agentic-saas/api/client`だけで、`packages/validators`やAPI schema/typeのdeep importを作らない。
+- browserのserver dataはTanStack Query、formはTanStack Form + Web-local Valibot、再取得不要な一時UI状態だけをJotaiで扱う。
+- packageのOxlintは`--deny-warnings`で実行し、plugin warningをCIへ残さない。
 - 人向けrunbookは `/docs` に置き、入口は `docs/README.md` へ追加する。
 
 ## Skill一覧

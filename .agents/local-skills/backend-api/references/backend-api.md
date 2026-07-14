@@ -102,7 +102,7 @@ export const corsPlugin = new Elysia({ name: "cors" }).use(
 ```txt
 modules/todos/
   index.ts       # Elysia routes
-  model.ts       # Elysia t / TypeBox schema
+  model.ts       # Valibot Standard Schema
   service.ts     # business logic
   repository.ts  # Drizzle access
   test.ts
@@ -110,10 +110,16 @@ modules/todos/
 
 todo は単純でも、tenant/group/permission 前提で設計する。repository query には tenant id や organization id を含める。
 
-## Elysia t / TypeBox route schema
+## Valibot Standard Schemaを使うroute schema
 
 ```ts
-import { Elysia, t } from "elysia"
+import { Elysia } from "elysia"
+import * as v from "valibot"
+
+const createTodoBody = v.object({
+  title: v.pipe(v.string(), v.minLength(1)),
+  organizationId: v.pipe(v.string(), v.minLength(1)),
+})
 
 export const todosModule = new Elysia({ prefix: "/todos" }).post(
   "/",
@@ -121,10 +127,7 @@ export const todosModule = new Elysia({ prefix: "/todos" }).post(
     return await createTodo(db, session.user.id, body)
   },
   {
-    body: t.Object({
-      title: t.String({ minLength: 1 }),
-      organizationId: t.String({ minLength: 1 }),
-    }),
+    body: createTodoBody,
   }
 )
 ```

@@ -38,18 +38,28 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 
 ## 実装時の確認
 
-- webからAPIを呼ぶときは `@enterprise-agentic-saas/api/client` または明示的なHTTP clientを使い、DB packageへショートカットしない。
+- first-party Elysia APIを呼ぶときは`@enterprise-agentic-saas/api/client`のEden clientだけを使い、raw `fetch` wrapperやAPI packageのschema/type deep import、DB packageへのショートカットを作らない。Better Auth固有endpointは`@enterprise-agentic-saas/auth/client`を使う。
+- first-party Elysia routeはbrowser/serverとも`@enterprise-agentic-saas/api/client`のEden clientだけを使い、feature内でraw `fetch`を再実装しない。Edenの`data` / `error.value` / `status`をcastせず扱い、UI固有のValibot parserはtransport型の代用品ではなくruntime表示境界として残す。公開data hookはTanStack Query経由を維持する。Better Auth固有endpointは`@enterprise-agentic-saas/auth/client`を使う。
 - public envだけがbrowser bundleに入ることを確認する。
 - UI追加時は既存のshadcn/ui・Tailwind・`packages/ui` の構成に寄せる。
 - portless local dev のweb originは `https://enterprise-agentic-saas.localhost`、API originは `https://api.enterprise-agentic-saas.localhost`。Next.js `allowedDevOrigins` も `.localhost` に合わせる。
 - auth必須画面はNext.js Server Componentでsessionを検証し、未ログインなら `/auth/sign-in` にredirectする。session検証やSSR prefetchはwebからDBへ触らず、cookie headerをAPIへ転送するserver-side HTTP/Eden callに限定する。
 - todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
+- browserのGET/mutationはTanStack Queryのquery/mutationへ集約する。フォームはTanStack Formと`apps/web`内のValibot schemaを使い、field errorをinput直下、action失敗を安全なtoast/form errorに出す。Jotaiは選択中dialogなど再取得不要な一時UI状態だけに使い、server data cacheを複製しない。
+- TanStack Queryの`mutationFn`へAPI methodをそのまま渡すと、Queryの第2引数contextも呼び出される。transport境界へ余計なargumentを流さないため、`mutationFn: (input) => api.method(input)`の明示wrapperを使う。
 - App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
 - SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。todoなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
+- active organization mutation成功時に`consoleKeys.all`を即invalidateすると、route遷移前の旧tenant queryが新session contextで再fetchされ409/404になる。旧queryはcancelだけして再fetchせず、organization routeのreplaceまたはRSC refreshで新tenant queryを構築する。
 - `activeOrganizationId = null` で複数membershipがある場合、`organizations[0]` をactive扱いしない。tenant data pageは `/settings/organizations` へ誘導し、sidebarは明示選択を表示する。switcherのno-op判定は選択target自身の `active === true` のときだけにする。
 - organization未所属ユーザーは `/onboarding` ではなく `/settings/organizations` に誘導する。org作成はorg一覧画面の作成formに集約し、auth必須ページのno-org guardも同じURLへredirectする。
 - Console sidebarはviewport固定（desktopはsticky `h-svh`、mobileはdrawer）を前提にし、page contentだけをscrollさせる。
+- Mobile sidebarの最初の操作は、hydration後の`useEffect`で確定する`isMobile`だけに依存させない。SSRと初期DOMを変えず、trigger event時の現在のviewportも確認してdrawer stateを切り替え、effect確定前のclickやkeyboard shortcutをdesktop sidebar stateへ誤配分しない。
+- mobile sidebar内のmenuから開くDialog/AlertDialogは、sidebar closeでmenu subtreeがunmountされても消えないよう、open stateとDialog本体を`ConsoleShell`などdrawer外のownerへ置く。menuはsidebar closeとopen callbackの発火だけを担当する。
 - Console routeはURLを変えない `app/(console)/layout.tsx` に集約し、`ConsoleShell` を各pageでwrapしない。これによりroute navigation中もsidebar・account・organization contextを維持し、nested `loading.tsx` / `error.tsx` はshell内のcontentだけを置換する。
+- Console layoutでsessionや`me`を待つ場合、async layout自体を最上位にせず、同期layoutの明示的な`Suspense`内で解決する。初回fallbackとlayout-level errorはready状態と同じsidebar幅、inset、`h-14` header、scroll領域、content paddingを共有し、desktopではsidebarを予約、mobileでは閉じたdrawerの幅を予約しない。
+- Consoleのnested `loading.tsx` / `error.tsx` は`ConsoleShell`のcontent frame内で描画されるため、`max-w`や`p-4 sm:p-6 lg:p-8`を再指定しない。ready/loading/errorで同じPageShell header/body slotを使い、route固有のaction有無、mobileでのdescription折返し、dashboard/issues/table/formのbody形状をskeletonへ反映する。
+- Loading skeletonは`role="status"`、`aria-busy="true"`、安全なlabelを持ち、視覚要素を`aria-hidden`にする。`aria-hidden`配下へbuttonやlinkを残さない。Error boundaryは実headingをfocusし、`role="alert"`と明示的なreset actionを持たせる。境界変更時はPlaywrightでdesktop/mobileのsidebar、header、content、PageShellのbounding boxと横overflowをready状態に対して確認する。
+- Next RSCのpage errorは`reset()`だけではerrored payloadがclient cacheから再利用され、mobile Chromium/WebKitで復帰しない場合がある。このrepoのerror actionはまず`reset()`でmounted boundaryの復帰を試し、error componentが一定時間後もmountedならfull reloadへfallbackしてserver requestを作り直す。成功時はcleanupでreload timerを解除し、one-shot faultを使う3 browser projectのE2Eで両経路の復帰を確認する。
 - Server Componentのcookie、session、console API、`me` は `react cache()` を使う `lib/server/*` helperでrequest内dedupeする。session endpointは401または200-nullだけを未認証とし、network errorと5xxをsign-in redirectへ変換せずerror boundaryへ送る。
 - Auth画面は `apps/web/app/auth/[path]/page.tsx` のpage-level compositionで背景・ブランド・previewを作り、`components/auth/*` はBetter Auth UIのview componentとして保つ。passwordlessが主導線なので、サインインの見た目調整はまず `MagicLink` fallbackにも反映する。
 - Authの `redirectTo` は先頭 `/` のlocal pathだけを許可し、`//`、backslash、encoded protocol-relative path、control characterをserver側で除外してからBetter Auth UIへ渡す。
@@ -58,7 +68,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - TanStack Tableを使うissue/member等のpage-level compositionは `apps/web` に置き、`packages/ui` はTable、Dialog、Select等のprimitiveに留める。assignee selectorはmember APIの表示名/emailを候補にし、member/user idの手入力UIを作らない。
 - Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
 - OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
-- API Workerの `ATTACHMENTS` R2 bindingは将来の添付機能用予約であり、endpoint/storage module実装前に機能提供済みとdocumentしない。
+- API Workerの`ATTACHMENTS` R2 bindingにはまだupload/download endpointがないが、organization削除後のtenant prefix cleanupでは使用する。添付UIを提供済みとdocumentせず、削除機能を有効にする環境ではbindingを外さない。
 - Elysia Cloudflare adapterはexperimentalなので、Bun runtimeのunit testだけでproduction互換と判断しない。
 
 ## SentryとSpotlight

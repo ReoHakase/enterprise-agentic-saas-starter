@@ -77,10 +77,11 @@ export type SendEmail = (input: SendEmailInput) => Promise<void>;
 
 ## sender adapter
 
-- `senders/console.ts`: local dev専用。`text` / `html` / recipient全文 / `renderProps` の値を一切logへ出さず、recipient domain、subject、本文長、template propのkey名だけを渡す。注入loggerにもsanitized eventしか渡さない。
+- `senders/console.ts`: local dev専用。`text` / `html` / subject / recipient全文 / `renderProps` / 本文長 / prop keyを一切logへ出さず、templateとrecipient domainだけを渡す。subjectにはorganization名等が入るため、localでもtelemetry metadataに含めない。注入loggerにもsanitized eventしか渡さない。
 - `senders/noop.ts`: testで送信副作用を避ける。
 - `senders/cloudflare.ts`: `EMAIL.send()`へ`to/from/subject/text/html`だけを渡す。`renderProps`はtransportへ渡さず、errorはCloudflare codeと明示retry allowlistを持つsanitized `EmailDeliveryError`へ変換する。
 - `createRuntimeEmailSender`: app/auth側から検証済みのprovider/runtime/fromを受け取る。workerd productionでは`EMAIL_PROVIDER=cloudflare`と`EMAIL` bindingを必須にし、通常runtimeのproduction consoleもfail-closedにする。
+- `@enterprise-agentic-saas/email/config`の`resolveEmailFrom`はlocal/testで未設定のときだけ配送不能な`noreply@example.test`を返す。本番は`undefined`を返してenv validationを失敗させる。`apps/api`と`packages/auth`で独自fallbackを二重実装せず、envだけのimportでtemplate runtimeを読み込まない。
 - Better Authのbackground taskはworkerd entrypointが公開する`waitUntil` handlerへ接続する。organization invitationはapp APIのtransaction/audit境界を維持するためAPI側senderを正本にする。
 - app/auth側でenvに応じてsenderを選ぶ。`packages/email` がenvを直接読まない。
 

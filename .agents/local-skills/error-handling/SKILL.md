@@ -13,6 +13,8 @@ description: enterprise-agentic-saas-starterのAppError、Error.cause、public/p
 - 想定外の失敗は `cause` と `privateContext` に包む。
 - HTTP responseへ返してよいのは public code、public message、sanitized public context、request idだけ。
 - `error.message` をそのままresponseへ返さない。
+- `fieldErrors`は`Record<string, string[]>`とし、Valibot issueからはsanitized field pathと固定の安全なmessageだけを返す。入力値、`received`、raw issue messageは反射しない。
+- `AppError.publicContext.field`がある場合は、application側で定義したpublic messageを同じfieldの`fieldErrors`へ写してよい。prototype pollutionに使えるfield名と過度に深いpathは破棄する。
 - `stack`, `cause`, SQL, DB URL, token, cookie, Authorization header, raw request body, external API raw responseはresponse禁止。
 - logへ出す前にもredactionを通す。
 - `onError` は最後の防波堤として残す。
@@ -57,6 +59,8 @@ private contextは内部診断向け。responseには出さず、log/Sentryへ�
 
 - 新しいerror factoryがpublic messageだけを持つか確認する。
 - validation errorの詳細を本番responseに出しすぎない。
+- request validationの`fieldErrors`は許可するが、response validationの内部field pathは公開しない。
+- Elysia/Valibotのrequest validationは400 `validation_error`へ正規化し、OpenAPI responseも400に揃える。runtimeが返さない422をdocumentしない。
 - Better AuthやElysia validation pluginのthrowも `onError` で安全に丸める。
 - redaction対象のkey/value patternにsecret, token, cookie, authorization, database url, api keyが入っていることを確認する。
 

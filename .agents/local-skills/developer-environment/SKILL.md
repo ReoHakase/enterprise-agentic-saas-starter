@@ -24,7 +24,9 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きの `turbo dev` に戻す。
 - `turso dev` は `PORT` envを読まないため、DBのportless scriptは `turso dev --port ${PORT:-8080}` のようにportlessが割り当てた `PORT` を明示的に渡す。
 - Wrangler/OpenNext/Playwright/Storybookはroot catalogと各workspaceのdevDependencyに固定し、flakeへ別versionのglobal CLIを重ねない。`nix develop` のBunから `bun run --cwd <workspace> ...` で起動する。
+- `flake.nix`から`bunx`で起動するMCP packageもbare nameにせずexact versionを指定する。生成configだけがNix storeにあっても、bare npm specでは同期時に取得versionが変わる。
 - Cloudflare local envは各appの `.dev.vars`、共有key一覧は `.dev.vars.example` に置く。production secretはCloudflare/GitHub secretへ置き、`.dev.vars` をcommitしない。
+- local/testの`EMAIL_FROM`は未設定でも`packages/email`の共通resolverが`noreply@example.test`を補う。本番は補わずenv validationでfail-fastするため、Cloudflareで検証済みsenderを必ず設定する。
 - 人向けrunbookの入口は `docs/README.md`。repo固有の判断をskillへ先に反映し、実行手順と運用checklistを `/docs` に展開する。
 
 ## Spotlight

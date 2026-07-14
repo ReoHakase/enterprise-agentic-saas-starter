@@ -64,7 +64,7 @@ export const auth = betterAuth({
 })
 ```
 
-実装では`env`で`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`EMAIL_FROM`を必須検証する。organization invitationの作成と送信はtenant guardとauditを持つ`apps/api`だけが行い、Better Auth pluginに別senderを作らない。
+実装では`env`で`BETTER_AUTH_SECRET`と`BETTER_AUTH_URL`を必須検証する。`EMAIL_FROM`はlocal/testだけ共通resolverで`noreply@example.test`へfallbackし、productionでは検証済みsenderを必須にしてfail-fastする。organization invitationの作成と送信はtenant guardとauditを持つ`apps/api`だけが行い、Better Auth pluginに別senderを作らない。
 
 ## auth client
 

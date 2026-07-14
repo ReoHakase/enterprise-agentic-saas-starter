@@ -64,6 +64,7 @@ bunx @better-auth/cli generate \
 - organization招待の作成・送信はtenant guard/auditを持つ`apps/api`だけを正本にする。Better Auth organization pluginへ別の`sendInvitationEmail`を設定して二重配送経路を作らない。
 - email送信eventはtemplate/domain/message ID/error code/retryableだけを許可し、magic link、verification URL、招待URL、recipient全文、HTML/text、provider raw errorをauth loggerやSentryへ渡さない。
 - 複数account切替はBetter Auth公式の `multiSession` / `multiSessionClient` をserver/clientの両方に入れる。同一browserでは最大5 accountとし、`listDeviceSessions` / `setActive` / `revoke` を使う。通常の `signOut` は保持中accountをすべてrevokeするため、個別削除と区別する。
+- `better-auth-ui` の `useAuth().authClient` は通常objectに見えてもfunction/proxyになり得る。client capability検出を `typeof value === "object"` だけに限定せず、object/functionのproperty containerからmethodをbindする。`listDeviceSessions` のresponseはcastや手書きtype guardで通さず、`apps/web`ローカルのValibot schemaで検証してからaccount switcherへ渡す。
 - Better Auth core/plugin endpointの仕様は `openAPI({ path: "/reference" })` で `/auth/reference` に公開し、app側Elysia OpenAPIから認証referenceへ誘導する。必要なら `auth.api.generateOpenAPISchema()` でOpenAPI 3.1 schemaを取得する。
 - Cloudflare Workersではin-memory rate limitを使わず、Better Authの `rateLimit.storage = "database"` でTursoへ永続化する。本番のclient IPはCloudflareが上書きする `cf-connecting-ip` だけを信頼し、magic link・multi-session切替・招待には個別ruleを置く。rate limit導入後はauth schemaを再生成し、`rateLimit` tableのmigrationを保存する。
 - Passkeyの `rpID` をlocal hostnameへhardcodeしない。必須 `TRUSTED_ORIGINS` 先頭のhostnameをRP ID、配列全体をpasskey verificationの許可originに使い、deploy先でも一致させる。
@@ -72,6 +73,9 @@ bunx @better-auth/cli generate \
 - app側の `step_up_required` は403とし、public contextに `action`, `maxAgeSeconds`, `reason` を返す。専用の疑似reauth tokenは作らず、passkey・magic link等で新しいBetter Auth sessionを作ってからmutationをretryする。
 - 新規sessionの `activeOrganizationId` は、同じuserの未失効sessionで使われた最新のorganizationをmembership付きで再検証して継承する。該当contextがなくmembershipが1件だけなら自動選択し、複数ならnullのまま明示選択を要求する。`/me` は同じ規則でstale/null contextをtransaction内で永続修復し、表示だけのfallbackをactive扱いしない。
 - member削除transactionでは、削除されたuserが当該organizationをactiveにしている全sessionも、残る最新valid context、単一membership、nullの順でreconcileする。membership削除後にsessionだけを旧tenantへ残さない。
+- organization削除は専用guardとserviceの両方で`super_admin`・active organization・fresh sessionを検証し、bodyのslug完全一致、`confirmation = "DELETE"`、16〜128文字のopaqueな冪等性keyを必須にする。通常の汎用tenant guardへ削除後replayの例外を混ぜない。
+- organization削除transactionは `(requested_by_user_id, idempotency_key)` の既存jobを最初に確認し、同じorganizationなら同じreceipt、別organizationなら409にする。新規削除ではactor membershipが`super_admin`であること、request sessionが未失効かつ対象organizationをactiveにしていること、organization/slug一致を同じtransaction内で再確認する。確認後にPIIを持たないdurable jobを保存し、対象organizationをactiveにする全sessionをnullへ戻してからorganizationをhard deleteする。tenant tableはDB cascadeでも消し、jobはorganizationへの外部keyを持たせずR2 cleanup完了まで残す。
+- 削除後のretryだけはmembership 404時に専用guardが `(actor user id, organization id, idempotency key)` の完全一致jobを検証して許可する。fresh sessionは再度要求し、active organization検証だけをskipする。別key・別actor・別organizationは同じ404にし、疑似membershipは作らない。
 - magic linkは `storeToken: "hashed"`、Better Auth全体のverification identifierもhashed保存にする。auth loggerはmessage、error args、SQL params、token、cookie、bodyを出さず固定metadataだけを出し、routerのunsafe fallback loggerへ非API errorを渡さずapp error boundaryへthrowする。DB障害を使ったdummy token非出力testを必須にする。
 
 ## 認可
@@ -84,6 +88,7 @@ bunx @better-auth/cli generate \
 - `super_admin` はorganizationごとに必ず一人だけにする。Better Authのrole定義だけに任せず、`apps/api` 側のmember role更新で昇格時に旧 `super_admin` を `admin` へ落とし、最後の `super_admin` の降格・削除を拒否する。
 - organization memberのrole変更はapp側で強制する。`admin` は招待や通常member管理はできるが、`member -> admin`、`admin -> member`、`super_admin` 関連変更はできない。role昇格/降格と `super_admin` 移譲は `super_admin` だけ許可する。
 - `admin` が招待できるroleは `member` だけ。`super_admin` が招待で `admin` を付与する場合もfresh sessionを要求する。
+- organization招待メールの`inviterName`には認証済みuserの表示名を渡す。user idを人向け表示へ流用せず、名前が空の場合だけtemplate側の安全なfallbackを使う。
 - `super_admin` 移管は通常role更新から分離し、target member emailのtyped confirmationとfresh sessionを要求する。移管、member削除、role変更とaudit insertは同一transactionにする。
 - `member` はDBで `(organization_id, user_id)` unique、`role = 'super_admin'` はorganizationごとのpartial uniqueを持つ。所有権移管transactionは旧super_adminを先にadminへ降格してからtargetを昇格し、前後のcountを検証する。逆順はpartial uniqueに違反する。
 - UI上の操作非表示は補助であり、`admin` が `super_admin` を触れないこと、`member` がmutationできないことはAPI integration testで確認する。

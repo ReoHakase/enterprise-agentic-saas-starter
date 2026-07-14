@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 
 ## 方針
 
-- primary lintはoxlint。
+- primary lintはoxlint。各workspaceのscriptは`oxlint --deny-warnings`にし、plugin warningもCI failureとして扱う。
 - primary formatterはoxfmt。
 - Oxlint/Oxfmt configはTS形式（root `oxlint.config.ts` / `oxfmt.config.ts`、package固有 `oxlint.config.ts`）にする。Oxlint TS configの `extends` はパス文字列ではなく、root configをimportしてconfig objectを渡す。
 - root `package.json` は `"type": "module"` にし、NodeのTS config ESM読込warningを出さない。
@@ -19,8 +19,10 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - Tailwind v4をOxlintで見る場合は `oxlint-tailwindcss` と `@tailwindcss/node` を一緒に入れる。
 - backend/API/DB/Auth packageはReact/Next/Tailwind/jsx-a11y pluginを足さず、server TypeScript向けpluginに寄せる。
 - React Email packageはReact componentを書くため `react` / `react-perf` を使うが、Next/Tailwind/browser前提にはしない。
+- Vitestを使うworkspaceはpackage-local Oxlint configで`vitest` pluginを有効にする。Vitestのcustom expect messageやinterfaceから型が決まるmockにOxlintのJest互換ruleが誤適用される場合だけ、対象test fileと理由を限定してoverrideする。
 - unit/integrationはVitest。
 - UI state、a11y、interactionはStorybook 10 + Vitest addon + Playwright browser provider。旧standalone Storybook test runnerは追加しない。
+- Storybook browser testへ新しいBase UI primitiveを初めて追加すると、test中のVite再最適化でpage reloadとshim取得失敗が起きうる。`packages/ui/vitest.config.ts`の`optimizeDeps.include`へ対象の`@base-ui/react/*` entryを明示し、light/dark両projectで再現しないことを確認する。
 - browser E2EはPlaywright。
 - Next.js buildをCIの品質ゲートに含める。
 - GitHub ActionsはNix、quality、Storybook、E2E、Cloudflare dry-runを独立jobにする。PRのE2Eは決定的なmock、production deployはGitHub Environment approvalとconcurrency lockを使う。
@@ -64,6 +66,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 ## Bun + Vitest
 
 - Vitestを使うなら `bun run test`。`bun test` はBun自身のtest runnerなので混同しない。
+- coverageは`@vitest/coverage-v8`を使い、実際にunit test対象として保守しているsourceだけを明示的に`include`する。現実的なthresholdをCIで常時有効にし、`coverage/**`をTurbo outputとCI artifactに残す。
 - 新規workspaceにはREADMEとVitest testを必ず置き、root `check` はlint/format/typecheck/testを含める。
 
 ## GitHub Actions

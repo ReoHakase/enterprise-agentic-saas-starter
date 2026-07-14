@@ -60,10 +60,6 @@ import type { EmailTemplate, SendEmail, SendEmailInput } from "../types"
 export type ConsoleEmailEvent = {
   template: EmailTemplate
   recipientDomain: string | null
-  subject: string
-  textLength: number
-  htmlLength?: number
-  renderPropKeys: string[]
 }
 
 export type ConsoleEmailLogger = (event: ConsoleEmailEvent) => void
@@ -78,13 +74,6 @@ const eventFromInput = (input: SendEmailInput): ConsoleEmailEvent => {
     template: input.template,
     recipientDomain:
       separator < 0 ? null : input.to.slice(separator + 1).toLowerCase(),
-    subject: input.subject,
-    textLength: input.text.length,
-    ...(input.html === undefined ? {} : { htmlLength: input.html.length }),
-    renderPropKeys:
-      input.renderProps && typeof input.renderProps === "object"
-        ? Object.keys(input.renderProps)
-        : [],
   }
 }
 
@@ -97,7 +86,7 @@ export function createConsoleSender(
 }
 ```
 
-loggerへ`SendEmailInput`そのものを渡さない。`renderProps`の値、recipient全文、text/htmlにはtokenや認証URLが含まれる。
+loggerへ`SendEmailInput`そのものを渡さない。`renderProps`の値、recipient全文、text/htmlにはtokenや認証URLが含まれ、subjectにはorganization名等が含まれる。
 
 ## app側composition
 

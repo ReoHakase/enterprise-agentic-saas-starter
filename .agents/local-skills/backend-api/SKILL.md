@@ -1,6 +1,6 @@
 ---
 name: backend-api
-description: enterprise-agentic-saas-starterのElysia API、apps/api、feature-first modules、app.ts/index.ts/worker.ts/client.ts、Elysia t/TypeBox model、Eden、OpenAPI、Sentry observability、service/repository境界、Effectを使わない方針を変更するときに使う。
+description: enterprise-agentic-saas-starterのElysia API、apps/api、feature-first modules、app.ts/index.ts/worker.ts/client.ts、Valibot Standard Schema、Eden、OpenAPI、Sentry observability、service/repository境界、Effectを使わない方針を変更するときに使う。
 ---
 
 # Backend API
@@ -35,9 +35,12 @@ apps/api/src/
   errors/
     app-error.ts     # AppError class + publicErrors helper
   modules/
+    organizations/
+      deletion-access.ts # 削除後replayだけを限定許可する専用guard
+      deletion-jobs.ts   # R2 cleanup cronの冪等job processor
     todos/
       index.ts
-      model.ts
+      model.ts       # Valibot Standard Schema
       service.ts
       repository.ts
       test.ts
@@ -56,10 +59,11 @@ apps/api/src/
 - `app.ts` は Elysia app を組み立てるだけ。listen しない。
 - `index.ts` はBun Sentryを最初に初期化し、dynamic importで本番 pluginを合成してlistenする。clientやtestからimportしない。
 - `worker.ts` はCloudflare SDKでhandlerをwrapする。Bun SDKをbundleしない。
-- `client.ts` は Eden client を export する。
+- `client.ts` はEden clientをexportし、`parseDate: false`をconsumerが上書きできない位置で固定する。WebがimportしてよいAPI entrypointは`@enterprise-agentic-saas/api/client`だけにする。
+- `/health`はHTTP runtimeだけを見るliveness、`/ready`は`select 1`でTurso/libSQL到達性も見るreadinessに分ける。依存先障害は503 `service_unavailable`へ丸め、DB詳細を公開しない。
 - feature は `modules/<feature>` に置く。todo 題材でも、group/permission/org 前提の SaaS 設計を崩さない。
-- `model.ts` は Elysia `t` / TypeBox schema と型を置く。
-- route schema は `import { t } from "elysia"` に寄せる。`apps/api` へ Valibot を追加しない（env.ts のみ例外）。
+- `model.ts` はValibot Standard Schemaを置き、Elysiaの`body` / `params` / `query` / `response`へ直接渡す。schemaから型が必要なら`v.InferOutput`で導出し、手書き型との二重管理を増やさない。
+- route modelは`apps/api`内に置く。Webとschemaを共有するためだけの`packages/validators`は作らず、Edenの公開型境界を優先する。
 - Elysia の route validation で typed input を service へ渡す。
 - service へ Elysia Context 丸ごとを渡さない。
 - repository は Drizzle/libSQL access を持ち、DB error を `cause/privateContext` 付きに包む。
@@ -87,7 +91,7 @@ apps/api/src/
 - `createApp(testDb())` + `app.handle(new Request(...))` でテストする。
 - テストはserver singletonの `@enterprise-agentic-saas/auth` / `@enterprise-agentic-saas/db` entrypointを importしない。schema exportと `file::memory:` libSQLで起動を軽くする。
 - auth/group/permission は happy path だけでなく、unauthorized/forbidden/not found を確認する。
-- E2E に行く前に、Elysia `t` schema、service、repository、Elysia handler を Vitest で押さえる。
+- E2E に行く前に、Valibot schema、service、repository、Elysia handlerをVitestで押さえる。日付契約は`app.handle()`に加え、実HTTP serverを通したEden clientでも型とruntime値の一致を確認する。
 
 ## 認証・tenant macro
 
@@ -98,6 +102,7 @@ apps/api/src/
 - `super_admin`移管は通常role PATCHから分離し、fresh sessionとtarget member email確認を要求する。移管transaction完了時のsuper_admin数を再確認する。
 - `/me` はsessionのactive organizationをmembershipで再検証し、stale/nullなら最新の未失効valid session context、単一membership、nullの順で同一transaction内に永続修復する。`/organizations` は先頭membershipをactive表示するfallbackを持たず、sessionの実値だけを正本にする。
 - member削除は対象userの旧tenantを指すsessionも同じtransactionで有効な別organizationまたはnullへreconcileする。
+- organization削除は汎用`organizationAccess`へ例外flagを足さず、専用`organizationDeletionAccess` macroを使う。通常はmembership、active organization、`super_admin`、fresh sessionをすべて要求する。削除済みorganizationへの再送だけはmembership 404時にactor・organization・冪等性keyの完全一致jobを確認し、fresh sessionを再要求してactive検証だけをskipする。handlerはreceiptを直接返し、serviceを再実行しない。
 
 ## OpenAPI
 
@@ -105,8 +110,10 @@ apps/api/src/
 - route追加時は `operationId`、summary、description、tag、全request schema、status別response schema、securityを同時に追加する。
 - protected routeのsecurity metadataはauth macroから付け、実行時guardとdocumentationが乖離しないようにする。
 - error responseは共通 `ApiError` schemaを使う。examplesへ実ID、cookie、token、DB情報を入れない。
+- `@elysia/openapi`には`@valibot/to-json-schema`のmapperを設定する。transformを含むquery schemaはOpenAPI生成testを必須にし、変換不能actionでroute schema全体が欠落しないことを確認する。
 - unsafe methodはglobal CSRF guardで`Origin`を必須にし、`CORS_ORIGIN` / `API_PUBLIC_URL`との完全一致だけを許可する。CSRFの403と`csrf_origin_forbidden` exampleを各mutationのOpenAPI responseにも含める。
 - resource作成は201へ統一する。このrepoではorganization、invitation、issue、issue commentのPOSTが対象で、実response、route schema、OpenAPI、client testを同時に変更する。
+- Elysia/Valibotのrequest validationはruntimeで400 `validation_error`へ統一し、安全な`fieldErrors`を返す。OpenAPIも400を正本にし、runtimeが返さない422を追加しない。
 
 ## Auditとtransaction
 
@@ -115,6 +122,7 @@ apps/api/src/
 - organization作成はorganization、super_admin member、audit、既定active session更新を同じtransactionへ含める。
 - organization内issue連番は `(organization_id, number)` uniqueを最終防波堤にし、process内organization別queueと、そのunique競合だけを対象にした限定retryを組み合わせる。
 - issue commentは`authorId`だけでなく `author: { id, name, image }` を返す。user profileのjoinはcommentの`organizationId`と同じmemberだけに制限し、tenant外または退会済みauthorのname/imageを漏らさずfallback表示にする。
+- organization削除はDB transaction内でactor membershipが`super_admin`であることと、request sessionが未失効かつ対象organizationをactiveにしていることをmutation直前に再確認する。その後PIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteする。tenant rowはDB cascadeで即時削除し、organization外部keyを持たないjobは残す。Cloudflare scheduled handlerが毎分R2 prefixを冪等削除し、list結果の各keyも同じencoded prefix内か再検証してからdeleteする。lease・指数backoff付きで再試行し、job完了/失敗の更新は`attempts + locked_at`をfencing tokenにして、lease期限切れの旧workerが再取得後の状態を上書きできないようにする。batch結果は`claimed/completed/failed/stale`の件数だけを記録し、job/organization/user IDをlogやSentry属性へ出さない。
 
 ## package 品質
 

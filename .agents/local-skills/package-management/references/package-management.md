@@ -43,8 +43,8 @@ export const api = createApiClient(clientEnv.NEXT_PUBLIC_API_URL);
 
 - `packages/api-client`: `apps/api` からexportする。
 - `packages/config`: envは各appが持つ。
-- `packages/contracts`: Eden/Elysia t/OpenAPIで足りなくなったあと。
-- `packages/validators`: 複数箇所で同じschema共有が発生したあと。
+- `packages/contracts`: Eden/Valibot/OpenAPIで足りなくなり、複数server appで安定した公開protocolを共有する必要が出たあと。
+- `packages/validators`: 作らない。API schemaは`apps/api`、browser schemaは`apps/web`へ閉じる。
 
 ## 将来拡張
 

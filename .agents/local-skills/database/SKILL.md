@@ -87,11 +87,13 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - memberがいるorganizationはmigrationで最古のsuper adminだけを残し、ゼロならadmin優先・次にmember・最後に `(created_at, id)` の安定順で1名を昇格する。`role='super_admin'` のorganization partial unique indexはat-most-oneだけを保証するため、通常mutationはtransaction内でat-least-oneも維持する。memberがいないorganizationへmigrationがidentityを捏造してはならず、accessはfail closedにする。
 - pending invitationのroleは `admin` / `member` だけを許可し、migration時の `owner` / `super_admin` / null /未知roleはfail closedでexpiredにする。
 - SQLite table rebuildやunique index追加は既存dataのbackfill/dedupをmigration SQLに含め、legacy fixtureで変換をtestする。
+- todoの`due_date`はDB内部では`timestamp_ms`のUTC midnightとして保存する。HTTP公開契約はcalendar dateの`YYYY-MM-DD | null`とし、repository境界でdate-onlyへ変換する。Edenの自動Date復元へ依存しない。
+- organization削除はtenant tableの`organization_id`外部keyを`ON DELETE CASCADE`にして即時削除をDBでも保証し、対象organizationを指す全sessionは同じtransactionでnullへ戻す。R2 cleanup用`organization_deletion_jobs`は削除後も残すためorganization外部keyを意図的に持たせず、slug・email・本文等のPIIを保存しない。`(requested_by_user_id, idempotency_key)` uniqueで同じactorの再送と別organizationへのkey衝突を決定的に判定する。
 
 具体的なschema/client/migration例が必要なときだけ `references/database.md` を読む。
 
 ## package品質
 
-- `packages/db/.oxlintrc.json` はserver-only TypeScript向けにし、React/Browser系pluginは入れない。
+- `packages/db/oxlint.config.ts` はroot configをextendsし、server-only TypeScriptとVitest向けpluginだけを使う。React/Browser系pluginは入れない。
 - READMEには役割、公開entrypoint、依存方向、env境界、test方法、入れないものを書く。
 - unit testでは実Turso接続を要求せず、`file::memory:` でclient境界とschema exportを確認する。

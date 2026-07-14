@@ -18,7 +18,7 @@ description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追
 - backend内部を早期に細かいpackageへ分けない。Elysiaの型推論・Eden・`app.handle()` testを活かすため、featureはまず `apps/api` に寄せる。
 - `packages/api-client` は作らない。Eden clientは `apps/api` から `@enterprise-agentic-saas/api/client` としてexportする。
 - `packages/config` は作らない。envは実行単位ごとに違うため、`apps/api` は `src/env.ts`（envin + Valibot）に集約する。CLI向けの package（例: `packages/db`）も同様に `src/env.ts` で `export const env` する。
-- `packages/validators` は「複数app/packageで同じvalidation schemaを共有する」実需要が出てから作る。
+- `packages/validators` は作らない。API route schemaは`apps/api`、browserのform/view-model/props schemaは`apps/web`へ閉じ、WebはEden clientの型推論だけをAPI境界にする。
 - `packages/shared` はpure TS utility/typeに限定し、SaaS固有の便利箱にしない。
 
 ## 推奨初期構成
@@ -35,7 +35,6 @@ packages/
   email/       # React Email templates + sender adapters
   ui/          # React DOM UI
   shared/      # pure TS only, minimal
-  validators/ # optional, later
 ```
 
 `mobile`, `desktop`, `native-ui` は必要になってから追加する。
@@ -49,13 +48,15 @@ import { treaty } from "@elysia/eden";
 import type { App } from "./app";
 
 export function createApiClient(baseUrl: string) {
-  return treaty<App>(baseUrl);
+  return treaty<App>(baseUrl, { parseDate: false });
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 ```
 
 `apps/api/package.json` は `./client` entrypointを分ける。
+
+`parseDate`は公開optionsから`Omit`し、optionsをspreadした後で必ず`false`を指定する。これによりEden runtimeがISO date文字列を`Date`へ暗黙変換せず、Elysiaの公開契約とWebの型が一致する。`apps/api`からWeb向けに`./types`やroot entrypointを追加しない。
 
 ## 迷ったとき
 
