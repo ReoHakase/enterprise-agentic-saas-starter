@@ -43,6 +43,10 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - OAuth API fixtureはpackage scriptを多段起動せずPlaywrightから直接起動し、signalを受けたfixtureの`finally`とPlaywright `globalTeardown`の両方で、run固有のtemporary DB本体・WAL・SHMを削除する。削除対象はtmp直下の固定prefixとPID形式に限定し、run後に残留fileとlistenerがないことを確認する。
 - Playwright管理のNext.jsには`NEXT_DIST_DIR=.next-e2e`を渡し、通常のportless開発serverが使う`.next`とdevelopment lockを共有しない。E2Eのためにdeveloper-owned `next dev`をkillせず、両方を同時実行できる状態を維持する。`.next-e2e/`はgitignoreする。
 - 標準browser matrixはDesktop Chrome（1280x720）、Pixel 7 Chrome、iPhone 13 WebKitの3 projectとする。詳細CRUDの重複実行は避けてもよいが、主要journeyはdesktop/mobile両方を通す。
+- keyboard-only suiteは`locator.click()`、`fill()`、`focus()`で通したことにせず、Tab/Shift+Tab、Arrow key、Enter、Escape、keyboard text inputだけでmagic link、org作成、sidebar、Issue inline編集、tenant切替、member管理、session revoke、step-up、破壊的確認を通す。Safari/WebKitでlinkが通常Tab対象外のplatform既定にはOption+Tab相当を使い、Menu itemはTabではなくArrow keyで移動する。
+- TanStack Tableのinline mutationはone-shot delayを入れ、request中の`aria-busy`、response後の表示、query再取得、row reorderを跨いで同じtrigger DOMにfocusが残ることを確認する。`disabled`を一時pendingに使ったり、busy stateでcolumn rendererを再生成したりするとfocusを失うため、E2E fixtureは実際に行順が変わる時刻を返す。
+- mobile tableは列を非表示にして成功扱いにしない。documentの`scrollWidth <= innerWidth`、table containerの`scrollWidth > clientWidth`、overflow時だけ名前付きregionと`tabIndex=0`が付くことをPixel 7とiPhone 13で確認する。
+- mutation後の`router.refresh()`を待つときは、mobile sidebar/drawer内のtriggerなど操作と同時にunmountされる要素を同期点にしない。常時表示されるconsole headerなどへ更新結果が反映されたことを待ってから次の`page.goto()`へ進み、RSC navigation同士を競合させない。
 - 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
 - 動画はPlaywrightの `use.video` を `"on"` にし、成功・失敗・再試行を問わずすべてのrunを保持する。traceとscreenshotは失敗時のみ保持する。
 - `failOnFlakyTests` を有効にし、auto fixtureで予期しない `console.error` と `pageerror` をtest failureにする。意図したHTTP error分岐はbrowser consoleを汚さないAPI requestで検証する。
@@ -64,6 +68,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - envはdotenvx/direnv/GitHub Secretsから入り、secretをtest artifactへ出さないか。
 - videoはすべてのrun、traceとscreenshotは失敗時に保持し、HTML reportとあわせてCI artifactに残すか。
 - ChromiumとWebKitをCIへinstallし、3 projectを実際に実行しているか。
+- keyboard-only specにmouse操作やlocatorの強制focusが混ざらず、Safari link navigationとARIA Menuのkeyboard差を覆っているか。
 - 正常journeyでconsole error/page errorが0件か。mock faultの消費後に正常responseへ戻るか。
 - tenant Aのユーザーがtenant Bのtodoを見られないことを確認しているか。
 - OAuth run後に一時DB、WAL、SHM、3100/3101/4101のlistenerが残っていないか。

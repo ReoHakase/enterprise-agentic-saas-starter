@@ -179,6 +179,11 @@ test("複数organizationでactive未選択なら明示選択を要求する", as
   await page.getByRole("menuitem", { name: "Alpha Operations" }).click()
   await expect((await activateResponse).ok()).toBeTruthy()
   await expect(page.getByText("Organization switched")).toBeVisible()
+  await expect(
+    page
+      .locator('[data-slot="console-header"]')
+      .getByText("Alpha Operations", { exact: true })
+  ).toBeVisible()
 
   await page.goto("/dashboard")
   await expect(page).toHaveURL(/\/dashboard$/)
@@ -272,7 +277,7 @@ test("member権限とtenant境界をAPIと画面の両方で拒否する", async
   await expect(
     page.getByRole("button", { name: "Delete organization" })
   ).toHaveCount(0)
-  await page.getByRole("button", { name: "View members" }).click()
+  await page.getByRole("link", { name: "View members" }).click()
   await expect(page).toHaveURL(/\/organization\/org-b\/members$/)
   await expect(
     page.getByRole("heading", { name: "Members", exact: true })

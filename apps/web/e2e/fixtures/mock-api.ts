@@ -117,6 +117,7 @@ type RequestDelay = {
 }
 
 const FIXED_NOW = "2026-07-14T09:00:00.000Z"
+const FIXED_MUTATION_NOW = "2026-07-15T09:00:00.000Z"
 const FIXED_DUE_DATE = "2026-07-21"
 const FIXED_EXPIRES_AT = "2026-08-14T09:00:00.000Z"
 
@@ -333,6 +334,21 @@ const createState = (sessionKey: string): SessionState => {
         dueDate: null,
         createdAt: "2026-07-11T09:00:00.000Z",
         updatedAt: FIXED_NOW,
+      },
+      {
+        id: "issue-a-2",
+        organizationId: "org-a",
+        number: 2,
+        title: "Triage keyboard regression",
+        description: "Verify focus survives an async table reorder.",
+        status: "open",
+        priority: "low",
+        assigneeId: null,
+        creatorId: user.id,
+        labels: ["accessibility"],
+        dueDate: null,
+        createdAt: "2026-07-11T09:00:00.000Z",
+        updatedAt: "2026-07-13T09:00:00.000Z",
       },
     ],
     commentsByIssue: new Map([
@@ -1270,7 +1286,7 @@ Bun.serve({
         if (typeof body.dueDate === "string" || body.dueDate === null) {
           issue.dueDate = body.dueDate
         }
-        issue.updatedAt = FIXED_NOW
+        issue.updatedAt = FIXED_MUTATION_NOW
         return json(issue)
       }
       if (request.method === "DELETE") {

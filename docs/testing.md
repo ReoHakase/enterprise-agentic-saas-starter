@@ -20,6 +20,8 @@ APIは `app.handle()` でHTTP境界まで検証します。日付契約はreal H
 
 Web coverageはschema/helperだけに限定せず、profile、session、security method、multi-account、organization作成/切替/設定、member destructive flow、Issue CRUD/commentのactive componentも対象にします。Testing Libraryでは成功だけでなく、field errorが対応input直下に出て入力変更で消えること、`aria-invalid` / `aria-describedby`、入力が失敗後も残ること、retry/step-up導線を確認します。unknown JS/network/provider messageやsecret風文字列が表示されず操作別fallbackになること、5xxの検証済みrequest IDだけがreferenceとして残ること、同じ失敗が二重toastされないことも回帰testにします。
 
+TanStack Tableのinline編集は、mutation中の`readOnly`/`aria-busy`だけでなく、row idとcolumn rendererのidentityを固定します。Testing Libraryではpending化、query反映、並び替えを跨いで同じtrigger DOMとfocusが残ることを確認します。`busyIssueId`や`pending`をcolumn定義の依存へ直接入れるとcell rendererが差し替わり、focus可能なtriggerでも再mountされるため禁止します。
+
 organization削除はroute/専用guard/service/repository/R2 processorに分け、非`super_admin`、stale session、slug/DELETE不一致、他tenant非開示、同一receipt replay、actor-key衝突、tenant cascade、active sessionのnull化、外部keyを持たないjob残存、R2 pagination/lease/backoffをVitestで検証します。Playwrightだけで認可やDB原子性を証明しません。
 
 ## Storybook
@@ -57,6 +59,7 @@ PR用E2Eは `apps/web/e2e/fixtures/mock-api.ts` をNext.jsと一緒に起動し�
 5. Super Adminの即時organization削除と二重確認
 6. member権限拒否、active organization不一致、未所属tenant非開示、設定画面guard、失敗時のretry/error表示
 7. consoleのhard/nested loadingとerror recoveryで、ready状態と同じsidebar、header、scroll、content、PageShell geometryを維持
+8. `keyboard.spec.ts`で`click` / `fill` / locator `focus`を使わず、magic link、organization作成、sidebar、Issue作成/priority編集、tenant切替、member role/削除/招待、session revoke、passkey step-up、organization削除をkeyboardだけで完了
 
 mockは認可そのものの証明ではありません。ただし本番契約と食い違う成功・失敗を隠さないよう、未所属/存在しないtenantは404、所属済みだがactiveでないtenantは409、active tenant内のrole不足だけを403として再現します。API Vitestで実service/repositoryのpermission matrixとtenant-scoped queryを検証し、staging smokeでは実Cloudflare/Turso構成を確認します。
 
@@ -73,6 +76,8 @@ GitHub OAuthだけは`playwright.oauth.config.ts`で別process群を起動しま
 OAuth suiteはDesktop Chromium 1280×720、`workers: 1`で実行します。標準mock matrixのmobile/WebKitを重複実行しません。suite runごとに新しいemulator processとfresh DBを使い、fixture `finally`とPlaywright `globalTeardown`でrun固有のDB、WAL、SHMを二重cleanupします。Playwright retryは同じfixture userを再認証しても結果が変わらないjourneyにし、途中成功を`failOnFlakyTests`でCI失敗として検出します。`emulate.reset()`は発行済みtoken mapを完全には消さないためtest isolation境界に使いません。
 
 Passkeyの失敗系は標準3 projectでfresh session期限切れ、step-up dialog、Escape後のAdd buttonへのfocus復帰、再認証URLを確認します。成功系はOAuth Chromium suiteだけでvirtual authenticatorを有効化し、`navigator.credentials.create`やAPI responseをmockせずにregistration ceremonyを通します。
+
+keyboard suiteはDesktop Chrome、Pixel 7 Chrome、iPhone 13 WebKitの全projectで実行します。Issue priorityはone-shot delay中もtriggerを`disabled`にせず`readOnly` + `aria-busy`にし、response、再取得、updatedAtによるrow reorderの後まで同じDOMへfocusが残ることを確認します。mobile tableは列を隠さず、document幅がviewport内に収まり、名前付き`table-container`だけが横overflowしてkeyboard focus可能になることを実寸で確認します。Safari/WebKitはplatform既定でlinkが通常Tab対象外になるため、keyboard helperは通常Tabの後にOption+Tab相当も試し、locatorの`focus()`で差を隠しません。Menu内はTabではなくARIA menu規約どおりArrow key + Enterを使います。
 
 mock stateとreset endpointは全projectで共有されるため、標準設定はlocal/CIとも `workers: 1` でjourneyを直列実行します。tenant切替時は旧tenantのmount済みqueryを再取得せず、cancelしてから遷移し、切替途中の409をbrowser errorとして発生させないこともE2Eで固定します。
 
