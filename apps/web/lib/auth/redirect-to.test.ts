@@ -17,8 +17,10 @@ describe("sanitizeAuthRedirectTo", () => {
 
   it("keeps a local path with query and hash", () => {
     expect(
-      sanitizeAuthRedirectTo("/organization/org-1/members?tab=pending#invite")
-    ).toBe("/organization/org-1/members?tab=pending#invite")
+      sanitizeAuthRedirectTo(
+        "/organization/acme-operations/members?tab=pending#invite"
+      )
+    ).toBe("/organization/acme-operations/members?tab=pending#invite")
   })
 
   it("uses a configurable fallback for a missing value", () => {

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { OrganizationSummary } from "@/features/organizations/schema"
 import { ConsoleApiError } from "@/lib/console-api"
 
 import { OrganizationsPage } from "./organizations-page"
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   activateOrganization: vi.fn<(organizationId: string) => Promise<unknown>>(),
   createOrganization: vi.fn<(input: unknown) => Promise<unknown>>(),
   listOrganizations: vi.fn<() => Promise<unknown>>(),
+  push: vi.fn<(href: string) => void>(),
   refresh: vi.fn<() => void>(),
   toastError:
     vi.fn<(message: string, options?: { description?: string }) => void>(),
@@ -26,7 +28,7 @@ vi.mock("@/lib/browser/console-api", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }))
 
 vi.mock("sonner", () => ({
@@ -44,7 +46,7 @@ const permissions = {
   canTransferSuperAdmin: true,
 }
 
-const organizations = [
+const organizations: OrganizationSummary[] = [
   {
     id: "org-acme",
     name: "Acme",
@@ -67,13 +69,15 @@ const organizations = [
   },
 ]
 
-const renderOrganizations = () => {
+const renderOrganizations = (
+  initialOrganizations: OrganizationSummary[] = organizations
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
   render(
     <QueryClientProvider client={queryClient}>
-      <OrganizationsPage initialOrganizations={organizations} />
+      <OrganizationsPage initialOrganizations={initialOrganizations} />
     </QueryClientProvider>
   )
 }
@@ -103,7 +107,62 @@ describe("OrganizationsPage", () => {
     await waitFor(() => {
       expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
     })
+    expect(screen.getByRole("button", { name: "Active" })).toBeDisabled()
+    expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization switched")
+  })
+
+  it("uses organization slugs in member and settings URLs", () => {
+    renderOrganizations()
+
+    expect(
+      screen.getByRole("link", { name: "Members for Acme" })
+    ).toHaveAttribute("href", "/organization/acme/members")
+    expect(
+      screen.getByRole("link", { name: "Settings for Acme" })
+    ).toHaveAttribute("href", "/organization/acme/settings")
+  })
+
+  it("keeps an existing invitations slug reachable after the public route move", () => {
+    renderOrganizations([
+      {
+        id: "org-invitations",
+        name: "Invitation Operations",
+        slug: "invitations",
+        role: "super_admin",
+        active: true,
+        memberCount: 2,
+        memberAvatars: [],
+        permissions,
+      },
+    ])
+
+    expect(
+      screen.getByRole("link", { name: "Members for Invitation Operations" })
+    ).toHaveAttribute("href", "/organization/invitations/members")
+    expect(
+      screen.getByRole("link", { name: "Settings for Invitation Operations" })
+    ).toHaveAttribute("href", "/organization/invitations/settings")
+  })
+
+  it("activates an inactive tenant before opening its slug route", async () => {
+    const actor = userEvent.setup()
+    renderOrganizations()
+
+    expect(
+      screen.queryByRole("link", { name: "Members for Beta" })
+    ).not.toBeInTheDocument()
+    await actor.click(
+      screen.getByRole("button", {
+        name: "Switch to Beta and open members",
+      })
+    )
+
+    await waitFor(() => {
+      expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
+    })
+    expect(mocks.push).toHaveBeenCalledWith("/organization/beta/members")
+    expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 
   it("keeps create input and renders API field errors below it", async () => {

@@ -54,12 +54,13 @@ PR用E2Eは `apps/web/e2e/fixtures/mock-api.ts` をNext.jsと一緒に起動し�
 
 1. magic link登録 → organization作成 → dashboard
 2. dashboard → Issue作成/編集/comment/削除 → active tenant切り替え
-3. member role編集・削除、comma/newline bulk招待、session revokeを実画面から完了する管理導線。bulk招待は大小文字を含む重複排除、POST body、queued件数、409時のatomic rollbackと入力保持を確認する
-4. mobile sidebarを閉じたaccount切替と、切替後sessionの反映
-5. Super Adminの即時organization削除と二重確認
-6. member権限拒否、active organization不一致、未所属tenant非開示、設定画面guard、失敗時のretry/error表示
-7. consoleのhard/nested loadingとerror recoveryで、ready状態と同じsidebar、header、scroll、content、PageShell geometryを維持
-8. `keyboard.spec.ts`で`click` / `fill` / locator `focus`を使わず、magic link、organization作成、sidebar、Issue作成/priority編集、tenant切替、member role/削除/招待、session revoke、passkey step-up、organization削除をkeyboardだけで完了
+3. slug指定のorganization URLでmember検索・sort・role編集・削除、comma/newline bulk招待、pending再送、expired復活、session revokeを実画面から完了する管理導線。bulk招待は大小文字を含む重複排除、POST body、queued件数、409時のatomic rollbackと入力保持を確認する
+4. 招待リンクを未ログインで開いて登録URLへ進み、別emailのactive accountではacceptを隠してswitch/add accountを提示し、recipient accountへ切替後に詳細表示とacceptを完了する導線
+5. mobile sidebarを閉じたaccount切替と、切替後sessionの反映
+6. Super Adminの即時organization削除と二重確認
+7. member権限拒否、active organization不一致、未所属tenant非開示、設定画面guard、失敗時のretry/error表示
+8. consoleのhard/nested loadingとerror recoveryで、ready状態と同じsidebar、header、scroll、content、PageShell geometryを維持
+9. `keyboard.spec.ts`で`click` / `fill` / locator `focus`を使わず、magic link、organization作成、sidebar、Issue作成/priority編集、tenant切替、member role/削除/招待、session revoke、passkey step-up、organization削除をkeyboardだけで完了
 
 mockは認可そのものの証明ではありません。ただし本番契約と食い違う成功・失敗を隠さないよう、未所属/存在しないtenantは404、所属済みだがactiveでないtenantは409、active tenant内のrole不足だけを403として再現します。API Vitestで実service/repositoryのpermission matrixとtenant-scoped queryを検証し、staging smokeでは実Cloudflare/Turso構成を確認します。
 

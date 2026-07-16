@@ -85,7 +85,7 @@ export default async function DashboardPage() {
           <CardFooter className="flex-wrap gap-2 border-t">
             <LinkButton
               variant="outline"
-              href={`/organization/${activeOrganization.id}/members`}
+              href={`/organization/${activeOrganization.slug}/members`}
             >
               <UsersRoundIcon data-icon="inline-start" aria-hidden="true" />
               Manage members
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
                 number="01"
                 title="Invite your team"
                 description="Add members and assign the minimum role they need."
-                href={`/organization/${activeOrganization.id}/members`}
+                href={`/organization/${activeOrganization.slug}/members`}
               />
               <QuickAction
                 number="02"

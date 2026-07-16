@@ -29,20 +29,25 @@ const noInvitations: OrganizationInvitation[] = []
 export const MembersPage = ({
   organization,
   initialMembers,
+  initialInvitations,
+  initialInvitationsError,
 }: {
   organization: OrganizationDetail
   initialMembers: OrganizationMember[]
+  initialInvitations?: OrganizationInvitation[]
+  initialInvitationsError?: string
 }) => {
   const membersQuery = useQuery({
     ...membersQueryOptions(organization.id),
     initialData: initialMembers,
   })
-  const invitationsQuery = useQuery(
-    invitationsQueryOptions(
+  const invitationsQuery = useQuery({
+    ...invitationsQueryOptions(
       organization.id,
       organization.permissions.canInviteMembers
-    )
-  )
+    ),
+    initialData: initialInvitations,
+  })
   const { refetch: refetchMembers } = membersQuery
   const { refetch: refetchInvitations } = invitationsQuery
   const retryMembers = useCallback(() => {
@@ -81,15 +86,19 @@ export const MembersPage = ({
       members={membersQuery.data}
       invitations={invitationsQuery.data ?? noInvitations}
       invitationsPending={
-        organization.permissions.canInviteMembers && invitationsQuery.isPending
+        organization.permissions.canInviteMembers &&
+        invitationsQuery.isPending &&
+        !initialInvitationsError
       }
       invitationsError={
-        invitationsQuery.error
-          ? getConsoleApiErrorText(
-              invitationsQuery.error,
-              "Invitations could not be loaded."
-            )
-          : undefined
+        invitationsQuery.isSuccess
+          ? undefined
+          : invitationsQuery.error
+            ? getConsoleApiErrorText(
+                invitationsQuery.error,
+                "Invitations could not be loaded."
+              )
+            : initialInvitationsError
       }
       onRetryInvitations={
         organization.permissions.canInviteMembers ? retryInvitations : undefined

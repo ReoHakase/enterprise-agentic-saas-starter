@@ -58,7 +58,7 @@ bunx @better-auth/cli generate \
 - auth migrationと主要auth flowはTurso環境で実検証する。
 - API hostを `api.enterprise-agentic-saas.localhost`、web hostを `enterprise-agentic-saas.localhost` に分ける場合、Better Authは `basePath: "/auth"` としてElysiaに `/auth/*` でmountする。`/api` prefixは使わない。
 - web/API subdomain間でSSRとbrowser fetchのsession cookieを共有するため、Better Authでは `advanced.crossSubDomainCookies.enabled = true`、`domain = "enterprise-agentic-saas.localhost"`、`useSecureCookies = true` を設定する。`trustedOrigins` はweb originを明示する。
-- `better-auth-ui` / Better Auth client の `baseURL` はAPI originにするが、magic link・verification・OAuth の `callbackURL` はweb originで作る。client componentでは `window.location.origin` と `redirectTo` から絶対URL化し、`api.enterprise-agentic-saas.localhost` へ戻さない。server側invitation URLは必須 `TRUSTED_ORIGINS` の先頭web origin + `/organization/invitations/:id` で作り、`BETTER_AUTH_URL`（API origin）へ向けない。
+- `better-auth-ui` / Better Auth client の `baseURL` はAPI originにするが、magic link・verification・OAuth の `callbackURL` はweb originで作る。client componentでは `window.location.origin` と `redirectTo` から絶対URL化し、`api.enterprise-agentic-saas.localhost` へ戻さない。server側invitation URLは必須 `TRUSTED_ORIGINS` の先頭web origin + `/invitations/:id` で作り、`BETTER_AUTH_URL`（API origin）へ向けない。
 - magic link、email verification、organization invitationは `@enterprise-agentic-saas/email/runtime` の `createRuntimeEmailSender` で統一する。workerd exportはCloudflare `EMAIL` binding、default exportはMailpit/console/noopを使う。既定providerはdevelopment=`mailpit`、test=`noop`、production=`cloudflare`とし、productionのMailpit/consoleはfail-closedにする。API dev scriptがPortlessのworktree-aware `MAILPIT_URL`を注入するため、auth側で固定URLや別resolverを持たない。
 - Better Authの`advanced.backgroundTasks.handler`はworkerdでだけ`waitUntil`へ接続する。console logへraw URL/tokenやrecipient全文を出さない。
 - organization招待の作成・送信はtenant guard/auditを持つ`apps/api`だけを正本にする。Better Auth organization pluginへ別の`sendInvitationEmail`を設定して二重配送経路を作らない。
@@ -99,6 +99,7 @@ bunx @better-auth/cli generate \
 - organization memberのrole変更はapp側で強制する。`admin` は招待や通常member管理はできるが、`member -> admin`、`admin -> member`、`super_admin` 関連変更はできない。role昇格/降格と `super_admin` 移譲は `super_admin` だけ許可する。
 - `admin` が招待できるroleは `member` だけ。`super_admin` が招待で `admin` を付与する場合もfresh sessionを要求する。
 - organization招待はBetter Authの`/organization/invite-member`ではなくapp所有のElysia batch routeだけを使う。Better Auth側に到達不能な招待用custom rate ruleや別送信callbackを残さず、app側でtenant guard、fresh session、recipient-count quota、atomic audit/outboxを一続きに強制する。
+- 招待再送は同じinvitation IDと`createdAt`を保持して48時間延長する。pending/期限切れだけを許可し、member roleはadmin以上、admin roleはfreshなsuper adminだけにする。service検証後もtransaction内でactor membership/roleを再確認し、inviterを現在のactorへ更新して、退会済みinviterのためBetter Auth acceptanceが失敗する状態を残さない。
 - organization招待メールの`inviterName`には認証済みuserの表示名を渡す。user idを人向け表示へ流用せず、名前が空の場合だけtemplate側の安全なfallbackを使う。
 - `super_admin` 移管は通常role更新から分離し、target member emailのtyped confirmationとfresh sessionを要求する。移管、member削除、role変更とaudit insertは同一transactionにする。
 - `member` はDBで `(organization_id, user_id)` unique、`role = 'super_admin'` はorganizationごとのpartial uniqueを持つ。所有権移管transactionは旧super_adminを先にadminへ降格してからtargetを昇格し、前後のcountを検証する。逆順はpartial uniqueに違反する。
@@ -108,6 +109,11 @@ bunx @better-auth/cli generate \
 - 招待取消は`pending`かつ期限内だけを許可する。accepted/canceled/expiredを上書きせず409 `conflict` + `reason: invitation_not_pending` を返し、他tenantや不存在IDは同じ404にする。保存値がpendingでも期限切れなら一覧responseは`expired`として扱う。
 - 招待取消transactionでは未送信・retry待ちのemail jobもterminalな`canceled`へ移す。送信中とのraceはlease fencingで後続のcompleted/failed更新を拒否するが、providerへ既に渡った配送そのものは取り消せないことを運用仕様として扱う。
 - invitation acceptanceはBetter Authの `organizationHooks.beforeAcceptInvitation` でもroleを `admin | member` にallowlistする。`owner`、`super_admin`、null、未知roleはstable errorでfail-closedにし、migrationでも該当する既存pending invitationをexpiredへ変換する。
+- invitation landingは未ログインuserを即sign-in redirectせず、招待URLを`redirectTo`へ保持したsign-up/sign-inを表示する。招待詳細はBetter Auth `get-invitation`がactive sessionのemail一致を確認した場合だけ表示し、403の別email sessionにはacceptを出さずmulti-session switch/add accountを促す。recipient emailをpublic context APIへ複製しない。
+- Next App Routerのroot layoutに置いたBetter Auth UI providerが、client navigation後も初回URLから得た`redirectTo`を保持する前提にしない。auth route直下のscopeへsanitize済み`redirectTo`、`add_account`、`reauth`を渡し、Magic Link・OAuth・Passkeyの完了先とSign in/Create account間のlinkを同じ値から作る。`add_account`はview切替でも保持し、`reauth`はSign upへ持ち込まない。
+- multi-sessionのactive account変更、Passkey sign-in、sign-outのようにdocument reloadなしでidentityが変わる前に、TanStack Queryの全queryをcancelしてQueryClient cacheをclearする。console queryだけのinvalidateではissue/comment等の別keyに前accountのtenant dataが残るため不十分。
+- organizationの公開URLは`/organization/:slug/*`、公開招待URLは衝突しない`/invitations/:id`を使う。旧メールの`/organization/invitations/:id`はCloudflare/OpenNextが処理できるEdge `middleware.ts`で307 redirectし、`/organization/invitations/members|settings`は既存tenant slugとして通す。Next 16の`proxy.ts`はNode runtimeになるため、この互換redirectには使わない。
+- Better Auth `get-invitation`のrecipient mismatchはaccount切替、明確なnot-found/terminal responseは再招待、5xx・network・schema不一致は詳細を露出しない再試行UIへ分類する。一時障害をexpired/canceledと断定しない。Server Componentでsessionを読んだ後の詳細取得、またはaccept/reject時に401・`SESSION_EXPIRED`となるTOCTOUは、招待IDを保持したsign-up/sign-in stateへ戻し、通常の再試行エラーに畳まない。
 
 ## package品質
 

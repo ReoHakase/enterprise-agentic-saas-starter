@@ -36,6 +36,7 @@ import {
   AuthTextField,
   selectCanSubmit,
 } from "./auth-form-field"
+import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
 import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 import { findCaptchaComponent, formDataString } from "./runtime-guards"
 
@@ -64,12 +65,14 @@ export function SignUp({
     emailAndPassword,
     localization,
     plugins,
-    redirectTo,
+    redirectTo: defaultRedirectTo,
     socialProviders,
     viewPaths,
     navigate,
     Link,
   } = useAuth()
+  const authRoute = useAuthRouteState()
+  const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
   const { fetchOptions, resetFetchOptions } = useFetchOptions()
   const formElement = useRef<HTMLFormElement>(null)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
@@ -178,6 +181,12 @@ export function SignUp({
   const Captcha = findCaptchaComponent(plugins)
   const showSeparator =
     emailAndPassword?.enabled && socialProviders && socialProviders.length > 0
+  const signInHref = createScopedAuthViewHref({
+    basePath: basePaths.auth,
+    preserveReauthentication: true,
+    route: authRoute,
+    viewPath: viewPaths.auth.signIn,
+  })
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -398,10 +407,7 @@ export function SignUp({
           <div className="mt-4 flex w-full flex-col items-center gap-3">
             <FieldDescription className="text-center">
               {localization.auth.alreadyHaveAnAccount}{" "}
-              <Link
-                href={`${basePaths.auth}/${viewPaths.auth.signIn}`}
-                className="underline underline-offset-4"
-              >
+              <Link href={signInHref} className="underline underline-offset-4">
                 {localization.auth.signIn}
               </Link>
             </FieldDescription>

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -9,6 +9,7 @@ import type {
   BulkInvitationResponse,
   OrganizationInvitation,
   OrganizationMember,
+  ResendInvitationResponse,
 } from "@/features/members/schema"
 import type {
   OrganizationDetail,
@@ -39,13 +40,18 @@ type CancelInvitation = (
   organizationId: string,
   invitationId: string
 ) => Promise<unknown>
+type ResendInvitation = (
+  organizationId: string,
+  invitationId: string
+) => Promise<ResendInvitationResponse>
 
 const mocks = vi.hoisted(() => ({
   cancelInvitation: vi.fn<CancelInvitation>(),
   createInvitations: vi.fn<CreateInvitations>(),
   refresh: vi.fn<() => void>(),
   removeMember: vi.fn<RemoveMember>(),
-  toastError: vi.fn<(message: string) => void>(),
+  resendInvitation: vi.fn<ResendInvitation>(),
+  toastError: vi.fn<(message: string, options?: unknown) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   transferSuperAdmin: vi.fn<TransferSuperAdmin>(),
   updateMemberRole: vi.fn<UpdateMemberRole>(),
@@ -56,6 +62,7 @@ vi.mock("@/lib/browser/console-api", () => ({
     cancelInvitation: mocks.cancelInvitation,
     createInvitations: mocks.createInvitations,
     removeMember: mocks.removeMember,
+    resendInvitation: mocks.resendInvitation,
     transferSuperAdmin: mocks.transferSuperAdmin,
     updateMemberRole: mocks.updateMemberRole,
   },
@@ -100,7 +107,7 @@ const members: OrganizationMember[] = [
     email: "owner@example.com",
     image: null,
     role: "super_admin",
-    createdAt: "2026-07-14T00:00:00.000Z",
+    createdAt: "2026-07-01T00:00:00.000Z",
   },
   {
     id: "member-admin",
@@ -109,7 +116,7 @@ const members: OrganizationMember[] = [
     email: "admin@example.com",
     image: null,
     role: "admin",
-    createdAt: "2026-07-14T00:00:00.000Z",
+    createdAt: "2026-07-02T00:00:00.000Z",
   },
   {
     id: "member-basic",
@@ -118,21 +125,47 @@ const members: OrganizationMember[] = [
     email: "member@example.com",
     image: null,
     role: "member",
-    createdAt: "2026-07-14T00:00:00.000Z",
+    createdAt: "2026-07-03T00:00:00.000Z",
   },
 ]
 
-const invitations: OrganizationInvitation[] = [
-  {
-    id: "invitation-1",
-    email: "pending@example.com",
-    role: "member",
-    status: "pending",
-    organizationId: organization.id,
-    inviterId: "user-owner",
-    expiresAt: "2026-07-21T00:00:00.000Z",
-    createdAt: "2026-07-14T00:00:00.000Z",
+const pendingInvitation: OrganizationInvitation = {
+  id: "invitation-1",
+  email: "pending@example.com",
+  role: "member",
+  status: "pending",
+  organizationId: organization.id,
+  inviterId: "user-owner",
+  inviter: {
+    id: "user-owner",
+    name: "Current Owner",
+    email: "owner@example.com",
+    image: null,
   },
+  expiresAt: "2026-07-21T00:00:00.000Z",
+  createdAt: "2026-07-14T00:00:00.000Z",
+}
+
+const expiredInvitation: OrganizationInvitation = {
+  id: "invitation-expired",
+  email: "expired@example.com",
+  role: "member",
+  status: "expired",
+  organizationId: organization.id,
+  inviterId: "user-admin",
+  inviter: {
+    id: "user-admin",
+    name: "Target Admin",
+    email: "admin@example.com",
+    image: null,
+  },
+  expiresAt: "2026-07-12T00:00:00.000Z",
+  createdAt: "2026-07-10T00:00:00.000Z",
+}
+
+const invitations: OrganizationInvitation[] = [
+  pendingInvitation,
+  expiredInvitation,
 ]
 
 const bulkInvitationResult = (
@@ -146,11 +179,30 @@ const bulkInvitationResult = (
     status: "pending",
     organizationId: organization.id,
     inviterId: "user-owner",
+    inviter: {
+      id: "user-owner",
+      name: "Current Owner",
+      email: "owner@example.com",
+      image: null,
+    },
     expiresAt: "2026-07-21T00:00:00.000Z",
     createdAt: "2026-07-14T00:00:00.000Z",
   })),
   queuedCount: emails.length,
   delivery: "queued",
+})
+
+const resendInvitationResult = (
+  invitation: OrganizationInvitation,
+  revived: boolean
+): ResendInvitationResponse => ({
+  invitation: {
+    ...invitation,
+    status: "pending",
+    expiresAt: "2026-07-23T00:00:00.000Z",
+  },
+  delivery: "queued",
+  revived,
 })
 
 const renderMembers = (
@@ -194,8 +246,168 @@ describe("MembersPanel", () => {
       bulkInvitationResult(["new@example.com"])
     )
     mocks.removeMember.mockResolvedValue({})
+    mocks.resendInvitation.mockResolvedValue(
+      resendInvitationResult(pendingInvitation, false)
+    )
     mocks.transferSuperAdmin.mockResolvedValue(members)
     mocks.updateMemberRole.mockResolvedValue(members)
+  })
+
+  it("searches members by name and email and sorts user, role, and joined columns", async () => {
+    const user = userEvent.setup()
+    renderMembers()
+    const table = screen.getByRole("table", { name: "Members of Acme" })
+
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
+      "Basic Member"
+    )
+    expect(within(table).getByText("Jul 1, 2026")).toBeInTheDocument()
+
+    const search = screen.getByRole("searchbox", {
+      name: "Search members by name or email",
+    })
+    await user.type(search, "admin@example.com")
+    expect(within(table).getAllByRole("row")).toHaveLength(2)
+    expect(within(table).getByText("Target Admin")).toBeInTheDocument()
+    expect(within(table).queryByText("Basic Member")).not.toBeInTheDocument()
+
+    await user.clear(search)
+    await user.click(
+      within(table).getByRole("button", { name: "Sort by joined" })
+    )
+    await user.click(
+      within(table).getByRole("button", {
+        name: "Sort by joined, currently ascending",
+      })
+    )
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
+      "Basic Member"
+    )
+
+    await user.click(
+      within(table).getByRole("button", { name: "Sort by role" })
+    )
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
+      "Current Owner"
+    )
+  })
+
+  it("shows sortable invitation lifecycle and inviter details", async () => {
+    const user = userEvent.setup()
+    renderMembers()
+    const table = screen.getByRole("table", { name: "Invitations for Acme" })
+
+    expect(within(table).getByText("pending@example.com")).toBeInTheDocument()
+    expect(within(table).getByText("expired@example.com")).toBeInTheDocument()
+    expect(within(table).getByText("Current Owner")).toBeInTheDocument()
+    expect(within(table).getByText("owner@example.com")).toBeInTheDocument()
+    expect(within(table).getByText("Jul 21, 2026")).toBeInTheDocument()
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
+      "pending@example.com"
+    )
+
+    await user.click(
+      within(table).getByRole("button", {
+        name: "Sort by created, currently descending",
+      })
+    )
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
+      "expired@example.com"
+    )
+  })
+
+  it("does not imply an empty invitation list to users without access", () => {
+    renderMembers({
+      ...organization,
+      role: "member",
+      permissions: {
+        canEditOrganization: false,
+        canInviteMembers: false,
+        canManageMembers: false,
+        canManageAdmins: false,
+        canTransferSuperAdmin: false,
+      },
+    })
+
+    expect(
+      screen.queryByRole("heading", { name: "Invitations" })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("No invitations")).not.toBeInTheDocument()
+  })
+
+  it("resends pending invitations and renews expired invitations", async () => {
+    const user = userEvent.setup()
+    mocks.resendInvitation
+      .mockResolvedValueOnce(resendInvitationResult(pendingInvitation, false))
+      .mockResolvedValueOnce(resendInvitationResult(expiredInvitation, true))
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Resend" }))
+    await waitFor(() => {
+      expect(mocks.resendInvitation).toHaveBeenCalledWith(
+        organization.id,
+        "invitation-1"
+      )
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Invitation email queued again"
+    )
+
+    await user.click(screen.getByRole("button", { name: "Renew & resend" }))
+    await waitFor(() => {
+      expect(mocks.resendInvitation).toHaveBeenCalledWith(
+        organization.id,
+        "invitation-expired"
+      )
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Invitation renewed and queued"
+    )
+  })
+
+  it("does not offer renewal when the recipient already has an active invitation", () => {
+    renderMembers(organization, members, [
+      pendingInvitation,
+      {
+        ...expiredInvitation,
+        id: "invitation-expired-duplicate",
+        email: pendingInvitation.email,
+      },
+    ])
+
+    const duplicateRow = screen
+      .getAllByRole("row")
+      .find((row) => within(row).queryByText("Active invitation exists"))
+    expect(duplicateRow).toBeDefined()
+    if (!duplicateRow) throw new Error("Expected duplicate invitation row")
+    expect(
+      within(duplicateRow).getByText("Active invitation exists")
+    ).toBeVisible()
+    expect(
+      within(duplicateRow).queryByRole("button", { name: "Renew & resend" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("shows a safe resend failure toast and keeps the action available", async () => {
+    const user = userEvent.setup()
+    mocks.resendInvitation.mockRejectedValueOnce(
+      new ConsoleApiError({
+        code: "invitation_not_resendable",
+        message: "Invitation is no longer resendable",
+        status: 409,
+      })
+    )
+    renderMembers()
+
+    await user.click(screen.getByRole("button", { name: "Resend" }))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Invitation is no longer resendable",
+        undefined
+      )
+    })
+    expect(screen.getByRole("button", { name: "Resend" })).toBeEnabled()
   })
 
   it("normalizes comma and newline separated emails, removes duplicates, and reports the queued count", async () => {

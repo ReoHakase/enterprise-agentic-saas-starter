@@ -200,7 +200,7 @@ const MembersBodySkeleton = () => (
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-5 w-72 max-w-full" />
       </div>
-      <Skeleton className="h-40 rounded-2xl" />
+      <TableBodySkeleton />
     </section>
   </div>
 )

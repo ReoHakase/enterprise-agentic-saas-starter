@@ -74,6 +74,23 @@ const renderDialog = () => {
       />
     </QueryClientProvider>
   )
+  return queryClient
+}
+
+const renderDialogWithInvitationReturn = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AccountSwitcherDialog
+        addAccountHref="/auth/sign-in?add_account=1&redirectTo=%2Finvitations%2Finvitation-1"
+        currentUser={currentUser}
+        open
+        onOpenChange={mocks.onOpenChange}
+      />
+    </QueryClientProvider>
+  )
 }
 
 describe("AccountSwitcherDialog", () => {
@@ -86,7 +103,17 @@ describe("AccountSwitcherDialog", () => {
 
   it("switches and removes another signed-in account", async () => {
     const actor = userEvent.setup()
-    renderDialog()
+    const queryClient = renderDialog()
+    queryClient.setQueryData(
+      ["issues", "list", "org-private"],
+      [{ title: "Private issue" }]
+    )
+    mocks.setActive.mockImplementationOnce(async () => {
+      expect(
+        queryClient.getQueryData(["issues", "list", "org-private"])
+      ).toBeUndefined()
+      return { data: {} }
+    })
 
     expect(await screen.findByText("other@example.test")).toBeInTheDocument()
     await actor.click(screen.getByRole("button", { name: "Switch" }))
@@ -96,7 +123,10 @@ describe("AccountSwitcherDialog", () => {
       })
     })
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce())
+    expect(
+      queryClient.getQueryData(["issues", "list", "org-private"])
+    ).toBeUndefined()
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Switched to other@example.test"
     )
@@ -132,6 +162,17 @@ describe("AccountSwitcherDialog", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled()
   })
 
+  it("preserves an invitation return path when adding an account", async () => {
+    renderDialogWithInvitationReturn()
+
+    expect(
+      await screen.findByRole("link", { name: "Add account" })
+    ).toHaveAttribute(
+      "href",
+      "/auth/sign-in?add_account=1&redirectTo=%2Finvitations%2Finvitation-1"
+    )
+  })
+
   it("shows one operation fallback when account switching rejects", async () => {
     const actor = userEvent.setup()
     mocks.setActive.mockRejectedValueOnce(
@@ -148,6 +189,7 @@ describe("AccountSwitcherDialog", () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Could not switch account. Try again."
     )
+    expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
   })
 })

@@ -35,6 +35,7 @@ import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
 import { AuthTextField, selectCanSubmit } from "./auth-form-field"
+import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
 import { PasskeySignInButton } from "./passkey-sign-in-button"
 import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 import { requireMagicLinkAuthClient } from "./runtime-guards"
@@ -60,11 +61,13 @@ export function MagicLink({
     basePaths,
     localization,
     plugins,
-    redirectTo,
+    redirectTo: defaultRedirectTo,
     socialProviders,
     viewPaths,
     Link,
   } = useAuth()
+  const authRoute = useAuthRouteState()
+  const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
   const { localization: magicLinkLocalization } = useAuthPlugin(magicLinkPlugin)
   const isHydrated = useIsHydrated()
   const requestedEmail = useRef("")
@@ -106,6 +109,17 @@ export function MagicLink({
   const formDisabled = !isHydrated || isPending
   const showSeparator = socialProviders && socialProviders.length > 0
   const creatingAccount = mode === "sign-up"
+  const signInHref = createScopedAuthViewHref({
+    basePath: basePaths.auth,
+    preserveReauthentication: true,
+    route: authRoute,
+    viewPath: viewPaths.auth.signIn,
+  })
+  const signUpHref = createScopedAuthViewHref({
+    basePath: basePaths.auth,
+    route: authRoute,
+    viewPath: viewPaths.auth.signUp,
+  })
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -254,7 +268,7 @@ export function MagicLink({
               <>
                 Already have an account?{" "}
                 <Link
-                  href={`${basePaths.auth}/${viewPaths.auth.signIn}`}
+                  href={signInHref}
                   className="underline underline-offset-4"
                 >
                   {localization.auth.signIn}
@@ -264,7 +278,7 @@ export function MagicLink({
               <>
                 {localization.auth.needToCreateAnAccount}{" "}
                 <Link
-                  href={`${basePaths.auth}/${viewPaths.auth.signUp}`}
+                  href={signUpHref}
                   className="underline underline-offset-4"
                 >
                   {localization.auth.signUp}

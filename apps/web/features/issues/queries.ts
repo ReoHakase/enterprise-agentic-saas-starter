@@ -1,5 +1,5 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
-import { queryOptions } from "@tanstack/react-query"
+import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 
 import { listIssueComments, listIssues } from "@/features/issues/api"
 
@@ -11,12 +11,15 @@ export const issueKeys = {
     [...issueKeys.all, "comments", organizationId, issueId] as const,
 }
 
-const createIssuesQueryFn = (client: ApiClient, organizationId: string) => () =>
-  listIssues(client, organizationId)
+const createIssuesQueryFn =
+  (client: ApiClient, organizationId: string) =>
+  ({ signal }: QueryFunctionContext) =>
+    listIssues(client, organizationId, signal)
 
 const createIssueCommentsQueryFn =
-  (client: ApiClient, organizationId: string, issueId: string) => () =>
-    listIssueComments(client, { id: issueId, organizationId })
+  (client: ApiClient, organizationId: string, issueId: string) =>
+  ({ signal }: QueryFunctionContext) =>
+    listIssueComments(client, { id: issueId, organizationId }, signal)
 
 export const issuesQueryOptions = (client: ApiClient, organizationId: string) =>
   queryOptions({

@@ -9,6 +9,11 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@enterprise-agentic-saas/ui/components/input-group"
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -27,12 +32,32 @@ import {
 import {
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
   useReactTable,
+  type Column,
   type ColumnDef,
+  type FilterFn,
+  type SortingFn,
+  type SortingState,
 } from "@tanstack/react-table"
-import { Trash2Icon, UsersRoundIcon } from "lucide-react"
-import { createContext, useCallback, useContext, useMemo } from "react"
+import {
+  ArrowDownIcon,
+  ArrowUpDownIcon,
+  SearchIcon,
+  Trash2Icon,
+  UsersRoundIcon,
+} from "lucide-react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ChangeEvent,
+} from "react"
 
+import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
 import type { OrganizationMember } from "@/features/members/schema"
 import {
@@ -55,6 +80,69 @@ const isOrganizationRole = (value: string | null): value is OrganizationRole =>
 
 const getMemberRowId = (member: OrganizationMember) => member.id
 const MemberMutationContext = createContext(false)
+const memberRoleOrder: Record<OrganizationRole, number> = {
+  super_admin: 0,
+  admin: 1,
+  member: 2,
+}
+const memberInitialSorting: SortingState = [{ id: "user", desc: false }]
+
+const memberSearchFilter: FilterFn<OrganizationMember> = (
+  row,
+  _columnId,
+  value
+) => {
+  const query =
+    typeof value === "string" ? value.trim().toLocaleLowerCase() : ""
+  if (!query) return true
+
+  return `${row.original.name}\n${row.original.email}`
+    .toLocaleLowerCase()
+    .includes(query)
+}
+
+const memberRoleSorting: SortingFn<OrganizationMember> = (first, second) =>
+  memberRoleOrder[first.original.role] - memberRoleOrder[second.original.role]
+
+const memberJoinedSorting: SortingFn<OrganizationMember> = (first, second) =>
+  Date.parse(first.original.createdAt) - Date.parse(second.original.createdAt)
+
+const SortableMemberHeader = ({
+  column,
+  label,
+}: {
+  column: Column<OrganizationMember, unknown>
+  label: string
+}) => {
+  const sorting = column.getIsSorted()
+  const sort = useCallback(
+    () => column.toggleSorting(sorting === "asc"),
+    [column, sorting]
+  )
+  const currentSort =
+    sorting === "asc"
+      ? ", currently ascending"
+      : sorting === "desc"
+        ? ", currently descending"
+        : ""
+
+  return (
+    <Button
+      className="-ml-3"
+      variant="ghost"
+      size="sm"
+      aria-label={`Sort by ${label.toLocaleLowerCase()}${currentSort}`}
+      onClick={sort}
+    >
+      {label}
+      {sorting === "desc" ? (
+        <ArrowDownIcon data-icon="inline-end" aria-hidden="true" />
+      ) : (
+        <ArrowUpDownIcon data-icon="inline-end" aria-hidden="true" />
+      )}
+    </Button>
+  )
+}
 
 export const MembersTable = ({
   organizationName,
@@ -77,6 +165,8 @@ export const MembersTable = ({
   onChangeRole: (member: OrganizationMember, role: OrganizationRole) => void
   onRequestRemove: (member: OrganizationMember) => void
 }) => {
+  const [search, setSearch] = useState("")
+  const [sorting, setSorting] = useState<SortingState>(memberInitialSorting)
   const superAdminCount = useMemo(
     () => members.filter((member) => member.role === "super_admin").length,
     [members]
@@ -101,13 +191,20 @@ export const MembersTable = ({
   const columns = useMemo<ColumnDef<OrganizationMember>[]>(
     () => [
       {
-        accessorKey: "name",
-        header: "User",
+        id: "user",
+        accessorFn: (member) => member.name,
+        filterFn: memberSearchFilter,
+        header: ({ column }) => (
+          <SortableMemberHeader column={column} label="User" />
+        ),
         cell: ({ row }) => <UserIdentity user={row.original} />,
       },
       {
         accessorKey: "role",
-        header: "Role",
+        sortingFn: memberRoleSorting,
+        header: ({ column }) => (
+          <SortableMemberHeader column={column} label="Role" />
+        ),
         cell: ({ row }) => (
           <MemberRoleSelect
             member={row.original}
@@ -117,6 +214,15 @@ export const MembersTable = ({
             onChange={onChangeRole}
           />
         ),
+      },
+      {
+        id: "joined",
+        accessorFn: (member) => member.createdAt,
+        sortingFn: memberJoinedSorting,
+        header: ({ column }) => (
+          <SortableMemberHeader column={column} label="Joined" />
+        ),
+        cell: ({ row }) => <LocalDate value={row.original.createdAt} />,
       },
       {
         id: "actions",
@@ -144,83 +250,123 @@ export const MembersTable = ({
   const table = useReactTable({
     data: members,
     columns,
+    state: { sorting },
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getRowId: getMemberRowId,
   })
+  const handleSearchChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value
+      setSearch(value)
+      table.getColumn("user")?.setFilterValue(value)
+    },
+    [table]
+  )
+  const filteredCount = table.getFilteredRowModel().rows.length
 
   return (
-    <div className="max-w-full min-w-0 overflow-hidden rounded-2xl border">
-      <MemberMutationContext.Provider value={pending}>
-        <Table scrollLabel={`Members of ${organizationName}`}>
-          <TableCaption className="sr-only">
-            Members of {organizationName}
-          </TableCaption>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={memberColumnClass(header.column.id)}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={memberColumnClass(cell.column.id)}
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <InputGroup className="sm:max-w-sm">
+          <InputGroupAddon>
+            <SearchIcon aria-hidden="true" />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            value={search}
+            placeholder="Search members"
+            aria-label="Search members by name or email"
+            onChange={handleSearchChange}
+          />
+        </InputGroup>
+        <p className="text-sm text-muted-foreground" role="status">
+          {search ? `${filteredCount} of ${members.length}` : members.length}{" "}
+          {members.length === 1 ? "member" : "members"}
+        </p>
+      </div>
+      <div className="max-w-full min-w-0 rounded-2xl border">
+        <MemberMutationContext.Provider value={pending}>
+          <Table scrollLabel={`Members of ${organizationName}`}>
+            <TableCaption className="sr-only">
+              Members of {organizationName}
+            </TableCaption>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className={memberColumnClass(header.column.id)}
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length}>
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <UsersRoundIcon aria-hidden="true" />
-                      </EmptyMedia>
-                      <EmptyTitle>No members</EmptyTitle>
-                      <EmptyDescription>
-                        Invite the first member to this organization.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </MemberMutationContext.Provider>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length > 0 ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={memberColumnClass(cell.column.id)}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length}>
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <UsersRoundIcon aria-hidden="true" />
+                        </EmptyMedia>
+                        <EmptyTitle>
+                          {search ? "No matching members" : "No members"}
+                        </EmptyTitle>
+                        <EmptyDescription>
+                          {search
+                            ? "Try a different name or email address."
+                            : "Invite the first member to this organization."}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </MemberMutationContext.Provider>
+      </div>
     </div>
   )
 }
 
 const memberColumnClass = (columnId: string) => {
-  if (columnId === "name") {
+  if (columnId === "user") {
     return "min-w-56"
   }
   if (columnId === "role") {
     return "w-44 min-w-44"
+  }
+  if (columnId === "joined") {
+    return "w-40 min-w-40"
   }
   if (columnId === "actions") {
     return "w-14 text-right"
@@ -319,21 +465,21 @@ const MemberActions = ({
   onRequestRemove: (member: OrganizationMember) => void
 }) => {
   const pending = useContext(MemberMutationContext)
-  const disabled =
-    pending ||
+  const permanentlyDisabled =
     member.role === "super_admin" ||
     (organizationRole === "admin" && member.role !== "member")
-  const requestRemoval = useCallback(
-    () => onRequestRemove(member),
-    [member, onRequestRemove]
-  )
+  const requestRemoval = useCallback(() => {
+    if (!pending && !permanentlyDisabled) onRequestRemove(member)
+  }, [member, onRequestRemove, pending, permanentlyDisabled])
 
   return (
     <div className="flex justify-end">
       <Button
         variant="ghost"
         size="icon-sm"
-        disabled={disabled}
+        disabled={permanentlyDisabled}
+        aria-disabled={pending || undefined}
+        aria-busy={pending}
         title={
           member.role === "super_admin"
             ? "Transfer Super Admin before removing this member."

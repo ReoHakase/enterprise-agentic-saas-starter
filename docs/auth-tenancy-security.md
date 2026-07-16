@@ -38,9 +38,15 @@ member削除時はmembership、auditだけでなく、対象userが削除organiz
 
 clientのactivate成功直後に旧tenantのTanStack Queryを一括invalidateしません。session contextだけが新tenantへ変わった状態で旧member/issue queryを再取得すると409/404になるため、in-flight queryをcancelし、route replaceまたはServer Component refreshで新tenantのquery keyを構築します。
 
+人が開くorganization管理URLは `/organization/:organizationSlug/members|settings` とし、UUIDを公開URLへ使いません。Server Componentはsession userが所属するorganization一覧からslugを解決し、見つからないslugを404にしてから、内部APIへ検証済みorganization IDを渡します。slug変更後は新slugのURLへ置換します。
+
 Better Auth organization pluginの管理・参照APIは直接公開しません。`/auth/organization/*` はdeny-by-defaultとし、招待recipient本人に必要な `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` の4 pathだけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths` で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
 
 招待accept直前にも `organizationHooks.beforeAcceptInvitation` でroleを `admin | member` に限定します。legacy `owner`、`super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
+
+招待リンクは`/invitations/:invitationId`を正規URLとし、未ログインでもlanding pageを開けます。organization名、inviter、recipientなどの招待詳細はBetter Authの`get-invitation`が現在のsession emailとrecipient emailの一致を確認した後だけ表示します。未ログインには招待URLを`redirectTo`へ保持した新規登録/ログインを示し、別emailのsessionにはaccept actionを出さず、multi-sessionのswitch/add accountを促します。account切替後は認証済みTanStack Query cacheを破棄してServer Componentをrefreshし、同じ検証をやり直します。明確なnot-foundだけをterminal表示にし、5xx、network、schema不一致はprovider詳細を出さない再試行表示にします。
+
+旧メールに含まれる`/organization/invitations/:invitationId`はqueryを保持した307 redirectで正規URLへ移します。ただし`/organization/invitations/members`と`/organization/invitations/settings`はslugが`invitations`の既存tenant routeとしてredirect対象外にし、永続DBのlegacy organizationを到達不能にしません。この互換処理はCloudflare/OpenNext対応のEdge `middleware.ts`に置き、Node runtimeになるNext 16の`proxy.ts`は使いません。
 
 招待メールの送信者表示には認証済みsession userの表示名を使います。内部user IDを人向けの`inviterName`へ流用せず、表示名が空の場合だけtemplateの一般的なfallback文言へ倒します。
 
@@ -51,6 +57,8 @@ Better Auth organization pluginの管理・参照APIは直接公開しません�
 既存memberまたは期限内pending invitationが1件でも含まれる場合、全件を同じ409で拒否し、どのaddressが該当したかはresponseへ反映しません。全invitation、各audit event、各email jobは同じDB transactionで作るため、一部だけが保存・送信される状態はありません。actor+organizationは30 recipient/時、organization全体は100 recipient/時です。quotaは競合したbatchも消費し、生のuser/organization IDを保存しないhash keyでTursoへ永続化します。
 
 APIはjobをqueueした時点で201を返します。local BunではprocessorをawaitしてMailpitへ直ちに反映し、Cloudflare Workersでは`waitUntil`と毎分cronで処理します。配送失敗は招待をrollbackせず、安全なerror codeとbackoffだけをjobへ保存します。取消・期限切れは未送信/retry jobをterminalな`canceled`へ移します。providerが受け付けた直後にWorkerが停止した場合は同じメールが再送される可能性があるため、配送保証はexactly-onceではなくat-least-onceです。
+
+`POST /organizations/:organizationId/invitations/:invitationId/resend`はpendingまたは期限切れ招待だけを同じIDで48時間延長し、元の`createdAt`を保持します。accepted/rejected/canceled、他tenant、不明role、既存member、同じrecipientの別pending招待はfail closedにします。member招待はadmin以上、admin招待はfresh sessionのsuper adminだけが再送でき、quotaは1 recipientとして数えます。transaction内でactor membershipを再確認し、inviterを現在のactorへ更新し、auditと既存outboxの再queueを同時に保存します。
 
 ## Destructive / privilege transfer
 

@@ -125,7 +125,7 @@ export const InvitationRouteLoading = () => (
     <section
       data-slot="invitation-panel"
       data-boundary-state="loading"
-      className="flex w-full max-w-md flex-col gap-5 rounded-2xl border p-5"
+      className="flex min-h-96 w-full max-w-lg flex-col gap-5 rounded-2xl border p-5 sm:p-6"
       aria-busy="true"
       aria-label="Loading organization invitation"
       aria-live="polite"
@@ -137,7 +137,8 @@ export const InvitationRouteLoading = () => (
           <Skeleton className="h-7 w-56 max-w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <div className="mt-auto flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Skeleton className="h-9 w-full sm:w-20" />
           <Skeleton className="h-9 w-full sm:w-36" />
         </div>
@@ -155,7 +156,7 @@ export const InvitationRouteError = ({ reset }: { reset: () => void }) => {
       <section
         data-slot="invitation-panel"
         data-boundary-state="error"
-        className="flex w-full max-w-md flex-col gap-5 rounded-2xl border p-5"
+        className="flex min-h-96 w-full max-w-lg flex-col gap-5 rounded-2xl border p-5 sm:p-6"
         aria-labelledby={headingId}
         aria-live="assertive"
         role="alert"
@@ -176,7 +177,7 @@ export const InvitationRouteError = ({ reset }: { reset: () => void }) => {
             Your membership was not changed. Try loading this invitation again.
           </p>
         </div>
-        <Button className="self-stretch sm:self-end" onClick={retry}>
+        <Button className="mt-auto self-stretch sm:self-end" onClick={retry}>
           <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
           Try again
         </Button>
@@ -196,7 +197,7 @@ export const RootRouteLoading = () => {
     return <AuthRouteLoading />
   }
 
-  if (pathname.startsWith("/organization/invitations/")) {
+  if (pathname.startsWith("/invitations/")) {
     return <InvitationRouteLoading />
   }
 
@@ -214,7 +215,7 @@ export const RootRouteError = ({ reset }: { reset: () => void }) => {
     return <AuthRouteError reset={reset} />
   }
 
-  if (pathname.startsWith("/organization/invitations/")) {
+  if (pathname.startsWith("/invitations/")) {
     return <InvitationRouteError reset={reset} />
   }
 
@@ -332,5 +333,4 @@ const isConsolePath = (pathname: string) =>
   pathname.startsWith("/dashboard/") ||
   pathname === "/onboarding" ||
   pathname.startsWith("/settings/") ||
-  (pathname.startsWith("/organization/") &&
-    !pathname.startsWith("/organization/invitations/"))
+  pathname.startsWith("/organization/")

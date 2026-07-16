@@ -55,9 +55,10 @@ type OrganizationInvitation = {
   id: string
   email: string
   role: Exclude<OrganizationRole, "super_admin">
-  status: string
+  status: "pending" | "accepted" | "rejected" | "canceled" | "expired"
   organizationId: string
   inviterId: string
+  inviter: UserIdentity
   expiresAt: string
   createdAt: string
 }
@@ -120,6 +121,8 @@ const FIXED_NOW = "2026-07-14T09:00:00.000Z"
 const FIXED_MUTATION_NOW = "2026-07-15T09:00:00.000Z"
 const FIXED_DUE_DATE = "2026-07-21"
 const FIXED_EXPIRES_AT = "2026-08-14T09:00:00.000Z"
+const FIXED_EXPIRED_AT = "2026-07-10T09:00:00.000Z"
+const PUBLIC_INVITATION_ID = "invitation-new-user"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -294,6 +297,13 @@ const createState = (sessionKey: string): SessionState => {
       role: "member",
       active: false,
     },
+    {
+      id: "org-invitations",
+      name: "Invitation Operations",
+      slug: "invitations",
+      role: "admin",
+      active: false,
+    },
   ]
   if (sessionKey === "unselected") {
     organizations.forEach((organization) => {
@@ -436,8 +446,31 @@ const createState = (sessionKey: string): SessionState => {
             status: "pending",
             organizationId: "org-a",
             inviterId: user.id,
+            inviter: { ...user },
             expiresAt: FIXED_EXPIRES_AT,
             createdAt: FIXED_NOW,
+          },
+          {
+            id: PUBLIC_INVITATION_ID,
+            email: "new-user@example.com",
+            role: "member",
+            status: "pending",
+            organizationId: "org-a",
+            inviterId: user.id,
+            inviter: { ...user },
+            expiresAt: FIXED_EXPIRES_AT,
+            createdAt: "2026-07-13T09:00:00.000Z",
+          },
+          {
+            id: "invitation-expired",
+            email: "expired@example.com",
+            role: "member",
+            status: "expired",
+            organizationId: "org-a",
+            inviterId: user.id,
+            inviter: { ...user },
+            expiresAt: FIXED_EXPIRED_AT,
+            createdAt: "2026-07-01T09:00:00.000Z",
           },
         ],
       ],
@@ -510,6 +543,18 @@ const forbidden = () => apiError("forbidden", "Permission denied", 403)
 
 const invalid = (message: string) => apiError("invalid_request", message, 400)
 
+const invalidAuthRequest = (message: string) =>
+  json({ code: "INVALID_INVITATION", message }, 400)
+
+const invitationRecipientMismatch = () =>
+  json(
+    {
+      code: "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
+      message: "Use the account that received this invitation",
+    },
+    403
+  )
+
 const notFound = (resource: string) =>
   apiError("not_found", `${resource} was not found`, 404)
 
@@ -551,6 +596,68 @@ const organizationPayload = (
 
 const getOrganization = (state: SessionState, organizationId: string) =>
   state.organizations.find(({ id }) => id === organizationId)
+
+const findSharedInvitation = (invitationId: string) => {
+  const ownerState = stateFor("admin")
+  for (const [
+    organizationId,
+    invitations,
+  ] of ownerState.invitationsByOrganization) {
+    const invitation = invitations.find(({ id }) => id === invitationId)
+    const organization = getOrganization(ownerState, organizationId)
+    if (invitation && organization) {
+      return { invitation, organization, ownerState }
+    }
+  }
+
+  return null
+}
+
+const addInvitationMember = (
+  state: SessionState,
+  ownerState: SessionState,
+  organization: Organization,
+  invitation: OrganizationInvitation
+) => {
+  const member: OrganizationMember = {
+    id: `member-${state.user.id}-${organization.id}`,
+    userId: state.user.id,
+    name: state.user.name,
+    email: state.user.email,
+    image: state.user.image,
+    role: invitation.role,
+    createdAt: FIXED_MUTATION_NOW,
+  }
+  const ownerMembers = membersFor(ownerState, organization.id)
+  if (!ownerMembers.some(({ userId }) => userId === state.user.id)) {
+    ownerMembers.push(member)
+    ownerState.membersByOrganization.set(organization.id, ownerMembers)
+  }
+
+  state.organizations.forEach((candidate) => {
+    candidate.active = false
+  })
+  const existingOrganization = getOrganization(state, organization.id)
+  if (existingOrganization) {
+    existingOrganization.active = true
+    existingOrganization.role = invitation.role
+  } else {
+    state.organizations.push({
+      ...organization,
+      active: true,
+      role: invitation.role,
+    })
+  }
+
+  if (state !== ownerState) {
+    state.membersByOrganization.set(
+      organization.id,
+      structuredClone(ownerMembers)
+    )
+  }
+
+  return member
+}
 
 type OrganizationAccessResult =
   | { organization: Organization }
@@ -721,6 +828,40 @@ Bun.serve({
       })
     }
     if (!sessionKey) return unauthorized()
+
+    if (
+      pathname === "/auth/organization/get-invitation" &&
+      request.method === "GET"
+    ) {
+      const invitationId = nonEmptyString(url.searchParams.get("id"))
+      if (!invitationId) return invalidAuthRequest("Invitation ID is required")
+
+      const sharedInvitation = findSharedInvitation(invitationId)
+      if (
+        !sharedInvitation ||
+        sharedInvitation.invitation.status !== "pending"
+      ) {
+        return invalidAuthRequest("Invitation is invalid or unavailable")
+      }
+      if (
+        sharedInvitation.invitation.email.toLowerCase() !==
+        identityFor(sessionKey).email.toLowerCase()
+      ) {
+        return invitationRecipientMismatch()
+      }
+
+      return json({
+        id: sharedInvitation.invitation.id,
+        organizationId: sharedInvitation.organization.id,
+        organizationName: sharedInvitation.organization.name,
+        organizationSlug: sharedInvitation.organization.slug,
+        inviterEmail: sharedInvitation.invitation.inviter.email,
+        role: sharedInvitation.invitation.role,
+        status: sharedInvitation.invitation.status,
+        expiresAt: sharedInvitation.invitation.expiresAt,
+        createdAt: sharedInvitation.invitation.createdAt,
+      })
+    }
 
     if (
       pathname === "/auth/multi-session/list-device-sessions" &&
@@ -994,6 +1135,7 @@ Bun.serve({
             status: "pending",
             organizationId: organization.id,
             inviterId: state.user.id,
+            inviter: { ...state.user },
             expiresAt: FIXED_EXPIRES_AT,
             createdAt: FIXED_NOW,
           })
@@ -1010,6 +1152,46 @@ Bun.serve({
           201
         )
       }
+    }
+
+    const resendInvitationMatch = pathname.match(
+      /^\/organizations\/([^/]+)\/invitations\/([^/]+)\/resend$/
+    )
+    if (
+      resendInvitationMatch?.[1] &&
+      resendInvitationMatch[2] &&
+      request.method === "POST"
+    ) {
+      const access = resolveOrganization(state, resendInvitationMatch[1])
+      if ("response" in access) return access.response
+      const { organization } = access
+      if (!permissionsFor(organization.role).canInviteMembers) {
+        return forbidden()
+      }
+      const invitation = invitationsFor(state, organization.id).find(
+        ({ id }) => id === resendInvitationMatch[2]
+      )
+      if (!invitation) return notFound("Invitation")
+      if (
+        invitation.role === "admin" &&
+        !permissionsFor(organization.role).canManageAdmins
+      ) {
+        return forbidden()
+      }
+      if (invitation.status !== "pending" && invitation.status !== "expired") {
+        return apiError(
+          "conflict",
+          "Only pending or expired invitations can be resent",
+          409
+        )
+      }
+
+      const revived = invitation.status === "expired"
+      invitation.status = "pending"
+      invitation.expiresAt = FIXED_EXPIRES_AT
+      invitation.inviterId = state.user.id
+      invitation.inviter = { ...state.user }
+      return json({ invitation, delivery: "queued", revived })
     }
 
     const invitationMatch = pathname.match(
@@ -1029,7 +1211,7 @@ Bun.serve({
       const invitations = invitationsFor(state, organization.id)
       const invitation = invitations.find(({ id }) => id === invitationMatch[2])
       if (!invitation) return notFound("Invitation")
-      invitation.status = "cancelled"
+      invitation.status = "canceled"
       return json({ id: invitation.id, status: invitation.status })
     }
 
@@ -1116,8 +1298,37 @@ Bun.serve({
         pathname === "/auth/organization/reject-invitation") &&
       request.method === "POST"
     ) {
-      const status = pathname.includes("accept") ? "accepted" : "rejected"
-      return json({ status })
+      const body = await readBody(request)
+      const invitationId = nonEmptyString(body.invitationId)
+      if (!invitationId) return invalidAuthRequest("Invitation ID is required")
+
+      const sharedInvitation = findSharedInvitation(invitationId)
+      if (
+        !sharedInvitation ||
+        sharedInvitation.invitation.status !== "pending"
+      ) {
+        return invalidAuthRequest("Invitation is invalid or unavailable")
+      }
+      if (
+        sharedInvitation.invitation.email.toLowerCase() !==
+        state.user.email.toLowerCase()
+      ) {
+        return invitationRecipientMismatch()
+      }
+
+      if (pathname.includes("reject")) {
+        sharedInvitation.invitation.status = "rejected"
+        return json({ invitation: sharedInvitation.invitation })
+      }
+
+      const member = addInvitationMember(
+        state,
+        sharedInvitation.ownerState,
+        sharedInvitation.organization,
+        sharedInvitation.invitation
+      )
+      sharedInvitation.invitation.status = "accepted"
+      return json({ invitation: sharedInvitation.invitation, member })
     }
 
     const commentMatch = pathname.match(/^\/todos\/([^/]+)\/comments\/([^/]+)$/)

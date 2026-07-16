@@ -43,18 +43,21 @@ import {
   createMultiSessionCapabilities,
 } from "@/features/account/multi-session-client"
 import type { DeviceAccount } from "@/features/account/schema"
+import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 import type { Me } from "@/lib/console-api"
 
 const deviceAccountKey = (userId: string) =>
   ["auth", "device-accounts", userId] as const
 
 type AccountSwitcherDialogProps = {
+  addAccountHref?: string
   currentUser: Me["user"]
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
 export const AccountSwitcherDialog = ({
+  addAccountHref = "/auth/sign-in?add_account=1",
   currentUser,
   open,
   onOpenChange,
@@ -78,6 +81,7 @@ export const AccountSwitcherDialog = ({
       if (!multiSession.setActive) {
         throw new Error("Account switching is not available")
       }
+      await clearAuthenticatedQueryCache(queryClient)
       await completeMultiSessionAction(
         multiSession.setActive({
           sessionToken: account.session.token,
@@ -92,6 +96,7 @@ export const AccountSwitcherDialog = ({
       toast.success(`Switched to ${account.user.email}`)
     },
     onError: () => {
+      router.refresh()
       toast.error("Could not switch account. Try again.")
     },
   })
@@ -210,7 +215,7 @@ export const AccountSwitcherDialog = ({
           </div>
 
           <DialogFooter>
-            <LinkButton href="/auth/sign-in?add_account=1" variant="outline">
+            <LinkButton href={addAccountHref} variant="outline">
               <PlusIcon data-icon="inline-start" />
               Add account
             </LinkButton>

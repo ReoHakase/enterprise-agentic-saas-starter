@@ -12,13 +12,29 @@ export const organizationMemberSchema = v.object({
   createdAt: v.string(),
 })
 
+export const organizationInvitationStatusSchema = v.picklist([
+  "pending",
+  "accepted",
+  "rejected",
+  "canceled",
+  "expired",
+])
+
+export const organizationInvitationInviterSchema = v.object({
+  id: v.string(),
+  name: v.string(),
+  email: v.pipe(v.string(), v.email()),
+  image: v.nullable(v.string()),
+})
+
 export const organizationInvitationSchema = v.object({
   id: v.string(),
   email: v.pipe(v.string(), v.email()),
   role: v.picklist(["admin", "member"]),
-  status: v.string(),
+  status: organizationInvitationStatusSchema,
   organizationId: v.string(),
   inviterId: v.string(),
+  inviter: organizationInvitationInviterSchema,
   expiresAt: v.string(),
   createdAt: v.string(),
 })
@@ -82,6 +98,12 @@ export const bulkInvitationResponseSchema = v.pipe(
   )
 )
 
+export const resendInvitationResponseSchema = v.object({
+  invitation: organizationInvitationSchema,
+  delivery: v.literal("queued"),
+  revived: v.boolean(),
+})
+
 export const memberConfirmationFormSchema = v.object({
   confirmation: v.string(),
 })
@@ -107,6 +129,9 @@ export type OrganizationMember = v.InferOutput<typeof organizationMemberSchema>
 export type OrganizationInvitation = v.InferOutput<
   typeof organizationInvitationSchema
 >
+export type OrganizationInvitationStatus = v.InferOutput<
+  typeof organizationInvitationStatusSchema
+>
 export type InvitationFormValues = v.InferOutput<typeof invitationFormSchema>
 export type BulkInvitationInput = {
   emails: string[]
@@ -115,6 +140,9 @@ export type BulkInvitationInput = {
 export type BulkInvitationResponse = v.InferOutput<
   typeof bulkInvitationResponseSchema
 >
+export type ResendInvitationResponse = v.InferOutput<
+  typeof resendInvitationResponseSchema
+>
 export type MemberConfirmationFormValues = v.InferOutput<
   typeof memberConfirmationFormSchema
 >
@@ -122,5 +150,9 @@ export type MemberConfirmationFormValues = v.InferOutput<
 export const parseMembers = (value: unknown) => v.parse(memberListSchema, value)
 export const parseInvitations = (value: unknown) =>
   v.parse(invitationListSchema, value)
+export const parseInvitation = (value: unknown) =>
+  v.parse(organizationInvitationSchema, value)
 export const parseBulkInvitationResponse = (value: unknown) =>
   v.parse(bulkInvitationResponseSchema, value)
+export const parseResendInvitationResponse = (value: unknown) =>
+  v.parse(resendInvitationResponseSchema, value)

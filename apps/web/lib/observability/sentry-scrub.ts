@@ -35,14 +35,8 @@ const SENSITIVE_KEY_SUFFIXES = [
 ] as const
 
 const DYNAMIC_PATHS: ReadonlyArray<readonly [RegExp, string]> = [
-  [
-    /\/organization\/invitations\/[^/?#\s]+/giu,
-    "/organization/invitations/[invitationId]",
-  ],
-  [
-    /\/organization\/(?!invitations(?:\/|$))[^/?#\s]+/giu,
-    "/organization/[organizationId]",
-  ],
+  [/\/organization\/invitations\/[^/?#\s]+/giu, "/invitations/[invitationId]"],
+  [/\/organization\/[^/?#\s]+/giu, "/organization/[organizationSlug]"],
   [/\/organizations\/[^/?#\s]+/giu, "/organizations/[organizationId]"],
   [/\/invitations\/[^/?#\s]+/giu, "/invitations/[invitationId]"],
   [/\/members\/[^/?#\s]+/giu, "/members/[memberId]"],

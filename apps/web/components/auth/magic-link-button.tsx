@@ -12,6 +12,8 @@ import { Lock, Mail } from "lucide-react"
 
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
+import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
+
 export type MagicLinkButtonProps = {
   /** @remarks `AuthView` */
   view?: AuthView
@@ -25,6 +27,7 @@ export type MagicLinkButtonProps = {
 export function MagicLinkButton({ view }: MagicLinkButtonProps) {
   const { basePaths, emailAndPassword, viewPaths, localization, Link } =
     useAuth()
+  const authRoute = useAuthRouteState()
 
   const signInMutating = useIsMutating({
     mutationKey: authMutationKeys.signIn.all,
@@ -45,7 +48,14 @@ export function MagicLinkButton({ view }: MagicLinkButtonProps) {
   // "Continue with Magic Link" link.)
   if (isMagicLinkView && !emailAndPassword?.enabled) return null
 
-  const href = `${basePaths.auth}/${isMagicLinkView ? viewPaths.auth.signIn : magicLinkViewPaths.auth.magicLink}`
+  const href = createScopedAuthViewHref({
+    basePath: basePaths.auth,
+    preserveReauthentication: true,
+    route: authRoute,
+    viewPath: isMagicLinkView
+      ? viewPaths.auth.signIn
+      : magicLinkViewPaths.auth.magicLink,
+  })
   const label = localization.auth.continueWith.replace(
     "{{provider}}",
     isMagicLinkView

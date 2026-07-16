@@ -69,6 +69,7 @@ import {
   consoleKeys,
   organizationsQueryOptions,
 } from "@/features/console/queries"
+import { prepareOrganizationSwitch } from "@/features/organizations/cache"
 import {
   organizationFormSchema,
   roleLabel,
@@ -108,10 +109,13 @@ export const OrganizationsPage = ({
     initialData: initialOrganizations,
   })
   const activateMutation = useMutation({
-    mutationFn: (organizationId: string) =>
-      browserConsoleApi.activateOrganization(organizationId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: consoleKeys.all })
+    mutationFn: (input: { organizationId: string; redirectTo?: string }) =>
+      browserConsoleApi.activateOrganization(input.organizationId),
+    onSuccess: async (_, input) => {
+      await prepareOrganizationSwitch(queryClient, input.organizationId)
+      if (input.redirectTo) {
+        router.push(input.redirectTo)
+      }
       router.refresh()
       toast.success("Organization switched")
     },
@@ -122,7 +126,8 @@ export const OrganizationsPage = ({
   const { isPending: activatePending, mutate: activateOrganization } =
     activateMutation
   const activate = useCallback(
-    (organizationId: string) => activateOrganization(organizationId),
+    (organizationId: string, redirectTo?: string) =>
+      activateOrganization({ organizationId, redirectTo }),
     [activateOrganization]
   )
   const columns = useMemo<ColumnDef<OrganizationSummary>[]>(
@@ -582,11 +587,21 @@ const OrganizationActions = ({
 }: {
   organization: OrganizationSummary
   pending: boolean
-  onActivate: (organizationId: string) => void
+  onActivate: (organizationId: string, redirectTo?: string) => void
 }) => {
+  const membersHref = `/organization/${organization.slug}/members`
+  const settingsHref = `/organization/${organization.slug}/settings`
   const activateOrganization = useCallback(
     () => onActivate(organization.id),
     [onActivate, organization.id]
+  )
+  const openMembers = useCallback(
+    () => onActivate(organization.id, membersHref),
+    [membersHref, onActivate, organization.id]
+  )
+  const openSettings = useCallback(
+    () => onActivate(organization.id, settingsHref),
+    [onActivate, organization.id, settingsHref]
   )
 
   return (
@@ -602,23 +617,47 @@ const OrganizationActions = ({
         ) : null}
         {organization.active ? "Active" : "Switch"}
       </Button>
-      <LinkButton
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Members for ${organization.name}`}
-        href={`/organization/${organization.id}/members`}
-      >
-        <UsersRoundIcon aria-hidden="true" />
-      </LinkButton>
-      {organization.permissions.canEditOrganization ? (
+      {organization.active ? (
         <LinkButton
           variant="ghost"
           size="icon-sm"
-          aria-label={`Settings for ${organization.name}`}
-          href={`/organization/${organization.id}/settings`}
+          aria-label={`Members for ${organization.name}`}
+          href={membersHref}
         >
-          <SettingsIcon aria-hidden="true" />
+          <UsersRoundIcon aria-hidden="true" />
         </LinkButton>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Switch to ${organization.name} and open members`}
+          disabled={pending}
+          onClick={openMembers}
+        >
+          {pending ? <Spinner /> : <UsersRoundIcon aria-hidden="true" />}
+        </Button>
+      )}
+      {organization.permissions.canEditOrganization ? (
+        organization.active ? (
+          <LinkButton
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Settings for ${organization.name}`}
+            href={settingsHref}
+          >
+            <SettingsIcon aria-hidden="true" />
+          </LinkButton>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Switch to ${organization.name} and open settings`}
+            disabled={pending}
+            onClick={openSettings}
+          >
+            {pending ? <Spinner /> : <SettingsIcon aria-hidden="true" />}
+          </Button>
+        )
       ) : null}
     </div>
   )

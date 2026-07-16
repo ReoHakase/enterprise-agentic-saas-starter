@@ -32,11 +32,16 @@ const unwrap = (result: EdenResult): unknown => {
   return result.data
 }
 
-export const listIssues = async (client: ApiClient, organizationId: string) =>
+export const listIssues = async (
+  client: ApiClient,
+  organizationId: string,
+  signal?: AbortSignal
+) =>
   parseIssues(
     unwrap(
       await client.todos.get({
         query: { organizationId },
+        fetch: { signal },
       })
     )
   )
@@ -98,12 +103,14 @@ export const deleteIssue = async (
 
 export const listIssueComments = async (
   client: ApiClient,
-  input: { id: string; organizationId: string }
+  input: { id: string; organizationId: string },
+  signal?: AbortSignal
 ) =>
   parseIssueComments(
     unwrap(
       await client.todos({ id: input.id }).comments.get({
         query: { organizationId: input.organizationId },
+        fetch: { signal },
       })
     )
   )

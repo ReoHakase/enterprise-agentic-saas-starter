@@ -5,7 +5,26 @@ import {
   bulkInvitationResponseSchema,
   invitationFormSchema,
   normalizeInvitationEmails,
+  organizationInvitationSchema,
+  resendInvitationResponseSchema,
 } from "./schema"
+
+const invitation = {
+  id: "invitation-1",
+  email: "recipient@example.com",
+  role: "member",
+  status: "pending",
+  organizationId: "org-1",
+  inviterId: "user-1",
+  inviter: {
+    id: "user-1",
+    name: "Inviter",
+    email: "inviter@example.com",
+    image: null,
+  },
+  expiresAt: "2026-07-23T00:00:00.000Z",
+  createdAt: "2026-07-16T00:00:00.000Z",
+} as const
 
 describe("bulk invitation schema", () => {
   it("normalizes case, whitespace, commas, new lines, and duplicates", () => {
@@ -60,5 +79,31 @@ describe("bulk invitation schema", () => {
     })
 
     expect(result.success).toBe(false)
+  })
+
+  it("requires a safe invitation status and nested inviter identity", () => {
+    expect(v.safeParse(organizationInvitationSchema, invitation).success).toBe(
+      true
+    )
+    expect(
+      v.safeParse(organizationInvitationSchema, {
+        ...invitation,
+        status: "unknown",
+      }).success
+    ).toBe(false)
+    const { inviter: _inviter, ...withoutInviter } = invitation
+    expect(
+      v.safeParse(organizationInvitationSchema, withoutInviter).success
+    ).toBe(false)
+  })
+
+  it("parses resend revival metadata with the renewed invitation", () => {
+    expect(
+      v.parse(resendInvitationResponseSchema, {
+        invitation,
+        delivery: "queued",
+        revived: true,
+      })
+    ).toMatchObject({ revived: true, invitation: { id: "invitation-1" } })
   })
 })

@@ -131,6 +131,16 @@ describe("issues Eden API", () => {
     )
   })
 
+  it("passes query cancellation through Eden to fetch", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json([issue]))
+    const client = createApiClient("https://api.example.test")
+    const controller = new AbortController()
+
+    await listIssues(client, "org-1", controller.signal)
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
+  })
+
   it("normalizes Eden errors and keeps safe field errors", async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json(

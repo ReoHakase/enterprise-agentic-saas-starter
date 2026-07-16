@@ -45,13 +45,16 @@ export const OrganizationSettingsForm = ({
   const updateMutation = useMutation({
     mutationFn: (value: { name: string; slug: string }) =>
       browserConsoleApi.updateOrganization(organization.id, value),
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await queryClient.invalidateQueries({
         queryKey: consoleKeys.organization(organization.id),
       })
       await queryClient.invalidateQueries({
         queryKey: consoleKeys.organizations(),
       })
+      if (updated.slug !== organization.slug) {
+        router.replace(`/organization/${updated.slug}/settings`)
+      }
       router.refresh()
       toast.success("Organization updated")
     },

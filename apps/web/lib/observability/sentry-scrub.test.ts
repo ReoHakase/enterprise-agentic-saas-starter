@@ -39,7 +39,7 @@ describe("Sentry telemetry scrubbing", () => {
     expect(event.user).toBeUndefined()
     expect(event.request).toEqual({
       method: "GET",
-      url: "https://app.example.com/organization/[organizationId]/settings",
+      url: "https://app.example.com/organization/[organizationSlug]/settings",
     })
     expect(event.contexts?.operation?.organizationId).toBe("[redacted]")
     expect(event.contexts?.operation?.resource).toBe("todo")

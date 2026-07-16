@@ -37,6 +37,7 @@ import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 import { useFetchOptions } from "@/lib/auth/fetch-options"
 
 import { AuthTextField, selectCanSubmit } from "./auth-form-field"
+import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
 import { PasskeySignInButton } from "./passkey-sign-in-button"
 import { ProviderButtons, type SocialLayout } from "./provider-buttons"
 import { findCaptchaComponent } from "./runtime-guards"
@@ -63,12 +64,14 @@ export function SignIn({
     emailAndPassword,
     localization,
     plugins,
-    redirectTo,
+    redirectTo: defaultRedirectTo,
     socialProviders,
     viewPaths,
     navigate,
     Link,
   } = useAuth()
+  const authRoute = useAuthRouteState()
+  const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
   const { fetchOptions, resetFetchOptions } = useFetchOptions()
   const [submitError, setSubmitError] = useState<string>()
   const minimumPasswordLength =
@@ -137,6 +140,11 @@ export function SignIn({
   const Captcha = findCaptchaComponent(plugins)
   const showSeparator =
     emailAndPassword?.enabled && socialProviders && socialProviders.length > 0
+  const signUpHref = createScopedAuthViewHref({
+    basePath: basePaths.auth,
+    route: authRoute,
+    viewPath: viewPaths.auth.signUp,
+  })
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -308,10 +316,7 @@ export function SignIn({
           {emailAndPassword?.enabled ? (
             <FieldDescription className="text-center">
               {localization.auth.needToCreateAnAccount}{" "}
-              <Link
-                href={`${basePaths.auth}/${viewPaths.auth.signUp}`}
-                className="underline underline-offset-4"
-              >
+              <Link href={signUpHref} className="underline underline-offset-4">
                 {localization.auth.signUp}
               </Link>
             </FieldDescription>

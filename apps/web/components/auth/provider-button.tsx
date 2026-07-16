@@ -12,6 +12,8 @@ import { toast } from "sonner"
 import { safeAuthErrorMessage } from "@/features/auth/error"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
+import { useAuthRouteState } from "./auth-route-scope"
+
 export type ProviderButtonProps = {
   provider: SocialProvider
   display?: "full" | "name" | "icon"
@@ -29,7 +31,9 @@ export function ProviderButton({
   variant = "outline",
   ...props
 }: ProviderButtonProps) {
-  const { authClient, localization, redirectTo } = useAuth()
+  const { authClient, localization, redirectTo: defaultRedirectTo } = useAuth()
+  const authRoute = useAuthRouteState()
+  const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
 
   const callbackURL = createAuthCallbackURL(redirectTo)
 

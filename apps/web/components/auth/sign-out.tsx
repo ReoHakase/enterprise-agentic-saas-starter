@@ -3,10 +3,13 @@
 import { useAuth, useSignOut } from "@better-auth-ui/react"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
+import { useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 
 import { safeAuthErrorMessage } from "@/features/auth/error"
+import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 
 export type SignOutProps = {
   className?: string
@@ -20,9 +23,12 @@ export type SignOutProps = {
  */
 export function SignOut({ className }: SignOutProps) {
   const { authClient, basePaths, navigate, viewPaths } = useAuth()
+  const queryClient = useQueryClient()
+  const router = useRouter()
 
   const { mutate: signOut } = useSignOut(authClient, {
     onError: (error) => {
+      router.refresh()
       toast.error(safeAuthErrorMessage(error, "Sign out failed. Try again."))
 
       navigate({
@@ -30,11 +36,12 @@ export function SignOut({ className }: SignOutProps) {
         replace: true,
       })
     },
-    onSuccess: () =>
+    onSuccess: () => {
       navigate({
         to: `${basePaths.auth}/${viewPaths.auth.signIn}`,
         replace: true,
-      }),
+      })
+    },
   })
 
   const hasSignedOut = useRef(false)
@@ -43,8 +50,11 @@ export function SignOut({ className }: SignOutProps) {
     if (hasSignedOut.current) return
     hasSignedOut.current = true
 
-    signOut()
-  }, [signOut])
+    void clearAuthenticatedQueryCache(queryClient).then(
+      () => signOut(),
+      () => signOut()
+    )
+  }, [queryClient, signOut])
 
   return <Spinner className={cn("mx-auto my-auto", className)} />
 }

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { AuthRouteScope } from "./auth-route-scope"
 import { MagicLink } from "./magic-link"
 import { SignIn } from "./sign-in"
 import { SignUp } from "./sign-up"
@@ -199,6 +200,53 @@ describe("email and password authentication forms", () => {
       callbackURL: "http://localhost:3000/dashboard",
       email: "new@example.com",
     })
+  })
+
+  it("keeps the invitation redirect across add-account magic-link views", async () => {
+    const user = userEvent.setup()
+    const invitationPath = "/invitations/invitation-new-user"
+    render(
+      <AuthRouteScope
+        addingAccount
+        reauthenticating
+        redirectTo={invitationPath}
+      >
+        <MagicLink />
+      </AuthRouteScope>
+    )
+
+    expect(
+      screen.getByRole("link", { name: "Create account" })
+    ).toHaveAttribute(
+      "href",
+      "/auth/sign-up?redirectTo=%2Finvitations%2Finvitation-new-user&add_account=1"
+    )
+    const email = screen.getByLabelText("Email")
+    await waitFor(() => expect(email).toBeEnabled())
+    await user.type(email, "new-user@example.com")
+    await user.click(screen.getByRole("button", { name: "Send magic link" }))
+
+    expect(authMocks.magicLinkRequest).toHaveBeenCalledWith({
+      callbackURL: "http://localhost:3000/invitations/invitation-new-user",
+      email: "new-user@example.com",
+    })
+  })
+
+  it("keeps add-account when returning from account creation to sign-in", () => {
+    render(
+      <AuthRouteScope
+        addingAccount
+        reauthenticating={false}
+        redirectTo="/invitations/invitation-new-user"
+      >
+        <MagicLink mode="sign-up" />
+      </AuthRouteScope>
+    )
+
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/auth/sign-in?redirectTo=%2Finvitations%2Finvitation-new-user&add_account=1"
+    )
   })
 
   it("validates sign-in fields and preserves credentials after a safe failure", async () => {

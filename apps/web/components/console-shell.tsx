@@ -78,7 +78,7 @@ import {
 import { UserAvatar } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { consoleKeys } from "@/features/console/queries"
+import { prepareOrganizationSwitch } from "@/features/organizations/cache"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
 
@@ -124,12 +124,12 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
   const activeOrganization = me.organizations.find(
     (organization) => organization.active
   )
-  const routeOrganizationId = pathname.match(
+  const routeOrganizationSlug = pathname.match(
     /^\/organization\/([^/]+)(?:\/|$)/
   )?.[1]
-  const contextOrganization = routeOrganizationId
+  const contextOrganization = routeOrganizationSlug
     ? me.organizations.find(
-        (organization) => organization.id === routeOrganizationId
+        (organization) => organization.slug === routeOrganizationSlug
       )
     : activeOrganization
   const hasOrganizationContextMismatch = Boolean(
@@ -141,18 +141,20 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
   const organizationMutation = useMutation({
     mutationFn: (organizationId: string) =>
       browserConsoleApi.activateOrganization(organizationId),
-    onSuccess: (_, organizationId) => {
-      void queryClient.cancelQueries({ queryKey: consoleKeys.all })
+    onSuccess: async (_, organizationId) => {
+      await prepareOrganizationSwitch(queryClient, organizationId)
       const organizationRoute = pathname.match(
         /^\/organization\/[^/]+\/(members|settings)(?:\/|$)/
       )
-      if (organizationRoute?.[1]) {
+      const nextOrganization = me.organizations.find(
+        (organization) => organization.id === organizationId
+      )
+      if (organizationRoute?.[1] && nextOrganization) {
         router.replace(
-          `/organization/${organizationId}/${organizationRoute[1]}`
+          `/organization/${nextOrganization.slug}/${organizationRoute[1]}`
         )
-      } else {
-        router.refresh()
       }
+      router.refresh()
       toast.success("Organization switched")
     },
     onError: (error) => {
@@ -362,14 +364,14 @@ const ConsoleNavigation = ({
       activeOrganization
         ? [
             {
-              href: `/organization/${activeOrganization.id}/members`,
+              href: `/organization/${activeOrganization.slug}/members`,
               label: "Members",
               icon: UsersRoundIcon,
             },
             ...(activeOrganization.permissions.canEditOrganization
               ? [
                   {
-                    href: `/organization/${activeOrganization.id}/settings`,
+                    href: `/organization/${activeOrganization.slug}/settings`,
                     label: "Organization settings",
                     icon: SettingsIcon,
                   } satisfies NavigationItem,

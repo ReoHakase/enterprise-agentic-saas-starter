@@ -3,6 +3,8 @@ import type { BrowserContext, Page } from "@playwright/test"
 import { expect, test } from "./fixtures/test"
 
 const mockApiUrl = "http://127.0.0.1:3001"
+const publicInvitationId = "invitation-new-user"
+const publicInvitationPath = `/invitations/${publicInvitationId}` as const
 
 const resetMockApi = async () => {
   const response = await fetch(`${mockApiUrl}/__e2e/reset`, { method: "POST" })
@@ -37,12 +39,209 @@ const openOrganizationSwitcher = async (page: Page) => {
 
   await page
     .locator('[data-slot="dropdown-menu-trigger"][data-sidebar="menu-button"]')
-    .filter({ hasText: /alpha operations|choose organization/i })
+    .filter({
+      hasText:
+        /alpha operations|beta support|invitation operations|choose organization/i,
+    })
     .click()
 }
 
 test.beforeEach(async () => {
   await resetMockApi()
+})
+
+test("旧招待URLを維持しつつinvitations slugのtenant routeを解決する", async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-chrome",
+    "namespace compatibilityはdesktopでrouting integrationを一度検証する"
+  )
+
+  const legacyPath =
+    `/organization/invitations/${publicInvitationId}?source=legacy` as const
+  const legacyResponse = await context.request.get(
+    `http://127.0.0.1:3000${legacyPath}`,
+    { maxRedirects: 0 }
+  )
+  expect(legacyResponse.status()).toBe(307)
+  expect(legacyResponse.headers().location).toBe(
+    `${publicInvitationPath}?source=legacy`
+  )
+
+  await page.goto(legacyPath)
+  await expect(page).toHaveURL(
+    `http://127.0.0.1:3000${publicInvitationPath}?source=legacy`
+  )
+  await expect(
+    page.getByRole("heading", { name: "You're invited" })
+  ).toBeVisible()
+
+  await useSession(context, "admin")
+  await page.goto("/organization/invitations/members")
+  await expect(page).toHaveURL(/\/organization\/invitations\/members$/)
+  await expect(
+    page.getByRole("region", { name: "Switch to Invitation Operations" })
+  ).toBeVisible()
+})
+
+test("未ログインの招待対象者が新規登録後の戻り先を失わない", async ({
+  context,
+  page,
+}) => {
+  await page.goto(publicInvitationPath)
+
+  await expect(
+    page.getByRole("heading", { name: "You're invited" })
+  ).toBeVisible()
+  const createAccount = page.getByRole("link", { name: "Create account" })
+  await expect(createAccount).toHaveAttribute(
+    "href",
+    `/auth/sign-up?redirectTo=${encodeURIComponent(publicInvitationPath)}`
+  )
+  await createAccount.click()
+
+  await expect(page).toHaveURL(/\/auth\/sign-up\?redirectTo=/)
+  const authUrl = new URL(page.url())
+  expect(authUrl.pathname).toBe("/auth/sign-up")
+  expect(authUrl.searchParams.get("redirectTo")).toBe(publicInvitationPath)
+  await expect(page.getByText("Create account", { exact: true })).toBeVisible()
+
+  const email = page.getByRole("textbox", { name: "Email" })
+  await expect(email).toBeEnabled()
+  await email.fill("new-user@example.com")
+  const magicLinkResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/auth/sign-in/magic-link") &&
+      response.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: /send magic link/i }).click()
+  const response = await magicLinkResponse
+  expect(response.ok()).toBeTruthy()
+  expect(response.request().postDataJSON()).toEqual(
+    expect.objectContaining({
+      callbackURL: `http://127.0.0.1:3000${publicInvitationPath}`,
+      email: "new-user@example.com",
+    })
+  )
+
+  // Email delivery is covered at the package boundary. Installing the session
+  // models opening the one-time link after this first account is created.
+  await useSession(context, "new-user")
+  await page.goto(publicInvitationPath)
+  await expect(
+    page.getByRole("heading", { name: "Join Alpha Operations" })
+  ).toBeVisible()
+
+  const acceptResponse = page.waitForResponse(
+    (candidate) =>
+      candidate.url().endsWith("/auth/organization/accept-invitation") &&
+      candidate.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Accept invitation" }).click()
+  expect((await acceptResponse).ok()).toBeTruthy()
+  await expect(page.getByText("Invitation accepted")).toBeVisible()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByText("Alpha Operations").first()).toBeVisible()
+
+  const membersResponse = await context.request.get(
+    `${mockApiUrl}/organizations/org-a/members`
+  )
+  expect(membersResponse.ok()).toBeTruthy()
+  expect(await membersResponse.json()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        email: "new-user@example.com",
+        role: "member",
+      }),
+    ])
+  )
+})
+
+test("別accountで開いた招待から対象accountへ切り替えて参加できる", async ({
+  context,
+  page,
+}) => {
+  await useSession(context, "admin")
+  await page.goto(publicInvitationPath)
+
+  await expect(
+    page.getByRole("heading", { name: "Use the invited account" })
+  ).toBeVisible()
+  await expect(
+    page.getByText("admin@example.com", { exact: true })
+  ).toBeVisible()
+  const addAccount = page.getByRole("link", { name: "Add account" })
+  await expect(addAccount).toHaveAttribute(
+    "href",
+    `/auth/sign-in?redirectTo=${encodeURIComponent(publicInvitationPath)}&add_account=1`
+  )
+  await addAccount.click()
+  await expect(page.getByText("Add account", { exact: true })).toBeVisible()
+  const createAdditionalAccount = page.getByRole("link", {
+    name: "Sign Up",
+  })
+  await expect(createAdditionalAccount).toHaveAttribute(
+    "href",
+    `/auth/sign-up?redirectTo=${encodeURIComponent(publicInvitationPath)}&add_account=1`
+  )
+  await createAdditionalAccount.click()
+  await expect(page.getByText("Create account", { exact: true })).toBeVisible()
+  await expect(page.getByRole("link", { name: /sign in/i })).toHaveAttribute(
+    "href",
+    `/auth/sign-in?redirectTo=${encodeURIComponent(publicInvitationPath)}&add_account=1`
+  )
+
+  await page.goto(publicInvitationPath)
+  await expect(
+    page.getByRole("heading", { name: "Use the invited account" })
+  ).toBeVisible()
+
+  await page.getByRole("button", { name: "Switch account" }).click()
+  const accountDialog = page.getByRole("dialog", { name: "Switch account" })
+  const invitedAccount = accountDialog
+    .getByText("new-user@example.com", { exact: true })
+    .locator("../..")
+  const switchResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/auth/multi-session/set-active") &&
+      response.request().method() === "POST"
+  )
+  await invitedAccount.getByRole("button", { name: "Switch" }).click()
+  expect((await switchResponse).ok()).toBeTruthy()
+
+  await expect
+    .poll(async () => {
+      const sessionCookie = (await context.cookies()).find(
+        ({ name }) => name === "e2e-session"
+      )
+      return sessionCookie?.value
+    })
+    .toBe("new-user")
+  await expect(
+    page.getByRole("heading", { name: "Join Alpha Operations" })
+  ).toBeVisible()
+  await expect(
+    page.getByText(
+      "admin@example.com invited new-user@example.com to this organization."
+    )
+  ).toBeVisible()
+
+  const acceptResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/auth/organization/accept-invitation") &&
+      response.request().method() === "POST"
+  )
+  await page.getByRole("button", { name: "Accept invitation" }).click()
+  const response = await acceptResponse
+  expect(response.ok()).toBeTruthy()
+  expect(response.request().postDataJSON()).toEqual({
+    invitationId: publicInvitationId,
+  })
+  await expect(page.getByText("Invitation accepted")).toBeVisible()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByText("Alpha Operations").first()).toBeVisible()
 })
 
 test("magic link登録から最初のorganizationとdashboardへ到達できる", async ({
@@ -111,6 +310,65 @@ test("dashboardからIssue作成とtenant切替を迷わず完了できる", asy
   await expect(page.getByText("Beta Support").first()).toBeVisible()
   await expect(page.getByText("Private Beta issue")).toBeVisible()
   await expect(page.getByText("Review tenant audit log")).toHaveCount(0)
+})
+
+test("organization slug route上でactive tenantを往復してshellを同期する", async ({
+  context,
+  page,
+}) => {
+  await useSession(context, "admin")
+  await page.goto("/organization/beta-support/members")
+
+  await expect(
+    page.getByRole("region", { name: "Switch to Beta Support" })
+  ).toBeVisible()
+  await openOrganizationSwitcher(page)
+  const activateBetaResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/organizations/org-b/activate") &&
+      response.request().method() === "POST"
+  )
+  await page.getByRole("menuitem", { name: "Beta Support" }).click()
+  expect((await activateBetaResponse).ok()).toBeTruthy()
+
+  await expect(page).toHaveURL(/\/organization\/beta-support\/members$/)
+  await expect(
+    page.getByRole("region", { name: "Switch to Beta Support" })
+  ).toHaveCount(0)
+  await expect(
+    page
+      .locator('[data-slot="console-header"]')
+      .getByText("Beta Support", { exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByText("Viewing another organization", { exact: true })
+  ).toHaveCount(0)
+
+  await openOrganizationSwitcher(page)
+  await expect(
+    page
+      .locator(
+        '[data-slot="dropdown-menu-trigger"][data-sidebar="menu-button"]'
+      )
+      .filter({ hasText: "Beta Support" })
+  ).toBeVisible()
+  const activateAlphaResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/organizations/org-a/activate") &&
+      response.request().method() === "POST"
+  )
+  await page.getByRole("menuitem", { name: "Alpha Operations" }).click()
+  expect((await activateAlphaResponse).ok()).toBeTruthy()
+
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/members$/)
+  await expect(
+    page
+      .locator('[data-slot="console-header"]')
+      .getByText("Alpha Operations", { exact: true })
+  ).toBeVisible()
+  await expect(
+    page.getByText("Viewing another organization", { exact: true })
+  ).toHaveCount(0)
 })
 
 test("tenant切替のserver errorは安全な詳細を示して再試行できる", async ({
@@ -265,7 +523,7 @@ test("member権限とtenant境界をAPIと画面の両方で拒否する", async
       invitationRequests.push(request.url())
     }
   })
-  await page.goto("/organization/org-b/settings")
+  await page.goto("/organization/beta-support/settings")
   await expect(
     page.getByRole("heading", { name: "Organization settings" })
   ).toBeVisible()
@@ -278,7 +536,7 @@ test("member権限とtenant境界をAPIと画面の両方で拒否する", async
     page.getByRole("button", { name: "Delete organization" })
   ).toHaveCount(0)
   await page.getByRole("link", { name: "View members" }).click()
-  await expect(page).toHaveURL(/\/organization\/org-b\/members$/)
+  await expect(page).toHaveURL(/\/organization\/beta-support\/members$/)
   await expect(
     page.getByRole("heading", { name: "Members", exact: true })
   ).toBeVisible()
@@ -306,7 +564,7 @@ test("member招待・role編集・削除とsession revokeを画面から完了�
     }
   )
   expect(invitationFaultResponse.status()).toBe(201)
-  await page.goto("/organization/org-a/members")
+  await page.goto("/organization/alpha-operations/members")
 
   await expect(
     page.getByRole("heading", { name: "Members", exact: true })
@@ -409,12 +667,121 @@ test("member招待・role編集・削除とsession revokeを画面から完了�
   await expect(page.getByText("iPhone (Safari)")).toHaveCount(0)
 })
 
+test("memberを検索・参加日順に並べ替え、招待を再送・復活できる", async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "desktop-chrome",
+    "横長tableの検索・sort・招待再送契約はdesktopで一度検証する"
+  )
+
+  await useSession(context, "admin")
+  await page.goto("/organization/alpha-operations/members")
+
+  const memberTable = page.getByRole("table", {
+    name: "Members of Alpha Operations",
+  })
+  await expect(memberTable).toBeVisible()
+  const kaiRow = memberTable.getByRole("row").filter({
+    hasText: "kai@example.com",
+  })
+  await expect(kaiRow).toContainText("Jul 3, 2026")
+
+  const memberSearch = page.getByRole("searchbox", {
+    name: "Search members by name or email",
+  })
+  await memberSearch.fill("kai@example.com")
+  await expect(kaiRow).toBeVisible()
+  await expect(
+    memberTable.getByText("Jordan Lee", { exact: true })
+  ).toHaveCount(0)
+  await expect(page.getByText("1 of 3 members", { exact: true })).toBeVisible()
+  await memberSearch.clear()
+
+  await memberTable.getByRole("button", { name: "Sort by joined" }).click()
+  await memberTable
+    .getByRole("button", {
+      name: "Sort by joined, currently ascending",
+    })
+    .click()
+  await expect
+    .poll(async () => memberTable.locator("tbody tr").allTextContents())
+    .toEqual([
+      expect.stringContaining("Kai Brooks"),
+      expect.stringContaining("Jordan Lee"),
+      expect.stringContaining("Admin User"),
+    ])
+
+  const invitationTable = page.getByRole("table", {
+    name: "Invitations for Alpha Operations",
+  })
+  await expect(invitationTable).toBeVisible()
+  const pendingRow = invitationTable.getByRole("row").filter({
+    hasText: "pending@example.com",
+  })
+  await expect(pendingRow).toContainText("Jul 14, 2026")
+  await expect(pendingRow).toContainText("Aug 14, 2026")
+  await expect(pendingRow).toContainText("Admin User")
+
+  const resendPendingResponse = page.waitForResponse(
+    (response) =>
+      response
+        .url()
+        .endsWith("/organizations/org-a/invitations/invitation-a-1/resend") &&
+      response.request().method() === "POST"
+  )
+  await pendingRow.getByRole("button", { name: "Resend" }).click()
+  expect(await (await resendPendingResponse).json()).toEqual(
+    expect.objectContaining({ delivery: "queued", revived: false })
+  )
+  await expect(page.getByText("Invitation email queued again")).toBeVisible()
+
+  const expiredRow = invitationTable.getByRole("row").filter({
+    hasText: "expired@example.com",
+  })
+  await expect(expiredRow).toContainText("Expired")
+  await expect(expiredRow).toContainText("Jul 10, 2026")
+  await expect(expiredRow).toContainText("Admin User")
+  const resendExpiredResponse = page.waitForResponse(
+    (response) =>
+      response
+        .url()
+        .endsWith(
+          "/organizations/org-a/invitations/invitation-expired/resend"
+        ) && response.request().method() === "POST"
+  )
+  await expiredRow.getByRole("button", { name: "Renew & resend" }).click()
+  expect(await (await resendExpiredResponse).json()).toEqual(
+    expect.objectContaining({
+      delivery: "queued",
+      invitation: expect.objectContaining({ status: "pending" }),
+      revived: true,
+    })
+  )
+  await expect(page.getByText("Invitation renewed and queued")).toBeVisible()
+  await expect(expiredRow).toContainText("Pending")
+  await expect(expiredRow).toContainText("Aug 14, 2026")
+})
+
 test("mobile sidebarを閉じて別accountへ安全に切り替えられる", async ({
   context,
   page,
 }) => {
   await useSession(context, "admin")
-  await page.goto("/dashboard")
+  await page.goto("/settings/organizations")
+  const organizationsTable = page.getByRole("table", {
+    name: "Organizations attached to your account",
+  })
+  await expect(
+    organizationsTable.getByText("Alpha Operations", { exact: true })
+  ).toBeVisible()
+  await expect(
+    organizationsTable.getByText("Beta Support", { exact: true })
+  ).toBeVisible()
+  await expect(
+    organizationsTable.getByText("Invitation Operations", { exact: true })
+  ).toBeVisible()
   await openMobileSidebar(page)
 
   await page
@@ -448,6 +815,13 @@ test("mobile sidebarを閉じて別accountへ安全に切り替えられる", as
 
   await expect(page).toHaveURL(/\/settings\/organizations$/)
   await expect(page.getByText("Create your first organization")).toBeVisible()
+  await expect(page.getByText("Alpha Operations", { exact: true })).toHaveCount(
+    0
+  )
+  await expect(page.getByText("Beta Support", { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByText("Invitation Operations", { exact: true })
+  ).toHaveCount(0)
   await openMobileSidebar(page)
   await expect(page.getByText("New User", { exact: true })).toBeVisible()
 })
@@ -624,7 +998,7 @@ test("Super Adminだけがorganizationを二重確認して即時削除できる
   expect(confirmationResponse.status()).toBe(400)
   expect(keyResponse.status()).toBe(400)
 
-  await page.goto("/organization/org-a/settings")
+  await page.goto("/organization/alpha-operations/settings")
   await expect(page.getByRole("heading", { name: "Danger zone" })).toBeVisible()
   await page.getByRole("button", { name: "Delete organization" }).click()
 
@@ -683,9 +1057,19 @@ test("Super Adminだけがorganizationを二重確認して即時削除できる
   )
   expect(replayResponse.status()).toBe(200)
   expect(await replayResponse.json()).toEqual(deletionReceipt)
-  expect(
-    await (await context.request.get(`${mockApiUrl}/organizations`)).json()
-  ).toEqual([expect.objectContaining({ id: "org-b", name: "Beta Support" })])
+  const remainingOrganizations = await (
+    await context.request.get(`${mockApiUrl}/organizations`)
+  ).json()
+  expect(remainingOrganizations).toHaveLength(2)
+  expect(remainingOrganizations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: "org-b", name: "Beta Support" }),
+      expect.objectContaining({
+        id: "org-invitations",
+        name: "Invitation Operations",
+      }),
+    ])
+  )
 })
 
 test("organization・member・invitation・session・一時faultを決定的に再現する", async ({
@@ -697,6 +1081,20 @@ test("organization・member・invitation・session・一時faultを決定的に�
   )
 
   await useSession(context, "admin")
+
+  const mismatchedInvitationResponse = await context.request.get(
+    `${mockApiUrl}/auth/organization/get-invitation?id=${publicInvitationId}`
+  )
+  expect(mismatchedInvitationResponse.status()).toBe(403)
+  expect(await mismatchedInvitationResponse.json()).toEqual(
+    expect.objectContaining({
+      code: "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
+    })
+  )
+  const invalidInvitationResponse = await context.request.get(
+    `${mockApiUrl}/auth/organization/get-invitation?id=missing-invitation`
+  )
+  expect(invalidInvitationResponse.status()).toBe(400)
 
   const todosResponse = await context.request.get(
     `${mockApiUrl}/todos?organizationId=org-a`
@@ -749,6 +1147,10 @@ test("organization・member・invitation・session・一時faultを決定的に�
           id: "invitation-admin-2",
           email: "browser-e2e@example.com",
           status: "pending",
+          inviter: expect.objectContaining({
+            id: "user-admin",
+            email: "admin@example.com",
+          }),
         }),
         expect.objectContaining({
           id: "invitation-admin-3",
@@ -792,12 +1194,42 @@ test("organization・member・invitation・session・一時faultを決定的に�
     )
   ).toBe(false)
 
+  const resendPendingResponse = await context.request.post(
+    `${mockApiUrl}/organizations/org-a/invitations/invitation-a-1/resend`
+  )
+  expect(await resendPendingResponse.json()).toEqual(
+    expect.objectContaining({
+      delivery: "queued",
+      invitation: expect.objectContaining({
+        id: "invitation-a-1",
+        inviter: expect.objectContaining({ email: "admin@example.com" }),
+        status: "pending",
+      }),
+      revived: false,
+    })
+  )
+
+  const reviveExpiredResponse = await context.request.post(
+    `${mockApiUrl}/organizations/org-a/invitations/invitation-expired/resend`
+  )
+  expect(await reviveExpiredResponse.json()).toEqual(
+    expect.objectContaining({
+      delivery: "queued",
+      invitation: expect.objectContaining({
+        expiresAt: "2026-08-14T09:00:00.000Z",
+        id: "invitation-expired",
+        status: "pending",
+      }),
+      revived: true,
+    })
+  )
+
   const cancelInvitationResponse = await context.request.delete(
     `${mockApiUrl}/organizations/org-a/invitations/invitation-admin-2`
   )
   expect(await cancelInvitationResponse.json()).toEqual({
     id: "invitation-admin-2",
-    status: "cancelled",
+    status: "canceled",
   })
 
   const sessionsResponse = await context.request.get(

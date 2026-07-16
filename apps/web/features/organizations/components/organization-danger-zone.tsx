@@ -259,7 +259,7 @@ export const OrganizationDangerZone = ({
         <LinkButton
           className="w-fit"
           variant="outline"
-          href={`/organization/${organization.id}/members`}
+          href={`/organization/${organization.slug}/members`}
         >
           Review members and ownership
         </LinkButton>
@@ -292,7 +292,7 @@ export const OrganizationDangerZone = ({
         <LinkButton
           className="w-fit"
           variant="outline"
-          href={`/organization/${organization.id}/members`}
+          href={`/organization/${organization.slug}/members`}
         >
           Transfer ownership
         </LinkButton>

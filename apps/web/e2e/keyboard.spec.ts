@@ -208,7 +208,7 @@ test("キーボードだけでmember管理・session revoke・passkey再認証�
     }
   )
   expect(delayResponse.status()).toBe(201)
-  await page.goto("/organization/org-a/members")
+  await page.goto("/organization/alpha-operations/members")
 
   const role = page.getByRole("combobox", { name: "Role for Kai Brooks" })
   await tabTo(page, role)
@@ -312,7 +312,7 @@ test("キーボードだけでorganizationの二重確認削除を完了でき�
   page,
 }) => {
   await useSession(context, "admin")
-  await page.goto("/organization/org-a/settings")
+  await page.goto("/organization/alpha-operations/settings")
   await activate(
     page,
     page.getByRole("button", { name: "Delete organization" })

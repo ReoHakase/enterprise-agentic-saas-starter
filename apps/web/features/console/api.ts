@@ -10,6 +10,7 @@ import {
   parseBulkInvitationResponse,
   parseInvitations,
   parseMembers,
+  parseResendInvitationResponse,
 } from "@/features/members/schema"
 import {
   parseOrganizationDeletionReceipt,
@@ -72,16 +73,21 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
   })
 
   return {
-    getMe: async () => parseMe(unwrap(await client.me.get())),
+    getMe: async (signal?: AbortSignal) =>
+      parseMe(unwrap(await client.me.get({ fetch: { signal } }))),
     updateMe: async (body: { name: string }) =>
       parseUserProfile(unwrap(await client.me.patch(body))),
-    listSessions: async () =>
-      parseUserSessions(unwrap(await client.me.sessions.get())),
+    listSessions: async (signal?: AbortSignal) =>
+      parseUserSessions(
+        unwrap(await client.me.sessions.get({ fetch: { signal } }))
+      ),
     revokeSession: async (sessionId: string) =>
       unwrap(await client.me.sessions({ sessionId }).delete()),
     revokeOtherSessions: async () => unwrap(await client.me.sessions.delete()),
-    listOrganizations: async () =>
-      parseOrganizations(unwrap(await client.organizations.get())),
+    listOrganizations: async (signal?: AbortSignal) =>
+      parseOrganizations(
+        unwrap(await client.organizations.get({ fetch: { signal } }))
+      ),
     createOrganization: async (body: {
       name: string
       slug: string
@@ -89,9 +95,13 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
     }) => parseOrganization(unwrap(await client.organizations.post(body))),
     activateOrganization: async (organizationId: string) =>
       unwrap(await client.organizations({ organizationId }).activate.post()),
-    getOrganization: async (organizationId: string) =>
+    getOrganization: async (organizationId: string, signal?: AbortSignal) =>
       parseOrganization(
-        unwrap(await client.organizations({ organizationId }).get())
+        unwrap(
+          await client
+            .organizations({ organizationId })
+            .get({ fetch: { signal } })
+        )
       ),
     updateOrganization: async (
       organizationId: string,
@@ -111,9 +121,13 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
       parseOrganizationDeletionReceipt(
         unwrap(await client.organizations({ organizationId }).delete(body))
       ),
-    listMembers: async (organizationId: string) =>
+    listMembers: async (organizationId: string, signal?: AbortSignal) =>
       parseMembers(
-        unwrap(await client.organizations({ organizationId }).members.get())
+        unwrap(
+          await client
+            .organizations({ organizationId })
+            .members.get({ fetch: { signal } })
+        )
       ),
     updateMemberRole: async (
       organizationId: string,
@@ -148,9 +162,13 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
           .members({ memberId })
           .delete({ confirmation })
       ),
-    listInvitations: async (organizationId: string) =>
+    listInvitations: async (organizationId: string, signal?: AbortSignal) =>
       parseInvitations(
-        unwrap(await client.organizations({ organizationId }).invitations.get())
+        unwrap(
+          await client
+            .organizations({ organizationId })
+            .invitations.get({ fetch: { signal } })
+        )
       ),
     createInvitations: async (
       organizationId: string,
@@ -170,6 +188,15 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
           .organizations({ organizationId })
           .invitations({ invitationId })
           .delete()
+      ),
+    resendInvitation: async (organizationId: string, invitationId: string) =>
+      parseResendInvitationResponse(
+        unwrap(
+          await client
+            .organizations({ organizationId })
+            .invitations({ invitationId })
+            .resend.post()
+        )
       ),
   }
 }

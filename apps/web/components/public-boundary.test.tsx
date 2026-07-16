@@ -121,7 +121,7 @@ describe("public route boundaries", () => {
       "p-6"
     )
     expect(status).toHaveAttribute("data-slot", "invitation-panel")
-    expect(status).toHaveClass("w-full", "max-w-md", "p-5")
+    expect(status).toHaveClass("w-full", "max-w-lg", "p-5")
     expect(status).toHaveAttribute("aria-busy", "true")
   })
 
@@ -137,7 +137,7 @@ describe("public route boundaries", () => {
       "invitation-frame"
     )
     expect(alert).toHaveAttribute("data-slot", "invitation-panel")
-    expect(alert).toHaveClass("w-full", "max-w-md", "p-5")
+    expect(alert).toHaveClass("w-full", "max-w-lg", "p-5")
     expect(
       screen.getByRole("heading", {
         level: 1,
@@ -154,7 +154,7 @@ describe("public route boundaries", () => {
   it.each([
     ["/auth/sign-up", "Loading authentication", "auth-frame"],
     [
-      "/organization/invitations/invitation-1",
+      "/invitations/invitation-1",
       "Loading organization invitation",
       "invitation-frame",
     ],
@@ -175,7 +175,7 @@ describe("public route boundaries", () => {
   it.each([
     ["/auth/sign-in", "Authentication could not be loaded", "auth-frame"],
     [
-      "/organization/invitations/invitation-1",
+      "/invitations/invitation-1",
       "Invitation could not be loaded",
       "invitation-frame",
     ],

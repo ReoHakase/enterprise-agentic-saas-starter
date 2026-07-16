@@ -73,6 +73,12 @@ describe("console Eden API", () => {
             status: "pending",
             organizationId: "org-acme",
             inviterId: "user-owner",
+            inviter: {
+              id: "user-owner",
+              name: "Owner",
+              email: "owner@example.com",
+              image: null,
+            },
             expiresAt: "2026-07-22T00:00:00.000Z",
             createdAt: "2026-07-15T00:00:00.000Z",
           },
@@ -83,6 +89,12 @@ describe("console Eden API", () => {
             status: "pending",
             organizationId: "org-acme",
             inviterId: "user-owner",
+            inviter: {
+              id: "user-owner",
+              name: "Owner",
+              email: "owner@example.com",
+              image: null,
+            },
             expiresAt: "2026-07-22T00:00:00.000Z",
             createdAt: "2026-07-15T00:00:00.000Z",
           },
@@ -115,6 +127,55 @@ describe("console Eden API", () => {
       emails: ["first@example.com", "second@example.com"],
       role: "member",
     })
+  })
+
+  it("queues an invitation resend through Eden and parses revival metadata", async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        invitation: {
+          id: "invitation-1",
+          email: "expired@example.com",
+          role: "member",
+          status: "pending",
+          organizationId: "org-acme",
+          inviterId: "user-owner",
+          inviter: {
+            id: "user-owner",
+            name: "Owner",
+            email: "owner@example.com",
+            image: null,
+          },
+          expiresAt: "2026-07-23T00:00:00.000Z",
+          createdAt: "2026-07-15T00:00:00.000Z",
+        },
+        delivery: "queued",
+        revived: true,
+      })
+    )
+    const api = createConsoleApi({ baseUrl: "https://api.example.test" })
+
+    await expect(
+      api.resendInvitation("org-acme", "invitation-1")
+    ).resolves.toMatchObject({ delivery: "queued", revived: true })
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const call = fetchMock.mock.calls[0]
+    if (!call) throw new Error("Expected an Eden request")
+    const request = requestFrom(...call)
+    expect(request.url).toBe(
+      "https://api.example.test/organizations/org-acme/invitations/invitation-1/resend"
+    )
+    expect(request.method).toBe("POST")
+  })
+
+  it("passes query cancellation through Eden to fetch", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json([]))
+    const api = createConsoleApi({ baseUrl: "https://api.example.test" })
+    const controller = new AbortController()
+
+    await api.listOrganizations(controller.signal)
+
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
   })
 
   it("maps typed Eden errors without losing safe field recovery data", async () => {

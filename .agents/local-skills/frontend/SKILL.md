@@ -47,6 +47,8 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
 - browserのGET/mutationはTanStack Queryのquery/mutationへ集約する。フォームはTanStack Formと`apps/web`内のValibot schemaを使い、field errorをinput直下、action失敗を安全なtoast/form errorに出す。Jotaiは選択中dialogなど再取得不要な一時UI状態だけに使い、server data cacheを複製しない。
 - bulk invitation formはTextareaへカンマまたは改行区切りで入力させ、Web-local Valibotでraw token 1〜20件、各254文字以下、email形式を検証してからtrim/lowercase/case-insensitive重複排除する。Edenへは`{ emails, role }`だけを渡し、batch responseもWeb-local schemaでparseする。409/429/step-upでは入力を保持し、field errorはTextarea直下、form errorはdialog内、成功はqueueされたunique件数をtoastで示す。
+- organization管理のbrowser URLはUUIDでなくslugを使う。Server Componentは`listOrganizations()`のmember-visible結果からslugを内部IDへ解決し、未所属/不存在slugは同じ404にする。API/query key/mutationは内部IDのまま保ち、sidebar、一覧、dashboard、slug更新後redirectはslug URLへ統一する。
+- invitation landingは未ログイン、recipient一致、recipient不一致、terminal/unavailable、一時的load errorを明示stateとして描画する。未ログインはsign-up/sign-inへ元URLを渡し、不一致ではaccept/rejectを隠してswitch/add accountを表示する。5xx/network/schema不一致をexpired/canceledと断定せず再試行を出す。詳細取得はBetter Auth clientだけを使い、Web-local Valibotでparseする。初回session判定後の詳細取得やaccept/reject中に401・session失効となった場合も未ログインstateへ遷移し、招待URLを認証後の戻り先として保持する。
 - Elysia errorはWeb-local Valibot schemaでparseし、成功した`ConsoleApiError`のpublic messageだけを信頼する。任意のJavaScript/Valibot/network errorや不正responseの`message`はUIへ出さず、操作別の固定fallbackへ変換する。
 - 5xxは復旧できる案内を主文にし、検証済みrequest IDがある場合だけreferenceとして添える。`fieldErrors`は一致するfieldだけをinvalidにし、入力変更でclearする。`aria-invalid`と`aria-describedby`を同期し、field外の失敗やstep-upを無関係なinputへ付けない。
 - mutation/formごとにerror表示ownerを一つ決め、global Query handlerとlocal handlerから二重toastしない。TanStack Queryのdefault retry/error policyは`QueryClient`生成時に設定し、observer mount後の`useEffect`でcache defaultを変更しない。
@@ -55,6 +57,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
 - SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。todoなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
 - active organization mutation成功時に`consoleKeys.all`を即invalidateすると、route遷移前の旧tenant queryが新session contextで再fetchされ409/404になる。旧queryはcancelだけして再fetchせず、organization routeのreplaceまたはRSC refreshで新tenant queryを構築する。
+- `(console)/layout`はorganization slug間のclient navigationで保持されるため、active organization切替後に`router.replace()` / `router.push()`だけを行うと、layoutへ渡した`me.organizations[].active`がstaleになる。切替成功時はconsoleだけでなくissue/commentを含む全tenant query familyをawaitしてcancelし、organization/me query cacheのactive表示を同期してからslug遷移し、全経路で`router.refresh()`して共有layoutのserver contextも更新する。GET queryはTanStack Queryの`AbortSignal`をEdenの`fetch.signal`へ渡し、旧tenant HTTP自体を中止できるようにする。
 - `activeOrganizationId = null` で複数membershipがある場合、`organizations[0]` をactive扱いしない。tenant data pageは `/settings/organizations` へ誘導し、sidebarは明示選択を表示する。switcherのno-op判定は選択target自身の `active === true` のときだけにする。
 - organization未所属ユーザーは `/onboarding` ではなく `/settings/organizations` に誘導する。org作成はorg一覧画面の作成formに集約し、auth必須ページのno-org guardも同じURLへredirectする。
 - Console sidebarはviewport固定（desktopはsticky `h-svh`、mobileはdrawer）を前提にし、page contentだけをscrollさせる。
@@ -69,6 +72,8 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - Auth画面は `apps/web/app/auth/[path]/page.tsx` のpage-level compositionで背景・ブランド・previewを作り、`components/auth/*` はBetter Auth UIのview componentとして保つ。passwordlessが主導線なので、サインインの見た目調整はまず `MagicLink` fallbackにも反映する。
 - SSRするcontrolled auth formは、React hydration前の入力がclient stateで消えないようserver snapshotではcontrolをdisabledにする。`useSyncExternalStore`のserver/client snapshotでhydration完了を判定し、`useEffect`のmount flagや固定delayを同期点にしない。
 - Authの `redirectTo` は先頭 `/` のlocal pathだけを許可し、`//`、backslash、encoded protocol-relative path、control characterをserver側で除外してからBetter Auth UIへ渡す。
+- user向け日時はbrowserのlocal timezoneで表示する。SSR/hydration差を避けるため初期HTMLは明示したUTC formatterで安定化し、mount後にlocal formatterへ更新する。UTC固定のまま`Joined` / `Created` / `Expires`とだけ表示しない。
+- members pageのmembers/invitationsはserverで同時取得してTanStack Queryの`initialData`へ渡す。route skeletonからready tableへ進んだ後に、clientだけ7remのloaderを挟んで再度大きくlayout shiftさせない。権限がなくqueryをdisabledにする場合は空配列を実データとして表示せず、section自体を隠すかaccess-limited stateにする。
 - shadcn preset/registry commandはframeworkを検出できる `apps/web` から実行する。`packages/ui` の `components.json` 相当設定は `apps/web/components.json` が共有packageのalias/CSSへ向けるため、`packages/ui` 直下からpreset applyしない。
 - `packages/ui/src/styles/globals.css` からworkspace appをscanする `@source` は `../../../../apps/**/*.{ts,tsx}`。`packages/apps` を指す `../../../apps` にしない。
 - TanStack Tableを使うissue/member等のpage-level compositionは `apps/web` に置き、`packages/ui` はTable、Dialog、Select等のprimitiveに留める。assignee selectorはmember APIの表示名/emailを候補にし、member/user idの手入力UIを作らない。
@@ -79,6 +84,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - 大きいpageのheader actionを安定化するときは、render内でComponentTypeを作らない。actionが独立stateを持てる場合はmodule-level componentへ切り出し、organization作成formの入力で一覧table全体を再renderさせない。単なるJSX移動をperformance改善とみなさず、state所有範囲が縮む境界を選ぶ。
 - Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
 - OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
+- Next 16の`proxy.ts`はNode runtimeとしてbuildされ、OpenNext Cloudflare 1.20では拒否される。旧URL互換の軽量redirectをWorkersへ載せる場合はEdge `middleware.ts`を使い、Nextの非推奨警告だけで`proxy.ts`へ機械的に移さず`build:cloudflare`で実adapterを確認する。
 - API Workerの`ATTACHMENTS` R2 bindingにはまだupload/download endpointがないが、organization削除後のtenant prefix cleanupでは使用する。添付UIを提供済みとdocumentせず、削除機能を有効にする環境ではbindingを外さない。
 - Elysia Cloudflare adapterはexperimentalなので、Bun runtimeのunit testだけでproduction互換と判断しない。
 

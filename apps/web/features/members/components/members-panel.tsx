@@ -37,12 +37,14 @@ type MemberMutationInput =
   | { type: "invite"; emails: string[]; role: "admin" | "member" }
   | { type: "remove"; memberId: string; confirmation: string }
   | { type: "cancel-invitation"; invitationId: string }
+  | { type: "resend-invitation"; invitationId: string }
 
 type MemberMutationOutcome =
   | { type: "invite"; queuedCount: number }
   | {
       type: "role" | "transfer" | "remove" | "cancel-invitation"
     }
+  | { type: "resend-invitation"; revived: boolean }
 
 type MembersPanelProps = {
   organization: OrganizationDetail
@@ -87,6 +89,13 @@ const runMemberMutation = async (
     )
     return { type: "remove" }
   }
+  if (input.type === "resend-invitation") {
+    const result = await browserConsoleApi.resendInvitation(
+      organizationId,
+      input.invitationId
+    )
+    return { type: "resend-invitation", revived: result.revived }
+  }
   await browserConsoleApi.cancelInvitation(organizationId, input.invitationId)
   return { type: "cancel-invitation" }
 }
@@ -97,6 +106,11 @@ const mutationSuccessMessage = (outcome: MemberMutationOutcome) => {
   }
   if (outcome.type === "cancel-invitation") {
     return "Invitation canceled"
+  }
+  if (outcome.type === "resend-invitation") {
+    return outcome.revived
+      ? "Invitation renewed and queued"
+      : "Invitation email queued again"
   }
   if (outcome.type === "remove") {
     return "Member removed"
@@ -151,7 +165,13 @@ export const MembersPanel = ({
         input.type !== "remove" &&
         input.type !== "transfer"
       ) {
-        showConsoleApiErrorToast(error, "The member update failed.")
+        const fallback =
+          input.type === "resend-invitation"
+            ? "The invitation could not be resent."
+            : input.type === "cancel-invitation"
+              ? "The invitation could not be canceled."
+              : "The member update failed."
+        showConsoleApiErrorToast(error, fallback)
       }
     },
     []
@@ -184,6 +204,7 @@ export const MembersPanel = ({
     isPending: mutationPending,
     mutate: mutateMember,
     mutateAsync: mutateMemberAsync,
+    variables: mutationVariables,
   } = memberMutation
   const inviteMember = useCallback(
     (value: BulkInvitationInput) =>
@@ -213,6 +234,20 @@ export const MembersPanel = ({
       mutateMember({ type: "cancel-invitation", invitationId }),
     [mutateMember]
   )
+  const resendInvitation = useCallback(
+    (invitation: OrganizationInvitation) =>
+      mutateMember({
+        type: "resend-invitation",
+        invitationId: invitation.id,
+      }),
+    [mutateMember]
+  )
+  const busyInvitationId =
+    mutationPending &&
+    (mutationVariables?.type === "cancel-invitation" ||
+      mutationVariables?.type === "resend-invitation")
+      ? mutationVariables.invitationId
+      : undefined
   const requestMemberRemoval = useCallback(
     (member: OrganizationMember) => setPendingMemberRemoval(member),
     []
@@ -282,15 +317,22 @@ export const MembersPanel = ({
         />
       </section>
 
-      <InvitationsSection
-        invitations={invitations}
-        pending={invitationsPending}
-        error={invitationsError}
-        canCancel={canManageMembers}
-        mutationPending={mutationPending}
-        onCancel={cancelInvitation}
-        onRetry={onRetryInvitations}
-      />
+      {canInvite ? (
+        <InvitationsSection
+          organizationName={organization.name}
+          invitations={invitations}
+          pending={invitationsPending}
+          error={invitationsError}
+          canCancel={canManageMembers}
+          canResend={canManageMembers}
+          canResendAdmins={canManageRoles}
+          mutationPending={mutationPending}
+          busyInvitationId={busyInvitationId}
+          onCancel={cancelInvitation}
+          onResend={resendInvitation}
+          onRetry={onRetryInvitations}
+        />
+      ) : null}
 
       {pendingSuperAdminTransfer ? (
         <MemberConfirmationDialog

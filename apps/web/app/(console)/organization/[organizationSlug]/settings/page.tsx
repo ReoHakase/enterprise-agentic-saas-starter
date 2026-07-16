@@ -1,21 +1,46 @@
 import { ShieldAlertIcon } from "lucide-react"
+import { notFound } from "next/navigation"
 
 import { AppState } from "@/components/app-state"
 import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
+import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
 import { OrganizationSettingsForm } from "@/features/organizations/components/organization-settings-form"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type OrganizationSettingsPageProps = {
-  params: Promise<{ organizationId: string }>
+  params: Promise<{ organizationSlug: string }>
 }
 
 export default async function OrganizationSettingsPage({
   params,
 }: OrganizationSettingsPageProps) {
-  const { organizationId } = await params
+  const { organizationSlug } = await params
   const api = await createServerConsoleApi()
-  const organization = await api.getOrganization(organizationId)
+  const organizations = await api.listOrganizations()
+  const organizationSummary = organizations.find(
+    (organization) => organization.slug === organizationSlug
+  )
+
+  if (!organizationSummary) {
+    notFound()
+  }
+
+  if (!organizationSummary.active) {
+    return (
+      <PageShell
+        title="Organization settings"
+        description={`Manage identity and sensitive controls for ${organizationSummary.name}.`}
+      >
+        <OrganizationActivationGate
+          organizationId={organizationSummary.id}
+          organizationName={organizationSummary.name}
+        />
+      </PageShell>
+    )
+  }
+
+  const organization = await api.getOrganization(organizationSummary.id)
 
   if (!organization.permissions.canEditOrganization) {
     return (
@@ -31,7 +56,7 @@ export default async function OrganizationSettingsPage({
         >
           <LinkButton
             variant="outline"
-            href={`/organization/${organizationId}/members`}
+            href={`/organization/${organization.slug}/members`}
           >
             View members
           </LinkButton>

@@ -18,26 +18,28 @@ export const consoleKeys = {
 export const meQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.me(),
-    queryFn: browserConsoleApi.getMe,
+    queryFn: ({ signal }) => browserConsoleApi.getMe(signal),
   })
 
 export const organizationsQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.organizations(),
-    queryFn: browserConsoleApi.listOrganizations,
+    queryFn: ({ signal }) => browserConsoleApi.listOrganizations(signal),
   })
 
 export const organizationQueryOptions = (organizationId: string) =>
   queryOptions({
     queryKey: consoleKeys.organization(organizationId),
-    queryFn: () => browserConsoleApi.getOrganization(organizationId),
+    queryFn: ({ signal }) =>
+      browserConsoleApi.getOrganization(organizationId, signal),
     enabled: organizationId.length > 0,
   })
 
 export const membersQueryOptions = (organizationId: string) =>
   queryOptions({
     queryKey: consoleKeys.members(organizationId),
-    queryFn: () => browserConsoleApi.listMembers(organizationId),
+    queryFn: ({ signal }) =>
+      browserConsoleApi.listMembers(organizationId, signal),
     enabled: organizationId.length > 0,
   })
 
@@ -47,12 +49,13 @@ export const invitationsQueryOptions = (
 ) =>
   queryOptions({
     queryKey: consoleKeys.invitations(organizationId),
-    queryFn: () => browserConsoleApi.listInvitations(organizationId),
+    queryFn: ({ signal }) =>
+      browserConsoleApi.listInvitations(organizationId, signal),
     enabled: organizationId.length > 0 && enabled,
   })
 
 export const sessionsQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.sessions(),
-    queryFn: browserConsoleApi.listSessions,
+    queryFn: ({ signal }) => browserConsoleApi.listSessions(signal),
   })

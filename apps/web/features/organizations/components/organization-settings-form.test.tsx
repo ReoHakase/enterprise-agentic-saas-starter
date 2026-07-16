@@ -10,6 +10,7 @@ import { OrganizationSettingsForm } from "./organization-settings-form"
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn<() => void>(),
+  replace: vi.fn<(href: string) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   updateOrganization:
     vi.fn<(organizationId: string, input: unknown) => Promise<unknown>>(),
@@ -20,7 +21,7 @@ vi.mock("@/lib/browser/console-api", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),
 }))
 
 vi.mock("sonner", () => ({
@@ -122,5 +123,26 @@ describe("OrganizationSettingsForm", () => {
     expect(slug).not.toHaveAccessibleDescription(
       /This slug is already in use\./u
     )
+  })
+
+  it("replaces the settings URL after a slug change", async () => {
+    const actor = userEvent.setup()
+    mocks.updateOrganization.mockResolvedValueOnce({
+      ...organization,
+      slug: "acme-operations",
+    })
+    renderSettings()
+
+    const slug = screen.getByLabelText("Slug")
+    await actor.clear(slug)
+    await actor.type(slug, "acme-operations")
+    await actor.click(screen.getByRole("button", { name: "Save changes" }))
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith(
+        "/organization/acme-operations/settings"
+      )
+    })
+    expect(mocks.refresh).toHaveBeenCalledOnce()
   })
 })

@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 import { Auth } from "@/components/auth/auth"
+import { AuthRouteScope } from "@/components/auth/auth-route-scope"
 import { AuthRouteFrame } from "@/components/public-route-frame"
 import { sanitizeAuthRedirectTo } from "@/lib/auth/redirect-to"
 
@@ -28,9 +29,9 @@ export default async function AuthPage({
   const requestedRedirect = Array.isArray(query.redirectTo)
     ? query.redirectTo[0]
     : query.redirectTo
+  const safeRedirect = sanitizeAuthRedirectTo(requestedRedirect)
 
   if (requestedRedirect) {
-    const safeRedirect = sanitizeAuthRedirectTo(requestedRedirect)
     if (safeRedirect !== requestedRedirect) {
       const safeQuery = new URLSearchParams({ redirectTo: safeRedirect })
       if (addingAccount) {
@@ -76,7 +77,13 @@ export default async function AuthPage({
 
   return (
     <AuthRouteFrame status={status}>
-      <Auth className="w-full max-w-none" path={path} />
+      <AuthRouteScope
+        addingAccount={addingAccount}
+        reauthenticating={reauthenticating}
+        redirectTo={safeRedirect}
+      >
+        <Auth className="w-full max-w-none" path={path} />
+      </AuthRouteScope>
     </AuthRouteFrame>
   )
 }
