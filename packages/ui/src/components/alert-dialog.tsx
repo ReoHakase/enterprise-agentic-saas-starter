@@ -5,6 +5,8 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import * as React from "react"
 
+const alertDialogCloseRender = <AlertDialogPrimitive.Close />
+
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
 }
@@ -161,10 +163,12 @@ function AlertDialogCancel({
 }: AlertDialogPrimitive.Close.Props &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
   return (
-    <AlertDialogPrimitive.Close
+    <Button
       data-slot="alert-dialog-cancel"
       className={cn(className)}
-      render={<Button variant={variant} size={size} />}
+      variant={variant}
+      size={size}
+      render={alertDialogCloseRender}
       {...props}
     />
   )

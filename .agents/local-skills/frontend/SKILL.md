@@ -71,6 +71,9 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - shadcn preset/registry commandはframeworkを検出できる `apps/web` から実行する。`packages/ui` の `components.json` 相当設定は `apps/web/components.json` が共有packageのalias/CSSへ向けるため、`packages/ui` 直下からpreset applyしない。
 - `packages/ui/src/styles/globals.css` からworkspace appをscanする `@source` は `../../../../apps/**/*.{ts,tsx}`。`packages/apps` を指す `../../../apps` にしない。
 - TanStack Tableを使うissue/member等のpage-level compositionは `apps/web` に置き、`packages/ui` はTable、Dialog、Select等のprimitiveに留める。assignee selectorはmember APIの表示名/emailを候補にし、member/user idの手入力UIを作らない。
+- Reactを使うWeb/UI/Email packageではreact-perfの`jsx-no-jsx-as-prop`、`jsx-no-new-array-as-prop`、`jsx-no-new-function-as-prop`、`jsx-no-new-object-as-prop`をすべて`error`にする。disableやrender内local const、根拠のない`useMemo`で隠さず、static element、直接anchor、children/compound component、state ownerの分割で解消する。
+- Base UIの`render`へmodule-static elementを渡す場合、element自身のpropsがcall-site propsより後勝ちになる。動的`href`へplaceholder URL付き`<Link>`を使うと全遷移先を上書きするため禁止する。直接`LinkButton`を使うか、`href`を持たないmodule-static bridge elementで受け、実DOMの`href`と未知prop非流出をinteraction testで固定する。
+- 大きいpageのheader actionを安定化するときは、render内でComponentTypeを作らない。actionが独立stateを持てる場合はmodule-level componentへ切り出し、organization作成formの入力で一覧table全体を再renderさせない。単なるJSX移動をperformance改善とみなさず、state所有範囲が縮む境界を選ぶ。
 - Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
 - OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
 - API Workerの`ATTACHMENTS` R2 bindingにはまだupload/download endpointがないが、organization削除後のtenant prefix cleanupでは使用する。添付UIを提供済みとdocumentせず、削除機能を有効にする環境ではbindingを外さない。

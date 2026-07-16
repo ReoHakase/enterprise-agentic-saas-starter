@@ -53,6 +53,8 @@ const invitationDefaultValues: InvitationFormValues = {
   role: "member",
 }
 
+const inviteMemberTrigger = <Button className="w-full sm:w-auto" />
+
 const selectSubmitState = (state: {
   canSubmit: boolean
   isSubmitting: boolean
@@ -134,9 +136,7 @@ export const InviteMemberDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={<Button className="w-full sm:w-auto" disabled={pending} />}
-      >
+      <DialogTrigger render={inviteMemberTrigger} disabled={pending}>
         <MailPlusIcon data-icon="inline-start" aria-hidden="true" />
         Invite members
       </DialogTrigger>

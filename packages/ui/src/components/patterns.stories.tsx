@@ -45,6 +45,7 @@ const members = [
   { name: "Jordan Lee", email: "jordan@example.com", role: "Admin" },
   { name: "Kai Brooks", email: "kai@example.com", role: "Member" },
 ]
+const dialogTriggerButtonRender = <Button />
 
 const SidebarPattern = () => (
   <div className="h-136 w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border">
@@ -157,7 +158,9 @@ const MembersPattern = ({
           </p>
         </div>
         <Dialog>
-          <DialogTrigger render={<Button />}>Invite member</DialogTrigger>
+          <DialogTrigger render={dialogTriggerButtonRender}>
+            Invite member
+          </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
               <DialogHeader>

@@ -66,7 +66,15 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { ConsoleFrame } from "@/components/console-frame"
+import {
+  ConsoleFrame,
+  ConsoleFrameContent,
+  ConsoleFrameHeader,
+} from "@/components/console-frame"
+import {
+  DropdownMenuLinkItem,
+  SidebarMenuLinkButton,
+} from "@/components/navigation-link"
 import { UserAvatar } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
@@ -98,6 +106,13 @@ const accountNavigation: NavigationItem[] = [
   },
   { href: "/settings/account", label: "Account", icon: UserCircleIcon },
 ]
+
+const enterpriseHomeLink = <Link href="/dashboard" />
+const organizationSwitcherTrigger = (
+  <SidebarMenuButton size="lg" tooltip="Switch organization" />
+)
+const themeSelectorTrigger = <Button variant="ghost" size="icon-sm" />
+const userMenuTrigger = <SidebarMenuButton size="lg" tooltip="Account menu" />
 
 export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
   const router = useRouter()
@@ -173,7 +188,7 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
               <SidebarMenuButton
                 size="lg"
                 tooltip="Enterprise SaaS"
-                render={<Link href="/dashboard" />}
+                render={enterpriseHomeLink}
               >
                 <span className="flex aspect-square size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
                   <BlocksIcon aria-hidden="true" />
@@ -202,7 +217,7 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
         <SidebarSeparator />
 
         <SidebarContent>
-          <Suspense fallback={<NavigationFallback />}>
+          <Suspense fallback={navigationFallback}>
             <ConsoleNavigation activeOrganization={contextOrganization} />
           </Suspense>
         </SidebarContent>
@@ -217,36 +232,34 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
         <SidebarRail />
       </Sidebar>
 
-      <ConsoleFrame
-        contentRef={contentRef}
-        header={
-          <>
-            <SidebarTrigger className="-ml-1" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {contextOrganization?.name ?? "Choose an organization"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {contextOrganization
-                  ? `${contextOrganization.memberCount} members`
-                  : me.organizations.length > 0
-                    ? "Select a workspace to continue"
-                    : "Create your first workspace to continue"}
-              </p>
-            </div>
-            {hasOrganizationContextMismatch ? (
-              <Badge variant="outline">Viewing another organization</Badge>
-            ) : null}
-            {contextOrganization ? (
-              <Badge variant="secondary">
-                {roleLabel(contextOrganization.role)}
-              </Badge>
-            ) : null}
-            <ThemeSelector />
-          </>
-        }
-      >
-        {children}
+      <ConsoleFrame>
+        <ConsoleFrameHeader>
+          <SidebarTrigger className="-ml-1" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">
+              {contextOrganization?.name ?? "Choose an organization"}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {contextOrganization
+                ? `${contextOrganization.memberCount} members`
+                : me.organizations.length > 0
+                  ? "Select a workspace to continue"
+                  : "Create your first workspace to continue"}
+            </p>
+          </div>
+          {hasOrganizationContextMismatch ? (
+            <Badge variant="outline">Viewing another organization</Badge>
+          ) : null}
+          {contextOrganization ? (
+            <Badge variant="secondary">
+              {roleLabel(contextOrganization.role)}
+            </Badge>
+          ) : null}
+          <ThemeSelector />
+        </ConsoleFrameHeader>
+        <ConsoleFrameContent contentRef={contentRef}>
+          {children}
+        </ConsoleFrameContent>
       </ConsoleFrame>
 
       <AccountSwitcherDialog
@@ -335,6 +348,8 @@ const NavigationFallback = () => (
     </SidebarGroupContent>
   </SidebarGroup>
 )
+
+const navigationFallback = <NavigationFallback />
 
 const ConsoleNavigation = ({
   activeOrganization,
@@ -432,15 +447,15 @@ const NavigationMenuItem = ({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton
+      <SidebarMenuLinkButton
         isActive={active}
         tooltip={item.label}
-        render={<Link href={item.href} />}
+        href={item.href}
         onClick={handleNavigate}
       >
         <Icon aria-hidden="true" />
         <span>{item.label}</span>
-      </SidebarMenuButton>
+      </SidebarMenuLinkButton>
     </SidebarMenuItem>
   )
 }
@@ -470,7 +485,7 @@ const OrganizationSwitcher = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<SidebarMenuButton size="lg" tooltip="Switch organization" />}
+        render={organizationSwitcherTrigger}
         disabled={pending}
       >
         <span className="flex aspect-square size-8 items-center justify-center rounded-xl border bg-background">
@@ -511,10 +526,10 @@ const OrganizationSwitcher = ({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href="/settings/organizations" />}>
+          <DropdownMenuLinkItem href="/settings/organizations">
             <PlusIcon aria-hidden="true" />
             Create organization
-          </DropdownMenuItem>
+          </DropdownMenuLinkItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -559,7 +574,7 @@ const ThemeSelector = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" />}
+        render={themeSelectorTrigger}
         aria-label="Choose color theme"
       >
         {displayTheme === "dark" ? <MoonIcon aria-hidden="true" /> : null}
@@ -601,9 +616,7 @@ const UserMenu = ({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<SidebarMenuButton size="lg" tooltip="Account menu" />}
-      >
+      <DropdownMenuTrigger render={userMenuTrigger}>
         <UserAvatar user={user} className="size-8 rounded-xl" />
         <span className="grid min-w-0 flex-1 text-left">
           <span className="truncate font-medium">{user.name}</span>
@@ -620,23 +633,21 @@ const UserMenu = ({
             <CircleUserRoundIcon aria-hidden="true" />
             Switch account
           </DropdownMenuItem>
-          <DropdownMenuItem
-            render={<Link href="/auth/sign-in?add_account=1" />}
-          >
+          <DropdownMenuLinkItem href="/auth/sign-in?add_account=1">
             <PlusIcon aria-hidden="true" />
             Add account
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href="/settings/account" />}>
+          </DropdownMenuLinkItem>
+          <DropdownMenuLinkItem href="/settings/account">
             <SettingsIcon aria-hidden="true" />
             Account settings
-          </DropdownMenuItem>
+          </DropdownMenuLinkItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href="/auth/sign-out" />}>
+          <DropdownMenuLinkItem href="/auth/sign-out">
             <LogOutIcon aria-hidden="true" />
             Sign out
-          </DropdownMenuItem>
+          </DropdownMenuLinkItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

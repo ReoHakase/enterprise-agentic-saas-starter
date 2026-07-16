@@ -1,8 +1,7 @@
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { ShieldAlertIcon } from "lucide-react"
-import Link from "next/link"
 
 import { AppState } from "@/components/app-state"
+import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
 import { OrganizationSettingsForm } from "@/features/organizations/components/organization-settings-form"
 import { createServerConsoleApi } from "@/lib/server/console-api"
@@ -29,16 +28,14 @@ export default async function OrganizationSettingsPage({
           icon={ShieldAlertIcon}
           title="You cannot edit this organization"
           description="Your current role can view members but cannot change organization identity or sensitive settings."
-          actions={
-            <Button
-              nativeButton={false}
-              variant="outline"
-              render={<Link href={`/organization/${organizationId}/members`} />}
-            >
-              View members
-            </Button>
-          }
-        />
+        >
+          <LinkButton
+            variant="outline"
+            href={`/organization/${organizationId}/members`}
+          >
+            View members
+          </LinkButton>
+        </AppState>
       </PageShell>
     )
   }

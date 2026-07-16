@@ -54,6 +54,8 @@ import type {
   IssueUpdate,
 } from "./types"
 
+const issueActionsTrigger = <Button variant="ghost" size="icon-sm" />
+
 export const SortableIssueHeader = ({
   column,
   label,
@@ -138,7 +140,7 @@ export const IssueActionsCell = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" />}
+        render={issueActionsTrigger}
         disabled={busy}
         aria-label={`Actions for ${issue.title}`}
       >

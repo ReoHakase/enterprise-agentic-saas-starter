@@ -1,5 +1,4 @@
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
   CardAction,
@@ -22,6 +21,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
+import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
@@ -62,12 +62,7 @@ export default async function DashboardPage() {
     <PageShell
       title="Overview"
       description={`Everything your team needs to operate ${activeOrganization.name}.`}
-      actions={
-        <Button nativeButton={false} render={<Link href="/dashboard/todos" />}>
-          <ListTodoIcon data-icon="inline-start" aria-hidden="true" />
-          View issues
-        </Button>
-      }
+      action={DashboardHeaderAction}
     >
       <div className="flex flex-col gap-5">
         <Card>
@@ -88,24 +83,17 @@ export default async function DashboardPage() {
             </p>
           </CardContent>
           <CardFooter className="flex-wrap gap-2 border-t">
-            <Button
-              nativeButton={false}
+            <LinkButton
               variant="outline"
-              render={
-                <Link href={`/organization/${activeOrganization.id}/members`} />
-              }
+              href={`/organization/${activeOrganization.id}/members`}
             >
               <UsersRoundIcon data-icon="inline-start" aria-hidden="true" />
               Manage members
-            </Button>
-            <Button
-              nativeButton={false}
-              variant="ghost"
-              render={<Link href="/settings/organizations" />}
-            >
+            </LinkButton>
+            <LinkButton variant="ghost" href="/settings/organizations">
               <Building2Icon data-icon="inline-start" aria-hidden="true" />
               Organization directory
-            </Button>
+            </LinkButton>
           </CardFooter>
         </Card>
 
@@ -204,6 +192,13 @@ export default async function DashboardPage() {
     </PageShell>
   )
 }
+
+const DashboardHeaderAction = () => (
+  <LinkButton href="/dashboard/todos">
+    <ListTodoIcon data-icon="inline-start" aria-hidden="true" />
+    View issues
+  </LinkButton>
+)
 
 const MetricCard = ({
   title,

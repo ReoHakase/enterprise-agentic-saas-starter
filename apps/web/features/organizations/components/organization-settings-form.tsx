@@ -10,12 +10,12 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Building2Icon } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field"
+import { LinkButton } from "@/components/link-button"
 import { consoleKeys } from "@/features/console/queries"
 import { OrganizationDangerZone } from "@/features/organizations/components/organization-danger-zone"
 import {
@@ -184,13 +184,9 @@ export const OrganizationSettingsForm = ({
           ) : null}
         </FieldGroup>
         <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t bg-background py-4">
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            render={<Link href="/settings/organizations" />}
-          >
+          <LinkButton variant="ghost" href="/settings/organizations">
             Back to organizations
-          </Button>
+          </LinkButton>
           <form.Subscribe selector={selectSubmitState}>
             {renderSubmitButton}
           </form.Subscribe>

@@ -28,6 +28,10 @@ import { useCallback } from "react"
 import type { OrganizationInvitation } from "@/features/members/schema"
 import { roleLabel } from "@/features/organizations/schema"
 
+const cancelInvitationTrigger = (
+  <Button className="w-full sm:w-auto" variant="outline" size="sm" />
+)
+
 export const InvitationsSection = ({
   invitations,
   pending,
@@ -140,16 +144,7 @@ const CancelInvitationButton = ({
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger
-        render={
-          <Button
-            className="w-full sm:w-auto"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-          />
-        }
-      >
+      <AlertDialogTrigger render={cancelInvitationTrigger} disabled={disabled}>
         Cancel
       </AlertDialogTrigger>
       <AlertDialogContent>

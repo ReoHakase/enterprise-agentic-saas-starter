@@ -5,9 +5,11 @@ import { ConsoleShellSkeleton } from "@/components/console-boundary"
 import { ConsoleShell } from "@/components/console-shell"
 import { getConsoleContext } from "@/lib/server/console-context"
 
+const consoleShellFallback = <ConsoleShellSkeleton />
+
 export default function ConsoleLayout({ children }: { children: ReactNode }) {
   return (
-    <Suspense fallback={<ConsoleShellSkeleton />}>
+    <Suspense fallback={consoleShellFallback}>
       <ConsoleLayoutContext>{children}</ConsoleLayoutContext>
     </Suspense>
   )

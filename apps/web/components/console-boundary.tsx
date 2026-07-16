@@ -26,8 +26,16 @@ import {
   RouteLoading,
   type RouteLoadingVariant,
 } from "@/components/app-state"
-import { ConsoleFrame } from "@/components/console-frame"
-import { PageHeader } from "@/components/page-shell"
+import {
+  ConsoleFrame,
+  ConsoleFrameContent,
+  ConsoleFrameHeader,
+} from "@/components/console-frame"
+import {
+  PageHeader,
+  PageHeaderCopy,
+  PageHeaderDescription,
+} from "@/components/page-shell"
 import { useBoundaryRetry } from "@/hooks/use-boundary-retry"
 
 type ConsoleBoundaryState = "error" | "loading"
@@ -72,12 +80,6 @@ export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)
   const retry = useBoundaryRetry(reset)
-  const retryButton = (
-    <Button onClick={retry}>
-      <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-      Try again
-    </Button>
-  )
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true })
@@ -92,8 +94,8 @@ export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
       aria-live="assertive"
       role="alert"
     >
-      <PageHeader
-        heading={
+      <PageHeader>
+        <PageHeaderCopy>
           <h1
             ref={headingRef}
             id={headingId}
@@ -102,26 +104,38 @@ export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
           >
             {presentation.title}
           </h1>
-        }
-        description={
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            {presentation.description}
-          </p>
-        }
-        actions={presentation.showAction ? retryButton : null}
-      />
+          <PageHeaderDescription>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              {presentation.description}
+            </p>
+          </PageHeaderDescription>
+        </PageHeaderCopy>
+        {presentation.showAction ? (
+          <BoundaryRetryButton onRetry={retry} />
+        ) : null}
+      </PageHeader>
       <div data-slot="page-body">
         <AppState
           className="min-h-[min(32rem,60svh)] p-0"
           icon={TriangleAlertIcon}
           title="The workspace is temporarily unavailable"
           description="Try the request again. If the problem continues, wait a moment before retrying."
-          actions={presentation.showAction ? undefined : retryButton}
-        />
+        >
+          {presentation.showAction ? null : (
+            <BoundaryRetryButton onRetry={retry} />
+          )}
+        </AppState>
       </div>
     </section>
   )
 }
+
+const BoundaryRetryButton = ({ onRetry }: { onRetry: () => void }) => (
+  <Button onClick={onRetry}>
+    <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
+    Try again
+  </Button>
+)
 
 export const getConsoleErrorPresentation = (
   pathname: string
@@ -241,9 +255,16 @@ const ConsoleBoundaryShell = ({
 }: ConsoleBoundaryShellProps) => (
   <SidebarProvider data-console-shell="true" data-boundary-state={state}>
     <ConsoleSidebarSkeleton />
-    <ConsoleFrame header={<ConsoleHeaderSkeleton />}>{children}</ConsoleFrame>
+    <ConsoleFrame>
+      <ConsoleFrameHeader>
+        <ConsoleHeaderSkeleton />
+      </ConsoleFrameHeader>
+      <ConsoleFrameContent>{children}</ConsoleFrameContent>
+    </ConsoleFrame>
   </SidebarProvider>
 )
+
+const sidebarSkeletonRender = <div />
 
 const ConsoleHeaderSkeleton = () => (
   <div className="contents" aria-hidden="true">
@@ -286,7 +307,7 @@ const ConsoleSidebarSkeleton = () => (
 
 const SidebarIdentitySkeleton = () => (
   <SidebarMenuItem>
-    <SidebarMenuButton size="lg" render={<div />}>
+    <SidebarMenuButton size="lg" render={sidebarSkeletonRender}>
       <Skeleton className="size-8 shrink-0 rounded-xl" />
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <Skeleton className="h-4 w-32 max-w-full" />
@@ -314,7 +335,7 @@ const SidebarNavigationRowSkeleton = ({
   textClassName: string
 }) => (
   <SidebarMenuItem>
-    <SidebarMenuButton render={<div />}>
+    <SidebarMenuButton render={sidebarSkeletonRender}>
       <Skeleton className="size-4 shrink-0 rounded-xl" />
       <Skeleton className={cn("h-4 max-w-full", textClassName)} />
     </SidebarMenuButton>

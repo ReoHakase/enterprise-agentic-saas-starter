@@ -11,13 +11,17 @@ import {
   DialogTrigger,
 } from "./dialog"
 
+const dialogTriggerButtonRender = <Button />
+
 describe("Dialog", () => {
   it("opens with an accessible title and returns focus when closed", async () => {
     const user = userEvent.setup()
 
     render(
       <Dialog>
-        <DialogTrigger render={<Button />}>Invite member</DialogTrigger>
+        <DialogTrigger render={dialogTriggerButtonRender}>
+          Invite member
+        </DialogTrigger>
         <DialogContent>
           <DialogTitle>Invite member</DialogTitle>
           <DialogDescription>

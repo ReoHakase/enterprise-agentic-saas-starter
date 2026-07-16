@@ -11,19 +11,23 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import type { LucideIcon } from "lucide-react"
 import { type ReactNode, useId } from "react"
 
-import { PageHeader } from "@/components/page-shell"
+import {
+  PageHeader,
+  PageHeaderCopy,
+  PageHeaderDescription,
+} from "@/components/page-shell"
 
 export const AppState = ({
   icon: Icon,
   title,
   description,
-  actions,
+  children,
   className = "min-h-svh",
 }: {
   icon: LucideIcon
   title: string
   description: string
-  actions?: ReactNode
+  children?: ReactNode
   className?: string
 }) => {
   const titleId = useId()
@@ -41,7 +45,7 @@ export const AppState = ({
           <EmptyTitle id={titleId}>{title}</EmptyTitle>
           <EmptyDescription>{description}</EmptyDescription>
         </EmptyHeader>
-        {actions ? <EmptyContent>{actions}</EmptyContent> : null}
+        {children ? <EmptyContent>{children}</EmptyContent> : null}
       </Empty>
     </section>
   )
@@ -88,11 +92,15 @@ export const RouteLoading = ({
 )
 
 const RouteHeadingSkeleton = ({ showAction }: { showAction: boolean }) => (
-  <PageHeader
-    heading={<Skeleton className="h-8 w-44 max-w-full" />}
-    description={<Skeleton className="h-10 w-96 max-w-full sm:h-5" />}
-    actions={showAction ? <Skeleton className="h-9 w-36" /> : null}
-  />
+  <PageHeader>
+    <PageHeaderCopy>
+      <Skeleton className="h-8 w-44 max-w-full" />
+      <PageHeaderDescription>
+        <Skeleton className="h-10 w-96 max-w-full sm:h-5" />
+      </PageHeaderDescription>
+    </PageHeaderCopy>
+    {showAction ? <Skeleton className="h-9 w-36" /> : null}
+  </PageHeader>
 )
 
 const RouteBodySkeleton = ({ variant }: { variant: RouteLoadingVariant }) => {

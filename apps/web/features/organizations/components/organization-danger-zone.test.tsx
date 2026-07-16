@@ -159,7 +159,7 @@ describe("OrganizationDangerZone", () => {
     await user.type(screen.getByLabelText("Type DELETE to confirm"), "DELETE")
     await user.click(screen.getByRole("button", { name: "Permanently delete" }))
 
-    const reauthenticate = await screen.findByRole("button", {
+    const reauthenticate = await screen.findByRole("link", {
       name: "Sign in again",
     })
     expect(reauthenticate).toHaveAttribute(

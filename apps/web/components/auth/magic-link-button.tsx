@@ -2,7 +2,10 @@
 
 import { type AuthView, authMutationKeys } from "@better-auth-ui/core"
 import { useAuth, useAuthPlugin } from "@better-auth-ui/react"
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import {
+  Button,
+  buttonVariants,
+} from "@enterprise-agentic-saas/ui/components/button"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
 import { Lock, Mail } from "lucide-react"
@@ -42,26 +45,34 @@ export function MagicLinkButton({ view }: MagicLinkButtonProps) {
   // "Continue with Magic Link" link.)
   if (isMagicLinkView && !emailAndPassword?.enabled) return null
 
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      disabled={isPending}
-      className={cn("w-full", isPending && "pointer-events-none opacity-50")}
-      render={
-        <Link
-          href={`${basePaths.auth}/${isMagicLinkView ? viewPaths.auth.signIn : magicLinkViewPaths.auth.magicLink}`}
-        />
-      }
-      nativeButton={false}
-    >
+  const href = `${basePaths.auth}/${isMagicLinkView ? viewPaths.auth.signIn : magicLinkViewPaths.auth.magicLink}`
+  const label = localization.auth.continueWith.replace(
+    "{{provider}}",
+    isMagicLinkView
+      ? localization.auth.password
+      : magicLinkLocalization.magicLink
+  )
+  const content = (
+    <>
       {isMagicLinkView ? <Lock /> : <Mail />}
-      {localization.auth.continueWith.replace(
-        "{{provider}}",
-        isMagicLinkView
-          ? localization.auth.password
-          : magicLinkLocalization.magicLink
-      )}
-    </Button>
+      {label}
+    </>
+  )
+
+  if (isPending) {
+    return (
+      <Button type="button" variant="outline" className="w-full" disabled>
+        {content}
+      </Button>
+    )
+  }
+
+  return (
+    <Link
+      href={href}
+      className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+    >
+      {content}
+    </Link>
   )
 }

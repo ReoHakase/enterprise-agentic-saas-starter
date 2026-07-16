@@ -20,12 +20,12 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ShieldAlertIcon, Trash2Icon } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { type FormEvent, useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field"
+import { LinkButton } from "@/components/link-button"
 import { consoleKeys } from "@/features/console/queries"
 import {
   createOrganizationDeletionFormSchema,
@@ -41,6 +41,9 @@ import {
 } from "@/lib/console-api"
 
 const organizationDeletionFields = ["slug", "confirmation"] as const
+const deleteOrganizationTrigger = (
+  <Button className="w-fit" variant="destructive" />
+)
 
 const createDeletionIdempotencyKey = () =>
   `delete_org_${globalThis.crypto.randomUUID().replaceAll("-", "")}`
@@ -253,14 +256,13 @@ export const OrganizationDangerZone = ({
             </p>
           </div>
         </div>
-        <Button
-          nativeButton={false}
+        <LinkButton
           className="w-fit"
           variant="outline"
-          render={<Link href={`/organization/${organization.id}/members`} />}
+          href={`/organization/${organization.id}/members`}
         >
           Review members and ownership
-        </Button>
+        </LinkButton>
       </section>
     )
   }
@@ -287,18 +289,15 @@ export const OrganizationDangerZone = ({
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button
-          nativeButton={false}
+        <LinkButton
           className="w-fit"
           variant="outline"
-          render={<Link href={`/organization/${organization.id}/members`} />}
+          href={`/organization/${organization.id}/members`}
         >
           Transfer ownership
-        </Button>
+        </LinkButton>
         <AlertDialog open={open} onOpenChange={handleOpenChange}>
-          <AlertDialogTrigger
-            render={<Button className="w-fit" variant="destructive" />}
-          >
+          <AlertDialogTrigger render={deleteOrganizationTrigger}>
             <Trash2Icon data-icon="inline-start" aria-hidden="true" />
             Delete organization
           </AlertDialogTrigger>
@@ -326,14 +325,13 @@ export const OrganizationDangerZone = ({
                   <FieldError role="alert">{submitError}</FieldError>
                 ) : null}
                 {reauthenticationHref ? (
-                  <Button
-                    nativeButton={false}
+                  <LinkButton
                     className="w-fit"
                     variant="outline"
-                    render={<Link href={reauthenticationHref} />}
+                    href={reauthenticationHref}
                   >
                     Sign in again
-                  </Button>
+                  </LinkButton>
                 ) : null}
               </FieldGroup>
               <AlertDialogFooter>

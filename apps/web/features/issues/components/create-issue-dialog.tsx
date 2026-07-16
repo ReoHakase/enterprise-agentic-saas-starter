@@ -30,6 +30,8 @@ import { getActionErrorMessage, getActionFieldError } from "./issue-utils"
 import { CreateIssueTitleField } from "./text-form-fields"
 import type { AsyncAction } from "./types"
 
+const createIssueTrigger = <Button />
+
 export const CreateIssueDialog = ({
   pending,
   onCreate,
@@ -110,7 +112,7 @@ export const CreateIssueDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button />}>
+      <DialogTrigger render={createIssueTrigger}>
         <PlusIcon data-icon="inline-start" aria-hidden="true" />
         New issue
       </DialogTrigger>

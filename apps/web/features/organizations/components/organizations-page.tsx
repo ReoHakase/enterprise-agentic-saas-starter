@@ -51,7 +51,6 @@ import {
   SettingsIcon,
   UsersRoundIcon,
 } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   type ChangeEvent,
@@ -62,6 +61,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 
+import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
 import { UserAvatar } from "@/components/user-identity"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
@@ -84,6 +84,7 @@ import {
 } from "@/lib/console-api"
 
 const organizationCreateFields = ["name", "slug"] as const
+const organizationCreateTrigger = <Button />
 
 const selectCreateSubmitState = (state: {
   canSubmit: boolean
@@ -100,7 +101,6 @@ export const OrganizationsPage = ({
 }) => {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const [createOpen, setCreateOpen] = useState(false)
   const organizationsQuery = useQuery({
     ...organizationsQueryOptions(),
     initialData: initialOrganizations,
@@ -119,45 +119,6 @@ export const OrganizationsPage = ({
   })
   const { isPending: activatePending, mutate: activateOrganization } =
     activateMutation
-  const createMutation = useMutation({
-    mutationFn: (input: { name: string; slug: string }) =>
-      browserConsoleApi.createOrganization(input),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: consoleKeys.organizations(),
-      })
-      setCreateOpen(false)
-      router.refresh()
-      toast.success("Organization created")
-    },
-  })
-  const [submitError, setSubmitError] = useState<string>()
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
-  const [slugEdited, setSlugEdited] = useState(false)
-  const form = useForm({
-    defaultValues: { name: "", slug: "" },
-    validators: { onSubmit: organizationFormSchema },
-    onSubmit: async ({ value }) => {
-      setSubmitError(undefined)
-      setFieldErrors({})
-      try {
-        await createMutation.mutateAsync(value)
-        form.reset()
-        setSlugEdited(false)
-      } catch (error) {
-        const nextFieldErrors = getConsoleApiFieldErrors(error)
-        setFieldErrors(nextFieldErrors)
-        setSubmitError(
-          hasConsoleApiFieldError(nextFieldErrors, organizationCreateFields)
-            ? undefined
-            : getConsoleApiErrorText(
-                error,
-                "The organization could not be created."
-              )
-        )
-      }
-    },
-  })
   const activate = useCallback(
     (organizationId: string) => activateOrganization(organizationId),
     [activateOrganization]
@@ -209,197 +170,11 @@ export const OrganizationsPage = ({
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
-  const handleCreateOpenChange = useCallback(
-    (open: boolean) => {
-      setCreateOpen(open)
-      if (!open && !form.state.isSubmitting) {
-        form.reset()
-        setSlugEdited(false)
-        setSubmitError(undefined)
-        setFieldErrors({})
-      }
-    },
-    [form]
-  )
-  const closeCreateDialog = useCallback(
-    () => handleCreateOpenChange(false),
-    [handleCreateOpenChange]
-  )
-  const submitOrganization = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault()
-      void form.handleSubmit()
-    },
-    [form]
-  )
-  const syncSlugFromName = useCallback(
-    (name: string) => {
-      if (!slugEdited) {
-        form.setFieldValue("slug", toOrganizationSlug(name))
-      }
-    },
-    [form, slugEdited]
-  )
-  const editOrganizationName = useCallback(() => {
-    setFieldErrors((current) => {
-      const withoutName = clearConsoleApiFieldError(current, "name")
-      return slugEdited
-        ? withoutName
-        : clearConsoleApiFieldError(withoutName, "slug")
-    })
-    setSubmitError(undefined)
-  }, [slugEdited])
-  const editOrganizationSlug = useCallback(() => {
-    setSlugEdited(true)
-    setFieldErrors((current) => clearConsoleApiFieldError(current, "slug"))
-    setSubmitError(undefined)
-  }, [])
-
   return (
     <PageShell
       title="Organizations"
       description="Choose the tenant context for this session or create a new workspace."
-      actions={
-        <Dialog open={createOpen} onOpenChange={handleCreateOpenChange}>
-          <DialogTrigger render={<Button />}>
-            <PlusIcon data-icon="inline-start" aria-hidden="true" />
-            Create organization
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={submitOrganization}>
-              <DialogHeader>
-                <DialogTitle>Create organization</DialogTitle>
-                <DialogDescription>
-                  Create an isolated workspace for members, permissions, and
-                  issues.
-                </DialogDescription>
-              </DialogHeader>
-              <FieldGroup className="py-5">
-                <form.Field name="name">
-                  {(field) => {
-                    const locallyInvalid =
-                      field.state.meta.isTouched && !field.state.meta.isValid
-                    const invalid =
-                      locallyInvalid || Boolean(fieldErrors.name?.length)
-                    const localErrorId = locallyInvalid
-                      ? "organization-create-name-local-error"
-                      : undefined
-                    const serverErrorId = fieldErrors.name?.length
-                      ? "organization-create-name-server-error"
-                      : undefined
-                    return (
-                      <Field data-invalid={invalid}>
-                        <FieldLabel htmlFor={field.name}>Name</FieldLabel>
-                        <OrganizationNameInput
-                          id={field.name}
-                          name={field.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onValueChange={field.handleChange}
-                          onNameChange={syncSlugFromName}
-                          onEdit={editOrganizationName}
-                          aria-describedby={
-                            [localErrorId, serverErrorId]
-                              .filter((value): value is string =>
-                                Boolean(value)
-                              )
-                              .join(" ") || undefined
-                          }
-                          aria-invalid={invalid}
-                        />
-                        {locallyInvalid ? (
-                          <FieldError
-                            id={localErrorId}
-                            errors={field.state.meta.errors}
-                          />
-                        ) : null}
-                        {fieldErrors.name ? (
-                          <FieldError id={serverErrorId} role="alert">
-                            {fieldErrors.name.join(" ")}
-                          </FieldError>
-                        ) : null}
-                      </Field>
-                    )
-                  }}
-                </form.Field>
-                <form.Field name="slug">
-                  {(field) => {
-                    const locallyInvalid =
-                      field.state.meta.isTouched && !field.state.meta.isValid
-                    const invalid =
-                      locallyInvalid || Boolean(fieldErrors.slug?.length)
-                    const descriptionId = "organization-create-slug-description"
-                    const localErrorId = locallyInvalid
-                      ? "organization-create-slug-local-error"
-                      : undefined
-                    const serverErrorId = fieldErrors.slug?.length
-                      ? "organization-create-slug-server-error"
-                      : undefined
-                    return (
-                      <Field data-invalid={invalid}>
-                        <FieldLabel htmlFor={field.name}>Slug</FieldLabel>
-                        <OrganizationSlugInput
-                          id={field.name}
-                          name={field.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onValueChange={field.handleChange}
-                          onEdit={editOrganizationSlug}
-                          aria-describedby={[
-                            descriptionId,
-                            localErrorId,
-                            serverErrorId,
-                          ]
-                            .filter((value): value is string => Boolean(value))
-                            .join(" ")}
-                          aria-invalid={invalid}
-                        />
-                        <FieldDescription id={descriptionId}>
-                          Used in URLs and API references. Lowercase letters,
-                          numbers, and hyphens only.
-                        </FieldDescription>
-                        {locallyInvalid ? (
-                          <FieldError
-                            id={localErrorId}
-                            errors={field.state.meta.errors}
-                          />
-                        ) : null}
-                        {fieldErrors.slug ? (
-                          <FieldError id={serverErrorId} role="alert">
-                            {fieldErrors.slug.join(" ")}
-                          </FieldError>
-                        ) : null}
-                      </Field>
-                    )
-                  }}
-                </form.Field>
-                {submitError ? (
-                  <FieldError role="alert">{submitError}</FieldError>
-                ) : null}
-              </FieldGroup>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeCreateDialog}
-                >
-                  Cancel
-                </Button>
-                <form.Subscribe selector={selectCreateSubmitState}>
-                  {({ canSubmit, isSubmitting }) => (
-                    <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                      {isSubmitting ? (
-                        <Spinner data-icon="inline-start" />
-                      ) : null}
-                      Create organization
-                    </Button>
-                  )}
-                </form.Subscribe>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      }
+      action={OrganizationCreateAction}
     >
       {organizationsQuery.isError ? (
         <Empty className="border" role="alert">
@@ -475,6 +250,229 @@ export const OrganizationsPage = ({
         </div>
       )}
     </PageShell>
+  )
+}
+
+const OrganizationCreateAction = () => {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [submitError, setSubmitError] = useState<string>()
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
+  const [slugEdited, setSlugEdited] = useState(false)
+  const createMutation = useMutation({
+    mutationFn: (input: { name: string; slug: string }) =>
+      browserConsoleApi.createOrganization(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: consoleKeys.organizations(),
+      })
+      setOpen(false)
+      router.refresh()
+      toast.success("Organization created")
+    },
+  })
+  const form = useForm({
+    defaultValues: { name: "", slug: "" },
+    validators: { onSubmit: organizationFormSchema },
+    onSubmit: async ({ value }) => {
+      setSubmitError(undefined)
+      setFieldErrors({})
+      try {
+        await createMutation.mutateAsync(value)
+        form.reset()
+        setSlugEdited(false)
+      } catch (error) {
+        const nextFieldErrors = getConsoleApiFieldErrors(error)
+        setFieldErrors(nextFieldErrors)
+        setSubmitError(
+          hasConsoleApiFieldError(nextFieldErrors, organizationCreateFields)
+            ? undefined
+            : getConsoleApiErrorText(
+                error,
+                "The organization could not be created."
+              )
+        )
+      }
+    },
+  })
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen && !form.state.isSubmitting) {
+        form.reset()
+        setSlugEdited(false)
+        setSubmitError(undefined)
+        setFieldErrors({})
+      }
+    },
+    [form]
+  )
+  const closeDialog = useCallback(
+    () => handleOpenChange(false),
+    [handleOpenChange]
+  )
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      void form.handleSubmit()
+    },
+    [form]
+  )
+  const syncSlugFromName = useCallback(
+    (name: string) => {
+      if (!slugEdited) {
+        form.setFieldValue("slug", toOrganizationSlug(name))
+      }
+    },
+    [form, slugEdited]
+  )
+  const editOrganizationName = useCallback(() => {
+    setFieldErrors((current) => {
+      const withoutName = clearConsoleApiFieldError(current, "name")
+      return slugEdited
+        ? withoutName
+        : clearConsoleApiFieldError(withoutName, "slug")
+    })
+    setSubmitError(undefined)
+  }, [slugEdited])
+  const editOrganizationSlug = useCallback(() => {
+    setSlugEdited(true)
+    setFieldErrors((current) => clearConsoleApiFieldError(current, "slug"))
+    setSubmitError(undefined)
+  }, [])
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={organizationCreateTrigger}>
+        <PlusIcon data-icon="inline-start" aria-hidden="true" />
+        Create organization
+      </DialogTrigger>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Create organization</DialogTitle>
+            <DialogDescription>
+              Create an isolated workspace for members, permissions, and issues.
+            </DialogDescription>
+          </DialogHeader>
+          <FieldGroup className="py-5">
+            <form.Field name="name">
+              {(field) => {
+                const locallyInvalid =
+                  field.state.meta.isTouched && !field.state.meta.isValid
+                const invalid =
+                  locallyInvalid || Boolean(fieldErrors.name?.length)
+                const localErrorId = locallyInvalid
+                  ? "organization-create-name-local-error"
+                  : undefined
+                const serverErrorId = fieldErrors.name?.length
+                  ? "organization-create-name-server-error"
+                  : undefined
+                return (
+                  <Field data-invalid={invalid}>
+                    <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                    <OrganizationNameInput
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onValueChange={field.handleChange}
+                      onNameChange={syncSlugFromName}
+                      onEdit={editOrganizationName}
+                      aria-describedby={
+                        [localErrorId, serverErrorId]
+                          .filter((value): value is string => Boolean(value))
+                          .join(" ") || undefined
+                      }
+                      aria-invalid={invalid}
+                    />
+                    {locallyInvalid ? (
+                      <FieldError
+                        id={localErrorId}
+                        errors={field.state.meta.errors}
+                      />
+                    ) : null}
+                    {fieldErrors.name ? (
+                      <FieldError id={serverErrorId} role="alert">
+                        {fieldErrors.name.join(" ")}
+                      </FieldError>
+                    ) : null}
+                  </Field>
+                )
+              }}
+            </form.Field>
+            <form.Field name="slug">
+              {(field) => {
+                const locallyInvalid =
+                  field.state.meta.isTouched && !field.state.meta.isValid
+                const invalid =
+                  locallyInvalid || Boolean(fieldErrors.slug?.length)
+                const descriptionId = "organization-create-slug-description"
+                const localErrorId = locallyInvalid
+                  ? "organization-create-slug-local-error"
+                  : undefined
+                const serverErrorId = fieldErrors.slug?.length
+                  ? "organization-create-slug-server-error"
+                  : undefined
+                return (
+                  <Field data-invalid={invalid}>
+                    <FieldLabel htmlFor={field.name}>Slug</FieldLabel>
+                    <OrganizationSlugInput
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onValueChange={field.handleChange}
+                      onEdit={editOrganizationSlug}
+                      aria-describedby={[
+                        descriptionId,
+                        localErrorId,
+                        serverErrorId,
+                      ]
+                        .filter((value): value is string => Boolean(value))
+                        .join(" ")}
+                      aria-invalid={invalid}
+                    />
+                    <FieldDescription id={descriptionId}>
+                      Used in URLs and API references. Lowercase letters,
+                      numbers, and hyphens only.
+                    </FieldDescription>
+                    {locallyInvalid ? (
+                      <FieldError
+                        id={localErrorId}
+                        errors={field.state.meta.errors}
+                      />
+                    ) : null}
+                    {fieldErrors.slug ? (
+                      <FieldError id={serverErrorId} role="alert">
+                        {fieldErrors.slug.join(" ")}
+                      </FieldError>
+                    ) : null}
+                  </Field>
+                )
+              }}
+            </form.Field>
+            {submitError ? (
+              <FieldError role="alert">{submitError}</FieldError>
+            ) : null}
+          </FieldGroup>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeDialog}>
+              Cancel
+            </Button>
+            <form.Subscribe selector={selectCreateSubmitState}>
+              {({ canSubmit, isSubmitting }) => (
+                <Button type="submit" disabled={!canSubmit || isSubmitting}>
+                  {isSubmitting ? <Spinner data-icon="inline-start" /> : null}
+                  Create organization
+                </Button>
+              )}
+            </form.Subscribe>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -604,25 +602,23 @@ const OrganizationActions = ({
         ) : null}
         {organization.active ? "Active" : "Switch"}
       </Button>
-      <Button
-        nativeButton={false}
+      <LinkButton
         variant="ghost"
         size="icon-sm"
         aria-label={`Members for ${organization.name}`}
-        render={<Link href={`/organization/${organization.id}/members`} />}
+        href={`/organization/${organization.id}/members`}
       >
         <UsersRoundIcon aria-hidden="true" />
-      </Button>
+      </LinkButton>
       {organization.permissions.canEditOrganization ? (
-        <Button
-          nativeButton={false}
+        <LinkButton
           variant="ghost"
           size="icon-sm"
           aria-label={`Settings for ${organization.name}`}
-          render={<Link href={`/organization/${organization.id}/settings`} />}
+          href={`/organization/${organization.id}/settings`}
         >
           <SettingsIcon aria-hidden="true" />
-        </Button>
+        </LinkButton>
       ) : null}
     </div>
   )

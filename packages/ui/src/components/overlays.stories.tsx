@@ -26,9 +26,12 @@ import {
   DrawerTrigger,
 } from "./drawer"
 
+const destructiveButtonRender = <Button variant="destructive" />
+const outlineButtonRender = <Button variant="outline" />
+
 const DestructiveConfirmation = ({ onConfirm }: { onConfirm: () => void }) => (
   <AlertDialog>
-    <AlertDialogTrigger render={<Button variant="destructive" />}>
+    <AlertDialogTrigger render={destructiveButtonRender}>
       Delete organization
     </AlertDialogTrigger>
     <AlertDialogContent>
@@ -53,7 +56,7 @@ const DestructiveConfirmation = ({ onConfirm }: { onConfirm: () => void }) => (
 
 const MobileNavigationDrawer = () => (
   <Drawer showSwipeHandle>
-    <DrawerTrigger render={<Button variant="outline" />}>
+    <DrawerTrigger render={outlineButtonRender}>
       Open mobile navigation
     </DrawerTrigger>
     <DrawerContent>
@@ -70,7 +73,7 @@ const MobileNavigationDrawer = () => (
         <Button variant="ghost">Members</Button>
       </nav>
       <DrawerFooter>
-        <DrawerClose render={<Button variant="outline" />}>Done</DrawerClose>
+        <DrawerClose render={outlineButtonRender}>Done</DrawerClose>
       </DrawerFooter>
     </DrawerContent>
   </Drawer>
@@ -89,15 +92,18 @@ type Story = StoryObj<typeof meta>
 export const DestructiveAlert: Story = {
   args: { onConfirm: fn() },
   play: async ({ args, canvas }) => {
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Delete organization" })
-    )
+    const trigger = canvas.getByRole("button", { name: "Delete organization" })
+    await userEvent.click(trigger)
     const body = within(document.body)
     await expect(
       body.getByRole("alertdialog", { name: "Delete Acme?" })
     ).toHaveAccessibleDescription(
       "This permanently deletes organization data and cannot be undone."
     )
+    await userEvent.click(body.getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+
+    await userEvent.click(trigger)
     await userEvent.click(
       body.getByRole("button", { name: "Permanently delete" })
     )

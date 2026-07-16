@@ -34,6 +34,8 @@ import {
 import { CommentBodyFormField } from "./text-form-fields"
 import type { AsyncAction, IssueCommentUiItem, IssueUiItem } from "./types"
 
+const deleteCommentTrigger = <Button variant="ghost" size="sm" />
+
 export const IssueComment = ({
   issue,
   comment,
@@ -158,9 +160,8 @@ export const IssueComment = ({
             {onDeleteComment ? (
               <AlertDialog>
                 <AlertDialogTrigger
-                  render={
-                    <Button variant="ghost" size="sm" disabled={pending} />
-                  }
+                  render={deleteCommentTrigger}
+                  disabled={pending}
                 >
                   Delete
                 </AlertDialogTrigger>

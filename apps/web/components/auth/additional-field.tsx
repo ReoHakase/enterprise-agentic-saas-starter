@@ -5,7 +5,7 @@ import {
   resolveInputType,
 } from "@better-auth-ui/core"
 import { useAuth } from "@better-auth-ui/react"
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import { buttonVariants } from "@enterprise-agentic-saas/ui/components/button"
 import { Calendar } from "@enterprise-agentic-saas/ui/components/calendar"
 import { Checkbox } from "@enterprise-agentic-saas/ui/components/checkbox"
 import {
@@ -564,20 +564,16 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
         />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
-            render={
-              <Button
-                type="button"
-                variant="outline"
-                id={`${name}-date`}
-                data-empty={!date}
-                aria-invalid={!!error}
-                disabled={isPending || field.readOnly}
-                className={cn(
-                  "flex-1 justify-between font-normal",
-                  "data-[empty=true]:text-muted-foreground"
-                )}
-              />
-            }
+            type="button"
+            id={`${name}-date`}
+            data-empty={!date}
+            aria-invalid={!!error}
+            disabled={isPending || field.readOnly}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "flex-1 justify-between font-normal",
+              "data-[empty=true]:text-muted-foreground"
+            )}
           >
             {date ? format(date, "PPP") : <span>{field.placeholder}</span>}
             {isDateTime ? <ChevronDownIcon /> : <CalendarIcon />}

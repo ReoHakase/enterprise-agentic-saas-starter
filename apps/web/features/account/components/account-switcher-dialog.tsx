@@ -31,11 +31,11 @@ import {
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CircleUserRoundIcon, LogOutIcon, PlusIcon } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
+import { LinkButton } from "@/components/link-button"
 import { UserAvatar } from "@/components/user-identity"
 import {
   completeMultiSessionAction,
@@ -210,14 +210,10 @@ export const AccountSwitcherDialog = ({
           </div>
 
           <DialogFooter>
-            <Button
-              nativeButton={false}
-              variant="outline"
-              render={<Link href="/auth/sign-in?add_account=1" />}
-            >
+            <LinkButton href="/auth/sign-in?add_account=1" variant="outline">
               <PlusIcon data-icon="inline-start" />
               Add account
-            </Button>
+            </LinkButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
