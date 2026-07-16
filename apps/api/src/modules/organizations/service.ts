@@ -21,17 +21,30 @@ import {
   deleteMemberById,
   deleteOrganizationById,
   findMemberById,
+  findInvitationForResend,
   findOrganizationForUser,
   insertInvitations,
   insertOrganizationWithSuperAdmin,
   listInvitationsByOrganization,
   listMembersByOrganization,
   listOrganizationsForUser,
+  resendInvitationById,
   updateMemberRoleById,
   updateOrganizationById,
   updateSessionActiveOrganization,
   transferSuperAdminById,
 } from "./repository"
+
+const dispatchInvitationEmailJobs = async (db: Db) => {
+  const deliveryTask = processConfiguredInvitationEmailJobs(db).catch(
+    () => undefined
+  )
+  if (backgroundTaskHandler) {
+    backgroundTaskHandler(deliveryTask)
+    return
+  }
+  await deliveryTask
+}
 
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
@@ -467,19 +480,92 @@ export const createInvitation = async (
     emails,
     role: input.role,
   })
-  const deliveryTask = processConfiguredInvitationEmailJobs(db).catch(
-    () => undefined
-  )
-  if (backgroundTaskHandler) {
-    backgroundTaskHandler(deliveryTask)
-  } else {
-    await deliveryTask
-  }
+  await dispatchInvitationEmailJobs(db)
 
   return {
     invitations,
     queuedCount: invitations.length,
     delivery: "queued" as const,
+  }
+}
+
+export const resendInvitation = async (
+  db: Db,
+  input: {
+    userId: string
+    session: SessionContext
+    organizationId: string
+    invitationId: string
+  }
+) => {
+  const actor = await requireOrganizationRole(db, {
+    ...input,
+    allow: ["super_admin", "admin"],
+    action: "invitation.resend",
+  })
+  const target = await findInvitationForResend(db, input)
+  if (!target) {
+    throw publicErrors.notFound("Invitation not found", {
+      resource: "invitation",
+    })
+  }
+  if (target.status !== "pending" && target.status !== "expired") {
+    throw publicErrors.conflict("Invitation cannot be resent", {
+      resource: "invitation",
+      reason: "invitation_not_resendable",
+    })
+  }
+  if (target.role !== "admin" && target.role !== "member") {
+    throw publicErrors.conflict("Invitation cannot be resent", {
+      resource: "invitation",
+      reason: "invitation_not_resendable",
+    })
+  }
+  if (target.role === "admin") {
+    if (actor.role !== "super_admin") {
+      throw publicErrors.forbidden(
+        "Only the super admin can resend admin invitations"
+      )
+    }
+    requireFreshSession(input.session, "organization.invitation.resend_admin")
+  }
+
+  await reserveInvitationQuota(db, {
+    actorUserId: input.userId,
+    organizationId: input.organizationId,
+    recipientCount: 1,
+  })
+
+  const result = await resendInvitationById(db, {
+    actorUserId: input.userId,
+    organizationId: input.organizationId,
+    invitationId: input.invitationId,
+  })
+  if (result.kind === "not_found") {
+    throw publicErrors.notFound("Invitation not found", {
+      resource: "invitation",
+    })
+  }
+  if (result.kind === "actor_not_member") {
+    throw publicErrors.notFound("Invitation not found", {
+      resource: "invitation",
+    })
+  }
+  if (result.kind === "actor_forbidden") {
+    throw publicErrors.forbidden("Invitation resend is not allowed")
+  }
+  if (result.kind === "not_resendable") {
+    throw publicErrors.conflict("Invitation cannot be resent", {
+      resource: "invitation",
+      reason: "invitation_not_resendable",
+    })
+  }
+
+  await dispatchInvitationEmailJobs(db)
+  return {
+    invitation: result.invitation,
+    delivery: "queued" as const,
+    revived: result.revived,
   }
 }
 

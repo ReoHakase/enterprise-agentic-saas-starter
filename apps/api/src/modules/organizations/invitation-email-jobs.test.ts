@@ -168,8 +168,7 @@ describe("invitation email jobs", () => {
 
     expect(renderEmail).toHaveBeenCalledWith({
       appName: "App",
-      invitationUrl:
-        "https://app.example.test/organization/invitations/invitation_1",
+      invitationUrl: "https://app.example.test/invitations/invitation_1",
       inviterName: "Inviter",
       organizationName: "Organization",
     })

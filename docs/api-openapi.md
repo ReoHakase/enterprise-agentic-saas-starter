@@ -35,6 +35,7 @@ Scalarは次を明示設定します。
 - Better Authの`disabledPaths`は生成schemaにも反映される。organization pluginは招待recipient向け4 routeだけを掲載し、app所有の管理routeを再公開しない。
 - Better Auth由来のoperationにも一意な`operationId`、summary、description、`Auth / ...` tagを補完する。
 - resource作成は `POST /organizations`、`POST /organizations/:organizationId/invitations`、`POST /todos`、`POST /todos/:id/comments` のすべてで201を返す。
+- 招待再送は`POST /organizations/:organizationId/invitations/:invitationId/resend`で200を返し、`{ invitation, delivery: "queued", revived }`をresponse schemaにする。403/404/409/429を明示し、admin role再送のfresh session、tenant非開示、terminal state、quotaをdescriptionへ含める。
 - comment DTOは `authorId` に加えてtenant-safeな `author: { id, name, image }` を返す。退会済み/tenant外userのprivate profileを漏らさず `Former member` fallbackにする。
 - organization削除は`DELETE /organizations/:organizationId`。active organizationの`super_admin`、fresh session、slug完全一致、`DELETE`確認、opaqueな冪等keyをすべて要求し、同一actor・organization・keyの再送へ同じreceiptを返す。
 

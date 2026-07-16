@@ -13,6 +13,7 @@ export const auditActionModel = v.picklist([
   "organization.super_admin.transferred",
   "organization.member.removed",
   "organization.invitation.created",
+  "organization.invitation.resent",
   "organization.invitation.canceled",
   "todo.created",
   "todo.updated",

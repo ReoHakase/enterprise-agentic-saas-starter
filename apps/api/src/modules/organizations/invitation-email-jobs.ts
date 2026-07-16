@@ -212,7 +212,7 @@ export const processInvitationEmailJobs = async ({
         const rendered = await renderEmail({
           appName,
           organizationName: delivery.organizationName,
-          invitationUrl: `${appBaseUrl}/organization/invitations/${delivery.invitationId}`,
+          invitationUrl: `${appBaseUrl}/invitations/${delivery.invitationId}`,
           inviterName: delivery.inviterName.trim() || undefined,
         })
         await sendEmail({ to: delivery.email, ...rendered })

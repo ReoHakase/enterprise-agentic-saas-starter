@@ -9,7 +9,17 @@ import {
   session,
   user,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, count, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm"
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  ne,
+  sql,
+} from "drizzle-orm"
 
 import { AppError, publicErrors } from "../../errors/app-error"
 import {
@@ -62,6 +72,14 @@ const invitationEmailConflict = () =>
     reason: "conflict",
     resource: "invitation",
   })
+
+const invitationResendRecipientConflict = () =>
+  publicErrors.conflict("Invitation cannot be resent", {
+    reason: "invitation_recipient_conflict",
+    resource: "invitation",
+  })
+
+const invitationLifetimeMs = 48 * 60 * 60 * 1000
 
 const withInvitationLock = async <T>(
   key: string,
@@ -153,6 +171,12 @@ export type OrganizationInvitation = {
   status: string
   organizationId: string
   inviterId: string
+  inviter: {
+    id: string
+    name: string
+    email: string
+    image: string | null
+  }
   expiresAt: string
   createdAt: string
 }
@@ -166,7 +190,13 @@ export type OrganizationDeletionReceipt = {
 type InvitationRow = typeof invitation.$inferSelect
 
 const toOrganizationInvitation = (
-  row: InvitationRow
+  row: InvitationRow,
+  inviter: {
+    id: string
+    name: string
+    email: string
+    image: string | null
+  }
 ): OrganizationInvitation => ({
   id: row.id,
   email: row.email,
@@ -177,6 +207,7 @@ const toOrganizationInvitation = (
       : row.status,
   organizationId: row.organizationId,
   inviterId: row.inviterId,
+  inviter,
   expiresAt: row.expiresAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
 })
@@ -1099,12 +1130,23 @@ export const listInvitationsByOrganization = async (
 ): Promise<OrganizationInvitation[]> => {
   try {
     const rows = await db
-      .select()
+      .select({
+        invitation,
+        inviter: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+        },
+      })
       .from(invitation)
+      .innerJoin(user, eq(invitation.inviterId, user.id))
       .where(eq(invitation.organizationId, organizationId))
       .orderBy(invitation.createdAt)
 
-    return rows.map(toOrganizationInvitation)
+    return rows.map(({ invitation: row, inviter }) =>
+      toOrganizationInvitation(row, inviter)
+    )
   } catch (cause) {
     throw publicErrors.internal(cause, {
       module: "organizations",
@@ -1126,8 +1168,22 @@ export const insertInvitations = async (
     const lockKeys = orderedUniqueKeys(
       input.emails.map((email) => `${input.organizationId}:${email}`)
     )
-    const rows = await withInvitationLocks(lockKeys, () =>
+    const result = await withInvitationLocks(lockKeys, () =>
       db.transaction(async (tx) => {
+        const inviterRows = await tx
+          .select({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+          })
+          .from(user)
+          .where(eq(user.id, input.inviterId))
+          .limit(1)
+        const inviter = inviterRows[0]
+        if (!inviter) {
+          throw new Error("Invitation inviter was not found")
+        }
         const existingMembers = await tx
           .select({ id: member.id })
           .from(member)
@@ -1191,7 +1247,7 @@ export const insertInvitations = async (
             )
         }
 
-        const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+        const expiresAt = new Date(now.getTime() + invitationLifetimeMs)
         const invitationValues = input.emails.map((email) => ({
           id: crypto.randomUUID(),
           organizationId: input.organizationId,
@@ -1228,17 +1284,20 @@ export const insertInvitations = async (
         const rowByEmail = new Map(
           insertedRows.map((row) => [row.email.toLowerCase(), row])
         )
-        return input.emails.map((email) => {
+        const orderedRows = input.emails.map((email) => {
           const row = rowByEmail.get(email)
           if (!row) {
             throw new Error("Invitation batch ordering failed")
           }
           return row
         })
+        return { inviter, rows: orderedRows }
       })
     )
 
-    return rows.map(toOrganizationInvitation)
+    return result.rows.map((row) =>
+      toOrganizationInvitation(row, result.inviter)
+    )
   } catch (cause) {
     if (cause instanceof AppError) {
       throw cause
@@ -1253,6 +1312,260 @@ export const insertInvitations = async (
     throw publicErrors.internal(cause, {
       module: "organizations",
       operation: "insertInvitations",
+    })
+  }
+}
+
+export const findInvitationForResend = async (
+  db: Db,
+  input: { organizationId: string; invitationId: string }
+) => {
+  try {
+    const rows = await db
+      .select({
+        id: invitation.id,
+        role: invitation.role,
+        status: invitation.status,
+        expiresAt: invitation.expiresAt,
+      })
+      .from(invitation)
+      .where(
+        and(
+          eq(invitation.organizationId, input.organizationId),
+          eq(invitation.id, input.invitationId)
+        )
+      )
+      .limit(1)
+
+    return rows[0] ?? null
+  } catch (cause) {
+    throw publicErrors.internal(cause, {
+      module: "organizations",
+      operation: "findInvitationForResend",
+    })
+  }
+}
+
+export const resendInvitationById = async (
+  db: Db,
+  input: {
+    actorUserId: string
+    organizationId: string
+    invitationId: string
+  }
+) => {
+  try {
+    return await withInvitationLock(
+      `${input.organizationId}:invitation:${input.invitationId}`,
+      () =>
+        db.transaction(async (tx) => {
+          const existingRows = await tx
+            .select()
+            .from(invitation)
+            .where(
+              and(
+                eq(invitation.organizationId, input.organizationId),
+                eq(invitation.id, input.invitationId)
+              )
+            )
+            .limit(1)
+          const existing = existingRows[0]
+          if (!existing) {
+            return { kind: "not_found" as const }
+          }
+          if (
+            (existing.status !== "pending" && existing.status !== "expired") ||
+            (existing.role !== "admin" && existing.role !== "member")
+          ) {
+            return { kind: "not_resendable" as const }
+          }
+
+          const actorRows = await tx
+            .select({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              image: user.image,
+              role: member.role,
+            })
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.organizationId, input.organizationId),
+                eq(member.userId, input.actorUserId)
+              )
+            )
+            .limit(1)
+          const actor = actorRows[0]
+          if (!actor) {
+            return { kind: "actor_not_member" as const }
+          }
+          if (
+            (existing.role === "admin" && actor.role !== "super_admin") ||
+            (existing.role === "member" &&
+              actor.role !== "super_admin" &&
+              actor.role !== "admin")
+          ) {
+            return { kind: "actor_forbidden" as const }
+          }
+
+          const existingMemberRows = await tx
+            .select({ id: member.id })
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.organizationId, input.organizationId),
+                eq(
+                  sql<string>`lower(${user.email})`,
+                  existing.email.toLowerCase()
+                )
+              )
+            )
+            .limit(1)
+          if (existingMemberRows[0]) {
+            throw invitationResendRecipientConflict()
+          }
+
+          const now = new Date()
+          const otherPendingRows = await tx
+            .select({
+              id: invitation.id,
+              expiresAt: invitation.expiresAt,
+            })
+            .from(invitation)
+            .where(
+              and(
+                eq(invitation.organizationId, input.organizationId),
+                ne(invitation.id, input.invitationId),
+                eq(invitation.status, "pending"),
+                eq(
+                  sql<string>`lower(${invitation.email})`,
+                  existing.email.toLowerCase()
+                )
+              )
+            )
+          if (
+            otherPendingRows.some(
+              ({ expiresAt }) => expiresAt.getTime() > now.getTime()
+            )
+          ) {
+            throw invitationResendRecipientConflict()
+          }
+          const otherExpiredIds = otherPendingRows.map(({ id }) => id)
+          if (otherExpiredIds.length > 0) {
+            await tx
+              .update(invitation)
+              .set({ status: "expired" })
+              .where(
+                and(
+                  eq(invitation.organizationId, input.organizationId),
+                  inArray(invitation.id, otherExpiredIds),
+                  eq(invitation.status, "pending")
+                )
+              )
+            await tx
+              .update(invitationEmailJobs)
+              .set({
+                status: "canceled",
+                completedAt: now,
+                lockedAt: null,
+                nextAttemptAt: null,
+              })
+              .where(
+                and(
+                  inArray(invitationEmailJobs.invitationId, otherExpiredIds),
+                  inArray(invitationEmailJobs.status, [
+                    "pending",
+                    "failed",
+                    "processing",
+                  ])
+                )
+              )
+          }
+
+          const revived =
+            existing.status === "expired" ||
+            existing.expiresAt.getTime() <= now.getTime()
+          const updatedRows = await tx
+            .update(invitation)
+            .set({
+              status: "pending",
+              expiresAt: new Date(now.getTime() + invitationLifetimeMs),
+              inviterId: input.actorUserId,
+            })
+            .where(
+              and(
+                eq(invitation.organizationId, input.organizationId),
+                eq(invitation.id, input.invitationId)
+              )
+            )
+            .returning()
+          const updated = updatedRows[0]
+          if (!updated) {
+            return { kind: "not_found" as const }
+          }
+
+          const jobRows = await tx
+            .select({ id: invitationEmailJobs.id })
+            .from(invitationEmailJobs)
+            .where(eq(invitationEmailJobs.invitationId, input.invitationId))
+            .limit(1)
+          if (jobRows[0]) {
+            await tx
+              .update(invitationEmailJobs)
+              .set({
+                status: "pending",
+                lastErrorCode: null,
+                lockedAt: null,
+                nextAttemptAt: null,
+                completedAt: null,
+              })
+              .where(eq(invitationEmailJobs.id, jobRows[0].id))
+          } else {
+            await tx.insert(invitationEmailJobs).values({
+              id: crypto.randomUUID(),
+              invitationId: input.invitationId,
+            })
+          }
+
+          await tx.insert(auditLogs).values({
+            id: crypto.randomUUID(),
+            organizationId: input.organizationId,
+            actorUserId: input.actorUserId,
+            action: "organization.invitation.resent",
+            targetType: "invitation",
+            targetId: input.invitationId,
+            metadata: { revived, role: existing.role },
+          })
+
+          return {
+            kind: "resent" as const,
+            invitation: toOrganizationInvitation(updated, {
+              id: actor.id,
+              name: actor.name,
+              email: actor.email,
+              image: actor.image,
+            }),
+            revived,
+          }
+        })
+    )
+  } catch (cause) {
+    if (cause instanceof AppError) {
+      throw cause
+    }
+    const details = errorChainText(cause)
+    if (
+      details.includes("invitation_pending_organization_email_uidx") ||
+      details.includes("invitation.organization_id, lower(email)")
+    ) {
+      throw invitationResendRecipientConflict()
+    }
+    throw publicErrors.internal(cause, {
+      module: "organizations",
+      operation: "resendInvitationById",
     })
   }
 }

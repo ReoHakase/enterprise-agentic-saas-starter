@@ -39,6 +39,10 @@ import { createApp } from "./app"
 import { createApiClient } from "./client"
 import { env } from "./env"
 import { publicErrors } from "./errors/app-error"
+import {
+  findInvitationForResend,
+  resendInvitationById,
+} from "./modules/organizations/repository"
 import { deleteOrganization } from "./modules/organizations/service"
 import { resolveAndPersistActiveOrganizationId } from "./modules/users/repository"
 import { corsPlugin } from "./plugins/cors"
@@ -557,6 +561,21 @@ describe("createApp security and OpenAPI", () => {
       spec.paths["/organizations/{organizationId}/ownership-transfer"].post
         .security
     ).toEqual([{ sessionCookie: [] }])
+    expect(
+      spec.paths[
+        "/organizations/{organizationId}/invitations/{invitationId}/resend"
+      ].post
+    ).toMatchObject({
+      operationId: "resendOrganizationInvitation",
+      security: [{ sessionCookie: [] }],
+      responses: {
+        200: expect.any(Object),
+        403: expect.any(Object),
+        404: expect.any(Object),
+        409: expect.any(Object),
+        429: expect.any(Object),
+      },
+    })
     expect(spec.paths["/todos/{id}"].get.operationId).toBe("getTodo")
     expect(
       spec.paths["/todos"].post.requestBody.content["application/json"].schema
@@ -844,6 +863,18 @@ describe("createApp security and OpenAPI", () => {
     expect(invalidResponses.map((response) => response.status)).toEqual([
       400, 400, 400,
     ])
+
+    const formerlyReservedCreate = await app.handle(
+      jsonRequest("/organizations", {
+        method: "POST",
+        userId: "user_1",
+        body: { name: "Invitation Operations", slug: "invitations" },
+      })
+    )
+    expect(formerlyReservedCreate.status).toBe(201)
+    expect(await formerlyReservedCreate.json()).toMatchObject({
+      slug: "invitations",
+    })
 
     const normalizedCreate = await app.handle(
       jsonRequest("/organizations", {
@@ -1446,6 +1477,15 @@ describe("createApp security and OpenAPI", () => {
       queuedCount: 1,
       delivery: "queued",
     })
+    expect(createdInvitation).toMatchObject({
+      inviterId: "user_3",
+      inviter: {
+        id: "user_3",
+        name: "User 3",
+        email: "user3@example.test",
+        image: null,
+      },
+    })
     expect(invitationEmailRenderSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         inviterName: "User 3",
@@ -1568,6 +1608,539 @@ describe("createApp security and OpenAPI", () => {
         context: { reason: "invitation_not_pending" },
       },
     })
+  })
+
+  it("returns member join times and invitation delivery context", async () => {
+    const db = await createSeededDb()
+    const joinedAt = new Date("2026-01-02T03:04:05.000Z")
+    const invitedAt = new Date("2026-02-03T04:05:06.000Z")
+    const expiresAt = new Date(Date.now() + 60_000)
+    await db
+      .update(schema.member)
+      .set({ createdAt: joinedAt })
+      .where(eq(schema.member.id, "member_4"))
+    await db.insert(schema.invitation).values({
+      id: "invitation_with_context",
+      organizationId: "org_1",
+      email: "context@example.test",
+      role: "member",
+      status: "pending",
+      expiresAt,
+      createdAt: invitedAt,
+      inviterId: "user_3",
+    })
+    const app = createApp(db)
+
+    const memberResponse = await app.handle(
+      jsonRequest("/organizations/org_1/members", { userId: "user_3" })
+    )
+    const invitationResponse = await app.handle(
+      jsonRequest("/organizations/org_1/invitations", { userId: "user_3" })
+    )
+
+    expect(memberResponse.status).toBe(200)
+    expect(await memberResponse.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "member_4",
+          createdAt: joinedAt.toISOString(),
+        }),
+      ])
+    )
+    expect(invitationResponse.status).toBe(200)
+    expect(await invitationResponse.json()).toEqual([
+      expect.objectContaining({
+        id: "invitation_with_context",
+        createdAt: invitedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        inviterId: "user_3",
+        inviter: {
+          id: "user_3",
+          name: "User 3",
+          email: "user3@example.test",
+          image: null,
+        },
+      }),
+    ])
+  })
+
+  it("resends a pending invitation without replacing its identity or attempts", async () => {
+    const db = await createSeededDb()
+    const createdAt = new Date("2026-01-01T00:00:00.000Z")
+    const jobCreatedAt = new Date("2026-01-01T01:00:00.000Z")
+    await db.insert(schema.invitation).values({
+      id: "pending_resend",
+      organizationId: "org_1",
+      email: "pending-resend@example.test",
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt,
+      inviterId: "user_1",
+    })
+    await db.insert(schema.invitationEmailJobs).values({
+      id: "pending_resend_job",
+      invitationId: "pending_resend",
+      status: "completed",
+      attempts: 3,
+      lastErrorCode: "previous_failure",
+      createdAt: jobCreatedAt,
+      completedAt: new Date(),
+    })
+    const app = createApp(db)
+    const requestedAt = Date.now()
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/invitations/pending_resend/resend", {
+        method: "POST",
+        userId: "user_3",
+      })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({
+      delivery: "queued",
+      revived: false,
+      invitation: {
+        id: "pending_resend",
+        status: "pending",
+        createdAt: createdAt.toISOString(),
+        inviterId: "user_3",
+        inviter: {
+          id: "user_3",
+          name: "User 3",
+          email: "user3@example.test",
+          image: null,
+        },
+      },
+    })
+    expect(new Date(body.invitation.expiresAt).getTime()).toBeGreaterThan(
+      requestedAt + 47 * 60 * 60 * 1000
+    )
+    expect(invitationEmailSendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "pending-resend@example.test" })
+    )
+
+    const storedInvitation = await db
+      .select()
+      .from(schema.invitation)
+      .where(eq(schema.invitation.id, "pending_resend"))
+    expect(storedInvitation[0]).toMatchObject({
+      id: "pending_resend",
+      status: "pending",
+      createdAt,
+      inviterId: "user_3",
+    })
+    const storedJob = await db
+      .select()
+      .from(schema.invitationEmailJobs)
+      .where(eq(schema.invitationEmailJobs.id, "pending_resend_job"))
+    expect(storedJob[0]).toMatchObject({
+      attempts: 4,
+      lastErrorCode: null,
+      lockedAt: null,
+      nextAttemptAt: null,
+      createdAt: jobCreatedAt,
+      status: "completed",
+    })
+    expect(storedJob[0]?.completedAt).toBeInstanceOf(Date)
+    expect(
+      await db
+        .select({ action: schema.auditLogs.action })
+        .from(schema.auditLogs)
+    ).toEqual([{ action: "organization.invitation.resent" }])
+    expect(
+      (await db.select().from(schema.rateLimit)).map(
+        ({ count: value }) => value
+      )
+    ).toEqual([1, 1])
+
+    const auditResponse = await app.handle(
+      jsonRequest("/organizations/org_1/audit-logs?limit=10", {
+        userId: "user_3",
+      })
+    )
+    expect(auditResponse.status).toBe(200)
+    expect(await auditResponse.json()).toEqual([
+      expect.objectContaining({
+        action: "organization.invitation.resent",
+        metadata: { revived: false, role: "member" },
+      }),
+    ])
+  })
+
+  it("revives stored and effective expiry while creating missing outbox jobs", async () => {
+    const db = await createSeededDb()
+    const createdAt = new Date("2025-12-01T00:00:00.000Z")
+    await db.insert(schema.invitation).values([
+      {
+        id: "stored_expired_resend",
+        organizationId: "org_1",
+        email: "stored-expired@example.test",
+        role: "member",
+        status: "expired",
+        expiresAt: new Date(0),
+        createdAt,
+        inviterId: "user_3",
+      },
+      {
+        id: "effective_expired_resend",
+        organizationId: "org_1",
+        email: "effective-expired@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(0),
+        createdAt,
+        inviterId: "user_3",
+      },
+    ])
+    const app = createApp(db)
+
+    for (const invitationId of [
+      "stored_expired_resend",
+      "effective_expired_resend",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- each revival must commit before its durable state is asserted.
+      const response = await app.handle(
+        jsonRequest(`/organizations/org_1/invitations/${invitationId}/resend`, {
+          method: "POST",
+          userId: "user_1",
+        })
+      )
+      // oxlint-disable-next-line no-await-in-loop -- response bodies are tied to the sequential revival above.
+      const body = await response.json()
+      expect(response.status).toBe(200)
+      expect(body).toMatchObject({
+        revived: true,
+        invitation: {
+          id: invitationId,
+          status: "pending",
+          createdAt: createdAt.toISOString(),
+          inviterId: "user_1",
+        },
+      })
+    }
+
+    expect(
+      (await db.select().from(schema.invitation)).map((row) => ({
+        id: row.id,
+        status: row.status,
+        inviterId: row.inviterId,
+        createdAt: row.createdAt,
+      }))
+    ).toEqual([
+      {
+        id: "stored_expired_resend",
+        status: "pending",
+        inviterId: "user_1",
+        createdAt,
+      },
+      {
+        id: "effective_expired_resend",
+        status: "pending",
+        inviterId: "user_1",
+        createdAt,
+      },
+    ])
+    expect(await db.select().from(schema.invitationEmailJobs)).toMatchObject([
+      { attempts: 1, status: "completed" },
+      { attempts: 1, status: "completed" },
+    ])
+    expect(invitationEmailSendSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it("revives an expired row after retiring a newer time-expired duplicate", async () => {
+    const db = await createSeededDb()
+    const createdAt = new Date("2025-11-01T00:00:00.000Z")
+    await db.insert(schema.invitation).values([
+      {
+        id: "stored_expired_duplicate",
+        organizationId: "org_1",
+        email: "duplicate-expiry@example.test",
+        role: "member",
+        status: "expired",
+        expiresAt: new Date(0),
+        createdAt,
+        inviterId: "user_3",
+      },
+      {
+        id: "effective_expired_duplicate",
+        organizationId: "org_1",
+        email: "duplicate-expiry@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(0),
+        createdAt: new Date("2025-12-01T00:00:00.000Z"),
+        inviterId: "user_3",
+      },
+    ])
+    await db.insert(schema.invitationEmailJobs).values({
+      id: "effective_expired_duplicate_job",
+      invitationId: "effective_expired_duplicate",
+      status: "processing",
+      attempts: 2,
+      lockedAt: new Date(),
+      createdAt,
+    })
+    const app = createApp(db)
+
+    const response = await app.handle(
+      jsonRequest(
+        "/organizations/org_1/invitations/stored_expired_duplicate/resend",
+        { method: "POST", userId: "user_3" }
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      revived: true,
+      invitation: {
+        id: "stored_expired_duplicate",
+        status: "pending",
+        createdAt: createdAt.toISOString(),
+      },
+    })
+    expect(
+      await db
+        .select({ id: schema.invitation.id, status: schema.invitation.status })
+        .from(schema.invitation)
+    ).toEqual([
+      { id: "stored_expired_duplicate", status: "pending" },
+      { id: "effective_expired_duplicate", status: "expired" },
+    ])
+    expect(
+      await db
+        .select({ status: schema.invitationEmailJobs.status })
+        .from(schema.invitationEmailJobs)
+        .where(
+          eq(schema.invitationEmailJobs.id, "effective_expired_duplicate_job")
+        )
+    ).toEqual([{ status: "canceled" }])
+  })
+
+  it("fails closed for resend role, terminal state, tenant, and recipient conflicts", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
+    await db.insert(schema.invitation).values([
+      {
+        id: "admin_role_resend",
+        organizationId: "org_1",
+        email: "admin-role@example.test",
+        role: "admin",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      },
+      ...["accepted", "rejected", "canceled"].map((status) => ({
+        id: `${status}_resend`,
+        organizationId: "org_1",
+        email: `${status}@example.test`,
+        role: "member",
+        status,
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      })),
+      {
+        id: "other_tenant_resend",
+        organizationId: "org_2",
+        email: "other-tenant@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_2",
+      },
+      {
+        id: "existing_member_resend",
+        organizationId: "org_1",
+        email: "user4@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      },
+      {
+        id: "expired_duplicate_resend",
+        organizationId: "org_1",
+        email: "duplicate-resend@example.test",
+        role: "member",
+        status: "expired",
+        expiresAt: new Date(0),
+        createdAt: new Date(0),
+        inviterId: "user_1",
+      },
+      {
+        id: "other_pending_resend",
+        organizationId: "org_1",
+        email: "duplicate-resend@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      },
+    ])
+    const app = createApp(db)
+
+    const adminForbidden = await app.handle(
+      jsonRequest("/organizations/org_1/invitations/admin_role_resend/resend", {
+        method: "POST",
+        userId: "user_3",
+      })
+    )
+    expect(adminForbidden.status).toBe(403)
+    const staleSuperAdmin = await app.handle(
+      jsonRequest("/organizations/org_1/invitations/admin_role_resend/resend", {
+        method: "POST",
+        userId: "user_1",
+        fresh: false,
+      })
+    )
+    expect(staleSuperAdmin.status).toBe(403)
+    expect(await staleSuperAdmin.json()).toMatchObject({
+      error: {
+        code: "step_up_required",
+        context: { action: "organization.invitation.resend_admin" },
+      },
+    })
+
+    for (const status of ["accepted", "rejected", "canceled"]) {
+      // oxlint-disable-next-line no-await-in-loop -- each terminal response has a separate immutable fixture.
+      const response = await app.handle(
+        jsonRequest(
+          `/organizations/org_1/invitations/${status}_resend/resend`,
+          {
+            method: "POST",
+            userId: "user_3",
+          }
+        )
+      )
+      expect(response.status).toBe(409)
+      // oxlint-disable-next-line no-await-in-loop -- each response body validates the corresponding terminal fixture.
+      expect(await response.json()).toMatchObject({
+        error: {
+          context: { reason: "invitation_not_resendable" },
+        },
+      })
+    }
+
+    for (const invitationId of ["other_tenant_resend", "does_not_exist"]) {
+      // oxlint-disable-next-line no-await-in-loop -- tenant and missing-resource probes must remain indistinguishable.
+      const response = await app.handle(
+        jsonRequest(`/organizations/org_1/invitations/${invitationId}/resend`, {
+          method: "POST",
+          userId: "user_3",
+        })
+      )
+      expect(response.status).toBe(404)
+    }
+    expect(await db.select().from(schema.rateLimit)).toHaveLength(0)
+
+    for (const invitationId of [
+      "existing_member_resend",
+      "expired_duplicate_resend",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- each conflict validates an independent recipient invariant.
+      const response = await app.handle(
+        jsonRequest(`/organizations/org_1/invitations/${invitationId}/resend`, {
+          method: "POST",
+          userId: "user_3",
+        })
+      )
+      // oxlint-disable-next-line no-await-in-loop -- each body belongs to the sequential conflict probe above.
+      const body = await response.json()
+      expect(response.status).toBe(409)
+      expect(body).toMatchObject({
+        error: {
+          context: { reason: "invitation_recipient_conflict" },
+        },
+      })
+      expect(JSON.stringify(body)).not.toMatch(/user4|duplicate-resend/i)
+    }
+
+    expect(invitationEmailSendSpy).not.toHaveBeenCalled()
+    expect(await db.select().from(schema.auditLogs)).toHaveLength(0)
+    expect(
+      (await db.select().from(schema.rateLimit)).map(
+        ({ count: value }) => value
+      )
+    ).toEqual([2, 2])
+  })
+
+  it("revalidates resend membership and role inside the mutation transaction", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
+    await db.insert(schema.invitation).values([
+      {
+        id: "member_role_toctou",
+        organizationId: "org_1",
+        email: "member-role-toctou@example.test",
+        role: "member",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      },
+      {
+        id: "admin_role_toctou",
+        organizationId: "org_1",
+        email: "admin-role-toctou@example.test",
+        role: "admin",
+        status: "pending",
+        expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
+        inviterId: "user_1",
+      },
+    ])
+
+    await expect(
+      findInvitationForResend(db, {
+        organizationId: "org_1",
+        invitationId: "member_role_toctou",
+      })
+    ).resolves.toMatchObject({ role: "member", status: "pending" })
+    await db
+      .update(schema.member)
+      .set({ role: "member" })
+      .where(eq(schema.member.id, "member_3"))
+    await expect(
+      resendInvitationById(db, {
+        actorUserId: "user_3",
+        organizationId: "org_1",
+        invitationId: "member_role_toctou",
+      })
+    ).resolves.toEqual({ kind: "actor_forbidden" })
+
+    await db
+      .update(schema.member)
+      .set({ role: "admin" })
+      .where(eq(schema.member.id, "member_3"))
+    await expect(
+      resendInvitationById(db, {
+        actorUserId: "user_3",
+        organizationId: "org_1",
+        invitationId: "admin_role_toctou",
+      })
+    ).resolves.toEqual({ kind: "actor_forbidden" })
+
+    await db.delete(schema.member).where(eq(schema.member.id, "member_3"))
+    await expect(
+      resendInvitationById(db, {
+        actorUserId: "user_3",
+        organizationId: "org_1",
+        invitationId: "member_role_toctou",
+      })
+    ).resolves.toEqual({ kind: "actor_not_member" })
+
+    expect(await db.select().from(schema.invitationEmailJobs)).toHaveLength(0)
+    expect(await db.select().from(schema.auditLogs)).toHaveLength(0)
+    expect(
+      (await db.select().from(schema.invitation)).map(({ status }) => status)
+    ).toEqual(["pending", "pending"])
   })
 
   it("normalizes and deduplicates a bulk invitation before durable enqueue", async () => {

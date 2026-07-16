@@ -86,6 +86,7 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - `todo_comments(todo_id, organization_id)` は `todos(id, organization_id)` への複合外部キーを持たせる。単独todo IDだけのFKでtenant整合性を表現しない。
 - pending invitationは `(organization_id, lower(email)) WHERE status='pending'` のpartial unique indexで同時duplicateを防ぐ。insert前にemailをlowercase保存し、expiredを更新しても、raceの最終防御はDBへ置く。
 - organization招待は、全invitation・各audit・各`invitation_email_jobs`を同じtransactionで作る。`invitation_email_jobs`は`invitation_id`をunique FK（`ON DELETE CASCADE`）にし、recipient、token、URL、organization/user IDを複製せず、status・attempt・lease・安全なerror codeだけを持つ。schema変更は必ず`db:generate`でmigration/snapshotを保存し、privacy列allowlistとcascade/unique/checkをmigration testで固定する。
+- 招待再送/期限切れ復活は新しいjob rowやschema列を増やさず、同じinvitationと一意outbox rowをtransactionで再queueする。`createdAt`とjob `attempts`は保持し、status、expiry、inviter、error/lease/completedだけを更新する。attemptsをresetすると旧workerのfencing tokenと衝突し得るため禁止する。job欠損だけunique FKの同じ形で再作成する。
 - membershipは `(organization_id, user_id)` をuniqueにする。既存duplicateは最古の `(created_at, id)` rowをsurvivorにし、roleは `super_admin > admin > member` の最強値を引き継いでから削除する。
 - memberがいるorganizationはmigrationで最古のsuper adminだけを残し、ゼロならadmin優先・次にmember・最後に `(created_at, id)` の安定順で1名を昇格する。`role='super_admin'` のorganization partial unique indexはat-most-oneだけを保証するため、通常mutationはtransaction内でat-least-oneも維持する。memberがいないorganizationへmigrationがidentityを捏造してはならず、accessはfail closedにする。
 - pending invitationのroleは `admin` / `member` だけを許可し、migration時の `owner` / `super_admin` / null /未知roleはfail closedでexpiredにする。

@@ -61,6 +61,12 @@ export const invitationModel = v.object({
   status: v.string(),
   organizationId: v.string(),
   inviterId: v.string(),
+  inviter: v.object({
+    id: v.string(),
+    name: v.string(),
+    email: v.string(),
+    image: v.nullable(v.string()),
+  }),
   expiresAt: isoTimestampModel,
   createdAt: isoTimestampModel,
 })
@@ -71,6 +77,12 @@ export const invitationBatchModel = v.object({
   invitations: invitationListModel,
   queuedCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
   delivery: v.literal("queued"),
+})
+
+export const resendInvitationResponseModel = v.object({
+  invitation: invitationModel,
+  delivery: v.literal("queued"),
+  revived: v.boolean(),
 })
 
 const manageableRoleModel = v.picklist(["admin", "member"])

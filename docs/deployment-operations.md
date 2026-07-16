@@ -47,6 +47,8 @@ local Bun developmentは既定で`EMAIL_PROVIDER=mailpit`を使い、portlessの
 
 organization invitationは`invitation_email_jobs`から配送します。jobはrecipient、token、URL、organization/user IDを持たず、送信時にinvitation・organization・inviterをjoinします。API request後の`waitUntil`と毎分scheduled handlerは同じprocessorを呼び、1回25件、5分lease、30秒から最大1時間の指数backoffで処理します。`attempts + locked_at`をfencing tokenにするため、lease切れ後の旧workerは新しい結果を上書きできません。
 
+招待再送/期限切れ復活ではinvitationごとに一意な同じjobを`pending`へ戻し、error、lock、next attempt、completed時刻をclearします。`attempts`はresetせず単調増加させるため、再送直前まで動いていた旧workerの完了/失敗更新はfencing条件に一致せずstaleになります。job欠損時だけ同じtransactionで再作成します。
+
 監視対象はbatchの`claimed/completed/failed/canceled/stale`件数、失敗時のattempt・固定error code・retryableだけです。job/invitation/organization/user ID、email、URL、provider raw errorをlog/Sentryへ出しません。`failed`増加、`stale`、最古pending ageをalertにし、bindingやsender domainを修復後はcronの再試行へ任せます。provider受付とjob完了の間でWorkerが停止すると重複配送の可能性が残るため、運用上はat-least-onceとして扱います。
 
 ## Sentry

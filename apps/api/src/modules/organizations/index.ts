@@ -25,6 +25,7 @@ import {
   organizationListModel,
   organizationMemberParamsModel,
   removeMemberBodyModel,
+  resendInvitationResponseModel,
   transferSuperAdminBodyModel,
   updateMemberRoleBodyModel,
   updateOrganizationBodyModel,
@@ -40,6 +41,7 @@ import {
   listMembers,
   listOrganizations,
   removeMember,
+  resendInvitation,
   transferSuperAdmin,
   updateMemberRole,
   updateOrganization,
@@ -381,6 +383,35 @@ export const createOrganizationsModule = (db: Db) =>
           summary: "memberを一括招待",
           description:
             "1〜20件のemailをcase-insensitiveに正規化・重複排除し、全件を同じroleでatomicにqueueする。adminはmemberだけを招待できる。admin roleの付与はfresh sessionを持つsuper_adminだけに許可し、actor+organizationは30件/時、organization全体は100件/時に制限する。",
+          tags: ["Organization invitations"],
+        },
+      }
+    )
+    .post(
+      "/organizations/:organizationId/invitations/:invitationId/resend",
+      async ({ authContext, organizationAccess, params }) =>
+        resendInvitation(db, {
+          userId: authContext.user.id,
+          session: authContext.session,
+          organizationId: organizationAccess.id,
+          invitationId: params.invitationId,
+        }),
+      {
+        organizationAccess: {
+          action: "invitation.resend",
+          allow: ["super_admin", "admin"],
+          source: "params",
+        },
+        params: organizationInvitationParamsModel,
+        response: {
+          200: resendInvitationResponseModel,
+          ...invitationErrorResponses,
+        },
+        detail: {
+          operationId: "resendOrganizationInvitation",
+          summary: "organization招待を再送",
+          description:
+            "pendingまたは期限切れの招待だけを同じIDで48時間延長し、durable email jobへ再queueする。admin roleの再送はfresh sessionを持つsuper_adminだけに許可する。quota、recipient競合、tenant境界を作成時と同じ安全なcontractで検証する。",
           tags: ["Organization invitations"],
         },
       }
