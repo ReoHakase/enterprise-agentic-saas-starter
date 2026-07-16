@@ -1,5 +1,27 @@
 import type { SecurityMethods } from "@/features/account/schema"
 import { parseSecurityMethods } from "@/features/account/schema"
+import {
+  parseSafeAuthError,
+  type PublicAuthErrorCode,
+} from "@/features/auth/error"
+
+const authenticationRequestFailedMessage = "Authentication request failed"
+
+export class SecurityMutationError extends Error {
+  readonly code?: PublicAuthErrorCode
+
+  constructor({
+    code,
+    message,
+  }: {
+    code?: PublicAuthErrorCode
+    message: string
+  }) {
+    super(message)
+    this.name = "SecurityMutationError"
+    this.code = code
+  }
+}
 
 export type SecurityAuthCapabilities = {
   listAccounts?: () => Promise<unknown>
@@ -84,7 +106,7 @@ export const createSecurityAuthCapabilities = (
 
 const unwrapAuthResult = (result: unknown): unknown => {
   if (isObjectRecord(result) && "error" in result && result.error) {
-    throw new Error("Authentication request failed")
+    throw securityMutationError(result)
   }
   if (isObjectRecord(result) && "data" in result) {
     return result.data
@@ -92,16 +114,30 @@ const unwrapAuthResult = (result: unknown): unknown => {
   return result
 }
 
-const authenticationRequestFailed = () =>
-  new Error("Authentication request failed")
+const securityMutationError = (error: unknown) =>
+  new SecurityMutationError(
+    parseSafeAuthError(error, authenticationRequestFailedMessage)
+  )
 
 const settleAuthRequest = async (request: Promise<unknown>) => {
   try {
     return await request
-  } catch {
-    throw authenticationRequestFailed()
+  } catch (error) {
+    if (error instanceof SecurityMutationError) throw error
+    throw securityMutationError(error)
   }
 }
+
+export const securityMutationErrorCode = (error: unknown) =>
+  error instanceof SecurityMutationError ? error.code : undefined
+
+export const securityMutationErrorMessage = (
+  error: unknown,
+  fallback: string
+) =>
+  error instanceof SecurityMutationError && error.code
+    ? error.message
+    : fallback
 
 export const hasSecurityMethodsCapability = (
   capabilities: SecurityAuthCapabilities

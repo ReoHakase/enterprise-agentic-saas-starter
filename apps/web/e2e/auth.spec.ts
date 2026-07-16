@@ -185,6 +185,43 @@ test("複数organizationでactive未選択なら明示選択を要求する", as
   await expect(page.getByText("Alpha Operations").first()).toBeVisible()
 })
 
+test("stale sessionではpasskey追加前に再認証しfocusを維持する", async ({
+  allowClientErrors,
+  context,
+  page,
+}) => {
+  allowClientErrors(/Failed to load resource.*403/)
+  await useSession(context, "admin")
+  await page.goto("/settings/account")
+
+  const addPasskey = page.getByRole("button", { name: "Add passkey" })
+  await expect(addPasskey).toBeVisible()
+  const staleResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/auth/passkey/generate-register-options") &&
+      response.request().method() === "GET"
+  )
+  await addPasskey.click()
+  expect((await staleResponse).status()).toBe(403)
+
+  await expect(
+    page.getByRole("alertdialog", {
+      name: "Sign in again to add a passkey",
+    })
+  ).toBeVisible()
+  await expect(page.getByText(/private session timestamp/u)).toHaveCount(0)
+
+  await page.keyboard.press("Escape")
+  await expect(addPasskey).toBeFocused()
+
+  await addPasskey.click()
+  await page.getByRole("button", { name: "Continue to sign in" }).click()
+  await expect(page).toHaveURL(
+    "/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account"
+  )
+  await expect(page.getByText("Security check", { exact: true })).toBeVisible()
+})
+
 test("member権限とtenant境界をAPIと画面の両方で拒否する", async ({
   context,
   page,

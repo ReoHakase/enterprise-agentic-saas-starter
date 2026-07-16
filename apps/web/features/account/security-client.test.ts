@@ -57,6 +57,19 @@ describe("security auth client boundary", () => {
     ).rejects.toThrow("Authentication request failed")
     await expect(
       completeSecurityMutation(
+        Promise.resolve({
+          error: {
+            code: "SESSION_NOT_FRESH",
+            message: "SELECT token FROM session WHERE secret = 'private'",
+          },
+        })
+      )
+    ).rejects.toMatchObject({
+      code: "SESSION_NOT_FRESH",
+      message: "Sign in again to continue.",
+    })
+    await expect(
+      completeSecurityMutation(
         Promise.reject(new Error("SELECT token FROM account"))
       )
     ).rejects.toThrow("Authentication request failed")

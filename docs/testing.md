@@ -68,8 +68,11 @@ GitHub OAuthだけは`playwright.oauth.config.ts`で別process群を起動しま
 4. organization未所属の新規userが最初のorganization画面へ戻る。
 5. reload後もsessionを維持し、account providerが`github`である。
 6. HttpOnly、SameSite、共有cookie domainが維持される。
+7. CDP virtual USB authenticatorで実WebAuthn registrationを完了し、passkeyがAPIのDB-backed list、reload後の画面、delete後の空listへ一貫して反映される。
 
 OAuth suiteはDesktop Chromium 1280×720、`workers: 1`で実行します。標準mock matrixのmobile/WebKitを重複実行しません。suite runごとに新しいemulator processとfresh DBを使い、fixture `finally`とPlaywright `globalTeardown`でrun固有のDB、WAL、SHMを二重cleanupします。Playwright retryは同じfixture userを再認証しても結果が変わらないjourneyにし、途中成功を`failOnFlakyTests`でCI失敗として検出します。`emulate.reset()`は発行済みtoken mapを完全には消さないためtest isolation境界に使いません。
+
+Passkeyの失敗系は標準3 projectでfresh session期限切れ、step-up dialog、Escape後のAdd buttonへのfocus復帰、再認証URLを確認します。成功系はOAuth Chromium suiteだけでvirtual authenticatorを有効化し、`navigator.credentials.create`やAPI responseをmockせずにregistration ceremonyを通します。
 
 mock stateとreset endpointは全projectで共有されるため、標準設定はlocal/CIとも `workers: 1` でjourneyを直列実行します。tenant切替時は旧tenantのmount済みqueryを再取得せず、cancelしてから遷移し、切替途中の409をbrowser errorとして発生させないこともE2Eで固定します。
 

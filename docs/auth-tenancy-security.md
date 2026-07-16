@@ -78,6 +78,12 @@ Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-s
 
 Better AuthやOAuth/passkey providerのclient errorは、Web-local Valibotでstable codeだけを読み、既知codeのallowlistを安全な固定文言へ対応付けます。未知codeやraw `message`、nested causeにはprovider response、token、内部障害が含まれ得るため表示せず、操作別fallbackを使います。表示ownerは操作componentまたはglobal ownerの一方に決め、同じ失敗を二重toastしません。
 
+## Passkey登録
+
+Passkeyの登録option生成とverifyは、Better Authの15分fresh sessionと`requireSession`をそのまま認可境界にします。stale sessionでは`SESSION_NOT_FRESH`を固定文言のstep-up dialogへ変換し、`/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account`へ進みます。同一tabではallowlist済みのaction識別子だけを`sessionStorage`へ一時保存し、新しいsessionでsettingsへ戻った時に1回だけconsumeして登録を再開します。token、credential、provider messageは保存しません。
+
+登録時は`authenticatorAttachment`を固定せず、端末内authenticatorと外付けsecurity keyの両方を許可します。cancelと既登録credentialはBetter Auth/WebAuthnの実codeをWeb-local Valibot allowlistで判定し、raw browser/provider errorをtoastへ出しません。
+
 ## GitHub OAuth
 
 productionはBetter Auth組み込みGitHub providerを使います。ローカル開発とOAuth E2Eで`GITHUB_OAUTH_EMULATOR_URL`が設定された場合だけ、同じ`providerId: "github"`を持つGeneric OAuth providerへ切り替えます。両providerを同時登録せず、productionでemulator URLが設定されていたら起動を拒否します。

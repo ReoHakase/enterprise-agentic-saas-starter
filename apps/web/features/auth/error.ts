@@ -1,6 +1,37 @@
 import * as v from "valibot"
 
-const publicErrorMessages: Readonly<Record<string, string>> = {
+const publicAuthErrorCodes = [
+  "AUTHENTICATION_FAILED",
+  "AUTH_CANCELLED",
+  "EMAIL_NOT_VERIFIED",
+  "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION",
+  "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
+  "ERROR_CEREMONY_ABORTED",
+  "FAILED_TO_UNLINK_LAST_ACCOUNT",
+  "INVALID_EMAIL",
+  "INVALID_EMAIL_OR_PASSWORD",
+  "INVALID_PASSWORD",
+  "INVALID_TOKEN",
+  "INVITATION_NOT_FOUND",
+  "LINKED_ACCOUNT_ALREADY_EXISTS",
+  "PASSKEY_NOT_FOUND",
+  "PASSWORD_TOO_LONG",
+  "PASSWORD_TOO_SHORT",
+  "PREVIOUSLY_REGISTERED",
+  "REGISTRATION_CANCELLED",
+  "SESSION_EXPIRED",
+  "SESSION_NOT_FRESH",
+  "SOCIAL_ACCOUNT_ALREADY_LINKED",
+  "TOKEN_EXPIRED",
+  "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+  "USER_ALREADY_EXISTS",
+  "USER_NOT_FOUND",
+  "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
+] as const
+
+export type PublicAuthErrorCode = (typeof publicAuthErrorCodes)[number]
+
+const publicErrorMessages = {
   AUTHENTICATION_FAILED: "Authentication failed. Try again.",
   AUTH_CANCELLED: "Authentication was cancelled.",
   EMAIL_NOT_VERIFIED: "Verify your email address before signing in.",
@@ -14,6 +45,9 @@ const publicErrorMessages: Readonly<Record<string, string>> = {
   INVALID_TOKEN: "This link is invalid. Request a new one.",
   INVITATION_NOT_FOUND: "This invitation is no longer available.",
   LINKED_ACCOUNT_ALREADY_EXISTS: "That account is already linked.",
+  ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED:
+    "That passkey is already registered.",
+  ERROR_CEREMONY_ABORTED: "Passkey registration was cancelled.",
   PASSKEY_NOT_FOUND: "That passkey is no longer available.",
   PASSWORD_TOO_LONG: "The password is too long.",
   PASSWORD_TOO_SHORT: "The password is too short.",
@@ -29,9 +63,9 @@ const publicErrorMessages: Readonly<Record<string, string>> = {
   USER_NOT_FOUND: "We could not complete that request.",
   YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION:
     "This invitation belongs to another account.",
-}
+} satisfies Readonly<Record<PublicAuthErrorCode, string>>
 
-const errorCodeSchema = v.pipe(v.string(), v.regex(/^[A-Z][A-Z0-9_]{0,127}$/u))
+const errorCodeSchema = v.picklist(publicAuthErrorCodes)
 const nestedAuthErrorSchema = v.object({
   error: v.object({ code: errorCodeSchema }),
 })
@@ -49,7 +83,22 @@ const errorCode = (error: unknown) => {
   }
 }
 
-export const safeAuthErrorMessage = (error: unknown, fallback: string) => {
-  const code = errorCode(error)
-  return code ? (publicErrorMessages[code] ?? fallback) : fallback
+export type SafeAuthError = {
+  code?: PublicAuthErrorCode
+  message: string
 }
+
+export const parseSafeAuthError = (
+  error: unknown,
+  fallback: string
+): SafeAuthError => {
+  const code = errorCode(error)
+  if (code) {
+    return { code, message: publicErrorMessages[code] }
+  }
+
+  return { message: fallback }
+}
+
+export const safeAuthErrorMessage = (error: unknown, fallback: string) =>
+  parseSafeAuthError(error, fallback).message

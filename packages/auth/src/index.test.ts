@@ -1,3 +1,5 @@
+import { makeSignature } from "better-auth/crypto"
+import { migrate } from "drizzle-orm/libsql/migrator"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import type { auth as Auth } from "./index"
@@ -22,6 +24,7 @@ let organizationSecurityHooks: {
   }): Promise<void>
 }
 let generateAuthOpenApiSchema: () => Promise<AuthOpenApiSchema>
+let createPasskeySessionHeaders: (ageInMilliseconds: number) => Promise<Headers>
 
 beforeAll(async () => {
   Object.assign(process.env, {
@@ -43,6 +46,95 @@ beforeAll(async () => {
   organizationSecurityHooks = authModule.organizationSecurityHooks
   const authOpenApiModule = await import("./openapi")
   generateAuthOpenApiSchema = authOpenApiModule.generateAuthOpenApiSchema
+
+  const [{ db }, schema] = await Promise.all([
+    import("@enterprise-agentic-saas/db"),
+    import("@enterprise-agentic-saas/db/schema"),
+  ])
+  await migrate(db, {
+    migrationsFolder: new URL("../../db/drizzle", import.meta.url).pathname,
+  })
+
+  let sessionSequence = 0
+  createPasskeySessionHeaders = async (ageInMilliseconds) => {
+    sessionSequence += 1
+    const suffix = `${sessionSequence}-${crypto.randomUUID()}`
+    const userId = `passkey-user-${suffix}`
+    const token = `passkey-session-${suffix}`
+    const createdAt = new Date(Date.now() - ageInMilliseconds)
+
+    await db.insert(schema.user).values({
+      id: userId,
+      name: "Passkey Test User",
+      email: `passkey-${suffix}@example.test`,
+      emailVerified: true,
+      createdAt,
+      updatedAt: createdAt,
+    })
+    await db.insert(schema.session).values({
+      id: `session-${suffix}`,
+      token,
+      userId,
+      createdAt,
+      updatedAt: createdAt,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    })
+
+    const context = await auth.$context
+    const signedToken = `${token}.${await makeSignature(token, context.secret)}`
+    return new Headers({
+      cookie: `${context.authCookies.sessionToken.name}=${signedToken}`,
+      origin: "http://app.localhost",
+    })
+  }
+})
+
+describe("passkey registration security boundary", () => {
+  it("generates options for a fresh session with the configured RP identity", async () => {
+    const headers = await createPasskeySessionHeaders(60_000)
+    const response = await auth.handler(
+      new Request(
+        "http://api.localhost/auth/passkey/generate-register-options",
+        { headers }
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      challenge: expect.any(String),
+      rp: {
+        id: "app.localhost",
+        name: "Enterprise Agentic SaaS",
+      },
+      user: {
+        displayName: expect.stringMatching(/@example\.test$/u),
+        name: expect.stringMatching(/@example\.test$/u),
+      },
+    })
+
+    const passkeyPlugin = auth.options.plugins?.find(
+      (plugin) => plugin.id === "passkey"
+    )
+    expect(passkeyPlugin?.options).toMatchObject({
+      origin: ["http://app.localhost"],
+      rpID: "app.localhost",
+    })
+  })
+
+  it("rejects registration options when the session is no longer fresh", async () => {
+    const headers = await createPasskeySessionHeaders(16 * 60 * 1000)
+    const response = await auth.handler(
+      new Request(
+        "http://api.localhost/auth/passkey/generate-register-options",
+        { headers }
+      )
+    )
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({
+      code: "SESSION_NOT_FRESH",
+    })
+  })
 })
 
 describe("organization invitation acceptance", () => {
@@ -152,19 +244,19 @@ describe("verification secret handling", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
     try {
-      await expect(
-        auth.handler(
-          new Request(
-            `http://api.localhost/auth/magic-link/verify?token=${submittedToken}&callbackURL=%2Fdashboard`,
-            {
-              headers: {
-                origin: "http://app.localhost",
-                cookie: "better-auth.session_token=secret-cookie-value",
-              },
-            }
-          )
+      const response = await auth.handler(
+        new Request(
+          `http://api.localhost/auth/magic-link/verify?token=${submittedToken}&callbackURL=%2Fdashboard`,
+          {
+            headers: {
+              origin: "http://app.localhost",
+              cookie: "better-auth.session_token=secret-cookie-value",
+            },
+          }
         )
-      ).rejects.toThrow()
+      )
+      expect(response.status).toBe(302)
+      expect(response.headers.get("location")).not.toContain(submittedToken)
 
       auth.options.logger?.log?.(
         "error",

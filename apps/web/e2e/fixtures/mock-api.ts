@@ -741,6 +741,18 @@ Bun.serve({
     ) {
       return json([])
     }
+    if (
+      pathname === "/auth/passkey/generate-register-options" &&
+      request.method === "GET"
+    ) {
+      return json(
+        {
+          code: "SESSION_NOT_FRESH",
+          message: "private session timestamp must never be rendered",
+        },
+        403
+      )
+    }
 
     const state = stateFor(sessionKey)
     const activeOrganization =

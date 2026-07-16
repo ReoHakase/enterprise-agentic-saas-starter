@@ -73,3 +73,83 @@ test("GitHub emulatorで認証しsessionを永続化できる", async ({
   await expect(page).toHaveURL(/\/settings\/organizations$/)
   await expect(page.getByText("Create your first organization")).toBeVisible()
 })
+
+test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", async ({
+  context,
+  page,
+}) => {
+  const cdp = await context.newCDPSession(page)
+  await cdp.send("WebAuthn.enable")
+  const { authenticatorId } = await cdp.send(
+    "WebAuthn.addVirtualAuthenticator",
+    {
+      options: {
+        protocol: "ctap2",
+        transport: "usb",
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    }
+  )
+
+  try {
+    await page.goto("/auth/sign-in?redirectTo=%2Fsettings%2Faccount")
+    await page.getByRole("button", { name: "GitHub" }).click()
+    await page.getByRole("button", { name: /oauth-alice/ }).click()
+    await expect(page).toHaveURL(/\/settings\/account$/u)
+
+    const generateOptions = page.waitForResponse(
+      (response) =>
+        response.url().includes("/auth/passkey/generate-register-options") &&
+        response.request().method() === "GET"
+    )
+    const verifyRegistration = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/auth/passkey/verify-registration") &&
+        response.request().method() === "POST"
+    )
+    await page.getByRole("button", { name: "Add passkey" }).click()
+    expect((await generateOptions).status()).toBe(200)
+    expect((await verifyRegistration).status()).toBe(200)
+    await expect(page.getByText("Passkey added", { exact: true })).toBeVisible()
+
+    const listAfterRegistration = await context.request.get(
+      `${apiOrigin}/auth/passkey/list-user-passkeys`
+    )
+    expect(listAfterRegistration.status()).toBe(200)
+    expect(await listAfterRegistration.json()).toEqual([
+      expect.objectContaining({
+        name: "Enterprise Agentic SaaS",
+        credentialID: expect.any(String),
+      }),
+    ])
+
+    await page.reload()
+    await expect(
+      page.getByText("Enterprise Agentic SaaS", { exact: true })
+    ).toBeVisible()
+
+    await page.getByRole("button", { name: "Delete" }).click()
+    const deleteRegistration = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/auth/passkey/delete-passkey") &&
+        response.request().method() === "POST"
+    )
+    await page.getByRole("button", { name: "Delete passkey" }).click()
+    expect((await deleteRegistration).status()).toBe(200)
+    await expect(
+      page.getByText("No passkeys are registered yet.")
+    ).toBeVisible()
+
+    const listAfterDeletion = await context.request.get(
+      `${apiOrigin}/auth/passkey/list-user-passkeys`
+    )
+    expect(listAfterDeletion.status()).toBe(200)
+    expect(await listAfterDeletion.json()).toEqual([])
+  } finally {
+    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId })
+    await cdp.send("WebAuthn.disable")
+  }
+})

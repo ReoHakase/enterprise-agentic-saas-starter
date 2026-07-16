@@ -97,5 +97,27 @@ describe("authentication form schemas", () => {
         "Operation failed safely."
       )
     ).toBe("Operation failed safely.")
+    expect(
+      safeAuthErrorMessage(
+        {
+          error: {
+            code: "ERROR_CEREMONY_ABORTED",
+            message: "raw WebAuthn error",
+          },
+        },
+        "fallback"
+      )
+    ).toBe("Passkey registration was cancelled.")
+    expect(
+      safeAuthErrorMessage(
+        {
+          error: {
+            code: "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
+            message: "raw authenticator metadata",
+          },
+        },
+        "fallback"
+      )
+    ).toBe("That passkey is already registered.")
   })
 })

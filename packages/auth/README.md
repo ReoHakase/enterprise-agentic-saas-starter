@@ -29,6 +29,8 @@ local emulator使用時も既存clientの `signIn.social({ provider: "github" })
 
 PasskeyのRP IDは `TRUSTED_ORIGINS` 先頭のhostname、許可originは同配列全体から組み立てるため、local用hostnameをproductionへ持ち込まない。
 
+Passkey登録は15分以内に作成されたfresh sessionを要求する。stale sessionはWebのstep-up導線で再認証し、`freshAge`や`registration.requireSession`を無効化しない。clientは`authenticatorAttachment`を固定せず、platform authenticatorと外付けsecurity keyの両方を許可する。
+
 cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、web/APIが共有する親domainを指定する。localの `.localhost` だけはweb hostnameへ自動fallbackする。cookieのSecure属性は `BETTER_AUTH_URL` のprotocolへ合わせ、productionはHTTPS以外を起動時に拒否する。これによりlocal HTTP E2EだけSecure属性を外せる。
 
 Better Auth organization pluginは招待recipient向けの `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` だけを公開する。organization/member/invitation/team/custom roleの管理・参照endpointは `disabledPaths` で404にし、tenant guard・fresh session・確認入力・auditを持つ `apps/api` のrouteへ集約する。

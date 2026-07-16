@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     },
   },
   refresh: vi.fn<() => void>(),
+  push: vi.fn<(href: string) => void>(),
   toastError: vi.fn<(message: string) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
@@ -26,7 +27,7 @@ vi.mock("@better-auth-ui/react", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }))
 
 vi.mock("sonner", () => ({
@@ -40,7 +41,7 @@ const renderPanel = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  render(
+  return render(
     <QueryClientProvider client={queryClient}>
       <SecurityMethodsPanel />
     </QueryClientProvider>
@@ -50,6 +51,7 @@ const renderPanel = () => {
 describe("SecurityMethodsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.sessionStorage.clear()
     mocks.authClient.listAccounts.mockResolvedValue({
       data: [
         {
@@ -84,6 +86,125 @@ describe("SecurityMethodsPanel", () => {
       })
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("GitHub account unlinked")
+  })
+
+  it("adds a passkey without restricting the authenticator type", async () => {
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.click(await screen.findByRole("button", { name: "Add passkey" }))
+
+    await waitFor(() => {
+      expect(mocks.authClient.passkey.addPasskey).toHaveBeenCalledWith({
+        name: "Enterprise Agentic SaaS",
+      })
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey added")
+  })
+
+  it("requires a fresh sign-in and resumes passkey setup after returning", async () => {
+    const user = userEvent.setup()
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "SESSION_NOT_FRESH",
+        message: "session row and provider secret must stay private",
+      },
+    })
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "SESSION_NOT_FRESH",
+        message: "another private session timestamp",
+      },
+    })
+    const firstRender = renderPanel()
+
+    const addPasskey = await screen.findByRole("button", {
+      name: "Add passkey",
+    })
+    await user.click(addPasskey)
+    expect(
+      await screen.findByRole("alertdialog", {
+        name: "Sign in again to add a passkey",
+      })
+    ).toBeVisible()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+
+    await user.keyboard("{Escape}")
+    expect(addPasskey).toHaveFocus()
+    await user.click(addPasskey)
+    expect(
+      await screen.findByRole("alertdialog", {
+        name: "Sign in again to add a passkey",
+      })
+    ).toBeVisible()
+
+    await user.click(
+      screen.getByRole("button", { name: "Continue to sign in" })
+    )
+    expect(mocks.push).toHaveBeenCalledWith(
+      "/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account"
+    )
+
+    firstRender.unmount()
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({ data: {} })
+    renderPanel()
+
+    await waitFor(() => {
+      expect(mocks.authClient.passkey.addPasskey).toHaveBeenCalledTimes(3)
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey added")
+    expect(JSON.stringify(mocks.toastError.mock.calls)).not.toContain(
+      "provider secret"
+    )
+  })
+
+  it.each([
+    ["ERROR_CEREMONY_ABORTED", "Passkey registration was cancelled."],
+    [
+      "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
+      "That passkey is already registered.",
+    ],
+  ])("maps %s to a fixed passkey message", async (code, message) => {
+    const user = userEvent.setup()
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
+      data: null,
+      error: { code, message: "credential=private-provider-material" },
+    })
+    renderPanel()
+
+    await user.click(await screen.findByRole("button", { name: "Add passkey" }))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(message)
+    })
+    expect(JSON.stringify(mocks.toastError.mock.calls)).not.toContain(
+      "private-provider-material"
+    )
+  })
+
+  it("falls back without exposing unknown passkey provider details", async () => {
+    const user = userEvent.setup()
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "BETTER_AUTH_SECRET=must-never-render",
+      },
+    })
+    renderPanel()
+
+    await user.click(await screen.findByRole("button", { name: "Add passkey" }))
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "The security method could not be updated. Try again."
+      )
+    })
+    expect(JSON.stringify(mocks.toastError.mock.calls)).not.toContain(
+      "must-never-render"
+    )
   })
 
   it("shows a recoverable state without leaking provider errors", async () => {

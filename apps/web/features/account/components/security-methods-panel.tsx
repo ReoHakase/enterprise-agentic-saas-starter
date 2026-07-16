@@ -41,15 +41,20 @@ import {
   createSecurityAuthCapabilities,
   hasSecurityMethodsCapability,
   loadSecurityMethods,
+  securityMutationErrorMessage,
 } from "@/features/account/security-client"
+import {
+  securityMethodsKey,
+  usePasskeyRegistration,
+} from "@/features/account/use-passkey-registration"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
-const securityMethodsKey = ["account", "security-methods"] as const
+const securityMutationFallback =
+  "The security method could not be updated. Try again."
 
 type SecurityMutation =
   | { type: "link-github" }
   | { type: "unlink-github"; accountId?: string }
-  | { type: "add-passkey" }
   | { type: "delete-passkey"; passkeyId: string }
 
 const formatSecurityDate = (value?: string | Date | null) =>
@@ -64,6 +69,11 @@ const GitHubMarkIcon = () => (
   >
     <path d="M12 .5a12 12 0 0 0-3.79 23.38c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.42-4.04-1.42-.55-1.38-1.33-1.75-1.33-1.75-1.08-.75.08-.74.08-.74 1.2.08 1.83 1.22 1.83 1.22 1.06 1.8 2.8 1.28 3.49.98.11-.76.42-1.28.76-1.58-2.67-.3-5.47-1.32-5.47-5.88 0-1.3.47-2.37 1.23-3.2-.12-.3-.53-1.52.12-3.17 0 0 1.01-.32 3.3 1.22a11.6 11.6 0 0 1 6 0c2.3-1.54 3.3-1.22 3.3-1.22.66 1.65.25 2.87.13 3.17.77.83 1.23 1.9 1.23 3.2 0 4.58-2.8 5.57-5.48 5.87.43.37.82 1.1.82 2.22v3.3c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" />
   </svg>
+)
+
+const unlinkGithubTrigger = <Button variant="destructive" />
+const deletePasskeyTrigger = (
+  <Button className="self-start sm:self-auto" variant="destructive" size="sm" />
 )
 
 export const SecurityMethodsPanel = () => {
@@ -103,16 +113,6 @@ export const SecurityMethodsPanel = () => {
         )
         return
       }
-      if (action.type === "add-passkey") {
-        if (!capabilities.passkey?.addPasskey) throw new Error("Unavailable")
-        await completeSecurityMutation(
-          capabilities.passkey.addPasskey({
-            name: "Enterprise Agentic SaaS",
-            authenticatorAttachment: "platform",
-          })
-        )
-        return
-      }
       if (!capabilities.passkey?.deletePasskey) throw new Error("Unavailable")
       await completeSecurityMutation(
         capabilities.passkey.deletePasskey({ id: action.passkeyId })
@@ -125,14 +125,12 @@ export const SecurityMethodsPanel = () => {
         toast.success(
           action.type === "unlink-github"
             ? "GitHub account unlinked"
-            : action.type === "add-passkey"
-              ? "Passkey added"
-              : "Passkey deleted"
+            : "Passkey deleted"
         )
       }
     },
-    onError: () => {
-      toast.error("The security method could not be updated. Try again.")
+    onError: (error) => {
+      toast.error(securityMutationErrorMessage(error, securityMutationFallback))
     },
   })
   const { mutate } = mutation
@@ -152,15 +150,16 @@ export const SecurityMethodsPanel = () => {
       }),
     [githubAccount?.accountId, mutate]
   )
-  const addPasskey = useCallback(
-    () => mutate({ type: "add-passkey" }),
-    [mutate]
+  const passkeyRegistration = usePasskeyRegistration(
+    capabilities.passkey?.addPasskey
   )
   const deletePasskey = useCallback(
     (passkeyId: string) => mutate({ type: "delete-passkey", passkeyId }),
     [mutate]
   )
   const retry = useCallback(() => void refetch(), [refetch])
+  const securityMutationPending =
+    mutation.isPending || passkeyRegistration.mutation.isPending
 
   return (
     <section
@@ -212,7 +211,7 @@ export const SecurityMethodsPanel = () => {
             account={githubAccount}
             canLink={Boolean(capabilities.linkSocial)}
             canUnlink={Boolean(capabilities.unlinkAccount)}
-            pending={mutation.isPending}
+            pending={securityMutationPending}
             pendingType={mutation.variables?.type}
             onLink={linkGithub}
             onUnlink={unlinkGithub}
@@ -226,11 +225,12 @@ export const SecurityMethodsPanel = () => {
                 </p>
               </div>
               <Button
+                ref={passkeyRegistration.triggerRef}
                 variant="outline"
                 disabled={
-                  !capabilities.passkey?.addPasskey || mutation.isPending
+                  !capabilities.passkey?.addPasskey || securityMutationPending
                 }
-                onClick={addPasskey}
+                onClick={passkeyRegistration.register}
               >
                 <KeyRoundIcon data-icon="inline-start" aria-hidden="true" />
                 Add passkey
@@ -243,7 +243,7 @@ export const SecurityMethodsPanel = () => {
                     key={passkey.id}
                     passkey={passkey}
                     canDelete={Boolean(capabilities.passkey?.deletePasskey)}
-                    pending={mutation.isPending}
+                    pending={securityMutationPending}
                     onDelete={deletePasskey}
                   />
                 ))}
@@ -256,6 +256,11 @@ export const SecurityMethodsPanel = () => {
           </div>
         </div>
       ) : null}
+      <PasskeyStepUpDialog
+        open={passkeyRegistration.reauthenticationOpen}
+        onOpenChange={passkeyRegistration.handleReauthenticationOpenChange}
+        onContinue={passkeyRegistration.continueReauthentication}
+      />
     </section>
   )
 }
@@ -299,9 +304,8 @@ const GithubMethod = ({
     {account ? (
       <AlertDialog>
         <AlertDialogTrigger
-          render={
-            <Button variant="destructive" disabled={!canUnlink || pending} />
-          }
+          render={unlinkGithubTrigger}
+          disabled={!canUnlink || pending}
         >
           <Unlink2Icon data-icon="inline-start" aria-hidden="true" />
           Unlink
@@ -347,10 +351,9 @@ const PasskeyRow = ({
   pending: boolean
   onDelete: (passkeyId: string) => void
 }) => {
-  const requestDelete = useCallback(
-    () => onDelete(passkey.id),
-    [onDelete, passkey.id]
-  )
+  const requestDelete = useCallback(() => {
+    onDelete(passkey.id)
+  }, [onDelete, passkey.id])
   return (
     <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -370,14 +373,8 @@ const PasskeyRow = ({
       </div>
       <AlertDialog>
         <AlertDialogTrigger
-          render={
-            <Button
-              className="self-start sm:self-auto"
-              variant="destructive"
-              size="sm"
-              disabled={!canDelete || pending}
-            />
-          }
+          render={deletePasskeyTrigger}
+          disabled={!canDelete || pending}
         >
           <Trash2Icon data-icon="inline-start" aria-hidden="true" />
           Delete
@@ -405,6 +402,34 @@ const PasskeyRow = ({
     </div>
   )
 }
+
+const PasskeyStepUpDialog = ({
+  open,
+  onOpenChange,
+  onContinue,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onContinue: () => void
+}) => (
+  <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Sign in again to add a passkey</AlertDialogTitle>
+        <AlertDialogDescription>
+          Your session is no longer recent enough for this security-sensitive
+          change. Sign in again, then passkey setup will resume here.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancel</AlertDialogCancel>
+        <AlertDialogAction onClick={onContinue}>
+          Continue to sign in
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+)
 
 const SecurityMethodsSkeleton = () => (
   <div className="grid gap-3" aria-label="Loading security methods">
