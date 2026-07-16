@@ -68,9 +68,9 @@ import {
 import { useCallback, useMemo, useState, type ChangeEvent } from "react"
 
 import { CreateIssueDialog } from "./create-issue-dialog"
-import { getColumnResponsiveClass } from "./issue-inline-controls"
 import { IssueMetrics } from "./issue-metrics"
 import { useIssueColumns } from "./issue-table-columns"
+import { IssueMutationContext } from "./issue-table-state"
 import { safelyRunAction, statusOptions } from "./issue-utils"
 import type {
   AsyncAction,
@@ -79,6 +79,8 @@ import type {
   IssueUiItem,
   IssueUpdate,
 } from "./types"
+
+const getIssueRowId = (issue: IssueUiItem) => issue.id
 
 export const IssuesTable = ({
   issues,
@@ -117,7 +119,6 @@ export const IssuesTable = ({
   )
   const columns = useIssueColumns({
     assignees,
-    busyIssueId,
     onToggle,
     onUpdate,
     onSelect,
@@ -134,6 +135,7 @@ export const IssuesTable = ({
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 10 } },
+    getRowId: getIssueRowId,
   })
   const [openCount, inProgressCount, closedCount] = useMemo(() => {
     let open = 0
@@ -263,71 +265,67 @@ export const IssuesTable = ({
             </Empty>
           ) : (
             <div className="overflow-hidden rounded-xl border">
-              <Table>
-                <TableCaption className="sr-only">
-                  Issues for the active organization
-                </TableCaption>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead
-                          key={header.id}
-                          className={getColumnResponsiveClass(header.column.id)}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows.length > 0 ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={
-                          row.getIsSelected() ? "selected" : undefined
-                        }
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            className={getColumnResponsiveClass(cell.column.id)}
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
+              <IssueMutationContext.Provider value={busyIssueId}>
+                <Table scrollLabel="Organization issues">
+                  <TableCaption className="sr-only">
+                    Issues for the active organization
+                  </TableCaption>
+                  <TableHeader>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </TableHead>
                         ))}
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columns.length}>
-                        <Empty>
-                          <EmptyHeader>
-                            <EmptyMedia variant="icon">
-                              <CircleDotIcon aria-hidden="true" />
-                            </EmptyMedia>
-                            <EmptyTitle>No matching issues</EmptyTitle>
-                            <EmptyDescription>
-                              Adjust the search or create the first issue for
-                              this organization.
-                            </EmptyDescription>
-                          </EmptyHeader>
-                        </Empty>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {table.getRowModel().rows.length > 0 ? (
+                      table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={
+                            row.getIsSelected() ? "selected" : undefined
+                          }
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={columns.length}>
+                          <Empty>
+                            <EmptyHeader>
+                              <EmptyMedia variant="icon">
+                                <CircleDotIcon aria-hidden="true" />
+                              </EmptyMedia>
+                              <EmptyTitle>No matching issues</EmptyTitle>
+                              <EmptyDescription>
+                                Adjust the search or create the first issue for
+                                this organization.
+                              </EmptyDescription>
+                            </EmptyHeader>
+                          </Empty>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </IssueMutationContext.Provider>
             </div>
           )}
         </CardContent>

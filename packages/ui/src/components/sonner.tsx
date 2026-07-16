@@ -34,7 +34,10 @@ const toasterStyle: ToasterStyle = {
 
 const toastOptions: NonNullable<ToasterProps["toastOptions"]> = {
   classNames: {
-    toast: "cn-toast",
+    toast: "cn-toast pointer-events-none",
+    actionButton: "pointer-events-auto",
+    cancelButton: "pointer-events-auto",
+    closeButton: "pointer-events-auto",
   },
 }
 

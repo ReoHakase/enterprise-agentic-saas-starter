@@ -22,14 +22,12 @@ import type {
 
 export const useIssueColumns = ({
   assignees,
-  busyIssueId,
   onToggle,
   onUpdate,
   onSelect,
   onRequestDelete,
 }: {
   assignees: IssueAssigneeOption[]
-  busyIssueId?: string
   onToggle: AsyncAction<[issue: IssueUiItem]>
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
   onSelect: (issue: IssueUiItem) => void
@@ -42,11 +40,7 @@ export const useIssueColumns = ({
         accessorFn: getIssueStatus,
         header: "Status",
         cell: ({ row }) => (
-          <IssueStatusSelect
-            issue={row.original}
-            disabled={busyIssueId === row.original.id || !onUpdate}
-            onUpdate={onUpdate}
-          />
+          <IssueStatusSelect issue={row.original} onUpdate={onUpdate} />
         ),
         filterFn: "equalsString",
       },
@@ -64,11 +58,7 @@ export const useIssueColumns = ({
         accessorFn: (issue) => issue.priority,
         header: "Priority",
         cell: ({ row }) => (
-          <IssuePrioritySelect
-            issue={row.original}
-            disabled={busyIssueId === row.original.id || !onUpdate}
-            onUpdate={onUpdate}
-          />
+          <IssuePrioritySelect issue={row.original} onUpdate={onUpdate} />
         ),
       },
       {
@@ -79,7 +69,6 @@ export const useIssueColumns = ({
           <IssueAssigneeSelect
             issue={row.original}
             assignees={assignees}
-            disabled={busyIssueId === row.original.id || !onUpdate}
             onUpdate={onUpdate}
           />
         ),
@@ -89,11 +78,7 @@ export const useIssueColumns = ({
         accessorFn: (issue) => issue.dueDate,
         header: "Due date",
         cell: ({ row }) => (
-          <IssueDueDateInput
-            issue={row.original}
-            disabled={busyIssueId === row.original.id || !onUpdate}
-            onUpdate={onUpdate}
-          />
+          <IssueDueDateInput issue={row.original} onUpdate={onUpdate} />
         ),
       },
       {
@@ -115,7 +100,6 @@ export const useIssueColumns = ({
         cell: ({ row }) => (
           <IssueActionsCell
             issue={row.original}
-            busy={busyIssueId === row.original.id}
             onSelect={onSelect}
             onToggle={onToggle}
             onRequestDelete={onRequestDelete}
@@ -123,5 +107,5 @@ export const useIssueColumns = ({
         ),
       },
     ],
-    [assignees, busyIssueId, onRequestDelete, onSelect, onToggle, onUpdate]
+    [assignees, onRequestDelete, onSelect, onToggle, onUpdate]
   )

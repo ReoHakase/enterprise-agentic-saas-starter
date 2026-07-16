@@ -35,6 +35,7 @@ import { useCallback, useMemo, type ChangeEvent } from "react"
 import { UserAvatar } from "@/components/user-identity"
 import { parseDueDateInput } from "@/features/issues/schema"
 
+import { useIssueMutationState } from "./issue-table-state"
 import {
   formatIssueDate,
   getIssueStatus,
@@ -115,45 +116,42 @@ export const IssueTitleCell = ({
 
 export const IssueActionsCell = ({
   issue,
-  busy,
   onSelect,
   onToggle,
   onRequestDelete,
 }: {
   issue: IssueUiItem
-  busy: boolean
   onSelect: (issue: IssueUiItem) => void
   onToggle: AsyncAction<[issue: IssueUiItem]>
   onRequestDelete: (issue: IssueUiItem) => void
 }) => {
+  const busy = useIssueMutationState(issue.id)
   const closed = getIssueStatus(issue) === "closed"
   const handleSelect = useCallback(() => onSelect(issue), [issue, onSelect])
-  const handleToggle = useCallback(
-    () => safelyRunAction(onToggle(issue)),
-    [issue, onToggle]
-  )
-  const handleRequestDelete = useCallback(
-    () => onRequestDelete(issue),
-    [issue, onRequestDelete]
-  )
+  const handleToggle = useCallback(() => {
+    if (!busy) safelyRunAction(onToggle(issue))
+  }, [busy, issue, onToggle])
+  const handleRequestDelete = useCallback(() => {
+    if (!busy) onRequestDelete(issue)
+  }, [busy, issue, onRequestDelete])
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={issueActionsTrigger}
-        disabled={busy}
         aria-label={`Actions for ${issue.title}`}
+        aria-busy={busy}
       >
         {busy ? <Spinner /> : <EllipsisIcon aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Issue actions</DropdownMenuLabel>
-          <DropdownMenuItem onClick={handleSelect}>
+          <DropdownMenuItem disabled={busy} onClick={handleSelect}>
             <CircleDotIcon aria-hidden="true" />
             View details
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleToggle}>
+          <DropdownMenuItem disabled={busy} onClick={handleToggle}>
             {closed ? (
               <CircleIcon aria-hidden="true" />
             ) : (
@@ -164,7 +162,11 @@ export const IssueActionsCell = ({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem variant="destructive" onClick={handleRequestDelete}>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={busy}
+            onClick={handleRequestDelete}
+          >
             <Trash2Icon aria-hidden="true" />
             Delete issue
           </DropdownMenuItem>
@@ -174,31 +176,14 @@ export const IssueActionsCell = ({
   )
 }
 
-export const getColumnResponsiveClass = (columnId: string) => {
-  if (
-    columnId === "assignee" ||
-    columnId === "dueDate" ||
-    columnId === "updatedAt"
-  ) {
-    return "hidden xl:table-cell"
-  }
-
-  if (columnId === "priority") {
-    return "hidden md:table-cell"
-  }
-
-  return undefined
-}
-
 export const IssueStatusSelect = ({
   issue,
-  disabled,
   onUpdate,
 }: {
   issue: IssueUiItem
-  disabled: boolean
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
+  const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
     (value: string | null) => {
       if (isIssueStatus(value) && value !== issue.status) {
@@ -212,10 +197,15 @@ export const IssueStatusSelect = ({
     <Select
       items={issueStatusOptions}
       value={issue.status}
-      disabled={disabled}
+      disabled={!onUpdate}
+      readOnly={busy}
       onValueChange={handleValueChange}
     >
-      <SelectTrigger className="w-32" aria-label={`Status for ${issue.title}`}>
+      <SelectTrigger
+        className="w-32"
+        aria-label={`Status for ${issue.title}`}
+        aria-busy={busy}
+      >
         <StatusBadge status={issue.status} />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
@@ -233,13 +223,12 @@ export const IssueStatusSelect = ({
 
 export const IssuePrioritySelect = ({
   issue,
-  disabled,
   onUpdate,
 }: {
   issue: IssueUiItem
-  disabled: boolean
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
+  const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
     (value: string | null) => {
       if (isIssuePriority(value) && value !== issue.priority) {
@@ -253,12 +242,14 @@ export const IssuePrioritySelect = ({
     <Select
       items={priorityOptions}
       value={issue.priority}
-      disabled={disabled}
+      disabled={!onUpdate}
+      readOnly={busy}
       onValueChange={handleValueChange}
     >
       <SelectTrigger
         className="w-36"
         aria-label={`Priority for ${issue.title}`}
+        aria-busy={busy}
       >
         <PriorityBadge priority={issue.priority} />
       </SelectTrigger>
@@ -278,14 +269,13 @@ export const IssuePrioritySelect = ({
 export const IssueAssigneeSelect = ({
   issue,
   assignees,
-  disabled,
   onUpdate,
 }: {
   issue: IssueUiItem
   assignees: IssueAssigneeOption[]
-  disabled: boolean
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
+  const busy = useIssueMutationState(issue.id)
   const selected = assignees.find(
     (assignee) => assignee.id === issue.assigneeId
   )
@@ -313,12 +303,14 @@ export const IssueAssigneeSelect = ({
     <Select
       items={items}
       value={issue.assigneeId ?? "unassigned"}
-      disabled={disabled}
+      disabled={!onUpdate}
+      readOnly={busy}
       onValueChange={handleValueChange}
     >
       <SelectTrigger
         className="w-48"
         aria-label={`Assignee for ${issue.title}`}
+        aria-busy={busy}
       >
         {selected ? (
           <span className="flex min-w-0 items-center gap-2">
@@ -353,13 +345,12 @@ export const IssueAssigneeSelect = ({
 
 export const IssueDueDateInput = ({
   issue,
-  disabled,
   onUpdate,
 }: {
   issue: IssueUiItem
-  disabled: boolean
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
+  const busy = useIssueMutationState(issue.id)
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const dueDate = event.target.value || null
@@ -376,8 +367,10 @@ export const IssueDueDateInput = ({
       className="w-40"
       type="date"
       defaultValue={parseDueDateInput(issue.dueDate)}
-      disabled={disabled}
+      disabled={!onUpdate}
+      readOnly={busy}
       aria-label={`Due date for ${issue.title}`}
+      aria-busy={busy}
       onChange={handleChange}
     />
   )

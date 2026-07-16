@@ -3,11 +3,58 @@
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import * as React from "react"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+type TableProps = React.ComponentProps<"table"> & {
+  containerClassName?: string
+  scrollLabel?: string
+}
+
+function Table({
+  className,
+  containerClassName,
+  scrollLabel,
+  ...props
+}: TableProps) {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] =
+    React.useState(false)
+  const updateOverflowState = React.useCallback(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    setHasHorizontalOverflow(container.scrollWidth > container.clientWidth)
+  }, [])
+
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    updateOverflowState()
+    const observer = new ResizeObserver(updateOverflowState)
+    observer.observe(container)
+    const table = container.querySelector("table")
+    if (table) observer.observe(table)
+
+    return () => observer.disconnect()
+  }, [updateOverflowState])
+
+  const accessibleScrollLabel = scrollLabel ?? props["aria-label"]
+
   return (
     <div
+      ref={containerRef}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      data-horizontal-overflow={hasHorizontalOverflow ? "true" : undefined}
+      role={hasHorizontalOverflow ? "region" : undefined}
+      aria-label={
+        hasHorizontalOverflow
+          ? (accessibleScrollLabel ?? "Scrollable data table")
+          : undefined
+      }
+      tabIndex={hasHorizontalOverflow ? 0 : undefined}
+      className={cn(
+        "relative w-full max-w-full min-w-0 overflow-x-auto overscroll-x-contain focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset",
+        containerClassName
+      )}
     >
       <table
         data-slot="table"

@@ -85,6 +85,8 @@ import {
 
 const organizationCreateFields = ["name", "slug"] as const
 const organizationCreateTrigger = <Button />
+const getOrganizationRowId = (organization: OrganizationSummary) =>
+  organization.id
 
 const selectCreateSubmitState = (state: {
   canSubmit: boolean
@@ -169,6 +171,7 @@ export const OrganizationsPage = ({
     data: organizationsQuery.data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getRowId: getOrganizationRowId,
   })
   return (
     <PageShell
@@ -206,7 +209,7 @@ export const OrganizationsPage = ({
         </Empty>
       ) : (
         <div className="overflow-hidden rounded-2xl border">
-          <Table>
+          <Table scrollLabel="Organizations attached to your account">
             <TableCaption className="sr-only">
               Organizations attached to your account
             </TableCaption>
@@ -477,12 +480,9 @@ const OrganizationCreateAction = () => {
 }
 
 const organizationColumnClass = (columnId: string) => {
-  if (columnId === "slug" || columnId === "memberCount") {
-    return "hidden lg:table-cell"
-  }
-  if (columnId === "role") {
-    return "hidden sm:table-cell"
-  }
+  if (columnId === "slug") return "min-w-44"
+  if (columnId === "memberCount") return "min-w-24"
+  if (columnId === "role") return "min-w-32"
   return undefined
 }
 

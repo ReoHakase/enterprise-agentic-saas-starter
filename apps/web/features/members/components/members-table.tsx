@@ -31,7 +31,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table"
 import { Trash2Icon, UsersRoundIcon } from "lucide-react"
-import { useCallback, useMemo } from "react"
+import { createContext, useCallback, useContext, useMemo } from "react"
 
 import { UserIdentity } from "@/components/user-identity"
 import type { OrganizationMember } from "@/features/members/schema"
@@ -52,6 +52,9 @@ const organizationRoleOptions = [
 
 const isOrganizationRole = (value: string | null): value is OrganizationRole =>
   value === "super_admin" || value === "admin" || value === "member"
+
+const getMemberRowId = (member: OrganizationMember) => member.id
+const MemberMutationContext = createContext(false)
 
 export const MembersTable = ({
   organizationName,
@@ -108,7 +111,6 @@ export const MembersTable = ({
         cell: ({ row }) => (
           <MemberRoleSelect
             member={row.original}
-            pending={pending}
             canManageRoles={canManageRoles}
             isOnlySuperAdmin={isOnlySuperAdmin(row.original)}
             canSelectRole={canSelectRole}
@@ -124,7 +126,6 @@ export const MembersTable = ({
             <MemberActions
               member={row.original}
               organizationRole={organizationRole}
-              pending={pending}
               onRequestRemove={onRequestRemove}
             />
           ) : null,
@@ -138,73 +139,78 @@ export const MembersTable = ({
       onChangeRole,
       onRequestRemove,
       organizationRole,
-      pending,
     ]
   )
   const table = useReactTable({
     data: members,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getRowId: getMemberRowId,
   })
 
   return (
-    <div className="min-w-0 overflow-x-auto rounded-2xl border">
-      <Table>
-        <TableCaption className="sr-only">
-          Members of {organizationName}
-        </TableCaption>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={memberColumnClass(header.column.id)}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length > 0 ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={memberColumnClass(cell.column.id)}
+    <div className="max-w-full min-w-0 overflow-hidden rounded-2xl border">
+      <MemberMutationContext.Provider value={pending}>
+        <Table scrollLabel={`Members of ${organizationName}`}>
+          <TableCaption className="sr-only">
+            Members of {organizationName}
+          </TableCaption>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className={memberColumnClass(header.column.id)}
                   >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length}>
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <UsersRoundIcon aria-hidden="true" />
-                    </EmptyMedia>
-                    <EmptyTitle>No members</EmptyTitle>
-                    <EmptyDescription>
-                      Invite the first member to this organization.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length > 0 ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={memberColumnClass(cell.column.id)}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length}>
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <UsersRoundIcon aria-hidden="true" />
+                      </EmptyMedia>
+                      <EmptyTitle>No members</EmptyTitle>
+                      <EmptyDescription>
+                        Invite the first member to this organization.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </MemberMutationContext.Provider>
     </div>
   )
 }
@@ -224,19 +230,18 @@ const memberColumnClass = (columnId: string) => {
 
 const MemberRoleSelect = ({
   member,
-  pending,
   canManageRoles,
   isOnlySuperAdmin,
   canSelectRole,
   onChange,
 }: {
   member: OrganizationMember
-  pending: boolean
   canManageRoles: boolean
   isOnlySuperAdmin: boolean
   canSelectRole: (member: OrganizationMember, role: OrganizationRole) => boolean
   onChange: (member: OrganizationMember, role: OrganizationRole) => void
 }) => {
+  const pending = useContext(MemberMutationContext)
   const descriptionId = `member-role-description-${member.id}`
   const disabledReason = !canManageRoles
     ? "Only the Super Admin can change roles."
@@ -257,13 +262,15 @@ const MemberRoleSelect = ({
       <Select
         items={organizationRoleOptions}
         value={member.role}
-        disabled={pending || !canManageRoles}
+        disabled={!canManageRoles}
+        readOnly={pending}
         onValueChange={handleValueChange}
       >
         <SelectTrigger
           className="w-36"
           aria-label={`Role for ${member.name}`}
           aria-describedby={disabledReason ? descriptionId : undefined}
+          aria-busy={pending}
           title={disabledReason}
         >
           <span className="min-w-0 flex-1 truncate text-left">
@@ -305,14 +312,13 @@ const MemberRoleSelect = ({
 const MemberActions = ({
   member,
   organizationRole,
-  pending,
   onRequestRemove,
 }: {
   member: OrganizationMember
   organizationRole: OrganizationRole
-  pending: boolean
   onRequestRemove: (member: OrganizationMember) => void
 }) => {
+  const pending = useContext(MemberMutationContext)
   const disabled =
     pending ||
     member.role === "super_admin" ||

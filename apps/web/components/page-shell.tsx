@@ -60,6 +60,8 @@ export const PageShell = ({
       </PageHeaderCopy>
       {Action ? <Action /> : null}
     </PageHeader>
-    <div data-slot="page-body">{children}</div>
+    <div data-slot="page-body" className="max-w-full min-w-0">
+      {children}
+    </div>
   </div>
 )

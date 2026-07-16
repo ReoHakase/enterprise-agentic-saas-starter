@@ -274,6 +274,67 @@ describe("IssuesWorkspace", () => {
     expect(onToggle).toHaveBeenCalledWith(billingIssue)
   })
 
+  it("keeps the priority trigger mounted and focused across pending reorder", async () => {
+    const user = userEvent.setup()
+    const onCreate = vi.fn<RequiredCallbacks["onCreate"]>()
+    const onToggle = vi.fn<RequiredCallbacks["onToggle"]>()
+    const onDelete = vi.fn<RequiredCallbacks["onDelete"]>()
+    const onUpdate = vi.fn<RequiredCallbacks["onUpdate"]>()
+    const onSelectIssue =
+      vi.fn<NonNullable<IssuesWorkspaceProps["onSelectIssue"]>>()
+    const accessIssue = issues[1]
+    if (!accessIssue) throw new Error("access issue fixture is required")
+    const reorderedIssues = [
+      billingIssue,
+      { ...accessIssue, updatedAt: "2026-07-14T00:00:00.000Z" },
+    ]
+    const renderTable = (issueValues: IssueUiItem[], busyIssueId?: string) => (
+      <IssuesWorkspace
+        issues={issueValues}
+        busyIssueId={busyIssueId}
+        onCreate={onCreate}
+        onToggle={onToggle}
+        onDelete={onDelete}
+        onUpdate={onUpdate}
+        onSelectIssue={onSelectIssue}
+      />
+    )
+    const view = render(renderTable(issues))
+    const priority = screen.getByRole("combobox", {
+      name: `Priority for ${accessIssue.title}`,
+    })
+
+    let reachedPriority = false
+    for (let index = 0; index < 30; index += 1) {
+      try {
+        expect(priority).toHaveFocus()
+        reachedPriority = true
+        break
+      } catch {
+        // oxlint-disable-next-line no-await-in-loop -- focus order is sequential.
+        await user.tab()
+      }
+    }
+    expect(reachedPriority).toBe(true)
+    expect(priority).toHaveFocus()
+
+    view.rerender(renderTable(reorderedIssues, accessIssue.id))
+    const busyPriority = screen.getByRole("combobox", {
+      name: `Priority for ${accessIssue.title}`,
+    })
+    expect(busyPriority).toBe(priority)
+    expect(busyPriority).toHaveFocus()
+    expect(busyPriority).toHaveAttribute("aria-busy", "true")
+
+    view.rerender(renderTable(reorderedIssues))
+    expect(
+      screen.getByRole("combobox", {
+        name: `Priority for ${accessIssue.title}`,
+      })
+    ).toBe(priority)
+    expect(priority).toHaveFocus()
+  })
+
   it("requires destructive confirmation before deleting", async () => {
     const user = userEvent.setup()
     const { onDelete } = renderWorkspace()

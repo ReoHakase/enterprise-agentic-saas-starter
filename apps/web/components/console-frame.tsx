@@ -40,12 +40,12 @@ export const ConsoleFrameContent = ({
   <div
     ref={contentRef}
     data-slot="console-scroll-region"
-    className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+    className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
   >
     <div
       data-slot="console-content"
       className={cn(
-        "mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8",
+        "mx-auto w-full max-w-7xl min-w-0 p-4 sm:p-6 lg:p-8",
         contentClassName
       )}
     >
