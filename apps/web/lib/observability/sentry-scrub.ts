@@ -17,6 +17,7 @@ const SENSITIVE_KEY_SUFFIXES = [
   "formdata",
   "headers",
   "invitationid",
+  "issueid",
   "memberid",
   "organizationid",
   "password",
@@ -30,7 +31,6 @@ const SENSITIVE_KEY_SUFFIXES = [
   "sessionid",
   "setcookie",
   "token",
-  "todoid",
   "userid",
 ] as const
 
@@ -40,7 +40,7 @@ const DYNAMIC_PATHS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\/organizations\/[^/?#\s]+/giu, "/organizations/[organizationId]"],
   [/\/invitations\/[^/?#\s]+/giu, "/invitations/[invitationId]"],
   [/\/members\/[^/?#\s]+/giu, "/members/[memberId]"],
-  [/\/todos\/[^/?#\s]+/giu, "/todos/[todoId]"],
+  [/\/issues\/[^/?#\s]+/giu, "/issues/[issueId]"],
   [/\/users\/[^/?#\s]+/giu, "/users/[userId]"],
 ]
 

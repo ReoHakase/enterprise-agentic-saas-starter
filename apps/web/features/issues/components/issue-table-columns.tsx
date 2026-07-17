@@ -3,6 +3,8 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { useMemo } from "react"
 
+import { LocalDate } from "@/components/local-date"
+
 import {
   IssueActionsCell,
   IssueAssigneeSelect,
@@ -12,7 +14,7 @@ import {
   IssueTitleCell,
   SortableIssueHeader,
 } from "./issue-inline-controls"
-import { formatIssueDate, getIssueStatus } from "./issue-utils"
+import { getIssueStatus } from "./issue-utils"
 import type {
   AsyncAction,
   IssueAssigneeOption,
@@ -22,12 +24,14 @@ import type {
 
 export const useIssueColumns = ({
   assignees,
+  getIssueHref,
   onToggle,
   onUpdate,
   onSelect,
   onRequestDelete,
 }: {
   assignees: IssueAssigneeOption[]
+  getIssueHref: (issue: IssueUiItem) => string
   onToggle: AsyncAction<[issue: IssueUiItem]>
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
   onSelect: (issue: IssueUiItem) => void
@@ -36,6 +40,29 @@ export const useIssueColumns = ({
   useMemo<ColumnDef<IssueUiItem>[]>(
     () => [
       {
+        accessorKey: "number",
+        header: ({ column }) => (
+          <SortableIssueHeader column={column} label="Number" />
+        ),
+        cell: ({ row }) => (
+          <span className="font-mono text-sm text-muted-foreground">
+            #{row.original.number}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "title",
+        header: ({ column }) => (
+          <SortableIssueHeader column={column} label="Name" />
+        ),
+        cell: ({ row }) => (
+          <IssueTitleCell
+            issue={row.original}
+            href={getIssueHref(row.original)}
+          />
+        ),
+      },
+      {
         id: "status",
         accessorFn: getIssueStatus,
         header: "Status",
@@ -43,15 +70,6 @@ export const useIssueColumns = ({
           <IssueStatusSelect issue={row.original} onUpdate={onUpdate} />
         ),
         filterFn: "equalsString",
-      },
-      {
-        accessorKey: "title",
-        header: ({ column }) => (
-          <SortableIssueHeader column={column} label="Issue" />
-        ),
-        cell: ({ row }) => (
-          <IssueTitleCell issue={row.original} onSelect={onSelect} />
-        ),
       },
       {
         id: "priority",
@@ -76,7 +94,7 @@ export const useIssueColumns = ({
       {
         id: "dueDate",
         accessorFn: (issue) => issue.dueDate,
-        header: "Due date",
+        header: "Due date and time",
         cell: ({ row }) => (
           <IssueDueDateInput issue={row.original} onUpdate={onUpdate} />
         ),
@@ -91,7 +109,9 @@ export const useIssueColumns = ({
             showDescendingIcon
           />
         ),
-        cell: ({ row }) => formatIssueDate(row.original.updatedAt),
+        cell: ({ row }) => (
+          <LocalDate value={row.original.updatedAt} includeTime />
+        ),
       },
       {
         id: "actions",
@@ -107,5 +127,5 @@ export const useIssueColumns = ({
         ),
       },
     ],
-    [assignees, onRequestDelete, onSelect, onToggle, onUpdate]
+    [assignees, getIssueHref, onRequestDelete, onSelect, onToggle, onUpdate]
   )

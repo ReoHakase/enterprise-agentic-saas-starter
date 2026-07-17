@@ -5,6 +5,7 @@ import {
   parseIssue,
   parseIssueComment,
   parseIssueComments,
+  parseIssueTimelinePage,
   parseIssues,
   type IssuePriority,
   type IssueStatus,
@@ -39,7 +40,7 @@ export const listIssues = async (
 ) =>
   parseIssues(
     unwrap(
-      await client.todos.get({
+      await client.issues.get({
         query: { organizationId },
         fetch: { signal },
       })
@@ -58,7 +59,44 @@ export const createIssue = async (
     labels?: string[]
     dueDate?: string | null
   }
-) => parseIssue(unwrap(await client.todos.post(input)))
+) => parseIssue(unwrap(await client.issues.post(input)))
+
+export const getIssueByNumber = async (
+  client: ApiClient,
+  input: { number: number; organizationId: string },
+  signal?: AbortSignal
+) =>
+  parseIssue(
+    unwrap(
+      await client.issues["by-number"]({ number: input.number }).get({
+        query: { organizationId: input.organizationId },
+        fetch: { signal },
+      })
+    )
+  )
+
+export const getIssueTimeline = async (
+  client: ApiClient,
+  input: {
+    id: string
+    organizationId: string
+    cursor?: string
+    limit?: number
+  },
+  signal?: AbortSignal
+) =>
+  parseIssueTimelinePage(
+    unwrap(
+      await client.issues({ id: input.id }).timeline.get({
+        query: {
+          organizationId: input.organizationId,
+          cursor: input.cursor,
+          limit: input.limit,
+        },
+        fetch: { signal },
+      })
+    )
+  )
 
 export const updateIssue = async (
   client: ApiClient,
@@ -76,7 +114,7 @@ export const updateIssue = async (
 ) =>
   parseIssue(
     unwrap(
-      await client.todos({ id: input.id }).patch({
+      await client.issues({ id: input.id }).patch({
         organizationId: input.organizationId,
         title: input.title,
         description: input.description,
@@ -95,7 +133,7 @@ export const deleteIssue = async (
 ) =>
   parseIssue(
     unwrap(
-      await client.todos({ id: input.id }).delete({
+      await client.issues({ id: input.id }).delete({
         organizationId: input.organizationId,
       })
     )
@@ -108,7 +146,7 @@ export const listIssueComments = async (
 ) =>
   parseIssueComments(
     unwrap(
-      await client.todos({ id: input.id }).comments.get({
+      await client.issues({ id: input.id }).comments.get({
         query: { organizationId: input.organizationId },
         fetch: { signal },
       })
@@ -121,7 +159,7 @@ export const createIssueComment = async (
 ) =>
   parseIssueComment(
     unwrap(
-      await client.todos({ id: input.id }).comments.post({
+      await client.issues({ id: input.id }).comments.post({
         organizationId: input.organizationId,
         body: input.body,
       })
@@ -140,7 +178,7 @@ export const updateIssueComment = async (
   parseIssueComment(
     unwrap(
       await client
-        .todos({ id: input.id })
+        .issues({ id: input.id })
         .comments({ commentId: input.commentId })
         .patch({
           organizationId: input.organizationId,
@@ -156,7 +194,7 @@ export const deleteIssueComment = async (
   parseIssueComment(
     unwrap(
       await client
-        .todos({ id: input.id })
+        .issues({ id: input.id })
         .comments({ commentId: input.commentId })
         .delete({ organizationId: input.organizationId })
     )

@@ -20,10 +20,10 @@ apps/web/
 ## tenant境界テスト例
 
 ```ts
-test("別organizationのtodoは見えない", async ({ page }) => {
+test("別organizationのissueは見えない", async ({ page }) => {
   await signInAs(page, "member-a@example.com")
-  await page.goto("/todos")
-  await expect(page.getByText("Org B private todo")).not.toBeVisible()
+  await page.goto("/organization/org-a/issues")
+  await expect(page.getByText("Org B private issue")).not.toBeVisible()
 })
 ```
 

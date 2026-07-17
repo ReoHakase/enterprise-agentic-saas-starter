@@ -63,7 +63,7 @@ bun run --cwd packages/db db:migrate
 ## Tenant整合性
 
 - Issue番号はorganization単位でunique。
-- commentは `(todo_id, organization_id)` の複合外部キーでparentと同じtenantに固定。
+- commentとactivityは `(issue_id, organization_id)` の複合外部キーでparentと同じtenantに固定。
 - membershipは `(organization_id, user_id)` をuniqueにし、同じuserのduplicate roleを作らない。
 - memberがいるorganizationはexactly one `super_admin` とする。migrationはduplicateをrepairし、`role='super_admin'` のpartial unique indexがat-most-oneを保証する。at-least-oneはownership transferなどのapp transactionで維持する。
 - memberがいないlegacy organizationはmigrationで架空membershipを作らず、認証・認可をfail closedにする。復旧は監査可能な運用手順で実ユーザーを割り当てる。

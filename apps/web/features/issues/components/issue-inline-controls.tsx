@@ -1,7 +1,10 @@
 "use client"
 
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
-import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import {
+  Button,
+  buttonVariants,
+} from "@enterprise-agentic-saas/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,15 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@enterprise-agentic-saas/ui/components/dropdown-menu"
-import { Input } from "@enterprise-agentic-saas/ui/components/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "@enterprise-agentic-saas/ui/components/select"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
+import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import type { Column } from "@tanstack/react-table"
 import {
   ArrowDownIcon,
@@ -28,26 +24,20 @@ import {
   CircleDotIcon,
   CircleIcon,
   EllipsisIcon,
+  Maximize2Icon,
   Trash2Icon,
 } from "lucide-react"
-import { useCallback, useMemo, type ChangeEvent } from "react"
+import Link from "next/link"
+import { useCallback } from "react"
 
-import { UserAvatar } from "@/components/user-identity"
-import { parseDueDateInput } from "@/features/issues/schema"
-
-import { useIssueMutationState } from "./issue-table-state"
 import {
-  formatIssueDate,
-  getIssueStatus,
-  isIssuePriority,
-  isIssueStatus,
-  issueNumber,
-  issueStatusOptions,
-  PriorityBadge,
-  priorityOptions,
-  safelyRunAction,
-  StatusBadge,
-} from "./issue-utils"
+  IssueAssigneeControl,
+  IssueDueDateTimeControl,
+  IssuePriorityControl,
+  IssueStatusControl,
+} from "./issue-metadata-controls"
+import { useIssueMutationState } from "./issue-table-state"
+import { getIssueStatus, safelyRunAction } from "./issue-utils"
 import type {
   AsyncAction,
   IssueAssigneeOption,
@@ -85,34 +75,42 @@ export const SortableIssueHeader = ({
 
 export const IssueTitleCell = ({
   issue,
-  onSelect,
+  href,
 }: {
   issue: IssueUiItem
-  onSelect: (issue: IssueUiItem) => void
-}) => {
-  const handleSelect = useCallback(() => onSelect(issue), [issue, onSelect])
-
-  return (
-    <div className="flex max-w-xl min-w-64 flex-col items-start gap-1">
-      <Button
-        variant="link"
-        className="h-auto min-w-0 justify-start p-0 text-left whitespace-normal"
-        onClick={handleSelect}
+  href: string
+}) => (
+  <div className="flex max-w-xl min-w-72 items-start justify-between gap-3">
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <Link
+        href={href}
+        className="h-auto min-w-0 text-left text-sm font-medium whitespace-normal text-primary underline-offset-4 hover:underline"
       >
         {issue.title}
-      </Button>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{issueNumber(issue)}</span>
-        <span>Updated {formatIssueDate(issue.updatedAt)}</span>
-        {issue.labels.slice(0, 3).map((label) => (
-          <Badge key={label} variant="outline">
-            {label}
-          </Badge>
-        ))}
-      </div>
+      </Link>
+      {issue.labels.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {issue.labels.slice(0, 3).map((label) => (
+            <Badge key={label} variant="outline">
+              {label}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
     </div>
-  )
-}
+    <a
+      href={href}
+      className={cn(
+        buttonVariants({ variant: "outline", size: "xs" }),
+        "opacity-100 transition-opacity sm:pointer-events-none sm:opacity-0 sm:group-focus-within/issue-row:pointer-events-auto sm:group-focus-within/issue-row:opacity-100 sm:group-hover/issue-row:pointer-events-auto sm:group-hover/issue-row:opacity-100"
+      )}
+      aria-label={`Open ${issue.title} as full page`}
+    >
+      <Maximize2Icon data-icon="inline-start" aria-hidden="true" />
+      Full page
+    </a>
+  </div>
+)
 
 export const IssueActionsCell = ({
   issue,
@@ -185,39 +183,20 @@ export const IssueStatusSelect = ({
 }) => {
   const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
-    (value: string | null) => {
-      if (isIssueStatus(value) && value !== issue.status) {
-        safelyRunAction(onUpdate?.(issue, { status: value }))
-      }
-    },
+    (value: IssueUiItem["status"]) =>
+      safelyRunAction(onUpdate?.(issue, { status: value })),
     [issue, onUpdate]
   )
 
   return (
-    <Select
-      items={issueStatusOptions}
+    <IssueStatusControl
       value={issue.status}
+      className="w-32"
       disabled={!onUpdate}
-      readOnly={busy}
+      busy={busy}
+      ariaLabel={`Status for ${issue.title}`}
       onValueChange={handleValueChange}
-    >
-      <SelectTrigger
-        className="w-32"
-        aria-label={`Status for ${issue.title}`}
-        aria-busy={busy}
-      >
-        <StatusBadge status={issue.status} />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          {issueStatusOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    />
   )
 }
 
@@ -230,39 +209,20 @@ export const IssuePrioritySelect = ({
 }) => {
   const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
-    (value: string | null) => {
-      if (isIssuePriority(value) && value !== issue.priority) {
-        safelyRunAction(onUpdate?.(issue, { priority: value }))
-      }
-    },
+    (value: IssueUiItem["priority"]) =>
+      safelyRunAction(onUpdate?.(issue, { priority: value })),
     [issue, onUpdate]
   )
 
   return (
-    <Select
-      items={priorityOptions}
+    <IssuePriorityControl
       value={issue.priority}
+      className="w-36"
       disabled={!onUpdate}
-      readOnly={busy}
+      busy={busy}
+      ariaLabel={`Priority for ${issue.title}`}
       onValueChange={handleValueChange}
-    >
-      <SelectTrigger
-        className="w-36"
-        aria-label={`Priority for ${issue.title}`}
-        aria-busy={busy}
-      >
-        <PriorityBadge priority={issue.priority} />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          {priorityOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    />
   )
 }
 
@@ -276,70 +236,22 @@ export const IssueAssigneeSelect = ({
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
   const busy = useIssueMutationState(issue.id)
-  const selected = assignees.find(
-    (assignee) => assignee.id === issue.assigneeId
-  )
-  const items = useMemo(
-    () => [
-      { label: "Unassigned", value: "unassigned" },
-      ...assignees.map((assignee) => ({
-        label: assignee.name,
-        value: assignee.id,
-      })),
-    ],
-    [assignees]
-  )
   const handleValueChange = useCallback(
-    (value: string | null) => {
-      const assigneeId = value === "unassigned" ? null : value
-      if (assigneeId !== issue.assigneeId) {
-        safelyRunAction(onUpdate?.(issue, { assigneeId }))
-      }
-    },
+    (assigneeId: string | null) =>
+      safelyRunAction(onUpdate?.(issue, { assigneeId })),
     [issue, onUpdate]
   )
 
   return (
-    <Select
-      items={items}
-      value={issue.assigneeId ?? "unassigned"}
+    <IssueAssigneeControl
+      value={issue.assigneeId}
+      assignees={assignees}
+      className="w-48"
       disabled={!onUpdate}
-      readOnly={busy}
+      busy={busy}
+      ariaLabel={`Assignee for ${issue.title}`}
       onValueChange={handleValueChange}
-    >
-      <SelectTrigger
-        className="w-48"
-        aria-label={`Assignee for ${issue.title}`}
-        aria-busy={busy}
-      >
-        {selected ? (
-          <span className="flex min-w-0 items-center gap-2">
-            <UserAvatar user={selected} className="size-6" />
-            <span className="truncate">{selected.name}</span>
-          </span>
-        ) : (
-          <span>Unassigned</span>
-        )}
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-          {assignees.map((assignee) => (
-            <SelectItem key={assignee.id} value={assignee.id}>
-              <span className="flex min-w-0 items-center gap-2">
-                <UserAvatar user={assignee} className="size-6" />
-                <span className="min-w-0">
-                  <span className="block truncate">{assignee.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {assignee.email}
-                  </span>
-                </span>
-              </span>
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    />
   )
 }
 
@@ -351,27 +263,19 @@ export const IssueDueDateInput = ({
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
 }) => {
   const busy = useIssueMutationState(issue.id)
-  const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      const dueDate = event.target.value || null
-      if (dueDate !== issue.dueDate) {
-        safelyRunAction(onUpdate?.(issue, { dueDate }))
-      }
-    },
+  const handleValueChange = useCallback(
+    (dueDate: string | null) => safelyRunAction(onUpdate?.(issue, { dueDate })),
     [issue, onUpdate]
   )
 
   return (
-    <Input
-      key={issue.dueDate ?? "empty"}
-      className="w-40"
-      type="date"
-      defaultValue={parseDueDateInput(issue.dueDate)}
+    <IssueDueDateTimeControl
+      value={issue.dueDate}
+      className="w-48"
       disabled={!onUpdate}
-      readOnly={busy}
-      aria-label={`Due date for ${issue.title}`}
-      aria-busy={busy}
-      onChange={handleChange}
+      busy={busy}
+      ariaLabel={`Due date and time for ${issue.title}`}
+      onValueChange={handleValueChange}
     />
   )
 }

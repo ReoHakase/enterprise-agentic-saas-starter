@@ -25,7 +25,7 @@ packages/db/
     env.ts           # envin + Valibot (TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
     schema/
       auth.ts        # Better Auth CLI で生成 — 手書き禁止
-      app.ts         # アプリ固有テーブル (todos 等)
+      app.ts         # アプリ固有テーブル (issues 等)
       index.ts       # re-export
     seed.ts          # 非破壊・決定的な開発用seed
     reset.ts         # local限定のmigration-first手動reset
@@ -83,7 +83,7 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 ## Tenant DB制約
 
 - tenant tableのrepository queryは常に `id + organizationId` を条件にする。
-- `todo_comments(todo_id, organization_id)` は `todos(id, organization_id)` への複合外部キーを持たせる。単独todo IDだけのFKでtenant整合性を表現しない。
+- `issue_comments(issue_id, organization_id)` と `issue_activity_events(issue_id, organization_id)` は `issues(id, organization_id)` への複合外部キーを持たせる。単独issue IDだけのFKでtenant整合性を表現せず、Issue削除時はcomment/activityをcascade削除する。
 - pending invitationは `(organization_id, lower(email)) WHERE status='pending'` のpartial unique indexで同時duplicateを防ぐ。insert前にemailをlowercase保存し、expiredを更新しても、raceの最終防御はDBへ置く。
 - organization招待は、全invitation・各audit・各`invitation_email_jobs`を同じtransactionで作る。`invitation_email_jobs`は`invitation_id`をunique FK（`ON DELETE CASCADE`）にし、recipient、token、URL、organization/user IDを複製せず、status・attempt・lease・安全なerror codeだけを持つ。schema変更は必ず`db:generate`でmigration/snapshotを保存し、privacy列allowlistとcascade/unique/checkをmigration testで固定する。
 - 招待再送/期限切れ復活は新しいjob rowやschema列を増やさず、同じinvitationと一意outbox rowをtransactionで再queueする。`createdAt`とjob `attempts`は保持し、status、expiry、inviter、error/lease/completedだけを更新する。attemptsをresetすると旧workerのfencing tokenと衝突し得るため禁止する。job欠損だけunique FKの同じ形で再作成する。
@@ -91,7 +91,8 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - memberがいるorganizationはmigrationで最古のsuper adminだけを残し、ゼロならadmin優先・次にmember・最後に `(created_at, id)` の安定順で1名を昇格する。`role='super_admin'` のorganization partial unique indexはat-most-oneだけを保証するため、通常mutationはtransaction内でat-least-oneも維持する。memberがいないorganizationへmigrationがidentityを捏造してはならず、accessはfail closedにする。
 - pending invitationのroleは `admin` / `member` だけを許可し、migration時の `owner` / `super_admin` / null /未知roleはfail closedでexpiredにする。
 - SQLite table rebuildやunique index追加は既存dataのbackfill/dedupをmigration SQLに含め、legacy fixtureで変換をtestする。
-- todoの`due_date`はDB内部では`timestamp_ms`のUTC midnightとして保存する。HTTP公開契約はcalendar dateの`YYYY-MM-DD | null`とし、repository境界でdate-onlyへ変換する。Edenの自動Date復元へ依存しない。
+- issueの`due_date`はDB内部では`timestamp_ms`として保存する。HTTP公開契約はISO timestampまたは`null`とし、時刻をUTC midnightへ丸めずrepository境界で相互変換する。Edenの自動Date復元へ依存しない。
+- TodoからIssueへのrename migrationはtable/column/index/FKを物理renameし、既存commentとorganization内連番uniqueを保持する。旧汎用update auditはold/new値を捏造せず`legacy_updated` activityへbackfillし、audit action/target/metadata keyも`issue.*`、`issue_comment`、`issueId`へ移行する。fresh DBとlegacy fixtureの両方でmigrationを検証する。
 - organization削除はtenant tableの`organization_id`外部keyを`ON DELETE CASCADE`にして即時削除をDBでも保証し、対象organizationを指す全sessionは同じtransactionでnullへ戻す。R2 cleanup用`organization_deletion_jobs`は削除後も残すためorganization外部keyを意図的に持たせず、slug・email・本文等のPIIを保存しない。`(requested_by_user_id, idempotency_key)` uniqueで同じactorの再送と別organizationへのkey衝突を決定的に判定する。
 
 具体的なschema/client/migration例が必要なときだけ `references/database.md` を読む。

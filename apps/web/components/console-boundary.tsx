@@ -140,7 +140,10 @@ const BoundaryRetryButton = ({ onRetry }: { onRetry: () => void }) => (
 export const getConsoleErrorPresentation = (
   pathname: string
 ): ConsoleErrorPresentation => {
-  if (pathname === "/dashboard") {
+  if (
+    pathname === "/dashboard" ||
+    /^\/organization\/[^/]+\/dashboard(?:\/|$)/.test(pathname)
+  ) {
     return {
       title: "Overview",
       description: "Everything your team needs is temporarily unavailable.",
@@ -148,7 +151,10 @@ export const getConsoleErrorPresentation = (
     }
   }
 
-  if (pathname.startsWith("/dashboard/todos")) {
+  if (
+    pathname.startsWith("/dashboard/todos") ||
+    /^\/organization\/[^/]+\/issues(?:\/|$)/.test(pathname)
+  ) {
     return {
       title: "Issues",
       description:
@@ -202,7 +208,10 @@ export const getConsoleErrorPresentation = (
 export const getConsoleLoadingPresentation = (
   pathname: string
 ): ConsoleLoadingPresentation => {
-  if (pathname === "/dashboard") {
+  if (
+    pathname === "/dashboard" ||
+    /^\/organization\/[^/]+\/dashboard(?:\/|$)/.test(pathname)
+  ) {
     return {
       label: "Loading organization dashboard",
       showAction: true,
@@ -210,7 +219,10 @@ export const getConsoleLoadingPresentation = (
     }
   }
 
-  if (pathname.startsWith("/dashboard/todos")) {
+  if (
+    pathname.startsWith("/dashboard/todos") ||
+    /^\/organization\/[^/]+\/issues(?:\/|$)/.test(pathname)
+  ) {
     return {
       label: "Loading organization issues",
       showAction: false,

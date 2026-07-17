@@ -11,17 +11,29 @@ import {
 
 import { invitation, organization, user } from "./auth.generated"
 
-export const todoStatuses = ["open", "in_progress", "closed"] as const
-export type TodoStatus = (typeof todoStatuses)[number]
+export const issueStatuses = ["open", "in_progress", "closed"] as const
+export type IssueStatus = (typeof issueStatuses)[number]
 
-export const todoPriorities = [
+export const issuePriorities = [
   "no_priority",
   "low",
   "medium",
   "high",
   "urgent",
 ] as const
-export type TodoPriority = (typeof todoPriorities)[number]
+export type IssuePriority = (typeof issuePriorities)[number]
+
+export const issueActivityFields = [
+  "title",
+  "description",
+  "status",
+  "priority",
+  "assignee",
+  "labels",
+  "due_date",
+] as const
+export type IssueActivityField = (typeof issueActivityFields)[number]
+export type IssueActivityValue = string | string[] | null
 
 export type AuditLogMetadata = Record<string, string | number | boolean | null>
 
@@ -44,8 +56,8 @@ export const invitationEmailJobStatuses = [
 export type InvitationEmailJobStatus =
   (typeof invitationEmailJobStatuses)[number]
 
-export const todos = sqliteTable(
-  "todos",
+export const issues = sqliteTable(
+  "issues",
   {
     id: text("id").primaryKey(),
     organizationId: text("organization_id")
@@ -54,9 +66,9 @@ export const todos = sqliteTable(
     number: integer("number").notNull(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
-    status: text("status").$type<TodoStatus>().notNull().default("open"),
+    status: text("status").$type<IssueStatus>().notNull().default("open"),
     priority: text("priority")
-      .$type<TodoPriority>()
+      .$type<IssuePriority>()
       .notNull()
       .default("no_priority"),
     assigneeId: text("assignee_id").references(() => user.id, {
@@ -79,38 +91,38 @@ export const todos = sqliteTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("todos_organization_number_uidx").on(
+    uniqueIndex("issues_organization_number_uidx").on(
       table.organizationId,
       table.number
     ),
-    uniqueIndex("todos_id_organization_uidx").on(
+    uniqueIndex("issues_id_organization_uidx").on(
       table.id,
       table.organizationId
     ),
-    index("todos_organization_status_idx").on(
+    index("issues_organization_status_idx").on(
       table.organizationId,
       table.status
     ),
-    index("todos_organization_assignee_idx").on(
+    index("issues_organization_assignee_idx").on(
       table.organizationId,
       table.assigneeId
     ),
-    index("todos_organization_creator_idx").on(
+    index("issues_organization_creator_idx").on(
       table.organizationId,
       table.creatorId
     ),
-    index("todos_organization_due_date_idx").on(
+    index("issues_organization_due_date_idx").on(
       table.organizationId,
       table.dueDate
     ),
   ]
 )
 
-export const todoComments = sqliteTable(
-  "todo_comments",
+export const issueComments = sqliteTable(
+  "issue_comments",
   {
     id: text("id").primaryKey(),
-    todoId: text("todo_id").notNull(),
+    issueId: text("issue_id").notNull(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -128,18 +140,56 @@ export const todoComments = sqliteTable(
   },
   (table) => [
     foreignKey({
-      columns: [table.todoId, table.organizationId],
-      foreignColumns: [todos.id, todos.organizationId],
-      name: "todo_comments_todo_tenant_fk",
+      columns: [table.issueId, table.organizationId],
+      foreignColumns: [issues.id, issues.organizationId],
+      name: "issue_comments_issue_tenant_fk",
     }).onDelete("cascade"),
-    index("todo_comments_organization_todo_created_idx").on(
+    index("issue_comments_organization_issue_created_idx").on(
       table.organizationId,
-      table.todoId,
+      table.issueId,
       table.createdAt
     ),
-    index("todo_comments_organization_author_idx").on(
+    index("issue_comments_organization_author_idx").on(
       table.organizationId,
       table.authorId
+    ),
+  ]
+)
+
+export const issueActivityEvents = sqliteTable(
+  "issue_activity_events",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    issueId: text("issue_id").notNull(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    batchId: text("batch_id").notNull(),
+    position: integer("position").notNull().default(0),
+    kind: text("kind")
+      .$type<"created" | "field_changed" | "legacy_updated">()
+      .notNull(),
+    field: text("field").$type<IssueActivityField>(),
+    fromValue: text("from_value", { mode: "json" }).$type<IssueActivityValue>(),
+    toValue: text("to_value", { mode: "json" }).$type<IssueActivityValue>(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.issueId, table.organizationId],
+      foreignColumns: [issues.id, issues.organizationId],
+      name: "issue_activity_events_issue_tenant_fk",
+    }).onDelete("cascade"),
+    index("issue_activity_events_issue_created_idx").on(
+      table.organizationId,
+      table.issueId,
+      table.createdAt,
+      table.position
     ),
   ]
 )

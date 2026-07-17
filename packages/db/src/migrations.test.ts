@@ -1,5 +1,11 @@
-import { readFile } from "node:fs/promises"
-import { mkdtemp, rm } from "node:fs/promises"
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -13,6 +19,29 @@ import { invitationEmailJobStatuses } from "./schema/app"
 import { seedDevelopmentDatabase } from "./seed"
 
 const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+
+const createMigrationPrefix = async (lastIndex: number) => {
+  const directory = await mkdtemp(join(tmpdir(), "db-migrations-prefix-"))
+  const metaDirectory = join(directory, "meta")
+  await mkdir(metaDirectory)
+  const journal: { entries: Array<{ idx: number; tag: string }> } = JSON.parse(
+    await readFile(join(migrationsFolder, "meta/_journal.json"), "utf8")
+  )
+  const entries = journal.entries.filter(({ idx }) => idx <= lastIndex)
+  await Promise.all(
+    entries.map(({ tag }) =>
+      copyFile(
+        join(migrationsFolder, `${tag}.sql`),
+        join(directory, `${tag}.sql`)
+      )
+    )
+  )
+  await writeFile(
+    join(metaDirectory, "_journal.json"),
+    `${JSON.stringify({ ...journal, entries }, null, 2)}\n`
+  )
+  return directory
+}
 
 const applyBaselineSchema = async (client: ReturnType<typeof createClient>) => {
   const baseline = await readFile(
@@ -47,8 +76,9 @@ describe("database migrations", () => {
           "invitation_email_jobs",
           "organization_deletion_jobs",
           "rate_limit",
-          "todo_comments",
-          "todos",
+          "issue_activity_events",
+          "issue_comments",
+          "issues",
         ])
       )
       expect(indexes.rows.map(({ name }) => name)).toEqual(
@@ -234,13 +264,13 @@ describe("database migrations", () => {
 
       await migrate(drizzle(client), { migrationsFolder })
 
-      const todos = await client.execute(
-        "select id, number, status, creator_id as creatorId, labels from todos order by number"
+      const issues = await client.execute(
+        "select id, number, status, creator_id as creatorId, labels from issues order by number"
       )
       const members = await client.execute(
         "select role from member where id = 'member-1'"
       )
-      expect(todos.rows).toMatchObject([
+      expect(issues.rows).toMatchObject([
         {
           id: "todo-open",
           number: 1,
@@ -259,6 +289,120 @@ describe("database migrations", () => {
       expect(members.rows).toMatchObject([{ role: "super_admin" }])
     } finally {
       client.close()
+    }
+  })
+
+  it("renames legacy issue data and backfills audit activity safely", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(8)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["issue-owner", "Owner", "owner@issue.test", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["issue-org", "Issue Org", "issue-org", now],
+        },
+        {
+          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
+          args: [
+            "issue-member",
+            "issue-org",
+            "issue-owner",
+            "super_admin",
+            now,
+          ],
+        },
+        {
+          sql: "insert into todos(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "legacy-issue",
+            "issue-org",
+            7,
+            "Legacy issue",
+            "issue-owner",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into todo_comments(id,todo_id,organization_id,author_id,body,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "legacy-comment",
+            "legacy-issue",
+            "issue-org",
+            "issue-owner",
+            "Preserved",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into audit_logs(id,organization_id,actor_user_id,action,target_type,target_id,metadata,created_at) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-created",
+            "issue-org",
+            "issue-owner",
+            "todo.created",
+            "todo",
+            "legacy-issue",
+            '{"todoId":"legacy-issue"}',
+            now,
+          ],
+        },
+        {
+          sql: "insert into audit_logs(id,organization_id,actor_user_id,action,target_type,target_id,metadata,created_at) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-updated",
+            "issue-org",
+            "issue-owner",
+            "todo.updated",
+            "todo",
+            "legacy-issue",
+            '{"todoId":"legacy-issue"}',
+            now + 1,
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const comments = await client.execute(
+        "select issue_id as issueId, body from issue_comments where id = 'legacy-comment'"
+      )
+      const activities = await client.execute(
+        "select kind, field, from_value as fromValue, to_value as toValue from issue_activity_events where issue_id = 'legacy-issue' order by created_at"
+      )
+      const audit = await client.execute(
+        "select action, target_type as targetType, metadata from audit_logs where id = 'legacy-updated'"
+      )
+      expect(comments.rows).toMatchObject([
+        { issueId: "legacy-issue", body: "Preserved" },
+      ])
+      expect(activities.rows).toMatchObject([
+        { kind: "created", field: null, fromValue: null, toValue: null },
+        {
+          kind: "legacy_updated",
+          field: null,
+          fromValue: null,
+          toValue: null,
+        },
+      ])
+      expect(audit.rows).toMatchObject([
+        {
+          action: "issue.updated",
+          targetType: "issue",
+          metadata: '{"issueId":"legacy-issue"}',
+        },
+      ])
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
     }
   })
 
@@ -533,7 +677,7 @@ describe("database migrations", () => {
     }
   })
 
-  it("rejects a comment whose todo belongs to another tenant", async () => {
+  it("rejects a comment whose issue belongs to another tenant", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle(client)
 
@@ -554,15 +698,59 @@ describe("database migrations", () => {
           args: ["org-b", "Org B", "org-b", now],
         },
         {
-          sql: "insert into todos(id,organization_id,number,title,creator_id) values(?,?,?,?,?)",
-          args: ["todo-a", "org-a", 1, "Tenant A issue", "user-1"],
+          sql: "insert into issues(id,organization_id,number,title,creator_id) values(?,?,?,?,?)",
+          args: ["issue-a", "org-a", 1, "Tenant A issue", "user-1"],
         },
       ])
 
       await expect(
         client.execute({
-          sql: "insert into todo_comments(id,todo_id,organization_id,author_id,body) values(?,?,?,?,?)",
-          args: ["comment-1", "todo-a", "org-b", "user-1", "cross tenant"],
+          sql: "insert into issue_comments(id,issue_id,organization_id,author_id,body) values(?,?,?,?,?)",
+          args: ["comment-1", "issue-a", "org-b", "user-1", "cross tenant"],
+        })
+      ).rejects.toThrow(/foreign key/i)
+    } finally {
+      client.close()
+    }
+  })
+
+  it("rejects an activity event whose issue belongs to another tenant", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const db = drizzle(client)
+
+    try {
+      await migrate(db, { migrationsFolder })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["user-1", "Owner", "owner@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["org-a", "Org A", "org-a", now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["org-b", "Org B", "org-b", now],
+        },
+        {
+          sql: "insert into issues(id,organization_id,number,title,creator_id) values(?,?,?,?,?)",
+          args: ["issue-a", "org-a", 1, "Tenant A issue", "user-1"],
+        },
+      ])
+
+      await expect(
+        client.execute({
+          sql: "insert into issue_activity_events(id,organization_id,issue_id,actor_user_id,batch_id,kind) values(?,?,?,?,?,?)",
+          args: [
+            "activity-1",
+            "org-b",
+            "issue-a",
+            "user-1",
+            "batch-1",
+            "created",
+          ],
         })
       ).rejects.toThrow(/foreign key/i)
     } finally {
@@ -843,13 +1031,13 @@ describe("database migrations", () => {
 
       const verificationClient = createClient(connection)
       try {
-        const [migrationCount, userCount, todoCount, obsoleteTable] =
+        const [migrationCount, userCount, issueCount, obsoleteTable] =
           await Promise.all([
             verificationClient.execute(
               "select count(*) as value from __drizzle_migrations"
             ),
             verificationClient.execute("select count(*) as value from user"),
-            verificationClient.execute("select count(*) as value from todos"),
+            verificationClient.execute("select count(*) as value from issues"),
             verificationClient.execute(
               "select name from sqlite_master where type = 'table' and name = 'obsolete_local_table'"
             ),
@@ -857,7 +1045,7 @@ describe("database migrations", () => {
 
         expect(Number(migrationCount.rows[0]?.value)).toBeGreaterThan(0)
         expect(Number(userCount.rows[0]?.value)).toBeGreaterThan(0)
-        expect(Number(todoCount.rows[0]?.value)).toBeGreaterThan(0)
+        expect(Number(issueCount.rows[0]?.value)).toBeGreaterThan(0)
         expect(obsoleteTable.rows).toHaveLength(0)
       } finally {
         verificationClient.close()

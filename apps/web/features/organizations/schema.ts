@@ -51,7 +51,7 @@ const reservedOrganizationSlugs = new Set([
   "organization",
   "organizations",
   "settings",
-  "todos",
+  "issues",
 ])
 
 export const organizationDeletionReceiptSchema = v.object({

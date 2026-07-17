@@ -7,6 +7,10 @@ export const issueKeys = {
   all: ["issues"] as const,
   list: (organizationId: string) =>
     [...issueKeys.all, "list", organizationId] as const,
+  detail: (organizationId: string, issueId: string) =>
+    [...issueKeys.all, "detail", organizationId, issueId] as const,
+  timeline: (organizationId: string, issueId: string) =>
+    [...issueKeys.all, "timeline", organizationId, issueId] as const,
   comments: (organizationId: string, issueId: string) =>
     [...issueKeys.all, "comments", organizationId, issueId] as const,
 }

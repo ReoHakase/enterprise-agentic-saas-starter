@@ -317,13 +317,15 @@ test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを�
 
   const delayResponse = await context.request.post(
     `${mockApiUrl}/__e2e/request-delays`,
-    { data: { path: "/todos", method: "GET", delayMs: 2_000 } }
+    { data: { path: "/issues", method: "GET", delayMs: 2_000 } }
   )
   expect(delayResponse.status()).toBe(201)
 
   const navigation =
     browserName === "webkit"
-      ? page.goto("/dashboard/todos?boundary-state=nested-loading")
+      ? page.goto(
+          "/organization/alpha-operations/issues?boundary-state=nested-loading"
+        )
       : null
   if (!navigation) {
     await navigateFromConsoleSidebar(page, "Issues")
@@ -467,7 +469,7 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
   await useAdminSession(context)
   const loadedDashboardGeometry = await readLoadedDashboardGeometry(page)
 
-  await page.goto("/dashboard/todos")
+  await page.goto("/organization/alpha-operations/issues")
   await expect(
     page.getByRole("heading", { name: "Issues", level: 1 })
   ).toBeVisible()
@@ -483,7 +485,7 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
     `${mockApiUrl}/__e2e/faults`,
     {
       data: {
-        path: "/todos",
+        path: "/issues",
         method: "GET",
         status: 503,
         code: "dependency_unavailable",

@@ -9,7 +9,10 @@ import type {
 export type { IssuePriority, IssueStatus }
 
 export type IssueUiItem = Omit<Issue, "organizationId">
-export type IssueCommentUiItem = Omit<IssueComment, "organizationId" | "todoId">
+export type IssueCommentUiItem = Omit<
+  IssueComment,
+  "organizationId" | "issueId"
+>
 export type IssueUpdate = Partial<UpdateIssueFormValues>
 
 export type IssueAssigneeOption = {
@@ -33,15 +36,7 @@ export type IssuesWorkspaceProps = {
   onDelete: AsyncAction<[issue: IssueUiItem]>
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
   assignees?: IssueAssigneeOption[]
-  selectedIssueId?: string | null
-  onSelectIssue?: (issue?: IssueUiItem) => void
-  comments?: IssueCommentUiItem[]
-  commentsPending?: boolean
-  commentsError?: string
-  onCreateComment?: AsyncAction<[issue: IssueUiItem, body: string]>
-  onUpdateComment?: AsyncAction<
-    [issue: IssueUiItem, commentId: string, body: string]
-  >
-  onDeleteComment?: AsyncAction<[issue: IssueUiItem, commentId: string]>
+  getIssueHref: (issue: IssueUiItem) => string
+  onSelectIssue: (issue: IssueUiItem) => void
   onRetry?: () => void
 }

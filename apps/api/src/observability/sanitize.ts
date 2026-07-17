@@ -110,7 +110,7 @@ const resourceCollectionSegments = new Set([
   "members",
   "organizations",
   "sessions",
-  "todos",
+  "issues",
   "users",
 ])
 

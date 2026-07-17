@@ -29,7 +29,7 @@ type Issue = {
 type IssueComment = {
   id: string
   organizationId: string
-  todoId: string
+  issueId: string
   authorId: string
   author: {
     id: string
@@ -39,6 +39,25 @@ type IssueComment = {
   body: string
   createdAt: string
   updatedAt: string
+}
+
+type IssueActivity = {
+  type: "activity"
+  id: string
+  kind: "created" | "field_changed" | "legacy_updated"
+  field:
+    | "title"
+    | "description"
+    | "status"
+    | "priority"
+    | "assignee"
+    | "labels"
+    | "due_date"
+    | null
+  fromValue: string | string[] | null
+  toValue: string | string[] | null
+  actor: { id: string | null; name: string; image: string | null }
+  createdAt: string
 }
 
 type OrganizationMember = {
@@ -91,6 +110,7 @@ type SessionState = {
   organizations: Organization[]
   issues: Issue[]
   commentsByIssue: Map<string, IssueComment[]>
+  activitiesByIssue: Map<string, IssueActivity[]>
   membersByOrganization: Map<string, OrganizationMember[]>
   invitationsByOrganization: Map<string, OrganizationInvitation[]>
   deletionReceiptsByIdempotencyKey: Map<string, OrganizationDeletionReceipt>
@@ -119,7 +139,7 @@ type RequestDelay = {
 
 const FIXED_NOW = "2026-07-14T09:00:00.000Z"
 const FIXED_MUTATION_NOW = "2026-07-15T09:00:00.000Z"
-const FIXED_DUE_DATE = "2026-07-21"
+const FIXED_DUE_DATE = "2026-07-21T09:30:00.000Z"
 const FIXED_EXPIRES_AT = "2026-08-14T09:00:00.000Z"
 const FIXED_EXPIRED_AT = "2026-07-10T09:00:00.000Z"
 const PUBLIC_INVITATION_ID = "invitation-new-user"
@@ -176,6 +196,13 @@ const isIssuePriority = (value: unknown): value is IssuePriority =>
   value === "medium" ||
   value === "high" ||
   value === "urgent"
+
+const toIssueActivityValue = (value: unknown): string | string[] | null => {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string")
+  }
+  return typeof value === "string" ? value : null
+}
 
 const isOrganizationDeletionIdempotencyKey = (
   value: unknown
@@ -271,6 +298,7 @@ const createState = (sessionKey: string): SessionState => {
       organizations: [],
       issues: [],
       commentsByIssue: new Map(),
+      activitiesByIssue: new Map(),
       membersByOrganization: new Map(),
       invitationsByOrganization: new Map(),
       deletionReceiptsByIdempotencyKey: new Map(),
@@ -323,7 +351,7 @@ const createState = (sessionKey: string): SessionState => {
         description: "Confirm tenant isolation.",
         status: "open",
         priority: "high",
-        assigneeId: null,
+        assigneeId: "user-jordan",
         creatorId: user.id,
         labels: ["security"],
         dueDate: FIXED_DUE_DATE,
@@ -368,12 +396,39 @@ const createState = (sessionKey: string): SessionState => {
           {
             id: "comment-a-1",
             organizationId: "org-a",
-            todoId: "issue-a-1",
+            issueId: "issue-a-1",
             authorId: user.id,
             author: user,
             body: "Tenant boundary verified in the API integration suite.",
             createdAt: FIXED_NOW,
             updatedAt: FIXED_NOW,
+          },
+        ],
+      ],
+    ]),
+    activitiesByIssue: new Map([
+      [
+        "issue-a-1",
+        [
+          {
+            type: "activity",
+            id: "activity-a-1",
+            kind: "created",
+            field: null,
+            fromValue: null,
+            toValue: null,
+            actor: { id: user.id, name: user.name, image: user.image },
+            createdAt: "2026-07-12T09:00:00.000Z",
+          },
+          {
+            type: "activity",
+            id: "activity-a-2",
+            kind: "field_changed",
+            field: "assignee",
+            fromValue: null,
+            toValue: "user-jordan",
+            actor: { id: user.id, name: user.name, image: user.image },
+            createdAt: "2026-07-13T09:00:00.000Z",
           },
         ],
       ],
@@ -1266,6 +1321,7 @@ Bun.serve({
         )
         deletedIssueIds.forEach((issueId) => {
           state.commentsByIssue.delete(issueId)
+          state.activitiesByIssue.delete(issueId)
         })
         state.membersByOrganization.delete(organizationId)
         state.invitationsByOrganization.delete(organizationId)
@@ -1331,7 +1387,9 @@ Bun.serve({
       return json({ invitation: sharedInvitation.invitation, member })
     }
 
-    const commentMatch = pathname.match(/^\/todos\/([^/]+)\/comments\/([^/]+)$/)
+    const commentMatch = pathname.match(
+      /^\/issues\/([^/]+)\/comments\/([^/]+)$/
+    )
     if (commentMatch?.[1] && commentMatch[2]) {
       const body = await readBody(request)
       const organizationId = nonEmptyString(body.organizationId)
@@ -1361,7 +1419,7 @@ Bun.serve({
     }
 
     const commentCollectionMatch = pathname.match(
-      /^\/todos\/([^/]+)\/comments$/
+      /^\/issues\/([^/]+)\/comments$/
     )
     if (commentCollectionMatch?.[1]) {
       const body = request.method === "GET" ? {} : await readBody(request)
@@ -1388,7 +1446,7 @@ Bun.serve({
         const comment: IssueComment = {
           id: `comment-${sessionKey}-${state.nextCommentId}`,
           organizationId: verifiedOrganizationId,
-          todoId: issue.id,
+          issueId: issue.id,
           authorId: state.user.id,
           author: state.user,
           body: commentBody,
@@ -1401,7 +1459,7 @@ Bun.serve({
       }
     }
 
-    if (pathname === "/todos" && request.method === "GET") {
+    if (pathname === "/issues" && request.method === "GET") {
       const organizationId = url.searchParams.get("organizationId")
       const access = resolveOrganization(state, organizationId)
       if ("response" in access) return access.response
@@ -1411,7 +1469,7 @@ Bun.serve({
         )
       )
     }
-    if (pathname === "/todos" && request.method === "POST") {
+    if (pathname === "/issues" && request.method === "POST") {
       const body = await readBody(request)
       const organizationId = nonEmptyString(body.organizationId)
       const title = nonEmptyString(body.title)
@@ -1453,11 +1511,71 @@ Bun.serve({
       }
       state.nextIssueId += 1
       state.issues.push(issue)
+      state.activitiesByIssue.set(issue.id, [
+        {
+          type: "activity",
+          id: `activity-${issue.id}-created`,
+          kind: "created",
+          field: null,
+          fromValue: null,
+          toValue: null,
+          actor: {
+            id: state.user.id,
+            name: state.user.name,
+            image: state.user.image,
+          },
+          createdAt: FIXED_NOW,
+        },
+      ])
       return json(issue, 201)
     }
 
-    const todoMatch = pathname.match(/^\/todos\/([^/]+)$/)
-    if (todoMatch?.[1]) {
+    const byNumberMatch = pathname.match(/^\/issues\/by-number\/(\d+)$/)
+    if (byNumberMatch?.[1] && request.method === "GET") {
+      const access = resolveOrganization(
+        state,
+        url.searchParams.get("organizationId")
+      )
+      if ("response" in access) return access.response
+      const issue = state.issues.find(
+        (candidate) =>
+          candidate.number === Number(byNumberMatch[1]) &&
+          candidate.organizationId === access.organization.id
+      )
+      return issue ? json(issue) : notFound("Issue")
+    }
+
+    const timelineMatch = pathname.match(/^\/issues\/([^/]+)\/timeline$/)
+    if (timelineMatch?.[1] && request.method === "GET") {
+      const access = resolveOrganization(
+        state,
+        url.searchParams.get("organizationId")
+      )
+      if ("response" in access) return access.response
+      const issue = findIssue(state, timelineMatch[1], access.organization.id)
+      if (!issue) return notFound("Issue")
+      const comments = (state.commentsByIssue.get(issue.id) ?? []).map(
+        (comment) => ({
+          type: "comment" as const,
+          id: comment.id,
+          organizationId: comment.organizationId,
+          issueId: comment.issueId,
+          authorId: comment.authorId,
+          author: comment.author,
+          body: comment.body,
+          createdAt: comment.createdAt,
+          updatedAt: comment.updatedAt,
+        })
+      )
+      const activities = state.activitiesByIssue.get(issue.id) ?? []
+      const items = [...activities, ...comments].toSorted((left, right) =>
+        right.createdAt.localeCompare(left.createdAt)
+      )
+      return json({ items, nextCursor: null })
+    }
+
+    const issueMatch = pathname.match(/^\/issues\/([^/]+)$/)
+    if (issueMatch?.[1]) {
       const body = request.method === "GET" ? {} : await readBody(request)
       const organizationId =
         request.method === "GET"
@@ -1468,7 +1586,7 @@ Bun.serve({
       const verifiedOrganizationId = access.organization.id
       const issueIndex = state.issues.findIndex(
         (issue) =>
-          issue.id === todoMatch[1] &&
+          issue.id === issueMatch[1] &&
           issue.organizationId === verifiedOrganizationId
       )
       const issue = state.issues[issueIndex]
@@ -1476,6 +1594,15 @@ Bun.serve({
 
       if (request.method === "GET") return json(issue)
       if (request.method === "PATCH") {
+        const activityFields = [
+          ["title", issue.title, body.title],
+          ["description", issue.description, body.description],
+          ["status", issue.status, body.status],
+          ["priority", issue.priority, body.priority],
+          ["assignee", issue.assigneeId, body.assigneeId],
+          ["labels", issue.labels, body.labels],
+          ["due_date", issue.dueDate, body.dueDate],
+        ] as const
         if (body.title !== undefined) {
           const title = nonEmptyString(body.title)
           if (!title) return invalid("title is invalid")
@@ -1498,11 +1625,35 @@ Bun.serve({
           issue.dueDate = body.dueDate
         }
         issue.updatedAt = FIXED_MUTATION_NOW
+        const activities = state.activitiesByIssue.get(issue.id) ?? []
+        activityFields.forEach(([field, fromValue, toValue], position) => {
+          if (
+            toValue === undefined ||
+            JSON.stringify(fromValue) === JSON.stringify(toValue)
+          )
+            return
+          activities.push({
+            type: "activity",
+            id: `activity-${issue.id}-${position}-${activities.length}`,
+            kind: "field_changed",
+            field,
+            fromValue,
+            toValue: toIssueActivityValue(toValue),
+            actor: {
+              id: state.user.id,
+              name: state.user.name,
+              image: state.user.image,
+            },
+            createdAt: FIXED_MUTATION_NOW,
+          })
+        })
+        state.activitiesByIssue.set(issue.id, activities)
         return json(issue)
       }
       if (request.method === "DELETE") {
         state.issues.splice(issueIndex, 1)
         state.commentsByIssue.delete(issue.id)
+        state.activitiesByIssue.delete(issue.id)
         return json(issue)
       }
     }

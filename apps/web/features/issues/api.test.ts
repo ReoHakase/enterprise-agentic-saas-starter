@@ -8,6 +8,7 @@ import {
   createIssueComment,
   deleteIssue,
   deleteIssueComment,
+  getIssueTimeline,
   listIssueComments,
   listIssues,
   updateIssue,
@@ -18,14 +19,14 @@ const issue = {
   id: "issue-1",
   organizationId: "org-1",
   number: 1,
-  title: "Keep date-only contracts",
+  title: "Keep date-time contracts",
   description: "",
   status: "open" as const,
   priority: "high" as const,
   assigneeId: null,
   creatorId: "user-1",
   labels: ["contract"],
-  dueDate: "2026-07-21",
+  dueDate: "2026-07-21T09:30:00.000Z",
   createdAt: "2026-07-14T00:00:00.000Z",
   updatedAt: "2026-07-14T00:00:00.000Z",
 }
@@ -33,7 +34,7 @@ const issue = {
 const comment = {
   id: "comment-1",
   organizationId: "org-1",
-  todoId: "issue-1",
+  issueId: "issue-1",
   authorId: "user-1",
   author: { id: "user-1", name: "Reo", image: null },
   body: "Verified",
@@ -56,7 +57,7 @@ describe("issues Eden API", () => {
     vi.unstubAllGlobals()
   })
 
-  it("parses issue and comment CRUD while preserving date-only due dates", async () => {
+  it("parses issue and comment CRUD while preserving due date-times", async () => {
     fetchMock
       .mockResolvedValueOnce(Response.json([issue]))
       .mockResolvedValueOnce(Response.json(issue))
@@ -73,7 +74,7 @@ describe("issues Eden API", () => {
       createIssue(client, {
         organizationId: "org-1",
         title: issue.title,
-        dueDate: "2026-07-21",
+        dueDate: "2026-07-21T09:30:00.000Z",
       })
     ).resolves.toEqual(issue)
     await expect(
@@ -81,7 +82,7 @@ describe("issues Eden API", () => {
         id: issue.id,
         organizationId: "org-1",
         title: issue.title,
-        dueDate: "2026-07-21",
+        dueDate: "2026-07-21T09:30:00.000Z",
       })
     ).resolves.toEqual(issue)
     await expect(
@@ -118,7 +119,7 @@ describe("issues Eden API", () => {
     const updateRequest = requestFrom(...updateCall)
     expect(updateRequest.method).toBe("PATCH")
     await expect(updateRequest.json()).resolves.toEqual(
-      expect.objectContaining({ dueDate: "2026-07-21" })
+      expect.objectContaining({ dueDate: "2026-07-21T09:30:00.000Z" })
     )
   })
 
@@ -129,6 +130,45 @@ describe("issues Eden API", () => {
     await expect(listIssues(client, "org-1")).rejects.toThrow(
       "API response did not include data"
     )
+  })
+
+  it("treats timeline cursors as opaque strings", async () => {
+    const opaqueCursor = "eyJ2IjoxLCJ0eXBlIjoiY29tbWVudCJ9"
+    const nextCursor = "eyJ2IjoxLCJ0eXBlIjoiYWN0aXZpdHkifQ"
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        items: [
+          {
+            type: "activity",
+            id: "activity-1",
+            kind: "created",
+            field: null,
+            fromValue: null,
+            toValue: null,
+            actor: { id: "user-1", name: "Reo", image: null },
+            createdAt: "2026-07-14T00:00:00.000Z",
+          },
+        ],
+        nextCursor,
+      })
+    )
+    const client = createApiClient("https://api.example.test")
+
+    await expect(
+      getIssueTimeline(client, {
+        id: issue.id,
+        organizationId: "org-1",
+        cursor: opaqueCursor,
+        limit: 1,
+      })
+    ).resolves.toMatchObject({ nextCursor })
+
+    const timelineCall = fetchMock.mock.calls[0]
+    if (!timelineCall) throw new Error("Expected a timeline request")
+    const request = requestFrom(...timelineCall)
+    const url = new URL(request.url)
+    expect(url.searchParams.get("cursor")).toBe(opaqueCursor)
+    expect(url.searchParams.get("limit")).toBe("1")
   })
 
   it("passes query cancellation through Eden to fetch", async () => {

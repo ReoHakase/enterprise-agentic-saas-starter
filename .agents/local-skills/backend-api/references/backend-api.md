@@ -100,7 +100,7 @@ export const corsPlugin = new Elysia({ name: "cors" }).use(
 ## module 例
 
 ```txt
-modules/todos/
+modules/issues/
   index.ts       # Elysia routes
   model.ts       # Valibot Standard Schema
   service.ts     # business logic
@@ -108,7 +108,7 @@ modules/todos/
   test.ts
 ```
 
-todo は単純でも、tenant/group/permission 前提で設計する。repository query には tenant id や organization id を含める。
+issue は単純でも、tenant/group/permission 前提で設計する。repository query には tenant id や organization id を含める。
 
 ## Valibot Standard Schemaを使うroute schema
 
@@ -116,18 +116,18 @@ todo は単純でも、tenant/group/permission 前提で設計する。repositor
 import { Elysia } from "elysia"
 import * as v from "valibot"
 
-const createTodoBody = v.object({
+const createIssueBody = v.object({
   title: v.pipe(v.string(), v.minLength(1)),
   organizationId: v.pipe(v.string(), v.minLength(1)),
 })
 
-export const todosModule = new Elysia({ prefix: "/todos" }).post(
+export const issuesModule = new Elysia({ prefix: "/issues" }).post(
   "/",
   async ({ body, db, session }) => {
-    return await createTodo(db, session.user.id, body)
+    return await createIssue(db, session.user.id, body)
   },
   {
-    body: createTodoBody,
+    body: createIssueBody,
   }
 )
 ```

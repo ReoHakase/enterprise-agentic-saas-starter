@@ -1,5 +1,3 @@
-import type { IssuePriority, IssueStatus } from "./types"
-
 type FormFieldErrorItem = { message?: string } | undefined
 
 export type StringFieldApi = {
@@ -16,41 +14,20 @@ export type StringFieldApi = {
   handleChange: (value: string) => void
 }
 
-export type IssueStatusFieldApi = {
-  name: string
-  state: { value: IssueStatus }
-  handleChange: (value: IssueStatus) => void
-}
-
-export type IssuePriorityFieldApi = {
-  name: string
-  state: { value: IssuePriority }
-  handleChange: (value: IssuePriority) => void
-}
-
-export type NullableStringFieldApi = {
-  name: string
-  state: { value: string | null }
-  handleChange: (value: string | null) => void
-}
-
-export type LabelsFieldApi = {
-  name: string
-  state: { value: string[] }
-  handleChange: (value: string[]) => void
-}
-
 type SubmitState = {
   canSubmit: boolean
+  isDirty: boolean
   isSubmitting: boolean
 }
 
 export type SubmitSelection = readonly [
   canSubmit: boolean,
   isSubmitting: boolean,
+  isDirty: boolean,
 ]
 
 export const selectSubmitState = (state: SubmitState): SubmitSelection => [
   state.canSubmit,
   state.isSubmitting,
+  state.isDirty,
 ]

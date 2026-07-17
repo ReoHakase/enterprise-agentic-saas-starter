@@ -13,12 +13,12 @@ export const auditActions = [
   "organization.invitation.created",
   "organization.invitation.resent",
   "organization.invitation.canceled",
-  "todo.created",
-  "todo.updated",
-  "todo.deleted",
-  "todo.comment.created",
-  "todo.comment.updated",
-  "todo.comment.deleted",
+  "issue.created",
+  "issue.updated",
+  "issue.deleted",
+  "issue.comment.created",
+  "issue.comment.updated",
+  "issue.comment.deleted",
 ] as const
 
 export type AuditAction = (typeof auditActions)[number]
@@ -26,14 +26,14 @@ export type AuditTargetType =
   | "invitation"
   | "member"
   | "organization"
-  | "todo"
-  | "todo_comment"
+  | "issue"
+  | "issue_comment"
 const auditTargetTypes: AuditTargetType[] = [
   "invitation",
   "member",
   "organization",
-  "todo",
-  "todo_comment",
+  "issue",
+  "issue_comment",
 ]
 export type AuditMetadata = Record<string, boolean | null | number | string>
 

@@ -59,7 +59,7 @@ Elysiaのrequest trace/logはSentry SDKとPII-safeなstructured console sinkへ�
 
 API routeのbody/query/params/responseと環境変数はValibotへ統一します。route modelはStandard SchemaとしてElysiaへ直接渡し、OpenAPIは`@valibot/to-json-schema` mapperで生成します。request validationは400 `validation_error`と安全な`fieldErrors`へ正規化し、422は返しません。
 
-Eden clientはoptionsをspreadした後で`parseDate: false`を固定し、consumerから上書きできません。todo due dateの公開値は`YYYY-MM-DD | null`、DB内部はUTC midnightです。実HTTP transport testでdue dateとtimestampが文字列のまま届くことを確認します。
+Eden clientはoptionsをspreadした後で`parseDate: false`を固定し、consumerから上書きできません。issue due dateの公開値はISO timestampまたは`null`、DB内部は`timestamp_ms`です。実HTTP transport testでdue dateとtimestampが文字列のまま届くことを確認します。
 
 ## API documentation
 
@@ -107,9 +107,11 @@ DB transactionはPIIを持たないcleanup jobを先に保存し、対象をacti
 
 organization/member/invitation/issue/comment mutationは `audit_logs` へappend-only eventを残す。重要mutationとevent insertは同じDB transactionに含め、audit失敗後にmutationだけ成功したように見える状態を作らない。admin以上は `/organizations/:organizationId/audit-logs` でtenant内eventを取得できる。
 
-## Issue相当todo
+## Issue
 
-todoはorganization内連番、Markdown description、status、priority、assignee、creator、labels、due dateを持つ。list routeはsearch/filter/sort、detail routeとcomment CRUDを提供する。採番はprocess内のorganization別queueに加え、DBの `(organization_id, number)` unique conflictだけを限定retryする。
+issueはorganization内連番、Markdown description、status、priority、assignee、creator、labels、due dateを持つ。list routeはsearch/filter/sort、番号解決、detail/comment CRUD、activity/comment統合timelineを提供する。採番はprocess内のorganization別queueに加え、DBの `(organization_id, number)` unique conflictだけを限定retryする。
+
+timelineは新しい順のtotal orderで返し、`nextCursor`は内部構造を解釈しないopaqueな文字列として次の`cursor` queryへそのまま渡す。同一timestampのactivity/commentが連続しても欠落や重複が起きないkeyset paginationとし、不正cursorは400 `validation_error`にする。
 
 ## テスト
 

@@ -15,12 +15,12 @@ export const auditActionModel = v.picklist([
   "organization.invitation.created",
   "organization.invitation.resent",
   "organization.invitation.canceled",
-  "todo.created",
-  "todo.updated",
-  "todo.deleted",
-  "todo.comment.created",
-  "todo.comment.updated",
-  "todo.comment.deleted",
+  "issue.created",
+  "issue.updated",
+  "issue.deleted",
+  "issue.comment.created",
+  "issue.comment.updated",
+  "issue.comment.deleted",
 ])
 
 export const auditEventModel = v.object({
@@ -32,8 +32,8 @@ export const auditEventModel = v.object({
     "organization",
     "member",
     "invitation",
-    "todo",
-    "todo_comment",
+    "issue",
+    "issue_comment",
   ]),
   targetId: v.nullable(v.string()),
   metadata: v.record(

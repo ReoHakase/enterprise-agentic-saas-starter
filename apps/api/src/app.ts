@@ -9,8 +9,8 @@ import {
   readinessResponseModel,
 } from "./models/api"
 import { createAuditModule } from "./modules/audit"
+import { createIssuesModule } from "./modules/issues"
 import { createOrganizationsModule } from "./modules/organizations"
-import { createTodosModule } from "./modules/todos"
 import { createUsersModule } from "./modules/users"
 import { withObservedSpan } from "./observability/runtime"
 import { csrfPlugin } from "./plugins/csrf"
@@ -85,7 +85,7 @@ export const createApp = (db: Db) =>
     )
     .use(createUsersModule(db))
     .use(createOrganizationsModule(db))
-    .use(createTodosModule(db))
+    .use(createIssuesModule(db))
     .use(createAuditModule(db))
     .use(openApiPlugin)
 

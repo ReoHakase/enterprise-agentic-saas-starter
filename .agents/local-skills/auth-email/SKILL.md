@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのBetter Auth、packages/auth、ses
 
 ## 前提
 
-- アプリ機能はtodoでも、設計対象はグループと権限設定を持つマルチテナントSaaS。
+- アプリ機能はissue管理でも、設計対象はグループと権限設定を持つマルチテナントSaaS。
 - Better Authはidentity/session/account linking/organizationの基盤。
 - SaaS固有のresource permissionはapp側に寄せる。
 
@@ -90,7 +90,7 @@ bunx @better-auth/cli generate \
 ## 認可
 
 - identity/session/org membershipはauth。
-- todo/project/group/billingなどresource permissionは `apps/api/modules/authorization` などapp側。
+- issue/project/group/billingなどresource permissionは `apps/api/modules/authorization` などapp側。
 - audit logを意識し、permission deniedはE2EとAPI integrationで確認する。
 - このrepoのorganization roleはBetter Auth標準の `owner/admin/member` ではなく、`super_admin/admin/member` を使う。
 - `packages/auth` のorganization pluginでは `creatorRole: "super_admin"` と custom `roles` を設定し、plugin構成を変えたら `packages/db/src/schema/auth.generated.ts` をBetter Auth CLIで再生成する。

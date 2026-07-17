@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 
 ## 前提
 
-- このrepoはtodoアプリを題材にした、マルチテナントSaaS webアプリのテンプレート。
+- このrepoはissue管理を題材にした、マルチテナントSaaS webアプリのテンプレート。
 - webはNext.js。開発とworkspace管理にはBunを使える。
 - Cloudflareに載せる場合、本番runtimeはBunではなくCloudflare Workers/workerd。
 - Next.js on CloudflareはOpenNext Cloudflare adapterを前提にする。
@@ -44,7 +44,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - UI追加時は既存のshadcn/ui・Tailwind・`packages/ui` の構成に寄せる。
 - portless local dev のweb originは `https://enterprise-agentic-saas.localhost`、API originは `https://api.enterprise-agentic-saas.localhost`。Next.js `allowedDevOrigins` も `.localhost` に合わせる。
 - auth必須画面はNext.js Server Componentでsessionを検証し、未ログインなら `/auth/sign-in` にredirectする。session検証やSSR prefetchはwebからDBへ触らず、cookie headerをAPIへ転送するserver-side HTTP/Eden callに限定する。
-- todosなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/todos` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
+- issuesなどauth必須dataはserver側でEden clientを作り、`/organizations` と `/issues` をTanStack Queryへprefetchして `HydrationBoundary` でclient componentへ渡す。browser fetchは同じEden clientに `credentials: "include"` を付ける。
 - browserのGET/mutationはTanStack Queryのquery/mutationへ集約する。フォームはTanStack Formと`apps/web`内のValibot schemaを使い、field errorをinput直下、action失敗を安全なtoast/form errorに出す。Jotaiは選択中dialogなど再取得不要な一時UI状態だけに使い、server data cacheを複製しない。
 - bulk invitation formはTextareaへカンマまたは改行区切りで入力させ、Web-local Valibotでraw token 1〜20件、各254文字以下、email形式を検証してからtrim/lowercase/case-insensitive重複排除する。Edenへは`{ emails, role }`だけを渡し、batch responseもWeb-local schemaでparseする。409/429/step-upでは入力を保持し、field errorはTextarea直下、form errorはdialog内、成功はqueueされたunique件数をtoastで示す。
 - organization管理のbrowser URLはUUIDでなくslugを使う。Server Componentは`listOrganizations()`のmember-visible結果からslugを内部IDへ解決し、未所属/不存在slugは同じ404にする。API/query key/mutationは内部IDのまま保ち、sidebar、一覧、dashboard、slug更新後redirectはslug URLへ統一する。
@@ -55,7 +55,20 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - toast本体はpointer-transparentにして背後のDialogやform submitを遮らず、magic-link再送など既存のaction/cancel/close buttonだけへpointer eventを戻す。toast classだけを`pointer-events-none`にしてactionまで操作不能にせず、mouse E2Eで後続操作とtoast actionの両方を確認する。
 - TanStack Queryの`mutationFn`へAPI methodをそのまま渡すと、Queryの第2引数contextも呼び出される。transport境界へ余計なargumentを流さないため、`mutationFn: (input) => api.method(input)`の明示wrapperを使う。
 - App Routerのserver pageでSSR prefetchしたdataをhydrateするときは、client component側で `QueryClientProvider` と `HydrationBoundary` を同じ境界にまとめる。`HydrationBoundary` は内部で `useQueryClient()` を呼ぶため、server page直下に単独で置かない。
-- SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。todoなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
+- SaaS console内ではactive organizationの切り替えUIはsidebarのorg switcherに集約する。issueなど個別機能画面で別のorganization pickerを重ねるとscopeが二重化してUXとdata prefetchが崩れる。
+- organization consoleのcanonical URLは `/organization/[organizationSlug]/dashboard` と `/organization/[organizationSlug]/issues` にする。Issue詳細はorganization内連番の `/organization/[organizationSlug]/issues/[issueNumber]` を使い、UUIDをbrowser URLへ出さない。旧 `/dashboard` と `/dashboard/todos` はactive organizationのcanonical URLへのserver redirectだけを残す。
+- Issue一覧からの詳細表示はissues layoutのparallel `@modal` slotと `(.)[issueNumber]` Intercepting RouteでDialogとして開き、canonical `[issueNumber]/page.tsx` と同じdetail controller/form/timelineを共有する。Issue名はcanonical URLを持つ`Link`にしてIntercepted Dialogを開く。直アクセス・再読込は全画面page、Dialog closeは`router.back()`、可視ラベルを持つ「Full page」actionはnative document navigationでinterceptionを外す。server由来の選択IssueをJotaiへ複製しない。
+- Issue詳細はtitle、description、new comment、comment editを独立したTanStack Formにする。titleはheading横のicon-only Editから編集し、明示SaveとCancelを表示する。差分がないSaveはdisabledにし、blurだけで保存しない。descriptionも明示Saveを持ち、status・priority・assignee・labels・due dateはfield単位の即時mutationにする。description保存時にmetadataのstale値をまとめて送らない。保存成功時は対象formだけresponse相当にresetする。
+- status・priority・assignee・labels・due dateの即時mutationをevent handlerからfire-and-forgetするときは、controllerがtoastを出した後のrejected Promiseもcomponent境界でsettleし、`unhandledrejection`をbrowser/Sentryへ漏らさない。comment edit中にtimelineがrefreshされても、`editing && isDirty`のdraftを新しいpropでresetせず、保存完了・Cancel後にだけserver値へ同期する。
+- Issue詳細のmobile DOM順はheader（title・Issue番号・Edit・全画面化）→metadata fields→description→discussionにする。desktopは全幅headerの後を2 columnにし、左へdescription→discussion、右へviewportに追従するsticky metadata fieldsを置く。通常時はtitle・Issue番号・icon-only Editを左へ詰め、titleを1行内で縮めて全画面化actionを操作可能なまま残す。title編集時は狭幅でinput・Cancel・Save・Full pageを同じ行へ押し込まず、formを次行の全幅へ落として横overflowを防ぐ。
+- Issue descriptionはcommentと同じcard/header/bodyの視覚文法を使い、作成日時・更新日時・Edit actionをcard headerへ集約する。creatorのavatar・名前は表示せず、detail headerや別captionへ同じ日時を重複表示しない。
+- status・priority・assignee・due dateのcontrolは`apps/web`のdomain componentを一覧tableと詳細asideで共有し、triggerとoptionのbadge/avatar表現を分岐させない。labelsはBase UI Comboboxのmultiple/chips/searchとpopup内の明示Add actionを使い、comma区切りinputを作らない。候補はorganization内Issueからcase-insensitiveに集約する。
+- Issue詳細のdirty guardはtitle、description、new comment、comment editを対象にし、Dialog close、Escape、overlay、全画面pageの「Back to issues」とbrowser Backを同じAlertDialogへ通す。full-page mount時は同URLのhistory sentinelを1件だけ積み、`popstate`でdirty判定してCancelならsentinelを再装着、Discardなら実際のBackを続行する。確定遷移では`beforeunload`を一度だけ抑止してbrowser標準確認との二重表示を避け、mutation中はclose/navigationを実行しない。
+- Intercepted modalからcanonical pageへの全画面化はdocument navigationでinterceptionを外す。title・description・new commentの未保存draftは`version`、`issueId`、短い有効期限を持つissue URL単位の`sessionStorage`へone-shot保存し、canonical mountでWeb-local Valibot検証後に復元して即削除する。既存comment editはcomment component内のform stateなので、handoffへ含めない限り「Full page」を破棄確認へ通し、Cancelではdraftを保持する。保存不能時にdirty dataを警告なしで捨てて遷移しない。
+- Intercepting Routeの`layout.tsx`が唯一のDialog、overlay、mobile inset、scroll containerを所有し、同階層の`loading.tsx`と`page.tsx`はbodyだけを返す。loadingと実体で別DialogをmountするとPortal、focus trap、open animationが再生成されるため禁止する。共通shellは固定外寸と`scrollbar-gutter: stable`を持ち、skeletonも実体と同じheader、main/aside、timeline骨格にする。
+- Issueのdue dateはISO timestampとしてAPIへ渡し、table/detailの共通controlはshadcn Calendar + Popover + hour/minute Selectでbrowser local timeを編集する。native `datetime-local`へ戻さず、表示は`LocalDate includeTime`でhydration後にlocal timezoneへ揃える。Popover内ではdate/hour/minute/clearをlocal draftだけへ反映し、閉じた時点で差分がある場合だけ1回PATCHする。未設定時の初期時刻表示と日付選択後の保存時刻を同じ値にする。
+- Discussionはsemanticな`ol/li`、field別の色付きicon、actor avatar、縦の接続線、右寄せした`LocalDate includeTime`で時系列を示す。field updateでもactor avatarを省略せず、field iconは補助markerとしてavatarへ重ねる。接続線はavatar・marker・comment cardより背面へ置き、activity文はtipsを含めてinline flowで自然に折り返し、語句ごとのflex item化でmobileに過剰な改行を作らない。status・priority・labels・due dateは共通badge、assigneeはUUIDでなくavatarとmember名を表示し、edited commentはEdited badgeと編集日時を作成日時から分ける。
+- Dialogと通常pageで共有するtimeline markerなどの重なり要素は、親surfaceのsemantic colorをCSS変数で受け取り、その色をavatar外周と補助markerのringへ使う。`background`固定にして`popover`上へ異なる外周を出さない。avatar上へ重ねる補助markerはlight/darkとも不透明な面色を使い、背後の画像を透過させず、Lucide iconには円内で潰れない明示sizeとstroke幅を与える。
 - active organization mutation成功時に`consoleKeys.all`を即invalidateすると、route遷移前の旧tenant queryが新session contextで再fetchされ409/404になる。旧queryはcancelだけして再fetchせず、organization routeのreplaceまたはRSC refreshで新tenant queryを構築する。
 - `(console)/layout`はorganization slug間のclient navigationで保持されるため、active organization切替後に`router.replace()` / `router.push()`だけを行うと、layoutへ渡した`me.organizations[].active`がstaleになる。切替成功時はconsoleだけでなくissue/commentを含む全tenant query familyをawaitしてcancelし、organization/me query cacheのactive表示を同期してからslug遷移し、全経路で`router.refresh()`して共有layoutのserver contextも更新する。GET queryはTanStack Queryの`AbortSignal`をEdenの`fetch.signal`へ渡し、旧tenant HTTP自体を中止できるようにする。
 - `activeOrganizationId = null` で複数membershipがある場合、`organizations[0]` をactive扱いしない。tenant data pageは `/settings/organizations` へ誘導し、sidebarは明示選択を表示する。switcherのno-op判定は選択target自身の `active === true` のときだけにする。

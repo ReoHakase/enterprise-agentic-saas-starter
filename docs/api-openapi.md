@@ -28,13 +28,14 @@ Scalarは次を明示設定します。
 - request body/query/path/responseはValibot Standard Schemaを再利用する。OpenAPI変換は`@valibot/to-json-schema` mapperを通す。
 - protected routeはaccess macroから `security: [{ sessionCookie: [] }]` を付ける。
 - `sessionCookie` は `apiKey`, `in: cookie`, `name: better-auth.session_token`。本番secure prefixはdescriptionで補足する。
-- tagsは `System`, `Users`, `Sessions`, `Organizations`, `Organization members`, `Organization invitations`, `Todos`, `Todo comments`, `Audit` に統一する。
+- tagsは `System`, `Users`, `Sessions`, `Organizations`, `Organization members`, `Organization invitations`, `Issues`, `Issue comments`, `Audit` に統一する。
 - 実装とdocumentationのdriftを防ぐため、route schemaから生成した `/openapi/json` をtestで検証する。
 - Better Authは`auth.api.generateOpenAPISchema()`の実生成結果を使い、pathへ`/auth`を付けて同じdocumentへ統合する。auth routeを手書きで複製しない。
 - Better Auth 1.6のOpenAPI 3.1 fragmentは、実際に存在するnullable type arrayをOpenAPI 3.0の`nullable`へ変換し、`$ref`のsiblingsは`allOf`へ保持してから統合する。変換不能なschemaは起動時にfail-fastする。
 - Better Authの`disabledPaths`は生成schemaにも反映される。organization pluginは招待recipient向け4 routeだけを掲載し、app所有の管理routeを再公開しない。
 - Better Auth由来のoperationにも一意な`operationId`、summary、description、`Auth / ...` tagを補完する。
-- resource作成は `POST /organizations`、`POST /organizations/:organizationId/invitations`、`POST /todos`、`POST /todos/:id/comments` のすべてで201を返す。
+- resource作成は `POST /organizations`、`POST /organizations/:organizationId/invitations`、`POST /issues`、`POST /issues/:id/comments` のすべてで201を返す。
+- `GET /issues/:id/timeline` の `nextCursor` はopaqueな文字列とし、consumerは解析せず次の `cursor` queryへ渡す。同一timestampのitemを含むtotal orderで欠落・重複を防ぎ、不正cursorは400 `validation_error`を返す。
 - 招待再送は`POST /organizations/:organizationId/invitations/:invitationId/resend`で200を返し、`{ invitation, delivery: "queued", revived }`をresponse schemaにする。403/404/409/429を明示し、admin role再送のfresh session、tenant非開示、terminal state、quotaをdescriptionへ含める。
 - comment DTOは `authorId` に加えてtenant-safeな `author: { id, name, image }` を返す。退会済み/tenant外userのprivate profileを漏らさず `Former member` fallbackにする。
 - organization削除は`DELETE /organizations/:organizationId`。active organizationの`super_admin`、fresh session、slug完全一致、`DELETE`確認、opaqueな冪等keyをすべて要求し、同一actor・organization・keyの再送へ同じreceiptを返す。
@@ -59,7 +60,7 @@ request validationは400 `validation_error`へ統一し、安全なfield pathと
 
 ## Eden / 日付契約
 
-Webがfirst-party APIへ接続するときは`@enterprise-agentic-saas/api/client`だけをimportし、featureごとのraw `fetch` wrapperを作りません。clientはconsumer optionsを適用した後に`parseDate: false`を固定するため、ISO風文字列が暗黙に`Date`へ変換されません。todoのdue dateはHTTPで`YYYY-MM-DD | null`、DBでUTC midnightとして扱い、repository境界で相互変換します。Web-local Valibot schemaはUI表示時のruntime境界として残します。
+Webがfirst-party APIへ接続するときは`@enterprise-agentic-saas/api/client`だけをimportし、featureごとのraw `fetch` wrapperを作りません。clientはconsumer optionsを適用した後に`parseDate: false`を固定するため、ISO風文字列が暗黙に`Date`へ変換されません。issueのdue dateはHTTPでISO timestampまたは`null`、DBで`timestamp_ms`として扱い、repository境界で相互変換します。Web-local Valibot schemaはUI表示時のruntime境界として残します。
 
 ## Local確認
 

@@ -6,7 +6,6 @@ import {
   FieldError,
   FieldLabel,
 } from "@enterprise-agentic-saas/ui/components/field"
-import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import {
   InputGroup,
   InputGroupInput,
@@ -70,103 +69,6 @@ export const CreateIssueTitleField = ({
       {serverError ? (
         <FieldError id={serverErrorId} role="alert">
           {serverError}
-        </FieldError>
-      ) : null}
-    </Field>
-  )
-}
-
-export const IssueTitleFormField = ({
-  field,
-  onEdit,
-  serverErrors,
-}: {
-  field: StringFieldApi
-  onEdit?: (field: string) => void
-  serverErrors?: string[]
-}) => {
-  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
-  const invalid = locallyInvalid || Boolean(serverErrors?.length)
-  const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onEdit?.(field.name)
-      field.handleChange(event.target.value)
-    },
-    [field, onEdit]
-  )
-  const localErrorId = locallyInvalid ? `${field.name}-local-error` : undefined
-  const serverErrorId = serverErrors?.length
-    ? `${field.name}-server-error`
-    : undefined
-
-  return (
-    <Field data-invalid={invalid}>
-      <FieldLabel htmlFor={field.name}>Title</FieldLabel>
-      <Input
-        id={field.name}
-        name={field.name}
-        value={field.state.value}
-        onBlur={field.handleBlur}
-        onChange={handleChange}
-        aria-describedby={describedByIds(localErrorId, serverErrorId)}
-        aria-invalid={invalid}
-        maxLength={200}
-      />
-      {locallyInvalid ? (
-        <FieldError id={localErrorId} errors={field.state.meta.errors} />
-      ) : null}
-      {serverErrors ? (
-        <FieldError id={serverErrorId} role="alert">
-          {serverErrors.join(" ")}
-        </FieldError>
-      ) : null}
-    </Field>
-  )
-}
-
-export const IssueDescriptionFormField = ({
-  field,
-  onEdit,
-  serverErrors,
-}: {
-  field: StringFieldApi
-  onEdit?: (field: string) => void
-  serverErrors?: string[]
-}) => {
-  const locallyInvalid = field.state.meta.isTouched && !field.state.meta.isValid
-  const invalid = locallyInvalid || Boolean(serverErrors?.length)
-  const handleChange = useCallback(
-    (event: ChangeEvent<HTMLTextAreaElement>) => {
-      onEdit?.(field.name)
-      field.handleChange(event.target.value)
-    },
-    [field, onEdit]
-  )
-  const localErrorId = locallyInvalid ? `${field.name}-local-error` : undefined
-  const serverErrorId = serverErrors?.length
-    ? `${field.name}-server-error`
-    : undefined
-
-  return (
-    <Field data-invalid={invalid}>
-      <FieldLabel htmlFor={field.name}>Description</FieldLabel>
-      <Textarea
-        id={field.name}
-        name={field.name}
-        value={field.state.value}
-        onBlur={field.handleBlur}
-        onChange={handleChange}
-        aria-describedby={describedByIds(localErrorId, serverErrorId)}
-        aria-invalid={invalid}
-        placeholder="Add context, acceptance criteria, or links."
-        className="min-h-28"
-      />
-      {locallyInvalid ? (
-        <FieldError id={localErrorId} errors={field.state.meta.errors} />
-      ) : null}
-      {serverErrors ? (
-        <FieldError id={serverErrorId} role="alert">
-          {serverErrors.join(" ")}
         </FieldError>
       ) : null}
     </Field>

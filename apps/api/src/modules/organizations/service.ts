@@ -65,7 +65,7 @@ const reservedOrganizationSlugs = new Set([
   "organization",
   "organizations",
   "settings",
-  "todos",
+  "issues",
 ])
 
 const normalizeSlug = (slug: string) => {

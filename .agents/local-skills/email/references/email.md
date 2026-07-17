@@ -106,7 +106,7 @@ export async function sendMagicLinkEmail(input: {
   url: string;
 }) {
   const rendered = await renderMagicLinkEmail({
-    appName: "Todo SaaS",
+    appName: "Issue SaaS",
     url: input.url,
   });
 

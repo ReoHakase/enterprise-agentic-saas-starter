@@ -87,7 +87,7 @@ describe("console route boundaries", () => {
 describe("getConsoleErrorPresentation", () => {
   it.each([
     ["/dashboard", "Overview", true],
-    ["/dashboard/todos", "Issues", false],
+    ["/organization/acme/issues", "Issues", false],
     ["/settings/organizations", "Organizations", true],
     ["/settings/account", "Account settings", false],
     ["/organization/org-acme/members", "Members", false],
@@ -114,7 +114,7 @@ describe("getConsoleLoadingPresentation", () => {
       },
     ],
     [
-      "/dashboard/todos/issue-1",
+      "/organization/acme/issues/1",
       {
         label: "Loading organization issues",
         showAction: false,

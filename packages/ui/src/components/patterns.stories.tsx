@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { LayoutDashboardIcon, ListTodoIcon, UsersRoundIcon } from "lucide-react"
+import {
+  LayoutDashboardIcon,
+  ListChecksIcon,
+  UsersRoundIcon,
+} from "lucide-react"
 import { type FormEvent, useCallback } from "react"
 import { expect, fn, userEvent, within } from "storybook/test"
 
@@ -85,7 +89,7 @@ const SidebarPattern = () => (
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton tooltip="Issues">
-                    <ListTodoIcon aria-hidden="true" />
+                    <ListChecksIcon aria-hidden="true" />
                     <span>Issues</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

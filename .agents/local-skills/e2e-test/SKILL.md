@@ -1,6 +1,6 @@
 ---
 name: e2e-test
-description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、organization/group/permission、todoのマルチテナント導線、Cloudflare/Next/Elysia連携、Playwright MCP、E2Eデータ準備、storybookではなくE2Eで見るべき範囲を変更するときに使う。
+description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、organization/group/permission、issueのマルチテナント導線、Cloudflare/Next/Elysia連携、Playwright MCP、E2Eデータ準備、storybookではなくE2Eで見るべき範囲を変更するときに使う。
 ---
 
 # E2E Test
@@ -13,7 +13,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - organization/group作成。
 - member invitation。
 - permission denied。
-- tenantをまたいだtodo/project access禁止。
+- tenantをまたいだissue/project access禁止。
 - critical CRUD flow。
 - billing/settingsなどSaaSで壊れると困る導線。
 
@@ -48,6 +48,12 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - mobile tableは列を非表示にして成功扱いにしない。documentの`scrollWidth <= innerWidth`、table containerの`scrollWidth > clientWidth`、overflow時だけ名前付きregionと`tabIndex=0`が付くことをPixel 7とiPhone 13で確認する。
 - mutation後の`router.refresh()`を待つときは、mobile sidebar/drawer内のtriggerなど操作と同時にunmountされる要素を同期点にしない。常時表示されるconsole headerなどへ更新結果が反映されたことを待ってから次の`page.goto()`へ進み、RSC navigation同士を競合させない。
 - 標準journeyは magic link登録→最初のorg→dashboard、Issue作成→tenant切替、member権限/未所属tenant拒否の3系統。mock E2Eだけを認可の証明にせず、実APIのVitestと組み合わせる。
+- Issue詳細journeyはcanonical `/organization/:slug/issues/:number`を基準にし、Issue名のLinkではURL更新とIntercepted Dialog、行hover/focusで現れる可視ラベル付き「Full page」はDialogを一度もmountしないnative document navigation、直アクセス・reloadは全画面、Backは一覧復帰を確認する。touchではfull-page actionを常時操作可能にし、mobile modalは四辺に8px以上のinsetがあることを3 projectで固定する。
+- Issue detailのresponsive回帰は文字列の出現だけでなく、mobileでheader→metadata→description→discussionのDOM/vertical順を確認する。desktopでは全幅headerの下に左description→discussion・右sticky metadataの2 columnが並ぶこと、scroll後もmetadataがviewportへ追従することをbounding boxで固定する。通常時は両viewportでheader内のtitle・番号・icon-only Edit・全画面化が同じ行に収まり、mobileのtitle編集時はformが次行全幅へ落ちてDialogに横overflowを作らないことも確認する。
+- title編集はEdit後に明示SaveとCancelが現れ、差分なしのSaveがdisabled、変更後だけenabledになり、SaveでtitleだけをPATCH、Cancelでdraftを破棄することを確認する。blurだけでは保存されないことはcomponent testと分担して固定する。
+- Intercepted modalのstreaming testではroute layoutが所有する`[data-slot="dialog-content"]`へmarkerを付け、loading status消滅後も同じDOM nodeであること、外寸差2px未満、ready時に再open animationがないことを確認する。loadingとreadyで別のaccessible dialog名を探すtestは二重mountを見逃すため使わない。
+- title/description/new comment/comment editを別々にdirtyにし、Close/Escape/overlay、全画面pageの「Back to issues」とbrowser BackでKeep editingが入力を保持し、Discardが保留遷移を一度だけ実行することを確認する。modalから「Full page」ではdescription/new comment draftがone-shotで復元され、既存comment editは破棄確認なしに失われないこと、browser標準確認もAlertDialogも重ならず、復元後にhandoffが残らないことを確認する。
+- metadataはstatus・priority・assignee・labels・due dateをfield単位で即時PATCHし、description/title requestに未変更fieldが混ざらないこと、連続field更新で別fieldが巻き戻らないことを確認する。labelsはsearch + popup内Add、due dateはCalendar + hour/minute Selectを操作し、picker内のdate/hour/minute変更中はPATCHせずPopover close時に差分を1回だけ送ること、native `datetime-local`がないことをcomponent testと分担して固定する。
 - 動画はPlaywrightの `use.video` を `"on"` にし、成功・失敗・再試行を問わずすべてのrunを保持する。traceとscreenshotは失敗時のみ保持する。
 - `failOnFlakyTests` を有効にし、auto fixtureで予期しない `console.error` と `pageerror` をtest failureにする。意図したHTTP error分岐はbrowser consoleを汚さないAPI requestで検証する。
 - SSRされたcontrolled auth inputを操作するE2Eは、`toBeEnabled()`をhydration同期点にしてから入力する。固定waitやtimeout延長でhydration競合を隠さず、server markup側もhydration完了までinputをdisabledにする。
@@ -73,7 +79,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - ChromiumとWebKitをCIへinstallし、3 projectを実際に実行しているか。
 - keyboard-only specにmouse操作やlocatorの強制focusが混ざらず、Safari link navigationとARIA Menuのkeyboard差を覆っているか。
 - 正常journeyでconsole error/page errorが0件か。mock faultの消費後に正常responseへ戻るか。
-- tenant Aのユーザーがtenant Bのtodoを見られないことを確認しているか。
+- tenant Aのユーザーがtenant Bのissueを見られないことを確認しているか。
 - OAuth run後に一時DB、WAL、SHM、3100/3101/4101のlistenerが残っていないか。
 
 具体的なPlaywright configやテスト例が必要なときだけ `references/e2e-test.md` を読む。

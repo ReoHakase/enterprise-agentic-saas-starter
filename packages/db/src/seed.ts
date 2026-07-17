@@ -159,8 +159,8 @@ export const seedDevelopmentDatabase = async (
     }
     await db.insert(schema.invitation).values(invitationRows)
 
-    const todoRows: Array<typeof schema.todos.$inferInsert> = []
-    const commentRows: Array<typeof schema.todoComments.$inferInsert> = []
+    const issueRows: Array<typeof schema.issues.$inferInsert> = []
+    const commentRows: Array<typeof schema.issueComments.$inferInsert> = []
     const availableLabels = ["bug", "feature", "docs", "security"]
 
     for (const { id: organizationId } of organizations) {
@@ -169,22 +169,22 @@ export const seedDevelopmentDatabase = async (
       const creatorId = memberUserIds[0]
       if (!creatorId) continue
 
-      const todoCount = faker.number.int({ min: 6, max: 10 })
-      for (let index = 0; index < todoCount; index += 1) {
+      const issueCount = faker.number.int({ min: 6, max: 10 })
+      for (let index = 0; index < issueCount; index += 1) {
         const id = faker.string.uuid()
         const createdAt = faker.date.recent({ days: 45 })
         const labels = faker.helpers
           .shuffle(availableLabels)
           .slice(0, faker.number.int({ min: 0, max: 2 }))
 
-        todoRows.push({
+        issueRows.push({
           id,
           organizationId,
           number: index + 1,
           title: faker.company.catchPhrase(),
           description: faker.lorem.paragraph(),
-          status: faker.helpers.arrayElement(schema.todoStatuses),
-          priority: faker.helpers.arrayElement(schema.todoPriorities),
+          status: faker.helpers.arrayElement(schema.issueStatuses),
+          priority: faker.helpers.arrayElement(schema.issuePriorities),
           assigneeId: faker.datatype.boolean({ probability: 0.7 })
             ? faker.helpers.arrayElement(memberUserIds)
             : null,
@@ -209,7 +209,7 @@ export const seedDevelopmentDatabase = async (
           })
           commentRows.push({
             id: faker.string.uuid(),
-            todoId: id,
+            issueId: id,
             organizationId,
             authorId: faker.helpers.arrayElement(memberUserIds),
             body: faker.lorem.sentences({ min: 1, max: 3 }),
@@ -220,9 +220,9 @@ export const seedDevelopmentDatabase = async (
       }
     }
 
-    await db.insert(schema.todos).values(todoRows)
+    await db.insert(schema.issues).values(issueRows)
     if (commentRows.length > 0) {
-      await db.insert(schema.todoComments).values(commentRows)
+      await db.insert(schema.issueComments).values(commentRows)
     }
 
     await Promise.all(
@@ -245,7 +245,7 @@ export const seedDevelopmentDatabase = async (
     )
 
     console.log(
-      `Seed completed: ${users.length} users, ${organizations.length} organizations, ${todoRows.length} issues, ${commentRows.length} comments.`
+      `Seed completed: ${users.length} users, ${organizations.length} organizations, ${issueRows.length} issues, ${commentRows.length} comments.`
     )
   } finally {
     client.close()

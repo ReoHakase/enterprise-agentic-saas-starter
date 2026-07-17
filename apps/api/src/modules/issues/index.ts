@@ -4,41 +4,46 @@ import { Elysia } from "elysia"
 import { tenantErrorResponses } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
 import {
-  createTodoBodyModel,
-  createTodoCommentBodyModel,
-  deleteTodoBodyModel,
-  deleteTodoCommentBodyModel,
-  deleteTodoParamsModel,
-  getTodoQueryModel,
-  listTodoCommentsResponseModel,
-  listTodosQueryModel,
-  listTodosResponseModel,
-  todoCommentModel,
-  todoCommentParamsModel,
-  todoModel,
-  updateTodoBodyModel,
-  updateTodoCommentBodyModel,
-  updateTodoParamsModel,
+  createIssueBodyModel,
+  createIssueCommentBodyModel,
+  deleteIssueBodyModel,
+  deleteIssueCommentBodyModel,
+  deleteIssueParamsModel,
+  getIssueQueryModel,
+  getIssueByNumberParamsModel,
+  issueTimelinePageModel,
+  issueTimelineQueryModel,
+  listIssueCommentsResponseModel,
+  listIssuesQueryModel,
+  listIssuesResponseModel,
+  issueCommentModel,
+  issueCommentParamsModel,
+  issueModel,
+  updateIssueBodyModel,
+  updateIssueCommentBodyModel,
+  updateIssueParamsModel,
 } from "./model"
 import {
-  createTodo,
-  createTodoComment,
-  deleteTodo,
-  deleteTodoComment,
-  getTodo,
-  getTodoComments,
-  listTodos,
-  updateTodo,
-  updateTodoComment,
+  createIssue,
+  createIssueComment,
+  deleteIssue,
+  deleteIssueComment,
+  getIssue,
+  getIssueByNumber,
+  getIssueComments,
+  getIssueTimeline,
+  listIssues,
+  updateIssue,
+  updateIssueComment,
 } from "./service"
 
-export const createTodosModule = (db: Db) =>
-  new Elysia({ name: "todos" })
+export const createIssuesModule = (db: Db) =>
+  new Elysia({ name: "issues" })
     .use(createAccessControlModule(db))
     .get(
-      "/todos",
+      "/issues",
       ({ authContext, organizationAccess, query }) =>
-        listTodos(db, {
+        listIssues(db, {
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
           search: query.search,
@@ -52,50 +57,102 @@ export const createTodosModule = (db: Db) =>
         }),
       {
         organizationAccess: {
-          action: "todo.list",
+          action: "issue.list",
           source: "query",
         },
-        query: listTodosQueryModel,
-        response: { 200: listTodosResponseModel, ...tenantErrorResponses },
+        query: listIssuesQueryModel,
+        response: { 200: listIssuesResponseModel, ...tenantErrorResponses },
         detail: {
-          operationId: "listTodos",
+          operationId: "listIssues",
           summary: "issue一覧を検索・filter・sort",
           description:
             "active organizationだけを対象に、search/status/priority/assignee/label filterと安全なsortを適用する。最大100件。",
-          tags: ["Todos"],
+          tags: ["Issues"],
         },
       }
     )
     .get(
-      "/todos/:id",
+      "/issues/by-number/:number",
       ({ authContext, organizationAccess, params }) =>
-        getTodo(db, {
+        getIssueByNumber(db, {
+          userId: authContext.user.id,
+          organizationId: organizationAccess.id,
+          number: params.number,
+        }),
+      {
+        organizationAccess: {
+          action: "issue.read",
+          source: "query",
+        },
+        params: getIssueByNumberParamsModel,
+        query: getIssueQueryModel,
+        response: { 200: issueModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getIssueByNumber",
+          summary: "organization内のissue番号で詳細を取得",
+          description:
+            "organization scopeと連番を組み合わせ、他tenantの存在を漏らさず取得する。",
+          tags: ["Issues"],
+        },
+      }
+    )
+    .get(
+      "/issues/:id",
+      ({ authContext, organizationAccess, params }) =>
+        getIssue(db, {
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
           id: params.id,
         }),
       {
         organizationAccess: {
-          action: "todo.read",
+          action: "issue.read",
           source: "query",
         },
-        params: updateTodoParamsModel,
-        query: getTodoQueryModel,
-        response: { 200: todoModel, ...tenantErrorResponses },
+        params: updateIssueParamsModel,
+        query: getIssueQueryModel,
+        response: { 200: issueModel, ...tenantErrorResponses },
         detail: {
-          operationId: "getTodo",
+          operationId: "getIssue",
           summary: "issue詳細を取得",
           description: "idとorganization idを常に組み合わせて検索する。",
-          tags: ["Todos"],
+          tags: ["Issues"],
+        },
+      }
+    )
+    .get(
+      "/issues/:id/timeline",
+      ({ authContext, organizationAccess, params, query }) =>
+        getIssueTimeline(db, {
+          userId: authContext.user.id,
+          organizationId: organizationAccess.id,
+          issueId: params.id,
+          cursor: query.cursor,
+          limit: query.limit,
+        }),
+      {
+        organizationAccess: {
+          action: "issue.read",
+          source: "query",
+        },
+        params: updateIssueParamsModel,
+        query: issueTimelineQueryModel,
+        response: { 200: issueTimelinePageModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getIssueTimeline",
+          summary: "issueの変更履歴とcommentを取得",
+          description:
+            "tenant-safeなactor情報を付け、変更履歴とcommentを新しい順でpage取得する。",
+          tags: ["Issues"],
         },
       }
     )
     .post(
-      "/todos",
+      "/issues",
       async ({ authContext, body, organizationAccess, status }) =>
         status(
           201,
-          await createTodo(db, {
+          await createIssue(db, {
             userId: authContext.user.id,
             organizationId: organizationAccess.id,
             title: body.title,
@@ -109,24 +166,24 @@ export const createTodosModule = (db: Db) =>
         ),
       {
         organizationAccess: {
-          action: "todo.create",
+          action: "issue.create",
           source: "body",
         },
-        body: createTodoBodyModel,
-        response: { 201: todoModel, ...tenantErrorResponses },
+        body: createIssueBodyModel,
+        response: { 201: issueModel, ...tenantErrorResponses },
         detail: {
-          operationId: "createTodo",
+          operationId: "createIssue",
           summary: "issueを作成",
           description:
             "creatorをsession userに固定し、organization内の次の連番をtransactionで採番する。assigneeは同じorganizationのmemberに限る。",
-          tags: ["Todos"],
+          tags: ["Issues"],
         },
       }
     )
     .patch(
-      "/todos/:id",
+      "/issues/:id",
       ({ authContext, body, organizationAccess, params }) =>
-        updateTodo(db, {
+        updateIssue(db, {
           userId: authContext.user.id,
           id: params.id,
           organizationId: organizationAccess.id,
@@ -140,151 +197,151 @@ export const createTodosModule = (db: Db) =>
         }),
       {
         organizationAccess: {
-          action: "todo.update",
+          action: "issue.update",
           source: "body",
         },
-        params: updateTodoParamsModel,
-        body: updateTodoBodyModel,
-        response: { 200: todoModel, ...tenantErrorResponses },
+        params: updateIssueParamsModel,
+        body: updateIssueBodyModel,
+        response: { 200: issueModel, ...tenantErrorResponses },
         detail: {
-          operationId: "updateTodo",
+          operationId: "updateIssue",
           summary: "issueを更新",
           description:
             "検証済みorganization scope内のissue fieldsを更新し、tenant auditを同時に保存する。",
-          tags: ["Todos"],
+          tags: ["Issues"],
         },
       }
     )
     .delete(
-      "/todos/:id",
+      "/issues/:id",
       ({ authContext, organizationAccess, params }) =>
-        deleteTodo(db, {
+        deleteIssue(db, {
           userId: authContext.user.id,
           id: params.id,
           organizationId: organizationAccess.id,
         }),
       {
         organizationAccess: {
-          action: "todo.delete",
+          action: "issue.delete",
           source: "body",
         },
-        params: deleteTodoParamsModel,
-        body: deleteTodoBodyModel,
-        response: { 200: todoModel, ...tenantErrorResponses },
+        params: deleteIssueParamsModel,
+        body: deleteIssueBodyModel,
+        response: { 200: issueModel, ...tenantErrorResponses },
         detail: {
-          operationId: "deleteTodo",
+          operationId: "deleteIssue",
           summary: "issueを削除",
           description:
             "memberは自分が作成したissueだけ、admin以上はorganization内のissueを削除できる。",
-          tags: ["Todos"],
+          tags: ["Issues"],
         },
       }
     )
     .get(
-      "/todos/:id/comments",
+      "/issues/:id/comments",
       ({ authContext, organizationAccess, params }) =>
-        getTodoComments(db, {
+        getIssueComments(db, {
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
-          todoId: params.id,
+          issueId: params.id,
         }),
       {
         organizationAccess: {
-          action: "todo.comment.list",
+          action: "issue.comment.list",
           source: "query",
         },
-        params: updateTodoParamsModel,
-        query: getTodoQueryModel,
+        params: updateIssueParamsModel,
+        query: getIssueQueryModel,
         response: {
-          200: listTodoCommentsResponseModel,
+          200: listIssueCommentsResponseModel,
           ...tenantErrorResponses,
         },
         detail: {
-          operationId: "listTodoComments",
+          operationId: "listIssueComments",
           summary: "issue comment一覧を取得",
           description:
             "検証済みorganizationとissueに属するcommentだけをauthor表示情報付きで返す。",
-          tags: ["Todo comments"],
+          tags: ["Issue comments"],
         },
       }
     )
     .post(
-      "/todos/:id/comments",
+      "/issues/:id/comments",
       async ({ authContext, body, organizationAccess, params, status }) =>
         status(
           201,
-          await createTodoComment(db, {
+          await createIssueComment(db, {
             userId: authContext.user.id,
             organizationId: organizationAccess.id,
-            todoId: params.id,
+            issueId: params.id,
             body: body.body,
           })
         ),
       {
         organizationAccess: {
-          action: "todo.comment.create",
+          action: "issue.comment.create",
           source: "body",
         },
-        params: updateTodoParamsModel,
-        body: createTodoCommentBodyModel,
-        response: { 201: todoCommentModel, ...tenantErrorResponses },
+        params: updateIssueParamsModel,
+        body: createIssueCommentBodyModel,
+        response: { 201: issueCommentModel, ...tenantErrorResponses },
         detail: {
-          operationId: "createTodoComment",
+          operationId: "createIssueComment",
           summary: "issueへcommentを追加",
           description:
             "検証済みorganizationとissueへcommentを追加し、tenant auditを同時に保存する。",
-          tags: ["Todo comments"],
+          tags: ["Issue comments"],
         },
       }
     )
     .patch(
-      "/todos/:id/comments/:commentId",
+      "/issues/:id/comments/:commentId",
       ({ authContext, body, organizationAccess, params }) =>
-        updateTodoComment(db, {
+        updateIssueComment(db, {
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
-          todoId: params.id,
+          issueId: params.id,
           commentId: params.commentId,
           body: body.body,
         }),
       {
         organizationAccess: {
-          action: "todo.comment.update",
+          action: "issue.comment.update",
           source: "body",
         },
-        params: todoCommentParamsModel,
-        body: updateTodoCommentBodyModel,
-        response: { 200: todoCommentModel, ...tenantErrorResponses },
+        params: issueCommentParamsModel,
+        body: updateIssueCommentBodyModel,
+        response: { 200: issueCommentModel, ...tenantErrorResponses },
         detail: {
-          operationId: "updateTodoComment",
+          operationId: "updateIssueComment",
           summary: "issue commentを更新",
           description: "author本人またはadmin以上だけが更新できる。",
-          tags: ["Todo comments"],
+          tags: ["Issue comments"],
         },
       }
     )
     .delete(
-      "/todos/:id/comments/:commentId",
+      "/issues/:id/comments/:commentId",
       ({ authContext, organizationAccess, params }) =>
-        deleteTodoComment(db, {
+        deleteIssueComment(db, {
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
-          todoId: params.id,
+          issueId: params.id,
           commentId: params.commentId,
         }),
       {
         organizationAccess: {
-          action: "todo.comment.delete",
+          action: "issue.comment.delete",
           source: "body",
         },
-        params: todoCommentParamsModel,
-        body: deleteTodoCommentBodyModel,
-        response: { 200: todoCommentModel, ...tenantErrorResponses },
+        params: issueCommentParamsModel,
+        body: deleteIssueCommentBodyModel,
+        response: { 200: issueCommentModel, ...tenantErrorResponses },
         detail: {
-          operationId: "deleteTodoComment",
+          operationId: "deleteIssueComment",
           summary: "issue commentを削除",
           description: "author本人またはadmin以上だけが削除できる。",
-          tags: ["Todo comments"],
+          tags: ["Issue comments"],
         },
       }
     )

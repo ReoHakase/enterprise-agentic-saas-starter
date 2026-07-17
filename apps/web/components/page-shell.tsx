@@ -1,5 +1,7 @@
 import type { ComponentType, ReactNode } from "react"
 
+import { LinkButton } from "@/components/link-button"
+
 export const PageHeader = ({ children }: { children: ReactNode }) => (
   <div
     data-slot="page-header"
@@ -31,11 +33,15 @@ export const PageShell = ({
   title,
   description,
   action: Action,
+  actionHref,
+  actionLabel,
   children,
 }: {
   title: string
   description?: string
   action?: ComponentType
+  actionHref?: string
+  actionLabel?: string
   children: ReactNode
 }) => (
   <div
@@ -58,7 +64,11 @@ export const PageShell = ({
           ) : null}
         </PageHeaderDescription>
       </PageHeaderCopy>
-      {Action ? <Action /> : null}
+      {actionHref && actionLabel ? (
+        <LinkButton href={actionHref}>{actionLabel}</LinkButton>
+      ) : Action ? (
+        <Action />
+      ) : null}
     </PageHeader>
     <div data-slot="page-body" className="max-w-full min-w-0">
       {children}

@@ -38,7 +38,7 @@ apps/api/src/
     organizations/
       deletion-access.ts # 削除後replayだけを限定許可する専用guard
       deletion-jobs.ts   # R2 cleanup cronの冪等job processor
-    todos/
+    issues/
       index.ts
       model.ts       # Valibot Standard Schema
       service.ts
@@ -61,7 +61,7 @@ apps/api/src/
 - `worker.ts` はCloudflare SDKでhandlerをwrapする。Bun SDKをbundleしない。
 - `client.ts` はEden clientをexportし、`parseDate: false`をconsumerが上書きできない位置で固定する。WebがimportしてよいAPI entrypointは`@enterprise-agentic-saas/api/client`だけにする。
 - `/health`はHTTP runtimeだけを見るliveness、`/ready`は`select 1`でTurso/libSQL到達性も見るreadinessに分ける。依存先障害は503 `service_unavailable`へ丸め、DB詳細を公開しない。
-- feature は `modules/<feature>` に置く。todo 題材でも、group/permission/org 前提の SaaS 設計を崩さない。
+- feature は `modules/<feature>` に置く。issue 題材でも、group/permission/org 前提の SaaS 設計を崩さない。
 - `model.ts` はValibot Standard Schemaを置き、Elysiaの`body` / `params` / `query` / `response`へ直接渡す。schemaから型が必要なら`v.InferOutput`で導出し、手書き型との二重管理を増やさない。
 - route modelは`apps/api`内に置く。Webとschemaを共有するためだけの`packages/validators`は作らず、Edenの公開型境界を優先する。
 - Elysia の route validation で typed input を service へ渡す。
@@ -126,7 +126,11 @@ apps/api/src/
 
 ## Auditとtransaction
 
-- organization/member/invitation/todo/comment mutationは `audit_logs` へappend-only eventを残す。
+- organization/member/invitation/issue/comment mutationは `audit_logs` へappend-only eventを残す。
+- Issue公開契約は `/issues`、`/issues/:id`、`/issues/by-number/:number`、`/issues/:id/comments`、`/issues/:id/timeline` に統一し、旧 `/todos` aliasやTodo型を残さない。番号解決とtimelineもorganization IDを必須にし、tenant外resourceは404にする。
+- Issue更新は更新前rowを同じtransactionで取得し、Issue本体、汎用audit、fieldごとの`issue_activity_events`を同一transactionで保存する。title、description、status、priority、assignee、labels、due dateの実差分だけを記録し、一括更新は同じbatch IDと安定したpositionを持たせる。
+- Issueの`dueDate`はdate-only文字列ではなくISO timestampで受け渡し、DBのtimestamp列、activityのold/new value、OpenAPI responseを同じ精度に揃える。
+- Timelineはactivity/commentのdiscriminated unionを新しい順のcursor paginationで返す。cursorはversion付きpayloadをbase64url化したopaque stringにし、`createdAt`だけでなくitem type、batch内position、IDを含むtotal orderでkeyset paginationする。同一timestampに複数field activityやcommentが並んでも欠落・重複させず、改ざん・未知version・不正encodingは400 `validation_error`へ丸める。comment-created auditを重複表示せず、actor profileは同じorganization membershipに限定してjoinし、退会済み・tenant外actorは安全なfallback名にする。UIが昇順表示へ並べ替えられるようtimestampを必ず返す。
 - 重要mutationとaudit insertは同じDB transactionへ入れる。mutation後に別queryでauditを書き、audit失敗時に500を返す実装はretry時の二重操作につながるため禁止。
 - organization作成はorganization、super_admin member、audit、既定active session更新を同じtransactionへ含める。
 - organization内issue連番は `(organization_id, number)` uniqueを最終防波堤にし、process内organization別queueと、そのunique競合だけを対象にした限定retryを組み合わせる。

@@ -9,6 +9,7 @@ import type {
 import { createClient } from "@libsql/client"
 import { eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
+import * as v from "valibot"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
@@ -39,6 +40,7 @@ import { createApp } from "./app"
 import { createApiClient } from "./client"
 import { env } from "./env"
 import { publicErrors } from "./errors/app-error"
+import { issueTimelinePageModel } from "./modules/issues/model"
 import {
   findInvitationForResend,
   resendInvitationById,
@@ -58,15 +60,16 @@ beforeEach(() => {
 
 const createSeededDb = async () => {
   const db = testDb()
-  await db.run(sql`pragma foreign_keys = on`)
+  await db.run(sql`pragma foreign_keys = off`)
 
   await Promise.all(
     [
       "organization_deletion_jobs",
       "invitation_email_jobs",
-      "todo_comments",
+      "issue_activity_events",
+      "issue_comments",
       "audit_logs",
-      "todos",
+      "issues",
       "invitation",
       "rate_limit",
       "session",
@@ -165,7 +168,7 @@ const createSeededDb = async () => {
     )
   `)
   await db.run(sql`
-    create table todos (
+    create table issues (
       id text primary key,
       organization_id text not null,
       number integer not null,
@@ -184,16 +187,33 @@ const createSeededDb = async () => {
     )
   `)
   await db.run(sql`
-    create table todo_comments (
+    create table issue_comments (
       id text primary key,
-      todo_id text not null,
+      issue_id text not null,
       organization_id text not null,
       author_id text not null,
       body text not null,
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       foreign key (organization_id) references organization(id) on delete cascade,
-      foreign key (todo_id) references todos(id) on delete cascade
+      foreign key (issue_id) references issues(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create table issue_activity_events (
+      id text primary key,
+      organization_id text not null,
+      issue_id text not null,
+      actor_user_id text,
+      batch_id text not null,
+      position integer not null default 0,
+      kind text not null,
+      field text,
+      from_value text,
+      to_value text,
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      foreign key (organization_id) references organization(id) on delete cascade,
+      foreign key (issue_id) references issues(id) on delete cascade
     )
   `)
   await db.run(sql`
@@ -224,6 +244,7 @@ const createSeededDb = async () => {
       completed_at integer
     )
   `)
+  await db.run(sql`pragma foreign_keys = on`)
   await db.run(sql`
     create unique index organization_deletion_jobs_request_uidx
     on organization_deletion_jobs (requested_by_user_id, idempotency_key)
@@ -297,8 +318,8 @@ const createSeededDb = async () => {
     updatedAt: now,
     activeOrganizationId: "org_1",
   })
-  await db.insert(schema.todos).values({
-    id: "todo_1",
+  await db.insert(schema.issues).values({
+    id: "issue_1",
     organizationId: "org_1",
     number: 1,
     title: "Seed issue",
@@ -576,13 +597,21 @@ describe("createApp security and OpenAPI", () => {
         429: expect.any(Object),
       },
     })
-    expect(spec.paths["/todos/{id}"].get.operationId).toBe("getTodo")
+    expect(spec.paths["/issues/{id}"].get.operationId).toBe("getIssue")
+    expect(spec.paths["/issues/by-number/{number}"].get.operationId).toBe(
+      "getIssueByNumber"
+    )
+    expect(spec.paths["/issues/{id}/timeline"].get.operationId).toBe(
+      "getIssueTimeline"
+    )
+    expect(spec.paths["/todos"]).toBeUndefined()
+    expect(spec.paths["/todos/{id}"]).toBeUndefined()
     expect(
-      spec.paths["/todos"].post.requestBody.content["application/json"].schema
+      spec.paths["/issues"].post.requestBody.content["application/json"].schema
         .properties.dueDate
-    ).toMatchObject({ format: "date", nullable: true, type: "string" })
+    ).toMatchObject({ format: "date-time", nullable: true, type: "string" })
     expect(
-      spec.paths["/todos"].get.parameters.find(
+      spec.paths["/issues"].get.parameters.find(
         (parameter: { name: string }) => parameter.name === "limit"
       ).schema
     ).toMatchObject({ maximum: 100, minimum: 1, type: "integer" })
@@ -617,7 +646,7 @@ describe("createApp security and OpenAPI", () => {
       documentedError.properties.context.properties.organizationId
     ).toBeUndefined()
     expect(
-      spec.paths["/todos/{id}/comments"].post.responses["201"].content[
+      spec.paths["/issues/{id}/comments"].post.responses["201"].content[
         "application/json"
       ].schema.properties.author.required
     ).toEqual(["id", "name", "image"])
@@ -738,13 +767,13 @@ describe("createApp security and OpenAPI", () => {
     ])
 
     const otherTenant = await app.handle(
-      jsonRequest("/todos?organizationId=org_2", {
+      jsonRequest("/issues?organizationId=org_2", {
         userId: "user_1",
         activeOrganizationId: "org_2",
       })
     )
     const nonexistent = await app.handle(
-      jsonRequest("/todos?organizationId=org_missing", {
+      jsonRequest("/issues?organizationId=org_missing", {
         userId: "user_1",
         activeOrganizationId: "org_missing",
       })
@@ -762,7 +791,7 @@ describe("createApp security and OpenAPI", () => {
   it("requires the requested member tenant to be active", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
-      jsonRequest("/todos?organizationId=org_2", {
+      jsonRequest("/issues?organizationId=org_2", {
         userId: "user_5",
         activeOrganizationId: "org_1",
       })
@@ -1182,9 +1211,9 @@ describe("createApp security and OpenAPI", () => {
       createdAt: now,
       inviterId: "user_1",
     })
-    await db.insert(schema.todoComments).values({
+    await db.insert(schema.issueComments).values({
       id: "comment_org_1",
-      todoId: "todo_1",
+      issueId: "issue_1",
       organizationId: "org_1",
       authorId: "user_1",
       body: "Delete with the tenant",
@@ -1224,17 +1253,17 @@ describe("createApp security and OpenAPI", () => {
     })
     expect(receipt.deletionId).toEqual(expect.any(String))
 
-    const [organizations, members, invitations, todos, comments, audits] =
+    const [organizations, members, invitations, issues, comments, audits] =
       await Promise.all([
         db.select().from(schema.organization),
         db.select().from(schema.member),
         db.select().from(schema.invitation),
-        db.select().from(schema.todos),
-        db.select().from(schema.todoComments),
+        db.select().from(schema.issues),
+        db.select().from(schema.issueComments),
         db.select().from(schema.auditLogs),
       ])
     expect(organizations.map((item) => item.id)).toEqual(["org_2", "org_3"])
-    for (const rows of [members, invitations, todos, comments, audits]) {
+    for (const rows of [members, invitations, issues, comments, audits]) {
       expect(rows.some((item) => item.organizationId === "org_1")).toBe(false)
     }
 
@@ -2670,12 +2699,12 @@ describe("createApp security and OpenAPI", () => {
   })
 })
 
-describe("issue-like todos", () => {
+describe("issue-like issues", () => {
   it("creates, filters, updates, loads, and comments on an issue", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
     const createResponse = await app.handle(
-      jsonRequest("/todos", {
+      jsonRequest("/issues", {
         method: "POST",
         userId: "user_1",
         body: {
@@ -2685,7 +2714,7 @@ describe("issue-like todos", () => {
           priority: "urgent",
           assigneeId: "user_4",
           labels: ["bug", "auth"],
-          dueDate: "2026-08-15",
+          dueDate: "2026-08-15T10:30:00.000Z",
         },
       })
     )
@@ -2694,21 +2723,21 @@ describe("issue-like todos", () => {
     expect(created).toMatchObject({
       number: 2,
       title: "Login bug",
-      dueDate: "2026-08-15",
+      dueDate: "2026-08-15T10:30:00.000Z",
     })
     expect(typeof created.dueDate).toBe("string")
 
-    const storedTodo = await db
-      .select({ dueDate: schema.todos.dueDate })
-      .from(schema.todos)
-      .where(eq(schema.todos.id, created.id))
-    expect(storedTodo[0]?.dueDate?.toISOString()).toBe(
-      "2026-08-15T00:00:00.000Z"
+    const storedIssue = await db
+      .select({ dueDate: schema.issues.dueDate })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, created.id))
+    expect(storedIssue[0]?.dueDate?.toISOString()).toBe(
+      "2026-08-15T10:30:00.000Z"
     )
 
     const filtered = await app.handle(
       jsonRequest(
-        "/todos?organizationId=org_1&search=OAuth&priority=urgent&label=auth&sortBy=number&sortDirection=asc",
+        "/issues?organizationId=org_1&search=OAuth&priority=urgent&label=auth&sortBy=number&sortDirection=asc",
         { userId: "user_1" }
       )
     )
@@ -2717,7 +2746,7 @@ describe("issue-like todos", () => {
     ])
 
     const update = await app.handle(
-      jsonRequest(`/todos/${created.id}`, {
+      jsonRequest(`/issues/${created.id}`, {
         method: "PATCH",
         userId: "user_1",
         body: { organizationId: "org_1", status: "in_progress" },
@@ -2726,15 +2755,15 @@ describe("issue-like todos", () => {
     expect(await update.json()).toMatchObject({ status: "in_progress" })
 
     const detail = await app.handle(
-      jsonRequest(`/todos/${created.id}?organizationId=org_1`, {
+      jsonRequest(`/issues/${created.id}?organizationId=org_1`, {
         userId: "user_1",
       })
     )
     expect(detail.status).toBe(200)
-    expect((await detail.json()).dueDate).toBe("2026-08-15")
+    expect((await detail.json()).dueDate).toBe("2026-08-15T10:30:00.000Z")
 
     const comment = await app.handle(
-      jsonRequest(`/todos/${created.id}/comments`, {
+      jsonRequest(`/issues/${created.id}/comments`, {
         method: "POST",
         userId: "user_4",
         body: { organizationId: "org_1", body: "I can reproduce this." },
@@ -2746,6 +2775,43 @@ describe("issue-like todos", () => {
       author: { id: "user_4", name: "User 4", image: null },
     })
 
+    const byNumber = await app.handle(
+      jsonRequest(`/issues/by-number/${created.number}?organizationId=org_1`, {
+        userId: "user_1",
+      })
+    )
+    expect(byNumber.status).toBe(200)
+    expect(await byNumber.json()).toMatchObject({ id: created.id, number: 2 })
+
+    const timeline = await app.handle(
+      jsonRequest(`/issues/${created.id}/timeline?organizationId=org_1`, {
+        userId: "user_1",
+      })
+    )
+    expect(timeline.status).toBe(200)
+    const timelineBody = await timeline.json()
+    expect(timelineBody.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "activity", kind: "created" }),
+        expect.objectContaining({
+          type: "activity",
+          kind: "field_changed",
+          field: "status",
+          fromValue: "open",
+          toValue: "in_progress",
+        }),
+        expect.objectContaining({
+          type: "comment",
+          body: "I can reproduce this.",
+        }),
+      ])
+    )
+    expect(
+      timelineBody.items.filter(
+        (item: { type: string }) => item.type === "comment"
+      )
+    ).toHaveLength(1)
+
     const audit = await app.handle(
       jsonRequest("/organizations/org_1/audit-logs?limit=100", {
         userId: "user_3",
@@ -2755,14 +2821,138 @@ describe("issue-like todos", () => {
       (await audit.json()).map((event: { action: string }) => event.action)
     ).toEqual(
       expect.arrayContaining([
-        "todo.created",
-        "todo.updated",
-        "todo.comment.created",
+        "issue.created",
+        "issue.updated",
+        "issue.comment.created",
       ])
     )
   })
 
-  it("keeps non-null date fields as strings over the real Eden HTTP transport", async () => {
+  it("paginates equal-timestamp timeline items without gaps or duplicates", async () => {
+    const db = await createSeededDb()
+    const createdAt = new Date("2026-07-17T03:00:00.000Z")
+    await db.insert(schema.issueActivityEvents).values([
+      {
+        id: "activity-position-2",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        actorUserId: "user_1",
+        batchId: "batch-equal-time",
+        position: 2,
+        kind: "field_changed",
+        field: "priority",
+        fromValue: "low",
+        toValue: "high",
+        createdAt,
+      },
+      {
+        id: "activity-position-1",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        actorUserId: "user_1",
+        batchId: "batch-equal-time",
+        position: 1,
+        kind: "field_changed",
+        field: "status",
+        fromValue: "open",
+        toValue: "in_progress",
+        createdAt,
+      },
+      {
+        id: "shared-entry",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        actorUserId: "user_2",
+        batchId: "batch-equal-time",
+        position: 0,
+        kind: "field_changed",
+        field: "assignee",
+        fromValue: null,
+        toValue: "user_1",
+        createdAt,
+      },
+    ])
+    await db.insert(schema.issueComments).values([
+      {
+        id: "shared-entry",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        authorId: "user_1",
+        body: "Same id as an activity",
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "older-comment",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        authorId: "user_1",
+        body: "Last in the total order",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ])
+    const app = createApp(db)
+    const items: Array<{
+      type: "activity" | "comment"
+      id: string
+      actor?: { id: string | null; name: string; image: string | null }
+    }> = []
+    let cursor: string | null = null
+
+    const loadPage = async (remainingPages: number): Promise<void> => {
+      const query = new URLSearchParams({
+        organizationId: "org_1",
+        limit: "1",
+      })
+      if (cursor) query.set("cursor", cursor)
+      const response = await app.handle(
+        jsonRequest(`/issues/issue_1/timeline?${query}`, { userId: "user_1" })
+      )
+      expect(response.status).toBe(200)
+      const page = v.parse(issueTimelinePageModel, await response.json())
+      items.push(...page.items)
+      cursor = page.nextCursor
+      if (!cursor) return
+      expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/)
+      expect(cursor).not.toContain(createdAt.toISOString())
+      if (remainingPages <= 1) return
+      await loadPage(remainingPages - 1)
+    }
+    await loadPage(6)
+
+    expect(cursor).toBeNull()
+    expect(items.map(({ id, type }) => `${type}:${id}`)).toEqual([
+      "activity:activity-position-2",
+      "activity:activity-position-1",
+      "comment:shared-entry",
+      "activity:shared-entry",
+      "comment:older-comment",
+    ])
+    expect(new Set(items.map(({ id, type }) => `${type}:${id}`)).size).toBe(5)
+    expect(
+      items.find(
+        (item) => item.type === "activity" && item.id === "shared-entry"
+      )?.actor
+    ).toEqual({ id: null, name: "Former member", image: null })
+
+    const malformed = await app.handle(
+      jsonRequest(
+        "/issues/issue_1/timeline?organizationId=org_1&cursor=not-a-cursor",
+        { userId: "user_1" }
+      )
+    )
+    expect(malformed.status).toBe(400)
+    expect(await malformed.json()).toMatchObject({
+      error: {
+        code: "validation_error",
+        message: "Invalid timeline cursor",
+        context: { field: "cursor" },
+      },
+    })
+  })
+
+  it("keeps non-null date-time fields as strings over the real Eden HTTP transport", async () => {
     const app = createApp(await createSeededDb())
     const server = await startHttpServer(app)
 
@@ -2770,16 +2960,16 @@ describe("issue-like todos", () => {
       const client = createApiClient(server.origin, {
         headers: authHeaders("user_1"),
       })
-      const response = await client.todos.post({
+      const response = await client.issues.post({
         organizationId: "org_1",
         title: "Date contract",
-        dueDate: "2026-09-30",
+        dueDate: "2026-09-30T18:45:00.000Z",
       })
 
       expect(response.status).toBe(201)
       expect(response.error).toBeNull()
       expect(response.data).toMatchObject({
-        dueDate: "2026-09-30",
+        dueDate: "2026-09-30T18:45:00.000Z",
       })
       expect(response.data?.dueDate).toBeTypeOf("string")
       expect(response.data?.createdAt).toBeTypeOf("string")
@@ -2792,7 +2982,7 @@ describe("issue-like todos", () => {
   it("returns safe field errors without reflecting invalid input", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
-      jsonRequest("/todos", {
+      jsonRequest("/issues", {
         method: "POST",
         userId: "user_1",
         body: {
@@ -2820,7 +3010,7 @@ describe("issue-like todos", () => {
     )
 
     const serviceValidation = await app.handle(
-      jsonRequest("/todos", {
+      jsonRequest("/issues", {
         method: "POST",
         userId: "user_1",
         body: {
@@ -2845,7 +3035,7 @@ describe("issue-like todos", () => {
     const responses = await Promise.all(
       Array.from({ length: 5 }, (_, index) =>
         app.handle(
-          jsonRequest("/todos", {
+          jsonRequest("/issues", {
             method: "POST",
             userId: "user_1",
             body: { organizationId: "org_1", title: `Concurrent ${index}` },
@@ -2866,7 +3056,7 @@ describe("issue-like todos", () => {
     const db = await createSeededDb()
     const app = createApp(db)
     const response = await app.handle(
-      jsonRequest("/todos/todo_1/comments", {
+      jsonRequest("/issues/issue_1/comments", {
         method: "POST",
         userId: "user_5",
         activeOrganizationId: "org_2",
@@ -2876,16 +3066,16 @@ describe("issue-like todos", () => {
     expect(response.status).toBe(404)
     expect((await response.json()).error).toMatchObject({
       code: "not_found",
-      context: { resource: "todo" },
+      context: { resource: "issue" },
     })
-    expect(await db.select().from(schema.todoComments)).toHaveLength(0)
+    expect(await db.select().from(schema.issueComments)).toHaveLength(0)
   })
 
   it("does not expose an author profile outside the comment tenant", async () => {
     const db = await createSeededDb()
-    await db.insert(schema.todoComments).values({
+    await db.insert(schema.issueComments).values({
       id: "comment_cross_tenant_author",
-      todoId: "todo_1",
+      issueId: "issue_1",
       organizationId: "org_1",
       authorId: "user_2",
       body: "Historical comment",
@@ -2893,7 +3083,7 @@ describe("issue-like todos", () => {
     const app = createApp(db)
 
     const response = await app.handle(
-      jsonRequest("/todos/todo_1/comments?organizationId=org_1", {
+      jsonRequest("/issues/issue_1/comments?organizationId=org_1", {
         userId: "user_1",
       })
     )

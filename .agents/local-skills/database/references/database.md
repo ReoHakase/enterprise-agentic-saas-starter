@@ -56,11 +56,11 @@ auth pluginの構成を変えたら再生成 → repo固有index/default差分�
 import { sql } from "drizzle-orm"
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
 
-export const todos = sqliteTable("todos", {
+export const issues = sqliteTable("issues", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull(),
   title: text("title").notNull(),
-  completed: integer("completed", { mode: "boolean" }).notNull().default(false),
+  status: text("status").notNull().default("open"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
@@ -113,22 +113,22 @@ Turso 接続文字列は `packages/db/src/env.ts`（envin + Valibot）で検証�
 ## repository
 
 ```ts
-export async function findTodoByIdFromDb(
+export async function findIssueByIdFromDb(
   db: Db,
   organizationId: string,
   id: string,
 ) {
   try {
-    const [todo] = await db
+    const [issue] = await db
       .select()
-      .from(todos)
-      .where(and(eq(todos.organizationId, organizationId), eq(todos.id, id)))
+      .from(issues)
+      .where(and(eq(issues.organizationId, organizationId), eq(issues.id, id)))
       .limit(1);
 
-    return todo ?? null;
+    return issue ?? null;
   } catch (cause) {
     throw publicErrors.internal(cause, {
-      operation: "findTodoByIdFromDb",
+      operation: "findIssueByIdFromDb",
     });
   }
 }

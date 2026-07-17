@@ -2,7 +2,7 @@
 
 ## 目的
 
-題材はIssue相当のtodo管理ですが、設計対象は認証、組織、権限、監査、堅牢なCIを持つマルチテナントSaaSテンプレートです。tenantはorganizationで表し、認証済みであることとorganization内で操作可能であることを別々に判定します。
+題材はIssue管理ですが、設計対象は認証、組織、権限、監査、堅牢なCIを持つマルチテナントSaaSテンプレートです。tenantはorganizationで表し、認証済みであることとorganization内で操作可能であることを別々に判定します。
 
 ## 実行構成
 
@@ -40,7 +40,7 @@ flowchart LR
 
 ## Tenant境界
 
-`todos`、`todo_comments`、`audit_logs` は `organization_id` を持ちます。Issue/comment取得・更新・削除ではIDだけを条件にせず、必ずorganization IDを同時に絞ります。commentは `(todo_id, organization_id)` からparent Issueの `(id, organization_id)` へ複合外部キーを持ち、repositoryのミスだけでtenantを越えないDB防御も置きます。
+`issues`、`issue_comments`、`issue_activity_events`、`audit_logs` は `organization_id` を持ちます。Issue/comment取得・更新・削除ではIDだけを条件にせず、必ずorganization IDを同時に絞ります。comment/activityは `(issue_id, organization_id)` からparent Issueの `(id, organization_id)` へ複合外部キーを持ち、repositoryのミスだけでtenantを越えないDB防御も置きます。
 
 ## Web rendering
 

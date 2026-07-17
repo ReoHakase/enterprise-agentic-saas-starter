@@ -5,7 +5,7 @@ description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追
 
 # Package Management
 
-このskillは、テンプレートとしてのmonorepo境界を変えるときに使う。アプリの題材はtodoだが、前提は「グループ・権限・認証・監査を持つマルチテナントSaaS」を作るためのスターターである。
+このskillは、テンプレートとしてのmonorepo境界を変えるときに使う。アプリの題材はissue管理だが、前提は「グループ・権限・認証・監査を持つマルチテナントSaaS」を作るためのスターターである。
 
 ## まず守る判断基準
 

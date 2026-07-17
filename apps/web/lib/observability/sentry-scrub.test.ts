@@ -14,7 +14,7 @@ describe("Sentry telemetry scrubbing", () => {
       contexts: {
         operation: {
           organizationId: "org-secret",
-          resource: "todo",
+          resource: "issue",
         },
       },
       extra: {
@@ -42,7 +42,7 @@ describe("Sentry telemetry scrubbing", () => {
       url: "https://app.example.com/organization/[organizationSlug]/settings",
     })
     expect(event.contexts?.operation?.organizationId).toBe("[redacted]")
-    expect(event.contexts?.operation?.resource).toBe("todo")
+    expect(event.contexts?.operation?.resource).toBe("issue")
     expect(event.extra?.email).toBe("[redacted]")
     expect(event.extra?.safeReason).toBe("network failure")
   })
@@ -66,6 +66,7 @@ describe("Sentry telemetry scrubbing", () => {
 
     const log = beforeSendSentryLog({
       attributes: {
+        issueId: "issue-secret",
         memberId: "member-secret",
         operation: "load-dashboard",
       },
@@ -74,6 +75,7 @@ describe("Sentry telemetry scrubbing", () => {
     })
 
     expect(log.message).toBe("Failed for [redacted]")
+    expect(log.attributes?.issueId).toBe("[redacted]")
     expect(log.attributes?.memberId).toBe("[redacted]")
     expect(log.attributes?.operation).toBe("load-dashboard")
   })

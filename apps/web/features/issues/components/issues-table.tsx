@@ -12,15 +12,6 @@ import {
 } from "@enterprise-agentic-saas/ui/components/alert-dialog"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@enterprise-agentic-saas/ui/components/card"
-import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -88,6 +79,7 @@ export const IssuesTable = ({
   busyIssueId,
   error,
   assignees,
+  getIssueHref,
   onCreate,
   onToggle,
   onDelete,
@@ -100,6 +92,7 @@ export const IssuesTable = ({
   busyIssueId?: string
   error?: string
   assignees: IssueAssigneeOption[]
+  getIssueHref: (issue: IssueUiItem) => string
   onCreate: AsyncAction<[title: string]>
   onToggle: AsyncAction<[issue: IssueUiItem]>
   onDelete: AsyncAction<[issue: IssueUiItem]>
@@ -119,6 +112,7 @@ export const IssuesTable = ({
   )
   const columns = useIssueColumns({
     assignees,
+    getIssueHref,
     onToggle,
     onUpdate,
     onSelect,
@@ -193,18 +187,20 @@ export const IssuesTable = ({
         closed={closedCount}
       />
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>Organization issues</CardTitle>
-          <CardDescription>
-            Track work with searchable, sortable, tenant-scoped issues.
-          </CardDescription>
-          <CardAction>
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold">Organization issues</h2>
+            <p className="text-sm text-muted-foreground">
+              Track work with searchable, sortable, tenant-scoped issues.
+            </p>
+          </div>
+          <div className="shrink-0">
             <CreateIssueDialog pending={pending} onCreate={onCreate} />
-          </CardAction>
-        </CardHeader>
+          </div>
+        </div>
 
-        <CardContent className="flex flex-col gap-4 pt-(--card-spacing)">
+        <div className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center">
             <InputGroup className="md:max-w-md">
               <InputGroupAddon>
@@ -291,6 +287,7 @@ export const IssuesTable = ({
                       table.getRowModel().rows.map((row) => (
                         <TableRow
                           key={row.id}
+                          className="group/issue-row"
                           data-state={
                             row.getIsSelected() ? "selected" : undefined
                           }
@@ -328,10 +325,10 @@ export const IssuesTable = ({
               </IssueMutationContext.Provider>
             </div>
           )}
-        </CardContent>
+        </div>
 
         {!error ? (
-          <CardFooter className="justify-between gap-3 border-t">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <p className="text-sm text-muted-foreground">
               {table.getFilteredRowModel().rows.length} issues
             </p>
@@ -357,9 +354,9 @@ export const IssuesTable = ({
                 Next
               </Button>
             </div>
-          </CardFooter>
+          </div>
         ) : null}
-      </Card>
+      </div>
 
       <AlertDialog
         open={deleteTarget !== undefined}

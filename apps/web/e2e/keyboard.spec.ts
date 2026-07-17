@@ -107,7 +107,7 @@ test("キーボード更新中もIssueのfocusを保持し、内部scrollとtena
   page,
 }) => {
   await useSession(context, "admin")
-  await page.goto("/dashboard/todos")
+  await page.goto("/organization/alpha-operations/issues")
   await expect(
     page.getByRole("heading", { name: "Issues", level: 1 })
   ).toBeVisible()
@@ -144,7 +144,7 @@ test("キーボード更新中もIssueのfocusを保持し、内部scrollとtena
 
   const delayResponse = await context.request.post(
     `${mockApiUrl}/__e2e/request-delays`,
-    { data: { path: "/todos/issue-a-2", method: "PATCH", delayMs: 1_200 } }
+    { data: { path: "/issues/issue-a-2", method: "PATCH", delayMs: 1_200 } }
   )
   expect(delayResponse.status()).toBe(201)
   const priority = page.getByRole("combobox", {
@@ -155,7 +155,7 @@ test("キーボード更新中もIssueのfocusを保持し、内部scrollとtena
   await expect(page.getByRole("option", { name: "Low" })).toBeVisible()
   const updateResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/todos/issue-a-2") &&
+      response.url().endsWith("/issues/issue-a-2") &&
       response.request().method() === "PATCH"
   )
   await page.keyboard.press("ArrowDown")

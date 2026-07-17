@@ -23,7 +23,7 @@ describe("navigation link adapters", () => {
       <SidebarProvider>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuLinkButton href="/dashboard/todos">
+            <SidebarMenuLinkButton href="/organization/acme/issues">
               Issues
             </SidebarMenuLinkButton>
           </SidebarMenuItem>
@@ -33,7 +33,7 @@ describe("navigation link adapters", () => {
 
     expect(screen.getByRole("link", { name: "Issues" })).toHaveAttribute(
       "href",
-      "/dashboard/todos"
+      "/organization/acme/issues"
     )
   })
 

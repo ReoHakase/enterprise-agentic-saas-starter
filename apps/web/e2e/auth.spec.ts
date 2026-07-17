@@ -291,11 +291,134 @@ test("dashboardからIssue作成とtenant切替を迷わず完了できる", asy
   page,
 }) => {
   await useSession(context, "admin")
-  await page.goto("/dashboard/todos")
+  await page.goto("/organization/alpha-operations/issues")
 
   await expect(page.getByText("Alpha Operations").first()).toBeVisible()
   await expect(page.getByText("Review tenant audit log")).toBeVisible()
   await expect(page.getByText("Private Beta issue")).toHaveCount(0)
+
+  const reviewIssueRow = page
+    .locator("tbody tr")
+    .filter({ hasText: "Review tenant audit log" })
+  await reviewIssueRow.hover()
+  const openReviewAsPage = reviewIssueRow.getByRole("link", {
+    name: "Open Review tenant audit log as full page",
+  })
+  await expect(openReviewAsPage).toBeVisible()
+  await expect(openReviewAsPage).toHaveText("Full page")
+  await openReviewAsPage.click()
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues\/1$/)
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(
+    page.getByRole("heading", {
+      name: "Review tenant audit log",
+      level: 1,
+    })
+  ).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "Issue #1", exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.getByText("Track work for Alpha Operations.", { exact: true })
+  ).toHaveCount(0)
+  await page.getByRole("button", { name: "Back to issues" }).click()
+
+  await page
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
+    .click()
+  const issueDialog = page.getByRole("dialog", { name: "Issue details" })
+  await expect(issueDialog).toBeVisible()
+  const modalInset = await issueDialog.evaluate((element) => {
+    const box = element.getBoundingClientRect()
+    return {
+      top: box.top,
+      left: box.left,
+      right: window.innerWidth - box.right,
+      bottom: window.innerHeight - box.bottom,
+    }
+  })
+  expect(modalInset.top).toBeGreaterThanOrEqual(7)
+  expect(modalInset.left).toBeGreaterThanOrEqual(7)
+  expect(modalInset.right).toBeGreaterThanOrEqual(7)
+  expect(modalInset.bottom).toBeGreaterThanOrEqual(7)
+
+  const detailHeader = issueDialog.locator('[data-slot="issue-detail-header"]')
+  const detailMetadata = issueDialog.locator('[data-slot="issue-metadata"]')
+  const detailDescription = issueDialog.locator(
+    '[data-slot="issue-description"]'
+  )
+  const detailDiscussion = issueDialog.locator('[data-slot="issue-discussion"]')
+  const [headerBox, metadataBox, descriptionBox, discussionBox] =
+    await Promise.all([
+      detailHeader.boundingBox(),
+      detailMetadata.boundingBox(),
+      detailDescription.boundingBox(),
+      detailDiscussion.boundingBox(),
+    ])
+  expect(headerBox).not.toBeNull()
+  expect(metadataBox).not.toBeNull()
+  expect(descriptionBox).not.toBeNull()
+  expect(discussionBox).not.toBeNull()
+
+  const viewportWidth = page.viewportSize()?.width ?? 0
+  if (viewportWidth < 1024) {
+    expect(metadataBox?.y ?? 0).toBeGreaterThanOrEqual(
+      (headerBox?.y ?? 0) + (headerBox?.height ?? 0)
+    )
+    expect(descriptionBox?.y ?? 0).toBeGreaterThanOrEqual(
+      (metadataBox?.y ?? 0) + (metadataBox?.height ?? 0)
+    )
+    expect(discussionBox?.y ?? 0).toBeGreaterThanOrEqual(
+      (descriptionBox?.y ?? 0) + (descriptionBox?.height ?? 0)
+    )
+    expect(
+      Math.abs((discussionBox?.width ?? 0) - (descriptionBox?.width ?? 0))
+    ).toBeLessThan(2)
+
+    const headerCenterY = (headerBox?.y ?? 0) + (headerBox?.height ?? 0) / 2
+    const headerControlBoxes = await Promise.all(
+      [
+        detailHeader.getByText("#1", { exact: true }),
+        detailHeader.getByRole("button", { name: "Edit issue title" }),
+        detailHeader.getByRole("button", { name: "Open full page" }),
+      ].map((control) => control.boundingBox())
+    )
+    for (const controlBox of headerControlBoxes) {
+      expect(controlBox).not.toBeNull()
+      expect(
+        Math.abs(
+          (controlBox?.y ?? 0) + (controlBox?.height ?? 0) / 2 - headerCenterY
+        )
+      ).toBeLessThan(4)
+    }
+    await detailHeader.getByRole("button", { name: "Edit issue title" }).click()
+    await expect(
+      detailHeader.getByRole("button", { name: "Save title" })
+    ).toBeDisabled()
+    expect(
+      await issueDialog.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth
+      )
+    ).toBe(true)
+    await detailHeader.getByRole("button", { name: "Cancel" }).click()
+  } else {
+    expect(
+      Math.abs((discussionBox?.width ?? 0) - (descriptionBox?.width ?? 0))
+    ).toBeLessThan(2)
+    expect(metadataBox?.x ?? 0).toBeGreaterThan(
+      (descriptionBox?.x ?? 0) + (descriptionBox?.width ?? 0)
+    )
+    expect(headerBox?.width ?? 0).toBeGreaterThan(
+      (descriptionBox?.width ?? 0) + 200
+    )
+    expect(
+      await detailMetadata.evaluate(
+        (element) => window.getComputedStyle(element).position
+      )
+    ).toBe("sticky")
+  }
+  await page.keyboard.press("Escape")
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues$/)
 
   await page.getByRole("button", { name: "New issue" }).click()
   await page.getByLabel("Title").fill("Document tenant switch runbook")
@@ -393,7 +516,7 @@ test("tenant切替のserver errorは安全な詳細を示して再試行でき�
   )
   expect(faultResponse.status()).toBe(201)
 
-  await page.goto("/dashboard/todos")
+  await page.goto("/organization/alpha-operations/issues")
   await openOrganizationSwitcher(page)
   const failedActivation = page.waitForResponse(
     (response) =>
@@ -490,11 +613,11 @@ test("member権限とtenant境界をAPIと画面の両方で拒否する", async
   page,
 }) => {
   await useSession(context, "admin")
-  await page.goto("/dashboard")
+  await page.goto("/organization/alpha-operations/dashboard")
 
   const [inactiveTenantResponse, missingTenantResponse] = await Promise.all([
-    context.request.get(`${mockApiUrl}/todos?organizationId=org-b`),
-    context.request.get(`${mockApiUrl}/todos?organizationId=org-forbidden`),
+    context.request.get(`${mockApiUrl}/issues?organizationId=org-b`),
+    context.request.get(`${mockApiUrl}/issues?organizationId=org-forbidden`),
   ])
 
   expect(inactiveTenantResponse.status()).toBe(409)
@@ -836,35 +959,142 @@ test("Issue詳細の期日・更新・comment・削除を一つのCRUD導線で�
   )
 
   await useSession(context, "admin")
-  await page.goto("/dashboard/todos")
+  await page.goto("/organization/alpha-operations/issues")
   await expect(
-    page.getByLabel("Due date for Review tenant audit log")
-  ).toHaveValue("2026-07-21")
+    page.getByLabel("Due date and time for Review tenant audit log")
+  ).toContainText("Jul 21, 2026")
+  await context.request.post(`${mockApiUrl}/__e2e/request-delays`, {
+    data: { path: "/issues/by-number/1", method: "GET", delayMs: 800 },
+  })
   await page
-    .getByRole("button", { name: "Review tenant audit log", exact: true })
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
     .click()
 
-  await expect(page.getByLabel("Due date", { exact: true })).toHaveValue(
-    "2026-07-21"
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues\/1$/)
+  const issueDialog = page.getByRole("dialog", { name: "Issue details" })
+  await expect(issueDialog).toBeVisible()
+  await issueDialog.evaluate((element) => {
+    element.setAttribute("data-e2e-persistent-shell", "true")
+  })
+  await expect(
+    issueDialog.getByRole("status", { name: "Loading issue details" })
+  ).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        issueDialog.evaluate((element) => element.getAnimations().length),
+      { message: "the initial modal animation should settle on the skeleton" }
+    )
+    .toBe(0)
+  const loadingBox = await issueDialog.boundingBox()
+  await expect(
+    issueDialog.getByRole("heading", { name: "Review tenant audit log" })
+  ).toBeVisible()
+  await expect(issueDialog).toHaveAttribute("data-e2e-persistent-shell", "true")
+  const issueBox = await issueDialog.boundingBox()
+  expect(loadingBox).not.toBeNull()
+  expect(issueBox).not.toBeNull()
+  expect(
+    Math.abs((loadingBox?.width ?? 0) - (issueBox?.width ?? 0))
+  ).toBeLessThan(2)
+  expect(
+    Math.abs((loadingBox?.height ?? 0) - (issueBox?.height ?? 0))
+  ).toBeLessThan(2)
+  expect(
+    await issueDialog.evaluate((element) => element.getAnimations().length)
+  ).toBe(0)
+  await expect(
+    issueDialog
+      .getByRole("combobox", { name: "Issue assignee" })
+      .locator('[data-slot="avatar"]')
+  ).toBeVisible()
+  await expect(page.getByText("changed assignee from")).toBeVisible()
+  await expect(
+    page.getByText("Jordan Lee", { exact: true }).last()
+  ).toBeVisible()
+  await expect(page.getByText("user-jordan", { exact: true })).toHaveCount(0)
+  await page.goBack()
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues$/)
+  await page
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
+    .click()
+
+  await page.getByRole("button", { name: "Edit description" }).click()
+  await page
+    .getByRole("textbox", { name: "Description" })
+    .fill("Unsaved issue description")
+  await page.getByLabel("Add comment").fill("Unsaved full-page draft")
+  await page.getByRole("button", { name: "Open full page" }).click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue(
+    "Unsaved issue description"
   )
+  await expect(page.getByLabel("Add comment")).toHaveValue(
+    "Unsaved full-page draft"
+  )
+
+  await page.evaluate(() => window.history.back())
+  const browserBackDiscardDialog = page.getByRole("alertdialog")
+  await expect(browserBackDiscardDialog).toContainText(
+    "Discard unsaved changes?"
+  )
+  await browserBackDiscardDialog
+    .getByRole("button", { name: "Keep editing" })
+    .click()
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue(
+    "Unsaved issue description"
+  )
+  await expect(page.getByLabel("Add comment")).toHaveValue(
+    "Unsaved full-page draft"
+  )
+  await page.getByRole("button", { name: "Back to issues" }).click()
+  const fullPageDiscardDialog = page.getByRole("alertdialog")
+  await expect(fullPageDiscardDialog).toContainText("Discard unsaved changes?")
+  await fullPageDiscardDialog
+    .getByRole("button", { name: "Discard changes" })
+    .click()
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues$/)
+
+  await page
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
+    .click()
+  await page.getByLabel("Add comment").fill("Unsaved comment draft")
+  await page.keyboard.press("Escape")
+  const discardDialog = page.getByRole("alertdialog")
+  await expect(discardDialog).toContainText("Discard unsaved changes?")
+  await discardDialog.getByRole("button", { name: "Discard changes" }).click()
+  await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues$/)
+
+  await page
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
+    .click()
+
+  await expect(
+    page.getByLabel("Issue due date and time", { exact: true })
+  ).toContainText("Jul 21, 2026")
   await expect(
     page.getByText("Tenant boundary verified in the API integration suite.")
   ).toBeVisible()
 
-  const title = page.getByLabel("Title")
+  await page.getByRole("button", { name: "Edit issue title" }).click()
+  const title = page.getByLabel("Issue title")
+  const saveTitle = page.getByRole("button", { name: "Save title" })
+  await expect(saveTitle).toBeDisabled()
   await title.clear()
   await title.fill("Review tenant audit evidence")
+  await expect(saveTitle).toBeEnabled()
   const updateResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/todos/issue-a-1") &&
+      response.url().endsWith("/issues/issue-a-1") &&
       response.request().method() === "PATCH"
   )
-  await page.getByRole("button", { name: "Save changes" }).click()
+  await saveTitle.click()
   const issueUpdateResponse = await updateResponse
   expect(issueUpdateResponse.ok()).toBeTruthy()
-  expect(issueUpdateResponse.request().postDataJSON()).toEqual(
-    expect.objectContaining({ dueDate: "2026-07-21" })
-  )
+  expect(issueUpdateResponse.request().postDataJSON()).toEqual({
+    organizationId: "org-a",
+    title: "Review tenant audit evidence",
+  })
   await expect(
     page.getByText("Review tenant audit evidence").first()
   ).toBeVisible()
@@ -872,7 +1102,7 @@ test("Issue詳細の期日・更新・comment・削除を一つのCRUD導線で�
   await page.getByLabel("Add comment").fill("Verified from the browser journey")
   const createCommentResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/todos/issue-a-1/comments") &&
+      response.url().endsWith("/issues/issue-a-1/comments") &&
       response.request().method() === "POST"
   )
   await page.getByRole("button", { name: "Comment" }).click()
@@ -882,15 +1112,15 @@ test("Issue詳細の期日・更新・comment・削除を一つのCRUD導線で�
   ).toBeVisible()
 
   let commentCard = page
-    .getByText("Verified from the browser journey")
-    .locator("..")
+    .locator('[data-slot="card"]')
+    .filter({ hasText: "Verified from the browser journey" })
   await commentCard.getByRole("button", { name: "Edit" }).click()
   const editComment = page.getByLabel("Edit comment")
   await editComment.clear()
   await editComment.fill("Verified and documented from the browser journey")
   const updateCommentResponse = page.waitForResponse(
     (response) =>
-      response.url().includes("/todos/issue-a-1/comments/comment-admin-2") &&
+      response.url().includes("/issues/issue-a-1/comments/comment-admin-2") &&
       response.request().method() === "PATCH"
   )
   await page.getByRole("button", { name: "Save comment" }).click()
@@ -900,12 +1130,12 @@ test("Issue詳細の期日・更新・comment・削除を一つのCRUD導線で�
   ).toBeVisible()
 
   commentCard = page
-    .getByText("Verified and documented from the browser journey")
-    .locator("..")
+    .locator('[data-slot="card"]')
+    .filter({ hasText: "Verified and documented from the browser journey" })
   await commentCard.getByRole("button", { name: "Delete" }).click()
   const deleteCommentResponse = page.waitForResponse(
     (response) =>
-      response.url().includes("/todos/issue-a-1/comments/comment-admin-2") &&
+      response.url().includes("/issues/issue-a-1/comments/comment-admin-2") &&
       response.request().method() === "DELETE"
   )
   await page
@@ -926,7 +1156,7 @@ test("Issue詳細の期日・更新・comment・削除を一つのCRUD導線で�
   await page.getByRole("menuitem", { name: "Delete issue" }).click()
   const deleteIssueResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/todos/issue-a-1") &&
+      response.url().endsWith("/issues/issue-a-1") &&
       response.request().method() === "DELETE"
   )
   await page
@@ -1096,14 +1326,14 @@ test("organization・member・invitation・session・一時faultを決定的に�
   )
   expect(invalidInvitationResponse.status()).toBe(400)
 
-  const todosResponse = await context.request.get(
-    `${mockApiUrl}/todos?organizationId=org-a`
+  const issuesResponse = await context.request.get(
+    `${mockApiUrl}/issues?organizationId=org-a`
   )
-  expect(await todosResponse.json()).toEqual(
+  expect(await issuesResponse.json()).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         id: "issue-a-1",
-        dueDate: "2026-07-21",
+        dueDate: "2026-07-21T09:30:00.000Z",
       }),
     ])
   )

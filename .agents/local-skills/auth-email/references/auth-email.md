@@ -120,7 +120,7 @@ auth packageに入れる:
 
 app側に置く:
 
-- todo/project/group resource permission
+- issue/project/group resource permission
 - billing permission
 - audit log
 - tenant data access check

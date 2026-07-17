@@ -25,10 +25,10 @@ describe("Sentry telemetry sanitizer", () => {
         headers: { authorization: "Bearer secret" },
         method: "GET",
         query_string: "email=person@example.com",
-        url: "https://api.example.com/todos/123?token=secret",
+        url: "https://api.example.com/issues/123?token=secret",
       },
       tags: { request_id: "req_safe", userId: "user_123" },
-      transaction: "GET /todos/123",
+      transaction: "GET /issues/123",
       user: { id: "user_123" },
     })
 
@@ -48,13 +48,13 @@ describe("Sentry telemetry sanitizer", () => {
         organizationId: "[REDACTED]",
       },
     })
-    expect(event.transaction).toBe("GET /todos/:id")
+    expect(event.transaction).toBe("GET /issues/:id")
   })
 
   it("structured logのsafe fieldだけを保持する", () => {
     const log = scrubSentryLog({
       attributes: {
-        http_route: "/todos/:todoId",
+        http_route: "/issues/:issueId",
         http_status_code: 500,
         request_id: "req_safe",
         sql: "SELECT * FROM users",
@@ -65,7 +65,7 @@ describe("Sentry telemetry sanitizer", () => {
 
     expect(log).toEqual({
       attributes: {
-        http_route: "/todos/:todoId",
+        http_route: "/issues/:issueId",
         http_status_code: 500,
         request_id: "req_safe",
         sql: "[REDACTED]",
@@ -98,11 +98,11 @@ describe("Sentry telemetry sanitizer", () => {
   it("dynamic path segmentを安定したroute名にする", () => {
     expect(
       normalizeTelemetryPath(
-        "/organizations/019f5bd6-a9fa-76a2-ac4f-1be5912668be/todos/42"
+        "/organizations/019f5bd6-a9fa-76a2-ac4f-1be5912668be/issues/42"
       )
-    ).toBe("/organizations/:id/todos/:id")
-    expect(normalizeTelemetryPath("/organizations/acme/todos/todo_1")).toBe(
-      "/organizations/:id/todos/:id"
+    ).toBe("/organizations/:id/issues/:id")
+    expect(normalizeTelemetryPath("/organizations/acme/issues/issue_1")).toBe(
+      "/organizations/:id/issues/:id"
     )
   })
 
@@ -111,7 +111,7 @@ describe("Sentry telemetry sanitizer", () => {
       data: {
         "http.request.header.x-request-id": "private header value",
         "url.full":
-          "https://api.example.com/todos/019f5bd6-a9fa-76a2-ac4f-1be5912668be?search=private",
+          "https://api.example.com/issues/019f5bd6-a9fa-76a2-ac4f-1be5912668be?search=private",
       },
       description: "outbound request",
       op: "http.client",

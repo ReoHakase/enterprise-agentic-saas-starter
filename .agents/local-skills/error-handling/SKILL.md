@@ -31,7 +31,7 @@ public context:
 - `retryAfter`
 - `maxAgeSeconds`
 
-public contextのkeyは上記allowlistに型で限定し、`AppError`生成時とHTTP response直前の両方でruntime検証する。文字列は短いidentifier、数値は非負のsafe integerだけを許可する。`organizationId`, `memberId`, `userId`, `invitationId`, `todoId` 等をrequestからresponseへ反射しない。tenant resourceの404は `{ resource: "organization" }` のような復旧用分類だけを返す。
+public contextのkeyは上記allowlistに型で限定し、`AppError`生成時とHTTP response直前の両方でruntime検証する。文字列は短いidentifier、数値は非負のsafe integerだけを許可する。`organizationId`, `memberId`, `userId`, `invitationId`, `issueId` 等をrequestからresponseへ反射しない。tenant resourceの404は `{ resource: "organization" }` のような復旧用分類だけを返す。
 
 private context:
 

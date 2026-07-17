@@ -1,24 +1,27 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import type {
-  TodoPriority,
-  TodoStatus,
+  IssuePriority,
+  IssueStatus,
 } from "@enterprise-agentic-saas/db/schema"
 
 import { publicErrors } from "../../errors/app-error"
 import { getMembership, requireMembership } from "../authorization/roles"
 import {
-  deleteTodoById,
-  deleteTodoCommentById,
-  findTodoById,
-  findTodoCommentById,
-  insertTodo,
-  insertTodoComment,
-  listTodoComments,
-  listTodosByOrganization,
-  updateTodoById,
-  updateTodoCommentById,
-  type ListTodosInput,
+  deleteIssueById,
+  deleteIssueCommentById,
+  findIssueById,
+  findIssueByNumber,
+  findIssueCommentById,
+  insertIssue,
+  insertIssueComment,
+  listIssueComments,
+  listIssueTimeline,
+  listIssuesByOrganization,
+  updateIssueById,
+  updateIssueCommentById,
+  type ListIssuesInput,
 } from "./repository"
+import { decodeIssueTimelineCursor } from "./timeline-cursor"
 
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
@@ -41,12 +44,11 @@ const parseDueDate = (value: string | null | undefined) => {
     return null
   }
 
-  const date = new Date(`${value}T00:00:00.000Z`)
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.toISOString().slice(0, 10) !== value
-  ) {
-    throw publicErrors.validation("Invalid due date", { field: "dueDate" })
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime()) || date.toISOString() !== value) {
+    throw publicErrors.validation("Invalid due date and time", {
+      field: "dueDate",
+    })
   }
   return date
 }
@@ -70,35 +72,80 @@ const assertAssigneeMembership = async (
   }
 }
 
-export const listTodos = async (
+export const listIssues = async (
   db: Db,
-  input: ListTodosInput & { userId: string }
+  input: ListIssuesInput & { userId: string }
 ) => {
   await requireMembership(db, input)
-  return listTodosByOrganization(db, input)
+  return listIssuesByOrganization(db, input)
 }
 
-export const getTodo = async (
+export const getIssue = async (
   db: Db,
   input: { userId: string; id: string; organizationId: string }
 ) => {
   await requireMembership(db, input)
-  const todo = await findTodoById(db, input)
-  if (!todo) {
-    throw publicErrors.notFound("Todo not found", { resource: "todo" })
+  const issue = await findIssueById(db, input)
+  if (!issue) {
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
   }
-  return todo
+  return issue
 }
 
-export const createTodo = async (
+export const getIssueByNumber = async (
+  db: Db,
+  input: { userId: string; number: number; organizationId: string }
+) => {
+  await requireMembership(db, input)
+  const issue = await findIssueByNumber(db, input)
+  if (!issue) {
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
+  }
+  return issue
+}
+
+export const getIssueTimeline = async (
+  db: Db,
+  input: {
+    userId: string
+    organizationId: string
+    issueId: string
+    cursor?: string
+    limit?: number
+  }
+) => {
+  await getIssue(db, {
+    userId: input.userId,
+    id: input.issueId,
+    organizationId: input.organizationId,
+  })
+
+  let cursor
+  try {
+    cursor = input.cursor ? decodeIssueTimelineCursor(input.cursor) : undefined
+  } catch {
+    throw publicErrors.validation("Invalid timeline cursor", {
+      field: "cursor",
+    })
+  }
+
+  return listIssueTimeline(db, {
+    organizationId: input.organizationId,
+    issueId: input.issueId,
+    cursor,
+    limit: input.limit ?? 50,
+  })
+}
+
+export const createIssue = async (
   db: Db,
   input: {
     userId: string
     organizationId: string
     title: string
     description?: string
-    status?: TodoStatus
-    priority?: TodoPriority
+    status?: IssueStatus
+    priority?: IssuePriority
     assigneeId?: string | null
     labels?: string[]
     dueDate?: string | null
@@ -107,7 +154,7 @@ export const createTodo = async (
   await requireMembership(db, input)
   await assertAssigneeMembership(db, input)
 
-  const todo = await insertTodo(db, {
+  const issue = await insertIssue(db, {
     organizationId: input.organizationId,
     creatorId: input.userId,
     title: normalizeRequired(input.title, "title"),
@@ -119,10 +166,10 @@ export const createTodo = async (
     dueDate: parseDueDate(input.dueDate) ?? null,
   })
 
-  return todo
+  return issue
 }
 
-export const updateTodo = async (
+export const updateIssue = async (
   db: Db,
   input: {
     userId: string
@@ -130,8 +177,8 @@ export const updateTodo = async (
     organizationId: string
     title?: string
     description?: string
-    status?: TodoStatus
-    priority?: TodoPriority
+    status?: IssueStatus
+    priority?: IssuePriority
     assigneeId?: string | null
     labels?: string[]
     dueDate?: string | null
@@ -150,10 +197,10 @@ export const updateTodo = async (
     input.dueDate,
   ]
   if (changes.every((value) => value === undefined)) {
-    throw publicErrors.validation("No todo changes provided")
+    throw publicErrors.validation("No issue changes provided")
   }
 
-  const todo = await updateTodoById(db, {
+  const issue = await updateIssueById(db, {
     id: input.id,
     actorUserId: input.userId,
     organizationId: input.organizationId,
@@ -170,132 +217,132 @@ export const updateTodo = async (
     dueDate: parseDueDate(input.dueDate),
   })
 
-  if (!todo) {
-    throw publicErrors.notFound("Todo not found", { resource: "todo" })
+  if (!issue) {
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
   }
 
-  return todo
+  return issue
 }
 
-export const deleteTodo = async (
+export const deleteIssue = async (
   db: Db,
   input: { userId: string; id: string; organizationId: string }
 ) => {
   const membership = await requireMembership(db, input)
-  const current = await findTodoById(db, input)
+  const current = await findIssueById(db, input)
   if (!current) {
-    throw publicErrors.notFound("Todo not found", { resource: "todo" })
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
   }
   if (membership.role === "member" && current.creatorId !== input.userId) {
     throw publicErrors.forbidden("Only the creator or an admin can delete")
   }
 
-  const todo = await deleteTodoById(db, {
+  const issue = await deleteIssueById(db, {
     ...input,
     actorUserId: input.userId,
   })
-  if (!todo) {
-    throw publicErrors.notFound("Todo not found", { resource: "todo" })
+  if (!issue) {
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
   }
-  return todo
+  return issue
 }
 
-export const getTodoComments = async (
+export const getIssueComments = async (
   db: Db,
-  input: { userId: string; organizationId: string; todoId: string }
+  input: { userId: string; organizationId: string; issueId: string }
 ) => {
-  await getTodo(db, {
+  await getIssue(db, {
     userId: input.userId,
-    id: input.todoId,
+    id: input.issueId,
     organizationId: input.organizationId,
   })
-  return listTodoComments(db, input)
+  return listIssueComments(db, input)
 }
 
-export const createTodoComment = async (
+export const createIssueComment = async (
   db: Db,
   input: {
     userId: string
     organizationId: string
-    todoId: string
+    issueId: string
     body: string
   }
 ) => {
-  await getTodo(db, {
+  await getIssue(db, {
     userId: input.userId,
-    id: input.todoId,
+    id: input.issueId,
     organizationId: input.organizationId,
   })
-  const comment = await insertTodoComment(db, {
+  const comment = await insertIssueComment(db, {
     organizationId: input.organizationId,
-    todoId: input.todoId,
+    issueId: input.issueId,
     authorId: input.userId,
     body: normalizeRequired(input.body, "body"),
   })
   return comment
 }
 
-export const updateTodoComment = async (
+export const updateIssueComment = async (
   db: Db,
   input: {
     userId: string
     organizationId: string
-    todoId: string
+    issueId: string
     commentId: string
     body: string
   }
 ) => {
   const membership = await requireMembership(db, input)
-  const current = await findTodoCommentById(db, input)
+  const current = await findIssueCommentById(db, input)
   if (!current) {
     throw publicErrors.notFound("Comment not found", {
-      resource: "todo_comment",
+      resource: "issue_comment",
     })
   }
   if (membership.role === "member" && current.authorId !== input.userId) {
     throw publicErrors.forbidden("Only the author or an admin can edit")
   }
 
-  const comment = await updateTodoCommentById(db, {
+  const comment = await updateIssueCommentById(db, {
     ...input,
     actorUserId: input.userId,
     body: normalizeRequired(input.body, "body"),
   })
   if (!comment) {
     throw publicErrors.notFound("Comment not found", {
-      resource: "todo_comment",
+      resource: "issue_comment",
     })
   }
   return comment
 }
 
-export const deleteTodoComment = async (
+export const deleteIssueComment = async (
   db: Db,
   input: {
     userId: string
     organizationId: string
-    todoId: string
+    issueId: string
     commentId: string
   }
 ) => {
   const membership = await requireMembership(db, input)
-  const current = await findTodoCommentById(db, input)
+  const current = await findIssueCommentById(db, input)
   if (!current) {
     throw publicErrors.notFound("Comment not found", {
-      resource: "todo_comment",
+      resource: "issue_comment",
     })
   }
   if (membership.role === "member" && current.authorId !== input.userId) {
     throw publicErrors.forbidden("Only the author or an admin can delete")
   }
 
-  const comment = await deleteTodoCommentById(db, {
+  const comment = await deleteIssueCommentById(db, {
     ...input,
     actorUserId: input.userId,
   })
   if (!comment) {
     throw publicErrors.notFound("Comment not found", {
-      resource: "todo_comment",
+      resource: "issue_comment",
     })
   }
   return comment

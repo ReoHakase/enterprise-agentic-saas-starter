@@ -39,7 +39,7 @@ import {
   CircleUserRoundIcon,
   EllipsisVerticalIcon,
   LayoutDashboardIcon,
-  ListTodoIcon,
+  ListChecksIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -52,7 +52,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { useTheme } from "next-themes"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Suspense,
@@ -93,11 +92,6 @@ type NavigationItem = {
   icon: LucideIcon
 }
 
-const workspaceNavigation: NavigationItem[] = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboardIcon },
-  { href: "/dashboard/todos", label: "Issues", icon: ListTodoIcon },
-]
-
 const accountNavigation: NavigationItem[] = [
   {
     href: "/settings/organizations",
@@ -107,7 +101,6 @@ const accountNavigation: NavigationItem[] = [
   { href: "/settings/account", label: "Account", icon: UserCircleIcon },
 ]
 
-const enterpriseHomeLink = <Link href="/dashboard" />
 const organizationSwitcherTrigger = (
   <SidebarMenuButton size="lg" tooltip="Switch organization" />
 )
@@ -144,7 +137,7 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
     onSuccess: async (_, organizationId) => {
       await prepareOrganizationSwitch(queryClient, organizationId)
       const organizationRoute = pathname.match(
-        /^\/organization\/[^/]+\/(members|settings)(?:\/|$)/
+        /^\/organization\/[^/]+\/(dashboard|issues|members|settings)(?:\/|$)/
       )
       const nextOrganization = me.organizations.find(
         (organization) => organization.id === organizationId
@@ -187,10 +180,14 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
           <MobileSidebarClose />
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton
+              <SidebarMenuLinkButton
                 size="lg"
                 tooltip="Enterprise SaaS"
-                render={enterpriseHomeLink}
+                href={
+                  activeOrganization
+                    ? `/organization/${activeOrganization.slug}/dashboard`
+                    : "/settings/organizations"
+                }
               >
                 <span className="flex aspect-square size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
                   <BlocksIcon aria-hidden="true" />
@@ -203,7 +200,7 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
                     Team workspace
                   </span>
                 </span>
-              </SidebarMenuButton>
+              </SidebarMenuLinkButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <OrganizationSwitcher
@@ -359,6 +356,24 @@ const ConsoleNavigation = ({
   activeOrganization?: OrganizationSummary
 }) => {
   const pathname = usePathname()
+  const workspaceNavigation = useMemo<NavigationItem[]>(
+    () =>
+      activeOrganization
+        ? [
+            {
+              href: `/organization/${activeOrganization.slug}/dashboard`,
+              label: "Overview",
+              icon: LayoutDashboardIcon,
+            },
+            {
+              href: `/organization/${activeOrganization.slug}/issues`,
+              label: "Issues",
+              icon: ListChecksIcon,
+            },
+          ]
+        : [],
+    [activeOrganization]
+  )
   const organizationNavigation = useMemo<NavigationItem[]>(
     () =>
       activeOrganization
