@@ -64,6 +64,7 @@ bunx @better-auth/cli generate \
 - organization招待の作成・送信はtenant guard/auditを持つ`apps/api`だけを正本にする。Better Auth organization pluginへ別の`sendInvitationEmail`を設定して二重配送経路を作らない。
 - email送信eventはtemplate/domain/message ID/error code/retryableだけを許可し、magic link、verification URL、招待URL、recipient全文、HTML/text、provider raw errorをauth loggerやSentryへ渡さない。
 - 複数account切替はBetter Auth公式の `multiSession` / `multiSessionClient` をserver/clientの両方に入れる。同一browserでは最大5 accountとし、`listDeviceSessions` / `setActive` / `revoke` を使う。通常の `signOut` は保持中accountをすべてrevokeするため、個別削除と区別する。
+- app所有のsession revokeは対象userとsession IDを同じDELETE条件で検証し、成功時にsession rowを即時物理削除する。soft deleteやrevoke済みsessionの保存へ変えず、current sessionの個別revokeはservice境界で拒否する。
 - `better-auth-ui` の `useAuth().authClient` は通常objectに見えてもfunction/proxyになり得る。client capability検出を `typeof value === "object"` だけに限定せず、object/functionのproperty containerからmethodをbindする。`listDeviceSessions` のresponseはcastや手書きtype guardで通さず、`apps/web`ローカルのValibot schemaで検証してからaccount switcherへ渡す。
 - Better Auth core/plugin endpointの仕様は`openAPI({ disableDefaultReference: true })`と`auth.api.generateOpenAPISchema()`を使う。`@enterprise-agentic-saas/auth/openapi`をserver-only exportにし、apps/apiが`/auth` prefixを付けて統合Scalar `/openapi`へ掲載する。`/auth/reference`は404にし、別のScalar設定やdocumentation正本を持たない。
 - Better Auth client/provider errorはWeb-local Valibotでstable codeだけを抽出し、明示したcode allowlistを固定文言へ対応付ける。未知code、providerのraw `message`、nested causeはtoast/formへ出さず、sign-in・sign-out・passkey等の操作別fallbackを表示する。

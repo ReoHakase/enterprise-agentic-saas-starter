@@ -287,7 +287,7 @@ test("キーボードだけでmember管理・session revoke・passkey再認証�
     revokeDialog.getByRole("button", { name: "Revoke session" })
   )
   expect((await revokeResponse).ok()).toBeTruthy()
-  await expect(page.getByText("iPhone (Safari)")).toHaveCount(0)
+  await expect(page.getByText("Apple iPhone")).toHaveCount(0)
 
   const addPasskey = page.getByRole("button", { name: "Add passkey" })
   await activate(page, addPasskey)

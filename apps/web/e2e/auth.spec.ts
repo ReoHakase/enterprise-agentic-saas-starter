@@ -774,7 +774,32 @@ test("member招待・role編集・削除とsession revokeを画面から完了�
   await expect(
     page.getByRole("heading", { name: "Signed-in devices" })
   ).toBeVisible()
-  await expect(page.getByText("iPhone (Safari)")).toBeVisible()
+  await expect(page.getByText("Apple iPhone")).toBeVisible()
+  await expect(page.getByText("Safari 18.5")).toBeVisible()
+  await expect(
+    page.getByRole("columnheader", { name: "Updated at" })
+  ).toBeVisible()
+  await expect(
+    page.getByRole("columnheader", { name: "Expires at" })
+  ).toBeVisible()
+  const sessionsTableRegion = page.getByRole("region", {
+    name: "Signed-in device sessions",
+  })
+  await expect(sessionsTableRegion).toBeVisible()
+  const sessionTableOverflow = await sessionsTableRegion.evaluate(
+    (element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    })
+  )
+  expect(sessionTableOverflow.documentWidth).toBeLessThanOrEqual(
+    sessionTableOverflow.viewportWidth
+  )
+  expect(sessionTableOverflow.scrollWidth).toBeGreaterThan(
+    sessionTableOverflow.clientWidth
+  )
   await page.getByRole("button", { name: "Revoke", exact: true }).click()
   const revokeDialog = page.getByRole("alertdialog", {
     name: "Revoke this session?",
@@ -787,7 +812,7 @@ test("member招待・role編集・削除とsession revokeを画面から完了�
   await revokeDialog.getByRole("button", { name: "Revoke session" }).click()
   expect((await revokeResponsePromise).ok()).toBeTruthy()
   await expect(page.getByText("Session revoked")).toBeVisible()
-  await expect(page.getByText("iPhone (Safari)")).toHaveCount(0)
+  await expect(page.getByText("Apple iPhone")).toHaveCount(0)
 })
 
 test("memberを検索・参加日順に並べ替え、招待を再送・復活できる", async ({

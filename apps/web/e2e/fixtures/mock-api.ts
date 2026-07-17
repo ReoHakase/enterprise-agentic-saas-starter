@@ -279,7 +279,8 @@ const createState = (sessionKey: string): SessionState => {
       createdAt: FIXED_NOW,
       updatedAt: FIXED_NOW,
       ipAddress: "127.0.0.1",
-      userAgent: "Chrome on macOS",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
     },
     {
       id: `session-${sessionKey}-other`,
@@ -288,7 +289,8 @@ const createState = (sessionKey: string): SessionState => {
       createdAt: "2026-07-10T09:00:00.000Z",
       updatedAt: "2026-07-13T09:00:00.000Z",
       ipAddress: "192.0.2.10",
-      userAgent: "Safari on iPhone",
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
     },
   ]
 

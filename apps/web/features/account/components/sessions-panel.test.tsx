@@ -28,6 +28,9 @@ vi.mock("sonner", () => ({
   },
 }))
 
+const macUserAgent =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
+
 const sessions = [
   {
     id: "session-current",
@@ -36,7 +39,7 @@ const sessions = [
     createdAt: "2026-07-14T00:00:00.000Z",
     updatedAt: "2026-07-14T00:00:00.000Z",
     ipAddress: "127.0.0.1",
-    userAgent: "Mozilla/5.0 (Macintosh) Chrome/140.0",
+    userAgent: macUserAgent,
   },
   {
     id: "session-old",
@@ -45,7 +48,8 @@ const sessions = [
     createdAt: "2026-07-13T00:00:00.000Z",
     updatedAt: "2026-07-13T00:00:00.000Z",
     ipAddress: "127.0.0.2",
-    userAgent: "Mozilla/5.0 (Windows NT 10.0) Firefox/140.0",
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
   },
 ]
 
@@ -72,8 +76,17 @@ describe("SessionsPanel", () => {
     const actor = userEvent.setup()
     renderSessions()
 
-    expect(await screen.findByText("Mac (Chrome)")).toBeInTheDocument()
-    expect(screen.getByText("Windows PC (Firefox)")).toBeInTheDocument()
+    expect(await screen.findByText("Apple Mac")).toBeInTheDocument()
+    expect(screen.getByText("Safari 18.5")).toBeInTheDocument()
+    expect(screen.getByText("Windows PC")).toBeInTheDocument()
+    expect(screen.getByText("Chrome 140.0.0.0")).toBeInTheDocument()
+    expect(screen.getByText("Updated at")).toBeInTheDocument()
+    expect(screen.getByText("Expires at")).toBeInTheDocument()
+    expect(screen.getByText(macUserAgent)).toBeInTheDocument()
+    expect(screen.queryByText("127.0.0.2")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("columnheader", { name: "IP address" })
+    ).not.toBeInTheDocument()
     await actor.click(screen.getByRole("button", { name: "Revoke" }))
     await actor.click(screen.getByRole("button", { name: "Revoke session" }))
 
