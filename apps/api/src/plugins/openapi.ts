@@ -251,6 +251,10 @@ export const openApiPlugin = new Elysia({ name: "openapi" }).use(
       valibot: (schema: Parameters<typeof toJsonSchema>[0]) =>
         toJsonSchema(schema, {
           ignoreActions: ["to_number", "trim"],
+          overrideSchema: ({ valibotSchema }) =>
+            valibotSchema.type === "file"
+              ? { format: "binary", type: "string" }
+              : undefined,
           target: "openapi-3.0",
           typeMode: "output",
         }),
