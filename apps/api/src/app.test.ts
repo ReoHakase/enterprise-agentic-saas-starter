@@ -615,10 +615,13 @@ describe("createApp security and OpenAPI", () => {
         (parameter: { name: string }) => parameter.name === "limit"
       ).schema
     ).toMatchObject({ maximum: 100, minimum: 1, type: "integer" })
-    expect(
+    const fileUploadContent =
       spec.paths[
         "/files/organizations/{organizationId}/owners/{ownerType}/{ownerId}"
-      ].post.requestBody.content["multipart/form-data"].schema.properties.file
+      ].post.requestBody.content
+    expect(Object.keys(fileUploadContent)).toEqual(["multipart/form-data"])
+    expect(
+      fileUploadContent["multipart/form-data"].schema.properties.file
     ).toEqual({ format: "binary", type: "string" })
     const createOrganizationResponses =
       spec.paths["/organizations"].post.responses

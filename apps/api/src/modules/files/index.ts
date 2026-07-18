@@ -80,6 +80,7 @@ export const createFilesModule = (db: Db) =>
           action: "file.upload",
           source: "params",
         },
+        parse: "multipart/form-data",
         params: fileOwnerParamsModel,
         body: fileUploadBodyModel,
         response: {
