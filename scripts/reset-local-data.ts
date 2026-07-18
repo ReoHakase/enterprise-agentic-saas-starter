@@ -60,7 +60,7 @@ const main = async () => {
   ])
 
   console.log(
-    "Local Turso and Wrangler storage state removed. Run `bun run dev` to migrate. Run `bun run seed:local` separately only when fixture data is needed."
+    "Local Turso and Wrangler storage state removed. Run `bun run dev` to migrate. Run `bun run seed` separately only when fixture data is needed."
   )
 }
 

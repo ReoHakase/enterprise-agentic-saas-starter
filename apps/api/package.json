@@ -23,7 +23,8 @@
     "lint": "oxlint --deny-warnings",
     "start": "NODE_ENV=production bun ./dist/index.js",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject ./dist/worker && sentry-cli sourcemaps upload --release \"$SENTRY_RELEASE\" --validate --strict --wait ./dist/worker",
-    "seed:files:local": "bun run src/development/seed-cli.ts",
+    "seed:files": "bun run src/development/seed-cli.ts",
+    "seed:preflight": "bun run src/development/seed-preflight.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
