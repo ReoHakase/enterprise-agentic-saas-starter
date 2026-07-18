@@ -11,7 +11,8 @@
 5. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
 6. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
 7. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
-8. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
+8. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
+9. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
 
 ## 最短の確認
 

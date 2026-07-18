@@ -99,7 +99,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - Next.jsが生成する `next-env.d.ts` はgit管理せず `.gitignore` 対象にする。`tsconfig.json` の `include` には残し、`apps/web` の `typecheck` は `next typegen && tsc --noEmit` の順で生成物を用意してからTypeScriptを走らせる。
 - OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
 - Next 16の`proxy.ts`はNode runtimeとしてbuildされ、OpenNext Cloudflare 1.20では拒否される。旧URL互換の軽量redirectをWorkersへ載せる場合はEdge `middleware.ts`を使い、Nextの非推奨警告だけで`proxy.ts`へ機械的に移さず`build:cloudflare`で実adapterを確認する。
-- API Workerの`ATTACHMENTS` R2 bindingにはまだupload/download endpointがないが、organization削除後のtenant prefix cleanupでは使用する。添付UIを提供済みとdocumentせず、削除機能を有効にする環境ではbindingを外さない。
+- 認証付きfile UIはprivate R2の`FILES` bindingを使う`/files/*` APIだけを呼ぶ。WebへR2 URLやobject keyを渡さず、list/deleteはEden + TanStack Query、progress付きuploadは`@enterprise-agentic-saas/api/client`のXHR helperを使う。private previewはNext optimizerを通さず、`AuthenticatedFileImage`のnative `srcset`で取得する。詳細contractは`file-storage-r2` skillを参照する。
 - Elysia Cloudflare adapterはexperimentalなので、Bun runtimeのunit testだけでproduction互換と判断しない。
 
 ## SentryとSpotlight

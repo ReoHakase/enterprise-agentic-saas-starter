@@ -31,7 +31,15 @@ bun run --cwd packages/db test
 bun run --cwd packages/db db:seed
 ```
 
-seedは `file:` またはlocalhost URLだけを受け入れます。同じlocal DBへ複数回実行でき、通常は既存userがいればskipします。Cloud Turso URLは、空DBであっても開発用fake dataの投入前に拒否します。認証plugin構成を変えた場合はBetter Auth CLIで `auth.generated.ts` を再生成し、その差分から新しいmigrationも生成します。
+seedは `file:` またはlocalhost URLだけを受け入れます。同じlocal DBへ複数回実行でき、通常は既存userがいればskipします。Cloud Turso URLは、空DBであっても開発用fake dataの投入前に拒否します。fresh DBでは固定anchor user/organization/Issueとseed 42の通常dataに加え、file manifestのpending row、typed owner、pending分を含むorganization usageを1 transactionで作成します。fixture bytesはDB processからR2へ直接書かず、local API Workerのbinding経由でready化します。認証plugin構成を変えた場合はBetter Auth CLIで `auth.generated.ts` を再生成し、その差分から新しいmigrationも生成します。
+
+DBとlocal R2を揃えてseed/reconcileする場合はroot commandを使います。
+
+```sh
+bun run seed:local
+```
+
+既存userがあるpre-file seed DBへfile fixtureだけを後付けしません。fixtureが必要な場合はdev server停止後に`bun run dev:data:reset`を一度実行してください。manifest rowを利用者が削除した後の通常seedでも復活させません。
 
 ## 手動reset
 

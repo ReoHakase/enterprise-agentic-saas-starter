@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "enterprise-agentic-saas-images-smoke",
+  "main": "smoke/images/worker.ts",
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "images": {
+    "binding": "IMAGES",
+  },
+  "observability": {
+    "enabled": false,
+  },
+}

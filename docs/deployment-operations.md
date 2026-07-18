@@ -3,7 +3,7 @@
 ## 対象
 
 - `apps/web`: OpenNext Cloudflare Worker + Assets + R2 incremental cache
-- `apps/api`: Elysia Cloudflare Worker + R2 attachment namespace cleanup
+- `apps/api`: Elysia Cloudflare Worker + private R2 file storage + Images binding
 - Database: Turso/libSQL（Cloudflare外の唯一のprimary data store）
 
 設定の正本は `apps/web/wrangler.jsonc`、`apps/web/open-next.config.ts`、`apps/api/wrangler.jsonc` です。
@@ -18,22 +18,22 @@ bunx wrangler r2 bucket create enterprise-agentic-saas-attachments
 
 worker名とbucket名はstarterからforkした製品固有名へ変更してください。custom domainは同じ親domainの `app.example.com` / `api.example.com` を推奨します。
 
-`enterprise-agentic-saas-attachments` は将来のupload/download endpoint用ですが、organization削除時のprefix cleanupにはすでに使います。organization削除機能を有効にする環境ではbindingとbucketを削除しないでください。
+`enterprise-agentic-saas-attachments` は物理bucket名だけを互換性のため維持し、Worker bindingは汎用名`FILES`を使います。bucketはprivateのままにし、public accessと`r2.dev`を有効化しません。API WorkerにはCloudflare Imagesの`IMAGES` bindingとWorkers Cacheも必要です。設定と障害復旧は[認証付きfile storage](./file-storage-r2.md)を参照してください。
 
 Cloudflare dashboardまたはIaCでAPI Workerへ次を設定します。
 
 - vars: `NODE_ENV=production`, `APP_NAME`, `APP_BASE_URL`, `API_PUBLIC_URL`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`, `TRUSTED_ORIGINS`, `CORS_ORIGIN`, `EMAIL_PROVIDER=cloudflare`, `EMAIL_FROM`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, sampling rate
 - secrets: `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SENTRY_DSN`
 
-Web buildには `API_PUBLIC_URL` と `NEXT_PUBLIC_API_BASE_URL` を同じAPI originで渡します。`keep_vars: true` によりdashboard管理値を通常deployで消さない構成ですが、環境ごとの設定一覧は別途IaC/secret managerで管理してください。
+Web buildには `API_PUBLIC_URL` と `NEXT_PUBLIC_API_BASE_URL` を同じAPI originで渡します。file preview/downloadもBetter Auth cookieを使うため、Web/APIは同じregistrable domain配下に置き、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、credential付き`CORS_ORIGIN`を揃えます。R2またはImages専用domainは不要です。`keep_vars: true` によりdashboard管理値を通常deployで消さない構成ですが、環境ごとの設定一覧は別途IaC/secret managerで管理してください。
 
 GitHub `production` Environmentでは、少なくともvarsに`APP_NAME`、`APP_BASE_URL`、`API_PUBLIC_URL`、`AUTH_COOKIE_DOMAIN`、`EMAIL_PROVIDER=cloudflare`、`EMAIL_FROM`、`SENTRY_ORG`、`SENTRY_API_PROJECT`、`SENTRY_WEB_PROJECT`、secretsに`SENTRY_API_DSN`、`SENTRY_WEB_DSN`、`SENTRY_AUTH_TOKEN`と既存のBetter Auth/Turso/Cloudflare credentialを登録する。workflowはcommit SHAを両serviceの`SENTRY_RELEASE`へ使う。各Worker runtime側の`SENTRY_DSN` secretもprojectごとに別値で事前登録する。
 
-## Organization削除とR2 cleanup
+## Fileとorganization削除のR2 cleanup
 
-API Workerのscheduled handlerは`apps/api/wrangler.jsonc`のcron（既定は毎分）で`organization_deletion_jobs`を処理します。organization本体とtenant rowはAPI transactionで即時削除され、R2の`organizations/<encoded organization id>/` prefixだけをbackgroundで冪等削除します。job tableは削除済みorganizationへの外部keyを持たないため、cleanupと同一requestのreceipt replayが継続できます。
+API Workerのscheduled handlerは`apps/api/wrangler.jsonc`のcron（既定は毎分）で`file_cleanup_jobs`と`organization_deletion_jobs`を処理します。file削除はquota解放、metadata削除、exact-key job、auditを同じtransactionで確定し、R2 objectをbackgroundで冪等削除します。Issue削除はowner prefix、organization削除は`organizations/<encoded organization id>/` prefixを対象にします。job tableは削除済みresourceへの外部keyを持たないため、cleanupを継続できます。
 
-processorは1回25件、5分lease、30秒から最大1時間の指数backoffで再試行します。`pending` / retry可能な`failed` / lease切れ`processing`だけをclaimし、成功を`completed`にします。完了/失敗更新はclaim時の`attempts + locked_at`が一致する場合だけ行うため、時間のかかった旧workerがlease再取得後の状態を上書きしません。batch logは`claimed/completed/failed/stale`の件数、失敗eventはattemptと固定error codeだけを記録します。job ID、organization/user ID、slug、email、object keyをconsoleやSentryへ出しません。運用では`failed`件数、`stale`発生、最古job ageを監視し、bucket binding欠落や権限不備を解消後、次回cronの冪等retryに任せます。
+processorはleaseと指数backoffで再試行します。`pending` / retry可能な`failed` / lease切れ`processing`だけをclaimし、成功を`completed`にします。完了/失敗更新はclaim時の`attempts + locked_at`が一致する場合だけ行うため、時間のかかった旧workerがlease再取得後の状態を上書きしません。batch logは`claimed/completed/failed/stale`の件数、失敗eventはattemptと固定error codeだけを記録します。job ID、organization/user ID、slug、email、filename、object keyをconsoleやSentryへ出しません。運用では`failed`件数、`stale`発生、最古job ageを監視し、`FILES` bindingやbucket権限を解消後、次回cronの冪等retryに任せます。
 
 ## Cloudflare Email Sending
 
@@ -96,8 +96,10 @@ GitHub Actionsの `Deploy production` workflowは同じ順序を `production` en
 - magic link / OAuth callbackのredirect originがproduction値。
 - 新規userが最初のorganizationを作成できる。
 - tenant Aからtenant BのIssueが取得できない。
+- tenant Aからtenant Bのfile metadata、preview、downloadが取得できず、membership取消後もcache経由で表示されない。
+- 4つの許可幅だけがpreviewでき、original downloadがattachment、Range/conditional response、`nosniff`を満たす。
 - memberがorganization設定やrole elevationを実行できない。
-- web asset、R2 cache、API logにsecretが出ていない。
+- web asset、R2 cache、API logにsecret、filename、object key、provider raw errorが出ていない。
 - Sentry release/source mapとWeb/API trace propagationが成立し、event/logにPII、tenant ID、tokenがない。
 - Sentry Uptime monitorとSlack/email notificationのtestが成功する。
 - Cloudflare Emailのmagic link、verification、organization invitationが検証済みsenderから届き、delivery failureがsanitized eventになる。

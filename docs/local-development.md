@@ -47,7 +47,7 @@ EMAIL_FROM=noreply@example.test
 
 ## DB開発環境
 
-通常は後述のroot `bun run dev`だけを実行します。このcommandがDB workspaceの`dev`も含み、`with` 関係によりlocal Tursoの起動と、保存済みmigrationの適用、seed、Drizzle Studioの起動をまとめて行います。初回にapplicationを開く前に、DB taskのmigrationとseed完了logを待ちます。
+通常は後述のroot `bun run dev`だけを実行します。このcommandがDB workspaceの`dev`も含み、`with` 関係によりlocal Tursoの起動と、保存済みmigrationの適用、seed、Drizzle Studioの起動をまとめて行います。API supervisorはDB bootstrapを待ちながらmanifestにあるpending fileをlocal R2へreconcileします。初回にapplicationを開く前に、DB taskのmigration/seedとfile reconcile完了logを待ちます。
 
 DBだけを起動してschemaやdataを調査するときは、root `bun run dev`の代わりに次を実行します。
 
@@ -67,7 +67,24 @@ DB-only taskとroot `bun run dev`は同時に起動しません。同じportとl
 bun run dev
 ```
 
-この1commandでWeb、API、local Turso、migration/seed、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。
+この1commandでWeb、local Wrangler API Worker、永続化local R2、local Turso、migration/seed、R2 fixture reconcile、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。APIは`wrangler dev --local --persist-to apps/api/.wrangler/state`をPortless配下で実行し、productionと同じElysia Worker entrypoint、`FILES`、`IMAGES` bindingを使います。
+
+既存のpre-file seed DBへmigrationだけを適用する場合はreset不要です。preview/download fixtureも追加する場合だけ、全dev serverを停止して次を実行します。
+
+```sh
+bun run dev:data:reset
+bun run dev
+```
+
+`dev:data:reset`は確認文字列を要求し、local Turso state、`apps/api/.wrangler/state`、staleなseed token/sessionを一緒に削除します。remote Turso URLとproductionでは最初に拒否します。非対話環境で明示実行する場合だけ`CONFIRM_DEV_DATA_RESET=reset-local-development`を付けます。通常の`bun run dev`は既存dataをresetしません。
+
+起動済みlocal Turso/APIへmigration、DB seed、R2 reconcileだけを再実行する場合:
+
+```sh
+bun run seed:local
+```
+
+R2 reconcileはloopback限定かつ起動ごとのtoken付きdev endpointを使います。endpointはOpenAPIへ掲載されず、remote/production bindingでは動きません。詳細は[認証付きfile storage](./file-storage-r2.md)を参照してください。
 
 Mailpitの受信データはgit管理外の `packages/email/.local/mailpit.db` へ保存され、開発serverを再起動しても残ります。受信箱だけを手動resetするときは、先に `bun run dev` を停止してから次を実行します。
 
@@ -85,7 +102,7 @@ bun run --cwd apps/web dev
 bun run --cwd packages/ui storybook
 ```
 
-filtered Turbo commandはAPIに加えてlocal DB、migration/seed、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。`bun run --cwd apps/api dev`はAPI processだけを起動するため、DB、Mailpit、GitHub OAuth emulatorがすでに動作している場合に限って使います。
+filtered Turbo commandはAPIに加えてlocal DB、migration/seed、local R2 reconcile、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。`bun run --cwd apps/api dev`はWrangler/API processだけを起動するため、DB、Mailpit、GitHub OAuth emulatorがすでに動作している場合に限って使います。
 
 ## ローカルGitHub OAuth
 
@@ -155,5 +172,9 @@ bun run build:cloudflare
 - GitHub OAuth user pickerが開かない: `portless get github.emulate.enterprise-agentic-saas`と`portless get api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
 - emulatorが起動を拒否する: `NODE_ENV=production`、remote URL、`DEBUG=1`、`EMULATE_DEBUG=1`をlocal shellへ残していないか確認する。実credentialをdebug logへ出す設定で回避しない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。
+- file fixtureが見えない: pre-file seed DBは非破壊seedの対象外なので、一度だけ`bun run dev:data:reset`を実行する。通常起動へresetを混ぜない。
+- local upload/previewが再起動で消える: APIが`wrangler dev --local --persist-to apps/api/.wrangler/state`で起動しているか確認する。raw `wrangler dev`を別terminalで二重起動しない。
+- R2 seedが拒否される: APIをPortless経由ではなくloopbackへ到達できるsupervisorから起動し、remote Turso、`NODE_ENV=production`、`wrangler --remote`を使っていないことを確認する。tokenやobject keyをlogへ出して回避しない。
+- local previewとproductionの変換差: local Imagesは低忠実度なので、API contract testとは別の資格情報付きremote Images smokeで確認する。
 - Spotlightにeventが出ない: `http://localhost:8969` が開けること、browser/server両方のSpotlight env、SDK initより前にerrorが起きていないことを確認する。
 - `bun install`がsecurity scannerの5xxで止まる: scannerは意図的にfail-closed。恒久的に無効化せず、まず再試行する。localの一時回避条件とreleaseで禁止する理由は`developer-environment` skillを参照する。

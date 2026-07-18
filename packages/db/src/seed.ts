@@ -43,6 +43,9 @@ const addMember = (
 export const seedDevelopmentDatabase = async (
   connection?: DatabaseConnectionOptions
 ) => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Development database seed is disabled in production.")
+  }
   const resolvedConnection: DatabaseConnectionOptions =
     connection ??
     (await import("./env").then(

@@ -29,6 +29,9 @@ export const resetLocalDevelopmentDatabase = async (
   connection: DatabaseConnectionOptions,
   confirmation: string | undefined
 ) => {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Development database reset is disabled in production.")
+  }
   assertLocalDatabase(connection.url, confirmation)
 
   const client = createClient({

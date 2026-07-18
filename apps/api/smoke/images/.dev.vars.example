@@ -1,0 +1,2 @@
+# run.tsが起動ごとにapps/api/.dev.vars.images-smokeへ生成するため、通常は編集不要。
+SMOKE_TOKEN=replace-with-at-least-32-random-characters

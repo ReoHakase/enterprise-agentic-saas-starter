@@ -1019,6 +1019,30 @@ describe("database migrations", () => {
         authToken: "not-used",
       })
     ).rejects.toThrow(/restricted to file: databases and localhost/i)
+    await expect(
+      seedDevelopmentDatabase({
+        url: "file://storage.example.com/shared.db",
+      })
+    ).rejects.toThrow(/restricted to file: databases and localhost/i)
+  })
+
+  it("refuses development seed and reset in production even for a local URL", async () => {
+    const previousNodeEnvironment = process.env.NODE_ENV
+    process.env.NODE_ENV = "production"
+    try {
+      await expect(
+        seedDevelopmentDatabase({ url: "file::memory:" })
+      ).rejects.toThrow(/seed is disabled in production/i)
+      await expect(
+        resetLocalDevelopmentDatabase(
+          { url: "file::memory:" },
+          RESET_CONFIRMATION
+        )
+      ).rejects.toThrow(/reset is disabled in production/i)
+    } finally {
+      if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = previousNodeEnvironment
+    }
   })
 
   it("rebuilds a local file database from migrations before seeding", async () => {

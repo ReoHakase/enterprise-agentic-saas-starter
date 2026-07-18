@@ -45,5 +45,6 @@
 - `error-handling`: `AppError`、`Error.cause`、safe response、redaction、logging、telemetry error。
 - `ci-quality`: GitHub Actions、oxlint、oxfmt、Vitest、Storybook test runner、Next build、CI品質ゲート。
 - `e2e-test`: Playwright、auth/org/permission導線、tenant境界、E2E data、Playwright MCP。
+- `file-storage-r2`: 認証付き`/files/*`、Cloudflare R2/Images、Turso metadata/quota、Issue attachment、local seed/reconcile。
 
 該当するskillの `SKILL.md` を先に読み、必要なときだけ同じskill内の `references/` を読む。
