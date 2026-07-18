@@ -46,7 +46,7 @@ APIとDB workspaceで同じURL/tokenを使います。実値はpackage直下のi
 通常はrepo rootからTurbo経由で起動します。これにより `db:turso` も同時に起動し、接続待機と`generate + migrate`を行います。日常のdev起動ではseedやtestを実行しません。
 
 ```sh
-bunx turbo run dev --filter=@enterprise-agentic-saas/db
+bun run dev:db
 ```
 
 package directoryで `bun run dev` だけを実行してもTurboの `with` 関係は適用されません。個別scriptは手動実行や診断用です。
@@ -76,10 +76,10 @@ fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpen
 DBとlocal R2のfixtureが必要な場合は、rootの`bun run dev`を起動したまま別terminalで明示実行します。
 
 ```sh
-bun run seed:local
+bun run seed
 ```
 
-これはmigration確認、DB seed、R2 reconcileを行うfixture provisioning commandで、通常のdevやtestには含まれません。local dataを完全に作り直す場合はdev停止後に`bun run dev:data:reset`、`bun run dev`、任意の`bun run seed:local`の順に実行します。
+これは起動済みdevのreadiness確認、DB seed、R2 reconcileを行うfixture provisioning commandで、通常のdevやtestには含まれません。migrationは先に起動した`bun run dev`が担当します。dev未起動時はDBを待たずに終了します。local dataを完全に作り直す場合はdev停止後に`bun run dev:db:reset`、`bun run dev`、任意の`bun run seed`の順に実行します。
 
 詳細は [`../../docs/database-lifecycle.md`](../../docs/database-lifecycle.md) を参照してください。
 

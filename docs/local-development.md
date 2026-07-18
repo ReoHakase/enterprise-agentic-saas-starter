@@ -45,6 +45,21 @@ EMAIL_PROVIDER=mailpit
 EMAIL_FROM=noreply@example.test
 ```
 
+## 開発コマンド
+
+日常の公開導線は次の4つです。production用seed commandは作りません。
+
+| command | 用途 |
+| --- | --- |
+| `bun run dev` | Web、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
+| `bun run dev:db` | local Turso、migration、Drizzle Studioだけを起動する |
+| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する |
+| `bun run seed` | 起動済みdevへ任意のDB/R2 fixtureを投入する |
+
+初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureが必要な場合だけ、migration完了後に別terminalで`bun run seed`を実行します。seedはアプリ起動の前提ではありません。
+
+`bun run seed`はDBだけでなくR2 reconcileも行うため`dev:db:seed`にはしません。起動中のloopback Worker sessionと`/ready`を短いtimeoutで先に確認し、devが停止中またはsessionがstaleならDB待機へ入らず、`bun run dev`を先に起動する案内を返します。
+
 ## DB開発環境
 
 通常は後述のroot `bun run dev`だけを実行します。このcommandがDB workspaceの`dev`も含み、`with` 関係によりlocal Tursoの起動、保存済みmigrationの適用、Drizzle Studioの起動をまとめて行います。日常の起動にDB seed、R2 fixture reconcile、testは含めません。初回にapplicationを開く前に、DB taskのmigration完了logだけを待ちます。
@@ -52,7 +67,7 @@ EMAIL_FROM=noreply@example.test
 DBだけを起動してschemaやdataを調査するときは、root `bun run dev`の代わりに次を実行します。
 
 ```sh
-bunx turbo run dev --filter=@enterprise-agentic-saas/db
+bun run dev:db
 ```
 
 package directoryで `bun run dev` だけを実行するとTurboの `with` 関係が適用されず、local Tursoが起動しません。手動で分ける場合は、別terminalで `db:turso` を起動してから `db:bootstrap` を実行します。
@@ -69,24 +84,26 @@ bun run dev
 
 この1commandでWeb、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。DB seed、R2 fixture reconcile、testは実行しません。
 
-Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleします。`bun run dev`が事前に生成したNext/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
+Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
+
+Wranglerを既定経路にすることで、Elysia routeを編集しながら`FILES` R2、`IMAGES`、Workers Cache、`EMAIL` bindingを同じWorker runtimeで利用できます。通常のapplication emailはdevelopment providerのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけlocal `EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
 
 既存DBへmigrationだけを適用する場合はreset不要です。local dataとR2 stateを作り直す場合だけ、全dev serverを停止して次を実行します。
 
 ```sh
-bun run dev:data:reset
+bun run dev:db:reset
 bun run dev
 ```
 
-`dev:data:reset`は確認文字列を要求し、local Turso state、`apps/api/.wrangler/state`、staleなseed token/sessionを一緒に削除します。remote Turso URLとproductionでは最初に拒否します。非対話環境で明示実行する場合だけ`CONFIRM_DEV_DATA_RESET=reset-local-development`を付けます。続く`bun run dev`はmigrationだけを適用し、seedやfixture reconcileは行いません。
+`dev:db:reset`は確認文字列を要求し、DB metadataとR2 objectの対応を壊さないようlocal Turso state、`apps/api/.wrangler/state`、staleなseed token/sessionを一緒に削除します。remote Turso URLとproductionでは最初に拒否します。非対話環境で明示実行する場合だけ`CONFIRM_DEV_DATA_RESET=reset-local-development`を付けます。続く`bun run dev`はmigrationだけを適用し、seedやfixture reconcileは行いません。
 
 fixtureが必要な場合だけ、`bun run dev`を起動したまま別terminalで明示実行します。
 
 ```sh
-bun run seed:local
+bun run seed
 ```
 
-このcommandはmigration確認、DB seed、R2 reconcileを順に行います。test commandではなく、local fixtureを作る明示的なprovisioning commandです。R2 reconcileはloopback限定かつ起動ごとのtoken付きdev endpointを使います。HTTP失敗は同じfixture位置で最大3回までretryし、前のfixtureから無限にやり直しません。endpointはOpenAPIへ掲載されず、remote/production bindingでは動きません。詳細は[認証付きfile storage](./file-storage-r2.md)を参照してください。
+このcommandは起動中Workerのreadiness確認、DB seed、R2 reconcileを順に行います。migrationは先に起動した`bun run dev`の責務です。test commandではなく、local fixtureを作る明示的なprovisioning commandです。R2 reconcileはloopback限定かつ起動ごとのtoken付きdev endpointを使います。HTTP失敗は同じfixture位置で最大3回までretryし、前のfixtureから無限にやり直しません。endpointはOpenAPIへ掲載されず、remote/production bindingでは動きません。詳細は[認証付きfile storage](./file-storage-r2.md)を参照してください。
 
 Mailpitの受信データはgit管理外の `packages/email/.local/mailpit.db` へ保存され、開発serverを再起動しても残ります。受信箱だけを手動resetするときは、先に `bun run dev` を停止してから次を実行します。
 
@@ -174,9 +191,10 @@ bun run build:cloudflare
 - GitHub OAuth user pickerが開かない: `portless get github.emulate.enterprise-agentic-saas`と`portless get api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
 - emulatorが起動を拒否する: `NODE_ENV=production`、remote URL、`DEBUG=1`、`EMULATE_DEBUG=1`をlocal shellへ残していないか確認する。実credentialをdebug logへ出す設定で回避しない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。
-- file fixtureが見えない: `bun run dev`はfixtureを作らない。devを起動したまま別terminalで`bun run seed:local`を実行する。完全に作り直す必要がある場合だけ、dev停止後に`bun run dev:data:reset` → `bun run dev` → 別terminalの`bun run seed:local`の順にする。
+- file fixtureが見えない: `bun run dev`はfixtureを作らない。devを起動したまま別terminalで`bun run seed`を実行する。完全に作り直す必要がある場合だけ、dev停止後に`bun run dev:db:reset` → `bun run dev` → 別terminalの任意の`bun run seed`の順にする。
 - local upload/previewが再起動で消える: APIが`wrangler dev --local --persist-to apps/api/.wrangler/state`で起動しているか確認する。raw `wrangler dev`を別terminalで二重起動しない。
-- R2 seedが拒否される: `bun run dev`のAPI supervisorが動作中であることと、remote Turso、`NODE_ENV=production`、`wrangler --remote`を使っていないことを確認する。HTTP 5xxは同じfixtureで最大3回だけretryして終了するため、固定errorの原因を直して`bun run seed:local`を明示再実行する。tokenやobject keyをlogへ出して回避しない。
+- seedがdev未起動を返す: `bun run dev`を起動し、DB migrationとAPI readinessのlogを待ってから別terminalで`bun run seed`を実行する。seed単独ではTursoやWorkerを起動せず、短いpreflight後に終了する。
+- R2 seedが拒否される: `bun run dev`のAPI supervisorが動作中であることと、remote Turso、`NODE_ENV=production`、`wrangler --remote`を使っていないことを確認する。HTTP 5xxは同じfixtureで最大3回だけretryして終了するため、固定errorの原因を直して`bun run seed`を明示再実行する。tokenやobject keyをlogへ出して回避しない。
 - local previewとproductionの変換差: local Imagesは低忠実度なので、API contract testとは別の資格情報付きremote Images smokeで確認する。
 - Spotlightにeventが出ない: `http://localhost:8969` が開けること、browser/server両方のSpotlight env、SDK initより前にerrorが起きていないことを確認する。
 - `bun install`がsecurity scannerの5xxで止まる: scannerは意図的にfail-closed。恒久的に無効化せず、まず再試行する。localの一時回避条件とreleaseで禁止する理由は`developer-environment` skillを参照する。

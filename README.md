@@ -165,27 +165,38 @@ bun run dev
 ```
 
 Wait for the DB task to report that migration has completed before opening the
-application for the first time. The Web process is `next dev --turbopack`; the
-API process is `wrangler dev` with `src/worker.ts` as its configured main. Both
-watch source files and reload/rebundle during development—`bun run dev` does
-not run a prebuilt Next/OpenNext or Worker artifact. Do not keep a separate
-DB-only Turbo dev task running alongside this command; both would try to own
-the same local port and database process.
+application for the first time. The Web process is `next dev --turbopack`, with
+Next Fast Refresh. The API process is `wrangler dev` with `src/worker.ts` as its
+configured main; Wrangler watches source imports, rebundles, and replaces the
+Worker isolate after a save. This is not state-preserving Bun HMR, but it also
+does not run a prebuilt Worker artifact. Local Turso, R2, and Mailpit data remain
+persisted across API reloads. Changes to the supervisor or its environment still
+require restarting `bun run dev`.
+
+Do not keep a separate DB-only dev task running alongside the full stack; both
+would try to own the same local port and database process.
 
 Sample DB data and R2 fixtures are opt-in. With `bun run dev` still running,
 execute this in a second terminal only when those fixtures are needed:
 
 ```sh
-bun run seed:local
+bun run seed
 ```
 
-The same command starts the persistent Mailpit inbox at
+`bun run seed` first checks that the local development stack is ready. If it is
+not running, the command exits quickly with an instruction to start `bun run
+dev`; it does not wait for a missing database process.
+
+The root `bun run dev` command also starts the persistent Mailpit inbox at
 `https://mailpit.enterprise-agentic-saas.localhost` and the React Email template
 preview at `https://email.enterprise-agentic-saas.localhost` in the main
 checkout. Portless adds the current worktree prefix in linked worktrees, and the
 API resolves that effective Mailpit URL automatically. Development email
 defaults to Mailpit, so magic links, verification messages, and invitations are
-visible without adding a provider override.
+visible without adding a provider override. The Worker still has local
+`FILES`, `IMAGES`, Cache, and `EMAIL` bindings; selecting the Cloudflare email
+provider explicitly exercises Wrangler's simulated email binding instead of the
+default Mailpit inbox.
 
 Common direct commands:
 
@@ -202,7 +213,7 @@ When you intentionally need only Turso, migrations, and Drizzle Studio,
 run this from the repository root instead of `bun run dev`:
 
 ```sh
-bunx turbo run dev --filter=@enterprise-agentic-saas/db
+bun run dev:db
 ```
 
 Sentry-compatible errors, traces, and structured logsをlocalだけで確認する場合:

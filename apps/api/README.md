@@ -41,6 +41,14 @@ Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だ
 
 SentryはBunとCloudflare WorkerのSDKをruntime entrypointで分離する。productionでは`SENTRY_DSN`、`SENTRY_ENVIRONMENT`、`SENTRY_RELEASE`、`SENTRY_TRACES_SAMPLE_RATE`を設定する。Cloudflareでは`SENTRY_DSN`を`wrangler secret put SENTRY_DSN`で登録し、releaseはdeploy時のversion/commitへ揃える。
 
+## Local Worker development
+
+rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` supervisorが`src/worker.ts`をmainにした`wrangler dev --local`を起動する。Wranglerはimport graphをwatchし、Elysiaや依存sourceの保存時にrebundleしてWorker isolateを再起動する。Bunの状態保持型HMRではないためmemory stateは引き継がないが、Tursoと`--persist-to .wrangler/state`のR2 dataはreload後も残る。supervisorまたは起動時envを変えた場合はdev processを再起動する。
+
+この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
+
+fixture投入はrootの`bun run seed`だけを公開入口にする。起動中Workerのsessionと`/ready`を短時間でpreflightしてからDB seedとR2 reconcileを行い、dev未起動時はTursoの長い接続待機へ入らない。
+
 ## Local observability
 
 Spotlight sidecarを起動したうえで次を実行する。

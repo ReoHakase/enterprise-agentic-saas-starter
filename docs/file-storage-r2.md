@@ -50,21 +50,21 @@ bun run dev
 fixtureが必要なときだけ、devを起動したまま別terminalで次を明示実行します。
 
 ```sh
-bun run seed:local
+bun run seed
 ```
 
-このcommandはlocal Tursoへのmigration/DB seedと、起動済みlocal API Worker経由のR2 reconcileを行います。remote Turso、production、`wrangler --remote`では実行できません。seed endpointはloopback限定かつ起動ごとのtokenが必要で、OpenAPIには掲載されません。
+このcommandは起動済みlocal API Workerを短時間でpreflightし、local TursoへのDB seedとWorker経由のR2 reconcileを行います。migrationは`bun run dev`が先に適用します。devが停止中ならDB processを待たずに案内付きで終了します。remote Turso、production、`wrangler --remote`では実行できません。seed endpointはloopback限定かつ起動ごとのtokenが必要で、OpenAPIには掲載されません。production用seed commandは作りません。
 
 local TursoとR2 stateを完全に作り直す場合だけ、devを停止してresetします。
 
 ```sh
-bun run dev:data:reset
+bun run dev:db:reset
 bun run dev
 # fixtureが必要なら、別terminalで:
-bun run seed:local
+bun run seed
 ```
 
-`dev:data:reset`は確認後にlocal Turso、`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。続く`bun run dev`が行うのはmigrationまでで、fixture投入は任意です。既存DBへmigrationだけを適用する場合はreset不要です。
+`dev:db:reset`は確認後にlocal Tursoと対応する`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。続く`bun run dev`が行うのはmigrationまでで、fixture投入は任意です。既存DBへmigrationだけを適用する場合はreset不要です。
 
 ## 障害復旧
 
@@ -91,7 +91,7 @@ local seedのreconcileは次の動作です。
 bun run check
 bun run --cwd apps/api cf:typegen
 bun run build:cloudflare
-bun run seed:local
+bun run seed
 bun run test:e2e
 ```
 
