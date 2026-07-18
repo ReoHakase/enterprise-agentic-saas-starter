@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { Me } from "@/features/account/schema"
 import { consoleKeys } from "@/features/console/queries"
+import { fileKeys } from "@/features/files/queries"
+import { registerFileUpload } from "@/features/files/uploads"
 import { issueKeys } from "@/features/issues/queries"
 import type { OrganizationSummary } from "@/features/organizations/schema"
 
@@ -77,18 +79,33 @@ describe("organization query cache", () => {
 
   it("cancels every current tenant query family before syncing the active cache", async () => {
     const queryClient = new QueryClient()
+    const uploadController = new AbortController()
+    registerFileUpload(uploadController)
     const cancelQueries = vi
       .spyOn(queryClient, "cancelQueries")
       .mockResolvedValue()
+    const removeQueries = vi.spyOn(queryClient, "removeQueries")
 
     await prepareOrganizationSwitch(queryClient, "org-beta")
 
-    expect(cancelQueries).toHaveBeenCalledTimes(2)
+    expect(cancelQueries).toHaveBeenCalledTimes(3)
     expect(cancelQueries).toHaveBeenNthCalledWith(1, {
       queryKey: consoleKeys.all,
     })
     expect(cancelQueries).toHaveBeenNthCalledWith(2, {
+      queryKey: fileKeys.all,
+    })
+    expect(cancelQueries).toHaveBeenNthCalledWith(3, {
       queryKey: issueKeys.all,
     })
+    expect(removeQueries).toHaveBeenCalledOnce()
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: fileKeys.all,
+      type: "inactive",
+    })
+    expect(uploadController.signal.aborted).toBe(true)
+    expect(removeQueries.mock.invocationCallOrder[0]).toBeGreaterThan(
+      Math.max(...cancelQueries.mock.invocationCallOrder)
+    )
   })
 })

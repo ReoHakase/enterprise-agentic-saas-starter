@@ -60,6 +60,26 @@ type IssueActivity = {
   createdAt: string
 }
 
+type FileAttachment = {
+  id: string
+  owner: { type: "issue"; id: string }
+  filename: string
+  sizeBytes: number
+  declaredContentType: string
+  previewable: boolean
+  imageWidth: number | null
+  imageHeight: number | null
+  uploader: { id: string; name: string; image: string | null }
+  createdAt: string
+  canDelete: boolean
+}
+
+type StoredFileAttachment = FileAttachment & {
+  organizationId: string
+  uploadId: string
+  content: string
+}
+
 type OrganizationMember = {
   id: string
   userId: string
@@ -109,6 +129,7 @@ type SessionState = {
   user: UserIdentity
   organizations: Organization[]
   issues: Issue[]
+  files: StoredFileAttachment[]
   commentsByIssue: Map<string, IssueComment[]>
   activitiesByIssue: Map<string, IssueActivity[]>
   membersByOrganization: Map<string, OrganizationMember[]>
@@ -119,6 +140,7 @@ type SessionState = {
   nextDeletionId: number
   nextInvitationId: number
   nextIssueId: number
+  nextFileId: number
 }
 
 type FaultRule = {
@@ -299,6 +321,7 @@ const createState = (sessionKey: string): SessionState => {
       user,
       organizations: [],
       issues: [],
+      files: [],
       commentsByIssue: new Map(),
       activitiesByIssue: new Map(),
       membersByOrganization: new Map(),
@@ -309,6 +332,7 @@ const createState = (sessionKey: string): SessionState => {
       nextDeletionId: 1,
       nextInvitationId: 1,
       nextIssueId: 1,
+      nextFileId: 1,
     }
   }
 
@@ -389,6 +413,40 @@ const createState = (sessionKey: string): SessionState => {
         dueDate: null,
         createdAt: "2026-07-11T09:00:00.000Z",
         updatedAt: "2026-07-13T09:00:00.000Z",
+      },
+    ],
+    files: [
+      {
+        id: "file-a-seed",
+        organizationId: "org-a",
+        uploadId: "upload-a-seed",
+        owner: { type: "issue", id: "issue-a-1" },
+        filename: "tenant-boundary-notes.txt",
+        sizeBytes: 42,
+        declaredContentType: "text/plain",
+        previewable: false,
+        imageWidth: null,
+        imageHeight: null,
+        uploader: { id: user.id, name: user.name, image: user.image },
+        createdAt: "2026-07-13T10:00:00.000Z",
+        canDelete: true,
+        content: "Tenant boundary fixture for browser tests.",
+      },
+      {
+        id: "file-b-seed",
+        organizationId: "org-b",
+        uploadId: "upload-b-seed",
+        owner: { type: "issue", id: "issue-b-1" },
+        filename: "beta-support-only.txt",
+        sizeBytes: 36,
+        declaredContentType: "text/plain",
+        previewable: false,
+        imageWidth: null,
+        imageHeight: null,
+        uploader: { id: user.id, name: user.name, image: user.image },
+        createdAt: "2026-07-13T11:00:00.000Z",
+        canDelete: true,
+        content: "Private Beta tenant fixture content.",
       },
     ],
     commentsByIssue: new Map([
@@ -538,6 +596,7 @@ const createState = (sessionKey: string): SessionState => {
     nextDeletionId: 1,
     nextInvitationId: 2,
     nextIssueId: 2,
+    nextFileId: 2,
   }
 }
 
@@ -599,6 +658,9 @@ const unauthorized = () =>
 const forbidden = () => apiError("forbidden", "Permission denied", 403)
 
 const invalid = (message: string) => apiError("invalid_request", message, 400)
+
+const conflict = (message: string) =>
+  apiError("upload_id_conflict", message, 409)
 
 const invalidAuthRequest = (message: string) =>
   json({ code: "INVALID_INVITATION", message }, 400)
@@ -748,6 +810,13 @@ const findIssue = (
   state.issues.find(
     (issue) => issue.id === issueId && issue.organizationId === organizationId
   )
+
+const filePayload = ({
+  organizationId: _organizationId,
+  uploadId: _uploadId,
+  content: _content,
+  ...file
+}: StoredFileAttachment): FileAttachment => file
 
 const consumeFault = (pathname: string, method: string) => {
   const index = faults.findIndex(
@@ -997,6 +1066,152 @@ Bun.serve({
       state.sessions = state.sessions.filter(({ current }) => current)
       return json({ revoked })
     }
+
+    const fileOwnerMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/owners\/([^/]+)\/([^/]+)$/
+    )
+    if (fileOwnerMatch?.[1] && fileOwnerMatch[2] && fileOwnerMatch[3]) {
+      const organizationId = decodeURIComponent(fileOwnerMatch[1])
+      const ownerType = decodeURIComponent(fileOwnerMatch[2])
+      const ownerId = decodeURIComponent(fileOwnerMatch[3])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      if (ownerType !== "issue") return notFound("File owner")
+      const issue = findIssue(state, ownerId, access.organization.id)
+      if (!issue) return notFound("Issue")
+
+      if (request.method === "GET") {
+        return json({
+          items: state.files
+            .filter(
+              (file) =>
+                file.organizationId === organizationId &&
+                file.owner.type === "issue" &&
+                file.owner.id === ownerId
+            )
+            .toSorted((left, right) =>
+              right.createdAt.localeCompare(left.createdAt)
+            )
+            .map(filePayload),
+          nextCursor: null,
+        })
+      }
+
+      if (request.method === "POST") {
+        const form = await request.formData()
+        const uploadId = nonEmptyString(form.get("uploadId"))
+        const declaredSize = Number(form.get("fileSize"))
+        const uploaded = form.get("file")
+        if (
+          !uploadId ||
+          !(uploaded instanceof File) ||
+          !Number.isInteger(declaredSize) ||
+          declaredSize !== uploaded.size
+        ) {
+          return invalid("uploadId, fileSize and file are required")
+        }
+
+        const content = await uploaded.text()
+        const declaredContentType =
+          uploaded.type.length > 0 ? uploaded.type : "application/octet-stream"
+
+        const replay = state.files.find(
+          (file) =>
+            file.organizationId === organizationId && file.uploadId === uploadId
+        )
+        if (replay) {
+          if (
+            replay.owner.type !== "issue" ||
+            replay.owner.id !== ownerId ||
+            replay.filename !== uploaded.name ||
+            replay.sizeBytes !== uploaded.size ||
+            replay.declaredContentType !== declaredContentType ||
+            replay.content !== content
+          ) {
+            return conflict("The upload ID is already in use")
+          }
+          return json(filePayload(replay))
+        }
+
+        if (uploaded.name.startsWith("cancel-")) {
+          await Bun.sleep(3_000)
+          if (request.signal.aborted) {
+            return new Response(null, { status: 499, headers: corsHeaders })
+          }
+        }
+
+        const file: StoredFileAttachment = {
+          id: `file-${sessionKey}-${state.nextFileId}`,
+          organizationId,
+          uploadId,
+          owner: { type: "issue", id: issue.id },
+          filename: uploaded.name,
+          sizeBytes: uploaded.size,
+          declaredContentType,
+          previewable: false,
+          imageWidth: null,
+          imageHeight: null,
+          uploader: {
+            id: state.user.id,
+            name: state.user.name,
+            image: state.user.image,
+          },
+          createdAt: FIXED_MUTATION_NOW,
+          canDelete: true,
+          content,
+        }
+        state.nextFileId += 1
+        state.files.push(file)
+        return json(filePayload(file), 201)
+      }
+    }
+
+    const fileDownloadMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/([^/]+)\/download$/
+    )
+    if (
+      fileDownloadMatch?.[1] &&
+      fileDownloadMatch[2] &&
+      request.method === "GET"
+    ) {
+      const organizationId = decodeURIComponent(fileDownloadMatch[1])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const file = state.files.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(fileDownloadMatch[2] ?? "") &&
+          candidate.organizationId === access.organization.id
+      )
+      if (!file) return notFound("File")
+      return new Response(file.content, {
+        headers: {
+          ...corsHeaders,
+          "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+          "content-type": "application/octet-stream",
+          "x-content-type-options": "nosniff",
+        },
+      })
+    }
+
+    const fileMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/([^/]+)$/
+    )
+    if (fileMatch?.[1] && fileMatch[2] && request.method === "DELETE") {
+      const organizationId = decodeURIComponent(fileMatch[1])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const fileIndex = state.files.findIndex(
+        (candidate) =>
+          candidate.id === decodeURIComponent(fileMatch[2] ?? "") &&
+          candidate.organizationId === access.organization.id
+      )
+      const file = state.files[fileIndex]
+      if (!file) return notFound("File")
+      if (!file.canDelete) return forbidden()
+      state.files.splice(fileIndex, 1)
+      return new Response(null, { status: 204, headers: corsHeaders })
+    }
+
     const sessionMatch = pathname.match(/^\/me\/sessions\/([^/]+)$/)
     if (sessionMatch?.[1] && request.method === "DELETE") {
       const sessionIndex = state.sessions.findIndex(
@@ -1320,6 +1535,9 @@ Bun.serve({
         )
         state.issues = state.issues.filter(
           (issue) => issue.organizationId !== organizationId
+        )
+        state.files = state.files.filter(
+          (file) => file.organizationId !== organizationId
         )
         deletedIssueIds.forEach((issueId) => {
           state.commentsByIssue.delete(issueId)
@@ -1654,6 +1872,9 @@ Bun.serve({
       }
       if (request.method === "DELETE") {
         state.issues.splice(issueIndex, 1)
+        state.files = state.files.filter(
+          (file) => file.owner.type !== "issue" || file.owner.id !== issue.id
+        )
         state.commentsByIssue.delete(issue.id)
         state.activitiesByIssue.delete(issue.id)
         return json(issue)

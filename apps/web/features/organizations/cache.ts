@@ -2,6 +2,8 @@ import type { QueryClient } from "@tanstack/react-query"
 
 import type { Me } from "@/features/account/schema"
 import { consoleKeys } from "@/features/console/queries"
+import { fileKeys } from "@/features/files/queries"
+import { cancelActiveFileUploads } from "@/features/files/uploads"
 import { issueKeys } from "@/features/issues/queries"
 import type { OrganizationSummary } from "@/features/organizations/schema"
 
@@ -39,13 +41,26 @@ export const cacheActiveOrganization = (
   )
 }
 
+export const cancelTenantWorkForOrganizationSwitch = async (
+  queryClient: QueryClient
+) => {
+  cancelActiveFileUploads()
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: consoleKeys.all }),
+    queryClient.cancelQueries({ queryKey: fileKeys.all }),
+    queryClient.cancelQueries({ queryKey: issueKeys.all }),
+  ])
+  // Removing a still-observed query causes TanStack Query to recreate it
+  // before the route switches, after the server already changed the active
+  // tenant. Remove inactive entries here; the owner component removes its
+  // exact query after it unmounts.
+  queryClient.removeQueries({ queryKey: fileKeys.all, type: "inactive" })
+}
+
 export const prepareOrganizationSwitch = async (
   queryClient: QueryClient,
   organizationId: string
 ) => {
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: consoleKeys.all }),
-    queryClient.cancelQueries({ queryKey: issueKeys.all }),
-  ])
+  await cancelTenantWorkForOrganizationSwitch(queryClient)
   cacheActiveOrganization(queryClient, organizationId)
 }

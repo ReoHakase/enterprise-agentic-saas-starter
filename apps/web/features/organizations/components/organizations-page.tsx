@@ -69,7 +69,10 @@ import {
   consoleKeys,
   organizationsQueryOptions,
 } from "@/features/console/queries"
-import { prepareOrganizationSwitch } from "@/features/organizations/cache"
+import {
+  cancelTenantWorkForOrganizationSwitch,
+  prepareOrganizationSwitch,
+} from "@/features/organizations/cache"
 import {
   organizationFormSchema,
   roleLabel,
@@ -109,8 +112,13 @@ export const OrganizationsPage = ({
     initialData: initialOrganizations,
   })
   const activateMutation = useMutation({
-    mutationFn: (input: { organizationId: string; redirectTo?: string }) =>
-      browserConsoleApi.activateOrganization(input.organizationId),
+    mutationFn: async (input: {
+      organizationId: string
+      redirectTo?: string
+    }) => {
+      await cancelTenantWorkForOrganizationSwitch(queryClient)
+      return browserConsoleApi.activateOrganization(input.organizationId)
+    },
     onSuccess: async (_, input) => {
       await prepareOrganizationSwitch(queryClient, input.organizationId)
       if (input.redirectTo) {

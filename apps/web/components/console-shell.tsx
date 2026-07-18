@@ -77,7 +77,10 @@ import {
 import { UserAvatar } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { prepareOrganizationSwitch } from "@/features/organizations/cache"
+import {
+  cancelTenantWorkForOrganizationSwitch,
+  prepareOrganizationSwitch,
+} from "@/features/organizations/cache"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
 
@@ -132,8 +135,10 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
   )
 
   const organizationMutation = useMutation({
-    mutationFn: (organizationId: string) =>
-      browserConsoleApi.activateOrganization(organizationId),
+    mutationFn: async (organizationId: string) => {
+      await cancelTenantWorkForOrganizationSwitch(queryClient)
+      return browserConsoleApi.activateOrganization(organizationId)
+    },
     onSuccess: async (_, organizationId) => {
       await prepareOrganizationSwitch(queryClient, organizationId)
       const organizationRoute = pathname.match(

@@ -57,6 +57,7 @@ import {
 import * as v from "valibot"
 
 import { LocalDate } from "@/components/local-date"
+import { FileAttachments } from "@/features/files/components/file-attachments"
 import type { IssueUpdateField } from "@/features/issues/issue-update-state"
 import {
   commentFormSchema,
@@ -257,6 +258,7 @@ export const IssueDetailDialog = ({
   timeline,
   nextCursor,
   canonicalHref,
+  organizationId,
   mode,
   pending,
   pendingFields = new Set(),
@@ -274,6 +276,7 @@ export const IssueDetailDialog = ({
   timeline: IssueTimelineItem[]
   nextCursor: string | null
   canonicalHref: string
+  organizationId?: string
   mode: "modal" | "page"
   pending?: boolean
   pendingFields?: ReadonlySet<IssueUpdateField>
@@ -1106,6 +1109,17 @@ export const IssueDetailDialog = ({
           </section>
 
           <Separator />
+
+          {organizationId ? (
+            <>
+              <FileAttachments
+                organizationId={organizationId}
+                ownerType="issue"
+                ownerId={issue.id}
+              />
+              <Separator />
+            </>
+          ) : null}
 
           <section
             data-slot="issue-discussion"

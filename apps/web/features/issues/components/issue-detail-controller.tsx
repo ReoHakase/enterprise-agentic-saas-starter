@@ -267,6 +267,7 @@ export const IssueDetailController = ({
       assignees={assignees}
       labelSuggestions={labelSuggestions}
       canonicalHref={canonicalHref}
+      organizationId={organizationId}
       mode={mode}
       pending={
         pendingFields.size > 0 ||

@@ -59,6 +59,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn<() => void>() }),
 }))
 
+vi.mock("@/features/files/components/file-attachments", () => ({
+  FileAttachments: () => (
+    <section role="region" aria-label="Attachments">
+      Attachments
+    </section>
+  ),
+}))
+
 const timeline: IssueTimelineItem[] = [
   {
     type: "activity",
@@ -138,6 +146,7 @@ const renderDetail = (mode: "modal" | "page" = "modal") => {
       timeline={timeline}
       nextCursor="2026-07-09T00:00:00.000Z"
       canonicalHref="/organization/acme/issues/12"
+      organizationId="org-1"
       mode={mode}
       assignees={assignees}
       {...callbacks}
@@ -383,11 +392,24 @@ describe("organization issues", () => {
     const discussion = screen.getByRole("region", {
       name: "Discussion",
     })
+    const attachments = screen.getByRole("region", {
+      name: "Attachments",
+    })
     expect(metadata).toBeInTheDocument()
     expect(description).toBeInTheDocument()
+    expect(attachments).toBeInTheDocument()
     expect(discussion).toBeInTheDocument()
     expect(primaryColumn).toContainElement(description)
+    expect(primaryColumn).toContainElement(attachments)
     expect(primaryColumn).toContainElement(discussion)
+    expect(
+      description.compareDocumentPosition(attachments) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(
+      attachments.compareDocumentPosition(discussion) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
     expect(metadata).toHaveClass(
       "lg:sticky",
       "lg:top-6",

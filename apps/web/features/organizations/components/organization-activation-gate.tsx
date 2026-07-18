@@ -10,7 +10,10 @@ import { toast } from "sonner"
 
 import { AppState } from "@/components/app-state"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { prepareOrganizationSwitch } from "@/features/organizations/cache"
+import {
+  cancelTenantWorkForOrganizationSwitch,
+  prepareOrganizationSwitch,
+} from "@/features/organizations/cache"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 
 export const OrganizationActivationGate = ({
@@ -23,7 +26,10 @@ export const OrganizationActivationGate = ({
   const queryClient = useQueryClient()
   const router = useRouter()
   const mutation = useMutation({
-    mutationFn: () => browserConsoleApi.activateOrganization(organizationId),
+    mutationFn: async () => {
+      await cancelTenantWorkForOrganizationSwitch(queryClient)
+      return browserConsoleApi.activateOrganization(organizationId)
+    },
     onSuccess: async () => {
       await prepareOrganizationSwitch(queryClient, organizationId)
       toast.success("Organization switched")
