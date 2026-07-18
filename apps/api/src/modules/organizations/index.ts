@@ -214,7 +214,7 @@ export const createOrganizationsModule = (db: Db) =>
           operationId: "deleteOrganization",
           summary: "organizationを即時削除",
           description:
-            "active organizationのsuper_adminがfresh session、slug完全一致、DELETE確認、冪等性keyを提示した場合だけ実行する。tenant dataはtransaction内で即時削除し、R2 attachmentはdurable background jobで再試行する。同じuser・organization・keyの再送は同じreceiptを返す。",
+            "active organizationのsuper_adminがfresh session、slug完全一致、DELETE確認、冪等性keyを提示した場合だけ実行する。tenant dataはtransaction内で即時削除し、R2 fileはdurable background jobで再試行する。同じuser・organization・keyの再送は同じreceiptを返す。",
           tags: ["Organizations"],
         },
       }

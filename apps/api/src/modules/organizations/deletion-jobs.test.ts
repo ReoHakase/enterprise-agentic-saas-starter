@@ -5,9 +5,9 @@ import { drizzle } from "drizzle-orm/libsql"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
-  deleteOrganizationAttachments,
+  deleteOrganizationFiles,
   processOrganizationDeletionJobs,
-  type OrganizationAttachmentBucket,
+  type OrganizationFilesBucket,
 } from "./deletion-jobs"
 
 const now = new Date("2026-07-14T00:00:00.000Z")
@@ -43,7 +43,7 @@ const insertJob = async (database: Db) => {
   })
 }
 
-describe("organization deletion attachment cleanup", () => {
+describe("organization deletion file cleanup", () => {
   let database: Db
 
   beforeEach(async () => {
@@ -53,7 +53,7 @@ describe("organization deletion attachment cleanup", () => {
 
   it("deletes every paginated object under only the tenant prefix", async () => {
     const list = vi
-      .fn<OrganizationAttachmentBucket["list"]>()
+      .fn<OrganizationFilesBucket["list"]>()
       .mockResolvedValueOnce({
         objects: [{ key: "organizations/org%2Facme/a" }],
         truncated: true,
@@ -64,11 +64,11 @@ describe("organization deletion attachment cleanup", () => {
         truncated: false,
       })
     const remove = vi
-      .fn<OrganizationAttachmentBucket["delete"]>()
+      .fn<OrganizationFilesBucket["delete"]>()
       .mockResolvedValue(undefined)
 
     await expect(
-      deleteOrganizationAttachments({ list, delete: remove }, "org/acme")
+      deleteOrganizationFiles({ list, delete: remove }, "org/acme")
     ).resolves.toBe(2)
 
     expect(list).toHaveBeenNthCalledWith(1, {
@@ -81,47 +81,47 @@ describe("organization deletion attachment cleanup", () => {
   })
 
   it("fails closed when R2 truncates a page without a continuation cursor", async () => {
-    const bucket: OrganizationAttachmentBucket = {
-      list: vi.fn<OrganizationAttachmentBucket["list"]>().mockResolvedValue({
+    const bucket: OrganizationFilesBucket = {
+      list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [],
         truncated: true,
       }),
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 
-    await expect(
-      deleteOrganizationAttachments(bucket, "org/acme")
-    ).rejects.toThrow("R2 returned a truncated page without a cursor")
+    await expect(deleteOrganizationFiles(bucket, "org/acme")).rejects.toThrow(
+      "R2 returned a truncated page without a cursor"
+    )
   })
 
   it("never deletes an object outside the encoded tenant prefix", async () => {
     const remove = vi
-      .fn<OrganizationAttachmentBucket["delete"]>()
+      .fn<OrganizationFilesBucket["delete"]>()
       .mockResolvedValue(undefined)
-    const bucket: OrganizationAttachmentBucket = {
-      list: vi.fn<OrganizationAttachmentBucket["list"]>().mockResolvedValue({
+    const bucket: OrganizationFilesBucket = {
+      list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [{ key: "organizations/another-tenant/private.txt" }],
         truncated: false,
       }),
       delete: remove,
     }
 
-    await expect(
-      deleteOrganizationAttachments(bucket, "org/acme")
-    ).rejects.toThrow("R2 returned an object outside the requested prefix")
+    await expect(deleteOrganizationFiles(bucket, "org/acme")).rejects.toThrow(
+      "R2 returned an object outside the requested prefix"
+    )
     expect(remove).not.toHaveBeenCalled()
   })
 
   it("marks a successful durable job completed", async () => {
-    const bucket: OrganizationAttachmentBucket = {
-      list: vi.fn<OrganizationAttachmentBucket["list"]>().mockResolvedValue({
+    const bucket: OrganizationFilesBucket = {
+      list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [],
         truncated: false,
       }),
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 
@@ -142,12 +142,12 @@ describe("organization deletion attachment cleanup", () => {
   })
 
   it("stores only a safe error code and schedules retry after R2 failure", async () => {
-    const bucket: OrganizationAttachmentBucket = {
+    const bucket: OrganizationFilesBucket = {
       list: vi
-        .fn<OrganizationAttachmentBucket["list"]>()
+        .fn<OrganizationFilesBucket["list"]>()
         .mockRejectedValue(new Error("secret bucket detail")),
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 
@@ -190,13 +190,13 @@ describe("organization deletion attachment cleanup", () => {
       lockedAt: new Date(now.getTime() - 5 * 60 * 1000 - 1),
       status: "processing",
     })
-    const bucket: OrganizationAttachmentBucket = {
-      list: vi.fn<OrganizationAttachmentBucket["list"]>().mockResolvedValue({
+    const bucket: OrganizationFilesBucket = {
+      list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [],
         truncated: false,
       }),
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 
@@ -211,18 +211,18 @@ describe("organization deletion attachment cleanup", () => {
   })
 
   it("does not let an expired worker complete a lease claimed by a newer worker", async () => {
-    type ListResult = Awaited<ReturnType<OrganizationAttachmentBucket["list"]>>
+    type ListResult = Awaited<ReturnType<OrganizationFilesBucket["list"]>>
     let resolveList: ((result: ListResult) => void) | undefined
     const pendingList = new Promise<ListResult>((resolve) => {
       resolveList = resolve
     })
     const list = vi
-      .fn<OrganizationAttachmentBucket["list"]>()
+      .fn<OrganizationFilesBucket["list"]>()
       .mockReturnValue(pendingList)
-    const bucket: OrganizationAttachmentBucket = {
+    const bucket: OrganizationFilesBucket = {
       list,
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 
@@ -266,13 +266,13 @@ describe("organization deletion attachment cleanup", () => {
       rejectList = reject
     })
     const list = vi
-      .fn<OrganizationAttachmentBucket["list"]>()
+      .fn<OrganizationFilesBucket["list"]>()
       .mockReturnValue(pendingList)
     const onFailure = vi.fn()
-    const bucket: OrganizationAttachmentBucket = {
+    const bucket: OrganizationFilesBucket = {
       list,
       delete: vi
-        .fn<OrganizationAttachmentBucket["delete"]>()
+        .fn<OrganizationFilesBucket["delete"]>()
         .mockResolvedValue(undefined),
     }
 

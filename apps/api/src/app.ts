@@ -9,6 +9,7 @@ import {
   readinessResponseModel,
 } from "./models/api"
 import { createAuditModule } from "./modules/audit"
+import { createFilesModule } from "./modules/files"
 import { createIssuesModule } from "./modules/issues"
 import { createOrganizationsModule } from "./modules/organizations"
 import { createUsersModule } from "./modules/users"
@@ -86,6 +87,7 @@ export const createApp = (db: Db) =>
     .use(createUsersModule(db))
     .use(createOrganizationsModule(db))
     .use(createIssuesModule(db))
+    .use(createFilesModule(db))
     .use(createAuditModule(db))
     .use(openApiPlugin)
 

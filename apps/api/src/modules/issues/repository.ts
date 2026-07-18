@@ -1,10 +1,14 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   auditLogs,
+  fileCleanupJobs,
+  files,
   issueActivityEvents,
+  issueFileOwners,
   member,
   issueComments,
   issues,
+  organizationFileUsage,
   type IssueActivityField,
   type IssueActivityValue,
   type IssuePriority,
@@ -16,6 +20,7 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   like,
   lt,
   max,
@@ -25,6 +30,7 @@ import {
 } from "drizzle-orm"
 
 import { publicErrors } from "../../errors/app-error"
+import { getFileOwnerAdapter } from "../files/owner-adapters"
 import {
   encodeIssueTimelineCursor,
   type IssueTimelineCursorPosition,
@@ -729,6 +735,45 @@ export const deleteIssueById = async (
 ): Promise<IssueDto | null> => {
   try {
     const rows = await db.transaction(async (tx) => {
+      const ownedFiles = await tx
+        .select({ sizeBytes: files.sizeBytes })
+        .from(files)
+        .innerJoin(
+          issueFileOwners,
+          and(
+            eq(issueFileOwners.fileId, files.id),
+            eq(issueFileOwners.organizationId, files.organizationId),
+            eq(issueFileOwners.ownerType, files.ownerType)
+          )
+        )
+        .where(
+          and(
+            eq(files.organizationId, input.organizationId),
+            eq(files.ownerType, "issue"),
+            eq(issueFileOwners.issueId, input.id)
+          )
+        )
+      if (ownedFiles.length > 0) {
+        const ownedFileIds = tx
+          .select({ id: issueFileOwners.fileId })
+          .from(issueFileOwners)
+          .where(
+            and(
+              eq(issueFileOwners.organizationId, input.organizationId),
+              eq(issueFileOwners.ownerType, "issue"),
+              eq(issueFileOwners.issueId, input.id)
+            )
+          )
+        await tx
+          .delete(files)
+          .where(
+            and(
+              eq(files.organizationId, input.organizationId),
+              eq(files.ownerType, "issue"),
+              inArray(files.id, ownedFileIds)
+            )
+          )
+      }
       const deletedRows = await tx
         .delete(issues)
         .where(
@@ -739,6 +784,43 @@ export const deleteIssueById = async (
         )
         .returning()
       if (deletedRows[0]) {
+        const releasedBytes = ownedFiles.reduce(
+          (total, file) => total + file.sizeBytes,
+          0
+        )
+        if (releasedBytes > 0) {
+          const usageRows = await tx
+            .update(organizationFileUsage)
+            .set({
+              updatedAt: new Date(),
+              usedBytes: sql`${organizationFileUsage.usedBytes} - ${releasedBytes}`,
+            })
+            .where(
+              and(
+                eq(organizationFileUsage.organizationId, input.organizationId),
+                sql`${organizationFileUsage.usedBytes} >= ${releasedBytes}`
+              )
+            )
+            .returning({ usedBytes: organizationFileUsage.usedBytes })
+          if (!usageRows[0]) {
+            throw new Error("Organization file usage is inconsistent")
+          }
+        }
+
+        const prefix = getFileOwnerAdapter("issue").cleanupPrefix({
+          organizationId: input.organizationId,
+          ownerId: input.id,
+        })
+        await tx
+          .insert(fileCleanupJobs)
+          .values({
+            id: crypto.randomUUID(),
+            kind: "owner_prefix",
+            organizationId: input.organizationId,
+            prefix,
+          })
+          .onConflictDoNothing()
+
         await tx.insert(auditLogs).values({
           id: crypto.randomUUID(),
           organizationId: input.organizationId,

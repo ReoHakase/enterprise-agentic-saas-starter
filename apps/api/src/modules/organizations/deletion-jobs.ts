@@ -17,7 +17,7 @@ type R2ListResult = {
   cursor?: string
 }
 
-export type OrganizationAttachmentBucket = {
+export type OrganizationFilesBucket = {
   list: (options: {
     prefix: string
     cursor?: string
@@ -41,14 +41,14 @@ export type DeletionJobFailure = {
 
 type DeletionJobOutcome = "completed" | "failed" | "skipped" | "stale"
 
-export const organizationAttachmentPrefix = (organizationId: string) =>
+export const organizationFilesPrefix = (organizationId: string) =>
   `organizations/${encodeURIComponent(organizationId)}/`
 
-export const deleteOrganizationAttachments = async (
-  bucket: OrganizationAttachmentBucket,
+export const deleteOrganizationFiles = async (
+  bucket: OrganizationFilesBucket,
   organizationId: string
 ): Promise<number> => {
-  const prefix = organizationAttachmentPrefix(organizationId)
+  const prefix = organizationFilesPrefix(organizationId)
   let cursor: string | undefined
   let deleted = 0
 
@@ -83,7 +83,7 @@ export const processOrganizationDeletionJobs = async ({
   now = new Date(),
   onFailure,
 }: {
-  bucket: OrganizationAttachmentBucket
+  bucket: OrganizationFilesBucket
   database: Db
   now?: Date
   onFailure?: (failure: DeletionJobFailure) => void
@@ -138,7 +138,7 @@ export const processOrganizationDeletionJobs = async ({
       )
 
       try {
-        await deleteOrganizationAttachments(bucket, claimed.organizationId)
+        await deleteOrganizationFiles(bucket, claimed.organizationId)
         const completedRows = await database
           .update(organizationDeletionJobs)
           .set({

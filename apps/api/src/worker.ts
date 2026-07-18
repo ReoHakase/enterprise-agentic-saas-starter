@@ -4,9 +4,17 @@ import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 
 import { createApp } from "./app"
+import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handler"
+import { processFileCleanupJobs } from "./modules/files/cleanup-jobs"
+import {
+  configureFileStorageRuntime,
+  type FileCache,
+  type FileImagesBinding,
+  type FileR2Bucket,
+} from "./modules/files/runtime"
 import {
   processOrganizationDeletionJobs,
-  type OrganizationAttachmentBucket,
+  type OrganizationFilesBucket,
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { configureObservability } from "./observability/runtime"
@@ -23,13 +31,16 @@ import { corsPlugin } from "./plugins/cors"
 import { serverTimingPlugin } from "./plugins/server-timing"
 
 type WorkerSentryEnv = {
-  ATTACHMENTS: OrganizationAttachmentBucket
+  DEV_FILE_SEED_TOKEN?: string
+  FILES: FileR2Bucket & OrganizationFilesBucket
+  IMAGES: FileImagesBinding
   NODE_ENV?: string
   SENTRY_DSN?: string
   SENTRY_ENVIRONMENT?: string
   SENTRY_RELEASE?: string
   SENTRY_SPOTLIGHT?: string
   SENTRY_TRACES_SAMPLE_RATE?: string
+  TURSO_DATABASE_URL?: string
 }
 
 type WorkerExecutionContext = {
@@ -61,17 +72,49 @@ const worker = new Elysia({ adapter: CloudflareAdapter })
   .use(serverTimingPlugin)
   .compile()
 
-const workerWithScheduled = Object.assign(worker, {
+const appFetch = worker.fetch.bind(worker)
+
+const isFileCache = (value: unknown): value is FileCache =>
+  value !== null &&
+  typeof value === "object" &&
+  typeof Reflect.get(value, "match") === "function" &&
+  typeof Reflect.get(value, "put") === "function"
+
+const cloudflareDefaultCache = (): FileCache | undefined => {
+  const cacheStorage = Reflect.get(globalThis, "caches")
+  if (!cacheStorage || typeof cacheStorage !== "object") return undefined
+  const defaultCache: unknown = Reflect.get(cacheStorage, "default")
+  return isFileCache(defaultCache) ? defaultCache : undefined
+}
+
+const workerWithScheduled = {
+  async fetch(
+    request: Request,
+    workerEnv: WorkerSentryEnv,
+    _context: WorkerExecutionContext
+  ) {
+    configureFileStorageRuntime({
+      bucket: workerEnv.FILES,
+      cache: cloudflareDefaultCache(),
+      images: workerEnv.IMAGES,
+    })
+    const seedResponse = await handleDevelopmentFileSeedRequest(
+      db,
+      request,
+      workerEnv
+    )
+    return seedResponse ?? appFetch(request)
+  },
   scheduled(
     _controller: WorkerScheduledController,
     workerEnv: WorkerSentryEnv,
     context: WorkerExecutionContext
   ) {
     const deletionJobs = processOrganizationDeletionJobs({
-      bucket: workerEnv.ATTACHMENTS,
+      bucket: workerEnv.FILES,
       database: db,
       onFailure: ({ attempts }) => {
-        const error = new Error("Organization attachment cleanup failed")
+        const error = new Error("Organization file cleanup failed")
         Sentry.captureException(error, {
           tags: {
             component: "organization-deletion",
@@ -90,6 +133,35 @@ const workerWithScheduled = Object.assign(worker, {
     }).then((result) => {
       console.info({
         component: "organization-deletion",
+        event: "cleanup_batch_completed",
+        level: "info",
+        ...result,
+      })
+      return result
+    })
+    const fileCleanupJobs = processFileCleanupJobs({
+      bucket: workerEnv.FILES,
+      database: db,
+      onFailure: ({ attempts }) => {
+        const error = new Error("File cleanup failed")
+        Sentry.captureException(error, {
+          tags: {
+            component: "file-cleanup",
+            errorCode: "r2_cleanup_failed",
+          },
+          extra: { attempts },
+        })
+        console.error({
+          attempts,
+          component: "file-cleanup",
+          errorCode: "r2_cleanup_failed",
+          event: "cleanup_job_failed",
+          level: "error",
+        })
+      },
+    }).then((result) => {
+      console.info({
+        component: "file-cleanup",
         event: "cleanup_batch_completed",
         level: "info",
         ...result,
@@ -128,10 +200,12 @@ const workerWithScheduled = Object.assign(worker, {
     })
 
     context.waitUntil(
-      Promise.all([deletionJobs, invitationJobs]).then(() => undefined)
+      Promise.all([deletionJobs, fileCleanupJobs, invitationJobs]).then(
+        () => undefined
+      )
     )
   },
-})
+}
 
 export default Sentry.withSentry<WorkerSentryEnv>((workerEnv) => {
   const development = workerEnv.NODE_ENV === "development"

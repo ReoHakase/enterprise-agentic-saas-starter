@@ -6,13 +6,13 @@ Elysia on Bun の API app workspace。
 
 - `createApp(db)` で Elysia app を組み立てる（テスト可能な最小ファクトリ）。
 - `index.ts` は本番 plugin を合成して listen する。
-- `client.ts` は`parseDate: false`固定のEden clientをexportする。
-- `worker.ts`はCloudflare request handlerとorganization削除後のR2 cleanup cronを合成する。
+- `client.ts` は`parseDate: false`固定のEden client、file DTO/URL builder/XHR upload helperをexportする。
+- `worker.ts`はCloudflare request handler、private `FILES` R2/`IMAGES` binding、durable cleanup cronを合成する。
 - 本番固有の関心事（auth, cors, Sentry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
 
 ## 公開 entrypoint
 
-- `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`
+- `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`, `FileDto`, `FILE_PREVIEW_WIDTHS`, file URL/upload helper
 
 Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だけです。`App`型はEden client内部で保持し、rootや`./types` entrypointは公開しません。
 
@@ -112,6 +112,14 @@ organization/member/invitation/issue/comment mutationは `audit_logs` へappend-
 issueはorganization内連番、Markdown description、status、priority、assignee、creator、labels、due dateを持つ。list routeはsearch/filter/sort、番号解決、detail/comment CRUD、activity/comment統合timelineを提供する。採番はprocess内のorganization別queueに加え、DBの `(organization_id, number)` unique conflictだけを限定retryする。
 
 timelineは新しい順のtotal orderで返し、`nextCursor`は内部構造を解釈しないopaqueな文字列として次の`cursor` queryへそのまま渡す。同一timestampのactivity/commentが連続しても欠落や重複が起きないkeyset paginationとし、不正cursorは400 `validation_error`にする。
+
+## File
+
+`/files/*`はprivate R2 objectを認証付きでupload/list/preview/download/deleteする汎用moduleです。v1のowner typeは`issue`だけに閉じますが、route、DB metadata、cleanup job、client helperはfileを正本にします。URLはDBへ保存せず、object keyも公開DTOへ返しません。
+
+uploadは1 file/1 multipart request、decimal 20,000,000 bytes上限、organization 1 GiB quota、`uploadId`冪等性を持ちます。同じIDのretryはR2 objectとrequest bodyをstream比較し、別内容なら409にします。R2/Imagesのraw provider errorはcause、log、Sentryへ渡しません。
+
+preview幅は`360 / 720 / 1200 / 2400`だけです。認証・tenant/file確認後に内部cacheを読み、Cloudflare ImagesでWebP quality 75、静止画、scale-downへ変換します。original downloadはoctet-stream attachment、single Range、ETag conditional requestを扱います。
 
 ## テスト
 

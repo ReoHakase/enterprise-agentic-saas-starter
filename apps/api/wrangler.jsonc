@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "enterprise-agentic-saas-api",
   "main": "src/worker.ts",
-  "compatibility_date": "2026-07-13",
+  "compatibility_date": "2026-07-18",
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
   "upload_source_maps": true,
@@ -13,10 +13,16 @@
   ],
   "r2_buckets": [
     {
-      "binding": "ATTACHMENTS",
+      "binding": "FILES",
       "bucket_name": "enterprise-agentic-saas-attachments",
     },
   ],
+  "images": {
+    "binding": "IMAGES",
+  },
+  "cache": {
+    "enabled": true,
+  },
   "triggers": {
     "crons": ["* * * * *"],
   },
