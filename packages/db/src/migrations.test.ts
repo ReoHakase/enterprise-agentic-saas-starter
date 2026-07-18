@@ -73,8 +73,12 @@ describe("database migrations", () => {
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
           "audit_logs",
+          "file_cleanup_jobs",
+          "files",
           "invitation_email_jobs",
+          "issue_file_owners",
           "organization_deletion_jobs",
+          "organization_file_usage",
           "rate_limit",
           "issue_activity_events",
           "issue_comments",
@@ -1031,21 +1035,43 @@ describe("database migrations", () => {
 
       const verificationClient = createClient(connection)
       try {
-        const [migrationCount, userCount, issueCount, obsoleteTable] =
-          await Promise.all([
-            verificationClient.execute(
-              "select count(*) as value from __drizzle_migrations"
-            ),
-            verificationClient.execute("select count(*) as value from user"),
-            verificationClient.execute("select count(*) as value from issues"),
-            verificationClient.execute(
-              "select name from sqlite_master where type = 'table' and name = 'obsolete_local_table'"
-            ),
-          ])
+        const [
+          migrationCount,
+          userCount,
+          issueCount,
+          fileCount,
+          fileOwnerCount,
+          usage,
+          obsoleteTable,
+        ] = await Promise.all([
+          verificationClient.execute(
+            "select count(*) as value from __drizzle_migrations"
+          ),
+          verificationClient.execute("select count(*) as value from user"),
+          verificationClient.execute("select count(*) as value from issues"),
+          verificationClient.execute(
+            "select count(*) as value from files where status = 'pending'"
+          ),
+          verificationClient.execute(
+            "select count(*) as value from issue_file_owners"
+          ),
+          verificationClient.execute(
+            "select organization_id as organizationId, used_bytes as usedBytes from organization_file_usage where used_bytes > 0 order by organization_id"
+          ),
+          verificationClient.execute(
+            "select name from sqlite_master where type = 'table' and name = 'obsolete_local_table'"
+          ),
+        ])
 
         expect(Number(migrationCount.rows[0]?.value)).toBeGreaterThan(0)
         expect(Number(userCount.rows[0]?.value)).toBeGreaterThan(0)
         expect(Number(issueCount.rows[0]?.value)).toBeGreaterThan(0)
+        expect(Number(fileCount.rows[0]?.value)).toBeGreaterThan(0)
+        expect(fileOwnerCount.rows).toEqual(fileCount.rows)
+        expect(usage.rows).toHaveLength(2)
+        expect(usage.rows.every(({ usedBytes }) => Number(usedBytes) > 0)).toBe(
+          true
+        )
         expect(obsoleteTable.rows).toHaveLength(0)
       } finally {
         verificationClient.close()

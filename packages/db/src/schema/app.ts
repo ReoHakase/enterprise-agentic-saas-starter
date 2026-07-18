@@ -37,6 +37,35 @@ export type IssueActivityValue = string | string[] | null
 
 export type AuditLogMetadata = Record<string, string | number | boolean | null>
 
+export const MAX_FILE_SIZE_BYTES = 20_000_000 as const
+export const ORGANIZATION_FILE_QUOTA_BYTES = 1_073_741_824 as const
+
+export const fileOwnerTypes = ["issue"] as const
+export type FileOwnerType = (typeof fileOwnerTypes)[number]
+
+export const fileStatuses = ["pending", "ready"] as const
+export type FileStatus = (typeof fileStatuses)[number]
+
+export const detectedImageFormats = [
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "avif",
+] as const
+export type DetectedImageFormat = (typeof detectedImageFormats)[number]
+
+export const fileCleanupJobKinds = ["exact", "owner_prefix"] as const
+export type FileCleanupJobKind = (typeof fileCleanupJobKinds)[number]
+
+export const fileCleanupJobStatuses = [
+  "pending",
+  "processing",
+  "failed",
+  "completed",
+] as const
+export type FileCleanupJobStatus = (typeof fileCleanupJobStatuses)[number]
+
 export const organizationDeletionJobStatuses = [
   "pending",
   "processing",
@@ -114,6 +143,140 @@ export const issues = sqliteTable(
     index("issues_organization_due_date_idx").on(
       table.organizationId,
       table.dueDate
+    ),
+  ]
+)
+
+export const files = sqliteTable(
+  "files",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    uploaderId: text("uploader_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    uploadId: text("upload_id").notNull(),
+    ownerType: text("owner_type").$type<FileOwnerType>().notNull(),
+    objectKey: text("object_key").notNull(),
+    filename: text("filename").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    declaredContentType: text("declared_content_type").notNull(),
+    detectedImageFormat: text(
+      "detected_image_format"
+    ).$type<DetectedImageFormat>(),
+    imageWidth: integer("image_width"),
+    imageHeight: integer("image_height"),
+    etag: text("etag"),
+    status: text("status").$type<FileStatus>().notNull().default("pending"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("files_organization_upload_uidx").on(
+      table.organizationId,
+      table.uploadId
+    ),
+    uniqueIndex("files_object_key_uidx").on(table.objectKey),
+    uniqueIndex("files_id_organization_owner_type_uidx").on(
+      table.id,
+      table.organizationId,
+      table.ownerType
+    ),
+    index("files_organization_status_created_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt
+    ),
+    index("files_organization_uploader_idx").on(
+      table.organizationId,
+      table.uploaderId
+    ),
+    check("files_owner_type_check", sql`${table.ownerType} in ('issue')`),
+    check("files_status_check", sql`${table.status} in ('pending', 'ready')`),
+    check(
+      "files_size_bytes_check",
+      sql`${table.sizeBytes} between 0 and ${sql.raw(String(MAX_FILE_SIZE_BYTES))}`
+    ),
+    check(
+      "files_filename_check",
+      sql`length(${table.filename}) between 1 and 255`
+    ),
+    check(
+      "files_declared_content_type_check",
+      sql`length(${table.declaredContentType}) <= 255`
+    ),
+    check(
+      "files_detected_image_format_check",
+      sql`${table.detectedImageFormat} is null or ${table.detectedImageFormat} in ('jpeg', 'png', 'webp', 'gif', 'avif')`
+    ),
+    check(
+      "files_image_dimensions_check",
+      sql`(
+        ${table.imageWidth} is null and ${table.imageHeight} is null
+      ) or (
+        ${table.imageWidth} > 0 and ${table.imageHeight} > 0
+      )`
+    ),
+    check(
+      "files_ready_etag_check",
+      sql`${table.status} != 'ready' or length(${table.etag}) between 1 and 128`
+    ),
+  ]
+)
+
+export const issueFileOwners = sqliteTable(
+  "issue_file_owners",
+  {
+    fileId: text("file_id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    ownerType: text("owner_type").$type<"issue">().notNull().default("issue"),
+    issueId: text("issue_id").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.fileId, table.organizationId, table.ownerType],
+      foreignColumns: [files.id, files.organizationId, files.ownerType],
+      name: "issue_file_owners_file_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.issueId, table.organizationId],
+      foreignColumns: [issues.id, issues.organizationId],
+      name: "issue_file_owners_issue_tenant_fk",
+    }).onDelete("cascade"),
+    index("issue_file_owners_organization_issue_idx").on(
+      table.organizationId,
+      table.issueId
+    ),
+    check(
+      "issue_file_owners_owner_type_check",
+      sql`${table.ownerType} = 'issue'`
+    ),
+  ]
+)
+
+export const organizationFileUsage = sqliteTable(
+  "organization_file_usage",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    usedBytes: integer("used_bytes").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "organization_file_usage_used_bytes_check",
+      sql`${table.usedBytes} between 0 and ${sql.raw(String(ORGANIZATION_FILE_QUOTA_BYTES))}`
     ),
   ]
 )
@@ -264,6 +427,74 @@ export const invitationEmailJobs = sqliteTable(
     check("invitation_email_jobs_attempts_check", sql`${table.attempts} >= 0`),
     check(
       "invitation_email_jobs_last_error_code_check",
+      sql`${table.lastErrorCode} is null or (
+        length(${table.lastErrorCode}) between 1 and 96
+        and ${table.lastErrorCode} glob '[A-Za-z]*'
+        and ${table.lastErrorCode} not glob '*[^A-Za-z0-9_.:-]*'
+      )`
+    ),
+  ]
+)
+
+// fileやownerをDBから削除した後もR2 cleanupを再試行するため、
+// organization/file/issueへの外部キーは意図的に持たない。
+export const fileCleanupJobs = sqliteTable(
+  "file_cleanup_jobs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    kind: text("kind").$type<FileCleanupJobKind>().notNull(),
+    objectKey: text("object_key"),
+    prefix: text("prefix"),
+    status: text("status")
+      .$type<FileCleanupJobStatus>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+    nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("file_cleanup_jobs_object_key_uidx")
+      .on(table.objectKey)
+      .where(sql`${table.kind} = 'exact'`),
+    uniqueIndex("file_cleanup_jobs_prefix_uidx")
+      .on(table.prefix)
+      .where(sql`${table.kind} = 'owner_prefix'`),
+    index("file_cleanup_jobs_organization_idx").on(table.organizationId),
+    index("file_cleanup_jobs_claim_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt
+    ),
+    check(
+      "file_cleanup_jobs_kind_check",
+      sql`${table.kind} in ('exact', 'owner_prefix')`
+    ),
+    check(
+      "file_cleanup_jobs_target_check",
+      sql`(
+        ${table.kind} = 'exact'
+        and length(${table.objectKey}) between 1 and 1024
+        and ${table.prefix} is null
+      ) or (
+        ${table.kind} = 'owner_prefix'
+        and ${table.objectKey} is null
+        and length(${table.prefix}) between 1 and 1024
+      )`
+    ),
+    check(
+      "file_cleanup_jobs_status_check",
+      sql`${table.status} in ('pending', 'processing', 'failed', 'completed')`
+    ),
+    check("file_cleanup_jobs_attempts_check", sql`${table.attempts} >= 0`),
+    check(
+      "file_cleanup_jobs_last_error_code_check",
       sql`${table.lastErrorCode} is null or (
         length(${table.lastErrorCode}) between 1 and 96
         and ${table.lastErrorCode} glob '[A-Za-z]*'

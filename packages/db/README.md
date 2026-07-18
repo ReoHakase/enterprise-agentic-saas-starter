@@ -7,6 +7,7 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 | import | 内容 |
 | --- | --- |
 | `@enterprise-agentic-saas/db` | singleton `db`、`Db`型 |
+| `@enterprise-agentic-saas/db/development-seed` | local R2 reconcile用の固定anchor、file fixture path・digest |
 | `@enterprise-agentic-saas/db/schema` | auth/app table定義 |
 
 `packages/auth` と `apps/api` からの依存を許可し、DB packageからauth/app/UIへの逆依存は禁止します。PostgreSQLや `DB_PROVIDER` 分岐は明示要求まで追加しません。
@@ -14,7 +15,8 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 ## Schemaとmigration
 
 - `src/schema/auth.generated.ts`: Better Auth CLI生成を起点とするauth schema
-- `src/schema/app.ts`: Issue/comment/auditなどapp schema
+- `src/schema/app.ts`: Issue/comment/file/auditなどapp schema
+- `fixtures/files/`: local R2へ投入する決定的なfile fixture
 - `drizzle/`: commitするSQL、snapshot、journal
 
 auth plugin変更時:
@@ -69,8 +71,10 @@ CONFIRM_DB_RESET=reset-local-development \
 
 seedとresetは `file:` またはlocalhost URLだけを許可します。resetはさらに確認文字列を要求し、migration ledgerを含むtableを削除、保存済みmigrationを全適用してからseedします。Cloud/staging/production URLはどちらも拒否します。本番provisioningでは `db:seed` を使わず、migration適用後に実ユーザーを通常の認証・organization作成フローから初期管理者にします。
 
+fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
+
 詳細は [`../../docs/database-lifecycle.md`](../../docs/database-lifecycle.md) を参照してください。
 
 ## Test
 
-`src/migrations.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、cross-tenant comment FK、pending invitation unique、remote seed拒否、実file DB resetを検証します。外部Tursoは必要ありません。
+`src/migrations.test.ts` と `src/files.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、file owner tenant FK、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。
