@@ -35,26 +35,36 @@ R2 keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`�
 
 previewはR2へ保存したraw imageからImages bindingでWebPへ変換します。OpenNextやNext `<Image>`がprivate R2 originalを自動で最適化する構成ではありません。認証付きsourceへNext optimizerを通さず、Webの`AuthenticatedFileImage`がAPI preview URLからnative `srcset`を組み立てます。
 
+AVIFはmagic bytesで形式だけを検出し、Cloudflare Imagesの`info()`へ渡しません。v1では常に`previewable: false`、`imageWidth: null`、`imageHeight: null`としてdownloadだけを提供します。local/remote Images実装差へ依存してAVIFのmetadataを確定しません。
+
 ## ローカル起動とseed
 
-初回またはfile fixtureを作り直したいときは、起動中のdev serverを停止してからresetします。
+日常の開発は次だけで起動します。
 
 ```sh
-bun run dev:data:reset
 bun run dev
 ```
 
-`dev:data:reset`は確認後にlocal Turso、`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。続く`bun run dev`がmigration、DB seed、R2 reconcileで再構築します。既存のpre-file seed DBはmigrationだけならreset不要ですが、新しい画像/download fixtureを得るには一度resetしてください。
+このcommandはmigrationを適用し、Webを`next dev --turbopack`、APIを`src/worker.ts`がmainの`wrangler dev`でsource watchします。build済みartifactは使いません。DB seed、R2 fixture reconcile、testは日常のdev起動へ混ぜません。
 
-通常の`bun run dev`はresetしません。DB bootstrapのmigrationと決定的seedを待ち、Portless配下でlocal Wranglerを`--local --persist-to apps/api/.wrangler/state`付きで起動し、manifestに残るpending fileをlocal R2へreconcileします。
-
-seedだけを再実行するときは次を使います。
+fixtureが必要なときだけ、devを起動したまま別terminalで次を明示実行します。
 
 ```sh
 bun run seed:local
 ```
 
 このcommandはlocal Tursoへのmigration/DB seedと、起動済みlocal API Worker経由のR2 reconcileを行います。remote Turso、production、`wrangler --remote`では実行できません。seed endpointはloopback限定かつ起動ごとのtokenが必要で、OpenAPIには掲載されません。
+
+local TursoとR2 stateを完全に作り直す場合だけ、devを停止してresetします。
+
+```sh
+bun run dev:data:reset
+bun run dev
+# fixtureが必要なら、別terminalで:
+bun run seed:local
+```
+
+`dev:data:reset`は確認後にlocal Turso、`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。続く`bun run dev`が行うのはmigrationまでで、fixture投入は任意です。既存DBへmigrationだけを適用する場合はreset不要です。
 
 ## 障害復旧
 
@@ -71,7 +81,7 @@ local seedのreconcileは次の動作です。
 - custom metadata不一致: 上書きせず停止
 - manifest file row削除済み: 再作成しない
 
-R2 PUT後にDB確定が失敗してもobjectとpendingを残すため、原因を直して同じcommandを再実行します。filename、object key、provider raw errorをlog/Sentryへ出さないでください。
+各fixtureはmanifest順に処理し、retry時も失敗したfixture位置を保持します。retry可能なHTTP失敗はそのfixtureで最大3回までとし、最初のfixtureへ戻るloopや無限retryは行いません。R2 PUT後にDB確定が失敗してもobjectとpendingを残すため、原因を直して同じcommandを明示再実行します。filename、object key、provider raw errorをlog/Sentryへ出さないでください。
 
 ## 検証
 

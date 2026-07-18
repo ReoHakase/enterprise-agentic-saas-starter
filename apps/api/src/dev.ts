@@ -1,7 +1,6 @@
 import { rm } from "node:fs/promises"
 
 import { isLocalDatabaseUrl } from "./development/file-seed-handler"
-import { reconcileDevelopmentFiles } from "./development/seed-client"
 import {
   developmentRuntimeEnvPath,
   developmentSeedSessionPath,
@@ -107,34 +106,14 @@ const main = async () => {
     }
   )
 
-  const abort = new AbortController()
-  let seedFailed = false
-  const seed = reconcileDevelopmentFiles({
-    endpoint,
-    token,
-    signal: abort.signal,
-  })
-    .then((count) => {
-      console.log(`Development R2 reconcile completed for ${count} fixtures.`)
-      return count
-    })
-    .catch(() => {
-      if (abort.signal.aborted) return
-      seedFailed = true
-      console.error("Development R2 reconcile failed.")
-      worker.kill()
-    })
-
   const forwardSignal = () => worker.kill()
   process.once("SIGINT", forwardSignal)
   process.once("SIGTERM", forwardSignal)
   const exitCode = await worker.exited
-  abort.abort()
-  await seed
   process.off("SIGINT", forwardSignal)
   process.off("SIGTERM", forwardSignal)
   await cleanup()
-  process.exitCode = seedFailed ? 1 : exitCode
+  process.exitCode = exitCode
 }
 
 try {

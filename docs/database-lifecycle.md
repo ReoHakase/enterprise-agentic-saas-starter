@@ -5,7 +5,7 @@
 - primary DBはTurso/libSQL、schemaはSQLite/libSQL専用。
 - `packages/db/drizzle/` のSQLとsnapshotを履歴の正本にする。
 - 開発起動でも `drizzle-kit push` は使わず、`generate + migrate` を使う。
-- seedは既存データを破壊せず、空のlocal開発DBに決定的なサンプルtenant/Issueを追加する。
+- seedは日常の`bun run dev`から分離し、必要なときだけ空のlocal開発DBに決定的なサンプルtenant/Issueを追加する。
 - resetはlocal DBかつ明示的な確認文字列があるときだけ許可する。
 
 ## Schema変更
@@ -27,19 +27,23 @@ bun run --cwd packages/db test
 
 ## Seed
 
+`bun run dev`はlocal Tursoへの接続待機と`generate + migrate`だけを行い、seedやtestを実行しません。fixtureが必要な場合はdevを動かしたまま別terminalでroot commandを使います。
+
+```sh
+bun run seed:local
+```
+
+このcommandがmigration確認、DB seed、起動済みlocal API Worker経由のR2 reconcileを順に実行します。fixture provisioning用であり、test commandではありません。
+
+DB seedだけを明示実行する場合:
+
 ```sh
 bun run --cwd packages/db db:seed
 ```
 
 seedは `file:` またはlocalhost URLだけを受け入れます。同じlocal DBへ複数回実行でき、通常は既存userがいればskipします。Cloud Turso URLは、空DBであっても開発用fake dataの投入前に拒否します。fresh DBでは固定anchor user/organization/Issueとseed 42の通常dataに加え、file manifestのpending row、typed owner、pending分を含むorganization usageを1 transactionで作成します。fixture bytesはDB processからR2へ直接書かず、local API Workerのbinding経由でready化します。認証plugin構成を変えた場合はBetter Auth CLIで `auth.generated.ts` を再生成し、その差分から新しいmigrationも生成します。
 
-DBとlocal R2を揃えてseed/reconcileする場合はroot commandを使います。
-
-```sh
-bun run seed:local
-```
-
-既存userがあるpre-file seed DBへfile fixtureだけを後付けしません。fixtureが必要な場合はdev server停止後に`bun run dev:data:reset`を一度実行してください。manifest rowを利用者が削除した後の通常seedでも復活させません。
+既存userがあるpre-file seed DBへfile fixtureだけを後付けしません。完全に作り直す場合はdev server停止後に`bun run dev:data:reset`を実行し、`bun run dev`でmigrationを適用してから、fixtureが必要な場合だけ別terminalで`bun run seed:local`を実行します。manifest rowを利用者が削除した後の通常seedでも復活させません。
 
 ## 手動reset
 

@@ -66,7 +66,7 @@ export const FILE_PREVIEW_WIDTHS = [360, 720, 1200, 2400] as const
 ```
 
 - raw path stringを集合と完全一致させる。`0360`、丸め、任意幅は400にする。
-- JPEG/PNG/WebP/GIFだけをmagic bytesと`IMAGES.info()`の両方でpreviewableにする。GIFは静止画、AVIF/SVG/HTMLはv1ではdownload-onlyにする。
+- JPEG/PNG/WebP/GIFだけをmagic bytesと`IMAGES.info()`の両方でpreviewableにする。GIFは静止画にする。AVIFはmagic bytesで形式だけを検出し、`IMAGES.info()`へ渡さず、常にdownload-only、dimensionsは`null`にする。SVG/HTMLもv1ではdownload-onlyにする。
 - R2 originalは自動最適化されない。認証・tenant確認後に`IMAGES.input()`へ渡し、WebP、quality 75、`anim: false`、aspect ratio維持、`fit: "scale-down"`で明示変換する。
 - cacheは認証・DB確認より先に読まない。keyへorganization、file、source ETag、幅、`webp:q75:anim0:v1`を含める。
 - browser responseは`private, no-cache`、ETag、`nosniff`、`Cross-Origin-Resource-Policy: same-site`にする。内部cloneだけ`public, max-age=2592000`、`Set-Cookie`なしにする。cache障害は変換結果を返すfail-openにする。
@@ -76,8 +76,12 @@ export const FILE_PREVIEW_WIDTHS = [360, 720, 1200, 2400] as const
 
 - seed manifestへ固定UUID、基準日時、owner/key、fixture path、size、MD5/SHA-256、format/dimensionsを集約する。Turso seedとR2 reconcileで別の正本を作らない。
 - DB seedはlocal URLだけを許可し、fresh DBへ1 transactionで通常data、pending files、typed owners、pending usageを作る。既存userがあるDBは非破壊でskipする。
+- `bun run dev`はseed、fixture reconcile、testを実行しない。local Tursoのmigrationを適用し、Webの`next dev --turbopack`とAPIのsource-watching Wranglerを起動する日常開発だけに閉じる。
+- API devはbuild済みWorker artifactを使わず、Wrangler mainの`src/worker.ts`を`wrangler dev`でwatch/rebundleする。Webもbuild済みOpenNext artifactではなくNext devのFast Refreshを維持する。
 - local R2は`wrangler dev --local --persist-to apps/api/.wrangler/state`の実binding経由でseedする。loopback request、起動ごとのtoken、development/local DBの三条件を満たす非OpenAPI endpointだけを使う。
+- fixtureが必要なときだけ、dev稼働中の別terminalで`bun run seed:local`を明示実行する。reset後も`bun run dev`が行うのはmigrationまでで、fixture投入は任意にする。
 - reconcileはmanifest rowが存在する場合だけ動く。pending+objectなしはPUT、pending+一致objectはready化、ready+objectなしは修復、ready+一致objectはno-opとし、未知metadata objectは上書きせず失敗させる。
+- reconcile clientは失敗したfixture位置を維持し、retry可能なHTTP失敗をそのfixtureで最大3回に制限する。fixture列全体を先頭から繰り返す無限loopを作らない。
 - R2成功後にDB確定が失敗した場合はobjectとpendingを残し、次回再開する。削除済みmanifest rowをseed再実行で復活させない。
 - remote Turso、`wrangler --remote`、production bindingではseed/resetを最初に拒否する。最大境界fixtureはcommitせずtest内で生成する。
 - local Imagesは低忠実度として扱い、通常testと資格情報付きremote Images smokeを分離する。
@@ -90,7 +94,6 @@ export const FILE_PREVIEW_WIDTHS = [360, 720, 1200, 2400] as const
 bun run check
 bun run --cwd apps/api cf:typegen
 bun run build:cloudflare
-bun run seed:local
 ```
 
-UIを変更した場合は`bun run test:e2e`、Cloudflare Imagesの変換条件を変更した場合はremote smokeも実行する。失敗時はprovider payloadを出力せず、固定error codeと件数だけで調査する。
+seed/reconcileを変更した場合だけ、devを起動した別terminalで`bun run seed:local`も確認する。UIを変更した場合は`bun run test:e2e`、Cloudflare Imagesの変換条件を変更した場合はremote smokeも実行する。失敗時はprovider payloadを出力せず、固定error codeと件数だけで調査する。

@@ -22,6 +22,8 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - portlessのTLDは `.localhost` を使う。webは `https://enterprise-agentic-saas.localhost`、APIは `https://api.enterprise-agentic-saas.localhost`、DBは `https://db.enterprise-agentic-saas.localhost`。
 - `.localhost` はportlessのデフォルトTLDなので、`package.json` の `portless.tld` は書かない。`tld` は未知のkeyとして警告される。
 - このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo run dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo run dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きへ戻す。
+- `bun run dev`はbuild済みartifactを起動しない。Webは`next dev --turbopack`でFast Refreshを維持し、APIはWrangler mainの`src/worker.ts`を`wrangler dev`でwatch/rebundleする。production相当のbuild確認は別の`bun run build:cloudflare`で行う。
+- 日常のdev起動はlocal Tursoの接続待機と`generate + migrate`までに閉じ、DB seed、R2 fixture reconcile、testを混ぜない。fixtureが必要な場合だけdev稼働中の別terminalで`bun run seed:local`を明示実行する。reset後も`bun run dev`でmigrationを適用し、seedは任意にする。
 - `turso dev` は `PORT` envを読まないため、DBのportless scriptは `turso dev --port ${PORT:-8080}` のようにportlessが割り当てた `PORT` を明示的に渡す。
 - local email inboxはNix dev shellの`pkgs.mailpit`を使う。`packages/email`の`dev`はReact Email previewを維持し、package-local `turbo.json`の`with`で`dev:mailpit`を並走させる。root `turbo.json`へpackage固有taskを増やさない。
 - Mailpit UI/Send APIはmain checkoutで `https://mailpit.enterprise-agentic-saas.localhost`、React Email previewは `https://email.enterprise-agentic-saas.localhost` にする。linked worktreeではPortless prefixを分離境界にし、別worktreeの固定URLへ配送しない。MailpitのSMTP listenerは外部公開せず、loopbackのephemeral portを使う。

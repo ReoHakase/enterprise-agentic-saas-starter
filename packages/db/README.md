@@ -43,7 +43,7 @@ APIとDB workspaceで同じURL/tokenを使います。実値はpackage直下のi
 
 ## Scripts
 
-通常はrepo rootからTurbo経由で起動します。これにより `db:turso` も同時に起動します。
+通常はrepo rootからTurbo経由で起動します。これにより `db:turso` も同時に起動し、接続待機と`generate + migrate`を行います。日常のdev起動ではseedやtestを実行しません。
 
 ```sh
 bunx turbo run dev --filter=@enterprise-agentic-saas/db
@@ -53,7 +53,7 @@ package directoryで `bun run dev` だけを実行してもTurboの `with` 関�
 
 ```sh
 bun run --cwd packages/db db:turso      # 永続化local Turso
-bun run --cwd packages/db db:bootstrap  # wait → generate → migrate → seed
+bun run --cwd packages/db db:bootstrap  # local確認 → wait → generate → migrate
 bun run --cwd packages/db db:generate
 bun run --cwd packages/db db:check
 bun run --cwd packages/db db:migrate
@@ -72,6 +72,14 @@ CONFIRM_DB_RESET=reset-local-development \
 seedとresetは `file:` またはlocalhost URLだけを許可します。resetはさらに確認文字列を要求し、migration ledgerを含むtableを削除、保存済みmigrationを全適用してからseedします。Cloud/staging/production URLはどちらも拒否します。本番provisioningでは `db:seed` を使わず、migration適用後に実ユーザーを通常の認証・organization作成フローから初期管理者にします。
 
 fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
+
+DBとlocal R2のfixtureが必要な場合は、rootの`bun run dev`を起動したまま別terminalで明示実行します。
+
+```sh
+bun run seed:local
+```
+
+これはmigration確認、DB seed、R2 reconcileを行うfixture provisioning commandで、通常のdevやtestには含まれません。local dataを完全に作り直す場合はdev停止後に`bun run dev:data:reset`、`bun run dev`、任意の`bun run seed:local`の順に実行します。
 
 詳細は [`../../docs/database-lifecycle.md`](../../docs/database-lifecycle.md) を参照してください。
 

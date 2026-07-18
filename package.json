@@ -109,7 +109,7 @@
     "format:check": "oxfmt --check",
     "lint": "turbo run lint",
     "prepare": "lefthook install",
-    "seed:local": "bun run --cwd packages/db db:bootstrap && bun run --cwd apps/api seed:files:local",
+    "seed:local": "bun run --cwd packages/db db:bootstrap && bun run --cwd packages/db db:seed && bun run --cwd apps/api seed:files:local",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:e2e:oauth": "turbo run test:e2e:oauth --filter=@enterprise-agentic-saas/web",

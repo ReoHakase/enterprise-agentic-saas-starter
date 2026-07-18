@@ -143,11 +143,11 @@ CORS_ORIGIN=https://enterprise-agentic-saas.localhost
 
 The root development command in the next step also starts the persistent local
 Turso process through the DB task's `with` relationship, waits for the
-database, applies committed Drizzle migrations with `generate + migrate`,
-inserts development seed data idempotently, and starts Drizzle Studio. It never
-resets existing data. See
+database, applies committed Drizzle migrations with `generate + migrate`, and
+starts Drizzle Studio. It does not seed sample data, reconcile R2 fixtures, or
+run tests, and it never resets existing data. See
 [`docs/database-lifecycle.md`](docs/database-lifecycle.md) for DB-only commands
-and the explicit local-only reset command.
+and the explicit local-only seed/reset commands.
 
 > [!NOTE]
 > `turso dev` expects the **`sqld`** binary on `PATH` (provided by the Nix dev shell as `pkgs.sqld`, or install Turso’s tooling by other means). Turso Cloud database creation also
@@ -164,10 +164,20 @@ and the explicit local-only reset command.
 bun run dev
 ```
 
-Wait for the DB task to report that migration and seed have completed before
-opening the application for the first time. Do not keep a separate DB-only
-Turbo dev task running alongside this command; both would try to own the same
-local port and database process.
+Wait for the DB task to report that migration has completed before opening the
+application for the first time. The Web process is `next dev --turbopack`; the
+API process is `wrangler dev` with `src/worker.ts` as its configured main. Both
+watch source files and reload/rebundle during development—`bun run dev` does
+not run a prebuilt Next/OpenNext or Worker artifact. Do not keep a separate
+DB-only Turbo dev task running alongside this command; both would try to own
+the same local port and database process.
+
+Sample DB data and R2 fixtures are opt-in. With `bun run dev` still running,
+execute this in a second terminal only when those fixtures are needed:
+
+```sh
+bun run seed:local
+```
 
 The same command starts the persistent Mailpit inbox at
 `https://mailpit.enterprise-agentic-saas.localhost` and the React Email template
@@ -188,7 +198,7 @@ The first command starts only the web process. The filtered Turbo command starts
 the API and its local DB and email dependencies, including Mailpit. Running the
 API package script directly assumes those dependencies are already running.
 
-When you intentionally need only Turso, migrations, seed, and Drizzle Studio,
+When you intentionally need only Turso, migrations, and Drizzle Studio,
 run this from the repository root instead of `bun run dev`:
 
 ```sh
