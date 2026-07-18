@@ -252,6 +252,15 @@ describe("development file fixtures", () => {
     expect(
       new Set(developmentFileFixtures.map((file) => file.organizationId)).size
     ).toBe(2)
+    expect(
+      developmentFileFixtures
+        .filter((fixture) => !fixture.previewable)
+        .every(
+          (fixture) =>
+            fixture.expectedImageWidth === null &&
+            fixture.expectedImageHeight === null
+        )
+    ).toBe(true)
 
     await Promise.all(
       developmentFileFixtures.map(async (fixture) => {

@@ -128,8 +128,8 @@ export const developmentFileFixtures = [
     md5: "131a49cba1b4f4b6cda6665edf506f7b",
     sha256: "300b39286a3cdcd392b5294d8a2ac0d3587dd6981cf13a8414ffe095cb601d40",
     expectedImageFormat: "avif",
-    expectedImageWidth: 64,
-    expectedImageHeight: 64,
+    expectedImageWidth: null,
+    expectedImageHeight: null,
     previewable: false,
   },
   {

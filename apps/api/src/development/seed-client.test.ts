@@ -61,4 +61,84 @@ describe("development file seed client", () => {
       })
     ).rejects.toThrow(/did not become ready \(unreachable\)/i)
   })
+
+  it("retries only the failing fixture and stops persistent 503s", async () => {
+    const failedFixture = developmentFileFixtures[2]
+    if (!failedFixture) throw new Error("A third fixture is required")
+    const fetchMock = vi.fn<FetchCall>(
+      async (url: Request | URL | string) =>
+        new Response(null, {
+          status: String(url).endsWith(encodeURIComponent(failedFixture.id))
+            ? 503
+            : 204,
+        })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      reconcileDevelopmentFiles({
+        endpoint: "http://127.0.0.1:8787",
+        token: "x".repeat(64),
+        timeoutMs: 1_000,
+        httpRetryLimit: 3,
+        retryIntervalMs: 1,
+      })
+    ).rejects.toThrow(/HTTP 503 after 3 attempts/i)
+
+    const callsByFixture = new Map<string, number>()
+    for (const [url] of fetchMock.mock.calls) {
+      const id = decodeURIComponent(
+        new URL(String(url)).pathname.split("/").at(-1) ?? ""
+      )
+      callsByFixture.set(id, (callsByFixture.get(id) ?? 0) + 1)
+    }
+    expect(callsByFixture.get(developmentFileFixtures[0]?.id ?? "")).toBe(1)
+    expect(callsByFixture.get(developmentFileFixtures[1]?.id ?? "")).toBe(1)
+    expect(callsByFixture.get(failedFixture.id)).toBe(3)
+    expect(callsByFixture.has(developmentFileFixtures[3]?.id ?? "")).toBe(false)
+  })
+
+  it("continues from a fixture after a transient 503", async () => {
+    const retriedFixture = developmentFileFixtures[2]
+    if (!retriedFixture) throw new Error("A third fixture is required")
+    let failuresRemaining = 1
+    const fetchMock = vi.fn<FetchCall>(async (url: Request | URL | string) => {
+      if (
+        String(url).endsWith(encodeURIComponent(retriedFixture.id)) &&
+        failuresRemaining > 0
+      ) {
+        failuresRemaining -= 1
+        return new Response(null, { status: 503 })
+      }
+      return new Response(null, { status: 204 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      reconcileDevelopmentFiles({
+        endpoint: "http://127.0.0.1:8787",
+        token: "x".repeat(64),
+        timeoutMs: 1_000,
+        retryIntervalMs: 1,
+      })
+    ).resolves.toBe(developmentFileFixtures.length)
+    expect(fetchMock).toHaveBeenCalledTimes(developmentFileFixtures.length + 1)
+  })
+
+  it("does not retry terminal HTTP responses", async () => {
+    const fetchMock = vi.fn<FetchCall>(
+      async () => new Response(null, { status: 409 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      reconcileDevelopmentFiles({
+        endpoint: "http://127.0.0.1:8787",
+        token: "x".repeat(64),
+        timeoutMs: 1_000,
+        retryIntervalMs: 1,
+      })
+    ).rejects.toThrow(/HTTP 409 after 1 attempt/i)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
 })

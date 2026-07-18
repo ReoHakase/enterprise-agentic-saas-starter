@@ -477,7 +477,7 @@ describe("file service", () => {
     ])
   })
 
-  it("records AVIF dimensions but keeps AVIF download-only", async () => {
+  it("keeps AVIF download-only without requiring the Images binding", async () => {
     const avif = new File(
       [new Uint8Array([0, 0, 0, 0, ...new TextEncoder().encode("ftypavif")])],
       "image.avif",
@@ -485,11 +485,12 @@ describe("file service", () => {
     )
     await expect(upload(database, avif, "avif-1")).resolves.toMatchObject({
       dto: {
-        imageHeight: 300,
-        imageWidth: 500,
+        imageHeight: null,
+        imageWidth: null,
         previewable: false,
       },
     })
+    expect(storage.runtime.images.info).not.toHaveBeenCalled()
   })
 
   it("supports single Range, conditional download, and security headers", async () => {

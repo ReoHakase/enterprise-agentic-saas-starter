@@ -245,7 +245,7 @@ const imageMetadata = async (
   runtime: FileStorageRuntime,
   file: FileWithOwner
 ): Promise<{ imageHeight: number | null; imageWidth: number | null }> => {
-  if (!file.detectedImageFormat) {
+  if (!isPreviewableImageFormat(file.detectedImageFormat)) {
     return { imageHeight: null, imageWidth: null }
   }
 

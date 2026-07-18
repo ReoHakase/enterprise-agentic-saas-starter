@@ -197,19 +197,21 @@ const reconcileFixture = async (
 
   if (stored.status === "ready") return response(204)
 
-  await db
-    .update(files)
-    .set({
-      detectedImageFormat: fixture.expectedImageFormat,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(files.id, fixture.id),
-        eq(files.organizationId, fixture.organizationId),
-        eq(files.status, "pending")
+  if (stored.detectedImageFormat !== fixture.expectedImageFormat) {
+    await db
+      .update(files)
+      .set({
+        detectedImageFormat: fixture.expectedImageFormat,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(files.id, fixture.id),
+          eq(files.organizationId, fixture.organizationId),
+          eq(files.status, "pending")
+        )
       )
-    )
+  }
 
   const pending = await findFileByUploadId(db, {
     organizationId: fixture.organizationId,

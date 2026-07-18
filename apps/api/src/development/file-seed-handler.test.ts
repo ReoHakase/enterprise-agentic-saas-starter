@@ -475,4 +475,50 @@ describe("development file seed reconcile", () => {
       await cleanup()
     }
   })
+
+  it("reconciles the download-only AVIF fixture without Images.info", async () => {
+    const selectedFixture = developmentFileFixtures.find(
+      (candidate) => candidate.key === "avif"
+    )
+    if (!selectedFixture) throw new Error("AVIF fixture is required")
+    const bytes = new Uint8Array(
+      await readFile(getDevelopmentFileFixtureUrl(selectedFixture))
+    )
+    const {
+      client,
+      database: fixtureDatabase,
+      cleanup,
+    } = await createFixtureDatabase(selectedFixture)
+    const bucket = new DevelopmentBucket()
+    const images = createImagesBinding(selectedFixture, true)
+    configureFileStorageRuntime({ bucket, images })
+
+    try {
+      const result = await handleDevelopmentFileSeedRequest(
+        fixtureDatabase,
+        await reconcileRequest(selectedFixture, bytes),
+        localEnvironment
+      )
+      expect(result?.status).toBe(204)
+      expect(images.info).not.toHaveBeenCalled()
+      await expect(
+        client.execute({
+          sql: "select status,detected_image_format as detectedImageFormat,image_width as imageWidth,image_height as imageHeight,etag from files where id = ?",
+          args: [selectedFixture.id],
+        })
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            status: "ready",
+            detectedImageFormat: "avif",
+            imageWidth: null,
+            imageHeight: null,
+            etag: selectedFixture.md5,
+          },
+        ],
+      })
+    } finally {
+      await cleanup()
+    }
+  })
 })
