@@ -147,7 +147,7 @@ export const createMailpitEmailSender = ({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(message),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       })
     } catch {

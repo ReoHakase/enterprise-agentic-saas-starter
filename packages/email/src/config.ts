@@ -31,7 +31,7 @@ export const resolveEmailProvider = (
 
 /**
  * Portlessを介さない単体起動向けのmain checkout URLだけをlocal developmentに補う。
- * 通常のAPI dev scriptはworktree-awareなURLをMAILPIT_URLへ先に注入する。
+ * 通常のAPI supervisorは起動中Mailpitのdirect loopback URLをMAILPIT_URLへ注入する。
  */
 export const resolveMailpitUrl = (
   configuredValue: string | undefined,

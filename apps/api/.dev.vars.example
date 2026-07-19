@@ -12,7 +12,7 @@ GITHUB_CLIENT_SECRET=replace-me
 TURSO_DATABASE_URL=https://db.enterprise-agentic-saas.localhost
 TURSO_AUTH_TOKEN=
 # Direct `wrangler dev` binding simulation only. Root `bun run dev` loads
-# `.env*`, defaults to Mailpit, and injects its worktree-aware URL instead.
+# `.env*`, defaults to Mailpit, and injects its direct loopback URL instead.
 EMAIL_PROVIDER=cloudflare
 EMAIL_FROM=noreply@example.com
 SENTRY_ENVIRONMENT=development

@@ -16,6 +16,10 @@
       "types": "./src/config.ts",
       "default": "./src/config.ts"
     },
+    "./development": {
+      "types": "./src/development/index.ts",
+      "default": "./src/development/index.ts"
+    },
     "./runtime": {
       "types": "./src/runtime/types.ts",
       "workerd": "./src/runtime/workerd.ts",
@@ -25,7 +29,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
-    "dev:mailpit": "portless run --name mailpit.enterprise-agentic-saas sh -c 'mkdir -p .local && exec mailpit --listen \"${HOST:-127.0.0.1}:$PORT\" --smtp 127.0.0.1:0 --database .local/mailpit.db --disable-version-check'",
+    "dev:mailpit": "portless run --name mailpit.enterprise-agentic-saas bun run src/development/mailpit-server.ts",
     "mailpit:reset": "rm -f .local/mailpit.db .local/mailpit.db-shm .local/mailpit.db-wal .local/mailpit.db-journal",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -42,6 +46,7 @@
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@react-email/ui": "catalog:",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",

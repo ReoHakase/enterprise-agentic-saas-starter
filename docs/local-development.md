@@ -32,13 +32,13 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
 - GitHub OAuth emulator: `https://github.emulate.enterprise-agentic-saas.localhost`
 
-上記はmain checkoutのURLです。linked worktreeではPortlessがworktree prefixを付け、APIの`dev` scriptも`portless get mailpit.enterprise-agentic-saas`で同じMailpit URLを解決します。別worktreeの受信箱へ誤配送しないため、固定URLをlocal envへ複製しません。
+上記はmain checkoutのbrowser URLです。linked worktreeではPortlessがworktree prefixを付けます。API supervisorは同じworktreeで起動したMailpit wrapperのprivate sessionを読み、workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別worktreeの固定URLをlocal envへ複製しません。
 
 `.env*` と `.dev.vars` の実値はcommitしません。共有するkeyだけを `.env.example` / `.dev.vars.example` に置きます。
 
 `EMAIL_FROM`はlocal/testでは省略でき、省略時は配送不能な`noreply@example.test`へ安全にfallbackします。productionではCloudflare Email Sendingで検証済みsenderを必須にし、未設定のまま起動しません。
 
-developmentではproviderとsender addressを既定で補い、Mailpit URLはAPIの`dev` scriptがworktreeを考慮して注入するため、通常はemail用envを追加しなくてもapplicationから送ったメールをMailpitで確認できます。別のlocal instanceへ向けるときだけAPIのlocal envで`MAILPIT_URL`を上書きします。React Email previewはtemplate単体の確認用、Mailpitは実際の送信導線の確認用です。
+developmentではproviderとsender addressを既定で補い、Mailpit wrapperとAPI supervisorがlocal sessionで接続先を引き渡すため、通常はemail用envを追加しなくてもapplicationから送ったメールをMailpitで確認できます。別のlocal instanceへ向けるときだけAPIのlocal envで`MAILPIT_URL`を上書きします。React Email previewはtemplate単体の確認用、Mailpitは実際の送信導線の確認用です。
 
 ```dotenv
 EMAIL_PROVIDER=mailpit
@@ -86,7 +86,7 @@ bun run dev
 
 Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
-Wranglerを既定経路にすることで、Elysia routeを編集しながら`FILES` R2、`IMAGES`、Workers Cache、`EMAIL` bindingを同じWorker runtimeで利用できます。通常のapplication emailはdevelopment providerのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけlocal `EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
+Wranglerを既定経路にすることで、Elysia routeを編集しながら`FILES` R2、`IMAGES`、Workers Cache、`EMAIL` bindingを同じWorker runtimeで利用できます。通常のapplication emailはdevelopment providerのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdはPortlessの開発CAを信頼しないため、browserはPortless HTTPS、WorkerからMailpitへの送信だけはprivate sessionで渡すdirect loopback HTTPに分けます。API supervisorはsessionを読み、Mailpit `/api/v1/info` のreadinessを確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけlocal `EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
 
 既存DBへmigrationだけを適用する場合はreset不要です。local dataとR2 stateを作り直す場合だけ、全dev serverを停止して次を実行します。
 
@@ -186,8 +186,8 @@ bun run build:cloudflare
 - `.localhost` HTTPSで証明書エラー: `~/.portless/ca.pem` と `NODE_EXTRA_CA_CERTS` を確認する。
 - envが読まれない: Bunはcommandのcwdにある `.env*` を読む。rootへsecretを集約しない。
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。
-- Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `portless get mailpit.enterprise-agentic-saas` の出力を開く。
-- Mailpitにメールが届かない: `NODE_ENV=development`であること、APIのlocal envが既定値を`console`等で上書きしていないこと、`MAILPIT_URL`がlocal URLであることを確認する。React Email previewにはapplicationから送ったメールは保存されない。
+- Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `portless get mailpit.enterprise-agentic-saas` の出力を開く。APIだけをpackage単体で起動するときは、Mailpit dependencyを先に起動するか明示的なlocal `MAILPIT_URL`を渡す。
+- Mailpitにメールが届かない: `NODE_ENV=development`であること、APIのlocal envが既定値を`console`等で上書きしていないことを確認する。通常のroot/filtered Turbo起動では `packages/email/.local/mailpit-session.json` が存在し、API起動時にdirect loopback endpointのreadinessが通る。React Email previewにはapplicationから送ったメールは保存されない。
 - GitHub OAuth user pickerが開かない: `portless get github.emulate.enterprise-agentic-saas`と`portless get api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
 - emulatorが起動を拒否する: `NODE_ENV=production`、remote URL、`DEBUG=1`、`EMULATE_DEBUG=1`をlocal shellへ残していないか確認する。実credentialをdebug logへ出す設定で回避しない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。

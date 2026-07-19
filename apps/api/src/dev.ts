@@ -1,5 +1,7 @@
 import { rm } from "node:fs/promises"
 
+import { waitForMailpitDevelopmentSession } from "@enterprise-agentic-saas/email/development"
+
 import { isLocalDatabaseUrl } from "./development/file-seed-handler"
 import {
   developmentRuntimeEnvPath,
@@ -68,6 +70,11 @@ const main = async () => {
   for (const key of forwardedEnvironmentKeys) {
     const value = process.env[key]
     if (value) environment.set(key, value)
+  }
+  const emailProvider = process.env.EMAIL_PROVIDER?.trim() || "mailpit"
+  if (emailProvider === "mailpit" && !environment.has("MAILPIT_URL")) {
+    const mailpit = await waitForMailpitDevelopmentSession()
+    environment.set("MAILPIT_URL", mailpit.url)
   }
   environment.set("NODE_ENV", "development")
   environment.set("DEV_FILE_SEED_TOKEN", token)

@@ -225,7 +225,7 @@ describe("email senders", () => {
           HTML: "<p>Text</p>",
           Tags: ["magic_link"],
         }),
-        redirect: "error",
+        redirect: "manual",
         signal: expect.any(AbortSignal),
       }
     )

@@ -190,10 +190,12 @@ dev`; it does not wait for a missing database process.
 The root `bun run dev` command also starts the persistent Mailpit inbox at
 `https://mailpit.enterprise-agentic-saas.localhost` and the React Email template
 preview at `https://email.enterprise-agentic-saas.localhost` in the main
-checkout. Portless adds the current worktree prefix in linked worktrees, and the
-API resolves that effective Mailpit URL automatically. Development email
-defaults to Mailpit, so magic links, verification messages, and invitations are
-visible without adding a provider override. The Worker still has local
+checkout. Portless adds the current worktree prefix in linked worktrees. The API
+supervisor discovers the matching Mailpit process through a private local
+session and gives workerd its direct loopback HTTP endpoint; the browser UI
+continues to use Portless HTTPS. Development email defaults to Mailpit, so magic
+links, verification messages, and invitations are visible without adding a
+provider override. The Worker still has local
 `FILES`, `IMAGES`, Cache, and `EMAIL` bindings; selecting the Cloudflare email
 provider explicitly exercises Wrangler's simulated email binding instead of the
 default Mailpit inbox.

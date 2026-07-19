@@ -24,7 +24,7 @@ Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だ
 
 ## Env 境界
 
-環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。email providerはdevelopment=`mailpit`、test=`noop`、production=`cloudflare`を既定にする。developmentの`dev` scriptは`portless get`でworktree-awareな`MAILPIT_URL`と`GITHUB_OAUTH_EMULATOR_URL`を注入する。local/testで`EMAIL_FROM`を省略した場合は配送不能な`noreply@example.test`を使う。本番では`EMAIL_FROM`を必須にし、未設定や不正なaddressならfail-fastする。
+環境変数は [`src/env.ts`](src/env.ts) で [envin](https://github.com/turbostarter/envin) + Valibot により検証する。API 固有の env のみ管理する。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env（`TURSO_DATABASE_URL`, `BETTER_AUTH_SECRET` 等）は各 package が検証するため、ここでは重複させない。email providerはdevelopment=`mailpit`、test=`noop`、production=`cloudflare`を既定にする。developmentのsupervisorはprivate local sessionから起動中Mailpitのdirect loopback URLを取得して`MAILPIT_URL`へ注入し、`GITHUB_OAUTH_EMULATOR_URL`だけを`portless get`でworktree-awareに解決する。local/testで`EMAIL_FROM`を省略した場合は配送不能な`noreply@example.test`を使う。本番では`EMAIL_FROM`を必須にし、未設定や不正なaddressならfail-fastする。
 
 主な env:
 
@@ -45,7 +45,7 @@ SentryはBunとCloudflare WorkerのSDKをruntime entrypointで分離する。pro
 
 rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` supervisorが`src/worker.ts`をmainにした`wrangler dev --local`を起動する。Wranglerはimport graphをwatchし、Elysiaや依存sourceの保存時にrebundleしてWorker isolateを再起動する。Bunの状態保持型HMRではないためmemory stateは引き継がないが、Tursoと`--persist-to .wrangler/state`のR2 dataはreload後も残る。supervisorまたは起動時envを変えた場合はdev processを再起動する。
 
-この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
+この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。workerdはPortlessの開発CAを信頼しないため、browser用Portless HTTPSではなく、token-fencedなsessionで受け取った同じMailpit instanceのdirect loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
 
 fixture投入はrootの`bun run seed`だけを公開入口にする。起動中Workerのsessionと`/ready`を短時間でpreflightしてからDB seedとR2 reconcileを行い、dev未起動時はTursoの長い接続待機へ入らない。
 
