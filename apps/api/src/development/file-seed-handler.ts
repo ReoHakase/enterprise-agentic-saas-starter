@@ -114,6 +114,9 @@ const findFixture = (request: Request) => {
   return developmentFileFixtures.find((fixture) => fixture.id === id) ?? null
 }
 
+const isReadinessRequest = (request: Request) =>
+  new URL(request.url).pathname === DEVELOPMENT_FILE_SEED_PATH
+
 const reconcileFixture = async (
   db: Db,
   request: Request,
@@ -251,10 +254,11 @@ export const handleDevelopmentFileSeedRequest = async (
   request: Request,
   environment: DevelopmentFileSeedEnvironment
 ): Promise<Response | null> => {
+  const readinessRequest = isReadinessRequest(request)
   const fixture = findFixture(request)
-  if (!fixture) return null
+  if (!readinessRequest && !fixture) return null
   if (
-    request.method !== "POST" ||
+    (readinessRequest ? request.method !== "GET" : request.method !== "POST") ||
     environment.NODE_ENV !== "development" ||
     !isLoopbackRequest(request) ||
     !isLocalDatabaseUrl(environment.TURSO_DATABASE_URL)
@@ -272,6 +276,12 @@ export const handleDevelopmentFileSeedRequest = async (
   }
 
   try {
+    if (readinessRequest) {
+      // session tokenだけでなく、seed対象schemaへ接続できることも確認する。
+      await db.select({ id: files.id }).from(files).limit(1)
+      return response(204)
+    }
+    if (!fixture) return response(404)
     return await reconcileFixture(db, request, fixture)
   } catch {
     // provider/DB raw error、object key、fixture名をresponse/logへ出さない。

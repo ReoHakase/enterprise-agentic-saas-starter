@@ -1,7 +1,10 @@
 import { developmentFileFixtures } from "@enterprise-agentic-saas/db/development-seed"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { reconcileDevelopmentFiles } from "./seed-client"
+import {
+  checkDevelopmentFileSeedSession,
+  reconcileDevelopmentFiles,
+} from "./seed-client"
 
 type FetchCall = (
   input: Request | string | URL,
@@ -10,6 +13,46 @@ type FetchCall = (
 
 describe("development file seed client", () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it("checks readiness through the authenticated development boundary", async () => {
+    const fetcher = vi.fn<FetchCall>(
+      async () => new Response(null, { status: 204 })
+    )
+
+    await expect(
+      checkDevelopmentFileSeedSession({
+        endpoint: "http://127.0.0.1:8787",
+        fetcher,
+        token: "x".repeat(64),
+      })
+    ).resolves.toBe(true)
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      "http://127.0.0.1:8787/__development/files/reconcile"
+    )
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: "GET" })
+    expect(
+      new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("authorization")
+    ).toBe(`Bearer ${"x".repeat(64)}`)
+  })
+
+  it("does not accept an unowned or unreachable development session", async () => {
+    await expect(
+      checkDevelopmentFileSeedSession({
+        endpoint: "http://127.0.0.1:8787",
+        fetcher: async () => new Response(null, { status: 401 }),
+        token: "x".repeat(64),
+      })
+    ).resolves.toBe(false)
+    await expect(
+      checkDevelopmentFileSeedSession({
+        endpoint: "http://127.0.0.1:8787",
+        fetcher: async () => {
+          throw new Error("unreachable")
+        },
+        token: "x".repeat(64),
+      })
+    ).resolves.toBe(false)
+  })
 
   it("reconciles every committed fixture through the loopback endpoint", async () => {
     const fetchMock = vi.fn<FetchCall>(

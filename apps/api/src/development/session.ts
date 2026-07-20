@@ -1,10 +1,21 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import {
+  chmod,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 
 const apiRoot = fileURLToPath(new URL("../../", import.meta.url))
 export const developmentRuntimeDirectory = `${apiRoot}.wrangler/development`
-export const developmentRuntimeEnvPath = `${developmentRuntimeDirectory}/runtime.env`
 export const developmentSeedSessionPath = `${developmentRuntimeDirectory}/file-seed-session.json`
+export const developmentLeaseDatabasePath = `${developmentRuntimeDirectory}/leases.db`
+
+export const createDevelopmentRuntimeEnvPath = () =>
+  `${developmentRuntimeDirectory}/runtime-${crypto.randomUUID()}.env`
 
 export type DevelopmentSeedSession = {
   endpoint: string
@@ -45,4 +56,59 @@ export const readDevelopmentSeedSession = async () => {
     await readFile(developmentSeedSessionPath, "utf8")
   )
   return parseDevelopmentSeedSession(value)
+}
+
+export const writeDevelopmentSeedSession = async (
+  session: DevelopmentSeedSession
+) => {
+  const temporaryPath = `${developmentSeedSessionPath}.${crypto.randomUUID()}.tmp`
+  try {
+    await writePrivateFile(
+      temporaryPath,
+      `${JSON.stringify(parseDevelopmentSeedSession(session))}\n`
+    )
+    await rename(temporaryPath, developmentSeedSessionPath)
+    await chmod(developmentSeedSessionPath, 0o600)
+  } finally {
+    await rm(temporaryPath, { force: true })
+  }
+}
+
+/** 別processが公開したsessionを消さないtoken-fenced cleanup。 */
+export const removeDevelopmentSeedSessionIfOwned = async (token: string) => {
+  let session: DevelopmentSeedSession
+  try {
+    session = await readDevelopmentSeedSession()
+  } catch {
+    return
+  }
+  if (session.token === token) {
+    await rm(developmentSeedSessionPath, { force: true })
+  }
+}
+
+/** Worker lease取得後だけ呼び、crashした旧supervisorのsecret envを回収する。 */
+export const removeStaleDevelopmentRuntimeEnvFiles = async () => {
+  let entries: string[]
+  try {
+    entries = await readdir(developmentRuntimeDirectory)
+  } catch (cause) {
+    if (cause instanceof Error && Reflect.get(cause, "code") === "ENOENT") {
+      return
+    }
+    throw cause
+  }
+  await Promise.all(
+    entries
+      .filter(
+        (entry) =>
+          entry === "runtime.env" ||
+          /^runtime-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.env$/u.test(
+            entry
+          )
+      )
+      .map((entry) =>
+        rm(`${developmentRuntimeDirectory}/${entry}`, { force: true })
+      )
+  )
 }

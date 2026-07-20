@@ -33,7 +33,7 @@ export const assertLocalDatabaseUrl = (databaseUrl: string) => {
   )
 }
 
-/** 固定のlocal Turso stateとWrangler stateを一緒に消すroot reset専用境界。 */
+/** repositoryが管理するlocal Turso stateだけを対象にする開発用境界。 */
 export const assertRepositoryLocalTursoUrl = (databaseUrl: string) => {
   assertLocalDatabaseUrl(databaseUrl)
 
@@ -56,6 +56,6 @@ export const assertRepositoryLocalTursoUrl = (databaseUrl: string) => {
   }
 
   throw new Error(
-    "Local development reset requires the repository-managed Portless Turso URL."
+    "Local development data operations require the repository-managed Portless Turso URL."
   )
 }

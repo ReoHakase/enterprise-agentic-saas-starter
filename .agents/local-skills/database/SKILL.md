@@ -77,8 +77,8 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - schema変更は `db:generate` でSQL/snapshotを保存し、SQLとdata backfillをレビューしてから `db:migrate` する。CIは `db:check` とfresh/legacy migration testを通す。
 - seedは `drizzle-seed` を使う。auth/appの `text("id")` primary key は実アプリの生成と合わせて `f.uuid()` を明示し、整数風や任意文字列のIDを混ぜない。
 - seedは既存userがいるDBを破壊せずskipする。seed自体も `file:` またはlocalhost URLだけを許可し、Cloud Tursoへ開発用fake dataを投入しない。本番provisioningはmigrationと実ユーザーの明示的な初期管理者作成を別経路で行う。
-- rootのDB開発入口は`bun run dev:db`、local Tursoと対応R2 stateのresetは`bun run dev:db:reset`にする。package内部の`db:*` scriptはschema作業・migration・診断用であり、日常のroot導線と区別する。
-- fixtureが必要な場合だけ、dev稼働中の別terminalで`bun run seed`を明示実行する。`dev:db:reset`後は`bun run dev`でmigrationを適用し、seed/R2 reconcileは必要な場合だけ実行する。root `seed`はDBだけでなくR2も扱うため`dev:db:seed`へ入れず、起動中Workerを先に短時間preflightしてdev停止中の長いDB waitを避ける。
+- rootのDB開発入口は`bun run dev:db`、local Tursoと対応R2 stateのresetは`bun run dev:db:reset`、任意fixture provisioningは`bun run dev:db:seed`にする。`dev:db:*`はDB metadataと対応R2 stateを一貫させるlocal data lifecycleの公開入口であり、package内部の`db:*` scriptはschema作業・migration・診断用として区別する。rootの`seed` aliasは作らない。
+- `bun run dev:db:seed`はhealthyなAPI dev sessionがあれば既存Workerを再利用する。dev停止中はlocal Tursoが停止中の場合だけ一時起動し、`generate + migrate`、DB seed、`apps/api/.wrangler/state`を使う一時Wrangler経由のR2 reconcileを行う。完了・失敗・signal時は自身が起動したprocessだけを停止し、既存processと永続stateには触れない。初回fixtureはseed後に`bun run dev`、resetはdev停止 → `dev:db:reset` → 任意の`dev:db:seed` → `dev`とする。通常の`bun run dev`へseedを混ぜず、production/remote seedを拒否する。
 - 作り直しはlocal URLかつ `CONFIRM_DB_RESET=reset-local-development` の明示時だけ許可し、migration ledgerを含むtableをdrop → 保存済みmigration全適用 → seedの順にする。
 - local devで `turso dev` を使う場合、Turso CLIだけでなく `sqld` が `PATH` に必要。Cloud DB作成は `turso auth login` 済みでないと実行できない。
 - `turso dev --db-file .local/turso/dev.db` は親directoryを自動作成しない。`db:turso:serve` は起動前に `.local/turso` を作成し、clean checkoutで`health check ... connection refused`にしない。

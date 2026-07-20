@@ -11,6 +11,12 @@ const RETRY_INTERVAL_MS = 500
 const MAX_RETRY_INTERVAL_MS = 5_000
 const DEFAULT_HTTP_RETRY_LIMIT = 3
 const DEFAULT_TIMEOUT_MS = 120_000
+const DEFAULT_READINESS_TIMEOUT_MS = 1_000
+
+type Fetcher = (
+  input: Request | string | URL,
+  init?: RequestInit
+) => Promise<Response>
 
 const delay = (milliseconds: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -32,6 +38,48 @@ const delay = (milliseconds: number, signal?: AbortSignal) =>
 class ReconcileHttpError extends Error {
   constructor(readonly status: number) {
     super("Development file reconcile request failed.")
+  }
+}
+
+export const checkDevelopmentFileSeedSession = async ({
+  endpoint,
+  fetcher = fetch,
+  signal,
+  timeoutMs = DEFAULT_READINESS_TIMEOUT_MS,
+  token,
+}: {
+  endpoint: string
+  fetcher?: Fetcher
+  signal?: AbortSignal
+  timeoutMs?: number
+  token: string
+}) => {
+  const controller = new AbortController()
+  const onAbort = () => controller.abort(signal?.reason)
+  if (signal?.aborted) onAbort()
+  else signal?.addEventListener("abort", onAbort, { once: true })
+  const timeout = setTimeout(
+    () => controller.abort(new Error("Development seed readiness timed out.")),
+    Math.max(0, timeoutMs)
+  )
+
+  try {
+    const result = await fetcher(
+      new URL(DEVELOPMENT_FILE_SEED_PATH, endpoint),
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      }
+    )
+    await result.body?.cancel()
+    return result.status === 204
+  } catch {
+    if (signal?.aborted) throw signal.reason
+    return false
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener("abort", onAbort)
   }
 }
 

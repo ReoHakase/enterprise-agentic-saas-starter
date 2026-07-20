@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./development-seed": "./src/development-seed.ts",
+    "./local-development": "./src/local-database.ts",
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {

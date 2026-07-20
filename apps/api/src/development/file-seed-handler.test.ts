@@ -319,6 +319,37 @@ describe("development file seed boundary", () => {
 describe("development file seed reconcile", () => {
   afterEach(() => resetFileStorageRuntimeForTest())
 
+  it("proves the session token and migrated database before seed", async () => {
+    const selectedFixture = developmentFileFixtures.find(
+      (candidate) => candidate.key === "text"
+    )
+    if (!selectedFixture) throw new Error("Text fixture is required")
+    const { database: fixtureDatabase, cleanup } =
+      await createFixtureDatabase(selectedFixture)
+
+    try {
+      const result = await handleDevelopmentFileSeedRequest(
+        fixtureDatabase,
+        new Request(`http://127.0.0.1:8787${DEVELOPMENT_FILE_SEED_PATH}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        localEnvironment
+      )
+      expect(result?.status).toBe(204)
+
+      const denied = await handleDevelopmentFileSeedRequest(
+        fixtureDatabase,
+        new Request(`http://127.0.0.1:8787${DEVELOPMENT_FILE_SEED_PATH}`, {
+          headers: { Authorization: `Bearer ${"z".repeat(64)}` },
+        }),
+        localEnvironment
+      )
+      expect(denied?.status).toBe(401)
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("converges pending, ready, missing, and deleted fixture states", async () => {
     const selectedFixture = developmentFileFixtures.find(
       (candidate) => candidate.key === "text"
