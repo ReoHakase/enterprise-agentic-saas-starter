@@ -22,6 +22,6 @@ bun run check
 bun run build
 ```
 
-local applicationは `bun run dev` 1つで起動します。Webは`next dev --turbopack`のFast Refresh、APIは`src/worker.ts`をmainにした`wrangler dev`のsource再bundleとWorker isolate再起動を使い、build済みartifactは実行しません。このcommandにはlocal Turso、migration、Drizzle Studio、永続R2、Mailpit、React Email preview、GitHub OAuth emulatorを含めますが、DB seed、R2 fixture reconcile、testは含めません。fixtureが必要なときだけ、devを起動したまま別terminalで`bun run seed`を明示実行します。main checkoutの送信メールは `https://mailpit.enterprise-agentic-saas.localhost`、GitHub user pickerは`https://github.emulate.enterprise-agentic-saas.localhost`で確認できます。linked worktreeでは各`portless get`の出力を使います。DBだけが必要な場合は`bun run dev:db`を使います。初回起動、reset、seedの関係は[ローカル開発](./local-development.md)を参照してください。
+local applicationは `bun run dev` 1つで起動します。Webは`next dev --turbopack`のFast Refresh、APIは`src/worker.ts`をmainにした`wrangler dev`のsource再bundleとWorker isolate再起動を使い、build済みartifactは実行しません。このcommandにはlocal Turso、migration、Drizzle Studio、永続R2、Mailpit、React Email preview、GitHub OAuth emulatorを含めますが、DB seed、R2 fixture reconcile、testは含めません。fixtureが必要なときだけ`bun run dev:db:seed`を明示実行します。このseed commandはfull devが停止中でも必要なlocal processだけを一時起動でき、起動中ならhealthyなAPI dev sessionを再利用します。main checkoutの送信メールは `https://mailpit.enterprise-agentic-saas.localhost`、GitHub user pickerは`https://github.emulate.enterprise-agentic-saas.localhost`で確認できます。linked worktreeでは各`portless get`の出力を使います。DBだけが必要な場合は`bun run dev:db`を使います。初回起動、reset、seedの関係は[ローカル開発](./local-development.md)を参照してください。
 
 破壊的なDB resetと本番deployは通常の開発コマンドへ混ぜていません。各runbookの確認条件を満たしてから明示実行してください。

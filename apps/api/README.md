@@ -47,7 +47,7 @@ rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` superviso
 
 この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。workerdはPortlessの開発CAを信頼しないため、browser用Portless HTTPSではなく、token-fencedなsessionで受け取った同じMailpit instanceのdirect loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
 
-fixture投入はrootの`bun run seed`だけを公開入口にする。起動中Workerのsessionと`/ready`を短時間でpreflightしてからDB seedとR2 reconcileを行い、dev未起動時はTursoの長い接続待機へ入らない。
+fixture投入の公開入口はrootの`bun run dev:db:seed`だけにする。healthyなAPI dev sessionがあればそのWorkerを再利用し、なければlocal Tursoが停止中の場合だけ一時起動したうえで、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動する。migration、DB seed、R2 reconcileの後はcommand自身が起動したprocessだけを停止し、既存のdev processには触れない。production/remote seedとrootの`seed` aliasは作らない。
 
 ## Local observability
 

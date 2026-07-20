@@ -73,13 +73,15 @@ seedとresetは `file:` またはlocalhost URLだけを許可します。reset�
 
 fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
 
-DBとlocal R2のfixtureが必要な場合は、rootの`bun run dev`を起動したまま別terminalで明示実行します。
+DBとlocal R2のfixtureが必要な場合は、rootから明示実行します。full devの起動前でも、起動中でも利用できます。
 
 ```sh
-bun run seed
+bun run dev:db:seed
 ```
 
-これは起動済みdevのreadiness確認、DB seed、R2 reconcileを行うfixture provisioning commandで、通常のdevやtestには含まれません。migrationは先に起動した`bun run dev`が担当します。dev未起動時はDBを待たずに終了します。local dataを完全に作り直す場合はdev停止後に`bun run dev:db:reset`、`bun run dev`、任意の`bun run seed`の順に実行します。
+これはlocal fixture provisioning commandです。healthyなAPI dev sessionがあれば再利用し、なければlocal Tursoが停止中の場合だけ一時起動してmigrationを適用し、`apps/api/.wrangler/state`を使うloopback限定Wrangler経由でDB seedとR2 reconcileを行います。終了時はcommand自身が起動したprocessだけを停止します。通常のdevやtestには含まれず、production/remote targetは拒否します。rootの`seed` aliasとproduction seed commandはありません。
+
+初回からfixtureが必要な場合は`bun run dev:db:seed`の後に`bun run dev`を起動します。local dataを完全に作り直す場合はdev停止後に`bun run dev:db:reset`、任意の`bun run dev:db:seed`、`bun run dev`の順に実行します。
 
 詳細は [`../../docs/database-lifecycle.md`](../../docs/database-lifecycle.md) を参照してください。
 

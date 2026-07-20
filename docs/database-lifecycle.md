@@ -27,13 +27,13 @@ bun run --cwd packages/db test
 
 ## Seed
 
-`bun run dev`はlocal Tursoへの接続待機と`generate + migrate`だけを行い、seedやtestを実行しません。migration済みの空DBから通常のsignupを開始できるため、seedは初回起動やreset後の必須手順ではありません。fixtureが必要な場合だけdevを動かしたまま別terminalでroot commandを使います。
+`bun run dev`はlocal Tursoへの接続待機と`generate + migrate`だけを行い、seedやtestを実行しません。migration済みの空DBから通常のsignupを開始できるため、seedは初回起動やreset後の必須手順ではありません。fixtureが必要な場合だけ、full devの起動前または起動中にroot commandを使います。
 
 ```sh
-bun run seed
+bun run dev:db:seed
 ```
 
-このcommandは起動中のloopback Worker sessionと`/ready`を短時間でpreflightし、DB seed、local API Worker経由のR2 reconcileを順に実行します。migrationは先に起動した`bun run dev`の責務です。devが停止中ならDBの接続待機を始めず、先にdevを起動する案内を返します。fixture provisioning用であり、test commandではありません。production seed commandは用意せず、この実装自体もproduction、remote Turso、remote Workerを拒否します。
+このcommandはhealthyなloopback API dev sessionがあれば既存Workerを再利用します。sessionがなければlocal Tursoが停止中の場合だけ一時起動し、`generate + migrate`、DB seed、`apps/api/.wrangler/state`を使う一時Wrangler経由のR2 reconcileを順に行います。終了時はcommand自身が起動したprocessだけを停止し、既存のdev processや永続化したDB/R2 stateには触れません。fixture provisioning用であり、test commandではありません。production seed commandとrootの`seed` aliasは用意せず、この実装自体もproduction、remote Turso、remote Workerを拒否します。
 
 DB seedだけを明示実行する場合:
 
@@ -43,7 +43,7 @@ bun run --cwd packages/db db:seed
 
 seedは `file:` またはlocalhost URLだけを受け入れます。同じlocal DBへ複数回実行でき、通常は既存userがいればskipします。Cloud Turso URLは、空DBであっても開発用fake dataの投入前に拒否します。fresh DBでは固定anchor user/organization/Issueとseed 42の通常dataに加え、file manifestのpending row、typed owner、pending分を含むorganization usageを1 transactionで作成します。fixture bytesはDB processからR2へ直接書かず、local API Workerのbinding経由でready化します。認証plugin構成を変えた場合はBetter Auth CLIで `auth.generated.ts` を再生成し、その差分から新しいmigrationも生成します。
 
-既存userがあるpre-file seed DBへfile fixtureだけを後付けしません。完全に作り直す場合はdev server停止後に`bun run dev:db:reset`を実行し、`bun run dev`でmigrationを適用してから、fixtureが必要な場合だけ別terminalで`bun run seed`を実行します。manifest rowを利用者が削除した後の通常seedでも復活させません。
+既存userがあるpre-file seed DBへfile fixtureだけを後付けしません。完全に作り直す場合はdev server停止後に`bun run dev:db:reset`を実行し、fixtureが必要な場合だけ`bun run dev:db:seed`、その後`bun run dev`の順に実行します。manifest rowを利用者が削除した後の通常seedでも復活させません。
 
 ## 手動reset
 

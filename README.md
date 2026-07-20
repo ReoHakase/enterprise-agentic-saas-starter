@@ -176,16 +176,20 @@ require restarting `bun run dev`.
 Do not keep a separate DB-only dev task running alongside the full stack; both
 would try to own the same local port and database process.
 
-Sample DB data and R2 fixtures are opt-in. With `bun run dev` still running,
-execute this in a second terminal only when those fixtures are needed:
+Sample DB data and R2 fixtures are opt-in. Provision them before or during
+development only when they are needed:
 
 ```sh
-bun run seed
+bun run dev:db:seed
 ```
 
-`bun run seed` first checks that the local development stack is ready. If it is
-not running, the command exits quickly with an instruction to start `bun run
-dev`; it does not wait for a missing database process.
+`bun run dev:db:seed` reuses a healthy API development session when one is
+already running. Otherwise it temporarily starts the repository-local Turso
+process if needed and a loopback-only Wrangler Worker backed by the persistent
+`apps/api/.wrangler/state`, applies migrations, seeds the DB, reconciles R2, and
+then stops only the processes it started. It refuses production, remote Turso,
+and remote Worker targets. There is intentionally no production seed command or
+root `seed` alias.
 
 The root `bun run dev` command also starts the persistent Mailpit inbox at
 `https://mailpit.enterprise-agentic-saas.localhost` and the React Email template
