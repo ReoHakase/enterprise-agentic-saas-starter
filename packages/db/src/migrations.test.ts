@@ -72,8 +72,10 @@ describe("database migrations", () => {
       )
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
+          "agent_assets",
           "agent_connection_tickets",
           "agent_grants",
+          "agent_run_assets",
           "agent_runs",
           "agent_session_contexts",
           "agent_threads",
@@ -87,6 +89,9 @@ describe("database migrations", () => {
           "profile_image_cleanup_jobs",
           "profile_images",
           "rate_limit",
+          "storage_object_claims",
+          "storage_object_cleanup_jobs",
+          "storage_objects",
           "issue_activity_events",
           "issue_comments",
           "issues",
@@ -148,6 +153,198 @@ describe("database migrations", () => {
           updatedAt: now,
         },
       ])
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
+  it("expands legacy files into one storage object and file claim without moving keys", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(13)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: [
+            "storage-user",
+            "Storage User",
+            "storage-user@example.test",
+            1,
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["storage-org", "Storage Org", "storage-org", now],
+        },
+        {
+          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "storage-issue",
+            "storage-org",
+            1,
+            "Storage issue",
+            "storage-user",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-pending-file",
+            "storage-org",
+            "storage-user",
+            "legacy-pending-upload",
+            "issue",
+            "organizations/storage-org/files/issue/storage-issue/legacy-pending-file",
+            "pending.png",
+            100,
+            "image/png",
+            "pending",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-ready-file",
+            "storage-org",
+            "storage-user",
+            "legacy-ready-upload",
+            "issue",
+            "organizations/storage-org/files/issue/storage-issue/legacy-ready-file",
+            "ready.png",
+            200,
+            "image/png",
+            "png",
+            16,
+            16,
+            "legacy-ready-etag",
+            "ready",
+            now + 1,
+            now + 1,
+          ],
+        },
+        {
+          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+          args: [
+            "legacy-pending-file",
+            "storage-org",
+            "issue",
+            "storage-issue",
+          ],
+        },
+        {
+          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+          args: ["legacy-ready-file", "storage-org", "issue", "storage-issue"],
+        },
+        {
+          sql: "insert into organization_file_usage(organization_id,used_bytes,updated_at) values(?,?,?)",
+          args: ["storage-org", 300, now],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const [objects, files, claims, owners, usage, columns, foreignKeys] =
+        await Promise.all([
+          client.execute(
+            "select id,organization_id as organizationId,upload_id as uploadId,object_key as objectKey,size_bytes as sizeBytes,status,key_version as keyVersion,cleanup_revision as cleanupRevision from storage_objects order by id"
+          ),
+          client.execute(
+            "select id,object_key as objectKey,storage_object_id as storageObjectId,key_version as keyVersion from files order by id"
+          ),
+          client.execute(
+            "select storage_object_id as storageObjectId,organization_id as organizationId,holder_type as holderType,holder_id as holderId,revision from storage_object_claims order by storage_object_id"
+          ),
+          client.execute(
+            "select file_id as fileId,issue_id as issueId from issue_file_owners order by file_id"
+          ),
+          client.execute(
+            "select used_bytes as usedBytes,temporary_bytes as temporaryBytes from organization_file_usage where organization_id = 'storage-org'"
+          ),
+          client.execute("pragma table_info('files')"),
+          client.execute("pragma foreign_key_check"),
+        ])
+
+      expect(objects.rows).toMatchObject([
+        {
+          id: "legacy-pending-file",
+          organizationId: "storage-org",
+          uploadId: "legacy-pending-upload",
+          objectKey:
+            "organizations/storage-org/files/issue/storage-issue/legacy-pending-file",
+          sizeBytes: 100,
+          status: "pending",
+          keyVersion: 1,
+          cleanupRevision: 0,
+        },
+        {
+          id: "legacy-ready-file",
+          organizationId: "storage-org",
+          uploadId: "legacy-ready-upload",
+          objectKey:
+            "organizations/storage-org/files/issue/storage-issue/legacy-ready-file",
+          sizeBytes: 200,
+          status: "ready",
+          keyVersion: 1,
+          cleanupRevision: 0,
+        },
+      ])
+      expect(files.rows).toMatchObject([
+        {
+          id: "legacy-pending-file",
+          objectKey:
+            "organizations/storage-org/files/issue/storage-issue/legacy-pending-file",
+          storageObjectId: "legacy-pending-file",
+          keyVersion: 1,
+        },
+        {
+          id: "legacy-ready-file",
+          objectKey:
+            "organizations/storage-org/files/issue/storage-issue/legacy-ready-file",
+          storageObjectId: "legacy-ready-file",
+          keyVersion: 1,
+        },
+      ])
+      expect(claims.rows).toMatchObject([
+        {
+          storageObjectId: "legacy-pending-file",
+          organizationId: "storage-org",
+          holderType: "file",
+          holderId: "legacy-pending-file",
+          revision: 1,
+        },
+        {
+          storageObjectId: "legacy-ready-file",
+          organizationId: "storage-org",
+          holderType: "file",
+          holderId: "legacy-ready-file",
+          revision: 1,
+        },
+      ])
+      expect(owners.rows).toMatchObject([
+        { fileId: "legacy-pending-file", issueId: "storage-issue" },
+        { fileId: "legacy-ready-file", issueId: "storage-issue" },
+      ])
+      expect(usage.rows).toMatchObject([{ usedBytes: 300, temporaryBytes: 0 }])
+      expect(columns.rows.map(({ name }) => name)).toEqual(
+        expect.arrayContaining([
+          "object_key",
+          "upload_id",
+          "storage_object_id",
+          "key_version",
+        ])
+      )
+      expect(foreignKeys.rows).toHaveLength(0)
     } finally {
       client.close()
       await rm(migrationPrefix, { recursive: true, force: true })

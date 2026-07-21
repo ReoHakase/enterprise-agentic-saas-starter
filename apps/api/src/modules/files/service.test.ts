@@ -116,12 +116,24 @@ const createDatabase = async (): Promise<Db> => {
       image_height integer,
       etag text,
       status text not null default 'pending',
+      storage_object_id text,
+      key_version integer,
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      constraint files_storage_v2_check check (
+        (storage_object_id is null and key_version is null)
+        or (
+          storage_object_id is not null
+          and key_version is not null
+          and key_version in (1, 2)
+        )
+      )
     );
     create unique index files_organization_upload_uidx
       on files(organization_id, upload_id);
     create unique index files_object_key_uidx on files(object_key);
+    create unique index files_storage_object_uidx
+      on files(storage_object_id) where storage_object_id is not null;
     create table issue_file_owners (
       file_id text primary key not null,
       organization_id text not null,
@@ -131,7 +143,11 @@ const createDatabase = async (): Promise<Db> => {
     create table organization_file_usage (
       organization_id text primary key not null,
       used_bytes integer not null default 0,
-      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+      temporary_bytes integer not null default 0,
+      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      constraint organization_file_usage_temporary_bytes_check check (
+        temporary_bytes between 0 and used_bytes
+      )
     );
     create table file_cleanup_jobs (
       id text primary key not null,

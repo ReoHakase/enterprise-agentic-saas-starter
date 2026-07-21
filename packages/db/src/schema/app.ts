@@ -4,6 +4,7 @@ import {
   foreignKey,
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -47,6 +48,10 @@ export type AuditLogMetadata = Record<string, string | number | boolean | null>
 
 export const MAX_FILE_SIZE_BYTES = 20_000_000 as const
 export const ORGANIZATION_FILE_QUOTA_BYTES = 1_073_741_824 as const
+export const AGENT_ASSET_MAX_SIZE_BYTES = 10_000_000 as const
+export const AGENT_RUN_MAX_ASSET_COUNT = 4 as const
+export const AGENT_RUN_MAX_ASSET_BYTES = 20_000_000 as const
+export const AGENT_ASSET_MAX_LIFETIME_MS = 604_800_000 as const
 
 export const fileOwnerTypes = ["issue"] as const
 export type FileOwnerType = (typeof fileOwnerTypes)[number]
@@ -127,6 +132,44 @@ export type AgentRunScope = (typeof agentRunScopes)[number]
 export const agentGrantKinds = ["connection", "run"] as const
 export type AgentGrantKind = (typeof agentGrantKinds)[number]
 
+export const storageObjectKeyVersions = [1, 2] as const
+export type StorageObjectKeyVersion = (typeof storageObjectKeyVersions)[number]
+
+export const storageObjectStatuses = [
+  "pending",
+  "ready",
+  "deleting",
+  "deleted",
+] as const
+export type StorageObjectStatus = (typeof storageObjectStatuses)[number]
+
+export const storageObjectClaimHolderTypes = [
+  "agent_asset",
+  "transferring",
+  "file",
+] as const
+export type StorageObjectClaimHolderType =
+  (typeof storageObjectClaimHolderTypes)[number]
+
+export const agentAssetStatuses = [
+  "pending",
+  "ready",
+  "promoting",
+  "promoted",
+  "expired",
+  "deleted",
+] as const
+export type AgentAssetStatus = (typeof agentAssetStatuses)[number]
+
+export const storageObjectCleanupJobStatuses = [
+  "pending",
+  "processing",
+  "failed",
+  "completed",
+] as const
+export type StorageObjectCleanupJobStatus =
+  (typeof storageObjectCleanupJobStatuses)[number]
+
 export const issues = sqliteTable(
   "issues",
   {
@@ -189,6 +232,129 @@ export const issues = sqliteTable(
   ]
 )
 
+export const storageObjects = sqliteTable(
+  "storage_objects",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    uploaderId: text("uploader_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    uploadId: text("upload_id").notNull(),
+    objectKey: text("object_key"),
+    sizeBytes: integer("size_bytes").notNull(),
+    declaredContentType: text("declared_content_type").notNull(),
+    detectedImageFormat: text(
+      "detected_image_format"
+    ).$type<DetectedImageFormat>(),
+    imageWidth: integer("image_width"),
+    imageHeight: integer("image_height"),
+    etag: text("etag"),
+    status: text("status")
+      .$type<StorageObjectStatus>()
+      .notNull()
+      .default("pending"),
+    keyVersion: integer("key_version")
+      .$type<StorageObjectKeyVersion>()
+      .notNull()
+      .default(2),
+    cleanupRevision: integer("cleanup_revision").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("storage_objects_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("storage_objects_organization_upload_uidx").on(
+      table.organizationId,
+      table.uploadId
+    ),
+    uniqueIndex("storage_objects_object_key_uidx")
+      .on(table.objectKey)
+      .where(sql`${table.objectKey} is not null`),
+    index("storage_objects_organization_status_created_idx").on(
+      table.organizationId,
+      table.status,
+      table.createdAt
+    ),
+    index("storage_objects_cleanup_idx").on(
+      table.status,
+      table.cleanupRevision,
+      table.updatedAt
+    ),
+    index("storage_objects_uploader_idx").on(
+      table.organizationId,
+      table.uploaderId
+    ),
+    check(
+      "storage_objects_upload_id_check",
+      sql`length(${table.uploadId}) between 1 and 128`
+    ),
+    check(
+      "storage_objects_size_bytes_check",
+      sql`${table.sizeBytes} between 0 and ${sql.raw(String(MAX_FILE_SIZE_BYTES))}`
+    ),
+    check(
+      "storage_objects_declared_content_type_check",
+      sql`length(${table.declaredContentType}) <= 255`
+    ),
+    check(
+      "storage_objects_detected_image_format_check",
+      sql`${table.detectedImageFormat} is null or ${table.detectedImageFormat} in ('jpeg', 'png', 'webp', 'gif', 'avif')`
+    ),
+    check(
+      "storage_objects_image_dimensions_check",
+      sql`(
+        ${table.imageWidth} is null and ${table.imageHeight} is null
+      ) or (
+        ${table.imageWidth} is not null
+        and ${table.imageHeight} is not null
+        and ${table.imageWidth} > 0
+        and ${table.imageHeight} > 0
+      )`
+    ),
+    check(
+      "storage_objects_status_check",
+      sql`${table.status} in ('pending', 'ready', 'deleting', 'deleted')`
+    ),
+    check(
+      "storage_objects_object_key_check",
+      sql`(
+        ${table.status} = 'deleted'
+        and ${table.objectKey} is null
+      ) or (
+        ${table.status} != 'deleted'
+        and ${table.objectKey} is not null
+        and length(${table.objectKey}) between 1 and 1024
+      )`
+    ),
+    check(
+      "storage_objects_ready_etag_check",
+      sql`${table.status} != 'ready' or (
+        ${table.etag} is not null
+        and length(${table.etag}) between 1 and 128
+      )`
+    ),
+    check(
+      "storage_objects_key_version_check",
+      sql`${table.keyVersion} in (1, 2)`
+    ),
+    check(
+      "storage_objects_cleanup_revision_check",
+      sql`${table.cleanupRevision} >= 0`
+    ),
+  ]
+)
+
 export const files = sqliteTable(
   "files",
   {
@@ -212,6 +378,8 @@ export const files = sqliteTable(
     imageHeight: integer("image_height"),
     etag: text("etag"),
     status: text("status").$type<FileStatus>().notNull().default("pending"),
+    storageObjectId: text("storage_object_id"),
+    keyVersion: integer("key_version").$type<StorageObjectKeyVersion>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -231,6 +399,13 @@ export const files = sqliteTable(
       table.organizationId,
       table.ownerType
     ),
+    uniqueIndex("files_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("files_storage_object_uidx")
+      .on(table.storageObjectId)
+      .where(sql`${table.storageObjectId} is not null`),
     index("files_organization_status_created_idx").on(
       table.organizationId,
       table.status,
@@ -240,6 +415,11 @@ export const files = sqliteTable(
       table.organizationId,
       table.uploaderId
     ),
+    foreignKey({
+      columns: [table.organizationId, table.storageObjectId],
+      foreignColumns: [storageObjects.organizationId, storageObjects.id],
+      name: "files_storage_object_tenant_fk",
+    }),
     check("files_owner_type_check", sql`${table.ownerType} in ('issue')`),
     check("files_status_check", sql`${table.status} in ('pending', 'ready')`),
     check(
@@ -269,6 +449,17 @@ export const files = sqliteTable(
     check(
       "files_ready_etag_check",
       sql`${table.status} != 'ready' or length(${table.etag}) between 1 and 128`
+    ),
+    check(
+      "files_storage_v2_check",
+      sql`(
+        ${table.storageObjectId} is null
+        and ${table.keyVersion} is null
+      ) or (
+        ${table.storageObjectId} is not null
+        and ${table.keyVersion} is not null
+        and ${table.keyVersion} in (1, 2)
+      )`
     ),
   ]
 )
@@ -310,6 +501,7 @@ export const organizationFileUsage = sqliteTable(
       .primaryKey()
       .references(() => organization.id, { onDelete: "cascade" }),
     usedBytes: integer("used_bytes").notNull().default(0),
+    temporaryBytes: integer("temporary_bytes").notNull().default(0),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .$onUpdate(() => new Date())
@@ -320,8 +512,326 @@ export const organizationFileUsage = sqliteTable(
       "organization_file_usage_used_bytes_check",
       sql`${table.usedBytes} between 0 and ${sql.raw(String(ORGANIZATION_FILE_QUOTA_BYTES))}`
     ),
+    check(
+      "organization_file_usage_temporary_bytes_check",
+      sql`${table.temporaryBytes} between 0 and ${table.usedBytes}`
+    ),
   ]
 )
+
+export const storageObjectClaims = sqliteTable(
+  "storage_object_claims",
+  {
+    storageObjectId: text("storage_object_id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    holderType: text("holder_type")
+      .$type<StorageObjectClaimHolderType>()
+      .notNull(),
+    holderId: text("holder_id"),
+    fromAssetId: text("from_asset_id"),
+    toFileId: text("to_file_id"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("storage_object_claims_holder_uidx")
+      .on(table.organizationId, table.holderType, table.holderId)
+      .where(sql`${table.holderType} in ('agent_asset', 'file')`),
+    uniqueIndex("storage_object_claims_transfer_from_uidx")
+      .on(table.organizationId, table.fromAssetId)
+      .where(sql`${table.holderType} = 'transferring'`),
+    uniqueIndex("storage_object_claims_transfer_to_uidx")
+      .on(table.organizationId, table.toFileId)
+      .where(sql`${table.holderType} = 'transferring'`),
+    index("storage_object_claims_organization_holder_idx").on(
+      table.organizationId,
+      table.holderType,
+      table.holderId
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.storageObjectId],
+      foreignColumns: [storageObjects.organizationId, storageObjects.id],
+      name: "storage_object_claims_object_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "storage_object_claims_holder_type_check",
+      sql`${table.holderType} in ('agent_asset', 'transferring', 'file')`
+    ),
+    check(
+      "storage_object_claims_shape_check",
+      sql`(
+        ${table.holderType} in ('agent_asset', 'file')
+        and ${table.holderId} is not null
+        and length(${table.holderId}) between 1 and 128
+        and ${table.fromAssetId} is null
+        and ${table.toFileId} is null
+      ) or (
+        ${table.holderType} = 'transferring'
+        and ${table.holderId} is null
+        and ${table.fromAssetId} is not null
+        and length(${table.fromAssetId}) between 1 and 128
+        and ${table.toFileId} is not null
+        and length(${table.toFileId}) between 1 and 128
+      )`
+    ),
+    check("storage_object_claims_revision_check", sql`${table.revision} >= 1`),
+  ]
+)
+
+export const agentAssets = sqliteTable(
+  "agent_assets",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    sessionId: text("session_id").references(() => session.id, {
+      onDelete: "set null",
+    }),
+    contextEpoch: integer("context_epoch").notNull(),
+    uploaderId: text("uploader_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    storageObjectId: text("storage_object_id"),
+    filename: text("filename").notNull(),
+    status: text("status")
+      .$type<AgentAssetStatus>()
+      .notNull()
+      .default("pending"),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    promotedFileId: text("promoted_file_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_assets_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("agent_assets_storage_object_uidx")
+      .on(table.storageObjectId)
+      .where(sql`${table.storageObjectId} is not null`),
+    uniqueIndex("agent_assets_promoted_file_uidx")
+      .on(table.promotedFileId)
+      .where(sql`${table.promotedFileId} is not null`),
+    index("agent_assets_thread_status_expiry_idx").on(
+      table.organizationId,
+      table.threadId,
+      table.status,
+      table.expiresAt
+    ),
+    index("agent_assets_cleanup_idx").on(table.status, table.expiresAt),
+    foreignKey({
+      columns: [table.organizationId, table.threadId],
+      foreignColumns: [agentThreads.organizationId, agentThreads.id],
+      name: "agent_assets_thread_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.storageObjectId],
+      foreignColumns: [storageObjects.organizationId, storageObjects.id],
+      name: "agent_assets_storage_object_tenant_fk",
+    }),
+    foreignKey({
+      columns: [table.organizationId, table.promotedFileId],
+      foreignColumns: [files.organizationId, files.id],
+      name: "agent_assets_promoted_file_tenant_fk",
+    }),
+    check("agent_assets_epoch_check", sql`${table.contextEpoch} >= 1`),
+    check(
+      "agent_assets_session_id_check",
+      sql`${table.sessionId} is null or length(${table.sessionId}) between 1 and 128`
+    ),
+    check(
+      "agent_assets_filename_check",
+      sql`length(${table.filename}) between 1 and 255`
+    ),
+    check(
+      "agent_assets_status_check",
+      sql`${table.status} in ('pending', 'ready', 'promoting', 'promoted', 'expired', 'deleted')`
+    ),
+    check(
+      "agent_assets_state_shape_check",
+      sql`(
+        ${table.status} in ('pending', 'ready', 'promoting')
+        and ${table.storageObjectId} is not null
+        and ${table.promotedFileId} is null
+      ) or (
+        ${table.status} = 'promoted'
+        and ${table.storageObjectId} is null
+        and ${table.promotedFileId} is not null
+      ) or (
+        ${table.status} in ('expired', 'deleted')
+        and ${table.storageObjectId} is null
+        and ${table.promotedFileId} is null
+      )`
+    ),
+    check(
+      "agent_assets_expiry_check",
+      sql`${table.expiresAt} > ${table.createdAt}
+        and ${table.expiresAt} <= ${table.createdAt} + ${sql.raw(String(AGENT_ASSET_MAX_LIFETIME_MS))}`
+    ),
+  ]
+)
+
+export const agentRunAssets = sqliteTable(
+  "agent_run_assets",
+  {
+    organizationId: text("organization_id").notNull(),
+    runId: text("run_id").notNull(),
+    assetId: text("asset_id").notNull(),
+    storageObjectId: text("storage_object_id"),
+    sourceEtag: text("source_etag").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.runId, table.assetId],
+      name: "agent_run_assets_pk",
+    }),
+    index("agent_run_assets_organization_run_idx").on(
+      table.organizationId,
+      table.runId
+    ),
+    index("agent_run_assets_storage_object_idx").on(table.storageObjectId),
+    foreignKey({
+      columns: [table.organizationId, table.runId],
+      foreignColumns: [agentRuns.organizationId, agentRuns.id],
+      name: "agent_run_assets_run_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.assetId],
+      foreignColumns: [agentAssets.organizationId, agentAssets.id],
+      name: "agent_run_assets_asset_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.storageObjectId],
+      foreignColumns: [storageObjects.organizationId, storageObjects.id],
+      name: "agent_run_assets_storage_object_tenant_fk",
+    }),
+    check(
+      "agent_run_assets_source_etag_check",
+      sql`length(${table.sourceEtag}) between 1 and 128`
+    ),
+    check(
+      "agent_run_assets_size_bytes_check",
+      sql`${table.sizeBytes} between 0 and ${sql.raw(String(AGENT_ASSET_MAX_SIZE_BYTES))}`
+    ),
+  ]
+)
+
+// cleanup完了後にもretry receiptを残すため、storage objectとorganizationへの
+// FKは意図的に持たない。expected revisionとexact keyの両方を照合して削除する。
+export const storageObjectCleanupJobs = sqliteTable(
+  "storage_object_cleanup_jobs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    storageObjectId: text("storage_object_id").notNull(),
+    expectedCleanupRevision: integer("expected_cleanup_revision").notNull(),
+    objectKey: text("object_key").notNull(),
+    status: text("status")
+      .$type<StorageObjectCleanupJobStatus>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    leaseToken: text("lease_token"),
+    lockedAt: integer("locked_at", { mode: "timestamp_ms" }),
+    leaseExpiresAt: integer("lease_expires_at", { mode: "timestamp_ms" }),
+    nextAttemptAt: integer("next_attempt_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("storage_object_cleanup_jobs_revision_uidx").on(
+      table.storageObjectId,
+      table.expectedCleanupRevision
+    ),
+    uniqueIndex("storage_object_cleanup_jobs_object_key_uidx").on(
+      table.objectKey
+    ),
+    index("storage_object_cleanup_jobs_organization_idx").on(
+      table.organizationId
+    ),
+    index("storage_object_cleanup_jobs_claim_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.createdAt
+    ),
+    check(
+      "storage_object_cleanup_jobs_revision_check",
+      sql`${table.expectedCleanupRevision} >= 1`
+    ),
+    check(
+      "storage_object_cleanup_jobs_object_key_check",
+      sql`length(${table.objectKey}) between 1 and 1024`
+    ),
+    check(
+      "storage_object_cleanup_jobs_status_check",
+      sql`${table.status} in ('pending', 'processing', 'failed', 'completed')`
+    ),
+    check(
+      "storage_object_cleanup_jobs_attempts_check",
+      sql`${table.attempts} >= 0`
+    ),
+    check(
+      "storage_object_cleanup_jobs_last_error_code_check",
+      sql`${table.lastErrorCode} is null or (
+        length(${table.lastErrorCode}) between 1 and 96
+        and ${table.lastErrorCode} glob '[A-Za-z]*'
+        and ${table.lastErrorCode} not glob '*[^A-Za-z0-9_.:-]*'
+      )`
+    ),
+    check(
+      "storage_object_cleanup_jobs_lease_check",
+      sql`(
+        ${table.status} = 'processing'
+        and ${table.leaseToken} is not null
+        and length(${table.leaseToken}) = 64
+        and ${table.leaseToken} not glob '*[^0-9a-f]*'
+        and ${table.lockedAt} is not null
+        and ${table.leaseExpiresAt} is not null
+        and ${table.leaseExpiresAt} > ${table.lockedAt}
+      ) or (
+        ${table.status} != 'processing'
+        and ${table.leaseToken} is null
+        and ${table.lockedAt} is null
+        and ${table.leaseExpiresAt} is null
+      )`
+    ),
+    check(
+      "storage_object_cleanup_jobs_completed_at_check",
+      sql`(
+        ${table.status} = 'completed'
+        and ${table.completedAt} is not null
+      ) or (
+        ${table.status} != 'completed'
+        and ${table.completedAt} is null
+      )`
+    ),
+  ]
+)
+
+// 0014は構造とbackfillまで。SQLiteにはdeferred constraintがないため、0015で
+// promotionの固定statement順に対応するimmediate triggerを追加すること。
+// ready asset/fileとclaimの一致をrepository assertionだけに依存させない。
 
 export const agentSessionContexts = sqliteTable(
   "agent_session_contexts",
