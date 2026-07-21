@@ -1,6 +1,9 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
+  auditLogs,
+  fileCleanupJobs,
   files,
+  issueActivityEvents,
   organizationFileUsage,
 } from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
@@ -10,7 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createApp } from "../../app"
 import { AppError } from "../../errors/app-error"
-import { FILE_MAX_BYTES, FILE_PREVIEW_WIDTHS } from "./constants"
+import {
+  FILE_MAX_BYTES,
+  FILE_PREVIEW_WIDTHS,
+  FILE_TEXT_PREVIEW_MAX_BYTES,
+  isTextPreviewableFile,
+} from "./constants"
 import { fileUploadBodyModel } from "./model"
 import { reservePendingFile } from "./repository"
 import {
@@ -26,6 +34,8 @@ import {
   detectImageFormat,
   downloadFile,
   previewFile,
+  previewTextFile,
+  removeFile,
   uploadFile,
 } from "./service"
 
@@ -39,6 +49,7 @@ const createDatabase = async (): Promise<Db> => {
     drop table if exists organization_file_usage;
     drop table if exists issue_file_owners;
     drop table if exists files;
+    drop table if exists issue_activity_events;
     drop table if exists audit_logs;
     drop table if exists issues;
     drop table if exists member;
@@ -76,6 +87,19 @@ const createDatabase = async (): Promise<Db> => {
     );
     create unique index issues_id_organization_uidx
       on issues(id, organization_id);
+    create table issue_activity_events (
+      id text primary key not null,
+      organization_id text not null,
+      issue_id text not null,
+      actor_user_id text,
+      batch_id text not null,
+      position integer not null default 0,
+      kind text not null,
+      field text,
+      from_value text,
+      to_value text,
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+    );
     create table files (
       id text primary key not null,
       organization_id text not null,
@@ -328,6 +352,116 @@ describe("file service", () => {
     })
   })
 
+  it("records one file activity per committed add and delete", async () => {
+    const source = new File(["timeline"], "timeline-notes.txt", {
+      type: "text/plain",
+    })
+    const uploaded = await upload(database, source, "activity-upload")
+    await expect(
+      upload(
+        database,
+        new File(["timeline"], "timeline-notes.txt", {
+          type: "text/plain",
+        }),
+        "activity-upload"
+      )
+    ).resolves.toMatchObject({ created: false })
+
+    await expect(
+      database.select().from(issueActivityEvents)
+    ).resolves.toMatchObject([
+      {
+        id: `file:${uploaded.dto.id}:added`,
+        issueId: "issue-1",
+        actorUserId: "user-1",
+        batchId: `file:${uploaded.dto.id}:added`,
+        kind: "file_added",
+        field: null,
+        fromValue: null,
+        toValue: "timeline-notes.txt",
+      },
+    ])
+
+    await removeFile(database, {
+      actorRole: "member",
+      actorUserId: "user-1",
+      fileId: uploaded.dto.id,
+      organizationId: "org-1",
+    })
+
+    const activities = await database.select().from(issueActivityEvents)
+    expect(activities).toHaveLength(2)
+    expect(activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: `file:${uploaded.dto.id}:added`,
+          kind: "file_added",
+          toValue: "timeline-notes.txt",
+        }),
+        expect.objectContaining({
+          id: `file:${uploaded.dto.id}:deleted`,
+          kind: "file_deleted",
+          fromValue: "timeline-notes.txt",
+          toValue: null,
+        }),
+      ])
+    )
+    await expect(
+      database.select().from(organizationFileUsage)
+    ).resolves.toEqual([expect.objectContaining({ usedBytes: 0 })])
+    await expect(database.select().from(fileCleanupJobs)).resolves.toHaveLength(
+      1
+    )
+    const audits = await database.select().from(auditLogs)
+    expect(audits.map(({ action }) => action)).toEqual([
+      "file.uploaded",
+      "file.deleted",
+    ])
+    expect(
+      audits.every(({ metadata }) => Object.keys(metadata).length === 0)
+    ).toBe(true)
+  })
+
+  it("rolls back file deletion when owner activity persistence fails", async () => {
+    const uploaded = await upload(
+      database,
+      new File(["retain"], "retain-on-failure.txt", { type: "text/plain" }),
+      "activity-rollback"
+    )
+    const deletionActivityId = `file:${uploaded.dto.id}:deleted`
+    await database.insert(issueActivityEvents).values({
+      id: deletionActivityId,
+      organizationId: "org-1",
+      issueId: "issue-1",
+      actorUserId: "user-1",
+      batchId: deletionActivityId,
+      kind: "file_deleted",
+      fromValue: "collision.txt",
+    })
+
+    await expect(
+      removeFile(database, {
+        actorRole: "member",
+        actorUserId: "user-1",
+        fileId: uploaded.dto.id,
+        organizationId: "org-1",
+      })
+    ).rejects.toMatchObject({ code: "internal_error", statusCode: 500 })
+
+    await expect(database.select().from(files)).resolves.toMatchObject([
+      { id: uploaded.dto.id, status: "ready" },
+    ])
+    await expect(
+      database.select().from(organizationFileUsage)
+    ).resolves.toEqual([
+      expect.objectContaining({ usedBytes: uploaded.dto.sizeBytes }),
+    ])
+    await expect(database.select().from(fileCleanupJobs)).resolves.toEqual([])
+    await expect(database.select().from(auditLogs)).resolves.toMatchObject([
+      { action: "file.uploaded", metadata: {} },
+    ])
+  })
+
   it("atomically converges concurrent reservations for one organization upload id", async () => {
     const common = {
       declaredContentType: "text/plain",
@@ -488,9 +622,226 @@ describe("file service", () => {
         imageHeight: null,
         imageWidth: null,
         previewable: false,
+        textPreviewable: false,
       },
     })
     expect(storage.runtime.images.info).not.toHaveBeenCalled()
+  })
+
+  it("marks only safe MIME and closed source extensions as text previewable", () => {
+    const fixtures: Array<
+      [boolean, { declaredContentType: string; filename: string }]
+    > = [
+      [
+        true,
+        {
+          declaredContentType: "text/plain; charset=utf-8",
+          filename: "README",
+        },
+      ],
+      [
+        true,
+        { declaredContentType: "application/problem+json", filename: "data" },
+      ],
+      [
+        true,
+        {
+          declaredContentType: "application/octet-stream",
+          filename: "source.ts",
+        },
+      ],
+      [false, { declaredContentType: "text/html", filename: "notes.txt" }],
+      [false, { declaredContentType: "text/plain", filename: "index.html" }],
+      [false, { declaredContentType: "image/svg+xml", filename: "icon.txt" }],
+      [
+        false,
+        {
+          declaredContentType: "application/octet-stream",
+          filename: "archive.bin",
+        },
+      ],
+    ]
+    for (const [expected, fixture] of fixtures) {
+      expect(isTextPreviewableFile(fixture)).toBe(expected)
+    }
+  })
+
+  it("serves authenticated UTF-8 text preview JSON with private headers", async () => {
+    const result = await upload(
+      database,
+      new File(["hello\nworld"], "notes.txt", {
+        type: "text/plain; charset=utf-8",
+      }),
+      "text-preview-1"
+    )
+    expect(result.dto).toMatchObject({
+      previewable: false,
+      textPreviewable: true,
+    })
+
+    const app = createApp(database)
+    const response = await app.handle(
+      new Request(
+        `http://localhost/files/organizations/org-1/${result.dto.id}/text-preview`,
+        {
+          headers: {
+            "x-test-active-organization-id": "org-1",
+            "x-test-session-created-at": now.toISOString(),
+            "x-test-user-id": "user-1",
+          },
+        }
+      )
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      content: "hello\nworld",
+      truncated: false,
+    })
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+    expect(response.headers.get("cross-origin-resource-policy")).toBe(
+      "same-site"
+    )
+  })
+
+  it("preserves a UTF-8 character crossing the text preview cap", async () => {
+    const prefix = new Uint8Array(FILE_TEXT_PREVIEW_MAX_BYTES - 1).fill(0x61)
+    const emoji = new TextEncoder().encode("😀")
+    const bytes = new Uint8Array(prefix.byteLength + emoji.byteLength + 1)
+    bytes.set(prefix)
+    bytes.set(emoji, prefix.byteLength)
+    bytes[bytes.byteLength - 1] = 0x7a
+    const result = await upload(
+      database,
+      new File([bytes], "large.txt", { type: "text/plain" }),
+      "text-preview-boundary"
+    )
+    const stored = [...storage.objects.values()].find(
+      ({ metadata }) => metadata.fileId === result.dto.id
+    )
+    if (!stored) throw new Error("Stored test object is required")
+    stored.bytes = bytes
+    vi.mocked(storage.runtime.bucket.get).mockClear()
+
+    const preview = await previewTextFile(database, {
+      actorRole: "member",
+      actorUserId: "user-1",
+      fileId: result.dto.id,
+      organizationId: "org-1",
+    })
+    expect(preview.content.endsWith("😀")).toBe(true)
+    expect(new TextEncoder().encode(preview.content)).toHaveLength(
+      FILE_TEXT_PREVIEW_MAX_BYTES + 3
+    )
+    expect(preview.truncated).toBe(true)
+    expect(storage.runtime.bucket.get).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        range: { offset: 0, length: FILE_TEXT_PREVIEW_MAX_BYTES + 3 },
+      })
+    )
+  })
+
+  it("returns 415 for ineligible, invalid UTF-8, and NUL text", async () => {
+    const ineligible = await upload(
+      database,
+      new File(["<p>html</p>"], "page.html", { type: "text/html" }),
+      "text-preview-html"
+    )
+    vi.mocked(storage.runtime.bucket.get).mockClear()
+    await expect(
+      previewTextFile(database, {
+        actorRole: "member",
+        actorUserId: "user-1",
+        fileId: ineligible.dto.id,
+        organizationId: "org-1",
+      })
+    ).rejects.toMatchObject({
+      code: "unsupported_media_type",
+      statusCode: 415,
+    })
+    expect(storage.runtime.bucket.get).not.toHaveBeenCalled()
+
+    for (const [uploadId, content] of [
+      ["text-preview-invalid-utf8", new Uint8Array([0xc3, 0x28])],
+      ["text-preview-nul", new TextEncoder().encode("before\0after")],
+    ] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- 2 unsafe encodingsを同じcontractで確認する。
+      const result = await upload(
+        database,
+        new File([content], `${uploadId}.txt`, { type: "text/plain" }),
+        uploadId
+      )
+      // oxlint-disable-next-line no-await-in-loop -- fixtureごとのservice responseを確認する。
+      await expect(
+        previewTextFile(database, {
+          actorRole: "member",
+          actorUserId: "user-1",
+          fileId: result.dto.id,
+          organizationId: "org-1",
+        })
+      ).rejects.toMatchObject({
+        code: "unsupported_media_type",
+        statusCode: 415,
+      })
+    }
+  })
+
+  it("redacts R2 text preview failures", async () => {
+    const result = await upload(
+      database,
+      new File(["secret-free content"], "notes.txt", { type: "text/plain" }),
+      "text-preview-r2-failure"
+    )
+    vi.mocked(storage.runtime.bucket.get).mockRejectedValueOnce(
+      new Error("private object key and provider token")
+    )
+
+    let caught: unknown
+    try {
+      await previewTextFile(database, {
+        actorRole: "member",
+        actorUserId: "user-1",
+        fileId: result.dto.id,
+        organizationId: "org-1",
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toMatchObject({
+      cause: undefined,
+      code: "service_unavailable",
+      privateContext: { operation: "readTextPreviewObject", provider: "r2" },
+      statusCode: 503,
+    })
+    expect(JSON.stringify(caught)).not.toContain("provider token")
+  })
+
+  it("authorizes text preview before reading R2", async () => {
+    const result = await upload(
+      database,
+      new File(["members only"], "notes.txt", { type: "text/plain" }),
+      "text-preview-auth"
+    )
+    vi.mocked(storage.runtime.bucket.get).mockClear()
+    const app = createApp(database)
+    const path = `/files/organizations/org-1/${result.dto.id}/text-preview`
+
+    const unauthorized = await app.handle(
+      new Request(`http://localhost${path}`)
+    )
+    expect(unauthorized.status).toBe(401)
+    const nonmember = await app.handle(
+      new Request(`http://localhost${path}`, {
+        headers: {
+          "x-test-active-organization-id": "org-1",
+          "x-test-session-created-at": now.toISOString(),
+          "x-test-user-id": "user-2",
+        },
+      })
+    )
+    expect(nonmember.status).toBe(404)
+    expect(storage.runtime.bucket.get).not.toHaveBeenCalled()
   })
 
   it("supports single Range, conditional download, and security headers", async () => {

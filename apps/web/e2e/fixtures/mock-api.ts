@@ -44,7 +44,12 @@ type IssueComment = {
 type IssueActivity = {
   type: "activity"
   id: string
-  kind: "created" | "field_changed" | "legacy_updated"
+  kind:
+    | "created"
+    | "field_changed"
+    | "legacy_updated"
+    | "file_added"
+    | "file_deleted"
   field:
     | "title"
     | "description"
@@ -67,6 +72,7 @@ type FileAttachment = {
   sizeBytes: number
   declaredContentType: string
   previewable: boolean
+  textPreviewable: boolean
   imageWidth: number | null
   imageHeight: number | null
   uploader: { id: string; name: string; image: string | null }
@@ -79,6 +85,9 @@ type StoredFileAttachment = FileAttachment & {
   uploadId: string
   content: string
 }
+
+const PREVIEW_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 type OrganizationMember = {
   id: string
@@ -425,6 +434,7 @@ const createState = (sessionKey: string): SessionState => {
         sizeBytes: 42,
         declaredContentType: "text/plain",
         previewable: false,
+        textPreviewable: true,
         imageWidth: null,
         imageHeight: null,
         uploader: { id: user.id, name: user.name, image: user.image },
@@ -441,12 +451,30 @@ const createState = (sessionKey: string): SessionState => {
         sizeBytes: 36,
         declaredContentType: "text/plain",
         previewable: false,
+        textPreviewable: true,
         imageWidth: null,
         imageHeight: null,
         uploader: { id: user.id, name: user.name, image: user.image },
         createdAt: "2026-07-13T11:00:00.000Z",
         canDelete: true,
         content: "Private Beta tenant fixture content.",
+      },
+      {
+        id: "file-a-image",
+        organizationId: "org-a",
+        uploadId: "upload-a-image",
+        owner: { type: "issue", id: "issue-a-1" },
+        filename: "architecture-preview.png",
+        sizeBytes: 68,
+        declaredContentType: "image/png",
+        previewable: true,
+        textPreviewable: false,
+        imageWidth: 500,
+        imageHeight: 300,
+        uploader: { id: user.id, name: user.name, image: user.image },
+        createdAt: "2026-07-13T10:30:00.000Z",
+        canDelete: true,
+        content: PREVIEW_PNG_BASE64,
       },
     ],
     commentsByIssue: new Map([
@@ -489,6 +517,26 @@ const createState = (sessionKey: string): SessionState => {
             toValue: "user-jordan",
             actor: { id: user.id, name: user.name, image: user.image },
             createdAt: "2026-07-13T09:00:00.000Z",
+          },
+          {
+            type: "activity",
+            id: "file:file-a-seed:added",
+            kind: "file_added",
+            field: null,
+            fromValue: null,
+            toValue: "tenant-boundary-notes.txt",
+            actor: { id: user.id, name: user.name, image: user.image },
+            createdAt: "2026-07-13T10:00:00.000Z",
+          },
+          {
+            type: "activity",
+            id: "file:file-a-image:added",
+            kind: "file_added",
+            field: null,
+            fromValue: null,
+            toValue: "architecture-preview.png",
+            actor: { id: user.id, name: user.name, image: user.image },
+            createdAt: "2026-07-13T10:30:00.000Z",
           },
         ],
       ],
@@ -1149,6 +1197,9 @@ Bun.serve({
           sizeBytes: uploaded.size,
           declaredContentType,
           previewable: false,
+          textPreviewable:
+            declaredContentType.startsWith("text/") &&
+            declaredContentType !== "text/html",
           imageWidth: null,
           imageHeight: null,
           uploader: {
@@ -1162,8 +1213,83 @@ Bun.serve({
         }
         state.nextFileId += 1
         state.files.push(file)
+        const activities = state.activitiesByIssue.get(issue.id) ?? []
+        activities.push({
+          type: "activity",
+          id: `file:${file.id}:added`,
+          kind: "file_added",
+          field: null,
+          fromValue: null,
+          toValue: file.filename,
+          actor: {
+            id: state.user.id,
+            name: state.user.name,
+            image: state.user.image,
+          },
+          createdAt: FIXED_MUTATION_NOW,
+        })
+        state.activitiesByIssue.set(issue.id, activities)
         return json(filePayload(file), 201)
       }
+    }
+
+    const fileTextPreviewMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/([^/]+)\/text-preview$/
+    )
+    if (
+      fileTextPreviewMatch?.[1] &&
+      fileTextPreviewMatch[2] &&
+      request.method === "GET"
+    ) {
+      const organizationId = decodeURIComponent(fileTextPreviewMatch[1])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const file = state.files.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(fileTextPreviewMatch[2] ?? "") &&
+          candidate.organizationId === access.organization.id
+      )
+      if (!file) return notFound("File")
+      if (!file.textPreviewable) {
+        return apiError(
+          "unsupported_media_type",
+          "This file cannot be previewed as text",
+          415
+        )
+      }
+      return json({ content: file.content, truncated: false }, 200, {
+        "cache-control": "private, no-store",
+        "cross-origin-resource-policy": "same-site",
+        "x-content-type-options": "nosniff",
+      })
+    }
+
+    const fileImagePreviewMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/([^/]+)\/preview\/(360|720|1200|2400)$/
+    )
+    if (
+      fileImagePreviewMatch?.[1] &&
+      fileImagePreviewMatch[2] &&
+      request.method === "GET"
+    ) {
+      const organizationId = decodeURIComponent(fileImagePreviewMatch[1])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const file = state.files.find(
+        (candidate) =>
+          candidate.id === decodeURIComponent(fileImagePreviewMatch[2] ?? "") &&
+          candidate.organizationId === access.organization.id
+      )
+      if (!file) return notFound("File")
+      if (!file.previewable) return notFound("File preview")
+      return new Response(Buffer.from(PREVIEW_PNG_BASE64, "base64"), {
+        headers: {
+          ...corsHeaders,
+          "cache-control": "private, no-cache",
+          "content-type": "image/png",
+          "x-content-type-options": "nosniff",
+        },
+      })
     }
 
     const fileDownloadMatch = pathname.match(
@@ -1209,6 +1335,22 @@ Bun.serve({
       if (!file) return notFound("File")
       if (!file.canDelete) return forbidden()
       state.files.splice(fileIndex, 1)
+      const activities = state.activitiesByIssue.get(file.owner.id) ?? []
+      activities.push({
+        type: "activity",
+        id: `file:${file.id}:deleted`,
+        kind: "file_deleted",
+        field: null,
+        fromValue: file.filename,
+        toValue: null,
+        actor: {
+          id: state.user.id,
+          name: state.user.name,
+          image: state.user.image,
+        },
+        createdAt: FIXED_MUTATION_NOW,
+      })
+      state.activitiesByIssue.set(file.owner.id, activities)
       return new Response(null, { status: 204, headers: corsHeaders })
     }
 

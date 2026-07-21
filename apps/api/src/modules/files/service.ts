@@ -318,10 +318,9 @@ export const reconcilePendingUpload = async (
   await finalizePendingFile(db, {
     actorUserId: input.actorUserId,
     etag: object.etag,
-    fileId: input.file.id,
+    file: input.file,
     imageHeight,
     imageWidth,
-    organizationId: input.file.organizationId,
   })
 }
 
@@ -869,7 +868,10 @@ export const removeFile = async (
       action: "file.delete",
     })
   }
-  const deleted = await deleteReadyFile(db, input)
+  const deleted = await deleteReadyFile(db, {
+    actorUserId: input.actorUserId,
+    file: file.stored,
+  })
   if (!deleted)
     throw publicErrors.notFound("File not found", { resource: "file" })
 }

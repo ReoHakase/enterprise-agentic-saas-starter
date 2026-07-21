@@ -1,5 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { issues } from "@enterprise-agentic-saas/db/schema"
+import { issueActivityEvents, issues } from "@enterprise-agentic-saas/db/schema"
 import type { issueFileOwners } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
@@ -9,6 +9,18 @@ import { fileOwnerPrefix, type FileOwnerType } from "./constants"
 
 type OwnerAccessInput = {
   actorUserId: string
+  organizationId: string
+  ownerId: string
+}
+
+type FileTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
+
+type FileOwnerActivityInput = {
+  actorUserId: string
+  fileId: string
+  filename: string
+  kind: "file_added" | "file_deleted"
+  occurredAt: Date
   organizationId: string
   ownerId: string
 }
@@ -26,6 +38,10 @@ export type FileOwnerAdapter = {
     organizationId: string
     ownerId: string
   }): typeof issueFileOwners.$inferInsert
+  recordActivity(
+    tx: FileTransaction,
+    input: FileOwnerActivityInput
+  ): Promise<void>
   cleanupPrefix(input: { organizationId: string; ownerId: string }): string
 }
 
@@ -62,6 +78,23 @@ const issueOwnerAdapter: FileOwnerAdapter = {
     ownerType: "issue",
     issueId: ownerId,
   }),
+  async recordActivity(tx, input) {
+    const action = input.kind === "file_added" ? "added" : "deleted"
+    const id = `file:${input.fileId}:${action}`
+    await tx.insert(issueActivityEvents).values({
+      id,
+      organizationId: input.organizationId,
+      issueId: input.ownerId,
+      actorUserId: input.actorUserId,
+      batchId: id,
+      position: 0,
+      kind: input.kind,
+      field: null,
+      fromValue: input.kind === "file_deleted" ? input.filename : null,
+      toValue: input.kind === "file_added" ? input.filename : null,
+      createdAt: input.occurredAt,
+    })
+  },
   async assertReadable(db, input) {
     await requireMembership(db, {
       organizationId: input.organizationId,

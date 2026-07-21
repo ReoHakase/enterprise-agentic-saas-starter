@@ -46,13 +46,13 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   await page.goto("/organization/alpha-operations/issues")
   await page
     .getByRole("link", { name: "Review tenant audit log", exact: true })
-    .click()
+    .evaluate((element: HTMLAnchorElement) => element.click())
 
   const issueDialog = page.getByRole("dialog", { name: "Issue details" })
   const modalAttachments = issueDialog.getByRole("region", {
     name: "Attachments",
   })
-  await expect(modalAttachments).toBeVisible()
+  await expect(modalAttachments).toBeVisible({ timeout: 15_000 })
   await expect(
     modalAttachments.getByText("tenant-boundary-notes.txt", { exact: true })
   ).toBeVisible()
@@ -65,6 +65,67 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
     /\/files\/organizations\/org-a\/file-a-seed\/download$/u
   )
 
+  const modalTextTrigger = modalAttachments.getByRole("button", {
+    name: "tenant-boundary-notes.txt",
+    exact: true,
+  })
+  const modalImageTrigger = modalAttachments.getByRole("button", {
+    name: "Preview image architecture-preview.png",
+  })
+  const imageCard = modalAttachments
+    .getByRole("group", {
+      name: "File details for architecture-preview.png",
+    })
+    .locator("..")
+  const cardBoxBefore = await imageCard.boundingBox()
+  const thumbnailBoxBefore = await modalImageTrigger.boundingBox()
+  if (!cardBoxBefore || !thumbnailBoxBefore) {
+    throw new Error("Expected attachment card geometry")
+  }
+  expect(thumbnailBoxBefore.height).toBeGreaterThanOrEqual(143)
+  expect(thumbnailBoxBefore.height).toBeLessThanOrEqual(289)
+  expect(
+    await modalAttachments.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1
+    )
+  ).toBe(true)
+
+  await modalTextTrigger.click()
+  let filePreview = page.getByRole("dialog", {
+    name: "tenant-boundary-notes.txt",
+  })
+  await expect(filePreview).toContainText(
+    "Tenant boundary fixture for browser tests."
+  )
+  const previewBox = await filePreview.boundingBox()
+  const viewport = page.viewportSize()
+  if (!previewBox || !viewport) throw new Error("Expected preview geometry")
+  expect(Math.abs(previewBox.width - viewport.width)).toBeLessThanOrEqual(1)
+  expect(Math.abs(previewBox.height - viewport.height)).toBeLessThanOrEqual(1)
+
+  await filePreview
+    .getByRole("button", { name: "Preview previous file" })
+    .click()
+  filePreview = page.getByRole("dialog", { name: "architecture-preview.png" })
+  await expect(
+    filePreview.getByRole("img", { name: "architecture-preview.png" })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(filePreview).toHaveCount(0)
+  await expect(issueDialog).toBeVisible()
+  await expect(modalTextTrigger).toBeFocused()
+  const cardBoxAfter = await imageCard.boundingBox()
+  const thumbnailBoxAfter = await modalImageTrigger.boundingBox()
+  if (!cardBoxAfter || !thumbnailBoxAfter) {
+    throw new Error("Expected attachment card geometry after preview")
+  }
+  expect(
+    Math.abs(cardBoxAfter.width - cardBoxBefore.width)
+  ).toBeLessThanOrEqual(4)
+  expect(
+    Math.abs(thumbnailBoxAfter.height - thumbnailBoxBefore.height)
+  ).toBeLessThanOrEqual(4)
+
   await issueDialog.getByRole("button", { name: "Open full page" }).click()
   await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues\/1$/u)
   await expect(page.getByRole("dialog", { name: "Issue details" })).toHaveCount(
@@ -74,6 +135,37 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   await expect(
     attachments.getByText("tenant-boundary-notes.txt", { exact: true })
   ).toBeVisible()
+  const pageImageTrigger = attachments.getByRole("button", {
+    name: "Preview image architecture-preview.png",
+  })
+  await pageImageTrigger.click()
+  await expect(
+    page
+      .getByRole("dialog", { name: "architecture-preview.png" })
+      .getByRole("img", { name: "architecture-preview.png" })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(pageImageTrigger).toBeFocused()
+
+  const pageTextTrigger = attachments.getByRole("button", {
+    name: "tenant-boundary-notes.txt",
+    exact: true,
+  })
+  await pageTextTrigger.click()
+  const pageTextPreview = page.getByRole("dialog", {
+    name: "tenant-boundary-notes.txt",
+  })
+  await expect(pageTextPreview).toContainText(
+    "Tenant boundary fixture for browser tests."
+  )
+  await page.keyboard.press("Escape")
+  await expect(pageTextPreview).toHaveCount(0)
+  await expect(pageTextTrigger).toBeFocused()
+  expect(
+    await attachments.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1
+    )
+  ).toBe(true)
 
   const fileInput = attachments.getByLabel("Choose files to upload")
   await fileInput.setInputFiles([
@@ -94,6 +186,9 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   await expect(
     attachments.getByText("acceptance-checklist.txt", { exact: true })
   ).toBeVisible()
+  const discussion = page.getByRole("region", { name: "Discussion" })
+  await expect(discussion).toContainText("attached release-notes.txt")
+  await expect(discussion).toContainText("attached acceptance-checklist.txt")
 
   await fileInput.setInputFiles({
     name: "cancel-later.txt",
@@ -126,6 +221,7 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   await expect(
     attachments.getByText("release-notes.txt", { exact: true })
   ).toHaveCount(0)
+  await expect(discussion).toContainText("deleted release-notes.txt")
   await expect(
     attachments.getByText("acceptance-checklist.txt", { exact: true })
   ).toBeVisible()

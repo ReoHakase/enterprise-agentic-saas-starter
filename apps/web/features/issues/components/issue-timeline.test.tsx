@@ -43,6 +43,28 @@ const assigneeActivity: IssueActivity = {
   createdAt: "2026-07-11T01:00:00.000Z",
 }
 
+const fileAddedActivity: IssueActivity = {
+  type: "activity",
+  id: "activity-file-added",
+  kind: "file_added",
+  field: null,
+  fromValue: null,
+  toValue: "roadmap_final.txt",
+  actor: { id: "user-1", name: "Alex", image: null },
+  createdAt: "2026-07-11T02:00:00.000Z",
+}
+
+const fileDeletedActivity: IssueActivity = {
+  type: "activity",
+  id: "activity-file-deleted",
+  kind: "file_deleted",
+  field: null,
+  fromValue: "old-notes.txt",
+  toValue: null,
+  actor: { id: "user-1", name: "Alex", image: null },
+  createdAt: "2026-07-11T03:00:00.000Z",
+}
+
 const assignees = [
   {
     id: "user-2",
@@ -88,6 +110,32 @@ describe("issue timeline", () => {
       "datetime",
       assigneeActivity.createdAt
     )
+  })
+
+  it("renders file additions and deletions with the actor avatar and filename", () => {
+    render(
+      <ol>
+        <IssueActivityItem activity={fileAddedActivity} assignees={assignees} />
+        <IssueActivityItem
+          activity={fileDeletedActivity}
+          assignees={assignees}
+        />
+      </ol>
+    )
+
+    const descriptions = screen.getAllByTestId("issue-activity-description")
+    expect(descriptions[0]).toHaveTextContent("Alex attached roadmap_final.txt")
+    expect(descriptions[1]).toHaveTextContent("Alex deleted old-notes.txt")
+    expect(descriptions[0]).not.toHaveTextContent("roadmap final.txt")
+
+    const actorMarkers = screen.getAllByTestId("issue-activity-actor-marker")
+    expect(actorMarkers).toHaveLength(2)
+    expect(actorMarkers[0]).toHaveTextContent("AL")
+    expect(actorMarkers[1]).toHaveTextContent("AL")
+
+    const fieldMarkers = screen.getAllByTestId("issue-activity-field-marker")
+    expect(fieldMarkers[0]).toHaveClass("bg-blue-50", "dark:bg-blue-950")
+    expect(fieldMarkers[1]).toHaveClass("bg-red-50", "dark:bg-red-950")
   })
 
   it("reports an edited comment as dirty and resets the state on cancel", async () => {

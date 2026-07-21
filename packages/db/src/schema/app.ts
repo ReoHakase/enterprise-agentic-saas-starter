@@ -33,6 +33,14 @@ export const issueActivityFields = [
   "due_date",
 ] as const
 export type IssueActivityField = (typeof issueActivityFields)[number]
+export const issueActivityKinds = [
+  "created",
+  "field_changed",
+  "legacy_updated",
+  "file_added",
+  "file_deleted",
+] as const
+export type IssueActivityKind = (typeof issueActivityKinds)[number]
 export type IssueActivityValue = string | string[] | null
 
 export type AuditLogMetadata = Record<string, string | number | boolean | null>
@@ -332,9 +340,7 @@ export const issueActivityEvents = sqliteTable(
     }),
     batchId: text("batch_id").notNull(),
     position: integer("position").notNull().default(0),
-    kind: text("kind")
-      .$type<"created" | "field_changed" | "legacy_updated">()
-      .notNull(),
+    kind: text("kind").$type<IssueActivityKind>().notNull(),
     field: text("field").$type<IssueActivityField>(),
     fromValue: text("from_value", { mode: "json" }).$type<IssueActivityValue>(),
     toValue: text("to_value", { mode: "json" }).$type<IssueActivityValue>(),

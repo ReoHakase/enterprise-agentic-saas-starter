@@ -7,7 +7,9 @@ import {
   FlagIcon,
   HistoryIcon,
   ListPlusIcon,
+  PaperclipIcon,
   TagIcon,
+  Trash2Icon,
   TypeIcon,
   UserRoundIcon,
   UserRoundXIcon,
@@ -84,6 +86,22 @@ const getActivityPresentation = (activity: IssueActivity) => {
       icon: ListPlusIcon,
       markerClassName:
         "border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    }
+  }
+
+  if (activity.kind === "file_added") {
+    return {
+      icon: PaperclipIcon,
+      markerClassName:
+        "border-blue-500/30 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    }
+  }
+
+  if (activity.kind === "file_deleted") {
+    return {
+      icon: Trash2Icon,
+      markerClassName:
+        "border-red-500/30 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
     }
   }
 
@@ -205,6 +223,26 @@ export const IssueActivityItem = ({
   let description: ReactNode
   if (activity.kind === "created") {
     description = "created this issue"
+  } else if (activity.kind === "file_added") {
+    description = (
+      <>
+        attached{" "}
+        <span className="font-medium break-all text-foreground">
+          {typeof activity.toValue === "string" ? activity.toValue : "a file"}
+        </span>
+      </>
+    )
+  } else if (activity.kind === "file_deleted") {
+    description = (
+      <>
+        deleted{" "}
+        <span className="font-medium break-all text-foreground">
+          {typeof activity.fromValue === "string"
+            ? activity.fromValue
+            : "a file"}
+        </span>
+      </>
+    )
   } else if (activity.kind === "legacy_updated" || !activity.field) {
     description = "updated this issue"
   } else {

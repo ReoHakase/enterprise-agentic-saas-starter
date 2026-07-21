@@ -132,7 +132,7 @@ describe("issues Eden API", () => {
     )
   })
 
-  it("treats timeline cursors as opaque strings", async () => {
+  it("accepts file activity while treating timeline cursors as opaque strings", async () => {
     const opaqueCursor = "eyJ2IjoxLCJ0eXBlIjoiY29tbWVudCJ9"
     const nextCursor = "eyJ2IjoxLCJ0eXBlIjoiYWN0aXZpdHkifQ"
     fetchMock.mockResolvedValueOnce(
@@ -141,10 +141,10 @@ describe("issues Eden API", () => {
           {
             type: "activity",
             id: "activity-1",
-            kind: "created",
+            kind: "file_added",
             field: null,
             fromValue: null,
-            toValue: null,
+            toValue: "notes.txt",
             actor: { id: "user-1", name: "Reo", image: null },
             createdAt: "2026-07-14T00:00:00.000Z",
           },
@@ -161,7 +161,10 @@ describe("issues Eden API", () => {
         cursor: opaqueCursor,
         limit: 1,
       })
-    ).resolves.toMatchObject({ nextCursor })
+    ).resolves.toMatchObject({
+      items: [{ kind: "file_added", toValue: "notes.txt" }],
+      nextCursor,
+    })
 
     const timelineCall = fetchMock.mock.calls[0]
     if (!timelineCall) throw new Error("Expected a timeline request")

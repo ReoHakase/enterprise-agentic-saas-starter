@@ -60,7 +60,13 @@ const issueActivityValueSchema = v.union([
 export const issueActivitySchema = v.object({
   type: v.literal("activity"),
   id: v.string(),
-  kind: v.picklist(["created", "field_changed", "legacy_updated"]),
+  kind: v.picklist([
+    "created",
+    "field_changed",
+    "legacy_updated",
+    "file_added",
+    "file_deleted",
+  ]),
   field: v.nullable(
     v.picklist([
       "title",

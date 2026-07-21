@@ -75,6 +75,14 @@ export const IssueDetailController = ({
     setTimeline(page.items)
     setNextCursor(page.nextCursor)
   }, [issue.id, organizationId])
+  const refreshTimelineAfterFilesChanged = useCallback(async () => {
+    await Promise.all([
+      refreshTimeline(),
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.timeline(organizationId, issue.id),
+      }),
+    ])
+  }, [issue.id, organizationId, queryClient, refreshTimeline])
   const updateMutation = useMutation({
     mutationFn: (update: IssueUpdate) => {
       const request = updateQueueRef.current.then(() =>
@@ -282,6 +290,7 @@ export const IssueDetailController = ({
       onCreateComment={handleCreateComment}
       onUpdateComment={handleUpdateComment}
       onDeleteComment={handleDeleteComment}
+      onFilesChanged={refreshTimelineAfterFilesChanged}
       onRequestClose={close}
     />
   )

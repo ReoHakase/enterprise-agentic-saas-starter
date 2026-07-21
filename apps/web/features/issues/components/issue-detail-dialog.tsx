@@ -268,6 +268,7 @@ export const IssueDetailDialog = ({
   onCreateComment,
   onUpdateComment,
   onDeleteComment,
+  onFilesChanged,
   onRequestClose,
 }: {
   issue: IssueUiItem
@@ -291,6 +292,7 @@ export const IssueDetailDialog = ({
     [issue: IssueUiItem, commentId: string, body: string]
   >
   onDeleteComment?: AsyncAction<[issue: IssueUiItem, commentId: string]>
+  onFilesChanged?: () => Promise<void> | void
   onRequestClose: () => void
 }) => {
   const [titleEditing, setTitleEditing] = useState(false)
@@ -1116,6 +1118,7 @@ export const IssueDetailDialog = ({
                 organizationId={organizationId}
                 ownerType="issue"
                 ownerId={issue.id}
+                onFilesChanged={onFilesChanged}
               />
               <Separator />
             </>

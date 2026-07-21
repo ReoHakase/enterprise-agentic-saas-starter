@@ -10,6 +10,7 @@ import {
   issues,
   organizationFileUsage,
   type IssueActivityField,
+  type IssueActivityKind,
   type IssueActivityValue,
   type IssuePriority,
   type IssueStatus,
@@ -71,7 +72,7 @@ export type IssueCommentDto = {
 export type IssueActivityDto = {
   type: "activity"
   id: string
-  kind: "created" | "field_changed" | "legacy_updated"
+  kind: IssueActivityKind
   field: IssueActivityField | null
   fromValue: IssueActivityValue
   toValue: IssueActivityValue

@@ -82,10 +82,22 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$CLOUDFLARE_API_TOKEN"
 
+      - name: Inspect file activity rollout state
+        id: file-activity-rollout
+        run: bun run packages/db/src/file-activity-rollout.ts >> "$GITHUB_OUTPUT"
+
+      - name: Deploy API Worker for file activity compatibility
+        if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
+        run: bun run --cwd apps/api deploy
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
+          SENTRY_PROJECT: ${{ env.SENTRY_API_PROJECT }}
+
       - name: Apply Turso migrations
         run: bun run --cwd packages/db db:migrate
 
       - name: Deploy API Worker
+        if: steps.file-activity-rollout.outputs.compatibility_deploy != 'true'
         run: bun run --cwd apps/api deploy
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}

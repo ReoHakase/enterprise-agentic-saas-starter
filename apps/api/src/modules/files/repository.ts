@@ -363,14 +363,14 @@ export const finalizePendingFile = async (
   input: {
     actorUserId: string
     etag: string
-    fileId: string
+    file: FileWithOwner
     imageHeight: number | null
     imageWidth: number | null
-    organizationId: string
   }
 ): Promise<void> => {
   try {
     await db.transaction(async (tx) => {
+      const readyAt = new Date()
       const rows = await tx
         .update(files)
         .set({
@@ -378,12 +378,12 @@ export const finalizePendingFile = async (
           imageHeight: input.imageHeight,
           imageWidth: input.imageWidth,
           status: "ready",
-          updatedAt: new Date(),
+          updatedAt: readyAt,
         })
         .where(
           and(
-            eq(files.id, input.fileId),
-            eq(files.organizationId, input.organizationId),
+            eq(files.id, input.file.id),
+            eq(files.organizationId, input.file.organizationId),
             eq(files.status, "pending")
           )
         )
@@ -394,8 +394,8 @@ export const finalizePendingFile = async (
           .from(files)
           .where(
             and(
-              eq(files.id, input.fileId),
-              eq(files.organizationId, input.organizationId),
+              eq(files.id, input.file.id),
+              eq(files.organizationId, input.file.organizationId),
               eq(files.status, "ready")
             )
           )
@@ -403,13 +403,22 @@ export const finalizePendingFile = async (
         if (ready[0]) return
         throw new Error("Pending file no longer exists")
       }
+      await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
+        actorUserId: input.actorUserId,
+        fileId: input.file.id,
+        filename: input.file.filename,
+        kind: "file_added",
+        occurredAt: readyAt,
+        organizationId: input.file.organizationId,
+        ownerId: input.file.ownerId,
+      })
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
-        organizationId: input.organizationId,
+        organizationId: input.file.organizationId,
         actorUserId: input.actorUserId,
         action: "file.uploaded",
         targetType: "file",
-        targetId: input.fileId,
+        targetId: input.file.id,
         metadata: {},
       })
     })
@@ -440,7 +449,7 @@ const releaseUsage = async (
 
 export const deleteReadyFile = async (
   db: Db,
-  input: { actorUserId: string; fileId: string; organizationId: string }
+  input: { actorUserId: string; file: FileWithOwner }
 ): Promise<boolean> => {
   try {
     return await db.transaction(async (tx) => {
@@ -448,8 +457,8 @@ export const deleteReadyFile = async (
         .delete(files)
         .where(
           and(
-            eq(files.id, input.fileId),
-            eq(files.organizationId, input.organizationId),
+            eq(files.id, input.file.id),
+            eq(files.organizationId, input.file.organizationId),
             eq(files.status, "ready")
           )
         )
@@ -460,25 +469,34 @@ export const deleteReadyFile = async (
       const file = rows[0]
       if (!file) return false
       await releaseUsage(tx, {
-        organizationId: input.organizationId,
+        organizationId: input.file.organizationId,
         sizeBytes: file.sizeBytes,
       })
       await tx
         .insert(fileCleanupJobs)
         .values({
           id: crypto.randomUUID(),
-          organizationId: input.organizationId,
+          organizationId: input.file.organizationId,
           kind: "exact",
           objectKey: file.objectKey,
         })
         .onConflictDoNothing()
+      await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
+        actorUserId: input.actorUserId,
+        fileId: input.file.id,
+        filename: input.file.filename,
+        kind: "file_deleted",
+        occurredAt: new Date(),
+        organizationId: input.file.organizationId,
+        ownerId: input.file.ownerId,
+      })
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
-        organizationId: input.organizationId,
+        organizationId: input.file.organizationId,
         actorUserId: input.actorUserId,
         action: "file.deleted",
         targetType: "file",
-        targetId: input.fileId,
+        targetId: input.file.id,
         metadata: {},
       })
       return true
