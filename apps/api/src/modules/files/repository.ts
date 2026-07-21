@@ -15,6 +15,7 @@ import type { OrganizationRole } from "../authorization/roles"
 import {
   ORGANIZATION_FILE_QUOTA_BYTES,
   isPreviewableImageFormat,
+  isTextPreviewableFile,
   type FileOwnerType,
   type PreviewableImageFormat,
 } from "./constants"
@@ -50,6 +51,7 @@ const toFileDto = (
   sizeBytes: row.stored.sizeBytes,
   declaredContentType: row.stored.declaredContentType,
   previewable: isPreviewableImageFormat(row.stored.detectedImageFormat),
+  textPreviewable: isTextPreviewableFile(row.stored),
   imageWidth: row.stored.imageWidth,
   imageHeight: row.stored.imageHeight,
   uploader: {

@@ -72,6 +72,7 @@ export const fileDtoModel = v.object({
   sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
   declaredContentType: v.string(),
   previewable: v.boolean(),
+  textPreviewable: v.boolean(),
   imageWidth: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
   imageHeight: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
   uploader: v.object({
@@ -88,6 +89,12 @@ export const fileListDtoModel = v.object({
   nextCursor: v.nullable(v.string()),
 })
 
+export const textFilePreviewDtoModel = v.object({
+  content: v.string(),
+  truncated: v.boolean(),
+})
+
 export type FileDto = v.InferOutput<typeof fileDtoModel>
 export type FileListDto = v.InferOutput<typeof fileListDtoModel>
 export type FileUploadBody = v.InferOutput<typeof fileUploadBodyModel>
+export type TextFilePreviewDto = v.InferOutput<typeof textFilePreviewDtoModel>

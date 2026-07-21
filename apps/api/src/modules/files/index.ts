@@ -12,11 +12,13 @@ import {
   fileParamsModel,
   filePreviewParamsModel,
   fileUploadBodyModel,
+  textFilePreviewDtoModel,
 } from "./model"
 import {
   downloadFile,
   listFiles,
   previewFile,
+  previewTextFile,
   removeFile,
   uploadFile,
 } from "./service"
@@ -125,6 +127,40 @@ export const createFilesModule = (db: Db) =>
           summary: "private original fileをdownload",
           description:
             "single RangeとETag conditional requestを処理し、常にattachmentとして返す。",
+          tags: ["Files"],
+        },
+      }
+    )
+    .get(
+      "/files/organizations/:organizationId/:fileId/text-preview",
+      async ({ authContext, organizationAccess, params, set }) => {
+        const preview = await previewTextFile(db, {
+          actorRole: organizationAccess.membership.role,
+          actorUserId: authContext.user.id,
+          fileId: params.fileId,
+          organizationId: organizationAccess.id,
+        })
+        set.headers["cache-control"] = "private, no-store"
+        set.headers["cross-origin-resource-policy"] = "same-site"
+        set.headers["x-content-type-options"] = "nosniff"
+        return preview
+      },
+      {
+        organizationAccess: {
+          action: "file.preview",
+          source: "params",
+        },
+        params: fileParamsModel,
+        response: {
+          200: textFilePreviewDtoModel,
+          415: apiErrorModel,
+          ...fileErrorResponses,
+        },
+        detail: {
+          operationId: "previewTextFile",
+          summary: "認証付きtext previewを取得",
+          description:
+            "許可済みtext fileの先頭1 MBをUTF-8として検証し、安全なJSONで返す。",
           tags: ["Files"],
         },
       }

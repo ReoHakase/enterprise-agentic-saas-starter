@@ -23,6 +23,7 @@ const uploadedFile = (id: string): FileDto => ({
   sizeBytes: 4,
   declaredContentType: "text/plain",
   previewable: false,
+  textPreviewable: true,
   imageWidth: null,
   imageHeight: null,
   uploader: { id: "user-1", name: "User", image: null },

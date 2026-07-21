@@ -14,11 +14,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@enterprise-agentic-saas/ui/components/alert-dialog"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@enterprise-agentic-saas/ui/components/avatar"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import {
   Button,
@@ -47,12 +42,15 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type MouseEvent,
 } from "react"
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
+import { UserAvatar } from "@/components/user-identity"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { deleteFile, type FileOwnerType } from "@/features/files/api"
+import { formatFileSize } from "@/features/files/format"
 import { fileKeys, filesQueryOptions } from "@/features/files/queries"
 import {
   useFileUploads,
@@ -62,22 +60,9 @@ import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
 import { AuthenticatedFileImage } from "./authenticated-file-image"
+import { FilePreviewDialog } from "./file-preview-dialog"
 
 const attachmentSizes = "(max-width: 640px) 100vw, 320px"
-
-const formatBytes = (bytes: number) => {
-  if (bytes < 1_000) return `${bytes.toString()} B`
-  if (bytes < 1_000_000) return `${(bytes / 1_000).toFixed(1)} KB`
-  return `${(bytes / 1_000_000).toFixed(1)} MB`
-}
-
-const initials = (name: string) =>
-  name
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "?"
 
 const UploadRow = ({
   upload,
@@ -100,7 +85,7 @@ const UploadRow = ({
         <div className="flex min-w-0 items-center justify-between gap-3">
           <p className="truncate text-sm font-medium">{upload.file.name}</p>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {formatBytes(upload.file.size)}
+            {formatFileSize(upload.file.size)}
           </span>
         </div>
         {upload.status === "failed" ? (
@@ -144,15 +129,23 @@ const FileRow = ({
   file,
   organizationId,
   onRequestDelete,
+  onRequestPreview,
 }: {
   file: FileDto
   organizationId: string
   onRequestDelete: (file: FileDto) => void
+  onRequestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
 }) => {
   const requestDelete = useCallback(
     () => onRequestDelete(file),
     [file, onRequestDelete]
   )
+  const requestPreview = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) =>
+      onRequestPreview(file, event.currentTarget),
+    [file, onRequestPreview]
+  )
+  const canPreview = file.previewable || file.textPreviewable
   const downloadUrl = buildFileDownloadUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
     organizationId,
     fileId: file.id,
@@ -161,7 +154,12 @@ const FileRow = ({
   return (
     <li className="overflow-hidden rounded-xl border bg-card">
       {file.previewable ? (
-        <div className="flex max-h-72 min-h-36 items-center justify-center overflow-hidden border-b bg-muted/30">
+        <button
+          type="button"
+          className="flex max-h-72 min-h-36 w-full items-center justify-center overflow-hidden border-b bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+          aria-label={`Preview image ${file.filename}`}
+          onClick={requestPreview}
+        >
           <AuthenticatedFileImage
             file={file}
             organizationId={organizationId}
@@ -169,34 +167,69 @@ const FileRow = ({
             className="max-h-72 w-full object-contain"
             loading="lazy"
           />
-        </div>
+        </button>
       ) : null}
-      <div className="flex min-w-0 items-center gap-3 p-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          {file.previewable ? (
-            <ImageIcon aria-hidden="true" className="size-4" />
-          ) : (
-            <FileIcon aria-hidden="true" className="size-4" />
-          )}
-        </div>
+      <div
+        role="group"
+        aria-label={`File details for ${file.filename}`}
+        className="flex min-h-16 min-w-0 items-center gap-3 p-3"
+      >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" title={file.filename}>
-            {file.filename}
-          </p>
+          {canPreview ? (
+            <button
+              type="button"
+              data-slot="file-filename"
+              className="flex max-w-full min-w-0 items-center gap-1.5 text-left text-sm font-medium hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              title={file.filename}
+              onClick={requestPreview}
+            >
+              {file.previewable ? (
+                <ImageIcon
+                  data-slot="file-icon"
+                  data-testid={`file-icon-${file.id}`}
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+              ) : (
+                <FileIcon
+                  data-slot="file-icon"
+                  data-testid={`file-icon-${file.id}`}
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+              )}
+              <span className="truncate">{file.filename}</span>
+            </button>
+          ) : (
+            <p
+              data-slot="file-filename"
+              className="flex min-w-0 items-center gap-1.5 text-sm font-medium"
+              title={file.filename}
+            >
+              <FileIcon
+                data-slot="file-icon"
+                data-testid={`file-icon-${file.id}`}
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground"
+              />
+              <span className="truncate">{file.filename}</span>
+            </p>
+          )}
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span>{formatBytes(file.sizeBytes)}</span>
+            <span>{formatFileSize(file.sizeBytes)}</span>
             <span aria-hidden="true">·</span>
-            <span className="truncate">{file.uploader.name}</span>
+            <span
+              data-slot="file-uploader"
+              className="flex min-w-0 items-center gap-1.5"
+              aria-label={`Uploaded by ${file.uploader.name}`}
+            >
+              <UserAvatar user={file.uploader} className="size-5" />
+              <span className="truncate">{file.uploader.name}</span>
+            </span>
             <span aria-hidden="true">·</span>
             <LocalDate value={file.createdAt} includeTime />
           </div>
         </div>
-        <Avatar size="sm" aria-label={`Uploaded by ${file.uploader.name}`}>
-          {file.uploader.image ? (
-            <AvatarImage src={file.uploader.image} alt="" />
-          ) : null}
-          <AvatarFallback>{initials(file.uploader.name)}</AvatarFallback>
-        </Avatar>
         <a
           href={downloadUrl}
           download
@@ -225,14 +258,18 @@ export const FileAttachments = ({
   organizationId,
   ownerType,
   ownerId,
+  onFilesChanged,
 }: {
   organizationId: string
   ownerType: FileOwnerType
   ownerId: string
+  onFilesChanged?: () => void | Promise<void>
 }) => {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
+  const previewTriggerRef = useRef<HTMLElement | null>(null)
   const [fileToDelete, setFileToDelete] = useState<FileDto | null>(null)
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null)
   const filesQuery = useInfiniteQuery(
     filesQueryOptions(apiClient, organizationId, ownerType, ownerId)
   )
@@ -252,13 +289,23 @@ export const FileAttachments = ({
     },
     [ownerQueryKey, queryClient]
   )
+  const notifyFilesChanged = useCallback(async () => {
+    try {
+      await onFilesChanged?.()
+    } catch {
+      // The file mutation remains authoritative when a parent timeline refresh
+      // fails. Its normal query retry path can reconcile the stale timeline.
+    }
+  }, [onFilesChanged])
   const handleUploaded = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
+    await notifyFilesChanged()
     toast.success("File uploaded")
-  }, [ownerQueryKey, queryClient])
+  }, [notifyFilesChanged, ownerQueryKey, queryClient])
   const handleCanceled = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
-  }, [ownerQueryKey, queryClient])
+    await notifyFilesChanged()
+  }, [notifyFilesChanged, ownerQueryKey, queryClient])
   const { uploads, addFiles, retryUpload, cancelUpload } = useFileUploads({
     organizationId,
     ownerType,
@@ -272,6 +319,7 @@ export const FileAttachments = ({
     onSuccess: async () => {
       setFileToDelete(null)
       await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
+      await notifyFilesChanged()
       toast.success("File deleted")
     },
     onError: (error) => {
@@ -284,6 +332,10 @@ export const FileAttachments = ({
     () => filesQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [filesQuery.data]
   )
+  const previewableFiles = useMemo(
+    () => files.filter((file) => file.previewable || file.textPreviewable),
+    [files]
+  )
   const openPicker = useCallback(() => inputRef.current?.click(), [])
   const selectFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -294,6 +346,19 @@ export const FileAttachments = ({
   )
   const requestDelete = useCallback((file: FileDto) => {
     setFileToDelete(file)
+  }, [])
+  const requestPreview = useCallback(
+    (file: FileDto, trigger: HTMLButtonElement) => {
+      previewTriggerRef.current = trigger
+      setPreviewFileId(file.id)
+    },
+    []
+  )
+  const selectPreviewFile = useCallback((fileId: string) => {
+    setPreviewFileId(fileId)
+  }, [])
+  const closePreview = useCallback(() => {
+    setPreviewFileId(null)
   }, [])
   const confirmDelete = useCallback(() => {
     if (fileToDelete) mutateDelete(fileToDelete)
@@ -386,6 +451,7 @@ export const FileAttachments = ({
               file={file}
               organizationId={organizationId}
               onRequestDelete={requestDelete}
+              onRequestPreview={requestPreview}
             />
           ))}
         </ul>
@@ -407,6 +473,15 @@ export const FileAttachments = ({
           Load more files
         </Button>
       ) : null}
+
+      <FilePreviewDialog
+        organizationId={organizationId}
+        files={previewableFiles}
+        selectedFileId={previewFileId}
+        finalFocusRef={previewTriggerRef}
+        onSelectFile={selectPreviewFile}
+        onClose={closePreview}
+      />
 
       <AlertDialog
         open={fileToDelete !== null}

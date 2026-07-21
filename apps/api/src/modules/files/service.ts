@@ -5,13 +5,15 @@ import type { OrganizationRole } from "../authorization/roles"
 import {
   FILE_PREVIEW_WIDTHS,
   FILE_MAX_BYTES,
+  FILE_TEXT_PREVIEW_MAX_BYTES,
   fileObjectKey,
   isPreviewableImageFormat,
+  isTextPreviewableFile,
   type FileOwnerType,
   type FilePreviewWidth,
   type PreviewableImageFormat,
 } from "./constants"
-import type { FileDto, FileListDto } from "./model"
+import type { FileDto, FileListDto, TextFilePreviewDto } from "./model"
 import { getFileOwnerAdapter } from "./owner-adapters"
 import {
   deleteReadyFile,
@@ -556,6 +558,116 @@ const privateFileHeaders = () =>
     "Cross-Origin-Resource-Policy": "same-site",
     "X-Content-Type-Options": "nosniff",
   })
+
+const unsupportedTextPreview = () =>
+  new AppError({
+    code: "unsupported_media_type",
+    publicMessage: "File cannot be previewed as text",
+    statusCode: 415,
+    publicContext: { resource: "file_preview" },
+  })
+
+const readBoundedBody = async (
+  body: ReadableStream<Uint8Array>,
+  expectedLength: number
+) => {
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let byteLength = 0
+  try {
+    while (byteLength < expectedLength) {
+      // oxlint-disable-next-line no-await-in-loop -- R2 bodyを上限内で逐次読む。
+      const result = await reader.read()
+      if (result.done) break
+      if (byteLength + result.value.byteLength > expectedLength) {
+        throw providerUnavailable("r2", "validateTextPreviewRange")
+      }
+      chunks.push(result.value)
+      byteLength += result.value.byteLength
+    }
+    if (byteLength !== expectedLength) {
+      throw providerUnavailable("r2", "validateTextPreviewRange")
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
+  }
+
+  const bytes = new Uint8Array(byteLength)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
+const isUtf8ContinuationByte = (byte: number) => (byte & 0xc0) === 0x80
+
+const textPreviewByteLength = (bytes: Uint8Array) => {
+  if (bytes.byteLength <= FILE_TEXT_PREVIEW_MAX_BYTES) {
+    return bytes.byteLength
+  }
+  let byteLength = FILE_TEXT_PREVIEW_MAX_BYTES
+  while (
+    byteLength < bytes.byteLength &&
+    isUtf8ContinuationByte(bytes[byteLength] ?? 0)
+  ) {
+    byteLength += 1
+  }
+  return byteLength
+}
+
+export const previewTextFile = async (
+  db: Db,
+  input: {
+    actorRole: OrganizationRole
+    actorUserId: string
+    fileId: string
+    organizationId: string
+  }
+): Promise<TextFilePreviewDto> => {
+  const file = await requireReadyFile(db, input)
+  if (!isTextPreviewableFile(file.stored)) throw unsupportedTextPreview()
+  if (!file.stored.etag) {
+    throw providerUnavailable("r2", "readTextPreviewMetadata")
+  }
+
+  const requestedLength = Math.min(
+    file.stored.sizeBytes,
+    FILE_TEXT_PREVIEW_MAX_BYTES + 3
+  )
+  const runtime = getRuntime()
+  let bytes: Uint8Array
+  try {
+    const source = bodyObject(
+      await runtime.bucket.get(file.stored.objectKey, {
+        onlyIf: new Headers({ "if-match": httpEtag(file.stored.etag) }),
+        range: { offset: 0, length: requestedLength },
+      })
+    )
+    if (!source) throw providerUnavailable("r2", "readTextPreviewObject")
+    bytes = await readBoundedBody(source.body, requestedLength)
+  } catch (error) {
+    if (error instanceof AppError) throw error
+    throw providerUnavailable("r2", "readTextPreviewObject")
+  }
+
+  const previewByteLength = textPreviewByteLength(bytes)
+  let content: string
+  try {
+    content = new TextDecoder("utf-8", { fatal: true }).decode(
+      bytes.subarray(0, previewByteLength)
+    )
+  } catch {
+    throw unsupportedTextPreview()
+  }
+  if (content.includes("\0")) throw unsupportedTextPreview()
+  return {
+    content,
+    truncated: file.stored.sizeBytes > previewByteLength,
+  }
+}
 
 export const downloadFile = async (
   db: Db,

@@ -2,6 +2,7 @@ import type {
   ApiClient,
   FileListDto,
   FileOwnerType,
+  TextFilePreviewDto,
 } from "@enterprise-agentic-saas/api/client"
 
 import { ConsoleApiError, toConsoleApiError } from "@/features/console/api"
@@ -64,4 +65,17 @@ export const deleteFile = async (
     })
     .delete()
   if (result.error) throw toConsoleApiError(result.error, result.status)
+}
+
+export const getTextFilePreview = async (
+  client: ApiClient,
+  input: { organizationId: string; fileId: string },
+  signal?: AbortSignal
+): Promise<TextFilePreviewDto> => {
+  const fileRoutes = client.files.organizations({
+    organizationId: input.organizationId,
+  })({
+    fileId: input.fileId,
+  })
+  return unwrap(await fileRoutes["text-preview"].get({ fetch: { signal } }))
 }

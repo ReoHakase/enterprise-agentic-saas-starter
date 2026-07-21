@@ -1,18 +1,26 @@
-import type { FileDto, FileListDto } from "@enterprise-agentic-saas/api/client"
+import type {
+  FileDto,
+  FileListDto,
+  TextFilePreviewDto,
+} from "@enterprise-agentic-saas/api/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { fileKeys } from "@/features/files/queries"
+
 const mocks = vi.hoisted(() => ({
   listFiles: vi.fn<() => Promise<FileListDto>>(),
   deleteFile: vi.fn<() => Promise<void>>(),
+  getTextFilePreview: vi.fn<() => Promise<TextFilePreviewDto>>(),
 }))
 
 vi.mock("@/features/files/api", () => ({
   listFiles: mocks.listFiles,
   deleteFile: mocks.deleteFile,
+  getTextFilePreview: mocks.getTextFilePreview,
 }))
 
 vi.mock("@/lib/api-client", () => ({ apiClient: {} }))
@@ -26,6 +34,7 @@ const imageFile: FileDto = {
   sizeBytes: 12_345,
   declaredContentType: "image/png",
   previewable: true,
+  textPreviewable: false,
   imageWidth: 500,
   imageHeight: 300,
   uploader: { id: "user-1", name: "Alex Example", image: null },
@@ -39,12 +48,23 @@ const documentFile: FileDto = {
   filename: "requirements.pdf",
   declaredContentType: "application/pdf",
   previewable: false,
+  textPreviewable: false,
   imageWidth: null,
   imageHeight: null,
   canDelete: false,
 }
 
-const renderAttachments = () => {
+const textFile: FileDto = {
+  ...documentFile,
+  id: "file-text",
+  filename: "notes.txt",
+  sizeBytes: 1_000_001,
+  declaredContentType: "text/plain",
+  textPreviewable: true,
+  canDelete: true,
+}
+
+const renderAttachments = (onFilesChanged?: () => void | Promise<void>) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -56,20 +76,27 @@ const renderAttachments = () => {
       organizationId="org alpha"
       ownerType="issue"
       ownerId="issue-1"
+      onFilesChanged={onFilesChanged}
     />,
     { wrapper: Wrapper }
   )
+  return queryClient
 }
 
 describe("file attachments", () => {
   beforeEach(() => {
     mocks.listFiles.mockReset()
     mocks.deleteFile.mockReset()
+    mocks.getTextFilePreview.mockReset()
     mocks.listFiles.mockResolvedValue({
-      items: [imageFile, documentFile],
+      items: [imageFile, textFile, documentFile],
       nextCursor: null,
     })
     mocks.deleteFile.mockResolvedValue()
+    mocks.getTextFilePreview.mockResolvedValue({
+      content: "<script>alert('escaped')</script>",
+      truncated: true,
+    })
   })
 
   it("renders private previews and authenticated downloads", async () => {
@@ -106,9 +133,84 @@ describe("file attachments", () => {
     )
   })
 
+  it("opens image and escaped text previews in a viewport dialog", async () => {
+    const user = userEvent.setup()
+    const queryClient = renderAttachments()
+
+    const trigger = await screen.findByRole("button", {
+      name: "Preview image architecture.png",
+    })
+    await user.click(trigger)
+
+    let dialog = await screen.findByRole("dialog", {
+      name: "architecture.png",
+    })
+    expect(dialog).toHaveClass("h-dvh", "w-screen", "max-w-none")
+    expect(dialog).toHaveStyle({
+      animation: "none",
+      maxHeight: "none",
+      maxWidth: "none",
+      transform: "none",
+    })
+    expect(dialog.style.width).toBe("100vw")
+    expect(
+      within(dialog).getByRole("img", { name: "architecture.png" })
+    ).toHaveAttribute("sizes", "100vw")
+
+    await user.keyboard("{ArrowRight}")
+    dialog = await screen.findByRole("dialog", { name: "notes.txt" })
+    expect(
+      await within(dialog).findByText("<script>alert('escaped')</script>")
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/Preview limited to the first 1 MB/u)
+    ).toBeInTheDocument()
+    expect(mocks.getTextFilePreview).toHaveBeenCalledWith(
+      expect.anything(),
+      { organizationId: "org alpha", fileId: "file-text" },
+      expect.any(AbortSignal)
+    )
+
+    await user.keyboard("{ArrowLeft}")
+    expect(
+      await screen.findByRole("dialog", { name: "architecture.png" })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(fileKeys.textPreview("org alpha", "file-text"))
+      ).toBeUndefined()
+    )
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it("keeps card dimensions while placing icons next to their labels", async () => {
+    renderAttachments()
+    const imageTrigger = await screen.findByRole("button", {
+      name: "Preview image architecture.png",
+    })
+    expect(imageTrigger).toHaveClass("min-h-36", "max-h-72")
+
+    const filename = screen.getByRole("button", { name: "architecture.png" })
+    const fileIcon = within(filename).getByTestId("file-icon-file-image")
+    expect(fileIcon).toHaveClass("size-4")
+    expect(within(filename).getByText("architecture.png")).toBeInTheDocument()
+
+    const uploader = screen.getAllByLabelText("Uploaded by Alex Example")[0]
+    if (!uploader) throw new Error("Expected the file uploader identity")
+    expect(within(uploader).getByText("AE")).toBeInTheDocument()
+    expect(within(uploader).getByText("Alex Example")).toBeInTheDocument()
+    expect(
+      screen.getByRole("group", {
+        name: "File details for architecture.png",
+      })
+    ).toHaveClass("min-h-16", "p-3")
+  })
+
   it("confirms deletion and refreshes the owner list", async () => {
     const user = userEvent.setup()
-    renderAttachments()
+    const onFilesChanged = vi.fn<() => Promise<void>>().mockResolvedValue()
+    renderAttachments(onFilesChanged)
     await screen.findByText("architecture.png")
 
     await user.click(
@@ -126,5 +228,6 @@ describe("file attachments", () => {
       })
     )
     await waitFor(() => expect(mocks.listFiles).toHaveBeenCalledTimes(2))
+    expect(onFilesChanged).toHaveBeenCalledOnce()
   })
 })

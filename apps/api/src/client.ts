@@ -11,10 +11,17 @@ import {
   fileDtoModel,
   type FileDto,
   type FileListDto,
+  type TextFilePreviewDto,
 } from "./modules/files/model"
 
 export { FILE_PREVIEW_WIDTHS }
-export type { FileDto, FileListDto, FileOwnerType, FilePreviewWidth }
+export type {
+  FileDto,
+  FileListDto,
+  FileOwnerType,
+  FilePreviewWidth,
+  TextFilePreviewDto,
+}
 
 type TreatyOptions = NonNullable<Parameters<typeof treaty<App>>[1]>
 

@@ -6,6 +6,7 @@ import {
   FileUploadError,
   uploadFileWithProgress,
   type CreateApiClientOptions,
+  type TextFilePreviewDto,
 } from "./client"
 
 it("does not expose Eden date parsing as a consumer option", () => {
@@ -17,6 +18,13 @@ it("does not expose Eden date parsing as a consumer option", () => {
 })
 
 describe("file client helpers", () => {
+  it("exports the text preview DTO through the client boundary", () => {
+    expectTypeOf<TextFilePreviewDto>().toEqualTypeOf<{
+      content: string
+      truncated: boolean
+    }>()
+  })
+
   it("builds encoded download and preview URLs without persisting them", () => {
     expect(
       buildFileDownloadUrl("https://api.example.test/root/", {
