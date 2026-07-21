@@ -8,6 +8,7 @@ import {
   healthResponseModel,
   readinessResponseModel,
 } from "./models/api"
+import { createAgentModule } from "./modules/agent"
 import { createAuditModule } from "./modules/audit"
 import { createFilesModule } from "./modules/files"
 import { createIssuesModule } from "./modules/issues"
@@ -87,6 +88,7 @@ export const createApp = (db: Db) =>
     )
     .use(createUsersModule(db))
     .use(createOrganizationsModule(db))
+    .use(createAgentModule(db))
     .use(createIssuesModule(db))
     .use(createFilesModule(db))
     .use(createProfileImagesModule(db))

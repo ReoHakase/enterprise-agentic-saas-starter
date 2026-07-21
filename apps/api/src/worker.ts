@@ -1,10 +1,13 @@
 import { db } from "@enterprise-agentic-saas/db"
 import * as Sentry from "@sentry/cloudflare"
+import { WorkerEntrypoint } from "cloudflare:workers"
 import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 
+import type { AgentInternalApiContract } from "./agent-client"
 import { createApp } from "./app"
 import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handler"
+import { createAgentInternalApi } from "./modules/agent/internal-api"
 import { processFileCleanupJobs } from "./modules/files/cleanup-jobs"
 import {
   configureFileStorageRuntime,
@@ -51,6 +54,63 @@ type WorkerExecutionContext = {
 type WorkerScheduledController = {
   cron: string
   scheduledTime: number
+}
+
+const agentInternalApi = createAgentInternalApi(db)
+
+export class AgentInternalApi
+  extends WorkerEntrypoint<WorkerSentryEnv>
+  implements AgentInternalApiContract
+{
+  consumeConnectionTicket(
+    input: Parameters<AgentInternalApiContract["consumeConnectionTicket"]>[0]
+  ) {
+    return agentInternalApi.consumeConnectionTicket(input)
+  }
+
+  startRun(input: Parameters<AgentInternalApiContract["startRun"]>[0]) {
+    return agentInternalApi.startRun(input)
+  }
+
+  cancelRun(input: Parameters<AgentInternalApiContract["cancelRun"]>[0]) {
+    return agentInternalApi.cancelRun(input)
+  }
+
+  finishRun(input: Parameters<AgentInternalApiContract["finishRun"]>[0]) {
+    return agentInternalApi.finishRun(input)
+  }
+
+  readAccountContext(
+    input: Parameters<AgentInternalApiContract["readAccountContext"]>[0]
+  ) {
+    return agentInternalApi.readAccountContext(input)
+  }
+
+  readActiveOrganization(
+    input: Parameters<AgentInternalApiContract["readActiveOrganization"]>[0]
+  ) {
+    return agentInternalApi.readActiveOrganization(input)
+  }
+
+  searchOrganizationMembers(
+    input: Parameters<AgentInternalApiContract["searchOrganizationMembers"]>[0]
+  ) {
+    return agentInternalApi.searchOrganizationMembers(input)
+  }
+
+  searchIssueLabels(
+    input: Parameters<AgentInternalApiContract["searchIssueLabels"]>[0]
+  ) {
+    return agentInternalApi.searchIssueLabels(input)
+  }
+
+  searchIssues(input: Parameters<AgentInternalApiContract["searchIssues"]>[0]) {
+    return agentInternalApi.searchIssues(input)
+  }
+
+  getIssue(input: Parameters<AgentInternalApiContract["getIssue"]>[0]) {
+    return agentInternalApi.getIssue(input)
+  }
 }
 
 const tracesSampleRate = (value: string | undefined): number => {

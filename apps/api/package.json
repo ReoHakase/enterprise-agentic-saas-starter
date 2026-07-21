@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./agent-client": {
+      "types": "./src/agent-client.ts",
+      "default": "./src/agent-client.ts"
+    },
     "./client": {
       "types": "./src/client.ts",
       "default": "./src/client.ts"

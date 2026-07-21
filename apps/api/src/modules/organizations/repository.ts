@@ -23,6 +23,10 @@ import {
 
 import { AppError, publicErrors } from "../../errors/app-error"
 import {
+  revokeAgentSessionContextInTransaction,
+  revokeAgentSessionContextsInTransaction,
+} from "../agent/context-repository"
+import {
   normalizeOrganizationRole,
   permissionsForRole,
   type OrganizationPermissions,
@@ -440,6 +444,11 @@ export const insertOrganizationWithSuperAdmin = async (
         if (!sessionRows[0]) {
           throw new Error("Session not found during organization creation")
         }
+        await revokeAgentSessionContextInTransaction(tx, {
+          sessionId: input.sessionId,
+          userId: input.userId,
+          now,
+        })
       }
 
       return rows[0]
@@ -498,17 +507,39 @@ export const updateSessionActiveOrganization = async (
         return "activated" as const
       }
 
+      const sessionRows = await tx
+        .select({ activeOrganizationId: session.activeOrganizationId })
+        .from(session)
+        .where(
+          and(eq(session.id, input.sessionId), eq(session.userId, input.userId))
+        )
+        .limit(1)
+      const currentSession = sessionRows[0]
+      if (!currentSession) {
+        return "session_not_found" as const
+      }
+      if (currentSession.activeOrganizationId === input.organizationId) {
+        return "activated" as const
+      }
+
+      const now = new Date()
       const rows = await tx
         .update(session)
         .set({
           activeOrganizationId: input.organizationId,
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         .where(
           and(eq(session.id, input.sessionId), eq(session.userId, input.userId))
         )
         .returning({ id: session.id })
-      return rows[0] ? ("activated" as const) : ("session_not_found" as const)
+      if (!rows[0]) return "session_not_found" as const
+      await revokeAgentSessionContextInTransaction(tx, {
+        sessionId: input.sessionId,
+        userId: input.userId,
+        now,
+      })
+      return "activated" as const
     })
   } catch (cause) {
     throw publicErrors.internal(cause, {
@@ -734,10 +765,16 @@ export const deleteOrganizationById = async (
         idempotencyKey: input.idempotencyKey,
       })
 
+      const affectedSessions = await tx
+        .select({ sessionId: session.id, userId: session.userId })
+        .from(session)
+        .where(eq(session.activeOrganizationId, input.organizationId))
+      const now = new Date()
       await tx
         .update(session)
-        .set({ activeOrganizationId: null, updatedAt: new Date() })
+        .set({ activeOrganizationId: null, updatedAt: now })
         .where(eq(session.activeOrganizationId, input.organizationId))
+      await revokeAgentSessionContextsInTransaction(tx, affectedSessions, now)
 
       const deletedRows = await tx
         .delete(organization)
@@ -881,17 +918,43 @@ export const updateMemberRoleById = async (
 ) => {
   try {
     const rows = await db.transaction(async (tx) => {
-      const updatedRows = await tx
-        .update(member)
-        .set({ role: input.role })
+      const targetRows = await tx
+        .select({ role: member.role, userId: member.userId })
+        .from(member)
         .where(
           and(
             eq(member.organizationId, input.organizationId),
             eq(member.id, input.memberId)
           )
         )
+        .limit(1)
+      const target = targetRows[0]
+      if (!target) return []
+      const affectedSessions =
+        target.role === input.role
+          ? []
+          : await tx
+              .select({ sessionId: session.id, userId: session.userId })
+              .from(session)
+              .where(
+                and(
+                  eq(session.userId, target.userId),
+                  eq(session.activeOrganizationId, input.organizationId)
+                )
+              )
+      const updatedRows = await tx
+        .update(member)
+        .set({ role: input.role })
+        .where(
+          and(
+            eq(member.organizationId, input.organizationId),
+            eq(member.id, input.memberId),
+            eq(member.role, target.role)
+          )
+        )
         .returning()
       if (updatedRows[0]) {
+        await revokeAgentSessionContextsInTransaction(tx, affectedSessions)
         await tx.insert(auditLogs).values({
           id: crypto.randomUUID(),
           organizationId: input.organizationId,
@@ -899,7 +962,7 @@ export const updateMemberRoleById = async (
           action: "organization.member.role_updated",
           targetType: "member",
           targetId: input.memberId,
-          metadata: { fromRole: input.previousRole, toRole: input.role },
+          metadata: { fromRole: target.role, toRole: input.role },
         })
       }
       return updatedRows
@@ -932,16 +995,18 @@ export const transferSuperAdminById = async (
   try {
     return await db.transaction(async (tx) => {
       const actorRows = await tx
-        .select({ role: member.role })
+        .select({ role: member.role, userId: member.userId })
         .from(member)
         .where(
           and(
             eq(member.id, input.actorMemberId),
-            eq(member.organizationId, input.organizationId)
+            eq(member.organizationId, input.organizationId),
+            eq(member.userId, input.actorUserId)
           )
         )
         .limit(1)
-      if (actorRows[0]?.role !== "super_admin") {
+      const actor = actorRows[0]
+      if (actor?.role !== "super_admin") {
         return "actor_not_super_admin"
       }
 
@@ -958,6 +1023,16 @@ export const transferSuperAdminById = async (
       if (!targetRows[0]) {
         return "target_not_found"
       }
+
+      const affectedSessions = await tx
+        .select({ sessionId: session.id, userId: session.userId })
+        .from(session)
+        .where(
+          and(
+            inArray(session.userId, [actor.userId, targetRows[0].userId]),
+            eq(session.activeOrganizationId, input.organizationId)
+          )
+        )
 
       const beforeCount = await tx
         .select({ value: count() })
@@ -979,6 +1054,7 @@ export const transferSuperAdminById = async (
           and(
             eq(member.id, input.actorMemberId),
             eq(member.organizationId, input.organizationId),
+            eq(member.userId, input.actorUserId),
             eq(member.role, "super_admin")
           )
         )
@@ -1014,6 +1090,8 @@ export const transferSuperAdminById = async (
       if (afterCount[0]?.value !== 1) {
         throw new Error("Ownership transfer violated super admin invariant")
       }
+
+      await revokeAgentSessionContextsInTransaction(tx, affectedSessions)
 
       await tx.insert(auditLogs).values({
         id: crypto.randomUUID(),
@@ -1056,6 +1134,15 @@ export const deleteMemberById = async (
         )
         .returning()
       if (deletedRows[0]) {
+        const affectedSessions = await tx
+          .select({ sessionId: session.id, userId: session.userId })
+          .from(session)
+          .where(
+            and(
+              eq(session.userId, deletedRows[0].userId),
+              eq(session.activeOrganizationId, input.organizationId)
+            )
+          )
         const recentRows = await tx
           .select({ organizationId: session.activeOrganizationId })
           .from(session)
@@ -1093,11 +1180,12 @@ export const deleteMemberById = async (
               : null
         }
 
+        const now = new Date()
         await tx
           .update(session)
           .set({
             activeOrganizationId: replacementOrganizationId,
-            updatedAt: new Date(),
+            updatedAt: now,
           })
           .where(
             and(
@@ -1105,6 +1193,7 @@ export const deleteMemberById = async (
               eq(session.activeOrganizationId, input.organizationId)
             )
           )
+        await revokeAgentSessionContextsInTransaction(tx, affectedSessions, now)
 
         await tx.insert(auditLogs).values({
           id: crypto.randomUUID(),

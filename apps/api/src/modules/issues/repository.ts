@@ -202,8 +202,10 @@ export type ListIssuesInput = {
   limit?: number
 }
 
+type IssueReadDatabase = Pick<Db, "select">
+
 export const listIssuesByOrganization = async (
-  db: Db,
+  db: IssueReadDatabase,
   input: ListIssuesInput
 ): Promise<IssueDto[]> => {
   try {
@@ -265,7 +267,7 @@ export const listIssuesByOrganization = async (
 }
 
 export const findIssueById = async (
-  db: Db,
+  db: IssueReadDatabase,
   input: { id: string; organizationId: string }
 ): Promise<IssueDto | null> => {
   try {
@@ -290,7 +292,7 @@ export const findIssueById = async (
 }
 
 export const findIssueByNumber = async (
-  db: Db,
+  db: IssueReadDatabase,
   input: { number: number; organizationId: string }
 ): Promise<IssueDto | null> => {
   try {

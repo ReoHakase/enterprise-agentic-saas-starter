@@ -64,6 +64,11 @@ const createSeededDb = async () => {
 
   await Promise.all(
     [
+      "agent_grants",
+      "agent_connection_tickets",
+      "agent_runs",
+      "agent_threads",
+      "agent_session_contexts",
       "organization_deletion_jobs",
       "invitation_email_jobs",
       "issue_activity_events",
@@ -242,6 +247,80 @@ const createSeededDb = async () => {
       next_attempt_at integer,
       requested_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       completed_at integer
+    )
+  `)
+  await db.run(sql`
+    create table agent_session_contexts (
+      session_id text primary key,
+      user_id text not null,
+      context_epoch integer not null default 1,
+      updated_at integer not null
+    )
+  `)
+  await db.run(sql`
+    create table agent_threads (
+      id text primary key,
+      organization_id text not null,
+      owner_user_id text not null,
+      title text not null,
+      status text not null default 'active',
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
+    )
+  `)
+  await db.run(sql`
+    create table agent_runs (
+      id text primary key,
+      organization_id text not null,
+      thread_id text not null,
+      root_run_id text not null,
+      parent_run_id text,
+      resumed_action_id text,
+      session_id text not null,
+      user_id text not null,
+      context_epoch integer not null,
+      client_message_id text,
+      status text not null default 'running',
+      scope text not null default 'chat',
+      step_count integer not null default 0,
+      tool_count integer not null default 0,
+      write_count integer not null default 0,
+      input_token_count integer not null default 0,
+      output_token_count integer not null default 0,
+      started_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      expires_at integer not null,
+      finished_at integer
+    )
+  `)
+  await db.run(sql`
+    create table agent_connection_tickets (
+      id text primary key,
+      token_hash text not null unique,
+      organization_id text not null,
+      thread_id text not null,
+      session_id text not null,
+      user_id text not null,
+      context_epoch integer not null,
+      issued_at integer not null,
+      expires_at integer not null,
+      consumed_at integer,
+      revoked_at integer
+    )
+  `)
+  await db.run(sql`
+    create table agent_grants (
+      id text primary key,
+      token_hash text not null unique,
+      kind text not null,
+      organization_id text not null,
+      thread_id text not null,
+      run_id text,
+      session_id text not null,
+      user_id text not null,
+      context_epoch integer not null,
+      issued_at integer not null,
+      expires_at integer not null,
+      revoked_at integer
     )
   `)
   await db.run(sql`pragma foreign_keys = on`)
