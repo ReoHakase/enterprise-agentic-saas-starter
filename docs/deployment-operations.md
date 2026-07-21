@@ -88,6 +88,8 @@ bun run --cwd apps/web deploy
 
 GitHub Actionsの `Deploy production` workflowは同じ順序を `production` environmentのapprovalとconcurrency lock付きで実行します。
 
+`0011_file_activity_backfill`だけは、migration適用とAPI切替の間に旧Workerがfileを確定・削除するとactivityを復元できないdata migrationです。workflowはmigration ledgerが`0010`適用済みかつ`0011`未適用の環境だけを検出し、既存schemaと互換な新APIを先にdeployしてからbackfillします。fresh環境、`0011`適用済み環境、今後の通常migrationでは上記のmigration-first順序を維持します。この互換deployを手動運用で省略せず、file writeを止めないままone-shot SQLだけを先行適用しないでください。
+
 ## Smoke checklist
 
 - `/health` が200。

@@ -21,7 +21,7 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - repository queryはfile/owner IDだけで引かず、必ず`organizationId`を含める。DBもtyped owner tableのcomposite FKでtenant境界を強制する。
 - `FileOwnerAdapter` registryでowner存在確認、read/upload/delete権限、typed owner row、owner削除cleanupを分離する。
 - Issue ownerはmemberがlist/read/uploadできる。削除はuploader本人または`admin` / `super_admin`だけにする。
-- filename、内容、URL、object key、raw provider error、tenant/user/resource IDをlog、Sentry、auditへ出さない。auditは`file.uploaded` / `file.deleted`と安全なmetadataだけをtransaction内へ保存する。
+- filename、内容、URL、object key、raw provider error、tenant/user/resource IDをlog、Sentry、auditへ出さない。auditは`file.uploaded` / `file.deleted`と安全なmetadataだけをtransaction内へ保存する。Issueの人向けtimeline eventだけは追加・削除時のfilename snapshotを値として保持する。
 
 ## DBとobject lifecycle
 
@@ -33,6 +33,8 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - uploadはquota予約+pending作成、R2 stream PUT、HEAD/実size/ETag確認、ready確定の二段階にする。request全体を`arrayBuffer()`へしない。
 - R2 objectは`application/octet-stream`で保存し、custom metadataは`fileId`、`uploadId`、`expectedSize`だけにする。
 - file削除はquota解放、DB削除、exact-key cleanup job、auditを同じtransactionへ入れる。R2 deleteの失敗でHTTP transactionを巻き戻さずdurable jobで収束させる。
+- Issue fileのready確定と削除では、`FileOwnerAdapter` hookから`file_added` / `file_deleted` activityも同じtransactionへ保存する。retryで追加eventを重複させず、削除後もfilename snapshotをtimelineへ残す。generic file coreへIssue固有table操作を直書きしない。
+- `0011_file_activity_backfill`のproduction rolloutでは旧Workerとの書込raceを避ける。migration ledgerが`0010`適用済み・`0011`未適用のときだけdeploy workflowが互換な新APIを先行deployし、その後にone-shot backfillを行う。fresh環境と適用済み環境の通常migration-first順序は変えない。
 - Issue削除は配下fileのquota解放とowner-prefix cleanupをIssue削除transactionへ入れる。organization削除はorganization prefix cleanupを同じ`FILES` bucketで行う。
 - cleanup jobは削除後も残るためresource FKを持たせない。lease、指数backoff、attempts、`lockedAt`を使い、完了/失敗updateをclaim tokenでfenceする。
 
@@ -47,15 +49,24 @@ GET    /files/organizations/:organizationId/owners/:ownerType/:ownerId
 POST   /files/organizations/:organizationId/owners/:ownerType/:ownerId
 GET    /files/organizations/:organizationId/:fileId/download
 GET    /files/organizations/:organizationId/:fileId/preview/:width
+GET    /files/organizations/:organizationId/:fileId/text-preview
 DELETE /files/organizations/:organizationId/:fileId
 ```
 
 - owner typeはValibot closed unionで`"issue"`だけを受ける。
 - listはreadyだけを新しい順で返す。opaque cursor、既定50件、最大100件を使う。
 - uploadは1 file/1 multipart requestとし、fieldsを`uploadId`、`fileSize`、`file`に固定する。初回201、同一retry 200、衝突409にする。
-- DTOからR2 keyと保存URLを除外する。`owner`、filename、size、declared MIME、previewable、dimensions、uploader profile、createdAt、canDeleteを返す。
+- DTOからR2 keyと保存URLを除外する。`owner`、filename、size、declared MIME、画像用`previewable`、`textPreviewable`、dimensions、uploader profile、createdAt、canDeleteを返す。
 - upload progressだけはXHR、`withCredentials`、AbortSignalで実装する。list/deleteはEdenとTanStack Queryを使う。
 - original downloadは常に`application/octet-stream`、attachment、`nosniff`とし、single Range、R2 conditional read、206/304/416を扱う。
+
+## Text preview
+
+- UTF-8の`text/*`（HTMLを除く）、JSON系、閉じたsource-text拡張子集合だけを対象にする。HTML/SVG拡張子はdeclared MIMEにかかわらずdownload-onlyにする。
+- R2から先頭decimal `1_000_000` bytesとUTF-8境界確認用の最大3 bytesだけをRange readする。invalid UTF-8、NUL、非対応形式は415へ丸め、本文をlog/Sentryへ出さない。
+- responseはJSONの`{ content, truncated }`、`private, no-store`、`nosniff`、`Cross-Origin-Resource-Policy: same-site`とする。Workers Cacheへ保存しない。
+- WebはEdenとtenant-scoped TanStack Queryで取得し、Reactのescaped `<pre>`だけで表示する。dialog close後はtext queryを破棄し、truncated時はoriginal downloadを案内する。
+- image/text viewerはpageとintercepted modalで共有するviewport dialogとし、browser Fullscreen APIや専用public URLを作らない。
 
 ## 画像preview
 

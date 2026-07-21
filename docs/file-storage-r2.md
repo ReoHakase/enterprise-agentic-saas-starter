@@ -29,13 +29,19 @@ productionではWebとAPIを同じregistrable domain配下、例えば`app.examp
 - 1 file: `20,000,000` bytes以下
 - ownerあたりのfile数: 制限なし
 - preview幅: `360`, `720`, `1200`, `2400`
-- preview形式: JPEG、PNG、WebP、GIF。AVIF、SVG、text等はdownloadのみ
+- 画像preview形式: JPEG、PNG、WebP、GIF
+- text preview: UTF-8 text/JSONの先頭`1,000,000` bytes
+- download-only: AVIF、SVG、HTML、PDF、その他の非対応形式
 
 R2 keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`です。filenameをkeyやR2 custom metadataへ含めません。objectは`application/octet-stream`で保存し、downloadもattachmentとして返します。
 
 previewはR2へ保存したraw imageからImages bindingでWebPへ変換します。OpenNextやNext `<Image>`がprivate R2 originalを自動で最適化する構成ではありません。認証付きsourceへNext optimizerを通さず、Webの`AuthenticatedFileImage`がAPI preview URLからnative `srcset`を組み立てます。
 
 AVIFはmagic bytesで形式だけを検出し、Cloudflare Imagesの`info()`へ渡しません。v1では常に`previewable: false`、`imageWidth: null`、`imageHeight: null`としてdownloadだけを提供します。local/remote Images実装差へ依存してAVIFのmetadataを確定しません。
+
+UTF-8 textは認証付き`/files/organizations/:organizationId/:fileId/text-preview`からJSONとして取得し、Webの全画面viewerがescaped textとして表示します。`text/*`（HTMLを除く）、JSON系、閉じたsource-text拡張子だけを対象とし、HTML/SVG拡張子、invalid UTF-8、NULを含む内容はpreviewしません。R2から読むのは先頭`1,000,000` bytesとUTF-8境界確認分だけで、超過時はviewerからoriginal downloadを案内します。text responseはbrowser/Workers Cacheへ保存しません。
+
+Issue detailのpageとintercepted modalは同じviewport viewerを共有します。画像は既存の認証付き`srcset`、textはEdenとtenant-scoped TanStack Queryを使い、browser Fullscreen APIや公開URLは使いません。
 
 ## ローカル起動とseed
 
@@ -70,7 +76,11 @@ bun run dev
 
 uploadはquota予約とpending row、R2 PUT、ready確定の二段階です。通信断やWorker停止後は同じ`uploadId`でretryすると、pending rowとR2 HEADを照合して収束します。異なるownerまたは内容で同じIDを再利用すると409になります。
 
+file追加・削除では、auditにfilenameを残さず、Issue Discussion向けの`file_added` / `file_deleted` eventだけがfilename snapshotを保持します。ready確定またはDB削除、quota、cleanup job、audit、activityは同じtransactionで確定し、upload retryでtimeline eventを重複させません。
+
 file削除ではDBとquotaを先にtransactionで確定し、R2 exact key削除はdurable cleanup jobで再試行します。Issue削除はowner prefix、organization削除はorganization prefixをcleanupします。bucket権限やbindingを直した後はcronの冪等retryへ任せ、DB rowやusageを手動で再作成しないでください。
+
+`file_added` / `file_deleted`を初めて導入する`0011_file_activity_backfill`は、旧APIとの切替中にfilename履歴を失わないよう特別なcompatibility deployを必要とします。production workflowは`0010`まで適用済みで`0011`が未適用の場合だけ新APIを先行deployし、その後にready fileをbackfillします。通常のmigration-first順序を手動で適用してこの判定を迂回しないでください。
 
 local seedのreconcileは次の動作です。
 
