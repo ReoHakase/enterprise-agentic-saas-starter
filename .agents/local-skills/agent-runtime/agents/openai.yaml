@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Runtime"
+  short_description: "Agent機能のruntime・tool・承認・tenant境界を安全に設計"
+  default_prompt: "$agent-runtime を使って、このrepoのAgent機能を安全に設計・実装してください。"

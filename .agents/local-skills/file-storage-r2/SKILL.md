@@ -1,11 +1,13 @@
 ---
 name: file-storage-r2
-description: enterprise-agentic-saas-starterの認証付き汎用file storage、Cloudflare R2/Images binding、`/files/*` API、Turso/Drizzle metadataとquota、Issue attachment UI、local Wrangler seed/reconcile、download/preview cacheを追加・変更・調査するときに使う。
+description: enterprise-agentic-saas-starterの認証付き汎用file storage、Cloudflare R2/Images binding、`/files/*` API、Turso/Drizzle metadataとquota、Issue attachment、Agent chat画像、local Wrangler seed/reconcile、download/preview cacheを追加・変更・調査するときに使う。
 ---
 
 # File storage with R2
 
 このskillはprivate R2へoriginalを保存し、Elysia Workerだけを通して認証付きfileを扱う実装で使う。Cloudflare一般の構成より、以下のrepo固有contractを優先する。
+
+`Agent chat image`節はAgent導入migration後のv2 targetであり、それ以外のgeneric file節は現在実装済みのv1 contractを表す。migrationが入るまではv1 key/schemaを変更済みと扱わない。v2実装時はこのskill全体を同じchangeで更新し、v1/v2のどちらを指すか曖昧な記述を残さない。
 
 ## 境界
 
@@ -29,6 +31,28 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - subjectごとのversion reservationはunique version競合だけでなく、libSQL/SQLiteの一時的な`SQLITE_BUSY` / `SQLITE_LOCKED`も短いbounded backoffでretryする。実際の`Promise.all` reservation testを残し、並行開始が500へ漏れないこととversionが単調になることを固定する。
 - browser responseはWebP、ETag/304、`private, no-cache`、`nosniff`、`Cross-Origin-Resource-Policy: same-site`を使い、R2 URLやobject keyを公開しない。
 
+### Agent chat image（v2 target）
+
+- Agent chatの短期画像は、Issueへ昇格するまではgeneric `file`ではなくfeature固有の`agent_asset`として扱う。`fileOwnerTypes`へ`agent_thread`を足さず、現行の「作成時からimmutableなIssue owner」というgeneric file contractを崩さない。
+- Browserは画像をAgent asset専用の`/files/*` routeへmultipartで一度だけuploadし、chat message、Durable Object、tool argumentにはopaque asset IDだけを保存する。base64/data URI、raw bytes、private URL、object keyを保存せず、Issue作成時もBrowserから再uploadしない。
+- 中核実装ではR2上のphysical objectを`storage_objects`へ分離し、`agent_assets`と`files`をlogical resourceにする。新規R2 keyはowner非依存にし、既存fileは1対1 storage objectとfile claimへbackfillして旧keyを移動しない。このmigration前は後述する現行のowner依存key contractを維持する。
+- `storage_object_claims`はstorage object IDをprimary keyにし、agent_asset、transferring、file holderを持つ。ready asset/fileとclaimの一致をrepositoryとSQLite triggerで強制し、1 physical objectに複数のlive holderを作らない。
+- v2 cleanupはclaimをconditional deleteしてstorage objectを`deleting`へ進め、cleanup revision付きexact-key jobを作る。jobはclaimなし・revision一致を再検証し、R2 delete後にobject keyをscrubする。logical history FKだけでphysical deleteを決めない。
+- Issue createのexecute transactionではpending file作成、asset promoting、claim transferring、claim file、asset promoted + FK null、file ready、最終assertionの順を固定する。SQLite triggerはdeferredにできないため、pending file + file claimはsource assetがpromoting/promotedの場合だけ同一transaction内で許し、外へcommitしない。一般的なowner変更やblob共有APIを作らない。
+- stream-copy fallbackはzero-copy migrationの実証済みblockerを別ADRで例外承認した場合だけ使い、`materializing` action、planned ID/key、idempotency、fenced retry、orphan cleanupを必須にする。BrowserやAgent toolから再uploadしない。
+- chat画像は1 file `10_000_000` bytes以下、1 message最大4件・合計`20_000_000` bytes以下にする。既存のorganization合計`1_073_741_824` bytesへstagedとpermanentの両方を算入し、object count、pending count、時間窓request数もatomicに制限する。
+- originalは各putでstorage classを明示してprivate R2 Standardへ保存し、Cloudflare Images hosted storageは使わない。APIだけがR2とImages bindingを持ち、authorization後にmax edge 2,048px、WebP quality 75、animation無効へ変換する。Images outputを4 MiB + 1 byteまでbounded readし、超過をprovider送信前に拒否してから上限内bytesだけをRPC ResponseでAgent Workerへ渡す。
+- chat-only assetは既定72時間、hard max 7日でexpireする。DBの`expiresAt`とcleanup jobを正本にしてquotaを解放し、exact keyを冪等削除する。zero-copy promotion対象originalへprefix lifecycleを設定せず、絶対にpromoteしないderivativeだけをlifecycle backstopにする。
+- Issue attachmentへ昇格するまでのasset ACL、active organization、thread owner、lease、approval、ETag/size snapshotは`agent-runtime` skillと`docs/agent-runtime.md`を正本にする。
+
+#### v1からv2へのrollout
+
+- additive schemaを先に適用し、v1/v2 dual-readとv1 key + storage object/claim dual-writeが可能なcompatibility APIをdeployする。
+- fenced incremental backfillで旧rowを1対1 storage object/file claimへ収束させ、legacy R2 keyは移動しない。
+- 全live file、claim、quota、R2 HEADの整合性を確認してからserver flagで新規v2 key writeを有効にする。削除はkey versionでlegacy prefixとv2 exact-keyへ分ける。
+- 旧isolate drain後にbackfillと検証を再実行する。rollbackはv2 write flagを止め、compatibility APIで既存v2を読み続ける。R2 copyでv1へ戻さない。
+- rollback windowと旧release停止を確認するまでlegacy column/writeをcontractせず、legacy read/cleanupはlegacy objectが0になるまで残す。
+
 ## Tenant、認証、権限
 
 - 全routeへ既存のBetter Auth `organizationAccess` macroを宣言する。未認証は401、active organization不一致は409、非member・別tenant・不存在owner/fileは同じ404へ丸める。
@@ -37,24 +61,24 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - Issue ownerはmemberがlist/read/uploadできる。削除はuploader本人または`admin` / `super_admin`だけにする。
 - filename、内容、URL、object key、raw provider error、tenant/user/resource IDをlog、Sentry、auditへ出さない。auditは`file.uploaded` / `file.deleted`と安全なmetadataだけをtransaction内へ保存する。Issueの人向けtimeline eventだけは追加・削除時のfilename snapshotを値として保持する。
 
-## DBとobject lifecycle
+## DBとobject lifecycle（current v1）
 
 - `files`は`pending | ready`、upload idempotency、declared MIME、検出画像format/dimensions、size、ETag、R2 keyを持つ。
 - `issue_file_owners`はfileとIssueを同じorganizationへ固定するtyped tableにする。
 - `organization_file_usage`はpendingとreadyの両方を含め、atomic reservationで`1_073_741_824` bytes以下を保証する。1 fileはdecimal `20_000_000` bytes以下にする。
 - `(organization_id, upload_id)`とobject keyをuniqueにする。同じupload IDの同一内容retryは収束し、owner・size・content type等が違うretryは409にする。
-- keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`とし、filenameをkey、R2 metadata、logへ含めない。
+- current v1 keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`とし、filenameをkey、R2 metadata、logへ含めない。Agent v2 migration後の新規objectだけは前節のowner非依存keyを使う。
 - uploadはquota予約+pending作成、R2 stream PUT、HEAD/実size/ETag確認、ready確定の二段階にする。request全体を`arrayBuffer()`へしない。
 - R2 objectは`application/octet-stream`で保存し、custom metadataは`fileId`、`uploadId`、`expectedSize`だけにする。
 - file削除はquota解放、DB削除、exact-key cleanup job、auditを同じtransactionへ入れる。R2 deleteの失敗でHTTP transactionを巻き戻さずdurable jobで収束させる。
 - Issue fileのready確定と削除では、`FileOwnerAdapter` hookから`file_added` / `file_deleted` activityも同じtransactionへ保存する。retryで追加eventを重複させず、削除後もfilename snapshotをtimelineへ残す。generic file coreへIssue固有table操作を直書きしない。
 - `0011_file_activity_backfill`のproduction rolloutでは旧Workerとの書込raceを避ける。migration ledgerが`0010`適用済み・`0011`未適用のときだけdeploy workflowが互換な新APIを先行deployし、その後にone-shot backfillを行う。fresh環境と適用済み環境の通常migration-first順序は変えない。
-- Issue削除は配下fileのquota解放とowner-prefix cleanupをIssue削除transactionへ入れる。organization削除はorganization prefix cleanupを同じ`FILES` bucketで行う。
+- current v1のIssue削除は配下fileのquota解放とowner-prefix cleanupをIssue削除transactionへ入れる。organization削除はorganization prefix cleanupを同じ`FILES` bucketで行う。v2 objectはDBからstorage objectを列挙したexact-key cleanupを正本にし、owner-prefix cleanupはlegacy v1 objectだけのbackstopにする。
 - cleanup jobは削除後も残るためresource FKを持たせない。lease、指数backoff、attempts、`lockedAt`を使い、完了/失敗updateをclaim tokenでfenceする。
 
 Schema変更は必ず`packages/db/drizzle/`へmigrationを保存し、`generate + migrate`で確認する。通常起動へ`push`やresetを混ぜない。
 
-## API contract
+## API contract（current v1）
 
 公開routeは次に固定する。
 

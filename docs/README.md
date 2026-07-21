@@ -8,11 +8,12 @@
 2. [ローカル開発](./local-development.md) — 初回セットアップと日々の起動
 3. [Database lifecycle](./database-lifecycle.md) — migration、seed、手動reset
 4. [認証・認可・マルチテナント](./auth-tenancy-security.md) — session、role、tenant境界、step-up
-5. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
-6. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
-7. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
-8. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
-9. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
+5. [Agent runtime・tool・承認](./agent-runtime.md) — 3 Worker、Issue CRUD、HITL、chat画像、client state、tenant切り替え
+6. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
+7. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
+8. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
+9. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
+10. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
 
 ## 最短の確認
 
