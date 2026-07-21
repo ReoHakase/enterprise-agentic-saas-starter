@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest"
 import {
   developmentFileFixtures,
   getDevelopmentFileFixtureUrl,
+  getDevelopmentUserAvatarUrl,
   selectDevelopmentFileFixturesForReconciliation,
 } from "./development-seed"
 import { seedDevelopmentDatabase } from "./seed"
@@ -349,7 +350,7 @@ describe("development file fixtures", () => {
     }
   })
 
-  it("produces identical rows in two fresh local databases", async () => {
+  it("produces identical rows with deterministic user avatars in two fresh local databases", async () => {
     const directories = await Promise.all([
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-a-")),
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-b-")),
@@ -377,6 +378,19 @@ describe("development file fixtures", () => {
         connections.map(readDevelopmentSeedSnapshot)
       )
       expect(snapshots[0]).toEqual(snapshots[1])
+
+      const users = snapshots[0]?.users ?? []
+      expect(users.length).toBeGreaterThan(0)
+      for (const user of users) {
+        const userId = String(user.id)
+        const image = String(user.image)
+        const avatarUrl = new URL(image)
+        expect(image).toBe(getDevelopmentUserAvatarUrl(userId))
+        expect(avatarUrl.protocol).toBe("https:")
+        expect(avatarUrl.hostname).toBe("api.dicebear.com")
+        expect(avatarUrl.pathname).toBe("/10.x/lorelei/svg")
+        expect(avatarUrl.searchParams.get("seed")).toBe(userId)
+      }
     } finally {
       await Promise.all(
         directories.map((directory) =>

@@ -1,14 +1,16 @@
 import { faker } from "@faker-js/faker"
 import { createClient } from "@libsql/client"
-import { count } from "drizzle-orm"
+import { count, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 import { seed } from "drizzle-seed"
 
 import {
   DEVELOPMENT_SEED,
   DEVELOPMENT_SEED_REFERENCE_DATE,
+  DEVELOPMENT_USER_AVATAR_URL_PREFIX,
   developmentFileFixtures,
   developmentSeedAnchors,
+  getDevelopmentUserAvatarUrl,
 } from "./development-seed"
 import { assertLocalDatabaseUrl } from "./local-database"
 import * as schema from "./schema/index"
@@ -107,11 +109,16 @@ export const seedDevelopmentDatabase = async (
         },
       }))
 
+      await tx.update(schema.user).set({
+        image: sql`${DEVELOPMENT_USER_AVATAR_URL_PREFIX} || ${schema.user.id}`,
+        updatedAt: referenceDate,
+      })
+
       await tx.insert(schema.user).values(
         developmentSeedAnchors.users.map((user) => ({
           ...user,
           emailVerified: true,
-          image: "",
+          image: getDevelopmentUserAvatarUrl(user.id),
           createdAt: referenceDate,
           updatedAt: referenceDate,
         }))
