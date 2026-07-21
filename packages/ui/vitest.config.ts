@@ -41,6 +41,7 @@ export default defineConfig({
       include: [
         "src/components/button.tsx",
         "src/components/dialog.tsx",
+        "src/lib/create-cropped-image.ts",
         "src/lib/utils.ts",
       ],
       thresholds: {

@@ -19,14 +19,15 @@ const organizationSummaryEntries = {
   id: v.string(),
   name: v.string(),
   slug: v.string(),
+  profileImage: v.nullable(v.string()),
   role: organizationRoleModel,
   active: v.boolean(),
   memberCount: v.number(),
-  memberAvatars: v.array(
+  memberProfileImages: v.array(
     v.object({
       userId: v.string(),
       name: v.string(),
-      image: v.nullable(v.string()),
+      profileImage: v.nullable(v.string()),
     })
   ),
   permissions: permissionsModel,
@@ -37,7 +38,6 @@ export const organizationListModel = v.array(organizationSummaryModel)
 
 export const organizationDetailModel = v.object({
   ...organizationSummaryEntries,
-  logo: v.nullable(v.string()),
   createdAt: isoTimestampModel,
   invitationCount: v.number(),
 })
@@ -47,7 +47,7 @@ export const memberModel = v.object({
   userId: v.string(),
   name: v.string(),
   email: v.string(),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
   role: organizationRoleModel,
   createdAt: isoTimestampModel,
 })
@@ -65,7 +65,7 @@ export const invitationModel = v.object({
     id: v.string(),
     name: v.string(),
     email: v.string(),
-    image: v.nullable(v.string()),
+    profileImage: v.nullable(v.string()),
   }),
   expiresAt: isoTimestampModel,
   createdAt: isoTimestampModel,

@@ -6,6 +6,19 @@ API Workerだけがprivate R2 bucketへアクセスします。browserはR2 URL�
 
 v1のownerはIssueだけですが、API、DB、R2 key、client helperは汎用fileとして構成しています。1 fileは作成時から1 ownerへ固定され、未所属uploadやowner変更はできません。
 
+userとorganizationのidentity画像はgeneric ownerを拡張せず、専用の`profile_images` metadataと次のrouteを使います。app-ownedなAPI/DB/Webの名称は`profileImage`へ統一し、Better Auth生成列の`user.image` / `organization.logo`だけを互換境界として残します。
+
+```text
+POST   /files/profile-images/users/me
+DELETE /files/profile-images/users/me
+GET    /files/profile-images/users/:userId
+POST   /files/profile-images/organizations/:organizationId
+DELETE /files/profile-images/organizations/:organizationId
+GET    /files/profile-images/organizations/:organizationId
+```
+
+browserは1:1にcropした512x512 PNGをuploadします。Workerはmagic bytesと画像情報を再検証し、Images bindingで512x512 WebP quality 85、animation無効へ再encodeしてからprivate R2へ保存します。原本と複数variantは保存しません。userは円、organizationは角丸四角で描画しますが、保存objectはどちらも同じ正方形です。
+
 ## Cloudflare provisioning
 
 物理bucket名は既存環境との互換性のため維持します。
@@ -34,6 +47,8 @@ productionではWebとAPIを同じregistrable domain配下、例えば`app.examp
 - download-only: AVIF、SVG、HTML、PDF、その他の非対応形式
 
 R2 keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`です。filenameをkeyやR2 custom metadataへ含めません。objectは`application/octet-stream`で保存し、downloadもattachmentとして返します。
+
+profile image keyは`users/{userId}/profile-images/{profileImageId}.webp`または`organizations/{organizationId}/profile-images/{profileImageId}.webp`です。`profile_images`にはobject keyと状態、upload ID、source hash、ETag、削除時に戻す以前のprovider画像URLを保存します。ready確定時だけBetter Auth列をfirst-partyの安定したrelative routeとopaqueなrevision query（`?v={profileImageId}`）へ更新します。object keyを公開せず、置換時はbrowserの`src`を確実に変えます。generic `files` tableにbrowser URLを保存しない原則は変わりません。
 
 previewはR2へ保存したraw imageからImages bindingでWebPへ変換します。OpenNextやNext `<Image>`がprivate R2 originalを自動で最適化する構成ではありません。認証付きsourceへNext optimizerを通さず、Webの`AuthenticatedFileImage`がAPI preview URLからnative `srcset`を組み立てます。
 
@@ -80,6 +95,10 @@ file追加・削除では、auditにfilenameを残さず、Issue Discussion向�
 
 file削除ではDBとquotaを先にtransactionで確定し、R2 exact key削除はdurable cleanup jobで再試行します。Issue削除はowner prefix、organization削除はorganization prefixをcleanupします。bucket権限やbindingを直した後はcronの冪等retryへ任せ、DB rowやusageを手動で再作成しないでください。
 
+profile imageの置換・削除もDBのcurrent metadataとBetter Auth列を先にtransactionで確定し、古いexact keyは専用のdurable cleanup processorへ渡します。currentでなくなったrowは`superseded` tombstoneとしてupload ID、source hash、versionを残すため、同じready uploadのretryは同じmetadataへ、置換・明示削除後の旧upload retryはterminal 409へ収束します。並行uploadは後から開始した有効なuploadだけをcurrentにし、最新ready確定時に古いpendingをcleanupへ回します。1時間以上残ったpendingもcronがstatusと更新時刻を再確認してtombstone化します。
+
+Organizationの更新と削除はroute guardに加え、finalize/delete transaction内でもmembership、期限内sessionのactive organization、`super_admin` roleをこの順に再検証します。Images/R2処理中のrole降格やactive organization変更があってもauth列を更新しません。UserのGETは認証済みsessionから利用でき、OrganizationのGETは対象membershipがなければ404です。
+
 `file_added` / `file_deleted`を初めて導入する`0011_file_activity_backfill`は、旧APIとの切替中にfilename履歴を失わないよう特別なcompatibility deployを必要とします。production workflowは`0010`まで適用済みで`0011`が未適用の場合だけ新APIを先行deployし、その後にready fileをbackfillします。通常のmigration-first順序を手動で適用してこの判定を迂回しないでください。
 
 local seedのreconcileは次の動作です。
@@ -113,4 +132,4 @@ Wranglerへloginした環境では次で実行します。credential、provider 
 bun run --cwd apps/api smoke/images/run.ts
 ```
 
-production smokeでは、member以外の404、active organization不一致409、upload retry、Range download、4幅のpreview、membership取消後の404、file/Issue/organization削除後のcleanup jobを確認します。
+production smokeでは、member以外の404、active organization不一致409、upload retry、Range download、4幅のpreview、membership取消後の404、file/Issue/organization削除後のcleanup jobに加え、user/org profile imageのWebP寸法、ETag/304、置換・削除後のfallbackとcleanupを確認します。

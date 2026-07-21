@@ -12,6 +12,7 @@ import { createAuditModule } from "./modules/audit"
 import { createFilesModule } from "./modules/files"
 import { createIssuesModule } from "./modules/issues"
 import { createOrganizationsModule } from "./modules/organizations"
+import { createProfileImagesModule } from "./modules/profile-images"
 import { createUsersModule } from "./modules/users"
 import { withObservedSpan } from "./observability/runtime"
 import { csrfPlugin } from "./plugins/csrf"
@@ -88,6 +89,7 @@ export const createApp = (db: Db) =>
     .use(createOrganizationsModule(db))
     .use(createIssuesModule(db))
     .use(createFilesModule(db))
+    .use(createProfileImagesModule(db))
     .use(createAuditModule(db))
     .use(openApiPlugin)
 

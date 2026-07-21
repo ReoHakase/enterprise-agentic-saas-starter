@@ -15,6 +15,20 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - DBへURLを保存しない。内部object keyとmetadataだけを保存し、browser向けURLは`@enterprise-agentic-saas/api/client`のbuilderで都度生成する。
 - WebがAPIからimportしてよいのは`@enterprise-agentic-saas/api/client`だけ。route schemaのdeep importやvalidators packageを作らない。
 
+### Profile image
+
+- userとorganizationのアップロード画像は、generic Issue attachment ownerへ混ぜず、専用の`profile_images` metadataと`/files/profile-images/*` routeを使う。R2 binding、Images binding、object cleanupの内部実装だけを共有する。
+- app-ownedなDTO、repository、URL builder、Web componentでは`profileImage`を共通語にする。Better Auth生成列の`user.image` / `organization.logo`とCloudflareの`IMAGES` binding名だけは外部契約として維持する。`avatar`はshadcn primitive、`icon`はLucide等のglyphに限定する。
+- 公開routeは`POST | DELETE /files/profile-images/users/me`、`GET /files/profile-images/users/:userId`、`POST | DELETE | GET /files/profile-images/organizations/:organizationId`とし、末尾へ`avatar`や`logo`を重ねない。
+- browserは1:1へcropした512x512 PNGを送る。Workerはmagic bytes、容量、画像情報を再検証し、`IMAGES` bindingで512x512 WebP quality 85、animation無効へ正規化してからprivate `FILES` R2へ保存する。原本や別variantは保存しない。
+- `IMAGES.output().response().body`は長さ不明のstreamになるため、そのままR2 `put`へ渡さない。変換後の512px WebPだけを固定上限内で読み、既知長の`Blob`としてR2へ保存する。Issue attachmentのoriginal request streamは従来どおりbufferせず保存する。
+- object keyは`users/{userId}/profile-images/{profileImageId}.webp`または`organizations/{organizationId}/profile-images/{profileImageId}.webp`にする。filename、表示名、emailをkeyやmetadata、logへ含めない。
+- ready確定時はBetter Auth列へfirst-partyの安定routeとopaqueなrevision query（`?v={profileImageId}`）を保存する。object keyを公開せず、置換時だけbrowserの`src`を変える。削除時に外部provider等の以前のURLへ戻せるよう、app-owned metadata側にfallbackを保持し、空文字fallbackは`null`へ正規化する。
+- user mutationは本人だけ、organization mutationはactive organization一致かつ`super_admin`だけを許可する。organization mutationはImages/R2処理後のfinalize transactionと削除transactionでもmembership、期限内sessionのactive organization、roleの順に再検証する。organization GETはmembershipを要求し、他tenant・非memberは404へ丸める。user GETは認証だけを要求し、multi-sessionやinactive organizationのidentity表示を妨げない。
+- 置換・明示削除・古い並行uploadでcurrentでなくなったrowは`superseded` tombstoneとしてupload ID、hash、versionを残す。同じ旧upload IDのretryをterminal 409へ収束させ、削除後や新しいreadyの上書きを防ぐ。最新ready確定時は古いpendingもtombstone化してcleanupをqueueし、1時間以上pendingのrowはcronが条件付きupdateでtombstone化する。
+- subjectごとのversion reservationはunique version競合だけでなく、libSQL/SQLiteの一時的な`SQLITE_BUSY` / `SQLITE_LOCKED`も短いbounded backoffでretryする。実際の`Promise.all` reservation testを残し、並行開始が500へ漏れないこととversionが単調になることを固定する。
+- browser responseはWebP、ETag/304、`private, no-cache`、`nosniff`、`Cross-Origin-Resource-Policy: same-site`を使い、R2 URLやobject keyを公開しない。
+
 ## Tenant、認証、権限
 
 - 全routeへ既存のBetter Auth `organizationAccess` macroを宣言する。未認証は401、active organization不一致は409、非member・別tenant・不存在owner/fileは同じ404へ丸める。

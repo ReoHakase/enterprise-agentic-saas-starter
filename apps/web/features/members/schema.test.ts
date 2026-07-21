@@ -20,7 +20,7 @@ const invitation = {
     id: "user-1",
     name: "Inviter",
     email: "inviter@example.com",
-    image: null,
+    profileImage: null,
   },
   expiresAt: "2026-07-23T00:00:00.000Z",
   createdAt: "2026-07-16T00:00:00.000Z",

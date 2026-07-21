@@ -28,6 +28,7 @@ import {
   type FileImagesBinding,
   type FileR2Bucket,
   type FileR2Object,
+  type FileR2PutValue,
   type FileStorageRuntime,
 } from "./runtime"
 import {
@@ -184,8 +185,12 @@ type StoredObject = {
   object: FileR2Object
 }
 
-const readBytes = async (stream: ReadableStream<Uint8Array>) =>
-  new Uint8Array(await new Response(stream).arrayBuffer())
+const readBytes = async (value: FileR2PutValue) =>
+  new Uint8Array(
+    await (value instanceof Blob
+      ? value.arrayBuffer()
+      : new Response(value).arrayBuffer())
+  )
 
 const imageFormat = async (stream: ReadableStream<Uint8Array>) => {
   const file = new File([await readBytes(stream)], "image")

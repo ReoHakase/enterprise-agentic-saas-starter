@@ -7,10 +7,10 @@ import { seed } from "drizzle-seed"
 import {
   DEVELOPMENT_SEED,
   DEVELOPMENT_SEED_REFERENCE_DATE,
-  DEVELOPMENT_USER_AVATAR_URL_PREFIX,
+  DEVELOPMENT_USER_PROFILE_IMAGE_URL_PREFIX,
   developmentFileFixtures,
   developmentSeedAnchors,
-  getDevelopmentUserAvatarUrl,
+  getDevelopmentUserProfileImageUrl,
 } from "./development-seed"
 import { assertLocalDatabaseUrl } from "./local-database"
 import * as schema from "./schema/index"
@@ -110,7 +110,7 @@ export const seedDevelopmentDatabase = async (
       }))
 
       await tx.update(schema.user).set({
-        image: sql`${DEVELOPMENT_USER_AVATAR_URL_PREFIX} || ${schema.user.id}`,
+        image: sql`${DEVELOPMENT_USER_PROFILE_IMAGE_URL_PREFIX} || ${schema.user.id}`,
         updatedAt: referenceDate,
       })
 
@@ -118,7 +118,7 @@ export const seedDevelopmentDatabase = async (
         developmentSeedAnchors.users.map((user) => ({
           ...user,
           emailVerified: true,
-          image: getDevelopmentUserAvatarUrl(user.id),
+          image: getDevelopmentUserProfileImageUrl(user.id),
           createdAt: referenceDate,
           updatedAt: referenceDate,
         }))

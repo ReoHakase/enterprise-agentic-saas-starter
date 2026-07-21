@@ -35,13 +35,13 @@ type InvitationUser = {
   id: string
   name: string
   email: string
-  image: string | null
+  profileImage: string | null
 }
 
 type InvitationCurrentUserProps = {
   currentUserEmail: string
   currentUserId: string
-  currentUserImage: string | null
+  currentUserProfileImage: string | null
   currentUserName: string
 }
 
@@ -96,7 +96,7 @@ export const InvitationDecisionPanel = (
   const authenticatedProps = props.state === "signed_out" ? undefined : props
   const currentUserEmail = authenticatedProps?.currentUserEmail
   const currentUserId = authenticatedProps?.currentUserId
-  const currentUserImage = authenticatedProps?.currentUserImage
+  const currentUserProfileImage = authenticatedProps?.currentUserProfileImage
   const currentUserName = authenticatedProps?.currentUserName
   const currentUser = useMemo<InvitationUser | undefined>(
     () =>
@@ -104,11 +104,11 @@ export const InvitationDecisionPanel = (
         ? {
             email: currentUserEmail,
             id: currentUserId,
-            image: currentUserImage ?? null,
+            profileImage: currentUserProfileImage ?? null,
             name: currentUserName,
           }
         : undefined,
-    [currentUserEmail, currentUserId, currentUserImage, currentUserName]
+    [currentUserEmail, currentUserId, currentUserName, currentUserProfileImage]
   )
   const mutation = useMutation({
     mutationFn: (action: "accept" | "reject") =>

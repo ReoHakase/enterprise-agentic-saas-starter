@@ -26,7 +26,7 @@ const issue: IssueUiItem = {
 const comment: IssueCommentUiItem = {
   id: "comment-1",
   authorId: "user-1",
-  author: { id: "user-1", name: "Alex", image: null },
+  author: { id: "user-1", name: "Alex", profileImage: null },
   body: "Verified in staging.",
   createdAt: "2026-07-12T00:00:00.000Z",
   updatedAt: "2026-07-13T00:00:00.000Z",
@@ -39,7 +39,7 @@ const assigneeActivity: IssueActivity = {
   field: "assignee",
   fromValue: null,
   toValue: "user-2",
-  actor: { id: "user-1", name: "Alex", image: null },
+  actor: { id: "user-1", name: "Alex", profileImage: null },
   createdAt: "2026-07-11T01:00:00.000Z",
 }
 
@@ -50,7 +50,7 @@ const fileAddedActivity: IssueActivity = {
   field: null,
   fromValue: null,
   toValue: "roadmap_final.txt",
-  actor: { id: "user-1", name: "Alex", image: null },
+  actor: { id: "user-1", name: "Alex", profileImage: null },
   createdAt: "2026-07-11T02:00:00.000Z",
 }
 
@@ -61,7 +61,7 @@ const fileDeletedActivity: IssueActivity = {
   field: null,
   fromValue: "old-notes.txt",
   toValue: null,
-  actor: { id: "user-1", name: "Alex", image: null },
+  actor: { id: "user-1", name: "Alex", profileImage: null },
   createdAt: "2026-07-11T03:00:00.000Z",
 }
 
@@ -70,7 +70,7 @@ const assignees = [
     id: "user-2",
     name: "Jordan",
     email: "jordan@example.test",
-    image: null,
+    profileImage: null,
   },
 ]
 
@@ -112,7 +112,7 @@ describe("issue timeline", () => {
     )
   })
 
-  it("renders file additions and deletions with the actor avatar and filename", () => {
+  it("renders file additions and deletions with the actor profile image and filename", () => {
     render(
       <ol>
         <IssueActivityItem activity={fileAddedActivity} assignees={assignees} />

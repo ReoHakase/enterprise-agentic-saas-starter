@@ -18,7 +18,7 @@ import {
 import type { ReactNode } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import type { IssueActivity } from "@/features/issues/schema"
 
 import {
@@ -163,7 +163,7 @@ const ActivityValue = ({
         assignee?.name.trim() || assignee?.email.trim() || "Unknown member"
       return assignee ? (
         <Badge className="h-auto gap-1.5 py-1 pr-2 pl-1" variant="secondary">
-          <UserAvatar user={assignee} className="size-4" />
+          <UserProfileImage user={assignee} className="size-4" />
           {assigneeLabel}
         </Badge>
       ) : (
@@ -278,7 +278,7 @@ export const IssueActivityItem = ({
         className="relative z-20 flex size-9 items-center justify-center rounded-full bg-(--issue-timeline-surface,var(--color-background)) ring-4 ring-(--issue-timeline-surface,var(--color-background))"
         aria-hidden="true"
       >
-        <UserAvatar user={activity.actor} className="size-8" />
+        <UserProfileImage user={activity.actor} className="size-8" />
         <span
           data-slot="issue-activity-field-marker"
           data-testid="issue-activity-field-marker"

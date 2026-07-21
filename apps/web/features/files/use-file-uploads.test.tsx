@@ -26,7 +26,7 @@ const uploadedFile = (id: string): FileDto => ({
   textPreviewable: true,
   imageWidth: null,
   imageHeight: null,
-  uploader: { id: "user-1", name: "User", image: null },
+  uploader: { id: "user-1", name: "User", profileImage: null },
   createdAt: "2026-07-18T00:00:00.000Z",
   canDelete: true,
 })

@@ -55,4 +55,4 @@ flowchart LR
 
 ## Production runtime
 
-WebとAPIはCloudflare Workers、静的assetとincremental cacheはCloudflare/R2、primary DBだけはTursoを利用します。認証付きfileはprivate R2の`FILES` bindingへoriginalを保存し、upload、download、Images bindingによるpreview、deleteのすべてをElysia Workerの`/files/*`経由で処理します。tenant DB rowとquotaはtransactionとcascadeで即時更新し、R2 cleanupだけをdurable jobで再試行します。local APIも`wrangler dev --local`で同じWorker entrypointとbindingを使います。ElysiaのCloudflare adapterはexperimentalなので、`build:cloudflare`と主要導線E2Eをrelease gateから外さないでください。
+WebとAPIはCloudflare Workers、静的assetとincremental cacheはCloudflare/R2、primary DBだけはTursoを利用します。認証付きfileはprivate R2の`FILES` bindingへoriginalを保存し、upload、download、Images bindingによるpreview、deleteのすべてをElysia Workerの`/files/*`経由で処理します。user / organizationのprofile imageは同じbindingとcleanup基盤を共有しつつ専用metadata/routeを使い、browser crop後もWorkerで512x512 WebPへ再検証・正規化して保存します。tenant DB rowとquotaはtransactionとcascadeで即時更新し、R2 cleanupだけをdurable jobで再試行します。local APIも`wrangler dev --local`で同じWorker entrypointとbindingを使います。ElysiaのCloudflare adapterはexperimentalなので、`build:cloudflare`と主要導線E2Eをrelease gateから外さないでください。

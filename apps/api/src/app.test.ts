@@ -657,7 +657,7 @@ describe("createApp security and OpenAPI", () => {
       spec.paths["/issues/{id}/comments"].post.responses["201"].content[
         "application/json"
       ].schema.properties.author.required
-    ).toEqual(["id", "name", "image"])
+    ).toEqual(["id", "name", "profileImage"])
     const invitationOperation =
       spec.paths["/organizations/{organizationId}/invitations"].post
     expect(
@@ -1520,7 +1520,7 @@ describe("createApp security and OpenAPI", () => {
         id: "user_3",
         name: "User 3",
         email: "user3@example.test",
-        image: null,
+        profileImage: null,
       },
     })
     expect(invitationEmailRenderSpy).toHaveBeenCalledWith(
@@ -1695,7 +1695,7 @@ describe("createApp security and OpenAPI", () => {
           id: "user_3",
           name: "User 3",
           email: "user3@example.test",
-          image: null,
+          profileImage: null,
         },
       }),
     ])
@@ -1748,7 +1748,7 @@ describe("createApp security and OpenAPI", () => {
           id: "user_3",
           name: "User 3",
           email: "user3@example.test",
-          image: null,
+          profileImage: null,
         },
       },
     })
@@ -2780,7 +2780,7 @@ describe("issue-like issues", () => {
     expect(comment.status).toBe(201)
     expect(await comment.json()).toMatchObject({
       authorId: "user_4",
-      author: { id: "user_4", name: "User 4", image: null },
+      author: { id: "user_4", name: "User 4", profileImage: null },
     })
 
     const byNumber = await app.handle(
@@ -2904,7 +2904,11 @@ describe("issue-like issues", () => {
     const items: Array<{
       type: "activity" | "comment"
       id: string
-      actor?: { id: string | null; name: string; image: string | null }
+      actor?: {
+        id: string | null
+        name: string
+        profileImage: string | null
+      }
     }> = []
     let cursor: string | null = null
 
@@ -2942,7 +2946,7 @@ describe("issue-like issues", () => {
       items.find(
         (item) => item.type === "activity" && item.id === "shared-entry"
       )?.actor
-    ).toEqual({ id: null, name: "Former member", image: null })
+    ).toEqual({ id: null, name: "Former member", profileImage: null })
 
     const malformed = await app.handle(
       jsonRequest(
@@ -3100,7 +3104,11 @@ describe("issue-like issues", () => {
     expect(await response.json()).toEqual([
       expect.objectContaining({
         authorId: "user_2",
-        author: { id: "user_2", name: "Former member", image: null },
+        author: {
+          id: "user_2",
+          name: "Former member",
+          profileImage: null,
+        },
       }),
     ])
   })

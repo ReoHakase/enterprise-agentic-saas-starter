@@ -58,7 +58,7 @@ export const loadIssueDetail = async (
     id: member.userId,
     name: member.name,
     email: member.email,
-    image: member.image,
+    profileImage: member.profileImage,
   }))
 
   return {

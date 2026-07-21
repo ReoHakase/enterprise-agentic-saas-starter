@@ -53,8 +53,9 @@ const organizations: OrganizationSummary[] = [
     slug: "acme",
     role: "super_admin" as const,
     active: true,
+    profileImage: null,
     memberCount: 2,
-    memberAvatars: [],
+    memberProfileImages: [],
     permissions,
   },
   {
@@ -63,8 +64,9 @@ const organizations: OrganizationSummary[] = [
     slug: "beta",
     role: "admin" as const,
     active: false,
+    profileImage: null,
     memberCount: 3,
-    memberAvatars: [],
+    memberProfileImages: [],
     permissions,
   },
 ]
@@ -93,7 +95,6 @@ describe("OrganizationsPage", () => {
       name: "New Team",
       slug: "new-team",
       active: false,
-      logo: null,
       createdAt: "2026-07-14T00:00:00.000Z",
       invitationCount: 0,
     })
@@ -131,8 +132,9 @@ describe("OrganizationsPage", () => {
         slug: "invitations",
         role: "super_admin",
         active: true,
+        profileImage: null,
         memberCount: 2,
-        memberAvatars: [],
+        memberProfileImages: [],
         permissions,
       },
     ])

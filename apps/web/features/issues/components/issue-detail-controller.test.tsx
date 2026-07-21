@@ -70,7 +70,7 @@ const activity = (id: string): IssueTimelinePage["items"][number] => ({
   field: null,
   fromValue: null,
   toValue: null,
-  actor: { id: "user-1", name: "Alex", image: null },
+  actor: { id: "user-1", name: "Alex", profileImage: null },
   createdAt: "2026-07-20T00:00:00.000Z",
 })
 

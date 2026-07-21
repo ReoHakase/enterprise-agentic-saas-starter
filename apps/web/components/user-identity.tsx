@@ -5,12 +5,13 @@ import {
 } from "@enterprise-agentic-saas/ui/components/avatar"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 
-import { getSafeAvatarUrl } from "@/lib/avatar-url"
+import { clientEnv } from "@/lib/env.client"
+import { getSafeProfileImageUrl } from "@/lib/profile-image-url"
 
 export type UserIdentityValue = {
   name?: string | null
   email?: string | null
-  image?: string | null
+  profileImage?: string | null
 }
 
 export const getUserInitials = ({ name, email }: UserIdentityValue) => {
@@ -27,16 +28,19 @@ export const getUserInitials = ({ name, email }: UserIdentityValue) => {
   return email?.trim().slice(0, 2).toUpperCase() || "?"
 }
 
-export const UserAvatar = ({
+export const UserProfileImage = ({
   user,
   className,
 }: {
   user: UserIdentityValue
   className?: string
 }) => (
-  <Avatar className={cn("size-9 shrink-0", className)}>
+  <Avatar shape="circle" className={cn("size-9 shrink-0", className)}>
     <AvatarImage
-      src={getSafeAvatarUrl(user.image)}
+      src={getSafeProfileImageUrl(
+        user.profileImage,
+        clientEnv.NEXT_PUBLIC_API_BASE_URL
+      )}
       alt={user.name?.trim() || user.email?.trim() || "User"}
     />
     <AvatarFallback>{getUserInitials(user)}</AvatarFallback>
@@ -46,14 +50,14 @@ export const UserAvatar = ({
 export const UserIdentity = ({
   user,
   className,
-  avatarClassName,
+  profileImageClassName,
 }: {
   user: UserIdentityValue
   className?: string
-  avatarClassName?: string
+  profileImageClassName?: string
 }) => (
   <div className={cn("flex min-w-0 items-center gap-3", className)}>
-    <UserAvatar user={user} className={avatarClassName} />
+    <UserProfileImage user={user} className={profileImageClassName} />
     <div className="min-w-0">
       <p className="truncate text-sm font-medium">
         {user.name?.trim() || user.email?.trim() || "Unknown user"}

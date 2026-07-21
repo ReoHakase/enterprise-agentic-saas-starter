@@ -17,6 +17,7 @@ import {
   type OrganizationFilesBucket,
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
+import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
 import { configureObservability } from "./observability/runtime"
 import { createSentryObservabilityRuntime } from "./observability/sentry-adapter"
 import {
@@ -168,6 +169,35 @@ const workerWithScheduled = {
       })
       return result
     })
+    const profileImageCleanupJobs = processProfileImageCleanupJobs({
+      bucket: workerEnv.FILES,
+      database: db,
+      onFailure: ({ attempts }) => {
+        const error = new Error("Profile image cleanup failed")
+        Sentry.captureException(error, {
+          tags: {
+            component: "profile-image-cleanup",
+            errorCode: "r2_cleanup_failed",
+          },
+          extra: { attempts },
+        })
+        console.error({
+          attempts,
+          component: "profile-image-cleanup",
+          errorCode: "r2_cleanup_failed",
+          event: "cleanup_job_failed",
+          level: "error",
+        })
+      },
+    }).then((result) => {
+      console.info({
+        component: "profile-image-cleanup",
+        event: "cleanup_batch_completed",
+        level: "info",
+        ...result,
+      })
+      return result
+    })
     const invitationJobs = processInvitationEmailJobs({
       database: db,
       onFailure: ({ attempts, errorCode, retryable }) => {
@@ -200,9 +230,12 @@ const workerWithScheduled = {
     })
 
     context.waitUntil(
-      Promise.all([deletionJobs, fileCleanupJobs, invitationJobs]).then(
-        () => undefined
-      )
+      Promise.all([
+        deletionJobs,
+        fileCleanupJobs,
+        profileImageCleanupJobs,
+        invitationJobs,
+      ]).then(() => undefined)
     )
   },
 }

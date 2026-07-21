@@ -42,13 +42,13 @@ const currentUser = {
   id: "user-current",
   name: "Current User",
   email: "current@example.test",
-  image: null,
+  profileImage: null,
 }
 
 const deviceAccounts = [
   {
     session: { token: "session-current" },
-    user: currentUser,
+    user: { ...currentUser, image: currentUser.profileImage },
   },
   {
     session: { token: "session-other" },

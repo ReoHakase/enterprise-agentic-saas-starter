@@ -100,6 +100,7 @@ GitHub Actionsの `Deploy production` workflowは同じ順序を `production` en
 - tenant Aからtenant BのIssueが取得できない。
 - tenant Aからtenant Bのfile metadata、preview、downloadが取得できず、membership取消後もcache経由で表示されない。
 - 4つの許可幅だけがpreviewでき、original downloadがattachment、Range/conditional response、`nosniff`を満たす。
+- user/org profile imageが512x512 WebPとしてprivate R2から配信され、ETag/304、`private, no-cache`、`nosniff`、same-site CORPを満たす。userは円、organizationは角丸四角で表示される。
 - memberがorganization設定やrole elevationを実行できない。
 - web asset、R2 cache、API logにsecret、filename、object key、provider raw errorが出ていない。
 - Sentry release/source mapとWeb/API trace propagationが成立し、event/logにPII、tenant ID、tokenがない。

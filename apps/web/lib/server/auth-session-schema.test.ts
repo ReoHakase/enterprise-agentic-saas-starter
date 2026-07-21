@@ -17,11 +17,11 @@ const session = {
 }
 
 describe("parseSession", () => {
-  it("preserves an authenticated user's optional avatar", () => {
+  it("preserves an authenticated user's optional profile image", () => {
     expect(parseSession(session)?.user.image).toBe(session.user.image)
   })
 
-  it("fails closed for an invalid avatar value", () => {
+  it("fails closed for an invalid profile image value", () => {
     expect(
       parseSession({
         ...session,

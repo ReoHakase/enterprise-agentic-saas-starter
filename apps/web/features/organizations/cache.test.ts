@@ -26,8 +26,9 @@ const organizations: OrganizationSummary[] = [
     slug: "alpha",
     role: "super_admin",
     active: true,
+    profileImage: null,
     memberCount: 2,
-    memberAvatars: [],
+    memberProfileImages: [],
     permissions,
   },
   {
@@ -36,8 +37,9 @@ const organizations: OrganizationSummary[] = [
     slug: "beta",
     role: "admin",
     active: false,
+    profileImage: null,
     memberCount: 3,
-    memberAvatars: [],
+    memberProfileImages: [],
     permissions,
   },
 ]
@@ -52,7 +54,7 @@ describe("organization query cache", () => {
         id: "user-1",
         name: "User",
         email: "user@example.test",
-        image: null,
+        profileImage: null,
       },
     }
     queryClient.setQueryData(consoleKeys.organizations(), organizations)

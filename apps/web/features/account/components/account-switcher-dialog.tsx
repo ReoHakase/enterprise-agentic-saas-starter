@@ -36,18 +36,16 @@ import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import {
   completeMultiSessionAction,
   createDeviceAccountsQueryFn,
   createMultiSessionCapabilities,
 } from "@/features/account/multi-session-client"
+import { accountKeys } from "@/features/account/queries"
 import type { DeviceAccount } from "@/features/account/schema"
 import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 import type { Me } from "@/lib/console-api"
-
-const deviceAccountKey = (userId: string) =>
-  ["auth", "device-accounts", userId] as const
 
 type AccountSwitcherDialogProps = {
   addAccountHref?: string
@@ -71,7 +69,7 @@ export const AccountSwitcherDialog = ({
   const queryClient = useQueryClient()
   const [revokeTarget, setRevokeTarget] = useState<DeviceAccount>()
   const accountsQuery = useQuery({
-    queryKey: deviceAccountKey(currentUser.id),
+    queryKey: accountKeys.deviceAccountsFor(currentUser.id),
     queryFn: createDeviceAccountsQueryFn(authClientValue),
     enabled: open,
     retry: false,
@@ -115,7 +113,7 @@ export const AccountSwitcherDialog = ({
       toast.success(`${account.user.email} was removed`)
       setRevokeTarget(undefined)
       await queryClient.invalidateQueries({
-        queryKey: deviceAccountKey(currentUser.id),
+        queryKey: accountKeys.deviceAccountsFor(currentUser.id),
       })
     },
     onError: () => {
@@ -284,7 +282,7 @@ const DeviceAccountRow = ({
 
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-xl border p-3">
-      <UserAvatar user={account.user} className="size-10" />
+      <UserProfileImage user={account.user} className="size-10" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{account.user.name}</p>

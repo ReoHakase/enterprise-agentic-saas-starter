@@ -6,13 +6,13 @@ Elysia on Bun の API app workspace。
 
 - `createApp(db)` で Elysia app を組み立てる（テスト可能な最小ファクトリ）。
 - `index.ts` は本番 plugin を合成して listen する。
-- `client.ts` は`parseDate: false`固定のEden client、file DTO/URL builder/XHR upload helperをexportする。
+- `client.ts` は`parseDate: false`固定のEden client、file/profile image DTO・URL builder・XHR upload helperをexportする。
 - `worker.ts`はCloudflare request handler、private `FILES` R2/`IMAGES` binding、durable cleanup cronを合成する。
 - 本番固有の関心事（auth, cors, Sentry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
 
 ## 公開 entrypoint
 
-- `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`, `FileDto`, `FILE_PREVIEW_WIDTHS`, file URL/upload helper
+- `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`, `FileDto`, `ProfileImageDto`, file/profile image URL・upload helper
 
 Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だけです。`App`型はEden client内部で保持し、rootや`./types` entrypointは公開しません。
 
@@ -128,6 +128,14 @@ timelineは新しい順のtotal orderで返し、`nextCursor`は内部構造を�
 uploadは1 file/1 multipart request、decimal 20,000,000 bytes上限、organization 1 GiB quota、`uploadId`冪等性を持ちます。同じIDのretryはR2 objectとrequest bodyをstream比較し、別内容なら409にします。R2/Imagesのraw provider errorはcause、log、Sentryへ渡しません。
 
 preview幅は`360 / 720 / 1200 / 2400`だけです。認証・tenant/file確認後に内部cacheを読み、Cloudflare ImagesでWebP quality 75、静止画、scale-downへ変換します。original downloadはoctet-stream attachment、single Range、ETag conditional requestを扱います。
+
+## Profile image
+
+UserとOrganizationの画像はapp境界で`profileImage`に統一し、Better Auth生成schemaの`user.image` / `organization.logo`だけを互換境界として維持します。更新・削除・表示の入口は`/files/profile-images/users/*`と`/files/profile-images/organizations/*`です。汎用file owner typeは拡張しません。
+
+browserから受け取るcrop済みPNGはmagic bytes、5,000,000 bytes上限、512x512を再検証し、Cloudflare Imagesで512x512 WebP quality 85へ正規化してprivate `FILES` R2へ保存します。安定したfirst-party routeとopaqueな`?v={profileImageId}`だけをauth tableへ戻し、R2 key、source hash、upload ID、ETag、置換前URLは`profile_images`へ閉じます。同一upload IDの別内容は409、同じready内容は冪等retry、置換・削除済みのupload IDは`superseded` tombstoneへ収束し、並行更新は最後に開始した有効なuploadを採用します。
+
+Organization更新はactive organizationの`super_admin`だけを許可し、finalize/delete transactionでもmembership、active session、roleを再検証します。Organization表示はmembershipを確認して他tenantを404にし、User表示は認証済みsessionへ許可します。配信はETag/304、`Cache-Control: private, no-cache`、`nosniff`、same-site CORPを返します。置換・削除・期限切れpendingのobjectは`profile_image_cleanup_jobs`へ保存し、cronがlease/backoff付きで再試行します。
 
 ## テスト
 

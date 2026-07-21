@@ -51,7 +51,7 @@ const assignees = [
     id: "user-2",
     name: "Jordan",
     email: "jordan@example.test",
-    image: null,
+    profileImage: null,
   },
 ]
 
@@ -75,7 +75,7 @@ const timeline: IssueTimelineItem[] = [
     field: null,
     fromValue: null,
     toValue: null,
-    actor: { id: "user-1", name: "Alex", image: null },
+    actor: { id: "user-1", name: "Alex", profileImage: null },
     createdAt: "2026-07-10T00:00:00.000Z",
   },
   {
@@ -85,7 +85,7 @@ const timeline: IssueTimelineItem[] = [
     field: "status",
     fromValue: "open",
     toValue: "in_progress",
-    actor: { id: "user-1", name: "Alex", image: null },
+    actor: { id: "user-1", name: "Alex", profileImage: null },
     createdAt: "2026-07-11T00:00:00.000Z",
   },
   {
@@ -95,7 +95,7 @@ const timeline: IssueTimelineItem[] = [
     field: "assignee",
     fromValue: null,
     toValue: "user-2",
-    actor: { id: "user-1", name: "Alex", image: null },
+    actor: { id: "user-1", name: "Alex", profileImage: null },
     createdAt: "2026-07-11T01:00:00.000Z",
   },
   {
@@ -104,7 +104,7 @@ const timeline: IssueTimelineItem[] = [
     organizationId: "org-1",
     issueId: billingIssue.id,
     authorId: "user-2",
-    author: { id: "user-2", name: "Jordan", image: null },
+    author: { id: "user-2", name: "Jordan", profileImage: null },
     body: "Verified in staging.",
     createdAt: "2026-07-12T00:00:00.000Z",
     updatedAt: "2026-07-13T00:00:00.000Z",

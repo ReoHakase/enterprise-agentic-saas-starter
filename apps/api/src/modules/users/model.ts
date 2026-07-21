@@ -7,7 +7,7 @@ export const userModel = v.object({
   id: v.string(),
   name: v.string(),
   email: v.string(),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
 })
 
 export const currentUserModel = v.object({

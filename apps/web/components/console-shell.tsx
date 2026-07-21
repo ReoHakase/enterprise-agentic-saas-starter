@@ -74,7 +74,8 @@ import {
   DropdownMenuLinkItem,
   SidebarMenuLinkButton,
 } from "@/components/navigation-link"
-import { UserAvatar } from "@/components/user-identity"
+import { OrganizationProfileImage } from "@/components/organization-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
@@ -109,6 +110,7 @@ const organizationSwitcherTrigger = (
 )
 const themeSelectorTrigger = <Button variant="ghost" size="icon-sm" />
 const userMenuTrigger = <SidebarMenuButton size="lg" tooltip="Account menu" />
+const emptyOrganizationIdentity = { name: "Organization" }
 
 export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
   const router = useRouter()
@@ -510,9 +512,16 @@ const OrganizationSwitcher = ({
         render={organizationSwitcherTrigger}
         disabled={pending}
       >
-        <span className="flex aspect-square size-8 items-center justify-center rounded-xl border bg-background">
-          {pending ? <Spinner /> : <Building2Icon aria-hidden="true" />}
-        </span>
+        {pending ? (
+          <span className="flex aspect-square size-8 items-center justify-center rounded-xl border bg-background">
+            <Spinner />
+          </span>
+        ) : (
+          <OrganizationProfileImage
+            organization={activeOrganization ?? emptyOrganizationIdentity}
+            className="size-8 border"
+          />
+        )}
         <span className="grid min-w-0 flex-1 text-left">
           <span className="truncate font-medium">
             {activeOrganization?.name ??
@@ -574,7 +583,10 @@ const OrganizationSwitcherItem = ({
 
   return (
     <DropdownMenuItem onClick={selectOrganization}>
-      <Building2Icon aria-hidden="true" />
+      <OrganizationProfileImage
+        organization={organization}
+        className="size-6"
+      />
       <span className="min-w-0 flex-1 truncate">{organization.name}</span>
       {current ? <CheckIcon aria-label="Current organization" /> : null}
     </DropdownMenuItem>
@@ -639,7 +651,7 @@ const UserMenu = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={userMenuTrigger}>
-        <UserAvatar user={user} className="size-8 rounded-xl" />
+        <UserProfileImage user={user} className="size-8" />
         <span className="grid min-w-0 flex-1 text-left">
           <span className="truncate font-medium">{user.name}</span>
           <span className="truncate text-xs text-muted-foreground">

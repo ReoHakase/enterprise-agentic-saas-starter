@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { UserIdentity } from "@/components/user-identity"
 import { profileFormSchema, type UserProfile } from "@/features/account/schema"
 import { consoleKeys } from "@/features/console/queries"
+import { ProfileImageEditor } from "@/features/profile-images/components/profile-image-editor"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   getConsoleApiErrorText,
@@ -94,8 +95,13 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
             This identity is shown to organization members and in comments.
           </p>
         </div>
-        <UserIdentity user={user} avatarClassName="size-10" />
+        <UserIdentity user={user} profileImageClassName="size-10" />
       </div>
+      <ProfileImageEditor
+        subject="user"
+        name={user.name}
+        profileImage={user.profileImage}
+      />
       <form className="flex flex-col gap-4" onSubmit={submitProfile}>
         <FieldGroup className="max-w-2xl">
           <form.Field name="name">

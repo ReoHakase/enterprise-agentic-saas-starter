@@ -2,11 +2,11 @@ export const DEVELOPMENT_SEED = 42 as const
 export const DEVELOPMENT_SEED_REFERENCE_DATE =
   "2026-01-15T09:00:00.000Z" as const
 
-export const DEVELOPMENT_USER_AVATAR_URL_PREFIX =
+export const DEVELOPMENT_USER_PROFILE_IMAGE_URL_PREFIX =
   "https://api.dicebear.com/10.x/lorelei/svg?seed=" as const
 
-export const getDevelopmentUserAvatarUrl = (userId: string) =>
-  `${DEVELOPMENT_USER_AVATAR_URL_PREFIX}${encodeURIComponent(userId)}`
+export const getDevelopmentUserProfileImageUrl = (userId: string) =>
+  `${DEVELOPMENT_USER_PROFILE_IMAGE_URL_PREFIX}${encodeURIComponent(userId)}`
 
 export const developmentSeedAnchors = {
   users: [

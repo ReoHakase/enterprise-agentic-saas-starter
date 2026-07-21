@@ -6,7 +6,7 @@ export const userProfileSchema = v.object({
   id: v.string(),
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
 })
 
 export const meSchema = v.object({
@@ -47,15 +47,26 @@ export const securityMethodsSchema = v.object({
   passkeys: v.array(userPasskeySchema),
 })
 
-export const deviceAccountSchema = v.object({
-  session: v.object({ token: v.string() }),
-  user: v.object({
-    id: v.string(),
-    name: v.string(),
-    email: v.pipe(v.string(), v.email()),
-    image: v.optional(v.nullable(v.string())),
+export const deviceAccountSchema = v.pipe(
+  v.object({
+    session: v.object({ token: v.string() }),
+    user: v.object({
+      id: v.string(),
+      name: v.string(),
+      email: v.pipe(v.string(), v.email()),
+      image: v.optional(v.nullable(v.string())),
+    }),
   }),
-})
+  v.transform(({ session, user }) => ({
+    session,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      profileImage: user.image ?? null,
+    },
+  }))
+)
 
 export const deviceAccountListSchema = v.array(deviceAccountSchema)
 

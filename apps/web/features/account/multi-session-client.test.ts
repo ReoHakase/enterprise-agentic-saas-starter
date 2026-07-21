@@ -37,7 +37,7 @@ describe("multi-session client boundary", () => {
           id: "user-1",
           name: "Reo",
           email: "reo@example.test",
-          image: null,
+          profileImage: null,
         },
       },
     ])

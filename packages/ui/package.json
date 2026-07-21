@@ -30,6 +30,7 @@
     "react": "catalog:",
     "react-day-picker": "catalog:",
     "react-dom": "catalog:",
+    "react-easy-crop": "catalog:",
     "shadcn": "catalog:",
     "sonner": "catalog:",
     "tailwind-merge": "catalog:",

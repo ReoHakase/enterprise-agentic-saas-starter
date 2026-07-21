@@ -62,7 +62,7 @@ export type IssueCommentDto = {
   author: {
     id: string
     name: string
-    image: string | null
+    profileImage: string | null
   }
   body: string
   createdAt: string
@@ -76,7 +76,7 @@ export type IssueActivityDto = {
   field: IssueActivityField | null
   fromValue: IssueActivityValue
   toValue: IssueActivityValue
-  actor: { id: string | null; name: string; image: string | null }
+  actor: { id: string | null; name: string; profileImage: string | null }
   createdAt: string
 }
 
@@ -135,7 +135,7 @@ type IssueCommentRow = typeof issueComments.$inferSelect
 type IssueCommentWithAuthorRow = IssueCommentRow & {
   authorUserId: string | null
   authorName: string | null
-  authorImage: string | null
+  authorProfileImage: string | null
 }
 
 const toIssueDto = (issue: IssueRow): IssueDto => ({
@@ -148,13 +148,13 @@ const toIssueDto = (issue: IssueRow): IssueDto => ({
 const toIssueCommentDto = (
   comment: IssueCommentWithAuthorRow
 ): IssueCommentDto => {
-  const { authorImage, authorName, authorUserId, ...fields } = comment
+  const { authorProfileImage, authorName, authorUserId, ...fields } = comment
   return {
     ...fields,
     author: {
       id: comment.authorId,
       name: authorUserId && authorName ? authorName : "Former member",
-      image: authorUserId ? authorImage : null,
+      profileImage: authorUserId ? authorProfileImage : null,
     },
     createdAt: comment.createdAt.toISOString(),
     updatedAt: comment.updatedAt.toISOString(),
@@ -171,7 +171,7 @@ const issueCommentSelection = {
   updatedAt: issueComments.updatedAt,
   authorUserId: user.id,
   authorName: user.name,
-  authorImage: user.image,
+  authorProfileImage: user.image,
 }
 
 const tenantSafeAuthorJoin = and(
@@ -633,7 +633,7 @@ export const listIssueTimeline = async (
           actorUserId: issueActivityEvents.actorUserId,
           actorId: user.id,
           actorName: user.name,
-          actorImage: user.image,
+          actorProfileImage: user.image,
           position: issueActivityEvents.position,
           createdAt: issueActivityEvents.createdAt,
         })
@@ -682,7 +682,9 @@ export const listIssueTimeline = async (
                 activity.actorId && activity.actorName
                   ? activity.actorName
                   : "Former member",
-              image: activity.actorId ? activity.actorImage : null,
+              profileImage: activity.actorId
+                ? activity.actorProfileImage
+                : null,
             },
             createdAt: activity.createdAt.toISOString(),
           },

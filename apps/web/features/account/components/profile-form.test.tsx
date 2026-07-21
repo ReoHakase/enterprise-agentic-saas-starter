@@ -29,7 +29,7 @@ const user = {
   id: "user-1",
   name: "Reo Hakase",
   email: "reo@example.test",
-  image: null,
+  profileImage: null,
 }
 
 const renderProfile = () => {

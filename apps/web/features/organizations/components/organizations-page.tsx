@@ -62,8 +62,9 @@ import {
 import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button"
+import { OrganizationProfileImage } from "@/components/organization-identity"
 import { PageShell } from "@/components/page-shell"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
   consoleKeys,
@@ -505,9 +506,7 @@ const OrganizationIdentity = ({
   organization: OrganizationSummary
 }) => (
   <div className="flex min-w-52 items-center gap-3">
-    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-      <Building2Icon aria-hidden="true" />
-    </span>
+    <OrganizationProfileImage organization={organization} className="size-10" />
     <div className="min-w-0">
       <div className="flex items-center gap-2">
         <p className="truncate font-medium">{organization.name}</p>
@@ -518,8 +517,8 @@ const OrganizationIdentity = ({
         ) : null}
       </div>
       <div className="mt-1 flex items-center gap-1">
-        {organization.memberAvatars.slice(0, 3).map((member) => (
-          <UserAvatar
+        {organization.memberProfileImages.slice(0, 3).map((member) => (
+          <UserProfileImage
             key={member.userId}
             user={member}
             className="size-6 border-2 border-background"

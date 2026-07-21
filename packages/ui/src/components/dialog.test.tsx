@@ -33,14 +33,39 @@ describe("Dialog", () => {
 
     const trigger = screen.getByRole("button", { name: "Invite member" })
     await user.click(trigger)
-    expect(
-      screen.getByRole("dialog", { name: "Invite member" })
-    ).toHaveAccessibleDescription("Send access to a verified email address.")
+    const dialog = screen.getByRole("dialog", { name: "Invite member" })
+    expect(dialog).toHaveAccessibleDescription(
+      "Send access to a verified email address."
+    )
+    expect(dialog).toHaveAttribute("data-motion", "scale")
 
     await user.click(screen.getByRole("button", { name: "Close" }))
     expect(
       screen.queryByRole("dialog", { name: "Invite member" })
     ).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it("supports fade-only motion for dimension-sensitive content", async () => {
+    const user = userEvent.setup()
+
+    render(
+      <Dialog>
+        <DialogTrigger render={dialogTriggerButtonRender}>
+          Crop image
+        </DialogTrigger>
+        <DialogContent motion="fade">
+          <DialogTitle>Crop image</DialogTitle>
+          <DialogDescription>Choose the visible area.</DialogDescription>
+        </DialogContent>
+      </Dialog>
+    )
+
+    await user.click(screen.getByRole("button", { name: "Crop image" }))
+    const dialog = screen.getByRole("dialog", { name: "Crop image" })
+
+    expect(dialog).toHaveAttribute("data-motion", "fade")
+    expect(dialog).not.toHaveClass("data-open:zoom-in-95")
+    expect(dialog).not.toHaveClass("data-closed:zoom-out-95")
   })
 })

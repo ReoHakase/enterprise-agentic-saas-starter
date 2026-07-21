@@ -37,7 +37,7 @@ const imageFile: FileDto = {
   textPreviewable: false,
   imageWidth: 500,
   imageHeight: 300,
-  uploader: { id: "user-1", name: "Alex Example", image: null },
+  uploader: { id: "user-1", name: "Alex Example", profileImage: null },
   createdAt: "2026-07-18T00:00:00.000Z",
   canDelete: true,
 }

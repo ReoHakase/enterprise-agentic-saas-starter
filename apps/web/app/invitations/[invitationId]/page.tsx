@@ -47,7 +47,7 @@ export default async function InvitationPage({ params }: InvitationPageProps) {
         <InvitationDecisionPanel
           currentUserEmail={session.user.email}
           currentUserId={session.user.id}
-          currentUserImage={session.user.image ?? null}
+          currentUserProfileImage={session.user.image ?? null}
           currentUserName={currentUserName}
           invitation={invitationContext.invitation}
           invitationId={invitationId}
@@ -57,7 +57,7 @@ export default async function InvitationPage({ params }: InvitationPageProps) {
         <InvitationDecisionPanel
           currentUserEmail={session.user.email}
           currentUserId={session.user.id}
-          currentUserImage={session.user.image ?? null}
+          currentUserProfileImage={session.user.image ?? null}
           currentUserName={currentUserName}
           invitationId={invitationId}
           state={

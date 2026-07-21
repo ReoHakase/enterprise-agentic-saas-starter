@@ -55,7 +55,7 @@ const currentUser = {
   id: "user-recipient",
   name: "Recipient User",
   email: "recipient@example.test",
-  image: null,
+  profileImage: null,
 }
 
 const invitation: InvitationContext = {
@@ -111,7 +111,7 @@ describe("InvitationDecisionPanel", () => {
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
         currentUserId={currentUser.id}
-        currentUserImage={currentUser.image}
+        currentUserProfileImage={currentUser.profileImage}
         currentUserName={currentUser.name}
         invitationId="invitation-1"
         state="recipient_mismatch"
@@ -137,7 +137,7 @@ describe("InvitationDecisionPanel", () => {
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
         currentUserId={currentUser.id}
-        currentUserImage={currentUser.image}
+        currentUserProfileImage={currentUser.profileImage}
         currentUserName={currentUser.name}
         invitation={invitation}
         invitationId="invitation-1"
@@ -171,7 +171,7 @@ describe("InvitationDecisionPanel", () => {
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
         currentUserId={currentUser.id}
-        currentUserImage={currentUser.image}
+        currentUserProfileImage={currentUser.profileImage}
         currentUserName={currentUser.name}
         invitation={invitation}
         invitationId="invitation-1"
@@ -199,7 +199,7 @@ describe("InvitationDecisionPanel", () => {
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
         currentUserId={currentUser.id}
-        currentUserImage={currentUser.image}
+        currentUserProfileImage={currentUser.profileImage}
         currentUserName={currentUser.name}
         invitationId="invitation-1"
         state="unavailable"
@@ -218,7 +218,7 @@ describe("InvitationDecisionPanel", () => {
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
         currentUserId={currentUser.id}
-        currentUserImage={currentUser.image}
+        currentUserProfileImage={currentUser.profileImage}
         currentUserName={currentUser.name}
         invitationId="invitation-1"
         state="load_error"

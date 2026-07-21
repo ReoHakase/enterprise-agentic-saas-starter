@@ -11,6 +11,7 @@ Next.js App RouterによるマルチテナントSaaS consoleです。production�
 - auth必須pageはserverでsessionを検証する。
 - active organizationはsidebar switcherを唯一のscope selectorにする。
 - shared primitiveは `packages/ui`、page/feature compositionはこのworkspaceに置く。
+- app-owned画像名は`profileImage`に統一する。Userは円形、Organizationは角丸四角で表示し、選択・検証・upload progress・query invalidationはWeb、API非依存のcrop処理は`packages/ui`へ置く。
 
 ## Commands
 

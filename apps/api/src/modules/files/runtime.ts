@@ -11,6 +11,8 @@ export type FileR2ObjectBody = FileR2Object & {
   range?: { offset: number; length: number }
 }
 
+export type FileR2PutValue = Blob | ReadableStream<Uint8Array>
+
 export type FileR2Bucket = {
   head(key: string): Promise<FileR2Object | null>
   get(
@@ -22,7 +24,7 @@ export type FileR2Bucket = {
   ): Promise<FileR2ObjectBody | FileR2Object | null>
   put(
     key: string,
-    value: ReadableStream<Uint8Array>,
+    value: FileR2PutValue,
     options: {
       onlyIf?: Headers
       httpMetadata: { contentType: string }
@@ -45,7 +47,11 @@ export type FileImagesBinding = {
     height?: number
   }>
   input(stream: ReadableStream<Uint8Array>): {
-    transform(options: { width: number; fit: "scale-down" }): {
+    transform(options: {
+      width: number
+      height?: number
+      fit: "cover" | "scale-down"
+    }): {
       output(options: {
         format: "image/webp"
         quality: number

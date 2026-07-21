@@ -79,6 +79,8 @@ describe("database migrations", () => {
           "issue_file_owners",
           "organization_deletion_jobs",
           "organization_file_usage",
+          "profile_image_cleanup_jobs",
+          "profile_images",
           "rate_limit",
           "issue_activity_events",
           "issue_comments",
@@ -91,6 +93,172 @@ describe("database migrations", () => {
           "member_organization_user_uidx",
         ])
       )
+    } finally {
+      client.close()
+    }
+  })
+
+  it("enforces profile image subject, idempotency, ready, and cleanup invariants", async () => {
+    const client = createClient({ url: "file::memory:" })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,image,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "profile-user",
+            "Profile User",
+            "profile-user@example.test",
+            1,
+            "https://images.example.test/user.png",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into organization(id,name,slug,logo,created_at) values(?,?,?,?,?)",
+          args: [
+            "profile-org",
+            "Profile Org",
+            "profile-org",
+            "https://images.example.test/org.png",
+            now,
+          ],
+        },
+        {
+          sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,fallback_url,etag,status) values(?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-user",
+            "user",
+            "profile-user",
+            "profile-user",
+            "upload-user",
+            "a".repeat(64),
+            1,
+            "users/profile-user/profile-images/profile-image-user.webp",
+            "https://images.example.test/user.png",
+            "etag-user",
+            "ready",
+          ],
+        },
+        {
+          sql: "insert into profile_image_cleanup_jobs(id,subject_type,subject_id,object_key) values(?,?,?,?)",
+          args: [
+            "profile-cleanup",
+            "user",
+            "profile-user",
+            "users/profile-user/profile-images/old.webp",
+          ],
+        },
+      ])
+
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,etag,status) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-second-ready",
+            "user",
+            "profile-user",
+            "profile-user",
+            "upload-second",
+            "b".repeat(64),
+            2,
+            "users/profile-user/profile-images/second.webp",
+            "etag-second",
+            "ready",
+          ],
+        })
+      ).rejects.toThrow(/unique/i)
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,organization_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-invalid-owner",
+            "user",
+            "profile-user",
+            "profile-org",
+            "upload-invalid",
+            "c".repeat(64),
+            2,
+            "users/profile-user/profile-images/invalid.webp",
+          ],
+        })
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-null-owner",
+            "user",
+            "profile-user",
+            "upload-null-owner",
+            "d".repeat(64),
+            2,
+            "users/profile-user/profile-images/null-owner.webp",
+          ],
+        })
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,organization_id,upload_id,source_hash,version,object_key,status) values(?,?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-ready-without-etag",
+            "organization",
+            "profile-org",
+            "profile-org",
+            "upload-ready-without-etag",
+            "e".repeat(64),
+            1,
+            "organizations/profile-org/profile-images/missing-etag.webp",
+            "ready",
+          ],
+        })
+      ).rejects.toThrow(/check constraint/i)
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-duplicate-upload",
+            "user",
+            "profile-user",
+            "profile-user",
+            "upload-user",
+            "f".repeat(64),
+            2,
+            "users/profile-user/profile-images/duplicate.webp",
+          ],
+        })
+      ).rejects.toThrow(/unique/i)
+      await expect(
+        client.execute({
+          sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,status) values(?,?,?,?,?,?,?,?,?)",
+          args: [
+            "profile-image-superseded",
+            "user",
+            "profile-user",
+            "profile-user",
+            "upload-superseded",
+            "0".repeat(64),
+            2,
+            "users/profile-user/profile-images/superseded.webp",
+            "superseded",
+          ],
+        })
+      ).resolves.toBeDefined()
+
+      await client.execute("delete from user where id = 'profile-user'")
+      const [images, cleanup] = await Promise.all([
+        client.execute(
+          "select id from profile_images where subject_id = 'profile-user'"
+        ),
+        client.execute(
+          "select id from profile_image_cleanup_jobs where id = 'profile-cleanup'"
+        ),
+      ])
+      expect(images.rows).toHaveLength(0)
+      expect(cleanup.rows).toHaveLength(1)
     } finally {
       client.close()
     }

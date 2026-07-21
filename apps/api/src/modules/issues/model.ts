@@ -120,7 +120,7 @@ export const issueCommentModel = v.pipe(
     author: v.object({
       id: v.string(),
       name: v.string(),
-      image: v.nullable(v.string()),
+      profileImage: v.nullable(v.string()),
     }),
     body: v.string(),
     createdAt: isoTimestampModel,
@@ -149,7 +149,7 @@ export const deleteIssueCommentBodyModel = v.object({
 const timelineActorModel = v.object({
   id: v.nullable(v.string()),
   name: v.string(),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
 })
 
 const issueActivityValueModel = v.union([

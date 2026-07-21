@@ -8,7 +8,7 @@ export type UserProfile = {
   id: string
   name: string
   email: string
-  image: string | null
+  profileImage: string | null
 }
 
 export type UserSession = {
@@ -31,7 +31,7 @@ export const findUserProfile = async (
         id: user.id,
         name: user.name,
         email: user.email,
-        image: user.image,
+        profileImage: user.image,
       })
       .from(user)
       .where(eq(user.id, userId))
@@ -59,7 +59,7 @@ export const updateUserProfile = async (
         id: user.id,
         name: user.name,
         email: user.email,
-        image: user.image,
+        profileImage: user.image,
       })
 
     return rows[0] ?? null

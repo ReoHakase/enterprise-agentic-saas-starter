@@ -14,10 +14,10 @@ export const organizationPermissionsSchema = v.object({
   canTransferSuperAdmin: v.boolean(),
 })
 
-const memberAvatarSchema = v.object({
+const memberProfileImageSchema = v.object({
   userId: v.string(),
   name: v.string(),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
 })
 
 export const organizationSummarySchema = v.object({
@@ -26,14 +26,14 @@ export const organizationSummarySchema = v.object({
   slug: v.string(),
   role: organizationRoleSchema,
   active: v.boolean(),
+  profileImage: v.nullable(v.string()),
   memberCount: v.pipe(v.number(), v.integer()),
-  memberAvatars: v.array(memberAvatarSchema),
+  memberProfileImages: v.array(memberProfileImageSchema),
   permissions: organizationPermissionsSchema,
 })
 
 export const organizationDetailSchema = v.object({
   ...organizationSummarySchema.entries,
-  logo: v.nullable(v.string()),
   createdAt: v.string(),
   invitationCount: v.pipe(v.number(), v.integer()),
 })

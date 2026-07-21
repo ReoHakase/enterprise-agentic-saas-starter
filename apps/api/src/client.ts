@@ -13,13 +13,28 @@ import {
   type FileListDto,
   type TextFilePreviewDto,
 } from "./modules/files/model"
+import {
+  PROFILE_IMAGE_SIZE,
+  PROFILE_IMAGE_SOURCE_CONTENT_TYPE,
+  PROFILE_IMAGE_SOURCE_MAX_BYTES,
+} from "./modules/profile-images/constants"
+import {
+  profileImageDtoModel,
+  type ProfileImageDto,
+} from "./modules/profile-images/model"
 
-export { FILE_PREVIEW_WIDTHS }
+export {
+  FILE_PREVIEW_WIDTHS,
+  PROFILE_IMAGE_SIZE,
+  PROFILE_IMAGE_SOURCE_CONTENT_TYPE,
+  PROFILE_IMAGE_SOURCE_MAX_BYTES,
+}
 export type {
   FileDto,
   FileListDto,
   FileOwnerType,
   FilePreviewWidth,
+  ProfileImageDto,
   TextFilePreviewDto,
 }
 
@@ -76,6 +91,32 @@ export const buildFilePreviewUrl = (
     String(input.width),
   ])
 
+export const buildUserProfileImageUrl = (
+  baseUrl: string,
+  input: { revision?: string; userId: string }
+) => {
+  const url = fileUrl(baseUrl, [
+    "files",
+    "profile-images",
+    "users",
+    input.userId,
+  ])
+  return input.revision ? `${url}?v=${encodeURIComponent(input.revision)}` : url
+}
+
+export const buildOrganizationProfileImageUrl = (
+  baseUrl: string,
+  input: { organizationId: string; revision?: string }
+) => {
+  const url = fileUrl(baseUrl, [
+    "files",
+    "profile-images",
+    "organizations",
+    input.organizationId,
+  ])
+  return input.revision ? `${url}?v=${encodeURIComponent(input.revision)}` : url
+}
+
 export type FileUploadProgress = {
   loaded: number
   total: number
@@ -121,25 +162,25 @@ const abortError = () => {
   return error
 }
 
-export const uploadFileWithProgress = ({
-  baseUrl,
-  organizationId,
-  ownerType,
-  ownerId,
+const uploadWithProgress = <Output>({
+  url,
   uploadId,
   file,
+  responseModel,
+  invalidResponseMessage,
+  failureMessage,
   signal,
   onProgress,
 }: {
-  baseUrl: string
-  organizationId: string
-  ownerType: FileOwnerType
-  ownerId: string
+  url: string
   uploadId: string
   file: File
+  responseModel: v.BaseSchema<unknown, Output, v.BaseIssue<unknown>>
+  invalidResponseMessage: string
+  failureMessage: string
   signal?: AbortSignal
   onProgress?: (progress: FileUploadProgress) => void
-}): Promise<FileDto> =>
+}): Promise<Output> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(abortError())
@@ -147,14 +188,6 @@ export const uploadFileWithProgress = ({
     }
 
     const xhr = new XMLHttpRequest()
-    const url = fileUrl(baseUrl, [
-      "files",
-      "organizations",
-      organizationId,
-      "owners",
-      ownerType,
-      ownerId,
-    ])
     const form = new FormData()
     form.set("uploadId", uploadId)
     form.set("fileSize", String(file.size))
@@ -176,14 +209,14 @@ export const uploadFileWithProgress = ({
     xhr.addEventListener("load", () => {
       cleanup()
       if (xhr.status >= 200 && xhr.status < 300) {
-        const result = v.safeParse(fileDtoModel, xhr.response)
+        const result = v.safeParse(responseModel, xhr.response)
         if (result.success) {
           resolve(result.output)
           return
         }
         reject(
           new FileUploadError({
-            message: "File upload returned an invalid response",
+            message: invalidResponseMessage,
             status: xhr.status,
           })
         )
@@ -193,7 +226,7 @@ export const uploadFileWithProgress = ({
       const details = uploadErrorDetails(xhr.response)
       reject(
         new FileUploadError({
-          message: details.message ?? "File upload failed",
+          message: details.message ?? failureMessage,
           status: xhr.status,
           code: details.code,
           requestId: details.requestId,
@@ -202,7 +235,7 @@ export const uploadFileWithProgress = ({
     })
     xhr.addEventListener("error", () => {
       cleanup()
-      reject(new FileUploadError({ message: "File upload failed", status: 0 }))
+      reject(new FileUploadError({ message: failureMessage, status: 0 }))
     })
     xhr.addEventListener("abort", () => {
       cleanup()
@@ -210,4 +243,96 @@ export const uploadFileWithProgress = ({
     })
     signal?.addEventListener("abort", onAbortSignal, { once: true })
     xhr.send(form)
+  })
+
+export const uploadFileWithProgress = ({
+  baseUrl,
+  organizationId,
+  ownerType,
+  ownerId,
+  uploadId,
+  file,
+  signal,
+  onProgress,
+}: {
+  baseUrl: string
+  organizationId: string
+  ownerType: FileOwnerType
+  ownerId: string
+  uploadId: string
+  file: File
+  signal?: AbortSignal
+  onProgress?: (progress: FileUploadProgress) => void
+}): Promise<FileDto> =>
+  uploadWithProgress({
+    url: fileUrl(baseUrl, [
+      "files",
+      "organizations",
+      organizationId,
+      "owners",
+      ownerType,
+      ownerId,
+    ]),
+    uploadId,
+    file,
+    responseModel: fileDtoModel,
+    invalidResponseMessage: "File upload returned an invalid response",
+    failureMessage: "File upload failed",
+    signal,
+    onProgress,
+  })
+
+export const uploadUserProfileImageWithProgress = ({
+  baseUrl,
+  uploadId,
+  file,
+  signal,
+  onProgress,
+}: {
+  baseUrl: string
+  uploadId: string
+  file: File
+  signal?: AbortSignal
+  onProgress?: (progress: FileUploadProgress) => void
+}): Promise<ProfileImageDto> =>
+  uploadWithProgress({
+    url: fileUrl(baseUrl, ["files", "profile-images", "users", "me"]),
+    uploadId,
+    file,
+    responseModel: profileImageDtoModel,
+    invalidResponseMessage: "Profile image upload returned an invalid response",
+    failureMessage: "Profile image upload failed",
+    signal,
+    onProgress,
+  })
+
+export const uploadOrganizationProfileImageWithProgress = ({
+  baseUrl,
+  organizationId,
+  uploadId,
+  file,
+  signal,
+  onProgress,
+}: {
+  baseUrl: string
+  organizationId: string
+  uploadId: string
+  file: File
+  signal?: AbortSignal
+  onProgress?: (progress: FileUploadProgress) => void
+}): Promise<ProfileImageDto> =>
+  uploadWithProgress({
+    url: fileUrl(baseUrl, [
+      "files",
+      "profile-images",
+      "organizations",
+      organizationId,
+    ]),
+    uploadId,
+    file,
+    responseModel: profileImageDtoModel,
+    invalidResponseMessage: "Profile image upload returned an invalid response",
+    failureMessage: "Profile image upload failed",
+    signal,
+    onProgress,
   })

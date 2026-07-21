@@ -4,19 +4,24 @@ import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import * as React from "react"
 
+type AvatarShape = "circle" | "rounded"
+
 function Avatar({
   className,
   size = "default",
+  shape = "circle",
   ...props
 }: AvatarPrimitive.Root.Props & {
   size?: "default" | "sm" | "lg"
+  shape?: AvatarShape
 }) {
   return (
     <AvatarPrimitive.Root
       data-slot="avatar"
       data-size={size}
+      data-shape={shape}
       className={cn(
-        "group/avatar relative flex size-8 shrink-0 rounded-full select-none after:absolute after:inset-0 after:rounded-full after:border after:border-border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
+        "group/avatar relative flex size-8 shrink-0 select-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-border after:mix-blend-darken data-[shape=circle]:rounded-full data-[shape=rounded]:rounded-[22%] data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten",
         className
       )}
       {...props}
@@ -29,7 +34,7 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
     <AvatarPrimitive.Image
       data-slot="avatar-image"
       className={cn(
-        "aspect-square size-full rounded-full object-cover",
+        "aspect-square size-full rounded-[inherit] object-cover",
         className
       )}
       {...props}
@@ -45,7 +50,7 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs",
+        "flex size-full items-center justify-center rounded-[inherit] bg-muted text-sm text-foreground group-data-[size=sm]/avatar:text-xs",
         className
       )}
       {...props}
@@ -106,3 +111,5 @@ export {
   AvatarGroupCount,
   AvatarBadge,
 }
+
+export type { AvatarShape }

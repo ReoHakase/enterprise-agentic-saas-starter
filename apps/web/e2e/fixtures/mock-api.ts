@@ -8,6 +8,7 @@ type Organization = {
   slug: string
   role: OrganizationRole
   active: boolean
+  profileImage: string | null
 }
 
 type Issue = {
@@ -34,7 +35,7 @@ type IssueComment = {
   author: {
     id: string
     name: string
-    image: string | null
+    profileImage: string | null
   }
   body: string
   createdAt: string
@@ -61,7 +62,7 @@ type IssueActivity = {
     | null
   fromValue: string | string[] | null
   toValue: string | string[] | null
-  actor: { id: string | null; name: string; image: string | null }
+  actor: { id: string | null; name: string; profileImage: string | null }
   createdAt: string
 }
 
@@ -75,7 +76,7 @@ type FileAttachment = {
   textPreviewable: boolean
   imageWidth: number | null
   imageHeight: number | null
-  uploader: { id: string; name: string; image: string | null }
+  uploader: { id: string; name: string; profileImage: string | null }
   createdAt: string
   canDelete: boolean
 }
@@ -94,7 +95,7 @@ type OrganizationMember = {
   userId: string
   name: string
   email: string
-  image: string | null
+  profileImage: string | null
   role: OrganizationRole
   createdAt: string
 }
@@ -131,7 +132,21 @@ type UserIdentity = {
   id: string
   name: string
   email: string
-  image: string | null
+  profileImage: string | null
+}
+
+type StoredProfileImageUpload = {
+  content: string
+  contentType: string
+  dto: {
+    id: string
+    profileImage: string
+    width: 512
+    height: 512
+    updatedAt: string
+  }
+  previousProfileImage: string | null
+  sizeBytes: number
 }
 
 type SessionState = {
@@ -144,12 +159,14 @@ type SessionState = {
   membersByOrganization: Map<string, OrganizationMember[]>
   invitationsByOrganization: Map<string, OrganizationInvitation[]>
   deletionReceiptsByIdempotencyKey: Map<string, OrganizationDeletionReceipt>
+  profileImageUploads: Map<string, StoredProfileImageUpload>
   sessions: UserSession[]
   nextCommentId: number
   nextDeletionId: number
   nextInvitationId: number
   nextIssueId: number
   nextFileId: number
+  nextProfileImageVersion: number
 }
 
 type FaultRule = {
@@ -174,6 +191,8 @@ const FIXED_DUE_DATE = "2026-07-21T09:30:00.000Z"
 const FIXED_EXPIRES_AT = "2026-08-14T09:00:00.000Z"
 const FIXED_EXPIRED_AT = "2026-07-10T09:00:00.000Z"
 const PUBLIC_INVITATION_ID = "invitation-new-user"
+const USER_PROFILE_IMAGE_FALLBACK =
+  "https://api.dicebear.com/10.x/lorelei/svg?seed=e2e-admin-fallback"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -263,7 +282,7 @@ const identityFor = (sessionKey: string): UserIdentity => {
       id: "user-new-user",
       name: "New User",
       email: "new-user@example.com",
-      image: null,
+      profileImage: null,
     }
   }
 
@@ -271,7 +290,7 @@ const identityFor = (sessionKey: string): UserIdentity => {
     id: "user-admin",
     name: "Admin User",
     email: "admin@example.com",
-    image: null,
+    profileImage: null,
   }
 }
 
@@ -285,20 +304,25 @@ const sessionKeyFromDeviceToken = (value: unknown) => {
   return null
 }
 
-const deviceAccountFor = (sessionKey: "admin" | "new-user") => {
-  const user = identityFor(sessionKey)
-  return {
-    session: {
-      id: sessionIdFor(sessionKey),
-      token: deviceSessionTokenFor(sessionKey),
-      userId: user.id,
-      expiresAt: FIXED_EXPIRES_AT,
-      createdAt: FIXED_NOW,
-      updatedAt: FIXED_NOW,
-    },
-    user,
-  }
-}
+const deviceAccountFor = (
+  sessionKey: "admin" | "new-user",
+  user: UserIdentity
+) => ({
+  session: {
+    id: sessionIdFor(sessionKey),
+    token: deviceSessionTokenFor(sessionKey),
+    userId: user.id,
+    expiresAt: FIXED_EXPIRES_AT,
+    createdAt: FIXED_NOW,
+    updatedAt: FIXED_NOW,
+  },
+  user: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.profileImage,
+  },
+})
 
 const createState = (sessionKey: string): SessionState => {
   const user = identityFor(sessionKey)
@@ -336,12 +360,14 @@ const createState = (sessionKey: string): SessionState => {
       membersByOrganization: new Map(),
       invitationsByOrganization: new Map(),
       deletionReceiptsByIdempotencyKey: new Map(),
+      profileImageUploads: new Map(),
       sessions,
       nextCommentId: 1,
       nextDeletionId: 1,
       nextInvitationId: 1,
       nextIssueId: 1,
       nextFileId: 1,
+      nextProfileImageVersion: 1,
     }
   }
 
@@ -352,6 +378,7 @@ const createState = (sessionKey: string): SessionState => {
       slug: "alpha-operations",
       role: "super_admin",
       active: true,
+      profileImage: null,
     },
     {
       id: "org-b",
@@ -359,6 +386,7 @@ const createState = (sessionKey: string): SessionState => {
       slug: "beta-support",
       role: "member",
       active: false,
+      profileImage: null,
     },
     {
       id: "org-invitations",
@@ -366,6 +394,7 @@ const createState = (sessionKey: string): SessionState => {
       slug: "invitations",
       role: "admin",
       active: false,
+      profileImage: null,
     },
   ]
   if (sessionKey === "unselected") {
@@ -437,7 +466,11 @@ const createState = (sessionKey: string): SessionState => {
         textPreviewable: true,
         imageWidth: null,
         imageHeight: null,
-        uploader: { id: user.id, name: user.name, image: user.image },
+        uploader: {
+          id: user.id,
+          name: user.name,
+          profileImage: user.profileImage,
+        },
         createdAt: "2026-07-13T10:00:00.000Z",
         canDelete: true,
         content: "Tenant boundary fixture for browser tests.",
@@ -454,7 +487,11 @@ const createState = (sessionKey: string): SessionState => {
         textPreviewable: true,
         imageWidth: null,
         imageHeight: null,
-        uploader: { id: user.id, name: user.name, image: user.image },
+        uploader: {
+          id: user.id,
+          name: user.name,
+          profileImage: user.profileImage,
+        },
         createdAt: "2026-07-13T11:00:00.000Z",
         canDelete: true,
         content: "Private Beta tenant fixture content.",
@@ -471,7 +508,11 @@ const createState = (sessionKey: string): SessionState => {
         textPreviewable: false,
         imageWidth: 500,
         imageHeight: 300,
-        uploader: { id: user.id, name: user.name, image: user.image },
+        uploader: {
+          id: user.id,
+          name: user.name,
+          profileImage: user.profileImage,
+        },
         createdAt: "2026-07-13T10:30:00.000Z",
         canDelete: true,
         content: PREVIEW_PNG_BASE64,
@@ -505,7 +546,11 @@ const createState = (sessionKey: string): SessionState => {
             field: null,
             fromValue: null,
             toValue: null,
-            actor: { id: user.id, name: user.name, image: user.image },
+            actor: {
+              id: user.id,
+              name: user.name,
+              profileImage: user.profileImage,
+            },
             createdAt: "2026-07-12T09:00:00.000Z",
           },
           {
@@ -515,7 +560,11 @@ const createState = (sessionKey: string): SessionState => {
             field: "assignee",
             fromValue: null,
             toValue: "user-jordan",
-            actor: { id: user.id, name: user.name, image: user.image },
+            actor: {
+              id: user.id,
+              name: user.name,
+              profileImage: user.profileImage,
+            },
             createdAt: "2026-07-13T09:00:00.000Z",
           },
           {
@@ -525,7 +574,11 @@ const createState = (sessionKey: string): SessionState => {
             field: null,
             fromValue: null,
             toValue: "tenant-boundary-notes.txt",
-            actor: { id: user.id, name: user.name, image: user.image },
+            actor: {
+              id: user.id,
+              name: user.name,
+              profileImage: user.profileImage,
+            },
             createdAt: "2026-07-13T10:00:00.000Z",
           },
           {
@@ -535,7 +588,11 @@ const createState = (sessionKey: string): SessionState => {
             field: null,
             fromValue: null,
             toValue: "architecture-preview.png",
-            actor: { id: user.id, name: user.name, image: user.image },
+            actor: {
+              id: user.id,
+              name: user.name,
+              profileImage: user.profileImage,
+            },
             createdAt: "2026-07-13T10:30:00.000Z",
           },
         ],
@@ -550,7 +607,7 @@ const createState = (sessionKey: string): SessionState => {
             userId: user.id,
             name: user.name,
             email: user.email,
-            image: null,
+            profileImage: null,
             role: "super_admin",
             createdAt: "2026-07-01T09:00:00.000Z",
           },
@@ -559,7 +616,7 @@ const createState = (sessionKey: string): SessionState => {
             userId: "user-jordan",
             name: "Jordan Lee",
             email: "jordan@example.com",
-            image: null,
+            profileImage: null,
             role: "admin",
             createdAt: "2026-07-02T09:00:00.000Z",
           },
@@ -568,7 +625,7 @@ const createState = (sessionKey: string): SessionState => {
             userId: "user-kai",
             name: "Kai Brooks",
             email: "kai@example.com",
-            image: null,
+            profileImage: null,
             role: "member",
             createdAt: "2026-07-03T09:00:00.000Z",
           },
@@ -582,7 +639,7 @@ const createState = (sessionKey: string): SessionState => {
             userId: "user-beta-lead",
             name: "Beta Lead",
             email: "lead@beta.example.com",
-            image: null,
+            profileImage: null,
             role: "super_admin",
             createdAt: "2026-07-01T09:00:00.000Z",
           },
@@ -591,7 +648,7 @@ const createState = (sessionKey: string): SessionState => {
             userId: user.id,
             name: user.name,
             email: user.email,
-            image: null,
+            profileImage: null,
             role: "member",
             createdAt: "2026-07-05T09:00:00.000Z",
           },
@@ -639,12 +696,14 @@ const createState = (sessionKey: string): SessionState => {
       ],
     ]),
     deletionReceiptsByIdempotencyKey: new Map(),
+    profileImageUploads: new Map(),
     sessions,
     nextCommentId: 2,
     nextDeletionId: 1,
     nextInvitationId: 2,
     nextIssueId: 2,
     nextFileId: 2,
+    nextProfileImageVersion: 1,
   }
 }
 
@@ -746,16 +805,15 @@ const organizationPayload = (
 
   return {
     ...organization,
-    logo: null,
     createdAt: "2026-07-01T09:00:00.000Z",
     invitationCount: invitationsFor(state, organization.id).filter(
       ({ status }) => status === "pending"
     ).length,
     memberCount: members.length,
-    memberAvatars: members.slice(0, 3).map((member) => ({
+    memberProfileImages: members.slice(0, 3).map((member) => ({
       userId: member.userId,
       name: member.name,
-      image: member.image,
+      profileImage: member.profileImage,
     })),
     permissions: permissionsFor(organization.role),
   }
@@ -791,7 +849,7 @@ const addInvitationMember = (
     userId: state.user.id,
     name: state.user.name,
     email: state.user.email,
-    image: state.user.image,
+    profileImage: state.user.profileImage,
     role: invitation.role,
     createdAt: FIXED_MUTATION_NOW,
   }
@@ -866,6 +924,37 @@ const filePayload = ({
   ...file
 }: StoredFileAttachment): FileAttachment => file
 
+const updateUserProfileImageSnapshots = (
+  state: SessionState,
+  profileImage: string | null
+) => {
+  state.user.profileImage = profileImage
+  for (const members of state.membersByOrganization.values()) {
+    for (const member of members) {
+      if (member.userId === state.user.id) member.profileImage = profileImage
+    }
+  }
+  for (const comments of state.commentsByIssue.values()) {
+    for (const comment of comments) {
+      if (comment.author.id === state.user.id) {
+        comment.author.profileImage = profileImage
+      }
+    }
+  }
+  for (const activities of state.activitiesByIssue.values()) {
+    for (const activity of activities) {
+      if (activity.actor.id === state.user.id) {
+        activity.actor.profileImage = profileImage
+      }
+    }
+  }
+  for (const file of state.files) {
+    if (file.uploader.id === state.user.id) {
+      file.uploader.profileImage = profileImage
+    }
+  }
+}
+
 const consumeFault = (pathname: string, method: string) => {
   const index = faults.findIndex(
     (fault) =>
@@ -915,6 +1004,28 @@ Bun.serve({
       faults.splice(0)
       requestDelays.splice(0)
       return json({ reset: true })
+    }
+    if (
+      pathname === "/__e2e/profile-images/fallback" &&
+      request.method === "POST"
+    ) {
+      const body = await readBody(request)
+      const state = stateFor("admin")
+      if (body.subject === "user") {
+        updateUserProfileImageSnapshots(state, USER_PROFILE_IMAGE_FALLBACK)
+        return json({ profileImage: USER_PROFILE_IMAGE_FALLBACK }, 201)
+      }
+      if (body.subject === "organization") {
+        const organizationId = nonEmptyString(body.organizationId)
+        const organization = organizationId
+          ? getOrganization(state, organizationId)
+          : undefined
+        if (!organization) return notFound("Organization")
+        const profileImage = `https://api.dicebear.com/10.x/shapes/svg?seed=${encodeURIComponent(organization.id)}`
+        organization.profileImage = profileImage
+        return json({ profileImage }, 201)
+      }
+      return invalid("subject must be user or organization")
     }
     if (pathname === "/__e2e/request-delays" && request.method === "GET") {
       return json(requestDelays)
@@ -991,14 +1102,19 @@ Bun.serve({
     const sessionKey = sessionKeyFor(request)
     if (pathname === "/auth/get-session") {
       if (!sessionKey) return json(null)
-      const identity = identityFor(sessionKey)
+      const identity = stateFor(sessionKey).user
       return json({
         session: {
           id: sessionIdFor(sessionKey),
           userId: identity.id,
           expiresAt: FIXED_EXPIRES_AT,
         },
-        user: identity,
+        user: {
+          id: identity.id,
+          name: identity.name,
+          email: identity.email,
+          image: identity.profileImage,
+        },
       })
     }
     if (!sessionKey) return unauthorized()
@@ -1041,7 +1157,10 @@ Bun.serve({
       pathname === "/auth/multi-session/list-device-sessions" &&
       request.method === "GET"
     ) {
-      return json([deviceAccountFor("admin"), deviceAccountFor("new-user")])
+      return json([
+        deviceAccountFor("admin", stateFor("admin").user),
+        deviceAccountFor("new-user", stateFor("new-user").user),
+      ])
     }
     if (
       pathname === "/auth/multi-session/set-active" &&
@@ -1051,9 +1170,13 @@ Bun.serve({
       const nextSessionKey = sessionKeyFromDeviceToken(body.sessionToken)
       if (!nextSessionKey) return unauthorized()
 
-      return json(deviceAccountFor(nextSessionKey), 200, {
-        "set-cookie": `e2e-session=${nextSessionKey}; Path=/; HttpOnly; SameSite=Lax`,
-      })
+      return json(
+        deviceAccountFor(nextSessionKey, stateFor(nextSessionKey).user),
+        200,
+        {
+          "set-cookie": `e2e-session=${nextSessionKey}; Path=/; HttpOnly; SameSite=Lax`,
+        }
+      )
     }
     if (
       pathname === "/auth/multi-session/revoke" &&
@@ -1104,6 +1227,176 @@ Bun.serve({
       if (!name) return invalid("name is required")
       state.user.name = name
       return json(state.user)
+    }
+
+    const userProfileImageMatch = pathname.match(
+      /^\/files\/profile-images\/users\/([^/]+)$/
+    )
+    if (userProfileImageMatch?.[1]) {
+      const subject = decodeURIComponent(userProfileImageMatch[1])
+      if (request.method === "GET") {
+        if (subject !== state.user.id || !state.user.profileImage) {
+          return notFound("Profile image")
+        }
+        return new Response(Buffer.from(PREVIEW_PNG_BASE64, "base64"), {
+          headers: {
+            ...corsHeaders,
+            "cache-control": "private, no-cache",
+            "content-type": "image/png",
+            // E2EはWeb/APIを別loopback portで動かすため、productionの
+            // same-site topologyはAPI integration test側で固定する。
+            "cross-origin-resource-policy": "cross-origin",
+            "x-content-type-options": "nosniff",
+          },
+        })
+      }
+      if (subject !== "me") return notFound("Profile image")
+      if (request.method === "POST") {
+        const form = await request.formData()
+        const uploadId = nonEmptyString(form.get("uploadId"))
+        const declaredSize = Number(form.get("fileSize"))
+        const uploaded = form.get("file")
+        if (
+          !uploadId ||
+          !(uploaded instanceof File) ||
+          !Number.isInteger(declaredSize) ||
+          declaredSize !== uploaded.size
+        ) {
+          return invalid("uploadId, fileSize and file are required")
+        }
+        const content = Buffer.from(await uploaded.arrayBuffer()).toString(
+          "base64"
+        )
+        const replayKey = `user:${state.user.id}:${uploadId}`
+        const replay = state.profileImageUploads.get(replayKey)
+        if (replay) {
+          if (
+            replay.content !== content ||
+            replay.contentType !== uploaded.type ||
+            replay.sizeBytes !== uploaded.size
+          ) {
+            return conflict("The upload ID is already in use")
+          }
+          updateUserProfileImageSnapshots(state, replay.dto.profileImage)
+          return json(replay.dto)
+        }
+        const imageId = `profile-image-${state.user.id}-${state.nextProfileImageVersion}`
+        state.nextProfileImageVersion += 1
+        const profileImage = `/files/profile-images/users/${state.user.id}?v=${encodeURIComponent(imageId)}`
+        const dto = {
+          id: imageId,
+          profileImage,
+          width: 512 as const,
+          height: 512 as const,
+          updatedAt: FIXED_MUTATION_NOW,
+        }
+        state.profileImageUploads.set(replayKey, {
+          content,
+          contentType: uploaded.type,
+          dto,
+          previousProfileImage: state.user.profileImage,
+          sizeBytes: uploaded.size,
+        })
+        updateUserProfileImageSnapshots(state, profileImage)
+        return json(dto, 201)
+      }
+      if (request.method === "DELETE") {
+        const currentUpload = [...state.profileImageUploads.values()].find(
+          ({ dto }) => dto.profileImage === state.user.profileImage
+        )
+        updateUserProfileImageSnapshots(
+          state,
+          currentUpload?.previousProfileImage ?? null
+        )
+        return new Response(null, { status: 204, headers: corsHeaders })
+      }
+    }
+
+    const organizationProfileImageMatch = pathname.match(
+      /^\/files\/profile-images\/organizations\/([^/]+)$/
+    )
+    if (organizationProfileImageMatch?.[1]) {
+      const organizationId = decodeURIComponent(
+        organizationProfileImageMatch[1]
+      )
+      const access = resolveOrganization(state, organizationId, {
+        requireActive: request.method !== "GET",
+      })
+      if ("response" in access) return access.response
+      if (request.method === "GET") {
+        if (!access.organization.profileImage) {
+          return notFound("Profile image")
+        }
+        return new Response(Buffer.from(PREVIEW_PNG_BASE64, "base64"), {
+          headers: {
+            ...corsHeaders,
+            "cache-control": "private, no-cache",
+            "content-type": "image/png",
+            // E2EはWeb/APIを別loopback portで動かすため、productionの
+            // same-site topologyはAPI integration test側で固定する。
+            "cross-origin-resource-policy": "cross-origin",
+            "x-content-type-options": "nosniff",
+          },
+        })
+      }
+      if (access.organization.role !== "super_admin") return forbidden()
+      if (request.method === "POST") {
+        const form = await request.formData()
+        const uploadId = nonEmptyString(form.get("uploadId"))
+        const declaredSize = Number(form.get("fileSize"))
+        const uploaded = form.get("file")
+        if (
+          !uploadId ||
+          !(uploaded instanceof File) ||
+          !Number.isInteger(declaredSize) ||
+          declaredSize !== uploaded.size
+        ) {
+          return invalid("uploadId, fileSize and file are required")
+        }
+        const content = Buffer.from(await uploaded.arrayBuffer()).toString(
+          "base64"
+        )
+        const replayKey = `organization:${organizationId}:${uploadId}`
+        const replay = state.profileImageUploads.get(replayKey)
+        if (replay) {
+          if (
+            replay.content !== content ||
+            replay.contentType !== uploaded.type ||
+            replay.sizeBytes !== uploaded.size
+          ) {
+            return conflict("The upload ID is already in use")
+          }
+          access.organization.profileImage = replay.dto.profileImage
+          return json(replay.dto)
+        }
+        const imageId = `profile-image-${organizationId}-${state.nextProfileImageVersion}`
+        state.nextProfileImageVersion += 1
+        const profileImage = `/files/profile-images/organizations/${organizationId}?v=${encodeURIComponent(imageId)}`
+        const dto = {
+          id: imageId,
+          profileImage,
+          width: 512 as const,
+          height: 512 as const,
+          updatedAt: FIXED_MUTATION_NOW,
+        }
+        state.profileImageUploads.set(replayKey, {
+          content,
+          contentType: uploaded.type,
+          dto,
+          previousProfileImage: access.organization.profileImage,
+          sizeBytes: uploaded.size,
+        })
+        access.organization.profileImage = profileImage
+        return json(dto, 201)
+      }
+      if (request.method === "DELETE") {
+        const currentUpload = [...state.profileImageUploads.values()].find(
+          ({ dto }) => dto.profileImage === access.organization.profileImage
+        )
+        access.organization.profileImage =
+          currentUpload?.previousProfileImage ?? null
+        return new Response(null, { status: 204, headers: corsHeaders })
+      }
     }
 
     if (pathname === "/me/sessions" && request.method === "GET") {
@@ -1205,7 +1498,7 @@ Bun.serve({
           uploader: {
             id: state.user.id,
             name: state.user.name,
-            image: state.user.image,
+            profileImage: state.user.profileImage,
           },
           createdAt: FIXED_MUTATION_NOW,
           canDelete: true,
@@ -1224,7 +1517,7 @@ Bun.serve({
           actor: {
             id: state.user.id,
             name: state.user.name,
-            image: state.user.image,
+            profileImage: state.user.profileImage,
           },
           createdAt: FIXED_MUTATION_NOW,
         })
@@ -1346,7 +1639,7 @@ Bun.serve({
         actor: {
           id: state.user.id,
           name: state.user.name,
-          image: state.user.image,
+          profileImage: state.user.profileImage,
         },
         createdAt: FIXED_MUTATION_NOW,
       })
@@ -1396,6 +1689,7 @@ Bun.serve({
         slug,
         role: "super_admin",
         active: body.keepCurrentActiveOrganization !== true,
+        profileImage: null,
       }
       state.organizations.push(organization)
       state.membersByOrganization.set(organization.id, [
@@ -1404,7 +1698,7 @@ Bun.serve({
           userId: state.user.id,
           name: state.user.name,
           email: state.user.email,
-          image: state.user.image,
+          profileImage: state.user.profileImage,
           role: "super_admin",
           createdAt: FIXED_NOW,
         },
@@ -1884,7 +2178,7 @@ Bun.serve({
           actor: {
             id: state.user.id,
             name: state.user.name,
-            image: state.user.image,
+            profileImage: state.user.profileImage,
           },
           createdAt: FIXED_NOW,
         },
@@ -2004,7 +2298,7 @@ Bun.serve({
             actor: {
               id: state.user.id,
               name: state.user.name,
-              image: state.user.image,
+              profileImage: state.user.profileImage,
             },
             createdAt: FIXED_MUTATION_NOW,
           })

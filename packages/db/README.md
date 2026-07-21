@@ -15,7 +15,7 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 ## Schemaとmigration
 
 - `src/schema/auth.generated.ts`: Better Auth CLI生成を起点とするauth schema
-- `src/schema/app.ts`: Issue/comment/file/auditなどapp schema
+- `src/schema/app.ts`: Issue/comment/file/profile image/auditなどapp schema
 - `fixtures/files/`: local R2へ投入する決定的なfile fixture
 - `drizzle/`: commitするSQL、snapshot、journal
 
@@ -87,4 +87,4 @@ bun run dev:db:seed
 
 ## Test
 
-`src/migrations.test.ts` と `src/files.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、file owner tenant FK、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。
+`src/migrations.test.ts` と `src/files.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、file owner tenant FK、profile image subject/ready/idempotency制約、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。

@@ -32,7 +32,7 @@ import {
 } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import { commentFormSchema } from "@/features/issues/schema"
 
 import {
@@ -186,7 +186,7 @@ export const IssueComment = ({
         className="relative z-20 flex size-9 items-center justify-center rounded-full bg-(--issue-timeline-surface,var(--color-background)) ring-4 ring-(--issue-timeline-surface,var(--color-background))"
         aria-hidden="true"
       >
-        <UserAvatar user={comment.author} className="size-8" />
+        <UserProfileImage user={comment.author} className="size-8" />
       </span>
       <Card
         size="sm"

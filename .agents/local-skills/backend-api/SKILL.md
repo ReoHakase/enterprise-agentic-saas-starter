@@ -116,6 +116,7 @@ apps/api/src/
 - protected routeのsecurity metadataはauth macroから付け、実行時guardとdocumentationが乖離しないようにする。
 - error responseは共通 `ApiError` schemaを使う。examplesへ実ID、cookie、token、DB情報を入れない。
 - `@elysia/openapi`には`@valibot/to-json-schema`のmapperを設定する。transformを含むquery schemaはOpenAPI生成testを必須にし、変換不能actionでroute schema全体が欠落しないことを確認する。
+- app-ownedなuser / organization / member / actor / uploaderの画像fieldは`profileImage`へ統一する。Better Auth routeと生成schemaの`image` / `logo`は書き換えず、repositoryまたはauth adapter境界でapp DTOへ変換する。
 - unsafe methodはglobal CSRF guardで`Origin`を必須にし、`CORS_ORIGIN` / `API_PUBLIC_URL`との完全一致だけを許可する。CSRFの403と`csrf_origin_forbidden` exampleを各mutationのOpenAPI responseにも含める。
 - resource作成は201へ統一する。このrepoではorganization、invitation、issue、issue commentのPOSTが対象で、実response、route schema、OpenAPI、client testを同時に変更する。
 - `POST /organizations/:organizationId/invitations`は1〜20件のemail配列と共通roleを受けるatomic batchにする。trim/lowercase/case-insensitive重複排除後、既存memberまたは有効pending invitationが1件でもあれば全件rollbackし、どのaddressが該当したかを反映しない同一の409 `fieldErrors.emails`を返す。quotaはrecipient件数でactor+organization 30件/時、organization 100件/時をDBへ原子的に予約し、競合探索も消費して429 `retryAfter`を返す。quota keyには生のuser/organization IDを保存せずnamespaced hashを使う。

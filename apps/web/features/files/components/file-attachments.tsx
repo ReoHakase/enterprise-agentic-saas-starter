@@ -47,7 +47,7 @@ import {
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import { deleteFile, type FileOwnerType } from "@/features/files/api"
 import { formatFileSize } from "@/features/files/format"
@@ -223,7 +223,7 @@ const FileRow = ({
               className="flex min-w-0 items-center gap-1.5"
               aria-label={`Uploaded by ${file.uploader.name}`}
             >
-              <UserAvatar user={file.uploader} className="size-5" />
+              <UserProfileImage user={file.uploader} className="size-5" />
               <span className="truncate">{file.uploader.name}</span>
             </span>
             <span aria-hidden="true">·</span>

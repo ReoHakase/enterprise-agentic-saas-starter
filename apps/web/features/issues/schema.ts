@@ -41,7 +41,7 @@ export const issueCommentSchema = v.object({
   author: v.object({
     id: v.string(),
     name: v.string(),
-    image: v.nullable(v.string()),
+    profileImage: v.nullable(v.string()),
   }),
   body: v.string(),
   createdAt: apiTimestampSchema,
@@ -83,7 +83,7 @@ export const issueActivitySchema = v.object({
   actor: v.object({
     id: v.nullable(v.string()),
     name: v.string(),
-    image: v.nullable(v.string()),
+    profileImage: v.nullable(v.string()),
   }),
   createdAt: apiTimestampSchema,
 })

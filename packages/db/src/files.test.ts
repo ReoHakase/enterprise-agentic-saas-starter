@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest"
 import {
   developmentFileFixtures,
   getDevelopmentFileFixtureUrl,
-  getDevelopmentUserAvatarUrl,
+  getDevelopmentUserProfileImageUrl,
   selectDevelopmentFileFixturesForReconciliation,
 } from "./development-seed"
 import { seedDevelopmentDatabase } from "./seed"
@@ -350,7 +350,7 @@ describe("development file fixtures", () => {
     }
   })
 
-  it("produces identical rows with deterministic user avatars in two fresh local databases", async () => {
+  it("produces identical rows with deterministic user profile images in two fresh local databases", async () => {
     const directories = await Promise.all([
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-a-")),
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-b-")),
@@ -384,12 +384,12 @@ describe("development file fixtures", () => {
       for (const user of users) {
         const userId = String(user.id)
         const image = String(user.image)
-        const avatarUrl = new URL(image)
-        expect(image).toBe(getDevelopmentUserAvatarUrl(userId))
-        expect(avatarUrl.protocol).toBe("https:")
-        expect(avatarUrl.hostname).toBe("api.dicebear.com")
-        expect(avatarUrl.pathname).toBe("/10.x/lorelei/svg")
-        expect(avatarUrl.searchParams.get("seed")).toBe(userId)
+        const profileImageUrl = new URL(image)
+        expect(image).toBe(getDevelopmentUserProfileImageUrl(userId))
+        expect(profileImageUrl.protocol).toBe("https:")
+        expect(profileImageUrl.hostname).toBe("api.dicebear.com")
+        expect(profileImageUrl.pathname).toBe("/10.x/lorelei/svg")
+        expect(profileImageUrl.searchParams.get("seed")).toBe(userId)
       }
     } finally {
       await Promise.all(

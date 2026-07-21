@@ -137,19 +137,19 @@ export type OrganizationSummary = {
   id: string
   name: string
   slug: string
+  profileImage: string | null
   role: OrganizationRole
   active: boolean
   memberCount: number
-  memberAvatars: Array<{
+  memberProfileImages: Array<{
     userId: string
     name: string
-    image: string | null
+    profileImage: string | null
   }>
   permissions: OrganizationPermissions
 }
 
 export type OrganizationDetail = OrganizationSummary & {
-  logo: string | null
   createdAt: string
   invitationCount: number
 }
@@ -159,7 +159,7 @@ export type OrganizationMember = {
   userId: string
   name: string
   email: string
-  image: string | null
+  profileImage: string | null
   role: OrganizationRole
   createdAt: string
 }
@@ -175,7 +175,7 @@ export type OrganizationInvitation = {
     id: string
     name: string
     email: string
-    image: string | null
+    profileImage: string | null
   }
   expiresAt: string
   createdAt: string
@@ -195,7 +195,7 @@ const toOrganizationInvitation = (
     id: string
     name: string
     email: string
-    image: string | null
+    profileImage: string | null
   }
 ): OrganizationInvitation => ({
   id: row.id,
@@ -216,13 +216,14 @@ const toSummary = (input: {
   id: string
   name: string
   slug: string
+  profileImage: string | null
   role: string
   activeOrganizationId?: string | null
   memberCount: number
-  memberAvatars: Array<{
+  memberProfileImages: Array<{
     userId: string
     name: string
-    image: string | null
+    profileImage: string | null
   }>
 }): OrganizationSummary => {
   const role = normalizeOrganizationRole(input.role)
@@ -231,10 +232,11 @@ const toSummary = (input: {
     id: input.id,
     name: input.name,
     slug: input.slug,
+    profileImage: input.profileImage,
     role,
     active: input.activeOrganizationId === input.id,
     memberCount: input.memberCount,
-    memberAvatars: input.memberAvatars,
+    memberProfileImages: input.memberProfileImages,
     permissions: permissionsForRole(role),
   }
 }
@@ -249,6 +251,7 @@ export const listOrganizationsForUser = async (
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
+        profileImage: organization.logo,
         role: member.role,
       })
       .from(member)
@@ -267,7 +270,7 @@ export const listOrganizationsForUser = async (
     )
     const countByOrganization = new Map(memberCounts)
     const organizationIds = rows.map((row) => row.id)
-    const avatarRows =
+    const profileImageRows =
       organizationIds.length === 0
         ? []
         : await db
@@ -275,24 +278,25 @@ export const listOrganizationsForUser = async (
               organizationId: member.organizationId,
               userId: user.id,
               name: user.name,
-              image: user.image,
+              profileImage: user.image,
             })
             .from(member)
             .innerJoin(user, eq(member.userId, user.id))
             .where(inArray(member.organizationId, organizationIds))
             .orderBy(user.name)
-    const avatarsByOrganization = new Map<
+    const profileImagesByOrganization = new Map<
       string,
-      Array<{ userId: string; name: string; image: string | null }>
+      Array<{ userId: string; name: string; profileImage: string | null }>
     >()
-    for (const avatar of avatarRows) {
-      const existing = avatarsByOrganization.get(avatar.organizationId) ?? []
+    for (const profileImage of profileImageRows) {
+      const existing =
+        profileImagesByOrganization.get(profileImage.organizationId) ?? []
       existing.push({
-        userId: avatar.userId,
-        name: avatar.name,
-        image: avatar.image,
+        userId: profileImage.userId,
+        name: profileImage.name,
+        profileImage: profileImage.profileImage,
       })
-      avatarsByOrganization.set(avatar.organizationId, existing)
+      profileImagesByOrganization.set(profileImage.organizationId, existing)
     }
 
     return rows.map((row) =>
@@ -300,7 +304,7 @@ export const listOrganizationsForUser = async (
         ...row,
         activeOrganizationId: input.activeOrganizationId,
         memberCount: countByOrganization.get(row.id) ?? 0,
-        memberAvatars: avatarsByOrganization.get(row.id) ?? [],
+        memberProfileImages: profileImagesByOrganization.get(row.id) ?? [],
       })
     )
   } catch (cause) {
@@ -325,7 +329,7 @@ export const findOrganizationForUser = async (
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
-        logo: organization.logo,
+        profileImage: organization.logo,
         createdAt: organization.createdAt,
         role: member.role,
       })
@@ -363,12 +367,12 @@ export const findOrganizationForUser = async (
         id: row.id,
         name: row.name,
         slug: row.slug,
+        profileImage: row.profileImage,
         role: row.role,
         activeOrganizationId: input.activeOrganizationId,
         memberCount: memberCountRows[0]?.value ?? 0,
-        memberAvatars: [],
+        memberProfileImages: [],
       }),
-      logo: row.logo,
       createdAt: row.createdAt.toISOString(),
       invitationCount: invitationCountRows[0]?.value ?? 0,
     }
@@ -448,11 +452,11 @@ export const insertOrganizationWithSuperAdmin = async (
       id: created.id,
       name: created.name,
       slug: created.slug,
-      logo: created.logo,
+      profileImage: created.logo,
       role: "super_admin",
       active: input.activate,
       memberCount: 1,
-      memberAvatars: [],
+      memberProfileImages: [],
       invitationCount: 0,
       createdAt: created.createdAt.toISOString(),
       permissions: permissionsForRole("super_admin"),
@@ -565,11 +569,11 @@ export const updateOrganizationById = async (
       id: row.id,
       name: row.name,
       slug: row.slug,
-      logo: row.logo,
+      profileImage: row.logo,
       role: "super_admin",
       active: false,
       memberCount: memberCountRows[0]?.value ?? 0,
-      memberAvatars: [],
+      memberProfileImages: [],
       invitationCount: 0,
       createdAt: row.createdAt.toISOString(),
       permissions: permissionsForRole("super_admin"),
@@ -782,7 +786,7 @@ export const listMembersByOrganization = async (
         userId: member.userId,
         name: user.name,
         email: user.email,
-        image: user.image,
+        profileImage: user.image,
         role: member.role,
         createdAt: member.createdAt,
       })
@@ -796,7 +800,7 @@ export const listMembersByOrganization = async (
       userId: row.userId,
       name: row.name,
       email: row.email,
-      image: row.image,
+      profileImage: row.profileImage,
       role: normalizeOrganizationRole(row.role),
       createdAt: row.createdAt.toISOString(),
     }))
@@ -1136,7 +1140,7 @@ export const listInvitationsByOrganization = async (
           id: user.id,
           name: user.name,
           email: user.email,
-          image: user.image,
+          profileImage: user.image,
         },
       })
       .from(invitation)
@@ -1175,7 +1179,7 @@ export const insertInvitations = async (
             id: user.id,
             name: user.name,
             email: user.email,
-            image: user.image,
+            profileImage: user.image,
           })
           .from(user)
           .where(eq(user.id, input.inviterId))
@@ -1385,7 +1389,7 @@ export const resendInvitationById = async (
               id: user.id,
               name: user.name,
               email: user.email,
-              image: user.image,
+              profileImage: user.image,
               role: member.role,
             })
             .from(member)
@@ -1546,7 +1550,7 @@ export const resendInvitationById = async (
               id: actor.id,
               name: actor.name,
               email: actor.email,
-              image: actor.image,
+              profileImage: actor.profileImage,
             }),
             revived,
           }

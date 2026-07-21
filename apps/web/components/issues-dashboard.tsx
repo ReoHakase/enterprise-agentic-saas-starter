@@ -101,7 +101,7 @@ export const IssuesDashboard = ({
         id: member.userId,
         name: member.name,
         email: member.email,
-        image: member.image,
+        profileImage: member.profileImage,
       })),
     [membersQuery.data]
   )

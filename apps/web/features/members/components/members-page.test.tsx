@@ -41,8 +41,9 @@ const organization = {
   slug: "acme",
   role: "super_admin" as const,
   active: true,
+  profileImage: null,
   memberCount: 1,
-  memberAvatars: [],
+  memberProfileImages: [],
   permissions: {
     canEditOrganization: true,
     canInviteMembers: true,
@@ -50,7 +51,6 @@ const organization = {
     canManageAdmins: true,
     canTransferSuperAdmin: true,
   },
-  logo: null,
   createdAt: "2026-07-01T00:00:00.000Z",
   invitationCount: 1,
 }
@@ -60,7 +60,7 @@ const member = {
   userId: "user-owner",
   name: "Owner",
   email: "owner@example.com",
-  image: null,
+  profileImage: null,
   role: "super_admin" as const,
   createdAt: "2026-07-01T00:00:00.000Z",
 }
@@ -76,7 +76,7 @@ const invitation = {
     id: member.userId,
     name: member.name,
     email: member.email,
-    image: null,
+    profileImage: null,
   },
   expiresAt: "2026-07-21T00:00:00.000Z",
   createdAt: "2026-07-14T00:00:00.000Z",

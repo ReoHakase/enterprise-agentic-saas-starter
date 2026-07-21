@@ -9,13 +9,13 @@ import {
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Building2Icon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field"
 import { LinkButton } from "@/components/link-button"
+import { OrganizationProfileImage } from "@/components/organization-identity"
 import { consoleKeys } from "@/features/console/queries"
 import { OrganizationDangerZone } from "@/features/organizations/components/organization-danger-zone"
 import {
@@ -23,6 +23,7 @@ import {
   roleLabel,
   type OrganizationDetail,
 } from "@/features/organizations/schema"
+import { ProfileImageEditor } from "@/features/profile-images/components/profile-image-editor"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,
@@ -155,9 +156,10 @@ export const OrganizationSettingsForm = ({
         className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:p-5"
         aria-labelledby="organization-identity-heading"
       >
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          <Building2Icon aria-hidden="true" />
-        </span>
+        <OrganizationProfileImage
+          organization={organization}
+          className="size-12"
+        />
         <div className="min-w-0 flex-1">
           <h2
             id="organization-identity-heading"
@@ -171,6 +173,13 @@ export const OrganizationSettingsForm = ({
         </div>
         <Badge variant="secondary">{roleLabel(organization.role)}</Badge>
       </section>
+
+      <ProfileImageEditor
+        subject="organization"
+        organizationId={organization.id}
+        name={organization.name}
+        profileImage={organization.profileImage}
+      />
 
       <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
         <div>

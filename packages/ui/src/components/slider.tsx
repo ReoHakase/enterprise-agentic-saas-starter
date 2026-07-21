@@ -7,13 +7,20 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  getAriaLabel,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & {
+  getAriaLabel?: SliderPrimitive.Thumb.Props["getAriaLabel"]
+}) {
   const normalizedValues = Array.isArray(value)
     ? value
-    : Array.isArray(defaultValue)
-      ? defaultValue
-      : [min, max]
+    : typeof value === "number"
+      ? [value]
+      : Array.isArray(defaultValue)
+        ? defaultValue
+        : typeof defaultValue === "number"
+          ? [defaultValue]
+          : [min]
 
   return (
     <SliderPrimitive.Root
@@ -40,6 +47,7 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
+            getAriaLabel={getAriaLabel}
             className="block h-4 w-6 shrink-0 rounded-full bg-white shadow-md ring-1 ring-black/10 transition-[color,box-shadow,background-color] select-none not-dark:bg-clip-padding hover:ring-4 hover:ring-ring/30 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-vertical:h-6 data-vertical:w-4"
           />
         ))}

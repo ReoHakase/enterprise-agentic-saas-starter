@@ -19,7 +19,7 @@ export type IssueAssigneeOption = {
   id: string
   name: string
   email: string
-  image?: string | null
+  profileImage?: string | null
 }
 
 export type AsyncAction<T extends unknown[]> = (

@@ -29,7 +29,7 @@ type FileRow = {
   stored: StoredFile
   ownerId: string
   uploaderName: string | null
-  uploaderImage: string | null
+  uploaderProfileImage: string | null
 }
 
 export type FileWithOwner = StoredFile & { ownerId: string }
@@ -38,7 +38,7 @@ const fileSelection = {
   stored: files,
   ownerId: issueFileOwners.issueId,
   uploaderName: user.name,
-  uploaderImage: user.image,
+  uploaderProfileImage: user.image,
 }
 
 const toFileDto = (
@@ -57,7 +57,7 @@ const toFileDto = (
   uploader: {
     id: row.stored.uploaderId,
     name: row.uploaderName ?? "Former member",
-    image: row.uploaderImage,
+    profileImage: row.uploaderProfileImage,
   },
   createdAt: row.stored.createdAt.toISOString(),
   canDelete: row.stored.uploaderId === actor.userId || actor.role !== "member",

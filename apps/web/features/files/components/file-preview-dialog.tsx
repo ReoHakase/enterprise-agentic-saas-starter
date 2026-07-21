@@ -34,7 +34,7 @@ import {
 } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 import { formatFileSize } from "@/features/files/format"
 import { textFilePreviewQueryOptions } from "@/features/files/queries"
 import { apiClient } from "@/lib/api-client"
@@ -258,7 +258,7 @@ export const FilePreviewDialog = ({
                 <span>{formatFileSize(file.sizeBytes)}</span>
                 <span aria-hidden="true">·</span>
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <UserAvatar user={file.uploader} className="size-5" />
+                  <UserProfileImage user={file.uploader} className="size-5" />
                   <span className="truncate">{file.uploader.name}</span>
                 </span>
                 <span aria-hidden="true">·</span>

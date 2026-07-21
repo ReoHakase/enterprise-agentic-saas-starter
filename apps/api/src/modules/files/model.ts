@@ -78,7 +78,7 @@ export const fileDtoModel = v.object({
   uploader: v.object({
     id: nonEmptyStringModel,
     name: v.string(),
-    image: v.nullable(v.string()),
+    profileImage: v.nullable(v.string()),
   }),
   createdAt: isoTimestampModel,
   canDelete: v.boolean(),

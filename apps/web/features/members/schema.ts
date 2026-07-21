@@ -7,7 +7,7 @@ export const organizationMemberSchema = v.object({
   userId: v.string(),
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
   role: organizationRoleSchema,
   createdAt: v.string(),
 })
@@ -24,7 +24,7 @@ export const organizationInvitationInviterSchema = v.object({
   id: v.string(),
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
-  image: v.nullable(v.string()),
+  profileImage: v.nullable(v.string()),
 })
 
 export const organizationInvitationSchema = v.object({

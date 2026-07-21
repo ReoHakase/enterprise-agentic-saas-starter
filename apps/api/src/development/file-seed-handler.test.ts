@@ -17,6 +17,7 @@ import {
   configureFileStorageRuntime,
   type FileImagesBinding,
   type FileR2Bucket,
+  type FileR2PutValue,
   resetFileStorageRuntimeForTest,
 } from "../modules/files/runtime"
 import {
@@ -33,6 +34,13 @@ const migrationsFolder = new URL(
   import.meta.url
 ).pathname
 const token = "x".repeat(64)
+
+const readPutValue = async (value: FileR2PutValue) =>
+  new Uint8Array(
+    await (value instanceof Blob
+      ? value.arrayBuffer()
+      : new Response(value).arrayBuffer())
+  )
 
 class DevelopmentBucket implements FileR2Bucket {
   private object:
@@ -83,7 +91,7 @@ class DevelopmentBucket implements FileR2Bucket {
 
   async put(
     key: string,
-    value: ReadableStream<Uint8Array>,
+    value: FileR2PutValue,
     options: {
       onlyIf?: Headers
       httpMetadata: { contentType: string }
@@ -93,7 +101,7 @@ class DevelopmentBucket implements FileR2Bucket {
     if (this.object && options.onlyIf?.get("if-none-match") === "*") {
       return null
     }
-    const bytes = new Uint8Array(await new Response(value).arrayBuffer())
+    const bytes = await readPutValue(value)
     this.object = {
       bytes,
       customMetadata: { ...options.customMetadata },

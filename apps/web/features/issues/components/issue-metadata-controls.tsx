@@ -42,7 +42,7 @@ import {
 } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { UserAvatar } from "@/components/user-identity"
+import { UserProfileImage } from "@/components/user-identity"
 
 import {
   isIssuePriority,
@@ -208,7 +208,7 @@ export const IssueAssigneeControl = ({
       >
         {selected ? (
           <span className="flex min-w-0 items-center gap-2">
-            <UserAvatar user={selected} className="size-6" />
+            <UserProfileImage user={selected} className="size-6" />
             <span className="truncate">{selected.name}</span>
           </span>
         ) : (
@@ -227,7 +227,7 @@ export const IssueAssigneeControl = ({
           {assignees.map((assignee) => (
             <SelectItem key={assignee.id} value={assignee.id}>
               <span className="flex min-w-0 items-center gap-2">
-                <UserAvatar user={assignee} className="size-6" />
+                <UserProfileImage user={assignee} className="size-6" />
                 <span className="min-w-0">
                   <span className="block truncate">{assignee.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">

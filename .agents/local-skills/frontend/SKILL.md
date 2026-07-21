@@ -100,6 +100,8 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - OpenNext設定は `apps/web/open-next.config.ts`、Worker/bindingは `apps/web/wrangler.jsonc` を正本にする。incremental cacheはR2 + regional cacheを使い、`build:cloudflare` dry-runをCI gateに含める。
 - Next 16の`proxy.ts`はNode runtimeとしてbuildされ、OpenNext Cloudflare 1.20では拒否される。旧URL互換の軽量redirectをWorkersへ載せる場合はEdge `middleware.ts`を使い、Nextの非推奨警告だけで`proxy.ts`へ機械的に移さず`build:cloudflare`で実adapterを確認する。
 - 認証付きfile UIはprivate R2の`FILES` bindingを使う`/files/*` APIだけを呼ぶ。WebへR2 URLやobject keyを渡さず、list/deleteはEden + TanStack Query、progress付きuploadは`@enterprise-agentic-saas/api/client`のXHR helperを使う。private previewはNext optimizerを通さず、`AuthenticatedFileImage`のnative `srcset`で取得する。詳細contractは`file-storage-r2` skillを参照する。
+- user / organizationのidentity画像はapp-ownedなAPI schema、Web-local schema、propsで`profileImage`に統一する。Better Auth session/multi-sessionをparseする境界だけ既存の`image`を維持し、app componentへ渡すときに変換する。userは円、organizationは角丸四角で表示し、`UserProfileImage` / `OrganizationProfileImage`を共通表示入口にする。
+- crop primitiveは`packages/ui`の`ImageCropper` / `ImageCropDialog` / `createCroppedImage`へ置き、API origin、Cloudflare binding、TanStack Queryを依存させない。`apps/web`はfile type/size検証、XHR progress、AbortSignal、toast、query invalidationを担当する。cropperをDialogへ置く場合はscale animationで計測を崩さないfade-only motionを使う。
 - Elysia Cloudflare adapterはexperimentalなので、Bun runtimeのunit testだけでproduction互換と判断しない。
 
 ## SentryとSpotlight
