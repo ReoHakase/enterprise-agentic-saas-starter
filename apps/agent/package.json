@@ -1,0 +1,45 @@
+{
+  "name": "@enterprise-agentic-saas/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir ./dist/worker",
+    "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker",
+    "cf:typegen": "wrangler types --env-file .dev.vars.example --strict-vars=false --include-runtime=false --env-interface CloudflareEnv src/cloudflare-env.d.ts && oxfmt src/cloudflare-env.d.ts",
+    "dev": "portless run wrangler dev --env-file .dev.vars.example --env-file .env.local",
+    "dev:portless": "bun run dev",
+    "dev:worker": "wrangler dev --env-file .dev.vars.example --env-file .env.local",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint --deny-warnings",
+    "smoke:mastra": "bun run scripts/mastra-openrouter-smoke.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "catalog:",
+    "@cloudflare/ai-chat": "catalog:",
+    "@enterprise-agentic-saas/api": "workspace:*",
+    "@openrouter/ai-sdk-provider": "catalog:",
+    "agents": "catalog:",
+    "ai": "catalog:",
+    "react": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@mastra/core": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "portless": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "catalog:"
+  },
+  "portless": {
+    "name": "agent.enterprise-agentic-saas"
+  }
+}
