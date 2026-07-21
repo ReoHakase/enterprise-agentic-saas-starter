@@ -72,6 +72,11 @@ describe("database migrations", () => {
       )
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
+          "agent_connection_tickets",
+          "agent_grants",
+          "agent_runs",
+          "agent_session_contexts",
+          "agent_threads",
           "audit_logs",
           "file_cleanup_jobs",
           "files",
@@ -95,6 +100,57 @@ describe("database migrations", () => {
       )
     } finally {
       client.close()
+    }
+  })
+
+  it("backfills an initial Agent context epoch for existing sessions", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(12)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: [
+            "agent-user",
+            "Agent User",
+            "agent-user@example.test",
+            1,
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into session(id,expires_at,token,created_at,updated_at,user_id) values(?,?,?,?,?,?)",
+          args: [
+            "agent-session",
+            now + 3_600_000,
+            "agent-session-token",
+            now,
+            now,
+            "agent-user",
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const contexts = await client.execute(
+        "select session_id as sessionId,user_id as userId,context_epoch as contextEpoch,updated_at as updatedAt from agent_session_contexts"
+      )
+      expect(contexts.rows).toMatchObject([
+        {
+          sessionId: "agent-session",
+          userId: "agent-user",
+          contextEpoch: 1,
+          updatedAt: now,
+        },
+      ])
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
     }
   })
 
