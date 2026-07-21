@@ -25,6 +25,11 @@
       url = "github:emilkowalski/skill";
       flake = false;
     };
+
+    mastra-skills = {
+      url = "github:mastra-ai/skills";
+      flake = false;
+    };
   };
 
   outputs =
@@ -97,10 +102,17 @@
                   subdir = "skills";
                   filter.maxDepth = 1;
                 };
+
+                mastra = {
+                  path = inputs.mastra-skills;
+                  subdir = "skills";
+                  filter.maxDepth = 1;
+                };
               }
               {
                 enable = [
                   "emil-design-eng"
+                  "mastra"
                   "next-best-practices"
                   "next-cache-components"
                   "next-upgrade"

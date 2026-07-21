@@ -76,6 +76,22 @@
         "type": "github"
       }
     },
+    "mastra-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779198229,
+        "narHash": "sha256-YjEpYfQ5Ch5dDnCqZlYLKQYHomw7IHownbmq7Ibkz8s=",
+        "owner": "mastra-ai",
+        "repo": "skills",
+        "rev": "7210bdbd0ea9a083244ec591c867a77ef564cc66",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mastra-ai",
+        "repo": "skills",
+        "type": "github"
+      }
+    },
     "mcp-servers-nix": {
       "inputs": {
         "nixpkgs": [
@@ -148,6 +164,7 @@
         "agent-skills-nix": "agent-skills-nix",
         "emil-skill": "emil-skill",
         "flake-parts": "flake-parts",
+        "mastra-skills": "mastra-skills",
         "mcp-servers-nix": "mcp-servers-nix",
         "next-skills": "next-skills",
         "nixpkgs": "nixpkgs"
