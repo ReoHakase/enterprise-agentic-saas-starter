@@ -223,7 +223,7 @@ canonical messageをTursoとMastra storageへ二重永続化しない。prompt�
 - chat transport/Mastra memory/Turso/log/Sentryにbase64/raw imageが残らないことをtestする。
 - nuqsのreload/Back/ForwardとAgent query操作、form dirty conflictをPlaywrightで確認する。
 - Playwrightはfake Agent protocolで成功扱いにせず、実API Worker、private Agent Worker、Mastra `product-agent`、OpenRouter Qwen3.6 Flashを起動する専用suiteを持つ。外部callを行うsuiteは明示commandへ分離し、keyやresponse本文をartifactへ出さない。
-- `bun run dev`と`bun run dev:agent:studio`で同じ`src/mastra/index.ts`がloadされ、Studioのagent listとQwen smokeが成功することを確認する。
+- `bun run dev`でAgent WorkerとMastra Studioが並走し、`bun run dev:agent:studio`ではStudioを単独起動できること、どちらも同じ`src/mastra/index.ts`をloadしてStudioのagent listとQwen smokeが成功することを確認する。
 - localでは`docs/upload-memory-smoke.md`の専用Workerで10,000,000-byte multipartを並列実行し、失敗数とworkerd peak RSSの回帰を記録する。local process RSSはproduction 128 MB/isolateの証明にせず、release前にreal Workers環境でもAPI→Agent stream、Agent→API RPC、Images input、memory errorをsmokeする。
 - Cloudflare変更時はBun buildだけで完了扱いにせず、少なくとも次を実行する。
 

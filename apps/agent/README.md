@@ -17,7 +17,13 @@ Worker用の`OPENROUTER_API_KEY`と`SENTRY_DSN`は追跡対象外の`.env.local`
 
 SentryはAgent Worker専用の `SENTRY_ENVIRONMENT` と `SENTRY_RELEASE` を使います。event、log、spanからrequest data、ticket、grant、resume ticket、prompt、tool payloadを除去し、固定error codeだけを記録します。
 
-Mastra Studioはrepo rootから別processで起動します。
+Mastra Studioはrepo rootの`bun run dev`でAgent Workerと一緒に起動します。
+
+```bash
+bun run dev
+```
+
+Studioだけを起動したい場合は次を使います。
 
 ```bash
 bun run dev:agent:studio
