@@ -22,6 +22,7 @@
     "@cloudflare/ai-chat": "catalog:",
     "@enterprise-agentic-saas/api": "workspace:*",
     "@openrouter/ai-sdk-provider": "catalog:",
+    "@sentry/cloudflare": "catalog:",
     "agents": "catalog:",
     "ai": "catalog:",
     "react": "catalog:",
