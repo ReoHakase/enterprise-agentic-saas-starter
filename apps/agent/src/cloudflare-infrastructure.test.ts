@@ -151,6 +151,25 @@ describe("wrangler-dev-portless", () => {
   })
 })
 
+describe("Mastra Studio development configuration", () => {
+  it("uses the Portless browser origin for Studio API requests", async () => {
+    const packageJson = await readJsonc(
+      join(repositoryRoot, "apps/agent/package.json")
+    )
+    const scripts = packageJson.scripts
+    if (typeof scripts !== "object" || scripts === null) {
+      throw new TypeError("apps/agent/package.json scripts must be an object")
+    }
+    const studioScript = Reflect.get(scripts, "dev:studio")
+
+    expect(studioScript).toBeTypeOf("string")
+    expect(studioScript).toContain("MASTRA_AUTO_DETECT_URL=true")
+    expect(studioScript).toContain(
+      "portless run --name mastra-studio.enterprise-agentic-saas"
+    )
+  })
+})
+
 describe("mutual Worker Service Binding deployment", () => {
   it("keeps the bootstrap API config identical except for outbound services", async () => {
     const finalConfig = await readJsonc(

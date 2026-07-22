@@ -57,6 +57,24 @@ export const serializeLocalWorkerEnvironment = (
     .map(([key, value]) => `${key}=${JSON.stringify(value)}\n`)
     .join("")
 
+export const resolveWranglerInspectorPort = (
+  environment: Readonly<Record<string, string | undefined>> = process.env
+) => {
+  const rawPort = environment.WRANGLER_INSPECTOR_PORT?.trim() || "0"
+  if (!/^\d+$/.test(rawPort)) {
+    throw new Error(
+      "WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535"
+    )
+  }
+  const port = Number(rawPort)
+  if (!Number.isSafeInteger(port) || port > 65_535) {
+    throw new Error(
+      "WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535"
+    )
+  }
+  return String(port)
+}
+
 export const spawnLocalWorker = ({
   environment = process.env,
   environmentPath,
@@ -79,6 +97,8 @@ export const spawnLocalWorker = ({
       "127.0.0.1",
       "--port",
       String(port),
+      "--inspector-port",
+      resolveWranglerInspectorPort(environment),
       "--env-file",
       environmentPath,
       "--show-interactive-dev-session=false",

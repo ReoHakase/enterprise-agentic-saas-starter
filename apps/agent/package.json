@@ -10,7 +10,7 @@
     "deploy": "wrangler deploy",
     "dev": "portless run sh ../../scripts/wrangler-dev-portless.sh",
     "dev:portless": "bun run dev",
-    "dev:studio": "portless run --name mastra-studio.enterprise-agentic-saas mastra dev --env .env.local",
+    "dev:studio": "MASTRA_AUTO_DETECT_URL=true portless run --name mastra-studio.enterprise-agentic-saas mastra dev --env .env.local",
     "dev:worker": "wrangler dev --env-file .dev.vars.example --env-file .env.local",
     "format": "oxfmt --ignore-path ../../.gitignore",
     "format:check": "oxfmt --check --ignore-path ../../.gitignore",

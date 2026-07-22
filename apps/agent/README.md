@@ -29,7 +29,7 @@ Studioだけを起動したい場合は次を使います。
 bun run dev:agent:studio
 ```
 
-Portless経由のURLは `https://mastra-studio.enterprise-agentic-saas.localhost` です。Studioもproduction Workerと同じ`src/mastra/index.ts`を読み込みます。`bun run studio:health`と`bun run studio:agents`は課金なし、`bun run studio:smoke`はOpenRouterを実際に呼ぶ明示的な課金testです。
+Portless経由のURLは `https://mastra-studio.enterprise-agentic-saas.localhost` です。`MASTRA_AUTO_DETECT_URL=true`によりbrowserのsame-origin `/api`へ接続し、ephemeralなdirect HTTP portやmixed contentへ依存しません。Studioもproduction Workerと同じ`src/mastra/index.ts`を読み込みます。`bun run studio:health`と`bun run studio:agents`は課金なし、`bun run studio:smoke`はOpenRouterを実際に呼ぶ明示的な課金testです。
 
 ## 検証
 
