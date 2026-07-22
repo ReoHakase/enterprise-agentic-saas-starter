@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare"
 import { routeAgentRequest } from "agents"
 
 import {
@@ -5,8 +6,13 @@ import {
   type AgentRequestRouter,
 } from "./connection-request"
 import type { AgentRuntimeEnv } from "./environment"
+import { IssueAssistantBase } from "./issue-assistant"
+import { createAgentSentryOptions } from "./observability"
 
-export { IssueAssistant } from "./issue-assistant"
+export const IssueAssistant = Sentry.instrumentDurableObjectWithSentry(
+  (environment: AgentRuntimeEnv) => createAgentSentryOptions(environment),
+  IssueAssistantBase
+)
 
 const routeRequest: AgentRequestRouter<AgentRuntimeEnv> = (
   request,
@@ -18,7 +24,12 @@ const routeRequest: AgentRequestRouter<AgentRuntimeEnv> = (
     routingRetry: false,
   })
 
-export default {
+const worker = {
   fetch: (request, environment) =>
     handleConnectionRequest(request, environment, routeRequest),
 } satisfies ExportedHandler<AgentRuntimeEnv>
+
+export default Sentry.withSentry<AgentRuntimeEnv>(
+  createAgentSentryOptions,
+  worker
+)

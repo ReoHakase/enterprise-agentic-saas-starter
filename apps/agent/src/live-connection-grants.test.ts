@@ -10,6 +10,7 @@ import { LiveConnectionGrantStore } from "./live-connection-grants"
 const NOW = Date.parse("2026-07-22T00:00:00.000Z")
 const THREAD_ID = "thread_01JZTEST"
 const CONNECTION_ID = "connection_01JZTEST"
+const SECOND_CONNECTION_ID = "connection_02JZTEST"
 const REQUEST_ID = "request_01JZTEST"
 
 const liveGrant = (
@@ -28,13 +29,6 @@ const authenticatedRequest = (connection = liveGrant()): Request =>
     connection
   )
 
-const chatRequest = (id = REQUEST_ID): string =>
-  JSON.stringify({
-    id,
-    init: { body: "{}", method: "POST" },
-    type: "cf_agent_use_chat_request",
-  })
-
 describe("live connection grant handoff", () => {
   it("removes the ticket URL and reads only the private request headers", () => {
     const forwarded = authenticatedRequest()
@@ -52,15 +46,97 @@ describe("live connection grant handoff", () => {
       store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
     ).toBe(true)
 
-    expect(store.bindChatRequest(CONNECTION_ID, chatRequest(), NOW)).toBe(
-      REQUEST_ID
-    )
-    expect(store.request(REQUEST_ID, NOW)).toEqual(liveGrant())
+    const lease = store.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
+    expect(lease?.requestId).toBe(REQUEST_ID)
+    expect(lease?.grant).toEqual(liveGrant())
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toEqual(liveGrant())
     expect(JSON.stringify(store)).toBe("{}")
     expect(JSON.stringify(store)).not.toContain(liveGrant().grant)
 
-    store.releaseRequest(REQUEST_ID)
-    expect(store.request(REQUEST_ID, NOW)).toBeUndefined()
+    lease?.release()
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toBeUndefined()
+  })
+
+  it("keeps cancel ownership only while an SDK continuation lease is active", () => {
+    const store = new LiveConnectionGrantStore()
+    store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
+    store.register(
+      SECOND_CONNECTION_ID,
+      authenticatedRequest({
+        ...liveGrant(),
+        grant: "grant_02abcdefghijklmnopqrstuvwxyz0123456789",
+      }),
+      THREAD_ID,
+      NOW
+    )
+
+    const lease = store.openChatRequest(
+      CONNECTION_ID,
+      "continuation_01JZTEST",
+      NOW
+    )
+    expect(lease?.grant).toEqual(liveGrant())
+    expect(store.chatRun(CONNECTION_ID, "continuation_01JZTEST", NOW)).toEqual(
+      liveGrant()
+    )
+    expect(
+      store.chatRun(SECOND_CONNECTION_ID, "continuation_01JZTEST", NOW)
+    ).toBeUndefined()
+    expect(
+      store.openChatRequest(CONNECTION_ID, "continuation_01JZTEST", NOW)
+    ).toBeUndefined()
+
+    lease?.release()
+    lease?.release()
+    expect(
+      store.chatRun(CONNECTION_ID, "continuation_01JZTEST", NOW)
+    ).toBeUndefined()
+    const rebound = store.openChatRequest(
+      CONNECTION_ID,
+      "continuation_01JZTEST",
+      NOW
+    )
+    expect(rebound).toBeDefined()
+    rebound?.release()
+    expect(
+      store.openChatRequest(CONNECTION_ID, "invalid request", NOW)
+    ).toBeUndefined()
+  })
+
+  it("does not retain completed continuation bindings across repeated runs", () => {
+    const store = new LiveConnectionGrantStore()
+    store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
+    const requestIds = Array.from(
+      { length: 256 },
+      (_, index) => `continuation_${index}`
+    )
+
+    for (const requestId of requestIds) {
+      const lease = store.openChatRequest(CONNECTION_ID, requestId, NOW)
+      expect(lease).toBeDefined()
+      expect(store.chatRun(CONNECTION_ID, requestId, NOW)).toEqual(liveGrant())
+      lease?.release()
+      expect(store.chatRun(CONNECTION_ID, requestId, NOW)).toBeUndefined()
+    }
+
+    for (const requestId of requestIds) {
+      const lease = store.openChatRequest(CONNECTION_ID, requestId, NOW)
+      expect(lease).toBeDefined()
+      lease?.release()
+    }
+  })
+
+  it("keeps an initial chat run bound to its exact connection and request", () => {
+    const store = new LiveConnectionGrantStore()
+    store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
+    const lease = store.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
+
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toEqual(liveGrant())
+    expect(store.chatRun(SECOND_CONNECTION_ID, REQUEST_ID, NOW)).toBeUndefined()
+    expect(
+      store.chatRun(CONNECTION_ID, "request_02JZTEST", NOW)
+    ).toBeUndefined()
+    lease?.release()
   })
 
   it("has no grant after a simulated isolate wake and requires reconnect", () => {
@@ -72,19 +148,55 @@ describe("live connection grant handoff", () => {
     const afterWake = new LiveConnectionGrantStore()
     expect(afterWake.connection(CONNECTION_ID, NOW)).toBeUndefined()
     expect(
-      afterWake.bindChatRequest(CONNECTION_ID, chatRequest(), NOW)
+      afterWake.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
     ).toBeUndefined()
   })
 
   it("removes request grants when their live connection closes", () => {
     const store = new LiveConnectionGrantStore()
     store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
-    store.bindChatRequest(CONNECTION_ID, chatRequest(), NOW)
+    const lease = store.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
 
     store.removeConnection(CONNECTION_ID)
 
     expect(store.connection(CONNECTION_ID, NOW)).toBeUndefined()
-    expect(store.request(REQUEST_ID, NOW)).toBeUndefined()
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toBeUndefined()
+    lease?.release()
+  })
+
+  it("never lets another live connection overwrite a bound request ID", () => {
+    const firstGrant = liveGrant()
+    const secondGrant = {
+      ...liveGrant(),
+      grant: "grant_02abcdefghijklmnopqrstuvwxyz0123456789",
+    }
+    const store = new LiveConnectionGrantStore()
+    store.register(
+      CONNECTION_ID,
+      authenticatedRequest(firstGrant),
+      THREAD_ID,
+      NOW
+    )
+    store.register(
+      SECOND_CONNECTION_ID,
+      authenticatedRequest(secondGrant),
+      THREAD_ID,
+      NOW
+    )
+
+    const lease = store.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
+    expect(lease).toBeDefined()
+    expect(
+      store.openChatRequest(SECOND_CONNECTION_ID, REQUEST_ID, NOW)
+    ).toBeUndefined()
+    expect(
+      store.openChatRequest(CONNECTION_ID, REQUEST_ID, NOW)
+    ).toBeUndefined()
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toEqual(firstGrant)
+
+    store.removeConnection(SECOND_CONNECTION_ID)
+    expect(store.chatRun(CONNECTION_ID, REQUEST_ID, NOW)).toEqual(firstGrant)
+    lease?.release()
   })
 
   it("rejects expired, wrong-thread, and incomplete private handoffs", () => {
@@ -103,22 +215,13 @@ describe("live connection grant handoff", () => {
     )
   })
 
-  it("does not bind malformed or unrelated protocol messages", () => {
+  it("does not bind malformed request identifiers", () => {
     const store = new LiveConnectionGrantStore()
     store.register(CONNECTION_ID, authenticatedRequest(), THREAD_ID, NOW)
 
     expect(
-      store.bindChatRequest(CONNECTION_ID, "not-json", NOW)
+      store.openChatRequest(CONNECTION_ID, "invalid id", NOW)
     ).toBeUndefined()
-    expect(
-      store.bindChatRequest(
-        CONNECTION_ID,
-        JSON.stringify({ id: REQUEST_ID, type: "cf_agent_chat_clear" }),
-        NOW
-      )
-    ).toBeUndefined()
-    expect(
-      store.bindChatRequest(CONNECTION_ID, chatRequest("invalid id"), NOW)
-    ).toBeUndefined()
+    expect(store.chatRun(CONNECTION_ID, "invalid id", NOW)).toBeUndefined()
   })
 })

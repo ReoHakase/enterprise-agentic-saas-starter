@@ -50,4 +50,25 @@ describe("createRunSettlement", () => {
     await expect(settlement.cancel()).resolves.toBeUndefined()
     expect(test.calls).toEqual([`failed:${RUN_GRANT}`])
   })
+
+  it("does not settle a run after a write action enters approval waiting", async () => {
+    const test = harness()
+    const settlement = createRunSettlement(test.api, RUN_GRANT)
+
+    settlement.holdForApproval()
+    await settlement.complete()
+    await settlement.fail()
+    await settlement.cancel()
+
+    expect(test.calls).toEqual([])
+  })
+
+  it("cannot be moved into approval waiting after it has settled", async () => {
+    const test = harness()
+    const settlement = createRunSettlement(test.api, RUN_GRANT)
+    await settlement.complete()
+    settlement.holdForApproval()
+    await settlement.fail()
+    expect(test.calls).toEqual([`completed:${RUN_GRANT}`])
+  })
 })

@@ -1,1 +1,6 @@
 WEB_ORIGIN="https://enterprise-agentic-saas.localhost"
+AGENT_RUNS_ENABLED="1"
+AGENT_VISION_ENABLED="1"
+AGENT_WRITES_ENABLED="1"
+NODE_ENV="development"
+SENTRY_ENVIRONMENT="agent-development"

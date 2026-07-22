@@ -9,19 +9,20 @@ export type RunSettlement = {
   cancel: () => Promise<void>
   complete: () => Promise<void>
   fail: () => Promise<void>
+  holdForApproval: () => void
 }
 
 export const createRunSettlement = (
   api: RunSettlementApi,
   runGrant: string
 ): RunSettlement => {
-  let settled = false
+  let state: "held" | "open" | "settled" = "open"
 
   const settle = async (
     outcome: "canceled" | "completed" | "failed"
   ): Promise<void> => {
-    if (settled) return
-    settled = true
+    if (state !== "open") return
+    state = "settled"
     try {
       if (outcome === "canceled") {
         await api.cancelRun({ grant: runGrant })
@@ -37,5 +38,8 @@ export const createRunSettlement = (
     cancel: () => settle("canceled"),
     complete: () => settle("completed"),
     fail: () => settle("failed"),
+    holdForApproval: () => {
+      if (state === "open") state = "held"
+    },
   }
 }

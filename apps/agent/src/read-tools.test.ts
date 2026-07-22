@@ -3,6 +3,7 @@ import type {
   AgentIssue,
 } from "@enterprise-agentic-saas/api/agent-client"
 import { describe, expect, it } from "vitest"
+import { z } from "zod"
 
 import {
   agentReadToolSchemas,
@@ -85,6 +86,12 @@ const apiHarness = (options: { failAccount?: boolean } = {}) => {
 }
 
 describe("Agent read tool schemas", () => {
+  it("keeps every provider schema JSON-serializable", () => {
+    for (const schema of Object.values(agentReadToolSchemas)) {
+      expect(() => z.toJSONSchema(schema)).not.toThrow()
+    }
+  })
+
   it("rejects unknown fields and values beyond the bounded contracts", () => {
     expect(
       agentReadToolSchemas.empty.safeParse({ grant: RUN_GRANT }).success
@@ -162,7 +169,7 @@ describe("createAgentReadHandlers", () => {
     )
 
     await expect(handlers.readAccountContext()).rejects.toThrow(
-      "Agent read tool limit reached"
+      "Agent tool limit reached"
     )
     expect(test.grants).toHaveLength(20)
   })

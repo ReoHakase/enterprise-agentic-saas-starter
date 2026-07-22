@@ -6,6 +6,8 @@ import type {
 import { tool } from "ai"
 import { z } from "zod"
 
+import { createAgentToolBudget, type AgentToolBudget } from "./tool-budget"
+
 type AgentReadApi = Pick<
   AgentInternalApiContract,
   | "getIssue"
@@ -18,8 +20,6 @@ type AgentReadApi = Pick<
 
 const DEFAULT_RESULT_LIMIT = 20
 const MAX_RESULT_LIMIT = 50
-const MAX_TOOL_CALLS = 20
-
 const emptyInputSchema = z.object({}).strict()
 const searchInputSchema = z
   .object({
@@ -121,16 +121,13 @@ const safeRead = async <Result>(
 
 export const createAgentReadHandlers = (
   api: AgentReadApi,
-  runGrant: string
+  runGrant: string,
+  budget: AgentToolBudget = createAgentToolBudget()
 ) => {
-  let callCount = 0
   const invoke = async <Result>(
     operation: () => Promise<Result>
   ): Promise<Result> => {
-    callCount += 1
-    if (callCount > MAX_TOOL_CALLS) {
-      throw new Error("Agent read tool limit reached")
-    }
+    budget.consume("read")
     return safeRead(operation)
   }
 
@@ -171,8 +168,12 @@ export const createAgentReadHandlers = (
   }
 }
 
-export const createAgentReadTools = (api: AgentReadApi, runGrant: string) => {
-  const handlers = createAgentReadHandlers(api, runGrant)
+export const createAgentReadTools = (
+  api: AgentReadApi,
+  runGrant: string,
+  budget: AgentToolBudget = createAgentToolBudget()
+) => {
+  const handlers = createAgentReadHandlers(api, runGrant, budget)
 
   return {
     get_issue: tool({
@@ -180,36 +181,42 @@ export const createAgentReadTools = (api: AgentReadApi, runGrant: string) => {
         "Read one Issue in the active organization by opaque ID or Issue number.",
       execute: handlers.getIssue,
       inputSchema: getIssueInputSchema,
+      strict: true,
     }),
     read_account_context: tool({
       description:
         "Read the current user's allowlisted display profile. This never returns credentials or account settings.",
       execute: handlers.readAccountContext,
       inputSchema: emptyInputSchema,
+      strict: true,
     }),
     read_active_organization: tool({
       description:
         "Read the active organization's allowlisted name, role, and Issue permissions without changing it.",
       execute: handlers.readActiveOrganization,
       inputSchema: emptyInputSchema,
+      strict: true,
     }),
     search_issue_labels: tool({
       description:
         "Search bounded label candidates from Issues in the active organization.",
       execute: handlers.searchIssueLabels,
       inputSchema: labelSearchInputSchema,
+      strict: true,
     }),
     search_issues: tool({
       description:
         "Search a bounded, stable first page of Issues in the active organization using typed filters.",
       execute: handlers.searchIssues,
       inputSchema: issueSearchInputSchema,
+      strict: true,
     }),
     search_organization_members: tool({
       description:
         "Search a bounded list of members in the active organization. Email and credentials are never returned.",
       execute: handlers.searchOrganizationMembers,
       inputSchema: searchInputSchema,
+      strict: true,
     }),
   }
 }

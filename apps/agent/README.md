@@ -2,7 +2,7 @@
 
 Cloudflare Agents SDK の Durable Object を実行する独立 Worker です。Web から発行された一回限りの接続 ticket を API Worker の named service binding で消費し、認証できた WebSocket 接続だけを Agent へ転送します。
 
-connection grant は live WebSocket ごとのmemoryだけに保持し、connection state、message、Durable Object SQLiteへ保存しません。isolate wake後にmemory上のgrantがなければ接続を閉じ、fresh ticketでの再接続を要求します。各user messageは `startRun` でrun grantへ交換し、account、active organization、member、label、Issueのbounded read toolだけがrun grantを使います。Issue mutation toolはこの段階には含めません。
+connection grant は live WebSocket ごとのmemoryだけに保持し、connection state、message、Durable Object SQLiteへ保存しません。isolate wake後にmemory上のgrantがなければ接続を閉じ、fresh ticketでの再接続を要求します。各user messageは `startRun` でrun grantへ交換し、account、active organization、member、label、Issueのbounded read toolと承認付きIssue CRUD toolだけがrun grantを使います。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けmemory上のmessage partへだけ追加します。
 
 ## ローカル起動
 
@@ -11,7 +11,9 @@ bun run cf:typegen
 bun run dev
 ```
 
-Worker 用の `OPENROUTER_API_KEY` は追跡対象外の `.env.local` にのみ設定します。`bun run dev` は公開可能な既定値を `.dev.vars.example`、秘密値を `.env.local` から読み込みます。接続 URL は `/agents/issue-assistant/:threadId?ticket=...` の完全一致で、`Origin` は `WEB_ORIGIN` と完全一致する必要があります。
+Worker 用の `OPENROUTER_API_KEY` と `SENTRY_DSN` は追跡対象外の `.env.local` にのみ設定します。`bun run dev` は公開可能な既定値を `.dev.vars.example`、秘密値を `.env.local` から読み込みます。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED` は明示値 `1` でだけ有効になるfail-closed switchです。接続 URL は `/agents/issue-assistant/:threadId?ticket=...` の完全一致で、`Origin` は `WEB_ORIGIN` と完全一致する必要があります。
+
+SentryはAgent Worker専用の `SENTRY_ENVIRONMENT` と `SENTRY_RELEASE` を使います。event、log、spanからrequest data、ticket、grant、resume ticket、prompt、tool payloadを除去し、固定error codeだけを記録します。
 
 ## 検証
 
