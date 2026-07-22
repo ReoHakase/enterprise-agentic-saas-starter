@@ -118,6 +118,9 @@ export type InvitationEmailJobStatus =
 export const agentThreadStatuses = ["active", "archived"] as const
 export type AgentThreadStatus = (typeof agentThreadStatuses)[number]
 
+export const agentThreadTitleStates = ["untitled", "agent"] as const
+export type AgentThreadTitleState = (typeof agentThreadTitleStates)[number]
+
 export const agentMessageRoles = ["user", "assistant"] as const
 export type AgentMessageRole = (typeof agentMessageRoles)[number]
 export type AgentMessageDocument = Record<string, unknown>
@@ -921,6 +924,10 @@ export const agentThreads = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    titleState: text("title_state")
+      .$type<AgentThreadTitleState>()
+      .notNull()
+      .default("untitled"),
     status: text("status")
       .$type<AgentThreadStatus>()
       .notNull()
@@ -951,6 +958,10 @@ export const agentThreads = sqliteTable(
     check(
       "agent_threads_status_check",
       sql`${table.status} in ('active', 'archived')`
+    ),
+    check(
+      "agent_threads_title_state_check",
+      sql`${table.titleState} in ('untitled', 'agent')`
     ),
   ]
 )
@@ -1035,6 +1046,18 @@ export const agentRuns = sqliteTable(
     writeCount: integer("write_count").notNull().default(0),
     inputTokenCount: integer("input_token_count").notNull().default(0),
     outputTokenCount: integer("output_token_count").notNull().default(0),
+    modelProfileId: text("model_profile_id")
+      .notNull()
+      .default("openrouter-qwen3.6-flash"),
+    contextWindowTokenCount: integer("context_window_token_count")
+      .notNull()
+      .default(1_000_000),
+    estimatedInputTokenCount: integer("estimated_input_token_count")
+      .notNull()
+      .default(0),
+    reservedOutputTokenCount: integer("reserved_output_token_count")
+      .notNull()
+      .default(4_096),
     attempt: integer("attempt").notNull().default(1),
     startedAt: integer("started_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -1137,7 +1160,11 @@ export const agentRuns = sqliteTable(
         and ${table.toolCount} >= 0
         and ${table.writeCount} >= 0
         and ${table.inputTokenCount} >= 0
-        and ${table.outputTokenCount} >= 0`
+        and ${table.outputTokenCount} >= 0
+        and ${table.contextWindowTokenCount} >= 1
+        and ${table.estimatedInputTokenCount} >= 0
+        and ${table.reservedOutputTokenCount} >= 1
+        and ${table.estimatedInputTokenCount} + ${table.reservedOutputTokenCount} <= ${table.contextWindowTokenCount}`
     ),
     check("agent_runs_attempt_check", sql`${table.attempt} >= 1`),
     check(
@@ -1820,10 +1847,35 @@ export const agentUsageEvents = sqliteTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     threadId: text("thread_id").notNull(),
     runId: text("run_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
     inputTokenCount: integer("input_token_count").notNull().default(0),
+    inputNoCacheTokenCount: integer("input_no_cache_token_count")
+      .notNull()
+      .default(0),
+    cacheReadTokenCount: integer("cache_read_token_count").notNull().default(0),
+    cacheWriteTokenCount: integer("cache_write_token_count")
+      .notNull()
+      .default(0),
     outputTokenCount: integer("output_token_count").notNull().default(0),
+    textOutputTokenCount: integer("text_output_token_count")
+      .notNull()
+      .default(0),
+    reasoningTokenCount: integer("reasoning_token_count").notNull().default(0),
+    totalTokenCount: integer("total_token_count").notNull().default(0),
+    imageInputCount: integer("image_input_count").notNull().default(0),
+    calculatedCostMicros: integer("calculated_cost_micros")
+      .notNull()
+      .default(0),
+    providerCostMicros: integer("provider_cost_micros"),
+    pricingVersion: text("pricing_version").notNull().default("unpriced"),
+    currency: text("currency").notNull().default("USD"),
+    isEstimate: integer("is_estimate", { mode: "boolean" })
+      .notNull()
+      .default(false),
     durationMs: integer("duration_ms").notNull(),
     providerRequestId: text("provider_request_id"),
     runEventId: text("run_event_id"),
@@ -1863,8 +1915,28 @@ export const agentUsageEvents = sqliteTable(
     check(
       "agent_usage_events_counts_check",
       sql`${table.inputTokenCount} >= 0
+        and ${table.inputNoCacheTokenCount} >= 0
+        and ${table.cacheReadTokenCount} >= 0
+        and ${table.cacheWriteTokenCount} >= 0
         and ${table.outputTokenCount} >= 0
+        and ${table.textOutputTokenCount} >= 0
+        and ${table.reasoningTokenCount} >= 0
+        and ${table.totalTokenCount} >= 0
+        and ${table.imageInputCount} >= 0
+        and ${table.calculatedCostMicros} >= 0
+        and (${table.providerCostMicros} is null or ${table.providerCostMicros} >= 0)
         and ${table.durationMs} between 0 and 300000`
+    ),
+    check(
+      "agent_usage_events_token_shape_check",
+      sql`${table.inputNoCacheTokenCount} + ${table.cacheReadTokenCount} + ${table.cacheWriteTokenCount} <= ${table.inputTokenCount}
+        and ${table.textOutputTokenCount} + ${table.reasoningTokenCount} <= ${table.outputTokenCount}
+        and ${table.totalTokenCount} = ${table.inputTokenCount} + ${table.outputTokenCount}`
+    ),
+    check(
+      "agent_usage_events_billing_check",
+      sql`length(${table.pricingVersion}) between 1 and 160
+        and ${table.currency} = 'USD'`
     ),
     check(
       "agent_usage_events_idempotency_check",
@@ -1875,6 +1947,150 @@ export const agentUsageEvents = sqliteTable(
         ${table.runEventId} is not null
         and length(${table.runEventId}) between 1 and 160
       )`
+    ),
+  ]
+)
+
+export const agentThreadContextSummaries = sqliteTable(
+  "agent_thread_context_summaries",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    throughSequence: integer("through_sequence").notNull(),
+    summary: text("summary").notNull(),
+    estimatedTokenCount: integer("estimated_token_count").notNull(),
+    model: text("model").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_thread_context_summaries_scope_uidx").on(
+      table.organizationId,
+      table.threadId,
+      table.throughSequence
+    ),
+    index("agent_thread_context_summaries_latest_idx").on(
+      table.organizationId,
+      table.threadId,
+      table.createdAt
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.threadId],
+      foreignColumns: [agentThreads.organizationId, agentThreads.id],
+      name: "agent_thread_context_summaries_thread_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_thread_context_summaries_content_check",
+      sql`${table.throughSequence} >= 1
+        and length(${table.summary}) between 1 and 50000
+        and ${table.estimatedTokenCount} >= 1
+        and length(${table.model}) between 1 and 160`
+    ),
+  ]
+)
+
+export const agentModelPrices = sqliteTable(
+  "agent_model_prices",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    pricingVersion: text("pricing_version").notNull(),
+    effectiveFrom: integer("effective_from", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    effectiveTo: integer("effective_to", { mode: "timestamp_ms" }),
+    inputPriceMicrosPerMillion: integer(
+      "input_price_micros_per_million"
+    ).notNull(),
+    cacheReadPriceMicrosPerMillion: integer(
+      "cache_read_price_micros_per_million"
+    ).notNull(),
+    cacheWritePriceMicrosPerMillion: integer(
+      "cache_write_price_micros_per_million"
+    ).notNull(),
+    outputPriceMicrosPerMillion: integer(
+      "output_price_micros_per_million"
+    ).notNull(),
+    currency: text("currency").notNull().default("USD"),
+  },
+  (table) => [
+    uniqueIndex("agent_model_prices_version_uidx").on(
+      table.provider,
+      table.model,
+      table.pricingVersion
+    ),
+    index("agent_model_prices_effective_idx").on(
+      table.provider,
+      table.model,
+      table.effectiveFrom
+    ),
+    check(
+      "agent_model_prices_values_check",
+      sql`length(${table.provider}) between 1 and 64
+        and length(${table.model}) between 1 and 160
+        and length(${table.pricingVersion}) between 1 and 160
+        and (${table.effectiveTo} is null or ${table.effectiveTo} > ${table.effectiveFrom})
+        and ${table.inputPriceMicrosPerMillion} >= 0
+        and ${table.cacheReadPriceMicrosPerMillion} >= 0
+        and ${table.cacheWritePriceMicrosPerMillion} >= 0
+        and ${table.outputPriceMicrosPerMillion} >= 0
+        and ${table.currency} = 'USD'`
+    ),
+  ]
+)
+
+export const agentUsageDaily = sqliteTable(
+  "agent_usage_daily",
+  {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    runCount: integer("run_count").notNull().default(0),
+    inputTokenCount: integer("input_token_count").notNull().default(0),
+    outputTokenCount: integer("output_token_count").notNull().default(0),
+    reasoningTokenCount: integer("reasoning_token_count").notNull().default(0),
+    totalTokenCount: integer("total_token_count").notNull().default(0),
+    costMicros: integer("cost_micros").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_usage_daily_scope_uidx").on(
+      table.date,
+      table.organizationId,
+      table.userId,
+      table.provider,
+      table.model
+    ),
+    index("agent_usage_daily_organization_date_idx").on(
+      table.organizationId,
+      table.date
+    ),
+    check(
+      "agent_usage_daily_values_check",
+      sql`${table.date} glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        and length(${table.provider}) between 1 and 64
+        and length(${table.model}) between 1 and 160
+        and ${table.runCount} >= 0
+        and ${table.inputTokenCount} >= 0
+        and ${table.outputTokenCount} >= 0
+        and ${table.reasoningTokenCount} >= 0
+        and ${table.totalTokenCount} = ${table.inputTokenCount} + ${table.outputTokenCount}
+        and ${table.costMicros} >= 0`
     ),
   ]
 )

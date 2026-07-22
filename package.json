@@ -45,6 +45,7 @@
       "@tailwindcss/postcss": "4.2.4",
       "@tanstack/react-query": "5.100.9",
       "@tanstack/react-form": "1.33.1",
+      "@tanstack/react-hotkeys": "0.10.0",
       "@tanstack/react-table": "8.21.3",
       "@tanstack/eslint-plugin-query": "5.101.2",
       "@testing-library/dom": "10.4.1",
@@ -82,7 +83,7 @@
       "lucide-react": "1.14.0",
       "mastra": "1.19.0",
       "msw": "2.15.0",
-      "next": "16.1.6",
+      "next": "16.2.10",
       "next-themes": "0.4.6",
       "nuqs": "2.9.0",
       "oxfmt": "0.47.0",
@@ -130,6 +131,7 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:e2e:agent": "turbo run test:e2e:agent --filter=@enterprise-agentic-saas/web",
+    "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/web",
     "test:e2e:oauth": "turbo run test:e2e:oauth --filter=@enterprise-agentic-saas/web",
     "test:storybook": "turbo run test:storybook --filter=@enterprise-agentic-saas/ui",
     "typecheck": "turbo run typecheck"
@@ -151,5 +153,9 @@
   "engines": {
     "bun": "1.3.13"
   },
-  "packageManager": "bun@1.3.13"
+  "packageManager": "bun@1.3.13",
+  "patchedDependencies": {
+    "@opennextjs/cloudflare@1.20.1": "patches/@opennextjs%2Fcloudflare@1.20.1.patch",
+    "@base-ui/react@1.4.1": "patches/@base-ui%2Freact@1.4.1.patch"
+  }
 }

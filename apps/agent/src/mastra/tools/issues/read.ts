@@ -3,7 +3,7 @@ import { createTool } from "@mastra/core/tools"
 import {
   agentReadToolSchemas,
   createAgentReadHandlers,
-} from "../../../read-tools"
+} from "../../../tools/read"
 import {
   getProductAgentRuntime,
   type ProductAgentRequestContext,

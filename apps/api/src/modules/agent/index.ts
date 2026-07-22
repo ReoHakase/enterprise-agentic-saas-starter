@@ -15,9 +15,13 @@ import {
   agentChatBodyModel,
   agentContextRevocationModel,
   agentIssueActionModel,
+  agentMonthlyUsageModel,
+  agentOrganizationUsageModel,
   agentThreadListModel,
+  agentThreadContextModel,
   agentThreadModel,
   agentThreadParamsModel,
+  agentUsageQueryModel,
   createAgentThreadBodyModel,
   decideAgentActionBodyModel,
   deleteAgentApprovalPolicyQueryModel,
@@ -32,6 +36,9 @@ import {
   deleteAgentApprovalPolicy,
   getAgentAction,
   getAgentApprovalPolicy,
+  getAgentMonthlyUsage,
+  getAgentOrganizationUsage,
+  getAgentThreadContext,
   forwardAgentChat,
   listAgentMessages,
   listAgentThreads,
@@ -129,6 +136,7 @@ export const createAgentModule = (db: Db) =>
           "message" in body
             ? await prepareAgentChat(db, {
                 assetIds: body.assetIds,
+                contextReferences: body.contextReferences,
                 message: body.message,
                 sessionId: session.id,
                 userId: user.id,
@@ -146,6 +154,7 @@ export const createAgentModule = (db: Db) =>
         return forwardAgentChat(
           {
             assetIds: prepared.assetIds,
+            contextReferences: prepared.contextReferences,
             clientMessageId: prepared.clientMessageId,
             messages: prepared.messages,
             threadId: prepared.threadId,
@@ -205,6 +214,78 @@ export const createAgentModule = (db: Db) =>
       }
     )
     .get(
+      "/agent/threads/:threadId/context",
+      ({ authContext: { session, user }, params, set }) => {
+        set.headers["cache-control"] = "private, no-store"
+        return getAgentThreadContext(db, {
+          sessionId: session.id,
+          threadId: params.threadId,
+          userId: user.id,
+        })
+      },
+      {
+        authenticated: true,
+        params: agentThreadParamsModel,
+        response: { 200: agentThreadContextModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getAgentThreadContext",
+          summary: "Agent threadのcontext使用量を取得",
+          description:
+            "owner境界を再検証し、保存messageの事前推定と最新compaction summaryを返す。provider実績とは区別する。",
+          tags: ["Agent"],
+        },
+      }
+    )
+    .get(
+      "/agent/usage/monthly",
+      ({ authContext: { session, user }, query, set }) => {
+        set.headers["cache-control"] = "private, no-store"
+        return getAgentMonthlyUsage(db, {
+          sessionId: session.id,
+          userId: user.id,
+          month: query.month,
+        })
+      },
+      {
+        authenticated: true,
+        query: agentUsageQueryModel,
+        response: { 200: agentMonthlyUsageModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getMyAgentMonthlyUsage",
+          summary: "本人の月間Agent usageを取得",
+          description:
+            "active organization内で本人に帰属する日次projectionを集計し、token内訳、model別内訳、算定costを返す。",
+          tags: ["Agent"],
+        },
+      }
+    )
+    .get(
+      "/agent/usage/organization",
+      ({ authContext: { session, user }, query, set }) => {
+        set.headers["cache-control"] = "private, no-store"
+        return getAgentOrganizationUsage(db, {
+          sessionId: session.id,
+          userId: user.id,
+          month: query.month,
+        })
+      },
+      {
+        authenticated: true,
+        query: agentUsageQueryModel,
+        response: {
+          200: agentOrganizationUsageModel,
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "getOrganizationAgentUsage",
+          summary: "管理者向けorganization/user/model別Agent usageを取得",
+          description:
+            "organization adminまたはownerへ、日次projectionから集計したuser別・model別usageと算定costを返す。",
+          tags: ["Agent"],
+        },
+      }
+    )
+    .get(
       "/agent/actions/:actionId",
       async ({ authContext: { session, user }, params, set }) => {
         set.headers["cache-control"] = "private, no-store"
@@ -222,7 +303,7 @@ export const createAgentModule = (db: Db) =>
           operationId: "getAgentIssueAction",
           summary: "Agent Issue actionのcanonical previewを取得",
           description:
-            "現在のsession、active organization、context epoch、thread ownerを再検証し、保存済みpayloadではなくAPI生成previewだけを返す。",
+            "現在のmembership、active organization、thread ownerを再検証し、過去sessionやcontext epochには依存せずAPI生成previewだけを返す。decisionとresumeは元scopeへ厳格に拘束する。",
           tags: ["Agent"],
         },
       }

@@ -154,6 +154,7 @@ type AgentThread = {
   id: string
   organizationId: string
   title: string
+  messageCount: number
   status: "active" | "archived"
   createdAt: string
   updatedAt: string
@@ -847,6 +848,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-a-1",
         organizationId: "org-a",
         title: "Alpha triage",
+        messageCount: 2,
         status: "active",
         createdAt: "2026-07-14T08:00:00.000Z",
         updatedAt: "2026-07-14T08:00:00.000Z",
@@ -855,6 +857,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-a-2",
         organizationId: "org-a",
         title: "Alpha follow-up",
+        messageCount: 1,
         status: "active",
         createdAt: "2026-07-14T09:00:00.000Z",
         updatedAt: "2026-07-14T09:00:00.000Z",
@@ -863,6 +866,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-b-1",
         organizationId: "org-b",
         title: "Beta triage",
+        messageCount: 3,
         status: "active",
         createdAt: "2026-07-14T10:00:00.000Z",
         updatedAt: "2026-07-14T10:00:00.000Z",
@@ -1168,6 +1172,7 @@ const agentActionPayload = (state: SessionState, action: MockAgentAction) => ({
         : []
     }),
   },
+  previewState: "available" as const,
   expiresAt: FIXED_EXPIRES_AT,
   completedAt: action.completedAt,
 })
@@ -1504,6 +1509,7 @@ Bun.serve({
         title:
           nonEmptyString(body.title) ??
           `Private thread ${state.nextAgentThreadId}`,
+        messageCount: 0,
         status: "active",
         createdAt: FIXED_MUTATION_NOW,
         updatedAt: FIXED_MUTATION_NOW,
@@ -1524,6 +1530,25 @@ Bun.serve({
       )
       if (!thread) return notFound("Agent thread")
       return json([])
+    }
+    const agentThreadContextMatch = pathname.match(
+      /^\/agent\/threads\/([^/]+)\/context$/
+    )
+    if (agentThreadContextMatch?.[1] && request.method === "GET") {
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === agentThreadContextMatch[1] &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      return json({
+        threadId: thread.id,
+        messageCount: thread.messageCount,
+        estimatedHistoryTokens: thread.messageCount * 120,
+        latestSummaryThroughSequence: null,
+        latestSummaryEstimatedTokens: null,
+      })
     }
     const archiveAgentThreadMatch = pathname.match(
       /^\/agent\/threads\/([^/]+)\/archive$/
@@ -1571,6 +1596,20 @@ Bun.serve({
           updateIssue: false,
           deleteIssue: false,
         },
+      })
+    }
+    if (pathname === "/agent/usage/monthly" && request.method === "GET") {
+      return json({
+        month: "2026-07",
+        totals: {
+          runCount: 0,
+          inputTokenCount: 0,
+          outputTokenCount: 0,
+          reasoningTokenCount: 0,
+          totalTokenCount: 0,
+          costMicros: 0,
+        },
+        byModel: [],
       })
     }
 

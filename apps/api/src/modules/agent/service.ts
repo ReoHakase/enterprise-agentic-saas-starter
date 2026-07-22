@@ -16,19 +16,24 @@ import {
   issueAgentActionResumeTicket,
   prepareAgentActionResumeForSession,
   putAgentApprovalPolicyForSession,
-} from "./action-repository"
+} from "./actions/repository"
 import { agentActionExecutionResultModel } from "./model"
+import { getAgentRuntime } from "./runtime"
 import {
   archiveAgentThreadForSession,
   createAgentThreadForSession,
   issueAgentConnectionTicket,
+  getAgentThreadContextForSession,
   listAgentMessagesForSession,
   listAgentThreadsForSession,
   prepareAgentClientToolContinuationForSession,
   prepareAgentChatForSession,
   revokeCurrentAgentContext,
-} from "./repository"
-import { getAgentRuntime } from "./runtime"
+} from "./threads/repository"
+import {
+  getAgentMonthlyUsageForSession,
+  getAgentOrganizationUsageForSession,
+} from "./usage/repository"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
 
@@ -78,6 +83,21 @@ export const listAgentMessages = (
   db: Db,
   input: Parameters<typeof listAgentMessagesForSession>[1]
 ) => listAgentMessagesForSession(db, input)
+
+export const getAgentThreadContext = (
+  db: Db,
+  input: Parameters<typeof getAgentThreadContextForSession>[1]
+) => getAgentThreadContextForSession(db, input)
+
+export const getAgentMonthlyUsage = (
+  db: Db,
+  input: Parameters<typeof getAgentMonthlyUsageForSession>[1]
+) => getAgentMonthlyUsageForSession(db, input)
+
+export const getAgentOrganizationUsage = (
+  db: Db,
+  input: Parameters<typeof getAgentOrganizationUsageForSession>[1]
+) => getAgentOrganizationUsageForSession(db, input)
 
 export const normalizeAgentTimezone = (value: string): string => {
   try {

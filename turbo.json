@@ -124,6 +124,11 @@
       "outputs": [],
       "passThroughEnv": ["CI", "OPENROUTER_API_KEY"]
     },
+    "test:eval:agent": {
+      "cache": false,
+      "outputs": [],
+      "passThroughEnv": ["CI", "OPENROUTER_API_KEY"]
+    },
     "typecheck": {
       "dependsOn": ["transit"],
       "outputs": []

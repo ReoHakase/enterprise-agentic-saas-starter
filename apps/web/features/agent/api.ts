@@ -8,7 +8,9 @@ import {
   parseAgentContextRevocation,
   parseAgentIssueAction,
   parseAgentMessages,
+  parseAgentMonthlyUsage,
   parseAgentThread,
+  parseAgentThreadContext,
   parseAgentThreads,
 } from "./schema"
 
@@ -51,6 +53,32 @@ export const listAgentMessages = async (
       await client.agent
         .threads({ threadId })
         .messages.get({ fetch: { signal } })
+    )
+  )
+
+export const getAgentThreadContext = async (
+  client: ApiClient,
+  threadId: string,
+  signal?: AbortSignal
+) =>
+  parseAgentThreadContext(
+    unwrap(
+      await client.agent
+        .threads({ threadId })
+        .context.get({ fetch: { signal } })
+    )
+  )
+
+export const getAgentMonthlyUsage = async (
+  client: ApiClient,
+  signal?: AbortSignal
+) =>
+  parseAgentMonthlyUsage(
+    unwrap(
+      await client.agent.usage.monthly.get({
+        query: {},
+        fetch: { signal },
+      })
     )
   )
 

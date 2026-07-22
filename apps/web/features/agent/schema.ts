@@ -17,7 +17,30 @@ export type AgentChatAssetData = {
 }
 export type AgentChatMessage = UIMessage<
   unknown,
-  { "agent-assets": AgentChatAssetData }
+  {
+    "agent-assets": AgentChatAssetData
+    activity: {
+      kind: "status" | "tool"
+      status: "running" | "completed" | "failed"
+      label: string
+    }
+    "context-budget": {
+      contextWindowTokens: number
+      reservedOutputTokens: number
+      estimated: {
+        system: number
+        skills: number
+        tools: number
+        history: number
+        pageContext: number
+        attachments: number
+        total: number
+      }
+      observedInputTokens: number | null
+      level: "normal" | "notice" | "warning" | "critical"
+    }
+    "thread-title": { threadId: string; title: string; renamed: boolean }
+  }
 >
 
 const canonicalToolTypes = [
@@ -26,6 +49,7 @@ const canonicalToolTypes = [
   "tool-get_issue",
   "tool-read_account_context",
   "tool-read_active_organization",
+  "tool-rename_thread",
   "tool-search_issue_labels",
   "tool-search_issues",
   "tool-search_organization_members",
@@ -63,6 +87,40 @@ const canonicalMessagePartSchema = v.union([
   v.object({
     type: v.literal("data-agent-assets"),
     data: v.object({ assetIds: v.array(identifier) }),
+  }),
+  v.object({
+    type: v.literal("data-activity"),
+    data: v.object({
+      kind: v.picklist(["status", "tool"]),
+      status: v.picklist(["running", "completed", "failed"]),
+      label: v.string(),
+    }),
+  }),
+  v.object({
+    type: v.literal("data-context-budget"),
+    data: v.object({
+      contextWindowTokens: v.number(),
+      reservedOutputTokens: v.number(),
+      estimated: v.object({
+        system: v.number(),
+        skills: v.number(),
+        tools: v.number(),
+        history: v.number(),
+        pageContext: v.number(),
+        attachments: v.number(),
+        total: v.number(),
+      }),
+      observedInputTokens: v.nullable(v.number()),
+      level: v.picklist(["normal", "notice", "warning", "critical"]),
+    }),
+  }),
+  v.object({
+    type: v.literal("data-thread-title"),
+    data: v.object({
+      threadId: identifier,
+      title: v.string(),
+      renamed: v.boolean(),
+    }),
   }),
   canonicalToolPartSchema,
 ])
@@ -129,6 +187,7 @@ export const agentThreadSchema = v.object({
   id: identifier,
   title: v.string(),
   status: v.picklist(["active", "archived"]),
+  messageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   createdAt: timestamp,
   updatedAt: timestamp,
 })
@@ -179,6 +238,7 @@ export const agentIssueActionSchema = v.object({
       ),
     })
   ),
+  previewState: v.picklist(["available", "expired"]),
   expiresAt: timestamp,
   completedAt: v.nullable(timestamp),
 })
@@ -205,6 +265,25 @@ export const agentApprovalPolicySchema = v.object({
 export const agentContextRevocationSchema = v.object({
   contextEpoch: v.pipe(v.number(), v.integer(), v.minValue(1)),
 })
+export const agentThreadContextSchema = v.object({
+  threadId: identifier,
+  messageCount: v.number(),
+  estimatedHistoryTokens: v.number(),
+  latestSummaryThroughSequence: v.nullable(v.number()),
+  latestSummaryEstimatedTokens: v.nullable(v.number()),
+})
+export const agentMonthlyUsageSchema = v.object({
+  month: v.string(),
+  totals: v.object({
+    runCount: v.number(),
+    inputTokenCount: v.number(),
+    outputTokenCount: v.number(),
+    reasoningTokenCount: v.number(),
+    totalTokenCount: v.number(),
+    costMicros: v.number(),
+  }),
+  byModel: v.array(v.unknown()),
+})
 
 export const pendingActionToolOutputSchema = v.object({
   status: v.literal("pending"),
@@ -219,6 +298,8 @@ export type AgentActionExecutionResult = v.InferOutput<
 export type AgentApprovalPolicy = v.InferOutput<
   typeof agentApprovalPolicySchema
 >
+export type AgentThreadContext = v.InferOutput<typeof agentThreadContextSchema>
+export type AgentMonthlyUsage = v.InferOutput<typeof agentMonthlyUsageSchema>
 
 export const parseAgentThreads = (value: unknown) =>
   v.parse(agentThreadListSchema, value)
@@ -243,3 +324,7 @@ export const parseAgentApprovalPolicy = (value: unknown) =>
   v.parse(agentApprovalPolicySchema, value)
 export const parseAgentContextRevocation = (value: unknown) =>
   v.parse(agentContextRevocationSchema, value)
+export const parseAgentThreadContext = (value: unknown) =>
+  v.parse(agentThreadContextSchema, value)
+export const parseAgentMonthlyUsage = (value: unknown) =>
+  v.parse(agentMonthlyUsageSchema, value)

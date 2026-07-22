@@ -18,16 +18,16 @@ import {
 import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm"
 
 import { AppError, publicErrors } from "../../errors/app-error"
-import { ensureAgentSessionContextInTransaction } from "../agent/context-repository"
+import { ensureAgentSessionContextInTransaction } from "../agent/context/repository"
 import { hashAgentToken } from "../agent/crypto"
-import { validateGrantInTransaction } from "../agent/repository"
+import { validateGrantInTransaction } from "../agent/threads/repository"
 import {
   AGENT_USAGE_DAY_MS,
   AGENT_USAGE_HOUR_MS,
   consumeAgentResourceLimitInTransaction,
   hashedAgentUsageOperationId,
   utcUsageWindow,
-} from "../agent/resource-usage-repository"
+} from "../agent/usage/resource-limits"
 import {
   AGENT_ASSET_MAX_BYTES,
   AGENT_ASSET_HARD_LIFETIME_MS,

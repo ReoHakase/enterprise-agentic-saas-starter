@@ -16,14 +16,15 @@ import {
 import { createAgentInternalApi, createAgentInternalApp } from "./internal-api"
 import { agentThreadModel } from "./model"
 import {
-  createAgentThreadForSession,
-  issueAgentConnectionTicket,
-} from "./repository"
-import {
   configureAgentRuntime,
   resetAgentRuntimeForTest,
   type AgentRuntimeBinding,
 } from "./runtime"
+import {
+  createAgentThreadForSession,
+  issueAgentConnectionTicket,
+  prepareAgentChatForSession,
+} from "./threads/repository"
 
 const migrationsFolder = new URL(
   "../../../../../packages/db/drizzle",
@@ -383,6 +384,14 @@ describe("Agent public control plane", () => {
             parts: [{ type: "text", text: "Create an Issue" }],
           },
           assetIds: [],
+          contextReferences: [
+            { kind: "issue", id: "agent-issue-a", label: "Untrusted label" },
+            {
+              kind: "current_page",
+              path: "/organization/agent-org-a/issues/1?from=agent",
+              label: "Untrusted page title",
+            },
+          ],
           timezone: "Asia/Tokyo",
         },
       })
@@ -394,6 +403,22 @@ describe("Agent public control plane", () => {
     expect(inputs[0]).toMatchObject({
       assetIds: [],
       clientMessageId: "message_public_1",
+      contextReferences: [
+        {
+          kind: "issue",
+          id: "agent-issue-a",
+          number: 1,
+          title: "Fix API boundary",
+          description: "Keep the tenant projection minimal",
+          status: "open",
+          priority: "high",
+        },
+        {
+          kind: "current_page",
+          path: "/organization/agent-org-a/issues/1",
+          title: "Issue #1: Fix API boundary",
+        },
+      ],
       threadId: thread.id,
       timezone: "Asia/Tokyo",
       trigger: "user_message",
@@ -410,6 +435,10 @@ describe("Agent public control plane", () => {
         role: "user",
         parts: [{ type: "text", text: "Create an Issue" }],
       },
+    ])
+    const threads = await app.handle(request("/agent/threads"))
+    expect(await threads.json()).toEqual([
+      expect.objectContaining({ id: thread.id, messageCount: 1 }),
     ])
 
     const overposted = await app.handle(
@@ -569,6 +598,76 @@ describe("Agent public control plane", () => {
 })
 
 describe("Agent private HTTP boundary", () => {
+  it("compacts context deterministically above 95% and keeps the latest 12 messages", async () => {
+    const { db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      title: "Compaction boundary",
+    })
+    const largeOutput = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [
+        `field_${index}`,
+        "x".repeat(9_500),
+      ])
+    )
+    await db.insert(schema.agentMessages).values(
+      Array.from({ length: 34 }, (_, index) => ({
+        id: `compaction-message-${index}`,
+        organizationId: "agent-org-a",
+        threadId: thread.id,
+        clientMessageId: null,
+        role: "assistant" as const,
+        content: {
+          parts: [
+            {
+              type: "tool-search_issues" as const,
+              toolCallId: `compaction-call-${index}`,
+              state: "output-available" as const,
+              input: {},
+              output: largeOutput,
+            },
+          ],
+        },
+      }))
+    )
+    const input = {
+      assetIds: [],
+      contextReferences: [],
+      message: {
+        id: "compaction-user-message",
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: "Continue from the summary" }],
+      },
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      timezone: "Asia/Tokyo",
+      userId: "agent-user-a",
+    }
+
+    const first = await prepareAgentChatForSession(db, input)
+    const repeated = await prepareAgentChatForSession(db, input)
+
+    expect(first.messages).toHaveLength(13)
+    expect(first.messages[0]).toMatchObject({
+      role: "assistant",
+      parts: [
+        {
+          type: "text",
+          text: expect.stringContaining("Earlier conversation summary"),
+        },
+      ],
+    })
+    expect(repeated.messages[0]?.id).toBe(first.messages[0]?.id)
+    const summaries = await db
+      .select({
+        throughSequence: schema.agentThreadContextSummaries.throughSequence,
+      })
+      .from(schema.agentThreadContextSummaries)
+      .where(eq(schema.agentThreadContextSummaries.threadId, thread.id))
+    expect(summaries).toHaveLength(1)
+  })
+
   it("serves the typed Eden client through the same fetch-only boundary", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApp(db)
@@ -615,6 +714,7 @@ describe("Agent private HTTP boundary", () => {
       {
         assetIds: [],
         clientMessageId: "message_private_boundary",
+        estimatedInputTokenCount: 12_345,
         trigger: "user_message",
       },
       { headers: { authorization: `Bearer ${connectionData.grant}` } }
@@ -631,6 +731,21 @@ describe("Agent private HTTP boundary", () => {
       grant: expect.stringMatching(/^[A-Za-z0-9._~-]{32,512}$/),
       rootRunId: expect.any(String),
       runId: expect.any(String),
+    })
+    const [snapshot] = await db
+      .select({
+        modelProfileId: schema.agentRuns.modelProfileId,
+        contextWindowTokenCount: schema.agentRuns.contextWindowTokenCount,
+        estimatedInputTokenCount: schema.agentRuns.estimatedInputTokenCount,
+        reservedOutputTokenCount: schema.agentRuns.reservedOutputTokenCount,
+      })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.data.runId))
+    expect(snapshot).toEqual({
+      modelProfileId: "openrouter-qwen3.6-flash",
+      contextWindowTokenCount: 1_000_000,
+      estimatedInputTokenCount: 12_345,
+      reservedOutputTokenCount: 4_096,
     })
   })
 
@@ -964,6 +1079,114 @@ describe("Agent internal capability repository", () => {
       .from(schema.agentGrants)
       .where(eq(schema.agentGrants.kind, "run"))
     expect(runGrants).toHaveLength(1)
+  })
+
+  it("renames an untitled thread once and projects one idempotent priced usage event", async () => {
+    const { app, db } = await createFixture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    expect(thread).toMatchObject({
+      title: "New conversation",
+      messageCount: 0,
+    })
+
+    const internal = createAgentInternalApi(db)
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      threadId: thread.id,
+    })
+    const connection = await internal.consumeConnectionTicket({
+      ticket: ticket.ticket,
+      threadId: thread.id,
+    })
+    const run = await internal.startRun({
+      grant: connection.grant,
+      clientMessageId: "message-title-and-usage",
+    })
+
+    await expect(
+      internal.guardWebSearch({
+        grant: run.grant,
+        query: "current approaches to prioritizing software defects",
+      })
+    ).resolves.toEqual({
+      query: "current approaches to prioritizing software defects",
+    })
+    await expect(
+      internal.guardWebSearch({
+        grant: run.grant,
+        query: "Agent User B software work",
+      })
+    ).rejects.toMatchObject({
+      code: "validation_error",
+      publicMessage: "Web search query is not public",
+    })
+
+    await expect(
+      internal.renameThread({
+        grant: run.grant,
+        title: "Prioritize urgent API work",
+      })
+    ).resolves.toEqual({
+      threadId: thread.id,
+      title: "Prioritize urgent API work",
+      renamed: true,
+    })
+    await expect(
+      internal.renameThread({
+        grant: run.grant,
+        title: "A second title must not win",
+      })
+    ).resolves.toEqual({
+      threadId: thread.id,
+      title: "Prioritize urgent API work",
+      renamed: false,
+    })
+
+    const usage = {
+      grant: run.grant,
+      provider: "openrouter" as const,
+      model: "qwen/qwen3.6-flash",
+      inputTokenCount: 100,
+      inputNoCacheTokenCount: 80,
+      cacheReadTokenCount: 20,
+      cacheWriteTokenCount: 0,
+      outputTokenCount: 50,
+      textOutputTokenCount: 30,
+      reasoningTokenCount: 20,
+      totalTokenCount: 150,
+      imageInputCount: 0,
+      durationMs: 1_000,
+      runEventId: "usage-title-and-usage",
+    }
+    const first = await internal.recordUsage(usage)
+    const repeated = await internal.recordUsage(usage)
+    expect(first).toMatchObject({
+      recorded: true,
+      pricingVersion: "openrouter-alibaba-2026-07-22",
+    })
+    expect(first.calculatedCostMicros).toBeGreaterThan(0)
+    expect(repeated).toEqual({ ...first, recorded: false })
+
+    const events = await db
+      .select()
+      .from(schema.agentUsageEvents)
+      .where(eq(schema.agentUsageEvents.runEventId, usage.runEventId))
+    const daily = await db
+      .select()
+      .from(schema.agentUsageDaily)
+      .where(eq(schema.agentUsageDaily.organizationId, "agent-org-a"))
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      userId: "agent-user-a",
+      reasoningTokenCount: 20,
+      totalTokenCount: 150,
+    })
+    expect(daily).toHaveLength(1)
+    expect(daily[0]).toMatchObject({ runCount: 1, totalTokenCount: 150 })
   })
 
   it("retries one failed logical run with a new attempt and one fresh grant", async () => {

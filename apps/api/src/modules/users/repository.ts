@@ -3,7 +3,7 @@ import { member, session, user } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, gt, isNotNull } from "drizzle-orm"
 
 import { publicErrors } from "../../errors/app-error"
-import { ensureAgentSessionContextInTransaction } from "../agent/context-repository"
+import { ensureAgentSessionContextInTransaction } from "../agent/context/repository"
 
 export type UserProfile = {
   id: string

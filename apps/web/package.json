@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "build:cloudflare": "opennextjs-cloudflare build",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:typegen": "wrangler types --include-runtime=false --env-interface CloudflareEnv cloudflare-env.d.ts && oxfmt cloudflare-env.d.ts",
     "deploy": "opennextjs-cloudflare deploy",
     "dev": "portless run next dev --turbopack",
     "dev:e2e": "next dev --hostname 127.0.0.1 --port 3000",
@@ -21,9 +21,10 @@
     "start": "next start",
     "test": "vitest run",
     "test:e2e": "bun run test:e2e:app && bun run test:e2e:oauth",
-    "test:e2e:agent": "playwright test --config playwright.agent.config.ts",
-    "test:e2e:app": "playwright test",
-    "test:e2e:oauth": "playwright test --config playwright.oauth.config.ts",
+    "test:e2e:agent": "env -u NO_COLOR playwright test --config playwright.agent.config.ts",
+    "test:eval:agent": "env -u NO_COLOR playwright test --config playwright.agent.config.ts --repeat-each=3",
+    "test:e2e:app": "env -u NO_COLOR playwright test",
+    "test:e2e:oauth": "env -u NO_COLOR playwright test --config playwright.oauth.config.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "@streamdown/math": "catalog:",
     "@streamdown/mermaid": "catalog:",
     "@tanstack/react-form": "catalog:",
+    "@tanstack/react-hotkeys": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-table": "catalog:",
     "ai": "catalog:",

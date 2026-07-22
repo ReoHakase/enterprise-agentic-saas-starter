@@ -1,11 +1,11 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows"
 import { z } from "zod"
 
-import { isActiveOpaqueGrant } from "../../connection-grant"
+import type { AgentInternalGateway } from "../../control-plane/client"
+import { isActiveOpaqueGrant } from "../../control-plane/grant"
 import type { AgentFeatureSwitches } from "../../feature-flags"
-import type { AgentInternalGateway } from "../../internal-api"
-import { createRunSettlement } from "../../run-settlement"
-import { toSafeActionReceipt } from "../../write-tools"
+import { createRunSettlement } from "../../runtime/settlement"
+import { toSafeActionReceipt } from "../../tools/write"
 
 const identifierSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 

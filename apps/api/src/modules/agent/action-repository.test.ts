@@ -23,12 +23,12 @@ import {
   putAgentApprovalPolicyForSession,
   resumeAgentApprovedAction,
   sweepAgentActions,
-} from "./action-repository"
+} from "./actions/repository"
 import { createAgentInternalApi } from "./internal-api"
 import {
   createAgentThreadForSession,
   issueAgentConnectionTicket,
-} from "./repository"
+} from "./threads/repository"
 
 const migrationsFolder = new URL(
   "../../../../../packages/db/drizzle",
@@ -284,6 +284,81 @@ describe("Agent Issue action protocol", () => {
       .from(schema.agentActions)
       .where(eq(schema.agentActions.id, otherAction.id))
     expect(afterSweep?.status).toBe("expired")
+  })
+
+  it("loads an archived thread approval from a replacement session but keeps decision scope strict", async () => {
+    const { app, db } = await createFixture()
+    const { internal, run, thread } = await createRun(db, {
+      clientMessageId: "historical-approval-session",
+    })
+    const action = await internal.prepareUpdateIssue({
+      grant: run.grant,
+      toolCallId: "tool-historical-approval-session",
+      idempotencyKey: "prepare-historical-approval-session",
+      issue: {
+        issueId: "action-issue-a",
+        expectedRevision: 1,
+        priority: "high",
+      },
+    })
+    const now = new Date()
+    await db.insert(schema.session).values({
+      id: "action-session-replacement",
+      userId: "action-user-a",
+      token: "action-token-replacement",
+      expiresAt: new Date(now.getTime() + 3_600_000),
+      createdAt: now,
+      updatedAt: now,
+      activeOrganizationId: "action-org-a",
+    })
+    const archived = await app.handle(
+      request(`/agent/threads/${thread.id}/archive`, {
+        method: "POST",
+        body: {},
+      })
+    )
+    expect(archived.status).toBe(200)
+
+    const historical = await app.handle(
+      request(`/agent/actions/${action.id}`, {
+        sessionId: "action-session-replacement",
+      })
+    )
+    expect(historical.status).toBe(200)
+    expect(await historical.json()).toMatchObject({
+      id: action.id,
+      status: "canceled",
+      previewState: "available",
+    })
+
+    const decision = await app.handle(
+      request(`/agent/actions/${action.id}/decision`, {
+        method: "POST",
+        sessionId: "action-session-replacement",
+        body: {
+          decision: "yes",
+          idempotencyKey: "replacement-session-must-not-decide",
+        },
+      })
+    )
+    expect(decision.status).toBe(404)
+
+    await sweepAgentActions(
+      db,
+      new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000)
+    )
+    const expired = await app.handle(
+      request(`/agent/actions/${action.id}`, {
+        sessionId: "action-session-replacement",
+      })
+    )
+    expect(expired.status).toBe(200)
+    expect(await expired.json()).toMatchObject({
+      id: action.id,
+      status: "canceled",
+      preview: null,
+      previewState: "expired",
+    })
   })
 
   it("converges parallel retries of the same manual decision", async () => {

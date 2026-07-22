@@ -48,7 +48,7 @@ describe("public Web search boundary", () => {
         executePublicWebSearch(
           { query },
           {
-            allowedQuery: query,
+            guard: async (guardedQuery) => ({ query: guardedQuery }),
             operationId: "call_private",
             reserve,
             search,
@@ -81,7 +81,7 @@ describe("public Web search boundary", () => {
     const result = await executePublicWebSearch(
       { query: "Cloudflare R2 object limits 2026" },
       {
-        allowedQuery: "Cloudflare R2 object limits 2026",
+        guard: async (query) => ({ query }),
         operationId: "call_public",
         consumeBudget: () => events.push("budget"),
         reserve: async (operationId) => {
@@ -111,7 +111,7 @@ describe("public Web search boundary", () => {
     })
   })
 
-  it("forwards the server-extracted query instead of model-controlled equivalent text", async () => {
+  it("forwards the server-guarded query", async () => {
     const search = vi.fn<
       (query: string, abortSignal?: AbortSignal) => Promise<typeof publicResult>
     >(async () => publicResult)
@@ -119,7 +119,7 @@ describe("public Web search boundary", () => {
     await executePublicWebSearch(
       { query: "cLoUdFlArE   R2\u00a0limits" },
       {
-        allowedQuery: "Cloudflare R2 limits",
+        guard: async () => ({ query: "Cloudflare R2 limits" }),
         operationId: "call_canonical",
         consumeBudget: vi.fn<() => void>(),
         reserve: vi.fn<(operationId: string) => Promise<void>>(async () => {}),
@@ -130,7 +130,7 @@ describe("public Web search boundary", () => {
     expect(search).toHaveBeenCalledWith("Cloudflare R2 limits", undefined)
   })
 
-  it("rejects a query inferred from private context before quota or provider forwarding", async () => {
+  it("rejects a query denied by the server guard before reservation or provider forwarding", async () => {
     const reserve = vi.fn<(operationId: string) => Promise<void>>()
     const search =
       vi.fn<
@@ -145,15 +145,17 @@ describe("public Web search boundary", () => {
       executePublicWebSearch(
         { query: "Cloudflare R2 limits Acme買収条件50億円" },
         {
-          allowedQuery: "Cloudflare R2 limits",
+          guard: async () => {
+            throw new Error("Web search accepts public information only")
+          },
           operationId: "call_tainted",
           reserve,
           search,
           consumeBudget,
         }
       )
-    ).rejects.toThrow("Web search requires an explicit public query")
-    expect(consumeBudget).not.toHaveBeenCalled()
+    ).rejects.toThrow("Web search accepts public information only")
+    expect(consumeBudget).toHaveBeenCalledOnce()
     expect(reserve).not.toHaveBeenCalled()
     expect(search).not.toHaveBeenCalled()
   })

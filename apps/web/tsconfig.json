@@ -19,5 +19,10 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "oxlint.config.ts"]
+  "exclude": [
+    "node_modules",
+    "oxlint.config.ts",
+    "cloudflare-env.d.ts",
+    ".open-next"
+  ]
 }

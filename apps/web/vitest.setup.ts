@@ -4,6 +4,19 @@ import { afterEach, vi } from "vitest"
 
 afterEach(() => cleanup())
 
+if (!document.doctype) {
+  document.insertBefore(
+    document.implementation.createDocumentType("html", "", ""),
+    document.documentElement
+  )
+}
+// happy-dom leaves compatMode undefined even with a doctype. Browser documents
+// for this Next.js app are standards mode, which KaTeX requires.
+Object.defineProperty(document, "compatMode", {
+  configurable: true,
+  value: "CSS1Compat",
+})
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi

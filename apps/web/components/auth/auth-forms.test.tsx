@@ -184,7 +184,7 @@ describe("email and password authentication forms", () => {
   it("keeps the magic-link form inert until hydration", async () => {
     const container = document.createElement("div")
     container.innerHTML = renderToString(<MagicLink />)
-    document.body.append(container)
+    document.body.appendChild(container)
 
     expect(within(container).getByLabelText("Email")).toBeDisabled()
 

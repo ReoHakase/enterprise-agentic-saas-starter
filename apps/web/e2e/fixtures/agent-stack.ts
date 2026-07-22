@@ -213,7 +213,7 @@ const main = async () => {
         APP_NAME: "Enterprise Agentic SaaS Agent E2E",
         APP_BASE_URL: environment.webOrigin,
         API_PUBLIC_URL: environment.apiOrigin,
-        AGENT_ASSET_UPLOAD_ENABLED: "0",
+        AGENT_ASSET_UPLOAD_ENABLED: "1",
         BETTER_AUTH_URL: environment.apiOrigin,
         BETTER_AUTH_SECRET:
           "agent-e2e-only-secret-with-at-least-thirty-two-characters",
@@ -258,8 +258,8 @@ const main = async () => {
       vars: {
         NODE_ENV: "development",
         AGENT_RUNS_ENABLED: "1",
-        AGENT_VISION_ENABLED: "0",
-        AGENT_WRITES_ENABLED: "0",
+        AGENT_VISION_ENABLED: "1",
+        AGENT_WRITES_ENABLED: "1",
         SENTRY_DSN: "",
         SENTRY_ENVIRONMENT: "agent-e2e",
         SENTRY_RELEASE: "",

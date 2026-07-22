@@ -4,11 +4,11 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@enterprise-agentic-saas/ui/components/sheet"
 import { useIsMobile } from "@enterprise-agentic-saas/ui/hooks/use-mobile"
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useAtom } from "jotai"
 import { BotIcon, GripVerticalIcon, XIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
@@ -22,6 +22,7 @@ import {
   type PointerEvent,
 } from "react"
 
+import { isAgentHotkeyAllowed } from "../hotkey-scope"
 import {
   AGENT_PANE_MAX_WIDTH,
   AGENT_PANE_MIN_WIDTH,
@@ -66,6 +67,18 @@ const persistPaneWidth = (width: number) => {
 export const AgentShellTrigger = ({ disabled }: { disabled?: boolean }) => {
   const [open, setOpen] = useAtom(agentShellOpenAtom)
   const toggle = useCallback(() => setOpen((current) => !current), [setOpen])
+  useHotkey(
+    "Mod+K",
+    (event) => {
+      if (!isAgentHotkeyAllowed(event)) return
+      toggle()
+    },
+    {
+      enabled: !disabled,
+      conflictBehavior: "allow",
+      meta: { name: "Toggle Agent pane", description: "Open or close Agent" },
+    }
+  )
 
   return (
     <Button
@@ -203,9 +216,6 @@ export const AgentShell = ({
           <SheetHeader className="flex-row items-center gap-3 border-b p-4 text-left">
             <div className="min-w-0 flex-1">
               <SheetTitle>Agent</SheetTitle>
-              <SheetDescription className="truncate">
-                {organization.name}
-              </SheetDescription>
             </div>
             <Button
               type="button"
@@ -259,9 +269,6 @@ export const AgentShell = ({
         <BotIcon className="size-4" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-medium">Agent</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {organization.name}
-          </p>
         </div>
         <Button
           type="button"

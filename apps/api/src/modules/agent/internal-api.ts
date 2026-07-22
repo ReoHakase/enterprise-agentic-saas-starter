@@ -14,7 +14,7 @@ import {
   prepareDeleteIssueAction,
   prepareUpdateIssueAction,
   resumeAgentApprovedAction,
-} from "./action-repository"
+} from "./actions/repository"
 import {
   agentGrantInputModel,
   agentInternalAuthorizationModel,
@@ -25,9 +25,13 @@ import {
   getAgentImageInputModel,
   getAgentIssueInputModel,
   getIssueActionDecisionInputModel,
+  guardAgentWebSearchInputModel,
   prepareCreateIssueInputModel,
   prepareDeleteIssueInputModel,
   prepareUpdateIssueInputModel,
+  recordAgentUsageInputModel,
+  recordAgentUsageObjectModel,
+  renameAgentThreadInputModel,
   reserveAgentWebSearchInputModel,
   resumeApprovedActionInputModel,
   searchAgentIssuesInputModel,
@@ -36,6 +40,10 @@ import {
   startAgentRunInputModel,
 } from "./model"
 import {
+  guardAgentWebSearchQuery,
+  reserveAgentWebSearch,
+} from "./runs/web-search"
+import {
   appendAgentRunMessages,
   cancelAgentRun,
   consumeAgentConnectionTicket,
@@ -43,12 +51,13 @@ import {
   getAgentIssue,
   readAgentAccountContext,
   readAgentActiveOrganization,
+  renameAgentThreadForRun,
   searchAgentIssueLabels,
   searchAgentIssues,
   searchAgentOrganizationMembers,
   startAgentRun,
-} from "./repository"
-import { reserveAgentWebSearch } from "./web-search-reservation-repository"
+} from "./threads/repository"
+import { recordAgentUsage } from "./usage/repository"
 
 const identifierModel = v.pipe(
   v.string(),
@@ -75,7 +84,10 @@ const startRunBodyModel = v.omit(startAgentRunInputModel, ["grant"])
 const reserveWebSearchBodyModel = v.omit(reserveAgentWebSearchInputModel, [
   "grant",
 ])
+const guardWebSearchBodyModel = v.omit(guardAgentWebSearchInputModel, ["grant"])
 const finishRunBodyModel = v.omit(finishAgentRunInputModel, ["grant"])
+const renameThreadBodyModel = v.omit(renameAgentThreadInputModel, ["grant"])
+const recordUsageBodyModel = v.omit(recordAgentUsageObjectModel, ["grant"])
 const appendRunMessagesBodyModel = v.omit(appendAgentRunMessagesInputModel, [
   "grant",
 ])
@@ -191,6 +203,12 @@ export const createAgentInternalApi = (db: Db) => ({
       parseInternalInput(reserveAgentWebSearchInputModel, input)
     )
   },
+  guardWebSearch(input: v.InferInput<typeof guardAgentWebSearchInputModel>) {
+    return guardAgentWebSearchQuery(
+      db,
+      parseInternalInput(guardAgentWebSearchInputModel, input)
+    )
+  },
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
     return cancelAgentRun(db, parseInternalInput(agentGrantInputModel, input))
   },
@@ -206,6 +224,18 @@ export const createAgentInternalApi = (db: Db) => ({
     return appendAgentRunMessages(
       db,
       parseInternalInput(appendAgentRunMessagesInputModel, input)
+    )
+  },
+  renameThread(input: v.InferInput<typeof renameAgentThreadInputModel>) {
+    return renameAgentThreadForRun(
+      db,
+      parseInternalInput(renameAgentThreadInputModel, input)
+    )
+  },
+  recordUsage(input: v.InferInput<typeof recordAgentUsageInputModel>) {
+    return recordAgentUsage(
+      db,
+      parseInternalInput(recordAgentUsageInputModel, input)
     )
   },
   readAccountContext(input: v.InferInput<typeof agentGrantInputModel>) {
@@ -330,6 +360,12 @@ export const createAgentInternalApp = (db: Db) => {
           { body: reserveWebSearchBodyModel }
         )
         .post(
+          "/runs/web-search/guard",
+          ({ body, request }) =>
+            api.guardWebSearch({ ...body, grant: bearerGrant(request) }),
+          { body: guardWebSearchBodyModel }
+        )
+        .post(
           "/runs/cancel",
           ({ request }) => api.cancelRun({ grant: bearerGrant(request) }),
           { body: emptyBodyModel }
@@ -345,6 +381,18 @@ export const createAgentInternalApp = (db: Db) => {
           ({ body, request }) =>
             api.appendRunMessages({ ...body, grant: bearerGrant(request) }),
           { body: appendRunMessagesBodyModel }
+        )
+        .post(
+          "/runs/thread-title",
+          ({ body, request }) =>
+            api.renameThread({ ...body, grant: bearerGrant(request) }),
+          { body: renameThreadBodyModel }
+        )
+        .post(
+          "/runs/usage",
+          ({ body, request }) =>
+            api.recordUsage({ ...body, grant: bearerGrant(request) }),
+          { body: recordUsageBodyModel }
         )
         .get("/context/account", ({ request }) =>
           api.readAccountContext({ grant: bearerGrant(request) })

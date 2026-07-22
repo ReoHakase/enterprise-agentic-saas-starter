@@ -14,14 +14,17 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { createApp } from "../../app"
 import { env } from "../../env"
 import { createAgentInternalApi } from "../agent/internal-api"
-import { issueAgentConnectionTicket, startAgentRun } from "../agent/repository"
+import {
+  issueAgentConnectionTicket,
+  startAgentRun,
+} from "../agent/threads/repository"
 import {
   AGENT_RESOURCE_USAGE_RETENTION_GRACE_MS,
   AGENT_USAGE_DAY_MS,
   AGENT_USAGE_HOUR_MS,
   consumeAgentResourceLimitInTransaction,
   utcUsageWindow,
-} from "../agent/resource-usage-repository"
+} from "../agent/usage/resource-limits"
 import {
   processAgentAssetLifecycle,
   processStorageObjectCleanupJobs,

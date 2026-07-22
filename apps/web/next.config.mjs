@@ -34,6 +34,16 @@ const nextConfig = {
     "@enterprise-agentic-saas/api",
     "@enterprise-agentic-saas/auth",
   ],
+  async redirects() {
+    return [
+      {
+        source:
+          "/organization/invitations/:invitationId((?!members$|settings$)[^/]+)",
+        destination: "/invitations/:invitationId",
+        permanent: false,
+      },
+    ]
+  },
   async headers() {
     return [
       {

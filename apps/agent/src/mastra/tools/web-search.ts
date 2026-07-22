@@ -6,7 +6,6 @@ import {
   publicWebResearchAgent,
   type PublicWebResearchRequestContext,
 } from "../agents/public-web-research-agent"
-import { matchesExplicitPublicWebSearchQuery } from "../public-web-query"
 import {
   getProductAgentRuntime,
   type ProductAgentRequestContext,
@@ -22,6 +21,10 @@ const TOOL_CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u
 const forbiddenPublicQueryPatterns = [
   // email addresses are explicitly outside the public-search contract.
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
+  // phone numbers, postal codes, and street-address shaped PII.
+  /(?:^|\s)\+?\d[\d ()-]{7,}\d(?:\s|$)/u,
+  /〒?\s*\d{3}-\d{4}/u,
+  /\b\d{1,6}\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,4}\s+(?:street|st|road|rd|avenue|ave|boulevard|blvd|lane|ln|drive|dr)\b/iu,
   // Provider keys, access tokens, JWTs, private keys, and auth headers.
   /\b(?:sk-or-v1|sk-proj|sk-live|sk-test|gh[pousr]|xox[baprs])[-_][A-Za-z0-9_-]{8,}\b/iu,
   /\bAKIA[A-Z0-9]{16}\b/u,
@@ -84,8 +87,8 @@ export type BoundedPublicWebSearchResult = {
 }
 
 type PublicWebSearchDependencies = {
-  allowedQuery: string | null
   operationId: string
+  guard: (query: string) => Promise<{ query: string }>
   reserve: (operationId: string) => Promise<unknown>
   search: (
     query: string,
@@ -209,18 +212,12 @@ export const executePublicWebSearch = async (
   if (!parsed.success) {
     throw new Error("Web search accepts public information only")
   }
-  const allowedQuery = dependencies.allowedQuery
-  if (
-    allowedQuery === null ||
-    !matchesExplicitPublicWebSearchQuery(allowedQuery, parsed.data.query)
-  ) {
-    throw new Error("Web search requires an explicit public query")
-  }
   dependencies.consumeBudget()
+  const guarded = await dependencies.guard(parsed.data.query)
   const operationId = await normalizeOperationId(dependencies.operationId)
   await dependencies.reserve(operationId)
   const result = await dependencies.search(
-    allowedQuery,
+    guarded.query,
     dependencies.abortSignal
   )
   return toBoundedPublicWebSearchResult(result)
@@ -238,7 +235,6 @@ const searchWithIsolatedAgent = async (
     maxSteps: 1,
     modelSettings: { maxOutputTokens: 768, temperature: 0 },
     requestContext,
-    toolChoice: { type: "tool", toolName: "openrouter_web_search" },
   })
   return {
     error: result.error,
@@ -276,9 +272,10 @@ export const createWebSearchTool = () =>
         throw new Error("Public Web search is unavailable")
       }
       return executePublicWebSearch(input, {
-        allowedQuery: runtime.allowedPublicWebSearchQuery,
         abortSignal: context.abortSignal,
         consumeBudget: () => runtime.budget.consume("read"),
+        guard: (query) =>
+          runtime.api.guardWebSearch({ grant: runtime.runGrant, query }),
         operationId: context.agent.toolCallId,
         reserve: (operationId) =>
           runtime.api.reserveWebSearch({

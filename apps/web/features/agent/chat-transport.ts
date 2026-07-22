@@ -3,10 +3,19 @@ import * as v from "valibot"
 
 import type { AgentChatMessage } from "./schema"
 
+export type AgentContextReference =
+  | {
+      kind: "issue" | "selected_issue" | "file" | "member"
+      id: string
+      label: string
+    }
+  | { kind: "current_page"; path: string; label: string }
+
 type PrepareAgentChatBodyInput = {
   threadId: string
   messages: AgentChatMessage[]
   timezone: string
+  contextReferences?: AgentContextReference[]
 }
 
 const identifier = v.pipe(v.string(), v.minLength(1), v.maxLength(128))
@@ -105,7 +114,8 @@ const validateAssetIds = (value: unknown): string[] => {
 const prepareUserMessageBody = (
   threadId: string,
   message: AgentChatMessage,
-  timezone: string
+  timezone: string,
+  contextReferences: AgentContextReference[]
 ) => {
   const textParts = message.parts.filter((part) => part.type === "text")
   const assetParts = message.parts.filter(
@@ -130,6 +140,7 @@ const prepareUserMessageBody = (
       parts: [{ type: "text" as const, text: textPart.text }],
     },
     assetIds,
+    contextReferences,
     timezone,
   }
 }
@@ -197,13 +208,19 @@ export const prepareAgentChatBody = ({
   threadId,
   messages,
   timezone,
+  contextReferences = [],
 }: PrepareAgentChatBodyInput) => {
   const message = messages.at(-1)
   if (!message || timezone.length === 0 || timezone.length > 64) {
     throw new Error("Invalid Agent message submission.")
   }
   if (message.role === "user") {
-    return prepareUserMessageBody(threadId, message, timezone)
+    return prepareUserMessageBody(
+      threadId,
+      message,
+      timezone,
+      contextReferences
+    )
   }
   if (message.role === "assistant") {
     return prepareClientToolContinuationBody(threadId, message, timezone)
@@ -217,6 +234,7 @@ export const createAgentChatTransport = (input: {
   apiBaseUrl: string
   threadId: string
   getTimezone?: () => string
+  getContextReferences?: () => AgentContextReference[]
 }) =>
   new DefaultChatTransport<AgentChatMessage>({
     api: agentChatUrl(input.apiBaseUrl),
@@ -227,6 +245,7 @@ export const createAgentChatTransport = (input: {
         threadId: input.threadId,
         messages,
         timezone: (input.getTimezone ?? browserTimezone)(),
+        contextReferences: input.getContextReferences?.() ?? [],
       }),
     }),
   })

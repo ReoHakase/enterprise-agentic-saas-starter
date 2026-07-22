@@ -80,6 +80,14 @@ describe("Agent chat transport", () => {
         threadId: "thread-1",
         messages,
         timezone: "Asia/Tokyo",
+        contextReferences: [
+          { kind: "issue", id: "issue-1", label: "Visible label" },
+          {
+            kind: "current_page",
+            path: "/organization/acme/issues/1",
+            label: "Current page",
+          },
+        ],
       })
     ).toEqual({
       threadId: "thread-1",
@@ -89,6 +97,14 @@ describe("Agent chat transport", () => {
         parts: [{ type: "text", text: "Create an issue for this screenshot" }],
       },
       assetIds: ["asset-1"],
+      contextReferences: [
+        { kind: "issue", id: "issue-1", label: "Visible label" },
+        {
+          kind: "current_page",
+          path: "/organization/acme/issues/1",
+          label: "Current page",
+        },
+      ],
       timezone: "Asia/Tokyo",
     })
   })

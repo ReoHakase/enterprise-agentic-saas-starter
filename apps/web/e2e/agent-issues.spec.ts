@@ -47,7 +47,7 @@ const selectAgentThread = async (
   expectedThreadId: string
 ) => {
   await page.getByRole("combobox", { name: "Agent thread" }).click()
-  await page.getByRole("option", { name, exact: true }).click()
+  await page.getByRole("option").filter({ hasText: name }).click()
   const switchDialog = page.getByRole("alertdialog", {
     name: "Switch Agent threads?",
   })
@@ -311,7 +311,7 @@ test("画像解析から承認付きIssue作成と恒久添付まで完了する
 
   const promotedChatImage = agent
     .locator("article")
-    .getByRole("img", { name: "screenshot-regression.png" })
+    .getByRole("img", { name: "screenshot-regression.png", exact: true })
   await expect(promotedChatImage).toBeVisible()
   await expect
     .poll(() =>

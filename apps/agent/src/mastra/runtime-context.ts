@@ -1,11 +1,10 @@
 import type { RequestContext } from "@mastra/core/request-context"
 
-import type { AgentInternalGateway } from "../internal-api"
-import type { RunSettlement } from "../run-settlement"
-import type { AgentToolBudget } from "../tool-budget"
+import type { AgentInternalGateway } from "../control-plane/client"
+import type { RunSettlement } from "../runtime/settlement"
+import type { AgentToolBudget } from "../tools/budget"
 
 export type ProductAgentRuntime = {
-  allowedPublicWebSearchQuery: string | null
   api: AgentInternalGateway
   budget: AgentToolBudget
   openRouterApiKey: string

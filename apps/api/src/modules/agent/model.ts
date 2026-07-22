@@ -50,6 +50,7 @@ const canonicalToolNames = [
   "get_issue",
   "read_account_context",
   "read_active_organization",
+  "rename_thread",
   "search_issue_labels",
   "search_issues",
   "search_organization_members",
@@ -95,6 +96,42 @@ const canonicalMessagePartModel = v.union([
   v.strictObject({
     type: v.literal("text"),
     text: v.pipe(v.string(), v.maxLength(50_000)),
+  }),
+  v.strictObject({
+    type: v.literal("data-activity"),
+    data: v.strictObject({
+      kind: v.picklist(["status", "tool"]),
+      status: v.picklist(["running", "completed", "failed"]),
+      label: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+    }),
+  }),
+  v.strictObject({
+    type: v.literal("data-context-budget"),
+    data: v.strictObject({
+      contextWindowTokens: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      reservedOutputTokens: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      estimated: v.strictObject({
+        system: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        skills: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        tools: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        history: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        pageContext: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        attachments: v.pipe(v.number(), v.integer(), v.minValue(0)),
+        total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      }),
+      observedInputTokens: v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(0))
+      ),
+      level: v.picklist(["normal", "notice", "warning", "critical"]),
+    }),
+  }),
+  v.strictObject({
+    type: v.literal("data-thread-title"),
+    data: v.strictObject({
+      threadId: identifierModel,
+      title: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+      renamed: v.boolean(),
+    }),
   }),
   v.strictObject({
     type: v.literal("reasoning"),
@@ -163,6 +200,35 @@ const publicUserMessageModel = v.strictObject({
   ]),
 })
 
+const contextReferenceModel = v.variant("kind", [
+  v.strictObject({
+    kind: v.picklist(["issue", "selected_issue"]),
+    id: identifierModel,
+    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  }),
+  v.strictObject({
+    kind: v.literal("file"),
+    id: identifierModel,
+    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  }),
+  v.strictObject({
+    kind: v.literal("member"),
+    id: identifierModel,
+    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  }),
+  v.strictObject({
+    kind: v.literal("current_page"),
+    path: v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(500),
+      v.regex(/^\/organization\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_/?=&.-]*)?$/)
+    ),
+    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  }),
+])
+
 const agentUserChatBodyModel = v.strictObject({
   threadId: identifierModel,
   message: publicUserMessageModel,
@@ -172,6 +238,10 @@ const agentUserChatBodyModel = v.strictObject({
       v.maxLength(4),
       v.checkItems((item, index, array) => array.indexOf(item) === index)
     ),
+    []
+  ),
+  contextReferences: v.optional(
+    v.pipe(v.array(contextReferenceModel), v.maxLength(12)),
     []
   ),
   timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
@@ -312,6 +382,7 @@ export const agentThreadModel = v.object({
   id: identifierModel,
   title: titleModel,
   status: v.picklist(["active", "archived"]),
+  messageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   createdAt: isoTimestampModel,
   updatedAt: isoTimestampModel,
 })
@@ -324,6 +395,57 @@ export const createAgentThreadBodyModel = v.strictObject({
 
 export const agentThreadParamsModel = v.strictObject({
   threadId: identifierModel,
+})
+
+export const agentThreadContextModel = v.object({
+  threadId: identifierModel,
+  messageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  estimatedHistoryTokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  latestSummaryThroughSequence: v.nullable(
+    v.pipe(v.number(), v.integer(), v.minValue(1))
+  ),
+  latestSummaryEstimatedTokens: v.nullable(
+    v.pipe(v.number(), v.integer(), v.minValue(1))
+  ),
+})
+
+export const agentUsageQueryModel = v.strictObject({
+  month: v.optional(
+    v.pipe(v.string(), v.regex(/^[0-9]{4}-(?:0[1-9]|1[0-2])$/))
+  ),
+})
+
+const usageTotalModel = v.object({
+  runCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  inputTokenCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  outputTokenCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  reasoningTokenCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  totalTokenCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  costMicros: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
+
+export const agentMonthlyUsageModel = v.object({
+  month: v.pipe(v.string(), v.regex(/^[0-9]{4}-(?:0[1-9]|1[0-2])$/)),
+  totals: usageTotalModel,
+  byModel: v.array(
+    v.object({
+      provider: v.string(),
+      model: v.string(),
+      ...usageTotalModel.entries,
+    })
+  ),
+})
+
+export const agentOrganizationUsageModel = v.object({
+  month: v.pipe(v.string(), v.regex(/^[0-9]{4}-(?:0[1-9]|1[0-2])$/)),
+  rows: v.array(
+    v.object({
+      userId: identifierModel,
+      provider: v.string(),
+      model: v.string(),
+      ...usageTotalModel.entries,
+    })
+  ),
 })
 
 export const createAgentConnectionBodyModel = v.strictObject({
@@ -359,6 +481,10 @@ export const consumeConnectionTicketInputModel = v.strictObject({
 export const startAgentRunInputModel = v.strictObject({
   grant: agentTokenModel,
   clientMessageId: identifierModel,
+  estimatedInputTokenCount: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(995_904)),
+    0
+  ),
   assetIds: v.optional(
     v.pipe(
       v.array(identifierModel),
@@ -377,10 +503,70 @@ export const agentGrantInputModel = v.strictObject({
   grant: agentTokenModel,
 })
 
+export const renameAgentThreadInputModel = v.strictObject({
+  grant: agentTokenModel,
+  title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
+})
+
 export const reserveAgentWebSearchInputModel = v.strictObject({
   grant: agentTokenModel,
   operationId: identifierModel,
 })
+
+export const guardAgentWebSearchInputModel = v.strictObject({
+  grant: agentTokenModel,
+  query: v.pipe(v.string(), v.trim(), v.minLength(2), v.maxLength(200)),
+})
+
+const usageCountModel = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(100_000_000)
+)
+
+export const recordAgentUsageObjectModel = v.strictObject({
+  grant: agentTokenModel,
+  provider: v.literal("openrouter"),
+  model: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(160)),
+  inputTokenCount: usageCountModel,
+  inputNoCacheTokenCount: usageCountModel,
+  cacheReadTokenCount: usageCountModel,
+  cacheWriteTokenCount: usageCountModel,
+  outputTokenCount: usageCountModel,
+  textOutputTokenCount: usageCountModel,
+  reasoningTokenCount: usageCountModel,
+  totalTokenCount: usageCountModel,
+  imageInputCount: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(4)
+  ),
+  providerCostMicros: v.optional(usageCountModel),
+  durationMs: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(300_000)
+  ),
+  runEventId: identifierModel,
+})
+
+export const recordAgentUsageInputModel = v.pipe(
+  recordAgentUsageObjectModel,
+  v.check(
+    (usage) =>
+      usage.inputNoCacheTokenCount +
+        usage.cacheReadTokenCount +
+        usage.cacheWriteTokenCount <=
+        usage.inputTokenCount &&
+      usage.textOutputTokenCount + usage.reasoningTokenCount <=
+        usage.outputTokenCount &&
+      usage.totalTokenCount === usage.inputTokenCount + usage.outputTokenCount,
+    "Invalid usage token shape"
+  )
+)
 
 export const getAgentImageInputModel = v.strictObject({
   grant: agentTokenModel,
@@ -607,6 +793,7 @@ export const agentIssueActionModel = v.object({
   approvalMode: v.nullable(v.picklist(["manual", "auto_policy"])),
   requiresApproval: v.boolean(),
   preview: v.nullable(agentIssueActionPreviewModel),
+  previewState: v.picklist(["available", "expired"]),
   expiresAt: isoTimestampModel,
   completedAt: v.nullable(isoTimestampModel),
 })

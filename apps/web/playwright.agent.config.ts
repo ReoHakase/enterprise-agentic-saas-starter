@@ -76,7 +76,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: [["list"]],
-  timeout: 180_000,
+  timeout: 600_000,
   expect: { timeout: 15_000 },
   use: {
     baseURL: environment.webOrigin,

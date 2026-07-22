@@ -11,13 +11,15 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { createApp } from "../../app"
 import { env } from "../../env"
+import { reserveAgentWebSearch } from "./runs/web-search"
+import { configureAgentRuntime, resetAgentRuntimeForTest } from "./runtime"
 import {
   consumeAgentConnectionTicket,
   createAgentThreadForSession,
   finishAgentRun,
   issueAgentConnectionTicket,
   startAgentRun,
-} from "./repository"
+} from "./threads/repository"
 import {
   AGENT_MODEL_RUN_ORGANIZATION_DAILY_LIMIT,
   AGENT_MODEL_RUN_USER_HOURLY_LIMIT,
@@ -25,9 +27,7 @@ import {
   AGENT_USAGE_HOUR_MS,
   AGENT_WEB_SEARCH_USER_HOURLY_LIMIT,
   utcUsageWindow,
-} from "./resource-usage-repository"
-import { configureAgentRuntime, resetAgentRuntimeForTest } from "./runtime"
-import { reserveAgentWebSearch } from "./web-search-reservation-repository"
+} from "./usage/resource-limits"
 
 const migrationsFolder = new URL(
   "../../../../../packages/db/drizzle",

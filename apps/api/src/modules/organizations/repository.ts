@@ -25,7 +25,7 @@ import { AppError, publicErrors } from "../../errors/app-error"
 import {
   ensureAgentSessionContextInTransaction,
   revokeAgentSessionContextsInTransaction,
-} from "../agent/context-repository"
+} from "../agent/context/repository"
 import {
   normalizeOrganizationRole,
   permissionsForRole,

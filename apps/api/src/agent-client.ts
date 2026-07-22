@@ -74,9 +74,42 @@ export type AgentRunResult = {
     | "expired"
 }
 
+export type AgentThreadRenameResult = {
+  threadId: string
+  title: string
+  renamed: boolean
+}
+
 export type AgentWebSearchReservation = {
   reserved: true
   reused: boolean
+}
+
+export type AgentGuardedWebSearchQuery = {
+  query: string
+}
+
+export type AgentUsageRecordInput = {
+  provider: "openrouter"
+  model: string
+  inputTokenCount: number
+  inputNoCacheTokenCount: number
+  cacheReadTokenCount: number
+  cacheWriteTokenCount: number
+  outputTokenCount: number
+  textOutputTokenCount: number
+  reasoningTokenCount: number
+  totalTokenCount: number
+  imageInputCount: number
+  providerCostMicros?: number
+  durationMs: number
+  runEventId: string
+}
+
+export type AgentUsageRecordResult = {
+  recorded: boolean
+  calculatedCostMicros: number
+  pricingVersion: string
 }
 
 export type AgentCanonicalJsonValue =
@@ -93,6 +126,7 @@ export type AgentCanonicalToolName =
   | "get_issue"
   | "read_account_context"
   | "read_active_organization"
+  | "rename_thread"
   | "search_issue_labels"
   | "search_issues"
   | "search_organization_members"
@@ -120,6 +154,22 @@ export type AgentCanonicalToolPart = {
 export type AgentCanonicalMessagePart =
   | { type: "text"; text: string }
   | { type: "data-agent-assets"; data: { assetIds: string[] } }
+  | {
+      type: "data-activity"
+      data: {
+        kind: "status" | "tool"
+        status: "running" | "completed" | "failed"
+        label: string
+      }
+    }
+  | {
+      type: "data-context-budget"
+      data: AgentContextBudget
+    }
+  | {
+      type: "data-thread-title"
+      data: AgentThreadRenameResult
+    }
   | { type: "reasoning"; text: string }
   | {
       type: "source-url"
@@ -129,6 +179,22 @@ export type AgentCanonicalMessagePart =
     }
   | { type: "step-start" }
   | AgentCanonicalToolPart
+
+export type AgentContextBudget = {
+  contextWindowTokens: number
+  reservedOutputTokens: number
+  estimated: {
+    system: number
+    skills: number
+    tools: number
+    history: number
+    pageContext: number
+    attachments: number
+    total: number
+  }
+  observedInputTokens: number | null
+  level: "normal" | "notice" | "warning" | "critical"
+}
 
 export type AgentCanonicalMessage = {
   id: string
@@ -142,9 +208,32 @@ export type AgentRuntimeChatInput = {
   clientMessageId: string
   messages: AgentCanonicalMessage[]
   assetIds: string[]
+  contextReferences: AgentResolvedContextReference[]
   timezone: string
   trigger: "user_message" | "client_tool_result"
 }
+
+export type AgentResolvedContextReference =
+  | {
+      kind: "issue" | "selected_issue"
+      id: string
+      number: number
+      title: string
+      description: string
+      status: AgentIssue["status"]
+      priority: AgentIssue["priority"]
+    }
+  | { kind: "file"; id: string; filename: string }
+  | { kind: "member"; id: string; name: string; role: AgentMember["role"] }
+  | { kind: "current_page"; path: string; title: string }
+
+export type AgentContextReferenceInput =
+  | {
+      kind: "issue" | "selected_issue" | "file" | "member"
+      id: string
+      label?: string
+    }
+  | { kind: "current_page"; path: string; label?: string }
 
 export type AgentRuntimeResumeInput = {
   actionId: string
@@ -244,6 +333,7 @@ export type AgentIssueAction = {
   approvalMode: "manual" | "auto_policy" | null
   requiresApproval: boolean
   preview: AgentIssueActionPreview | null
+  previewState: "available" | "expired"
   expiresAt: string
   completedAt: string | null
 }

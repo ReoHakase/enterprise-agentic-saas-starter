@@ -10,6 +10,7 @@ import { issueSearchParamsCache } from "@/features/issues/search-params.server"
 import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
+import { createServerConsoleApi } from "@/lib/server/console-api"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 export const metadata: Metadata = {
@@ -56,9 +57,16 @@ export default async function IssuesPage({
     )
   }
 
-  await queryClient.prefetchQuery(
-    issuesQueryOptions(apiClient, activeOrganization.id, issueSearchState)
-  )
+  await Promise.all([
+    queryClient.prefetchQuery(
+      issuesQueryOptions(apiClient, activeOrganization.id, issueSearchState)
+    ),
+    queryClient.prefetchQuery({
+      queryKey: ["console", "organizations", activeOrganization.id, "members"],
+      queryFn: async () =>
+        (await createServerConsoleApi()).listMembers(activeOrganization.id),
+    }),
+  ])
 
   return (
     <PageShell

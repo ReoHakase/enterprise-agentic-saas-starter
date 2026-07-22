@@ -6,7 +6,7 @@ import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 
 import { createApp } from "./app"
 import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handler"
-import { sweepAgentActions } from "./modules/agent/action-repository"
+import { sweepAgentActions } from "./modules/agent/actions/repository"
 import { createAgentInternalApp } from "./modules/agent/internal-api"
 import {
   configureAgentRuntime,

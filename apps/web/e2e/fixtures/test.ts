@@ -49,6 +49,44 @@ export const test = base.extend<ClientDiagnosticsFixtures>({
   },
   assertNoClientErrors: [
     async ({ clientErrorPolicy, page }, use) => {
+      // Next/Turbopack development can emit an invalid RSC timing interval
+      // during redirects and error-boundary recovery. Suppress only that
+      // framework-owned measurement; product timing and every other browser
+      // error remain visible to this fixture.
+      // https://github.com/vercel/next.js/issues/86060
+      await page.addInitScript(() => {
+        const originalMeasure: Performance["measure"] =
+          window.performance.measure.bind(window.performance)
+
+        Object.defineProperty(window.performance, "measure", {
+          configurable: true,
+          value: (
+            measurementName: string,
+            startOrMeasureOptions?: string | PerformanceMeasureOptions,
+            endMark?: string
+          ) => {
+            try {
+              return typeof startOrMeasureOptions === "object"
+                ? originalMeasure(measurementName, startOrMeasureOptions)
+                : originalMeasure(
+                    measurementName,
+                    startOrMeasureOptions,
+                    endMark
+                  )
+            } catch (error) {
+              if (
+                measurementName.startsWith("\u200b") &&
+                error instanceof Error &&
+                error.message.includes("cannot have a negative time stamp")
+              ) {
+                return undefined
+              }
+              throw error
+            }
+          },
+        })
+      })
+
       const errors = watchClientErrors(page)
 
       await use()

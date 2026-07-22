@@ -3,7 +3,7 @@ import { createTool } from "@mastra/core/tools"
 import {
   agentWriteToolSchemas,
   createAgentWriteHandlers,
-} from "../../../write-tools"
+} from "../../../tools/write"
 import {
   getProductAgentRuntime,
   type ProductAgentRequestContext,

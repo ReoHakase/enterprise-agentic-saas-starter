@@ -40,6 +40,7 @@ describe("Mastra product agent registry", () => {
       "search_issue_labels",
       "search_issues",
       "search_organization_members",
+      "rename_thread",
       "web_search",
     ])
     expect(productTools.web_search).not.toMatchObject({ type: "provider" })

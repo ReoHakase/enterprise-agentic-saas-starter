@@ -8,7 +8,7 @@ import {
 import { and, eq, gt, inArray } from "drizzle-orm"
 
 import { publicErrors } from "../../errors/app-error"
-import type { ValidGrant } from "../agent/repository"
+import type { ValidGrant } from "../agent/threads/repository"
 import {
   AGENT_RUN_ASSET_MAX_BYTES,
   AGENT_RUN_ASSET_MAX_COUNT,
