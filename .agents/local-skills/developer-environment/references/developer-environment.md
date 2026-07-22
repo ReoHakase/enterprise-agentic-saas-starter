@@ -40,7 +40,7 @@ MCP:
 ## secret
 
 - secret入りの `.env.development`, `.env.test`, `.env.local` はgitに入れない（各 **実行パッケージ** 直下。例: `apps/api/.env.local`, `packages/db/.env.local`）。
-- 共有用のenv templateはsecret値を入れずに各パッケージの `.env.example` へ置く（ルート [`.env.example`](../../../.env.example) はパス索引）。
+- 共有用のenv templateはsecret値を入れずに各パッケージの `.env.example` へ置く（例: [`apps/api/.env.example`](../../../../apps/api/.env.example)、[`packages/db/.env.example`](../../../../packages/db/.env.example)）。
 - Bun は **cwd** の `.env` → `NODE_ENV` に応じた `.env.development` / `.env.test` / `.env.production` → `.env.local` を自動読込する。`bun --cwd apps/api run dev` なら `apps/api/.env*` が読まれる。`bun --env-file=../../...` は使わない。
 - ローカルでは API と DB で `TURSO_DATABASE_URL` を揃える（`apps/api` と `packages/db` に同じ値を書く）。
 - secret値をskill/reference/docsに書かない。

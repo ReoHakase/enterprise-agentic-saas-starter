@@ -44,7 +44,7 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - chat画像は1 file `10_000_000` bytes以下、1 message最大4件・合計`20_000_000` bytes以下にする。既存のorganization合計`1_073_741_824` bytesへstagedとpermanentの両方を算入し、object count、pending count、時間窓request数もatomicに制限する。
 - originalは各putでstorage classを明示してprivate R2 Standardへ保存し、Cloudflare Images hosted storageは使わない。APIだけがR2とImages bindingを持ち、authorization後にmax edge 2,048px、WebP quality 75、animation無効へ変換する。Images outputを4 MiB + 1 byteまでbounded readし、超過をprovider送信前に拒否してから上限内bytesだけをnamed private `/internal/agent/*` responseでAgent Workerへ渡す。
 - chat-only assetは既定72時間、hard max 7日でexpireする。DBの`expiresAt`とcleanup jobを正本にしてquotaを解放し、exact keyを冪等削除する。zero-copy promotion対象originalへprefix lifecycleを設定せず、絶対にpromoteしないderivativeだけをlifecycle backstopにする。
-- Issue attachmentへ昇格するまでのasset ACL、active organization、thread owner、lease、approval、ETag/size snapshotは`agent-runtime` skillと`docs/agent-runtime.md`を正本にする。
+- Issue attachmentへ昇格するまでのasset ACL、active organization、thread owner、lease、approval、ETag/size snapshotは`agent-runtime` skillと`docs/agent/assets-mentions.md`を正本にする。
 
 #### v1からv2へのrollout
 
