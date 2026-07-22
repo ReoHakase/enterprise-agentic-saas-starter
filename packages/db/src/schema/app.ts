@@ -52,6 +52,8 @@ export const AGENT_ASSET_MAX_SIZE_BYTES = 10_000_000 as const
 export const AGENT_RUN_MAX_ASSET_COUNT = 4 as const
 export const AGENT_RUN_MAX_ASSET_BYTES = 20_000_000 as const
 export const AGENT_ASSET_MAX_LIFETIME_MS = 604_800_000 as const
+export const AGENT_ACTION_MAX_LIFETIME_MS = 900_000 as const
+export const AGENT_RESUME_TICKET_MAX_LIFETIME_MS = 60_000 as const
 
 export const fileOwnerTypes = ["issue"] as const
 export type FileOwnerType = (typeof fileOwnerTypes)[number]
@@ -170,6 +172,45 @@ export const storageObjectCleanupJobStatuses = [
 export type StorageObjectCleanupJobStatus =
   (typeof storageObjectCleanupJobStatuses)[number]
 
+export const agentActionKinds = [
+  "create_issue",
+  "update_issue",
+  "delete_issue",
+] as const
+export type AgentActionKind = (typeof agentActionKinds)[number]
+
+export const agentActionStatuses = [
+  "pending",
+  "approved",
+  "rejected",
+  "expired",
+  "canceled",
+  "succeeded",
+  "conflicted",
+] as const
+export type AgentActionStatus = (typeof agentActionStatuses)[number]
+
+export const agentDecisionProvenances = ["manual", "auto_policy"] as const
+export type AgentDecisionProvenance = (typeof agentDecisionProvenances)[number]
+
+export const agentApprovalPolicyModes = [
+  "ask_each",
+  "auto_write",
+  "auto_all",
+] as const
+export type AgentApprovalPolicyMode = (typeof agentApprovalPolicyModes)[number]
+
+export const agentResourceUsageKinds = [
+  "asset_upload",
+  "vision_transform",
+  "write_action",
+  "staged_asset",
+  "pending_upload",
+] as const
+export type AgentResourceUsageKind = (typeof agentResourceUsageKinds)[number]
+
+export type AgentActionDocument = Record<string, unknown>
+
 export const issues = sqliteTable(
   "issues",
   {
@@ -196,6 +237,7 @@ export const issues = sqliteTable(
       .notNull()
       .default(sql`'[]'`),
     dueDate: integer("due_date", { mode: "timestamp_ms" }),
+    revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -229,6 +271,7 @@ export const issues = sqliteTable(
       table.organizationId,
       table.dueDate
     ),
+    check("issues_revision_check", sql`${table.revision} >= 1`),
   ]
 )
 
@@ -829,8 +872,7 @@ export const storageObjectCleanupJobs = sqliteTable(
   ]
 )
 
-// 0014は構造とbackfillまで。SQLiteにはdeferred constraintがないため、0015で
-// promotionの固定statement順に対応するimmediate triggerを追加すること。
+// promotionは0015のimmediate triggerが固定statement順を強制する。
 // ready asset/fileとclaimの一致をrepository assertionだけに依存させない。
 
 export const agentSessionContexts = sqliteTable(
@@ -849,6 +891,11 @@ export const agentSessionContexts = sqliteTable(
       .notNull(),
   },
   (table) => [
+    uniqueIndex("agent_session_contexts_scope_uidx").on(
+      table.sessionId,
+      table.userId,
+      table.contextEpoch
+    ),
     index("agent_session_contexts_user_idx").on(table.userId),
     check(
       "agent_session_contexts_epoch_check",
@@ -938,6 +985,19 @@ export const agentRuns = sqliteTable(
     uniqueIndex("agent_runs_organization_id_uidx").on(
       table.organizationId,
       table.id
+    ),
+    uniqueIndex("agent_runs_action_scope_uidx").on(
+      table.organizationId,
+      table.id,
+      table.threadId,
+      table.sessionId,
+      table.userId,
+      table.contextEpoch
+    ),
+    uniqueIndex("agent_runs_usage_scope_uidx").on(
+      table.organizationId,
+      table.id,
+      table.threadId
     ),
     uniqueIndex("agent_runs_thread_client_message_uidx")
       .on(table.threadId, table.clientMessageId)
@@ -1162,6 +1222,675 @@ export const agentGrants = sqliteTable(
     check(
       "agent_grants_revoked_at_check",
       sql`${table.revokedAt} is null or ${table.revokedAt} >= ${table.issuedAt}`
+    ),
+  ]
+)
+
+export const agentApprovalPolicies = sqliteTable(
+  "agent_approval_policies",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    contextEpoch: integer("context_epoch").notNull(),
+    mode: text("mode").$type<AgentApprovalPolicyMode>().notNull(),
+    destructiveConfirmedAt: integer("destructive_confirmed_at", {
+      mode: "timestamp_ms",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_approval_policies_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("agent_approval_policies_action_scope_uidx").on(
+      table.organizationId,
+      table.id,
+      table.threadId,
+      table.sessionId,
+      table.userId,
+      table.contextEpoch
+    ),
+    uniqueIndex("agent_approval_policies_active_scope_uidx")
+      .on(table.sessionId, table.userId, table.organizationId, table.threadId)
+      .where(sql`${table.revokedAt} is null`),
+    index("agent_approval_policies_expiry_idx").on(
+      table.revokedAt,
+      table.expiresAt
+    ),
+    index("agent_approval_policies_session_epoch_idx").on(
+      table.sessionId,
+      table.contextEpoch
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.threadId],
+      foreignColumns: [agentThreads.organizationId, agentThreads.id],
+      name: "agent_approval_policies_thread_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_approval_policies_mode_check",
+      sql`${table.mode} in ('ask_each', 'auto_write', 'auto_all')`
+    ),
+    check(
+      "agent_approval_policies_epoch_check",
+      sql`${table.contextEpoch} >= 1`
+    ),
+    check(
+      "agent_approval_policies_expiry_check",
+      sql`${table.expiresAt} > ${table.createdAt}
+        and ${table.expiresAt} <= ${table.createdAt} + ${sql.raw(String(AGENT_ACTION_MAX_LIFETIME_MS))}`
+    ),
+    check(
+      "agent_approval_policies_destructive_check",
+      sql`(
+        ${table.mode} = 'auto_all'
+        and ${table.destructiveConfirmedAt} is not null
+        and ${table.destructiveConfirmedAt} >= ${table.createdAt}
+        and ${table.destructiveConfirmedAt} <= ${table.expiresAt}
+      ) or (
+        ${table.mode} != 'auto_all'
+        and ${table.destructiveConfirmedAt} is null
+      )`
+    ),
+    check(
+      "agent_approval_policies_revoked_at_check",
+      sql`${table.revokedAt} is null or ${table.revokedAt} >= ${table.createdAt}`
+    ),
+  ]
+)
+
+export const agentActions = sqliteTable(
+  "agent_actions",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    runId: text("run_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    contextEpoch: integer("context_epoch").notNull(),
+    toolCallId: text("tool_call_id").notNull(),
+    kind: text("kind").$type<AgentActionKind>().notNull(),
+    normalizedPayload: text("normalized_payload", {
+      mode: "json",
+    }).$type<AgentActionDocument>(),
+    canonicalPreview: text("canonical_preview", {
+      mode: "json",
+    }).$type<AgentActionDocument>(),
+    targetType: text("target_type").$type<"issue">().notNull().default("issue"),
+    targetId: text("target_id").notNull(),
+    targetRevision: integer("target_revision"),
+    status: text("status")
+      .$type<AgentActionStatus>()
+      .notNull()
+      .default("pending"),
+    decisionProvenance: text(
+      "decision_provenance"
+    ).$type<AgentDecisionProvenance>(),
+    decisionPolicyId: text("decision_policy_id"),
+    decisionIdempotencyKey: text("decision_idempotency_key"),
+    decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    receipt: text("receipt", { mode: "json" }).$type<AgentActionDocument>(),
+    resultId: text("result_id"),
+    errorClassification: text("error_classification"),
+    attempt: integer("attempt").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    scrubbedAt: integer("scrubbed_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("agent_actions_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("agent_actions_resume_scope_uidx").on(
+      table.organizationId,
+      table.id,
+      table.threadId,
+      table.sessionId,
+      table.userId,
+      table.contextEpoch
+    ),
+    uniqueIndex("agent_actions_idempotency_uidx").on(
+      table.organizationId,
+      table.idempotencyKey
+    ),
+    uniqueIndex("agent_actions_run_tool_call_uidx").on(
+      table.organizationId,
+      table.runId,
+      table.toolCallId
+    ),
+    uniqueIndex("agent_actions_decision_idempotency_uidx")
+      .on(table.organizationId, table.decisionIdempotencyKey)
+      .where(sql`${table.decisionIdempotencyKey} is not null`),
+    index("agent_actions_thread_status_created_idx").on(
+      table.organizationId,
+      table.threadId,
+      table.status,
+      table.createdAt
+    ),
+    index("agent_actions_session_epoch_status_idx").on(
+      table.sessionId,
+      table.contextEpoch,
+      table.status
+    ),
+    index("agent_actions_expiry_idx").on(table.status, table.expiresAt),
+    index("agent_actions_target_idx").on(
+      table.organizationId,
+      table.targetType,
+      table.targetId
+    ),
+    foreignKey({
+      columns: [
+        table.organizationId,
+        table.runId,
+        table.threadId,
+        table.sessionId,
+        table.userId,
+        table.contextEpoch,
+      ],
+      foreignColumns: [
+        agentRuns.organizationId,
+        agentRuns.id,
+        agentRuns.threadId,
+        agentRuns.sessionId,
+        agentRuns.userId,
+        agentRuns.contextEpoch,
+      ],
+      name: "agent_actions_run_scope_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [
+        table.organizationId,
+        table.decisionPolicyId,
+        table.threadId,
+        table.sessionId,
+        table.userId,
+        table.contextEpoch,
+      ],
+      foreignColumns: [
+        agentApprovalPolicies.organizationId,
+        agentApprovalPolicies.id,
+        agentApprovalPolicies.threadId,
+        agentApprovalPolicies.sessionId,
+        agentApprovalPolicies.userId,
+        agentApprovalPolicies.contextEpoch,
+      ],
+      name: "agent_actions_policy_scope_fk",
+    }),
+    check(
+      "agent_actions_kind_check",
+      sql`${table.kind} in ('create_issue', 'update_issue', 'delete_issue')`
+    ),
+    check(
+      "agent_actions_status_check",
+      sql`${table.status} in ('pending', 'approved', 'rejected', 'expired', 'canceled', 'succeeded', 'conflicted')`
+    ),
+    check("agent_actions_epoch_check", sql`${table.contextEpoch} >= 1`),
+    check(
+      "agent_actions_tool_call_id_check",
+      sql`length(${table.toolCallId}) between 1 and 128`
+    ),
+    check(
+      "agent_actions_target_check",
+      sql`${table.targetType} = 'issue'
+        and length(${table.targetId}) between 1 and 128
+        and (
+          (${table.kind} = 'create_issue' and ${table.targetRevision} is null)
+          or (
+            ${table.kind} in ('update_issue', 'delete_issue')
+            and ${table.targetRevision} is not null
+            and ${table.targetRevision} >= 1
+          )
+        )`
+    ),
+    check(
+      "agent_actions_payload_check",
+      sql`(
+        ${table.normalizedPayload} is not null
+        and json_valid(${table.normalizedPayload})
+        and ${table.canonicalPreview} is not null
+        and json_valid(${table.canonicalPreview})
+        and ${table.scrubbedAt} is null
+      ) or (
+        ${table.normalizedPayload} is null
+        and ${table.canonicalPreview} is null
+        and ${table.scrubbedAt} is not null
+        and ${table.status} in ('rejected', 'expired', 'canceled', 'succeeded', 'conflicted')
+      )`
+    ),
+    check(
+      "agent_actions_decision_check",
+      sql`(
+        ${table.decisionProvenance} is null
+        and ${table.decisionPolicyId} is null
+        and ${table.decisionIdempotencyKey} is null
+        and ${table.decidedAt} is null
+      ) or (
+        ${table.decisionProvenance} = 'manual'
+        and ${table.decisionPolicyId} is null
+        and ${table.decisionIdempotencyKey} is not null
+        and length(${table.decisionIdempotencyKey}) between 1 and 128
+        and ${table.decidedAt} is not null
+      ) or (
+        ${table.decisionProvenance} = 'auto_policy'
+        and ${table.decisionPolicyId} is not null
+        and ${table.decisionIdempotencyKey} is null
+        and ${table.decidedAt} is not null
+      )`
+    ),
+    check(
+      "agent_actions_status_shape_check",
+      sql`(
+        ${table.status} = 'pending'
+        and ${table.decisionProvenance} is null
+        and ${table.completedAt} is null
+        and ${table.receipt} is null
+        and ${table.resultId} is null
+        and ${table.errorClassification} is null
+      ) or (
+        ${table.status} = 'approved'
+        and ${table.decisionProvenance} is not null
+        and ${table.completedAt} is null
+        and ${table.receipt} is null
+        and ${table.resultId} is null
+        and ${table.errorClassification} is null
+      ) or (
+        ${table.status} = 'rejected'
+        and ${table.decisionProvenance} = 'manual'
+        and ${table.completedAt} is not null
+        and ${table.receipt} is null
+        and ${table.resultId} is null
+        and ${table.errorClassification} is null
+      ) or (
+        ${table.status} in ('expired', 'canceled')
+        and ${table.completedAt} is not null
+        and ${table.receipt} is null
+        and ${table.resultId} is null
+        and ${table.errorClassification} is null
+      ) or (
+        ${table.status} = 'conflicted'
+        and ${table.decisionProvenance} is not null
+        and ${table.completedAt} is not null
+        and ${table.receipt} is null
+        and ${table.resultId} is null
+        and ${table.errorClassification} is not null
+      ) or (
+        ${table.status} = 'succeeded'
+        and ${table.decisionProvenance} is not null
+        and ${table.completedAt} is not null
+        and ${table.receipt} is not null
+        and json_valid(${table.receipt})
+        and ${table.resultId} is not null
+        and ${table.errorClassification} is null
+      )`
+    ),
+    check(
+      "agent_actions_idempotency_key_check",
+      sql`length(${table.idempotencyKey}) between 1 and 128`
+    ),
+    check(
+      "agent_actions_result_id_check",
+      sql`${table.resultId} is null or length(${table.resultId}) between 1 and 128`
+    ),
+    check(
+      "agent_actions_error_classification_check",
+      sql`${table.errorClassification} is null or (
+        length(${table.errorClassification}) between 1 and 96
+        and ${table.errorClassification} glob '[A-Za-z]*'
+        and ${table.errorClassification} not glob '*[^A-Za-z0-9_.:-]*'
+      )`
+    ),
+    check("agent_actions_attempt_check", sql`${table.attempt} >= 0`),
+    check(
+      "agent_actions_expiry_check",
+      sql`${table.expiresAt} > ${table.createdAt}
+        and ${table.expiresAt} <= ${table.createdAt} + ${sql.raw(String(AGENT_ACTION_MAX_LIFETIME_MS))}`
+    ),
+    check(
+      "agent_actions_timestamps_check",
+      sql`(${table.decidedAt} is null or (
+          ${table.decidedAt} >= ${table.createdAt}
+          and ${table.decidedAt} <= ${table.expiresAt}
+        ))
+        and (${table.completedAt} is null or ${table.completedAt} >= ${table.createdAt})
+        and (${table.scrubbedAt} is null or (
+          ${table.completedAt} is not null
+          and ${table.scrubbedAt} >= ${table.completedAt}
+        ))`
+    ),
+  ]
+)
+
+export const agentResumeTickets = sqliteTable(
+  "agent_resume_tickets",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    actionId: text("action_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    threadId: text("thread_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    contextEpoch: integer("context_epoch").notNull(),
+    issuedAt: integer("issued_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    consumedAt: integer("consumed_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("agent_resume_tickets_hash_uidx").on(table.tokenHash),
+    uniqueIndex("agent_resume_tickets_active_action_uidx")
+      .on(table.organizationId, table.actionId)
+      .where(sql`${table.consumedAt} is null and ${table.revokedAt} is null`),
+    index("agent_resume_tickets_expiry_idx").on(table.expiresAt),
+    index("agent_resume_tickets_action_idx").on(
+      table.organizationId,
+      table.actionId
+    ),
+    index("agent_resume_tickets_session_epoch_idx").on(
+      table.sessionId,
+      table.contextEpoch
+    ),
+    foreignKey({
+      columns: [
+        table.organizationId,
+        table.actionId,
+        table.threadId,
+        table.sessionId,
+        table.userId,
+        table.contextEpoch,
+      ],
+      foreignColumns: [
+        agentActions.organizationId,
+        agentActions.id,
+        agentActions.threadId,
+        agentActions.sessionId,
+        agentActions.userId,
+        agentActions.contextEpoch,
+      ],
+      name: "agent_resume_tickets_action_scope_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_resume_tickets_hash_check",
+      sql`length(${table.tokenHash}) = 64
+        and ${table.tokenHash} not glob '*[^0-9a-f]*'`
+    ),
+    check("agent_resume_tickets_epoch_check", sql`${table.contextEpoch} >= 1`),
+    check(
+      "agent_resume_tickets_expiry_check",
+      sql`${table.expiresAt} > ${table.issuedAt}
+        and ${table.expiresAt} <= ${table.issuedAt} + ${sql.raw(String(AGENT_RESUME_TICKET_MAX_LIFETIME_MS))}`
+    ),
+    check(
+      "agent_resume_tickets_terminal_check",
+      sql`not (
+        ${table.consumedAt} is not null
+        and ${table.revokedAt} is not null
+      )
+      and (${table.consumedAt} is null or ${table.consumedAt} >= ${table.issuedAt})
+      and (${table.revokedAt} is null or ${table.revokedAt} >= ${table.issuedAt})`
+    ),
+  ]
+)
+
+export const agentActionAssets = sqliteTable(
+  "agent_action_assets",
+  {
+    organizationId: text("organization_id").notNull(),
+    actionId: text("action_id").notNull(),
+    assetId: text("asset_id").notNull(),
+    storageObjectId: text("storage_object_id"),
+    sourceEtag: text("source_etag").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    leaseExpiresAt: integer("lease_expires_at", {
+      mode: "timestamp_ms",
+    }).notNull(),
+    releasedAt: integer("released_at", { mode: "timestamp_ms" }),
+    quotaClassifiedAt: integer("quota_classified_at", {
+      mode: "timestamp_ms",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.actionId, table.assetId],
+      name: "agent_action_assets_pk",
+    }),
+    uniqueIndex("agent_action_assets_active_asset_uidx")
+      .on(table.assetId)
+      .where(sql`${table.releasedAt} is null`),
+    index("agent_action_assets_organization_action_idx").on(
+      table.organizationId,
+      table.actionId
+    ),
+    index("agent_action_assets_active_lease_idx").on(
+      table.releasedAt,
+      table.leaseExpiresAt
+    ),
+    index("agent_action_assets_storage_object_idx").on(table.storageObjectId),
+    foreignKey({
+      columns: [table.organizationId, table.actionId],
+      foreignColumns: [agentActions.organizationId, agentActions.id],
+      name: "agent_action_assets_action_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.assetId],
+      foreignColumns: [agentAssets.organizationId, agentAssets.id],
+      name: "agent_action_assets_asset_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.storageObjectId],
+      foreignColumns: [storageObjects.organizationId, storageObjects.id],
+      name: "agent_action_assets_storage_object_tenant_fk",
+    }),
+    check(
+      "agent_action_assets_source_etag_check",
+      sql`length(${table.sourceEtag}) between 1 and 128`
+    ),
+    check(
+      "agent_action_assets_size_bytes_check",
+      sql`${table.sizeBytes} between 0 and ${sql.raw(String(AGENT_ASSET_MAX_SIZE_BYTES))}`
+    ),
+    check(
+      "agent_action_assets_lease_check",
+      sql`${table.leaseExpiresAt} > ${table.createdAt}
+        and (${table.releasedAt} is null or ${table.releasedAt} >= ${table.createdAt})
+        and (${table.quotaClassifiedAt} is null or (
+          ${table.quotaClassifiedAt} >= ${table.createdAt}
+          and (${table.releasedAt} is null or ${table.quotaClassifiedAt} <= ${table.releasedAt})
+        ))`
+    ),
+    check(
+      "agent_action_assets_storage_state_check",
+      sql`${table.storageObjectId} is not null or ${table.releasedAt} is not null`
+    ),
+  ]
+)
+
+export const agentUsageEvents = sqliteTable(
+  "agent_usage_events",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    runId: text("run_id").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    inputTokenCount: integer("input_token_count").notNull().default(0),
+    outputTokenCount: integer("output_token_count").notNull().default(0),
+    durationMs: integer("duration_ms").notNull(),
+    providerRequestId: text("provider_request_id"),
+    runEventId: text("run_event_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_usage_events_provider_request_uidx")
+      .on(table.organizationId, table.provider, table.providerRequestId)
+      .where(sql`${table.providerRequestId} is not null`),
+    uniqueIndex("agent_usage_events_run_event_uidx")
+      .on(table.organizationId, table.runId, table.runEventId)
+      .where(sql`${table.runEventId} is not null`),
+    index("agent_usage_events_run_created_idx").on(
+      table.organizationId,
+      table.runId,
+      table.createdAt
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.runId, table.threadId],
+      foreignColumns: [
+        agentRuns.organizationId,
+        agentRuns.id,
+        agentRuns.threadId,
+      ],
+      name: "agent_usage_events_run_scope_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_usage_events_provider_check",
+      sql`length(${table.provider}) between 1 and 64`
+    ),
+    check(
+      "agent_usage_events_model_check",
+      sql`length(${table.model}) between 1 and 160`
+    ),
+    check(
+      "agent_usage_events_counts_check",
+      sql`${table.inputTokenCount} >= 0
+        and ${table.outputTokenCount} >= 0
+        and ${table.durationMs} between 0 and 300000`
+    ),
+    check(
+      "agent_usage_events_idempotency_check",
+      sql`(
+        ${table.providerRequestId} is not null
+        and length(${table.providerRequestId}) between 1 and 160
+      ) or (
+        ${table.runEventId} is not null
+        and length(${table.runEventId}) between 1 and 160
+      )`
+    ),
+  ]
+)
+
+export const agentResourceUsageBuckets = sqliteTable(
+  "agent_resource_usage_buckets",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").$type<AgentResourceUsageKind>().notNull(),
+    windowStart: integer("window_start", { mode: "timestamp_ms" }).notNull(),
+    windowEnd: integer("window_end", { mode: "timestamp_ms" }).notNull(),
+    count: integer("count").notNull().default(0),
+    limitCount: integer("limit_count").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_resource_usage_buckets_organization_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    uniqueIndex("agent_resource_usage_buckets_organization_scope_uidx")
+      .on(table.organizationId, table.kind, table.windowStart)
+      .where(sql`${table.userId} is null`),
+    uniqueIndex("agent_resource_usage_buckets_user_scope_uidx")
+      .on(table.organizationId, table.userId, table.kind, table.windowStart)
+      .where(sql`${table.userId} is not null`),
+    index("agent_resource_usage_buckets_window_end_idx").on(table.windowEnd),
+    check(
+      "agent_resource_usage_buckets_kind_check",
+      sql`${table.kind} in ('asset_upload', 'vision_transform', 'write_action', 'staged_asset', 'pending_upload')`
+    ),
+    check(
+      "agent_resource_usage_buckets_window_check",
+      sql`${table.windowEnd} > ${table.windowStart}`
+    ),
+    check(
+      "agent_resource_usage_buckets_count_check",
+      sql`${table.limitCount} >= 0 and ${table.count} between 0 and ${table.limitCount}`
+    ),
+  ]
+)
+
+export const agentResourceUsageOperations = sqliteTable(
+  "agent_resource_usage_operations",
+  {
+    operationId: text("operation_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    bucketId: text("bucket_id").notNull(),
+    delta: integer("delta").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.bucketId, table.operationId],
+      name: "agent_resource_usage_operations_pk",
+    }),
+    index("agent_resource_usage_operations_bucket_created_idx").on(
+      table.organizationId,
+      table.bucketId,
+      table.createdAt
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.bucketId],
+      foreignColumns: [
+        agentResourceUsageBuckets.organizationId,
+        agentResourceUsageBuckets.id,
+      ],
+      name: "agent_resource_usage_operations_bucket_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_resource_usage_operations_id_check",
+      sql`length(${table.operationId}) between 1 and 160`
+    ),
+    check(
+      "agent_resource_usage_operations_delta_check",
+      sql`${table.delta} between -${sql.raw(String(ORGANIZATION_FILE_QUOTA_BYTES))} and ${sql.raw(String(ORGANIZATION_FILE_QUOTA_BYTES))}
+        and ${table.delta} != 0`
     ),
   ]
 )

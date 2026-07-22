@@ -351,6 +351,98 @@ describe("database migrations", () => {
     }
   })
 
+  it("upgrades the storage schema to the Agent action runtime without losing Issues", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(14)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: [
+            "action-upgrade-user",
+            "Action Upgrade User",
+            "action-upgrade@example.test",
+            1,
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: [
+            "action-upgrade-org",
+            "Action Upgrade Org",
+            "action-upgrade-org",
+            now,
+          ],
+        },
+        {
+          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "action-upgrade-issue",
+            "action-upgrade-org",
+            1,
+            "Preserved Issue",
+            "action-upgrade-user",
+            now,
+            now,
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const [issue, tables, triggers, foreignKeys] = await Promise.all([
+        client.execute(
+          "select id,title,revision from issues where id = 'action-upgrade-issue'"
+        ),
+        client.execute(
+          "select name from sqlite_master where type = 'table' order by name"
+        ),
+        client.execute(
+          "select name from sqlite_master where type = 'trigger' order by name"
+        ),
+        client.execute("pragma foreign_key_check"),
+      ])
+
+      expect(issue.rows).toMatchObject([
+        {
+          id: "action-upgrade-issue",
+          title: "Preserved Issue",
+          revision: 1,
+        },
+      ])
+      expect(tables.rows.map(({ name }) => name)).toEqual(
+        expect.arrayContaining([
+          "agent_action_assets",
+          "agent_actions",
+          "agent_approval_policies",
+          "agent_resource_usage_buckets",
+          "agent_resource_usage_operations",
+          "agent_resume_tickets",
+          "agent_usage_events",
+        ])
+      )
+      expect(triggers.rows.map(({ name }) => name)).toEqual(
+        expect.arrayContaining([
+          "agent_actions_state_update",
+          "agent_assets_state_machine_update",
+          "agent_session_contexts_revoke_old_epoch",
+          "issues_revision_auto_increment",
+          "storage_object_claims_promotion_update",
+        ])
+      )
+      expect(foreignKeys.rows).toHaveLength(0)
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
   it("enforces profile image subject, idempotency, ready, and cleanup invariants", async () => {
     const client = createClient({ url: "file::memory:" })
 

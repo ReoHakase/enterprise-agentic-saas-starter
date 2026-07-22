@@ -151,7 +151,7 @@ const agentAssetStatement = (input: {
     "storage-user",
     input.storageObjectId ?? input.id,
     `${input.id}.png`,
-    "ready",
+    "pending",
     input.now + 72 * 60 * 60 * 1000,
     input.now,
     input.now,
@@ -174,6 +174,13 @@ describe("Agent storage expansion schema", () => {
           organizationId: "storage-org-b",
         }),
         agentAssetStatement({
+          id: "storage-asset-b",
+          now,
+          organizationId: "storage-org-b",
+          storageObjectId: "storage-object-b",
+          threadId: "storage-thread-b",
+        }),
+        agentAssetStatement({
           id: "storage-asset-a",
           now,
           storageObjectId: "storage-object-a",
@@ -190,6 +197,10 @@ describe("Agent storage expansion schema", () => {
             now,
           ],
         },
+        {
+          sql: "update agent_assets set status = 'ready', updated_at = ? where id = ?",
+          args: [now, "storage-asset-a"],
+        },
       ])
 
       await expect(
@@ -197,7 +208,7 @@ describe("Agent storage expansion schema", () => {
           sql: "insert into storage_object_claims(storage_object_id,organization_id,holder_type,holder_id) values(?,?,?,?)",
           args: ["storage-object-a", "storage-org-a", "file", "some-file"],
         })
-      ).rejects.toThrow(/unique/i)
+      ).rejects.toThrow(/unique|storage_object_claim_file_mismatch/i)
       await expect(
         client.execute({
           sql: "insert into storage_object_claims(storage_object_id,organization_id,holder_type,holder_id) values(?,?,?,?)",
@@ -205,7 +216,7 @@ describe("Agent storage expansion schema", () => {
             "storage-object-b",
             "storage-org-b",
             "agent_asset",
-            "storage-asset-a",
+            "storage-asset-b",
           ],
         })
       ).resolves.toBeDefined()
@@ -214,7 +225,9 @@ describe("Agent storage expansion schema", () => {
           sql: "update storage_object_claims set organization_id = ?, holder_id = ? where storage_object_id = ?",
           args: ["storage-org-a", "storage-asset-a", "storage-object-b"],
         })
-      ).rejects.toThrow(/unique|foreign key|claim_requires_live/i)
+      ).rejects.toThrow(
+        /unique|foreign key|claim_requires_live|claim_invalid_revision/i
+      )
       await expect(
         client.execute({
           sql: "insert into agent_assets(id,organization_id,thread_id,session_id,context_epoch,uploader_id,storage_object_id,filename,status,expires_at,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -227,19 +240,21 @@ describe("Agent storage expansion schema", () => {
             "storage-user",
             "storage-object-cross",
             "cross.png",
-            "ready",
+            "pending",
             now + 60_000,
             now,
             now,
           ],
         })
-      ).rejects.toThrow(/foreign key/i)
+      ).rejects.toThrow(/foreign key|agent_asset_invalid_initial_state/i)
       await expect(
         client.execute({
           sql: "insert into storage_object_claims(storage_object_id,organization_id,holder_type) values(?,?,?)",
           args: ["storage-object-cross", "storage-org-a", "file"],
         })
-      ).rejects.toThrow(/check constraint/i)
+      ).rejects.toThrow(
+        /check constraint|file_v2_invalid_initial_state|storage_object_claim_file_mismatch/i
+      )
       await expect(
         client.execute(
           "update storage_objects set status = 'deleting' where id = 'storage-object-cross'"
@@ -253,7 +268,9 @@ describe("Agent storage expansion schema", () => {
           sql: "insert into storage_object_claims(storage_object_id,organization_id,holder_type,holder_id) values(?,?,?,?)",
           args: ["storage-object-cross", "storage-org-a", "file", "some-file"],
         })
-      ).rejects.toThrow(/storage_object_claim_requires_live_object/i)
+      ).rejects.toThrow(
+        /storage_object_claim_requires_live_object|storage_object_claim_file_mismatch/i
+      )
       await expect(
         client.execute({
           sql: "insert into agent_assets(id,organization_id,thread_id,session_id,context_epoch,uploader_id,filename,status,expires_at,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?)",
@@ -271,7 +288,9 @@ describe("Agent storage expansion schema", () => {
             now,
           ],
         })
-      ).rejects.toThrow(/check constraint/i)
+      ).rejects.toThrow(
+        /check constraint|file_v2_invalid_initial_state|agent_asset_invalid_initial_state/i
+      )
 
       await client.execute("delete from session where id = 'storage-session'")
       const asset = await client.execute(
@@ -310,7 +329,7 @@ describe("Agent storage expansion schema", () => {
             "file-storage-object",
           ],
         })
-      ).rejects.toThrow(/check constraint/i)
+      ).rejects.toThrow(/check constraint|file_v2_invalid_initial_state/i)
       await expect(
         client.execute({
           sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,status) values(?,?,?,?,?,?,?,?,?,?)",
@@ -330,7 +349,7 @@ describe("Agent storage expansion schema", () => {
       ).resolves.toBeDefined()
       await expect(
         client.execute({
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,status,storage_object_id,key_version) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,storage_object_id,key_version) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
           args: [
             "v2-file",
             "storage-org-a",
@@ -340,7 +359,11 @@ describe("Agent storage expansion schema", () => {
             "organizations/storage-org-a/storage-objects/file-storage-object",
             "v2.txt",
             1,
-            "text/plain",
+            "image/png",
+            "png",
+            1,
+            1,
+            "etag-file-storage-object",
             "pending",
             "file-storage-object",
             2,
