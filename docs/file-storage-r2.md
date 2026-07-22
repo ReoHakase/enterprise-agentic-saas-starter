@@ -6,7 +6,7 @@ API Workerだけがprivate R2 bucketへアクセスします。browserはR2 URL�
 
 v1のownerはIssueだけですが、API、DB、R2 key、client helperは汎用fileとして構成しています。1 fileは作成時から1 ownerへ固定され、未所属uploadやowner変更はできません。
 
-Agent chatへ添付する短期画像は、Issueへ昇格するまではgeneric fileではなく専用のagent assetとして扱います。`fileOwnerTypes`へ`agent_thread`を追加してownerを変更する方式は採りません。physical objectとlogical fileを分離したzero-copy promotion、期限、quota、承認の設計は[Agent runtime・tool・承認](./agent-runtime.md#画像付きchatとissue-attachment)を参照してください。
+Agent chatへ添付する短期画像は、Issueへ昇格するまではgeneric fileではなく専用のagent assetとして扱います。`fileOwnerTypes`へ`agent_thread`を追加してownerを変更する方式は採りません。physical objectとlogical fileを分離したzero-copy promotion、期限、quota、承認の設計は[Agent asset、mention、page context](./agent/assets-mentions.md#chat画像)を参照してください。
 
 userとorganizationのidentity画像はgeneric ownerを拡張せず、専用の`profile_images` metadataと次のrouteを使います。app-ownedなAPI/DB/Webの名称は`profileImage`へ統一し、Better Auth生成列の`user.image` / `organization.logo`だけを互換境界として残します。
 

@@ -129,7 +129,7 @@ Cloudflare Service Bindingはpublic internetを遮断するnetwork boundaryで�
 
 Agent WorkerはAPI named `WorkerEntrypoint`内のprivate Elysia `POST /internal/agent/connections/consume`でticketをatomic consumeし、5分以内のrun grantへ交換します。以後はgrantを`Authorization: Bearer`で同じnamed entrypointの`/internal/agent/*`へ送り、各routeがlive session、active organization、membership、context epoch、thread/run owner、scope、expiry、現在permissionを再検証します。`x-user-id` / `x-organization-id`、modelのtool argument、page context、route slugをactor authorityにしません。public Elysia appへinternal appをmountせず、Agent WorkerへBetter Auth secret、cookie署名鍵、Turso credentialを渡しません。
 
-v1でdelegation JWTを使わないのは、one-time consumeと即時失効にDB stateが必要だからです。opaque tokenはactive organization/account/role変更時に同じtransactionで失効でき、Agent Workerへ署名鍵を配る必要もありません。詳細なticket/grant/action lifecycleは[Agent runtime設計](./agent-runtime.md#認証認可の正本)を正本にします。
+v1でdelegation JWTを使わないのは、one-time consumeと即時失効にDB stateが必要だからです。opaque tokenはactive organization/account/role変更時に同じtransactionで失効でき、Agent Workerへ署名鍵を配る必要もありません。詳細なticket/grant/action lifecycleは[Agent architectureとsecurity](./agent/architecture-security.md#認証とcsrf)を正本にします。
 
 ## Secret
 

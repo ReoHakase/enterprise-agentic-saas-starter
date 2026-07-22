@@ -8,14 +8,13 @@
 2. [ローカル開発](./local-development.md) — 初回セットアップと日々の起動
 3. [Database lifecycle](./database-lifecycle.md) — migration、seed、手動reset
 4. [認証・認可・マルチテナント](./auth-tenancy-security.md) — session、role、tenant境界、step-up
-5. [Mastra Agent runtime・tool・承認](./agent-runtime.md) — 3 Worker、layout-level Agent Shell、Web検索、Issue CRUD、HITL、chat画像、tenant切り替え
-6. [Mastra Agent paid E2E](./agent-paid-e2e.md) — 実OAuth、private Service Binding、OpenRouter課金、secretとcleanup
-7. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
-8. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
-9. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
-10. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
-11. [10 MB upload memory smoke](./upload-memory-smoke.md) — local workerd、並列multipart、RSSの読み方
-12. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
+5. [Agent仕様](./agent/README.md) — 3 Worker、chat UI、thread/context、tool/承認、usage、paid eval
+6. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
+7. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
+8. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
+9. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
+10. [10 MB upload memory smoke](./upload-memory-smoke.md) — local workerd、並列multipart、RSSの読み方
+11. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
 
 ## 最短の確認
 
