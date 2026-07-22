@@ -118,6 +118,8 @@ export const mastra = new Mastra({
 })
 ```
 
+`skills/*.ts`は単なるprompt断片にせず、`@mastra/core/skills`の`createSkill()`でinline Mastra Skillとして定義し、`productAgent`の`skills`へ登録する。`core`、`issue-triage`、`issue-writing`、`web-assistance`が`agent.listSkills()`とStudioのSkills表示から確認できることをtestする。
+
 agent keyは`productAgent`、IDは`product-agent`に固定する。local dev、Mastra Studio、paid E2EではOpenRouterの`qwen/qwen3.6-flash`を使う。Mastra上のmodel表現は`openrouter/qwen/qwen3.6-flash`、OpenRouter providerへ渡すslugは`qwen/qwen3.6-flash`である。model IDはMastra provider registryで存在確認してから更新する。
 
 `OPENROUTER_API_KEY`は次の場所にだけ置く。
@@ -142,6 +144,104 @@ keyをCLI引数、source、docs、Turbo cache、Playwright artifact、Sentry、s
 
 検索queryへemail、token、session、organization ID、asset ID、private Issue本文を含めない。Web resultはuntrusted contentであり、そこに書かれた命令をIssue toolやclient toolの権限として扱わない。
 
+## 認証・認可の正本
+
+Service Bindingはnetwork capabilityであり、human actorのidentityやtenant権限を証明しない。Agentの認証・認可は次の3層をすべて通す。
+
+| 境界 | credential | 検証責務 |
+| --- | --- | --- |
+| Browser → API public app | Better AuthのSecure/HttpOnly session cookie | Origin、session、active organization、membership、thread owner、quota |
+| API → Agent named entrypoint | 60秒・一回限りのconnection ticket | ticket scope、replay、Agent feature flag |
+| Agent → API named `/internal/agent/*` | 5分以内のBearer run grant | live session、active organization、membership、context epoch、thread/run scope、現在permission |
+
+Browserのcookie、`Authorization`、organization IDをAgent Workerへ転送しない。Agent Workerが`x-user-id`や`x-organization-id`を自己申告する構成にもしない。Browserへconnection ticket、grant、resume ticketを返さない。
+
+### Public APIのsessionとCSRF
+
+WebはAPIと別subdomainなので、AI SDK transportはAPI originへ`credentials: "include"`で接続する。Better Authは`AUTH_COOKIE_DOMAIN`でWeb/API共通の親domainへ閉じ、`TRUSTED_ORIGINS`と`CORS_ORIGIN`はWeb originのexact allowlistにする。wildcard CORSとcredentialを併用しない。
+
+このrepoのCSRF境界は独自header tokenではなく、`apps/api/src/plugins/csrf.ts`のglobal Origin検証である。`POST /agent/chat`、action decision/resume、approval policy、asset uploadを含む全unsafe methodはOrigin必須で、`CORS_ORIGIN`または`API_PUBLIC_URL`と完全一致しないrequestを403 `csrf_origin_forbidden`へ倒す。添付草案の`x-csrf-token`を別系統として追加しない。
+
+public Agent routeは`authenticated: true` macroでBetter Auth sessionを解決する。ただしAgent request bodyにorganization IDが存在しないため、汎用`organizationAccess`へ偽のIDを渡さない。service/repository transaction内で次の順に解決する。
+
+1. `(sessionId, userId)`が一致し、期限内のsessionを取得する。
+2. sessionの`activeOrganizationId`をcanonical tenantとし、nullを拒否する。
+3. 現在のmembershipを取得し、未知roleをfail closedにする。
+4. `(threadId, activeOrganizationId, ownerUserId, status = active)`でprivate threadを取得する。
+5. context epoch、quota、message/attachment上限を検証する。
+6. canonical message保存とconnection ticket発行を同じtransactionへ入れる。
+
+非member、別tenant thread、不存在threadは同じ404にし、active organization不一致は409、session欠如・期限切れは401にする。Browserが送るroute slug、page context、mention label、`agentThread` queryは認可へ使わない。
+
+`POST /agent/chat`のbodyは、最後のuser message、またはserver保存済みassistant messageに対応するallowlist済みclient-tool resultのstrict unionである。全履歴、user/organization、ticket、grant、approval policyのover-postを拒否する。client-tool continuationはassistant message ID、tool call ID、tool名、pending stateをDB上のcanonical messageと完全一致させ、Browserが任意のassistant/tool resultを捏造できないようにする。
+
+### Opaque capabilityを使う理由
+
+v1ではdelegation JWTを使わない。APIが256-bit以上のrandom値を生成し、DBにはSHA-256 hashとscopeだけを保存する。
+
+```text
+connection ticket
+  TTL 60秒 / atomic one-time consume
+  session + user + organization + thread + context epoch
+
+connection grant
+  TTL 5分
+  startRunのための短期capability
+
+run grant
+  TTL 5分以内
+  root run + thread + session + user + organization + context epoch + scope
+
+resume ticket
+  TTL 60秒以下 / atomic one-time consume
+  approved action + session + user + organization + thread + context epoch
+```
+
+opaque tokenならactive organization変更、account切り替え、membership/role変更、thread archive、sign-out、manual revokeを即時DB失効へ反映でき、replayもatomic updateで防げる。JWTへ変えても`jti`の一回性と即時失効を保存するDBが必要になるため、現構成では署名鍵とclaim parserだけが増える。Agent Workerへ署名鍵、Better Auth secret、Turso credentialを渡さず、tokenの正当性はAPI named entrypointだけが判定する。
+
+### Named entrypoint内の`/internal/*`と内部再認可
+
+`AGENT_RUNTIME`はAgent Workerのnamed `AgentRuntime`だけを指し、Agent Workerのdefault `fetch`は常に404にする。`workers_dev = false`、`preview_urls = false`を維持し、route/custom domainを設定しない。
+
+逆方向は`AGENT_INTERNAL_API`からAPI Workerのnamed `AgentInternalApi`をHTTP Service Bindingで呼ぶ。named entrypointの`fetch()`だけが`createAgentInternalApp(db)`を実行し、prefixを`/internal/agent`へ固定する。default/public `createApp(db)`へinternal appを`.use()`せず、public custom domain、OpenAPI、CORSから`/internal/*`へ到達させない。
+
+Agent WorkerはEden Treatyのcustom `fetcher`を`AGENT_INTERNAL_API.fetch(request)`へ差し替える。型はserver-onlyな`AgentInternalApp` exportから推論し、dummy originはURL組み立てのためだけに使う。通常のglobal `fetch`やAPI public originへのfallbackは禁止する。Webが`@enterprise-agentic-saas/api/agent-client`をimportすることも禁止する。
+
+internal appはElysia/Valibotのroute schemaを使う。connection/resume ticketをatomic consumeするroute以外は、strictな`authorization: Bearer <run grant>` header guardでcredentialを抽出する。guardは形式を検証するだけで認証済み扱いにせず、各routeのservice/repositoryがhash lookupとlive DB再認可を行う。validation errorへtoken値やValibot issueを含めない。
+
+pathはtool名のmirrorではなく、安定したdomain capabilityへ分ける。
+
+```text
+POST /internal/agent/connections/consume
+POST /internal/agent/runs
+POST /internal/agent/runs/:runId/settle
+POST /internal/agent/messages/append
+GET  /internal/agent/account/context
+GET  /internal/agent/organizations/active
+GET  /internal/agent/organizations/active/members
+GET  /internal/agent/issues
+GET  /internal/agent/issues/:issueId
+POST /internal/agent/issue-actions/prepare
+GET  /internal/agent/issue-actions/:actionId/decision
+POST /internal/agent/issue-actions/:actionId/resume
+POST /internal/agent/issue-actions/:actionId/execute
+GET  /internal/agent/assets/:assetId/model-image
+```
+
+同じauthorization/transactionを共有するprepareはcreate/update/deleteのdiscriminated unionを受ける。Mastraの`create_issue`等とHTTP endpointを一対一に増やさない。binary image responseなどEdenの通常data shapeに合わないrouteだけは、同じtyped internal client内の低水準fetch helperに隔離する。
+
+run grantを受ける各internal methodは、hash lookupだけで許可せず毎回次を再検証する。
+
+- sessionが未失効で、同じuserに属する
+- active organizationがgrantのorganizationと完全一致する
+- membershipとroleが現在も有効である
+- context epochが同じである
+- threadが同じtenantの同じownerに属する
+- runが同じthread/session/user/tenant/scopeに属し、期限内かつ許可状態である
+- read/writeごとの現在permission、Issue revision、assignee membership、asset leaseが有効である
+
+これによりAgent Workerまたはmodelが任意のRPC methodを選べても、別actor/tenantへscopeを広げられない。Service Bindingだけ、Mastra tool schemaだけ、UIの非表示だけを認可境界にしない。
+
 ## Worker間通信
 
 ### BrowserからAPI
@@ -158,11 +258,11 @@ browser timezone
 
 全message history、organization ID、raw image、private URL、object key、approval policyをclient authorityとして送らない。
 
-APIはcookie、Origin、CSRF、session、active organization、membership、thread owner、context epoch、quota、message sizeを検証する。canonical organizationとuserはsessionから決定する。
+APIはcookie、Origin、session、active organization、membership、thread owner、context epoch、quota、message sizeを検証する。canonical organizationとuserはsessionから決定する。
 
 ### APIからAgent
 
-APIの`AGENT_RUNTIME` bindingはAgent Workerのnamed entrypointだけを指す。短期delegationには次を束縛する。
+APIの`AGENT_RUNTIME` bindingはAgent Workerのnamed entrypointだけを指す。connection ticketには次を束縛する。
 
 ```text
 session ID
@@ -170,20 +270,18 @@ user ID
 active organization ID
 context epoch
 thread ID
-root run ID
-scope
 issued at / expiry
 ```
 
-delegationは一回限り、短寿命、hash保存とする。Agent Workerへ署名鍵を渡さない。
+connection ticketは一回限り、60秒、hash保存とする。Agent Workerがconsumeした後にAPIが5分のconnection grantを発行し、`startRun`がroot run IDとrun scopeを確定して5分以内のrun grantへ交換する。
 
 Agent WorkerはMastra `product-agent.stream()`を実行し、`@mastra/ai-sdk`のstream adapterでAI SDK UI streamへ変換する。APIはstatus、content type、cancel signalを保持してBrowserへ返す。API/Agentどちらもstream全体をbufferしない。
 
 ### AgentからAPI
 
-Agentの`AGENT_INTERNAL_API`はAPI Workerのnamed `AgentInternalApi`だけを指す。public Elysia appへ`/internal/*`をmountしない。
+Agentの`AGENT_INTERNAL_API`はAPI Workerのnamed `AgentInternalApi`だけを指す。named entrypoint内のElysia appだけが`/internal/agent/*`を処理し、public Elysia appへはmountしない。
 
-各tool callでAPIはdelegation、live session、active organization、context epoch、membership、現在permission、thread/run owner、expiryを再検証する。modelが渡すorganization IDやroute slugをauthorizationへ使わない。
+各tool callでAPIはrun grant、live session、active organization、context epoch、membership、現在permission、thread/run owner、scope、expiryを再検証する。modelが渡すorganization IDやroute slugをauthorizationへ使わない。
 
 ## Tool設計
 
@@ -308,7 +406,7 @@ dirty form、composer、in-flight upload、staged asset、active run、pending a
 - Stay
 - Discard local draft and switch
 
-activation成功まではdraftとlocal Blobを保持する。成功transactionでcontext epochを増やし、旧delegation、run、action、resume ticket、approval policy、asset leaseを失効させる。
+activation成功まではdraftとlocal Blobを保持する。sessionの`active_organization_id`変更は`session_agent_context_rotate_organization` DB triggerで同じtransaction内のcontext epochを必ず1だけ増やす。続く`agent_session_contexts_revoke_old_epoch` triggerが旧connection ticket、grant、run、action、resume ticket、approval policyを失効し、action terminal transitionがasset leaseを解放する。application codeとDB triggerの両方でepochを増やして二重rotationさせない。
 
 成功後に次を順番に行う。
 
@@ -320,6 +418,16 @@ activation成功まではdraftとlocal Blobを保持する。成功transaction�
 6. `router.refresh()`でpersistent console layoutを更新する。
 
 ready staged assetはserver既定72時間、pending uploadは1時間でcleanupする。switch失敗時は旧routeとdraftを維持し、別organizationへstateを付け替えない。route organizationとactive organizationが一致しない間はcomposerとclient toolをdisableする。
+
+Better Authのmulti-session account切り替えはorganization切り替えと同一操作ではない。次の順序を固定する。
+
+1. 旧session cookieのまま`POST /agent/context/revoke`を成功させる。失敗したら`setActive`を呼ばない。
+2. in-flight Agent/tenant queryをcancelし、identity-scoped TanStack Query cacheをclearする。
+3. Better Auth `multiSessionClient.setActive`でactive accountを切り替える。
+4. Agent stream/upload、shell、thread、composer、form registry、Blob URLをclearする。
+5. account固有のactive organizationを新sessionから再解決し、`/dashboard`へreplaceして`router.refresh()`する。
+
+旧accountのactive organizationを新accountへコピーしない。新sessionのactive organizationがnullまたはstaleなら、既存のBetter Auth/`/me`規則どおり現在membershipを再検証して修復または明示選択へ進める。sign-out、session revoke、membership/role変更も該当sessionのAgent contextを失効させる。
 
 ## 画像とIssue添付
 
@@ -347,6 +455,8 @@ Browser multipart upload
 - pending: 8/user、32/org
 - ready retention: 72時間、hard max 7日
 - pending timeout: 1時間
+
+Cloudflare側のcapacityとapplication quotaは分けて考える。2026-07時点でR2はbucketごとの保存容量とobject数がunlimitedで、1 objectは最大5 TiB、single-part uploadは最大5 GiBである。この機能の10 MB制限はR2由来ではなく、abuse、Worker memory、model input、費用を抑えるproduct側の制限である。Cloudflare Images bindingの`.input()`は最大20 MBであり、この設計はoriginalをImages hosted storageへ二重保存せず、10 MB以下のR2 objectをbindingへ入力してbounded variantだけを生成する。したがって容量制御の正本は1 GiB/org、asset件数、TTL、cleanup backlogであり、Cloudflareのplatform上限へ近づくまで無制限に受理する設計にはしない。platform limitは変更され得るためrelease時に公式R2/Images limitを再確認する。
 
 R2 keyとprivate URLはWebやmodelへ渡さない。Agent WorkerへR2 bindingを渡さない。IssueへのpromotionはR2 copyやBrowser再uploadを行わず、claim/file metadataをtransactionで移す。promotion対象originalへprefix lifecycleを直接適用しない。
 
@@ -431,7 +541,7 @@ bun run dev:agent:studio
 
 ## Deployment
 
-deploy順はDB migration、API、Agent、Web、smokeとする。APIはAgent bindingを参照するため、初回deployではcompatibility versionを用意する。
+相互Service Bindingがあるため、fresh accountはDB migration、bootstrap API（`AGENT_RUNTIME`なし）、Agent、final API、Web、smokeの順にする。既存環境の通常releaseは互換な旧APIを残してAgent、API、Webの順に更新する。bootstrap configを通常runtimeとして残さない。
 
 - Web/APIのみcustom domainを持つ
 - Agentはprivate Service Bindingのみ

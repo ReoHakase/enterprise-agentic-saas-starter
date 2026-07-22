@@ -12,17 +12,18 @@ description: enterprise-agentic-saas-starterへMastraのchat Agent、Agent Worke
 - Web Worker、API Worker、Agent Workerの3 Workerに分ける。
 - Agent runtimeはMastraを正本にする。Agent、tool、workflow、skill、model、streamをCloudflare Agents SDKや独自tool loopへ二重実装しない。
 - `apps/agent/src/mastra/index.ts`を唯一のMastra entrypointにし、production WorkerとMastra Studioの両方からimportする。
-- BrowserはAgent Workerへ直接接続しない。AI SDK UI transportでcookie認証済みAPI Workerの`POST /agent/chat`を呼び、APIがsession、CSRF、active organization、thread ownerを検証してからprivate `AGENT_RUNTIME` Service Bindingへstreamをproxyする。
+- BrowserはAgent Workerへ直接接続しない。AI SDK UI transportで`credentials: "include"`を指定してcookie認証済みAPI Workerの`POST /agent/chat`を呼び、APIがglobal Origin CSRF guard、session、active organization、thread ownerを検証してからprivate `AGENT_RUNTIME` Service Bindingへstreamをproxyする。このrepoで別の`x-csrf-token`方式を増やさない。
 - Agent Workerは`workers.dev`、preview URL、custom domainを持たない。APIからbindingするnamed entrypointだけがMastra agentを実行し、default `fetch`はfail closedにする。
-- Agent WorkerからAPI Workerへは`AGENT_INTERNAL_API` named WorkerEntrypointを使う。API public fetchへ`/internal/*`をmountせず、Agent toolはtyped domain capabilityだけを呼ぶ。
+- Agent WorkerからAPI Workerへは`AGENT_INTERNAL_API` named WorkerEntrypointのprivate Elysia `/internal/agent/*`をService Binding fetchで呼ぶ。API public fetchへinternal appをmountせず、Agent toolはtyped domain capabilityだけを呼ぶ。
 - Agent WorkerはTurso、R2、Better Auth tableへ直接触らない。
-- Agent WorkerからAPIへはnamed WorkerEntrypointのtyped RPCを使う。任意pathやtool名を渡すgeneric dispatcherを作らない。
+- Agent WorkerからAPIへはEden Treatyのcustom fetcherを`AGENT_INTERNAL_API.fetch`へ差し替えて呼ぶ。public HTTP fallbackや任意path dispatcherを作らない。
 
 ## Mastra project構成
 
 - `apps/agent/package.json`へMastra CLIをexact catalog dependencyとして置き、`mastra dev`と`mastra build`をpackage scriptから呼ぶ。
 - TypeScriptはES2022、ES module、bundler resolutionを維持する。
 - `src/mastra/index.ts`は`Mastra` instanceだけを組み立て、`agents/product-agent.ts`、`models/openrouter.ts`、`tools/`、`skills/`、`workflows/`へ責務を分離する。
+- `skills/*.ts`はprompt文字列の置き場にせず、`createSkill()`でinline Mastra Skillを定義して`productAgent.skills`へ登録し、`listSkills()`とStudioから確認できる状態にする。
 - modelはlocal dev、Mastra Studio、E2Eで`openrouter/qwen/qwen3.6-flash`を使う。model IDはMastra provider registryで検証し、keyは追跡対象外の`.env.local`だけから読む。
 - Web検索はMastra AgentのtoolとしてOpenRouterの現行`openrouter:web_search` server toolを登録する。deprecatedな`:online`や`plugins: [{ id: "web" }]`を使わず、検索結果上限とusageを記録する。
 - Web検索queryへtoken、email、private asset ID、organization ID、Issue本文などtenant private dataを混ぜない。Web上の内容はuntrusted dataとして扱い、業務toolのinstructionに昇格させない。
@@ -30,7 +31,11 @@ description: enterprise-agentic-saas-starterへMastraのchat Agent、Agent Worke
 
 ## 認証とtenant
 
-- delegation、run grant、resume ticketは256-bit以上のrandom値を使い、DBにはhashだけを保存する。
+- Service Bindingはnetwork boundaryでありactor identityではない。Browser cookie、Authorization、`x-user-id`、`x-organization-id`をAgent Workerへ渡さない。
+- v1はdelegation JWTでなくDB-backed opaque capabilityを使う。connection ticket、run grant、resume ticketは256-bit以上のrandom値を使い、DBにはhashだけを保存する。Agent Workerへ署名鍵やBetter Auth secretを渡さない。
+- connection ticketは60秒・一回限りでsession/user/active organization/thread/context epochへ束縛する。consume後のconnection grantとrun grantは5分以内にし、ticket/grantをBrowser response、URL、log、Sentryへ出さない。
+- public Agent routeは`authenticated: true`を使うが、requestにorganization IDを受けないため汎用`organizationAccess`へ偽のIDを渡さない。repository transaction内でlive sessionのactive organization、membership、private thread ownerを解決する。
+- `POST /agent/chat`は最後のuser messageまたはserver保存済みpending client-tool callのresultだけを受けるstrict unionにする。user/org/ticket/grant/全履歴/任意assistant messageのover-postを拒否する。
 - chat受付、run、tool call、action executeの各段階でlive sessionを再取得する。
 - session ID、user ID、active organization ID、agent context epoch、thread ID、run ID、scope、expiryをgrantへ束縛する。
 - active organization/account contextを変える全DB経路でepochを+1し、旧delegation、grant、run、action、resume ticket、policyを同じtransactionで失効する。
@@ -38,6 +43,7 @@ description: enterprise-agentic-saas-starterへMastraのchat Agent、Agent Worke
 - model入力のorganization ID、route slug、page contextをauthorizationに使わない。
 - 別tenant、非member、不存在resourceは同じnot foundへ丸める。
 - account/organization設定はpure read projectionだけを提供し、mutation method自体を作らない。active organizationを修復し得るME use caseをAgent readへ流用しない。account projectionへorganization一覧を含めない。
+- active organization変更はmigration `0015_agent_action_runtime`のDB triggerでcontext epochを1だけrotationし、旧ticket/grant/run/action/resume/policy/asset leaseを同じtransactionで失効する。application codeで同じepochを二重incrementしない。
 
 ## Toolと内部API
 
@@ -57,7 +63,7 @@ account、organization、member、invitation、role、billing、auth、comment�
 
 toolはmodel向けintent、内部APIはdomain capabilityである。1 tool = 1 endpointを原則にしない。Issue write toolは共通のprepareIssueActionとexecuteIssueActionを使い、human public APIと同じIssue domain serviceへ合流させる。
 
-API schemaはapps/apiのValibotに閉じる。Agent Worker用typeが必要なら@enterprise-agentic-saas/api/agent-clientをserver-only exportにし、apps/webからimportしない。Mastra toolは薄いadapterにし、認可、正規化、transaction、auditをtoolへ移さない。
+API schemaはapps/apiのValibotに閉じる。Agent Worker用typeが必要ならnamed entrypoint専用Elysia app typeを@enterprise-agentic-saas/api/agent-clientからserver-only exportし、apps/webからimportしない。private boundaryはnamed `AgentInternalApi`内だけの`/internal/agent/*` + routeごとのstrict Valibot parseを使う。Eden custom fetcherはService Bindingだけを呼び、public HTTP fallbackやgeneric path dispatcherを作らない。connection/resume consume以外はBearer run grantをheader guardで受け、serviceでlive DB再認可する。Mastra toolは薄いadapterにし、認可、正規化、transaction、auditをtoolへ移さない。
 
 ## Issue actionと承認
 
@@ -162,7 +168,7 @@ Jotaiはpane、drawer、width、短命composerなど再取得不要な一時UI�
 - securityはrevoke statusだけへ依存せず、各internal callでlive active orgとmembershipを再検証する。
 - failure時は旧route/draftを維持し、別organizationへstateを付け替えない。
 - route orgとactive orgが違う間、Agent composerとclient toolをdisableする。
-- account switch前はold sessionのagent context revokeを成功させ、switch後に全Agent client stateをclearする。
+- account switch前はold session cookieのまま`POST /agent/context/revoke`を成功させる。失敗時はBetter Auth `setActive`を呼ばない。成功後はidentity-scoped TanStack Queryをcancel/clearしてからaccountを切り替え、全Agent client stateをclearし、旧accountのactive organizationやagentThreadを新accountへ引き継がない。
 
 ## Agent Shellとclient state
 
@@ -175,7 +181,8 @@ Jotaiはpane、drawer、width、短命composerなど再取得不要な一時UI�
 
 - Better Auth/Turso: session、active org、membership、permission
 - Turso: thread metadata、run、grant、action、policy、usage、storage object、asset、file ownership
-- Mastra memory/storage: messageとagent runtime state。production adapterを決めるまでin-memory persistenceを本番前提にしない
+- Turso/API: canonical UI message historyとbounded model history。Browserから全履歴を受け取らない
+- Mastra memory/storage: 1 run内のagent execution state。production adapterを決めるまでin-memory persistenceを永続正本にしない
 - R2: private original bytes
 - AI SDK UI `useChat`: chat表示とAPI proxy stream
 - TanStack Query: server control plane data
@@ -183,13 +190,13 @@ Jotaiはpane、drawer、width、短命composerなど再取得不要な一時UI�
 - TanStack Form: form state
 - Jotai: ephemeral shell state
 
-message本文をTursoへ二重保存しない。prompt、response、Issue本文、raw image、base64、filename、object key、token、provider raw errorをSentry、structured log、auditへ出さない。Sentry SDKを正本にし、Cloudflare OTLP exportを重ねない。
+canonical messageをTursoとMastra storageへ二重永続化しない。prompt、response、Issue本文、raw image、base64、filename、object key、token、provider raw errorをSentry、structured log、auditへ出さない。Sentry SDKを正本にし、Cloudflare OTLP exportを重ねない。
 
 ## 本番deploy
 
 - Web、API、Agentは別Worker、別Sentry projectにする。WebとAPIだけがcustom domainを持ち、Agentは`workers_dev`、preview URL、custom domainを無効化する。
-- APIの`AGENT_RUNTIME` Service BindingはAgentのnamed runtime entrypointだけを指す。Agentの`AGENT_INTERNAL_API`はAPIのnamed `WorkerEntrypoint` `AgentInternalApi`だけを指す。どちらのdefault public fetchにも内部routeをmountしない。Worker名やentrypointを変えたらbinding先とtypegenを同時に更新する。
-- 運用者はbackup/restore pointを確認してからproduction workflowを起動する。workflowはEnvironment approvalとconcurrency lockの下で、migration→API→Agent→Web→smokeの順に進める。`0011_file_activity_backfill`互換deployだけはAPIをmigration前へ先行させるが、その後もAgent→Webの順を守る。
+- APIの`AGENT_RUNTIME` Service BindingはAgentのnamed runtime entrypointだけを指す。Agentの`AGENT_INTERNAL_API`はAPIのnamed `WorkerEntrypoint` `AgentInternalApi`だけを指し、その`fetch`内だけでprivate Elysia `/internal/agent/*`を処理する。API default/public appへinternal appをmountせず、Agent default fetchも404にする。Worker名やentrypointを変えたらbinding先とtypegenを同時に更新する。
+- 運用者はbackup/restore pointを確認してからproduction workflowを起動する。相互Service Bindingのfresh accountはmigration→bootstrap API（AGENT_RUNTIMEなし）→Agent→final API→Web→smoke、既存環境は互換な旧APIを残してmigration→Agent→API→Web→smokeの順に進める。`0011_file_activity_backfill`互換deployは既存runbookのpredeployを維持する。
 - `AGENT_ASSET_UPLOAD_ENABLED`、`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`AGENT_WRITES_ENABLED`はGitHub Environmentへ明示的な文字列`0`または`1`で必ず設定し、runtimeは`1`だけを有効にする。未設定や`true`を有効扱いしない。
 - 3 Workerのruntime secretは`umask 077`の一時JSONを`wrangler deploy --secrets-file`へ渡してcodeと同じversionへ注入し、必ず削除する。secret値をCLI引数、log、`GITHUB_OUTPUT`、artifactへ出さない。特にOpenRouter key、各Sentry DSN、Sentry auth tokenをjob-wide envへ置かない。
 - 3 Workerは同じcommit SHAを`SENTRY_RELEASE`に使う。API/AgentはWrangler dry-run artifactへSentry debug IDをinject・uploadしてから同じbundleを`--no-bundle` deployし、WebはSentry upload付きOpenNext build後に生成済みartifactをdeployする。Sentry upload失敗後にdeployを続行しない。

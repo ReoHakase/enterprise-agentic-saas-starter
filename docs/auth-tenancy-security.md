@@ -38,6 +38,8 @@ member削除時はmembership、auditだけでなく、対象userが削除organiz
 
 clientのactivate成功直後に旧tenantのTanStack Queryを一括invalidateしません。session contextだけが新tenantへ変わった状態で旧member/issue queryを再取得すると409/404になるため、in-flight queryをcancelし、route replaceまたはServer Component refreshで新tenantのquery keyを構築します。
 
+Agent機能が有効なsessionでは、`active_organization_id`変更とAgent context失効も同じDB transactionです。migration `0015_agent_action_runtime`の`session_agent_context_rotate_organization` triggerがcontext epochを1増やし、旧epochのconnection ticket、grant、resume ticket、run、action、approval policyを失効します。これをclient-side cleanupの代わりにせず、切り替え後はAgent stream/uploadをabortし、Agent/files/issuesを含む旧tenant queryをcancelし、shell draft、thread、form registry、Blob URL、tenant query parameterをclearしてから`router.replace()`と`router.refresh()`を行います。route slugと新sessionのactive organizationが一致するまでAgent composerとclient toolは無効です。
+
 人が開くorganization管理URLは `/organization/:organizationSlug/members|settings` とし、UUIDを公開URLへ使いません。Server Componentはsession userが所属するorganization一覧からslugを解決し、見つからないslugを404にしてから、内部APIへ検証済みorganization IDを渡します。slug変更後は新slugのURLへ置換します。
 
 Better Auth organization pluginの管理・参照APIは直接公開しません。`/auth/organization/*` はdeny-by-defaultとし、招待recipient本人に必要な `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` の4 pathだけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths` で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
@@ -82,6 +84,8 @@ APIはjobをqueueした時点で201を返します。local Bunではprocessorを
 
 Better Authのmulti-session pluginをserver/client双方に設定します。account menuから現在のsessionを維持したまま別アカウントを追加し、保存済みsessionを切り替えられます。切り替え後はServer Componentをrefreshし、active organizationとpermissionを新sessionから再取得します。
 
+Agent Shellを持つconsoleでaccountを切り替える場合は、旧session cookieがactiveな間に`POST /agent/context/revoke`を完了させます。revokeが失敗したらBetter Auth `setActive`を呼ばず、旧accountとlocal draftを維持します。成功後は認証済みqueryをすべてcancel/clearしてから`setActive`を呼び、Agent stream、upload、thread、composer、form registry、Blob URLを破棄し、`/dashboard`へreplaceして`router.refresh()`します。旧accountのactive organizationや`agentThread`を新accountへ引き継ぎません。
+
 Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 
 Better AuthやOAuth/passkey providerのclient errorは、Web-local Valibotでstable codeだけを読み、既知codeのallowlistを安全な固定文言へ対応付けます。未知codeやraw `message`、nested causeにはprovider response、token、内部障害が含まれ得るため表示せず、操作別fallbackを使います。表示ownerは操作componentまたはglobal ownerの一方に決め、同じ失敗を二重toastしません。
@@ -116,6 +120,16 @@ Better Auth 1.6.9ではcallback pathが異なります。
 - `AUTH_COOKIE_DOMAIN=example.com`
 
 OpenAPI上のcookie名は `better-auth.session_token` で表現しますが、本番ではBetter Authがsecure prefixを付ける場合があります。CORSはallow-list + credentialsにし、wildcardとcredentialsを併用しません。
+
+## Agent delegation
+
+BrowserはBetter Auth cookieをAgent Workerへ送らず、cookie認証済みAPI public routeだけを呼びます。APIのglobal CSRF guardはunsafe methodの`Origin`を必須にし、`CORS_ORIGIN`または`API_PUBLIC_URL`とのexact matchを検証します。Agent専用の`x-csrf-token`方式は追加しません。
+
+Cloudflare Service Bindingはpublic internetを遮断するnetwork boundaryであり、actorの認可ではありません。APIはsessionからuserとactive organizationを決め、membershipとprivate thread ownerをDB transaction内で再検証してから、60秒・一回限りのopaque connection ticketをAgent Workerへ渡します。tokenは256-bit以上のrandom値とし、DBにはhashだけを保存します。Browser response、URL、log、Sentryへ出しません。
+
+Agent WorkerはAPI named `WorkerEntrypoint`内のprivate Elysia `POST /internal/agent/connections/consume`でticketをatomic consumeし、5分以内のrun grantへ交換します。以後はgrantを`Authorization: Bearer`で同じnamed entrypointの`/internal/agent/*`へ送り、各routeがlive session、active organization、membership、context epoch、thread/run owner、scope、expiry、現在permissionを再検証します。`x-user-id` / `x-organization-id`、modelのtool argument、page context、route slugをactor authorityにしません。public Elysia appへinternal appをmountせず、Agent WorkerへBetter Auth secret、cookie署名鍵、Turso credentialを渡しません。
+
+v1でdelegation JWTを使わないのは、one-time consumeと即時失効にDB stateが必要だからです。opaque tokenはactive organization/account/role変更時に同じtransactionで失効でき、Agent Workerへ署名鍵を配る必要もありません。詳細なticket/grant/action lifecycleは[Agent runtime設計](./agent-runtime.md#認証認可の正本)を正本にします。
 
 ## Secret
 

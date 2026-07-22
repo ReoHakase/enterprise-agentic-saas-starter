@@ -34,7 +34,7 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 ### Agent chat image（v2 target）
 
 - Agent chatの短期画像は、Issueへ昇格するまではgeneric `file`ではなくfeature固有の`agent_asset`として扱う。`fileOwnerTypes`へ`agent_thread`を足さず、現行の「作成時からimmutableなIssue owner」というgeneric file contractを崩さない。
-- Browserは画像をAgent asset専用の`/files/*` routeへmultipartで一度だけuploadし、chat message、Durable Object、tool argumentにはopaque asset IDだけを保存する。base64/data URI、raw bytes、private URL、object keyを保存せず、Issue作成時もBrowserから再uploadしない。
+- Browserは画像をAgent asset専用の`/files/*` routeへmultipartで一度だけuploadし、canonical chat messageにはopaque asset IDだけを保存する。Mastra memory/tool argumentへbase64/data URI、raw bytes、private URL、object keyを保存せず、Issue作成時もBrowserから再uploadしない。
 - 中核実装ではR2上のphysical objectを`storage_objects`へ分離し、`agent_assets`と`files`をlogical resourceにする。新規R2 keyはowner非依存にし、既存fileは1対1 storage objectとfile claimへbackfillして旧keyを移動しない。このmigration前は後述する現行のowner依存key contractを維持する。
 - `storage_object_claims`はstorage object IDをprimary keyにし、agent_asset、transferring、file holderを持つ。ready asset/fileとclaimの一致をrepositoryとSQLite triggerで強制し、1 physical objectに複数のlive holderを作らない。
 - v2 cleanupはclaimをconditional deleteしてstorage objectを`deleting`へ進め、cleanup revision付きexact-key jobを作る。jobはclaimなし・revision一致を再検証し、R2 delete後にobject keyをscrubする。logical history FKだけでphysical deleteを決めない。
@@ -42,7 +42,7 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - Issue createのexecute transactionではpending file作成、asset promoting、claim transferring、claim file、asset promoted + FK null、file ready、最終assertionの順を固定する。SQLite triggerはdeferredにできないため、pending file + file claimはsource assetがpromoting/promotedの場合だけ同一transaction内で許し、外へcommitしない。一般的なowner変更やblob共有APIを作らない。
 - stream-copy fallbackはzero-copy migrationの実証済みblockerを別ADRで例外承認した場合だけ使い、`materializing` action、planned ID/key、idempotency、fenced retry、orphan cleanupを必須にする。BrowserやAgent toolから再uploadしない。
 - chat画像は1 file `10_000_000` bytes以下、1 message最大4件・合計`20_000_000` bytes以下にする。既存のorganization合計`1_073_741_824` bytesへstagedとpermanentの両方を算入し、object count、pending count、時間窓request数もatomicに制限する。
-- originalは各putでstorage classを明示してprivate R2 Standardへ保存し、Cloudflare Images hosted storageは使わない。APIだけがR2とImages bindingを持ち、authorization後にmax edge 2,048px、WebP quality 75、animation無効へ変換する。Images outputを4 MiB + 1 byteまでbounded readし、超過をprovider送信前に拒否してから上限内bytesだけをRPC ResponseでAgent Workerへ渡す。
+- originalは各putでstorage classを明示してprivate R2 Standardへ保存し、Cloudflare Images hosted storageは使わない。APIだけがR2とImages bindingを持ち、authorization後にmax edge 2,048px、WebP quality 75、animation無効へ変換する。Images outputを4 MiB + 1 byteまでbounded readし、超過をprovider送信前に拒否してから上限内bytesだけをnamed private `/internal/agent/*` responseでAgent Workerへ渡す。
 - chat-only assetは既定72時間、hard max 7日でexpireする。DBの`expiresAt`とcleanup jobを正本にしてquotaを解放し、exact keyを冪等削除する。zero-copy promotion対象originalへprefix lifecycleを設定せず、絶対にpromoteしないderivativeだけをlifecycle backstopにする。
 - Issue attachmentへ昇格するまでのasset ACL、active organization、thread owner、lease、approval、ETag/size snapshotは`agent-runtime` skillと`docs/agent-runtime.md`を正本にする。
 

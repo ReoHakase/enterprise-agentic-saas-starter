@@ -48,7 +48,7 @@ apps/api/src/
 
 ## アーキテクチャ原則
 
-- `createApp(db)` は唯一のファクトリ。引数は `db: Db` のみ。テストと本番で共有する。
+- public appでは`createApp(db)`を唯一のファクトリにする。private Agent Service Bindingだけはnamed `WorkerEntrypoint`の`fetch`内で`createAgentInternalApp(db)`を使ってよい。internal appをpublic `createApp`へ合成しない。
 - 本番固有の関心事（auth, cors, server-timing）は独立 Elysia plugin にし、`index.ts` / `worker.ts` で `.use()` 合成する。
 - app construction用の中間factoryは作らない。`observability/runtime.ts` はSDKをcore appから隔離し、test時にnoopで動かすbridgeとしてのみ許可する。
 - `env.ts` は API 固有の env だけ持つ。`@enterprise-agentic-saas/db` / `@enterprise-agentic-saas/auth` が管理する env を重複させない。
@@ -97,6 +97,7 @@ apps/api/src/
 ## 認証・tenant macro
 
 - protected routeは `modules/authorization/access-control.ts` の `authenticated` または `organizationAccess` macroを必ず宣言する。handler内で個別にsession取得するrouteを増やさない。
+- named `AgentInternalApi`の`/internal/agent/*`はBrowser session macroを使わず、connection/resume consume以外でBearer run grantをstrict header schemaから取得し、service/repositoryでlive session、active organization、membership、context epoch、thread/run scope、現在permissionを再検証する。default/public app、統合OpenAPI、CORSへinternal routeをmountしない。
 - `organizationAccess` はroute schemaで検証済みのparams/query/bodyから `organizationId` を取り、session、membership、active organization、role、fresh sessionの順にfail-closedで解決する。
 - 非memberによるtenant指定は、存在する他tenantと存在しないIDを区別せず404にする。role不足は403、所属しているがactive tenantが違う場合は409 `active_organization_mismatch`。
 - repositoryのtenant resource queryはresource ID単独で検索せず、必ず `organizationId` と組み合わせる。親子resourceはDBのcomposite FKも併用する。
