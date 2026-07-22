@@ -13,7 +13,7 @@ const config: UserConfig = {
     parserOpts: {
       headerPattern: /^(\w*)(?:\((.*)\))?(!)?:\s+(.+)$/,
       headerCorrespondence: ["type", "scope", "breaking", "subject"],
-      breakingHeaderPattern: /^(\w*)(?:\((.*)\))?!:\s+(.+)$/,
+      breakingHeaderPattern: /^(\w*)(?:\((.*)\))?(!):\s+(.+)$/,
       issuePrefixes: ["#"],
       noteKeywords: ["BREAKING CHANGE"],
     },
