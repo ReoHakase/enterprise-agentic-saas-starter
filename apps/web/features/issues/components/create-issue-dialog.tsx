@@ -17,8 +17,10 @@ import {
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useForm } from "@tanstack/react-form"
 import { PlusIcon } from "lucide-react"
-import { useCallback, useState, type FormEvent } from "react"
+import { useCallback, useMemo, useState, type FormEvent } from "react"
+import * as v from "valibot"
 
+import { useRegisterAgentForm } from "@/features/agent/form-registry"
 import { createIssueFormSchema } from "@/features/issues/schema"
 
 import {
@@ -33,12 +35,15 @@ import type { AsyncAction } from "./types"
 const createIssueTrigger = <Button />
 
 export const CreateIssueDialog = ({
+  organizationId,
   pending,
   onCreate,
 }: {
+  organizationId: string
   pending?: boolean
   onCreate: AsyncAction<[title: string]>
 }) => {
+  const [formEpoch, setFormEpoch] = useState(() => crypto.randomUUID())
   const [open, setOpen] = useState(false)
   const [createError, setCreateError] = useState<string>()
   const [titleError, setTitleError] = useState<string>()
@@ -63,6 +68,51 @@ export const CreateIssueDialog = ({
       }
     },
   })
+  const agentFormAdapter = useMemo(
+    () =>
+      open
+        ? {
+            formId: "issue:create",
+            organizationId,
+            resource: "issue" as const,
+            epoch: formEpoch,
+            read: () => ({
+              values: { title: form.state.values.title },
+              dirtyFields: form.state.isDirty ? ["title" as const] : [],
+            }),
+            validate: (patch: { title?: string; description?: string }) => {
+              if (
+                Object.keys(patch).length !== 1 ||
+                typeof patch.title !== "string"
+              ) {
+                return {
+                  success: false as const,
+                  message: "The create Issue form only accepts a title patch.",
+                }
+              }
+              const result = v.safeParse(createIssueFormSchema, {
+                title: patch.title,
+              })
+              return result.success
+                ? {
+                    success: true as const,
+                    patch: { title: result.output.title },
+                  }
+                : {
+                    success: false as const,
+                    message: "The proposed Issue title is invalid.",
+                  }
+            },
+            apply: (patch: { title?: string }) => {
+              if (patch.title !== undefined) {
+                form.setFieldValue("title", patch.title)
+              }
+            },
+          }
+        : null,
+    [form, formEpoch, open, organizationId]
+  )
+  useRegisterAgentForm(agentFormAdapter)
   const clearCreateError = useCallback(() => {
     setCreateError(undefined)
     setTitleError(undefined)
@@ -77,6 +127,7 @@ export const CreateIssueDialog = ({
   )
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
+      if (nextOpen && !open) setFormEpoch(crypto.randomUUID())
       setOpen(nextOpen)
       if (!nextOpen && !form.state.isSubmitting) {
         form.reset()
@@ -84,7 +135,7 @@ export const CreateIssueDialog = ({
         setTitleError(undefined)
       }
     },
-    [form]
+    [form, open]
   )
   const closeDialog = useCallback(
     () => handleOpenChange(false),

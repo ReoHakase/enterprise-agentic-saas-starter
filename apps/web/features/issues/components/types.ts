@@ -5,6 +5,10 @@ import type {
   IssueStatus,
   UpdateIssueFormValues,
 } from "@/features/issues/schema"
+import type {
+  IssueSearchState,
+  SetIssueSearchState,
+} from "@/features/issues/search-params"
 
 export type { IssuePriority, IssueStatus }
 
@@ -27,7 +31,11 @@ export type AsyncAction<T extends unknown[]> = (
 ) => void | Promise<void>
 
 export type IssuesWorkspaceProps = {
+  organizationId: string
   issues: IssueUiItem[]
+  searchState: IssueSearchState
+  total: number
+  pageSize: number
   pending?: boolean
   busyIssueId?: string
   error?: string
@@ -39,4 +47,6 @@ export type IssuesWorkspaceProps = {
   getIssueHref: (issue: IssueUiItem) => string
   onSelectIssue: (issue: IssueUiItem) => void
   onRetry?: () => void
+  onSearchChange: (query: string) => void
+  onViewChange: SetIssueSearchState
 }

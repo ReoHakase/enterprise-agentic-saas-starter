@@ -42,26 +42,34 @@ export const IssueMetrics = ({
       aria-label="Issue status summary"
     >
       <div className="min-w-0 p-3 text-center">
-        <dt className="truncate text-xs text-muted-foreground">Open</dt>
+        <dt className="truncate text-xs text-muted-foreground">Open on page</dt>
         <dd className="mt-1 font-medium tabular-nums">{open}</dd>
       </div>
       <div className="min-w-0 p-3 text-center">
-        <dt className="truncate text-xs text-muted-foreground">In progress</dt>
+        <dt className="truncate text-xs text-muted-foreground">
+          In progress on page
+        </dt>
         <dd className="mt-1 font-medium tabular-nums">{inProgress}</dd>
       </div>
       <div className="min-w-0 p-3 text-center">
-        <dt className="truncate text-xs text-muted-foreground">Closed</dt>
+        <dt className="truncate text-xs text-muted-foreground">
+          Closed on page
+        </dt>
         <dd className="mt-1 font-medium tabular-nums">{closed}</dd>
       </div>
     </dl>
     <div className="hidden gap-4 sm:grid sm:grid-cols-3">
-      <IssueMetricCard label="Open" value={open} icon={CircleDotIcon} />
+      <IssueMetricCard label="Open on page" value={open} icon={CircleDotIcon} />
       <IssueMetricCard
-        label="In progress"
+        label="In progress on page"
         value={inProgress}
         icon={Clock3Icon}
       />
-      <IssueMetricCard label="Closed" value={closed} icon={CheckCircle2Icon} />
+      <IssueMetricCard
+        label="Closed on page"
+        value={closed}
+        icon={CheckCircle2Icon}
+      />
     </div>
   </>
 )

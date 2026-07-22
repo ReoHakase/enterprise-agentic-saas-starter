@@ -6,10 +6,17 @@ import {
   parseIssueComment,
   parseIssueComments,
   parseIssueTimelinePage,
-  parseIssues,
+  parseIssueListPage,
+  type Issue,
+  type IssueListPage,
   type IssuePriority,
   type IssueStatus,
 } from "@/features/issues/schema"
+import {
+  defaultIssueSearchState,
+  toIssueListRequest,
+  type IssueListRequest,
+} from "@/features/issues/search-params.shared"
 
 type EdenResult = {
   data: unknown
@@ -33,19 +40,35 @@ const unwrap = (result: EdenResult): unknown => {
   return result.data
 }
 
-export const listIssues = async (
+export function listIssues(
   client: ApiClient,
   organizationId: string,
   signal?: AbortSignal
-) =>
-  parseIssues(
+): Promise<Issue[]>
+export function listIssues(
+  client: ApiClient,
+  input: IssueListRequest,
+  signal?: AbortSignal
+): Promise<IssueListPage>
+export async function listIssues(
+  client: ApiClient,
+  input: string | IssueListRequest,
+  signal?: AbortSignal
+) {
+  const request =
+    typeof input === "string"
+      ? toIssueListRequest(input, defaultIssueSearchState)
+      : input
+  const page = parseIssueListPage(
     unwrap(
       await client.issues.get({
-        query: { organizationId },
+        query: request,
         fetch: { signal },
       })
     )
   )
+  return typeof input === "string" ? page.items : page
+}
 
 export const createIssue = async (
   client: ApiClient,

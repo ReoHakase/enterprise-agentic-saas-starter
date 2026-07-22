@@ -1,5 +1,14 @@
 "use client"
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@enterprise-agentic-saas/ui/components/alert-dialog"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
@@ -33,6 +42,7 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   BlocksIcon,
+  BotIcon,
   Building2Icon,
   CheckIcon,
   ChevronsUpDownIcon,
@@ -77,6 +87,13 @@ import {
 import { OrganizationProfileImage } from "@/components/organization-identity"
 import { UserProfileImage } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
+import { AgentFormRegistryProvider } from "@/features/agent/form-registry"
+import {
+  AgentRuntimeProvider,
+  hasOrganizationSwitchRisks,
+  useAgentRuntimeState,
+  type OrganizationSwitchRisks,
+} from "@/features/agent/runtime-state"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
   cancelTenantWorkForOrganizationSwitch,
@@ -113,11 +130,33 @@ const userMenuTrigger = <SidebarMenuButton size="lg" tooltip="Account menu" />
 const emptyOrganizationIdentity = { name: "Organization" }
 
 export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
+  const activeOrganization = me.organizations.find(
+    (organization) => organization.active
+  )
+
+  return (
+    <AgentFormRegistryProvider>
+      <AgentRuntimeProvider
+        userId={me.user.id}
+        organizationId={activeOrganization?.id ?? ""}
+      >
+        <ConsoleShellContent me={me}>{children}</ConsoleShellContent>
+      </AgentRuntimeProvider>
+    </AgentFormRegistryProvider>
+  )
+}
+
+const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const agentRuntime = useAgentRuntimeState()
   const pathname = usePathname()
   const contentRef = useRef<HTMLDivElement>(null)
   const [accountDialogOpen, setAccountDialogOpen] = useState(false)
+  const [pendingOrganizationSwitch, setPendingOrganizationSwitch] = useState<{
+    organizationId: string
+    risks: OrganizationSwitchRisks
+  }>()
   const openAccountSwitcher = useCallback(() => setAccountDialogOpen(true), [])
   const activeOrganization = me.organizations.find(
     (organization) => organization.active
@@ -142,22 +181,26 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
       return browserConsoleApi.activateOrganization(organizationId)
     },
     onSuccess: async (_, organizationId) => {
+      await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)
       const organizationRoute = pathname.match(
-        /^\/organization\/[^/]+\/(dashboard|issues|members|settings)(?:\/|$)/
+        /^\/organization\/[^/]+\/(dashboard|issues|agent|members|settings)(?:\/|$)/
       )
       const nextOrganization = me.organizations.find(
         (organization) => organization.id === organizationId
       )
+      let nextPathname = pathname
       if (organizationRoute?.[1] && nextOrganization) {
-        router.replace(
-          `/organization/${nextOrganization.slug}/${organizationRoute[1]}`
-        )
+        nextPathname = `/organization/${nextOrganization.slug}/${organizationRoute[1]}`
       }
+      // usePathname excludes the search string, so this also clears every
+      // tenant query parameter, including agentThread, before refresh.
+      router.replace(nextPathname)
       router.refresh()
       toast.success("Organization switched")
     },
     onError: (error) => {
+      agentRuntime.cancelOrganizationSwitch()
       showConsoleApiErrorToast(error, "Could not switch organization")
     },
   })
@@ -174,10 +217,34 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
         return
       }
 
+      const risks = agentRuntime.beginOrganizationSwitch()
+      if (hasOrganizationSwitchRisks(risks)) {
+        setPendingOrganizationSwitch({ organizationId, risks })
+        return
+      }
       activateOrganization(organizationId)
     },
-    [activateOrganization, me.organizations]
+    [activateOrganization, agentRuntime, me.organizations]
   )
+  const cancelPendingOrganizationSwitch = useCallback(() => {
+    setPendingOrganizationSwitch(undefined)
+    agentRuntime.cancelOrganizationSwitch()
+  }, [agentRuntime])
+  const confirmPendingOrganizationSwitch = useCallback(() => {
+    const target = pendingOrganizationSwitch?.organizationId
+    setPendingOrganizationSwitch(undefined)
+    if (target) activateOrganization(target)
+  }, [activateOrganization, pendingOrganizationSwitch])
+  const handleSwitchDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) cancelPendingOrganizationSwitch()
+    },
+    [cancelPendingOrganizationSwitch]
+  )
+  const completeAccountSwitch = useCallback(async () => {
+    await agentRuntime.completeOrganizationSwitch()
+    agentRuntime.cancelOrganizationSwitch()
+  }, [agentRuntime])
 
   return (
     <SidebarProvider data-console-shell="true" data-boundary-state="ready">
@@ -272,7 +339,35 @@ export const ConsoleShell = ({ me, children }: ConsoleShellProps) => {
         currentUser={me.user}
         open={accountDialogOpen}
         onOpenChange={setAccountDialogOpen}
+        onPrepareAgentSwitch={agentRuntime.beginOrganizationSwitch}
+        onCancelAgentSwitch={agentRuntime.cancelOrganizationSwitch}
+        onCompleteAgentSwitch={completeAccountSwitch}
       />
+      <AlertDialog
+        open={pendingOrganizationSwitch !== undefined}
+        onOpenChange={handleSwitchDialogOpenChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Discard local Agent work and switch?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A message, upload, approval, or unsaved Issue form is still
+              active. Switching clears local unsent work. Images already
+              uploaded to chat storage keep their normal short retention period.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelPendingOrganizationSwitch}>
+              Stay here
+            </AlertDialogCancel>
+            <Button onClick={confirmPendingOrganizationSwitch}>
+              Discard local draft and switch
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   )
 }
@@ -376,6 +471,11 @@ const ConsoleNavigation = ({
               href: `/organization/${activeOrganization.slug}/issues`,
               label: "Issues",
               icon: ListChecksIcon,
+            },
+            {
+              href: `/organization/${activeOrganization.slug}/agent`,
+              label: "Agent",
+              icon: BotIcon,
             },
           ]
         : [],

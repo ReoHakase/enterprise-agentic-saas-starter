@@ -1,5 +1,6 @@
 NEXTJS_ENV=development
 NEXT_INC_CACHE_R2_PREFIX=incremental-cache
+NEXT_PUBLIC_AGENT_BASE_URL=https://agent.enterprise-agentic-saas.localhost
 
 # `bun run dev:spotlight` injects both Spotlight variables automatically.
 # Keep them unset for the normal local development command.

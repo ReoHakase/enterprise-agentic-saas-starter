@@ -23,6 +23,10 @@ import { notFound } from "next/navigation"
 import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
 import { listIssues } from "@/features/issues/api"
+import {
+  defaultIssueSearchState,
+  toIssueListRequest,
+} from "@/features/issues/search-params.shared"
 import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
@@ -65,14 +69,22 @@ export default async function DashboardPage({
     )
   }
 
-  const issues = await listIssues(
-    createServerApiClient(cookie),
-    activeOrganization.id
-  )
-  const closedIssues = issues.filter(
-    (issue) => issue.status === "closed"
-  ).length
-  const openIssues = issues.length - closedIssues
+  const apiClient = createServerApiClient(cookie)
+  const [allIssues, closedIssuePage] = await Promise.all([
+    listIssues(
+      apiClient,
+      toIssueListRequest(activeOrganization.id, defaultIssueSearchState)
+    ),
+    listIssues(
+      apiClient,
+      toIssueListRequest(activeOrganization.id, {
+        ...defaultIssueSearchState,
+        status: "closed",
+      })
+    ),
+  ])
+  const closedIssues = closedIssuePage.total
+  const openIssues = allIssues.total - closedIssues
   const enabledPermissions = Object.values(
     activeOrganization.permissions
   ).filter(Boolean).length

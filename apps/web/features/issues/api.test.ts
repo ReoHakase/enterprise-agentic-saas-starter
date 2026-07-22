@@ -27,6 +27,7 @@ const issue = {
   creatorId: "user-1",
   labels: ["contract"],
   dueDate: "2026-07-21T09:30:00.000Z",
+  revision: 1,
   createdAt: "2026-07-14T00:00:00.000Z",
   updatedAt: "2026-07-14T00:00:00.000Z",
 }
@@ -59,7 +60,9 @@ describe("issues Eden API", () => {
 
   it("parses issue and comment CRUD while preserving due date-times", async () => {
     fetchMock
-      .mockResolvedValueOnce(Response.json([issue]))
+      .mockResolvedValueOnce(
+        Response.json({ items: [issue], page: 1, pageSize: 10, total: 1 })
+      )
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
@@ -175,7 +178,9 @@ describe("issues Eden API", () => {
   })
 
   it("passes query cancellation through Eden to fetch", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json([issue]))
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ items: [issue], page: 1, pageSize: 10, total: 1 })
+    )
     const client = createApiClient("https://api.example.test")
     const controller = new AbortController()
 

@@ -6,6 +6,7 @@ import { IssuesDashboard } from "@/components/issues-dashboard"
 import { PageShell } from "@/components/page-shell"
 import { QueryHydrationBoundary } from "@/components/query-hydration-boundary"
 import { issuesQueryOptions } from "@/features/issues/queries"
+import { issueSearchParamsCache } from "@/features/issues/search-params.server"
 import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
@@ -18,10 +19,15 @@ export const metadata: Metadata = {
 
 export default async function IssuesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ organizationSlug: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { organizationSlug } = await params
+  const [{ organizationSlug }, issueSearchState] = await Promise.all([
+    params,
+    issueSearchParamsCache.parse(searchParams),
+  ])
   const [{ me }, cookie] = await Promise.all([
     getConsoleContext(),
     getCookieHeader(),
@@ -51,7 +57,7 @@ export default async function IssuesPage({
   }
 
   await queryClient.prefetchQuery(
-    issuesQueryOptions(apiClient, activeOrganization.id)
+    issuesQueryOptions(apiClient, activeOrganization.id, issueSearchState)
   )
 
   return (

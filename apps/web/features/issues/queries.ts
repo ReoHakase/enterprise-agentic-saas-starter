@@ -2,11 +2,23 @@ import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 
 import { listIssueComments, listIssues } from "@/features/issues/api"
+import {
+  issueListQueryKeyState,
+  toIssueListRequest,
+  type IssueSearchState,
+} from "@/features/issues/search-params.shared"
 
 export const issueKeys = {
   all: ["issues"] as const,
-  list: (organizationId: string) =>
+  lists: (organizationId: string) =>
     [...issueKeys.all, "list", organizationId] as const,
+  list: (organizationId: string, state?: IssueSearchState) =>
+    state
+      ? ([
+          ...issueKeys.lists(organizationId),
+          issueListQueryKeyState(state),
+        ] as const)
+      : issueKeys.lists(organizationId),
   detail: (organizationId: string, issueId: string) =>
     [...issueKeys.all, "detail", organizationId, issueId] as const,
   timeline: (organizationId: string, issueId: string) =>
@@ -16,19 +28,23 @@ export const issueKeys = {
 }
 
 const createIssuesQueryFn =
-  (client: ApiClient, organizationId: string) =>
+  (client: ApiClient, organizationId: string, state: IssueSearchState) =>
   ({ signal }: QueryFunctionContext) =>
-    listIssues(client, organizationId, signal)
+    listIssues(client, toIssueListRequest(organizationId, state), signal)
 
 const createIssueCommentsQueryFn =
   (client: ApiClient, organizationId: string, issueId: string) =>
   ({ signal }: QueryFunctionContext) =>
     listIssueComments(client, { id: issueId, organizationId }, signal)
 
-export const issuesQueryOptions = (client: ApiClient, organizationId: string) =>
+export const issuesQueryOptions = (
+  client: ApiClient,
+  organizationId: string,
+  state: IssueSearchState
+) =>
   queryOptions({
-    queryKey: issueKeys.list(organizationId),
-    queryFn: createIssuesQueryFn(client, organizationId),
+    queryKey: issueKeys.list(organizationId, state),
+    queryFn: createIssuesQueryFn(client, organizationId, state),
     enabled: organizationId.length > 0,
   })
 

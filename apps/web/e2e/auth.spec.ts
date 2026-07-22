@@ -1355,12 +1355,18 @@ test("organization・member・invitation・session・一時faultを決定的に�
     `${mockApiUrl}/issues?organizationId=org-a`
   )
   expect(await issuesResponse.json()).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        id: "issue-a-1",
-        dueDate: "2026-07-21T09:30:00.000Z",
-      }),
-    ])
+    expect.objectContaining({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: "issue-a-1",
+          dueDate: "2026-07-21T09:30:00.000Z",
+          revision: 1,
+        }),
+      ]),
+      page: 1,
+      pageSize: 10,
+      total: 12,
+    })
   )
 
   const organizationResponse = await context.request.patch(

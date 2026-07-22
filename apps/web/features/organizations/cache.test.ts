@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query"
 import { describe, expect, it, vi } from "vitest"
 
 import type { Me } from "@/features/account/schema"
+import { agentKeys } from "@/features/agent/queries"
 import { consoleKeys } from "@/features/console/queries"
 import { fileKeys } from "@/features/files/queries"
 import { registerFileUpload } from "@/features/files/uploads"
@@ -90,7 +91,7 @@ describe("organization query cache", () => {
 
     await prepareOrganizationSwitch(queryClient, "org-beta")
 
-    expect(cancelQueries).toHaveBeenCalledTimes(3)
+    expect(cancelQueries).toHaveBeenCalledTimes(4)
     expect(cancelQueries).toHaveBeenNthCalledWith(1, {
       queryKey: consoleKeys.all,
     })
@@ -100,9 +101,16 @@ describe("organization query cache", () => {
     expect(cancelQueries).toHaveBeenNthCalledWith(3, {
       queryKey: issueKeys.all,
     })
-    expect(removeQueries).toHaveBeenCalledOnce()
+    expect(cancelQueries).toHaveBeenNthCalledWith(4, {
+      queryKey: agentKeys.all,
+    })
+    expect(removeQueries).toHaveBeenCalledTimes(2)
     expect(removeQueries).toHaveBeenCalledWith({
       queryKey: fileKeys.all,
+      type: "inactive",
+    })
+    expect(removeQueries).toHaveBeenCalledWith({
+      queryKey: agentKeys.all,
       type: "inactive",
     })
     expect(uploadController.signal.aborted).toBe(true)

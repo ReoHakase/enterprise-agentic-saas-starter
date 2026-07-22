@@ -17,6 +17,7 @@ import type {
 } from "@/features/issues/components/types"
 import { issueKeys, issuesQueryOptions } from "@/features/issues/queries"
 import type { Issue } from "@/features/issues/schema"
+import { useIssueSearchState } from "@/features/issues/search-params"
 import { apiClient } from "@/lib/api-client"
 
 type IssuesDashboardProps = {
@@ -30,14 +31,17 @@ export const IssuesDashboard = ({
 }: IssuesDashboardProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { state: searchState, setSearch, setDiscrete } = useIssueSearchState()
   const [busyIssueId, setBusyIssueId] = useState<string>()
-  const issuesQuery = useQuery(issuesQueryOptions(apiClient, organizationId))
+  const issuesQuery = useQuery(
+    issuesQueryOptions(apiClient, organizationId, searchState)
+  )
   const membersQuery = useQuery(membersQueryOptions(organizationId))
 
   const invalidateIssues = useCallback(
     () =>
       queryClient.invalidateQueries({
-        queryKey: issueKeys.list(organizationId),
+        queryKey: issueKeys.lists(organizationId),
       }),
     [organizationId, queryClient]
   )
@@ -92,7 +96,7 @@ export const IssuesDashboard = ({
   const { refetch: refetchIssues } = issuesQuery
 
   const issues = useMemo(
-    () => (issuesQuery.data ?? []).map(toIssueViewModel),
+    () => (issuesQuery.data?.items ?? []).map(toIssueViewModel),
     [issuesQuery.data]
   )
   const assignees = useMemo<IssueAssigneeOption[]>(
@@ -148,6 +152,12 @@ export const IssuesDashboard = ({
   const handleRetry = useCallback(() => {
     void refetchIssues()
   }, [refetchIssues])
+  const handleSearchChange = useCallback(
+    (q: string) => {
+      void setSearch({ q, page: 1 })
+    },
+    [setSearch]
+  )
 
   const errorMessage = issuesQuery.error
     ? getConsoleApiErrorText(
@@ -159,6 +169,10 @@ export const IssuesDashboard = ({
   return (
     <IssuesWorkspace
       issues={issues}
+      organizationId={organizationId}
+      searchState={searchState}
+      total={issuesQuery.data?.total ?? 0}
+      pageSize={issuesQuery.data?.pageSize ?? 10}
       pending={createPending || updatePending}
       busyIssueId={busyIssueId}
       error={errorMessage}
@@ -170,6 +184,8 @@ export const IssuesDashboard = ({
       onDelete={handleDelete}
       onSelectIssue={handleSelect}
       onRetry={handleRetry}
+      onSearchChange={handleSearchChange}
+      onViewChange={setDiscrete}
     />
   )
 }
@@ -185,6 +201,7 @@ const toIssueViewModel = (issue: Issue): IssueUiItem => ({
   creatorId: issue.creatorId,
   labels: issue.labels,
   dueDate: issue.dueDate,
+  revision: issue.revision,
   createdAt: issue.createdAt,
   updatedAt: issue.updatedAt,
 })

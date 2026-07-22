@@ -29,6 +29,7 @@ export const issueSchema = v.object({
   creatorId: v.string(),
   labels: v.array(v.string()),
   dueDate: v.nullable(dueDateSchema),
+  revision: v.pipe(v.number(), v.integer(), v.minValue(1)),
   createdAt: apiTimestampSchema,
   updatedAt: apiTimestampSchema,
 })
@@ -48,7 +49,12 @@ export const issueCommentSchema = v.object({
   updatedAt: apiTimestampSchema,
 })
 
-export const issueListSchema = v.array(issueSchema)
+export const issueListPageSchema = v.object({
+  items: v.array(issueSchema),
+  page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  pageSize: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
 export const issueCommentListSchema = v.array(issueCommentSchema)
 
 const issueActivityValueSchema = v.union([
@@ -151,6 +157,7 @@ export const commentFormSchema = v.object({
 })
 
 export type Issue = v.InferOutput<typeof issueSchema>
+export type IssueListPage = v.InferOutput<typeof issueListPageSchema>
 export type IssueStatus = v.InferOutput<typeof issueStatusSchema>
 export type IssuePriority = v.InferOutput<typeof issuePrioritySchema>
 export type IssueComment = v.InferOutput<typeof issueCommentSchema>
@@ -163,7 +170,8 @@ export type CreateIssueFormValues = v.InferOutput<typeof createIssueFormSchema>
 export type UpdateIssueFormValues = v.InferOutput<typeof updateIssueFormSchema>
 
 export const parseIssue = (value: unknown) => v.parse(issueSchema, value)
-export const parseIssues = (value: unknown) => v.parse(issueListSchema, value)
+export const parseIssueListPage = (value: unknown) =>
+  v.parse(issueListPageSchema, value)
 export const parseIssueComment = (value: unknown) =>
   v.parse(issueCommentSchema, value)
 export const parseIssueComments = (value: unknown) =>

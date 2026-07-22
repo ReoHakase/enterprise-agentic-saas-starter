@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Provider as JotaiProvider } from "jotai"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { NuqsAdapter } from "nuqs/adapters/next/app"
 import { useCallback, useState, type PropsWithChildren } from "react"
 
 import { AuthProvider } from "@/components/auth/auth-provider"
@@ -54,25 +55,27 @@ export const Providers = ({ children }: PropsWithChildren) => {
   )
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <JotaiProvider>
-        <AuthProvider
-          authClient={authClient}
-          baseURL={clientEnv.NEXT_PUBLIC_API_BASE_URL}
-          basePaths={authBasePaths}
-          queryClient={queryClient}
-          socialProviders={socialProviders}
-          emailAndPassword={emailAndPassword}
-          plugins={authPlugins}
-          Link={Link}
-          navigate={navigate}
-        >
-          <ThemeProvider>
-            <TooltipProvider delay={350}>{children}</TooltipProvider>
-          </ThemeProvider>
-          <Toaster />
-        </AuthProvider>
-      </JotaiProvider>
-    </QueryClientProvider>
+    <NuqsAdapter>
+      <QueryClientProvider client={queryClient}>
+        <JotaiProvider>
+          <AuthProvider
+            authClient={authClient}
+            baseURL={clientEnv.NEXT_PUBLIC_API_BASE_URL}
+            basePaths={authBasePaths}
+            queryClient={queryClient}
+            socialProviders={socialProviders}
+            emailAndPassword={emailAndPassword}
+            plugins={authPlugins}
+            Link={Link}
+            navigate={navigate}
+          >
+            <ThemeProvider>
+              <TooltipProvider delay={350}>{children}</TooltipProvider>
+            </ThemeProvider>
+            <Toaster />
+          </AuthProvider>
+        </JotaiProvider>
+      </QueryClientProvider>
+    </NuqsAdapter>
   )
 }

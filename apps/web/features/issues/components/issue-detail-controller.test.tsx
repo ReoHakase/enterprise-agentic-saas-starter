@@ -59,6 +59,7 @@ const issue: Issue = {
   creatorId: "user-1",
   labels: [],
   dueDate: null,
+  revision: 1,
   createdAt: "2026-07-20T00:00:00.000Z",
   updatedAt: "2026-07-20T00:00:00.000Z",
 }

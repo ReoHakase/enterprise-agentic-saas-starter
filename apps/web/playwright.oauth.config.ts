@@ -126,6 +126,7 @@ export default defineConfig({
         API_PUBLIC_URL: apiOrigin,
         NEXT_DIST_DIR: ".next-e2e-oauth",
         NEXT_PUBLIC_API_BASE_URL: apiOrigin,
+        NEXT_PUBLIC_AGENT_BASE_URL: "http://127.0.0.1:3002",
       },
     },
   ],

@@ -57,6 +57,7 @@ import {
 import * as v from "valibot"
 
 import { LocalDate } from "@/components/local-date"
+import { useRegisterAgentForm } from "@/features/agent/form-registry"
 import { FileAttachments } from "@/features/files/components/file-attachments"
 import type { IssueUpdateField } from "@/features/issues/issue-update-state"
 import {
@@ -106,6 +107,13 @@ type ImmediateField =
   | "assigneeId"
   | "labels"
   | "dueDate"
+
+const agentIssueDraftPatchSchema = v.partial(
+  v.strictObject({
+    title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
+    description: v.pipe(v.string(), v.maxLength(10_000)),
+  })
+)
 
 const draftHandoffSchema = v.object({
   version: v.literal(1),
@@ -295,6 +303,7 @@ export const IssueDetailDialog = ({
   onFilesChanged?: () => Promise<void> | void
   onRequestClose: () => void
 }) => {
+  const [agentFormEpoch] = useState(() => crypto.randomUUID())
   const [titleEditing, setTitleEditing] = useState(false)
   const [descriptionEditing, setDescriptionEditing] = useState(false)
   const [titleError, setTitleError] = useState<string>()
@@ -407,6 +416,65 @@ export const IssueDetailDialog = ({
       }
     },
   })
+  const agentFormAdapter = useMemo(
+    () =>
+      organizationId
+        ? {
+            formId: `issue:${issue.id}`,
+            organizationId,
+            resource: "issue" as const,
+            resourceId: issue.id,
+            revision: issue.revision,
+            epoch: agentFormEpoch,
+            read: () => ({
+              values: {
+                title: titleForm.state.values.title,
+                description: descriptionForm.state.values.description,
+              },
+              dirtyFields: [
+                ...(titleForm.state.isDirty ? (["title"] as const) : []),
+                ...(descriptionForm.state.isDirty
+                  ? (["description"] as const)
+                  : []),
+              ],
+            }),
+            validate: (patch: { title?: string; description?: string }) => {
+              if (Object.keys(patch).length === 0) {
+                return {
+                  success: false as const,
+                  message: "At least one Issue draft field is required.",
+                }
+              }
+              const result = v.safeParse(agentIssueDraftPatchSchema, patch)
+              return result.success
+                ? { success: true as const, patch: result.output }
+                : {
+                    success: false as const,
+                    message: "The proposed Issue draft fields are invalid.",
+                  }
+            },
+            apply: (patch: { title?: string; description?: string }) => {
+              if (patch.title !== undefined) {
+                titleForm.setFieldValue("title", patch.title)
+                setTitleEditing(true)
+              }
+              if (patch.description !== undefined) {
+                descriptionForm.setFieldValue("description", patch.description)
+                setDescriptionEditing(true)
+              }
+            },
+          }
+        : null,
+    [
+      agentFormEpoch,
+      descriptionForm,
+      issue.id,
+      issue.revision,
+      organizationId,
+      titleForm,
+    ]
+  )
+  useRegisterAgentForm(agentFormAdapter)
 
   useEffect(() => {
     if (!titleEditing && !titleForm.state.isDirty) {

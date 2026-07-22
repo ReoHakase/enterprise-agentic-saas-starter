@@ -19,6 +19,7 @@ const issue: IssueUiItem = {
   creatorId: "user-1",
   labels: [],
   dueDate: null,
+  revision: 1,
   createdAt: "2026-07-10T00:00:00.000Z",
   updatedAt: "2026-07-13T00:00:00.000Z",
 }

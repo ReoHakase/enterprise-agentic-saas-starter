@@ -6,6 +6,10 @@ import type { IssuesWorkspaceProps } from "./types"
 
 export const IssuesWorkspace = ({
   issues,
+  organizationId,
+  searchState,
+  total,
+  pageSize,
   pending,
   busyIssueId,
   error,
@@ -17,10 +21,16 @@ export const IssuesWorkspace = ({
   getIssueHref,
   onSelectIssue,
   onRetry,
+  onSearchChange,
+  onViewChange,
 }: IssuesWorkspaceProps) => (
   <section className="flex min-w-0 flex-col gap-5" aria-label="Issues">
     <IssuesTable
       issues={issues}
+      organizationId={organizationId}
+      searchState={searchState}
+      total={total}
+      pageSize={pageSize}
       pending={pending}
       busyIssueId={busyIssueId}
       error={error}
@@ -32,6 +42,8 @@ export const IssuesWorkspace = ({
       onUpdate={onUpdate}
       onSelect={onSelectIssue}
       onRetry={onRetry}
+      onSearchChange={onSearchChange}
+      onViewChange={onViewChange}
     />
   </section>
 )

@@ -43,20 +43,23 @@ import {
 import {
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
-  type SortingState,
+  type PaginationState,
 } from "@tanstack/react-table"
 import {
   CircleDotIcon,
+  FlagIcon,
   ListFilterIcon,
   RefreshCwIcon,
   SearchIcon,
   Trash2Icon,
 } from "lucide-react"
 import { useCallback, useMemo, useState, type ChangeEvent } from "react"
+
+import type {
+  IssueSearchState,
+  SetIssueSearchState,
+} from "@/features/issues/search-params"
 
 import { CreateIssueDialog } from "./create-issue-dialog"
 import { IssueMetrics } from "./issue-metrics"
@@ -66,15 +69,54 @@ import { safelyRunAction, statusOptions } from "./issue-utils"
 import type {
   AsyncAction,
   IssueAssigneeOption,
-  IssueStatus,
   IssueUiItem,
   IssueUpdate,
 } from "./types"
 
 const getIssueRowId = (issue: IssueUiItem) => issue.id
+const tablePriorityOptions = [
+  { label: "All priorities", value: "all" },
+  { label: "No priority", value: "no_priority" },
+  { label: "Low", value: "low" },
+  { label: "Medium", value: "medium" },
+  { label: "High", value: "high" },
+  { label: "Urgent", value: "urgent" },
+] as const
+const tableSortOptions = [
+  { label: "Updated", value: "updatedAt" },
+  { label: "Created", value: "createdAt" },
+  { label: "Number", value: "number" },
+  { label: "Due date", value: "dueDate" },
+  { label: "Priority", value: "priority" },
+  { label: "Status", value: "status" },
+] as const
+const tableDirectionOptions = [
+  { label: "Descending", value: "desc" },
+  { label: "Ascending", value: "asc" },
+] as const
+const isTablePriority = (
+  value: string | null
+): value is IssueSearchState["priority"] =>
+  value === "all" ||
+  value === "no_priority" ||
+  value === "low" ||
+  value === "medium" ||
+  value === "high" ||
+  value === "urgent"
+const isTableSort = (value: string | null): value is IssueSearchState["sort"] =>
+  value === "number" ||
+  value === "createdAt" ||
+  value === "updatedAt" ||
+  value === "dueDate" ||
+  value === "priority" ||
+  value === "status"
 
 export const IssuesTable = ({
   issues,
+  organizationId,
+  searchState,
+  total,
+  pageSize,
   pending,
   busyIssueId,
   error,
@@ -86,8 +128,14 @@ export const IssuesTable = ({
   onUpdate,
   onSelect,
   onRetry,
+  onSearchChange,
+  onViewChange,
 }: {
+  organizationId: string
   issues: IssueUiItem[]
+  searchState: IssueSearchState
+  total: number
+  pageSize: number
   pending?: boolean
   busyIssueId?: string
   error?: string
@@ -99,13 +147,20 @@ export const IssuesTable = ({
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
   onSelect: (issue: IssueUiItem) => void
   onRetry?: () => void
+  onSearchChange: (query: string) => void
+  onViewChange: SetIssueSearchState
 }) => {
-  const [globalFilter, setGlobalFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | IssueStatus>("all")
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "updatedAt", desc: true },
-  ])
   const [deleteTarget, setDeleteTarget] = useState<IssueUiItem>()
+  const assigneeFilterOptions = useMemo(
+    () => [
+      { label: "All assignees", value: "all" },
+      ...assignees.map((assignee) => ({
+        label: assignee.name,
+        value: assignee.id,
+      })),
+    ],
+    [assignees]
+  )
   const requestDelete = useCallback(
     (issue: IssueUiItem) => setDeleteTarget(issue),
     []
@@ -121,14 +176,46 @@ export const IssuesTable = ({
   const table = useReactTable({
     data: issues,
     columns,
-    state: { globalFilter, sorting },
-    onGlobalFilterChange: setGlobalFilter,
-    onSortingChange: setSorting,
+    state: {
+      sorting: [{ id: searchState.sort, desc: searchState.dir === "desc" }],
+      pagination: { pageIndex: searchState.page - 1, pageSize },
+    },
+    onSortingChange: (updater) => {
+      const current = [
+        { id: searchState.sort, desc: searchState.dir === "desc" },
+      ]
+      const next = typeof updater === "function" ? updater(current) : updater
+      const sort = next[0]
+      if (!sort) return
+      if (
+        sort.id !== "number" &&
+        sort.id !== "createdAt" &&
+        sort.id !== "updatedAt" &&
+        sort.id !== "dueDate" &&
+        sort.id !== "priority" &&
+        sort.id !== "status"
+      ) {
+        return
+      }
+      void onViewChange({
+        sort: sort.id,
+        dir: sort.desc ? "desc" : "asc",
+        page: 1,
+      })
+    },
+    onPaginationChange: (updater) => {
+      const current: PaginationState = {
+        pageIndex: searchState.page - 1,
+        pageSize,
+      }
+      const next = typeof updater === "function" ? updater(current) : updater
+      void onViewChange({ page: next.pageIndex + 1 })
+    },
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 10 } },
+    manualFiltering: true,
+    manualSorting: true,
+    manualPagination: true,
+    rowCount: total,
     getRowId: getIssueRowId,
   })
   const [openCount, inProgressCount, closedCount] = useMemo(() => {
@@ -154,18 +241,55 @@ export const IssuesTable = ({
       ) {
         return
       }
-      setStatusFilter(value)
-      table
-        .getColumn("status")
-        ?.setFilterValue(value === "all" ? undefined : value)
+      void onViewChange({ status: value, page: 1 })
     },
-    [table]
+    [onViewChange]
   )
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      setGlobalFilter(event.target.value)
+      onSearchChange(event.target.value)
     },
-    []
+    [onSearchChange]
+  )
+  const handlePriorityChange = useCallback(
+    (value: string | null) => {
+      if (!isTablePriority(value)) return
+      void onViewChange({
+        priority: value,
+        page: 1,
+      })
+    },
+    [onViewChange]
+  )
+  const handleAssigneeChange = useCallback(
+    (value: string | null) => {
+      if (!value) return
+      void onViewChange({ assignee: value === "all" ? "" : value, page: 1 })
+    },
+    [onViewChange]
+  )
+  const handleLabelChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      void onViewChange(
+        { label: event.target.value, page: 1 },
+        { history: "replace" }
+      )
+    },
+    [onViewChange]
+  )
+  const handleSortChange = useCallback(
+    (value: string | null) => {
+      if (!isTableSort(value)) return
+      void onViewChange({ sort: value, page: 1 })
+    },
+    [onViewChange]
+  )
+  const handleDirectionChange = useCallback(
+    (value: string | null) => {
+      if (value !== "asc" && value !== "desc") return
+      void onViewChange({ dir: value, page: 1 })
+    },
+    [onViewChange]
   )
   const showPreviousPage = useCallback(() => table.previousPage(), [table])
   const showNextPage = useCallback(() => table.nextPage(), [table])
@@ -196,7 +320,11 @@ export const IssuesTable = ({
             </p>
           </div>
           <div className="shrink-0">
-            <CreateIssueDialog pending={pending} onCreate={onCreate} />
+            <CreateIssueDialog
+              organizationId={organizationId}
+              pending={pending}
+              onCreate={onCreate}
+            />
           </div>
         </div>
 
@@ -208,7 +336,7 @@ export const IssuesTable = ({
               </InputGroupAddon>
               <InputGroupInput
                 type="search"
-                value={globalFilter}
+                value={searchState.q}
                 onChange={handleSearchChange}
                 placeholder="Search issues"
                 aria-label="Search issues"
@@ -216,19 +344,114 @@ export const IssuesTable = ({
             </InputGroup>
             <Select
               items={statusOptions}
-              value={statusFilter}
+              value={searchState.status}
               onValueChange={handleStatusChange}
             >
               <SelectTrigger className="w-full md:w-44">
                 <ListFilterIcon aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate text-left">
-                  {statusOptions.find((option) => option.value === statusFilter)
-                    ?.label ?? "All issues"}
+                  {statusOptions.find(
+                    (option) => option.value === searchState.status
+                  )?.label ?? "All issues"}
                 </span>
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
                 <SelectGroup>
                   {statusOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Select
+              items={tablePriorityOptions}
+              value={searchState.priority}
+              onValueChange={handlePriorityChange}
+            >
+              <SelectTrigger className="w-full md:w-44">
+                <FlagIcon aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {tablePriorityOptions.find(
+                    (option) => option.value === searchState.priority
+                  )?.label ?? "All priorities"}
+                </span>
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {tablePriorityOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <InputGroup>
+              <InputGroupInput
+                value={searchState.label}
+                onChange={handleLabelChange}
+                placeholder="Filter by label"
+                aria-label="Filter issues by label"
+              />
+            </InputGroup>
+            <Select
+              items={assigneeFilterOptions}
+              value={searchState.assignee || "all"}
+              onValueChange={handleAssigneeChange}
+            >
+              <SelectTrigger className="w-full">
+                {assigneeFilterOptions.find(
+                  (option) => option.value === (searchState.assignee || "all")
+                )?.label ?? "All assignees"}
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {assigneeFilterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Select
+              items={tableSortOptions}
+              value={searchState.sort}
+              onValueChange={handleSortChange}
+            >
+              <SelectTrigger className="w-full">
+                Sort:{" "}
+                {tableSortOptions.find(
+                  (option) => option.value === searchState.sort
+                )?.label ?? "Updated"}
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {tableSortOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Select
+              items={tableDirectionOptions}
+              value={searchState.dir}
+              onValueChange={handleDirectionChange}
+            >
+              <SelectTrigger className="w-full">
+                {tableDirectionOptions.find(
+                  (option) => option.value === searchState.dir
+                )?.label ?? "Descending"}
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {tableDirectionOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -329,9 +552,7 @@ export const IssuesTable = ({
 
         {!error ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <p className="text-sm text-muted-foreground">
-              {table.getFilteredRowModel().rows.length} issues
-            </p>
+            <p className="text-sm text-muted-foreground">{total} issues</p>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"

@@ -23,6 +23,7 @@ type Issue = {
   creatorId: string
   labels: string[]
   dueDate: string | null
+  revision: number
   createdAt: string
   updatedAt: string
 }
@@ -149,6 +150,27 @@ type StoredProfileImageUpload = {
   sizeBytes: number
 }
 
+type AgentThread = {
+  id: string
+  organizationId: string
+  title: string
+  status: "active" | "archived"
+  createdAt: string
+  updatedAt: string
+}
+
+type AgentAsset = {
+  id: string
+  organizationId: string
+  threadId: string
+  filename: string
+  sizeBytes: number
+  imageWidth: number
+  imageHeight: number
+  previewable: true
+  expiresAt: string
+}
+
 type SessionState = {
   user: UserIdentity
   organizations: Organization[]
@@ -160,6 +182,8 @@ type SessionState = {
   invitationsByOrganization: Map<string, OrganizationInvitation[]>
   deletionReceiptsByIdempotencyKey: Map<string, OrganizationDeletionReceipt>
   profileImageUploads: Map<string, StoredProfileImageUpload>
+  agentThreads: AgentThread[]
+  agentAssets: AgentAsset[]
   sessions: UserSession[]
   nextCommentId: number
   nextDeletionId: number
@@ -167,6 +191,8 @@ type SessionState = {
   nextIssueId: number
   nextFileId: number
   nextProfileImageVersion: number
+  nextAgentThreadId: number
+  nextAgentAssetId: number
 }
 
 type FaultRule = {
@@ -246,6 +272,86 @@ const isIssuePriority = (value: unknown): value is IssuePriority =>
   value === "medium" ||
   value === "high" ||
   value === "urgent"
+
+type IssueSort =
+  | "number"
+  | "createdAt"
+  | "updatedAt"
+  | "dueDate"
+  | "priority"
+  | "status"
+
+const isIssueSort = (value: unknown): value is IssueSort =>
+  value === "number" ||
+  value === "createdAt" ||
+  value === "updatedAt" ||
+  value === "dueDate" ||
+  value === "priority" ||
+  value === "status"
+
+const compareIssueValue = (
+  left: string | number | null,
+  right: typeof left
+) => {
+  if (left === right) return 0
+  if (left === null) return -1
+  if (right === null) return 1
+  return left < right ? -1 : 1
+}
+
+const listIssuePage = (issues: Issue[], searchParams: URLSearchParams) => {
+  const search = searchParams.get("search")?.trim().toLowerCase()
+  const status = searchParams.get("status")
+  const priority = searchParams.get("priority")
+  const assigneeId = searchParams.get("assigneeId")
+  const label = searchParams.get("label")
+  const sortByValue = searchParams.get("sortBy")
+  const sortBy: IssueSort = isIssueSort(sortByValue) ? sortByValue : "updatedAt"
+  const direction = searchParams.get("sortDirection") === "asc" ? 1 : -1
+  const requestedPage = Number(searchParams.get("page") ?? "1")
+  const page =
+    Number.isInteger(requestedPage) &&
+    requestedPage > 0 &&
+    requestedPage <= 100_000
+      ? requestedPage
+      : 1
+
+  const filtered = issues.filter((issue) => {
+    if (
+      search &&
+      !issue.title.toLowerCase().includes(search) &&
+      !issue.description.toLowerCase().includes(search)
+    ) {
+      return false
+    }
+    if (isIssueStatus(status) && issue.status !== status) return false
+    if (isIssuePriority(priority) && issue.priority !== priority) return false
+    if (assigneeId === "unassigned" && issue.assigneeId !== null) return false
+    if (
+      assigneeId &&
+      assigneeId !== "unassigned" &&
+      issue.assigneeId !== assigneeId
+    ) {
+      return false
+    }
+    if (label && !issue.labels.includes(label)) return false
+    return true
+  })
+  filtered.sort((left, right) => {
+    const primary = compareIssueValue(left[sortBy], right[sortBy]) * direction
+    if (primary !== 0) return primary
+    const number = compareIssueValue(left.number, right.number) * direction
+    if (number !== 0) return number
+    return compareIssueValue(left.id, right.id) * direction
+  })
+  const pageSize = 10
+  return {
+    items: filtered.slice((page - 1) * pageSize, page * pageSize),
+    page,
+    pageSize,
+    total: filtered.length,
+  }
+}
 
 const toIssueActivityValue = (value: unknown): string | string[] | null => {
   if (Array.isArray(value)) {
@@ -361,6 +467,8 @@ const createState = (sessionKey: string): SessionState => {
       invitationsByOrganization: new Map(),
       deletionReceiptsByIdempotencyKey: new Map(),
       profileImageUploads: new Map(),
+      agentThreads: [],
+      agentAssets: [],
       sessions,
       nextCommentId: 1,
       nextDeletionId: 1,
@@ -368,6 +476,8 @@ const createState = (sessionKey: string): SessionState => {
       nextIssueId: 1,
       nextFileId: 1,
       nextProfileImageVersion: 1,
+      nextAgentThreadId: 1,
+      nextAgentAssetId: 1,
     }
   }
 
@@ -419,6 +529,7 @@ const createState = (sessionKey: string): SessionState => {
         creatorId: user.id,
         labels: ["security"],
         dueDate: FIXED_DUE_DATE,
+        revision: 1,
         createdAt: "2026-07-12T09:00:00.000Z",
         updatedAt: FIXED_NOW,
       },
@@ -434,6 +545,7 @@ const createState = (sessionKey: string): SessionState => {
         creatorId: user.id,
         labels: [],
         dueDate: null,
+        revision: 1,
         createdAt: "2026-07-11T09:00:00.000Z",
         updatedAt: FIXED_NOW,
       },
@@ -449,9 +561,29 @@ const createState = (sessionKey: string): SessionState => {
         creatorId: user.id,
         labels: ["accessibility"],
         dueDate: null,
+        revision: 1,
         createdAt: "2026-07-11T09:00:00.000Z",
         updatedAt: "2026-07-13T09:00:00.000Z",
       },
+      ...Array.from({ length: 10 }, (_, index): Issue => {
+        const number = index + 3
+        return {
+          id: `issue-a-${number}`,
+          organizationId: "org-a",
+          number,
+          title: `Backlog fixture ${number.toString().padStart(2, "0")}`,
+          description: "Pagination and URL-state browser fixture.",
+          status: number % 2 === 0 ? "closed" : "open",
+          priority: number % 3 === 0 ? "medium" : "no_priority",
+          assigneeId: null,
+          creatorId: user.id,
+          labels: ["pagination"],
+          dueDate: null,
+          revision: 1,
+          createdAt: "2026-07-01T09:00:00.000Z",
+          updatedAt: `2026-07-${number.toString().padStart(2, "0")}T08:00:00.000Z`,
+        }
+      }),
     ],
     files: [
       {
@@ -697,6 +829,33 @@ const createState = (sessionKey: string): SessionState => {
     ]),
     deletionReceiptsByIdempotencyKey: new Map(),
     profileImageUploads: new Map(),
+    agentThreads: [
+      {
+        id: "agent-thread-a-1",
+        organizationId: "org-a",
+        title: "Alpha triage",
+        status: "active",
+        createdAt: "2026-07-14T08:00:00.000Z",
+        updatedAt: "2026-07-14T08:00:00.000Z",
+      },
+      {
+        id: "agent-thread-a-2",
+        organizationId: "org-a",
+        title: "Alpha follow-up",
+        status: "active",
+        createdAt: "2026-07-14T09:00:00.000Z",
+        updatedAt: "2026-07-14T09:00:00.000Z",
+      },
+      {
+        id: "agent-thread-b-1",
+        organizationId: "org-b",
+        title: "Beta triage",
+        status: "active",
+        createdAt: "2026-07-14T10:00:00.000Z",
+        updatedAt: "2026-07-14T10:00:00.000Z",
+      },
+    ],
+    agentAssets: [],
     sessions,
     nextCommentId: 2,
     nextDeletionId: 1,
@@ -704,6 +863,8 @@ const createState = (sessionKey: string): SessionState => {
     nextIssueId: 2,
     nextFileId: 2,
     nextProfileImageVersion: 1,
+    nextAgentThreadId: 1,
+    nextAgentAssetId: 1,
   }
 }
 
@@ -923,6 +1084,17 @@ const filePayload = ({
   content: _content,
   ...file
 }: StoredFileAttachment): FileAttachment => file
+
+const agentThreadPayload = ({
+  organizationId: _organizationId,
+  ...thread
+}: AgentThread) => thread
+
+const agentAssetPayload = ({
+  organizationId: _organizationId,
+  threadId: _threadId,
+  ...asset
+}: AgentAsset) => asset
 
 const updateUserProfileImageSnapshots = (
   state: SessionState,
@@ -1212,6 +1384,88 @@ Bun.serve({
     const activeOrganization =
       state.organizations.find((organization) => organization.active) ?? null
 
+    if (pathname === "/__e2e/agent-assets" && request.method === "GET") {
+      return json(state.agentAssets)
+    }
+
+    if (pathname === "/agent/threads" && request.method === "GET") {
+      if (!activeOrganization) return invalid("active organization is required")
+      return json(
+        state.agentThreads
+          .filter(
+            (thread) =>
+              thread.organizationId === activeOrganization.id &&
+              thread.status === "active"
+          )
+          .map(agentThreadPayload)
+      )
+    }
+    if (pathname === "/agent/threads" && request.method === "POST") {
+      if (!activeOrganization) return invalid("active organization is required")
+      const body = await readBody(request)
+      const thread: AgentThread = {
+        id: `agent-thread-${sessionKey}-${state.nextAgentThreadId}`,
+        organizationId: activeOrganization.id,
+        title:
+          nonEmptyString(body.title) ??
+          `Private thread ${state.nextAgentThreadId}`,
+        status: "active",
+        createdAt: FIXED_MUTATION_NOW,
+        updatedAt: FIXED_MUTATION_NOW,
+      }
+      state.nextAgentThreadId += 1
+      state.agentThreads.push(thread)
+      return json(agentThreadPayload(thread), 201)
+    }
+    const archiveAgentThreadMatch = pathname.match(
+      /^\/agent\/threads\/([^/]+)\/archive$/
+    )
+    if (archiveAgentThreadMatch?.[1] && request.method === "POST") {
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === archiveAgentThreadMatch[1] &&
+          candidate.organizationId === activeOrganization?.id
+      )
+      if (!thread) return notFound("Agent thread")
+      thread.status = "archived"
+      thread.updatedAt = FIXED_MUTATION_NOW
+      return json(agentThreadPayload(thread))
+    }
+    if (pathname === "/agent/connections" && request.method === "POST") {
+      const body = await readBody(request)
+      const threadId = nonEmptyString(body.threadId)
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      return json({
+        ticket: `e2e-ticket-${thread.id}-0000000000000000`,
+        expiresAt: FIXED_EXPIRES_AT,
+      })
+    }
+    if (pathname === "/agent/approval-policy" && request.method === "GET") {
+      const threadId = url.searchParams.get("threadId")
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      return json({
+        mode: "ask_each",
+        expiresAt: null,
+        permissions: {
+          createIssue: false,
+          updateIssue: false,
+          deleteIssue: false,
+        },
+      })
+    }
+
     if (pathname === "/me" && request.method === "GET") {
       return json({
         user: state.user,
@@ -1406,6 +1660,73 @@ Bun.serve({
       const revoked = state.sessions.filter(({ current }) => !current).length
       state.sessions = state.sessions.filter(({ current }) => current)
       return json({ revoked })
+    }
+
+    const agentAssetUploadMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/agent-threads\/([^/]+)\/assets$/
+    )
+    if (
+      agentAssetUploadMatch?.[1] &&
+      agentAssetUploadMatch[2] &&
+      request.method === "POST"
+    ) {
+      const organizationId = decodeURIComponent(agentAssetUploadMatch[1])
+      const threadId = decodeURIComponent(agentAssetUploadMatch[2])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          candidate.organizationId === access.organization.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      const form = await request.formData()
+      const uploadId = nonEmptyString(form.get("uploadId"))
+      const declaredSize = Number(form.get("fileSize"))
+      const uploaded = form.get("file")
+      if (
+        !uploadId ||
+        !(uploaded instanceof File) ||
+        !Number.isInteger(declaredSize) ||
+        declaredSize !== uploaded.size
+      ) {
+        return invalid("uploadId, fileSize and file are required")
+      }
+      const asset: AgentAsset = {
+        id: `agent-asset-${sessionKey}-${state.nextAgentAssetId}`,
+        organizationId: access.organization.id,
+        threadId: thread.id,
+        filename: uploaded.name,
+        sizeBytes: uploaded.size,
+        imageWidth: 1,
+        imageHeight: 1,
+        previewable: true,
+        expiresAt: FIXED_EXPIRES_AT,
+      }
+      state.nextAgentAssetId += 1
+      state.agentAssets.push(asset)
+      return json(agentAssetPayload(asset), 201)
+    }
+
+    const agentAssetDeleteMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/agent-assets\/([^/]+)$/
+    )
+    if (agentAssetDeleteMatch?.[1] && agentAssetDeleteMatch[2]) {
+      const organizationId = decodeURIComponent(agentAssetDeleteMatch[1])
+      const assetId = decodeURIComponent(agentAssetDeleteMatch[2])
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const assetIndex = state.agentAssets.findIndex(
+        (asset) =>
+          asset.id === assetId &&
+          asset.organizationId === access.organization.id
+      )
+      if (assetIndex < 0) return notFound("Agent asset")
+      if (request.method === "DELETE") {
+        state.agentAssets.splice(assetIndex, 1)
+        return new Response(null, { status: 204, headers: corsHeaders })
+      }
     }
 
     const fileOwnerMatch = pathname.match(
@@ -1975,6 +2296,12 @@ Bun.serve({
         state.files = state.files.filter(
           (file) => file.organizationId !== organizationId
         )
+        state.agentThreads = state.agentThreads.filter(
+          (thread) => thread.organizationId !== organizationId
+        )
+        state.agentAssets = state.agentAssets.filter(
+          (asset) => asset.organizationId !== organizationId
+        )
         deletedIssueIds.forEach((issueId) => {
           state.commentsByIssue.delete(issueId)
           state.activitiesByIssue.delete(issueId)
@@ -2120,8 +2447,11 @@ Bun.serve({
       const access = resolveOrganization(state, organizationId)
       if ("response" in access) return access.response
       return json(
-        state.issues.filter(
-          (issue) => issue.organizationId === access.organization.id
+        listIssuePage(
+          state.issues.filter(
+            (issue) => issue.organizationId === access.organization.id
+          ),
+          url.searchParams
         )
       )
     }
@@ -2162,6 +2492,7 @@ Bun.serve({
           typeof body.dueDate === "string" || body.dueDate === null
             ? body.dueDate
             : null,
+        revision: 1,
         createdAt: FIXED_NOW,
         updatedAt: FIXED_NOW,
       }
@@ -2281,6 +2612,7 @@ Bun.serve({
           issue.dueDate = body.dueDate
         }
         issue.updatedAt = FIXED_MUTATION_NOW
+        issue.revision += 1
         const activities = state.activitiesByIssue.get(issue.id) ?? []
         activityFields.forEach(([field, fromValue, toValue], position) => {
           if (

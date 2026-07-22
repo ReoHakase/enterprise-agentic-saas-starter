@@ -52,9 +52,8 @@ export const useIssueColumns = ({
       },
       {
         accessorKey: "title",
-        header: ({ column }) => (
-          <SortableIssueHeader column={column} label="Name" />
-        ),
+        header: "Name",
+        enableSorting: false,
         cell: ({ row }) => (
           <IssueTitleCell
             issue={row.original}

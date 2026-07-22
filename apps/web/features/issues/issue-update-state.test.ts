@@ -18,6 +18,7 @@ const currentIssue: Issue = {
   creatorId: "user-1",
   labels: ["frontend"],
   dueDate: "2026-07-18T00:00:00.000Z",
+  revision: 1,
   createdAt: "2026-07-17T00:00:00.000Z",
   updatedAt: "2026-07-17T00:00:00.000Z",
 }

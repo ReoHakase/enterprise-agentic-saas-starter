@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import type { IssueTimelineItem } from "@/features/issues/schema"
+import { defaultIssueSearchState } from "@/features/issues/search-params"
 
 import { IssueDetailDialog } from "./issue-detail-dialog"
 import { IssueModalRouteShell } from "./issue-modal-route-shell"
@@ -20,6 +21,7 @@ const billingIssue: IssueUiItem = {
   creatorId: "user-1",
   labels: ["billing", "bug"],
   dueDate: "2026-07-20T09:30:00.000Z",
+  revision: 1,
   createdAt: "2026-07-10T00:00:00.000Z",
   updatedAt: "2026-07-13T00:00:00.000Z",
 }
@@ -54,6 +56,17 @@ const assignees = [
     profileImage: null,
   },
 ]
+
+const createViewProps = (total: number) => ({
+  organizationId: "org-1",
+  searchState: defaultIssueSearchState,
+  total,
+  pageSize: 10,
+  onSearchChange: vi.fn<(query: string) => void>(),
+  onViewChange: vi.fn<(...input: unknown[]) => Promise<URLSearchParams>>(
+    async () => Promise.resolve(new URLSearchParams())
+  ),
+})
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn<() => void>() }),
@@ -121,6 +134,7 @@ const renderWorkspace = (issueValues = issues) => {
     getIssueHref: (issue: IssueUiItem) =>
       `/organization/acme/issues/${issue.number.toString()}`,
     onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+    ...createViewProps(issueValues.length),
   }
   render(<IssuesWorkspace issues={issueValues} {...callbacks} />)
   return callbacks
@@ -165,7 +179,7 @@ const renderDetail = (mode: "modal" | "page" = "modal") => {
 describe("organization issues", () => {
   it("renders the full-width table with the requested columns and filters", async () => {
     const user = userEvent.setup()
-    renderWorkspace()
+    const callbacks = renderWorkspace()
 
     const headers = screen
       .getAllByRole("columnheader")
@@ -192,7 +206,7 @@ describe("organization issues", () => {
       "billing"
     )
     expect(screen.getByText(billingIssue.title)).toBeInTheDocument()
-    expect(screen.queryByText("Document role permissions")).toBeNull()
+    expect(callbacks.onSearchChange).toHaveBeenCalled()
   })
 
   it("creates, opens, closes, and deletes from the table", async () => {
@@ -241,6 +255,7 @@ describe("organization issues", () => {
         `/organization/acme/issues/${issue.number.toString()}`,
       onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
       onRetry: vi.fn<() => void>(),
+      ...createViewProps(0),
     }
     const view = render(<IssuesWorkspace issues={noIssues} {...callbacks} />)
     expect(screen.getByText("No matching issues")).toBeInTheDocument()
