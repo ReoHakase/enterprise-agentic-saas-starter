@@ -33,6 +33,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth flow、orga
 - test dataはtenant境界が見える名前にする。
 - 外部GitHubや実credentialには接続しない。標準mock suiteとは別に、`vercel-labs/emulate`、実Elysia API、fresh file DBを起動するChromium専用OAuth suiteをPR/CIで通す。authorize、state、callback、token、userinfo、session/account保存までをこのsuiteの責務にする。
 - PRの標準harnessは `apps/web/e2e/fixtures/mock-api.ts` とNext.jsをPlaywright `webServer` で同時起動する。mock stateとreset endpointは全projectで共有されるため、local/CIとも `workers: 1` で直列実行する。`fullyParallel: false` だけではproject間の並列実行を止められない。
+- Agent journeyは標準mock harnessのfake WebSocketやfake tool eventで成功扱いにしない。外部課金を伴う明示的な`test:e2e:agent` suiteで、実API Worker、private Agent Worker、Mastra `product-agent`、OpenRouter `qwen/qwen3.6-flash`を起動し、API `/agent/chat`経由のstream、Web検索、read tool、Yes/No承認、org切替中断を確認する。API key、prompt、response本文をPlaywright video、trace、console、reportへ出さない。
 - OAuth harnessは`playwright.oauth.config.ts`へ分離し、`apps/github-emulator`、migration適用済みの実API、専用Next distを`webServer`で所有する。標準`playwright.config.ts`では`e2e/oauth`をignoreし、同じjourneyをmockとemulatorで二重実行しない。
 - Passkeyは標準3 projectでstale sessionの403、step-up dialog、cancel後のtrigger focus復帰、再認証URLを固定する。成功系はChromium OAuth suiteでCDP WebAuthnのvirtual USB authenticatorを使い、実`generate-register-options`、browser ceremony、`verify-registration`、DB-backed list、reload、deleteまで通す。`navigator.credentials.create`をstubして成功扱いにしない。
 - `emulate@0.9.0`は`oauth_apps`を省略するとclient/secret/redirect URI検証をskipするため、OAuth E2Eではcallbackを含むstrict appを必ずseedする。user pickerは標準`admin`/`ghost`の順序に依存せず、fixture loginを含むrole locatorで選ぶ。

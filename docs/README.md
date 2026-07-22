@@ -8,7 +8,7 @@
 2. [ローカル開発](./local-development.md) — 初回セットアップと日々の起動
 3. [Database lifecycle](./database-lifecycle.md) — migration、seed、手動reset
 4. [認証・認可・マルチテナント](./auth-tenancy-security.md) — session、role、tenant境界、step-up
-5. [Agent runtime・tool・承認](./agent-runtime.md) — 3 Worker、Issue CRUD、HITL、chat画像、client state、tenant切り替え
+5. [Mastra Agent runtime・tool・承認](./agent-runtime.md) — 3 Worker、layout-level Agent Shell、Web検索、Issue CRUD、HITL、chat画像、tenant切り替え
 6. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
 7. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
 8. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy

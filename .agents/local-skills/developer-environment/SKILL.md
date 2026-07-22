@@ -20,6 +20,7 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - MCPはNext.js、Playwright、Turso、context7など、実装確認や最新仕様確認に使う。
 - workspaceのパッケージ名は `@enterprise-agentic-saas/*`（`apps/*`・`packages/*`）。portlessで固定したいホスト名は `apps/web`・`apps/api`・`packages/db` の `package.json` の `portless.name` で指定する（ルートの `portless.json` は使わない）。
 - portlessのTLDは `.localhost` を使う。webは `https://enterprise-agentic-saas.localhost`、APIは `https://api.enterprise-agentic-saas.localhost`、DBは `https://db.enterprise-agentic-saas.localhost`。
+- Mastra Studioは通常devから分離した`bun run dev:agent:studio`で起動し、`https://mastra-studio.enterprise-agentic-saas.localhost`を使う。StudioとAgent Workerは同じ`apps/agent/src/mastra/index.ts`をloadし、Studio専用agentやmock toolを作らない。
 - `.localhost` はportlessのデフォルトTLDなので、`package.json` の `portless.tld` は書かない。`tld` は未知のkeyとして警告される。
 - このrepoでは `bun run dev` がportlessを使う。packageごとの `dev` は `portless run <command>` にし、rootは `turbo run dev` で各packageのdevを起動する。stream のログ接頭辞を消すには `turbo run dev --log-prefix=none` とする（**`turbo.json` には未対応**で、root `package.json` の `dev` か手元のCLIで渡す）。並列ログは混線しやすいので、必要なら一時的に接頭辞付きへ戻す。
 - `bun run dev`はbuild済みartifactを起動しない。Webは`next dev --turbopack`でFast Refreshを維持し、APIはWrangler mainの`src/worker.ts`を`wrangler dev`でwatch/rebundleする。APIはBunの状態保持型HMRではなくWorker isolate再起動なのでmemory stateを引き継がないが、Turso、Wrangler R2 state、Mailpit DBはdiskへ永続化する。`src/dev.ts` supervisorや起動時envの変更だけはdevを再起動する。production相当のbuild確認は別の`bun run build:cloudflare`で行う。
