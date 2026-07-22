@@ -165,6 +165,10 @@
       "cache": false,
       "persistent": true
     },
+    "dev:studio": {
+      "cache": false,
+      "persistent": true
+    },
     "@enterprise-agentic-saas/db#dev": {
       "cache": false,
       "persistent": true,
