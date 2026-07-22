@@ -22,6 +22,12 @@ jobs:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
       NEXT_PUBLIC_API_BASE_URL: ${{ vars.API_PUBLIC_URL }}
+      AGENT_PUBLIC_URL: ${{ vars.AGENT_PUBLIC_URL }}
+      NEXT_PUBLIC_AGENT_BASE_URL: ${{ vars.AGENT_PUBLIC_URL }}
+      AGENT_ASSET_UPLOAD_ENABLED: ${{ vars.AGENT_ASSET_UPLOAD_ENABLED }}
+      AGENT_RUNS_ENABLED: ${{ vars.AGENT_RUNS_ENABLED }}
+      AGENT_VISION_ENABLED: ${{ vars.AGENT_VISION_ENABLED }}
+      AGENT_WRITES_ENABLED: ${{ vars.AGENT_WRITES_ENABLED }}
       BETTER_AUTH_URL: ${{ vars.API_PUBLIC_URL }}
       AUTH_COOKIE_DOMAIN: ${{ vars.AUTH_COOKIE_DOMAIN }}
       TRUSTED_ORIGINS: ${{ vars.APP_BASE_URL }}
@@ -31,21 +37,10 @@ jobs:
       SENTRY_ENVIRONMENT: production
       NEXT_PUBLIC_SENTRY_ENVIRONMENT: production
       SENTRY_RELEASE: ${{ github.sha }}
-      SENTRY_API_DSN: ${{ secrets.SENTRY_API_DSN }}
-      SENTRY_WEB_DSN: ${{ secrets.SENTRY_WEB_DSN }}
-      NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_API_PROJECT: ${{ vars.SENTRY_API_PROJECT }}
+      SENTRY_AGENT_PROJECT: ${{ vars.SENTRY_AGENT_PROJECT }}
       SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
-      SENTRY_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
-      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-      GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
-      GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
     steps:
       - name: Checkout
@@ -60,51 +55,408 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Validate production configuration
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SENTRY_AGENT_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
+          SENTRY_API_DSN: ${{ secrets.SENTRY_API_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_WEB_DSN: ${{ secrets.SENTRY_WEB_DSN }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
         run: |
-          test -n "$APP_NAME"
-          test -n "$APP_BASE_URL"
-          test -n "$API_PUBLIC_URL"
-          test -n "$AUTH_COOKIE_DOMAIN"
-          test -n "$BETTER_AUTH_SECRET"
-          test -n "$GITHUB_CLIENT_ID"
-          test -n "$GITHUB_CLIENT_SECRET"
-          test "$EMAIL_PROVIDER" = "cloudflare"
-          test -n "$EMAIL_FROM"
-          test -n "$SENTRY_API_DSN"
-          test -n "$SENTRY_WEB_DSN"
-          test -n "$NEXT_PUBLIC_SENTRY_DSN"
-          test -n "$SENTRY_AUTH_TOKEN"
-          test -n "$SENTRY_ORG"
-          test -n "$SENTRY_API_PROJECT"
-          test -n "$SENTRY_WEB_PROJECT"
-          test -n "$TURSO_DATABASE_URL"
-          test -n "$TURSO_AUTH_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-          test -n "$CLOUDFLARE_API_TOKEN"
+          bun - <<'JS'
+          import { appendFile } from "node:fs/promises"
+          import { isIP } from "node:net"
+
+          const requireValue = (name) => {
+            const value = process.env[name]
+            if (!value) throw new Error(`${name} is required`)
+            return value
+          }
+          const hostnamePattern =
+            /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+          const exactProductionOrigin = (name) => {
+            const value = requireValue(name)
+            let url
+            try {
+              url = new URL(value)
+            } catch {
+              throw new Error(`${name} must be an exact HTTPS custom-domain origin`)
+            }
+            if (
+              url.protocol !== "https:" ||
+              url.origin !== value ||
+              !hostnamePattern.test(url.hostname) ||
+              isIP(url.hostname) !== 0
+            ) {
+              throw new Error(`${name} must be an exact HTTPS custom-domain origin`)
+            }
+            if (
+              url.hostname === "workers.dev" ||
+              url.hostname.endsWith(".workers.dev")
+            ) {
+              throw new Error(`${name} must use a production custom domain`)
+            }
+            return url.hostname
+          }
+
+          requireValue("APP_NAME")
+          const hosts = {
+            APP_HOST: exactProductionOrigin("APP_BASE_URL"),
+            API_HOST: exactProductionOrigin("API_PUBLIC_URL"),
+            AGENT_HOST: exactProductionOrigin("AGENT_PUBLIC_URL"),
+          }
+          if (new Set(Object.values(hosts)).size !== 3) {
+            throw new Error("Worker origins must use distinct hostnames")
+          }
+
+          const cookieDomain = requireValue("AUTH_COOKIE_DOMAIN")
+          if (!hostnamePattern.test(cookieDomain)) {
+            throw new Error(
+              "AUTH_COOKIE_DOMAIN must be the lowercase application parent domain"
+            )
+          }
+          for (const host of Object.values(hosts)) {
+            if (host !== cookieDomain && !host.endsWith(`.${cookieDomain}`)) {
+              throw new Error("Worker origins must share AUTH_COOKIE_DOMAIN")
+            }
+          }
+
+          for (const name of [
+            "AGENT_ASSET_UPLOAD_ENABLED",
+            "AGENT_RUNS_ENABLED",
+            "AGENT_VISION_ENABLED",
+            "AGENT_WRITES_ENABLED",
+          ]) {
+            if (!["0", "1"].includes(requireValue(name))) {
+              throw new Error(`${name} must be exactly 0 or 1`)
+            }
+          }
+          for (const name of [
+            "BETTER_AUTH_SECRET",
+            "CLOUDFLARE_ACCOUNT_ID",
+            "CLOUDFLARE_API_TOKEN",
+            "EMAIL_FROM",
+            "GITHUB_CLIENT_ID",
+            "GITHUB_CLIENT_SECRET",
+            "OPENROUTER_API_KEY",
+            "SENTRY_AGENT_DSN",
+            "SENTRY_API_DSN",
+            "SENTRY_AUTH_TOKEN",
+            "SENTRY_ORG",
+            "SENTRY_AGENT_PROJECT",
+            "SENTRY_API_PROJECT",
+            "SENTRY_WEB_DSN",
+            "SENTRY_WEB_PROJECT",
+            "TURSO_AUTH_TOKEN",
+            "TURSO_DATABASE_URL",
+          ]) {
+            requireValue(name)
+          }
+          if (requireValue("EMAIL_PROVIDER") !== "cloudflare") {
+            throw new Error("EMAIL_PROVIDER must be cloudflare")
+          }
+          await appendFile(
+            requireValue("GITHUB_ENV"),
+            Object.entries(hosts)
+              .map(([name, host]) => `${name}=${host}\n`)
+              .join("")
+          )
+          JS
+
+      - name: Verify Cloudflare binding types
+        run: |
+          bun run --cwd apps/api cf:typegen
+          bun run --cwd apps/agent cf:typegen
+          apps/web/node_modules/.bin/wrangler types \
+            --config apps/web/wrangler.jsonc \
+            --env-interface CloudflareEnv \
+            --include-runtime=false \
+            "$RUNNER_TEMP/web-cloudflare-env.d.ts"
+          git diff --exit-code -- \
+            apps/api/src/cloudflare-env.d.ts \
+            apps/agent/src/cloudflare-env.d.ts
+          test -s "$RUNNER_TEMP/web-cloudflare-env.d.ts"
 
       - name: Inspect file activity rollout state
         id: file-activity-rollout
         run: bun run packages/db/src/file-activity-rollout.ts >> "$GITHUB_OUTPUT"
+        env:
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+
+      - name: Keep Agent disabled during file activity compatibility rollout
+        if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
+        run: |
+          for name in \
+            AGENT_ASSET_UPLOAD_ENABLED \
+            AGENT_RUNS_ENABLED \
+            AGENT_VISION_ENABLED \
+            AGENT_WRITES_ENABLED; do
+            if [ "${!name}" != "0" ]; then
+              printf '%s must be 0 during the file activity compatibility rollout\n' \
+                "$name" >&2
+              exit 1
+            fi
+          done
 
       - name: Deploy API Worker for file activity compatibility
         if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
-        run: bun run --cwd apps/api deploy
+        run: |
+          umask 077
+          api_secrets="$(mktemp)"
+          trap 'rm -f "$api_secrets"' EXIT
+          SECRETS_FILE="$api_secrets" bun -e '
+            const keys = [
+              "BETTER_AUTH_SECRET",
+              "GITHUB_CLIENT_ID",
+              "GITHUB_CLIENT_SECRET",
+              "SENTRY_DSN",
+              "TURSO_AUTH_TOKEN",
+              "TURSO_DATABASE_URL",
+            ]
+            await Bun.write(
+              process.env.SECRETS_FILE,
+              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
+            )
+          '
+          bun run --cwd apps/api deploy -- \
+            --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
+            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
+            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
+            --domain "$API_HOST" \
+            --strict \
+            --secrets-file "$api_secrets"
         env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_PROJECT: ${{ env.SENTRY_API_PROJECT }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+
+      - name: Smoke API Worker before file activity migration
+        if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
+        run: |
+          assert_status() {
+            label="$1"
+            expected="$2"
+            url="$3"
+            status=""
+            for delay in 0 2 4 8 12; do
+              sleep "$delay"
+              status="$(curl --silent --show-error --output /dev/null \
+                --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "$expected" ]; then
+                printf '%s smoke passed\n' "$label"
+                return 0
+              fi
+            done
+            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
+            return 1
+          }
+          assert_status API-compat-health 200 "$API_PUBLIC_URL/health"
+          assert_status API-compat-ready 200 "$API_PUBLIC_URL/ready"
+          assert_status API-compat-OpenAPI 200 "$API_PUBLIC_URL/openapi/json"
 
       - name: Apply Turso migrations
         run: bun run --cwd packages/db db:migrate
+        env:
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
       - name: Deploy API Worker
         if: steps.file-activity-rollout.outputs.compatibility_deploy != 'true'
-        run: bun run --cwd apps/api deploy
+        run: |
+          umask 077
+          api_secrets="$(mktemp)"
+          trap 'rm -f "$api_secrets"' EXIT
+          SECRETS_FILE="$api_secrets" bun -e '
+            const keys = [
+              "BETTER_AUTH_SECRET",
+              "GITHUB_CLIENT_ID",
+              "GITHUB_CLIENT_SECRET",
+              "SENTRY_DSN",
+              "TURSO_AUTH_TOKEN",
+              "TURSO_DATABASE_URL",
+            ]
+            await Bun.write(
+              process.env.SECRETS_FILE,
+              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
+            )
+          '
+          bun run --cwd apps/api deploy -- \
+            --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
+            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
+            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
+            --domain "$API_HOST" \
+            --strict \
+            --secrets-file "$api_secrets"
         env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_PROJECT: ${{ env.SENTRY_API_PROJECT }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
-      - name: Deploy Web Worker
-        run: bun run --cwd apps/web deploy
+      - name: Smoke API Worker
+        run: |
+          assert_status() {
+            label="$1"
+            expected="$2"
+            url="$3"
+            status=""
+            for delay in 0 2 4 8 12; do
+              sleep "$delay"
+              status="$(curl --silent --show-error --output /dev/null \
+                --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "$expected" ]; then
+                printf '%s smoke passed\n' "$label"
+                return 0
+              fi
+            done
+            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
+            return 1
+          }
+          assert_status API-health 200 "$API_PUBLIC_URL/health"
+          assert_status API-ready 200 "$API_PUBLIC_URL/ready"
+          assert_status API-OpenAPI 200 "$API_PUBLIC_URL/openapi/json"
+
+      - name: Build Agent Worker and upload source maps
+        run: |
+          bun run --cwd apps/agent build:cloudflare
+          apps/api/node_modules/.bin/sentry-cli sourcemaps inject apps/agent/dist/worker
+          apps/api/node_modules/.bin/sentry-cli sourcemaps upload \
+            --release "$SENTRY_RELEASE" \
+            --validate \
+            --strict \
+            --wait \
+            apps/agent/dist/worker
         env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_PROJECT: ${{ env.SENTRY_AGENT_PROJECT }}
+
+      - name: Deploy Agent Worker
+        run: |
+          umask 077
+          agent_secrets="$(mktemp)"
+          trap 'rm -f "$agent_secrets"' EXIT
+          SECRETS_FILE="$agent_secrets" bun -e '
+            const keys = ["OPENROUTER_API_KEY", "SENTRY_DSN"]
+            await Bun.write(
+              process.env.SECRETS_FILE,
+              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
+            )
+          '
+          bun run --cwd apps/agent deploy -- \
+            ./dist/worker/worker.js \
+            --no-bundle \
+            --var "WEB_ORIGIN:$APP_BASE_URL" \
+            --var "AGENT_RUNS_ENABLED:$AGENT_RUNS_ENABLED" \
+            --var "AGENT_VISION_ENABLED:$AGENT_VISION_ENABLED" \
+            --var "AGENT_WRITES_ENABLED:$AGENT_WRITES_ENABLED" \
+            --var "NODE_ENV:production" \
+            --var "SENTRY_ENVIRONMENT:production" \
+            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
+            --domain "$AGENT_HOST" \
+            --strict \
+            --secrets-file "$agent_secrets"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
+
+      - name: Smoke Agent Worker
+        run: |
+          assert_status() {
+            label="$1"
+            expected="$2"
+            url="$3"
+            status=""
+            for delay in 0 2 4 8 12; do
+              sleep "$delay"
+              status="$(curl --silent --show-error --output /dev/null \
+                --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "$expected" ]; then
+                printf '%s smoke passed\n' "$label"
+                return 0
+              fi
+            done
+            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
+            return 1
+          }
+          assert_status Agent-HTTP-rejection 426 "$AGENT_PUBLIC_URL/"
+
+      - name: Build Web Worker and upload source maps
+        run: |
+          bun run --cwd apps/web build:cloudflare
+          OPEN_NEXT_DEPLOY=true apps/web/node_modules/.bin/wrangler deploy \
+            --config apps/web/wrangler.jsonc \
+            --dry-run \
+            --outdir "$RUNNER_TEMP/web-worker" \
+            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
+            --var "SENTRY_RELEASE:$SENTRY_RELEASE"
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
           SENTRY_PROJECT: ${{ env.SENTRY_WEB_PROJECT }}
+
+      - name: Deploy Web Worker
+        run: |
+          umask 077
+          web_secrets="$(mktemp)"
+          trap 'rm -f "$web_secrets"' EXIT
+          SECRETS_FILE="$web_secrets" bun -e '
+            const keys = ["SENTRY_DSN"]
+            await Bun.write(
+              process.env.SECRETS_FILE,
+              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
+            )
+          '
+          bun run --cwd apps/web deploy -- \
+            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
+            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
+            --domain "$APP_HOST" \
+            --strict \
+            --secrets-file "$web_secrets"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
+
+      - name: Smoke Web Worker
+        run: |
+          assert_status() {
+            label="$1"
+            expected="$2"
+            url="$3"
+            status=""
+            for delay in 0 2 4 8 12; do
+              sleep "$delay"
+              status="$(curl --silent --show-error --output /dev/null \
+                --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "$expected" ]; then
+                printf '%s smoke passed\n' "$label"
+                return 0
+              fi
+            done
+            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
+            return 1
+          }
+          assert_status Web-sign-in 200 "$APP_BASE_URL/auth/sign-in"

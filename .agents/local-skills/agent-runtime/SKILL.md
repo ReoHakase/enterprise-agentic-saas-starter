@@ -143,7 +143,7 @@ Jotaiはpane、drawer、width、短命composerなど再取得不要な一時UI�
 ## Active organizationとaccount切り替え
 
 - switch開始時にmessage、image upload、tool、approval、form patchをfreezeする。
-- dirty form、composer、in-flight upload、staged asset、run、pending approvalを検査し、StayまたはDiscard local draft and switchを出す。未送信・leaseなしassetは成功後に即cleanupし、送信済みassetはretentionまで残ることを明示する。
+- dirty form、composer、in-flight upload、staged asset、run、pending approvalを検査し、StayまたはDiscard local draft and switchを出す。成功後はlocal Blob、selection、draftだけを破棄し、旧tenantのready assetへDELETEしない。送信前を含むready assetはserver既定72時間retention、pendingは1時間timeoutでcleanupされることを明示する。
 - activation成功まではdraft/local Blob snapshotを保持する。
 - active organization更新transactionでcontext epochを+1し、旧sessionのticket、grant、resume ticket、run、action、policyをrevoke/cancelし、action asset leaseを解放する。
 - success後にWebSocketとuploadをabortし、Agent/files/issuesを含む全tenant queryをcancelする。
@@ -167,6 +167,17 @@ Jotaiはpane、drawer、width、短命composerなど再取得不要な一時UI�
 
 message本文をTursoへ二重保存しない。prompt、response、Issue本文、raw image、base64、filename、object key、token、provider raw errorをSentry、structured log、auditへ出さない。Sentry SDKを正本にし、Cloudflare OTLP exportを重ねない。
 
+## 本番deploy
+
+- Web、API、Agentは別Worker、別custom domain、別Sentry projectにする。Agentは`workers_dev`とpreview URLを無効化し、通常HTTPを公開せずAgent protocolだけを受ける。
+- Agentの`AGENT_INTERNAL_API` Service BindingはAPIのnamed `WorkerEntrypoint` `AgentInternalApi`だけを指す。bindingはAgent側だけに置き、API→Agentや循環bindingを作らない。API Worker名を変えたらbinding先とtypegenを同時に更新する。
+- 運用者はbackup/restore pointを確認してからproduction workflowを起動する。workflowはEnvironment approvalとconcurrency lockの下で、migration→API→Agent→Web→smokeの順に進める。`0011_file_activity_backfill`互換deployだけはAPIをmigration前へ先行させるが、その後もAgent→Webの順を守る。
+- `AGENT_ASSET_UPLOAD_ENABLED`、`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`AGENT_WRITES_ENABLED`はGitHub Environmentへ明示的な文字列`0`または`1`で必ず設定し、runtimeは`1`だけを有効にする。未設定や`true`を有効扱いしない。
+- 3 Workerのruntime secretは`umask 077`の一時JSONを`wrangler deploy --secrets-file`へ渡してcodeと同じversionへ注入し、必ず削除する。secret値をCLI引数、log、`GITHUB_OUTPUT`、artifactへ出さない。特にOpenRouter key、各Sentry DSN、Sentry auth tokenをjob-wide envへ置かない。
+- 3 Workerは同じcommit SHAを`SENTRY_RELEASE`に使う。API/AgentはWrangler dry-run artifactへSentry debug IDをinject・uploadしてから同じbundleを`--no-bundle` deployし、WebはSentry upload付きOpenNext build後に生成済みartifactをdeployする。Sentry upload失敗後にdeployを続行しない。
+- `SENTRY_AUTH_TOKEN`はsource map stepだけへ渡しruntimeへ保存しない。Cloudflareの`upload_source_maps`はCloudflare stack向けに維持するがSentry uploadの代わりにしない。application telemetryはSentry SDKだけから送り、Cloudflare Sentry OTLP exportを重ねない。
+- deploy前にAPI/Agent/Webの`cf:typegen`と全WorkerのCloudflare dry-runを通す。deploy後はAPI health/ready/OpenAPI、Web sign-in、Agent通常HTTPの426、実ticket WebSocket、ticket replay、Service Binding RPC、feature flag、3 projectのreadable stackをsmokeする。
+
 ## 実装時の確認
 
 - ticket expiry/replay、cross-tenant ID、org switch race、membership/role失効をAPI integration testする。
@@ -175,9 +186,11 @@ message本文をTursoへ二重保存しない。prompt、response、Issue本文�
 - chat-only asset expiry、promotionとのrace、quota解放、R2 cleanupをtestする。
 - WebSocket/DO/Turso/log/Sentryにbase64/raw imageが残らないことをtestする。
 - nuqsのreload/Back/ForwardとAgent query操作、form dirty conflictをPlaywrightで確認する。
-- real Workers環境でticket、reconnect、RPC stream、Images input、10 MB upload memoryをsmoke testする。
+- localでは`docs/upload-memory-smoke.md`の専用Workerで10,000,000-byte multipartを並列実行し、失敗数とworkerd peak RSSの回帰を記録する。local process RSSはproduction 128 MB/isolateの証明にせず、release前にreal Workers環境でもticket、reconnect、RPC stream、Images input、memory errorをsmokeする。
 - Cloudflare変更時はBun buildだけで完了扱いにせず、少なくとも次を実行する。
 
     bun run check
     bun run --cwd apps/api cf:typegen
+    bun run --cwd apps/agent cf:typegen
+    bun run --cwd apps/web cf:typegen
     bun run build:cloudflare
