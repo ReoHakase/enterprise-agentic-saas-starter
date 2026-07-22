@@ -30,7 +30,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 
 ## 推奨CI順序
 
-Agent releaseでは通常のcheck/mock E2E後に、明示的なpaid `test:e2e:agent`と各scenario 3回の`test:eval:agent`をgateにする。secretやprovider本文をartifactへ残さず、warning、flaky、未説明・意図しないskipがあればreleaseを止める。browser能力差による計画skipは理由と代替coverageをtest内へ明記する。docs link/禁止用語とrepo-local skill validationも同じgateへ含める。
+Agent releaseでは通常のcheck/mock E2E後に、明示的なpaid `test:e2e:agent`と各scenario 3回の`test:eval:agent`をgateにする。paid journeyはrename指示なしの自動titleと、1 message内の画像upload→自然Web検索→画像付きIssue作成を含む。secretやprovider本文をartifactへ残さず、warning、flaky、未説明・意図しないskipがあればreleaseを止める。browser能力差による計画skipは理由と代替coverageをtest内へ明記する。docs link/禁止用語とrepo-local skill validationも同じgateへ含める。
 
 ```txt
 1. bun install --frozen-lockfile

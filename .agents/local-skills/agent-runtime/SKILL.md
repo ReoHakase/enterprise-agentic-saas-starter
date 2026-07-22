@@ -16,9 +16,9 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra、chat thre
 - Agent WorkerへTurso、R2、Better Auth secret、JWT署名鍵を渡さない。public routeを作らない。
 - model/tool inputのID、label、page pathを信用せず、APIがactive organizationで再解決する。
 - Web検索は履歴、Issue、page context、tool結果を利用できるが、最終queryからcredential、PII、known member identity、opaque ID、private固有情報を除く。確定できなければ検索しない。
-- Web検索後の同一root runではIssue writeを`ask_each`へ戻す。
+- Web検索後もthreadの`ask_always | full_access`を維持し、queryや検索結果から権限を拡張しない。
 - approval preview、decision、receiptはAPI正本。cardはtool part位置へinline表示する。
-- provider reasoning、tool、source、activity、context budget、title data partをbounded canonical messageとして保存する。
+- provider reasoning、tool、source、context budget、title data partをbounded canonical messageとして保存し、transient activityは保存しない。
 - provider usageでreasoning/cacheを二重計上せず、失敗・cancelでも観測済みusageを冪等記録する。
 - 旧`IssueAssistant`はretention隔離し、この変更へ`deleted_classes`を含めない。
 

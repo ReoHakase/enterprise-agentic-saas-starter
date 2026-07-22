@@ -34,6 +34,7 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 ### Agent chat image（v2 target）
 
 - Agent chatの短期画像は、Issueへ昇格するまではgeneric `file`ではなくfeature固有の`agent_asset`として扱う。`fileOwnerTypes`へ`agent_thread`を足さず、現行の「作成時からimmutableなIssue owner」というgeneric file contractを崩さない。
+- productionのAgent asset upload flagは`1`だけを有効としてfail closedにする。local API supervisorは通常`bun run dev`時だけ未設定を`1`へ補い、明示設定は上書きしない。UIはfeature-disabledとAPI/provider unavailableを別のsafe errorとして表示し、raw responseをtoastへ出さない。
 - Browserは画像をAgent asset専用の`/files/*` routeへmultipartで一度だけuploadし、canonical chat messageにはopaque asset IDだけを保存する。Mastra memory/tool argumentへbase64/data URI、raw bytes、private URL、object keyを保存せず、Issue作成時もBrowserから再uploadしない。
 - 中核実装ではR2上のphysical objectを`storage_objects`へ分離し、`agent_assets`と`files`をlogical resourceにする。新規R2 keyはowner非依存にし、既存fileは1対1 storage objectとfile claimへbackfillして旧keyを移動しない。このmigration前は後述する現行のowner依存key contractを維持する。
 - `storage_object_claims`はstorage object IDをprimary keyにし、agent_asset、transferring、file holderを持つ。ready asset/fileとclaimの一致をrepositoryとSQLite triggerで強制し、1 physical objectに複数のlive holderを作らない。

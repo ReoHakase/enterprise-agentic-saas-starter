@@ -10,6 +10,7 @@ description: enterprise-agentic-saas-starterでdependency更新、Bun catalog、
 ## まず守る判断基準
 
 - Bun workspaceの外部依存versionはroot `workspaces.catalog` にexact versionで集約し、各packageでは `catalog:` を使う。
+- Tiptap composerは`@tiptap/core/react/pm/starter-kit/extension-mention/extension-placeholder/suggestion`を同一exact versionでcatalog固定し、Web packageは`catalog:`だけを参照する。
 - `bunfig.toml` の `[install] exact = true` と `.npmrc` の `save-exact=true` で `bun add` 時のexact保存を強制する。
 - dependency更新は `bunfig.toml` の `minimumReleaseAge` を維持し、公開直後のlatestが拒否されるときは制約を迂回せず、通常の `bun install` で解決できる最新versionを選ぶ。
 - `apps/*` は実行単位。Next.js web、Elysia API、将来のagent serverなどを置く。
