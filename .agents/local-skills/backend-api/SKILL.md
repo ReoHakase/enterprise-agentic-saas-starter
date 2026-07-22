@@ -97,7 +97,7 @@ apps/api/src/
 ## 認証・tenant macro
 
 - protected routeは `modules/authorization/access-control.ts` の `authenticated` または `organizationAccess` macroを必ず宣言する。handler内で個別にsession取得するrouteを増やさない。
-- named `AgentInternalApi`の`/internal/agent/*`はBrowser session macroを使わず、connection/resume consume以外でBearer run grantをstrict header schemaから取得し、service/repositoryでlive session、active organization、membership、context epoch、thread/run scope、現在permissionを再検証する。default/public app、統合OpenAPI、CORSへinternal routeをmountしない。
+- named `AgentInternalApi`の`/internal/agent/*`はBrowser session macroを使わない。connection/resume ticketはstrict bodyからatomic consumeし、run開始はBearer connection grant、以後はBearer run grantをstrict header schemaから取得する。service/repositoryでlive session、active organization、membership、context epoch、thread/run scope、現在permissionを再検証し、default/public app、統合OpenAPI、CORSへinternal routeをmountしない。
 - `organizationAccess` はroute schemaで検証済みのparams/query/bodyから `organizationId` を取り、session、membership、active organization、role、fresh sessionの順にfail-closedで解決する。
 - 非memberによるtenant指定は、存在する他tenantと存在しないIDを区別せず404にする。role不足は403、所属しているがactive tenantが違う場合は409 `active_organization_mismatch`。
 - repositoryのtenant resource queryはresource ID単独で検索せず、必ず `organizationId` と組み合わせる。親子resourceはDBのcomposite FKも併用する。

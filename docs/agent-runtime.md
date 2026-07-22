@@ -207,28 +207,31 @@ opaque tokenならactive organization変更、account切り替え、membership/r
 
 Agent WorkerはEden Treatyのcustom `fetcher`を`AGENT_INTERNAL_API.fetch(request)`へ差し替える。型はserver-onlyな`AgentInternalApp` exportから推論し、dummy originはURL組み立てのためだけに使う。通常のglobal `fetch`やAPI public originへのfallbackは禁止する。Webが`@enterprise-agentic-saas/api/agent-client`をimportすることも禁止する。
 
-internal appはElysia/Valibotのroute schemaを使う。connection/resume ticketをatomic consumeするroute以外は、strictな`authorization: Bearer <run grant>` header guardでcredentialを抽出する。guardは形式を検証するだけで認証済み扱いにせず、各routeのservice/repositoryがhash lookupとlive DB再認可を行う。validation errorへtoken値やValibot issueを含めない。
+internal appはElysia/Valibotのroute schemaを使う。connection ticketとresume ticketはstrict bodyからatomic consumeする。run開始だけは`Authorization: Bearer <connection grant>`、それ以外の実行中routeは`Authorization: Bearer <run grant>`を使う。header guardは形式を検証するだけで認証済み扱いにせず、各routeのservice/repositoryがhash lookupとlive DB再認可を行う。validation errorへtoken値やValibot issueを含めない。
 
 pathはtool名のmirrorではなく、安定したdomain capabilityへ分ける。
 
 ```text
 POST /internal/agent/connections/consume
 POST /internal/agent/runs
-POST /internal/agent/runs/:runId/settle
-POST /internal/agent/messages/append
-GET  /internal/agent/account/context
-GET  /internal/agent/organizations/active
-GET  /internal/agent/organizations/active/members
+POST /internal/agent/runs/cancel
+POST /internal/agent/runs/finish
+POST /internal/agent/runs/messages
+GET  /internal/agent/context/account
+GET  /internal/agent/context/organization
+GET  /internal/agent/members
+GET  /internal/agent/issue-labels
 GET  /internal/agent/issues
+GET  /internal/agent/issues/by-number/:number
 GET  /internal/agent/issues/:issueId
-POST /internal/agent/issue-actions/prepare
-GET  /internal/agent/issue-actions/:actionId/decision
-POST /internal/agent/issue-actions/:actionId/resume
-POST /internal/agent/issue-actions/:actionId/execute
-GET  /internal/agent/assets/:assetId/model-image
+POST /internal/agent/actions
+GET  /internal/agent/actions/:actionId
+POST /internal/agent/actions/:actionId/resume
+POST /internal/agent/actions/:actionId/execute
+GET  /internal/agent/assets/:assetId/model
 ```
 
-同じauthorization/transactionを共有するprepareはcreate/update/deleteのdiscriminated unionを受ける。Mastraの`create_issue`等とHTTP endpointを一対一に増やさない。binary image responseなどEdenの通常data shapeに合わないrouteだけは、同じtyped internal client内の低水準fetch helperに隔離する。
+`runs/cancel`と`runs/finish`はrun grantから対象runを一意に決め、client由来のrun IDを受けない。同じauthorization/transactionを共有する`actions`はcreate/update/deleteのdiscriminated unionを受ける。Mastraの`create_issue`等とHTTP endpointを一対一に増やさない。binary image responseなどEdenの通常data shapeに合わないrouteだけは、同じtyped internal client内の低水準fetch helperに隔離する。
 
 run grantを受ける各internal methodは、hash lookupだけで許可せず毎回次を再検証する。
 

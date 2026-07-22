@@ -63,7 +63,7 @@ account、organization、member、invitation、role、billing、auth、comment�
 
 toolはmodel向けintent、内部APIはdomain capabilityである。1 tool = 1 endpointを原則にしない。Issue write toolは共通のprepareIssueActionとexecuteIssueActionを使い、human public APIと同じIssue domain serviceへ合流させる。
 
-API schemaはapps/apiのValibotに閉じる。Agent Worker用typeが必要ならnamed entrypoint専用Elysia app typeを@enterprise-agentic-saas/api/agent-clientからserver-only exportし、apps/webからimportしない。private boundaryはnamed `AgentInternalApi`内だけの`/internal/agent/*` + routeごとのstrict Valibot parseを使う。Eden custom fetcherはService Bindingだけを呼び、public HTTP fallbackやgeneric path dispatcherを作らない。connection/resume consume以外はBearer run grantをheader guardで受け、serviceでlive DB再認可する。Mastra toolは薄いadapterにし、認可、正規化、transaction、auditをtoolへ移さない。
+API schemaはapps/apiのValibotに閉じる。Agent Worker用typeが必要ならnamed entrypoint専用Elysia app typeを@enterprise-agentic-saas/api/agent-clientからserver-only exportし、apps/webからimportしない。private boundaryはnamed `AgentInternalApi`内だけの`/internal/agent/*` + routeごとのstrict Valibot parseを使う。Eden custom fetcherはService Bindingだけを呼び、public HTTP fallbackやgeneric path dispatcherを作らない。connection/resume ticketはstrict bodyからatomic consumeし、run開始はBearer connection grant、以後はBearer run grantをheader guardで受け、serviceでlive DB再認可する。Mastra toolは薄いadapterにし、認可、正規化、transaction、auditをtoolへ移さない。
 
 ## Issue actionと承認
 
