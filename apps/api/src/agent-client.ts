@@ -38,6 +38,7 @@ export type AgentIssue = {
   assigneeId: string | null
   labels: string[]
   dueDate: string | null
+  revision: number
   createdAt: string
   updatedAt: string
 }
@@ -68,6 +69,109 @@ export type AgentRunResult = {
     | "expired"
 }
 
+export type AgentIssueActionKind =
+  | "create_issue"
+  | "update_issue"
+  | "delete_issue"
+
+export type AgentCreateIssueActionInput = {
+  title: string
+  description?: string
+  status?: AgentIssue["status"]
+  priority?: AgentIssue["priority"]
+  assigneeId?: string | null
+  labels?: string[]
+  dueDate?: string | null
+  attachmentAssetIds?: string[]
+}
+
+export type AgentUpdateIssueActionInput = {
+  issueId: string
+  expectedRevision: number
+  title?: string
+  description?: string
+  status?: AgentIssue["status"]
+  priority?: AgentIssue["priority"]
+  assigneeId?: string | null
+  labels?: string[]
+  dueDate?: string | null
+}
+
+export type AgentDeleteIssueActionInput = {
+  issueId: string
+  expectedRevision: number
+}
+
+export type AgentIssueActionPreview = {
+  kind: AgentIssueActionKind
+  destructive: boolean
+  title: string
+  issueNumber: number | null
+  issueRevision: number | null
+  fields: Array<{
+    field:
+      | "title"
+      | "description"
+      | "status"
+      | "priority"
+      | "assignee"
+      | "labels"
+      | "due_date"
+    before: string | string[] | null
+    after: string | string[] | null
+  }>
+  attachments: Array<{
+    assetId: string
+    filename: string
+    sizeBytes: number
+  }>
+}
+
+export type AgentIssueAction = {
+  id: string
+  kind: AgentIssueActionKind
+  status:
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "expired"
+    | "canceled"
+    | "succeeded"
+    | "conflicted"
+  approvalMode: "manual" | "auto_policy" | null
+  requiresApproval: boolean
+  preview: AgentIssueActionPreview | null
+  expiresAt: string
+  completedAt: string | null
+}
+
+export type AgentActionExecutionResult = {
+  actionId: string
+  kind: AgentIssueActionKind
+  status: "succeeded"
+  issue: {
+    id: string
+    number: number
+    revision: number
+    deleted: boolean
+  }
+}
+
+export type AgentApprovalPolicy = {
+  mode: "ask_each" | "auto_write" | "auto_all"
+  expiresAt: string | null
+  permissions: {
+    createIssue: boolean
+    updateIssue: boolean
+    deleteIssue: boolean
+  }
+}
+
+export type AgentResumeTicket = {
+  ticket: string
+  expiresAt: string
+}
+
 export type AgentSearchIssuesInput = {
   grant: string
   search?: string
@@ -95,6 +199,7 @@ export type AgentInternalApiContract = {
   startRun(input: {
     grant: string
     clientMessageId: string
+    assetIds?: string[]
   }): Promise<AgentRunGrant>
   cancelRun(input: { grant: string }): Promise<AgentRunResult>
   finishRun(input: {
@@ -121,4 +226,38 @@ export type AgentInternalApiContract = {
       | { grant: string; lookup: "id"; id: string }
       | { grant: string; lookup: "number"; number: number }
   ): Promise<AgentIssue>
+  prepareCreateIssue(input: {
+    grant: string
+    toolCallId: string
+    idempotencyKey: string
+    issue: AgentCreateIssueActionInput
+  }): Promise<AgentIssueAction>
+  prepareUpdateIssue(input: {
+    grant: string
+    toolCallId: string
+    idempotencyKey: string
+    issue: AgentUpdateIssueActionInput
+  }): Promise<AgentIssueAction>
+  prepareDeleteIssue(input: {
+    grant: string
+    toolCallId: string
+    idempotencyKey: string
+    issue: AgentDeleteIssueActionInput
+  }): Promise<AgentIssueAction>
+  getIssueActionDecision(input: {
+    grant: string
+    actionId: string
+  }): Promise<AgentIssueAction>
+  resumeApprovedAction(input: {
+    actionId: string
+    resumeTicket: string
+  }): Promise<AgentRunGrant>
+  executeApprovedAction(input: {
+    grant: string
+    actionId: string
+  }): Promise<AgentActionExecutionResult>
+  getAgentImageForModel(input: {
+    grant: string
+    assetId: string
+  }): Promise<Response>
 }

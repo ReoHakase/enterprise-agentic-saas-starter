@@ -62,6 +62,8 @@ export const revokeAgentSessionContextInTransaction = async (
   const context = rows[0]
   if (!context) throw new Error("Agent context epoch update lost a race")
 
+  // 0015以降のaction/policy/resume/asset leaseはcontext epoch更新triggerが
+  // 同じtransaction内で失効させる。以下は0014由来の実行資源も明示的に閉じる。
   await tx
     .update(agentConnectionTickets)
     .set({ revokedAt: now })

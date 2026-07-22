@@ -22,6 +22,10 @@ import {
 import { decodeFileCursor, encodeFileCursor } from "./cursor"
 import type { FileDto, FileListDto } from "./model"
 import { getFileOwnerAdapter } from "./owner-adapters"
+import {
+  isLegacyFileStorage,
+  releaseDeletedFileStorageObjectsInTransaction,
+} from "./storage-object-release"
 
 export type StoredFile = typeof files.$inferSelect
 
@@ -453,6 +457,7 @@ export const deleteReadyFile = async (
 ): Promise<boolean> => {
   try {
     return await db.transaction(async (tx) => {
+      const now = new Date()
       const rows = await tx
         .delete(files)
         .where(
@@ -463,30 +468,39 @@ export const deleteReadyFile = async (
           )
         )
         .returning({
+          keyVersion: files.keyVersion,
           objectKey: files.objectKey,
           sizeBytes: files.sizeBytes,
+          storageObjectId: files.storageObjectId,
         })
       const file = rows[0]
       if (!file) return false
+      await releaseDeletedFileStorageObjectsInTransaction(tx, {
+        files: [file],
+        now,
+        organizationId: input.file.organizationId,
+      })
       await releaseUsage(tx, {
         organizationId: input.file.organizationId,
         sizeBytes: file.sizeBytes,
       })
-      await tx
-        .insert(fileCleanupJobs)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: input.file.organizationId,
-          kind: "exact",
-          objectKey: file.objectKey,
-        })
-        .onConflictDoNothing()
+      if (isLegacyFileStorage(file)) {
+        await tx
+          .insert(fileCleanupJobs)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: input.file.organizationId,
+            kind: "exact",
+            objectKey: file.objectKey,
+          })
+          .onConflictDoNothing()
+      }
       await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
         actorUserId: input.actorUserId,
         fileId: input.file.id,
         filename: input.file.filename,
         kind: "file_deleted",
-        occurredAt: new Date(),
+        occurredAt: now,
         organizationId: input.file.organizationId,
         ownerId: input.file.ownerId,
       })

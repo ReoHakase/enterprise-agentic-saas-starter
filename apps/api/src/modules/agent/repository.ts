@@ -1,7 +1,11 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
+  agentActionAssets,
+  agentActions,
+  agentApprovalPolicies,
   agentConnectionTickets,
   agentGrants,
+  agentResumeTickets,
   agentRuns,
   agentSessionContexts,
   agentThreads,
@@ -10,6 +14,7 @@ import {
   organization,
   session,
   user,
+  type AgentRunScope,
   type AgentRunStatus,
 } from "@enterprise-agentic-saas/db/schema"
 import { and, asc, desc, eq, gt, inArray, isNull, like, sql } from "drizzle-orm"
@@ -27,6 +32,7 @@ import type {
 } from "../../agent-client"
 import { AppError, publicErrors } from "../../errors/app-error"
 import { normalizeOrganizationRole } from "../authorization/roles"
+import { bindAgentAssetsToRunInTransaction } from "../files/agent-run-assets-repository"
 import {
   findIssueById,
   findIssueByNumber,
@@ -39,7 +45,7 @@ import {
 } from "./context-repository"
 import { createAgentToken, hashAgentToken } from "./crypto"
 
-type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
+export type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
 export type AgentThreadDto = {
   id: string
@@ -55,7 +61,7 @@ type LiveSession = {
   activeOrganizationId: string
 }
 
-type ValidGrant = {
+export type ValidGrant = {
   organizationId: string
   threadId: string
   runId: string | null
@@ -64,6 +70,9 @@ type ValidGrant = {
   contextEpoch: number
   role: ReturnType<typeof normalizeOrganizationRole>
   runStatus: AgentRunStatus | null
+  runScope: AgentRunScope | null
+  rootRunId: string | null
+  resumedActionId: string | null
 }
 
 const CONNECTION_TICKET_TTL_MS = 60_000
@@ -90,6 +99,7 @@ const toAgentIssue = (issue: IssueDto): AgentIssue => ({
   assigneeId: issue.assigneeId,
   labels: issue.labels,
   dueDate: issue.dueDate,
+  revision: issue.revision,
   createdAt: issue.createdAt,
   updatedAt: issue.updatedAt,
 })
@@ -123,7 +133,7 @@ const preserveAgentError = (cause: unknown, operation: string): never => {
   throw publicErrors.internal(cause, { module: "agent", operation })
 }
 
-const requireLiveSession = async (
+export const requireLiveSession = async (
   tx: AgentTransaction,
   input: { sessionId: string; userId: string; now: Date }
 ): Promise<LiveSession> => {
@@ -154,7 +164,7 @@ const requireLiveSession = async (
   }
 }
 
-const requireActiveMembership = async (
+export const requireActiveMembership = async (
   tx: AgentTransaction,
   input: LiveSession
 ) => {
@@ -177,7 +187,7 @@ const requireActiveMembership = async (
   return normalizeOrganizationRole(membership.role)
 }
 
-const requireOwnedThread = async (
+export const requireOwnedThread = async (
   tx: AgentTransaction,
   input: {
     threadId: string
@@ -211,7 +221,7 @@ const requireOwnedThread = async (
   return thread
 }
 
-const validateGrantInTransaction = async (
+export const validateGrantInTransaction = async (
   tx: AgentTransaction,
   input: {
     tokenHash: string
@@ -271,12 +281,20 @@ const validateGrantInTransaction = async (
   }
 
   let runStatus: AgentRunStatus | null = null
+  let runScope: AgentRunScope | null = null
+  let rootRunId: string | null = null
+  let resumedActionId: string | null = null
   if (input.kind === "run") {
     if (!grant.runId) {
       throw publicErrors.unauthorized("Agent capability is invalid")
     }
     const runRows = await tx
-      .select({ status: agentRuns.status })
+      .select({
+        status: agentRuns.status,
+        scope: agentRuns.scope,
+        rootRunId: agentRuns.rootRunId,
+        resumedActionId: agentRuns.resumedActionId,
+      })
       .from(agentRuns)
       .where(
         and(
@@ -291,6 +309,9 @@ const validateGrantInTransaction = async (
       )
       .limit(1)
     runStatus = runRows[0]?.status ?? null
+    runScope = runRows[0]?.scope ?? null
+    rootRunId = runRows[0]?.rootRunId ?? null
+    resumedActionId = runRows[0]?.resumedActionId ?? null
     if (!runStatus) {
       throw publicErrors.unauthorized("Agent capability is invalid")
     }
@@ -314,10 +335,13 @@ const validateGrantInTransaction = async (
     contextEpoch: grant.contextEpoch,
     role,
     runStatus,
+    runScope,
+    rootRunId,
+    resumedActionId,
   }
 }
 
-const createGrantInTransaction = async (
+export const createGrantInTransaction = async (
   tx: AgentTransaction,
   input: {
     tokenHash: string
@@ -472,6 +496,55 @@ export const archiveAgentThreadForSession = async (
             eq(agentRuns.organizationId, thread.organizationId),
             eq(agentRuns.threadId, thread.id),
             inArray(agentRuns.status, ["running", "waiting_approval"])
+          )
+        )
+      await tx
+        .update(agentResumeTickets)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(agentResumeTickets.organizationId, thread.organizationId),
+            eq(agentResumeTickets.threadId, thread.id),
+            isNull(agentResumeTickets.consumedAt),
+            isNull(agentResumeTickets.revokedAt)
+          )
+        )
+      await tx
+        .update(agentActions)
+        .set({ status: "canceled", completedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(agentActions.organizationId, thread.organizationId),
+            eq(agentActions.threadId, thread.id),
+            inArray(agentActions.status, ["pending", "approved"])
+          )
+        )
+      await tx
+        .update(agentApprovalPolicies)
+        .set({ revokedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(agentApprovalPolicies.organizationId, thread.organizationId),
+            eq(agentApprovalPolicies.threadId, thread.id),
+            isNull(agentApprovalPolicies.revokedAt)
+          )
+        )
+      const threadActionIds = tx
+        .select({ id: agentActions.id })
+        .from(agentActions)
+        .where(
+          and(
+            eq(agentActions.organizationId, thread.organizationId),
+            eq(agentActions.threadId, thread.id)
+          )
+        )
+      await tx
+        .update(agentActionAssets)
+        .set({ releasedAt: now })
+        .where(
+          and(
+            inArray(agentActionAssets.actionId, threadActionIds),
+            isNull(agentActionAssets.releasedAt)
           )
         )
       return toThreadDto(archived)
@@ -648,7 +721,12 @@ export const consumeAgentConnectionTicket = async (
 
 export const startAgentRun = async (
   db: Db,
-  input: { grant: string; clientMessageId: string; now?: Date }
+  input: {
+    grant: string
+    clientMessageId: string
+    assetIds?: string[]
+    now?: Date
+  }
 ): Promise<AgentRunGrant> => {
   const [tokenHash, runCredential] = await Promise.all([
     hashAgentToken(input.grant),
@@ -710,6 +788,12 @@ export const startAgentRun = async (
           })
         }
       }
+      await bindAgentAssetsToRunInTransaction(tx, {
+        assetIds: input.assetIds ?? [],
+        context,
+        now,
+        runId: run.id,
+      })
       const grantExpiresAt = await createGrantInTransaction(tx, {
         tokenHash: runCredential.tokenHash,
         kind: "run",

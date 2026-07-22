@@ -29,6 +29,7 @@ export type FileR2Bucket = {
       onlyIf?: Headers
       httpMetadata: { contentType: string }
       customMetadata: Record<string, string>
+      storageClass?: "Standard"
     }
   ): Promise<FileR2Object | null>
   delete(keys: string | string[]): Promise<void>
@@ -67,6 +68,8 @@ export type FileCache = {
 }
 
 export type FileStorageRuntime = {
+  /** 明示的に有効化されたときだけ新規Agent asset uploadを許可する。 */
+  agentAssetUploadEnabled?: boolean
   bucket: FileR2Bucket
   images: FileImagesBinding
   cache?: FileCache

@@ -2,6 +2,7 @@ NODE_ENV=development
 APP_NAME="Enterprise Agentic SaaS"
 APP_BASE_URL=https://enterprise-agentic-saas.localhost
 API_PUBLIC_URL=https://api.enterprise-agentic-saas.localhost
+AGENT_ASSET_UPLOAD_ENABLED=1
 BETTER_AUTH_URL=https://api.enterprise-agentic-saas.localhost
 BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
 AUTH_COOKIE_DOMAIN=enterprise-agentic-saas.localhost

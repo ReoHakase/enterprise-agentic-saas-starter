@@ -8,6 +8,7 @@ const forwardedEnvironmentKeys = [
   "APP_NAME",
   "APP_BASE_URL",
   "API_PUBLIC_URL",
+  "AGENT_ASSET_UPLOAD_ENABLED",
   "BETTER_AUTH_URL",
   "BETTER_AUTH_SECRET",
   "AUTH_COOKIE_DOMAIN",

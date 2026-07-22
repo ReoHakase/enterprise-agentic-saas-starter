@@ -23,7 +23,7 @@ import {
 
 import { AppError, publicErrors } from "../../errors/app-error"
 import {
-  revokeAgentSessionContextInTransaction,
+  ensureAgentSessionContextInTransaction,
   revokeAgentSessionContextsInTransaction,
 } from "../agent/context-repository"
 import {
@@ -431,6 +431,11 @@ export const insertOrganizationWithSuperAdmin = async (
       })
 
       if (input.activate && input.sessionId !== "test_session") {
+        await ensureAgentSessionContextInTransaction(tx, {
+          sessionId: input.sessionId,
+          userId: input.userId,
+          now,
+        })
         const sessionRows = await tx
           .update(session)
           .set({ activeOrganizationId: organizationId, updatedAt: now })
@@ -444,11 +449,6 @@ export const insertOrganizationWithSuperAdmin = async (
         if (!sessionRows[0]) {
           throw new Error("Session not found during organization creation")
         }
-        await revokeAgentSessionContextInTransaction(tx, {
-          sessionId: input.sessionId,
-          userId: input.userId,
-          now,
-        })
       }
 
       return rows[0]
@@ -523,6 +523,11 @@ export const updateSessionActiveOrganization = async (
       }
 
       const now = new Date()
+      await ensureAgentSessionContextInTransaction(tx, {
+        sessionId: input.sessionId,
+        userId: input.userId,
+        now,
+      })
       const rows = await tx
         .update(session)
         .set({
@@ -534,11 +539,6 @@ export const updateSessionActiveOrganization = async (
         )
         .returning({ id: session.id })
       if (!rows[0]) return "session_not_found" as const
-      await revokeAgentSessionContextInTransaction(tx, {
-        sessionId: input.sessionId,
-        userId: input.userId,
-        now,
-      })
       return "activated" as const
     })
   } catch (cause) {
@@ -770,11 +770,14 @@ export const deleteOrganizationById = async (
         .from(session)
         .where(eq(session.activeOrganizationId, input.organizationId))
       const now = new Date()
+      for (const context of affectedSessions) {
+        // oxlint-disable-next-line no-await-in-loop -- session update trigger前に全context rowを同一transactionで用意する。
+        await ensureAgentSessionContextInTransaction(tx, { ...context, now })
+      }
       await tx
         .update(session)
         .set({ activeOrganizationId: null, updatedAt: now })
         .where(eq(session.activeOrganizationId, input.organizationId))
-      await revokeAgentSessionContextsInTransaction(tx, affectedSessions, now)
 
       const deletedRows = await tx
         .delete(organization)
@@ -1181,6 +1184,10 @@ export const deleteMemberById = async (
         }
 
         const now = new Date()
+        for (const context of affectedSessions) {
+          // oxlint-disable-next-line no-await-in-loop -- session update trigger前に全context rowを同一transactionで用意する。
+          await ensureAgentSessionContextInTransaction(tx, { ...context, now })
+        }
         await tx
           .update(session)
           .set({
@@ -1193,7 +1200,6 @@ export const deleteMemberById = async (
               eq(session.activeOrganizationId, input.organizationId)
             )
           )
-        await revokeAgentSessionContextsInTransaction(tx, affectedSessions, now)
 
         await tx.insert(auditLogs).values({
           id: crypto.randomUUID(),

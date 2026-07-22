@@ -31,6 +31,7 @@ const issue = (description = "description"): AgentIssue => ({
   labels: ["bug"],
   number: 1,
   priority: "medium",
+  revision: 1,
   status: "open",
   title: "Issue",
   updatedAt: "2026-07-22T00:00:00.000Z",

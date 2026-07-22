@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest"
 
 import {
+  buildAgentAssetPreviewUrl,
   buildFileDownloadUrl,
   buildFilePreviewUrl,
   buildOrganizationProfileImageUrl,
   buildUserProfileImageUrl,
   FileUploadError,
   uploadOrganizationProfileImageWithProgress,
+  uploadAgentAssetWithProgress,
   uploadFileWithProgress,
   uploadUserProfileImageWithProgress,
+  type AgentAssetDto,
   type CreateApiClientOptions,
   type FileUploadProgress,
   type ProfileImageDto,
@@ -17,6 +20,7 @@ import {
 
 class SuccessfulXMLHttpRequest {
   static instances: SuccessfulXMLHttpRequest[] = []
+  static nextResponse: unknown
 
   readonly listeners = new Map<string, () => void>()
   readonly uploadListeners = new Map<
@@ -42,7 +46,7 @@ class SuccessfulXMLHttpRequest {
   withCredentials = false
   responseType = ""
   status = 201
-  response = {
+  response: unknown = {
     id: "profile-image-1",
     profileImage: "/files/profile-images/users/user-1?v=profile-image-1",
     width: 512,
@@ -52,6 +56,9 @@ class SuccessfulXMLHttpRequest {
   sentBody: unknown
 
   constructor() {
+    if (SuccessfulXMLHttpRequest.nextResponse !== undefined) {
+      this.response = SuccessfulXMLHttpRequest.nextResponse
+    }
     SuccessfulXMLHttpRequest.instances.push(this)
   }
 
@@ -83,6 +90,7 @@ class SuccessfulXMLHttpRequest {
 
 afterEach(() => {
   SuccessfulXMLHttpRequest.instances = []
+  SuccessfulXMLHttpRequest.nextResponse = undefined
   vi.unstubAllGlobals()
 })
 
@@ -95,6 +103,18 @@ it("does not expose Eden date parsing as a consumer option", () => {
 })
 
 describe("file client helpers", () => {
+  it("exports the Agent asset DTO through the client boundary", () => {
+    expectTypeOf<AgentAssetDto>().toEqualTypeOf<{
+      id: string
+      filename: string
+      sizeBytes: number
+      imageWidth: number
+      imageHeight: number
+      previewable: true
+      expiresAt: string
+    }>()
+  })
+
   it("exports the text preview DTO through the client boundary", () => {
     expectTypeOf<TextFilePreviewDto>().toEqualTypeOf<{
       content: string
@@ -119,6 +139,15 @@ describe("file client helpers", () => {
       })
     ).toBe(
       "https://api.example.test/files/organizations/org%2Facme/file%20one/preview/720"
+    )
+    expect(
+      buildAgentAssetPreviewUrl("https://api.example.test/root/", {
+        organizationId: "org/acme",
+        assetId: "asset one",
+        width: 1200,
+      })
+    ).toBe(
+      "https://api.example.test/root/files/organizations/org%2Facme/agent-assets/asset%20one/preview/1200"
     )
   })
 
@@ -234,6 +263,40 @@ describe("file client helpers", () => {
     expect(SuccessfulXMLHttpRequest.instances[1]?.url).toBe(
       "https://api.example.test/root/files/profile-images/organizations/org%2Facme"
     )
+  })
+
+  it("encapsulates credentialed Agent asset upload and validates its DTO", async () => {
+    vi.stubGlobal("XMLHttpRequest", SuccessfulXMLHttpRequest)
+    const file = new File(["png"], "evidence.png", { type: "image/png" })
+    SuccessfulXMLHttpRequest.nextResponse = {
+      id: "asset-1",
+      filename: "evidence.png",
+      sizeBytes: file.size,
+      imageWidth: 640,
+      imageHeight: 480,
+      previewable: true,
+      expiresAt: "2026-07-25T00:00:00.000Z",
+    }
+    const requestPromise = uploadAgentAssetWithProgress({
+      baseUrl: "https://api.example.test/root/",
+      organizationId: "org/acme",
+      threadId: "thread/one",
+      uploadId: "upload-agent-image",
+      file,
+    })
+    const request = SuccessfulXMLHttpRequest.instances[0]
+    if (!request) throw new Error("Expected Agent asset XHR")
+
+    await expect(requestPromise).resolves.toMatchObject({
+      id: "asset-1",
+      filename: "evidence.png",
+    })
+    expect(request).toMatchObject({
+      method: "POST",
+      url: "https://api.example.test/root/files/organizations/org%2Facme/agent-threads/thread%2Fone/assets",
+      withCredentials: true,
+      responseType: "json",
+    })
   })
 
   it("keeps upload errors typed without exposing transport internals", () => {

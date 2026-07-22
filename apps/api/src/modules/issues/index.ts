@@ -53,7 +53,7 @@ export const createIssuesModule = (db: Db) =>
           label: query.label,
           sortBy: query.sortBy,
           sortDirection: query.sortDirection,
-          limit: query.limit,
+          page: query.page,
         }),
       {
         organizationAccess: {
@@ -66,7 +66,7 @@ export const createIssuesModule = (db: Db) =>
           operationId: "listIssues",
           summary: "issue一覧を検索・filter・sort",
           description:
-            "active organizationだけを対象に、search/status/priority/assignee/label filterと安全なsortを適用する。最大100件。",
+            "active organizationだけを対象に、search/status/priority/assignee/label filterと決定的なsortを適用し、10件単位のpageを返す。",
           tags: ["Issues"],
         },
       }

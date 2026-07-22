@@ -3,7 +3,7 @@ import { member, session, user } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, gt, isNotNull } from "drizzle-orm"
 
 import { publicErrors } from "../../errors/app-error"
-import { revokeAgentSessionContextInTransaction } from "../agent/context-repository"
+import { ensureAgentSessionContextInTransaction } from "../agent/context-repository"
 
 export type UserProfile = {
   id: string
@@ -203,6 +203,11 @@ export const resolveAndPersistActiveOrganizationId = async (
 
       if (input.sessionId !== "test_session") {
         const now = new Date()
+        await ensureAgentSessionContextInTransaction(tx, {
+          sessionId: input.sessionId,
+          userId: input.userId,
+          now,
+        })
         const updatedRows = await tx
           .update(session)
           .set({
@@ -219,11 +224,6 @@ export const resolveAndPersistActiveOrganizationId = async (
         if (!updatedRows[0]) {
           throw new Error("Session not found during organization recovery")
         }
-        await revokeAgentSessionContextInTransaction(tx, {
-          sessionId: input.sessionId,
-          userId: input.userId,
-          now,
-        })
       }
 
       return resolvedOrganizationId

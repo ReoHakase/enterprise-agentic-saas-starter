@@ -42,6 +42,7 @@ export const issueModel = v.pipe(
     creatorId: v.string(),
     labels: labelsModel,
     dueDate: v.nullable(isoTimestampModel),
+    revision: v.pipe(v.number(), v.integer(), v.minValue(1)),
     createdAt: isoTimestampModel,
     updatedAt: isoTimestampModel,
   }),
@@ -51,7 +52,12 @@ export const issueModel = v.pipe(
   })
 )
 
-export const listIssuesResponseModel = v.array(issueModel)
+export const listIssuesResponseModel = v.object({
+  items: v.array(issueModel),
+  page: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  pageSize: v.literal(10),
+  total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
 
 export const listIssuesQueryModel = v.object({
   organizationId: organizationIdModel,
@@ -71,7 +77,7 @@ export const listIssuesQueryModel = v.object({
     ])
   ),
   sortDirection: v.optional(v.picklist(["asc", "desc"])),
-  limit: v.optional(positiveIntegerQueryModel(100)),
+  page: v.optional(positiveIntegerQueryModel(100_000), 1),
 })
 
 export const getIssueQueryModel = v.object({

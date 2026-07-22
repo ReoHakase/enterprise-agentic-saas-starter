@@ -20,6 +20,7 @@ const createDatabase = async (): Promise<Db> => {
       id text primary key not null,
       organization_id text not null,
       number integer not null,
+      revision integer not null default 1,
       title text not null,
       description text not null default '',
       status text not null default 'open',

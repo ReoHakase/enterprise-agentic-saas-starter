@@ -177,6 +177,7 @@ const createSeededDb = async () => {
       id text primary key,
       organization_id text not null,
       number integer not null,
+      revision integer not null default 1,
       title text not null,
       description text not null default '',
       status text not null default 'open',
@@ -691,9 +692,9 @@ describe("createApp security and OpenAPI", () => {
     ).toMatchObject({ format: "date-time", nullable: true, type: "string" })
     expect(
       spec.paths["/issues"].get.parameters.find(
-        (parameter: { name: string }) => parameter.name === "limit"
+        (parameter: { name: string }) => parameter.name === "page"
       ).schema
-    ).toMatchObject({ maximum: 100, minimum: 1, type: "integer" })
+    ).toMatchObject({ maximum: 100_000, minimum: 1, type: "integer" })
     const fileUploadContent =
       spec.paths[
         "/files/organizations/{organizationId}/owners/{ownerType}/{ownerId}"
@@ -2787,6 +2788,45 @@ describe("createApp security and OpenAPI", () => {
 })
 
 describe("issue-like issues", () => {
+  it("returns stable server-filtered Issue pages beyond the first ten rows", async () => {
+    const db = await createSeededDb()
+    const now = new Date("2026-07-22T00:00:00.000Z")
+    await db.insert(schema.issues).values(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `paged-issue-${index + 2}`,
+        organizationId: "org_1",
+        number: index + 2,
+        title: `Paged Issue ${index + 2}`,
+        description: "server pagination fixture",
+        status: "open" as const,
+        priority: "medium" as const,
+        creatorId: "user_1",
+        labels: ["pagination"],
+        revision: 1,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    )
+    const response = await createApp(db).handle(
+      jsonRequest(
+        "/issues?organizationId=org_1&sortBy=number&sortDirection=asc&page=2",
+        { userId: "user_1" }
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      items: [
+        expect.objectContaining({ number: 11 }),
+        expect.objectContaining({ number: 12 }),
+        expect.objectContaining({ number: 13 }),
+      ],
+      page: 2,
+      pageSize: 10,
+      total: 13,
+    })
+  })
+
   it("creates, filters, updates, loads, and comments on an issue", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
@@ -2828,9 +2868,12 @@ describe("issue-like issues", () => {
         { userId: "user_1" }
       )
     )
-    expect(await filtered.json()).toEqual([
-      expect.objectContaining({ id: created.id }),
-    ])
+    expect(await filtered.json()).toMatchObject({
+      items: [expect.objectContaining({ id: created.id })],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    })
 
     const update = await app.handle(
       jsonRequest(`/issues/${created.id}`, {

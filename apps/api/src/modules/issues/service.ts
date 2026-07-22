@@ -16,7 +16,7 @@ import {
   insertIssueComment,
   listIssueComments,
   listIssueTimeline,
-  listIssuesByOrganization,
+  listIssuePageByOrganization,
   updateIssueById,
   updateIssueCommentById,
   type ListIssuesInput,
@@ -74,10 +74,10 @@ const assertAssigneeMembership = async (
 
 export const listIssues = async (
   db: Db,
-  input: ListIssuesInput & { userId: string }
+  input: Omit<ListIssuesInput, "limit"> & { page: number; userId: string }
 ) => {
   await requireMembership(db, input)
-  return listIssuesByOrganization(db, input)
+  return listIssuePageByOrganization(db, input)
 }
 
 export const getIssue = async (

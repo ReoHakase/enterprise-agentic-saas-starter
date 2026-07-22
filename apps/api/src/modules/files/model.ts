@@ -2,6 +2,7 @@ import * as v from "valibot"
 
 import { isoTimestampModel, nonEmptyStringModel } from "../../models/common"
 import {
+  AGENT_ASSET_MAX_BYTES,
   FILE_LIST_DEFAULT_LIMIT,
   FILE_LIST_MAX_LIMIT,
   FILE_MAX_BYTES,
@@ -62,6 +63,45 @@ export const fileUploadBodyModel = v.strictObject({
   file: v.file(),
 })
 
+export const agentAssetThreadParamsModel = v.strictObject({
+  organizationId: identifierModel,
+  threadId: identifierModel,
+})
+
+export const agentAssetParamsModel = v.strictObject({
+  organizationId: identifierModel,
+  assetId: identifierModel,
+})
+
+export const agentAssetPreviewParamsModel = v.strictObject({
+  organizationId: identifierModel,
+  assetId: identifierModel,
+  width: nonEmptyStringModel,
+})
+
+export const agentAssetUploadBodyModel = v.strictObject({
+  uploadId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
+  fileSize: v.pipe(
+    v.union([v.number(), v.string()]),
+    v.toNumber(),
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(AGENT_ASSET_MAX_BYTES)
+  ),
+  file: v.file(),
+})
+
+export const agentAssetDtoModel = v.object({
+  id: nonEmptyStringModel,
+  filename: v.string(),
+  sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  imageWidth: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  imageHeight: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  previewable: v.literal(true),
+  expiresAt: isoTimestampModel,
+})
+
 export const fileDtoModel = v.object({
   id: nonEmptyStringModel,
   owner: v.object({
@@ -98,3 +138,7 @@ export type FileDto = v.InferOutput<typeof fileDtoModel>
 export type FileListDto = v.InferOutput<typeof fileListDtoModel>
 export type FileUploadBody = v.InferOutput<typeof fileUploadBodyModel>
 export type TextFilePreviewDto = v.InferOutput<typeof textFilePreviewDtoModel>
+export type AgentAssetDto = v.InferOutput<typeof agentAssetDtoModel>
+export type AgentAssetUploadBody = v.InferOutput<
+  typeof agentAssetUploadBodyModel
+>

@@ -7,14 +7,15 @@ import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 import type { AgentInternalApiContract } from "./agent-client"
 import { createApp } from "./app"
 import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handler"
+import { sweepAgentActions } from "./modules/agent/action-repository"
 import { createAgentInternalApi } from "./modules/agent/internal-api"
+import { processAgentAssetLifecycle } from "./modules/files/agent-assets-cleanup"
 import { processFileCleanupJobs } from "./modules/files/cleanup-jobs"
 import {
-  configureFileStorageRuntime,
-  type FileCache,
   type FileImagesBinding,
   type FileR2Bucket,
 } from "./modules/files/runtime"
+import { configureFileStorageRuntimeFromWorkerEnvironment } from "./modules/files/worker-runtime"
 import {
   processOrganizationDeletionJobs,
   type OrganizationFilesBucket,
@@ -35,6 +36,7 @@ import { corsPlugin } from "./plugins/cors"
 import { serverTimingPlugin } from "./plugins/server-timing"
 
 type WorkerSentryEnv = {
+  AGENT_ASSET_UPLOAD_ENABLED?: string
   DEV_FILE_SEED_TOKEN?: string
   FILES: FileR2Bucket & OrganizationFilesBucket
   IMAGES: FileImagesBinding
@@ -111,6 +113,49 @@ export class AgentInternalApi
   getIssue(input: Parameters<AgentInternalApiContract["getIssue"]>[0]) {
     return agentInternalApi.getIssue(input)
   }
+
+  prepareCreateIssue(
+    input: Parameters<AgentInternalApiContract["prepareCreateIssue"]>[0]
+  ) {
+    return agentInternalApi.prepareCreateIssue(input)
+  }
+
+  prepareUpdateIssue(
+    input: Parameters<AgentInternalApiContract["prepareUpdateIssue"]>[0]
+  ) {
+    return agentInternalApi.prepareUpdateIssue(input)
+  }
+
+  prepareDeleteIssue(
+    input: Parameters<AgentInternalApiContract["prepareDeleteIssue"]>[0]
+  ) {
+    return agentInternalApi.prepareDeleteIssue(input)
+  }
+
+  getIssueActionDecision(
+    input: Parameters<AgentInternalApiContract["getIssueActionDecision"]>[0]
+  ) {
+    return agentInternalApi.getIssueActionDecision(input)
+  }
+
+  resumeApprovedAction(
+    input: Parameters<AgentInternalApiContract["resumeApprovedAction"]>[0]
+  ) {
+    return agentInternalApi.resumeApprovedAction(input)
+  }
+
+  executeApprovedAction(
+    input: Parameters<AgentInternalApiContract["executeApprovedAction"]>[0]
+  ) {
+    return agentInternalApi.executeApprovedAction(input)
+  }
+
+  getAgentImageForModel(
+    input: Parameters<AgentInternalApiContract["getAgentImageForModel"]>[0]
+  ) {
+    configureFileStorageRuntimeFromWorkerEnvironment(this.env)
+    return agentInternalApi.getAgentImageForModel(input)
+  }
 }
 
 const tracesSampleRate = (value: string | undefined): number => {
@@ -135,30 +180,13 @@ const worker = new Elysia({ adapter: CloudflareAdapter })
 
 const appFetch = worker.fetch.bind(worker)
 
-const isFileCache = (value: unknown): value is FileCache =>
-  value !== null &&
-  typeof value === "object" &&
-  typeof Reflect.get(value, "match") === "function" &&
-  typeof Reflect.get(value, "put") === "function"
-
-const cloudflareDefaultCache = (): FileCache | undefined => {
-  const cacheStorage = Reflect.get(globalThis, "caches")
-  if (!cacheStorage || typeof cacheStorage !== "object") return undefined
-  const defaultCache: unknown = Reflect.get(cacheStorage, "default")
-  return isFileCache(defaultCache) ? defaultCache : undefined
-}
-
 const workerWithScheduled = {
   async fetch(
     request: Request,
     workerEnv: WorkerSentryEnv,
     _context: WorkerExecutionContext
   ) {
-    configureFileStorageRuntime({
-      bucket: workerEnv.FILES,
-      cache: cloudflareDefaultCache(),
-      images: workerEnv.IMAGES,
-    })
+    configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
     const seedResponse = await handleDevelopmentFileSeedRequest(
       db,
       request,
@@ -258,6 +286,42 @@ const workerWithScheduled = {
       })
       return result
     })
+    const agentAssetLifecycle = processAgentAssetLifecycle({
+      bucket: workerEnv.FILES,
+      database: db,
+      onFailure: ({ attempts, errorCode }) => {
+        const error = new Error("Agent asset cleanup failed")
+        Sentry.captureException(error, {
+          tags: {
+            component: "agent-asset-cleanup",
+            errorCode,
+          },
+          extra: { attempts },
+        })
+        console.error({
+          attempts,
+          component: "agent-asset-cleanup",
+          errorCode,
+          event: "cleanup_job_failed",
+          level: "error",
+        })
+      },
+    }).then((result) => {
+      console.info({
+        component: "agent-asset-cleanup",
+        event: "cleanup_batch_completed",
+        level: "info",
+        cleanupClaimed: result.cleanup.claimed,
+        cleanupCompleted: result.cleanup.completed,
+        cleanupFailed: result.cleanup.failed,
+        cleanupStale: result.cleanup.stale,
+        expiryConsidered: result.expiry.considered,
+        expiryCompleted: result.expiry.expired,
+        usageBucketsDeleted: result.usagePurge.bucketsDeleted,
+        usageOperationsDeleted: result.usagePurge.operationsDeleted,
+      })
+      return result
+    })
     const invitationJobs = processInvitationEmailJobs({
       database: db,
       onFailure: ({ attempts, errorCode, retryable }) => {
@@ -288,12 +352,23 @@ const workerWithScheduled = {
       })
       return result
     })
+    const agentActionSweep = sweepAgentActions(db).then((result) => {
+      console.info({
+        component: "agent-action-sweep",
+        event: "agent_action_sweep_completed",
+        level: "info",
+        ...result,
+      })
+      return result
+    })
 
     context.waitUntil(
       Promise.all([
+        agentActionSweep,
         deletionJobs,
         fileCleanupJobs,
         profileImageCleanupJobs,
+        agentAssetLifecycle,
         invitationJobs,
       ]).then(() => undefined)
     )

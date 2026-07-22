@@ -8,6 +8,24 @@ export const FILE_LIST_DEFAULT_LIMIT = 50
 export const FILE_LIST_MAX_LIMIT = 100
 export const FILE_TEXT_PREVIEW_MAX_BYTES = 1_000_000
 
+export const AGENT_ASSET_MAX_BYTES = 10_000_000
+export const AGENT_ASSET_PENDING_LIFETIME_MS = 60 * 60 * 1000
+export const AGENT_ASSET_READY_LIFETIME_MS = 72 * 60 * 60 * 1000
+export const AGENT_ASSET_HARD_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
+export const AGENT_ASSET_MAX_DIMENSION = 10_000
+export const AGENT_ASSET_MAX_PIXELS = 40_000_000
+export const AGENT_ASSET_MAX_PENDING_PER_USER = 8
+export const AGENT_ASSET_MAX_PENDING_PER_ORGANIZATION = 32
+export const AGENT_ASSET_MAX_READY_PER_ORGANIZATION = 200
+export const AGENT_RUN_ASSET_MAX_COUNT = 4
+export const AGENT_RUN_ASSET_MAX_BYTES = 20_000_000
+export const AGENT_ASSET_UPLOAD_USER_HOURLY_LIMIT = 60
+export const AGENT_ASSET_UPLOAD_ORGANIZATION_DAILY_LIMIT = 1_000
+export const AGENT_ASSET_VISION_USER_DAILY_LIMIT = 200
+export const AGENT_ASSET_VISION_ORGANIZATION_DAILY_LIMIT = 2_000
+export const AGENT_ASSET_MODEL_MAX_EDGE = 2048
+export const AGENT_ASSET_MODEL_MAX_BYTES = 4 * 1024 * 1024
+
 export const fileOwnerTypes = ["issue"] as const
 export type FileOwnerType = (typeof fileOwnerTypes)[number]
 
@@ -150,3 +168,17 @@ export const fileOwnerPrefix = ({
     ownerType,
     encodeURIComponent(ownerId),
   ].join("/")}/`
+
+export const agentAssetObjectKey = ({
+  organizationId,
+  storageObjectId,
+}: {
+  organizationId: string
+  storageObjectId: string
+}) =>
+  [
+    "organizations",
+    encodeURIComponent(organizationId),
+    "storage-objects",
+    encodeURIComponent(storageObjectId),
+  ].join("/")

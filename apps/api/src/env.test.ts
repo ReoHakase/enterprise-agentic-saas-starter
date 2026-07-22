@@ -74,4 +74,21 @@ describe("API email environment", () => {
       consoleError.mockRestore()
     }
   })
+
+  it.each([
+    ["", false],
+    ["0", false],
+    ["true", false],
+    ["yes", false],
+    [" 1 ", true],
+  ] as const)(
+    "resolves the Agent asset upload flag %s to %s",
+    async (value, expected) => {
+      vi.stubEnv("AGENT_ASSET_UPLOAD_ENABLED", value)
+
+      const { env } = await import("./env")
+
+      expect(env.AGENT_ASSET_UPLOAD_ENABLED).toBe(expected)
+    }
+  )
 })

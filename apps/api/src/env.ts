@@ -6,6 +6,8 @@ import {
 import { defineEnv } from "envin"
 import * as v from "valibot"
 
+import { resolveExplicitlyEnabledFlag } from "./runtime-flags"
+
 const commaSeparatedList = v.pipe(
   v.optional(v.string()),
   v.transform((input) =>
@@ -62,6 +64,11 @@ const emailFromSchema = v.pipe(
   v.email()
 )
 
+const explicitlyEnabledFlagSchema = v.pipe(
+  v.optional(v.string()),
+  v.transform(resolveExplicitlyEnabledFlag)
+)
+
 export const env = defineEnv({
   shared: {
     NODE_ENV: nodeEnvSchema,
@@ -84,6 +91,7 @@ export const env = defineEnv({
       }),
       v.pipe(v.string(), v.minLength(1))
     ),
+    AGENT_ASSET_UPLOAD_ENABLED: explicitlyEnabledFlagSchema,
     CORS_ORIGIN: v.pipe(
       commaSeparatedList,
       v.transform((list) => {

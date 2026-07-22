@@ -8,7 +8,9 @@ import {
   type FilePreviewWidth,
 } from "./modules/files/constants"
 import {
+  agentAssetDtoModel,
   fileDtoModel,
+  type AgentAssetDto,
   type FileDto,
   type FileListDto,
   type TextFilePreviewDto,
@@ -30,6 +32,7 @@ export {
   PROFILE_IMAGE_SOURCE_MAX_BYTES,
 }
 export type {
+  AgentAssetDto,
   FileDto,
   FileListDto,
   FileOwnerType,
@@ -87,6 +90,24 @@ export const buildFilePreviewUrl = (
     "organizations",
     input.organizationId,
     input.fileId,
+    "preview",
+    String(input.width),
+  ])
+
+export const buildAgentAssetPreviewUrl = (
+  baseUrl: string,
+  input: {
+    organizationId: string
+    assetId: string
+    width: FilePreviewWidth
+  }
+) =>
+  fileUrl(baseUrl, [
+    "files",
+    "organizations",
+    input.organizationId,
+    "agent-assets",
+    input.assetId,
     "preview",
     String(input.width),
   ])
@@ -278,6 +299,41 @@ export const uploadFileWithProgress = ({
     responseModel: fileDtoModel,
     invalidResponseMessage: "File upload returned an invalid response",
     failureMessage: "File upload failed",
+    signal,
+    onProgress,
+  })
+
+export const uploadAgentAssetWithProgress = ({
+  baseUrl,
+  organizationId,
+  threadId,
+  uploadId,
+  file,
+  signal,
+  onProgress,
+}: {
+  baseUrl: string
+  organizationId: string
+  threadId: string
+  uploadId: string
+  file: File
+  signal?: AbortSignal
+  onProgress?: (progress: FileUploadProgress) => void
+}): Promise<AgentAssetDto> =>
+  uploadWithProgress({
+    url: fileUrl(baseUrl, [
+      "files",
+      "organizations",
+      organizationId,
+      "agent-threads",
+      threadId,
+      "assets",
+    ]),
+    uploadId,
+    file,
+    responseModel: agentAssetDtoModel,
+    invalidResponseMessage: "Agent image upload returned an invalid response",
+    failureMessage: "Agent image upload failed",
     signal,
     onProgress,
   })

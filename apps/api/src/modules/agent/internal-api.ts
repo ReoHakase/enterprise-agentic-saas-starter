@@ -3,11 +3,27 @@ import * as v from "valibot"
 
 import type { AgentInternalApiContract } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
+import { getAgentImageForModel } from "../files/agent-assets-service"
+import {
+  executeAgentApprovedAction,
+  getAgentIssueActionDecision,
+  prepareCreateIssueAction,
+  prepareDeleteIssueAction,
+  prepareUpdateIssueAction,
+  resumeAgentApprovedAction,
+} from "./action-repository"
 import {
   agentGrantInputModel,
   consumeConnectionTicketInputModel,
+  executeApprovedActionInputModel,
   finishAgentRunInputModel,
+  getAgentImageInputModel,
   getAgentIssueInputModel,
+  getIssueActionDecisionInputModel,
+  prepareCreateIssueInputModel,
+  prepareDeleteIssueInputModel,
+  prepareUpdateIssueInputModel,
+  resumeApprovedActionInputModel,
   searchAgentIssuesInputModel,
   searchAgentLabelsInputModel,
   searchAgentMembersInputModel,
@@ -91,5 +107,47 @@ export const createAgentInternalApi = (db: Db): AgentInternalApiContract => ({
   },
   getIssue(input) {
     return getAgentIssue(db, parseInternalInput(getAgentIssueInputModel, input))
+  },
+  prepareCreateIssue(input) {
+    return prepareCreateIssueAction(
+      db,
+      parseInternalInput(prepareCreateIssueInputModel, input)
+    )
+  },
+  prepareUpdateIssue(input) {
+    return prepareUpdateIssueAction(
+      db,
+      parseInternalInput(prepareUpdateIssueInputModel, input)
+    )
+  },
+  prepareDeleteIssue(input) {
+    return prepareDeleteIssueAction(
+      db,
+      parseInternalInput(prepareDeleteIssueInputModel, input)
+    )
+  },
+  getIssueActionDecision(input) {
+    return getAgentIssueActionDecision(
+      db,
+      parseInternalInput(getIssueActionDecisionInputModel, input)
+    )
+  },
+  resumeApprovedAction(input) {
+    return resumeAgentApprovedAction(
+      db,
+      parseInternalInput(resumeApprovedActionInputModel, input)
+    )
+  },
+  executeApprovedAction(input) {
+    return executeAgentApprovedAction(
+      db,
+      parseInternalInput(executeApprovedActionInputModel, input)
+    )
+  },
+  getAgentImageForModel(input) {
+    return getAgentImageForModel(
+      db,
+      parseInternalInput(getAgentImageInputModel, input)
+    )
   },
 })
