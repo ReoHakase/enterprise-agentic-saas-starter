@@ -17,32 +17,33 @@ selectorはAPI順を維持し、`updatedAt DESC, id DESC`です。各itemはtitl
 
 ## Conversationとmessage part
 
-userとassistant messageは通常flow内へ表示します。approvalをabsolute/fixed layerやmessage末尾の別listへ移動しません。part順序が履歴の正本です。
+conversation全体とcomposerを1枚の大きなCardで囲みません。conversationは平面、composerは独立した下部surfaceです。assistantは枠なし全幅、userだけを右寄せbubbleにし、各messageの`You` / `Issue agent`表示は省略してaccessible nameだけを保持します。approvalをabsolute/fixed layerやmessage末尾の別listへ移動せず、part順序を履歴の正本にします。
 
 | part | 表示 |
 | --- | --- |
 | `text` | Markdown対応response |
 | `reasoning` | `Thinking` details、既定で閉じる |
-| `data-activity` | status、tool activity、失敗状態 |
+| transient `data-activity` | 現在turnの「応答を生成中」だけ。履歴へ保存しない |
 | tool part | tool名とstate、input/output details、既定で閉じる |
 | pending action tool output | そのtool位置のinline approval card |
 | `source-url` | 外部link |
 | `data-context-budget` | messageではなくcontext meterへ反映 |
 | `data-thread-title` | title更新通知とselector再取得 |
 
-thinkingは「UI status」「provider reasoning」「観測済みtool/activity」を混同しません。provider非公開chain-of-thoughtを推測生成せず、providerがstreamしたbounded reasoningだけを保存・表示します。
+thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、providerがstreamしたbounded reasoningだけを保存・表示します。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
 
 ## Composer
 
-permission policyはcomposer footerに置きます。
+composerはTiptapを正本にし、textとmentionを同じdocument内で編集します。mentionは青いinline atom nodeで、右端X、Backspace/Delete、keyboard suggestion、IME、Escape、Arrow/Enterを扱います。送信時はtext/mention/画像を1つのpending snapshotへ移してeditorから即時消去し、失敗時は新しい入力を上書きしない場合だけ復元します。
 
-- 毎回確認
-- 15分間、Issue作成・更新を許可
-- 15分間、Issue作成・更新・削除を許可
+permissionはicon付きselectとしてcomposer footerに置きます。
 
-select item内に影響を説明し、削除許可は`ALLOW_ISSUE_DELETE`の明示確認を維持します。policyはserver正本で、Jotaiへ正本を置きません。
+- Ask always: Issue作成・更新・削除を毎回確認
+- Full access: 現在threadのIssue作成・更新・削除を確認なしで許可
 
-textareaだけを内容に応じて最大`40vh`まで拡張し、それ以上は内部scrollにします。attachment、policy、context/usage meter、Stop/Sendは常にviewport内へ残します。Enterは改行、Mod+Enterだけが送信です。
+時間制限や削除確認文字列はUI契約に含めません。権限はserver正本で、session、organization、context epoch、threadへ束縛し、Jotaiへ正本を置きません。
+
+Tiptap editorだけを内容に応じて最大`40vh`まで拡張し、それ以上は内部scrollにします。attachment、permission、円形context meter、Stop/Sendはdesktopで原則1行に置き、常にviewport内へ残します。狭幅だけ折り返します。chat composerにmonthly costは表示しません。Enterは改行、Mod+Enterだけが送信です。
 
 ## Keyboard shortcuts
 
@@ -57,7 +58,7 @@ textareaだけを内容に応じて最大`40vh`まで拡張し、それ以上は
 | `Alt+ArrowUp/Down` | 更新順の前後threadへ移動 |
 | `Mod+/` | shortcut一覧 |
 
-IME composition中は発火しません。送信shortcutはinputを無視しない設定でtextarea内から使えますが、upload中、modal、frozen context、active responseとの競合時は無効です。既存shortcutと同時利用が必要なscopeだけ`allow`し、dialogは自身のkeyboard scopeを優先します。
+IME composition中は発火しません。送信shortcutはinputを無視しない設定でTiptap editor内から使えますが、upload中、modal、frozen context、active responseとの競合時は無効です。既存shortcutと同時利用が必要なscopeだけ`allow`し、dialogは自身のkeyboard scopeを優先します。
 
 ## Responsiveとaccessibility
 

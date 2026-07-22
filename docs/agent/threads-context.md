@@ -8,6 +8,7 @@
 type AgentThread = {
   id: string
   title: string
+  titleRevision: number
   status: "active" | "archived"
   messageCount: number
   createdAt: string
@@ -17,11 +18,15 @@ type AgentThread = {
 
 listはlive session、active organization、membership、ownerをtransaction内で再検証し、`updatedAt DESC, id DESC`で返します。`messageCount`は保存済みcanonical messageの件数です。archive rowは通常listから除外しますが、過去approvalのread authorizationではowner確認対象として保持します。
 
-canonical message、reasoning、tool、source、activity、context/title data partはAPI/Tursoが正本です。Mastra Memoryはauthorizationや履歴の正本ではありません。UI向け履歴はbounded projectionだけを返し、provider metadata、credential、raw imageを保存しません。
+canonical message、reasoning、tool、source、context/title data partはAPI/Tursoが正本です。transient `data-activity`は保存しません。Mastra Memoryはauthorizationや履歴の正本ではありません。UI向け履歴はbounded projectionだけを返し、provider metadata、credential、raw imageを保存しません。
 
 ## 自動title
 
-threadは`title_state = untitled | agent`を持ちます。既定`New conversation`は`untitled`、明示titleは`agent`です。
+threadは`title_state_v2 = untitled | agent | user`と`title_revision`を持ちます。既定`New conversation`は`untitled`、専用title Agentは`agent`、手動変更は`user`です。
+
+最初の有意なuser messageでmain Agentとは独立した専用title Agentを起動し、`rename_thread`だけをforced tool callします。title処理の失敗は本回答を失敗させず、`untitled`なら次turnで再試行します。すでに`agent | user`ならtitle Agent自体を起動しません。
+
+Qwen/Alibabaはthinking mode中のforced `tool_choice`を拒否するため、専用title Agentだけreasoningを無効化します。製品Agent本体のreasoning mediumとtrace契約は変更しません。
 
 `rename_thread({ title })`は次のcontractです。
 
@@ -34,6 +39,8 @@ threadは`title_state = untitled | agent`を持ちます。既定`New conversati
 - modelへthread IDやtenant IDを選ばせない
 
 streamは`data-thread-title`を返し、Webはthread listを再取得します。
+
+手動変更は`PATCH /agent/threads/:threadId/title`へ1〜80文字と`expectedRevision`を送り、owner/tenant/revision CAS成功時に`title_state_v2=user`へ更新します。user titleは自動処理で上書きしません。
 
 ## Model profile snapshot
 
@@ -57,7 +64,7 @@ modelの将来設定変更で過去runの解釈を変えないため、run row�
 - page context
 - attachments
 
-providerが返した実績input tokenは`observedInputTokens`として別に保存・表示し、事前推定へ上書きしません。context meterと月間usage meterも別表示です。
+providerが返した実績input tokenは`observedInputTokens`として別に保存・表示し、事前推定へ上書きしません。chat UIは円形context ringとhover/focus tooltipで内訳を表示し、月間costは表示しません。usage APIと管理画面向け集計は別契約として維持します。
 
 注意段階は70%=`notice`、85%=`warning`、95%=`critical`です。95%以上では古い履歴をdeterministic summaryへ圧縮し、最新12 messageを原文で保持します。summaryはorganization/thread、through sequence、estimated token、作成日時を持ち、再試行で同じ範囲を二重作成しません。
 

@@ -24,15 +24,20 @@ composerの`@`候補は次です。
 - file
 - member
 
-選択後は青いcontext chipとして表示し、右端のXで削除します。chip labelはUI表示専用で、serverは信用しません。requestは構造化referenceだけを送ります。
+選択後はTiptap文章内の青いinline nodeとして表示し、右端のXで削除します。browser labelはrequestへ送らず、serverはID/pathだけを信用境界内で再解決します。requestは文章順を保つ`contentSegments`です。
 
 ```ts
-type ContextReference =
-  | { kind: "issue" | "selected_issue" | "file" | "member"; id: string; label?: string }
-  | { kind: "current_page"; path: string; label?: string }
+type ContentSegment =
+  | { type: "text"; text: string }
+  | {
+      type: "context_reference"
+      reference:
+        | { kind: "issue" | "file" | "member"; id: string }
+        | { kind: "current_page"; path: string }
+    }
 ```
 
-APIはlive active organizationでID/pathを再解決します。
+APIはsegment順を維持したままlive active organizationでID/pathを再解決し、canonical履歴だけへserver生成label付き`data-context-reference`を保存します。Agentへ渡す文章にも同じ位置でcanonical mentionを埋め込みます。
 
 - Issue: organization IDを条件にtitle、number、status等のbounded projection
 - file: private file ACLとIssue ownerを再検証

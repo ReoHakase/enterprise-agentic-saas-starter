@@ -15,7 +15,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 
 - migrationのfresh/upgrade、既存row保持、trigger整合性
 - thread owner/tenant境界、message count、更新順とID tie break
-- title compare-and-swapと最大80文字
+- title state/revision、manual CAS、auto/manual競合、最大80文字
 - context compaction threshold、最新12 message、summary idempotency
 - usage event idempotency、daily projection、price version切替、admin境界
 - historical approval GETは現在ownerで読め、decision/resumeは元scope外で拒否
@@ -27,7 +27,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - private固有情報を一般化した公開query
 - credential、email、電話、住所、member identity、opaque IDの拒否
 - query、拒否文字列、Issue本文がlog/Sentryへ残らない
-- rename、reasoning sanitizer、usage正規化、write fence、approval resume
+- 専用title Agentのforced rename、transient status sanitizer、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
 
 ### Web / mock Playwright
@@ -35,9 +35,9 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - headerにorganization名なし、selector metadata、赤いarchive
 - 未保存draft、sample prompt、初回send/attachmentで作成
 - inline approval、過去approval reload、expired preview
-- thinking/activity/tool/source、Issue個別link
-- mention候補、青chip、右端X、server error
-- textarea最大40vhと固定footer、desktop/mobile
+- thinking/transient status/tool/source、trace重複なし、Issue個別link
+- Tiptap inline mentionの順序、削除、送信、失敗復元、reload
+- editor最大40vh、context ring tooltip、一行footer、desktop/mobile
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
 ## Paid E2E
@@ -46,15 +46,15 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 
 release journey:
 
-1. 新規draftから最初のmessageを送り自動titleを確認
+1. renameを依頼しない最初のmessageで専用title Agentによる自動titleを確認
 2. 明示prefixなしの自然なWeb検索とsource part
 3. 過去履歴、Issue read、tool resultを材料に一般化した検索
 4. Issue readとorganization slug付き個別link
-5. manual Yes / No、create / update、削除policyの明示確認
-6. 画像uploadとvision、Issue attachment preview
+5. Ask alwaysのYes / Noと、Full accessでcardなしの即時write
+6. 1つのmessageで画像upload、自然な公開Web検索、画像付きIssue作成を行い、tool input、DB Issue/file/claim、preview、個別pageを確認
 7. Issue/member/current page mentionのserver解決
-8. thinking、activity、tool traceのstreamとreload
-9. context meter、monthly usage event、cost projection
+8. thinking、transient status、tool traceのstreamとreload。完了/reload後statusなし、assistant重複なし
+9. context ringとusage event/cost projection API
 10. session更新後の過去approval reload
 
 secret、provider response本文、DOM snapshot、video、trace、screenshotをartifactへ保存しません。run専用tmp directoryとmode 0600の`.dev.vars`を使い、cleanup時は自分が起動したprocessとvalidated tmp pathだけを削除します。
@@ -66,8 +66,8 @@ secret、provider response本文、DOM snapshot、video、trace、screenshotをa
 ## 最終command
 
 ```sh
-bun run db:generate
-bun run db:migrate
+bun run --cwd packages/db db:generate
+bun run --cwd packages/db db:migrate
 bun run check
 bun run test:e2e
 bun run test:e2e:agent

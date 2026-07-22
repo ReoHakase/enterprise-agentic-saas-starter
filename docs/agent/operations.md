@@ -4,7 +4,7 @@
 
 `bun run dev`はWeb、API、Agent Worker、local Turso等を起動します。Mastra Studioだけを確認する場合はrepo scriptを使い、production Agent定義と別forkを作りません。OpenRouter keyはgitignore済み`apps/agent/.env.local`または明示的なprocess environmentから読みます。
 
-Agentのfeature flagは`1`だけを有効とし、未設定、`true`、未知値をfail closedにします。DB schema変更はDrizzle migrationを生成して適用し、通常起動でpush/resetしません。
+Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true`、未知値をfail closedにします。local API supervisorは`bun run dev`時だけ`AGENT_ASSET_UPLOAD_ENABLED`未設定を`1`へ補い、明示値は尊重します。disabledとprovider/API障害は別のsafe toastにし、raw responseを表示しません。DB schema変更はDrizzle migrationを生成して適用し、通常起動でpush/resetしません。
 
 ## Paid test secret
 
@@ -49,7 +49,7 @@ scheduled sweepとrequest時lazy sweepはtenant、claim、leaseを再確認し�
 
 ## Incident behavior
 
-- provider outage: write toolへfallbackせず、runをfailed、observed usageを保存
+- provider outage: product runは2分でabortしてcomposerを復帰し、write toolへfallbackせずrunをcanceled、observed usageを保存する。run grantの5分上限までUIを拘束しない
 - internal API outage: bounded 503。raw body/headerを伝播しない
 - quota/concurrency: bounded 429と整数`Retry-After`
 - DB contention:冪等operation IDでretryし、二重usage/writeを防止

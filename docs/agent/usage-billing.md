@@ -35,11 +35,11 @@ type AgentUsageEvent = {
 
 ## Pricing
 
-`agent_model_prices`はprovider/model、effective period、pricing version、通貨、1M token当たりのinput/cache read/cache write/output単価を保持します。usage発生時点の有効priceを選び、calculated costをeventへ固定します。後日の価格改定で過去costを再計算しません。
+`agent_model_prices`はprovider/model、effective period、pricing version、通貨、1M token当たりのinput/cache read/cache write/output単価を保持します。context量でtierが変わるmodelはthresholdとhigh-tierの4単価も同じversionへ固定します。usage発生時点の有効priceを選び、calculated costをeventへ固定します。後日の価格改定で過去costを再計算しません。
 
 provider costが観測できれば表示集計はprovider costを優先し、なければcalculated costを使って`isEstimate = true`とします。price未登録は`unpriced`として0を記録し、黙って別model priceを流用しません。
 
-Qwen3.6 Flashの初期pricing rowはversion付きmigrationでseedします。長context等のtier pricingがprovider contractに追加された場合は、新version rowと選択条件をmigration/testで追加します。
+Qwen3.6 Flashは256,000 input token以下と超過で単価が変わるため、低/high tierをversion付きmigrationでseedします。threshold判定はproviderへ送った総input tokenで行い、そのrequest全体へ該当tierを適用します。将来の価格改定は既存rowを書き換えず、新しいeffective versionを追加します。
 
 ## Daily projection
 
@@ -52,9 +52,9 @@ Qwen3.6 Flashの初期pricing rowはversion付きmigrationでseedします。長
 
 memberはorganization aggregateを取得できません。月は`YYYY-MM`だけを受け、active organizationをrequest bodyから選ばせません。
 
-## UI meter
+## UI境界
 
-context meterは一runのcontext window占有率、monthly usage meterはcalendar monthのtoken/costです。隣接表示しても同じpercentやquotaとして表現しません。金額はUSDと推定有無を明示し、raw provider responseを表示しません。
+chat composerは一runのcontext window占有率だけを円形ringで表示し、monthly token/costを表示しません。本人向けmonthly APIと管理画面向け集計は維持し、利用量画面で金額を出す場合はUSDと推定有無を明示してraw provider responseを表示しません。
 
 ## Error behavior
 

@@ -19,16 +19,16 @@
 | --- | --- | --- | --- |
 | 3 Worker / private Service Binding | architecture-security | 実装済み | typegen、Cloudflare build、private route test |
 | opaque ticket / grant / epoch | architecture-security | 実装済み | replay、失効、tenant test |
-| thread count / sort / archive / auto title | threads-context | 実装済み | DB/API/component/E2E |
+| thread count / sort / archive / auto/manual title | threads-context | 実装済み | DB/API/component/E2E |
 | context meter / compaction | threads-context | 実装済み | threshold、summary、provider usage test |
-| thinking / activity / tool / source表示 | chat-ui | 実装済み | stream保存、reload、desktop/mobile |
+| thinking / transient status / tool / source表示 | chat-ui | 実装済み | canonical保存、完了時消去、reload、desktop/mobile |
 | natural Web検索とquery guard | tools-approval | 実装済み | secret/PII/opaque ID、履歴・Issue・tool結果eval |
 | historical approval reload | tools-approval | 実装済み | session更新後GET、decision/resume scope test |
 | mention / page context / Issue link | assets-mentions | 実装済み | API再解決、cross-tenant、UI test |
 | usage event / pricing / daily projection | usage-billing | 実装済み | idempotency、price version、失敗/cancel test |
 | Agent UI shortcut | chat-ui | 実装済み | IME、input、modal、desktop/mobile test |
-| deterministic release suite | testing | 検証済み | `bun run check`、mock browser 89件成功、能力差による明示skip 16件、OAuth/WebAuthn 2件成功 |
-| paid E2E / 3回eval | testing | 検証済み | `test:e2e:agent` 1/1、`test:eval:agent` 3/3成功 |
+| deterministic release suite | testing | releaseごとに検証 | `bun run check`、mock browser、typegen、Cloudflare build |
+| paid E2E / 3回eval | testing | releaseごとに検証 | `test:e2e:agent` 1回、`test:eval:agent` 3/3成功 |
 
 「実装済み」はcode pathが存在することを示し、「検証済み」は[Testとrelease gate](./testing.md)の対応gateが成功したことを示します。確率的なLLM出力は文面一致で保証せず、tool call、stream part、DB state、安全境界を検証します。
 

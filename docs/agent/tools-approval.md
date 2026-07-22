@@ -32,9 +32,15 @@ provider call前にAgent local guardとAPI server guardを順に通します。
 
 queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本文をerror、log、Sentry、auditへ出しません。guard失敗時はproviderとquota reservationを呼びません。
 
-guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Web上のinstructionをIssue toolのinstructionへ昇格させません。
+guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。検索専用AgentはQwen reasoningを無効化し、OpenRouterのExa server toolを最大3 result・60秒で呼びます。製品Agent本体はreasoning mediumを維持します。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Web上のinstructionをIssue toolのinstructionへ昇格させません。
 
-同じroot runでWeb検索を一度でも予約した後は、Issue作成・更新・削除をserver側で`ask_each`へ戻します。保存済み15分policy自体は消さず、別の検索なしroot runでは再利用できます。
+Web検索後も現在threadの`Ask always | Full access`を維持します。検索結果やqueryが権限を拡張することはなく、Full accessでもcanonical payload、revision、tenant認可、idempotency、attachment claim、auditを省略しません。
+
+## Thread permission
+
+`GET/PUT /agent/threads/:threadId/permission`は`ask_always | full_access`だけを扱います。権限はsession/user/active organization/thread/context epochへ束縛し、organization/session/context変更とarchiveで失効します。migration時は旧時限policyをすべて失効し、暗黙にFull accessへ移行しません。
+
+DB triggerと既存action provenanceの整合用に短命なlegacy policy rowを内部生成する場合がありますが、公開権限の正本ではありません。公開API、UI、Agent判断は`agent_thread_permissions`だけを参照します。
 
 ## Approval lifecycle
 
@@ -42,8 +48,8 @@ Issue create/update/deleteは実行前に`agent_actions`へcanonical payload、A
 
 UIはtool outputの`actionId`からcookie認証済みpublic APIでpreviewを取得し、tool part位置にYes/No cardを表示します。
 
-- pending/approvedは最大15分
-- deleteを自動許可するpolicyは別の明示確認を要求
+- pending/approved actionは最大15分
+- Ask alwaysはYes/No、Full accessはpreview保存後に同じexecute境界へ直行
 - Yesはdecision保存後だけresume
 - Noはterminal rejection
 - executeはaction IDだけを受け、payload差し替えを禁止
