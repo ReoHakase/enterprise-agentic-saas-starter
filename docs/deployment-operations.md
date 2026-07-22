@@ -115,7 +115,7 @@ API WorkerはElysia Cloudflare adapter、WebはOpenNext、AgentはMastraとCloud
 
 1. Turso backup/restore pointを確認する。
 2. production migrationを1回だけ適用する。
-3. fresh accountだけは`AGENT_RUNTIME`を含まないbootstrap API configでAPI named `AgentInternalApi`を先に作る。
+3. workflowがCloudflare Worker Script APIでAPI/Agent両Workerを確認する。どちらかが404なら`AGENT_RUNTIME`を含まないbootstrap API configでAPI named `AgentInternalApi`を先に作り、200/404以外なら停止する。両方が存在しても旧Agents SDK protocolから切り替える初回だけはdispatch input `force_agent_protocol_bootstrap=true`を選ぶ。
 4. Agent Workerをdeployし、API named entrypointへのService Binding解決を確認する。
 5. final API Workerを`AGENT_RUNTIME` binding付きでdeployし、health/readiness/OpenAPIを自動smokeする。既存環境の通常releaseは互換な旧APIがあるためAgent→APIの順に更新する。
 6. Web Workerをbuildしてからdeployし、custom domainのsign-in pageを自動smokeする。
@@ -123,13 +123,17 @@ API WorkerはElysia Cloudflare adapter、WebはOpenNext、AgentはMastraとCloud
 
 ```sh
 bun run --cwd packages/db db:migrate
-bun run --cwd apps/api deploy
+# fresh accountまたは片側Worker欠損時だけ。実運用はworkflowが自動判定する。
+bun run --cwd apps/api deploy -- --config wrangler.bootstrap.jsonc
 bun run --cwd apps/agent deploy
+bun run --cwd apps/api deploy
 bun run --cwd apps/web build:cloudflare
 bun run --cwd apps/web deploy
 ```
 
-これは順序の概要です。相互Service Bindingはtarget Workerが先に存在する必要があるため、fresh accountのbootstrapだけを明示分岐し、通常releaseでは互換な旧APIを残したままAgent→API→Webの順に更新します。runtime secretをCLI引数へ渡さず、flagは検証済みのGitHub Environment varsから渡し、実際のproduction deployは`Deploy production` workflowだけから実行します。workflowは`production` Environmentのapprovalとconcurrency lock付きで進め、どのdeployまたは自動smokeで失敗しても後続Workerを変更しません。
+これは順序の概要です。相互Service Bindingはtarget Workerが先に存在する必要があるため、workflowはAPI/Agentのどちらかが存在しない場合にbootstrapを自動実行し、両方が存在して同じMastra protocolへ移行済みの通常releaseでは互換な旧APIを残したままAgent→API→Webの順に更新します。Workerの存在だけではprotocol互換性を証明できません。旧Agents SDKからの初回切替は4 Agent flagを全て`0`にし、既存chat導線のmaintenance windowを確保して`force_agent_protocol_bootstrap=true`を選びます。workflowはこのinput時にflagが1つでも`0`以外なら停止します。`apps/api/wrangler.bootstrap.jsonc`はfinal configと同じWorker名・binding・trigger・observabilityを持ち、outbound `services`だけを除きます。この差分はunit contract testで固定します。Cloudflareのauth failure、network error、429、5xxをWorker不存在と推測せず停止します。runtime secretをCLI引数へ渡さず、flagは検証済みのGitHub Environment varsから渡し、実際のproduction deployは`Deploy production` workflowだけから実行します。workflowは`production` Environmentのapprovalとconcurrency lock付きで進め、どのdeployまたは自動smokeで失敗しても後続Workerを変更しません。
+
+旧Agentの`IssueAssistant` SQLite Durable Object namespaceはこのprotocol切替では削除しません。Agent configに既存`v1 new_sqlite_classes` migrationを残し、worker bundleにも410を返すretention classをexportしますが、Durable Object bindingとpublic routeは外します。これにより新規trafficをMastra `AgentRuntime`へ限定しつつ、旧message dataを保持します。旧dataのexport/backfill、件数照合、retention期間の承認を完了した後だけ、別releaseでunique migration tagの`deleted_classes`とclass export削除を同時に行います。delete migrationはnamespaceと全dataを永久削除し、rollbackやTrashで復元できないため、今回のdeployへ含めません。
 
 `0011_file_activity_backfill`だけは、migration適用とAPI切替の間に旧Workerがfileを確定・削除するとactivityを復元できないdata migrationです。workflowはmigration ledgerが`0010`適用済みかつ`0011`未適用の環境だけを検出し、既存schemaと互換な新APIを先にdeployします。このpredeployでは4つのAgent flagを全て`0`に固定し、旧schemaのままAPI smokeを通してからbackfillへ進みます。migration後のAPI smokeが完了するまでAgent/Webを変更しません。fresh環境、`0011`適用済み環境、今後の通常migrationではmigration-first順序を維持します。この互換deployを手動運用で省略せず、file writeを止めないままone-shot SQLだけを先行適用しないでください。
 

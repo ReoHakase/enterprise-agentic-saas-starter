@@ -59,6 +59,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 - Sentry SDK追加後もWeb `build:cloudflare`とAPI Wrangler dry-runをrelease gateにする。Next build成功だけでOpenNext/Workers互換と判断しない。
 - source map upload用`SENTRY_AUTH_TOKEN`、`SENTRY_ORG`、`SENTRY_PROJECT`はCI/deploy jobのsecret/pass-throughだけに置き、PR forkやruntime/public envへ渡さない。通常のlocal/PR buildはcredentialなしでも成功させる。
 - API deployはWrangler dry-run artifactへSentry debug IDを注入・uploadした後、その同一artifactを`--no-bundle`でdeployする。API/Webで`SENTRY_PROJECT`をstepごとに切り替え、同じ`SENTRY_RELEASE`を使う。
+- API/Agentが相互Service Bindingを持つproduction workflowは、両Workerの存在をCloudflare Worker Script APIでread-only判定する。どちらかが404ならfinal APIと同じ設定から`services`だけを除いたbootstrap configでAPI named entrypointを作り、Agent→final APIの順に同じ検証済みartifactをdeployする。200/404以外はfresh扱いにせず停止する。両Workerが存在し、すでに同じMastra protocolへ移行済みの通常releaseだけbootstrapをskipする。旧Agents SDKからのone-time切替は`force_agent_protocol_bootstrap=true`を明示し、4 Agent flagが全て`0`でなければ停止する。
 - observability helperのunit testはSpotlight local-only判定、sampling境界、DSNのproduction-only判定、PII/secret/ID scrubを含める。
 - CI workflowで設定したenvはTurbo strict modeではtaskの`env`または`passThroughEnv`にも宣言する。特に`test`の`EMAIL_FROM`と`build:cloudflare`の`NEXT_PUBLIC_*`をworkflowだけに置かない。
 - deploy smokeではWeb/API release、readable stack、distributed trace、Uptime monitor、notification testを確認し、意図的test error endpointをproductionへ残さない。
