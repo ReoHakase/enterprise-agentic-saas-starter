@@ -1,6 +1,6 @@
 ---
 name: package-management
-description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追加、依存方向、package exports、API client配置、config/contract/validators packageを作るべきか、Bun/Turborepo workspace設計を変更するときに使う。
+description: enterprise-agentic-saas-starterでdependency更新、Bun catalog、minimum release age、monorepo構成、apps/packages追加、依存方向、package exports、API client配置、config/contract/validators packageを作るべきか、Bun/Turborepo workspace設計を変更するときに使う。
 ---
 
 # Package Management
@@ -11,6 +11,7 @@ description: enterprise-agentic-saas-starterでmonorepo構成、apps/packages追
 
 - Bun workspaceの外部依存versionはroot `workspaces.catalog` にexact versionで集約し、各packageでは `catalog:` を使う。
 - `bunfig.toml` の `[install] exact = true` と `.npmrc` の `save-exact=true` で `bun add` 時のexact保存を強制する。
+- dependency更新は `bunfig.toml` の `minimumReleaseAge` を維持し、公開直後のlatestが拒否されるときは制約を迂回せず、通常の `bun install` で解決できる最新versionを選ぶ。
 - `apps/*` は実行単位。Next.js web、Elysia API、将来のagent serverなどを置く。
 - `packages/*` は下位の共有ライブラリ。実行環境を持たない。
 - `apps/* -> packages/*` は許可。
