@@ -19,11 +19,8 @@ const titleProjection = (output: unknown) => {
     : null
 }
 
-const toolLabel = (toolName: string, status: "running" | "completed") =>
-  `${status === "running" ? "Running" : "Completed"} ${toolName.replaceAll("_", " ")}`
-
 /**
- * MastraのUI streamへ、製品固有だがcanonicalなactivity/title partを追加する。
+ * MastraのUI streamへ、transient statusとcanonicalなtitle/context partを追加する。
  * provider chunkのpayloadを複製せず、allowlist済みの投影だけをemitする。
  */
 export const addAgentStreamDataParts = (
@@ -36,37 +33,43 @@ export const addAgentStreamDataParts = (
   const toolNames = new Map<string, string>()
   return stream.pipeThrough(
     new TransformStream<UIMessageChunk, UIMessageChunk>({
+      start(controller) {
+        controller.enqueue({
+          type: "data-activity",
+          id: "response-status",
+          transient: true,
+          data: {
+            kind: "status",
+            label: "応答を生成中",
+            status: "running",
+          },
+        })
+      },
       transform(chunk, controller) {
         controller.enqueue(chunk)
         if (chunk.type === "tool-input-available") {
           toolNames.set(chunk.toolCallId, chunk.toolName)
-          controller.enqueue({
-            type: "data-activity",
-            data: {
-              kind: "tool",
-              label: toolLabel(chunk.toolName, "running"),
-              status: "running",
-            },
-          })
           return
         }
         if (chunk.type !== "tool-output-available") return
         const toolName = toolNames.get(chunk.toolCallId)
         if (!toolName) return
         toolNames.delete(chunk.toolCallId)
-        controller.enqueue({
-          type: "data-activity",
-          data: {
-            kind: "tool",
-            label: toolLabel(toolName, "completed"),
-            status: "completed",
-          },
-        })
         if (toolName !== "rename_thread") return
         const data = titleProjection(chunk.output)
         if (data) controller.enqueue({ type: "data-thread-title", data })
       },
       async flush(controller) {
+        controller.enqueue({
+          type: "data-activity",
+          id: "response-status",
+          transient: true,
+          data: {
+            kind: "status",
+            label: "応答を生成中",
+            status: "completed",
+          },
+        })
         if (!finalContext) return
         const observedInputTokens = await finalContext.observedInputTokens()
         if (observedInputTokens === null) return

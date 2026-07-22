@@ -96,6 +96,27 @@ const canonicalPartSchema = z.union([
     .strict(),
   z
     .object({
+      type: z.literal("data-context-reference"),
+      data: z.discriminatedUnion("kind", [
+        z
+          .object({
+            kind: z.enum(["issue", "file", "member"]),
+            id: identifierSchema,
+            label: z.string().min(1).max(200),
+          })
+          .strict(),
+        z
+          .object({
+            kind: z.literal("current_page"),
+            path: z.string().min(1).max(500),
+            label: z.string().min(1).max(200),
+          })
+          .strict(),
+      ]),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("data-activity"),
       data: z
         .object({
@@ -170,14 +191,29 @@ const canonicalMessageSchema = z
   })
   .strict()
   .refine((message) => JSON.stringify(message).length <= 131_072)
-  .refine((message) =>
-    message.role === "assistant"
-      ? message.parts.every((part) => part.type !== "data-agent-assets")
-      : message.parts.length <= 2 &&
-        message.parts[0]?.type === "text" &&
-        (message.parts.length === 1 ||
-          message.parts[1]?.type === "data-agent-assets")
-  )
+  .refine((message) => {
+    if (message.role === "assistant") {
+      return message.parts.every(
+        (part) =>
+          part.type !== "data-agent-assets" &&
+          part.type !== "data-context-reference"
+      )
+    }
+    const assetIndexes = message.parts.flatMap((part, index) =>
+      part.type === "data-agent-assets" ? [index] : []
+    )
+    return (
+      message.parts.every(
+        (part) =>
+          part.type === "text" ||
+          part.type === "data-context-reference" ||
+          part.type === "data-agent-assets"
+      ) &&
+      assetIndexes.length <= 1 &&
+      (assetIndexes.length === 0 ||
+        assetIndexes[0] === message.parts.length - 1)
+    )
+  })
 
 const timezoneSchema = z
   .string()
@@ -197,7 +233,7 @@ const timezoneSchema = z
 const resolvedContextReferenceSchema = z.discriminatedUnion("kind", [
   z
     .object({
-      kind: z.enum(["issue", "selected_issue"]),
+      kind: z.literal("issue"),
       id: identifierSchema,
       number: z.number().int().positive(),
       title: z.string().max(200),
@@ -264,14 +300,27 @@ const chatInputSchema = z
     if (current?.role !== "user" || current.id !== input.clientMessageId) {
       return false
     }
-    const assetPart = current.parts[1]
+    const assetPart = current.parts.find(
+      (part) => part.type === "data-agent-assets"
+    )
     const messageAssetIds =
       assetPart?.type === "data-agent-assets" ? assetPart.data.assetIds : []
+    const messageReferences = current.parts.flatMap((part) =>
+      part.type === "data-context-reference" ? [part.data] : []
+    )
     return (
       messageAssetIds.length === input.assetIds.length &&
       messageAssetIds.every(
         (assetId, index) => assetId === input.assetIds[index]
-      )
+      ) &&
+      messageReferences.length === input.contextReferences.length &&
+      messageReferences.every((reference, index) => {
+        const resolved = input.contextReferences[index]
+        if (!resolved || resolved.kind !== reference.kind) return false
+        return reference.kind === "current_page"
+          ? resolved.kind === "current_page" && resolved.path === reference.path
+          : resolved.kind !== "current_page" && resolved.id === reference.id
+      })
     )
   })
 

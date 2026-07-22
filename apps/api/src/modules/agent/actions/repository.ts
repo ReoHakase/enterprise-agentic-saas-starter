@@ -5,6 +5,7 @@ import {
   agentActionAssets,
   agentActions,
   agentApprovalPolicies,
+  agentThreadPermissions,
   agentAssets,
   agentGrants,
   agentResumeTickets,
@@ -16,7 +17,7 @@ import {
   storageObjects,
   user,
   type AgentActionKind,
-  type AgentApprovalPolicyMode,
+  type AgentThreadPermissionMode,
   type IssuePriority,
   type IssueStatus,
 } from "@enterprise-agentic-saas/db/schema"
@@ -311,7 +312,10 @@ const toActionDto = (action: ActionRow): AgentIssueAction => {
     id: action.id,
     kind: action.kind,
     status: action.status,
-    approvalMode: action.decisionProvenance,
+    approvalMode:
+      action.decisionProvenance === "auto_policy"
+        ? "full_access"
+        : action.decisionProvenance,
     requiresApproval: action.status === "pending",
     preview,
     previewState: preview === null ? "expired" : "available",
@@ -480,62 +484,53 @@ const expireActionsInTransaction = async (
 const findApplicablePolicy = async (
   tx: AgentTransaction,
   context: ValidGrant,
-  kind: AgentActionKind,
   now: Date
 ) => {
-  const rows = await tx
+  const permissionRows = await tx
     .select()
-    .from(agentApprovalPolicies)
+    .from(agentThreadPermissions)
+    .where(
+      and(
+        eq(agentThreadPermissions.organizationId, context.organizationId),
+        eq(agentThreadPermissions.threadId, context.threadId),
+        eq(agentThreadPermissions.sessionId, context.sessionId),
+        eq(agentThreadPermissions.userId, context.userId),
+        eq(agentThreadPermissions.contextEpoch, context.contextEpoch),
+        eq(agentThreadPermissions.mode, "full_access")
+      )
+    )
+    .limit(1)
+  if (!permissionRows[0]) return null
+
+  await tx
+    .update(agentApprovalPolicies)
+    .set({ revokedAt: now, updatedAt: now })
     .where(
       and(
         eq(agentApprovalPolicies.organizationId, context.organizationId),
         eq(agentApprovalPolicies.threadId, context.threadId),
         eq(agentApprovalPolicies.sessionId, context.sessionId),
         eq(agentApprovalPolicies.userId, context.userId),
-        eq(agentApprovalPolicies.contextEpoch, context.contextEpoch),
-        isNull(agentApprovalPolicies.revokedAt),
-        gt(agentApprovalPolicies.expiresAt, now)
+        isNull(agentApprovalPolicies.revokedAt)
       )
     )
-    .limit(1)
-  const policy = rows[0]
-  if (!policy) return null
-  if (policy.mode === "auto_all") return policy
-  if (
-    policy.mode === "auto_write" &&
-    (kind === "create_issue" || kind === "update_issue")
-  ) {
-    return policy
-  }
-  return null
-}
-
-const rootRunRequiresAskEach = async (
-  tx: AgentTransaction,
-  context: ValidGrant
-) => {
-  if (!context.rootRunId) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
-  }
   const rows = await tx
-    .select({ webSearchUsedAt: agentRuns.webSearchUsedAt })
-    .from(agentRuns)
-    .where(
-      and(
-        eq(agentRuns.id, context.rootRunId),
-        eq(agentRuns.organizationId, context.organizationId),
-        eq(agentRuns.threadId, context.threadId),
-        eq(agentRuns.sessionId, context.sessionId),
-        eq(agentRuns.userId, context.userId),
-        eq(agentRuns.contextEpoch, context.contextEpoch)
-      )
-    )
-    .limit(1)
-  const rootRun = rows[0]
-  if (!rootRun) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
-  }
-  return rootRun.webSearchUsedAt !== null
+    .insert(agentApprovalPolicies)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: context.organizationId,
+      threadId: context.threadId,
+      sessionId: context.sessionId,
+      userId: context.userId,
+      contextEpoch: context.contextEpoch,
+      mode: "auto_all",
+      destructiveConfirmedAt: now,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + AGENT_ACTION_MAX_LIFETIME_MS),
+      updatedAt: now,
+    })
+    .returning()
+  return rows[0] ?? null
 }
 
 const findExistingPreparedAction = async (
@@ -780,12 +775,7 @@ const persistPreparedAction = async (
       resource: "agent_asset",
     })
   }
-  // Public Web content is untrusted. Once the root run externalizes a query,
-  // every following Issue mutation must return to canonical human approval;
-  // a session auto policy cannot bypass this server-side fence.
-  const policy = (await rootRunRequiresAskEach(tx, input.context))
-    ? null
-    : await findApplicablePolicy(tx, input.context, input.kind, input.now)
+  const policy = await findApplicablePolicy(tx, input.context, input.now)
   const status = policy ? "approved" : "pending"
   const actionId = crypto.randomUUID()
   const rows = await tx
@@ -1725,6 +1715,7 @@ export const resumeAgentApprovedAction = async (
         attempt: 1,
         grant: runCredential.token,
         expiresAt: grantExpiresAt.toISOString(),
+        shouldGenerateTitle: false,
       }
     })
   } catch (cause) {
@@ -1733,17 +1724,16 @@ export const resumeAgentApprovedAction = async (
 }
 
 const policyPermissions = (
-  mode: AgentApprovalPolicyMode
+  mode: AgentThreadPermissionMode
 ): AgentApprovalPolicy["permissions"] => ({
-  createIssue: mode !== "ask_each",
-  updateIssue: mode !== "ask_each",
-  deleteIssue: mode === "auto_all",
+  createIssue: mode === "full_access",
+  updateIssue: mode === "full_access",
+  deleteIssue: mode === "full_access",
 })
 
 const defaultPolicy = (): AgentApprovalPolicy => ({
-  mode: "ask_each",
-  expiresAt: null,
-  permissions: policyPermissions("ask_each"),
+  mode: "ask_always",
+  permissions: policyPermissions("ask_always"),
 })
 
 const requirePolicyScope = async (
@@ -1771,35 +1761,24 @@ export const getAgentApprovalPolicyForSession = async (
       const { context, live } = await requirePolicyScope(tx, { ...input, now })
       const rows = await tx
         .select()
-        .from(agentApprovalPolicies)
+        .from(agentThreadPermissions)
         .where(
           and(
-            eq(agentApprovalPolicies.organizationId, live.activeOrganizationId),
-            eq(agentApprovalPolicies.threadId, input.threadId),
-            eq(agentApprovalPolicies.sessionId, input.sessionId),
-            eq(agentApprovalPolicies.userId, input.userId),
-            eq(agentApprovalPolicies.contextEpoch, context.contextEpoch),
-            isNull(agentApprovalPolicies.revokedAt)
+            eq(
+              agentThreadPermissions.organizationId,
+              live.activeOrganizationId
+            ),
+            eq(agentThreadPermissions.threadId, input.threadId),
+            eq(agentThreadPermissions.sessionId, input.sessionId),
+            eq(agentThreadPermissions.userId, input.userId),
+            eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
           )
         )
         .limit(1)
       const policy = rows[0]
       if (!policy) return defaultPolicy()
-      if (policy.expiresAt.getTime() <= now.getTime()) {
-        await tx
-          .update(agentApprovalPolicies)
-          .set({ revokedAt: now, updatedAt: now })
-          .where(
-            and(
-              eq(agentApprovalPolicies.id, policy.id),
-              isNull(agentApprovalPolicies.revokedAt)
-            )
-          )
-        return defaultPolicy()
-      }
       return {
         mode: policy.mode,
-        expiresAt: policy.expiresAt.toISOString(),
         permissions: policyPermissions(policy.mode),
       }
     })
@@ -1817,16 +1796,17 @@ export const deleteAgentApprovalPolicyForSession = async (
       const now = input.now ?? new Date()
       const { context, live } = await requirePolicyScope(tx, { ...input, now })
       await tx
-        .update(agentApprovalPolicies)
-        .set({ revokedAt: now, updatedAt: now })
+        .delete(agentThreadPermissions)
         .where(
           and(
-            eq(agentApprovalPolicies.organizationId, live.activeOrganizationId),
-            eq(agentApprovalPolicies.threadId, input.threadId),
-            eq(agentApprovalPolicies.sessionId, input.sessionId),
-            eq(agentApprovalPolicies.userId, input.userId),
-            eq(agentApprovalPolicies.contextEpoch, context.contextEpoch),
-            isNull(agentApprovalPolicies.revokedAt)
+            eq(
+              agentThreadPermissions.organizationId,
+              live.activeOrganizationId
+            ),
+            eq(agentThreadPermissions.threadId, input.threadId),
+            eq(agentThreadPermissions.sessionId, input.sessionId),
+            eq(agentThreadPermissions.userId, input.userId),
+            eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
           )
         )
       return defaultPolicy()
@@ -1845,49 +1825,28 @@ export const putAgentApprovalPolicyForSession = async (
     sessionId: string
     userId: string
     threadId: string
-    mode: AgentApprovalPolicyMode
-    expiresInSeconds: number
-    destructiveConfirmation?: "ALLOW_ISSUE_DELETE"
+    mode: AgentThreadPermissionMode
     now?: Date
   }
 ): Promise<AgentApprovalPolicy> => {
   try {
     return await db.transaction(async (tx) => {
       const now = input.now ?? new Date()
-      if (
-        input.mode === "auto_all" &&
-        input.destructiveConfirmation !== "ALLOW_ISSUE_DELETE"
-      ) {
-        throw publicErrors.confirmationRequired("agent.enable_auto_delete", {
-          reason: "destructive_confirmation_required",
-        })
-      }
-      if (
-        input.mode !== "auto_all" &&
-        input.destructiveConfirmation !== undefined
-      ) {
-        throw publicErrors.validation("Unexpected destructive confirmation", {
-          field: "destructiveConfirmation",
-        })
-      }
       const { context, live } = await requirePolicyScope(tx, { ...input, now })
       await tx
-        .update(agentApprovalPolicies)
-        .set({ revokedAt: now, updatedAt: now })
+        .delete(agentThreadPermissions)
         .where(
           and(
-            eq(agentApprovalPolicies.organizationId, live.activeOrganizationId),
-            eq(agentApprovalPolicies.threadId, input.threadId),
-            eq(agentApprovalPolicies.sessionId, input.sessionId),
-            eq(agentApprovalPolicies.userId, input.userId),
-            isNull(agentApprovalPolicies.revokedAt)
+            eq(
+              agentThreadPermissions.organizationId,
+              live.activeOrganizationId
+            ),
+            eq(agentThreadPermissions.threadId, input.threadId),
+            eq(agentThreadPermissions.sessionId, input.sessionId),
+            eq(agentThreadPermissions.userId, input.userId)
           )
         )
-      const expiresAt = new Date(
-        now.getTime() +
-          Math.min(input.expiresInSeconds * 1000, AGENT_ACTION_MAX_LIFETIME_MS)
-      )
-      await tx.insert(agentApprovalPolicies).values({
+      await tx.insert(agentThreadPermissions).values({
         id: crypto.randomUUID(),
         organizationId: live.activeOrganizationId,
         threadId: input.threadId,
@@ -1895,14 +1854,11 @@ export const putAgentApprovalPolicyForSession = async (
         userId: input.userId,
         contextEpoch: context.contextEpoch,
         mode: input.mode,
-        destructiveConfirmedAt: input.mode === "auto_all" ? now : null,
         createdAt: now,
         updatedAt: now,
-        expiresAt,
       })
       return {
         mode: input.mode,
-        expiresAt: expiresAt.toISOString(),
         permissions: policyPermissions(input.mode),
       }
     })

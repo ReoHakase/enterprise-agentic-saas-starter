@@ -4,7 +4,6 @@ import {
   buildAgentAssetPreviewUrl,
   FILE_PREVIEW_WIDTHS,
 } from "@enterprise-agentic-saas/api/client"
-import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { getToolName, isToolUIPart } from "ai"
 import Link from "next/link"
 import * as v from "valibot"
@@ -66,13 +65,13 @@ export const AgentMessage = ({
   onPendingChange: (actionId: string, pending: boolean) => void
 }) => (
   <article
-    className={`max-w-[92%] rounded-xl border p-3 ${
-      message.role === "user" ? "ml-auto bg-muted" : "mr-auto bg-card"
+    aria-label={message.role === "user" ? "Your message" : "Agent response"}
+    className={`text-sm ${
+      message.role === "user"
+        ? "ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-3"
+        : "w-full py-2"
     }`}
   >
-    <p className="mb-1 text-xs font-medium text-muted-foreground">
-      {message.role === "user" ? "You" : "Issue agent"}
-    </p>
     <div className="space-y-2">
       {message.parts.map((part, index) => {
         const key = `${part.type}:${index}`
@@ -100,17 +99,16 @@ export const AgentMessage = ({
           )
         }
         if (part.type === "data-activity") {
+          return null
+        }
+        if (part.type === "data-context-reference") {
           return (
-            <p
+            <span
               key={key}
-              className="text-xs text-muted-foreground"
-              role="status"
+              className="inline-flex max-w-full rounded-md bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:text-blue-300"
             >
-              {part.data.status === "running" ? (
-                <Spinner className="mr-1 inline-flex" />
-              ) : null}
-              {part.data.label}
-            </p>
+              @{part.data.label}
+            </span>
           )
         }
         if (part.type === "data-thread-title") {

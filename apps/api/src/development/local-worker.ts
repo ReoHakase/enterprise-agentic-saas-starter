@@ -57,6 +57,10 @@ export const serializeLocalWorkerEnvironment = (
     .map(([key, value]) => `${key}=${JSON.stringify(value)}\n`)
     .join("")
 
+export const resolveDevelopmentAgentAssetUploadFlag = (
+  environment: Readonly<Record<string, string | undefined>> = process.env
+) => environment.AGENT_ASSET_UPLOAD_ENABLED?.trim() || "1"
+
 export const resolveWranglerInspectorPort = (
   environment: Readonly<Record<string, string | undefined>> = process.env
 ) => {

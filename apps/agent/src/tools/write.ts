@@ -26,6 +26,12 @@ export type AgentWriteControl = {
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 const identifierSchema = z.string().trim().regex(IDENTIFIER_PATTERN)
+const optionalAssigneeSchema = z
+  .union([identifierSchema, z.literal(""), z.null()])
+  .optional()
+  .describe(
+    "Organization member ID. Omit this field or use null when the Issue is unassigned; never use an empty string."
+  )
 const issueStatusSchema = z.enum(["open", "in_progress", "closed"])
 const issuePrioritySchema = z.enum([
   "no_priority",
@@ -39,7 +45,7 @@ const labelsSchema = z.array(z.string().trim().min(1).max(40)).max(20)
 const attachmentAssetIdsSchema = z.array(identifierSchema).max(4).optional()
 
 const mutableIssueFields = {
-  assigneeId: identifierSchema.nullable().optional(),
+  assigneeId: optionalAssigneeSchema,
   description: z.string().max(50_000).optional(),
   dueDate: dueDateSchema.nullable().optional(),
   labels: labelsSchema.optional(),
@@ -101,7 +107,7 @@ const normalizeCreateIssue = (
   ...issue,
   assigneeId:
     typeof issue.assigneeId === "string"
-      ? issue.assigneeId.trim()
+      ? issue.assigneeId.trim() || null
       : issue.assigneeId,
   attachmentAssetIds: [...new Set(issue.attachmentAssetIds ?? [])],
   labels: normalizeLabels(issue.labels),
@@ -114,7 +120,7 @@ const normalizeUpdateIssue = (
   ...issue,
   assigneeId:
     typeof issue.assigneeId === "string"
-      ? issue.assigneeId.trim()
+      ? issue.assigneeId.trim() || null
       : issue.assigneeId,
   issueId: issue.issueId.trim(),
   labels: normalizeLabels(issue.labels),

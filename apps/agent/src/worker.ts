@@ -1,4 +1,8 @@
-import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/api/agent-client"
+import type {
+  AgentActionExecutionResult,
+  AgentCanonicalMessage,
+  AgentThreadRenameResult,
+} from "@enterprise-agentic-saas/api/agent-client"
 import { toAISdkStream } from "@mastra/ai-sdk"
 import { RequestContext } from "@mastra/core/request-context"
 import * as Sentry from "@sentry/cloudflare"
@@ -32,6 +36,7 @@ import { addAgentStreamDataParts } from "./messages/stream-parts"
 import { createAgentClientTools } from "./tools/client"
 export { IssueAssistant } from "./legacy/issue-assistant"
 import { mastra } from "./mastra"
+import { threadTitleProviderOptions } from "./mastra/agents/thread-title-agent"
 import type { ProductAgentRequestContext } from "./mastra/runtime-context"
 import { captureAgentFailure } from "./observability/capture"
 import { createAgentSentryOptions } from "./observability/privacy"
@@ -46,7 +51,9 @@ import { stopOnPendingIssueAction } from "./runtime/stop-conditions"
 import { createAgentToolBudget } from "./tools/budget"
 import { normalizeAgentUsage } from "./usage/normalize"
 
-const RUN_TIMEOUT_MS = 5 * 60 * 1000
+// Keep provider stalls below the five-minute capability lifetime so the run can
+// be settled and the composer can recover while its original grant is live.
+const RUN_TIMEOUT_MS = 2 * 60 * 1000
 const ignoreObservedUsage = async () => undefined
 
 type AgentExecutionContext = {
@@ -84,6 +91,26 @@ const controlFailure = (error: unknown): Response | null => {
 
 const consumeStream = async (stream: ReadableStream<string>): Promise<void> => {
   await stream.pipeTo(new WritableStream()).catch(() => undefined)
+}
+
+const titlePromptFromMessages = (
+  messages: readonly AgentCanonicalMessage[]
+): string | null => {
+  const latestUserMessage = messages.findLast(
+    (message) => message.role === "user"
+  )
+  if (!latestUserMessage) return null
+  const prompt = latestUserMessage.parts
+    .map((part) => {
+      if (part.type === "text") return part.text.trim()
+      if (part.type === "data-context-reference") return `@${part.data.label}`
+      if (part.type === "data-agent-assets") return "[画像添付]"
+      return ""
+    })
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 4_000)
+  return prompt || null
 }
 
 const handleChat = async (
@@ -149,11 +176,17 @@ const handleChat = async (
 
   const settlement = createRunSettlement(api, run.grant)
   const budget = createAgentToolBudget()
+  const generatedThreadTitle: { current: AgentThreadRenameResult | null } = {
+    current: null,
+  }
   const requestContext = new RequestContext<ProductAgentRequestContext>()
   requestContext.set("runtime", {
     api,
     budget,
     openRouterApiKey: environment.OPENROUTER_API_KEY,
+    onThreadTitle: (result) => {
+      generatedThreadTitle.current = result
+    },
     rootRunId: run.rootRunId,
     runGrant: run.grant,
     settlement,
@@ -199,7 +232,39 @@ const handleChat = async (
       ? AbortSignal.any([request.signal, timeoutSignal])
       : timeoutSignal
     const productAgent = mastra.getAgentById("product-agent")
+    const titlePrompt =
+      input.trigger === "user_message" && run.shouldGenerateTitle
+        ? titlePromptFromMessages(input.messages)
+        : null
     const runStartedAt = Date.now()
+    const titlePromise = titlePrompt
+      ? (async () => {
+          try {
+            const titleAgent = mastra.getAgentById("thread-title-agent")
+            const titleStartedAt = Date.now()
+            const titleOutput = await titleAgent.generate(titlePrompt, {
+              maxSteps: 1,
+              modelSettings: { maxOutputTokens: 160, temperature: 0.1 },
+              providerOptions: threadTitleProviderOptions,
+              requestContext,
+              toolChoice: { type: "tool", toolName: "rename_thread" },
+            })
+            await api.recordUsage({
+              grant: run.grant,
+              ...normalizeAgentUsage({
+                usage: titleOutput.totalUsage,
+                imageInputCount: 0,
+                durationMs: Date.now() - titleStartedAt,
+                runEventId: `title_${run.attempt}`,
+              }),
+            })
+            return generatedThreadTitle.current
+          } catch {
+            captureAgentFailure("title_failed")
+            return null
+          }
+        })()
+      : Promise.resolve(null)
     let recordObservedUsage: () => Promise<void> = ignoreObservedUsage
     const output = await productAgent.stream(modelMessages, {
       abortSignal,
@@ -212,19 +277,19 @@ const handleChat = async (
         },
       },
       onAbort: async () => {
-        await recordObservedUsage()
         await settlement.cancel()
+        await recordObservedUsage()
       },
       onError: async () => {
         modelFailed = true
         captureAgentFailure("model_failed")
-        await recordObservedUsage()
         await settlement.fail()
+        await recordObservedUsage()
       },
       requestContext,
       stopWhen: stopOnPendingIssueAction,
-      // Web search reservation must commit before a following Issue write checks
-      // the root-run ask_each fence. Serial tool execution closes same-step races.
+      // Tool reservations and Issue writes remain serial so usage, audit, and
+      // attachment claims keep deterministic ordering within one root run.
       toolCallConcurrency: 1,
     })
     let usageRecorded = false
@@ -271,20 +336,16 @@ const handleChat = async (
       }
     )
     const stream = createUIMessageStream({
-      execute: ({ writer }) => {
-        writer.write({
-          type: "data-activity",
-          data: {
-            kind: "status",
-            status: "running",
-            label: "応答を生成中",
-          },
-        })
+      execute: async ({ writer }) => {
         writer.write({
           type: "data-context-budget",
           data: contextBudget,
         })
         writer.merge(modelStream)
+        const title = await titlePromise
+        if (title?.renamed) {
+          writer.write({ type: "data-thread-title", data: title })
+        }
       },
       generateId: () => crypto.randomUUID(),
       onError: () => "Model response failed.",

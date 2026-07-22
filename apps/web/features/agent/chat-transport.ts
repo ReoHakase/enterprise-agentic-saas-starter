@@ -5,17 +5,19 @@ import type { AgentChatMessage } from "./schema"
 
 export type AgentContextReference =
   | {
-      kind: "issue" | "selected_issue" | "file" | "member"
+      kind: "issue" | "file" | "member"
       id: string
-      label: string
     }
-  | { kind: "current_page"; path: string; label: string }
+  | { kind: "current_page"; path: string }
+
+type AgentContentSegment =
+  | { type: "text"; text: string }
+  | { type: "context_reference"; reference: AgentContextReference }
 
 type PrepareAgentChatBodyInput = {
   threadId: string
   messages: AgentChatMessage[]
   timezone: string
-  contextReferences?: AgentContextReference[]
 }
 
 const identifier = v.pipe(v.string(), v.minLength(1), v.maxLength(128))
@@ -114,33 +116,37 @@ const validateAssetIds = (value: unknown): string[] => {
 const prepareUserMessageBody = (
   threadId: string,
   message: AgentChatMessage,
-  timezone: string,
-  contextReferences: AgentContextReference[]
+  timezone: string
 ) => {
-  const textParts = message.parts.filter((part) => part.type === "text")
   const assetParts = message.parts.filter(
     (part) => part.type === "data-agent-assets"
   )
-  const textPart = textParts[0]
-  if (
-    textParts.length !== 1 ||
-    !textPart ||
-    textPart.text.trim().length === 0 ||
-    assetParts.length > 1
-  ) {
+  if (assetParts.length > 1) {
     throw new Error("Invalid Agent message submission.")
   }
   const assetIds = validateAssetIds(assetParts[0]?.data.assetIds ?? [])
+  const contentSegments: AgentContentSegment[] = []
+  for (const part of message.parts) {
+    if (part.type === "text") {
+      contentSegments.push({ type: "text", text: part.text })
+      continue
+    }
+    if (part.type !== "data-context-reference") continue
+    const reference: AgentContextReference =
+      part.data.kind === "current_page"
+        ? { kind: "current_page", path: part.data.path }
+        : { kind: part.data.kind, id: part.data.id }
+    contentSegments.push({ type: "context_reference", reference })
+  }
+  if (contentSegments.length === 0 && assetIds.length === 0) {
+    throw new Error("Invalid Agent message submission.")
+  }
 
   return {
     threadId,
-    message: {
-      id: message.id,
-      role: "user" as const,
-      parts: [{ type: "text" as const, text: textPart.text }],
-    },
+    messageId: message.id,
+    contentSegments,
     assetIds,
-    contextReferences,
     timezone,
   }
 }
@@ -208,19 +214,13 @@ export const prepareAgentChatBody = ({
   threadId,
   messages,
   timezone,
-  contextReferences = [],
 }: PrepareAgentChatBodyInput) => {
   const message = messages.at(-1)
   if (!message || timezone.length === 0 || timezone.length > 64) {
     throw new Error("Invalid Agent message submission.")
   }
   if (message.role === "user") {
-    return prepareUserMessageBody(
-      threadId,
-      message,
-      timezone,
-      contextReferences
-    )
+    return prepareUserMessageBody(threadId, message, timezone)
   }
   if (message.role === "assistant") {
     return prepareClientToolContinuationBody(threadId, message, timezone)
@@ -234,7 +234,6 @@ export const createAgentChatTransport = (input: {
   apiBaseUrl: string
   threadId: string
   getTimezone?: () => string
-  getContextReferences?: () => AgentContextReference[]
 }) =>
   new DefaultChatTransport<AgentChatMessage>({
     api: agentChatUrl(input.apiBaseUrl),
@@ -245,7 +244,6 @@ export const createAgentChatTransport = (input: {
         threadId: input.threadId,
         messages,
         timezone: (input.getTimezone ?? browserTimezone)(),
-        contextReferences: input.getContextReferences?.() ?? [],
       }),
     }),
   })

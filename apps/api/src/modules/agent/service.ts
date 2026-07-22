@@ -1,5 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import type { AgentApprovalPolicyMode } from "@enterprise-agentic-saas/db/schema"
+import type { AgentThreadPermissionMode } from "@enterprise-agentic-saas/db/schema"
 import * as v from "valibot"
 
 import type {
@@ -9,7 +9,6 @@ import type {
 } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
 import {
-  deleteAgentApprovalPolicyForSession,
   decideAgentActionForSession,
   getAgentActionForSession,
   getAgentApprovalPolicyForSession,
@@ -28,6 +27,7 @@ import {
   listAgentThreadsForSession,
   prepareAgentClientToolContinuationForSession,
   prepareAgentChatForSession,
+  renameAgentThreadForSession,
   revokeCurrentAgentContext,
 } from "./threads/repository"
 import {
@@ -63,6 +63,11 @@ export const archiveAgentThread = (
   db: Db,
   input: { sessionId: string; userId: string; threadId: string }
 ) => archiveAgentThreadForSession(db, input)
+
+export const updateAgentThreadTitle = (
+  db: Db,
+  input: Parameters<typeof renameAgentThreadForSession>[1]
+) => renameAgentThreadForSession(db, input)
 
 export const createAgentConnection = (
   db: Db,
@@ -245,19 +250,12 @@ export const getAgentApprovalPolicy = (
   input: { sessionId: string; userId: string; threadId: string }
 ) => getAgentApprovalPolicyForSession(db, input)
 
-export const deleteAgentApprovalPolicy = (
-  db: Db,
-  input: { sessionId: string; userId: string; threadId: string }
-) => deleteAgentApprovalPolicyForSession(db, input)
-
 export const putAgentApprovalPolicy = (
   db: Db,
   input: {
     sessionId: string
     userId: string
     threadId: string
-    mode: AgentApprovalPolicyMode
-    expiresInSeconds: number
-    destructiveConfirmation?: "ALLOW_ISSUE_DELETE"
+    mode: AgentThreadPermissionMode
   }
 ) => putAgentApprovalPolicyForSession(db, input)

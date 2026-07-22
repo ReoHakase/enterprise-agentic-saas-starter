@@ -4,6 +4,7 @@ import { z } from "zod"
 
 import {
   publicWebResearchAgent,
+  publicWebResearchProviderOptions,
   type PublicWebResearchRequestContext,
 } from "../agents/public-web-research-agent"
 import {
@@ -16,6 +17,7 @@ const MAXIMUM_RESULT_CHARACTERS = 6_000
 const MAXIMUM_SOURCE_TITLE_CHARACTERS = 200
 const MAXIMUM_SOURCE_URL_CHARACTERS = 2_048
 const MAXIMUM_SOURCES = 5
+export const PUBLIC_WEB_RESEARCH_TIMEOUT_MS = 60_000
 const TOOL_CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u
 
 const forbiddenPublicQueryPatterns = [
@@ -230,10 +232,15 @@ const searchWithIsolatedAgent = async (
 ): Promise<RawPublicWebResearchResult> => {
   const requestContext = new RequestContext<PublicWebResearchRequestContext>()
   requestContext.set("apiKey", apiKey)
+  const timeoutSignal = AbortSignal.timeout(PUBLIC_WEB_RESEARCH_TIMEOUT_MS)
+  const searchSignal = abortSignal
+    ? AbortSignal.any([abortSignal, timeoutSignal])
+    : timeoutSignal
   const result = await publicWebResearchAgent.generate(query, {
-    abortSignal,
+    abortSignal: searchSignal,
     maxSteps: 1,
     modelSettings: { maxOutputTokens: 768, temperature: 0 },
+    providerOptions: publicWebResearchProviderOptions,
     requestContext,
   })
   return {

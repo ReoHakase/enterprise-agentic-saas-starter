@@ -3,12 +3,18 @@ import { InMemoryStore } from "@mastra/core/storage"
 
 import { productAgent } from "./agents/product-agent"
 import { publicWebResearchAgent } from "./agents/public-web-research-agent"
+import { threadTitleAgent } from "./agents/thread-title-agent"
 import { approvedIssueActionWorkflow } from "./workflows/approved-issue-action"
 
-export { approvedIssueActionWorkflow, productAgent, publicWebResearchAgent }
+export {
+  approvedIssueActionWorkflow,
+  productAgent,
+  publicWebResearchAgent,
+  threadTitleAgent,
+}
 
 export const mastra = new Mastra({
-  agents: { productAgent, publicWebResearchAgent },
+  agents: { productAgent, publicWebResearchAgent, threadTitleAgent },
   // Provider errors can contain request bodies and response headers. Product
   // failures are reported through the scrubbed Sentry boundary instead.
   logger: false,

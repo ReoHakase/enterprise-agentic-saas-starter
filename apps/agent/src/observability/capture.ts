@@ -6,6 +6,7 @@ export type AgentFailureCode =
   | "resume_failed"
   | "run_grant_invalid"
   | "run_start_failed"
+  | "title_failed"
   | "usage_record_failed"
 
 const failureMessages: Record<AgentFailureCode, string> = {
@@ -14,6 +15,7 @@ const failureMessages: Record<AgentFailureCode, string> = {
   resume_failed: "Agent action resume failed",
   run_grant_invalid: "Agent run grant validation failed",
   run_start_failed: "Agent run start failed",
+  title_failed: "Agent thread title generation failed",
   usage_record_failed: "Agent usage recording failed",
 }
 

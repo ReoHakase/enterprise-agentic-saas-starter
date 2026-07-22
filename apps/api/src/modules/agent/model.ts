@@ -98,6 +98,26 @@ const canonicalMessagePartModel = v.union([
     text: v.pipe(v.string(), v.maxLength(50_000)),
   }),
   v.strictObject({
+    type: v.literal("data-context-reference"),
+    data: v.variant("kind", [
+      v.strictObject({
+        kind: v.literal("issue"),
+        id: identifierModel,
+        label: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+      }),
+      v.strictObject({
+        kind: v.picklist(["file", "member"]),
+        id: identifierModel,
+        label: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+      }),
+      v.strictObject({
+        kind: v.literal("current_page"),
+        path: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
+        label: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+      }),
+    ]),
+  }),
+  v.strictObject({
     type: v.literal("data-activity"),
     data: v.strictObject({
       kind: v.picklist(["status", "tool"]),
@@ -172,16 +192,29 @@ export const agentCanonicalMessageModel = v.pipe(
     (message) => JSON.stringify(message).length <= 131_072,
     "Agent message is too large"
   ),
-  v.check(
-    (message) =>
-      message.role === "assistant"
-        ? message.parts.every((part) => part.type !== "data-agent-assets")
-        : message.parts.length <= 2 &&
-          message.parts[0]?.type === "text" &&
-          (message.parts.length === 1 ||
-            message.parts[1]?.type === "data-agent-assets"),
-    "Invalid parts for agent message role"
-  )
+  v.check((message) => {
+    if (message.role === "assistant") {
+      return message.parts.every(
+        (part) =>
+          part.type !== "data-agent-assets" &&
+          part.type !== "data-context-reference"
+      )
+    }
+    const assetIndexes = message.parts.flatMap((part, index) =>
+      part.type === "data-agent-assets" ? [index] : []
+    )
+    return (
+      message.parts.every(
+        (part) =>
+          part.type === "text" ||
+          part.type === "data-context-reference" ||
+          part.type === "data-agent-assets"
+      ) &&
+      assetIndexes.length <= 1 &&
+      (assetIndexes.length === 0 ||
+        assetIndexes[0] === message.parts.length - 1)
+    )
+  }, "Invalid parts for agent message role")
 )
 
 export const agentCanonicalMessageListModel = v.pipe(
@@ -189,32 +222,18 @@ export const agentCanonicalMessageListModel = v.pipe(
   v.maxLength(40)
 )
 
-const publicUserMessageModel = v.strictObject({
-  id: identifierModel,
-  role: v.literal("user"),
-  parts: v.tuple([
-    v.strictObject({
-      type: v.literal("text"),
-      text: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(20_000)),
-    }),
-  ]),
-})
-
 const contextReferenceModel = v.variant("kind", [
   v.strictObject({
-    kind: v.picklist(["issue", "selected_issue"]),
+    kind: v.literal("issue"),
     id: identifierModel,
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
   }),
   v.strictObject({
     kind: v.literal("file"),
     id: identifierModel,
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
   }),
   v.strictObject({
     kind: v.literal("member"),
     id: identifierModel,
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
   }),
   v.strictObject({
     kind: v.literal("current_page"),
@@ -225,23 +244,30 @@ const contextReferenceModel = v.variant("kind", [
       v.maxLength(500),
       v.regex(/^\/organization\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_/?=&.-]*)?$/)
     ),
-    label: v.optional(v.pipe(v.string(), v.maxLength(200))),
+  }),
+])
+
+const contentSegmentModel = v.variant("type", [
+  v.strictObject({
+    type: v.literal("text"),
+    text: v.pipe(v.string(), v.maxLength(20_000)),
+  }),
+  v.strictObject({
+    type: v.literal("context_reference"),
+    reference: contextReferenceModel,
   }),
 ])
 
 const agentUserChatBodyModel = v.strictObject({
   threadId: identifierModel,
-  message: publicUserMessageModel,
+  messageId: identifierModel,
+  contentSegments: v.pipe(v.array(contentSegmentModel), v.maxLength(25)),
   assetIds: v.optional(
     v.pipe(
       v.array(identifierModel),
       v.maxLength(4),
       v.checkItems((item, index, array) => array.indexOf(item) === index)
     ),
-    []
-  ),
-  contextReferences: v.optional(
-    v.pipe(v.array(contextReferenceModel), v.maxLength(12)),
     []
   ),
   timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
@@ -364,12 +390,7 @@ export const agentChatBodyModel = v.union([
   agentClientToolContinuationBodyModel,
 ])
 
-const titleModel = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(120)
-)
+const titleModel = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80))
 
 const boundedSearchModel = v.pipe(v.string(), v.trim(), v.maxLength(200))
 
@@ -381,6 +402,7 @@ const limitModel = v.optional(
 export const agentThreadModel = v.object({
   id: identifierModel,
   title: titleModel,
+  titleRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
   status: v.picklist(["active", "archived"]),
   messageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   createdAt: isoTimestampModel,
@@ -388,6 +410,11 @@ export const agentThreadModel = v.object({
 })
 
 export const agentThreadListModel = v.array(agentThreadModel)
+
+export const updateAgentThreadTitleBodyModel = v.strictObject({
+  title: titleModel,
+  expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
+})
 
 export const createAgentThreadBodyModel = v.strictObject({
   title: v.optional(titleModel),
@@ -790,7 +817,7 @@ export const agentIssueActionModel = v.object({
     "succeeded",
     "conflicted",
   ]),
-  approvalMode: v.nullable(v.picklist(["manual", "auto_policy"])),
+  approvalMode: v.nullable(v.picklist(["manual", "full_access"])),
   requiresApproval: v.boolean(),
   preview: v.nullable(agentIssueActionPreviewModel),
   previewState: v.picklist(["available", "expired"]),
@@ -826,34 +853,14 @@ export const agentActionExecutionResultModel = v.strictObject({
   }),
 })
 
-export const approvalPolicyModeModel = v.picklist([
-  "ask_each",
-  "auto_write",
-  "auto_all",
-])
-
-export const getAgentApprovalPolicyQueryModel = v.strictObject({
-  threadId: identifierModel,
-})
-
-export const deleteAgentApprovalPolicyQueryModel =
-  getAgentApprovalPolicyQueryModel
+export const approvalPolicyModeModel = v.picklist(["ask_always", "full_access"])
 
 export const putAgentApprovalPolicyBodyModel = v.strictObject({
-  threadId: identifierModel,
   mode: approvalPolicyModeModel,
-  expiresInSeconds: v.pipe(
-    v.number(),
-    v.integer(),
-    v.minValue(1),
-    v.maxValue(900)
-  ),
-  destructiveConfirmation: v.optional(v.literal("ALLOW_ISSUE_DELETE")),
 })
 
 export const agentApprovalPolicyModel = v.object({
   mode: approvalPolicyModeModel,
-  expiresAt: v.nullable(isoTimestampModel),
   permissions: v.object({
     createIssue: v.boolean(),
     updateIssue: v.boolean(),

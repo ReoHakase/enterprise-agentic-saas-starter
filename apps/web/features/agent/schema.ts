@@ -19,6 +19,9 @@ export type AgentChatMessage = UIMessage<
   unknown,
   {
     "agent-assets": AgentChatAssetData
+    "context-reference":
+      | { kind: "issue" | "file" | "member"; id: string; label: string }
+      | { kind: "current_page"; path: string; label: string }
     activity: {
       kind: "status" | "tool"
       status: "running" | "completed" | "failed"
@@ -87,6 +90,21 @@ const canonicalMessagePartSchema = v.union([
   v.object({
     type: v.literal("data-agent-assets"),
     data: v.object({ assetIds: v.array(identifier) }),
+  }),
+  v.object({
+    type: v.literal("data-context-reference"),
+    data: v.variant("kind", [
+      v.object({
+        kind: v.picklist(["issue", "file", "member"]),
+        id: identifier,
+        label: v.string(),
+      }),
+      v.object({
+        kind: v.literal("current_page"),
+        path: v.string(),
+        label: v.string(),
+      }),
+    ]),
   }),
   v.object({
     type: v.literal("data-activity"),
@@ -186,6 +204,7 @@ const normalizeCanonicalMessagePart = (
 export const agentThreadSchema = v.object({
   id: identifier,
   title: v.string(),
+  titleRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
   status: v.picklist(["active", "archived"]),
   messageCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   createdAt: timestamp,
@@ -205,7 +224,7 @@ export const agentIssueActionSchema = v.object({
     "succeeded",
     "conflicted",
   ]),
-  approvalMode: v.nullable(v.picklist(["manual", "auto_policy"])),
+  approvalMode: v.nullable(v.picklist(["manual", "full_access"])),
   requiresApproval: v.boolean(),
   preview: v.nullable(
     v.object({
@@ -254,8 +273,7 @@ export const agentActionExecutionResultSchema = v.object({
   }),
 })
 export const agentApprovalPolicySchema = v.object({
-  mode: v.picklist(["ask_each", "auto_write", "auto_all"]),
-  expiresAt: v.nullable(timestamp),
+  mode: v.picklist(["ask_always", "full_access"]),
   permissions: v.object({
     createIssue: v.boolean(),
     updateIssue: v.boolean(),

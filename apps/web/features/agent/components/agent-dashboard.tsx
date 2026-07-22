@@ -24,7 +24,11 @@ import { MessageSquarePlusIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { archiveAgentThread, createAgentThread } from "@/features/agent/api"
+import {
+  archiveAgentThread,
+  createAgentThread,
+  updateAgentThreadTitle,
+} from "@/features/agent/api"
 import { AgentConversation } from "@/features/agent/components/agent-conversation"
 import { AgentNewThreadComposer } from "@/features/agent/components/agent-new-thread-composer"
 import { AgentShortcutHelp } from "@/features/agent/components/agent-shortcut-help"
@@ -178,6 +182,27 @@ export const AgentDashboard = ({
     createThreadMutation
   const { mutate: runArchiveThread, isPending: archivingThread } =
     archiveThreadMutation
+  const renameThreadMutation = useMutation({
+    mutationFn: (input: { thread: AgentThread; title: string }) =>
+      updateAgentThreadTitle(apiClient, {
+        threadId: input.thread.id,
+        title: input.title,
+        expectedRevision: input.thread.titleRevision,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: agentKeys.threads(organizationId),
+      })
+    },
+    onError: () =>
+      toast.error("The thread title changed elsewhere. Reload and try again."),
+  })
+  const { mutate: runRenameThread, isPending: renamingThread } =
+    renameThreadMutation
+  const renameThread = useCallback(
+    (thread: AgentThread, title: string) => runRenameThread({ thread, title }),
+    [runRenameThread]
+  )
 
   useEffect(() => {
     if (
@@ -342,11 +367,13 @@ export const AgentDashboard = ({
             error={threadsQuery.isError}
             creating={creatingThread}
             archiving={archivingThread}
+            renaming={renamingThread}
             disabled={interactionDisabled}
             draftOpen={draftOpen}
             onSelect={selectThread}
             onCreate={startThread}
             onArchive={archiveThread}
+            onRename={renameThread}
           />
         ) : (
           <Card className="min-w-0">

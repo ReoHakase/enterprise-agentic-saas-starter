@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  FileUploadError,
   uploadAgentAssetWithProgress,
   type AgentAssetDto,
 } from "@enterprise-agentic-saas/api/client"
@@ -136,6 +137,23 @@ const allowedImageTypes = new Set([
 const maximumImageBytes = 10_000_000
 const maximumImagesTotalBytes = 20_000_000
 const maximumImagesPerMessage = 4
+
+export const toAgentImageUploadError = (error: unknown): Error => {
+  if (!(error instanceof FileUploadError)) {
+    return error instanceof Error ? error : new Error("Image upload failed.")
+  }
+  if (error.code === "feature_not_enabled") {
+    return new Error(
+      "Image attachments are disabled in this environment. Enable Agent image uploads and try again."
+    )
+  }
+  if (error.status === 503 || error.status === 0) {
+    return new Error(
+      "The image upload service is temporarily unavailable. Try again after the API is ready."
+    )
+  }
+  return error
+}
 
 export const AgentRuntimeProvider = ({
   userId,
@@ -319,7 +337,7 @@ export const AgentRuntimeProvider = ({
               stagedAssets: [...current.stagedAssets, staged],
             }))
           } catch (error) {
-            if (!controller.signal.aborted) throw error
+            if (!controller.signal.aborted) throw toAgentImageUploadError(error)
           } finally {
             uploadsRef.current.delete(controller)
             if (

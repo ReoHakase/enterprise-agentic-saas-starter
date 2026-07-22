@@ -1,3 +1,4 @@
+import type { AgentThreadRenameResult } from "@enterprise-agentic-saas/api/agent-client"
 import type { RequestContext } from "@mastra/core/request-context"
 
 import type { AgentInternalGateway } from "../control-plane/client"
@@ -8,6 +9,7 @@ export type ProductAgentRuntime = {
   api: AgentInternalGateway
   budget: AgentToolBudget
   openRouterApiKey: string
+  onThreadTitle?: (result: AgentThreadRenameResult) => void
   rootRunId: string
   runGrant: string
   settlement: RunSettlement

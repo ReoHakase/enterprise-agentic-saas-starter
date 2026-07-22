@@ -57,22 +57,38 @@ export const recordAgentUsage = async (
         )
         .limit(1)
       const price = priceRows[0]
+      const usesTierPrice =
+        price?.tierThresholdTokenCount !== null &&
+        price?.tierThresholdTokenCount !== undefined &&
+        input.inputTokenCount > price.tierThresholdTokenCount
+      const inputPrice = usesTierPrice
+        ? price.tierInputPriceMicrosPerMillion
+        : price?.inputPriceMicrosPerMillion
+      const cacheReadPrice = usesTierPrice
+        ? price.tierCacheReadPriceMicrosPerMillion
+        : price?.cacheReadPriceMicrosPerMillion
+      const cacheWritePrice = usesTierPrice
+        ? price.tierCacheWritePriceMicrosPerMillion
+        : price?.cacheWritePriceMicrosPerMillion
+      const outputPrice = usesTierPrice
+        ? price.tierOutputPriceMicrosPerMillion
+        : price?.outputPriceMicrosPerMillion
       const calculatedCostMicros = price
         ? pricedMicros(
             input.inputNoCacheTokenCount,
-            price.inputPriceMicrosPerMillion
+            inputPrice ?? price.inputPriceMicrosPerMillion
           ) +
           pricedMicros(
             input.cacheReadTokenCount,
-            price.cacheReadPriceMicrosPerMillion
+            cacheReadPrice ?? price.cacheReadPriceMicrosPerMillion
           ) +
           pricedMicros(
             input.cacheWriteTokenCount,
-            price.cacheWritePriceMicrosPerMillion
+            cacheWritePrice ?? price.cacheWritePriceMicrosPerMillion
           ) +
           pricedMicros(
             input.outputTokenCount,
-            price.outputPriceMicrosPerMillion
+            outputPrice ?? price.outputPriceMicrosPerMillion
           )
         : 0
       const pricingVersion = price?.pricingVersion ?? "unpriced"

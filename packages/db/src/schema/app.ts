@@ -118,8 +118,10 @@ export type InvitationEmailJobStatus =
 export const agentThreadStatuses = ["active", "archived"] as const
 export type AgentThreadStatus = (typeof agentThreadStatuses)[number]
 
-export const agentThreadTitleStates = ["untitled", "agent"] as const
+export const agentThreadTitleStates = ["untitled", "agent", "user"] as const
 export type AgentThreadTitleState = (typeof agentThreadTitleStates)[number]
+const agentLegacyThreadTitleStates = ["untitled", "agent"] as const
+type AgentLegacyThreadTitleState = (typeof agentLegacyThreadTitleStates)[number]
 
 export const agentMessageRoles = ["user", "assistant"] as const
 export type AgentMessageRole = (typeof agentMessageRoles)[number]
@@ -206,6 +208,10 @@ export const agentApprovalPolicyModes = [
   "auto_all",
 ] as const
 export type AgentApprovalPolicyMode = (typeof agentApprovalPolicyModes)[number]
+
+export const agentThreadPermissionModes = ["ask_always", "full_access"] as const
+export type AgentThreadPermissionMode =
+  (typeof agentThreadPermissionModes)[number]
 
 export const agentResourceUsageKinds = [
   "asset_upload",
@@ -924,10 +930,15 @@ export const agentThreads = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
-    titleState: text("title_state")
+    legacyTitleState: text("title_state")
+      .$type<AgentLegacyThreadTitleState>()
+      .notNull()
+      .default("untitled"),
+    titleState: text("title_state_v2")
       .$type<AgentThreadTitleState>()
       .notNull()
       .default("untitled"),
+    titleRevision: integer("title_revision").notNull().default(1),
     status: text("status")
       .$type<AgentThreadStatus>()
       .notNull()
@@ -961,7 +972,7 @@ export const agentThreads = sqliteTable(
     ),
     check(
       "agent_threads_title_state_check",
-      sql`${table.titleState} in ('untitled', 'agent')`
+      sql`${table.legacyTitleState} in ('untitled', 'agent')`
     ),
   ]
 )
@@ -1411,6 +1422,57 @@ export const agentApprovalPolicies = sqliteTable(
     check(
       "agent_approval_policies_revoked_at_check",
       sql`${table.revokedAt} is null or ${table.revokedAt} >= ${table.createdAt}`
+    ),
+  ]
+)
+
+export const agentThreadPermissions = sqliteTable(
+  "agent_thread_permissions",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    contextEpoch: integer("context_epoch").notNull(),
+    mode: text("mode").$type<AgentThreadPermissionMode>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_thread_permissions_scope_uidx").on(
+      table.sessionId,
+      table.userId,
+      table.organizationId,
+      table.threadId
+    ),
+    index("agent_thread_permissions_session_epoch_idx").on(
+      table.sessionId,
+      table.contextEpoch
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.threadId],
+      foreignColumns: [agentThreads.organizationId, agentThreads.id],
+      name: "agent_thread_permissions_thread_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_thread_permissions_mode_check",
+      sql`${table.mode} in ('ask_always', 'full_access')`
+    ),
+    check(
+      "agent_thread_permissions_epoch_check",
+      sql`${table.contextEpoch} >= 1`
     ),
   ]
 )
@@ -2016,6 +2078,19 @@ export const agentModelPrices = sqliteTable(
     outputPriceMicrosPerMillion: integer(
       "output_price_micros_per_million"
     ).notNull(),
+    tierThresholdTokenCount: integer("tier_threshold_token_count"),
+    tierInputPriceMicrosPerMillion: integer(
+      "tier_input_price_micros_per_million"
+    ),
+    tierCacheReadPriceMicrosPerMillion: integer(
+      "tier_cache_read_price_micros_per_million"
+    ),
+    tierCacheWritePriceMicrosPerMillion: integer(
+      "tier_cache_write_price_micros_per_million"
+    ),
+    tierOutputPriceMicrosPerMillion: integer(
+      "tier_output_price_micros_per_million"
+    ),
     currency: text("currency").notNull().default("USD"),
   },
   (table) => [
@@ -2039,6 +2114,19 @@ export const agentModelPrices = sqliteTable(
         and ${table.cacheReadPriceMicrosPerMillion} >= 0
         and ${table.cacheWritePriceMicrosPerMillion} >= 0
         and ${table.outputPriceMicrosPerMillion} >= 0
+        and (
+          (${table.tierThresholdTokenCount} is null
+            and ${table.tierInputPriceMicrosPerMillion} is null
+            and ${table.tierCacheReadPriceMicrosPerMillion} is null
+            and ${table.tierCacheWritePriceMicrosPerMillion} is null
+            and ${table.tierOutputPriceMicrosPerMillion} is null)
+          or
+          (${table.tierThresholdTokenCount} >= 1
+            and ${table.tierInputPriceMicrosPerMillion} >= 0
+            and ${table.tierCacheReadPriceMicrosPerMillion} >= 0
+            and ${table.tierCacheWritePriceMicrosPerMillion} >= 0
+            and ${table.tierOutputPriceMicrosPerMillion} >= 0)
+        )
         and ${table.currency} = 'USD'`
     ),
   ]

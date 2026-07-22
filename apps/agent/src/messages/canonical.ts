@@ -111,20 +111,8 @@ const sanitizePart = (part: unknown): AgentCanonicalMessagePart | undefined => {
   if (part.type === "text" && typeof part.text === "string") {
     return { type: "text", text: part.text.slice(0, 50_000) }
   }
-  if (part.type === "data-activity" && isRecord(part.data)) {
-    const { kind, label, status } = part.data
-    if (
-      (kind === "status" || kind === "tool") &&
-      (status === "running" || status === "completed" || status === "failed") &&
-      typeof label === "string" &&
-      label.length > 0
-    ) {
-      return {
-        type: "data-activity",
-        data: { kind, status, label: label.slice(0, 200) },
-      }
-    }
-  }
+  // 実行中statusはtransient streamだけで扱い、canonical履歴へ保存しない。
+  if (part.type === "data-activity") return undefined
   if (part.type === "data-context-budget" && isRecord(part.data)) {
     const data = part.data
     const estimated = isRecord(data.estimated) ? data.estimated : null
@@ -251,6 +239,9 @@ const toModelUiPart = (
   part: AgentCanonicalMessagePart
 ): ModelUiPart | undefined => {
   if (part.type === "data-agent-assets") return undefined
+  if (part.type === "data-context-reference") {
+    return { type: "text", text: `@${part.data.label}` }
+  }
   if (!("toolCallId" in part)) return part
   const input = part.input ?? null
   if (part.state === "input-available") {

@@ -10,6 +10,7 @@ import {
   agentRuns,
   agentSessionContexts,
   agentThreadContextSummaries,
+  agentThreadPermissions,
   agentThreads,
   files,
   issues,
@@ -39,6 +40,8 @@ import type {
   AgentCanonicalMessage,
   AgentCanonicalToolPart,
   AgentClientToolResult,
+  AgentContentSegment,
+  AgentCanonicalContextReference,
   AgentConnection,
   AgentContextReferenceInput,
   AgentIssue,
@@ -72,6 +75,7 @@ export type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 export type AgentThreadDto = {
   id: string
   title: string
+  titleRevision: number
   status: "active" | "archived"
   messageCount: number
   createdAt: string
@@ -122,6 +126,7 @@ const toThreadDto = (
 ): AgentThreadDto => ({
   id: thread.id,
   title: thread.title,
+  titleRevision: thread.titleRevision,
   status: thread.status,
   messageCount,
   createdAt: thread.createdAt.toISOString(),
@@ -757,6 +762,14 @@ export const archiveAgentThreadForSession = async (
             isNull(agentApprovalPolicies.revokedAt)
           )
         )
+      await tx
+        .delete(agentThreadPermissions)
+        .where(
+          and(
+            eq(agentThreadPermissions.organizationId, thread.organizationId),
+            eq(agentThreadPermissions.threadId, thread.id)
+          )
+        )
       const threadActionIds = tx
         .select({ id: agentActions.id })
         .from(agentActions)
@@ -850,15 +863,8 @@ const resolveAgentContextReferencesInTransaction = async (
   }
 ): Promise<AgentResolvedContextReference[]> => {
   const resolved: AgentResolvedContextReference[] = []
-  const seen = new Set<string>()
   for (const reference of input.references) {
-    const key =
-      reference.kind === "current_page"
-        ? `${reference.kind}:${reference.path}`
-        : `${reference.kind}:${reference.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    if (reference.kind === "issue" || reference.kind === "selected_issue") {
+    if (reference.kind === "issue") {
       // oxlint-disable-next-line no-await-in-loop -- bounded references are resolved in request order.
       const issue = await findIssueById(tx, {
         organizationId: input.organizationId,
@@ -870,7 +876,7 @@ const resolveAgentContextReferencesInTransaction = async (
         })
       }
       resolved.push({
-        kind: reference.kind,
+        kind: "issue",
         id: issue.id,
         number: issue.number,
         title: issue.title,
@@ -971,12 +977,62 @@ const resolveAgentContextReferencesInTransaction = async (
   return resolved
 }
 
+const toCanonicalContextReference = (
+  reference: AgentResolvedContextReference
+): AgentCanonicalContextReference => {
+  if (reference.kind === "issue") {
+    return {
+      kind: "issue",
+      id: reference.id,
+      label: `Issue #${reference.number}: ${reference.title}`,
+    }
+  }
+  if (reference.kind === "file") {
+    return { kind: "file", id: reference.id, label: reference.filename }
+  }
+  if (reference.kind === "member") {
+    return { kind: "member", id: reference.id, label: reference.name }
+  }
+  return {
+    kind: "current_page",
+    path: reference.path,
+    label: reference.title,
+  }
+}
+
+const canonicalUserParts = (input: {
+  assetIds: string[]
+  contentSegments: AgentContentSegment[]
+  resolvedReferences: AgentResolvedContextReference[]
+}): AgentCanonicalMessage["parts"] => {
+  let referenceIndex = 0
+  const parts: AgentCanonicalMessage["parts"] = input.contentSegments.map(
+    (segment) => {
+      if (segment.type === "text") return segment
+      const resolved = input.resolvedReferences[referenceIndex]
+      referenceIndex += 1
+      if (!resolved) throw publicErrors.validation("Invalid context reference")
+      return {
+        type: "data-context-reference" as const,
+        data: toCanonicalContextReference(resolved),
+      }
+    }
+  )
+  if (input.assetIds.length > 0) {
+    parts.push({
+      type: "data-agent-assets",
+      data: { assetIds: input.assetIds },
+    })
+  }
+  return parts
+}
+
 export const prepareAgentChatForSession = async (
   db: Db,
   input: {
     assetIds: string[]
-    contextReferences: AgentContextReferenceInput[]
-    message: AgentCanonicalMessage & { role: "user" }
+    contentSegments: AgentContentSegment[]
+    messageId: string
     sessionId: string
     threadId: string
     timezone: string
@@ -995,24 +1051,32 @@ export const prepareAgentChatForSession = async (
         userId: input.userId,
         activeOrganizationId: current.activeOrganizationId,
       })
+      if (
+        input.assetIds.length === 0 &&
+        !input.contentSegments.some(
+          (segment) =>
+            segment.type === "context_reference" || segment.text.trim() !== ""
+        )
+      ) {
+        throw publicErrors.validation("Agent message is empty")
+      }
+      const inputReferences = input.contentSegments.flatMap((segment) =>
+        segment.type === "context_reference" ? [segment.reference] : []
+      )
       const contextReferences =
         await resolveAgentContextReferencesInTransaction(tx, {
           organizationId: current.activeOrganizationId,
-          references: input.contextReferences,
+          references: inputReferences,
         })
       const parsedMessage = parseCanonicalMessage(
         {
-          ...input.message,
-          parts:
-            input.assetIds.length === 0
-              ? input.message.parts
-              : [
-                  input.message.parts[0],
-                  {
-                    type: "data-agent-assets",
-                    data: { assetIds: input.assetIds },
-                  },
-                ],
+          id: input.messageId,
+          role: "user",
+          parts: canonicalUserParts({
+            assetIds: input.assetIds,
+            contentSegments: input.contentSegments,
+            resolvedReferences: contextReferences,
+          }),
         },
         "user"
       )
@@ -1709,12 +1773,31 @@ const startAgentRunWithRetry = async (
           resource: "agent_run",
         })
       }
+      const threadRows = await tx
+        .select({ titleState: agentThreads.titleState })
+        .from(agentThreads)
+        .where(
+          and(
+            eq(agentThreads.organizationId, run.organizationId),
+            eq(agentThreads.id, run.threadId),
+            eq(agentThreads.ownerUserId, run.userId),
+            eq(agentThreads.status, "active")
+          )
+        )
+        .limit(1)
+      const thread = threadRows[0]
+      if (!thread) {
+        throw publicErrors.notFound("Agent thread not found", {
+          resource: "agent_thread",
+        })
+      }
       return {
         runId: run.id,
         rootRunId: run.rootRunId,
         attempt: run.attempt,
         grant: runCredential.token,
         expiresAt: grantExpiresAt.toISOString(),
+        shouldGenerateTitle: thread.titleState === "untitled",
       }
     })
   } catch (cause) {
@@ -1921,7 +2004,12 @@ export const renameAgentThreadForRun = async (
       const now = input.now ?? new Date()
       const rows = await tx
         .update(agentThreads)
-        .set({ title: input.title, titleState: "agent", updatedAt: now })
+        .set({
+          title: input.title,
+          titleState: "agent",
+          titleRevision: sql`${agentThreads.titleRevision} + 1`,
+          updatedAt: now,
+        })
         .where(
           and(
             eq(agentThreads.organizationId, context.organizationId),
@@ -1945,6 +2033,68 @@ export const renameAgentThreadForRun = async (
     })
   } catch (cause) {
     return preserveAgentError(cause, "renameAgentThreadForRun")
+  }
+}
+
+export const renameAgentThreadForSession = async (
+  db: Db,
+  input: {
+    expectedRevision: number
+    sessionId: string
+    threadId: string
+    title: string
+    userId: string
+    now?: Date
+  }
+): Promise<AgentThreadDto> => {
+  try {
+    return await db.transaction(async (tx) => {
+      const now = input.now ?? new Date()
+      const current = await requireLiveSession(tx, { ...input, now })
+      await requireActiveMembership(tx, current)
+      await requireOwnedThread(tx, {
+        threadId: input.threadId,
+        userId: input.userId,
+        activeOrganizationId: current.activeOrganizationId,
+      })
+      const rows = await tx
+        .update(agentThreads)
+        .set({
+          title: input.title,
+          titleState: "user",
+          titleRevision: input.expectedRevision + 1,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(agentThreads.organizationId, current.activeOrganizationId),
+            eq(agentThreads.id, input.threadId),
+            eq(agentThreads.ownerUserId, input.userId),
+            eq(agentThreads.status, "active"),
+            eq(agentThreads.titleRevision, input.expectedRevision)
+          )
+        )
+        .returning()
+      const renamed = rows[0]
+      if (!renamed) {
+        throw publicErrors.conflict("Agent thread title changed", {
+          reason: "revision_conflict",
+          resource: "agent_thread",
+        })
+      }
+      const countRows = await tx
+        .select({ value: sql<number>`count(*)` })
+        .from(agentMessages)
+        .where(
+          and(
+            eq(agentMessages.organizationId, current.activeOrganizationId),
+            eq(agentMessages.threadId, input.threadId)
+          )
+        )
+      return toThreadDto(renamed, Number(countRows[0]?.value ?? 0))
+    })
+  } catch (cause) {
+    return preserveAgentError(cause, "renameAgentThreadForSession")
   }
 }
 

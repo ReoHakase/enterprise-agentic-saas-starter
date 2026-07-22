@@ -33,12 +33,14 @@ export const renameThreadTool = createTool<
       readOnlyHint: false,
     },
   },
-  execute: (input, context) => {
+  execute: async (input, context) => {
     const runtime = getProductAgentRuntime(context.requestContext)
     runtime.budget.consume("client")
-    return runtime.api.renameThread({
+    const result = await runtime.api.renameThread({
       grant: runtime.runGrant,
       title: input.title,
     })
+    runtime.onThreadTitle?.(result)
+    return result
   },
 })

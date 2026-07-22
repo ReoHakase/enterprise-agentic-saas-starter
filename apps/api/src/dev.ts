@@ -6,6 +6,7 @@ import { waitForMailpitDevelopmentSession } from "@enterprise-agentic-saas/email
 import { acquireDevelopmentLease } from "./development/development-lock"
 import {
   createLocalWorkerEnvironment,
+  resolveDevelopmentAgentAssetUploadFlag,
   serializeLocalWorkerEnvironment,
   spawnLocalWorker,
 } from "./development/local-worker"
@@ -54,6 +55,9 @@ const main = async () => {
         NODE_ENV: "development",
         PORT: String(port),
         DEV_FILE_SEED_TOKEN: token,
+        AGENT_ASSET_UPLOAD_ENABLED: resolveDevelopmentAgentAssetUploadFlag(
+          process.env
+        ),
       },
     })
     const emailProvider = process.env.EMAIL_PROVIDER?.trim() || "mailpit"

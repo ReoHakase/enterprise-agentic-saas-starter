@@ -24,16 +24,14 @@ import {
   agentUsageQueryModel,
   createAgentThreadBodyModel,
   decideAgentActionBodyModel,
-  deleteAgentApprovalPolicyQueryModel,
-  getAgentApprovalPolicyQueryModel,
   putAgentApprovalPolicyBodyModel,
   resumeAgentActionBodyModel,
+  updateAgentThreadTitleBodyModel,
 } from "./model"
 import {
   archiveAgentThread,
   createAgentThread,
   decideAgentAction,
-  deleteAgentApprovalPolicy,
   getAgentAction,
   getAgentApprovalPolicy,
   getAgentMonthlyUsage,
@@ -48,6 +46,7 @@ import {
   prepareAgentChat,
   revokeAgentContext,
   resumeAgentAction,
+  updateAgentThreadTitle,
 } from "./service"
 
 const agentStreamResponseModel = v.any()
@@ -128,16 +127,40 @@ export const createAgentModule = (db: Db) =>
         },
       }
     )
+    .patch(
+      "/agent/threads/:threadId/title",
+      ({ authContext: { session, user }, body, params }) =>
+        updateAgentThreadTitle(db, {
+          expectedRevision: body.expectedRevision,
+          sessionId: session.id,
+          threadId: params.threadId,
+          title: body.title,
+          userId: user.id,
+        }),
+      {
+        authenticated: true,
+        params: agentThreadParamsModel,
+        body: updateAgentThreadTitleBodyModel,
+        response: { 200: agentThreadModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "updateAgentThreadTitle",
+          summary: "Agent thread名を変更",
+          description:
+            "ownerとtenantを再検証し、revision CASでuser titleへ更新する。自動titleはuser titleを上書きしない。",
+          tags: ["Agent"],
+        },
+      }
+    )
     .post(
       "/agent/chat",
       async ({ authContext: { session, user }, body, request }) => {
         const timezone = normalizeAgentTimezone(body.timezone)
         const prepared =
-          "message" in body
+          "contentSegments" in body
             ? await prepareAgentChat(db, {
                 assetIds: body.assetIds,
-                contextReferences: body.contextReferences,
-                message: body.message,
+                contentSegments: body.contentSegments,
+                messageId: body.messageId,
                 sessionId: session.id,
                 userId: user.id,
                 threadId: body.threadId,
@@ -362,73 +385,49 @@ export const createAgentModule = (db: Db) =>
       }
     )
     .get(
-      "/agent/approval-policy",
-      async ({ authContext: { session, user }, query, set }) => {
+      "/agent/threads/:threadId/permission",
+      async ({ authContext: { session, user }, params, set }) => {
         set.headers["cache-control"] = "private, no-store"
         return getAgentApprovalPolicy(db, {
           sessionId: session.id,
           userId: user.id,
-          threadId: query.threadId,
+          threadId: params.threadId,
         })
       },
       {
         authenticated: true,
-        query: getAgentApprovalPolicyQueryModel,
+        params: agentThreadParamsModel,
         response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
         detail: {
-          operationId: "getAgentApprovalPolicy",
-          summary: "現在のAgent自動許可policyを取得",
+          operationId: "getAgentThreadPermission",
+          summary: "現在のAgent thread権限を取得",
           description:
-            "server保存のsession、organization、thread、context epoch、期限へ束縛されたpolicyだけを返す。",
+            "server保存のsession、organization、thread、context epochへ束縛された権限だけを返す。",
           tags: ["Agent"],
         },
       }
     )
     .put(
-      "/agent/approval-policy",
-      async ({ authContext: { session, user }, body, set }) => {
+      "/agent/threads/:threadId/permission",
+      async ({ authContext: { session, user }, body, params, set }) => {
         set.headers["cache-control"] = "private, no-store"
         return putAgentApprovalPolicy(db, {
           sessionId: session.id,
           userId: user.id,
-          threadId: body.threadId,
+          threadId: params.threadId,
           mode: body.mode,
-          expiresInSeconds: body.expiresInSeconds,
-          destructiveConfirmation: body.destructiveConfirmation,
         })
       },
       {
         authenticated: true,
+        params: agentThreadParamsModel,
         body: putAgentApprovalPolicyBodyModel,
         response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
         detail: {
-          operationId: "putAgentApprovalPolicy",
-          summary: "時限付きAgent自動許可policyを設定",
+          operationId: "putAgentThreadPermission",
+          summary: "Agent thread権限を設定",
           description:
-            "最大15分のask_each、auto_write、auto_allを設定する。auto_allはIssue deleteを明示する追加確認を必須にする。",
-          tags: ["Agent"],
-        },
-      }
-    )
-    .delete(
-      "/agent/approval-policy",
-      async ({ authContext: { session, user }, query, set }) => {
-        set.headers["cache-control"] = "private, no-store"
-        return deleteAgentApprovalPolicy(db, {
-          sessionId: session.id,
-          userId: user.id,
-          threadId: query.threadId,
-        })
-      },
-      {
-        authenticated: true,
-        query: deleteAgentApprovalPolicyQueryModel,
-        response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
-        detail: {
-          operationId: "deleteAgentApprovalPolicy",
-          summary: "現在のAgent自動許可policyを解除",
-          description:
-            "live session、active organization、membership、thread owner、context epochを再検証し、現在scopeのpolicyを解除してask_eachへ戻す。",
+            "現在のsession、organization、thread、context epochへ束縛したask_alwaysまたはfull_accessを設定する。",
           tags: ["Agent"],
         },
       }

@@ -43,6 +43,19 @@ export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
     unwrap(await client.agent.threads({ threadId }).archive.post())
   )
 
+export const updateAgentThreadTitle = async (
+  client: ApiClient,
+  input: { threadId: string; title: string; expectedRevision: number }
+) =>
+  parseAgentThread(
+    unwrap(
+      await client.agent.threads({ threadId: input.threadId }).title.patch({
+        title: input.title,
+        expectedRevision: input.expectedRevision,
+      })
+    )
+  )
+
 export const listAgentMessages = async (
   client: ApiClient,
   threadId: string,
@@ -116,8 +129,7 @@ export const getAgentApprovalPolicy = async (
 ) =>
   parseAgentApprovalPolicy(
     unwrap(
-      await client.agent["approval-policy"].get({
-        query: { threadId },
+      await client.agent.threads({ threadId }).permission.get({
         fetch: { signal },
       })
     )
@@ -127,27 +139,14 @@ export const putAgentApprovalPolicy = async (
   client: ApiClient,
   input: {
     threadId: string
-    mode: "ask_each" | "auto_write" | "auto_all"
-    expiresInSeconds: number
-    destructiveConfirmation?: "ALLOW_ISSUE_DELETE"
+    mode: "ask_always" | "full_access"
   }
 ) =>
   parseAgentApprovalPolicy(
-    unwrap(await client.agent["approval-policy"].put(input))
-  )
-
-export const deleteAgentApprovalPolicy = async (
-  client: ApiClient,
-  threadId: string
-) =>
-  parseAgentApprovalPolicy(
     unwrap(
-      await client.agent["approval-policy"].delete(
-        {},
-        {
-          query: { threadId },
-        }
-      )
+      await client.agent
+        .threads({ threadId: input.threadId })
+        .permission.put({ mode: input.mode })
     )
   )
 

@@ -61,6 +61,7 @@ export type AgentRunGrant = {
   attempt: number
   grant: string
   expiresAt: string
+  shouldGenerateTitle: boolean
 }
 
 export type AgentRunResult = {
@@ -155,6 +156,10 @@ export type AgentCanonicalMessagePart =
   | { type: "text"; text: string }
   | { type: "data-agent-assets"; data: { assetIds: string[] } }
   | {
+      type: "data-context-reference"
+      data: AgentCanonicalContextReference
+    }
+  | {
       type: "data-activity"
       data: {
         kind: "status" | "tool"
@@ -215,7 +220,7 @@ export type AgentRuntimeChatInput = {
 
 export type AgentResolvedContextReference =
   | {
-      kind: "issue" | "selected_issue"
+      kind: "issue"
       id: string
       number: number
       title: string
@@ -229,11 +234,22 @@ export type AgentResolvedContextReference =
 
 export type AgentContextReferenceInput =
   | {
-      kind: "issue" | "selected_issue" | "file" | "member"
+      kind: "issue" | "file" | "member"
       id: string
-      label?: string
     }
-  | { kind: "current_page"; path: string; label?: string }
+  | { kind: "current_page"; path: string }
+
+export type AgentContentSegment =
+  | { type: "text"; text: string }
+  | { type: "context_reference"; reference: AgentContextReferenceInput }
+
+export type AgentCanonicalContextReference =
+  | {
+      kind: "issue" | "file" | "member"
+      id: string
+      label: string
+    }
+  | { kind: "current_page"; path: string; label: string }
 
 export type AgentRuntimeResumeInput = {
   actionId: string
@@ -330,7 +346,7 @@ export type AgentIssueAction = {
     | "canceled"
     | "succeeded"
     | "conflicted"
-  approvalMode: "manual" | "auto_policy" | null
+  approvalMode: "manual" | "full_access" | null
   requiresApproval: boolean
   preview: AgentIssueActionPreview | null
   previewState: "available" | "expired"
@@ -351,8 +367,7 @@ export type AgentActionExecutionResult = {
 }
 
 export type AgentApprovalPolicy = {
-  mode: "ask_each" | "auto_write" | "auto_all"
-  expiresAt: string | null
+  mode: "ask_always" | "full_access"
   permissions: {
     createIssue: boolean
     updateIssue: boolean

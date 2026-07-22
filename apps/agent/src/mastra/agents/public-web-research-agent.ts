@@ -8,6 +8,14 @@ export type PublicWebResearchRequestContext = {
   apiKey?: string
 }
 
+export const publicWebResearchProviderOptions = {
+  openrouter: {
+    // The query is already guarded and this agent only retrieves/summarizes
+    // public evidence. Disable Qwen thinking to keep server search bounded.
+    reasoning: { enabled: false, effort: "none", exclude: true },
+  },
+} as const
+
 const readApiKey = (
   requestContext?: RequestContext<PublicWebResearchRequestContext>
 ) => requestContext?.get("apiKey")
