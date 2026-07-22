@@ -27,6 +27,7 @@
     "lint": "oxlint --deny-warnings",
     "start": "NODE_ENV=production bun ./dist/index.js",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject ./dist/worker && sentry-cli sourcemaps upload --release \"$SENTRY_RELEASE\" --validate --strict --wait ./dist/worker",
+    "smoke:upload-memory": "bun run src/smoke/upload-memory/run.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

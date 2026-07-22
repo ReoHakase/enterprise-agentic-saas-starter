@@ -135,6 +135,8 @@ export const FILE_PREVIEW_WIDTHS = [360, 720, 1200, 2400] as const
 - R2成功後にDB確定が失敗した場合はobjectとpendingを残し、次回再開する。削除済みmanifest rowをseed再実行で復活させない。
 - remote Turso、`wrangler --remote`、production bindingではseed/resetを最初に拒否する。最大境界fixtureはcommitせずtest内で生成する。
 - local Imagesは低忠実度として扱い、通常testと資格情報付きremote Images smokeを分離する。
+- 10,000,000-byte Agent assetのmultipart parser/R2 stream memoryは`bun run --cwd apps/api smoke:upload-memory -- --concurrency=4`で専用local Workerへ並列送信する。production binding、credential、Tursoを使わず、失敗数、status、local workerd peak RSSをsanitized JSONへ出す。
+- local workerdのprocess RSSはnative runtime、allocator、local R2 simulationも含み、productionの128 MB/isolate（JavaScript heap + WebAssembly）と同じ指標ではない。128 MBをlocal合否閾値にせず、同じmachine・並列数のbefore/after回帰検出に使う。release判定は別途stagingのMemory Usageと`exceededMemory`を確認する。
 
 ## 変更時の確認
 
@@ -147,3 +149,5 @@ bun run build:cloudflare
 ```
 
 seed/reconcileを変更した場合は、full dev停止中と起動中の両方で`bun run dev:db:seed`を確認する。停止中は一時processだけが終了し永続stateが残ること、起動中は既存sessionを再利用して既存processを停止しないことも確認する。UIを変更した場合は`bun run test:e2e`、Cloudflare Imagesの変換条件を変更した場合はremote smokeも実行する。失敗時はprovider payloadを出力せず、固定error codeと件数だけで調査する。
+
+multipart schema、Elysia/Cloudflare adapter、file size、R2 upload streamを変更した場合はupload memory smokeも同じ並列数で実行し、`failed=0`とRSS deltaを記録する。手順と指標の限界は`docs/upload-memory-smoke.md`を正本にする。

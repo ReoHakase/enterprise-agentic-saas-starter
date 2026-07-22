@@ -465,8 +465,8 @@ Agentのorganization scopeはroute slugではなく、現在のBetter Auth sessi
 
 1. Webは新しいmessage、image upload、tool、approval decision、form patchをfreezeする。
 2. dirty form、composer draft、in-flight image upload、ready staged asset、active run、pending approvalがあるか検査する。
-3. 何もなければ続行する。ある場合はStayまたはDiscard local draft and switchを表示し、serverへ送信済み画像は通常retentionまで残ることを明示する。
-4. Discardを選んでもactivation成功まではdraftのsnapshotを保持する。成功後、未送信かつaction leaseのないstaged assetはDELETEをqueueして即expiryへ進め、送信済みmessageが参照するassetは勝手に消さない。
+3. 何もなければ続行する。ある場合はStayまたはDiscard local draft and switchを表示し、serverへupload済みのready画像はmessage送信前後を問わず通常retentionまで残ることを明示する。
+4. Discardを選んでもactivation成功まではdraftのsnapshotを保持する。成功後はlocal Blob URL、selection、composer/form draftだけを破棄し、旧tenantのready staged assetへDELETEを送らない。送信前ready assetも送信済みassetもserver既定72時間retention、in-flightで残ったpendingは1時間timeoutのcleanupへ委ねる。
 5. 既存のorganization activate APIを呼ぶ。
 6. API transactionでsessionのactive organizationを更新してagent context epochを+1し、旧session scopeのticket、grant、resume ticket、running/waiting run、pending/approved action、approval policyをrevoke/cancelし、action asset leaseを解放する。
 7. success後にWebSocketとin-flight uploadを閉じ、Agent stream/client toolをcancelし、Agent/filesを含む全tenant query familyをcancelする。
@@ -786,7 +786,7 @@ cleanupはDBをauthorityにする。
 
 R2 lifecycle ruleはprefixでしか対象を選べないため、zero-copyでpermanentへclaimされ得るoriginalへ一律3日ruleを設定しない。vision derivativeなど絶対にpermanent化しない専用prefixには4日程度のlifecycleをdefense-in-depthとして設定できる。R2 lifecycle deleteはexpiration時刻から通常24時間程度遅れるため、product UIとquotaはDB cleanupのexpiresAtを正本にする。
 
-thread archive、account context revoke、organization削除では期限を前倒しできる。active organization切り替えでは、未送信かつleaseのないlocal draft assetだけを即delete対象にし、旧threadの送信済み画像は通常の72時間retentionを維持する。
+thread archiveやorganization削除など、旧tenantのauthorityを保持するserver transactionで期限を前倒しする余地はある。ただしactive organization/account切り替え後のclientは旧tenant assetへDELETEしない。local Blob、selection、draftだけを即時破棄し、送信前を含むready assetはserver既定72時間retention、pendingは1時間timeoutを維持する。これによりswitch後のcross-tenant mutationをcleanupへ混ぜない。
 
 ### Vision modelへ渡す画像
 
@@ -957,7 +957,7 @@ Service BindingはAgentからAPIへの一方向なので、deploy順はAPI、Age
 
 「3 Worker」はproduction topologyであり、localでNext devを本番Worker artifactとして動かす意味ではない。AgentからAPIへのService Bindingは別Wrangler session間の公式local経路を使い、experimentalなmulti-configだけを標準経路にしない。
 
-phase 0で最低限、echo chat、ticket consume、WebSocket reconnect、resumable stream、named entrypoint RPC、R2からImages bindingを経由したbounded RPC image stream、multipart upload時のmemory、Sentry redaction、bundle sizeを実Worker環境でspikeする。
+phase 0で最低限、echo chat、ticket consume、WebSocket reconnect、resumable stream、named entrypoint RPC、R2からImages bindingを経由したbounded RPC image stream、multipart upload時のmemory、Sentry redaction、bundle sizeをspikeする。multipart memoryはまず[10 MB upload memory smoke](./upload-memory-smoke.md)でlocal回帰を記録し、local workerd RSSをproduction 128 MB/isolateの証明には使わない。release前にreal WorkerのMemory Usageとmemory errorも確認する。
 
 Cloudflare構成を変更したら既存のbun run build:cloudflareにAgent Worker build/dry-runを含める。Bun buildだけで完了扱いにしない。
 
@@ -971,7 +971,7 @@ Cloudflare構成を変更したら既存のbun run build:cloudflareにAgent Work
 - approval decision後のresume ticketとhibernation/reconnect再開
 - AgentからAPI named entrypoint
 - R2 imageをImages bindingで縮小し、4 MiBへbounded readしてからRPC ResponseでAgentへ渡す
-- 10 MB multipart uploadの並行memory smoke
+- 10,000,000-byte multipart uploadのlocal並行memory smokeとreal Worker側のmemory error確認
 - local 3 process
 - Cloudflare build、Sentry redaction、kill switch
 

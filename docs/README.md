@@ -13,7 +13,8 @@
 7. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
 8. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
 9. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
-10. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
+10. [10 MB upload memory smoke](./upload-memory-smoke.md) — local workerd、並列multipart、RSSの読み方
+11. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
 
 ## 最短の確認
 
