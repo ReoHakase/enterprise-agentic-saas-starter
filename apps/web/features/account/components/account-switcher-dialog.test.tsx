@@ -9,12 +9,14 @@ import { AccountSwitcherDialog } from "./account-switcher-dialog"
 
 const mocks = vi.hoisted(() => ({
   listDeviceSessions: vi.fn<() => Promise<unknown>>(),
+  navigateAfterAccountSwitch: vi.fn<(returnTo?: string) => void>(),
   onOpenChange: vi.fn<(open: boolean) => void>(),
+  abortAgentSwitch: vi.fn<() => void>(),
   cancelAgentSwitch: vi.fn<() => void>(),
   completeAgentSwitch: vi.fn<() => Promise<void>>(),
+  fetchAgent: vi.fn<typeof fetch>(),
   prepareAgentSwitch: vi.fn<() => OrganizationSwitchRisks>(),
   refresh: vi.fn<() => void>(),
-  replace: vi.fn<(href: string) => void>(),
   revoke: vi.fn<(input: { sessionToken: string }) => Promise<unknown>>(),
   setActive: vi.fn<(input: { sessionToken: string }) => Promise<unknown>>(),
   toastError: vi.fn<(message: string) => void>(),
@@ -33,8 +35,12 @@ vi.mock("@better-auth-ui/react", () => ({
   useAuth: () => ({ authClient }),
 }))
 
+vi.mock("@/features/account/account-switch-navigation", () => ({
+  navigateAfterAccountSwitch: mocks.navigateAfterAccountSwitch,
+}))
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),
+  useRouter: () => ({ refresh: mocks.refresh }),
 }))
 
 vi.mock("sonner", () => ({
@@ -94,6 +100,7 @@ const renderDialogWithInvitationReturn = () => {
         currentUser={currentUser}
         open
         onOpenChange={mocks.onOpenChange}
+        returnTo="/invitations/invitation-1"
       />
     </QueryClientProvider>
   )
@@ -110,6 +117,7 @@ const renderDialogWithAgentBarrier = () => {
         open
         onOpenChange={mocks.onOpenChange}
         onPrepareAgentSwitch={mocks.prepareAgentSwitch}
+        onAbortAgentSwitch={mocks.abortAgentSwitch}
         onCancelAgentSwitch={mocks.cancelAgentSwitch}
         onCompleteAgentSwitch={mocks.completeAgentSwitch}
       />
@@ -120,6 +128,8 @@ const renderDialogWithAgentBarrier = () => {
 describe("AccountSwitcherDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.fetchAgent.mockResolvedValue(Response.json({ contextEpoch: 2 }))
+    vi.stubGlobal("fetch", mocks.fetchAgent)
     mocks.listDeviceSessions.mockResolvedValue({ data: deviceAccounts })
     mocks.revoke.mockResolvedValue({ data: {} })
     mocks.setActive.mockResolvedValue({ data: {} })
@@ -146,7 +156,7 @@ describe("AccountSwitcherDialog", () => {
     mocks.setActive.mockImplementationOnce(async () => {
       expect(
         queryClient.getQueryData(["issues", "list", "org-private"])
-      ).toBeUndefined()
+      ).toEqual([{ title: "Private issue" }])
       return { data: {} }
     })
 
@@ -158,7 +168,11 @@ describe("AccountSwitcherDialog", () => {
       })
     })
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce())
+    await waitFor(() =>
+      expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith(
+        "/dashboard"
+      )
+    )
     expect(
       queryClient.getQueryData(["issues", "list", "org-private"])
     ).toBeUndefined()
@@ -199,10 +213,6 @@ describe("AccountSwitcherDialog", () => {
 
   it("revokes the old Agent context before switching an account", async () => {
     const actor = userEvent.setup()
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(Response.json({ contextEpoch: 2 }))
-    vi.stubGlobal("fetch", fetchMock)
     renderDialogWithAgentBarrier()
 
     expect(await screen.findByText("other@example.test")).toBeInTheDocument()
@@ -210,20 +220,24 @@ describe("AccountSwitcherDialog", () => {
 
     await waitFor(() => expect(mocks.setActive).toHaveBeenCalledOnce())
     expect(mocks.prepareAgentSwitch).toHaveBeenCalledOnce()
-    expect(fetchMock).toHaveBeenCalledOnce()
-    const requestInput = fetchMock.mock.calls[0]?.[0]
+    expect(mocks.fetchAgent).toHaveBeenCalledOnce()
+    const requestInput = mocks.fetchAgent.mock.calls[0]?.[0]
     if (!requestInput) throw new Error("Expected Agent context revoke request")
     expect(new Request(requestInput).url).toContain("/agent/context/revoke")
-    expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.abortAgentSwitch.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(mocks.abortAgentSwitch.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.setActive.mock.invocationCallOrder[0] ?? 0
     )
     await waitFor(() =>
       expect(mocks.completeAgentSwitch).toHaveBeenCalledOnce()
     )
-    expect(mocks.replace).toHaveBeenCalledWith("/dashboard")
+    expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith("/dashboard")
   })
 
-  it("preserves an invitation return path when adding an account", async () => {
+  it("preserves an invitation return path when adding or switching accounts", async () => {
+    const actor = userEvent.setup()
     renderDialogWithInvitationReturn()
 
     expect(
@@ -231,6 +245,18 @@ describe("AccountSwitcherDialog", () => {
     ).toHaveAttribute(
       "href",
       "/auth/sign-in?add_account=1&redirectTo=%2Finvitations%2Finvitation-1"
+    )
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+    await waitFor(() => expect(mocks.setActive).toHaveBeenCalledOnce())
+    expect(mocks.fetchAgent).toHaveBeenCalledOnce()
+    expect(mocks.fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.setActive.mock.invocationCallOrder[0] ?? 0
+    )
+    await waitFor(() =>
+      expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith(
+        "/invitations/invitation-1"
+      )
     )
   })
 
@@ -252,5 +278,24 @@ describe("AccountSwitcherDialog", () => {
     )
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
+  })
+
+  it("keeps the old account active when Agent context revocation fails", async () => {
+    const actor = userEvent.setup()
+    mocks.fetchAgent.mockRejectedValueOnce(
+      new Error("AGENT_INTERNAL_GRANT=private-provider-detail")
+    )
+    renderDialog()
+
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
+    expect(mocks.setActive).not.toHaveBeenCalled()
+    expect(mocks.navigateAfterAccountSwitch).not.toHaveBeenCalled()
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(
+      screen.queryByText(/private-provider-detail/u)
+    ).not.toBeInTheDocument()
   })
 })

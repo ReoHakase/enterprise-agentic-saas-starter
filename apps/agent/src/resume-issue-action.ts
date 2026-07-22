@@ -1,16 +1,14 @@
-import type {
-  AgentActionExecutionResult,
-  AgentInternalApiContract,
-} from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/api/agent-client"
+import { RequestContext } from "@mastra/core/request-context"
 import { z } from "zod"
 
-import { isActiveOpaqueGrant } from "./connection-grant"
 import type { AgentFeatureSwitches } from "./feature-flags"
-import { createRunSettlement } from "./run-settlement"
-import { toSafeActionReceipt } from "./write-tools"
+import type { AgentInternalGateway } from "./internal-api"
+import { mastra } from "./mastra"
+import type { ApprovedIssueActionRuntime } from "./mastra/workflows/approved-issue-action"
 
 type ResumeIssueActionApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
 >
 
@@ -32,46 +30,35 @@ export const resumeIssueAction = async (
   dependencies: {
     api: ResumeIssueActionApi
     features: AgentFeatureSwitches
-    liveConnection: boolean
   }
 ): Promise<AgentActionExecutionResult> => {
   const parsed = resumeIssueActionSchema.safeParse(input)
   if (
     !parsed.success ||
-    !dependencies.liveConnection ||
     !dependencies.features.runs ||
     !dependencies.features.writes
   ) {
     throw new Error("Issue action resume is unavailable")
   }
 
-  let run
   try {
-    // resumeTicketはこのcall frameだけで保持し、APIでatomic consumeした後は再利用しない。
-    run = await dependencies.api.resumeApprovedAction({
-      actionId: parsed.data.actionId,
+    const requestContext = new RequestContext()
+    requestContext.set("approvedIssueActionRuntime", {
+      api: dependencies.api,
+      features: dependencies.features,
       resumeTicket: parsed.data.resumeTicket,
+    } satisfies ApprovedIssueActionRuntime)
+    const workflow = mastra.getWorkflow("approvedIssueActionWorkflow")
+    const run = await workflow.createRun()
+    const result = await run.start({
+      inputData: { actionId: parsed.data.actionId },
+      requestContext,
     })
+    if (result.status !== "success") {
+      throw new Error("Issue action resume is unavailable")
+    }
+    return result.result
   } catch {
-    throw new Error("Issue action resume is unavailable")
-  }
-  if (!isActiveOpaqueGrant(run.grant, run.expiresAt)) {
-    throw new Error("Issue action resume is unavailable")
-  }
-
-  const settlement = createRunSettlement(dependencies.api, run.grant)
-  try {
-    const receipt = toSafeActionReceipt(
-      await dependencies.api.executeApprovedAction({
-        actionId: parsed.data.actionId,
-        grant: run.grant,
-      }),
-      { actionId: parsed.data.actionId }
-    )
-    await settlement.complete()
-    return receipt
-  } catch {
-    await settlement.fail()
     throw new Error("Issue action resume is unavailable")
   }
 }

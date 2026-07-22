@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest"
+
+import {
+  approvedIssueActionWorkflow,
+  mastra,
+  productAgent,
+  publicWebResearchAgent,
+} from "."
+import { OPENROUTER_MODEL_ID } from "./models/openrouter"
+
+describe("Mastra product agent registry", () => {
+  it("registers the approved Issue action workflow for runtime and Studio", () => {
+    expect(mastra.getWorkflow("approvedIssueActionWorkflow")).toBe(
+      approvedIssueActionWorkflow
+    )
+    expect(approvedIssueActionWorkflow.id).toBe("approved-issue-action")
+  })
+
+  it("registers the canonical agent and Qwen model", async () => {
+    expect(mastra.getAgentById("product-agent")).toBe(productAgent)
+    expect(productAgent.id).toBe("product-agent")
+    const model = await productAgent.getModel()
+    expect(model.modelId).toBe(OPENROUTER_MODEL_ID)
+    expect(model.provider).toBe("openrouter")
+    expect(productAgent.hasOwnMemory()).toBe(false)
+  })
+
+  it("pins inline skill names", async () => {
+    expect(
+      (await productAgent.listSkills()).map((skill) => skill.name)
+    ).toEqual(["core", "issue-triage", "issue-writing", "web-assistance"])
+  })
+
+  it("keeps provider Web search on the isolated research agent", async () => {
+    const productTools = await productAgent.listTools()
+    expect(Object.keys(productTools)).toEqual([
+      "get_issue",
+      "read_account_context",
+      "read_active_organization",
+      "search_issue_labels",
+      "search_issues",
+      "search_organization_members",
+      "web_search",
+    ])
+    expect(productTools.web_search).not.toMatchObject({ type: "provider" })
+
+    expect(mastra.getAgentById("public-web-research-agent")).toBe(
+      publicWebResearchAgent
+    )
+    const researchTools = await publicWebResearchAgent.listTools()
+    expect(Object.keys(researchTools)).toEqual(["openrouter_web_search"])
+    expect(researchTools.openrouter_web_search).toMatchObject({
+      type: "provider",
+    })
+  })
+})

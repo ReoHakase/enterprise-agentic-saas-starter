@@ -13,17 +13,11 @@ const safeOrigin = (value) => {
 const apiOrigin =
   safeOrigin(process.env.NEXT_PUBLIC_API_BASE_URL) ??
   "https://api.enterprise-agentic-saas.localhost"
-const agentOrigin =
-  safeOrigin(process.env.NEXT_PUBLIC_AGENT_BASE_URL) ??
-  "https://agent.enterprise-agentic-saas.localhost"
-const agentWebSocketOrigin = agentOrigin.replace(/^http/, "ws")
 const sentryOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_DSN)
 const spotlightOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_SPOTLIGHT)
 const connectSources = [
   "'self'",
   apiOrigin,
-  agentOrigin,
-  agentWebSocketOrigin,
   sentryOrigin,
   spotlightOrigin,
 ].filter(Boolean)

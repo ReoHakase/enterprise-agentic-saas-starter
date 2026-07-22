@@ -521,6 +521,51 @@ const selectAgentAssetById = async (
   return rows[0] ?? null
 }
 
+const selectPromotedAgentAssetById = async (
+  tx: AgentAssetTransaction,
+  input: { assetId: string; organizationId: string }
+): Promise<AgentAssetWithStorage | null> => {
+  const rows = await tx
+    .select({
+      asset: agentAssets,
+      storage: storageObjects,
+      claim: storageObjectClaims,
+    })
+    .from(agentAssets)
+    .innerJoin(
+      files,
+      and(
+        eq(files.organizationId, agentAssets.organizationId),
+        eq(files.id, agentAssets.promotedFileId),
+        eq(files.status, "ready")
+      )
+    )
+    .innerJoin(
+      storageObjects,
+      and(
+        eq(storageObjects.organizationId, files.organizationId),
+        eq(storageObjects.id, files.storageObjectId),
+        eq(storageObjects.status, "ready")
+      )
+    )
+    .leftJoin(
+      storageObjectClaims,
+      and(
+        eq(storageObjectClaims.organizationId, storageObjects.organizationId),
+        eq(storageObjectClaims.storageObjectId, storageObjects.id)
+      )
+    )
+    .where(
+      and(
+        eq(agentAssets.id, input.assetId),
+        eq(agentAssets.organizationId, input.organizationId),
+        eq(agentAssets.status, "promoted")
+      )
+    )
+    .limit(1)
+  return rows[0] ?? null
+}
+
 const assertAgentAssetClaim = (value: AgentAssetWithStorage) => {
   if (
     !value.claim ||
@@ -528,6 +573,19 @@ const assertAgentAssetClaim = (value: AgentAssetWithStorage) => {
     value.claim.storageObjectId !== value.storage.id ||
     value.claim.holderType !== "agent_asset" ||
     value.claim.holderId !== value.asset.id
+  ) {
+    throw assetConflict("claim_mismatch")
+  }
+}
+
+const assertPromotedAgentAssetClaim = (value: AgentAssetWithStorage) => {
+  if (
+    !value.claim ||
+    !value.asset.promotedFileId ||
+    value.claim.organizationId !== value.asset.organizationId ||
+    value.claim.storageObjectId !== value.storage.id ||
+    value.claim.holderType !== "file" ||
+    value.claim.holderId !== value.asset.promotedFileId
   ) {
     throw assetConflict("claim_mismatch")
   }
@@ -692,6 +750,60 @@ export const findReadyAgentAssetForSession = async (
     })
   } catch (cause) {
     return preserveAgentAssetError(cause, "findReadyAgentAssetForSession")
+  }
+}
+
+/**
+ * Browser chat内のopaque asset URLを安定aliasとして解決する。
+ * staged中はagent_asset claim、Issue昇格後はpromoted_file_idからfile claimを
+ * tenant/session/thread owner再認可後に辿り、R2 keyをBrowserへ公開しない。
+ */
+export const findPreviewableAgentAssetForSession = async (
+  db: Db,
+  input: {
+    assetId: string
+    organizationId: string
+    sessionId: string
+    userId: string
+    now?: Date
+  }
+): Promise<AgentAssetWithStorage> => {
+  try {
+    return await db.transaction(async (tx) => {
+      const now = input.now ?? new Date()
+      const staged = await selectAgentAssetById(tx, input)
+      const value =
+        staged?.asset.status === "ready"
+          ? staged
+          : await selectPromotedAgentAssetById(tx, input)
+      if (
+        !value ||
+        (value.asset.status !== "ready" && value.asset.status !== "promoted") ||
+        value.storage.status !== "ready" ||
+        value.asset.uploaderId !== input.userId ||
+        value.asset.sessionId !== input.sessionId ||
+        (value.asset.status === "ready" &&
+          value.asset.expiresAt.getTime() <= now.getTime())
+      ) {
+        throw assetNotFound()
+      }
+      if (value.asset.status === "promoted") {
+        assertPromotedAgentAssetClaim(value)
+      } else {
+        assertAgentAssetClaim(value)
+      }
+      await requireLiveUploadScope(tx, {
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        threadId: value.asset.threadId,
+        userId: input.userId,
+        now,
+        expectedContextEpoch: value.asset.contextEpoch,
+      })
+      return value
+    })
+  } catch (cause) {
+    return preserveAgentAssetError(cause, "findPreviewableAgentAssetForSession")
   }
 }
 

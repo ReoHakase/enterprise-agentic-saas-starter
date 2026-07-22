@@ -4,15 +4,17 @@ import { join } from "node:path"
 
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { createApp } from "../../app"
 import { env } from "../../env"
+import { findPreviewableAgentAssetForSession } from "../files/agent-assets-repository"
 import { agentAssetObjectKey } from "../files/constants"
 import { updateIssueById } from "../issues/repository"
+import { insertOrganizationWithSuperAdmin } from "../organizations/repository"
 import {
   deleteAgentApprovalPolicyForSession,
   getAgentApprovalPolicyForSession,
@@ -230,7 +232,7 @@ const createRun = async (
     grant: connection.grant,
     clientMessageId: input.clientMessageId,
   })
-  return { internal, run, thread }
+  return { connection, internal, run, thread, ticket }
 }
 
 describe("Agent Issue action protocol", () => {
@@ -386,6 +388,90 @@ describe("Agent Issue action protocol", () => {
         .from(schema.issues)
         .where(eq(schema.issues.title, "Parallel execution"))
     ).toHaveLength(1)
+  })
+
+  it("replays a succeeded write receipt across a failed-run retry", async () => {
+    const { db } = await createFixture()
+    const first = await createRun(db, {
+      clientMessageId: "retry-succeeded-write",
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: first.thread.id,
+      mode: "auto_write",
+      expiresInSeconds: 900,
+    })
+    const issueInput = {
+      issueId: "action-issue-a",
+      expectedRevision: 1,
+      priority: "high" as const,
+    }
+    const prepared = await first.internal.prepareUpdateIssue({
+      grant: first.run.grant,
+      toolCallId: "provider-tool-first-attempt",
+      idempotencyKey: "stable-logical-write-identity",
+      issue: issueInput,
+    })
+    const firstReceipt = await first.internal.executeApprovedAction({
+      grant: first.run.grant,
+      actionId: prepared.id,
+    })
+    await first.internal.finishRun({
+      grant: first.run.grant,
+      outcome: "failed",
+    })
+
+    const retryTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: first.thread.id,
+    })
+    const retryConnection = await first.internal.consumeConnectionTicket({
+      ticket: retryTicket.ticket,
+      threadId: first.thread.id,
+    })
+    const retryRun = await first.internal.startRun({
+      grant: retryConnection.grant,
+      clientMessageId: "retry-succeeded-write",
+    })
+    expect(retryRun).toMatchObject({
+      attempt: 2,
+      rootRunId: first.run.rootRunId,
+      runId: first.run.runId,
+    })
+    const replayedAction = await first.internal.prepareUpdateIssue({
+      grant: retryRun.grant,
+      toolCallId: "provider-tool-second-attempt",
+      idempotencyKey: "stable-logical-write-identity",
+      issue: issueInput,
+    })
+    expect(replayedAction).toMatchObject({
+      id: prepared.id,
+      status: "succeeded",
+    })
+    await expect(
+      first.internal.executeApprovedAction({
+        grant: retryRun.grant,
+        actionId: replayedAction.id,
+      })
+    ).resolves.toEqual(firstReceipt)
+
+    const issueRows = await db
+      .select({ revision: schema.issues.revision })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "action-issue-a"))
+    expect(issueRows).toEqual([{ revision: 2 }])
+    const auditRows = await db
+      .select({ id: schema.auditLogs.id })
+      .from(schema.auditLogs)
+      .where(
+        and(
+          eq(schema.auditLogs.targetId, "action-issue-a"),
+          eq(schema.auditLogs.action, "issue.updated")
+        )
+      )
+    expect(auditRows).toHaveLength(1)
   })
 
   it("allocates distinct Issue numbers for parallel approved creates", async () => {
@@ -550,17 +636,11 @@ describe("Agent Issue action protocol", () => {
       })
     ).rejects.toMatchObject({ code: "unauthorized" })
 
-    const resumeResponse = await app.handle(
-      request(`/agent/actions/${prepared.id}/resume-ticket`, {
-        method: "POST",
-        body: {},
-      })
-    )
-    expect(resumeResponse.status).toBe(200)
-    const resumeTicket: {
-      ticket: string
-      expiresAt: string
-    } = await resumeResponse.json()
+    const resumeTicket = await issueAgentActionResumeTicket(db, {
+      actionId: prepared.id,
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+    })
     const storedTicket = await db
       .select({ tokenHash: schema.agentResumeTickets.tokenHash })
       .from(schema.agentResumeTickets)
@@ -600,6 +680,35 @@ describe("Agent Issue action protocol", () => {
         actionId: prepared.id,
       })
     ).resolves.toEqual(result)
+
+    const replayedReceipt = await app.handle(
+      request(`/agent/actions/${prepared.id}/resume`, {
+        method: "POST",
+        body: {},
+      })
+    )
+    expect(replayedReceipt.status).toBe(200)
+    expect(await replayedReceipt.json()).toEqual(result)
+    const crossOwnerReplay = await app.handle(
+      request(`/agent/actions/${prepared.id}/resume`, {
+        method: "POST",
+        body: {},
+        userId: "action-user-b",
+        sessionId: "action-session-b",
+      })
+    )
+    expect(crossOwnerReplay.status).toBe(404)
+    const unconsumedResumeTickets = await db
+      .select({ id: schema.agentResumeTickets.id })
+      .from(schema.agentResumeTickets)
+      .where(
+        and(
+          eq(schema.agentResumeTickets.actionId, prepared.id),
+          isNull(schema.agentResumeTickets.consumedAt),
+          isNull(schema.agentResumeTickets.revokedAt)
+        )
+      )
+    expect(unconsumedResumeTickets).toEqual([])
 
     const issueRows = await db
       .select()
@@ -758,13 +867,13 @@ describe("Agent Issue action protocol", () => {
       })
     )
     expect(repeated.status).toBe(200)
-    const resume = await app.handle(
-      request(`/agent/actions/${rejected.id}/resume-ticket`, {
-        method: "POST",
-        body: {},
+    await expect(
+      issueAgentActionResumeTicket(db, {
+        actionId: rejected.id,
+        sessionId: "action-session-a",
+        userId: "action-user-a",
       })
-    )
-    expect(resume.status).toBe(409)
+    ).rejects.toMatchObject({ code: "conflict", statusCode: 409 })
 
     const second = await createRun(db, { clientMessageId: "reject-second" })
     const pending = await second.internal.prepareUpdateIssue({
@@ -910,6 +1019,76 @@ describe("Agent Issue action protocol", () => {
         deleteIssue: false,
       },
     })
+  })
+
+  it("forces ask_each after Web search while preserving auto policy without search", async () => {
+    const { app, db } = await createFixture()
+    const actionRun = await createRun(db, {
+      clientMessageId: "web-search-approval-fence",
+    })
+    const policy = await app.handle(
+      request("/agent/approval-policy", {
+        method: "PUT",
+        body: {
+          threadId: actionRun.thread.id,
+          mode: "auto_write",
+          expiresInSeconds: 900,
+        },
+      })
+    )
+    expect(policy.status).toBe(200)
+
+    const beforeSearch = await actionRun.internal.prepareUpdateIssue({
+      grant: actionRun.run.grant,
+      toolCallId: "tool-before-web-search",
+      idempotencyKey: "prepare-before-web-search",
+      issue: {
+        issueId: "action-issue-a",
+        expectedRevision: 1,
+        priority: "high",
+      },
+    })
+    expect(beforeSearch).toMatchObject({
+      approvalMode: "auto_policy",
+      requiresApproval: false,
+      status: "approved",
+    })
+    await expect(
+      actionRun.internal.executeApprovedAction({
+        actionId: beforeSearch.id,
+        grant: actionRun.run.grant,
+      })
+    ).resolves.toMatchObject({ issue: { revision: 2 } })
+
+    await expect(
+      actionRun.internal.reserveWebSearch({
+        grant: actionRun.run.grant,
+        operationId: "tool-public-web-search",
+      })
+    ).resolves.toEqual({ reserved: true, reused: false })
+
+    const afterSearch = await actionRun.internal.prepareUpdateIssue({
+      grant: actionRun.run.grant,
+      toolCallId: "tool-after-web-search",
+      idempotencyKey: "prepare-after-web-search",
+      issue: {
+        issueId: "action-issue-a",
+        expectedRevision: 2,
+        status: "closed",
+      },
+    })
+    expect(afterSearch).toMatchObject({
+      approvalMode: null,
+      requiresApproval: true,
+      status: "pending",
+    })
+    await expect(
+      getAgentApprovalPolicyForSession(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: actionRun.thread.id,
+      })
+    ).resolves.toMatchObject({ mode: "auto_write" })
   })
 
   it("deletes the current approval policy through the public route", async () => {
@@ -1288,6 +1467,27 @@ describe("Agent Issue action protocol", () => {
       holderType: "file",
       revision: 3,
     })
+    const promotedPreview = await findPreviewableAgentAssetForSession(db, {
+      assetId,
+      organizationId: "action-org-a",
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      now,
+    })
+    expect(promotedPreview).toMatchObject({
+      asset: { id: assetId, status: "promoted" },
+      storage: { id: storageObjectId, status: "ready" },
+      claim: { holderId: file?.id, holderType: "file" },
+    })
+    await expect(
+      findPreviewableAgentAssetForSession(db, {
+        assetId,
+        organizationId: "action-org-a",
+        sessionId: "action-session-b",
+        userId: "action-user-b",
+        now,
+      })
+    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
     const [promotedUsage] = await db
       .select()
       .from(schema.organizationFileUsage)
@@ -1457,9 +1657,18 @@ describe("Agent Issue action protocol", () => {
 
   it("revokes approved actions, policies, resume tickets, and leases on organization switch", async () => {
     const { app, db } = await createFixture()
-    const { internal, run, thread } = await createRun(db, {
+    const { connection, internal, run, thread } = await createRun(db, {
       clientMessageId: "switch-action",
     })
+    const unusedTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: thread.id,
+    })
+    const [contextBefore] = await db
+      .select({ contextEpoch: schema.agentSessionContexts.contextEpoch })
+      .from(schema.agentSessionContexts)
+      .where(eq(schema.agentSessionContexts.sessionId, "action-session-a"))
     const prepared = await internal.prepareDeleteIssue({
       grant: run.grant,
       toolCallId: "tool-switch-action",
@@ -1495,6 +1704,34 @@ describe("Agent Issue action protocol", () => {
       })
     )
     expect(switched.status).toBe(200)
+    const [contextAfter] = await db
+      .select({ contextEpoch: schema.agentSessionContexts.contextEpoch })
+      .from(schema.agentSessionContexts)
+      .where(eq(schema.agentSessionContexts.sessionId, "action-session-a"))
+    expect(contextAfter?.contextEpoch).toBe(
+      (contextBefore?.contextEpoch ?? 0) + 1
+    )
+    const [unconsumedTicket] = await db
+      .select({ revokedAt: schema.agentConnectionTickets.revokedAt })
+      .from(schema.agentConnectionTickets)
+      .where(
+        and(
+          eq(schema.agentConnectionTickets.sessionId, "action-session-a"),
+          isNull(schema.agentConnectionTickets.consumedAt)
+        )
+      )
+    expect(unconsumedTicket?.revokedAt).toBeInstanceOf(Date)
+    const grants = await db
+      .select({ revokedAt: schema.agentGrants.revokedAt })
+      .from(schema.agentGrants)
+      .where(eq(schema.agentGrants.sessionId, "action-session-a"))
+    expect(grants).toHaveLength(2)
+    expect(grants.every((grant) => grant.revokedAt instanceof Date)).toBe(true)
+    const [storedRun] = await db
+      .select({ status: schema.agentRuns.status })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.runId))
+    expect(storedRun).toEqual({ status: "canceled" })
     const [action] = await db
       .select({ status: schema.agentActions.status })
       .from(schema.agentActions)
@@ -1512,10 +1749,62 @@ describe("Agent Issue action protocol", () => {
       .where(eq(schema.agentResumeTickets.actionId, prepared.id))
     expect(ticket?.revokedAt).toBeInstanceOf(Date)
     await expect(
+      internal.consumeConnectionTicket({
+        ticket: unusedTicket.ticket,
+        threadId: thread.id,
+      })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+    await expect(
+      internal.startRun({
+        grant: connection.grant,
+        clientMessageId: "switch-replay",
+      })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+    await expect(
+      internal.readActiveOrganization({ grant: run.grant })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+    await expect(
       resumeAgentApprovedAction(db, {
         actionId: prepared.id,
         resumeTicket: resume.ticket,
       })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+  })
+
+  it("rotates the Agent context when creating and activating a replacement organization", async () => {
+    const { db } = await createFixture()
+    const { internal, run } = await createRun(db, {
+      clientMessageId: "create-replacement-organization",
+    })
+    const [contextBefore] = await db
+      .select({ contextEpoch: schema.agentSessionContexts.contextEpoch })
+      .from(schema.agentSessionContexts)
+      .where(eq(schema.agentSessionContexts.sessionId, "action-session-a"))
+
+    const created = await insertOrganizationWithSuperAdmin(db, {
+      activate: true,
+      name: "Replacement Organization",
+      sessionId: "action-session-a",
+      slug: `replacement-${crypto.randomUUID()}`,
+      userId: "action-user-a",
+    })
+
+    const [currentSession] = await db
+      .select({
+        activeOrganizationId: schema.session.activeOrganizationId,
+      })
+      .from(schema.session)
+      .where(eq(schema.session.id, "action-session-a"))
+    const [contextAfter] = await db
+      .select({ contextEpoch: schema.agentSessionContexts.contextEpoch })
+      .from(schema.agentSessionContexts)
+      .where(eq(schema.agentSessionContexts.sessionId, "action-session-a"))
+    expect(currentSession?.activeOrganizationId).toBe(created.id)
+    expect(contextAfter?.contextEpoch).toBe(
+      (contextBefore?.contextEpoch ?? 0) + 1
+    )
+    await expect(
+      internal.readActiveOrganization({ grant: run.grant })
     ).rejects.toMatchObject({ code: "unauthorized" })
   })
 

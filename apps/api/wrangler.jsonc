@@ -17,6 +17,13 @@
       "bucket_name": "enterprise-agentic-saas-attachments",
     },
   ],
+  "services": [
+    {
+      "binding": "AGENT_RUNTIME",
+      "service": "enterprise-agentic-saas-agent",
+      "entrypoint": "AgentRuntime",
+    },
+  ],
   "images": {
     "binding": "IMAGES",
   },

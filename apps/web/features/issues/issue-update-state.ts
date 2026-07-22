@@ -34,5 +34,6 @@ export const mergeIssueUpdateResponse = (
     : {}),
   ...(update.labels !== undefined ? { labels: updated.labels } : {}),
   ...(update.dueDate !== undefined ? { dueDate: updated.dueDate } : {}),
+  revision: updated.revision,
   updatedAt: updated.updatedAt,
 })

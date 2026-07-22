@@ -1,6 +1,6 @@
 "use client"
 
-import { useAgentChat, getToolOutput } from "@cloudflare/ai-chat/react"
+import { useChat, type UseChatHelpers } from "@ai-sdk/react"
 import {
   buildAgentAssetPreviewUrl,
   FILE_PREVIEW_WIDTHS,
@@ -32,12 +32,19 @@ import {
 } from "@enterprise-agentic-saas/ui/components/select"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
+import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useAgent } from "agents/react"
-import { isToolUIPart, type UIMessage } from "ai"
+import {
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type ChatOnFinishCallback,
+  type ChatOnToolCallCallback,
+  type UIMessage,
+} from "ai"
 import {
   ArchiveIcon,
   ImagePlusIcon,
+  MessageSquareIcon,
   MessageSquarePlusIcon,
   SendIcon,
   StopCircleIcon,
@@ -57,22 +64,24 @@ import {
 import { toast } from "sonner"
 import * as v from "valibot"
 
+import { MessageResponse } from "@/components/ai-elements/message"
 import { LocalDate } from "@/components/local-date"
 import {
   archiveAgentThread,
-  createAgentConnectionTicket,
-  createAgentResumeTicket,
   createAgentThread,
   deleteAgentApprovalPolicy,
   decideAgentAction,
   putAgentApprovalPolicy,
+  resumeAgentAction,
 } from "@/features/agent/api"
+import { createAgentChatTransport } from "@/features/agent/chat-transport"
 import { executeAgentClientTool } from "@/features/agent/client-tools"
 import { useAgentFormRegistry } from "@/features/agent/form-registry"
 import {
   agentActionQueryOptions,
   agentApprovalPolicyQueryOptions,
   agentKeys,
+  agentMessagesQueryOptions,
   agentThreadsQueryOptions,
 } from "@/features/agent/queries"
 import {
@@ -84,36 +93,29 @@ import {
 } from "@/features/agent/runtime-state"
 import {
   pendingActionToolOutputSchema,
+  type AgentChatMessage,
   type AgentIssueAction,
   type AgentThread,
 } from "@/features/agent/schema"
+import {
+  resolveAgentSubmissionIdentity,
+  shouldRetainAgentSubmission,
+} from "@/features/agent/submission-identity"
+import { issueKeys } from "@/features/issues/queries"
 import { useIssueSearchState } from "@/features/issues/search-params"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
-type AgentAssetMessage = {
-  id: string
-  filename: string
-  sizeBytes: number
-  imageWidth: number
-  imageHeight: number
-  expiresAt: string
-}
-type AgentChatMessage = UIMessage<
-  unknown,
-  { "agent-assets": { assets: AgentAssetMessage[] } }
->
 const attachmentButtonRender = <span />
+const emptyAgentThreads: AgentThread[] = []
+const closeHttpChatSession = () => undefined
 
 export const extractPendingActionIds = (messages: UIMessage[]) => {
   const ids = new Set<string>()
   for (const message of messages) {
     for (const part of message.parts) {
-      if (!isToolUIPart(part)) continue
-      const parsed = v.safeParse(
-        pendingActionToolOutputSchema,
-        getToolOutput(part)
-      )
+      if (!isToolUIPart(part) || part.state !== "output-available") continue
+      const parsed = v.safeParse(pendingActionToolOutputSchema, part.output)
       if (parsed.success) ids.add(parsed.output.actionId)
     }
   }
@@ -136,9 +138,13 @@ type PendingThreadTransition =
 export const AgentDashboard = ({
   organizationId,
   organizationSlug,
+  presentation = "page",
+  disabled = false,
 }: {
   organizationId: string
   organizationSlug: string
+  presentation?: "page" | "shell"
+  disabled?: boolean
 }) => {
   const queryClient = useQueryClient()
   const runtime = useAgentRuntimeState()
@@ -151,6 +157,7 @@ export const AgentDashboard = ({
   const selectedThread = threadsQuery.data?.find(
     (thread) => thread.id === state.agentThread
   )
+  const interactionDisabled = disabled || runtime.frozen
   const finishThreadSelection = useCallback(
     async (sourceThreadId: string, targetThreadId: string) => {
       try {
@@ -219,7 +226,13 @@ export const AgentDashboard = ({
     archiveThreadMutation
 
   useEffect(() => {
-    if (!threadsQuery.data || selectedThread || state.agentThread === "") return
+    if (
+      disabled ||
+      !threadsQuery.data ||
+      selectedThread ||
+      state.agentThread === ""
+    )
+      return
     const missingThreadId = state.agentThread
     runtime.beginThreadSwitch(missingThreadId)
     void runtime
@@ -228,6 +241,7 @@ export const AgentDashboard = ({
       .finally(() => runtime.cancelThreadSwitch())
   }, [
     runtime,
+    disabled,
     selectedThread,
     setDiscrete,
     state.agentThread,
@@ -285,47 +299,69 @@ export const AgentDashboard = ({
 
   return (
     <>
-      <div className="grid min-h-136 min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <Card className="min-w-0">
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <CardTitle>Private threads</CardTitle>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              aria-label="New agent thread"
-              disabled={creatingThread || runtime.frozen}
-              onClick={startThread}
-            >
-              {creatingThread ? <Spinner /> : <MessageSquarePlusIcon />}
-            </Button>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {threadsQuery.data?.map((thread) => (
-              <AgentThreadItem
-                key={thread.id}
-                thread={thread}
-                selected={thread.id === selectedThread?.id}
-                disabled={archivingThread || runtime.frozen}
-                onSelect={selectThread}
-                onArchive={archiveThread}
-              />
-            ))}
-            {threadsQuery.data?.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Create a private thread to start working with the Issue agent.
+      <div
+        className={cn(
+          "min-w-0 gap-4",
+          presentation === "shell"
+            ? "flex min-h-0 flex-1 flex-col"
+            : "grid min-h-136 lg:grid-cols-[15rem_minmax(0,1fr)]"
+        )}
+      >
+        {presentation === "shell" ? (
+          <AgentThreadToolbar
+            threads={threadsQuery.data ?? emptyAgentThreads}
+            selectedThread={selectedThread}
+            loading={threadsQuery.isPending}
+            error={threadsQuery.isError}
+            creating={creatingThread}
+            archiving={archivingThread}
+            disabled={interactionDisabled}
+            onSelect={selectThread}
+            onCreate={startThread}
+            onArchive={archiveThread}
+          />
+        ) : (
+          <Card className="min-w-0">
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <CardTitle>Private threads</CardTitle>
+              <Button
+                size="icon-sm"
+                variant="outline"
+                aria-label="New agent thread"
+                disabled={creatingThread || interactionDisabled}
+                onClick={startThread}
+              >
+                {creatingThread ? <Spinner /> : <MessageSquarePlusIcon />}
+              </Button>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {threadsQuery.data?.map((thread) => (
+                <AgentThreadItem
+                  key={thread.id}
+                  thread={thread}
+                  selected={thread.id === selectedThread?.id}
+                  disabled={archivingThread || interactionDisabled}
+                  onSelect={selectThread}
+                  onArchive={archiveThread}
+                />
+              ))}
+              {threadsQuery.data?.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Create a private thread to start working with the Issue agent.
+                </p>
+              ) : null}
+              {threadsQuery.isError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  Agent threads could not be loaded.
+                </p>
+              ) : null}
+              <p className="pt-2 text-xs text-muted-foreground">
+                Unsent text and staged images stay with their thread. Archiving
+                that thread discards the draft and deletes its temporary images.
               </p>
-            ) : null}
-            {threadsQuery.isError ? (
-              <p role="alert" className="text-sm text-destructive">
-                Agent threads could not be loaded.
-              </p>
-            ) : null}
-            <p className="pt-2 text-xs text-muted-foreground">
-              Unsent text and staged images stay with their thread. Archiving
-              that thread discards the draft and deletes its temporary images.
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {selectedThread ? (
           <ConnectedAgentChat
@@ -333,9 +369,11 @@ export const AgentDashboard = ({
             organizationId={organizationId}
             organizationSlug={organizationSlug}
             thread={selectedThread}
+            presentation={presentation}
+            disabled={disabled}
           />
         ) : (
-          <Card className="grid place-items-center p-8 text-center">
+          <Card className="grid min-h-0 flex-1 place-items-center p-8 text-center">
             <div>
               <h2 className="font-semibold">Choose an Agent thread</h2>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -386,6 +424,112 @@ export const AgentDashboard = ({
   )
 }
 
+const AgentThreadToolbar = ({
+  threads,
+  selectedThread,
+  loading,
+  error,
+  creating,
+  archiving,
+  disabled,
+  onSelect,
+  onCreate,
+  onArchive,
+}: {
+  threads: AgentThread[]
+  selectedThread?: AgentThread
+  loading: boolean
+  error: boolean
+  creating: boolean
+  archiving: boolean
+  disabled: boolean
+  onSelect: (threadId: string) => void
+  onCreate: () => void
+  onArchive: (threadId: string) => void
+}) => {
+  const items = useMemo(
+    () => threads.map((thread) => ({ label: thread.title, value: thread.id })),
+    [threads]
+  )
+  const selectThread = useCallback(
+    (threadId: string | null) => {
+      if (threadId) onSelect(threadId)
+    },
+    [onSelect]
+  )
+  const archiveThread = useCallback(() => {
+    if (selectedThread) onArchive(selectedThread.id)
+  }, [onArchive, selectedThread])
+
+  return (
+    <div className="shrink-0 space-y-2 rounded-xl border bg-card p-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <Select
+          items={items}
+          value={selectedThread?.id ?? ""}
+          disabled={disabled || loading || threads.length === 0}
+          onValueChange={selectThread}
+        >
+          <SelectTrigger className="min-w-0 flex-1" aria-label="Agent thread">
+            <MessageSquareIcon aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-left">
+              {selectedThread?.title ??
+                (loading ? "Loading threads…" : "Choose a private thread")}
+            </span>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {threads.map((thread) => (
+                <SelectItem key={thread.id} value={thread.id}>
+                  {thread.title}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="outline"
+          aria-label="New agent thread"
+          disabled={disabled || creating}
+          onClick={onCreate}
+        >
+          {creating ? (
+            <Spinner />
+          ) : (
+            <MessageSquarePlusIcon aria-hidden="true" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label={
+            selectedThread
+              ? `Archive ${selectedThread.title}`
+              : "Archive thread"
+          }
+          disabled={disabled || archiving || !selectedThread}
+          onClick={archiveThread}
+        >
+          <ArchiveIcon aria-hidden="true" />
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="px-1 text-xs text-destructive">
+          Agent threads could not be loaded.
+        </p>
+      ) : null}
+      {!loading && !error && threads.length === 0 ? (
+        <p className="px-1 text-xs text-muted-foreground">
+          Create a private thread to start.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 const AgentThreadItem = ({
   thread,
   selected,
@@ -431,38 +575,98 @@ const ConnectedAgentChat = ({
   organizationId,
   organizationSlug,
   thread,
+  presentation,
+  disabled,
 }: {
   organizationId: string
   organizationSlug: string
   thread: AgentThread
+  presentation: "page" | "shell"
+  disabled: boolean
 }) => {
+  const messagesQuery = useQuery(
+    agentMessagesQueryOptions(apiClient, organizationId, thread.id)
+  )
+  const { refetch: refetchMessages } = messagesQuery
+  const retryHistory = useCallback(
+    () => void refetchMessages(),
+    [refetchMessages]
+  )
+
+  if (messagesQuery.isPending) {
+    return (
+      <Card className="grid min-h-0 flex-1 place-items-center p-8">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner /> Loading Agent history…
+        </div>
+      </Card>
+    )
+  }
+
+  if (messagesQuery.isError) {
+    return (
+      <Card className="grid min-h-0 flex-1 place-items-center p-8 text-center">
+        <div>
+          <p role="alert" className="text-sm text-destructive">
+            Agent history could not be loaded.
+          </p>
+          <Button className="mt-3" variant="outline" onClick={retryHistory}>
+            Try again
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <AgentChatSession
+      organizationId={organizationId}
+      organizationSlug={organizationSlug}
+      thread={thread}
+      presentation={presentation}
+      disabled={disabled}
+      initialMessages={messagesQuery.data}
+    />
+  )
+}
+
+const AgentChatSession = ({
+  organizationId,
+  organizationSlug,
+  thread,
+  presentation,
+  disabled,
+  initialMessages,
+}: {
+  organizationId: string
+  organizationSlug: string
+  thread: AgentThread
+  presentation: "page" | "shell"
+  disabled: boolean
+  initialMessages: AgentChatMessage[]
+}) => {
+  const queryClient = useQueryClient()
   const router = useRouter()
   const formRegistry = useAgentFormRegistry()
   const { state: issueSearchState } = useIssueSearchState()
   const runtime = useAgentThreadRuntimeState(thread.id)
-  const createConnectionQuery = useCallback(
-    async () => ({
-      ticket: (await createAgentConnectionTicket(apiClient, thread.id)).ticket,
-    }),
+  const transport = useMemo(
+    () =>
+      createAgentChatTransport({
+        apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+        threadId: thread.id,
+      }),
     [thread.id]
   )
-  const agent = useAgent({
-    agent: "IssueAssistant",
-    name: thread.id,
-    host: clientEnv.NEXT_PUBLIC_AGENT_BASE_URL,
-    // useAgentのasync queryは初回Suspense retryを跨ぐ短いmemory cacheが必須。
-    // close/reconnect時はSDKが明示invalidateし、ticketを再取得する。
-    cacheTtl: 5_000,
-    queryDeps: [organizationId, thread.id],
-    query: createConnectionQuery,
-  })
-  const handleToolCall = useCallback(
-    async ({
-      toolCall,
-      addToolOutput,
-    }: Parameters<
-      NonNullable<Parameters<typeof useAgentChat>[0]["onToolCall"]>
-    >[0]) => {
+  const addToolOutputRef = useRef<
+    UseChatHelpers<AgentChatMessage>["addToolOutput"] | undefined
+  >(undefined)
+  const pendingSubmissionRef = useRef(runtime.pendingSubmission)
+  pendingSubmissionRef.current = runtime.pendingSubmission
+  const handleToolCall = useCallback<ChatOnToolCallCallback<AgentChatMessage>>(
+    async ({ toolCall }) => {
+      const addToolOutput = addToolOutputRef.current
+      if (!addToolOutput) return
       try {
         const output = await executeAgentClientTool(
           toolCall.toolName,
@@ -470,20 +674,28 @@ const ConnectedAgentChat = ({
           {
             organizationId,
             organizationSlug,
-            frozen: runtime.frozen,
+            frozen: runtime.frozen || disabled,
             navigate: router.push,
             issueSearchState,
             readForm: formRegistry.read,
             patchForm: formRegistry.patch,
           }
         )
-        addToolOutput({ toolCallId: toolCall.toolCallId, output })
+        void addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          output,
+        })
       } catch (error) {
-        addToolOutput({
+        const errorText =
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : "Client tool failed."
+        void addToolOutput({
+          tool: toolCall.toolName,
           toolCallId: toolCall.toolCallId,
           state: "output-error",
-          errorText:
-            error instanceof Error ? error.message : "Client tool failed.",
+          errorText: errorText.slice(0, 500),
         })
       }
     },
@@ -493,14 +705,43 @@ const ConnectedAgentChat = ({
       organizationSlug,
       router.push,
       runtime.frozen,
+      disabled,
       issueSearchState,
     ]
   )
-  const chat = useAgentChat<unknown, AgentChatMessage>({
-    agent,
+  const finishChat = useCallback<ChatOnFinishCallback<AgentChatMessage>>(
+    ({ isAbort, isDisconnect, isError }) => {
+      if (shouldRetainAgentSubmission({ isAbort, isDisconnect, isError })) {
+        if (pendingSubmissionRef.current) {
+          toast.error(
+            isAbort
+              ? "The Agent response was stopped. Your local draft was kept."
+              : "The Agent response failed. Your local draft was kept."
+          )
+        }
+        return
+      }
+      if (pendingSubmissionRef.current) {
+        pendingSubmissionRef.current = undefined
+        runtime.setPendingSubmission(undefined)
+        runtime.setComposer("")
+        runtime.clearStagedAssetsAfterSend()
+      }
+      void queryClient.invalidateQueries({
+        queryKey: agentKeys.messages(organizationId, thread.id),
+      })
+    },
+    [organizationId, queryClient, runtime, thread.id]
+  )
+  const chat = useChat<AgentChatMessage>({
+    id: thread.id,
+    messages: initialMessages,
+    transport,
     onToolCall: handleToolCall,
-    resume: true,
+    onFinish: finishChat,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   })
+  addToolOutputRef.current = chat.addToolOutput
   const actionIds = useMemo(
     () => extractPendingActionIds(chat.messages),
     [chat.messages]
@@ -512,8 +753,7 @@ const ConnectedAgentChat = ({
     if (!actionIds.includes(actionId))
       approvalStatesRef.current.delete(actionId)
   }
-  busyRef.current =
-    chat.isStreaming || chat.isRecovering || chat.status === "submitted"
+  busyRef.current = chat.status === "streaming" || chat.status === "submitted"
   approvalsRef.current = actionIds.some(
     (actionId) => approvalStatesRef.current.get(actionId) ?? true
   )
@@ -531,21 +771,12 @@ const ConnectedAgentChat = ({
   useEffect(
     () =>
       registerSession({
-        close: () => agent.close(),
+        close: closeHttpChatSession,
         stop: () => void stopChat(),
         isBusy: () => busyRef.current,
         hasPendingApprovals: () => approvalsRef.current,
       }),
-    [agent, registerSession, stopChat]
-  )
-  const resumeAction = useCallback(
-    async (id: string) => {
-      const resumeTicket = await createAgentResumeTicket(apiClient, id)
-      await agent.call("resumeIssueAction", [
-        { actionId: id, resumeTicket: resumeTicket.ticket },
-      ])
-    },
-    [agent]
+    [registerSession, stopChat]
   )
   const changeComposer = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) =>
@@ -557,7 +788,12 @@ const ConnectedAgentChat = ({
   const submitMessage = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      if (runtime.frozen || busyRef.current || runtime.uploadingCount > 0)
+      if (
+        disabled ||
+        runtime.frozen ||
+        busyRef.current ||
+        runtime.uploadingCount > 0
+      )
         return
       const text = runtime.composer.trim()
       const assets = runtime.stagedAssets.map(({ asset }) => ({
@@ -569,34 +805,41 @@ const ConnectedAgentChat = ({
         expiresAt: asset.expiresAt,
       }))
       if (!text && assets.length === 0) return
+      const messageText = text || "Please review the attached images."
+      const assetIds = assets.map((asset) => asset.id)
+      const fingerprint = JSON.stringify([messageText, assetIds])
+      const submission = resolveAgentSubmissionIdentity(
+        pendingSubmissionRef.current,
+        fingerprint,
+        () => crypto.randomUUID()
+      )
+      pendingSubmissionRef.current = submission.pending
+      runtime.setPendingSubmission(submission.pending)
       try {
-        await chat.sendMessage(
-          {
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: text || "Please review the attached images.",
-              },
-              ...(assets.length > 0
-                ? [{ type: "data-agent-assets" as const, data: { assets } }]
-                : []),
-            ],
-          },
-          {
-            body: {
-              assetIds: assets.map((asset) => asset.id),
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        await chat.sendMessage({
+          id: submission.id,
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: messageText,
             },
-          }
-        )
-        runtime.setComposer("")
-        runtime.clearStagedAssetsAfterSend()
+            ...(assets.length > 0
+              ? [
+                  {
+                    type: "data-agent-assets" as const,
+                    data: { assetIds, assets },
+                  },
+                ]
+              : []),
+          ],
+          messageId: submission.retrying ? submission.id : undefined,
+        })
       } catch {
         toast.error("The message could not be sent. Your local draft was kept.")
       }
     },
-    [chat, runtime]
+    [chat, disabled, runtime]
   )
   const attachImages = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -613,8 +856,15 @@ const ConnectedAgentChat = ({
   )
 
   return (
-    <Card className="flex min-h-0 min-w-0 flex-col">
-      <CardHeader className="gap-3 border-b">
+    <Card
+      className={cn(
+        "flex min-h-0 min-w-0 flex-col",
+        presentation === "shell" && "flex-1"
+      )}
+    >
+      <CardHeader
+        className={cn("gap-3 border-b", presentation === "shell" && "p-3")}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <CardTitle>{thread.title}</CardTitle>
@@ -626,14 +876,19 @@ const ConnectedAgentChat = ({
           <AgentPolicyControl
             organizationId={organizationId}
             threadId={thread.id}
+            disabled={disabled || runtime.frozen}
           />
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 pt-4">
-        {agent.connectionError ? (
+      <CardContent
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-4 pt-4",
+          presentation === "shell" && "p-3"
+        )}
+      >
+        {chat.error ? (
           <p role="alert" className="text-sm text-destructive">
-            Agent connection failed. Refresh the thread to request a new
-            one-time ticket.
+            Agent response failed. You can retry the same draft safely.
           </p>
         ) : null}
         <div
@@ -652,16 +907,10 @@ const ConnectedAgentChat = ({
               key={actionId}
               actionId={actionId}
               organizationId={organizationId}
-              frozen={runtime.frozen}
-              resume={resumeAction}
+              frozen={runtime.frozen || disabled}
               onPendingChange={reportApprovalState}
             />
           ))}
-          {chat.isRecovering ? (
-            <p className="text-sm text-muted-foreground">
-              Recovering the active turn…
-            </p>
-          ) : null}
         </div>
 
         {runtime.stagedAssets.length > 0 ? (
@@ -673,6 +922,7 @@ const ConnectedAgentChat = ({
               <StagedAssetPreview
                 key={item.asset.id}
                 item={item}
+                disabled={busyRef.current || disabled || runtime.frozen}
                 onRemove={runtime.removeStagedAsset}
               />
             ))}
@@ -684,7 +934,7 @@ const ConnectedAgentChat = ({
             value={runtime.composer}
             onChange={changeComposer}
             placeholder="Describe the issue, or attach screenshots for analysis."
-            disabled={runtime.frozen}
+            disabled={runtime.frozen || disabled || busyRef.current}
             maxLength={10_000}
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -694,14 +944,20 @@ const ConnectedAgentChat = ({
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
-                disabled={runtime.frozen || runtime.uploadingCount > 0}
+                disabled={
+                  disabled ||
+                  runtime.frozen ||
+                  runtime.uploadingCount > 0 ||
+                  busyRef.current
+                }
                 onChange={attachImages}
               />
               <Button
                 render={attachmentButtonRender}
+                nativeButton={false}
                 type="button"
                 variant="outline"
-                disabled={runtime.frozen}
+                disabled={runtime.frozen || disabled || busyRef.current}
               >
                 <ImagePlusIcon data-icon="inline-start" />
                 {runtime.uploadingCount > 0 ? "Uploading…" : "Attach images"}
@@ -720,6 +976,7 @@ const ConnectedAgentChat = ({
               <Button
                 type="submit"
                 disabled={
+                  disabled ||
                   runtime.frozen ||
                   runtime.uploadingCount > 0 ||
                   busyRef.current
@@ -737,9 +994,11 @@ const ConnectedAgentChat = ({
 
 const StagedAssetPreview = ({
   item,
+  disabled,
   onRemove,
 }: {
   item: StagedAgentAsset
+  disabled: boolean
   onRemove: (assetId: string) => Promise<void>
 }) => {
   const remove = useCallback(
@@ -763,6 +1022,7 @@ const StagedAssetPreview = ({
         size="icon-xs"
         variant="secondary"
         aria-label={`Remove ${item.asset.filename}`}
+        disabled={disabled}
         onClick={remove}
       >
         <XIcon />
@@ -788,7 +1048,11 @@ const AgentMessage = ({
     </p>
     {message.parts.map((part) => {
       if (part.type === "text")
-        return (
+        return message.role === "assistant" ? (
+          <MessageResponse key={`text:${part.text}`} className="text-sm">
+            {part.text}
+          </MessageResponse>
+        ) : (
           <p key={`text:${part.text}`} className="text-sm whitespace-pre-wrap">
             {part.text}
           </p>
@@ -796,28 +1060,33 @@ const AgentMessage = ({
       if (part.type === "data-agent-assets") {
         return (
           <div
-            key={`assets:${part.data.assets.map((asset) => asset.id).join(":")}`}
+            key={`assets:${part.data.assetIds.join(":")}`}
             className="mt-2 grid grid-cols-2 gap-2"
           >
-            {part.data.assets.map((asset) => (
-              // The authenticated API image must bypass the Next optimizer.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={asset.id}
-                className="max-h-56 w-full rounded-lg object-cover"
-                src={buildAgentAssetPreviewUrl(
-                  clientEnv.NEXT_PUBLIC_API_BASE_URL,
-                  {
-                    organizationId,
-                    assetId: asset.id,
-                    width: FILE_PREVIEW_WIDTHS[1],
-                  }
-                )}
-                width={asset.imageWidth}
-                height={asset.imageHeight}
-                alt={asset.filename}
-              />
-            ))}
+            {part.data.assetIds.map((assetId) => {
+              const asset = part.data.assets?.find(
+                (candidate) => candidate.id === assetId
+              )
+              return (
+                // The authenticated API image must bypass the Next optimizer.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={assetId}
+                  className="max-h-56 w-full rounded-lg object-cover"
+                  src={buildAgentAssetPreviewUrl(
+                    clientEnv.NEXT_PUBLIC_API_BASE_URL,
+                    {
+                      organizationId,
+                      assetId,
+                      width: FILE_PREVIEW_WIDTHS[1],
+                    }
+                  )}
+                  width={asset?.imageWidth}
+                  height={asset?.imageHeight}
+                  alt={asset?.filename ?? "Attached image"}
+                />
+              )
+            })}
           </div>
         )
       }
@@ -830,19 +1099,31 @@ const AgentApprovalCard = ({
   organizationId,
   actionId,
   frozen,
-  resume,
   onPendingChange,
 }: {
   organizationId: string
   actionId: string
   frozen: boolean
-  resume: (actionId: string) => Promise<void>
   onPendingChange: (actionId: string, pending: boolean) => void
 }) => {
   const queryClient = useQueryClient()
   const actionQuery = useQuery(
     agentActionQueryOptions(apiClient, organizationId, actionId)
   )
+  const resume = useCallback(async () => {
+    const result = await resumeAgentAction(apiClient, actionId)
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.lists(organizationId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.detail(organizationId, result.issue.id),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.timeline(organizationId, result.issue.id),
+      }),
+    ])
+  }, [actionId, organizationId, queryClient])
   const decisionMutation = useMutation({
     mutationFn: async (decision: "yes" | "no") => {
       const action = await decideAgentAction(apiClient, {
@@ -850,8 +1131,7 @@ const AgentApprovalCard = ({
         decision,
         idempotencyKey: crypto.randomUUID(),
       })
-      if (decision === "yes" && action.status === "approved")
-        await resume(actionId)
+      if (decision === "yes" && action.status === "approved") await resume()
       return action
     },
     onSettled: async () => {
@@ -863,7 +1143,7 @@ const AgentApprovalCard = ({
   })
   const { mutate: decide, isPending: deciding } = decisionMutation
   const resumeMutation = useMutation({
-    mutationFn: () => resume(actionId),
+    mutationFn: resume,
     onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: agentKeys.action(organizationId, actionId),
@@ -876,10 +1156,35 @@ const AgentApprovalCard = ({
   const reject = useCallback(() => decide("no"), [decide])
   const retryResume = useCallback(() => resumeApproved(), [resumeApproved])
   const action = actionQuery.data
+  const refetchAction = actionQuery.refetch
+  const retryActionQuery = useCallback(
+    () => void refetchAction(),
+    [refetchAction]
+  )
   useEffect(() => {
     if (action) onPendingChange(actionId, action.status === "pending")
   }, [action, actionId, onPendingChange])
-  if (!action) return null
+  if (actionQuery.isPending) {
+    return (
+      <Card className="border-amber-500/50 bg-amber-500/5 p-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner /> Loading approval details…
+        </div>
+      </Card>
+    )
+  }
+  if (actionQuery.isError || !action) {
+    return (
+      <Card className="border-destructive/50 p-4">
+        <p role="alert" className="text-sm text-destructive">
+          Approval details could not be loaded.
+        </p>
+        <Button className="mt-3" variant="outline" onClick={retryActionQuery}>
+          Try again
+        </Button>
+      </Card>
+    )
+  }
   const pending = action.status === "pending"
 
   return (
@@ -914,12 +1219,12 @@ const AgentApprovalCard = ({
             </span>
           </div>
         ))}
-        {action.preview?.attachments.map((attachment) => (
-          <p key={attachment.assetId} className="text-sm">
-            Attachment: {attachment.filename} (
-            {Math.ceil(attachment.sizeBytes / 1024)} KB)
-          </p>
-        ))}
+        {action.preview && action.preview.attachments.length > 0 ? (
+          <AgentApprovalAttachments
+            organizationId={organizationId}
+            attachments={action.preview.attachments}
+          />
+        ) : null}
         {pending ? (
           <div className="flex gap-2">
             <Button disabled={frozen || deciding} onClick={approve}>
@@ -945,6 +1250,59 @@ const AgentApprovalCard = ({
   )
 }
 
+type AgentApprovalAttachment = NonNullable<
+  AgentIssueAction["preview"]
+>["attachments"][number]
+
+export const AgentApprovalAttachments = ({
+  organizationId,
+  attachments,
+}: {
+  organizationId: string
+  attachments: AgentApprovalAttachment[]
+}) => (
+  <section
+    className="space-y-2 rounded-lg border bg-background/80 p-3"
+    aria-label="Issue attachments awaiting approval"
+  >
+    <p className="text-sm font-medium">
+      These images will become permanent Issue attachments if you approve this
+      action.
+    </p>
+    <p className="text-xs text-muted-foreground">
+      They will remain with the Issue after the temporary chat-image retention
+      period ends.
+    </p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {attachments.map((attachment) => (
+        <figure
+          key={attachment.assetId}
+          className="overflow-hidden rounded-md border bg-muted/30"
+        >
+          {/* This authenticated private image must bypass the Next optimizer. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="max-h-64 w-full object-contain"
+            src={buildAgentAssetPreviewUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
+              organizationId,
+              assetId: attachment.assetId,
+              width: FILE_PREVIEW_WIDTHS[1],
+            })}
+            alt={`Attachment preview: ${attachment.filename}`}
+            loading="lazy"
+          />
+          <figcaption className="border-t px-2 py-1.5 text-xs">
+            <span className="block truncate">{attachment.filename}</span>
+            <span className="text-muted-foreground">
+              {Math.ceil(attachment.sizeBytes / 1024)} KB
+            </span>
+          </figcaption>
+        </figure>
+      ))}
+    </div>
+  </section>
+)
+
 const formatActionValue = (
   value: AgentIssueAction["preview"] extends infer Preview
     ? Preview extends { fields: Array<infer Field> }
@@ -964,9 +1322,11 @@ const policyOptions = [
 const AgentPolicyControl = ({
   organizationId,
   threadId,
+  disabled,
 }: {
   organizationId: string
   threadId: string
+  disabled: boolean
 }) => {
   const queryClient = useQueryClient()
   const policyQuery = useQuery(
@@ -1028,6 +1388,7 @@ const AgentPolicyControl = ({
       <Select
         items={policyOptions}
         value={policyQuery.data?.mode ?? "ask_each"}
+        disabled={disabled || updatingPolicy}
         onValueChange={selectMode}
       >
         <SelectTrigger className="w-56">
@@ -1061,13 +1422,19 @@ const AgentPolicyControl = ({
               variant="destructive"
               disabled={
                 destructiveConfirmation !== "ALLOW_ISSUE_DELETE" ||
-                updatingPolicy
+                updatingPolicy ||
+                disabled
               }
               onClick={enableAutoAll}
             >
               <Trash2Icon data-icon="inline-start" /> Enable
             </Button>
-            <Button size="sm" variant="outline" onClick={cancelAutoAll}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              onClick={cancelAutoAll}
+            >
               Cancel
             </Button>
           </div>

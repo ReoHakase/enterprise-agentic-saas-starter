@@ -1,11 +1,11 @@
-import type { AgentInternalApiContract } from "@enterprise-agentic-saas/api/agent-client"
 import { describe, expect, it } from "vitest"
 
+import type { AgentInternalGateway } from "./internal-api"
 import { createRunSettlement } from "./run-settlement"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 
-type SettlementApi = Pick<AgentInternalApiContract, "cancelRun" | "finishRun">
+type SettlementApi = Pick<AgentInternalGateway, "cancelRun" | "finishRun">
 
 const harness = (fail = false) => {
   const calls: string[] = []
@@ -42,7 +42,7 @@ describe("createRunSettlement", () => {
     expect(test.calls).toEqual([`${expected}:${RUN_GRANT}`])
   })
 
-  it("swallows RPC details so grant and provider errors cannot escape", async () => {
+  it("swallows internal API details so grant and provider errors cannot escape", async () => {
     const test = harness(true)
     const settlement = createRunSettlement(test.api, RUN_GRANT)
 

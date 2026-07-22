@@ -216,6 +216,7 @@ export const InvitationDecisionPanel = (
           currentUser={currentUser}
           open={accountSwitcherOpen}
           onOpenChange={setAccountSwitcherOpen}
+          returnTo={createInvitationPath(props.invitationId)}
         />
       </>
     )

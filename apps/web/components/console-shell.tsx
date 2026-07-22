@@ -87,6 +87,10 @@ import {
 import { OrganizationProfileImage } from "@/components/organization-identity"
 import { UserProfileImage } from "@/components/user-identity"
 import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
+import {
+  AgentShell,
+  AgentShellTrigger,
+} from "@/features/agent/components/agent-shell"
 import { AgentFormRegistryProvider } from "@/features/agent/form-registry"
 import {
   AgentRuntimeProvider,
@@ -96,9 +100,11 @@ import {
 } from "@/features/agent/runtime-state"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
-  cancelTenantWorkForOrganizationSwitch,
-  prepareOrganizationSwitch,
-} from "@/features/organizations/cache"
+  useIssueSearchState,
+  withAgentThreadHref,
+} from "@/features/issues/search-params"
+import { prepareOrganizationSwitch } from "@/features/organizations/cache"
+import { resolveOrganizationRouteContext } from "@/features/organizations/route-context"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
 
@@ -150,6 +156,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
   const agentRuntime = useAgentRuntimeState()
+  const { state: issueSearchState } = useIssueSearchState()
   const pathname = usePathname()
   const contentRef = useRef<HTMLDivElement>(null)
   const [accountDialogOpen, setAccountDialogOpen] = useState(false)
@@ -158,28 +165,15 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
     risks: OrganizationSwitchRisks
   }>()
   const openAccountSwitcher = useCallback(() => setAccountDialogOpen(true), [])
-  const activeOrganization = me.organizations.find(
-    (organization) => organization.active
-  )
-  const routeOrganizationSlug = pathname.match(
-    /^\/organization\/([^/]+)(?:\/|$)/
-  )?.[1]
-  const contextOrganization = routeOrganizationSlug
-    ? me.organizations.find(
-        (organization) => organization.slug === routeOrganizationSlug
-      )
-    : activeOrganization
-  const hasOrganizationContextMismatch = Boolean(
-    contextOrganization &&
-    activeOrganization &&
-    contextOrganization.id !== activeOrganization.id
-  )
+  const {
+    activeOrganization,
+    contextOrganization,
+    contextMismatch: hasOrganizationContextMismatch,
+  } = resolveOrganizationRouteContext(pathname, me.organizations)
 
   const organizationMutation = useMutation({
-    mutationFn: async (organizationId: string) => {
-      await cancelTenantWorkForOrganizationSwitch(queryClient)
-      return browserConsoleApi.activateOrganization(organizationId)
-    },
+    mutationFn: (organizationId: string) =>
+      browserConsoleApi.activateOrganization(organizationId),
     onSuccess: async (_, organizationId) => {
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)
@@ -257,11 +251,12 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
               <SidebarMenuLinkButton
                 size="lg"
                 tooltip="Enterprise SaaS"
-                href={
+                href={withAgentThreadHref(
                   activeOrganization
                     ? `/organization/${activeOrganization.slug}/dashboard`
-                    : "/settings/organizations"
-                }
+                    : "/settings/organizations",
+                  issueSearchState.agentThread
+                )}
               >
                 <span className="flex aspect-square size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
                   <BlocksIcon aria-hidden="true" />
@@ -280,6 +275,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
               <OrganizationSwitcher
                 organizations={me.organizations}
                 activeOrganization={activeOrganization}
+                agentThread={issueSearchState.agentThread}
                 pending={organizationPending}
                 onChange={handleOrganizationChange}
               />
@@ -291,7 +287,10 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
 
         <SidebarContent>
           <Suspense fallback={navigationFallback}>
-            <ConsoleNavigation activeOrganization={contextOrganization} />
+            <ConsoleNavigation
+              activeOrganization={contextOrganization}
+              agentThread={issueSearchState.agentThread}
+            />
           </Suspense>
         </SidebarContent>
 
@@ -299,6 +298,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
         <SidebarFooter>
           <UserMenu
             user={me.user}
+            agentThread={issueSearchState.agentThread}
             onOpenAccountSwitcher={openAccountSwitcher}
           />
         </SidebarFooter>
@@ -328,6 +328,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
               {roleLabel(contextOrganization.role)}
             </Badge>
           ) : null}
+          <AgentShellTrigger disabled={!activeOrganization} />
           <ThemeSelector />
         </ConsoleFrameHeader>
         <ConsoleFrameContent contentRef={contentRef}>
@@ -335,11 +336,18 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
         </ConsoleFrameContent>
       </ConsoleFrame>
 
+      <AgentShell
+        userId={me.user.id}
+        organization={activeOrganization}
+        contextMismatch={hasOrganizationContextMismatch}
+      />
+
       <AccountSwitcherDialog
         currentUser={me.user}
         open={accountDialogOpen}
         onOpenChange={setAccountDialogOpen}
         onPrepareAgentSwitch={agentRuntime.beginOrganizationSwitch}
+        onAbortAgentSwitch={agentRuntime.abortOrganizationSwitch}
         onCancelAgentSwitch={agentRuntime.cancelOrganizationSwitch}
         onCompleteAgentSwitch={completeAccountSwitch}
       />
@@ -454,8 +462,10 @@ const navigationFallback = <NavigationFallback />
 
 const ConsoleNavigation = ({
   activeOrganization,
+  agentThread,
 }: {
   activeOrganization?: OrganizationSummary
+  agentThread: string
 }) => {
   const pathname = usePathname()
   const workspaceNavigation = useMemo<NavigationItem[]>(
@@ -510,18 +520,21 @@ const ConsoleNavigation = ({
         label="Workspace"
         items={workspaceNavigation}
         pathname={pathname}
+        agentThread={agentThread}
       />
       {organizationNavigation.length > 0 ? (
         <NavigationGroup
           label="Organization"
           items={organizationNavigation}
           pathname={pathname}
+          agentThread={agentThread}
         />
       ) : null}
       <NavigationGroup
         label="Settings"
         items={accountNavigation}
         pathname={pathname}
+        agentThread={agentThread}
       />
     </>
   )
@@ -531,10 +544,12 @@ const NavigationGroup = ({
   label,
   items,
   pathname,
+  agentThread,
 }: {
   label: string
   items: NavigationItem[]
   pathname: string
+  agentThread: string
 }) => (
   <SidebarGroup>
     <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -544,6 +559,7 @@ const NavigationGroup = ({
           <NavigationMenuItem
             key={item.href}
             item={item}
+            agentThread={agentThread}
             active={
               pathname === item.href ||
               (item.href !== "/dashboard" &&
@@ -558,9 +574,11 @@ const NavigationGroup = ({
 
 const NavigationMenuItem = ({
   item,
+  agentThread,
   active,
 }: {
   item: NavigationItem
+  agentThread: string
   active: boolean
 }) => {
   const Icon = item.icon
@@ -574,7 +592,7 @@ const NavigationMenuItem = ({
       <SidebarMenuLinkButton
         isActive={active}
         tooltip={item.label}
-        href={item.href}
+        href={withAgentThreadHref(item.href, agentThread)}
         onClick={handleNavigate}
       >
         <Icon aria-hidden="true" />
@@ -587,6 +605,7 @@ const NavigationMenuItem = ({
 type OrganizationSwitcherProps = {
   organizations: OrganizationSummary[]
   activeOrganization?: OrganizationSummary
+  agentThread: string
   pending: boolean
   onChange: (organizationId: string) => void
 }
@@ -594,6 +613,7 @@ type OrganizationSwitcherProps = {
 const OrganizationSwitcher = ({
   organizations,
   activeOrganization,
+  agentThread,
   pending,
   onChange,
 }: OrganizationSwitcherProps) => {
@@ -657,7 +677,9 @@ const OrganizationSwitcher = ({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuLinkItem href="/settings/organizations">
+          <DropdownMenuLinkItem
+            href={withAgentThreadHref("/settings/organizations", agentThread)}
+          >
             <PlusIcon aria-hidden="true" />
             Create organization
           </DropdownMenuLinkItem>
@@ -740,8 +762,12 @@ const ThemeSelector = () => {
 
 const UserMenu = ({
   user,
+  agentThread,
   onOpenAccountSwitcher,
-}: Pick<Me, "user"> & { onOpenAccountSwitcher: () => void }) => {
+}: Pick<Me, "user"> & {
+  agentThread: string
+  onOpenAccountSwitcher: () => void
+}) => {
   const { setOpenMobile } = useSidebar()
   const openAccountSwitcher = useCallback(() => {
     setOpenMobile(false)
@@ -771,7 +797,9 @@ const UserMenu = ({
             <PlusIcon aria-hidden="true" />
             Add account
           </DropdownMenuLinkItem>
-          <DropdownMenuLinkItem href="/settings/account">
+          <DropdownMenuLinkItem
+            href={withAgentThreadHref("/settings/account", agentThread)}
+          >
             <SettingsIcon aria-hidden="true" />
             Account settings
           </DropdownMenuLinkItem>

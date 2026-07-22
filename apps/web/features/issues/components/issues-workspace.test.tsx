@@ -69,6 +69,7 @@ const createViewProps = (total: number) => ({
 })
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/organization/acme/issues",
   useRouter: () => ({ back: vi.fn<() => void>() }),
 }))
 
@@ -206,7 +207,119 @@ describe("organization issues", () => {
       "billing"
     )
     expect(screen.getByText(billingIssue.title)).toBeInTheDocument()
-    expect(callbacks.onSearchChange).toHaveBeenCalled()
+    expect(callbacks.onSearchChange).not.toHaveBeenCalled()
+    await waitFor(() => expect(callbacks.onSearchChange).toHaveBeenCalledOnce())
+    expect(callbacks.onSearchChange).toHaveBeenCalledWith("billing")
+  })
+
+  it("debounces label URL state with replace history", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Filter issues by label" }),
+      "incident"
+    )
+    expect(callbacks.onViewChange).not.toHaveBeenCalled()
+    await waitFor(() => expect(callbacks.onViewChange).toHaveBeenCalledOnce())
+    expect(callbacks.onViewChange).toHaveBeenCalledWith(
+      { label: "incident", page: 1 },
+      { history: "replace" }
+    )
+  })
+
+  it("keeps a real pagination href before hydration and uses URL state after hydration", async () => {
+    const user = userEvent.setup()
+    const callbacks = {
+      onCreate: vi.fn<(title: string) => Promise<void>>(),
+      onToggle: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onDelete: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
+      assignees,
+      getIssueHref: (issue: IssueUiItem) =>
+        `/organization/acme/issues/${issue.number.toString()}`,
+      onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+      ...createViewProps(12),
+      searchState: {
+        ...defaultIssueSearchState,
+        q: "tenant audit",
+        status: "open" as const,
+        agentThread: "agent-thread-1",
+      },
+    }
+    render(<IssuesWorkspace issues={issues} {...callbacks} />)
+
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    const next = screen.getByRole("link", { name: "Next" })
+    const href = new URL(
+      next.getAttribute("href") ?? "",
+      "https://enterprise-agentic-saas.localhost"
+    )
+    expect(href.pathname).toBe("/organization/acme/issues")
+    expect(href.searchParams.get("q")).toBe("tenant audit")
+    expect(href.searchParams.get("status")).toBe("open")
+    expect(href.searchParams.get("agentThread")).toBe("agent-thread-1")
+    expect(href.searchParams.get("page")).toBe("2")
+
+    await user.keyboard("{Control>}")
+    await user.click(next)
+    await user.keyboard("{/Control}")
+    expect(callbacks.onViewChange).not.toHaveBeenCalled()
+
+    await user.click(next)
+    expect(callbacks.onViewChange).toHaveBeenCalledWith({ page: 2 })
+  })
+
+  it("reuses the status, priority, and assignee domain controls for filters", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+
+    const statusFilter = screen.getByRole("combobox", {
+      name: "Filter issues by status",
+    })
+    expect(within(statusFilter).getByTestId("status-all")).toHaveTextContent(
+      "All issues"
+    )
+    await user.click(statusFilter)
+    const inProgress = screen.getByRole("option", { name: "In progress" })
+    expect(within(inProgress).getByTestId("status-in-progress")).toBeVisible()
+    await user.click(inProgress)
+    expect(callbacks.onViewChange).toHaveBeenCalledWith({
+      status: "in_progress",
+      page: 1,
+    })
+
+    callbacks.onViewChange.mockClear()
+    const priorityFilter = screen.getByRole("combobox", {
+      name: "Filter issues by priority",
+    })
+    expect(
+      within(priorityFilter).getByTestId("priority-all")
+    ).toHaveTextContent("All priorities")
+    await user.click(priorityFilter)
+    const urgent = screen.getByRole("option", { name: "Urgent" })
+    expect(within(urgent).getByTestId("priority-urgent")).toBeVisible()
+    await user.click(urgent)
+    expect(callbacks.onViewChange).toHaveBeenCalledWith({
+      priority: "urgent",
+      page: 1,
+    })
+
+    callbacks.onViewChange.mockClear()
+    const assigneeFilter = screen.getByRole("combobox", {
+      name: "Filter issues by assignee",
+    })
+    expect(assigneeFilter).toHaveTextContent("All assignees")
+    await user.click(assigneeFilter)
+    const jordanOption = screen.getByRole("option", {
+      name: /Jordan.*jordan@example\.test/u,
+    })
+    expect(within(jordanOption).getByText("JO")).toBeVisible()
+    await user.click(jordanOption)
+    expect(callbacks.onViewChange).toHaveBeenCalledWith({
+      assignee: "user-2",
+      page: 1,
+    })
   })
 
   it("creates, opens, closes, and deletes from the table", async () => {

@@ -1,10 +1,8 @@
-import type {
-  AgentInternalApiContract,
-  AgentIssueAction,
-} from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentIssueAction } from "@enterprise-agentic-saas/api/agent-client"
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 
+import type { AgentInternalGateway } from "./internal-api"
 import { createAgentToolBudget } from "./tool-budget"
 import {
   agentWriteToolSchemas,
@@ -15,8 +13,9 @@ import {
 } from "./write-tools"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
+const ROOT_RUN_ID = "root_run_1"
 type WriteApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   | "executeApprovedAction"
   | "prepareCreateIssue"
   | "prepareDeleteIssue"
@@ -83,7 +82,8 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
     api,
     RUN_GRANT,
     { consume, suspendForApproval },
-    { holdForApproval }
+    { holdForApproval },
+    ROOT_RUN_ID
   )
   return {
     api,
@@ -150,29 +150,44 @@ describe("agent write schemas", () => {
 })
 
 describe("action identity", () => {
-  it("is deterministic over tool call, kind, and canonical payload", async () => {
-    const first = await createActionIdentity("create_issue", "call_1", {
-      title: "Issue",
-      labels: ["bug"],
-    })
-    const reordered = await createActionIdentity("create_issue", "call_1", {
-      labels: ["bug"],
-      title: "Issue",
-    })
+  it("is stable across provider calls in one root run and changes across logical writes", async () => {
+    const first = await createActionIdentity(
+      "create_issue",
+      "call_1",
+      { title: "Issue", labels: ["bug"] },
+      ROOT_RUN_ID
+    )
+    const reordered = await createActionIdentity(
+      "create_issue",
+      "call_1",
+      { labels: ["bug"], title: "Issue" },
+      ROOT_RUN_ID
+    )
     const changedPayload = await createActionIdentity(
       "create_issue",
       "call_1",
-      { title: "Other" }
+      { title: "Other" },
+      ROOT_RUN_ID
     )
-    const changedCall = await createActionIdentity("create_issue", "call_2", {
-      title: "Issue",
-      labels: ["bug"],
-    })
+    const changedCall = await createActionIdentity(
+      "create_issue",
+      "call_2",
+      { title: "Issue", labels: ["bug"] },
+      ROOT_RUN_ID
+    )
+    const changedScope = await createActionIdentity(
+      "create_issue",
+      "call_1",
+      { title: "Issue", labels: ["bug"] },
+      "root_run_2"
+    )
 
     expect(first).toEqual(reordered)
     expect(first.idempotencyKey).toMatch(/^v1\.[a-f0-9]{64}$/)
     expect(first.idempotencyKey).not.toBe(changedPayload.idempotencyKey)
-    expect(first.idempotencyKey).not.toBe(changedCall.idempotencyKey)
+    expect(first.idempotencyKey).toBe(changedCall.idempotencyKey)
+    expect(first.toolCallId).not.toBe(changedCall.toolCallId)
+    expect(first.idempotencyKey).not.toBe(changedScope.idempotencyKey)
   })
 
   it("hashes a provider tool ID that is unsafe for the internal API", async () => {
@@ -216,9 +231,13 @@ describe("createAgentWriteHandlers", () => {
   it("suspends the shared tool control after a pending mutation", async () => {
     const test = harness("pending")
     const budget = createAgentToolBudget()
-    const handlers = createAgentWriteHandlers(test.api, RUN_GRANT, budget, {
-      holdForApproval: vi.fn<() => void>(),
-    })
+    const handlers = createAgentWriteHandlers(
+      test.api,
+      RUN_GRANT,
+      budget,
+      { holdForApproval: vi.fn<() => void>() },
+      ROOT_RUN_ID
+    )
 
     await handlers.createIssue({ title: "Issue" }, "call_1")
 
@@ -424,7 +443,8 @@ describe("createAgentWriteTools", () => {
             consume: vi.fn<(kind: "client" | "read" | "write") => void>(),
             suspendForApproval: vi.fn<() => void>(),
           },
-          { holdForApproval: vi.fn<() => void>() }
+          { holdForApproval: vi.fn<() => void>() },
+          ROOT_RUN_ID
         )
       ).toSorted()
     ).toEqual(["create_issue", "delete_issue", "update_issue"])
@@ -449,7 +469,8 @@ describe("createAgentWriteTools", () => {
       api,
       RUN_GRANT,
       { consume, suspendForApproval },
-      { holdForApproval: vi.fn<() => void>() }
+      { holdForApproval: vi.fn<() => void>() },
+      ROOT_RUN_ID
     )
     const options = { messages: [], toolCallId: "call_1" }
 

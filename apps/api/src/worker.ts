@@ -4,11 +4,14 @@ import { WorkerEntrypoint } from "cloudflare:workers"
 import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
 
-import type { AgentInternalApiContract } from "./agent-client"
 import { createApp } from "./app"
 import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handler"
 import { sweepAgentActions } from "./modules/agent/action-repository"
-import { createAgentInternalApi } from "./modules/agent/internal-api"
+import { createAgentInternalApp } from "./modules/agent/internal-api"
+import {
+  configureAgentRuntime,
+  type AgentRuntimeBinding,
+} from "./modules/agent/runtime"
 import { processAgentAssetLifecycle } from "./modules/files/agent-assets-cleanup"
 import { processFileCleanupJobs } from "./modules/files/cleanup-jobs"
 import {
@@ -36,6 +39,7 @@ import { corsPlugin } from "./plugins/cors"
 import { serverTimingPlugin } from "./plugins/server-timing"
 
 type WorkerSentryEnv = {
+  AGENT_RUNTIME: AgentRuntimeBinding
   AGENT_ASSET_UPLOAD_ENABLED?: string
   DEV_FILE_SEED_TOKEN?: string
   FILES: FileR2Bucket & OrganizationFilesBucket
@@ -58,109 +62,38 @@ type WorkerScheduledController = {
   scheduledTime: number
 }
 
-const agentInternalApi = createAgentInternalApi(db)
-
-export class AgentInternalApi
-  extends WorkerEntrypoint<WorkerSentryEnv>
-  implements AgentInternalApiContract
-{
-  consumeConnectionTicket(
-    input: Parameters<AgentInternalApiContract["consumeConnectionTicket"]>[0]
-  ) {
-    return agentInternalApi.consumeConnectionTicket(input)
-  }
-
-  startRun(input: Parameters<AgentInternalApiContract["startRun"]>[0]) {
-    return agentInternalApi.startRun(input)
-  }
-
-  cancelRun(input: Parameters<AgentInternalApiContract["cancelRun"]>[0]) {
-    return agentInternalApi.cancelRun(input)
-  }
-
-  finishRun(input: Parameters<AgentInternalApiContract["finishRun"]>[0]) {
-    return agentInternalApi.finishRun(input)
-  }
-
-  readAccountContext(
-    input: Parameters<AgentInternalApiContract["readAccountContext"]>[0]
-  ) {
-    return agentInternalApi.readAccountContext(input)
-  }
-
-  readActiveOrganization(
-    input: Parameters<AgentInternalApiContract["readActiveOrganization"]>[0]
-  ) {
-    return agentInternalApi.readActiveOrganization(input)
-  }
-
-  searchOrganizationMembers(
-    input: Parameters<AgentInternalApiContract["searchOrganizationMembers"]>[0]
-  ) {
-    return agentInternalApi.searchOrganizationMembers(input)
-  }
-
-  searchIssueLabels(
-    input: Parameters<AgentInternalApiContract["searchIssueLabels"]>[0]
-  ) {
-    return agentInternalApi.searchIssueLabels(input)
-  }
-
-  searchIssues(input: Parameters<AgentInternalApiContract["searchIssues"]>[0]) {
-    return agentInternalApi.searchIssues(input)
-  }
-
-  getIssue(input: Parameters<AgentInternalApiContract["getIssue"]>[0]) {
-    return agentInternalApi.getIssue(input)
-  }
-
-  prepareCreateIssue(
-    input: Parameters<AgentInternalApiContract["prepareCreateIssue"]>[0]
-  ) {
-    return agentInternalApi.prepareCreateIssue(input)
-  }
-
-  prepareUpdateIssue(
-    input: Parameters<AgentInternalApiContract["prepareUpdateIssue"]>[0]
-  ) {
-    return agentInternalApi.prepareUpdateIssue(input)
-  }
-
-  prepareDeleteIssue(
-    input: Parameters<AgentInternalApiContract["prepareDeleteIssue"]>[0]
-  ) {
-    return agentInternalApi.prepareDeleteIssue(input)
-  }
-
-  getIssueActionDecision(
-    input: Parameters<AgentInternalApiContract["getIssueActionDecision"]>[0]
-  ) {
-    return agentInternalApi.getIssueActionDecision(input)
-  }
-
-  resumeApprovedAction(
-    input: Parameters<AgentInternalApiContract["resumeApprovedAction"]>[0]
-  ) {
-    return agentInternalApi.resumeApprovedAction(input)
-  }
-
-  executeApprovedAction(
-    input: Parameters<AgentInternalApiContract["executeApprovedAction"]>[0]
-  ) {
-    return agentInternalApi.executeApprovedAction(input)
-  }
-
-  getAgentImageForModel(
-    input: Parameters<AgentInternalApiContract["getAgentImageForModel"]>[0]
-  ) {
-    configureFileStorageRuntimeFromWorkerEnvironment(this.env)
-    return agentInternalApi.getAgentImageForModel(input)
-  }
-}
-
 const tracesSampleRate = (value: string | undefined): number => {
   const parsed = Number(value ?? "0.1")
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.1
+}
+
+const createWorkerSentryOptions = (workerEnv: WorkerSentryEnv) => {
+  const development = workerEnv.NODE_ENV === "development"
+  const spotlight = resolveSpotlightTarget(
+    workerEnv.SENTRY_SPOTLIGHT,
+    development ? "development" : "production"
+  )
+  const spotlightEnabled = spotlight !== false
+
+  return {
+    ...sentryPrivacyOptions,
+    dsn: spotlightEnabled
+      ? SPOTLIGHT_DSN
+      : development
+        ? undefined
+        : workerEnv.SENTRY_DSN,
+    enableLogs: true,
+    environment:
+      workerEnv.SENTRY_ENVIRONMENT ??
+      (development ? "development" : "production"),
+    integrations: filterSentryIntegrations,
+    release: workerEnv.SENTRY_RELEASE,
+    sampleRate: 1,
+    spotlight,
+    tracesSampleRate: spotlightEnabled
+      ? 1
+      : tracesSampleRate(workerEnv.SENTRY_TRACES_SAMPLE_RATE),
+  }
 }
 
 configureObservability(
@@ -180,12 +113,32 @@ const worker = new Elysia({ adapter: CloudflareAdapter })
 
 const appFetch = worker.fetch.bind(worker)
 
+const agentInternalWorker = new Elysia({ adapter: CloudflareAdapter })
+  .use(createAgentInternalApp(db))
+  .compile()
+const agentInternalFetch = agentInternalWorker.fetch.bind(agentInternalWorker)
+
+class AgentInternalApiBase extends WorkerEntrypoint<WorkerSentryEnv> {
+  fetch(request: Request): Promise<Response> | Response {
+    // named entrypointはdefault/public Workerとは別isolateになり得るため、
+    // asset prepare/execute/model imageの全経路でbindingを初期化する。
+    configureFileStorageRuntimeFromWorkerEnvironment(this.env)
+    return agentInternalFetch(request)
+  }
+}
+
+export const AgentInternalApi = Sentry.withSentry(
+  createWorkerSentryOptions,
+  AgentInternalApiBase
+)
+
 const workerWithScheduled = {
   async fetch(
     request: Request,
     workerEnv: WorkerSentryEnv,
     _context: WorkerExecutionContext
   ) {
+    configureAgentRuntime(workerEnv.AGENT_RUNTIME)
     configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
     const seedResponse = await handleDevelopmentFileSeedRequest(
       db,
@@ -375,31 +328,7 @@ const workerWithScheduled = {
   },
 }
 
-export default Sentry.withSentry<WorkerSentryEnv>((workerEnv) => {
-  const development = workerEnv.NODE_ENV === "development"
-  const spotlight = resolveSpotlightTarget(
-    workerEnv.SENTRY_SPOTLIGHT,
-    development ? "development" : "production"
-  )
-  const spotlightEnabled = spotlight !== false
-
-  return {
-    ...sentryPrivacyOptions,
-    dsn: spotlightEnabled
-      ? SPOTLIGHT_DSN
-      : development
-        ? undefined
-        : workerEnv.SENTRY_DSN,
-    enableLogs: true,
-    environment:
-      workerEnv.SENTRY_ENVIRONMENT ??
-      (development ? "development" : "production"),
-    integrations: filterSentryIntegrations,
-    release: workerEnv.SENTRY_RELEASE,
-    sampleRate: 1,
-    spotlight,
-    tracesSampleRate: spotlightEnabled
-      ? 1
-      : tracesSampleRate(workerEnv.SENTRY_TRACES_SAMPLE_RATE),
-  }
-}, workerWithScheduled)
+export default Sentry.withSentry<WorkerSentryEnv>(
+  createWorkerSentryOptions,
+  workerWithScheduled
+)

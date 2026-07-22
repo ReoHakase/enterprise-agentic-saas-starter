@@ -1343,6 +1343,7 @@ describe("Agent staged image API and lifecycle", () => {
       .from(schema.agentResourceUsageBuckets)
       .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
     expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
+    await internal.finishRun({ grant: run.grant, outcome: "completed" })
 
     const seededIds: string[] = []
     for (let index = 0; index < 5; index += 1) {
@@ -1353,9 +1354,10 @@ describe("Agent staged image API and lifecycle", () => {
       })
       seededIds.push(seededId)
     }
+    const countConnection = await openConnection(db)
     await expect(
       startAgentRun(db, {
-        grant: connection.grant,
+        grant: countConnection.grant,
         clientMessageId: "too-many-assets",
         assetIds: seededIds,
       })
@@ -1370,9 +1372,10 @@ describe("Agent staged image API and lifecycle", () => {
       })
       largeIds.push(seededId)
     }
+    const byteConnection = await openConnection(db)
     await expect(
       startAgentRun(db, {
-        grant: connection.grant,
+        grant: byteConnection.grant,
         clientMessageId: "too-many-bytes",
         assetIds: largeIds,
       })
@@ -1387,7 +1390,9 @@ describe("Agent staged image API and lifecycle", () => {
   })
 
   it("records a minimal file.uploaded audit inside zero-copy promotion", async () => {
-    const { db } = await createFixture()
+    const { app, db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
     const assetId = await seedReadyAsset(db, {
       id: "promotion-audit-asset",
       sizeBytes: 16,
@@ -1399,6 +1404,16 @@ describe("Agent staged image API and lifecycle", () => {
     if (!object?.etag || !object.objectKey) {
       throw new Error("Promotion storage fixture is incomplete")
     }
+    storage.objects.set(object.objectKey, {
+      bytes: Uint8Array.from(pngBytes()),
+      object: {
+        key: object.objectKey,
+        size: object.sizeBytes,
+        etag: object.etag,
+        httpEtag: `"${object.etag}"`,
+        customMetadata: {},
+      },
+    })
     await db.insert(schema.organizationFileUsage).values({
       organizationId: "asset-org-a",
       usedBytes: object.sizeBytes,
@@ -1515,6 +1530,19 @@ describe("Agent staged image API and lifecycle", () => {
         .from(schema.files)
         .where(eq(schema.files.id, plannedFileId))
     ).toEqual([{ objectKey: object.objectKey, storageObjectId: object.id }])
+
+    const promotedPreview = await app.handle(assetRequest({ assetId }))
+    expect(promotedPreview.status).toBe(200)
+    expect(promotedPreview.headers.get("content-type")).toBe("image/webp")
+
+    const unauthorizedPreview = await app.handle(
+      assetRequest({
+        assetId,
+        sessionId: "asset-session-b",
+        userId: "asset-user-b",
+      })
+    )
+    expect(unauthorizedPreview.status).toBe(404)
   })
 
   it("blocks deletion under an active action lease, then releases quota and exact-deletes", async () => {

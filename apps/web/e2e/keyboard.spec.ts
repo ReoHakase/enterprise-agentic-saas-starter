@@ -164,7 +164,7 @@ test("キーボード更新中もIssueのfocusを保持し、内部scrollとtena
   await expect(priority).toHaveAttribute("aria-busy", "true")
   await expect(priority).toBeFocused()
   expect((await updateResponse).ok()).toBeTruthy()
-  await expect(priority).toContainText("medium")
+  await expect(priority).toContainText("Medium")
   await expect(priority).toHaveAttribute("aria-busy", "false")
   await expect(priority).toBeFocused()
   await expect(
@@ -297,7 +297,18 @@ test("キーボードだけでmember管理・session revoke・passkey再認証�
   await expect(stepUp).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(addPasskey).toBeFocused()
+  // Base UI keeps the closing portal mounted briefly. Wait for that exact
+  // instance to leave before reopening, otherwise the keyboard helper can
+  // target its inert action instead of the fresh focus trap.
+  await expect(stepUp).toHaveCount(0)
+  const repeatedStaleResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/auth/passkey/generate-register-options") &&
+      response.request().method() === "GET"
+  )
   await page.keyboard.press("Enter")
+  expect((await repeatedStaleResponse).status()).toBe(403)
+  await expect(stepUp).toHaveAttribute("data-open", "")
   await activate(
     page,
     stepUp.getByRole("button", { name: "Continue to sign in" })

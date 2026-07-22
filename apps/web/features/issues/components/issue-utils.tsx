@@ -4,6 +4,7 @@ import {
   CircleDotIcon,
   Clock3Icon,
   FlagIcon,
+  ListFilterIcon,
 } from "lucide-react"
 
 import {
@@ -44,6 +45,11 @@ export const priorityOptions: Array<{
   { label: "Medium", value: "medium" },
   { label: "High", value: "high" },
   { label: "Urgent", value: "urgent" },
+]
+
+export const priorityFilterOptions = [
+  { label: "All priorities", value: "all" },
+  ...priorityOptions,
 ]
 
 export const emptyAssigneeOptions: IssueAssigneeOption[] = []
@@ -115,7 +121,9 @@ export const StatusBadge = ({ status }: { status: IssueStatus }) => {
 }
 
 export const PriorityBadge = ({ priority }: { priority: IssuePriority }) => {
-  const label = priority === "no_priority" ? "No priority" : priority
+  const label =
+    priorityOptions.find((option) => option.value === priority)?.label ??
+    priority
   const className =
     priority === "urgent"
       ? "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-300"
@@ -134,7 +142,29 @@ export const PriorityBadge = ({ priority }: { priority: IssuePriority }) => {
       data-testid={`priority-${priority}`}
     >
       <FlagIcon aria-hidden="true" />
-      <span className="capitalize">{label}</span>
+      <span>{label}</span>
     </Badge>
   )
 }
+
+export const AllIssueStatusesBadge = () => (
+  <Badge
+    className="border-border bg-muted text-foreground"
+    variant="outline"
+    data-testid="status-all"
+  >
+    <ListFilterIcon aria-hidden="true" />
+    All issues
+  </Badge>
+)
+
+export const AllIssuePrioritiesBadge = () => (
+  <Badge
+    className="border-border bg-muted text-foreground"
+    variant="outline"
+    data-testid="priority-all"
+  >
+    <FlagIcon aria-hidden="true" />
+    All priorities
+  </Badge>
+)

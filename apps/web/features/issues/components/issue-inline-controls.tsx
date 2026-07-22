@@ -183,8 +183,9 @@ export const IssueStatusSelect = ({
 }) => {
   const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
-    (value: IssueUiItem["status"]) =>
-      safelyRunAction(onUpdate?.(issue, { status: value })),
+    (value: IssueUiItem["status"] | "all") => {
+      if (value !== "all") safelyRunAction(onUpdate?.(issue, { status: value }))
+    },
     [issue, onUpdate]
   )
 
@@ -209,8 +210,10 @@ export const IssuePrioritySelect = ({
 }) => {
   const busy = useIssueMutationState(issue.id)
   const handleValueChange = useCallback(
-    (value: IssueUiItem["priority"]) =>
-      safelyRunAction(onUpdate?.(issue, { priority: value })),
+    (value: IssueUiItem["priority"] | "all") => {
+      if (value !== "all")
+        safelyRunAction(onUpdate?.(issue, { priority: value }))
+    },
     [issue, onUpdate]
   )
 

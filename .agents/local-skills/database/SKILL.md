@@ -75,6 +75,8 @@ auth pluginの構成（magicLink, organization 等）を変えたら必ず再生
 - 開発用DBは `packages/db/.local/turso/dev.db` に永続化する。gitには入れない。
 - local dev bootstrapは `turso dev -> wait -> generate -> migrate -> studio` の順にする。日常の`bun run dev`へseedやtestを混ぜず、開発起動でも `drizzle-kit push` は使わない。
 - schema変更は `db:generate` でSQL/snapshotを保存し、SQLとdata backfillをレビューしてから `db:migrate` する。CIは `db:check` とfresh/legacy migration testを通す。
+- Drizzleが既存tableをrebuildするmigrationでは、そのtableを参照する別table上のtriggerも一時的にinvalidになる。`sqlite_master`/既存migrationから参照triggerを列挙し、rebuild前にdrop、rename/index作成後に同じ定義で復元する。table自身のtriggerもdropで消えるため復元し、freshだけでなく既存data入りlegacy migration testで確認する。
+- Agentの課金reservationは`agent_resource_usage_buckets`とappend-only `agent_resource_usage_operations`を使い、user/orgの複数scopeを呼出側の同一transactionへ閉じる。`model_run`と`web_search`もkind checkへ明示し、operation IDはnamespaced hash、上限時はbucket checkのrollbackから429 `retryAfter`へ変換する。
 - seedは `drizzle-seed` を使う。auth/appの `text("id")` primary key は実アプリの生成と合わせて `f.uuid()` を明示し、整数風や任意文字列のIDを混ぜない。
 - seedは既存userがいるDBを破壊せずskipする。seed自体も `file:` またはlocalhost URLだけを許可し、Cloud Tursoへ開発用fake dataを投入しない。本番provisioningはmigrationと実ユーザーの明示的な初期管理者作成を別経路で行う。
 - development seedのuser profile imageは、user UUIDをseed parameterにした`https://api.dicebear.com/10.x/lorelei/svg`の決定的URLを保存する。名前、email、生成順へ依存させず、Webのprofile image URL allowlistと整合させる。

@@ -2,9 +2,6 @@ export const clientEnv = {
   NEXT_PUBLIC_API_BASE_URL:
     process.env.NEXT_PUBLIC_API_BASE_URL ??
     "https://api.enterprise-agentic-saas.localhost",
-  NEXT_PUBLIC_AGENT_BASE_URL:
-    process.env.NEXT_PUBLIC_AGENT_BASE_URL ??
-    "https://agent.enterprise-agentic-saas.localhost",
   NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   NEXT_PUBLIC_SENTRY_ENVIRONMENT: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT,
   NEXT_PUBLIC_SENTRY_ERROR_SAMPLE_RATE:

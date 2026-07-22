@@ -1,9 +1,11 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
+  agentRuns,
   agentResourceUsageBuckets,
   agentResourceUsageOperations,
+  type AgentResourceUsageKind,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, asc, eq, inArray, isNull, lte, sql } from "drizzle-orm"
+import { and, asc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm"
 
 import { AppError } from "../../errors/app-error"
 
@@ -11,15 +13,19 @@ export type AgentResourceUsageTransaction = Parameters<
   Parameters<Db["transaction"]>[0]
 >[0]
 
-type AgentResourceUsageKind =
-  | "asset_upload"
-  | "vision_transform"
-  | "write_action"
-
 export const AGENT_USAGE_HOUR_MS = 60 * 60 * 1000
 export const AGENT_USAGE_DAY_MS = 24 * AGENT_USAGE_HOUR_MS
 export const AGENT_RESOURCE_USAGE_RETENTION_GRACE_MS = AGENT_USAGE_DAY_MS
 export const AGENT_RESOURCE_USAGE_PURGE_BATCH_SIZE = 100
+
+// 初期運用はcost runawayを避けるため、課金対象をuserの短期窓とorgの
+// 日次窓の両方で予約する。plan別quotaを導入するまではこの保守値を正本にする。
+export const AGENT_MODEL_RUN_USER_HOURLY_LIMIT = 20
+export const AGENT_MODEL_RUN_ORGANIZATION_DAILY_LIMIT = 500
+export const AGENT_WEB_SEARCH_USER_HOURLY_LIMIT = 10
+export const AGENT_WEB_SEARCH_ORGANIZATION_DAILY_LIMIT = 100
+export const AGENT_MODEL_RUN_ACTIVE_USER_LIMIT = 1
+export const AGENT_MODEL_RUN_ACTIVE_ORGANIZATION_LIMIT = 10
 
 /**
  * 完了windowはretry/idempotencyの短いgraceだけ保持し、bucket削除のFK cascadeで
@@ -90,6 +96,27 @@ const limitExceeded = (input: { now: Date; windowEnd: Date }) =>
       retryAfter: Math.max(
         1,
         Math.ceil((input.windowEnd.getTime() - input.now.getTime()) / 1000)
+      ),
+    },
+    privateContext: { module: "agent-resource-usage" },
+  })
+
+const concurrencyLimitExceeded = (input: {
+  constraint: "active_model_runs_organization" | "active_model_runs_user"
+  now: Date
+  retryAt: Date
+}) =>
+  new AppError({
+    code: "rate_limited",
+    publicMessage: "Too many agent runs are active. Try again later",
+    statusCode: 429,
+    publicContext: {
+      constraint: input.constraint,
+      reason: "concurrency_limit_exceeded",
+      resource: "agent_run",
+      retryAfter: Math.max(
+        1,
+        Math.ceil((input.retryAt.getTime() - input.now.getTime()) / 1000)
       ),
     },
     privateContext: { module: "agent-resource-usage" },
@@ -231,4 +258,189 @@ export const hashedAgentUsageOperationId = async (
     byte.toString(16).padStart(2, "0")
   ).join("")
   return `${namespace}:${hex}`
+}
+
+type ModelRunConcurrencyInput = {
+  expiresAt: Date
+  now: Date
+  organizationId: string
+  runId: string
+  userId: string
+}
+
+type ModelRunReservationInput = ModelRunConcurrencyInput & {
+  attempt: number
+}
+
+export const assertAgentModelRunConcurrencyInTransaction = async (
+  tx: AgentResourceUsageTransaction,
+  input: ModelRunConcurrencyInput
+) => {
+  const activeRuns = await tx
+    .select({
+      expiresAt: agentRuns.expiresAt,
+      id: agentRuns.id,
+      userId: agentRuns.userId,
+    })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.organizationId, input.organizationId),
+        eq(agentRuns.scope, "chat"),
+        eq(agentRuns.status, "running"),
+        gt(agentRuns.expiresAt, input.now)
+      )
+    )
+
+  const retryAt = (runs: typeof activeRuns) =>
+    runs
+      .filter(({ id }) => id !== input.runId)
+      .reduce<Date | null>(
+        (earliest, run) =>
+          earliest === null || run.expiresAt < earliest
+            ? run.expiresAt
+            : earliest,
+        null
+      ) ?? input.expiresAt
+
+  const activeUserRuns = activeRuns.filter(
+    ({ userId }) => userId === input.userId
+  )
+  if (activeUserRuns.length > AGENT_MODEL_RUN_ACTIVE_USER_LIMIT) {
+    throw concurrencyLimitExceeded({
+      constraint: "active_model_runs_user",
+      now: input.now,
+      retryAt: retryAt(activeUserRuns),
+    })
+  }
+  if (activeRuns.length > AGENT_MODEL_RUN_ACTIVE_ORGANIZATION_LIMIT) {
+    throw concurrencyLimitExceeded({
+      constraint: "active_model_runs_organization",
+      now: input.now,
+      retryAt: retryAt(activeRuns),
+    })
+  }
+}
+
+const assertMatchingReservationResult = (input: {
+  organizationConsumed: boolean
+  userConsumed: boolean
+}) => {
+  if (input.organizationConsumed !== input.userConsumed) {
+    throw new Error("Agent resource usage reservation ledger is inconsistent")
+  }
+  return { reused: !input.userConsumed }
+}
+
+/**
+ * chat run attemptをrunningへ確定した同じtransactionから呼ぶ。新規insertと
+ * CAS retryのどちらも、active runと2つのquota bucketをattempt単位で予約する。
+ */
+export const reserveAgentModelRunInTransaction = async (
+  tx: AgentResourceUsageTransaction,
+  input: ModelRunReservationInput
+) => {
+  if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) {
+    throw new Error("Invalid Agent model run attempt")
+  }
+  await assertAgentModelRunConcurrencyInTransaction(tx, input)
+  const operationId = await hashedAgentUsageOperationId(
+    "model-run",
+    input.organizationId,
+    input.userId,
+    input.runId,
+    String(input.attempt)
+  )
+  const organizationWindow = utcUsageWindow(input.now, AGENT_USAGE_DAY_MS)
+  const userWindow = utcUsageWindow(input.now, AGENT_USAGE_HOUR_MS)
+  const organization = await consumeAgentResourceLimitInTransaction(tx, {
+    kind: "model_run",
+    limitCount: AGENT_MODEL_RUN_ORGANIZATION_DAILY_LIMIT,
+    now: input.now,
+    operationId,
+    organizationId: input.organizationId,
+    userId: null,
+    ...organizationWindow,
+  })
+  const user = await consumeAgentResourceLimitInTransaction(tx, {
+    kind: "model_run",
+    limitCount: AGENT_MODEL_RUN_USER_HOURLY_LIMIT,
+    now: input.now,
+    operationId,
+    organizationId: input.organizationId,
+    userId: input.userId,
+    ...userWindow,
+  })
+  return assertMatchingReservationResult({
+    organizationConsumed: organization.consumed,
+    userConsumed: user.consumed,
+  })
+}
+
+/**
+ * provider call前に呼び、検索の課金枠とroot runのsecurity markerを同時に固定する。
+ * operationIdはtool call由来でもraw値をledgerへ保存しない。
+ */
+export const reserveAgentWebSearchInTransaction = async (
+  tx: AgentResourceUsageTransaction,
+  input: {
+    now: Date
+    operationId: string
+    organizationId: string
+    runId: string
+    threadId: string
+    userId: string
+  }
+) => {
+  const operationId = await hashedAgentUsageOperationId(
+    "web-search",
+    input.organizationId,
+    input.userId,
+    input.runId,
+    input.operationId
+  )
+  const organizationWindow = utcUsageWindow(input.now, AGENT_USAGE_DAY_MS)
+  const userWindow = utcUsageWindow(input.now, AGENT_USAGE_HOUR_MS)
+  const organization = await consumeAgentResourceLimitInTransaction(tx, {
+    kind: "web_search",
+    limitCount: AGENT_WEB_SEARCH_ORGANIZATION_DAILY_LIMIT,
+    now: input.now,
+    operationId,
+    organizationId: input.organizationId,
+    userId: null,
+    ...organizationWindow,
+  })
+  const user = await consumeAgentResourceLimitInTransaction(tx, {
+    kind: "web_search",
+    limitCount: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT,
+    now: input.now,
+    operationId,
+    organizationId: input.organizationId,
+    userId: input.userId,
+    ...userWindow,
+  })
+  const markedRuns = await tx
+    .update(agentRuns)
+    .set({
+      webSearchUsedAt: sql`coalesce(${agentRuns.webSearchUsedAt}, ${input.now})`,
+    })
+    .where(
+      and(
+        eq(agentRuns.id, input.runId),
+        eq(agentRuns.organizationId, input.organizationId),
+        eq(agentRuns.threadId, input.threadId),
+        eq(agentRuns.userId, input.userId),
+        eq(agentRuns.scope, "chat"),
+        eq(agentRuns.status, "running"),
+        gt(agentRuns.expiresAt, input.now)
+      )
+    )
+    .returning({ id: agentRuns.id })
+  if (!markedRuns[0]) {
+    throw new Error("Agent web search run is no longer active")
+  }
+  return assertMatchingReservationResult({
+    organizationConsumed: organization.consumed,
+    userConsumed: user.consumed,
+  })
 }

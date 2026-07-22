@@ -31,7 +31,7 @@ export type AgentFormAdapter = {
   organizationId: string
   resource: "issue"
   resourceId?: string
-  revision?: number
+  revision: number
   epoch: string
   read: () => {
     values: AgentIssueFormValues
@@ -55,13 +55,14 @@ type FormTarget = {
 type FormPatchTarget = FormTarget & {
   formId: string
   expectedEpoch: string
+  expectedRevision: number
 }
 
 export type AgentFormSnapshot = {
   formId: string
   resource: "issue"
   resourceId?: string
-  revision?: number
+  revision: number
   epoch: string
   values: AgentIssueFormValues
   dirtyFields: Array<keyof AgentIssueFormValues>
@@ -83,7 +84,8 @@ const AgentFormRegistryContext = createContext<AgentFormRegistry | null>(null)
 
 const selectAdapter = (
   adapters: Map<string, AgentFormAdapter>,
-  target: FormTarget
+  target: FormTarget,
+  requireRevision = false
 ) => {
   const candidates = [...adapters.values()].filter(
     (candidate) => candidate.organizationId === target.organizationId
@@ -105,6 +107,11 @@ const selectAdapter = (
   if (target.expectedEpoch && target.expectedEpoch !== adapter.epoch) {
     throw new Error(
       "The Issue form changed. Read the draft again before patching it."
+    )
+  }
+  if (requireRevision && target.expectedRevision === undefined) {
+    throw new Error(
+      "The Issue revision is required. Read the draft again before patching it."
     )
   }
   if (
@@ -147,10 +154,10 @@ export const AgentFormRegistryProvider = ({ children }: PropsWithChildren) => {
     return snapshot(selectAdapter(adaptersRef.current, target))
   }, [])
   const patch = useCallback(
-    async (target: FormTarget, values: AgentIssueFormValues) => {
+    async (target: FormPatchTarget, values: AgentIssueFormValues) => {
       if (frozenRef.current)
         throw new Error("Organization switching is in progress.")
-      const adapter = selectAdapter(adaptersRef.current, target)
+      const adapter = selectAdapter(adaptersRef.current, target, true)
       const parsed = adapter.validate(values)
       if (!parsed.success) throw new Error(parsed.message)
 

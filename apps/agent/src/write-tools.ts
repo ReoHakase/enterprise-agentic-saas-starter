@@ -1,7 +1,6 @@
 import type {
   AgentActionExecutionResult,
   AgentCreateIssueActionInput,
-  AgentInternalApiContract,
   AgentIssueAction,
   AgentIssueActionKind,
   AgentIssueActionPreview,
@@ -10,10 +9,11 @@ import type {
 import { tool } from "ai"
 import { z } from "zod"
 
+import type { AgentInternalGateway } from "./internal-api"
 import type { AgentToolBudget } from "./tool-budget"
 
 type AgentWriteApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   | "executeApprovedAction"
   | "prepareCreateIssue"
   | "prepareDeleteIssue"
@@ -144,11 +144,12 @@ const sha256 = async (value: string): Promise<string> => {
 export const createActionIdentity = async (
   kind: AgentIssueActionKind,
   providerToolCallId: string,
-  payload: unknown
+  payload: unknown,
+  actionScopeId = providerToolCallId
 ): Promise<{ idempotencyKey: string; toolCallId: string }> => {
   const payloadDigest = await sha256(stableJson(payload))
   const identityDigest = await sha256(
-    `${kind}\u0000${providerToolCallId}\u0000${payloadDigest}`
+    `${kind}\u0000${actionScopeId}\u0000${payloadDigest}`
   )
   const toolCallId = IDENTIFIER_PATTERN.test(providerToolCallId)
     ? providerToolCallId
@@ -311,7 +312,8 @@ export const createAgentWriteHandlers = (
   api: AgentWriteApi,
   runGrant: string,
   budget: AgentToolBudget,
-  control: AgentWriteControl
+  control: AgentWriteControl,
+  actionScopeId: string
 ) => {
   const invoke = async (
     kind: AgentIssueActionKind,
@@ -327,7 +329,8 @@ export const createAgentWriteHandlers = (
       const identity = await createActionIdentity(
         kind,
         providerToolCallId,
-        payload
+        payload,
+        actionScopeId
       )
       return await prepareResult(
         api,
@@ -383,9 +386,16 @@ export const createAgentWriteTools = (
   api: AgentWriteApi,
   runGrant: string,
   budget: AgentToolBudget,
-  control: AgentWriteControl
+  control: AgentWriteControl,
+  actionScopeId: string
 ) => {
-  const handlers = createAgentWriteHandlers(api, runGrant, budget, control)
+  const handlers = createAgentWriteHandlers(
+    api,
+    runGrant,
+    budget,
+    control,
+    actionScopeId
+  )
   return {
     create_issue: tool({
       description:

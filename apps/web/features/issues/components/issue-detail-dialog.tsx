@@ -636,13 +636,16 @@ export const IssueDetailDialog = ({
     [issue, onUpdate]
   )
   const changeStatus = useCallback(
-    (status: IssueUiItem["status"]) =>
-      void updateImmediateField("status", { status }),
+    (status: IssueUiItem["status"] | "all") => {
+      if (status !== "all") void updateImmediateField("status", { status })
+    },
     [updateImmediateField]
   )
   const changePriority = useCallback(
-    (priority: IssueUiItem["priority"]) =>
-      void updateImmediateField("priority", { priority }),
+    (priority: IssueUiItem["priority"] | "all") => {
+      if (priority !== "all")
+        void updateImmediateField("priority", { priority })
+    },
     [updateImmediateField]
   )
   const changeAssignee = useCallback(

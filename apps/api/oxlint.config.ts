@@ -4,6 +4,7 @@ import rootConfig from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [".agents/skills/**"],
   plugins: [
     "import",
     "node",

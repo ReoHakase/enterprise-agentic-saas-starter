@@ -1,13 +1,14 @@
-import type { AgentInternalApiContract } from "@enterprise-agentic-saas/api/agent-client"
 import { describe, expect, it, vi } from "vitest"
 
+import type { AgentInternalGateway } from "./internal-api"
+import { mastra } from "./mastra"
 import { resumeIssueAction } from "./resume-issue-action"
 
 const ACTION_ID = "action_1"
 const RESUME_TICKET = "ticket_0123456789abcdefghijklmnopqrstuvwxyz"
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 type ResumeApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   "cancelRun" | "executeApprovedAction" | "finishRun" | "resumeApprovedAction"
 >
 
@@ -19,6 +20,7 @@ const harness = () => {
   const resumeApprovedAction = vi
     .fn<ResumeApi["resumeApprovedAction"]>()
     .mockResolvedValue({
+      attempt: 1,
       expiresAt: "2999-07-22T00:00:00.000Z",
       grant: RUN_GRANT,
       rootRunId: "root_1",
@@ -52,17 +54,10 @@ const harness = () => {
 const enabled = { runs: true, vision: true, writes: true }
 
 describe("resumeIssueAction", () => {
-  it("requires a live connection and fail-closed run/write switches", async () => {
+  it("requires fail-closed run/write switches", async () => {
     const cases = [
-      { features: enabled, liveConnection: false },
-      {
-        features: { runs: false, vision: true, writes: true },
-        liveConnection: true,
-      },
-      {
-        features: { runs: true, vision: true, writes: false },
-        liveConnection: true,
-      },
+      { features: { runs: false, vision: true, writes: true } },
+      { features: { runs: true, vision: true, writes: false } },
     ]
     await Promise.all(
       cases.map(async (dependencies) => {
@@ -80,9 +75,10 @@ describe("resumeIssueAction", () => {
 
   it("atomically consumes the ticket, executes with the fresh grant, and settles", async () => {
     const test = harness()
+    const workflowLookup = vi.spyOn(mastra, "getWorkflow")
     const receipt = await resumeIssueAction(
       { actionId: ACTION_ID, resumeTicket: RESUME_TICKET },
-      { api: test.api, features: enabled, liveConnection: true }
+      { api: test.api, features: enabled }
     )
 
     expect(test.resumeApprovedAction).toHaveBeenCalledWith({
@@ -105,6 +101,8 @@ describe("resumeIssueAction", () => {
     })
     expect(JSON.stringify(receipt)).not.toContain(RESUME_TICKET)
     expect(JSON.stringify(receipt)).not.toContain(RUN_GRANT)
+    expect(workflowLookup).toHaveBeenCalledWith("approvedIssueActionWorkflow")
+    workflowLookup.mockRestore()
   })
 
   it("settles the continuation as failed and hides execution details", async () => {
@@ -116,7 +114,7 @@ describe("resumeIssueAction", () => {
     await expect(
       resumeIssueAction(
         { actionId: ACTION_ID, resumeTicket: RESUME_TICKET },
-        { api: test.api, features: enabled, liveConnection: true }
+        { api: test.api, features: enabled }
       )
     ).rejects.toThrow("Issue action resume is unavailable")
     expect(test.finishRun).toHaveBeenCalledWith({
@@ -133,13 +131,14 @@ describe("resumeIssueAction", () => {
     await expect(
       resumeIssueAction(
         { actionId: ACTION_ID, resumeTicket: RESUME_TICKET },
-        { api: failed.api, features: enabled, liveConnection: true }
+        { api: failed.api, features: enabled }
       )
     ).rejects.toThrow("Issue action resume is unavailable")
     expect(failed.executeApprovedAction).not.toHaveBeenCalled()
 
     const invalid = harness()
     invalid.resumeApprovedAction.mockResolvedValue({
+      attempt: 1,
       expiresAt: "2000-07-22T00:00:00.000Z",
       grant: "invalid",
       rootRunId: "root_1",
@@ -148,13 +147,13 @@ describe("resumeIssueAction", () => {
     await expect(
       resumeIssueAction(
         { actionId: ACTION_ID, resumeTicket: RESUME_TICKET },
-        { api: invalid.api, features: enabled, liveConnection: true }
+        { api: invalid.api, features: enabled }
       )
     ).rejects.toThrow("Issue action resume is unavailable")
     expect(invalid.executeApprovedAction).not.toHaveBeenCalled()
   })
 
-  it("rejects malformed and over-posted RPC payloads before consuming", async () => {
+  it("rejects malformed and over-posted resume payloads before consuming", async () => {
     const test = harness()
     await expect(
       resumeIssueAction(
@@ -163,7 +162,7 @@ describe("resumeIssueAction", () => {
           extra: "secret",
           resumeTicket: RESUME_TICKET,
         },
-        { api: test.api, features: enabled, liveConnection: true }
+        { api: test.api, features: enabled }
       )
     ).rejects.toThrow("Issue action resume is unavailable")
     expect(test.resumeApprovedAction).not.toHaveBeenCalled()

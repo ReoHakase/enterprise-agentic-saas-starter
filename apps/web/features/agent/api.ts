@@ -3,11 +3,11 @@ import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 import { ConsoleApiError, toConsoleApiError } from "@/features/console/api"
 
 import {
+  parseAgentActionExecutionResult,
   parseAgentApprovalPolicy,
-  parseAgentConnectionTicket,
   parseAgentContextRevocation,
   parseAgentIssueAction,
-  parseAgentResumeTicket,
+  parseAgentMessages,
   parseAgentThread,
   parseAgentThreads,
 } from "./schema"
@@ -41,12 +41,17 @@ export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
     unwrap(await client.agent.threads({ threadId }).archive.post())
   )
 
-export const createAgentConnectionTicket = async (
+export const listAgentMessages = async (
   client: ApiClient,
-  threadId: string
+  threadId: string,
+  signal?: AbortSignal
 ) =>
-  parseAgentConnectionTicket(
-    unwrap(await client.agent.connections.post({ threadId }))
+  parseAgentMessages(
+    unwrap(
+      await client.agent
+        .threads({ threadId })
+        .messages.get({ fetch: { signal } })
+    )
   )
 
 export const getAgentAction = async (
@@ -71,14 +76,9 @@ export const decideAgentAction = async (
     )
   )
 
-// Deliberately kept out of TanStack Query: the opaque ticket is consumed from
-// this local variable immediately and must never enter cache or persisted chat.
-export const createAgentResumeTicket = async (
-  client: ApiClient,
-  actionId: string
-) =>
-  parseAgentResumeTicket(
-    unwrap(await client.agent.actions({ actionId })["resume-ticket"].post())
+export const resumeAgentAction = async (client: ApiClient, actionId: string) =>
+  parseAgentActionExecutionResult(
+    unwrap(await client.agent.actions({ actionId }).resume.post({}))
   )
 
 export const getAgentApprovalPolicy = async (

@@ -5,9 +5,10 @@ import type { AgentToolBudget } from "./tool-budget"
 
 const boundedString = (maximum: number) => z.string().max(maximum)
 const formIdentifier = z.string().min(1).max(128)
+const issueRevision = z.number().int().min(1)
 const formTarget = {
   expectedEpoch: formIdentifier.optional(),
-  expectedRevision: z.number().int().min(1).optional(),
+  expectedRevision: issueRevision.optional(),
   formId: formIdentifier.optional(),
 }
 
@@ -43,7 +44,7 @@ export const agentClientToolSchemas = {
   patchFormDraft: z
     .object({
       expectedEpoch: formIdentifier,
-      expectedRevision: formTarget.expectedRevision,
+      expectedRevision: issueRevision,
       formId: formIdentifier,
       patch: z
         .object({
@@ -77,7 +78,7 @@ export const createAgentClientTools = (budget: AgentToolBudget) => ({
   }),
   ui_patch_form_draft: tool({
     description:
-      "Patch allowlisted fields of a previously read Issue form draft using its exact form ID and epoch, without submitting it.",
+      "Patch allowlisted fields of a previously read Issue form draft using its exact form ID, epoch, and revision, without submitting it.",
     inputSchema: agentClientToolSchemas.patchFormDraft,
     onInputAvailable: countClientTool(budget),
     strict: true,

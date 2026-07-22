@@ -16,7 +16,6 @@ env:
   APP_BASE_URL: https://app.example.test
   API_PUBLIC_URL: https://api.example.test
   NEXT_PUBLIC_API_BASE_URL: https://api.example.test
-  NEXT_PUBLIC_AGENT_BASE_URL: https://agent.example.test
   BETTER_AUTH_URL: https://api.example.test
   BETTER_AUTH_SECRET: ci-only-secret-at-least-32-characters
   AUTH_COOKIE_DOMAIN: example.test

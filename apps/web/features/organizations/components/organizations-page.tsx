@@ -1,5 +1,14 @@
 "use client"
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@enterprise-agentic-saas/ui/components/alert-dialog"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
@@ -51,7 +60,7 @@ import {
   SettingsIcon,
   UsersRoundIcon,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   type ChangeEvent,
   type FormEvent,
@@ -65,15 +74,17 @@ import { LinkButton } from "@/components/link-button"
 import { OrganizationProfileImage } from "@/components/organization-identity"
 import { PageShell } from "@/components/page-shell"
 import { UserProfileImage } from "@/components/user-identity"
+import {
+  hasOrganizationSwitchRisks,
+  useAgentRuntimeState,
+  type OrganizationSwitchRisks,
+} from "@/features/agent/runtime-state"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
 import {
   consoleKeys,
   organizationsQueryOptions,
 } from "@/features/console/queries"
-import {
-  cancelTenantWorkForOrganizationSwitch,
-  prepareOrganizationSwitch,
-} from "@/features/organizations/cache"
+import { prepareOrganizationSwitch } from "@/features/organizations/cache"
 import {
   organizationFormSchema,
   roleLabel,
@@ -108,36 +119,70 @@ export const OrganizationsPage = ({
 }) => {
   const queryClient = useQueryClient()
   const router = useRouter()
+  const pathname = usePathname()
+  const agentRuntime = useAgentRuntimeState()
+  const [pendingOrganizationSwitch, setPendingOrganizationSwitch] = useState<{
+    organizationId: string
+    redirectTo?: string
+    risks: OrganizationSwitchRisks
+  }>()
   const organizationsQuery = useQuery({
     ...organizationsQueryOptions(),
     initialData: initialOrganizations,
   })
   const activateMutation = useMutation({
-    mutationFn: async (input: {
-      organizationId: string
-      redirectTo?: string
-    }) => {
-      await cancelTenantWorkForOrganizationSwitch(queryClient)
-      return browserConsoleApi.activateOrganization(input.organizationId)
-    },
+    mutationFn: (input: { organizationId: string; redirectTo?: string }) =>
+      browserConsoleApi.activateOrganization(input.organizationId),
     onSuccess: async (_, input) => {
+      await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, input.organizationId)
       if (input.redirectTo) {
         router.push(input.redirectTo)
+      } else {
+        // Active organization changed, so every tenant-scoped query value,
+        // including agentThread, must be discarded before the refresh.
+        router.replace(pathname)
       }
       router.refresh()
       toast.success("Organization switched")
     },
     onError: (error) => {
+      agentRuntime.cancelOrganizationSwitch()
       showConsoleApiErrorToast(error, "Could not switch organization")
     },
   })
   const { isPending: activatePending, mutate: activateOrganization } =
     activateMutation
   const activate = useCallback(
-    (organizationId: string, redirectTo?: string) =>
-      activateOrganization({ organizationId, redirectTo }),
-    [activateOrganization]
+    (organizationId: string, redirectTo?: string) => {
+      const risks = agentRuntime.beginOrganizationSwitch()
+      if (hasOrganizationSwitchRisks(risks)) {
+        setPendingOrganizationSwitch({ organizationId, redirectTo, risks })
+        return
+      }
+      activateOrganization({ organizationId, redirectTo })
+    },
+    [activateOrganization, agentRuntime]
+  )
+  const cancelPendingOrganizationSwitch = useCallback(() => {
+    setPendingOrganizationSwitch(undefined)
+    agentRuntime.cancelOrganizationSwitch()
+  }, [agentRuntime])
+  const confirmPendingOrganizationSwitch = useCallback(() => {
+    const pendingSwitch = pendingOrganizationSwitch
+    setPendingOrganizationSwitch(undefined)
+    if (pendingSwitch) {
+      activateOrganization({
+        organizationId: pendingSwitch.organizationId,
+        redirectTo: pendingSwitch.redirectTo,
+      })
+    }
+  }, [activateOrganization, pendingOrganizationSwitch])
+  const handleSwitchDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) cancelPendingOrganizationSwitch()
+    },
+    [cancelPendingOrganizationSwitch]
   )
   const columns = useMemo<ColumnDef<OrganizationSummary>[]>(
     () => [
@@ -188,85 +233,111 @@ export const OrganizationsPage = ({
     getRowId: getOrganizationRowId,
   })
   return (
-    <PageShell
-      title="Organizations"
-      description="Choose the tenant context for this session or create a new workspace."
-      action={OrganizationCreateAction}
-    >
-      {organizationsQuery.isError ? (
-        <Empty className="border" role="alert">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Building2Icon aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>Organizations could not be loaded</EmptyTitle>
-            <EmptyDescription>
-              {getConsoleApiErrorText(
-                organizationsQuery.error,
-                "Try the request again."
-              )}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : organizationsQuery.data.length === 0 ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Building2Icon aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>Create your first organization</EmptyTitle>
-            <EmptyDescription>
-              Organizations isolate members, permissions, and issue data. Use
-              the create action above to continue to the dashboard.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border">
-          <Table scrollLabel="Organizations attached to your account">
-            <TableCaption className="sr-only">
-              Organizations attached to your account
-            </TableCaption>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className={organizationColumnClass(header.column.id)}
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={organizationColumnClass(cell.column.id)}
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </PageShell>
+    <>
+      <PageShell
+        title="Organizations"
+        description="Choose the tenant context for this session or create a new workspace."
+        action={OrganizationCreateAction}
+      >
+        {organizationsQuery.isError ? (
+          <Empty className="border" role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Building2Icon aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>Organizations could not be loaded</EmptyTitle>
+              <EmptyDescription>
+                {getConsoleApiErrorText(
+                  organizationsQuery.error,
+                  "Try the request again."
+                )}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : organizationsQuery.data.length === 0 ? (
+          <Empty className="border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Building2Icon aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>Create your first organization</EmptyTitle>
+              <EmptyDescription>
+                Organizations isolate members, permissions, and issue data. Use
+                the create action above to continue to the dashboard.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border">
+            <Table scrollLabel="Organizations attached to your account">
+              <TableCaption className="sr-only">
+                Organizations attached to your account
+              </TableCaption>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className={organizationColumnClass(header.column.id)}
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={organizationColumnClass(cell.column.id)}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </PageShell>
+      <AlertDialog
+        open={pendingOrganizationSwitch !== undefined}
+        onOpenChange={handleSwitchDialogOpenChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Discard local Agent work and switch?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Unsent messages, uploads, approvals, and unsaved Issue form fields
+              will be cleared only after the organization switch succeeds.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelPendingOrganizationSwitch}>
+              Stay here
+            </AlertDialogCancel>
+            <Button onClick={confirmPendingOrganizationSwitch}>
+              Discard local draft and switch
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 

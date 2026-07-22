@@ -91,9 +91,7 @@ const normalizeTransaction = (value: string): string => {
   const [method, target = "unknown"] = value.split(" ", 2)
   const [path = "unknown"] = target.split("?", 1)
   const normalizedPath =
-    /^\/agents\/issue-assistant\/[A-Za-z0-9_-]{1,128}$/.test(path)
-      ? "/agents/issue-assistant/:threadId"
-      : "/unmatched"
+    path === "/chat" || path === "/actions/resume" ? path : "/unmatched"
   return `${safeHttpMethod(method) ?? "UNKNOWN"} ${normalizedPath}`
 }
 

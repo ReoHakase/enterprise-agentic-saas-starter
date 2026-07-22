@@ -118,6 +118,10 @@ export type InvitationEmailJobStatus =
 export const agentThreadStatuses = ["active", "archived"] as const
 export type AgentThreadStatus = (typeof agentThreadStatuses)[number]
 
+export const agentMessageRoles = ["user", "assistant"] as const
+export type AgentMessageRole = (typeof agentMessageRoles)[number]
+export type AgentMessageDocument = Record<string, unknown>
+
 export const agentRunStatuses = [
   "running",
   "waiting_approval",
@@ -206,6 +210,8 @@ export const agentResourceUsageKinds = [
   "write_action",
   "staged_asset",
   "pending_upload",
+  "model_run",
+  "web_search",
 ] as const
 export type AgentResourceUsageKind = (typeof agentResourceUsageKinds)[number]
 
@@ -949,6 +955,60 @@ export const agentThreads = sqliteTable(
   ]
 )
 
+export const agentMessages = sqliteTable(
+  "agent_messages",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    id: text("id").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: text("thread_id").notNull(),
+    clientMessageId: text("client_message_id"),
+    role: text("role").$type<AgentMessageRole>().notNull(),
+    content: text("content", { mode: "json" })
+      .$type<AgentMessageDocument>()
+      .notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_messages_id_uidx").on(table.id),
+    uniqueIndex("agent_messages_thread_client_message_uidx")
+      .on(table.organizationId, table.threadId, table.clientMessageId)
+      .where(sql`${table.clientMessageId} is not null`),
+    index("agent_messages_thread_sequence_idx").on(
+      table.organizationId,
+      table.threadId,
+      table.sequence
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.threadId],
+      foreignColumns: [agentThreads.organizationId, agentThreads.id],
+      name: "agent_messages_thread_tenant_fk",
+    }).onDelete("cascade"),
+    check(
+      "agent_messages_role_check",
+      sql`${table.role} in ('user', 'assistant')`
+    ),
+    check(
+      "agent_messages_client_id_check",
+      sql`(
+        ${table.role} = 'user'
+        and length(${table.clientMessageId}) between 1 and 128
+      ) or (
+        ${table.role} = 'assistant'
+        and ${table.clientMessageId} is null
+      )`
+    ),
+    check(
+      "agent_messages_content_check",
+      sql`json_valid(${table.content}) and length(${table.content}) between 2 and 131072`
+    ),
+  ]
+)
+
 export const agentRuns = sqliteTable(
   "agent_runs",
   {
@@ -975,10 +1035,14 @@ export const agentRuns = sqliteTable(
     writeCount: integer("write_count").notNull().default(0),
     inputTokenCount: integer("input_token_count").notNull().default(0),
     outputTokenCount: integer("output_token_count").notNull().default(0),
+    attempt: integer("attempt").notNull().default(1),
     startedAt: integer("started_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    webSearchUsedAt: integer("web_search_used_at", {
+      mode: "timestamp_ms",
+    }),
     finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
   },
   (table) => [
@@ -1075,6 +1139,7 @@ export const agentRuns = sqliteTable(
         and ${table.inputTokenCount} >= 0
         and ${table.outputTokenCount} >= 0`
     ),
+    check("agent_runs_attempt_check", sql`${table.attempt} >= 1`),
     check(
       "agent_runs_expiry_check",
       sql`${table.expiresAt} > ${table.startedAt}
@@ -1083,6 +1148,13 @@ export const agentRuns = sqliteTable(
     check(
       "agent_runs_finished_at_check",
       sql`${table.finishedAt} is null or ${table.finishedAt} >= ${table.startedAt}`
+    ),
+    check(
+      "agent_runs_web_search_used_at_check",
+      sql`${table.webSearchUsedAt} is null or (
+        ${table.webSearchUsedAt} >= ${table.startedAt}
+        and ${table.webSearchUsedAt} <= ${table.expiresAt}
+      )`
     ),
   ]
 )
@@ -1841,7 +1913,7 @@ export const agentResourceUsageBuckets = sqliteTable(
     index("agent_resource_usage_buckets_window_end_idx").on(table.windowEnd),
     check(
       "agent_resource_usage_buckets_kind_check",
-      sql`${table.kind} in ('asset_upload', 'vision_transform', 'write_action', 'staged_asset', 'pending_upload')`
+      sql`${table.kind} in ('asset_upload', 'vision_transform', 'write_action', 'staged_asset', 'pending_upload', 'model_run', 'web_search')`
     ),
     check(
       "agent_resource_usage_buckets_window_check",

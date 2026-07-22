@@ -1,3 +1,7 @@
+import { treaty, type Treaty } from "@elysia/eden"
+
+import type { AgentInternalApp } from "./modules/agent/internal-api"
+
 export type AgentAccountContext = {
   name: string
   profileImage: string | null
@@ -54,6 +58,7 @@ export type AgentConnection = {
 export type AgentRunGrant = {
   runId: string
   rootRunId: string
+  attempt: number
   grant: string
   expiresAt: string
 }
@@ -68,6 +73,104 @@ export type AgentRunResult = {
     | "canceled"
     | "expired"
 }
+
+export type AgentWebSearchReservation = {
+  reserved: true
+  reused: boolean
+}
+
+export type AgentCanonicalJsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | AgentCanonicalJsonValue[]
+  | { [key: string]: AgentCanonicalJsonValue }
+
+export type AgentCanonicalToolName =
+  | "create_issue"
+  | "delete_issue"
+  | "get_issue"
+  | "read_account_context"
+  | "read_active_organization"
+  | "search_issue_labels"
+  | "search_issues"
+  | "search_organization_members"
+  | "ui_navigate"
+  | "ui_open_issue"
+  | "ui_patch_form_draft"
+  | "ui_read_form_draft"
+  | "ui_set_issue_query"
+  | "update_issue"
+  | "web_search"
+
+export type AgentCanonicalToolPart = {
+  type: `tool-${AgentCanonicalToolName}`
+  toolCallId: string
+  state:
+    | "input-available"
+    | "output-available"
+    | "output-denied"
+    | "output-error"
+  input?: AgentCanonicalJsonValue
+  output?: AgentCanonicalJsonValue
+  errorText?: string
+}
+
+export type AgentCanonicalMessagePart =
+  | { type: "text"; text: string }
+  | { type: "data-agent-assets"; data: { assetIds: string[] } }
+  | { type: "reasoning"; text: string }
+  | {
+      type: "source-url"
+      sourceId: string
+      url: string
+      title?: string
+    }
+  | { type: "step-start" }
+  | AgentCanonicalToolPart
+
+export type AgentCanonicalMessage = {
+  id: string
+  role: "user" | "assistant"
+  parts: AgentCanonicalMessagePart[]
+}
+
+export type AgentRuntimeChatInput = {
+  ticket: string
+  threadId: string
+  clientMessageId: string
+  messages: AgentCanonicalMessage[]
+  assetIds: string[]
+  timezone: string
+  trigger: "user_message" | "client_tool_result"
+}
+
+export type AgentRuntimeResumeInput = {
+  actionId: string
+  resumeTicket: string
+}
+
+export type AgentClientToolName =
+  | "ui_navigate"
+  | "ui_open_issue"
+  | "ui_patch_form_draft"
+  | "ui_read_form_draft"
+  | "ui_set_issue_query"
+
+export type AgentClientToolResult = {
+  toolCallId: string
+  toolName: AgentClientToolName
+} & (
+  | {
+      state: "output-available"
+      output: AgentCanonicalJsonValue
+    }
+  | {
+      state: "output-error"
+      errorText: string
+    }
+)
 
 export type AgentIssueActionKind =
   | "create_issue"
@@ -191,73 +294,46 @@ export type AgentSearchIssuesInput = {
   limit?: number
 }
 
-export type AgentInternalApiContract = {
-  consumeConnectionTicket(input: {
-    ticket: string
-    threadId: string
-  }): Promise<AgentConnection>
-  startRun(input: {
-    grant: string
-    clientMessageId: string
-    assetIds?: string[]
-  }): Promise<AgentRunGrant>
-  cancelRun(input: { grant: string }): Promise<AgentRunResult>
-  finishRun(input: {
-    grant: string
-    outcome: "completed" | "failed"
-  }): Promise<AgentRunResult>
-  readAccountContext(input: { grant: string }): Promise<AgentAccountContext>
-  readActiveOrganization(input: {
-    grant: string
-  }): Promise<AgentOrganizationContext>
-  searchOrganizationMembers(input: {
-    grant: string
-    query?: string
-    limit?: number
-  }): Promise<AgentMember[]>
-  searchIssueLabels(input: {
-    grant: string
-    query?: string
-    limit?: number
-  }): Promise<AgentIssueLabel[]>
-  searchIssues(input: AgentSearchIssuesInput): Promise<AgentIssue[]>
-  getIssue(
-    input:
-      | { grant: string; lookup: "id"; id: string }
-      | { grant: string; lookup: "number"; number: number }
-  ): Promise<AgentIssue>
-  prepareCreateIssue(input: {
-    grant: string
-    toolCallId: string
-    idempotencyKey: string
-    issue: AgentCreateIssueActionInput
-  }): Promise<AgentIssueAction>
-  prepareUpdateIssue(input: {
-    grant: string
-    toolCallId: string
-    idempotencyKey: string
-    issue: AgentUpdateIssueActionInput
-  }): Promise<AgentIssueAction>
-  prepareDeleteIssue(input: {
-    grant: string
-    toolCallId: string
-    idempotencyKey: string
-    issue: AgentDeleteIssueActionInput
-  }): Promise<AgentIssueAction>
-  getIssueActionDecision(input: {
-    grant: string
-    actionId: string
-  }): Promise<AgentIssueAction>
-  resumeApprovedAction(input: {
-    actionId: string
-    resumeTicket: string
-  }): Promise<AgentRunGrant>
-  executeApprovedAction(input: {
-    grant: string
-    actionId: string
-  }): Promise<AgentActionExecutionResult>
-  getAgentImageForModel(input: {
-    grant: string
-    assetId: string
-  }): Promise<Response>
+export type AgentInternalFetchBinding = {
+  fetch(
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1]
+  ): ReturnType<typeof fetch>
 }
+
+/**
+ * server-only private Service Binding client. Browserへ公開するpublic API clientと
+ * 同じentry pointへ再exportせず、Agent Workerだけがこのfactoryを利用する。
+ */
+export const createAgentInternalClient = (
+  binding: AgentInternalFetchBinding
+): Treaty.Create<AgentInternalApp> => {
+  const serviceBindingFetch: typeof fetch = Object.assign(
+    (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1]
+    ) => {
+      // Cloudflareのfetch-only Service Binding契約へ、header/body/signalを
+      // まとめた単一Requestとして渡す。
+      const request =
+        input instanceof Request
+          ? init === undefined
+            ? input
+            : new Request(input, init)
+          : new Request(input, init)
+      return binding.fetch(request)
+    },
+    {
+      // Bunの型だけが要求するhint。Eden/Service Binding transportでは未使用。
+      preconnect: () => undefined,
+    }
+  )
+  return treaty<AgentInternalApp>("https://agent-internal.invalid", {
+    fetcher: serviceBindingFetch,
+    // Internal DTOもpublic clientと同じJSON契約を保ち、ISO timestampを
+    // 実行時だけDateへ変換しない。
+    parseDate: false,
+  })
+}
+
+export type AgentInternalClient = ReturnType<typeof createAgentInternalClient>

@@ -5,7 +5,7 @@ const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000"
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: ["oauth/**"],
+  testIgnore: ["oauth/**", "agent/**"],
   outputDir: "./test-results",
   // The local mock API intentionally keeps per-session state in memory. Keep
   // journeys serial so reset/setup is deterministic in CI and on laptops.
@@ -57,7 +57,6 @@ export default defineConfig({
             API_PUBLIC_URL: "http://127.0.0.1:3001",
             NEXT_DIST_DIR: ".next-e2e",
             NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:3001",
-            NEXT_PUBLIC_AGENT_BASE_URL: "http://127.0.0.1:3002",
           },
         },
       ],

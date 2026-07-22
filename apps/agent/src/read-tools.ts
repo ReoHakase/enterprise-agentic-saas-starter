@@ -1,15 +1,15 @@
 import type {
-  AgentInternalApiContract,
   AgentIssue,
   AgentSearchIssuesInput,
 } from "@enterprise-agentic-saas/api/agent-client"
 import { tool } from "ai"
 import { z } from "zod"
 
+import type { AgentInternalGateway } from "./internal-api"
 import { createAgentToolBudget, type AgentToolBudget } from "./tool-budget"
 
 type AgentReadApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   | "getIssue"
   | "readAccountContext"
   | "readActiveOrganization"

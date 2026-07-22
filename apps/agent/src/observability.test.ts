@@ -23,16 +23,16 @@ describe("Agent Sentry privacy", () => {
         cookies: { session: ticket },
         data: { prompt: "private prompt" },
         headers: { authorization: `Bearer ${ticket}` },
-        method: "GET",
+        method: "POST",
         query_string: `ticket=${ticket}`,
-        url: `https://agent.example/agents/issue-assistant/thread_1?ticket=${ticket}`,
+        url: `https://agent.example/chat?ticket=${ticket}`,
       },
       tags: {
         component: "agent-worker",
         errorCode: "model_failed",
         organizationId: "org_private",
       },
-      transaction: `GET /agents/issue-assistant/thread_private?ticket=${ticket}`,
+      transaction: `POST /chat?ticket=${ticket}`,
       user: { id: "user_private" },
     })
 
@@ -42,9 +42,9 @@ describe("Agent Sentry privacy", () => {
         values: [{ type: "AgentRuntimeError", value: "Agent runtime error" }],
       },
       message: "Agent runtime error",
-      request: { method: "GET" },
+      request: { method: "POST" },
       tags: { component: "agent-worker", errorCode: "model_failed" },
-      transaction: "GET /agents/issue-assistant/:threadId",
+      transaction: "POST /chat",
     })
     const serialized = JSON.stringify(event)
     expect(serialized).not.toContain(ticket)
@@ -121,7 +121,7 @@ describe("Agent Sentry privacy", () => {
         dynamicSamplingContext: {
           public_key: "0123456789abcdef0123456789abcdef",
           trace_id: "0123456789abcdef0123456789abcdef",
-          transaction: `GET /agents/issue-assistant/thread_private?ticket=${ticket}`,
+          transaction: `POST /actions/resume?ticket=${ticket}`,
           user_segment: "organization_private",
         },
         ipAddress: "192.0.2.1",
@@ -146,7 +146,7 @@ describe("Agent Sentry privacy", () => {
         dynamicSamplingContext: {
           public_key: "0123456789abcdef0123456789abcdef",
           trace_id: "0123456789abcdef0123456789abcdef",
-          transaction: "GET /agents/issue-assistant/:threadId",
+          transaction: "POST /actions/resume",
         },
       },
       tags: undefined,

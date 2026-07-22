@@ -1,8 +1,10 @@
 # Agent Worker
 
-Cloudflare Agents SDK の Durable Object を実行する独立 Worker です。Web から発行された一回限りの接続 ticket を API Worker の named service binding で消費し、認証できた WebSocket 接続だけを Agent へ転送します。
+Mastra の `product-agent` を実行するprivate Cloudflare Workerです。BrowserはこのWorkerへ直接接続せず、cookie認証済みAPIの`POST /agent/chat`がnamed `AGENT_RUNTIME` Service Bindingを通してstreamをproxyします。default fetchは常に404を返し、`workers.dev`、preview URL、custom domainを公開しません。
 
-connection grant は live WebSocket ごとのmemoryだけに保持し、connection state、message、Durable Object SQLiteへ保存しません。isolate wake後にmemory上のgrantがなければ接続を閉じ、fresh ticketでの再接続を要求します。各user messageは `startRun` でrun grantへ交換し、account、active organization、member、label、Issueのbounded read toolと承認付きIssue CRUD toolだけがrun grantを使います。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けmemory上のmessage partへだけ追加します。
+APIはsession、active organization、membership、thread ownerを検証し、canonical messageをTursoへ保存してからone-time run ticketを発行します。Agentは`AGENT_INTERNAL_API` Service Bindingだけでticket消費、bounded read tool、承認付きIssue CRUD、canonical assistant message保存を行います。Turso/R2/Auth credentialやMastra Memoryを持ちません。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けmemory上のpartへだけ追加します。
+
+旧Agents SDKの`IssueAssistant` SQLite Durable Objectはdata retentionのため`v1` migrationとclass exportだけを残し、runtime bindingとpublic routeを持ちません。旧messageのexport/backfillとretention判断が終わるまで`deleted_classes`を追加しないでください。
 
 ## ローカル起動
 
@@ -11,9 +13,17 @@ bun run cf:typegen
 bun run dev
 ```
 
-Worker 用の `OPENROUTER_API_KEY` と `SENTRY_DSN` は追跡対象外の `.env.local` にのみ設定します。`bun run dev` は公開可能な既定値を `.dev.vars.example`、秘密値を `.env.local` から読み込みます。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED` は明示値 `1` でだけ有効になるfail-closed switchです。接続 URL は `/agents/issue-assistant/:threadId?ticket=...` の完全一致で、`Origin` は `WEB_ORIGIN` と完全一致する必要があります。
+Worker用の`OPENROUTER_API_KEY`と`SENTRY_DSN`は追跡対象外の`.env.local`にのみ設定します。`bun run dev`は公開可能な既定値を`.dev.vars.example`、秘密値を`.env.local`から読み込みます。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED`は明示値`1`でだけ有効になるfail-closed switchです。
 
 SentryはAgent Worker専用の `SENTRY_ENVIRONMENT` と `SENTRY_RELEASE` を使います。event、log、spanからrequest data、ticket、grant、resume ticket、prompt、tool payloadを除去し、固定error codeだけを記録します。
+
+Mastra Studioはrepo rootから別processで起動します。
+
+```bash
+bun run dev:agent:studio
+```
+
+Portless経由のURLは `https://mastra-studio.enterprise-agentic-saas.localhost` です。Studioもproduction Workerと同じ`src/mastra/index.ts`を読み込みます。`bun run studio:health`と`bun run studio:agents`は課金なし、`bun run studio:smoke`はOpenRouterを実際に呼ぶ明示的な課金testです。
 
 ## 検証
 
@@ -25,7 +35,7 @@ bun run format:check
 bun run build:cloudflare
 ```
 
-Mastra は本番 Worker に含めず、OpenRouter 疎通確認だけに使います。課金を伴うため通常テストや CI からは呼び出しません。key は追跡対象外の `apps/agent/.env.local` へ設定し、値をcommand lineやlogへ出しません。
+Mastraは本番Workerのruntime authorityです。通常のunit testとCIはproviderを呼ばず、課金を伴うOpenRouter疎通確認だけを明示的なsmokeで実行します。keyは追跡対象外の`apps/agent/.env.local`へ設定し、値をcommand lineやlogへ出しません。
 
 ```bash
 bun run smoke:mastra

@@ -53,6 +53,20 @@ const RegistryHarness = ({
       .catch(() => setResult("kept"))
   }, [adapter, registry])
   const freeze = useCallback(() => registry.setFrozen(true), [registry])
+  const patchWithoutRevision = useCallback(() => {
+    void registry
+      .patch(
+        // @ts-expect-error -- This runtime-boundary test intentionally bypasses the required revision.
+        {
+          organizationId: adapter.organizationId,
+          formId: adapter.formId,
+          expectedEpoch: adapter.epoch,
+        },
+        { title: "Unfenced title" }
+      )
+      .then(() => setResult("unsafe-applied"))
+      .catch(() => setResult("revision-required"))
+  }, [adapter, registry])
 
   return (
     <div>
@@ -61,6 +75,9 @@ const RegistryHarness = ({
       </button>
       <button type="button" onClick={freeze}>
         Freeze
+      </button>
+      <button type="button" onClick={patchWithoutRevision}>
+        Patch without revision
       </button>
       <output>{result}</output>
     </div>
@@ -75,6 +92,7 @@ const AmbiguousRegistryHarness = () => {
       formId,
       organizationId: "org-1",
       resource: "issue",
+      revision: 1,
       epoch: `epoch:${formId}`,
       read: () => ({ values: {}, dirtyFields: [] }),
       validate: (patch) => ({ success: true, patch }),
@@ -141,6 +159,23 @@ describe("Agent form registry", () => {
     expect(
       screen.queryByRole("heading", { name: "Replace your unsaved field?" })
     ).not.toBeInTheDocument()
+    expect(apply).not.toHaveBeenCalled()
+  })
+
+  it("rejects a patch that bypasses the client schema without a revision", async () => {
+    const actor = userEvent.setup()
+    const apply =
+      vi.fn<(patch: { title?: string; description?: string }) => void>()
+    render(
+      <AgentFormRegistryProvider>
+        <RegistryHarness apply={apply} />
+      </AgentFormRegistryProvider>
+    )
+
+    await actor.click(
+      screen.getByRole("button", { name: "Patch without revision" })
+    )
+    expect(await screen.findByText("revision-required")).toBeInTheDocument()
     expect(apply).not.toHaveBeenCalled()
   })
 

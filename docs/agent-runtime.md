@@ -27,6 +27,7 @@ Web Worker ───────────────► API Worker public ap
 
 - `apps/agent/src/mastra/index.ts`をproduction WorkerとMastra Studioで共有する。
 - Cloudflare Agents SDK、独自tool loop、Mastraを並列のruntimeとして持たない。
+- 旧Agents SDKの`IssueAssistant` Durable Objectはruntimeとして使わない。ただし既存SQLite namespaceを暗黙削除しないため、migration `v1`と到達不能なretention class exportはdata exportまたは明示的な削除判断まで保持する。
 - BrowserはAgent Workerへ直接接続しない。chatはAPI Workerの`POST /agent/chat`だけを呼ぶ。
 - Agent Workerはpublic hostname、`workers.dev`、preview URLを持たない。
 - Agent WorkerはTurso、R2、Better Auth tableへ直接触らない。
@@ -64,45 +65,45 @@ apps/agent/
   .env.local                 # ignored、mode 600
   README.md
   scripts/
-    studio-health.ts
-    studio-agent-smoke.ts
+    mastra-openrouter-smoke.ts
   src/
     worker.ts
-    env.ts
+    environment.ts
     cloudflare-env.d.ts
+    internal-api.ts
+    runtime-request.ts
+    canonical-messages.ts
+    chat-input.ts
+    read-tools.ts
+    write-tools.ts
     mastra/
       index.ts
+      server.ts
+      runtime-context.ts
       agents/
+        index.ts
         product-agent.ts
+        public-web-research-agent.ts
       models/
         openrouter.ts
       skills/
+        index.ts
         core.ts
         issue-triage.ts
         issue-writing.ts
         web-assistance.ts
       tools/
-        account/
-          read-account-context.ts
-          read-active-organization.ts
         issues/
-          search-issues.ts
-          get-issue.ts
-          create-issue.ts
-          update-issue.ts
-          delete-issue.ts
-        members/
-          search-organization-members.ts
-        web/
-          web-search.ts
+          index.ts
+          read.ts
+          write.ts
+        web-search.ts
+        openrouter-web-search.ts
       workflows/
         approved-issue-action.ts
-      usage/
-        normalize.ts
-    api/
-      internal-client.ts
-      request-context.ts
 ```
+
+`read-tools.ts`と`write-tools.ts`がprivate API capabilityをMastra toolへ変換し、`mastra/tools/issues/*`はMastraへ登録する薄い定義だけを持つ。transport、grant、canonical message、画像入力は`src/mastra`へ混在させず、Worker境界の各moduleへ分離する。
 
 `packages/domain`、`packages/agent-tools`、`packages/agent-skills`は作らない。business ruleは`apps/api/src/modules`に残し、Mastra toolはtyped internal capabilityを呼ぶ薄いadapterにする。
 
@@ -132,17 +133,28 @@ keyをCLI引数、source、docs、Turbo cache、Playwright artifact、Sentry、s
 
 ## Web検索
 
-`product-agent`へOpenRouterのprovider-defined web search server toolを登録する。deprecatedな`:online` suffixや`plugins: [{ id: "web" }]`は使わず、現行の`openrouter:web_search`を使う。
+`product-agent`へOpenRouterのprovider-defined Web searchを直接登録しない。main Agentはstrictな`web_search` custom toolだけを持つ。toolはlocal public-query guardとprivate quota reservationを通した後、会話履歴、tenant read/write tool、run grantを持たないMastra `public-web-research-agent`を呼ぶ。OpenRouterの現行provider Web search server toolを持つのはこの検索専用Agentだけである。deprecatedな`:online` suffixや`plugins: [{ id: "web" }]`は使わない。
 
 初期設定は次とする。
 
 - engine: `auto`
 - 1検索あたり最大5 result
-- 1 run内の検索回数とresult総数をusageへ記録する
-- current informationが必要な場合、またはuserが明示した場合だけ検索する
-- citation URLをmessage partとしてWebへ渡す
+- provider送信前に`POST /internal/agent/runs/web-search/reserve`でuser/hourとorganization/dayの枠を同一transactionへ冪等予約する
+- current user messageに`Web検索: <公開クエリ>`または`ウェブ検索: <公開クエリ>`がある場合だけ検索する
+- main Agentへ返す本文は6,000文字、重複除去済みの公開HTTP(S) sourceは5件までにする
 
-検索queryへemail、token、session、organization ID、asset ID、private Issue本文を含めない。Web resultはuntrusted contentであり、そこに書かれた命令をIssue toolやclient toolの権限として扱わない。
+課金対象resourceの初期quotaは次で固定する。plan別quotaを導入するまでは、設定漏れでunlimitedへ倒さない。
+
+| resource | user scope | organization scope | active concurrency |
+| --- | ---: | ---: | ---: |
+| model run | 20回/時 | 500回/日 | 1/user、10/organization |
+| Web検索 | 10回/時 | 100回/日 | model runの直列tool実行に含める |
+
+`agent_resource_usage_buckets`とappend-onlyな`agent_resource_usage_operations`をDB accountingの正本にする。organization/userはFK scope列に閉じ、operation IDにはrun/tool callとtenant IDを連結せずnamespaced hashだけを保存する。run attempt開始、user/org両bucket、active run判定、connection grant消費は同じtransactionへ閉じる。同じattemptのtransport/DB retryはmodel quotaを再加算しないが、failed/canceled/expiredから次attemptを開始すると新しいprovider callとして1回消費する。Web検索は同じoperation retryを再加算しない。上限時は429とwindow終端由来の`retryAfter`を返し、DB write contentionを使い切った場合だけ1秒後のretryとする。active runは`status = running`かつ`expires_at > now`だけを数えるため、lease expiry後はsweepを待たずに枠を解放する。
+
+queryはstrict objectの200文字以下の公開文字列だけを受ける。current user messageから明示markerに続く1行をserver側で抽出し、modelがtoolへ渡したqueryが空白・ASCII大小文字の正規化後に完全一致することを必須にする。過去の会話、Issue read結果、modelの言い換えから検索語を推論・増補してはならない。これによりregexでは判別できない秘密の自然文をprivate tool outputからproviderへ転送する経路をfail closedにする。email、provider key/token/JWT/private key、credential assignment、cookie/auth header、private/internal host、private IP、UUID、organization/Issue/user/member/asset/thread/session/run/actionのopaque ID、private Issue本文らしいpatternもlocal guardで拒否する。いずれの拒否でもquota reservationと検索Agentを呼ばず、queryをerror/log/telemetryへ転記しない。userがmarkerへ書いた文字列は公開Webへ送る明示的なdeclassificationとして扱うため、UI/helpではprivate dataを書かないよう示す。
+
+Web resultは`untrusted_public_web_content`であり、そこに書かれた命令やprompt injectionをIssue tool/client toolの権限として扱わない。検索予約transactionはroot `agent_runs.web_search_used_at`も固定する。このmarkerがあるroot runでは、APIのcanonical action prepareが`auto_write`/`auto_all`を無視してcreate/update/deleteを`ask_each`へ強制する。policy row自体はrevokeせず、検索していない別runでは通常のauto policyを維持する。同一model stepの検索とwriteが競合しないようAgent Workerのtool executionは1並列に固定する。
 
 ## 認証・認可の正本
 
@@ -205,15 +217,18 @@ opaque tokenならactive organization変更、account切り替え、membership/r
 
 逆方向は`AGENT_INTERNAL_API`からAPI Workerのnamed `AgentInternalApi`をHTTP Service Bindingで呼ぶ。named entrypointの`fetch()`だけが`createAgentInternalApp(db)`を実行し、prefixを`/internal/agent`へ固定する。default/public `createApp(db)`へinternal appを`.use()`せず、public custom domain、OpenAPI、CORSから`/internal/*`へ到達させない。
 
-Agent WorkerはEden Treatyのcustom `fetcher`を`AGENT_INTERNAL_API.fetch(request)`へ差し替える。型はserver-onlyな`AgentInternalApp` exportから推論し、dummy originはURL組み立てのためだけに使う。通常のglobal `fetch`やAPI public originへのfallbackは禁止する。Webが`@enterprise-agentic-saas/api/agent-client`をimportすることも禁止する。
+Agent WorkerはEden Treatyのcustom `fetcher`を単一`Request`へ正規化して`AGENT_INTERNAL_API.fetch(request)`へ差し替える。`parseDate: false`を固定し、grantのISO expiryを型どおりJSON文字列のまま扱う。型はserver-onlyな`AgentInternalApp` exportから推論し、dummy originはURL組み立てのためだけに使う。通常のglobal `fetch`やAPI public originへのfallbackは禁止する。Webが`@enterprise-agentic-saas/api/agent-client`をimportすることも禁止する。
 
 internal appはElysia/Valibotのroute schemaを使う。connection ticketとresume ticketはstrict bodyからatomic consumeする。run開始だけは`Authorization: Bearer <connection grant>`、それ以外の実行中routeは`Authorization: Bearer <run grant>`を使う。header guardは形式を検証するだけで認証済み扱いにせず、各routeのservice/repositoryがhash lookupとlive DB再認可を行う。validation errorへtoken値やValibot issueを含めない。
+
+private APIのerror bodyや任意headerをAgent Worker/public APIへforwardしない。run開始の期待可能な重複だけは固定409、quota/concurrencyだけは固定429と1〜86,400秒の整数`Retry-After`へ再構成してBrowserまで返す。それ以外は503へ縮退し、request ID、DB/provider detail、tenant identifier、grant/tokenを公開responseへ含めない。
 
 pathはtool名のmirrorではなく、安定したdomain capabilityへ分ける。
 
 ```text
 POST /internal/agent/connections/consume
 POST /internal/agent/runs
+POST /internal/agent/runs/web-search/reserve
 POST /internal/agent/runs/cancel
 POST /internal/agent/runs/finish
 POST /internal/agent/runs/messages
@@ -276,7 +291,9 @@ thread ID
 issued at / expiry
 ```
 
-connection ticketは一回限り、60秒、hash保存とする。Agent Workerがconsumeした後にAPIが5分のconnection grantを発行し、`startRun`がroot run IDとrun scopeを確定して5分以内のrun grantへ交換する。
+connection ticketは一回限り、60秒、hash保存とする。Agent Workerがconsumeした後にAPIが5分のconnection grantを発行し、`startRun`がroot run IDとrun scopeを確定して5分以内のrun grantへ交換する。connection grantはrun作成と同じtransactionで単回消費する。
+
+chat runは`(thread_id, client_message_id)`ごとに1 logical rowだけを持つ。running、waiting approval、completedの重複開始は新しいrun grantを発行せず拒否する。failed、canceled、expired、またはlease期限切れrunningの同一draft再送だけは、statusと`attempt`のCASで同じrun/root IDを次attemptへ戻し、旧run grantを全てrevokeしてからfresh grantを1つ発行する。これによりBrowserは失敗した同一draftで同じmessage IDを再利用でき、別draftでは新しいmessage IDを使える。provider課金はattemptごとに発生するため、model-run quota operationも`run ID + attempt`で新規予約し、active concurrencyを再検証する。active/completed重複を拒否しただけならquotaは消費しない。
 
 Agent WorkerはMastra `product-agent.stream()`を実行し、`@mastra/ai-sdk`のstream adapterでAI SDK UI streamへ変換する。APIはstatus、content type、cancel signalを保持してBrowserへ返す。API/Agentどちらもstream全体をbufferしない。
 
@@ -331,6 +348,8 @@ Mastra tool call
 canonical previewにはaction種別、title、description、status、priority、label、absolute due date、assignee表示名、添付画像、変更前後、破壊性、expiryを含める。modelが生成した説明を承認画面の正本にしない。
 
 actionにはsession、user、organization、thread、run、context epoch、target revision、idempotency key、asset leaseを束縛する。execute transaction内で全条件を再確認し、mutation、activity、audit、receiptを同時commitする。payload差し替え、二重execute、stale revisionを拒否する。
+
+write idempotency keyはprovider tool-call IDではなく、root run ID、action kind、正規化payloadから導出する。同じlogical runのretryでproviderが別tool-call IDを採番しても、既存actionと保存receiptへ収束する。成功済みactionへのpublic resumeは、live session、active organization、context epoch、thread ownerを再認可した後、DBの最小receiptを直接返す。この経路ではresume ticket、continuation run、Issue mutation、auditを追加しない。
 
 ### 自動許可
 
@@ -424,11 +443,14 @@ ready staged assetはserver既定72時間、pending uploadは1時間でcleanup�
 
 Better Authのmulti-session account切り替えはorganization切り替えと同一操作ではない。次の順序を固定する。
 
+この順序はAgent Shellのmount有無に依存させず、console、招待landingを含む全`AccountSwitcherDialog`経路で実行する。shell callbackは未保存draftの確認とlocal cleanupを担当するだけで、security revokeを省略する条件にはしない。
+
 1. 旧session cookieのまま`POST /agent/context/revoke`を成功させる。失敗したら`setActive`を呼ばない。
-2. in-flight Agent/tenant queryをcancelし、identity-scoped TanStack Query cacheをclearする。
+2. 旧identityのin-flight Agent/tenant queryをcancelする。この時点ではmounted queryが旧cookieで再取得しないようcacheをclearしない。
 3. Better Auth `multiSessionClient.setActive`でactive accountを切り替える。
-4. Agent stream/upload、shell、thread、composer、form registry、Blob URLをclearする。
-5. account固有のactive organizationを新sessionから再解決し、`/dashboard`へreplaceして`router.refresh()`する。
+4. 新session cookieへ切り替わった後にidentity-scoped TanStack Query cacheをclearする。
+5. Agent stream/upload、shell、thread、composer、form registry、Blob URLをclearする。
+6. account固有のactive organizationを新sessionから再解決するため、`/dashboard`へfull-document navigationする。account identity境界では、同じ最終URLへ戻るclient navigationが旧Server Component propsを再利用し得るため、`router.replace()`と`router.refresh()`だけで済ませない。
 
 旧accountのactive organizationを新accountへコピーしない。新sessionのactive organizationがnullまたはstaleなら、既存のBetter Auth/`/me`規則どおり現在membershipを再検証して修復または明示選択へ進める。sign-out、session revoke、membership/role変更も該当sessionのAgent contextを失効させる。
 
@@ -503,8 +525,11 @@ Studioも同じ`src/mastra/index.ts`をloadする。Studio専用のagent、mock 
 ### Unit / integration
 
 - Mastra instanceが`product-agent`と全toolを登録する
+- provider Web searchが`public-web-research-agent`だけに登録され、mainの`web_search`はlocal custom toolである
 - modelがOpenRouter Qwen3.6 Flashである
-- Web検索provider toolが現行server toolとして登録される
+- markerのないquery、private query、markerからmodelが増補したqueryがquota/providerへforwardされない
+- prompt injectionを含む検索結果がboundedなuntrusted dataとして返る
+- 検索後の同一root runはauto policyがあってもpending approvalになり、検索なしrunではauto policyを維持する
 - account/org mutation toolが存在しない
 - API→Agent delegation expiry/replay
 - Agent→API tenant/permission再検証
@@ -520,7 +545,7 @@ fake Agent WebSocketやfake tool eventを使わない明示suiteを用意し、�
 
 - layout-level shellがroute navigation後も維持される
 - message stream
-- Web検索とcitation
+- `Web検索: <公開クエリ>`によるWeb検索とcitation
 - Issue read
 - Issue create preview、No、Yes
 - auto mode expiry
@@ -544,7 +569,9 @@ bun run dev:agent:studio
 
 ## Deployment
 
-相互Service Bindingがあるため、fresh accountはDB migration、bootstrap API（`AGENT_RUNTIME`なし）、Agent、final API、Web、smokeの順にする。既存環境の通常releaseは互換な旧APIを残してAgent、API、Webの順に更新する。bootstrap configを通常runtimeとして残さない。
+相互Service Bindingがあるため、workflowはAPI/Agent両WorkerをCloudflare Worker Script APIで確認する。どちらかが404ならDB migration、bootstrap API（`AGENT_RUNTIME`なし）、Agent、final API、Web、smokeの順にし、両方200かつMastra protocol移行済みなら互換な旧APIを残してAgent、API、Webの順に更新する。旧Agents SDKからのone-time切替は両方200でも`force_agent_protocol_bootstrap=true`を選び、4 Agent flagを全て`0`にしたmaintenance window内でbootstrap API、Agent、final API、Webを連続deployする。auth/network/429/5xxをfresh環境と推測せず停止する。bootstrap configはfinal API configからoutbound `services`だけを除いた同名Workerで、contract testによりdriftを拒否し、通常runtimeとして残さない。
+
+旧`IssueAssistant` SQLite Durable Object namespaceはこの切替で削除しない。`v1 new_sqlite_classes` migrationと410だけを返すretention class exportを残し、runtime bindingとpublic routeを外すため、新規trafficは到達できないが既存message dataは保持される。export/backfill、件数照合、retention判断が完了した後の別deployだけで、unique tagの`deleted_classes` migrationとclass export削除を行う。Cloudflareのdelete migrationはnamespace内dataを永久削除するため、backupなしで追加しない。
 
 - Web/APIのみcustom domainを持つ
 - Agentはprivate Service Bindingのみ
@@ -566,6 +593,7 @@ production smokeではAPI health、Web sign-in、Agent public fetch fail-closed�
 - [OpenRouter web search server tool](https://openrouter.ai/docs/guides/features/server-tools/web-search)
 - [Cloudflare Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
 - [Cloudflare Service Binding RPC](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/)
+- [Cloudflare Durable Object class migrations (legacy)](https://developers.cloudflare.com/durable-objects/reference/durable-object-class-migrations-legacy/)
 - [Cloudflare R2 limits](https://developers.cloudflare.com/r2/platform/limits/)
 - [Cloudflare Images limits](https://developers.cloudflare.com/images/get-started/limits/)
 - [nuqs documentation](https://nuqs.dev/docs)

@@ -59,7 +59,7 @@ apps/api/src/
 - `app.ts` は Elysia app を組み立てるだけ。listen しない。
 - `index.ts` はBun Sentryを最初に初期化し、dynamic importで本番 pluginを合成してlistenする。clientやtestからimportしない。
 - `worker.ts` はCloudflare SDKでhandlerをwrapする。Bun SDKをbundleしない。
-- `client.ts` はEden clientをexportし、`parseDate: false`をconsumerが上書きできない位置で固定する。WebがimportしてよいAPI entrypointは`@enterprise-agentic-saas/api/client`だけにする。
+- `client.ts` とprivate Service Binding用のEden clientは、`parseDate: false`をconsumerが上書きできない位置で固定する。既定値のままだとISO timestampが型上は`string`でも実行時だけ`Date`になり、Worker境界のgrant expiry検証を壊す。WebがimportしてよいAPI entrypointは`@enterprise-agentic-saas/api/client`だけにする。
 - `/health`はHTTP runtimeだけを見るliveness、`/ready`は`select 1`でTurso/libSQL到達性も見るreadinessに分ける。依存先障害は503 `service_unavailable`へ丸め、DB詳細を公開しない。
 - feature は `modules/<feature>` に置く。issue 題材でも、group/permission/org 前提の SaaS 設計を崩さない。
 - `model.ts` はValibot Standard Schemaを置き、Elysiaの`body` / `params` / `query` / `response`へ直接渡す。schemaから型が必要なら`v.InferOutput`で導出し、手書き型との二重管理を増やさない。
@@ -98,6 +98,7 @@ apps/api/src/
 
 - protected routeは `modules/authorization/access-control.ts` の `authenticated` または `organizationAccess` macroを必ず宣言する。handler内で個別にsession取得するrouteを増やさない。
 - named `AgentInternalApi`の`/internal/agent/*`はBrowser session macroを使わない。connection/resume ticketはstrict bodyからatomic consumeし、run開始はBearer connection grant、以後はBearer run grantをstrict header schemaから取得する。service/repositoryでlive session、active organization、membership、context epoch、thread/run scope、現在permissionを再検証し、default/public app、統合OpenAPI、CORSへinternal routeをmountしない。
+- `POST /internal/agent/runs/web-search/reserve`はBearer run grantとstrictなoperation IDだけを受ける。live root chat runを再認可し、user/hour・organization/dayのquotaと`web_search_used_at` markerを同一transactionへ冪等予約する。上限は429 + `retryAfter`で返し、raw grant/tool call IDをerrorやledgerへ保存しない。organization/userはbucketのFK scope列に閉じ、operation keyへ連結せずhash化する。
 - `organizationAccess` はroute schemaで検証済みのparams/query/bodyから `organizationId` を取り、session、membership、active organization、role、fresh sessionの順にfail-closedで解決する。
 - 非memberによるtenant指定は、存在する他tenantと存在しないIDを区別せず404にする。role不足は403、所属しているがactive tenantが違う場合は409 `active_organization_mismatch`。
 - repositoryのtenant resource queryはresource ID単独で検索せず、必ず `organizationId` と組み合わせる。親子resourceはDBのcomposite FKも併用する。
@@ -116,7 +117,7 @@ apps/api/src/
 - route追加時は `operationId`、summary、description、tag、全request schema、status別response schema、securityを同時に追加する。
 - protected routeのsecurity metadataはauth macroから付け、実行時guardとdocumentationが乖離しないようにする。
 - error responseは共通 `ApiError` schemaを使う。examplesへ実ID、cookie、token、DB情報を入れない。
-- `@elysia/openapi`には`@valibot/to-json-schema`のmapperを設定する。transformを含むquery schemaはOpenAPI生成testを必須にし、変換不能actionでroute schema全体が欠落しないことを確認する。
+- `@elysia/openapi`には`@valibot/to-json-schema`のmapperを設定する。runtimeで維持する`check` / `check_items`のようにJSON Schemaへ表現できないactionはmapperの`ignoreActions`へ明示し、`custom` schemaは意味を説明する安全なOpenAPI schemaへ`overrideSchema`する。transformを含むquery schemaはOpenAPI生成testを必須にし、変換warningやroute schema全体の欠落を残さない。
 - app-ownedなuser / organization / member / actor / uploaderの画像fieldは`profileImage`へ統一する。Better Auth routeと生成schemaの`image` / `logo`は書き換えず、repositoryまたはauth adapter境界でapp DTOへ変換する。
 - unsafe methodはglobal CSRF guardで`Origin`を必須にし、`CORS_ORIGIN` / `API_PUBLIC_URL`との完全一致だけを許可する。CSRFの403と`csrf_origin_forbidden` exampleを各mutationのOpenAPI responseにも含める。
 - resource作成は201へ統一する。このrepoではorganization、invitation、issue、issue commentのPOSTが対象で、実response、route schema、OpenAPI、client testを同時に変更する。

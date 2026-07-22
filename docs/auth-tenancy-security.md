@@ -46,7 +46,7 @@ Better Auth organization pluginの管理・参照APIは直接公開しません�
 
 招待accept直前にも `organizationHooks.beforeAcceptInvitation` でroleを `admin | member` に限定します。legacy `owner`、`super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
 
-招待リンクは`/invitations/:invitationId`を正規URLとし、未ログインでもlanding pageを開けます。organization名、inviter、recipientなどの招待詳細はBetter Authの`get-invitation`が現在のsession emailとrecipient emailの一致を確認した後だけ表示します。未ログインには招待URLを`redirectTo`へ保持した新規登録/ログインを示し、別emailのsessionにはaccept actionを出さず、multi-sessionのswitch/add accountを促します。account切替後は認証済みTanStack Query cacheを破棄してServer Componentをrefreshし、同じ検証をやり直します。明確なnot-foundだけをterminal表示にし、5xx、network、schema不一致はprovider詳細を出さない再試行表示にします。
+招待リンクは`/invitations/:invitationId`を正規URLとし、未ログインでもlanding pageを開けます。organization名、inviter、recipientなどの招待詳細はBetter Authの`get-invitation`が現在のsession emailとrecipient emailの一致を確認した後だけ表示します。未ログインには招待URLを`redirectTo`へ保持した新規登録/ログインを示し、別emailのsessionにはaccept actionを出さず、multi-sessionのswitch/add accountを促します。account切替では旧sessionのqueryをcancelし、cookie切替後に認証済みTanStack Query cacheを破棄して、Next/React treeをhard reloadします。通常は`/dashboard`、招待中は検証済みの同一origin `/invitations/:id`を明示的な戻り先とし、account境界のためにworkflow contextを失わないよう同じ招待検証をやり直します。外部origin、protocol-relative path、backslash、control文字を含む戻り先は`/dashboard`へfail closedします。明確なnot-foundだけをterminal表示にし、5xx、network、schema不一致はprovider詳細を出さない再試行表示にします。
 
 旧メールに含まれる`/organization/invitations/:invitationId`はqueryを保持した307 redirectで正規URLへ移します。ただし`/organization/invitations/members`と`/organization/invitations/settings`はslugが`invitations`の既存tenant routeとしてredirect対象外にし、永続DBのlegacy organizationを到達不能にしません。この互換処理はCloudflare/OpenNext対応のEdge `middleware.ts`に置き、Node runtimeになるNext 16の`proxy.ts`は使いません。
 
@@ -84,7 +84,7 @@ APIはjobをqueueした時点で201を返します。local Bunではprocessorを
 
 Better Authのmulti-session pluginをserver/client双方に設定します。account menuから現在のsessionを維持したまま別アカウントを追加し、保存済みsessionを切り替えられます。切り替え後はServer Componentをrefreshし、active organizationとpermissionを新sessionから再取得します。
 
-Agent Shellを持つconsoleでaccountを切り替える場合は、旧session cookieがactiveな間に`POST /agent/context/revoke`を完了させます。revokeが失敗したらBetter Auth `setActive`を呼ばず、旧accountとlocal draftを維持します。成功後は認証済みqueryをすべてcancel/clearしてから`setActive`を呼び、Agent stream、upload、thread、composer、form registry、Blob URLを破棄し、`/dashboard`へreplaceして`router.refresh()`します。旧accountのactive organizationや`agentThread`を新accountへ引き継ぎません。
+console、招待landingを含む全account切替で、Agent Shellのmount有無にかかわらず旧session cookieがactiveな間に`POST /agent/context/revoke`を完了させます。revokeが失敗したらBetter Auth `setActive`を呼ばず、旧accountとlocal draftを維持します。shell callbackは未保存draftの確認とlocal cleanup専用で、security revokeの条件にはしません。revoke成功後は旧identityのqueryをcancelしてから`setActive`を呼び、新cookieへ切り替わった後で認証済みcache、Agent stream、upload、thread、composer、form registry、Blob URLを破棄します。最後は通常`/dashboard`、招待中は検証済みの同一origin招待pathへfull-document navigationします。旧accountのactive organizationや`agentThread`を新accountへ引き継ぎません。
 
 Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 

@@ -119,6 +119,11 @@
       "outputs": ["test-results/oauth/**", "playwright-report/oauth/**"],
       "passThroughEnv": ["CI"]
     },
+    "test:e2e:agent": {
+      "cache": false,
+      "outputs": [],
+      "passThroughEnv": ["CI", "OPENROUTER_API_KEY"]
+    },
     "typecheck": {
       "dependsOn": ["transit"],
       "outputs": []

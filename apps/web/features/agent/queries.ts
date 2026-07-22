@@ -1,12 +1,19 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 
-import { getAgentAction, getAgentApprovalPolicy, listAgentThreads } from "./api"
+import {
+  getAgentAction,
+  getAgentApprovalPolicy,
+  listAgentMessages,
+  listAgentThreads,
+} from "./api"
 
 export const agentKeys = {
   all: ["agent"] as const,
   threads: (organizationId: string) =>
     [...agentKeys.all, "threads", organizationId] as const,
+  messages: (organizationId: string, threadId: string) =>
+    [...agentKeys.all, "messages", organizationId, threadId] as const,
   action: (organizationId: string, actionId: string) =>
     [...agentKeys.all, "action", organizationId, actionId] as const,
   policy: (organizationId: string, threadId: string) =>
@@ -21,6 +28,10 @@ const createAgentActionQueryFn =
   (client: ApiClient, actionId: string) =>
   ({ signal }: QueryFunctionContext) =>
     getAgentAction(client, actionId, signal)
+const createAgentMessagesQueryFn =
+  (client: ApiClient, threadId: string) =>
+  ({ signal }: QueryFunctionContext) =>
+    listAgentMessages(client, threadId, signal)
 const createAgentPolicyQueryFn =
   (client: ApiClient, threadId: string) =>
   ({ signal }: QueryFunctionContext) =>
@@ -45,6 +56,18 @@ export const agentActionQueryOptions = (
     queryKey: agentKeys.action(organizationId, actionId),
     queryFn: createAgentActionQueryFn(client, actionId),
     enabled: organizationId.length > 0 && actionId.length > 0,
+    staleTime: 0,
+  })
+
+export const agentMessagesQueryOptions = (
+  client: ApiClient,
+  organizationId: string,
+  threadId: string
+) =>
+  queryOptions({
+    queryKey: agentKeys.messages(organizationId, threadId),
+    queryFn: createAgentMessagesQueryFn(client, threadId),
+    enabled: organizationId.length > 0 && threadId.length > 0,
     staleTime: 0,
   })
 

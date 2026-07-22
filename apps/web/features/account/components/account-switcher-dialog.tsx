@@ -37,6 +37,7 @@ import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button"
 import { UserProfileImage } from "@/components/user-identity"
+import { navigateAfterAccountSwitch } from "@/features/account/account-switch-navigation"
 import {
   completeMultiSessionAction,
   createDeviceAccountsQueryFn,
@@ -59,8 +60,10 @@ type AccountSwitcherDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onPrepareAgentSwitch?: () => OrganizationSwitchRisks
+  onAbortAgentSwitch?: () => void
   onCancelAgentSwitch?: () => void
   onCompleteAgentSwitch?: () => Promise<void>
+  returnTo?: string
 }
 
 export const AccountSwitcherDialog = ({
@@ -69,8 +72,10 @@ export const AccountSwitcherDialog = ({
   open,
   onOpenChange,
   onPrepareAgentSwitch,
+  onAbortAgentSwitch,
   onCancelAgentSwitch,
   onCompleteAgentSwitch,
+  returnTo = "/dashboard",
 }: AccountSwitcherDialogProps) => {
   const { authClient: authClientValue } = useAuth()
   const multiSession = useMemo(
@@ -92,22 +97,32 @@ export const AccountSwitcherDialog = ({
       if (!multiSession.setActive) {
         throw new Error("Account switching is not available")
       }
-      if (onPrepareAgentSwitch) await revokeAgentContext(apiClient)
-      await clearAuthenticatedQueryCache(queryClient)
+      // Revoke while the old session cookie is still active. This belongs to
+      // the account boundary itself, not to the optional Agent shell, because
+      // invitation and other public workflows can switch the same sessions.
+      await revokeAgentContext(apiClient)
+      onAbortAgentSwitch?.()
+      await queryClient.cancelQueries()
       await completeMultiSessionAction(
         multiSession.setActive({
           sessionToken: account.session.token,
         }),
         "Could not switch account. Try again."
       )
+      // Clear only after the session cookie changes. Clearing while the old
+      // account is still active lets mounted queries immediately repopulate
+      // the cache with old-account tenant data.
+      await clearAuthenticatedQueryCache(queryClient)
       return account
     },
     onSuccess: async (account) => {
       await onCompleteAgentSwitch?.()
       onOpenChange(false)
-      if (onPrepareAgentSwitch) router.replace("/dashboard")
-      router.refresh()
       toast.success(`Switched to ${account.user.email}`)
+      // Account identity is a hard cache boundary. A client-router refresh can
+      // reuse old Server Component props when /dashboard redirects back to the
+      // same settings URL, so discard the full Next/React tree here.
+      navigateAfterAccountSwitch(returnTo)
     },
     onError: () => {
       onCancelAgentSwitch?.()

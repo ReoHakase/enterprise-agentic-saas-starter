@@ -208,7 +208,13 @@ test("別accountで開いた招待から対象accountへ切り替えて参加で
       response.url().endsWith("/auth/multi-session/set-active") &&
       response.request().method() === "POST"
   )
+  const agentRevokeResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/agent/context/revoke") &&
+      response.request().method() === "POST"
+  )
   await invitedAccount.getByRole("button", { name: "Switch" }).click()
+  expect((await agentRevokeResponse).ok()).toBeTruthy()
   expect((await switchResponse).ok()).toBeTruthy()
 
   await expect
@@ -950,7 +956,13 @@ test("mobile sidebarを閉じて別accountへ安全に切り替えられる", as
       response.url().endsWith("/auth/multi-session/set-active") &&
       response.request().method() === "POST"
   )
+  const agentRevokeResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/agent/context/revoke") &&
+      response.request().method() === "POST"
+  )
   await nextAccount.getByRole("button", { name: "Switch" }).click()
+  expect((await agentRevokeResponsePromise).ok()).toBeTruthy()
   expect((await switchResponsePromise).ok()).toBeTruthy()
   await expect
     .poll(async () => {

@@ -108,6 +108,46 @@ describe("database migrations", () => {
     }
   })
 
+  it("upgrades the Agent message schema without losing run guards", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(16)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const columns = await client.execute("pragma table_info(agent_runs)")
+      expect(columns.rows.map(({ name }) => name)).toEqual(
+        expect.arrayContaining(["attempt", "web_search_used_at"])
+      )
+      const triggers = await client.execute({
+        sql: "select name from sqlite_master where type = 'trigger' and name in (?,?,?,?,?,?) order by name",
+        args: [
+          "agent_actions_scope_insert",
+          "agent_resource_usage_operations_apply",
+          "agent_runs_required_identifiers_insert",
+          "agent_runs_required_identifiers_update",
+          "agent_runs_resume_action_scope_insert",
+          "agent_session_contexts_revoke_old_epoch",
+        ],
+      })
+      expect(triggers.rows.map(({ name }) => name)).toEqual([
+        "agent_actions_scope_insert",
+        "agent_resource_usage_operations_apply",
+        "agent_runs_required_identifiers_insert",
+        "agent_runs_required_identifiers_update",
+        "agent_runs_resume_action_scope_insert",
+        "agent_session_contexts_revoke_old_epoch",
+      ])
+      expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
+        []
+      )
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
   it("backfills an initial Agent context epoch for existing sessions", async () => {
     const client = createClient({ url: "file::memory:" })
     const migrationPrefix = await createMigrationPrefix(12)

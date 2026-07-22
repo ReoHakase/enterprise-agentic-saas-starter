@@ -1,5 +1,6 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { Elysia } from "elysia"
+import * as v from "valibot"
 
 import {
   authenticatedErrorResponses,
@@ -7,35 +8,42 @@ import {
 } from "../../models/api"
 import { createAccessControlModule } from "../authorization/access-control"
 import {
-  agentConnectionTicketModel,
   agentActionParamsModel,
+  agentActionExecutionResultModel,
   agentApprovalPolicyModel,
+  agentCanonicalMessageListModel,
+  agentChatBodyModel,
   agentContextRevocationModel,
   agentIssueActionModel,
   agentThreadListModel,
   agentThreadModel,
   agentThreadParamsModel,
-  createAgentConnectionBodyModel,
   createAgentThreadBodyModel,
   decideAgentActionBodyModel,
   deleteAgentApprovalPolicyQueryModel,
   getAgentApprovalPolicyQueryModel,
-  issueAgentResumeTicketModel,
   putAgentApprovalPolicyBodyModel,
+  resumeAgentActionBodyModel,
 } from "./model"
 import {
   archiveAgentThread,
-  createAgentActionResumeTicket,
-  createAgentConnection,
   createAgentThread,
   decideAgentAction,
   deleteAgentApprovalPolicy,
   getAgentAction,
   getAgentApprovalPolicy,
+  forwardAgentChat,
+  listAgentMessages,
   listAgentThreads,
   putAgentApprovalPolicy,
+  normalizeAgentTimezone,
+  prepareAgentClientToolContinuation,
+  prepareAgentChat,
   revokeAgentContext,
+  resumeAgentAction,
 } from "./service"
+
+const agentStreamResponseModel = v.any()
 
 export const createAgentModule = (db: Db) =>
   new Elysia({ name: "agent" })
@@ -114,27 +122,84 @@ export const createAgentModule = (db: Db) =>
       }
     )
     .post(
-      "/agent/connections",
-      async ({ authContext: { session, user }, body, set }) => {
+      "/agent/chat",
+      async ({ authContext: { session, user }, body, request }) => {
+        const timezone = normalizeAgentTimezone(body.timezone)
+        const prepared =
+          "message" in body
+            ? await prepareAgentChat(db, {
+                assetIds: body.assetIds,
+                message: body.message,
+                sessionId: session.id,
+                userId: user.id,
+                threadId: body.threadId,
+                timezone,
+              })
+            : await prepareAgentClientToolContinuation(db, {
+                assistantMessageId: body.assistantMessageId,
+                clientToolResults: body.clientToolResults,
+                sessionId: session.id,
+                userId: user.id,
+                threadId: body.threadId,
+                timezone,
+              })
+        return forwardAgentChat(
+          {
+            assetIds: prepared.assetIds,
+            clientMessageId: prepared.clientMessageId,
+            messages: prepared.messages,
+            threadId: prepared.threadId,
+            ticket: prepared.ticket,
+            timezone: prepared.timezone,
+            trigger: prepared.trigger,
+          },
+          request.signal
+        )
+      },
+      {
+        authenticated: true,
+        body: agentChatBodyModel,
+        response: {
+          200: agentStreamResponseModel,
+          400: agentStreamResponseModel,
+          401: tenantErrorResponses[401],
+          403: tenantErrorResponses[403],
+          404: tenantErrorResponses[404],
+          409: tenantErrorResponses[409],
+          500: tenantErrorResponses[500],
+          503: agentStreamResponseModel,
+        },
+        detail: {
+          operationId: "streamAgentChat",
+          summary: "private Agent WorkerからAI SDK UI streamを転送",
+          description:
+            "最後のuser messageまたは直前assistantのallowlist済みclient tool結果だけをcanonical履歴へ反映し、一回限りのticketとbounded server historyをprivate Service Bindingへ渡す。browser履歴、user ID、organization IDは受理しない。",
+          tags: ["Agent"],
+        },
+      }
+    )
+    .get(
+      "/agent/threads/:threadId/messages",
+      ({ authContext: { session, user }, params, set }) => {
         set.headers["cache-control"] = "private, no-store"
-        return createAgentConnection(db, {
+        return listAgentMessages(db, {
           sessionId: session.id,
+          threadId: params.threadId,
           userId: user.id,
-          threadId: body.threadId,
         })
       },
       {
         authenticated: true,
-        body: createAgentConnectionBodyModel,
+        params: agentThreadParamsModel,
         response: {
-          200: agentConnectionTicketModel,
+          200: agentCanonicalMessageListModel,
           ...tenantErrorResponses,
         },
         detail: {
-          operationId: "createAgentConnectionTicket",
-          summary: "一回限りのAgent接続ticketを発行",
+          operationId: "listAgentThreadMessages",
+          summary: "Agent threadのcanonical message履歴を取得",
           description:
-            "60秒以下のopaque ticketをsession、user、active organization、thread、context epochへ束縛し、DBにはhashだけを保存する。",
+            "live session、active organization、membership、thread ownerを再検証し、APIが保存したbounded UI projectionだけを返す。",
           tags: ["Agent"],
         },
       }
@@ -189,10 +254,10 @@ export const createAgentModule = (db: Db) =>
       }
     )
     .post(
-      "/agent/actions/:actionId/resume-ticket",
+      "/agent/actions/:actionId/resume",
       async ({ authContext: { session, user }, params, set }) => {
         set.headers["cache-control"] = "private, no-store"
-        return createAgentActionResumeTicket(db, {
+        return resumeAgentAction(db, {
           actionId: params.actionId,
           sessionId: session.id,
           userId: user.id,
@@ -201,15 +266,16 @@ export const createAgentModule = (db: Db) =>
       {
         authenticated: true,
         params: agentActionParamsModel,
+        body: resumeAgentActionBodyModel,
         response: {
-          200: issueAgentResumeTicketModel,
+          200: agentActionExecutionResultModel,
           ...tenantErrorResponses,
         },
         detail: {
-          operationId: "createAgentActionResumeTicket",
-          summary: "承認済みactionの一回限りresume ticketを発行",
+          operationId: "resumeAgentIssueAction",
+          summary: "承認済みactionをprivate Agent Runtimeで再開",
           description:
-            "60秒以下のopaque ticketをactionとcurrent session scopeへ束縛し、DBにはhashだけを保存する。",
+            "一回限りのresume ticketを内部発行し、browserへ公開せずprivate Agent Runtimeでconsumeしてtransaction実行まで完了する。",
           tags: ["Agent"],
         },
       }

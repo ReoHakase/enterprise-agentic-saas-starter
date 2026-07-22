@@ -26,20 +26,12 @@ const useAdminSession = async (context: BrowserContext) => {
   ])
 }
 
-const allowUnavailableAgentWorker = (
-  allowClientErrors: (...patterns: RegExp[]) => void
-) => {
-  // The E2E stack intentionally starts Web and the HTTP mock API only. A fake
-  // Agents SDK WebSocket protocol would test the fake instead of the runtime.
-  allowClientErrors(
-    /WebSocket connection to .*127\.0\.0\.1:3002/u,
-    /ERR_CONNECTION_REFUSED/u,
-    /WebSocket.*closed/u
-  )
-}
-
 const openOrganizationMenu = async (page: Page) => {
   if ((page.viewportSize()?.width ?? 1280) < 768) {
+    const agentDialog = page.getByRole("dialog", { name: "Agent" })
+    if (await agentDialog.isVisible()) {
+      await agentDialog.getByRole("button", { name: "Close Agent" }).click()
+    }
     await page.getByRole("button", { name: "Toggle Sidebar" }).click()
     await expect(page.getByRole("dialog", { name: "Sidebar" })).toBeVisible()
   }
@@ -54,7 +46,8 @@ const selectAgentThread = async (
   name: string,
   expectedThreadId: string
 ) => {
-  await page.getByRole("button", { name, exact: true }).click()
+  await page.getByRole("combobox", { name: "Agent thread" }).click()
+  await page.getByRole("option", { name, exact: true }).click()
   const switchDialog = page.getByRole("alertdialog", {
     name: "Switch Agent threads?",
   })
@@ -78,7 +71,7 @@ test("Issue検索URLはreloadとback-forwardでcanonical stateを復元する", 
   await page.goto("/organization/alpha-operations/issues")
 
   await expect(page.getByText("12 issues")).toBeVisible()
-  await page.getByRole("button", { name: "Next", exact: true }).click()
+  await page.getByRole("link", { name: "Next", exact: true }).click()
   await expect(page).toHaveURL((url) => url.searchParams.get("page") === "2")
   await expect(page.getByText("Backlog fixture 03")).toBeVisible()
 
@@ -113,19 +106,60 @@ test("Issue検索URLはreloadとback-forwardでcanonical stateを復元する", 
   await expect(page.getByText("Review tenant audit log")).toBeVisible()
 })
 
-// The default Playwright stack does not start the real Agent Worker. Keep these
-// journeys explicit without replacing the Agents SDK HTTP/WebSocket protocol
-// with a browser-side fake; enable them when that Worker joins the E2E stack.
-test.fixme("organization切替barrierはAgent draftを保持または明示破棄する", async ({
-  allowClientErrors,
+test("Agent shellはconsole内で永続化しmobileではfull-screenになる", async ({
   context,
   page,
 }) => {
-  allowUnavailableAgentWorker(allowClientErrors)
+  await useAdminSession(context)
+  await page.goto(
+    "/organization/alpha-operations/issues?agentThread=agent-thread-a-1"
+  )
+  await page.getByRole("button", { name: "Open Agent" }).click()
+
+  const viewport = page.viewportSize()
+  if (!viewport) throw new Error("Expected a configured viewport")
+
+  if (viewport.width < 768) {
+    const sheet = page.getByRole("dialog", { name: "Agent" })
+    await expect(sheet).toBeVisible()
+    const bounds = await sheet.boundingBox()
+    expect(bounds).not.toBeNull()
+    expect(bounds?.width).toBe(viewport.width)
+    expect(bounds?.height).toBe(viewport.height)
+    await page.getByRole("button", { name: "Close Agent" }).click()
+    await expect(sheet).toBeHidden()
+    return
+  }
+
+  const pane = page.getByRole("complementary", { name: "Agent" })
+  await expect(pane).toBeVisible()
+  await expect.poll(async () => (await pane.boundingBox())?.width).toBe(460)
+
+  const separator = page.getByRole("separator", {
+    name: "Resize Agent pane",
+  })
+  await separator.focus()
+  await separator.press("ArrowLeft")
+  await expect.poll(async () => (await pane.boundingBox())?.width).toBe(480)
+
+  await page.getByRole("link", { name: "Overview", exact: true }).click()
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/organization/alpha-operations/dashboard" &&
+      url.searchParams.get("agentThread") === "agent-thread-a-1"
+  )
+  await expect(pane).toBeVisible()
+  await expect.poll(async () => (await pane.boundingBox())?.width).toBe(480)
+})
+
+test("organization切替barrierはAgent draftを保持または明示破棄する", async ({
+  context,
+  page,
+}) => {
   await useAdminSession(context)
   await page.goto("/organization/alpha-operations/agent")
   await expect(
-    page.getByRole("button", { name: "Alpha triage", exact: true })
+    page.getByRole("combobox", { name: "Agent thread" })
   ).toBeVisible({ timeout: 20_000 })
   await selectAgentThread(page, "Alpha triage", "agent-thread-a-1")
 
@@ -143,6 +177,9 @@ test.fixme("organization切替barrierはAgent draftを保持または明示破�
   await expect(barrier).toBeVisible()
   await barrier.getByRole("button", { name: "Stay here" }).click()
   await expect(page).toHaveURL(/alpha-operations\/agent/u)
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    await page.getByRole("button", { name: "Open Agent" }).click()
+  }
   await expect(composer).toHaveValue("Keep this Alpha draft")
 
   await openOrganizationMenu(page)
@@ -151,7 +188,6 @@ test.fixme("organization切替barrierはAgent draftを保持または明示破�
     .getByRole("button", { name: "Discard local draft and switch" })
     .click()
   await expect(page).toHaveURL(/\/organization\/beta-support\/agent$/u)
-  await expect(page.getByText("Beta triage")).toBeVisible()
   await selectAgentThread(page, "Beta triage", "agent-thread-b-1")
   await expect(
     page.getByPlaceholder(
@@ -160,16 +196,14 @@ test.fixme("organization切替barrierはAgent draftを保持または明示破�
   ).toHaveValue("")
 })
 
-test.fixme("Agent threadはdraftと画像を分離しarchive時に一時画像を削除する", async ({
-  allowClientErrors,
+test("Agent threadはdraftと画像を分離しarchive時に一時画像を削除する", async ({
   context,
   page,
 }) => {
-  allowUnavailableAgentWorker(allowClientErrors)
   await useAdminSession(context)
   await page.goto("/organization/alpha-operations/agent")
   await expect(
-    page.getByRole("button", { name: "Alpha triage", exact: true })
+    page.getByRole("combobox", { name: "Agent thread" })
   ).toBeVisible({ timeout: 20_000 })
   await selectAgentThread(page, "Alpha triage", "agent-thread-a-1")
 
@@ -215,4 +249,96 @@ test.fixme("Agent threadはdraftと画像を分離しarchive時に一時画像�
       return response.json()
     })
     .toEqual([])
+})
+
+test("画像解析から承認付きIssue作成と恒久添付まで完了する", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto(
+    "/organization/alpha-operations/issues?agentThread=agent-thread-a-1"
+  )
+  await page.getByRole("button", { name: "Open Agent" }).click()
+
+  const agent =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+  await expect(agent).toBeVisible()
+  const composer = agent.getByPlaceholder(
+    "Describe the issue, or attach screenshots for analysis."
+  )
+  await expect(composer).toBeVisible()
+  await agent.locator('input[type="file"]').setInputFiles({
+    name: "screenshot-regression.png",
+    mimeType: "image/png",
+    buffer: tinyPng,
+  })
+  await expect(
+    agent.getByRole("img", { name: "screenshot-regression.png" })
+  ).toBeVisible()
+  await composer.fill(
+    "Describe this screenshot and create a high-priority Issue with labels, due date, assignee, and this image attached."
+  )
+  await agent.getByRole("button", { name: "Send" }).click()
+
+  await expect(
+    agent.getByText(
+      "I analyzed the screenshot and prepared an Issue with labels, due date, assignee, and attachment."
+    )
+  ).toBeVisible()
+  const approvalAttachments = agent.getByRole("region", {
+    name: "Issue attachments awaiting approval",
+  })
+  await expect(approvalAttachments).toContainText(
+    "These images will become permanent Issue attachments"
+  )
+  await expect(
+    approvalAttachments.getByRole("img", {
+      name: "Attachment preview: screenshot-regression.png",
+    })
+  ).toBeVisible()
+
+  await expect(
+    agent.getByText("Approve Issue change?", { exact: true })
+  ).toBeVisible()
+  await expect(agent).toContainText("Screenshot layout regression")
+  await expect(agent).toContainText("ui, regression")
+  await expect(agent).toContainText("Jordan Lee")
+  await agent.getByRole("button", { name: "Yes" }).click()
+  await expect(agent.getByText("succeeded", { exact: true })).toBeVisible()
+
+  const promotedChatImage = agent
+    .locator("article")
+    .getByRole("img", { name: "screenshot-regression.png" })
+  await expect(promotedChatImage).toBeVisible()
+  await expect
+    .poll(() =>
+      promotedChatImage.evaluate(
+        (image: HTMLImageElement) => image.complete && image.naturalWidth > 0
+      )
+    )
+    .toBe(true)
+
+  await page.goto(
+    "/organization/alpha-operations/issues?q=Screenshot%20layout%20regression"
+  )
+  const issueLink = page.getByRole("link", {
+    name: "Screenshot layout regression",
+    exact: true,
+  })
+  await expect(issueLink).toBeVisible()
+  await issueLink.click()
+  const issueDialog = page.getByRole("dialog", { name: "Issue details" })
+  await expect(issueDialog).toBeVisible({ timeout: 20_000 })
+  const attachments = issueDialog.getByRole("region", { name: "Attachments" })
+  await expect(
+    attachments.getByText("screenshot-regression.png", { exact: true })
+  ).toBeVisible()
+  await expect(
+    attachments.getByRole("button", {
+      name: "Preview image screenshot-regression.png",
+    })
+  ).toBeVisible()
 })

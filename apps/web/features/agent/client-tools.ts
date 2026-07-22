@@ -3,16 +3,18 @@ import * as v from "valibot"
 import {
   buildIssueListHref,
   type IssueSearchState,
+  withAgentThreadHref,
 } from "@/features/issues/search-params"
 
 import type { AgentIssueFormValues, AgentFormSnapshot } from "./form-registry"
 
 const boundedString = (maximum: number) =>
   v.pipe(v.string(), v.maxLength(maximum))
+const issueRevisionSchema = v.pipe(v.number(), v.integer(), v.minValue(1))
 const formTargetEntries = {
   formId: v.optional(boundedString(128)),
   expectedEpoch: v.optional(boundedString(128)),
-  expectedRevision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  expectedRevision: v.optional(issueRevisionSchema),
 }
 const issueQuerySchema = v.strictObject({
   q: v.optional(boundedString(200)),
@@ -50,7 +52,7 @@ const clientToolSchemas = {
   ui_patch_form_draft: v.strictObject({
     formId: boundedString(128),
     expectedEpoch: boundedString(128),
-    expectedRevision: formTargetEntries.expectedRevision,
+    expectedRevision: issueRevisionSchema,
     patch: v.strictObject({
       title: v.optional(v.string()),
       description: v.optional(v.string()),
@@ -77,7 +79,7 @@ type ClientToolDependencies = {
       organizationId: string
       formId: string
       expectedEpoch: string
-      expectedRevision?: number
+      expectedRevision: number
     },
     patch: AgentIssueFormValues
   ) => Promise<AgentFormSnapshot>
@@ -113,7 +115,10 @@ export const executeAgentClientTool = async (
     const parsed = parseToolInput(toolName, input)
     deferNavigation(
       dependencies.navigate,
-      `/organization/${dependencies.organizationSlug}/${parsed.page}`
+      withAgentThreadHref(
+        `/organization/${dependencies.organizationSlug}/${parsed.page}`,
+        dependencies.issueSearchState.agentThread
+      )
     )
     return { ok: true }
   }
@@ -124,14 +129,18 @@ export const executeAgentClientTool = async (
       dependencies.issueSearchState,
       parsed.query
     )
+    const { agentThread: _agentThread, ...publicQuery } = target.state
     deferNavigation(dependencies.navigate, target.href)
-    return { ok: true, query: target.state }
+    return { ok: true, query: publicQuery }
   }
   if (toolName === "ui_open_issue") {
     const parsed = parseToolInput(toolName, input)
     deferNavigation(
       dependencies.navigate,
-      `/organization/${dependencies.organizationSlug}/issues/${parsed.issueNumber.toString()}`
+      withAgentThreadHref(
+        `/organization/${dependencies.organizationSlug}/issues/${parsed.issueNumber.toString()}`,
+        dependencies.issueSearchState.agentThread
+      )
     )
     return { ok: true }
   }

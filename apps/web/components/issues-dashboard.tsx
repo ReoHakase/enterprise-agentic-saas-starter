@@ -17,7 +17,10 @@ import type {
 } from "@/features/issues/components/types"
 import { issueKeys, issuesQueryOptions } from "@/features/issues/queries"
 import type { Issue } from "@/features/issues/schema"
-import { useIssueSearchState } from "@/features/issues/search-params"
+import {
+  useIssueSearchState,
+  withAgentThreadHref,
+} from "@/features/issues/search-params"
 import { apiClient } from "@/lib/api-client"
 
 type IssuesDashboardProps = {
@@ -139,15 +142,21 @@ export const IssuesDashboard = ({
   const handleSelect = useCallback(
     (issue: IssueUiItem) => {
       router.push(
-        `/organization/${organizationSlug}/issues/${issue.number.toString()}`
+        withAgentThreadHref(
+          `/organization/${organizationSlug}/issues/${issue.number.toString()}`,
+          searchState.agentThread
+        )
       )
     },
-    [organizationSlug, router]
+    [organizationSlug, router, searchState.agentThread]
   )
   const getIssueHref = useCallback(
     (issue: IssueUiItem) =>
-      `/organization/${organizationSlug}/issues/${issue.number.toString()}`,
-    [organizationSlug]
+      withAgentThreadHref(
+        `/organization/${organizationSlug}/issues/${issue.number.toString()}`,
+        searchState.agentThread
+      ),
+    [organizationSlug, searchState.agentThread]
   )
   const handleRetry = useCallback(() => {
     void refetchIssues()

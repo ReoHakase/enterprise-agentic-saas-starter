@@ -4,8 +4,10 @@ import {
   defaultIssueSearchState,
   issueListQueryKeyState,
   loadIssueSearchParams,
+  mergeIssueSearchPatch,
   serializeIssueSearchParams,
   toIssueListRequest,
+  withAgentThreadHref,
 } from "./search-params"
 
 describe("issue search params", () => {
@@ -49,5 +51,26 @@ describe("issue search params", () => {
     expect(serializeIssueSearchParams("/issues", defaultIssueSearchState)).toBe(
       "/issues"
     )
+  })
+
+  it("preserves the private Agent thread through same-tenant navigation", () => {
+    const current = {
+      ...defaultIssueSearchState,
+      status: "open" as const,
+      page: 4,
+      agentThread: "thread-9",
+    }
+
+    expect(mergeIssueSearchPatch(current, { priority: "urgent" })).toEqual({
+      ...current,
+      priority: "urgent",
+      page: 1,
+    })
+    expect(withAgentThreadHref("/organization/acme/members", "thread-9")).toBe(
+      "/organization/acme/members?agentThread=thread-9"
+    )
+    expect(
+      withAgentThreadHref("/organization/acme/issues?status=open", "thread/9")
+    ).toBe("/organization/acme/issues?status=open&agentThread=thread%2F9")
   })
 })

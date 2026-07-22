@@ -86,8 +86,13 @@ export const mergeIssueSearchPatch = (
   sort: patch.sort ?? current.sort,
   dir: patch.dir ?? current.dir,
   page: patch.page ?? 1,
-  agentThread: "",
+  agentThread: current.agentThread,
 })
+
+export const withAgentThreadHref = (href: string, agentThread: string) =>
+  agentThread
+    ? `${href}${href.includes("?") ? "&" : "?"}agentThread=${encodeURIComponent(agentThread)}`
+    : href
 
 export const buildIssueListHref = (
   organizationSlug: string,

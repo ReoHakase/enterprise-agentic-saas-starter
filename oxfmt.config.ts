@@ -23,6 +23,7 @@ export default defineConfig({
     ".open-next/**",
     "**/.open-next/**",
     ".agents/skills/**",
+    "**/.agents/skills/**",
     ".turbo/**",
     "**/.turbo/**",
     "**/*.md",

@@ -1,9 +1,6 @@
-import type { AgentInternalApiContract } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentInternalGateway } from "./internal-api"
 
-type RunSettlementApi = Pick<
-  AgentInternalApiContract,
-  "cancelRun" | "finishRun"
->
+type RunSettlementApi = Pick<AgentInternalGateway, "cancelRun" | "finishRun">
 
 export type RunSettlement = {
   cancel: () => Promise<void>

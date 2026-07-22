@@ -43,6 +43,7 @@ test-results/
 storybook-static/
 .next/
 .next-e2e/
+.next-e2e-agent/
 .next-e2e-oauth/
 **/next-env.d.ts
 out/

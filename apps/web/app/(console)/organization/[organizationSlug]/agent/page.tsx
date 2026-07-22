@@ -1,8 +1,8 @@
+import { BotIcon } from "lucide-react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { PageShell } from "@/components/page-shell"
-import { AgentDashboard } from "@/features/agent/components/agent-dashboard"
 import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
 import { getConsoleContext } from "@/lib/server/console-context"
 
@@ -41,10 +41,20 @@ export default async function AgentPage({
       title="Agent"
       description={`Analyze screenshots and manage Issues for ${organization.name}.`}
     >
-      <AgentDashboard
-        organizationId={organization.id}
-        organizationSlug={organization.slug}
-      />
+      <section className="grid min-h-72 place-items-center rounded-2xl border bg-card p-8 text-center">
+        <div className="max-w-md">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <BotIcon aria-hidden="true" />
+          </span>
+          <h2 className="mt-4 font-heading text-lg font-medium">
+            The Agent now works alongside every page
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Keep this route as a focused entry point, or navigate through the
+            console while the same private thread stays open in the Agent pane.
+          </p>
+        </div>
+      </section>
     </PageShell>
   )
 }

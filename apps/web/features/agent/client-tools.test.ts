@@ -68,12 +68,12 @@ describe("agent client tools", () => {
     {
       toolName: "ui_navigate",
       input: { page: "members" },
-      href: "/organization/acme/members",
+      href: "/organization/acme/members?agentThread=thread-1",
     },
     {
       toolName: "ui_open_issue",
       input: { issueNumber: 42 },
-      href: "/organization/acme/issues/42",
+      href: "/organization/acme/issues/42?agentThread=thread-1",
     },
   ])("defers $toolName until its tool output is returned", async (testCase) => {
     vi.useFakeTimers()
@@ -91,6 +91,12 @@ describe("agent client tools", () => {
   it("merges a partial query, resets page, and navigates to canonical Issues", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
+    const { agentThread, ...expectedQuery } = {
+      ...deps.issueSearchState,
+      priority: "high" as const,
+      page: 1,
+    }
+    expect(agentThread).toBe("thread-1")
     await expect(
       executeAgentClientTool(
         "ui_set_issue_query",
@@ -99,22 +105,17 @@ describe("agent client tools", () => {
       )
     ).resolves.toEqual({
       ok: true,
-      query: {
-        ...deps.issueSearchState,
-        priority: "high",
-        page: 1,
-        agentThread: "",
-      },
+      query: expectedQuery,
     })
     expect(deps.navigate).not.toHaveBeenCalled()
 
     await vi.runAllTimersAsync()
     expect(deps.navigate).toHaveBeenCalledWith(
-      "/organization/acme/issues?status=open&priority=high"
+      "/organization/acme/issues?status=open&priority=high&agentThread=thread-1"
     )
   })
 
-  it("removes defaults and Agent-only state from the Issues URL", async () => {
+  it("removes filter defaults while preserving the Agent thread", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
     deps.issueSearchState = {
@@ -140,7 +141,9 @@ describe("agent client tools", () => {
     )
     await vi.runAllTimersAsync()
 
-    expect(deps.navigate).toHaveBeenCalledWith("/organization/acme/issues")
+    expect(deps.navigate).toHaveBeenCalledWith(
+      "/organization/acme/issues?agentThread=thread-1"
+    )
   })
 
   it("rejects arbitrary tools and operation targets", async () => {
@@ -161,7 +164,11 @@ describe("agent client tools", () => {
     await expect(
       executeAgentClientTool(
         "ui_patch_form_draft",
-        { patch: { title: "Unscoped patch" } },
+        {
+          formId: "issue:1",
+          expectedEpoch: "epoch-1",
+          patch: { title: "Missing revision" },
+        },
         deps
       )
     ).rejects.toThrow("Invalid input")

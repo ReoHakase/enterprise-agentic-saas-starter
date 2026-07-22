@@ -75,6 +75,7 @@ export const CreateIssueDialog = ({
             formId: "issue:create",
             organizationId,
             resource: "issue" as const,
+            revision: 1,
             epoch: formEpoch,
             read: () => ({
               values: { title: form.state.values.title },

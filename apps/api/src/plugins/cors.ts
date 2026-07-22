@@ -13,7 +13,7 @@ export const corsPlugin = new Elysia({ name: "cors" }).use(
       "x-request-id",
     ],
     credentials: true,
-    exposeHeaders: ["Server-Timing", "x-request-id"],
+    exposeHeaders: ["Server-Timing", "x-request-id", "Retry-After"],
     origin: env.CORS_ORIGIN,
   })
 )

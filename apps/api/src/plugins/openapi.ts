@@ -250,11 +250,21 @@ export const openApiPlugin = new Elysia({ name: "openapi" }).use(
     mapJsonSchema: {
       valibot: (schema: Parameters<typeof toJsonSchema>[0]) =>
         toJsonSchema(schema, {
-          ignoreActions: ["to_number", "trim"],
-          overrideSchema: ({ valibotSchema }) =>
-            valibotSchema.type === "file"
-              ? { format: "binary", type: "string" }
-              : undefined,
+          // Valibotのcross-field/URL checkはruntime validationの正本に残す。
+          // JSON Schemaへ表現できないactionだけを落とし、route schema全体を欠落させない。
+          ignoreActions: ["check", "check_items", "to_number", "trim"],
+          overrideSchema: ({ valibotSchema }) => {
+            if (valibotSchema.type === "file") {
+              return { format: "binary", type: "string" }
+            }
+            if (valibotSchema.type === "custom") {
+              return {
+                description:
+                  "Runtime-validates a bounded JSON value; the recursive size contract is not representable in OpenAPI 3.0.",
+              }
+            }
+            return undefined
+          },
           target: "openapi-3.0",
           typeMode: "output",
         }),

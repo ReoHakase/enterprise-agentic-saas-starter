@@ -29,6 +29,7 @@ describe("issue update state", () => {
       ...currentIssue,
       status: "closed",
       priority: "low",
+      revision: 2,
       updatedAt: "2026-07-17T00:01:00.000Z",
     }
 
@@ -37,6 +38,7 @@ describe("issue update state", () => {
     ).toMatchObject({
       status: "closed",
       priority: "medium",
+      revision: 2,
       updatedAt: "2026-07-17T00:01:00.000Z",
     })
   })

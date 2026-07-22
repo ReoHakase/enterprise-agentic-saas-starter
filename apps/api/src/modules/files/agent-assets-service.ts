@@ -6,6 +6,7 @@ import {
   discardPendingAgentAsset,
   finalizePendingAgentAsset,
   findAgentRunAssetForModel,
+  findPreviewableAgentAssetForSession,
   findReadyAgentAssetForSession,
   reservePendingAgentAsset,
   toAgentAssetDto,
@@ -641,7 +642,7 @@ export const previewAgentAsset = async (
       field: "width",
     })
   }
-  const value = await findReadyAgentAssetForSession(db, {
+  const value = await findPreviewableAgentAssetForSession(db, {
     assetId: input.assetId,
     organizationId: input.organizationId,
     sessionId: input.sessionId,
@@ -675,13 +676,16 @@ export const previewAgentAsset = async (
 
   const transformed = await transformAgentImage(runtime, value, width)
   if (runtime.cache) {
-    const cacheTtlSeconds = Math.max(
-      1,
-      Math.min(
-        3 * 24 * 60 * 60,
-        Math.floor((value.asset.expiresAt.getTime() - Date.now()) / 1000)
-      )
-    )
+    const cacheTtlSeconds =
+      value.asset.status === "promoted"
+        ? 3 * 24 * 60 * 60
+        : Math.max(
+            1,
+            Math.min(
+              3 * 24 * 60 * 60,
+              Math.floor((value.asset.expiresAt.getTime() - Date.now()) / 1000)
+            )
+          )
     const cacheHeaders = new Headers(transformed.headers)
     cacheHeaders.delete("Set-Cookie")
     cacheHeaders.set("Cache-Control", `public, max-age=${cacheTtlSeconds}`)

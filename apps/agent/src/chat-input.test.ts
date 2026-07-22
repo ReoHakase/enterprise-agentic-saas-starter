@@ -1,126 +1,13 @@
-import type { AgentInternalApiContract } from "@enterprise-agentic-saas/api/agent-client"
 import type { ModelMessage } from "ai"
 import { describe, expect, it, vi } from "vitest"
 
 import {
-  agentChatBodySchema,
   appendCurrentMessageImages,
-  hasBoundedCurrentUserMessage,
   loadCurrentMessageImages,
-  parseAgentChatInput,
 } from "./chat-input"
+import type { AgentInternalGateway } from "./internal-api"
 
-type ImageApi = Pick<AgentInternalApiContract, "getAgentImageForModel">
-
-describe("agent chat input", () => {
-  it("strictly validates body fields, limits assets, and de-duplicates in order", () => {
-    expect(
-      parseAgentChatInput({
-        assetIds: ["asset_2", "asset_1", "asset_2"],
-        timezone: "Asia/Tokyo",
-      })
-    ).toEqual({ assetIds: ["asset_2", "asset_1"], timezone: "Asia/Tokyo" })
-
-    expect(
-      agentChatBodySchema.safeParse({
-        assetIds: ["a", "b", "c", "d", "e"],
-        timezone: "Asia/Tokyo",
-      }).success
-    ).toBe(false)
-    expect(
-      agentChatBodySchema.safeParse({
-        assetIds: [],
-        timezone: "Not/A_Zone",
-      }).success
-    ).toBe(false)
-    expect(
-      agentChatBodySchema.safeParse({
-        assetIds: [],
-        extra: true,
-        timezone: "Asia/Tokyo",
-      }).success
-    ).toBe(false)
-    expect(parseAgentChatInput(null)).toBeUndefined()
-    expect(parseAgentChatInput({ assetIds: [], timezone: "Etc/UTC" })).toEqual({
-      assetIds: [],
-      timezone: "UTC",
-    })
-  })
-
-  it("enforces strict bounded parts on the latest user turn", () => {
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          role: "user",
-          parts: [{ type: "text", text: "x".repeat(20_000) }],
-        },
-      ])
-    ).toBe(true)
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          role: "user",
-          parts: [{ type: "text", text: "x".repeat(20_001) }],
-        },
-      ])
-    ).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          role: "user",
-          parts: [{ type: "text", text: "ok" }],
-        },
-        {
-          id: "message_2",
-          role: "assistant",
-          parts: [{ type: "text", text: "tool output" }],
-        },
-      ])
-    ).toBe(true)
-    expect(hasBoundedCurrentUserMessage([])).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        { id: "message_1", role: "user", parts: "invalid" },
-      ])
-    ).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          role: "user",
-          parts: [{ type: "text", text: 123 }],
-        },
-      ])
-    ).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          role: "user",
-          parts: [null, { type: "image", image: "ignored" }],
-        },
-      ])
-    ).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        { role: "user", parts: [{ type: "text", text: "missing id" }] },
-      ])
-    ).toBe(false)
-    expect(
-      hasBoundedCurrentUserMessage([
-        {
-          id: "message_1",
-          metadata: { arbitrary: true },
-          role: "user",
-          parts: [{ type: "text", text: "unexpected metadata" }],
-        },
-      ])
-    ).toBe(false)
-  })
-})
+type ImageApi = Pick<AgentInternalGateway, "getAgentImageForModel">
 
 describe("current-message model images", () => {
   it("loads bounded WebP responses through the run grant", async () => {

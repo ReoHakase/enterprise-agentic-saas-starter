@@ -1,10 +1,8 @@
-import type {
-  AgentInternalApiContract,
-  AgentIssue,
-} from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentIssue } from "@enterprise-agentic-saas/api/agent-client"
 import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
+import type { AgentInternalGateway } from "./internal-api"
 import {
   agentReadToolSchemas,
   createAgentReadHandlers,
@@ -14,7 +12,7 @@ import {
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 
 type AgentReadApi = Pick<
-  AgentInternalApiContract,
+  AgentInternalGateway,
   | "getIssue"
   | "readAccountContext"
   | "readActiveOrganization"
@@ -174,7 +172,7 @@ describe("createAgentReadHandlers", () => {
     expect(test.grants).toHaveLength(20)
   })
 
-  it("replaces internal RPC errors with a fixed tool error", async () => {
+  it("replaces private HTTP errors with a fixed tool error", async () => {
     const test = apiHarness({ failAccount: true })
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 

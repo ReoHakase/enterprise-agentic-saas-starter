@@ -31,7 +31,13 @@ import {
   SelectValue,
 } from "@enterprise-agentic-saas/ui/components/select"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
-import { CalendarClockIcon, PlusIcon, UserRoundIcon, XIcon } from "lucide-react"
+import {
+  CalendarClockIcon,
+  PlusIcon,
+  UserRoundIcon,
+  UsersRoundIcon,
+  XIcon,
+} from "lucide-react"
 import {
   useCallback,
   useEffect,
@@ -45,11 +51,15 @@ import { LocalDate } from "@/components/local-date"
 import { UserProfileImage } from "@/components/user-identity"
 
 import {
+  AllIssuePrioritiesBadge,
+  AllIssueStatusesBadge,
   isIssuePriority,
   isIssueStatus,
   issueStatusOptions,
   PriorityBadge,
+  priorityFilterOptions,
   priorityOptions,
+  statusOptions,
   StatusBadge,
 } from "./issue-utils"
 import type { IssueAssigneeOption, IssuePriority, IssueStatus } from "./types"
@@ -65,27 +75,33 @@ type ControlStateProps = {
 export const IssueStatusControl = ({
   value,
   onValueChange,
+  includeAll = false,
   ariaLabel,
   busy,
   className,
   disabled,
   readOnly,
 }: ControlStateProps & {
-  value: IssueStatus
-  onValueChange?: (value: IssueStatus) => void
+  value: IssueStatus | "all"
+  includeAll?: boolean
+  onValueChange?: (value: IssueStatus | "all") => void
 }) => {
   const handleValueChange = useCallback(
     (nextValue: string | null) => {
-      if (isIssueStatus(nextValue) && nextValue !== value) {
+      if (
+        (isIssueStatus(nextValue) || (includeAll && nextValue === "all")) &&
+        nextValue !== value
+      ) {
         onValueChange?.(nextValue)
       }
     },
-    [onValueChange, value]
+    [includeAll, onValueChange, value]
   )
+  const options = includeAll ? statusOptions : issueStatusOptions
 
   return (
     <Select
-      items={issueStatusOptions}
+      items={options}
       value={value}
       disabled={disabled || !onValueChange}
       readOnly={readOnly || busy}
@@ -96,10 +112,19 @@ export const IssueStatusControl = ({
         aria-label={ariaLabel}
         aria-busy={busy}
       >
-        <StatusBadge status={value} />
+        {value === "all" ? (
+          <AllIssueStatusesBadge />
+        ) : (
+          <StatusBadge status={value} />
+        )}
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
         <SelectGroup>
+          {includeAll ? (
+            <SelectItem value="all">
+              <AllIssueStatusesBadge />
+            </SelectItem>
+          ) : null}
           {issueStatusOptions.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               <StatusBadge status={option.value} />
@@ -114,27 +139,33 @@ export const IssueStatusControl = ({
 export const IssuePriorityControl = ({
   value,
   onValueChange,
+  includeAll = false,
   ariaLabel,
   busy,
   className,
   disabled,
   readOnly,
 }: ControlStateProps & {
-  value: IssuePriority
-  onValueChange?: (value: IssuePriority) => void
+  value: IssuePriority | "all"
+  includeAll?: boolean
+  onValueChange?: (value: IssuePriority | "all") => void
 }) => {
   const handleValueChange = useCallback(
     (nextValue: string | null) => {
-      if (isIssuePriority(nextValue) && nextValue !== value) {
+      if (
+        (isIssuePriority(nextValue) || (includeAll && nextValue === "all")) &&
+        nextValue !== value
+      ) {
         onValueChange?.(nextValue)
       }
     },
-    [onValueChange, value]
+    [includeAll, onValueChange, value]
   )
+  const options = includeAll ? priorityFilterOptions : priorityOptions
 
   return (
     <Select
-      items={priorityOptions}
+      items={options}
       value={value}
       disabled={disabled || !onValueChange}
       readOnly={readOnly || busy}
@@ -145,10 +176,19 @@ export const IssuePriorityControl = ({
         aria-label={ariaLabel}
         aria-busy={busy}
       >
-        <PriorityBadge priority={value} />
+        {value === "all" ? (
+          <AllIssuePrioritiesBadge />
+        ) : (
+          <PriorityBadge priority={value} />
+        )}
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
         <SelectGroup>
+          {includeAll ? (
+            <SelectItem value="all">
+              <AllIssuePrioritiesBadge />
+            </SelectItem>
+          ) : null}
           {priorityOptions.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               <PriorityBadge priority={option.value} />
@@ -169,34 +209,38 @@ export const IssueAssigneeControl = ({
   className,
   disabled,
   readOnly,
+  includeAll = false,
 }: ControlStateProps & {
   value: string | null
   assignees: IssueAssigneeOption[]
+  includeAll?: boolean
   onValueChange?: (value: string | null) => void
 }) => {
   const selected = assignees.find((assignee) => assignee.id === value)
+  const emptyValue = includeAll ? "all" : "unassigned"
+  const emptyLabel = includeAll ? "All assignees" : "Unassigned"
   const items = useMemo(
     () => [
-      { label: "Unassigned", value: "unassigned" },
+      { label: emptyLabel, value: emptyValue },
       ...assignees.map((assignee) => ({
         label: assignee.name,
         value: assignee.id,
       })),
     ],
-    [assignees]
+    [assignees, emptyLabel, emptyValue]
   )
   const handleValueChange = useCallback(
     (nextValue: string | null) => {
-      const assigneeId = nextValue === "unassigned" ? null : nextValue
+      const assigneeId = nextValue === emptyValue ? null : nextValue
       if (assigneeId !== value) onValueChange?.(assigneeId)
     },
-    [onValueChange, value]
+    [emptyValue, onValueChange, value]
   )
 
   return (
     <Select
       items={items}
-      value={value ?? "unassigned"}
+      value={value ?? emptyValue}
       disabled={disabled || !onValueChange}
       readOnly={readOnly || busy}
       onValueChange={handleValueChange}
@@ -213,16 +257,24 @@ export const IssueAssigneeControl = ({
           </span>
         ) : (
           <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
-            <UserRoundIcon aria-hidden="true" />
-            <span>Unassigned</span>
+            {includeAll ? (
+              <UsersRoundIcon aria-hidden="true" />
+            ) : (
+              <UserRoundIcon aria-hidden="true" />
+            )}
+            <span>{emptyLabel}</span>
           </span>
         )}
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
         <SelectGroup>
-          <SelectItem value="unassigned">
-            <UserRoundIcon aria-hidden="true" />
-            Unassigned
+          <SelectItem value={emptyValue}>
+            {includeAll ? (
+              <UsersRoundIcon aria-hidden="true" />
+            ) : (
+              <UserRoundIcon aria-hidden="true" />
+            )}
+            {emptyLabel}
           </SelectItem>
           {assignees.map((assignee) => (
             <SelectItem key={assignee.id} value={assignee.id}>

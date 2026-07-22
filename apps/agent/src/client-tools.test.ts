@@ -38,16 +38,12 @@ describe("agentClientToolSchemas", () => {
       patch: { title: "New title" },
     })
     expect(
-      agentClientToolSchemas.patchFormDraft.parse({
+      agentClientToolSchemas.patchFormDraft.safeParse({
         expectedEpoch: "epoch_2",
-        formId: "issue-create",
+        formId: "issue-edit-2",
         patch: { description: "Draft" },
-      })
-    ).toEqual({
-      expectedEpoch: "epoch_2",
-      formId: "issue-create",
-      patch: { description: "Draft" },
-    })
+      }).success
+    ).toBe(false)
     expect(agentClientToolSchemas.readFormDraft.parse({})).toEqual({})
   })
 

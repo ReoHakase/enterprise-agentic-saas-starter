@@ -5,7 +5,7 @@ import {
   type AgentAssetDto,
 } from "@enterprise-agentic-saas/api/client"
 import { useQueryClient } from "@tanstack/react-query"
-import { atom, useAtom } from "jotai"
+import { atom, useAtom, useSetAtom } from "jotai"
 import {
   createContext,
   useCallback,
@@ -23,6 +23,8 @@ import { clientEnv } from "@/lib/env.client"
 import { deleteAgentAsset } from "./api"
 import { useAgentFormRegistry } from "./form-registry"
 import { agentKeys } from "./queries"
+import { agentShellOpenAtom } from "./shell-state"
+import type { PendingChatSubmission } from "./submission-identity"
 
 export type StagedAgentAsset = {
   asset: AgentAssetDto
@@ -34,6 +36,7 @@ type AgentThreadDraft = {
   composer: string
   stagedAssets: StagedAgentAsset[]
   uploadingCount: number
+  pendingSubmission?: PendingChatSubmission
 }
 
 type AgentDraftScopes = Record<string, Record<string, AgentThreadDraft>>
@@ -86,6 +89,10 @@ type AgentRuntimeState = {
   frozen: boolean
   getThreadDraft: (threadId: string) => AgentThreadDraft
   setThreadComposer: (threadId: string, value: string) => void
+  setThreadPendingSubmission: (
+    threadId: string,
+    submission: PendingChatSubmission | undefined
+  ) => void
   uploadImages: (threadId: string, files: File[]) => Promise<void>
   removeStagedAsset: (threadId: string, assetId: string) => Promise<void>
   clearStagedAssetsAfterSend: (threadId: string) => void
@@ -101,6 +108,7 @@ type AgentRuntimeState = {
   ) => Promise<void>
   beginOrganizationSwitch: () => OrganizationSwitchRisks
   cancelOrganizationSwitch: () => void
+  abortOrganizationSwitch: () => void
   completeOrganizationSwitch: () => Promise<void>
 }
 
@@ -108,6 +116,8 @@ export type AgentThreadRuntimeState = {
   frozen: boolean
   composer: string
   setComposer: (value: string) => void
+  pendingSubmission?: PendingChatSubmission
+  setPendingSubmission: (submission: PendingChatSubmission | undefined) => void
   stagedAssets: StagedAgentAsset[]
   uploadingCount: number
   uploadImages: (files: File[]) => Promise<void>
@@ -134,6 +144,7 @@ export const AgentRuntimeProvider = ({
 }: PropsWithChildren<{ userId: string; organizationId: string }>) => {
   const queryClient = useQueryClient()
   const formRegistry = useAgentFormRegistry()
+  const setAgentShellOpen = useSetAtom(agentShellOpenAtom)
   const [draftScopes, setDraftScopes] = useAtom(threadDraftsAtom)
   const [frozen, setFrozen] = useState(false)
   const frozenRef = useRef(false)
@@ -207,6 +218,14 @@ export const AgentRuntimeProvider = ({
   const setThreadComposer = useCallback(
     (threadId: string, composer: string) =>
       updateThreadDraft(threadId, (current) => ({ ...current, composer })),
+    [updateThreadDraft]
+  )
+  const setThreadPendingSubmission = useCallback(
+    (threadId: string, pendingSubmission: PendingChatSubmission | undefined) =>
+      updateThreadDraft(threadId, (current) => ({
+        ...current,
+        pendingSubmission,
+      })),
     [updateThreadDraft]
   )
   const currentUploadGeneration = useCallback(
@@ -445,10 +464,10 @@ export const AgentRuntimeProvider = ({
     setFrozen(false)
     formRegistry.setFrozen(false)
   }, [formRegistry])
-  const completeOrganizationSwitch = useCallback(async () => {
-    // This method runs only after organization/account activation succeeds.
+  const abortOrganizationSwitch = useCallback(() => {
+    // Server-side context revocation must complete before this phase starts.
     // Fence late old-context upload responses before aborting them so they
-    // cannot issue DELETE with the newly active session context.
+    // cannot issue DELETE with a subsequently active session context.
     contextFenceRef.current += 1
     for (const session of sessionsRef.current.values()) {
       session.stop()
@@ -458,6 +477,16 @@ export const AgentRuntimeProvider = ({
     const threadDrafts = draftsRef.current[scopeKey] ?? {}
     for (const threadId of Object.keys(threadDrafts))
       stopThreadUploads(threadId)
+  }, [scopeKey, stopThreadUploads])
+  const completeOrganizationSwitch = useCallback(async () => {
+    // Local drafts survive until organization/account activation succeeds.
+    // Calling abort again is intentional and makes this boundary fail closed
+    // for callers that cannot split the two phases.
+    abortOrganizationSwitch()
+    await queryClient.cancelQueries({ queryKey: agentKeys.all })
+    queryClient.removeQueries({ queryKey: agentKeys.all })
+    setAgentShellOpen(false)
+    const threadDrafts = draftsRef.current[scopeKey] ?? {}
     const stagedAssets = Object.values(threadDrafts).flatMap(
       (draft) => draft.stagedAssets
     )
@@ -467,14 +496,13 @@ export const AgentRuntimeProvider = ({
     // 見えるbest-effort requestを発生させない。
     removeCurrentScope()
     formRegistry.clear()
-    await queryClient.cancelQueries({ queryKey: agentKeys.all })
-    queryClient.removeQueries({ queryKey: agentKeys.all })
   }, [
+    abortOrganizationSwitch,
     formRegistry,
     queryClient,
     removeCurrentScope,
+    setAgentShellOpen,
     scopeKey,
-    stopThreadUploads,
   ])
 
   useEffect(
@@ -504,6 +532,7 @@ export const AgentRuntimeProvider = ({
       frozen,
       getThreadDraft,
       setThreadComposer,
+      setThreadPendingSubmission,
       uploadImages,
       removeStagedAsset,
       clearStagedAssetsAfterSend,
@@ -513,9 +542,11 @@ export const AgentRuntimeProvider = ({
       completeThreadSwitch,
       beginOrganizationSwitch,
       cancelOrganizationSwitch,
+      abortOrganizationSwitch,
       completeOrganizationSwitch,
     }),
     [
+      abortOrganizationSwitch,
       beginOrganizationSwitch,
       beginThreadSwitch,
       cancelOrganizationSwitch,
@@ -529,6 +560,7 @@ export const AgentRuntimeProvider = ({
       registerSession,
       removeStagedAsset,
       setThreadComposer,
+      setThreadPendingSubmission,
       uploadImages,
       userId,
     ]
@@ -555,6 +587,7 @@ export const useAgentThreadRuntimeState = (
   const draft = runtime.getThreadDraft(threadId)
   const {
     setThreadComposer,
+    setThreadPendingSubmission,
     uploadImages: uploadThreadImages,
     removeStagedAsset: removeThreadStagedAsset,
     clearStagedAssetsAfterSend: clearThreadStagedAssetsAfterSend,
@@ -563,6 +596,11 @@ export const useAgentThreadRuntimeState = (
   const setComposer = useCallback(
     (value: string) => setThreadComposer(threadId, value),
     [setThreadComposer, threadId]
+  )
+  const setPendingSubmission = useCallback(
+    (submission: PendingChatSubmission | undefined) =>
+      setThreadPendingSubmission(threadId, submission),
+    [setThreadPendingSubmission, threadId]
   )
   const uploadImages = useCallback(
     (files: File[]) => uploadThreadImages(threadId, files),
@@ -586,6 +624,8 @@ export const useAgentThreadRuntimeState = (
       frozen: runtime.frozen,
       composer: draft.composer,
       setComposer,
+      pendingSubmission: draft.pendingSubmission,
+      setPendingSubmission,
       stagedAssets: draft.stagedAssets,
       uploadingCount: draft.uploadingCount,
       uploadImages,
@@ -596,12 +636,14 @@ export const useAgentThreadRuntimeState = (
     [
       clearStagedAssetsAfterSend,
       draft.composer,
+      draft.pendingSubmission,
       draft.stagedAssets,
       draft.uploadingCount,
       registerSession,
       removeStagedAsset,
       runtime.frozen,
       setComposer,
+      setPendingSubmission,
       uploadImages,
     ]
   )

@@ -23,10 +23,7 @@ import {
   useAgentRuntimeState,
 } from "@/features/agent/runtime-state"
 import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import {
-  cancelTenantWorkForOrganizationSwitch,
-  prepareOrganizationSwitch,
-} from "@/features/organizations/cache"
+import { prepareOrganizationSwitch } from "@/features/organizations/cache"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 
 export const OrganizationActivationGate = ({
@@ -42,10 +39,7 @@ export const OrganizationActivationGate = ({
   const agentRuntime = useAgentRuntimeState()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const mutation = useMutation({
-    mutationFn: async () => {
-      await cancelTenantWorkForOrganizationSwitch(queryClient)
-      return browserConsoleApi.activateOrganization(organizationId)
-    },
+    mutationFn: () => browserConsoleApi.activateOrganization(organizationId),
     onSuccess: async () => {
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)

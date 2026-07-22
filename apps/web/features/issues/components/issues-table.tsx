@@ -48,24 +48,37 @@ import {
 } from "@tanstack/react-table"
 import {
   CircleDotIcon,
-  FlagIcon,
-  ListFilterIcon,
   RefreshCwIcon,
   SearchIcon,
   Trash2Icon,
 } from "lucide-react"
-import { useCallback, useMemo, useState, type ChangeEvent } from "react"
+import { usePathname } from "next/navigation"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react"
 
-import type {
-  IssueSearchState,
-  SetIssueSearchState,
+import { LinkButton } from "@/components/link-button"
+import {
+  serializeIssueSearchParams,
+  type IssueSearchState,
+  type SetIssueSearchState,
 } from "@/features/issues/search-params"
 
 import { CreateIssueDialog } from "./create-issue-dialog"
+import {
+  IssueAssigneeControl,
+  IssuePriorityControl,
+  IssueStatusControl,
+} from "./issue-metadata-controls"
 import { IssueMetrics } from "./issue-metrics"
 import { useIssueColumns } from "./issue-table-columns"
 import { IssueMutationContext } from "./issue-table-state"
-import { safelyRunAction, statusOptions } from "./issue-utils"
+import { safelyRunAction } from "./issue-utils"
 import type {
   AsyncAction,
   IssueAssigneeOption,
@@ -74,14 +87,7 @@ import type {
 } from "./types"
 
 const getIssueRowId = (issue: IssueUiItem) => issue.id
-const tablePriorityOptions = [
-  { label: "All priorities", value: "all" },
-  { label: "No priority", value: "no_priority" },
-  { label: "Low", value: "low" },
-  { label: "Medium", value: "medium" },
-  { label: "High", value: "high" },
-  { label: "Urgent", value: "urgent" },
-] as const
+const ISSUE_FILTER_DEBOUNCE_MS = 300
 const tableSortOptions = [
   { label: "Updated", value: "updatedAt" },
   { label: "Created", value: "createdAt" },
@@ -94,15 +100,6 @@ const tableDirectionOptions = [
   { label: "Descending", value: "desc" },
   { label: "Ascending", value: "asc" },
 ] as const
-const isTablePriority = (
-  value: string | null
-): value is IssueSearchState["priority"] =>
-  value === "all" ||
-  value === "no_priority" ||
-  value === "low" ||
-  value === "medium" ||
-  value === "high" ||
-  value === "urgent"
 const isTableSort = (value: string | null): value is IssueSearchState["sort"] =>
   value === "number" ||
   value === "createdAt" ||
@@ -150,17 +147,10 @@ export const IssuesTable = ({
   onSearchChange: (query: string) => void
   onViewChange: SetIssueSearchState
 }) => {
+  const pathname = usePathname()
   const [deleteTarget, setDeleteTarget] = useState<IssueUiItem>()
-  const assigneeFilterOptions = useMemo(
-    () => [
-      { label: "All assignees", value: "all" },
-      ...assignees.map((assignee) => ({
-        label: assignee.name,
-        value: assignee.id,
-      })),
-    ],
-    [assignees]
-  )
+  const [searchDraft, setSearchDraft] = useState(searchState.q)
+  const [labelDraft, setLabelDraft] = useState(searchState.label)
   const requestDelete = useCallback(
     (issue: IssueUiItem) => setDeleteTarget(issue),
     []
@@ -232,28 +222,19 @@ export const IssuesTable = ({
     return [open, inProgress, closed]
   }, [issues])
   const handleStatusChange = useCallback(
-    (value: string | null) => {
-      if (
-        value !== "all" &&
-        value !== "open" &&
-        value !== "in_progress" &&
-        value !== "closed"
-      ) {
-        return
-      }
+    (value: IssueSearchState["status"]) => {
       void onViewChange({ status: value, page: 1 })
     },
     [onViewChange]
   )
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      onSearchChange(event.target.value)
+      setSearchDraft(event.target.value)
     },
-    [onSearchChange]
+    []
   )
   const handlePriorityChange = useCallback(
-    (value: string | null) => {
-      if (!isTablePriority(value)) return
+    (value: IssueSearchState["priority"]) => {
       void onViewChange({
         priority: value,
         page: 1,
@@ -262,21 +243,33 @@ export const IssuesTable = ({
     [onViewChange]
   )
   const handleAssigneeChange = useCallback(
-    (value: string | null) => {
-      if (!value) return
-      void onViewChange({ assignee: value === "all" ? "" : value, page: 1 })
-    },
+    (value: string | null) =>
+      void onViewChange({ assignee: value ?? "", page: 1 }),
     [onViewChange]
   )
   const handleLabelChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      void onViewChange(
-        { label: event.target.value, page: 1 },
-        { history: "replace" }
-      )
+      setLabelDraft(event.target.value)
     },
-    [onViewChange]
+    []
   )
+  useEffect(() => setSearchDraft(searchState.q), [searchState.q])
+  useEffect(() => setLabelDraft(searchState.label), [searchState.label])
+  useEffect(() => {
+    if (searchDraft === searchState.q) return
+    const timeout = window.setTimeout(
+      () => onSearchChange(searchDraft),
+      ISSUE_FILTER_DEBOUNCE_MS
+    )
+    return () => window.clearTimeout(timeout)
+  }, [onSearchChange, searchDraft, searchState.q])
+  useEffect(() => {
+    if (labelDraft === searchState.label) return
+    const timeout = window.setTimeout(() => {
+      void onViewChange({ label: labelDraft, page: 1 }, { history: "replace" })
+    }, ISSUE_FILTER_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [labelDraft, onViewChange, searchState.label])
   const handleSortChange = useCallback(
     (value: string | null) => {
       if (!isTableSort(value)) return
@@ -291,8 +284,46 @@ export const IssuesTable = ({
     },
     [onViewChange]
   )
-  const showPreviousPage = useCallback(() => table.previousPage(), [table])
-  const showNextPage = useCallback(() => table.nextPage(), [table])
+  const previousPageHref = serializeIssueSearchParams(pathname, {
+    ...searchState,
+    page: Math.max(searchState.page - 1, 1),
+  })
+  const nextPageHref = serializeIssueSearchParams(pathname, {
+    ...searchState,
+    page: searchState.page + 1,
+  })
+  const showPreviousPage = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return
+      }
+      event.preventDefault()
+      table.previousPage()
+    },
+    [table]
+  )
+  const showNextPage = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return
+      }
+      event.preventDefault()
+      table.nextPage()
+    },
+    [table]
+  )
   const handleDeleteOpenChange = useCallback((open: boolean) => {
     if (!open) setDeleteTarget(undefined)
   }, [])
@@ -336,88 +367,44 @@ export const IssuesTable = ({
               </InputGroupAddon>
               <InputGroupInput
                 type="search"
-                value={searchState.q}
+                value={searchDraft}
                 onChange={handleSearchChange}
                 placeholder="Search issues"
                 aria-label="Search issues"
               />
             </InputGroup>
-            <Select
-              items={statusOptions}
+            <IssueStatusControl
               value={searchState.status}
+              includeAll
+              className="w-full md:w-44"
+              ariaLabel="Filter issues by status"
               onValueChange={handleStatusChange}
-            >
-              <SelectTrigger className="w-full md:w-44">
-                <ListFilterIcon aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-left">
-                  {statusOptions.find(
-                    (option) => option.value === searchState.status
-                  )?.label ?? "All issues"}
-                </span>
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {statusOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Select
-              items={tablePriorityOptions}
+            />
+            <IssuePriorityControl
               value={searchState.priority}
+              includeAll
+              className="w-full md:w-44"
+              ariaLabel="Filter issues by priority"
               onValueChange={handlePriorityChange}
-            >
-              <SelectTrigger className="w-full md:w-44">
-                <FlagIcon aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-left">
-                  {tablePriorityOptions.find(
-                    (option) => option.value === searchState.priority
-                  )?.label ?? "All priorities"}
-                </span>
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {tablePriorityOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <InputGroup>
               <InputGroupInput
-                value={searchState.label}
+                value={labelDraft}
                 onChange={handleLabelChange}
                 placeholder="Filter by label"
                 aria-label="Filter issues by label"
               />
             </InputGroup>
-            <Select
-              items={assigneeFilterOptions}
-              value={searchState.assignee || "all"}
+            <IssueAssigneeControl
+              value={searchState.assignee || null}
+              assignees={assignees}
+              includeAll
+              className="w-full"
+              ariaLabel="Filter issues by assignee"
               onValueChange={handleAssigneeChange}
-            >
-              <SelectTrigger className="w-full">
-                {assigneeFilterOptions.find(
-                  (option) => option.value === (searchState.assignee || "all")
-                )?.label ?? "All assignees"}
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {assigneeFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            />
             <Select
               items={tableSortOptions}
               value={searchState.sort}
@@ -554,26 +541,40 @@ export const IssuesTable = ({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <p className="text-sm text-muted-foreground">{total} issues</p>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!table.getCanPreviousPage()}
-                onClick={showPreviousPage}
-              >
-                Previous
-              </Button>
+              {table.getCanPreviousPage() ? (
+                <LinkButton
+                  variant="outline"
+                  size="sm"
+                  href={previousPageHref}
+                  prefetch={false}
+                  onClick={showPreviousPage}
+                >
+                  Previous
+                </LinkButton>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  Previous
+                </Button>
+              )}
               <span className="text-sm text-muted-foreground">
                 {table.getState().pagination.pageIndex + 1} /{" "}
                 {Math.max(table.getPageCount(), 1)}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!table.getCanNextPage()}
-                onClick={showNextPage}
-              >
-                Next
-              </Button>
+              {table.getCanNextPage() ? (
+                <LinkButton
+                  variant="outline"
+                  size="sm"
+                  href={nextPageHref}
+                  prefetch={false}
+                  onClick={showNextPage}
+                >
+                  Next
+                </LinkButton>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  Next
+                </Button>
+              )}
             </div>
           </div>
         ) : null}

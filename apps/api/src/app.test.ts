@@ -548,6 +548,14 @@ describe("createApp security and OpenAPI", () => {
     expect(getResponse.headers.get("access-control-allow-credentials")).toBe(
       "true"
     )
+    expect(
+      getResponse.headers
+        .get("access-control-expose-headers")
+        ?.toLowerCase()
+        .split(", ")
+    ).toEqual(
+      expect.arrayContaining(["server-timing", "x-request-id", "retry-after"])
+    )
 
     const preflight = await app.handle(
       new Request("http://localhost/auth/multi-session/set-active", {

@@ -319,6 +319,24 @@ const toActionDto = (action: ActionRow): AgentIssueAction => {
   }
 }
 
+const executionResult = (
+  action: ActionRow,
+  receiptValue: unknown
+): AgentActionExecutionResult => {
+  const receipt = safeStoredParse(storedReceiptModel, receiptValue)
+  return {
+    actionId: action.id,
+    kind: action.kind,
+    status: "succeeded",
+    issue: {
+      id: receipt.issueId,
+      number: receipt.number,
+      revision: receipt.revision,
+      deleted: receipt.deleted,
+    },
+  }
+}
+
 const normalizeDueDate = (value: string | null | undefined) => {
   if (value === undefined || value === null) return value
   const date = new Date(value)
@@ -491,6 +509,34 @@ const findApplicablePolicy = async (
   return null
 }
 
+const rootRunRequiresAskEach = async (
+  tx: AgentTransaction,
+  context: ValidGrant
+) => {
+  if (!context.rootRunId) {
+    throw publicErrors.unauthorized("Agent capability is invalid")
+  }
+  const rows = await tx
+    .select({ webSearchUsedAt: agentRuns.webSearchUsedAt })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.id, context.rootRunId),
+        eq(agentRuns.organizationId, context.organizationId),
+        eq(agentRuns.threadId, context.threadId),
+        eq(agentRuns.sessionId, context.sessionId),
+        eq(agentRuns.userId, context.userId),
+        eq(agentRuns.contextEpoch, context.contextEpoch)
+      )
+    )
+    .limit(1)
+  const rootRun = rows[0]
+  if (!rootRun) {
+    throw publicErrors.unauthorized("Agent capability is invalid")
+  }
+  return rootRun.webSearchUsedAt !== null
+}
+
 const findExistingPreparedAction = async (
   tx: AgentTransaction,
   input: {
@@ -526,7 +572,6 @@ const findExistingPreparedAction = async (
     existing.userId !== input.context.userId ||
     existing.contextEpoch !== input.context.contextEpoch ||
     existing.kind !== input.kind ||
-    existing.toolCallId !== input.toolCallId ||
     existing.idempotencyKey !== input.idempotencyKey
   ) {
     throw publicErrors.conflict("Agent action idempotency conflict", {
@@ -734,12 +779,12 @@ const persistPreparedAction = async (
       resource: "agent_asset",
     })
   }
-  const policy = await findApplicablePolicy(
-    tx,
-    input.context,
-    input.kind,
-    input.now
-  )
+  // Public Web content is untrusted. Once the root run externalizes a query,
+  // every following Issue mutation must return to canonical human approval;
+  // a session auto policy cannot bypass this server-side fence.
+  const policy = (await rootRunRequiresAskEach(tx, input.context))
+    ? null
+    : await findApplicablePolicy(tx, input.context, input.kind, input.now)
   const status = policy ? "approved" : "pending"
   const actionId = crypto.randomUUID()
   const rows = await tx
@@ -1395,15 +1440,24 @@ export const decideAgentActionForSession = async (
     decideAgentActionForSessionWithRetry(db, input)
   )
 
-export const issueAgentActionResumeTicket = async (
+export type AgentActionResumePreparation =
+  | { kind: "receipt"; result: AgentActionExecutionResult }
+  | { kind: "ticket"; resume: AgentResumeTicket }
+
+export const prepareAgentActionResumeForSession = async (
   db: Db,
   input: { actionId: string; sessionId: string; userId: string; now?: Date }
-): Promise<AgentResumeTicket> => {
-  const credential = await createAgentToken()
+): Promise<AgentActionResumePreparation> => {
   try {
     return await db.transaction(async (tx) => {
       const now = input.now ?? new Date()
       const action = await requirePublicAction(tx, { ...input, now })
+      if (action.status === "succeeded") {
+        return {
+          kind: "receipt",
+          result: executionResult(action, action.receipt),
+        }
+      }
       if (
         action.status !== "approved" ||
         action.decisionProvenance !== "manual" ||
@@ -1414,6 +1468,7 @@ export const issueAgentActionResumeTicket = async (
           resource: "agent_action",
         })
       }
+      const credential = await createAgentToken()
       await tx
         .update(agentResumeTickets)
         .set({ revokedAt: now })
@@ -1449,11 +1504,31 @@ export const issueAgentActionResumeTicket = async (
         issuedAt: now,
         expiresAt,
       })
-      return { ticket: credential.token, expiresAt: expiresAt.toISOString() }
+      return {
+        kind: "ticket",
+        resume: {
+          ticket: credential.token,
+          expiresAt: expiresAt.toISOString(),
+        },
+      }
     })
   } catch (cause) {
-    return preserveAgentActionError(cause, "issueAgentActionResumeTicket")
+    return preserveAgentActionError(cause, "prepareAgentActionResumeForSession")
   }
+}
+
+export const issueAgentActionResumeTicket = async (
+  db: Db,
+  input: { actionId: string; sessionId: string; userId: string; now?: Date }
+): Promise<AgentResumeTicket> => {
+  const preparation = await prepareAgentActionResumeForSession(db, input)
+  if (preparation.kind === "receipt") {
+    throw publicErrors.conflict("Agent action is already complete", {
+      reason: "idempotency_conflict",
+      resource: "agent_action",
+    })
+  }
+  return preparation.resume
 }
 
 export const resumeAgentApprovedAction = async (
@@ -1614,6 +1689,7 @@ export const resumeAgentApprovedAction = async (
       return {
         runId,
         rootRunId: origin.rootRunId,
+        attempt: 1,
         grant: runCredential.token,
         expiresAt: grantExpiresAt.toISOString(),
       }
@@ -1827,24 +1903,6 @@ const parseStoredPayload = (action: ActionRow): StoredPayload => {
       storedDeleteIssuePayloadModel,
       action.normalizedPayload
     ),
-  }
-}
-
-const executionResult = (
-  action: ActionRow,
-  receiptValue: unknown
-): AgentActionExecutionResult => {
-  const receipt = safeStoredParse(storedReceiptModel, receiptValue)
-  return {
-    actionId: action.id,
-    kind: action.kind,
-    status: "succeeded",
-    issue: {
-      id: receipt.issueId,
-      number: receipt.number,
-      revision: receipt.revision,
-      deleted: receipt.deleted,
-    },
   }
 }
 

@@ -171,6 +171,15 @@ type AgentAsset = {
   expiresAt: string
 }
 
+type MockAgentAction = {
+  id: string
+  organizationId: string
+  threadId: string
+  assetIds: string[]
+  status: "pending" | "approved" | "rejected" | "succeeded"
+  completedAt: string | null
+}
+
 type SessionState = {
   user: UserIdentity
   organizations: Organization[]
@@ -184,6 +193,8 @@ type SessionState = {
   profileImageUploads: Map<string, StoredProfileImageUpload>
   agentThreads: AgentThread[]
   agentAssets: AgentAsset[]
+  agentActions: MockAgentAction[]
+  agentContextEpoch: number
   sessions: UserSession[]
   nextCommentId: number
   nextDeletionId: number
@@ -469,6 +480,8 @@ const createState = (sessionKey: string): SessionState => {
       profileImageUploads: new Map(),
       agentThreads: [],
       agentAssets: [],
+      agentActions: [],
+      agentContextEpoch: 1,
       sessions,
       nextCommentId: 1,
       nextDeletionId: 1,
@@ -856,6 +869,8 @@ const createState = (sessionKey: string): SessionState => {
       },
     ],
     agentAssets: [],
+    agentActions: [],
+    agentContextEpoch: 1,
     sessions,
     nextCommentId: 2,
     nextDeletionId: 1,
@@ -1095,6 +1110,81 @@ const agentAssetPayload = ({
   threadId: _threadId,
   ...asset
 }: AgentAsset) => asset
+
+const agentActionPayload = (state: SessionState, action: MockAgentAction) => ({
+  id: action.id,
+  kind: "create_issue" as const,
+  status: action.status,
+  approvalMode: action.status === "pending" ? null : ("manual" as const),
+  requiresApproval: true,
+  preview: {
+    kind: "create_issue" as const,
+    destructive: false,
+    title: "Create Issue from screenshot",
+    issueNumber: null,
+    issueRevision: null,
+    fields: [
+      {
+        field: "title" as const,
+        before: null,
+        after: "Screenshot layout regression",
+      },
+      {
+        field: "description" as const,
+        before: null,
+        after: "The uploaded screenshot shows a layout regression.",
+      },
+      {
+        field: "priority" as const,
+        before: null,
+        after: "high",
+      },
+      {
+        field: "labels" as const,
+        before: null,
+        after: ["ui", "regression"],
+      },
+      {
+        field: "due_date" as const,
+        before: null,
+        after: FIXED_DUE_DATE,
+      },
+      {
+        field: "assignee" as const,
+        before: null,
+        after: "Jordan Lee",
+      },
+    ],
+    attachments: action.assetIds.flatMap((assetId) => {
+      const asset = state.agentAssets.find(({ id }) => id === assetId)
+      return asset
+        ? [
+            {
+              assetId: asset.id,
+              filename: asset.filename,
+              sizeBytes: asset.sizeBytes,
+            },
+          ]
+        : []
+    }),
+  },
+  expiresAt: FIXED_EXPIRES_AT,
+  completedAt: action.completedAt,
+})
+
+const agentMessageStream = (chunks: unknown[]) =>
+  new Response(
+    `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`,
+    {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "cache-control": "private, no-store",
+        "content-type": "text/event-stream; charset=utf-8",
+        "x-vercel-ai-ui-message-stream": "v1",
+      },
+    }
+  )
 
 const updateUserProfileImageSnapshots = (
   state: SessionState,
@@ -1388,6 +1478,11 @@ Bun.serve({
       return json(state.agentAssets)
     }
 
+    if (pathname === "/agent/context/revoke" && request.method === "POST") {
+      state.agentContextEpoch += 1
+      return json({ contextEpoch: state.agentContextEpoch })
+    }
+
     if (pathname === "/agent/threads" && request.method === "GET") {
       if (!activeOrganization) return invalid("active organization is required")
       return json(
@@ -1416,6 +1511,19 @@ Bun.serve({
       state.nextAgentThreadId += 1
       state.agentThreads.push(thread)
       return json(agentThreadPayload(thread), 201)
+    }
+    const agentThreadMessagesMatch = pathname.match(
+      /^\/agent\/threads\/([^/]+)\/messages$/
+    )
+    if (agentThreadMessagesMatch?.[1] && request.method === "GET") {
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === agentThreadMessagesMatch[1] &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      return json([])
     }
     const archiveAgentThreadMatch = pathname.match(
       /^\/agent\/threads\/([^/]+)\/archive$/
@@ -1462,6 +1570,198 @@ Bun.serve({
           createIssue: false,
           updateIssue: false,
           deleteIssue: false,
+        },
+      })
+    }
+
+    if (pathname === "/agent/chat" && request.method === "POST") {
+      if (!activeOrganization) return invalid("active organization is required")
+      const body = await readBody(request)
+      const threadId = nonEmptyString(body.threadId)
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          candidate.organizationId === activeOrganization.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      const assetIds = Array.isArray(body.assetIds)
+        ? body.assetIds.filter(
+            (assetId): assetId is string => typeof assetId === "string"
+          )
+        : []
+      if (
+        assetIds.length !==
+          (Array.isArray(body.assetIds) ? body.assetIds.length : 0) ||
+        assetIds.some(
+          (assetId) =>
+            !state.agentAssets.some(
+              (asset) =>
+                asset.id === assetId &&
+                asset.threadId === thread.id &&
+                asset.organizationId === activeOrganization.id
+            )
+        )
+      ) {
+        return invalid("Agent assets are invalid")
+      }
+
+      const messageId = `agent-message-${crypto.randomUUID()}`
+      const textId = `agent-text-${crypto.randomUUID()}`
+      const chunks: unknown[] = [
+        { type: "start", messageId },
+        { type: "start-step" },
+        { type: "text-start", id: textId },
+        {
+          type: "text-delta",
+          id: textId,
+          delta:
+            assetIds.length > 0
+              ? "I analyzed the screenshot and prepared an Issue with labels, due date, assignee, and attachment."
+              : "I am ready to help with this Issue.",
+        },
+        { type: "text-end", id: textId },
+      ]
+      if (assetIds.length > 0) {
+        const action: MockAgentAction = {
+          id: `agent-action-${crypto.randomUUID()}`,
+          organizationId: activeOrganization.id,
+          threadId: thread.id,
+          assetIds,
+          status: "pending",
+          completedAt: null,
+        }
+        state.agentActions.push(action)
+        const toolCallId = `agent-tool-${crypto.randomUUID()}`
+        chunks.push(
+          {
+            type: "tool-input-available",
+            toolCallId,
+            toolName: "create_issue",
+            input: {
+              title: "Screenshot layout regression",
+              attachmentAssetIds: assetIds,
+            },
+          },
+          {
+            type: "tool-output-available",
+            toolCallId,
+            output: { status: "pending", actionId: action.id },
+          }
+        )
+      }
+      chunks.push({ type: "finish-step" }, { type: "finish" })
+      return agentMessageStream(chunks)
+    }
+
+    const agentActionMatch = pathname.match(/^\/agent\/actions\/([^/]+)$/)
+    if (agentActionMatch?.[1] && request.method === "GET") {
+      const action = state.agentActions.find(
+        (candidate) =>
+          candidate.id === agentActionMatch[1] &&
+          candidate.organizationId === activeOrganization?.id
+      )
+      return action
+        ? json(agentActionPayload(state, action))
+        : notFound("Agent action")
+    }
+    const agentActionDecisionMatch = pathname.match(
+      /^\/agent\/actions\/([^/]+)\/decision$/
+    )
+    if (agentActionDecisionMatch?.[1] && request.method === "POST") {
+      const action = state.agentActions.find(
+        (candidate) =>
+          candidate.id === agentActionDecisionMatch[1] &&
+          candidate.organizationId === activeOrganization?.id
+      )
+      if (!action) return notFound("Agent action")
+      const body = await readBody(request)
+      if (body.decision !== "yes" && body.decision !== "no") {
+        return invalid("decision is required")
+      }
+      action.status = body.decision === "yes" ? "approved" : "rejected"
+      action.completedAt = body.decision === "no" ? FIXED_MUTATION_NOW : null
+      return json(agentActionPayload(state, action))
+    }
+    const agentActionResumeMatch = pathname.match(
+      /^\/agent\/actions\/([^/]+)\/resume$/
+    )
+    if (agentActionResumeMatch?.[1] && request.method === "POST") {
+      const action = state.agentActions.find(
+        (candidate) =>
+          candidate.id === agentActionResumeMatch[1] &&
+          candidate.organizationId === activeOrganization?.id
+      )
+      if (!action) return notFound("Agent action")
+      if (action.status !== "approved" && action.status !== "succeeded") {
+        return conflict("Agent action is not approved")
+      }
+      const organizationIssues = state.issues.filter(
+        (issue) => issue.organizationId === action.organizationId
+      )
+      const existingIssue = state.issues.find(
+        (issue) =>
+          issue.organizationId === action.organizationId &&
+          issue.title === "Screenshot layout regression"
+      )
+      const issue: Issue = existingIssue ?? {
+        id: `issue-agent-${state.nextIssueId}`,
+        organizationId: action.organizationId,
+        number:
+          Math.max(0, ...organizationIssues.map(({ number }) => number)) + 1,
+        title: "Screenshot layout regression",
+        description: "The uploaded screenshot shows a layout regression.",
+        status: "open",
+        priority: "high",
+        assigneeId: "user-jordan",
+        creatorId: state.user.id,
+        labels: ["ui", "regression"],
+        dueDate: FIXED_DUE_DATE,
+        revision: 1,
+        createdAt: FIXED_MUTATION_NOW,
+        updatedAt: FIXED_MUTATION_NOW,
+      }
+      if (!existingIssue) {
+        state.nextIssueId += 1
+        state.issues.push(issue)
+        for (const assetId of action.assetIds) {
+          const asset = state.agentAssets.find(({ id }) => id === assetId)
+          if (!asset) continue
+          state.files.push({
+            id: `file-agent-${state.nextFileId}`,
+            organizationId: action.organizationId,
+            uploadId: `promoted-${asset.id}`,
+            owner: { type: "issue", id: issue.id },
+            filename: asset.filename,
+            sizeBytes: asset.sizeBytes,
+            declaredContentType: "image/png",
+            previewable: true,
+            textPreviewable: false,
+            imageWidth: asset.imageWidth,
+            imageHeight: asset.imageHeight,
+            uploader: {
+              id: state.user.id,
+              name: state.user.name,
+              profileImage: state.user.profileImage,
+            },
+            createdAt: FIXED_MUTATION_NOW,
+            canDelete: true,
+            content: PREVIEW_PNG_BASE64,
+          })
+          state.nextFileId += 1
+        }
+      }
+      action.status = "succeeded"
+      action.completedAt = FIXED_MUTATION_NOW
+      return json({
+        actionId: action.id,
+        kind: "create_issue",
+        status: "succeeded",
+        issue: {
+          id: issue.id,
+          number: issue.number,
+          revision: issue.revision,
+          deleted: false,
         },
       })
     }
@@ -1712,6 +2012,36 @@ Bun.serve({
     const agentAssetDeleteMatch = pathname.match(
       /^\/files\/organizations\/([^/]+)\/agent-assets\/([^/]+)$/
     )
+    const agentAssetPreviewMatch = pathname.match(
+      /^\/files\/organizations\/([^/]+)\/agent-assets\/([^/]+)\/preview\/(360|720|1200|2400)$/
+    )
+    if (
+      agentAssetPreviewMatch?.[1] &&
+      agentAssetPreviewMatch[2] &&
+      request.method === "GET"
+    ) {
+      const organizationId = decodeURIComponent(agentAssetPreviewMatch[1])
+      const assetId = decodeURIComponent(agentAssetPreviewMatch[2])
+      const access = resolveOrganization(state, organizationId, {
+        requireActive: false,
+      })
+      if ("response" in access) return access.response
+      const asset = state.agentAssets.find(
+        (candidate) =>
+          candidate.id === assetId &&
+          candidate.organizationId === access.organization.id
+      )
+      if (!asset) return notFound("Agent asset")
+      return new Response(Buffer.from(PREVIEW_PNG_BASE64, "base64"), {
+        headers: {
+          ...corsHeaders,
+          "cache-control": "private, no-cache",
+          "content-type": "image/png",
+          "cross-origin-resource-policy": "cross-origin",
+          "x-content-type-options": "nosniff",
+        },
+      })
+    }
     if (agentAssetDeleteMatch?.[1] && agentAssetDeleteMatch[2]) {
       const organizationId = decodeURIComponent(agentAssetDeleteMatch[1])
       const assetId = decodeURIComponent(agentAssetDeleteMatch[2])

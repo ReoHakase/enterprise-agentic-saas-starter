@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -10,13 +10,27 @@ import { OrganizationsPage } from "./organizations-page"
 
 const mocks = vi.hoisted(() => ({
   activateOrganization: vi.fn<(organizationId: string) => Promise<unknown>>(),
+  beginOrganizationSwitch: vi.fn<() => Record<string, boolean>>(),
+  cancelOrganizationSwitch: vi.fn<() => void>(),
+  completeOrganizationSwitch: vi.fn<() => Promise<void>>(),
   createOrganization: vi.fn<(input: unknown) => Promise<unknown>>(),
+  hasOrganizationSwitchRisks: vi.fn<() => boolean>(),
   listOrganizations: vi.fn<() => Promise<unknown>>(),
   push: vi.fn<(href: string) => void>(),
+  replace: vi.fn<(href: string) => void>(),
   refresh: vi.fn<() => void>(),
   toastError:
     vi.fn<(message: string, options?: { description?: string }) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
+}))
+
+vi.mock("@/features/agent/runtime-state", () => ({
+  hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
+  useAgentRuntimeState: () => ({
+    beginOrganizationSwitch: mocks.beginOrganizationSwitch,
+    cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
+    completeOrganizationSwitch: mocks.completeOrganizationSwitch,
+  }),
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
@@ -28,7 +42,12 @@ vi.mock("@/lib/browser/console-api", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
+  usePathname: () => "/settings/organizations",
+  useRouter: () => ({
+    push: mocks.push,
+    replace: mocks.replace,
+    refresh: mocks.refresh,
+  }),
 }))
 
 vi.mock("sonner", () => ({
@@ -87,6 +106,9 @@ const renderOrganizations = (
 describe("OrganizationsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.beginOrganizationSwitch.mockReturnValue({})
+    mocks.completeOrganizationSwitch.mockResolvedValue()
+    mocks.hasOrganizationSwitchRisks.mockReturnValue(false)
     mocks.listOrganizations.mockResolvedValue(organizations)
     mocks.activateOrganization.mockResolvedValue({})
     mocks.createOrganization.mockResolvedValue({
@@ -102,13 +124,28 @@ describe("OrganizationsPage", () => {
 
   it("switches the active tenant from the organization table", async () => {
     const actor = userEvent.setup()
+    let finishActivation: ((value: unknown) => void) | undefined
+    mocks.activateOrganization.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishActivation = resolve
+        })
+    )
     renderOrganizations()
 
     await actor.click(screen.getByRole("button", { name: "Switch" }))
     await waitFor(() => {
       expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
     })
+    expect(mocks.completeOrganizationSwitch).not.toHaveBeenCalled()
+    const resolveActivation = finishActivation
+    if (!resolveActivation) throw new Error("Activation did not start")
+    await act(async () => resolveActivation({ organizationId: "org-beta" }))
+    await waitFor(() =>
+      expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
+    )
     expect(screen.getByRole("button", { name: "Active" })).toBeDisabled()
+    expect(mocks.replace).toHaveBeenCalledWith("/settings/organizations")
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization switched")
   })
@@ -164,7 +201,30 @@ describe("OrganizationsPage", () => {
       expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
     })
     expect(mocks.push).toHaveBeenCalledWith("/organization/beta/members")
+    expect(mocks.replace).not.toHaveBeenCalled()
     expect(mocks.refresh).toHaveBeenCalledOnce()
+  })
+
+  it("keeps risky local Agent work until the user confirms the switch", async () => {
+    const actor = userEvent.setup()
+    mocks.hasOrganizationSwitchRisks.mockReturnValue(true)
+    renderOrganizations()
+
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+    expect(mocks.activateOrganization).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole("heading", {
+        name: "Discard local Agent work and switch?",
+      })
+    ).toBeVisible()
+
+    await actor.click(
+      screen.getByRole("button", { name: "Discard local draft and switch" })
+    )
+    await waitFor(() =>
+      expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
+    )
+    expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
   })
 
   it("keeps create input and renders API field errors below it", async () => {
@@ -232,5 +292,7 @@ describe("OrganizationsPage", () => {
         }
       )
     })
+    expect(mocks.completeOrganizationSwitch).not.toHaveBeenCalled()
+    expect(mocks.cancelOrganizationSwitch).toHaveBeenCalledOnce()
   })
 })
