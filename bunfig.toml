@@ -3,7 +3,7 @@ exact = true
 linker = "isolated"
 linkWorkspacePackages = true
 saveTextLockfile = true
-minimumReleaseAge = 259200 # 3 days
+# minimumReleaseAge = 259200 # 3 days
 
 [install.security]
 scanner = "@socketsecurity/bun-security-scanner"
