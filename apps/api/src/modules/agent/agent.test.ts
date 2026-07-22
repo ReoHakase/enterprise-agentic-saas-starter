@@ -227,11 +227,8 @@ describe("Agent public control plane", () => {
         headers: headersWithoutOrigin,
         body: JSON.stringify({
           threadId: thread.id,
-          message: {
-            id: "message_missing_origin",
-            role: "user",
-            parts: [{ type: "text", text: "Do not start" }],
-          },
+          messageId: "message_missing_origin",
+          contentSegments: [{ type: "text", text: "Do not start" }],
           assetIds: [],
           timezone: "Asia/Tokyo",
         }),
@@ -277,11 +274,8 @@ describe("Agent public control plane", () => {
         method: "POST",
         body: {
           threadId: thread.id,
-          message: {
-            id: "message_control_conflict",
-            role: "user",
-            parts: [{ type: "text", text: "Retry this message" }],
-          },
+          messageId: "message_control_conflict",
+          contentSegments: [{ type: "text", text: "Retry this message" }],
           assetIds: [],
           timezone: "Asia/Tokyo",
         },
@@ -297,11 +291,10 @@ describe("Agent public control plane", () => {
         method: "POST",
         body: {
           threadId: thread.id,
-          message: {
-            id: "message_control_limited",
-            role: "user",
-            parts: [{ type: "text", text: "Try when capacity is ready" }],
-          },
+          messageId: "message_control_limited",
+          contentSegments: [
+            { type: "text", text: "Try when capacity is ready" },
+          ],
           assetIds: [],
           timezone: "Asia/Tokyo",
         },
@@ -378,20 +371,23 @@ describe("Agent public control plane", () => {
         method: "POST",
         body: {
           threadId: thread.id,
-          message: {
-            id: "message_public_1",
-            role: "user",
-            parts: [{ type: "text", text: "Create an Issue" }],
-          },
-          assetIds: [],
-          contextReferences: [
-            { kind: "issue", id: "agent-issue-a", label: "Untrusted label" },
+          messageId: "message_public_1",
+          contentSegments: [
+            { type: "text", text: "Create an Issue for " },
             {
-              kind: "current_page",
-              path: "/organization/agent-org-a/issues/1?from=agent",
-              label: "Untrusted page title",
+              type: "context_reference",
+              reference: { kind: "issue", id: "agent-issue-a" },
+            },
+            { type: "text", text: " from " },
+            {
+              type: "context_reference",
+              reference: {
+                kind: "current_page",
+                path: "/organization/agent-org-a/issues/1?from=agent",
+              },
             },
           ],
+          assetIds: [],
           timezone: "Asia/Tokyo",
         },
       })
@@ -433,7 +429,26 @@ describe("Agent public control plane", () => {
       {
         id: "message_public_1",
         role: "user",
-        parts: [{ type: "text", text: "Create an Issue" }],
+        parts: [
+          { type: "text", text: "Create an Issue for " },
+          {
+            type: "data-context-reference",
+            data: {
+              kind: "issue",
+              id: "agent-issue-a",
+              label: "Issue #1: Fix API boundary",
+            },
+          },
+          { type: "text", text: " from " },
+          {
+            type: "data-context-reference",
+            data: {
+              kind: "current_page",
+              path: "/organization/agent-org-a/issues/1",
+              label: "Issue #1: Fix API boundary",
+            },
+          },
+        ],
       },
     ])
     const threads = await app.handle(request("/agent/threads"))
@@ -459,6 +474,38 @@ describe("Agent public control plane", () => {
     )
     expect(overposted.status).toBe(400)
     expect(inputs).toHaveLength(1)
+  })
+
+  it("rejects a cross-tenant inline mention before starting the runtime", async () => {
+    const { app } = await createFixture()
+    const inputs = configureAgentStreamCapture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    const thread = v.parse(agentThreadModel, await createdResponse.json())
+
+    const response = await app.handle(
+      request("/agent/chat", {
+        method: "POST",
+        body: {
+          threadId: thread.id,
+          messageId: "message_cross_tenant_mention",
+          contentSegments: [
+            { type: "text", text: "Read " },
+            {
+              type: "context_reference",
+              reference: { kind: "issue", id: "agent-issue-b" },
+            },
+          ],
+          assetIds: [],
+          timezone: "Asia/Tokyo",
+        },
+      })
+    )
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).not.toContain("Other tenant issue")
+    expect(inputs).toEqual([])
   })
 
   it("continues only the last persisted allowlisted client tool call", async () => {
@@ -633,12 +680,10 @@ describe("Agent private HTTP boundary", () => {
     )
     const input = {
       assetIds: [],
-      contextReferences: [],
-      message: {
-        id: "compaction-user-message",
-        role: "user" as const,
-        parts: [{ type: "text" as const, text: "Continue from the summary" }],
-      },
+      contentSegments: [
+        { type: "text" as const, text: "Continue from the summary" },
+      ],
+      messageId: "compaction-user-message",
       sessionId: "agent-session-a",
       threadId: thread.id,
       timezone: "Asia/Tokyo",
@@ -1106,6 +1151,7 @@ describe("Agent internal capability repository", () => {
       grant: connection.grant,
       clientMessageId: "message-title-and-usage",
     })
+    expect(run.shouldGenerateTitle).toBe(true)
 
     await expect(
       internal.guardWebSearch({
@@ -1166,10 +1212,26 @@ describe("Agent internal capability repository", () => {
     const repeated = await internal.recordUsage(usage)
     expect(first).toMatchObject({
       recorded: true,
-      pricingVersion: "openrouter-alibaba-2026-07-22",
+      pricingVersion: "openrouter-alibaba-tiered-2026-07-23",
     })
-    expect(first.calculatedCostMicros).toBeGreaterThan(0)
+    expect(first.calculatedCostMicros).toBe(73)
     expect(repeated).toEqual({ ...first, recorded: false })
+    const tiered = await internal.recordUsage({
+      ...usage,
+      inputTokenCount: 300_000,
+      inputNoCacheTokenCount: 250_000,
+      cacheReadTokenCount: 50_000,
+      outputTokenCount: 1_000,
+      textOutputTokenCount: 500,
+      reasoningTokenCount: 500,
+      totalTokenCount: 301_000,
+      runEventId: "usage-tiered-price",
+    })
+    expect(tiered).toEqual({
+      recorded: true,
+      calculatedCostMicros: 194_250,
+      pricingVersion: "openrouter-alibaba-tiered-2026-07-23",
+    })
 
     const events = await db
       .select()
@@ -1186,7 +1248,102 @@ describe("Agent internal capability repository", () => {
       totalTokenCount: 150,
     })
     expect(daily).toHaveLength(1)
-    expect(daily[0]).toMatchObject({ runCount: 1, totalTokenCount: 150 })
+    expect(daily[0]).toMatchObject({ runCount: 2, totalTokenCount: 301_150 })
+
+    await internal.finishRun({ grant: run.grant, outcome: "completed" })
+    const nextTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      threadId: thread.id,
+    })
+    const nextConnection = await internal.consumeConnectionTicket({
+      ticket: nextTicket.ticket,
+      threadId: thread.id,
+    })
+    const nextRun = await internal.startRun({
+      grant: nextConnection.grant,
+      clientMessageId: "message-title-already-set",
+    })
+    expect(nextRun.shouldGenerateTitle).toBe(false)
+  })
+
+  it("renames a thread manually with revision CAS and protects the user title", async () => {
+    const { app, db } = await createFixture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    const thread = v.parse(agentThreadModel, await createdResponse.json())
+
+    const renamedResponse = await app.handle(
+      request(`/agent/threads/${thread.id}/title`, {
+        method: "PATCH",
+        body: { title: "手動で決めた調査thread", expectedRevision: 1 },
+      })
+    )
+    expect(renamedResponse.status).toBe(200)
+    expect(await renamedResponse.json()).toMatchObject({
+      id: thread.id,
+      title: "手動で決めた調査thread",
+      titleRevision: 2,
+    })
+
+    const staleResponse = await app.handle(
+      request(`/agent/threads/${thread.id}/title`, {
+        method: "PATCH",
+        body: { title: "古いrevisionからの上書き", expectedRevision: 1 },
+      })
+    )
+    expect(staleResponse.status).toBe(409)
+
+    const otherOwnerResponse = await app.handle(
+      request(`/agent/threads/${thread.id}/title`, {
+        method: "PATCH",
+        body: { title: "別userからの上書き", expectedRevision: 2 },
+        userId: "agent-user-b",
+        sessionId: "agent-session-b",
+      })
+    )
+    expect(otherOwnerResponse.status).toBe(404)
+
+    const internal = createAgentInternalApi(db)
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      threadId: thread.id,
+    })
+    const connection = await internal.consumeConnectionTicket({
+      ticket: ticket.ticket,
+      threadId: thread.id,
+    })
+    const run = await internal.startRun({
+      grant: connection.grant,
+      clientMessageId: "message-manual-title-wins",
+    })
+    expect(run.shouldGenerateTitle).toBe(false)
+    await expect(
+      internal.renameThread({
+        grant: run.grant,
+        title: "自動titleで上書きしてはいけない",
+      })
+    ).resolves.toEqual({
+      threadId: thread.id,
+      title: "手動で決めた調査thread",
+      renamed: false,
+    })
+
+    const [stored] = await db
+      .select({
+        title: schema.agentThreads.title,
+        titleRevision: schema.agentThreads.titleRevision,
+        titleState: schema.agentThreads.titleState,
+      })
+      .from(schema.agentThreads)
+      .where(eq(schema.agentThreads.id, thread.id))
+    expect(stored).toEqual({
+      title: "手動で決めた調査thread",
+      titleRevision: 2,
+      titleState: "user",
+    })
   })
 
   it("retries one failed logical run with a new attempt and one fresh grant", async () => {

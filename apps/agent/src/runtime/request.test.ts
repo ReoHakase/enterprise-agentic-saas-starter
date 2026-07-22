@@ -39,6 +39,51 @@ describe("private Agent runtime request", () => {
     })
   })
 
+  it("binds canonical mention order to the API-resolved context", () => {
+    const input = validInput()
+    input.assetIds = []
+    input.messages[0] = {
+      id: "message_1",
+      role: "user",
+      parts: [
+        { type: "text", text: "Compare " },
+        {
+          type: "data-context-reference",
+          data: { kind: "issue", id: "issue_1", label: "Issue #1" },
+        },
+        { type: "text", text: " with " },
+        {
+          type: "data-context-reference",
+          data: {
+            kind: "current_page",
+            path: "/acme/issues/1",
+            label: "Current Issue",
+          },
+        },
+      ],
+    }
+    input.contextReferences = [
+      {
+        kind: "issue",
+        id: "issue_1",
+        number: 1,
+        title: "First issue",
+        description: "Resolved by the API",
+        status: "open",
+        priority: "medium",
+      },
+      {
+        kind: "current_page",
+        path: "/acme/issues/1",
+        title: "First issue",
+      },
+    ]
+    expect(parseAgentRuntimeChatInput(input)).toBeDefined()
+
+    input.contextReferences.reverse()
+    expect(parseAgentRuntimeChatInput(input)).toBeUndefined()
+  })
+
   it("rejects browser-controlled history fields and mismatched current state", () => {
     expect(
       parseAgentRuntimeChatInput({ ...validInput(), organizationId: "org_1" })

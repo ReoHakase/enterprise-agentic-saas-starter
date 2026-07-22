@@ -1,3 +1,4 @@
+import { FileUploadError } from "@enterprise-agentic-saas/api/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -7,6 +8,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   AgentRuntimeProvider,
+  toAgentImageUploadError,
   useAgentThreadRuntimeState,
 } from "./runtime-state"
 
@@ -56,6 +58,23 @@ const Harness = () => {
 }
 
 describe("AgentRuntimeProvider", () => {
+  it("distinguishes disabled and unavailable image upload failures", () => {
+    expect(
+      toAgentImageUploadError(
+        new FileUploadError({
+          code: "feature_not_enabled",
+          message: "Service temporarily unavailable",
+          status: 503,
+        })
+      ).message
+    ).toContain("disabled in this environment")
+    expect(
+      toAgentImageUploadError(
+        new FileUploadError({ message: "Network error", status: 0 })
+      ).message
+    ).toContain("temporarily unavailable")
+  })
+
   it("keeps a failed submission identity when the shell session unmounts", async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient({

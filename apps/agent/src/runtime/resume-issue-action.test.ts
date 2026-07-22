@@ -32,6 +32,7 @@ const harness = () => {
       grant: RUN_GRANT,
       rootRunId: "root_1",
       runId: "run_2",
+      shouldGenerateTitle: false,
     })
   const executeApprovedAction = vi
     .fn<ResumeApi["executeApprovedAction"]>()
@@ -150,6 +151,7 @@ describe("resumeIssueAction", () => {
       grant: "invalid",
       rootRunId: "root_1",
       runId: "run_2",
+      shouldGenerateTitle: false,
     })
     await expect(
       resumeIssueAction(

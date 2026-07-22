@@ -26,7 +26,7 @@ describe("agent public schemas", () => {
   it("keeps automatic permission state server-authored", () => {
     expect(
       v.parse(agentApprovalPolicySchema, {
-        mode: "auto_write",
+        mode: "full_access",
         expiresAt: "2026-07-22T01:00:00.000Z",
         permissions: {
           createIssue: true,
@@ -35,7 +35,7 @@ describe("agent public schemas", () => {
         },
       })
     ).toMatchObject({
-      mode: "auto_write",
+      mode: "full_access",
       permissions: { deleteIssue: false },
     })
   })

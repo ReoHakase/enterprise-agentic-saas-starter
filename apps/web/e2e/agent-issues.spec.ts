@@ -180,7 +180,7 @@ test("organization切替barrierはAgent draftを保持または明示破棄す�
   if ((page.viewportSize()?.width ?? 1280) < 768) {
     await page.getByRole("button", { name: "Open Agent" }).click()
   }
-  await expect(composer).toHaveValue("Keep this Alpha draft")
+  await expect(composer).toHaveText("Keep this Alpha draft")
 
   await openOrganizationMenu(page)
   await page.getByRole("menuitem", { name: "Beta Support" }).click()
@@ -193,7 +193,7 @@ test("organization切替barrierはAgent draftを保持または明示破棄す�
     page.getByPlaceholder(
       "Describe the issue, or attach screenshots for analysis."
     )
-  ).toHaveValue("")
+  ).toHaveText("")
 })
 
 test("Agent threadはdraftと画像を分離しarchive時に一時画像を削除する", async ({
@@ -224,11 +224,11 @@ test("Agent threadはdraftと画像を分離しarchive時に一時画像を削�
     page.getByPlaceholder(
       "Describe the issue, or attach screenshots for analysis."
     )
-  ).toHaveValue("")
+  ).toHaveText("")
   await expect(page.getByRole("img", { name: "thread-a.png" })).toHaveCount(0)
 
   await selectAgentThread(page, "Alpha triage", "agent-thread-a-1")
-  await expect(composer).toHaveValue("Thread A draft")
+  await expect(composer).toHaveText("Thread A draft")
   await expect(page.getByRole("img", { name: "thread-a.png" })).toBeVisible()
 
   await page.getByRole("button", { name: "Archive Alpha triage" }).click()
@@ -249,6 +249,83 @@ test("Agent threadはdraftと画像を分離しarchive時に一時画像を削�
       return response.json()
     })
     .toEqual([])
+})
+
+test("inline mentionは順序付きrequestと履歴へ残りthread名を手動変更できる", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto(
+    "/organization/alpha-operations/issues?agentThread=agent-thread-a-1"
+  )
+  await page.getByRole("button", { name: "Open Agent" }).click()
+  const agent =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+
+  await agent.getByRole("button", { name: "Rename thread" }).click()
+  const titleInput = agent.getByRole("textbox", { name: "Thread title" })
+  await titleInput.fill("Access review follow-up")
+  await agent.getByRole("button", { name: "Save thread title" }).click()
+  await expect(
+    agent.getByRole("combobox", { name: "Agent thread" })
+  ).toContainText("Access review follow-up")
+
+  const composer = agent.getByRole("textbox", { name: "Agent message" })
+  await composer.fill("Compare @")
+  await page
+    .getByRole("button", { name: /Issue #1: Review tenant audit log/u })
+    .click()
+  await composer.press("End")
+  await composer.pressSequentially("today")
+  await expect(composer).toContainText(
+    "Compare @Issue #1: Review tenant audit log today"
+  )
+  await expect(
+    composer.getByRole("button", {
+      name: "Remove Issue #1: Review tenant audit log",
+    })
+  ).toBeVisible()
+
+  const requestPromise = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/agent/chat") && request.method() === "POST"
+  )
+  await agent.getByRole("button", { name: "Send" }).click()
+  const chatRequest = await requestPromise
+  expect(chatRequest.postDataJSON()).toMatchObject({
+    contentSegments: [
+      { type: "text", text: "Compare " },
+      {
+        type: "context_reference",
+        reference: { kind: "issue", id: "issue-a-1" },
+      },
+      { type: "text", text: " today" },
+    ],
+  })
+  expect(JSON.stringify(chatRequest.postDataJSON())).not.toContain(
+    "Review tenant audit log"
+  )
+  await expect(composer).toHaveText("")
+
+  await page.reload()
+  const reloaded =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+  await page.getByRole("button", { name: "Open Agent" }).click()
+  await expect(reloaded).toBeVisible()
+  await expect(
+    reloaded.getByRole("article", { name: "Your message" })
+  ).toContainText("@Issue #1: Review tenant audit log")
+
+  const contextRing = reloaded.getByRole("button", {
+    name: /^Context window \d+% used$/u,
+  })
+  await contextRing.hover()
+  await expect(page.getByText("Estimated input tokens")).toBeVisible()
 })
 
 test("画像解析から承認付きIssue作成と恒久添付まで完了する", async ({

@@ -47,7 +47,7 @@ const collect = async (
 }
 
 describe("addAgentStreamDataParts", () => {
-  it("adds observed tool activity and a bounded thread title projection", async () => {
+  it("keeps tool state canonical and adds a bounded thread title projection", async () => {
     const chunks = await collect([
       {
         type: "tool-input-available",
@@ -64,12 +64,23 @@ describe("addAgentStreamDataParts", () => {
 
     expect(chunks).toContainEqual({
       type: "data-activity",
+      id: "response-status",
+      transient: true,
       data: {
-        kind: "tool",
-        label: "Running rename thread",
+        kind: "status",
+        label: "応答を生成中",
         status: "running",
       },
     })
+    expect(
+      chunks.some(
+        (chunk) =>
+          chunk.type === "data-activity" &&
+          typeof chunk.data === "object" &&
+          chunk.data !== null &&
+          Reflect.get(chunk.data, "kind") === "tool"
+      )
+    ).toBe(false)
     expect(chunks).toContainEqual({
       type: "data-thread-title",
       data: { renamed: true, threadId: "thread_1", title: "Outage review" },
@@ -116,6 +127,27 @@ describe("addAgentStreamDataParts", () => {
   it("omits the final projection when provider usage is unavailable", async () => {
     const chunks = await collect([], () => Promise.resolve(null))
 
-    expect(chunks).toEqual([])
+    expect(chunks).toEqual([
+      {
+        type: "data-activity",
+        id: "response-status",
+        transient: true,
+        data: {
+          kind: "status",
+          label: "応答を生成中",
+          status: "running",
+        },
+      },
+      {
+        type: "data-activity",
+        id: "response-status",
+        transient: true,
+        data: {
+          kind: "status",
+          label: "応答を生成中",
+          status: "completed",
+        },
+      },
+    ])
   })
 })

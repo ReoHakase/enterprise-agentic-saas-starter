@@ -154,6 +154,7 @@ type AgentThread = {
   id: string
   organizationId: string
   title: string
+  titleRevision: number
   messageCount: number
   status: "active" | "archived"
   createdAt: string
@@ -195,6 +196,8 @@ type SessionState = {
   agentThreads: AgentThread[]
   agentAssets: AgentAsset[]
   agentActions: MockAgentAction[]
+  agentMessagesByThread: Map<string, unknown[]>
+  agentPermissions: Map<string, "ask_always" | "full_access">
   agentContextEpoch: number
   sessions: UserSession[]
   nextCommentId: number
@@ -482,6 +485,8 @@ const createState = (sessionKey: string): SessionState => {
       agentThreads: [],
       agentAssets: [],
       agentActions: [],
+      agentMessagesByThread: new Map(),
+      agentPermissions: new Map(),
       agentContextEpoch: 1,
       sessions,
       nextCommentId: 1,
@@ -848,6 +853,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-a-1",
         organizationId: "org-a",
         title: "Alpha triage",
+        titleRevision: 1,
         messageCount: 2,
         status: "active",
         createdAt: "2026-07-14T08:00:00.000Z",
@@ -857,6 +863,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-a-2",
         organizationId: "org-a",
         title: "Alpha follow-up",
+        titleRevision: 1,
         messageCount: 1,
         status: "active",
         createdAt: "2026-07-14T09:00:00.000Z",
@@ -866,6 +873,7 @@ const createState = (sessionKey: string): SessionState => {
         id: "agent-thread-b-1",
         organizationId: "org-b",
         title: "Beta triage",
+        titleRevision: 1,
         messageCount: 3,
         status: "active",
         createdAt: "2026-07-14T10:00:00.000Z",
@@ -874,6 +882,8 @@ const createState = (sessionKey: string): SessionState => {
     ],
     agentAssets: [],
     agentActions: [],
+    agentMessagesByThread: new Map(),
+    agentPermissions: new Map(),
     agentContextEpoch: 1,
     sessions,
     nextCommentId: 2,
@@ -1509,6 +1519,7 @@ Bun.serve({
         title:
           nonEmptyString(body.title) ??
           `Private thread ${state.nextAgentThreadId}`,
+        titleRevision: 1,
         messageCount: 0,
         status: "active",
         createdAt: FIXED_MUTATION_NOW,
@@ -1529,7 +1540,7 @@ Bun.serve({
           candidate.status === "active"
       )
       if (!thread) return notFound("Agent thread")
-      return json([])
+      return json(state.agentMessagesByThread.get(thread.id) ?? [])
     }
     const agentThreadContextMatch = pathname.match(
       /^\/agent\/threads\/([^/]+)\/context$/
@@ -1562,7 +1573,67 @@ Bun.serve({
       if (!thread) return notFound("Agent thread")
       thread.status = "archived"
       thread.updatedAt = FIXED_MUTATION_NOW
+      state.agentPermissions.delete(thread.id)
       return json(agentThreadPayload(thread))
+    }
+    const agentThreadTitleMatch = pathname.match(
+      /^\/agent\/threads\/([^/]+)\/title$/
+    )
+    if (agentThreadTitleMatch?.[1] && request.method === "PATCH") {
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === agentThreadTitleMatch[1] &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      const body = await readBody(request)
+      const title = nonEmptyString(body.title)
+      if (
+        !title ||
+        title.length > 80 ||
+        body.expectedRevision !== thread.titleRevision
+      ) {
+        return body.expectedRevision === thread.titleRevision
+          ? invalid("title is invalid")
+          : conflict("Agent thread title changed")
+      }
+      thread.title = title
+      thread.titleRevision += 1
+      thread.updatedAt = FIXED_MUTATION_NOW
+      return json(agentThreadPayload(thread))
+    }
+    const agentThreadPermissionMatch = pathname.match(
+      /^\/agent\/threads\/([^/]+)\/permission$/
+    )
+    if (
+      agentThreadPermissionMatch?.[1] &&
+      (request.method === "GET" || request.method === "PUT")
+    ) {
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === agentThreadPermissionMatch[1] &&
+          candidate.organizationId === activeOrganization?.id &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      let mode = state.agentPermissions.get(thread.id) ?? "ask_always"
+      if (request.method === "PUT") {
+        const body = await readBody(request)
+        if (body.mode !== "ask_always" && body.mode !== "full_access") {
+          return invalid("permission mode is invalid")
+        }
+        mode = body.mode
+        state.agentPermissions.set(thread.id, mode)
+      }
+      return json({
+        mode,
+        permissions: {
+          createIssue: mode === "full_access",
+          updateIssue: mode === "full_access",
+          deleteIssue: mode === "full_access",
+        },
+      })
     }
     if (pathname === "/agent/connections" && request.method === "POST") {
       const body = await readBody(request)
@@ -1577,25 +1648,6 @@ Bun.serve({
       return json({
         ticket: `e2e-ticket-${thread.id}-0000000000000000`,
         expiresAt: FIXED_EXPIRES_AT,
-      })
-    }
-    if (pathname === "/agent/approval-policy" && request.method === "GET") {
-      const threadId = url.searchParams.get("threadId")
-      const thread = state.agentThreads.find(
-        (candidate) =>
-          candidate.id === threadId &&
-          candidate.organizationId === activeOrganization?.id &&
-          candidate.status === "active"
-      )
-      if (!thread) return notFound("Agent thread")
-      return json({
-        mode: "ask_each",
-        expiresAt: null,
-        permissions: {
-          createIssue: false,
-          updateIssue: false,
-          deleteIssue: false,
-        },
       })
     }
     if (pathname === "/agent/usage/monthly" && request.method === "GET") {
@@ -1624,6 +1676,87 @@ Bun.serve({
           candidate.status === "active"
       )
       if (!thread) return notFound("Agent thread")
+      const clientMessageId = nonEmptyString(body.messageId)
+      const contentSegments = Array.isArray(body.contentSegments)
+        ? body.contentSegments
+        : null
+      if (!clientMessageId || !contentSegments) {
+        return invalid("Agent message is invalid")
+      }
+      const canonicalUserParts: unknown[] = []
+      for (const rawSegment of contentSegments) {
+        if (!isRecord(rawSegment)) return invalid("Agent segment is invalid")
+        if (rawSegment.type === "text" && typeof rawSegment.text === "string") {
+          canonicalUserParts.push({ type: "text", text: rawSegment.text })
+          continue
+        }
+        if (
+          rawSegment.type !== "context_reference" ||
+          !isRecord(rawSegment.reference)
+        ) {
+          return invalid("Agent segment is invalid")
+        }
+        const reference = rawSegment.reference
+        if (
+          reference.kind === "current_page" &&
+          typeof reference.path === "string"
+        ) {
+          canonicalUserParts.push({
+            type: "data-context-reference",
+            data: {
+              kind: "current_page",
+              path: reference.path.split("?")[0],
+              label: "Current page",
+            },
+          })
+          continue
+        }
+        if (typeof reference.id !== "string") {
+          return invalid("Agent context reference is invalid")
+        }
+        if (reference.kind === "issue") {
+          const issue = state.issues.find(
+            (candidate) =>
+              candidate.id === reference.id &&
+              candidate.organizationId === activeOrganization.id
+          )
+          if (!issue) return notFound("Agent context reference")
+          canonicalUserParts.push({
+            type: "data-context-reference",
+            data: {
+              kind: "issue",
+              id: issue.id,
+              label: `Issue #${issue.number}: ${issue.title}`,
+            },
+          })
+          continue
+        }
+        if (reference.kind === "file") {
+          const file = state.files.find(
+            (candidate) =>
+              candidate.id === reference.id &&
+              candidate.organizationId === activeOrganization.id
+          )
+          if (!file) return notFound("Agent context reference")
+          canonicalUserParts.push({
+            type: "data-context-reference",
+            data: { kind: "file", id: file.id, label: file.filename },
+          })
+          continue
+        }
+        if (reference.kind === "member") {
+          const member = state.membersByOrganization
+            .get(activeOrganization.id)
+            ?.find((candidate) => candidate.userId === reference.id)
+          if (!member) return notFound("Agent context reference")
+          canonicalUserParts.push({
+            type: "data-context-reference",
+            data: { kind: "member", id: member.userId, label: member.name },
+          })
+          continue
+        }
+        return invalid("Agent context reference is invalid")
+      }
       const assetIds = Array.isArray(body.assetIds)
         ? body.assetIds.filter(
             (assetId): assetId is string => typeof assetId === "string"
@@ -1662,6 +1795,16 @@ Bun.serve({
         { type: "text-end", id: textId },
       ]
       if (assetIds.length > 0) {
+        canonicalUserParts.push({
+          type: "data-agent-assets",
+          data: {
+            assetIds,
+            assets: assetIds.flatMap((assetId) => {
+              const asset = state.agentAssets.find(({ id }) => id === assetId)
+              return asset ? [agentAssetPayload(asset)] : []
+            }),
+          },
+        })
         const action: MockAgentAction = {
           id: `agent-action-${crypto.randomUUID()}`,
           organizationId: activeOrganization.id,
@@ -1690,6 +1833,26 @@ Bun.serve({
         )
       }
       chunks.push({ type: "finish-step" }, { type: "finish" })
+      const history = state.agentMessagesByThread.get(thread.id) ?? []
+      history.push(
+        { id: clientMessageId, role: "user", parts: canonicalUserParts },
+        {
+          id: messageId,
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text:
+                assetIds.length > 0
+                  ? "I analyzed the screenshot and prepared an Issue with labels, due date, assignee, and attachment."
+                  : "I am ready to help with this Issue.",
+            },
+          ],
+        }
+      )
+      state.agentMessagesByThread.set(thread.id, history)
+      thread.messageCount = history.length
+      thread.updatedAt = FIXED_MUTATION_NOW
       return agentMessageStream(chunks)
     }
 

@@ -76,7 +76,9 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: [["list"]],
-  timeout: 600_000,
+  // A single product run may legitimately consume the five-minute runtime
+  // budget. The full release journey contains several independent runs.
+  timeout: 1_800_000,
   expect: { timeout: 15_000 },
   use: {
     baseURL: environment.webOrigin,

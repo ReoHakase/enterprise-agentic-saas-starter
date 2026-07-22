@@ -139,7 +139,7 @@ describe("agent action projection", () => {
     expect(
       screen.getByText("I should inspect the urgent Issues.")
     ).not.toBeVisible()
-    expect(screen.getByText("Searched Issues")).toBeVisible()
+    expect(screen.queryByText("Searched Issues")).not.toBeInTheDocument()
     expect(
       screen.getByRole("group", { name: "Agent answer" })
     ).toHaveTextContent("The urgent Issue was confirmed.")
@@ -150,6 +150,28 @@ describe("agent action projection", () => {
     expect(
       screen.getByRole("link", { name: "#7 Restore production access" })
     ).toHaveAttribute("href", "/organization/acme/issues/7")
+  })
+
+  it("uses a full-width assistant response and omits repeated speaker labels", () => {
+    render(
+      createElement(AgentMessage, {
+        message: {
+          id: "message-plain",
+          role: "assistant",
+          parts: [{ type: "text", text: "A borderless answer" }],
+        },
+        organizationId: "org-1",
+        organizationSlug: "acme",
+        frozen: false,
+        onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
+      })
+    )
+
+    const article = screen.getByRole("article", { name: "Agent response" })
+    expect(article).toHaveClass("w-full")
+    expect(article).not.toHaveClass("border")
+    expect(screen.queryByText("Issue agent")).not.toBeInTheDocument()
+    expect(screen.queryByText("You")).not.toBeInTheDocument()
   })
 
   it("does not create Issue links from model text or unrelated tool output", () => {

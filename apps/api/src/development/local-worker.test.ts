@@ -3,7 +3,10 @@ import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { resolveWranglerInspectorPort } from "./local-worker"
+import {
+  resolveDevelopmentAgentAssetUploadFlag,
+  resolveWranglerInspectorPort,
+} from "./local-worker"
 
 describe("local Worker development configuration", () => {
   it("keeps the API supervisor in the dev path so Mailpit is injected", async () => {
@@ -28,6 +31,15 @@ describe("local Worker development configuration", () => {
     expect(
       resolveWranglerInspectorPort({ WRANGLER_INSPECTOR_PORT: "9234" })
     ).toBe("9234")
+  })
+
+  it("enables Agent image uploads by default only in the local supervisor", () => {
+    expect(resolveDevelopmentAgentAssetUploadFlag({})).toBe("1")
+    expect(
+      resolveDevelopmentAgentAssetUploadFlag({
+        AGENT_ASSET_UPLOAD_ENABLED: " 0 ",
+      })
+    ).toBe("0")
   })
 
   it.each(["-1", "1.5", "invalid", "65536"])(

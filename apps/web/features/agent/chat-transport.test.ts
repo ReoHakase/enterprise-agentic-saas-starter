@@ -12,7 +12,20 @@ const userMessage: AgentChatMessage = {
   id: "message-2",
   role: "user",
   parts: [
-    { type: "text", text: "Create an issue for this screenshot" },
+    { type: "text", text: "Create an issue for " },
+    {
+      type: "data-context-reference",
+      data: { kind: "issue", id: "issue-1", label: "Visible label" },
+    },
+    { type: "text", text: " from " },
+    {
+      type: "data-context-reference",
+      data: {
+        kind: "current_page",
+        path: "/organization/acme/issues/1",
+        label: "Current page",
+      },
+    },
     {
       type: "data-agent-assets",
       data: {
@@ -80,29 +93,24 @@ describe("Agent chat transport", () => {
         threadId: "thread-1",
         messages,
         timezone: "Asia/Tokyo",
-        contextReferences: [
-          { kind: "issue", id: "issue-1", label: "Visible label" },
-          {
-            kind: "current_page",
-            path: "/organization/acme/issues/1",
-            label: "Current page",
-          },
-        ],
       })
     ).toEqual({
       threadId: "thread-1",
-      message: {
-        id: "message-2",
-        role: "user",
-        parts: [{ type: "text", text: "Create an issue for this screenshot" }],
-      },
+      messageId: "message-2",
       assetIds: ["asset-1"],
-      contextReferences: [
-        { kind: "issue", id: "issue-1", label: "Visible label" },
+      contentSegments: [
+        { type: "text", text: "Create an issue for " },
         {
-          kind: "current_page",
-          path: "/organization/acme/issues/1",
-          label: "Current page",
+          type: "context_reference",
+          reference: { kind: "issue", id: "issue-1" },
+        },
+        { type: "text", text: " from " },
+        {
+          type: "context_reference",
+          reference: {
+            kind: "current_page",
+            path: "/organization/acme/issues/1",
+          },
         },
       ],
       timezone: "Asia/Tokyo",

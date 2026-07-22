@@ -5,8 +5,13 @@ import {
   mastra,
   productAgent,
   publicWebResearchAgent,
+  threadTitleAgent,
 } from "."
+import { publicWebResearchProviderOptions } from "./agents/public-web-research-agent"
+import { threadTitleProviderOptions } from "./agents/thread-title-agent"
 import { OPENROUTER_MODEL_ID } from "./models/openrouter"
+import { openRouterWebSearchOptions } from "./tools/openrouter-web-search"
+import { PUBLIC_WEB_RESEARCH_TIMEOUT_MS } from "./tools/web-search"
 
 describe("Mastra product agent registry", () => {
   it("registers the approved Issue action workflow for runtime and Studio", () => {
@@ -40,7 +45,6 @@ describe("Mastra product agent registry", () => {
       "search_issue_labels",
       "search_issues",
       "search_organization_members",
-      "rename_thread",
       "web_search",
     ])
     expect(productTools.web_search).not.toMatchObject({ type: "provider" })
@@ -52,6 +56,25 @@ describe("Mastra product agent registry", () => {
     expect(Object.keys(researchTools)).toEqual(["openrouter_web_search"])
     expect(researchTools.openrouter_web_search).toMatchObject({
       type: "provider",
+    })
+    expect(publicWebResearchProviderOptions.openrouter.reasoning).toEqual({
+      enabled: false,
+      effort: "none",
+      exclude: true,
+    })
+    expect(openRouterWebSearchOptions).toEqual({
+      engine: "exa",
+      maxResults: 3,
+    })
+    expect(PUBLIC_WEB_RESEARCH_TIMEOUT_MS).toBe(60_000)
+
+    expect(mastra.getAgentById("thread-title-agent")).toBe(threadTitleAgent)
+    const titleTools = await threadTitleAgent.listTools()
+    expect(Object.keys(titleTools)).toEqual(["rename_thread"])
+    expect(threadTitleProviderOptions.openrouter.reasoning).toEqual({
+      enabled: false,
+      effort: "none",
+      exclude: true,
     })
   })
 })

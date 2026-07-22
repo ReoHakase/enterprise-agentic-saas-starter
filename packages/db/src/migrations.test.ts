@@ -78,6 +78,7 @@ describe("database migrations", () => {
           "agent_run_assets",
           "agent_runs",
           "agent_session_contexts",
+          "agent_thread_permissions",
           "agent_threads",
           "audit_logs",
           "file_cleanup_jobs",
@@ -142,6 +143,102 @@ describe("database migrations", () => {
       expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
         []
       )
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
+  it("upgrades thread titles and revokes legacy timed Agent policies", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix(18)
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["agent-user", "Agent User", "agent@example.test", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["agent-org", "Agent Org", "agent-org", now],
+        },
+        {
+          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
+          args: ["agent-member", "agent-org", "agent-user", "super_admin", now],
+        },
+        {
+          sql: "insert into session(id,expires_at,token,created_at,updated_at,user_id,active_organization_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "agent-session",
+            now + 3_600_000,
+            "agent-session-token",
+            now,
+            now,
+            "agent-user",
+            "agent-org",
+          ],
+        },
+        {
+          sql: "insert into agent_session_contexts(session_id,user_id,context_epoch,updated_at) values(?,?,?,?)",
+          args: ["agent-session", "agent-user", 1, now],
+        },
+        {
+          sql: "insert into agent_threads(id,organization_id,owner_user_id,title,title_state,status,created_at,updated_at) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "agent-thread",
+            "agent-org",
+            "agent-user",
+            "Generated title",
+            "agent",
+            "active",
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into agent_approval_policies(id,organization_id,thread_id,session_id,user_id,context_epoch,mode,destructive_confirmed_at,created_at,expires_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-policy",
+            "agent-org",
+            "agent-thread",
+            "agent-session",
+            "agent-user",
+            1,
+            "auto_all",
+            now,
+            now,
+            now + 600_000,
+            now,
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const [thread, policy, permissionTable, actionTrigger] =
+        await Promise.all([
+          client.execute(
+            "select title_state_v2 as titleState,title_revision as titleRevision from agent_threads where id = 'agent-thread'"
+          ),
+          client.execute(
+            "select revoked_at as revokedAt from agent_approval_policies where id = 'legacy-policy'"
+          ),
+          client.execute(
+            "select name from sqlite_master where type = 'table' and name = 'agent_thread_permissions'"
+          ),
+          client.execute(
+            "select name from sqlite_master where type = 'trigger' and name = 'agent_actions_scope_insert'"
+          ),
+        ])
+      expect(thread.rows).toMatchObject([
+        { titleState: "agent", titleRevision: 1 },
+      ])
+      expect(policy.rows[0]?.revokedAt).not.toBeNull()
+      expect(permissionTable.rows).toHaveLength(1)
+      expect(actionTrigger.rows).toHaveLength(1)
     } finally {
       client.close()
       await rm(migrationPrefix, { recursive: true, force: true })

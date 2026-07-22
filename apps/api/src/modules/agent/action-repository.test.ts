@@ -436,8 +436,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const prepared = await internal.prepareCreateIssue({
       grant: run.grant,
@@ -474,8 +473,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: first.thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const issueInput = {
       issueId: "action-issue-a",
@@ -558,8 +556,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const first = await internal.prepareCreateIssue({
       grant: run.grant,
@@ -981,26 +978,22 @@ describe("Agent Issue action protocol", () => {
     expect(issue).toEqual({ revision: 1, title: "Original title" })
   })
 
-  it("enforces auto policy scope, destructive confirmation, expiry, and member delete ownership", async () => {
+  it("enforces full access scope and member delete ownership", async () => {
     const { app, db } = await createFixture()
     const autoRun = await createRun(db, { clientMessageId: "auto-write" })
     const putAutoWrite = await app.handle(
-      request("/agent/approval-policy", {
+      request(`/agent/threads/${autoRun.thread.id}/permission`, {
         method: "PUT",
-        body: {
-          threadId: autoRun.thread.id,
-          mode: "auto_write",
-          expiresInSeconds: 900,
-        },
+        body: { mode: "full_access" },
       })
     )
     expect(putAutoWrite.status).toBe(200)
     expect(await putAutoWrite.json()).toMatchObject({
-      mode: "auto_write",
+      mode: "full_access",
       permissions: {
         createIssue: true,
         updateIssue: true,
-        deleteIssue: false,
+        deleteIssue: true,
       },
     })
     const autoUpdate = await autoRun.internal.prepareUpdateIssue({
@@ -1015,7 +1008,7 @@ describe("Agent Issue action protocol", () => {
     })
     expect(autoUpdate).toMatchObject({
       status: "approved",
-      approvalMode: "auto_policy",
+      approvalMode: "full_access",
     })
     await expect(
       autoRun.internal.executeApprovedAction({
@@ -1023,37 +1016,6 @@ describe("Agent Issue action protocol", () => {
         actionId: autoUpdate.id,
       })
     ).resolves.toMatchObject({ issue: { revision: 2 } })
-
-    const confirmMissing = await app.handle(
-      request("/agent/approval-policy", {
-        method: "PUT",
-        body: {
-          threadId: autoRun.thread.id,
-          mode: "auto_all",
-          expiresInSeconds: 900,
-        },
-      })
-    )
-    expect(confirmMissing.status).toBe(400)
-    expect(await confirmMissing.json()).toMatchObject({
-      error: { code: "confirmation_required" },
-    })
-    const confirmDelete = await app.handle(
-      request("/agent/approval-policy", {
-        method: "PUT",
-        body: {
-          threadId: autoRun.thread.id,
-          mode: "auto_all",
-          expiresInSeconds: 900,
-          destructiveConfirmation: "ALLOW_ISSUE_DELETE",
-        },
-      })
-    )
-    expect(confirmDelete.status).toBe(200)
-    expect(await confirmDelete.json()).toMatchObject({
-      mode: "auto_all",
-      permissions: { deleteIssue: true },
-    })
 
     const memberRun = await createRun(db, {
       clientMessageId: "member-delete",
@@ -1068,47 +1030,17 @@ describe("Agent Issue action protocol", () => {
         issue: { issueId: "action-issue-a", expectedRevision: 2 },
       })
     ).rejects.toMatchObject({ code: "forbidden" })
-
-    const policyNow = new Date()
-    await putAgentApprovalPolicyForSession(db, {
-      sessionId: "action-session-a",
-      userId: "action-user-a",
-      threadId: autoRun.thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 1,
-      now: policyNow,
-    })
-    await expect(
-      getAgentApprovalPolicyForSession(db, {
-        sessionId: "action-session-a",
-        userId: "action-user-a",
-        threadId: autoRun.thread.id,
-        now: new Date(policyNow.getTime() + 1_001),
-      })
-    ).resolves.toEqual({
-      mode: "ask_each",
-      expiresAt: null,
-      permissions: {
-        createIssue: false,
-        updateIssue: false,
-        deleteIssue: false,
-      },
-    })
   })
 
-  it("forces ask_each after Web search while preserving auto policy without search", async () => {
+  it("preserves full access after Web search", async () => {
     const { app, db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-approval-fence",
     })
     const policy = await app.handle(
-      request("/agent/approval-policy", {
+      request(`/agent/threads/${actionRun.thread.id}/permission`, {
         method: "PUT",
-        body: {
-          threadId: actionRun.thread.id,
-          mode: "auto_write",
-          expiresInSeconds: 900,
-        },
+        body: { mode: "full_access" },
       })
     )
     expect(policy.status).toBe(200)
@@ -1124,7 +1056,7 @@ describe("Agent Issue action protocol", () => {
       },
     })
     expect(beforeSearch).toMatchObject({
-      approvalMode: "auto_policy",
+      approvalMode: "full_access",
       requiresApproval: false,
       status: "approved",
     })
@@ -1153,9 +1085,9 @@ describe("Agent Issue action protocol", () => {
       },
     })
     expect(afterSearch).toMatchObject({
-      approvalMode: null,
-      requiresApproval: true,
-      status: "pending",
+      approvalMode: "full_access",
+      requiresApproval: false,
+      status: "approved",
     })
     await expect(
       getAgentApprovalPolicyForSession(db, {
@@ -1163,10 +1095,10 @@ describe("Agent Issue action protocol", () => {
         userId: "action-user-a",
         threadId: actionRun.thread.id,
       })
-    ).resolves.toMatchObject({ mode: "auto_write" })
+    ).resolves.toMatchObject({ mode: "full_access" })
   })
 
-  it("deletes the current approval policy through the public route", async () => {
+  it("returns the current permission to ask always through the public route", async () => {
     const { app, db } = await createFixture()
     const { thread } = await createRun(db, {
       clientMessageId: "delete-policy-route",
@@ -1175,21 +1107,19 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
 
     const response = await app.handle(
-      request(
-        `/agent/approval-policy?threadId=${encodeURIComponent(thread.id)}`,
-        { method: "DELETE" }
-      )
+      request(`/agent/threads/${thread.id}/permission`, {
+        method: "PUT",
+        body: { mode: "ask_always" },
+      })
     )
     expect(response.status).toBe(200)
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(await response.json()).toEqual({
-      mode: "ask_each",
-      expiresAt: null,
+      mode: "ask_always",
       permissions: {
         createIssue: false,
         updateIssue: false,
@@ -1197,13 +1127,16 @@ describe("Agent Issue action protocol", () => {
       },
     })
     const [policy] = await db
-      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
-      .from(schema.agentApprovalPolicies)
-      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
-    expect(policy?.revokedAt).toBeInstanceOf(Date)
+      .select({ mode: schema.agentThreadPermissions.mode })
+      .from(schema.agentThreadPermissions)
+      .where(eq(schema.agentThreadPermissions.threadId, thread.id))
+    expect(policy).toEqual({ mode: "ask_always" })
 
     const invalid = await app.handle(
-      request("/agent/approval-policy?threadId=%20", { method: "DELETE" })
+      request("/agent/threads/%20/permission", {
+        method: "PUT",
+        body: { mode: "ask_always" },
+      })
     )
     expect(invalid.status).toBe(400)
   })
@@ -1218,14 +1151,12 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
       now: policyNow,
     })
     const firstRevokedAt = new Date(policyNow.getTime() + 1_000)
     const defaultPolicy = {
-      mode: "ask_each" as const,
-      expiresAt: null,
+      mode: "ask_always" as const,
       permissions: {
         createIssue: false,
         updateIssue: false,
@@ -1241,14 +1172,11 @@ describe("Agent Issue action protocol", () => {
         now: firstRevokedAt,
       })
     ).resolves.toEqual(defaultPolicy)
-    const [afterFirst] = await db
-      .select({
-        id: schema.agentApprovalPolicies.id,
-        revokedAt: schema.agentApprovalPolicies.revokedAt,
-      })
-      .from(schema.agentApprovalPolicies)
-      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
-    expect(afterFirst?.revokedAt?.getTime()).toBe(firstRevokedAt.getTime())
+    const afterFirst = await db
+      .select({ id: schema.agentThreadPermissions.id })
+      .from(schema.agentThreadPermissions)
+      .where(eq(schema.agentThreadPermissions.threadId, thread.id))
+    expect(afterFirst).toEqual([])
 
     await expect(
       deleteAgentApprovalPolicyForSession(db, {
@@ -1259,13 +1187,10 @@ describe("Agent Issue action protocol", () => {
       })
     ).resolves.toEqual(defaultPolicy)
     const afterRetry = await db
-      .select({
-        id: schema.agentApprovalPolicies.id,
-        revokedAt: schema.agentApprovalPolicies.revokedAt,
-      })
-      .from(schema.agentApprovalPolicies)
-      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
-    expect(afterRetry).toEqual([afterFirst])
+      .select({ id: schema.agentThreadPermissions.id })
+      .from(schema.agentThreadPermissions)
+      .where(eq(schema.agentThreadPermissions.threadId, thread.id))
+    expect(afterRetry).toEqual([])
   })
 
   it("does not revoke approval policies owned by another tenant or user", async () => {
@@ -1293,15 +1218,13 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-other-policy",
       userId: "action-user-a",
       threadId: otherTenant.thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     await putAgentApprovalPolicyForSession(db, {
       sessionId: "action-session-b",
       userId: "action-user-b",
       threadId: otherOwner.thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
 
     await expect(
@@ -1320,29 +1243,24 @@ describe("Agent Issue action protocol", () => {
     ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
 
     const [otherTenantPolicy] = await db
-      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
-      .from(schema.agentApprovalPolicies)
-      .where(eq(schema.agentApprovalPolicies.threadId, otherTenant.thread.id))
+      .select({ mode: schema.agentThreadPermissions.mode })
+      .from(schema.agentThreadPermissions)
+      .where(eq(schema.agentThreadPermissions.threadId, otherTenant.thread.id))
     const [otherOwnerPolicy] = await db
-      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
-      .from(schema.agentApprovalPolicies)
-      .where(eq(schema.agentApprovalPolicies.threadId, otherOwner.thread.id))
-    expect(otherTenantPolicy?.revokedAt).toBeNull()
-    expect(otherOwnerPolicy?.revokedAt).toBeNull()
+      .select({ mode: schema.agentThreadPermissions.mode })
+      .from(schema.agentThreadPermissions)
+      .where(eq(schema.agentThreadPermissions.threadId, otherOwner.thread.id))
+    expect(otherTenantPolicy?.mode).toBe("full_access")
+    expect(otherOwnerPolicy?.mode).toBe("full_access")
   })
 
-  it("executes auto_all delete through the same revision and audit boundary", async () => {
+  it("executes full_access delete through the same revision and audit boundary", async () => {
     const { app, db } = await createFixture()
     const actionRun = await createRun(db, { clientMessageId: "auto-delete" })
     const policy = await app.handle(
-      request("/agent/approval-policy", {
+      request(`/agent/threads/${actionRun.thread.id}/permission`, {
         method: "PUT",
-        body: {
-          threadId: actionRun.thread.id,
-          mode: "auto_all",
-          expiresInSeconds: 900,
-          destructiveConfirmation: "ALLOW_ISSUE_DELETE",
-        },
+        body: { mode: "full_access" },
       })
     )
     expect(policy.status).toBe(200)
@@ -1353,7 +1271,7 @@ describe("Agent Issue action protocol", () => {
       issue: { issueId: "action-issue-a", expectedRevision: 1 },
     })
     expect(prepared).toMatchObject({
-      approvalMode: "auto_policy",
+      approvalMode: "full_access",
       status: "approved",
       preview: { destructive: true, issueNumber: 1 },
     })
@@ -1476,8 +1394,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const createAction = await internal.prepareCreateIssue({
       grant: run.grant,
@@ -1573,9 +1490,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_all",
-      expiresInSeconds: 900,
-      destructiveConfirmation: "ALLOW_ISSUE_DELETE",
+      mode: "full_access",
     })
     const deleteAction = await internal.prepareDeleteIssue({
       grant: run.grant,
@@ -1624,8 +1539,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: actionRun.thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const prepared = []
     for (let index = 0; index < 5; index += 1) {
@@ -1673,8 +1587,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const prepared = await prepareCreateIssueAction(db, {
       grant: run.grant,
@@ -1763,8 +1676,7 @@ describe("Agent Issue action protocol", () => {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: thread.id,
-      mode: "auto_write",
-      expiresInSeconds: 900,
+      mode: "full_access",
     })
     const resume = await issueAgentActionResumeTicket(db, {
       actionId: prepared.id,
@@ -1812,12 +1724,12 @@ describe("Agent Issue action protocol", () => {
       .from(schema.agentActions)
       .where(eq(schema.agentActions.id, prepared.id))
     expect(action).toEqual({ status: "canceled" })
-    const [policy] = await db
-      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
+    const policies = await db
+      .select({ id: schema.agentApprovalPolicies.id })
       .from(schema.agentApprovalPolicies)
       .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
       .orderBy(schema.agentApprovalPolicies.createdAt)
-    expect(policy?.revokedAt).toBeInstanceOf(Date)
+    expect(policies).toEqual([])
     const [ticket] = await db
       .select({ revokedAt: schema.agentResumeTickets.revokedAt })
       .from(schema.agentResumeTickets)

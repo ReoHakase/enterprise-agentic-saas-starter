@@ -589,11 +589,10 @@ describe("Agent billable resource reservations", () => {
         },
         body: JSON.stringify({
           threadId: thread.id,
-          message: {
-            id: "quota_public_429",
-            role: "user",
-            parts: [{ type: "text", text: "Start a bounded model run" }],
-          },
+          messageId: "quota_public_429",
+          contentSegments: [
+            { type: "text", text: "Start a bounded model run" },
+          ],
           assetIds: [],
           timezone: "Asia/Tokyo",
         }),

@@ -35,7 +35,7 @@ const preview: NonNullable<AgentIssueAction["preview"]> = {
 const action = (
   status: AgentIssueAction["status"] = "pending"
 ): AgentIssueAction => ({
-  approvalMode: status === "approved" ? "auto_policy" : null,
+  approvalMode: status === "approved" ? "full_access" : null,
   completedAt: status === "succeeded" ? "2026-07-22T00:00:00.000Z" : null,
   expiresAt: "2026-07-22T01:00:00.000Z",
   id: "action_1",
@@ -267,6 +267,22 @@ describe("createAgentWriteHandlers", () => {
       assigneeId: "member_1",
       attachmentAssetIds: ["asset_1"],
       labels: ["bug"],
+      title: "Issue",
+    })
+  })
+
+  it("normalizes an empty model assignee to an unassigned Issue", async () => {
+    const parsed = agentWriteToolSchemas.createIssue.parse({
+      assigneeId: "",
+      title: "Issue",
+    })
+    const test = harness("pending")
+
+    await test.handlers.createIssue(parsed, "call_1")
+
+    expect(test.prepared[0]?.issue).toEqual({
+      assigneeId: null,
+      attachmentAssetIds: [],
       title: "Issue",
     })
   })

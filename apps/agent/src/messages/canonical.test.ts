@@ -151,7 +151,7 @@ describe("canonical assistant message projection", () => {
     })
   })
 
-  it("persists bounded activity, context, title, and reasoning trace parts", () => {
+  it("drops transient activity and persists context, title, and reasoning", () => {
     const projected = sanitizeAssistantMessage({
       id: "assistant_trace",
       role: "assistant",
@@ -190,13 +190,17 @@ describe("canonical assistant message projection", () => {
       ],
     })
 
-    expect(projected.parts).toHaveLength(4)
+    expect(projected.parts).toHaveLength(3)
     expect(projected.parts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: "data-activity" }),
         expect.objectContaining({ type: "data-context-budget" }),
         expect.objectContaining({ type: "data-thread-title" }),
         expect.objectContaining({ type: "reasoning" }),
+      ])
+    )
+    expect(projected.parts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "data-activity" }),
       ])
     )
   })
