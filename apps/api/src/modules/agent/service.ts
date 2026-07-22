@@ -2,6 +2,7 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import type { AgentApprovalPolicyMode } from "@enterprise-agentic-saas/db/schema"
 
 import {
+  deleteAgentApprovalPolicyForSession,
   decideAgentActionForSession,
   getAgentActionForSession,
   getAgentApprovalPolicyForSession,
@@ -72,6 +73,11 @@ export const getAgentApprovalPolicy = (
   db: Db,
   input: { sessionId: string; userId: string; threadId: string }
 ) => getAgentApprovalPolicyForSession(db, input)
+
+export const deleteAgentApprovalPolicy = (
+  db: Db,
+  input: { sessionId: string; userId: string; threadId: string }
+) => deleteAgentApprovalPolicyForSession(db, input)
 
 export const putAgentApprovalPolicy = (
   db: Db,

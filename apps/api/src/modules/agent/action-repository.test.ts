@@ -14,6 +14,7 @@ import { env } from "../../env"
 import { agentAssetObjectKey } from "../files/constants"
 import { updateIssueById } from "../issues/repository"
 import {
+  deleteAgentApprovalPolicyForSession,
   getAgentApprovalPolicyForSession,
   issueAgentActionResumeTicket,
   prepareCreateIssueAction,
@@ -909,6 +910,171 @@ describe("Agent Issue action protocol", () => {
         deleteIssue: false,
       },
     })
+  })
+
+  it("deletes the current approval policy through the public route", async () => {
+    const { app, db } = await createFixture()
+    const { thread } = await createRun(db, {
+      clientMessageId: "delete-policy-route",
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: thread.id,
+      mode: "auto_write",
+      expiresInSeconds: 900,
+    })
+
+    const response = await app.handle(
+      request(
+        `/agent/approval-policy?threadId=${encodeURIComponent(thread.id)}`,
+        { method: "DELETE" }
+      )
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(await response.json()).toEqual({
+      mode: "ask_each",
+      expiresAt: null,
+      permissions: {
+        createIssue: false,
+        updateIssue: false,
+        deleteIssue: false,
+      },
+    })
+    const [policy] = await db
+      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
+      .from(schema.agentApprovalPolicies)
+      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
+    expect(policy?.revokedAt).toBeInstanceOf(Date)
+
+    const invalid = await app.handle(
+      request("/agent/approval-policy?threadId=%20", { method: "DELETE" })
+    )
+    expect(invalid.status).toBe(400)
+  })
+
+  it("revokes the scoped approval policy idempotently", async () => {
+    const { db } = await createFixture()
+    const { thread } = await createRun(db, {
+      clientMessageId: "delete-policy-idempotent",
+    })
+    const policyNow = new Date()
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: thread.id,
+      mode: "auto_write",
+      expiresInSeconds: 900,
+      now: policyNow,
+    })
+    const firstRevokedAt = new Date(policyNow.getTime() + 1_000)
+    const defaultPolicy = {
+      mode: "ask_each" as const,
+      expiresAt: null,
+      permissions: {
+        createIssue: false,
+        updateIssue: false,
+        deleteIssue: false,
+      },
+    }
+
+    await expect(
+      deleteAgentApprovalPolicyForSession(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: thread.id,
+        now: firstRevokedAt,
+      })
+    ).resolves.toEqual(defaultPolicy)
+    const [afterFirst] = await db
+      .select({
+        id: schema.agentApprovalPolicies.id,
+        revokedAt: schema.agentApprovalPolicies.revokedAt,
+      })
+      .from(schema.agentApprovalPolicies)
+      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
+    expect(afterFirst?.revokedAt?.getTime()).toBe(firstRevokedAt.getTime())
+
+    await expect(
+      deleteAgentApprovalPolicyForSession(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: thread.id,
+        now: new Date(firstRevokedAt.getTime() + 1_000),
+      })
+    ).resolves.toEqual(defaultPolicy)
+    const afterRetry = await db
+      .select({
+        id: schema.agentApprovalPolicies.id,
+        revokedAt: schema.agentApprovalPolicies.revokedAt,
+      })
+      .from(schema.agentApprovalPolicies)
+      .where(eq(schema.agentApprovalPolicies.threadId, thread.id))
+    expect(afterRetry).toEqual([afterFirst])
+  })
+
+  it("does not revoke approval policies owned by another tenant or user", async () => {
+    const { db } = await createFixture()
+    const now = new Date()
+    await db.insert(schema.session).values({
+      id: "action-session-other-policy",
+      userId: "action-user-a",
+      token: "action-token-other-policy",
+      expiresAt: new Date(now.getTime() + 3_600_000),
+      createdAt: now,
+      updatedAt: now,
+      activeOrganizationId: "action-org-b",
+    })
+    const otherTenant = await createRun(db, {
+      clientMessageId: "delete-policy-other-tenant",
+      sessionId: "action-session-other-policy",
+    })
+    const otherOwner = await createRun(db, {
+      clientMessageId: "delete-policy-other-owner",
+      userId: "action-user-b",
+      sessionId: "action-session-b",
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-other-policy",
+      userId: "action-user-a",
+      threadId: otherTenant.thread.id,
+      mode: "auto_write",
+      expiresInSeconds: 900,
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-b",
+      userId: "action-user-b",
+      threadId: otherOwner.thread.id,
+      mode: "auto_write",
+      expiresInSeconds: 900,
+    })
+
+    await expect(
+      deleteAgentApprovalPolicyForSession(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: otherTenant.thread.id,
+      })
+    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    await expect(
+      deleteAgentApprovalPolicyForSession(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: otherOwner.thread.id,
+      })
+    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+
+    const [otherTenantPolicy] = await db
+      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
+      .from(schema.agentApprovalPolicies)
+      .where(eq(schema.agentApprovalPolicies.threadId, otherTenant.thread.id))
+    const [otherOwnerPolicy] = await db
+      .select({ revokedAt: schema.agentApprovalPolicies.revokedAt })
+      .from(schema.agentApprovalPolicies)
+      .where(eq(schema.agentApprovalPolicies.threadId, otherOwner.thread.id))
+    expect(otherTenantPolicy?.revokedAt).toBeNull()
+    expect(otherOwnerPolicy?.revokedAt).toBeNull()
   })
 
   it("executes auto_all delete through the same revision and audit boundary", async () => {

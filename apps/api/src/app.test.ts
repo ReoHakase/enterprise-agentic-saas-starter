@@ -684,6 +684,18 @@ describe("createApp security and OpenAPI", () => {
     expect(spec.paths["/issues/{id}/timeline"].get.operationId).toBe(
       "getIssueTimeline"
     )
+    expect(spec.paths["/agent/approval-policy"].delete).toMatchObject({
+      operationId: "deleteAgentApprovalPolicy",
+      security: [{ sessionCookie: [] }],
+      responses: { 200: expect.any(Object), 404: expect.any(Object) },
+      parameters: expect.arrayContaining([
+        expect.objectContaining({
+          in: "query",
+          name: "threadId",
+          required: true,
+        }),
+      ]),
+    })
     expect(spec.paths["/todos"]).toBeUndefined()
     expect(spec.paths["/todos/{id}"]).toBeUndefined()
     expect(

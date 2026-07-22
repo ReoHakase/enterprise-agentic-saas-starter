@@ -325,6 +325,9 @@ export const getAgentApprovalPolicyQueryModel = v.strictObject({
   threadId: identifierModel,
 })
 
+export const deleteAgentApprovalPolicyQueryModel =
+  getAgentApprovalPolicyQueryModel
+
 export const putAgentApprovalPolicyBodyModel = v.strictObject({
   threadId: identifierModel,
   mode: approvalPolicyModeModel,

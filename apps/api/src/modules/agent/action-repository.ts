@@ -1699,6 +1699,37 @@ export const getAgentApprovalPolicyForSession = async (
   }
 }
 
+export const deleteAgentApprovalPolicyForSession = async (
+  db: Db,
+  input: { sessionId: string; userId: string; threadId: string; now?: Date }
+): Promise<AgentApprovalPolicy> => {
+  try {
+    return await db.transaction(async (tx) => {
+      const now = input.now ?? new Date()
+      const { context, live } = await requirePolicyScope(tx, { ...input, now })
+      await tx
+        .update(agentApprovalPolicies)
+        .set({ revokedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(agentApprovalPolicies.organizationId, live.activeOrganizationId),
+            eq(agentApprovalPolicies.threadId, input.threadId),
+            eq(agentApprovalPolicies.sessionId, input.sessionId),
+            eq(agentApprovalPolicies.userId, input.userId),
+            eq(agentApprovalPolicies.contextEpoch, context.contextEpoch),
+            isNull(agentApprovalPolicies.revokedAt)
+          )
+        )
+      return defaultPolicy()
+    })
+  } catch (cause) {
+    return preserveAgentActionError(
+      cause,
+      "deleteAgentApprovalPolicyForSession"
+    )
+  }
+}
+
 export const putAgentApprovalPolicyForSession = async (
   db: Db,
   input: {

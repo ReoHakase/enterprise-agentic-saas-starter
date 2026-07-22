@@ -18,6 +18,7 @@ import {
   createAgentConnectionBodyModel,
   createAgentThreadBodyModel,
   decideAgentActionBodyModel,
+  deleteAgentApprovalPolicyQueryModel,
   getAgentApprovalPolicyQueryModel,
   issueAgentResumeTicketModel,
   putAgentApprovalPolicyBodyModel,
@@ -28,6 +29,7 @@ import {
   createAgentConnection,
   createAgentThread,
   decideAgentAction,
+  deleteAgentApprovalPolicy,
   getAgentAction,
   getAgentApprovalPolicy,
   listAgentThreads,
@@ -257,6 +259,29 @@ export const createAgentModule = (db: Db) =>
           summary: "時限付きAgent自動許可policyを設定",
           description:
             "最大15分のask_each、auto_write、auto_allを設定する。auto_allはIssue deleteを明示する追加確認を必須にする。",
+          tags: ["Agent"],
+        },
+      }
+    )
+    .delete(
+      "/agent/approval-policy",
+      async ({ authContext: { session, user }, query, set }) => {
+        set.headers["cache-control"] = "private, no-store"
+        return deleteAgentApprovalPolicy(db, {
+          sessionId: session.id,
+          userId: user.id,
+          threadId: query.threadId,
+        })
+      },
+      {
+        authenticated: true,
+        query: deleteAgentApprovalPolicyQueryModel,
+        response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "deleteAgentApprovalPolicy",
+          summary: "現在のAgent自動許可policyを解除",
+          description:
+            "live session、active organization、membership、thread owner、context epochを再検証し、現在scopeのpolicyを解除してask_eachへ戻す。",
           tags: ["Agent"],
         },
       }
