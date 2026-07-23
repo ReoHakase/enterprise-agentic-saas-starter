@@ -32,6 +32,14 @@ conversation全体とcomposerを1枚の大きなCardで囲みません。convers
 
 thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、providerがstreamしたbounded reasoningだけを保存・表示します。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
 
+### Scroll追従とminimap
+
+desktop Agent paneとmobile full-screen sheetのconversationは、thread表示時に末尾から開始します。末尾との距離が96px以内なら追従中とみなし、message追加、streaming、画像読込、composerを含む周辺layoutのresizeで高さが変わったときも、次のanimation frameで末尾へ即時移動します。上向きwheelまたはscrollで96pxより離れたら追従を止め、利用者が末尾へ戻したときだけ再開します。履歴閲覧中の位置を新しいresponseで上書きせず、smooth scrollは使いません。
+
+minimapはuser messageから次のuser message直前までを1 turnとして、2 turn以上あるshell conversationの右端だけへ表示します。専用Agent pageには表示しません。marker位置はconversation全高に対するturn先頭位置の比率から求め、密集時も順序を保ちます。現在turnはviewport上端から1/3の位置を基準にし、markerは右端を起点として現在・hover・focus時だけ左へ長く強調します。native scrollbarは残し、conversationへminimap分の右paddingを確保します。
+
+各markerはturn番号とuser promptをaccessible nameに持ち、現在位置には`aria-current="location"`を付けます。hover/focus previewはmarkerの左側へ開き、user prompt、直後のassistant本文、画像・context・tool件数を保存済みmessage partからローカル生成します。添付だけのturnにもfallback labelを与えます。clickまたはEnterはturn先頭へ即時移動します。preview幅はmobile viewport内へ収め、dark themeでも同じ情報階層を維持します。
+
 ## Composer
 
 composerはTiptapを正本にし、textとmentionを同じdocument内で編集します。mentionは青いinline atom nodeで、右端X、Backspace/Delete、keyboard suggestion、IME、Escape、Arrow/Enterを扱います。送信時はtext/mention/画像を1つのpending snapshotへ移してeditorから即時消去し、失敗時は新しい入力を上書きしない場合だけ復元します。

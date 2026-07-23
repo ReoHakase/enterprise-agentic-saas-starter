@@ -388,6 +388,7 @@ const faults: FaultRule[] = []
 const requestDelays: RequestDelay[] = []
 
 const MAX_E2E_DELAY_MS = 5_000
+const AGENT_MINIMAP_FIXTURE_TURN_COUNT = 6
 
 const permissionsFor = (role: OrganizationRole) => ({
   canEditOrganization: role === "super_admin",
@@ -1281,6 +1282,50 @@ Bun.serve({
       faults.splice(0)
       requestDelays.splice(0)
       return json({ reset: true })
+    }
+    if (pathname === "/__e2e/agent-conversation" && request.method === "POST") {
+      const body = await readBody(request)
+      const threadId = nonEmptyString(body.threadId)
+      const state = stateFor("admin")
+      const thread = state.agentThreads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          candidate.organizationId === "org-a" &&
+          candidate.status === "active"
+      )
+      if (!thread) return notFound("Agent thread")
+      const messages = Array.from(
+        { length: AGENT_MINIMAP_FIXTURE_TURN_COUNT },
+        (_, index) => {
+          const turn = index + 1
+          return [
+            {
+              id: `agent-minimap-user-${turn}`,
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: `Investigate fixture turn ${turn} and keep the response easy to review.`,
+                },
+              ],
+            },
+            {
+              id: `agent-minimap-assistant-${turn}`,
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: `Fixture response ${turn}. ${"This deterministic paragraph makes the Agent pane tall enough to exercise minimap navigation and scroll-follow behavior without using a paid provider. ".repeat(6)}`,
+                },
+              ],
+            },
+          ]
+        }
+      ).flat()
+      state.agentMessagesByThread.set(thread.id, messages)
+      thread.messageCount = messages.length
+      thread.updatedAt = FIXED_MUTATION_NOW
+      return json({ messageCount: messages.length }, 201)
     }
     if (
       pathname === "/__e2e/profile-images/fallback" &&

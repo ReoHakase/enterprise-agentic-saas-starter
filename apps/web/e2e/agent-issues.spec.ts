@@ -13,6 +13,15 @@ const resetMockApi = async () => {
   expect(response.ok).toBeTruthy()
 }
 
+const seedAgentConversation = async (threadId: string) => {
+  const response = await fetch(`${mockApiUrl}/__e2e/agent-conversation`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ threadId }),
+  })
+  expect(response.status).toBe(201)
+}
+
 const useAdminSession = async (context: BrowserContext) => {
   await context.addCookies([
     {
@@ -150,6 +159,130 @@ test("Agent shellはconsole内で永続化しmobileではfull-screenになる", 
   )
   await expect(pane).toBeVisible()
   await expect.poll(async () => (await pane.boundingBox())?.width).toBe(480)
+})
+
+test("Agent paneは末尾付近を追従し右側minimapからturnへ移動できる", async ({
+  context,
+  page,
+}, testInfo) => {
+  await seedAgentConversation("agent-thread-a-2")
+  await useAdminSession(context)
+  await page.goto(
+    "/organization/alpha-operations/issues?agentThread=agent-thread-a-2"
+  )
+  await page.getByRole("button", { name: "Open Agent" }).click()
+
+  const agent =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+  const conversation = agent.getByRole("log", { name: "Agent conversation" })
+  const minimap = agent.getByRole("navigation", {
+    name: "Conversation turns",
+  })
+  await expect(conversation).toBeVisible()
+  await expect(minimap).toBeVisible()
+
+  const markers = minimap.getByRole("button", { name: /^Jump to turn/u })
+  await expect(markers).toHaveCount(6)
+  await expect(markers.nth(5)).toHaveAttribute("aria-current", "location")
+  await expect
+    .poll(() =>
+      conversation.evaluate(
+        (element) =>
+          element.scrollHeight - element.scrollTop - element.clientHeight
+      )
+    )
+    .toBeLessThanOrEqual(1)
+
+  const conversationBox = await conversation.boundingBox()
+  const minimapBox = await minimap.boundingBox()
+  expect(conversationBox).not.toBeNull()
+  expect(minimapBox).not.toBeNull()
+  expect(minimapBox?.x).toBeGreaterThan(
+    (conversationBox?.x ?? 0) + (conversationBox?.width ?? 0) - 80
+  )
+  expect((minimapBox?.x ?? 0) + (minimapBox?.width ?? 0)).toBeLessThanOrEqual(
+    (conversationBox?.x ?? 0) + (conversationBox?.width ?? 0)
+  )
+
+  const firstMarker = minimap.getByRole("button", {
+    name: /Jump to turn 1: Investigate fixture turn 1/u,
+  })
+  const supportsHardwareKeyboardFocus =
+    testInfo.project.name !== "iphone-13-webkit"
+  if (
+    (page.viewportSize()?.width ?? 1280) < 768 &&
+    supportsHardwareKeyboardFocus
+  ) {
+    await firstMarker.focus()
+    await page.keyboard.press("Shift+Tab")
+    await page.keyboard.press("Tab")
+    await expect(firstMarker).toBeFocused()
+  } else if (supportsHardwareKeyboardFocus) {
+    await firstMarker.hover()
+  } else {
+    await firstMarker.focus()
+  }
+  if (supportsHardwareKeyboardFocus) {
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: "Fixture response 1." })
+    ).toBeVisible()
+  }
+  await firstMarker.press("Enter")
+  await expect
+    .poll(() => conversation.evaluate((element) => element.scrollTop))
+    .toBe(0)
+  await expect(firstMarker).toHaveAttribute("aria-current", "location")
+
+  const composer = agent.getByPlaceholder(
+    "Describe the issue, or attach screenshots for analysis."
+  )
+  await composer.fill("Keep my reading position while this response arrives.")
+  await agent.getByRole("button", { name: "Send", exact: true }).click()
+  await expect(
+    agent
+      .getByRole("article", { name: "Your message" })
+      .filter({ hasText: "Keep my reading position" })
+  ).toHaveCount(1)
+  await expect(
+    agent.getByRole("button", { name: "Send", exact: true })
+  ).toBeEnabled()
+  await expect
+    .poll(() => conversation.evaluate((element) => element.scrollTop))
+    .toBe(0)
+
+  await conversation.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+    element.dispatchEvent(new Event("scroll"))
+  })
+  await expect
+    .poll(() =>
+      conversation.evaluate(
+        (element) =>
+          element.scrollHeight - element.scrollTop - element.clientHeight
+      )
+    )
+    .toBeLessThanOrEqual(1)
+
+  await composer.fill("Follow this new response because I returned to the end.")
+  await agent.getByRole("button", { name: "Send", exact: true }).click()
+  await expect(
+    agent
+      .getByRole("article", { name: "Your message" })
+      .filter({ hasText: "Follow this new response" })
+  ).toHaveCount(1)
+  await expect(
+    agent.getByRole("button", { name: "Send", exact: true })
+  ).toBeEnabled()
+  await expect
+    .poll(() =>
+      conversation.evaluate(
+        (element) =>
+          element.scrollHeight - element.scrollTop - element.clientHeight
+      )
+    )
+    .toBeLessThanOrEqual(1)
 })
 
 test("organization切替barrierはAgent draftを保持または明示破棄する", async ({

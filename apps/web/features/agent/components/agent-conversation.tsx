@@ -6,9 +6,13 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { ImagePlusIcon, SendIcon, StopCircleIcon } from "lucide-react"
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 
 import { AgentComposer } from "@/features/agent/components/agent-composer"
+import {
+  AgentConversationViewport,
+  buildAgentConversationGroups,
+} from "@/features/agent/components/agent-conversation-viewport"
 import { AgentMessage } from "@/features/agent/components/agent-message"
 import { AgentMeters } from "@/features/agent/components/agent-meters"
 import { AgentPolicyControl } from "@/features/agent/components/agent-policy-control"
@@ -117,6 +121,15 @@ const AgentChatSession = ({
     onAutoSubmit,
   })
   const { chat, runtime } = session
+  const conversationGroups = useMemo(
+    () => buildAgentConversationGroups(chat.messages),
+    [chat.messages]
+  )
+  const turnPreviews = useMemo(
+    () =>
+      conversationGroups.flatMap((group) => (group.turn ? [group.turn] : [])),
+    [conversationGroups]
+  )
 
   return (
     <div
@@ -136,22 +149,30 @@ const AgentChatSession = ({
             Agent response failed. You can retry the same draft safely.
           </p>
         ) : null}
-        <div
-          className="min-h-72 flex-1 space-y-4 overflow-y-auto"
-          aria-live="polite"
+        <AgentConversationViewport
+          enabled={presentation === "shell"}
+          turns={turnPreviews}
         >
           {chat.messages.length === 0 ? (
             <AgentSamplePrompts onSelect={runtime.setComposer} />
           ) : null}
-          {chat.messages.map((message) => (
-            <AgentMessage
-              key={message.id}
-              message={message}
-              organizationId={organizationId}
-              organizationSlug={organizationSlug}
-              frozen={runtime.frozen || disabled || session.busy}
-              onPendingChange={session.reportApprovalState}
-            />
+          {conversationGroups.map((group) => (
+            <div
+              key={group.id}
+              className="space-y-4"
+              data-agent-turn-id={group.turn?.id}
+            >
+              {group.messages.map((message) => (
+                <AgentMessage
+                  key={message.id}
+                  message={message}
+                  organizationId={organizationId}
+                  organizationSlug={organizationSlug}
+                  frozen={runtime.frozen || disabled || session.busy}
+                  onPendingChange={session.reportApprovalState}
+                />
+              ))}
+            </div>
           ))}
           {session.transientStatus && session.busy ? (
             <div
@@ -161,7 +182,7 @@ const AgentChatSession = ({
               <Spinner /> {session.transientStatus}
             </div>
           ) : null}
-        </div>
+        </AgentConversationViewport>
 
         <form
           ref={session.composerFormRef}

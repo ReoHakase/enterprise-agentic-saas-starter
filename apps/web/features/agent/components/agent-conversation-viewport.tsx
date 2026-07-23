@@ -1,0 +1,478 @@
+"use client"
+
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@enterprise-agentic-saas/ui/components/tooltip"
+import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
+import { isToolUIPart } from "ai"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type WheelEvent,
+} from "react"
+
+import type { AgentChatMessage } from "@/features/agent/schema"
+
+export const AGENT_CONVERSATION_BOTTOM_THRESHOLD = 96
+
+const markerEdgeInset = 8
+const markerMinimumGap = 12
+const turnPreviewTextLimit = 180
+const responsePreviewTextLimit = 240
+
+export type AgentConversationTurnPreview = {
+  id: string
+  prompt: string
+  response?: string
+  imageCount: number
+  contextCount: number
+  toolCount: number
+}
+
+export type AgentConversationGroup = {
+  id: string
+  messages: AgentChatMessage[]
+  turn?: AgentConversationTurnPreview
+}
+
+type MarkerPosition = {
+  id: string
+  top: number
+}
+
+type ViewportMetrics = {
+  activeTurnId?: string
+  markers: MarkerPosition[]
+}
+
+const emptyViewportMetrics: ViewportMetrics = { markers: [] }
+
+const normalizePreviewText = (value: string, limit: number) => {
+  const normalized = value.replace(/\s+/gu, " ").trim()
+  if (normalized.length <= limit) return normalized
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`
+}
+
+const userMessagePreview = (message: AgentChatMessage) => {
+  const text = message.parts
+    .flatMap((part) => {
+      if (part.type === "text") return [part.text]
+      if (part.type === "data-context-reference") return [`@${part.data.label}`]
+      return []
+    })
+    .join(" ")
+  const imageCount = message.parts.reduce(
+    (count, part) =>
+      part.type === "data-agent-assets"
+        ? count + part.data.assetIds.length
+        : count,
+    0
+  )
+  const contextCount = message.parts.filter(
+    (part) => part.type === "data-context-reference"
+  ).length
+  const prompt =
+    normalizePreviewText(text, turnPreviewTextLimit) ||
+    (imageCount > 0 ? "Image request" : "Agent request")
+
+  return { contextCount, imageCount, prompt }
+}
+
+const assistantResponsePreview = (messages: AgentChatMessage[]) => {
+  const text = messages
+    .filter((message) => message.role === "assistant")
+    .flatMap((message) =>
+      message.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
+    )
+    .join(" ")
+  return normalizePreviewText(text, responsePreviewTextLimit) || undefined
+}
+
+const toolCountForMessages = (messages: AgentChatMessage[]) =>
+  messages.reduce(
+    (count, message) =>
+      count + message.parts.filter((part) => isToolUIPart(part)).length,
+    0
+  )
+
+export const buildAgentConversationGroups = (
+  messages: AgentChatMessage[]
+): AgentConversationGroup[] => {
+  const groups: AgentConversationGroup[] = []
+
+  for (const message of messages) {
+    if (message.role === "user") {
+      const preview = userMessagePreview(message)
+      groups.push({
+        id: message.id,
+        messages: [message],
+        turn: {
+          id: message.id,
+          ...preview,
+          toolCount: 0,
+        },
+      })
+      continue
+    }
+
+    const current = groups.at(-1)
+    if (current?.turn) {
+      current.messages.push(message)
+      current.turn.response = assistantResponsePreview(current.messages)
+      current.turn.toolCount = toolCountForMessages(current.messages)
+      continue
+    }
+
+    if (current) {
+      current.messages.push(message)
+    } else {
+      groups.push({ id: `leading:${message.id}`, messages: [message] })
+    }
+  }
+
+  return groups
+}
+
+export const isNearAgentConversationBottom = (
+  metrics: Pick<HTMLElement, "clientHeight" | "scrollHeight" | "scrollTop">,
+  threshold = AGENT_CONVERSATION_BOTTOM_THRESHOLD
+) =>
+  metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold
+
+export const layoutAgentConversationMarkers = (
+  desiredPositions: number[],
+  height: number
+) => {
+  if (desiredPositions.length === 0 || height <= 0) return []
+  if (desiredPositions.length === 1) {
+    return [
+      Math.min(
+        Math.max(desiredPositions[0] ?? height / 2, markerEdgeInset),
+        Math.max(markerEdgeInset, height - markerEdgeInset)
+      ),
+    ]
+  }
+
+  const minimum = markerEdgeInset
+  const maximum = Math.max(minimum, height - markerEdgeInset)
+  const gap = Math.min(
+    markerMinimumGap,
+    (maximum - minimum) / (desiredPositions.length - 1)
+  )
+  const positions: number[] = []
+
+  for (const desired of desiredPositions) {
+    const previous = positions.at(-1)
+    const clamped = Math.min(Math.max(desired, minimum), maximum)
+    positions.push(
+      previous === undefined ? clamped : Math.max(clamped, previous + gap)
+    )
+  }
+
+  positions[positions.length - 1] = Math.min(
+    positions.at(-1) ?? maximum,
+    maximum
+  )
+  for (let index = positions.length - 2; index >= 0; index -= 1) {
+    positions[index] = Math.min(
+      positions[index] ?? minimum,
+      (positions[index + 1] ?? maximum) - gap
+    )
+  }
+
+  return positions
+}
+
+const viewportMetricsEqual = (left: ViewportMetrics, right: ViewportMetrics) =>
+  left.activeTurnId === right.activeTurnId &&
+  left.markers.length === right.markers.length &&
+  left.markers.every(
+    (marker, index) =>
+      marker.id === right.markers[index]?.id &&
+      Math.abs(marker.top - (right.markers[index]?.top ?? 0)) < 0.5
+  )
+
+const turnElementsFor = (content: HTMLElement) => [
+  ...content.querySelectorAll<HTMLElement>("[data-agent-turn-id]"),
+]
+
+const AgentConversationMinimapMarker = ({
+  active,
+  index,
+  marker,
+  turn,
+  onJump,
+}: {
+  active: boolean
+  index: number
+  marker: MarkerPosition
+  turn: AgentConversationTurnPreview
+  onJump: (turnId: string) => void
+}) => {
+  const jump = useCallback(() => onJump(turn.id), [onJump, turn.id])
+  const style = useMemo<CSSProperties>(
+    () => ({ top: marker.top }),
+    [marker.top]
+  )
+  const details = [
+    turn.imageCount > 0
+      ? `${turn.imageCount} image${turn.imageCount === 1 ? "" : "s"}`
+      : undefined,
+    turn.contextCount > 0
+      ? `${turn.contextCount} context item${turn.contextCount === 1 ? "" : "s"}`
+      : undefined,
+    turn.toolCount > 0
+      ? `${turn.toolCount} tool${turn.toolCount === 1 ? "" : "s"}`
+      : undefined,
+  ].filter((item): item is string => item !== undefined)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        type="button"
+        className="group pointer-events-auto absolute right-0 grid h-4 w-12 -translate-y-1/2 place-items-center outline-none"
+        style={style}
+        aria-label={`Jump to turn ${index + 1}: ${turn.prompt}`}
+        aria-current={active ? "location" : undefined}
+        onClick={jump}
+      >
+        <span
+          className={cn(
+            "ml-auto h-0.5 w-12 origin-right rounded-full bg-muted-foreground/45",
+            active
+              ? "scale-x-100 bg-foreground"
+              : "scale-x-50 group-hover:scale-x-100 group-hover:bg-foreground group-focus-visible:scale-x-100 group-focus-visible:bg-foreground"
+          )}
+          aria-hidden="true"
+        />
+      </TooltipTrigger>
+      <TooltipContent
+        role="tooltip"
+        side="left"
+        sideOffset={8}
+        className="w-[min(18rem,calc(100vw-5rem))] max-w-none flex-col items-stretch gap-2 rounded-2xl px-4 py-3"
+      >
+        <p className="text-[10px] font-medium tracking-wide uppercase opacity-70">
+          Turn {index + 1}
+        </p>
+        <p className="line-clamp-2 text-sm font-medium">{turn.prompt}</p>
+        {turn.response ? (
+          <p className="line-clamp-3 text-xs opacity-75">{turn.response}</p>
+        ) : null}
+        {details.length > 0 ? (
+          <p className="truncate text-[11px] opacity-70">
+            {details.join(" · ")}
+          </p>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+const AgentConversationMinimap = ({
+  activeTurnId,
+  markers,
+  turns,
+  onJump,
+}: {
+  activeTurnId?: string
+  markers: MarkerPosition[]
+  turns: AgentConversationTurnPreview[]
+  onJump: (turnId: string) => void
+}) => (
+  <TooltipProvider delay={250}>
+    <nav
+      data-slot="agent-conversation-minimap"
+      className="pointer-events-none absolute inset-y-2 right-3 z-10 w-12"
+      aria-label="Conversation turns"
+    >
+      {markers.map((marker, index) => {
+        const turn = turns[index]
+        return turn ? (
+          <AgentConversationMinimapMarker
+            key={marker.id}
+            active={marker.id === activeTurnId}
+            index={index}
+            marker={marker}
+            turn={turn}
+            onJump={onJump}
+          />
+        ) : null
+      })}
+    </nav>
+  </TooltipProvider>
+)
+
+export const AgentConversationViewport = ({
+  children,
+  enabled,
+  turns,
+}: {
+  children: ReactNode
+  enabled: boolean
+  turns: AgentConversationTurnPreview[]
+}) => {
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const followingRef = useRef(true)
+  const animationFrameRef = useRef<number | undefined>(undefined)
+  const [metrics, setMetrics] = useState<ViewportMetrics>(emptyViewportMetrics)
+  const showMinimap = enabled && turns.length >= 2
+
+  const measure = useCallback(() => {
+    const viewport = viewportRef.current
+    const content = contentRef.current
+    if (!viewport || !content) return
+
+    if (followingRef.current) {
+      viewport.scrollTop = Math.max(
+        0,
+        viewport.scrollHeight - viewport.clientHeight
+      )
+    }
+
+    const turnElements = turnElementsFor(content)
+    const activeLine = viewport.scrollTop + viewport.clientHeight / 3
+    const activeElement =
+      turnElements.findLast((element) => element.offsetTop <= activeLine) ??
+      turnElements[0]
+    const availableHeight = Math.max(0, viewport.clientHeight - 16)
+    const contentHeight = Math.max(viewport.scrollHeight, 1)
+    const desiredPositions = turnElements.map(
+      (element) =>
+        markerEdgeInset + (element.offsetTop / contentHeight) * availableHeight
+    )
+    const positions = layoutAgentConversationMarkers(
+      desiredPositions,
+      viewport.clientHeight
+    )
+    const nextMetrics: ViewportMetrics = {
+      activeTurnId: activeElement?.dataset.agentTurnId,
+      markers: turnElements.flatMap((element, index) => {
+        const id = element.dataset.agentTurnId
+        const top = positions[index]
+        return id && top !== undefined ? [{ id, top }] : []
+      }),
+    }
+    setMetrics((current) =>
+      viewportMetricsEqual(current, nextMetrics) ? current : nextMetrics
+    )
+  }, [])
+
+  const scheduleMeasure = useCallback(() => {
+    if (animationFrameRef.current !== undefined) return
+    animationFrameRef.current = requestAnimationFrame(() => {
+      animationFrameRef.current = undefined
+      measure()
+    })
+  }, [measure])
+
+  const handleScroll = useCallback(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    followingRef.current = isNearAgentConversationBottom(viewport)
+    scheduleMeasure()
+  }, [scheduleMeasure])
+
+  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY < 0) followingRef.current = false
+  }, [])
+
+  const jumpToTurn = useCallback(
+    (turnId: string) => {
+      const viewport = viewportRef.current
+      const content = contentRef.current
+      if (!viewport || !content) return
+      const target = turnElementsFor(content).find(
+        (element) => element.dataset.agentTurnId === turnId
+      )
+      if (!target) return
+      viewport.scrollTop = Math.min(
+        Math.max(0, target.offsetTop - 12),
+        Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      )
+      followingRef.current = isNearAgentConversationBottom(viewport)
+      scheduleMeasure()
+    },
+    [scheduleMeasure]
+  )
+
+  useEffect(() => {
+    if (!enabled) return
+    const viewport = viewportRef.current
+    const content = contentRef.current
+    if (!viewport || !content) return
+
+    const observer = new ResizeObserver(scheduleMeasure)
+    observer.observe(viewport)
+    observer.observe(content)
+    scheduleMeasure()
+
+    return () => {
+      observer.disconnect()
+      if (animationFrameRef.current !== undefined) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = undefined
+      }
+    }
+  }, [enabled, scheduleMeasure])
+
+  useEffect(() => {
+    if (enabled) scheduleMeasure()
+  }, [enabled, scheduleMeasure, turns])
+
+  if (!enabled) {
+    return (
+      <div
+        className="min-h-72 flex-1 space-y-4 overflow-y-auto"
+        role="log"
+        aria-label="Agent conversation"
+        aria-live="polite"
+      >
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative min-h-72 min-w-0 flex-1">
+      <div
+        ref={viewportRef}
+        data-slot="agent-conversation-viewport"
+        className={cn(
+          "absolute inset-0 overflow-y-auto [scrollbar-gutter:stable]",
+          showMinimap && "pr-14"
+        )}
+        role="log"
+        aria-label="Agent conversation"
+        aria-live="polite"
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+      >
+        <div
+          ref={contentRef}
+          data-slot="agent-conversation-content"
+          className="space-y-4"
+        >
+          {children}
+        </div>
+      </div>
+      {showMinimap ? (
+        <AgentConversationMinimap
+          activeTurnId={metrics.activeTurnId}
+          markers={metrics.markers}
+          turns={turns}
+          onJump={jumpToTurn}
+        />
+      ) : null}
+    </div>
+  )
+}
