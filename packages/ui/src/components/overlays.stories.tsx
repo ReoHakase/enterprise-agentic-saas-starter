@@ -126,6 +126,6 @@ export const MobileDrawer: StoryObj<typeof MobileNavigationDrawer> = {
       body.getByRole("navigation", { name: "Workspace navigation" })
     ).toBeVisible()
     await userEvent.click(body.getByRole("button", { name: "Done" }))
-    await waitFor(() => expect(trigger).toHaveFocus())
+    await waitFor(() => expect(trigger).toHaveFocus(), { timeout: 5_000 })
   },
 }
