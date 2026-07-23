@@ -117,15 +117,16 @@ export const InvitationDecisionPanel = (
         apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
         invitationId: props.invitationId,
       }),
-    onSuccess: async (_, action) => {
-      await queryClient.invalidateQueries({ queryKey: consoleKeys.all })
+    onSuccess: (_, action) => {
+      // The destination route fetches fresh RSC data. Do not let a refetch of
+      // the outgoing invitation page race the route replacement.
+      void queryClient.invalidateQueries({ queryKey: consoleKeys.all })
       toast.success(
         action === "accept" ? "Invitation accepted" : "Invitation rejected"
       )
       router.replace(
         action === "accept" ? "/dashboard" : "/settings/organizations"
       )
-      router.refresh()
     },
   })
   const { isPending, mutate } = mutation

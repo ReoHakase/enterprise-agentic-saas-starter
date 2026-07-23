@@ -180,7 +180,11 @@ test("キーボード更新中もIssueのfocusを保持し、内部scrollとtena
   const betaOrganization = page.getByRole("menuitem", {
     name: "Beta Support",
   })
+  const alphaOrganization = page.getByRole("menuitem", {
+    name: "Alpha Operations",
+  })
   await expect(betaOrganization).toBeVisible()
+  await expect(alphaOrganization).toBeFocused()
   await page.keyboard.press("ArrowDown")
   await expect(betaOrganization).toBeFocused()
   await page.keyboard.press("Enter")

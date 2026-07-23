@@ -161,6 +161,7 @@ describe("InvitationDecisionPanel", () => {
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Invitation accepted")
     expect(mocks.replace).toHaveBeenCalledWith("/dashboard")
+    expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
   it("returns to sign-in with the invitation path when the session expires during acceptance", async () => {

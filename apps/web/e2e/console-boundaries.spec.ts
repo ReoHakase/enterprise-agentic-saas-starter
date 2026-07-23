@@ -59,8 +59,23 @@ const requireGeometry = async (
     `${label} should have one stable layout target`
   ).toHaveCount(1)
   await expect(locator, `${label} should be visible`).toBeVisible()
-  const geometry = await locator.boundingBox()
-  expect(geometry, `${label} should have a measurable box`).not.toBeNull()
+
+  let geometry: ElementGeometry | undefined
+  await expect
+    .poll(
+      async () => {
+        geometry = await locator
+          .evaluate((element) => {
+            const { height, width, x, y } = element.getBoundingClientRect()
+            return width > 0 && height > 0 ? { height, width, x, y } : undefined
+          })
+          .catch(() => undefined)
+        return geometry
+      },
+      { message: `${label} should have a measurable box` }
+    )
+    .toBeDefined()
+
   if (!geometry) {
     throw new Error(`${label} did not expose a measurable box`)
   }

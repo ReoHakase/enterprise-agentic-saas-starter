@@ -68,6 +68,7 @@ import {
   type IssueSearchState,
   type SetIssueSearchState,
 } from "@/features/issues/search-params"
+import { useIsHydrated } from "@/hooks/use-is-hydrated"
 
 import { CreateIssueDialog } from "./create-issue-dialog"
 import {
@@ -157,6 +158,7 @@ export const IssuesTable = ({
   onViewChange: SetIssueSearchState
 }) => {
   const pathname = usePathname()
+  const isHydrated = useIsHydrated()
   const [deleteTarget, setDeleteTarget] = useState<IssueUiItem>()
   const [searchDraft, setSearchDraft] = useState(searchState.q)
   const [labelDraft, setLabelDraft] = useState(searchState.label)
@@ -305,6 +307,7 @@ export const IssuesTable = ({
   const showPreviousPage = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       if (
+        !isHydrated ||
         event.button !== 0 ||
         event.metaKey ||
         event.ctrlKey ||
@@ -316,11 +319,12 @@ export const IssuesTable = ({
       event.preventDefault()
       table.previousPage()
     },
-    [table]
+    [isHydrated, table]
   )
   const showNextPage = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       if (
+        !isHydrated ||
         event.button !== 0 ||
         event.metaKey ||
         event.ctrlKey ||
@@ -332,7 +336,7 @@ export const IssuesTable = ({
       event.preventDefault()
       table.nextPage()
     },
-    [table]
+    [isHydrated, table]
   )
   const handleDeleteOpenChange = useCallback((open: boolean) => {
     if (!open) setDeleteTarget(undefined)
