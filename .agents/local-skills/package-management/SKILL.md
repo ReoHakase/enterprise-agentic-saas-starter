@@ -13,6 +13,8 @@ description: enterprise-agentic-saas-starterでdependency更新、Bun catalog、
 - Tiptap composerは`@tiptap/core/react/pm/starter-kit/extension-mention/extension-placeholder/suggestion`を同一exact versionでcatalog固定し、Web packageは`catalog:`だけを参照する。
 - `bunfig.toml` の `[install] exact = true` と `.npmrc` の `save-exact=true` で `bun add` 時のexact保存を強制する。
 - dependency更新は `bunfig.toml` の `minimumReleaseAge` を維持し、公開直後のlatestが拒否されるときは制約を迂回せず、通常の `bun install` で解決できる最新versionを選ぶ。
+- dependency更新後は`bun update`で互換範囲内の推移依存も更新し、`bun outdated --recursive`と`bun audit`を確認する。複数majorが共存する推移依存をpackage名だけのglobal overrideで一律上書きせず、残るadvisoryは親packageの対応versionとruntime到達性を切り分ける。
+- TypeScript 7では`baseUrl`が削除され、`types`の既定値が空になる。`paths`は各`tsconfig.json`からの相対pathで指定し、Node/Bun/Workers等のambient typeが必要なpackageは`types`へ明示する。
 - `apps/*` は実行単位。Next.js web、Elysia API、将来のagent serverなどを置く。
 - `packages/*` は下位の共有ライブラリ。実行環境を持たない。
 - `apps/* -> packages/*` は許可。

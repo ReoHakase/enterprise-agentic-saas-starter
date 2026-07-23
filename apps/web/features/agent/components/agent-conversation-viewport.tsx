@@ -360,7 +360,7 @@ export const AgentConversationViewport = ({
       <div
         ref={viewportRef}
         data-slot="agent-conversation-viewport"
-        className="absolute inset-0 overflow-y-auto [scrollbar-gutter:stable]"
+        className="scrollbar-gutter-stable absolute inset-0 overflow-y-auto"
         role="log"
         aria-label="Agent conversation"
         aria-live="polite"

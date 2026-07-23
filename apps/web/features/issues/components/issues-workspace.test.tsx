@@ -89,9 +89,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/features/files/components/file-attachments", () => ({
   FileAttachments: () => (
-    <section role="region" aria-label="Attachments">
-      Attachments
-    </section>
+    <section aria-label="Attachments">Attachments</section>
   ),
 }))
 

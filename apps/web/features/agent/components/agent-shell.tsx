@@ -211,7 +211,7 @@ export const AgentShell = ({
           id={agentPaneId}
           side="right"
           showCloseButton={false}
-          className="inset-0 size-full max-w-none rounded-none border-0 p-0 duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-[side=right]:inset-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:max-w-none data-[side=right]:sm:max-w-none"
+          className="inset-0 size-full max-w-none rounded-none border-0 p-0 duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-[side=right]:inset-0 data-[side=right]:size-full data-[side=right]:max-w-none data-[side=right]:sm:max-w-none"
         >
           <SheetHeader className="flex-row items-center gap-3 border-b p-4 text-left">
             <div className="min-w-0 flex-1">

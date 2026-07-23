@@ -78,7 +78,7 @@ export const IssueModalRouteShell = ({ children }: { children: ReactNode }) => {
           >
             Review and update this issue without leaving the issues list.
           </DialogDescription>
-          <div className="h-full min-h-0 overflow-y-scroll p-4 [scrollbar-gutter:stable] sm:p-6">
+          <div className="scrollbar-gutter-stable h-full min-h-0 overflow-y-scroll p-4 sm:p-6">
             {children}
           </div>
         </DialogContent>

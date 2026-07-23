@@ -1,7 +1,6 @@
 {
   "extends": "@enterprise-agentic-saas/typescript-config/nextjs.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
       "@enterprise-agentic-saas/ui/*": ["../../packages/ui/src/*"]

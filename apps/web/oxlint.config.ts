@@ -51,6 +51,8 @@ export default defineConfig({
         ],
       },
     ],
+    // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
+    "jsx-a11y/prefer-tag-over-role": "off",
     "react/react-in-jsx-scope": "off",
     "react-perf/jsx-no-jsx-as-prop": "error",
     "react-perf/jsx-no-new-array-as-prop": "error",
@@ -65,7 +67,8 @@ export default defineConfig({
     "query/stable-query-client": "error",
     "tailwindcss/enforce-canonical": "warn",
     "tailwindcss/enforce-shorthand": "warn",
-    "tailwindcss/enforce-sort-order": "warn",
+    // class orderはroot oxfmt.config.tsのsortTailwindcssを単一の正本にする。
+    "tailwindcss/enforce-sort-order": "off",
     "tailwindcss/no-conflicting-classes": "error",
     "tailwindcss/no-deprecated-classes": "error",
     "tailwindcss/no-duplicate-classes": "error",
@@ -75,6 +78,17 @@ export default defineConfig({
     "tailwindcss/no-unnecessary-whitespace": "error",
   },
   overrides: [
+    {
+      files: [
+        "features/members/components/invitations-section.tsx",
+        "features/members/components/members-table.tsx",
+        "features/organizations/components/organizations-page.tsx",
+      ],
+      rules: {
+        // TanStack Tableのmemoized column cell/header rendererをnested componentと誤認する。
+        "react/no-unstable-nested-components": "off",
+      },
+    },
     {
       files: ["**/*.test.ts", "**/*.test.tsx"],
       rules: {
@@ -135,7 +149,7 @@ export default defineConfig({
       rootDir: ".",
     },
     react: {
-      version: "19.2.5",
+      version: "19.2.8",
     },
     tailwindcss: {
       entryPoint: "../../packages/ui/src/styles/globals.css",

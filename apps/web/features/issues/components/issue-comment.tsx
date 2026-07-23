@@ -270,7 +270,7 @@ export const IssueComment = ({
           ) : null}
         </CardHeader>
         <Separator />
-        <CardContent className="px-3 py-3 sm:px-4 sm:py-4">
+        <CardContent className="p-3 sm:p-4">
           {editing && onUpdateComment ? (
             <form className="flex flex-col gap-2" onSubmit={saveComment}>
               <editForm.Field name="body">

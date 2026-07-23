@@ -32,6 +32,8 @@ export default defineConfig({
   rules: {
     "func-style": "off",
     "import/no-unassigned-import": "off",
+    // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
+    "jsx-a11y/prefer-tag-over-role": "off",
     "react/react-in-jsx-scope": "off",
     "react-perf/jsx-no-jsx-as-prop": "error",
     "react-perf/jsx-no-new-array-as-prop": "error",
@@ -39,7 +41,8 @@ export default defineConfig({
     "react-perf/jsx-no-new-object-as-prop": "error",
     "tailwindcss/enforce-canonical": "warn",
     "tailwindcss/enforce-shorthand": "warn",
-    "tailwindcss/enforce-sort-order": "warn",
+    // class orderはroot oxfmt.config.tsのsortTailwindcssを単一の正本にする。
+    "tailwindcss/enforce-sort-order": "off",
     "tailwindcss/no-conflicting-classes": "error",
     "tailwindcss/no-deprecated-classes": "error",
     "tailwindcss/no-duplicate-classes": "error",
@@ -49,6 +52,13 @@ export default defineConfig({
     "tailwindcss/no-unnecessary-whitespace": "error",
   },
   overrides: [
+    {
+      files: ["src/components/calendar.tsx"],
+      rules: {
+        // React DayPickerのcomponents slotへ渡すmemoized rendererをnested componentと誤認する。
+        "react/no-unstable-nested-components": "off",
+      },
+    },
     {
       files: ["src/**/*.test.ts", "src/**/*.test.tsx"],
       rules: {
@@ -94,7 +104,7 @@ export default defineConfig({
   },
   settings: {
     react: {
-      version: "19.2.5",
+      version: "19.2.8",
     },
     tailwindcss: {
       entryPoint: "src/styles/globals.css",

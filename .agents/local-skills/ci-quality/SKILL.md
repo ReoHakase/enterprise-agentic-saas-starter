@@ -11,6 +11,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、CI品質ゲー�
 
 - primary lintはoxlint。各workspaceのscriptは`oxlint --deny-warnings`にし、plugin warningもCI failureとして扱う。
 - primary formatterはoxfmt。
+- Tailwind class orderはroot `oxfmt.config.ts` の`sortTailwindcss`を単一の正本にし、Oxlint側の`tailwindcss/enforce-sort-order`は無効化する。OxfmtとOxlint pluginのversion差でutility順序が競合し、lintとformatが相互に書き戻す状態を作らない。
 - Oxlint/Oxfmt configはTS形式（root `oxlint.config.ts` / `oxfmt.config.ts`、package固有 `oxlint.config.ts`）にする。Oxlint TS configの `extends` はパス文字列ではなく、root configをimportしてconfig objectを渡す。
 - root `package.json` は `"type": "module"` にし、NodeのTS config ESM読込warningを出さない。
 - Oxlint TS configはrootをimportする際、Node ESM loader都合で `.ts` 拡張子を明示する（`import rootConfig from "../../oxlint.config.ts"`）。`tsc --noEmit` がTS5097で落ちないよう、`oxlint.config.ts` を拾うpackage（`include: ["."]` や `**/*.ts` を持つもの）の `tsconfig.json` の `exclude` に `oxlint.config.ts` を加える。

@@ -131,6 +131,7 @@ type DraftHandoff = v.InferOutput<typeof draftHandoffSchema>
 const draftHandoffKey = (canonicalHref: string) =>
   `issue-draft-handoff:${canonicalHref}`
 const issueHistoryGuardStateKey = "__issueDetailNavigationGuard"
+const emptyPendingFields = new Set<IssueUpdateField>()
 
 const parseDraftHandoff = (value: unknown, issueId: string) => {
   const result = v.safeParse(draftHandoffSchema, value)
@@ -269,7 +270,7 @@ export const IssueDetailDialog = ({
   organizationId,
   mode,
   pending,
-  pendingFields = new Set(),
+  pendingFields = emptyPendingFields,
   loadingOlder,
   onLoadOlder,
   onUpdate,
@@ -1145,7 +1146,7 @@ export const IssueDetailDialog = ({
               <Separator />
               {descriptionEditing ? (
                 <form onSubmit={saveDescription}>
-                  <CardContent className="flex flex-col gap-3 px-4 py-4">
+                  <CardContent className="flex flex-col gap-3 p-4">
                     <descriptionForm.Field name="description">
                       {renderDescriptionField}
                     </descriptionForm.Field>
@@ -1166,7 +1167,7 @@ export const IssueDetailDialog = ({
                   </CardContent>
                 </form>
               ) : (
-                <CardContent className="min-h-24 px-4 py-4">
+                <CardContent className="min-h-24 p-4">
                   {issue.description ? (
                     <p className="text-sm leading-6 whitespace-pre-wrap">
                       {issue.description}

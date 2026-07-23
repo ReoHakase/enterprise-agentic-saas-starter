@@ -1,5 +1,4 @@
 diff --git a/dist/cli/build/utils/workerd.js b/dist/cli/build/utils/workerd.js
-index 2567f7c3bb76d65b8703946e57c9d442814a2bc9..e731d775523c1a4409a93eae271f1ebc659ec790 100644
 --- a/dist/cli/build/utils/workerd.js
 +++ b/dist/cli/build/utils/workerd.js
 @@ -43,12 +43,12 @@ export function transformBuildCondition(conditionMap, condition) {

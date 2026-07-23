@@ -9,6 +9,13 @@ import {
 
 type ImageApi = Pick<AgentInternalGateway, "getAgentImageForModel">
 
+const loadSingleCurrentMessageImage = (response: Response) =>
+  loadCurrentMessageImages(
+    { getAgentImageForModel: () => Promise.resolve(response) },
+    "run_0123456789abcdefghijklmnopqrstuvwxyz",
+    ["asset_1"]
+  )
+
 describe("current-message model images", () => {
   it("loads bounded WebP responses through the run grant", async () => {
     const getAgentImageForModel = vi
@@ -45,22 +52,15 @@ describe("current-message model images", () => {
   })
 
   it("rejects non-WebP, declared overflow, and streamed overflow", async () => {
-    const call = (response: Response) =>
-      loadCurrentMessageImages(
-        { getAgentImageForModel: () => Promise.resolve(response) },
-        "run_0123456789abcdefghijklmnopqrstuvwxyz",
-        ["asset_1"]
-      )
-
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(new Uint8Array([1]), {
           headers: { "content-type": "image/png" },
         })
       )
     ).rejects.toThrow("Agent image is unavailable")
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(null, {
           headers: { "content-type": "image/webp" },
           status: 500,
@@ -68,14 +68,14 @@ describe("current-message model images", () => {
       )
     ).rejects.toThrow("Agent image is unavailable")
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(null, {
           headers: { "content-type": "image/webp" },
         })
       )
     ).rejects.toThrow("Agent image is unavailable")
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(new Uint8Array([1]), {
           headers: {
             "content-length": "invalid",
@@ -92,14 +92,14 @@ describe("current-message model images", () => {
       start: (controller) => controller.enqueue(new Uint8Array([1])),
     })
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(cancelFailure, {
           headers: { "content-type": "image/png" },
         })
       )
     ).rejects.toThrow("Agent image is unavailable")
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(new Uint8Array([1]), {
           headers: {
             "content-length": String(4 * 1024 * 1024 + 1),
@@ -109,7 +109,7 @@ describe("current-message model images", () => {
       )
     ).rejects.toThrow("Agent image is unavailable")
     await expect(
-      call(
+      loadSingleCurrentMessageImage(
         new Response(new Uint8Array(4 * 1024 * 1024 + 1), {
           headers: { "content-type": "image/webp" },
         })

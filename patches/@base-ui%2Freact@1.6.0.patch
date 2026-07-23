@@ -1,7 +1,6 @@
-diff --git a/esm/floating-ui-react/middleware/arrow.js b/esm/floating-ui-react/middleware/arrow.js
-index 6d72afc331e3c24d734a1617a4653c477b03c169..a950e925e207cdbd35c9c25200d5bb53335fa750 100644
---- a/esm/floating-ui-react/middleware/arrow.js
-+++ b/esm/floating-ui-react/middleware/arrow.js
+diff --git a/floating-ui-react/middleware/arrow.mjs b/floating-ui-react/middleware/arrow.mjs
+--- a/floating-ui-react/middleware/arrow.mjs
++++ b/floating-ui-react/middleware/arrow.mjs
 @@ -88,7 +88,8 @@ export const baseArrow = options => ({
   * This wraps the core `arrow` middleware to allow React refs as the element.
   * @see https://floating-ui.com/docs/arrow

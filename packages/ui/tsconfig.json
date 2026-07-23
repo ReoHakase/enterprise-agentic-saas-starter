@@ -1,7 +1,6 @@
 {
   "extends": "@enterprise-agentic-saas/typescript-config/react-library.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@enterprise-agentic-saas/ui/*": ["./src/*"]
     }

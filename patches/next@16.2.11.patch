@@ -1,0 +1,30 @@
+diff --git a/dist/lib/verify-typescript-setup.js b/dist/lib/verify-typescript-setup.js
+--- a/dist/lib/verify-typescript-setup.js
++++ b/dist/lib/verify-typescript-setup.js
+@@ -92,8 +92,13 @@ const requiredPackages = [
+  */ function hasNativeTypeScriptPreview(dir) {
+     try {
+         (0, _resolvefrom.resolveFrom)(dir, '@typescript/native-preview/package.json');
+         return true;
+-    } catch  {
++    } catch  {}
++    try {
++        const typescriptPackageJsonPath = (0, _resolvefrom.resolveFrom)(dir, 'typescript/package.json');
++        const typescriptPackageJson = require(typescriptPackageJsonPath);
++        return _semver.default.gte(typescriptPackageJson.version, '7.0.0');
++    } catch  {
+         return false;
+     }
+ }
+@@ -126,8 +131,8 @@ async function verifyTypeScriptSetup({
+             const onlyTypescriptMissing = deps.missing.length === 1 && deps.missing[0].pkg === 'typescript';
+             if (onlyTypescriptMissing) {
+-                // @typescript/native-preview is installed and only typescript is missing
+-                // Skip installation and return early - the project can use the native preview
++                // A native TypeScript compiler is installed and the legacy JavaScript compiler is missing
++                // Skip installation and return early so route declarations can still be generated
+-                _log.info(`Detected ${(0, _picocolors.bold)('@typescript/native-preview')} as TypeScript compiler. ` + `Some Next.js TypeScript features (like type checking during build) require the standard ${(0, _picocolors.bold)('typescript')} package.`);
++                _log.info(`Detected native TypeScript compiler. ` + `Next.js will generate route types; the workspace ${(0, _picocolors.bold)('tsc --noEmit')} command performs type checking.`);
+                 // Still write type declarations since they don't require the typescript package
+                 await (0, _writeAppTypeDeclarations.writeAppTypeDeclarations)({
+                     baseDir: dir,

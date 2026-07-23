@@ -112,7 +112,7 @@ export function SignUp({
       },
       onSuccess: () => {
         if (emailAndPassword?.requireEmailVerification) {
-          toast.success(localization.auth.verifyYourEmail)
+          toast.success(localization.auth.checkYourEmail)
           navigate({ to: `${basePaths.auth}/${viewPaths.auth.signIn}` })
         } else {
           navigate({ to: redirectTo })

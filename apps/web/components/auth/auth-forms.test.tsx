@@ -105,7 +105,7 @@ vi.mock("@better-auth-ui/react", () => {
           signIn: "Sign in",
           signUp: "Create account",
           verificationEmailSent: "Verification email sent",
-          verifyYourEmail: "Verify your email",
+          checkYourEmail: "Check your email",
         },
       },
       navigate: authMocks.navigate,
