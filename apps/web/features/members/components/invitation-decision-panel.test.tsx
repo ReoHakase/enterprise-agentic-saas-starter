@@ -7,6 +7,7 @@ import {
   InvitationAuthenticationError,
   type InvitationContext,
 } from "@/features/members/api"
+import { clientEnv } from "@/lib/env.client"
 
 import { InvitationDecisionPanel } from "./invitation-decision-panel"
 
@@ -154,7 +155,7 @@ describe("InvitationDecisionPanel", () => {
     await waitFor(() => {
       expect(mocks.decideInvitation).toHaveBeenCalledWith({
         action: "accept",
-        apiBaseUrl: "https://api.enterprise-agentic-saas.localhost",
+        apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
         invitationId: "invitation-1",
       })
     })

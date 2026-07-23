@@ -27,6 +27,7 @@ description: enterprise-agentic-saas-starterのNext.js frontend、Cloudflare/Ope
 - clientへ出す値は `NEXT_PUBLIC_*` のみにする。
 - client componentがserver-only envをimportしそうなら、`env.server.ts` と `env.client.ts` に分ける。
 - `process.env` を各所で直接読むのではなく、`apps/web/src/env.ts` 経由にする。
+- API originを検証するclient interaction testはlocal fallback URLを直接期待せず、`clientEnv.NEXT_PUBLIC_API_BASE_URL`を期待値に使う。CIは公開API URLを注入するため、固定localhost期待値は環境依存で失敗する。
 - secretはdotenvx/direnv経由で注入する。ソースや公開envには入れない。
 
 ## Storybook
