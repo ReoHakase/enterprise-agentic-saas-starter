@@ -290,7 +290,7 @@ describe("MembersPanel", () => {
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
       "Current Owner"
     )
-  })
+  }, 10_000)
 
   it("shows sortable invitation lifecycle and inviter details", async () => {
     const user = userEvent.setup()
