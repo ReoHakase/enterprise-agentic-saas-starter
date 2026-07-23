@@ -87,7 +87,7 @@ beforeAll(async () => {
       origin: "http://app.localhost",
     })
   }
-})
+}, 30_000)
 
 describe("passkey registration security boundary", () => {
   it("generates options for a fresh session with the configured RP identity", async () => {

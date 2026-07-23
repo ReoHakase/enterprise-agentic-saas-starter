@@ -121,6 +121,7 @@ bunx @better-auth/cli generate \
 ## package品質
 
 - `packages/auth/.oxlintrc.json` はserver/client entrypoint分離を前提にserver TypeScript向けへ寄せる。React/Browser系pluginは入れない。
+- Better Authのcold importとDB準備を行うintegration suiteは、並列CIでVitest既定の10秒を超えうる。suite全体のtimeoutを緩めず、該当する`beforeAll`だけ30秒を明示し、test本体のtimeoutは既定値を維持する。
 - READMEには役割、公開entrypoint、依存方向、env境界、test方法、入れないものを書く。
 
 具体的な auth singleton やclient例が必要なときだけ `references/auth-email.md` を読む。React Email templateやsender例は `email` skillを読む。

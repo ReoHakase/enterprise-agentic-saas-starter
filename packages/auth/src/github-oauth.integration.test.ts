@@ -136,7 +136,7 @@ beforeAll(async () => {
     activeOrganizationId: null,
   })
   signedSessionCookie = await signCookieValue(sessionToken, authSecret)
-})
+}, 30_000)
 
 afterAll(() => {
   vi.unstubAllEnvs()
