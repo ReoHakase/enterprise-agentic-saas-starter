@@ -100,6 +100,7 @@ DELETE /files/organizations/:organizationId/:fileId
 - Issue一覧のthumbnailは`issue_thumbnail_selections`で明示選択だけを保持し、未選択時はreadyかつpreview可能な添付画像を`createdAt ASC, id ASC`で自動選択する。selectionはIssue・organization・file ownerのcomposite FKでtenant/owner境界を強制し、選択file削除時はcascadeで自動選択へ戻す。
 - 一覧ではpage内のIssue IDをまとめて集計し、ready添付数、comment数、明示または自動thumbnailをN+1なしで返す。private R2 URLは返さず、Webは認証付きpreview routeを`AuthenticatedFileImage`から使う。
 - thumbnail変更は`PUT /issues/:id/thumbnail`へ`fileId`または`null`を送り、同一設定はno-op、変更時だけIssueの`revision` / `updatedAt`と`issue.updated` auditを更新する。候補はJPEG/PNG/WebP/GIFに限定し、AVIF/SVGは除外する。
+- Webの通常添付cardにはthumbnail badgeや選択actionを置かない。`Add files`の横にあるicon付き`Change thumbnail`から編集へ入り、全cardのradioを表示してpreview可能な画像だけを選択可能にする。選択は`Confirm`までlocal draftに留め、`Cancel`はmutationなしで破棄する。Webから自動選択へ戻すreset actionは提供せず、`fileId: null`のAPI contractだけを維持する。
 - Agentの`get_issue`も同じready-only paginationを使い、filename、size、declared MIME、画像可否、text preview可否、dimensions、uploader名、createdAtだけを投影する。R2 key、ETag、URL、delete権限は返さない。
 - uploadは1 file/1 multipart requestとし、fieldsを`uploadId`、`fileSize`、`file`に固定する。初回201、同一retry 200、衝突409にする。
 - DTOからR2 keyと保存URLを除外する。`owner`、filename、size、declared MIME、画像用`previewable`、`textPreviewable`、dimensions、uploader profile、createdAt、canDeleteを返す。

@@ -122,7 +122,12 @@ describe("file attachments", () => {
     })
     mocks.getIssueThumbnail.mockResolvedValue({
       mode: "automatic",
-      file: null,
+      file: {
+        id: imageFile.id,
+        filename: imageFile.filename,
+        imageWidth: imageFile.imageWidth,
+        imageHeight: imageFile.imageHeight,
+      },
     })
     mocks.updateIssueThumbnail.mockImplementation(
       async (_client: unknown, input: { fileId: string | null }) => ({
@@ -276,15 +281,69 @@ describe("file attachments", () => {
     expect(onFilesChanged).toHaveBeenCalledOnce()
   })
 
-  it("selects an image thumbnail and resets to the oldest image", async () => {
+  it("keeps thumbnail controls in an explicit edit mode", async () => {
     const user = userEvent.setup()
     renderAttachments()
 
+    const changeThumbnail = await screen.findByRole("button", {
+      name: "Change thumbnail",
+    })
+    const attachmentActions = screen.getByRole("group", {
+      name: "Attachment actions",
+    })
+    expect(
+      within(attachmentActions).getByRole("button", { name: "Add files" })
+    ).toBeInTheDocument()
+    expect(
+      within(attachmentActions).getByRole("button", {
+        name: "Change thumbnail",
+      })
+    ).toBe(changeThumbnail)
+    expect(screen.getByTestId("change-thumbnail-icon")).toHaveAttribute(
+      "data-icon",
+      "inline-start"
+    )
+    expect(screen.queryByText("Thumbnail")).toBeNull()
+    expect(screen.queryByRole("radio")).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Use oldest automatically" })
+    ).toBeNull()
+
+    await user.click(changeThumbnail)
+    const imageRadio = screen.getByRole("radio", {
+      name: "Use architecture.png as thumbnail",
+    })
+    expect(imageRadio).toBeEnabled()
+    expect(imageRadio).not.toBeChecked()
+    expect(
+      screen.getByRole("radio", {
+        name: "Use notes.txt as thumbnail",
+      })
+    ).toBeDisabled()
+    expect(
+      screen.getByRole("radio", {
+        name: "Use requirements.pdf as thumbnail",
+      })
+    ).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled()
+
+    await user.click(imageRadio)
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled()
+    await user.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(screen.queryByRole("radio")).toBeNull()
+    expect(mocks.updateIssueThumbnail).not.toHaveBeenCalled()
+
     await user.click(
-      await screen.findByRole("button", {
+      screen.getByRole("button", {
+        name: "Change thumbnail",
+      })
+    )
+    await user.click(
+      screen.getByRole("radio", {
         name: "Use architecture.png as thumbnail",
       })
     )
+    await user.click(screen.getByRole("button", { name: "Confirm" }))
     await waitFor(() =>
       expect(mocks.updateIssueThumbnail).toHaveBeenCalledWith(
         expect.anything(),
@@ -295,20 +354,33 @@ describe("file attachments", () => {
         }
       )
     )
-    expect(await screen.findByText("Thumbnail")).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole("radio")).toBeNull())
+    expect(screen.queryByText("Thumbnail")).toBeNull()
+  })
+
+  it("checks the current explicit thumbnail when editing starts", async () => {
+    const user = userEvent.setup()
+    mocks.getIssueThumbnail.mockResolvedValue({
+      mode: "selected",
+      file: {
+        id: imageFile.id,
+        filename: imageFile.filename,
+        imageWidth: imageFile.imageWidth,
+        imageHeight: imageFile.imageHeight,
+      },
+    })
+    renderAttachments()
 
     await user.click(
-      screen.getByRole("button", { name: "Use oldest automatically" })
+      await screen.findByRole("button", {
+        name: "Change thumbnail",
+      })
     )
-    await waitFor(() =>
-      expect(mocks.updateIssueThumbnail).toHaveBeenLastCalledWith(
-        expect.anything(),
-        {
-          id: "issue-1",
-          organizationId: "org alpha",
-          fileId: null,
-        }
-      )
-    )
+    expect(
+      screen.getByRole("radio", {
+        name: "Use architecture.png as thumbnail",
+      })
+    ).toBeChecked()
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled()
   })
 })

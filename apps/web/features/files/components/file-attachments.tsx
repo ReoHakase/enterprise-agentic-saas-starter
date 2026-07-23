@@ -32,7 +32,6 @@ import {
   ImageIcon,
   PaperclipIcon,
   RefreshCwIcon,
-  RotateCcwIcon,
   Trash2Icon,
   UploadIcon,
   XIcon,
@@ -40,6 +39,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -138,6 +138,8 @@ const FileRow = ({
   onRequestDelete,
   onRequestPreview,
   onSelectThumbnail,
+  thumbnailGroupName,
+  thumbnailEditing,
   thumbnailPending,
   thumbnailSelected,
 }: {
@@ -146,6 +148,8 @@ const FileRow = ({
   onRequestDelete: (file: FileDto) => void
   onRequestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
   onSelectThumbnail: (fileId: string) => void
+  thumbnailGroupName: string
+  thumbnailEditing: boolean
   thumbnailPending: boolean
   thumbnailSelected: boolean
 }) => {
@@ -247,21 +251,17 @@ const FileRow = ({
             <LocalDate value={file.createdAt} includeTime />
           </div>
         </div>
-        {file.previewable ? (
-          thumbnailSelected ? (
-            <Badge variant="secondary">Thumbnail</Badge>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              disabled={thumbnailPending}
-              aria-label={`Use ${file.filename} as thumbnail`}
-              onClick={selectThumbnail}
-            >
-              Use as thumbnail
-            </Button>
-          )
+        {thumbnailEditing ? (
+          <input
+            type="radio"
+            name={thumbnailGroupName}
+            value={file.id}
+            checked={thumbnailSelected}
+            disabled={!file.previewable || thumbnailPending}
+            aria-label={`Use ${file.filename} as thumbnail`}
+            className="size-4 shrink-0 accent-primary"
+            onChange={selectThumbnail}
+          />
         ) : null}
         <a
           href={downloadUrl}
@@ -299,10 +299,15 @@ export const FileAttachments = ({
   onFilesChanged?: () => void | Promise<void>
 }) => {
   const queryClient = useQueryClient()
+  const thumbnailGroupName = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const previewTriggerRef = useRef<HTMLElement | null>(null)
   const [fileToDelete, setFileToDelete] = useState<FileDto | null>(null)
   const [previewFileId, setPreviewFileId] = useState<string | null>(null)
+  const [thumbnailEditing, setThumbnailEditing] = useState(false)
+  const [thumbnailDraftFileId, setThumbnailDraftFileId] = useState<
+    string | null
+  >(null)
   const filesQuery = useInfiniteQuery(
     filesQueryOptions(apiClient, organizationId, ownerType, ownerId)
   )
@@ -326,6 +331,10 @@ export const FileAttachments = ({
     },
     [ownerQueryKey, queryClient]
   )
+  const closeThumbnailEditor = useCallback(() => {
+    setThumbnailEditing(false)
+    setThumbnailDraftFileId(null)
+  }, [])
   const notifyFilesChanged = useCallback(async () => {
     try {
       await onFilesChanged?.()
@@ -348,10 +357,11 @@ export const FileAttachments = ({
     ])
   }, [organizationId, ownerId, ownerQueryKey, ownerType, queryClient])
   const handleUploaded = useCallback(async () => {
+    closeThumbnailEditor()
     await invalidateAttachmentViews()
     await notifyFilesChanged()
     toast.success("File uploaded")
-  }, [invalidateAttachmentViews, notifyFilesChanged])
+  }, [closeThumbnailEditor, invalidateAttachmentViews, notifyFilesChanged])
   const handleCanceled = useCallback(async () => {
     await invalidateAttachmentViews()
     await notifyFilesChanged()
@@ -368,6 +378,7 @@ export const FileAttachments = ({
       deleteFile(apiClient, { organizationId, fileId: file.id }),
     onSuccess: async () => {
       setFileToDelete(null)
+      closeThumbnailEditor()
       await invalidateAttachmentViews()
       await notifyFilesChanged()
       toast.success("File deleted")
@@ -377,7 +388,7 @@ export const FileAttachments = ({
     },
   })
   const thumbnailMutation = useMutation({
-    mutationFn: (fileId: string | null) =>
+    mutationFn: (fileId: string) =>
       updateIssueThumbnail(apiClient, {
         id: ownerId,
         organizationId,
@@ -396,6 +407,7 @@ export const FileAttachments = ({
           queryKey: issueKeys.detail(organizationId, ownerId),
         }),
       ])
+      closeThumbnailEditor()
       toast.success(
         thumbnail.mode === "selected"
           ? "Thumbnail updated"
@@ -454,14 +466,29 @@ export const FileAttachments = ({
   const loadMore = useCallback(() => {
     void fetchNextPage()
   }, [fetchNextPage])
-  const selectThumbnail = useCallback(
-    (fileId: string) => mutateThumbnail(fileId),
-    [mutateThumbnail]
-  )
-  const resetThumbnail = useCallback(
-    () => mutateThumbnail(null),
-    [mutateThumbnail]
-  )
+  const selectedThumbnailFileId =
+    thumbnailQuery.data?.mode === "selected"
+      ? (thumbnailQuery.data.file?.id ?? null)
+      : null
+  const thumbnailChanged =
+    thumbnailDraftFileId !== null &&
+    thumbnailDraftFileId !== selectedThumbnailFileId
+  const openThumbnailEditor = useCallback(() => {
+    setThumbnailDraftFileId(
+      thumbnailQuery.data?.mode === "selected"
+        ? (thumbnailQuery.data.file?.id ?? null)
+        : null
+    )
+    setThumbnailEditing(true)
+  }, [thumbnailQuery.data])
+  const selectThumbnail = useCallback((fileId: string) => {
+    setThumbnailDraftFileId(fileId)
+  }, [])
+  const confirmThumbnail = useCallback(() => {
+    if (thumbnailChanged && thumbnailDraftFileId) {
+      mutateThumbnail(thumbnailDraftFileId)
+    }
+  }, [mutateThumbnail, thumbnailChanged, thumbnailDraftFileId])
 
   return (
     <section
@@ -492,22 +519,63 @@ export const FileAttachments = ({
           aria-label="Choose files to upload"
           onChange={selectFiles}
         />
-        <Button type="button" variant="outline" size="sm" onClick={openPicker}>
-          <UploadIcon data-icon="inline-start" aria-hidden="true" />
-          Add files
-        </Button>
-        {thumbnailQuery.data?.mode === "selected" ? (
+        <div
+          role="group"
+          aria-label="Attachment actions"
+          className="flex flex-wrap items-center gap-2"
+        >
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            disabled={thumbnailPending}
-            onClick={resetThumbnail}
+            onClick={openPicker}
           >
-            <RotateCcwIcon data-icon="inline-start" aria-hidden="true" />
-            Use oldest automatically
+            <UploadIcon data-icon="inline-start" aria-hidden="true" />
+            Add files
           </Button>
-        ) : null}
+          {ownerType === "issue" && files.length > 0 ? (
+            thumbnailEditing ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={thumbnailPending}
+                  onClick={closeThumbnailEditor}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!thumbnailChanged || thumbnailPending}
+                  onClick={confirmThumbnail}
+                >
+                  Confirm
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  thumbnailQuery.isPending ||
+                  thumbnailQuery.isError ||
+                  thumbnailPending
+                }
+                onClick={openThumbnailEditor}
+              >
+                <ImageIcon
+                  data-icon="inline-start"
+                  data-testid="change-thumbnail-icon"
+                  aria-hidden="true"
+                />
+                Change thumbnail
+              </Button>
+            )
+          ) : null}
+        </div>
       </div>
 
       {uploads.length > 0 ? (
@@ -555,8 +623,10 @@ export const FileAttachments = ({
               onRequestDelete={requestDelete}
               onRequestPreview={requestPreview}
               onSelectThumbnail={selectThumbnail}
+              thumbnailGroupName={thumbnailGroupName}
+              thumbnailEditing={thumbnailEditing}
               thumbnailPending={thumbnailPending}
-              thumbnailSelected={thumbnailQuery.data?.file?.id === file.id}
+              thumbnailSelected={thumbnailDraftFileId === file.id}
             />
           ))}
         </ul>

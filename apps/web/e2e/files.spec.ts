@@ -118,35 +118,56 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   })
   await expect(
     architectureDetails.getByText("Thumbnail", { exact: true })
+  ).toHaveCount(0)
+  const changeThumbnail = modalAttachments.getByRole("button", {
+    name: "Change thumbnail",
+  })
+  await expect(
+    changeThumbnail.locator("xpath=preceding-sibling::button[1]")
+  ).toHaveText(/Add files/u)
+  await expect(
+    changeThumbnail.locator('[data-icon="inline-start"]')
   ).toBeVisible()
+  await changeThumbnail.click()
+
+  const architectureRadio = modalAttachments.getByRole("radio", {
+    name: "Use architecture-preview.png as thumbnail",
+  })
+  const alternateRadio = modalAttachments.getByRole("radio", {
+    name: "Use diagram-preview.png as thumbnail",
+  })
+  await expect(architectureRadio).not.toBeChecked()
+  await expect(alternateRadio).toBeEnabled()
+  await expect(
+    modalAttachments.getByRole("radio", {
+      name: "Use tenant-boundary-notes.txt as thumbnail",
+    })
+  ).toBeDisabled()
+  const confirmThumbnail = modalAttachments.getByRole("button", {
+    name: "Confirm",
+  })
+  await expect(confirmThumbnail).toBeDisabled()
+  await alternateRadio.press("Space")
+  await expect(alternateRadio).toBeChecked()
+  await expect(confirmThumbnail).toBeEnabled()
+
   const selectThumbnailResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith("/issues/issue-a-1/thumbnail") &&
       response.request().method() === "PUT"
   )
-  await alternateDetails
-    .getByRole("button", { name: "Use diagram-preview.png as thumbnail" })
-    .click()
+  await confirmThumbnail.click()
   expect((await selectThumbnailResponse).ok()).toBeTruthy()
   await expect(
-    alternateDetails.getByText("Thumbnail", { exact: true })
+    modalAttachments.getByRole("button", { name: "Change thumbnail" })
   ).toBeVisible()
+  await expect(modalAttachments.getByRole("radio")).toHaveCount(0)
   await expect(
-    architectureDetails.getByText("Thumbnail", { exact: true })
+    alternateDetails.getByText("Thumbnail", { exact: true })
   ).toHaveCount(0)
-
-  const resetThumbnailResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/issues/issue-a-1/thumbnail") &&
-      response.request().method() === "PUT"
-  )
   await modalAttachments
     .getByRole("button", { name: "Use oldest automatically" })
-    .click()
-  expect((await resetThumbnailResponse).ok()).toBeTruthy()
-  await expect(
-    architectureDetails.getByText("Thumbnail", { exact: true })
-  ).toBeVisible()
+    .waitFor({ state: "detached" })
 
   const modalTextTrigger = modalAttachments.getByRole("button", {
     name: "tenant-boundary-notes.txt",
