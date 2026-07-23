@@ -8,12 +8,18 @@ selectorはAPI順を維持し、`updatedAt DESC, id DESC`です。各itemはtitl
 
 ## 新規thread
 
+URLに`agentThread`がない場合は、Agent paneと専用Agent pageのどちらも常に`New conversation`のlocal draftを表示します。指定threadが存在しない、削除済み、archive済みの場合は`agentThread`をURLから除去し、同じlocal draftへ戻します。thread選択を要求する空画面は表示しません。
+
 新規threadはDB rowを作らないlocal draftから開始します。次のどちらかで初めてthreadを作成します。
 
 - 有意な最初のmessageを送信する
 - 画像を選択してuploadを開始する
 
 空のdraftまたは空threadには3件のsample promptを表示し、clickは送信せずcomposerを埋めます。
+
+新規draftでも既存threadと同じcurrent page、Issue、memberのmention候補を提供します。初回作成時はplain textではなくTiptap documentと順序付きのtext/mention partをsnapshotし、作成後のcomposerへ一度だけ引き継ぎます。最初のchat requestはmentionのID/pathとtextの順序を保持します。thread作成に失敗した場合はdocument、mention、画像選択前のtext、permission選択をlocalに保持します。
+
+permissionは新規draftでは`Ask always`をlocal既定値とし、thread作成前に`Full access`へ変更できます。`POST /agent/threads`は選択した`permissionMode`を受け取り、threadとsession、user、organization、context epochへ束縛した初期permissionを同一transactionで保存します。初回runはこのtransactionの完了後だけ開始します。
 
 ## Conversationとmessage part
 
@@ -44,7 +50,7 @@ minimapはuser messageから次のuser message直前までを1 turnとして、2
 
 composerはTiptapを正本にし、textとmentionを同じdocument内で編集します。mentionは青いinline atom nodeで、右端X、Backspace/Delete、keyboard suggestion、IME、Escape、Arrow/Enterを扱います。送信時はtext/mention/画像を1つのpending snapshotへ移してeditorから即時消去し、失敗時は新しい入力を上書きしない場合だけ復元します。
 
-permissionはicon付きselectとしてcomposer footerに置きます。
+permissionはicon付きselectとしてcomposer footerに置きます。表示専用のcontrolled selectとserver-backed更新を分離し、新規draftではlocal state、既存threadではserver stateを接続します。
 
 - Ask always: Issue作成・更新・削除を毎回確認
 - Full access: 現在threadのIssue作成・更新・削除を確認なしで許可

@@ -35,6 +35,59 @@ const policyOptions = [
   },
 ] as const
 
+export type AgentPermissionMode = (typeof policyOptions)[number]["value"]
+
+export const AgentPermissionSelect = ({
+  mode,
+  disabled,
+  onModeChange,
+}: {
+  mode: AgentPermissionMode
+  disabled: boolean
+  onModeChange: (mode: AgentPermissionMode) => void
+}) => {
+  const selectMode = useCallback(
+    (value: string | null) => {
+      if (value === "ask_always" || value === "full_access") {
+        onModeChange(value)
+      }
+    },
+    [onModeChange]
+  )
+  const selected =
+    policyOptions.find((option) => option.value === mode) ?? policyOptions[0]
+  const SelectedIcon = selected.Icon
+
+  return (
+    <Select
+      items={policyOptions}
+      value={mode}
+      disabled={disabled}
+      onValueChange={selectMode}
+    >
+      <SelectTrigger className="min-w-40 sm:w-auto">
+        <SelectedIcon data-icon="inline-start" />
+        {selected.label}
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        <SelectGroup>
+          {policyOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              <option.Icon className="mt-0.5 size-4 shrink-0" />
+              <div className="py-0.5">
+                <span className="block">{option.label}</span>
+                <span className="block max-w-72 text-xs whitespace-normal text-muted-foreground">
+                  {option.description}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
+}
+
 export const AgentPolicyControl = ({
   organizationId,
   threadId,
@@ -59,45 +112,13 @@ export const AgentPolicyControl = ({
     onError: () => toast.error("The Agent permission could not be updated."),
   })
   const { mutate: updatePermission, isPending: updatingPermission } = mutation
-  const selectMode = useCallback(
-    (value: string | null) => {
-      if (value === "ask_always" || value === "full_access") {
-        updatePermission(value)
-      }
-    },
-    [updatePermission]
-  )
   const mode = policyQuery.data?.mode ?? "ask_always"
-  const selected =
-    policyOptions.find((option) => option.value === mode) ?? policyOptions[0]
-  const SelectedIcon = selected.Icon
 
   return (
-    <Select
-      items={policyOptions}
-      value={mode}
+    <AgentPermissionSelect
+      mode={mode}
       disabled={disabled || updatingPermission}
-      onValueChange={selectMode}
-    >
-      <SelectTrigger className="min-w-40 sm:w-auto">
-        <SelectedIcon data-icon="inline-start" />
-        {selected.label}
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          {policyOptions.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              <option.Icon className="mt-0.5 size-4 shrink-0" />
-              <div className="py-0.5">
-                <span className="block">{option.label}</span>
-                <span className="block max-w-72 text-xs whitespace-normal text-muted-foreground">
-                  {option.description}
-                </span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+      onModeChange={updatePermission}
+    />
   )
 }

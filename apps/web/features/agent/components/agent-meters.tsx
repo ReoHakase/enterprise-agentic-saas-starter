@@ -45,6 +45,7 @@ export const AgentMeters = ({
             total: context?.estimatedHistoryTokens ?? 0,
           },
         }
+  const hasObservedInput = budget.observedInputTokens !== null
   const used = budget.observedInputTokens ?? budget.estimated.total
   const percent = Math.min(
     100,
@@ -63,10 +64,10 @@ export const AgentMeters = ({
       <button
         type="button"
         className="relative grid size-9 shrink-0 place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        aria-label={`Context window ${percent}% used`}
+        aria-label={`${hasObservedInput ? "Last request context" : "Estimated context"} ${percent}% used`}
       />
     ),
-    [percent]
+    [hasObservedInput, percent]
   )
 
   return (
@@ -97,27 +98,44 @@ export const AgentMeters = ({
         </svg>
         <span className="absolute text-[9px] font-medium">{percent}%</span>
       </TooltipTrigger>
-      <TooltipContent className="w-64 space-y-2 text-xs">
-        <div className="flex justify-between gap-4 font-medium">
-          <span>Context window</span>
-          <span>
-            {used.toLocaleString()} /{" "}
-            {budget.contextWindowTokens.toLocaleString()}
-          </span>
-        </div>
-        <p className="text-muted-foreground">
-          {budget.observedInputTokens === null
-            ? "Estimated input tokens"
-            : `${budget.observedInputTokens.toLocaleString()} observed · ${budget.estimated.total.toLocaleString()} estimated`}
-        </p>
-        <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-          {budgetRows.map((row) => (
-            <div key={row.key} className="contents">
-              <dt className="text-muted-foreground">{row.label}</dt>
-              <dd>{budget.estimated[row.key].toLocaleString()}</dd>
+      <TooltipContent className="max-w-[calc(100vw-2rem)] p-0 text-xs">
+        <div className="w-72 max-w-[calc(100vw-2rem)] space-y-3 px-3 py-2">
+          <div className="flex items-start justify-between gap-4 font-medium">
+            <span>
+              {hasObservedInput ? "Last request actual" : "Estimated context"}
+            </span>
+            <span className="shrink-0 whitespace-nowrap">
+              {used.toLocaleString()} /{" "}
+              {budget.contextWindowTokens.toLocaleString()}
+            </span>
+          </div>
+          <p className="text-muted-foreground">
+            {hasObservedInput
+              ? "Provider-reported input tokens from the last request."
+              : "No provider result yet. Showing the preflight estimate."}
+          </p>
+          {hasObservedInput ? (
+            <div className="flex justify-between gap-4 border-t border-background/20 pt-2">
+              <span className="text-muted-foreground">Preflight estimate</span>
+              <span className="shrink-0 whitespace-nowrap">
+                {budget.estimated.total.toLocaleString()}
+              </span>
             </div>
-          ))}
-        </dl>
+          ) : null}
+          <div>
+            <p className="mb-1 font-medium">Estimated breakdown</p>
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
+              {budgetRows.map((row) => (
+                <div key={row.key} className="contents">
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="whitespace-nowrap">
+                    {budget.estimated[row.key].toLocaleString()}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
       </TooltipContent>
     </Tooltip>
   )

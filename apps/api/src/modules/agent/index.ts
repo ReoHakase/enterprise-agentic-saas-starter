@@ -85,6 +85,7 @@ export const createAgentModule = (db: Db) =>
             sessionId: session.id,
             userId: user.id,
             title: body.title,
+            permissionMode: body.permissionMode,
           })
         ),
       {
@@ -98,7 +99,7 @@ export const createAgentModule = (db: Db) =>
           operationId: "createAgentThread",
           summary: "Agent threadを作成",
           description:
-            "現在のsessionとactive organizationへ束縛したprivate threadを作成する。",
+            "現在のsessionとactive organizationへ束縛したprivate threadと初期permissionを同一transactionで作成する。",
           tags: ["Agent"],
         },
       }

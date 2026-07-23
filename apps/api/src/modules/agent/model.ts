@@ -421,8 +421,11 @@ export const updateAgentThreadTitleBodyModel = v.strictObject({
   expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
 })
 
+const agentThreadPermissionModeModel = v.picklist(["ask_always", "full_access"])
+
 export const createAgentThreadBodyModel = v.strictObject({
   title: v.optional(titleModel),
+  permissionMode: v.optional(agentThreadPermissionModeModel, "ask_always"),
 })
 
 export const agentThreadParamsModel = v.strictObject({
@@ -888,7 +891,7 @@ export const agentActionExecutionResultModel = v.strictObject({
   }),
 })
 
-export const approvalPolicyModeModel = v.picklist(["ask_always", "full_access"])
+export const approvalPolicyModeModel = agentThreadPermissionModeModel
 
 export const putAgentApprovalPolicyBodyModel = v.strictObject({
   mode: approvalPolicyModeModel,

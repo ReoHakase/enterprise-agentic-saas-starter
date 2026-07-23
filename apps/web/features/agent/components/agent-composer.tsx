@@ -23,6 +23,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
 } from "react"
@@ -239,119 +240,132 @@ export const AgentComposer = forwardRef<
     candidates: AgentMentionValue[]
     disabled: boolean
     draftText: string
+    initialSnapshot?: AgentComposerSnapshot
     onDraftTextChange: (value: string) => void
   }
->(({ candidates, disabled, draftText, onDraftTextChange }, ref) => {
-  const extensions = useMemo(
-    () => [
-      StarterKit.configure({ heading: false, codeBlock: false }),
-      Placeholder.configure({
-        placeholder: "Describe the issue, or attach screenshots for analysis.",
-      }),
-      ContextMentionNode.configure({
-        deleteTriggerWithBackspace: true,
-        renderText: ({ node }) => `@${String(node.attrs.label ?? "context")}`,
-        suggestion: {
-          items: ({ query }) => {
-            const normalized = query.toLocaleLowerCase()
-            return candidates
-              .filter(
-                (candidate) =>
-                  normalized.length === 0 ||
-                  candidate.label.toLocaleLowerCase().includes(normalized)
-              )
-              .slice(0, 10)
-          },
-          render: () => {
-            let renderer: ReactRenderer<MentionListHandle> | undefined
-            let popup: HTMLDivElement | undefined
-            const position = (props: SuggestionProps<AgentMentionValue>) => {
-              const rect = props.clientRect?.()
-              if (!rect || !popup) return
-              popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 296))}px`
-              popup.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 280)}px`
-            }
-            return {
-              onStart: (props) => {
-                renderer = new ReactRenderer(MentionList, {
-                  editor: props.editor,
-                  props,
-                })
-                popup = document.createElement("div")
-                popup.className = "fixed z-50"
-                popup.append(renderer.element)
-                document.body.append(popup)
-                position(props)
-              },
-              onUpdate: (props) => {
-                renderer?.updateProps(props)
-                position(props)
-              },
-              onKeyDown: (props) => renderer?.ref?.onKeyDown(props) ?? false,
-              onExit: () => {
-                renderer?.destroy()
-                popup?.remove()
-              },
-            }
-          },
-        },
-      }).extend({
-        addNodeView: () => ReactNodeViewRenderer(ContextMentionView),
-      }),
-    ],
-    [candidates]
-  )
-  const editor = useEditor(
-    {
-      extensions,
-      content: plainDocument(draftText),
-      editable: !disabled,
-      immediatelyRender: false,
-      editorProps: {
-        attributes: {
-          class:
-            "max-h-[40vh] min-h-24 overflow-y-auto px-3 py-3 text-sm outline-none",
-          "aria-label": "Agent message",
-          "aria-multiline": "true",
+>(
+  (
+    { candidates, disabled, draftText, initialSnapshot, onDraftTextChange },
+    ref
+  ) => {
+    const candidatesRef = useRef(candidates)
+    const onDraftTextChangeRef = useRef(onDraftTextChange)
+    candidatesRef.current = candidates
+    onDraftTextChangeRef.current = onDraftTextChange
+    const extensions = useMemo(
+      () => [
+        StarterKit.configure({ heading: false, codeBlock: false }),
+        Placeholder.configure({
           placeholder:
             "Describe the issue, or attach screenshots for analysis.",
-          role: "textbox",
+        }),
+        ContextMentionNode.configure({
+          deleteTriggerWithBackspace: true,
+          renderText: ({ node }) => `@${String(node.attrs.label ?? "context")}`,
+          suggestion: {
+            items: ({ query }) => {
+              const normalized = query.toLocaleLowerCase()
+              return candidatesRef.current
+                .filter(
+                  (candidate) =>
+                    normalized.length === 0 ||
+                    candidate.label.toLocaleLowerCase().includes(normalized)
+                )
+                .slice(0, 10)
+            },
+            render: () => {
+              let renderer: ReactRenderer<MentionListHandle> | undefined
+              let popup: HTMLDivElement | undefined
+              const position = (props: SuggestionProps<AgentMentionValue>) => {
+                const rect = props.clientRect?.()
+                if (!rect || !popup) return
+                popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 296))}px`
+                popup.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 280)}px`
+              }
+              return {
+                onStart: (props) => {
+                  renderer = new ReactRenderer(MentionList, {
+                    editor: props.editor,
+                    props,
+                  })
+                  popup = document.createElement("div")
+                  popup.className = "fixed z-50"
+                  popup.append(renderer.element)
+                  document.body.append(popup)
+                  position(props)
+                },
+                onUpdate: (props) => {
+                  renderer?.updateProps(props)
+                  position(props)
+                },
+                onKeyDown: (props) => renderer?.ref?.onKeyDown(props) ?? false,
+                onExit: () => {
+                  renderer?.destroy()
+                  popup?.remove()
+                },
+              }
+            },
+          },
+        }).extend({
+          addNodeView: () => ReactNodeViewRenderer(ContextMentionView),
+        }),
+      ],
+      []
+    )
+    const editor = useEditor(
+      {
+        extensions,
+        content: initialSnapshot?.document ?? plainDocument(draftText),
+        editable: !disabled,
+        immediatelyRender: false,
+        editorProps: {
+          attributes: {
+            class:
+              "max-h-[40vh] min-h-24 overflow-y-auto px-3 py-3 text-sm outline-none",
+            "aria-label": "Agent message",
+            "aria-multiline": "true",
+            placeholder:
+              "Describe the issue, or attach screenshots for analysis.",
+            role: "textbox",
+          },
         },
+        onUpdate: ({ editor: current }) =>
+          onDraftTextChangeRef.current(
+            current.getText({ blockSeparator: "\n" })
+          ),
       },
-      onUpdate: ({ editor: current }) =>
-        onDraftTextChange(current.getText({ blockSeparator: "\n" })),
-    },
-    [extensions]
-  )
+      [extensions]
+    )
 
-  useEffect(() => editor?.setEditable(!disabled), [disabled, editor])
-  useEffect(() => {
-    if (!editor) return
-    const current = editor.getText({ blockSeparator: "\n" })
-    if (current === draftText) return
-    if (draftText === "" && current !== "") return
-    editor.commands.setContent(plainDocument(draftText))
-  }, [draftText, editor])
+    useEffect(() => editor?.setEditable(!disabled), [disabled, editor])
+    useEffect(() => {
+      if (!editor) return
+      const current = editor.getText({ blockSeparator: "\n" })
+      if (current === draftText) return
+      if (draftText === "" && current !== "") return
+      editor.commands.setContent(plainDocument(draftText))
+    }, [draftText, editor])
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      clear: () => editor?.commands.clearContent(true),
-      focus: () => editor?.commands.focus(),
-      restore: (snapshot) => editor?.commands.setContent(snapshot.document),
-      snapshot: () => {
-        const document = editor?.getJSON() ?? plainDocument("")
-        return { document, parts: agentComposerDocumentToParts(document) }
-      },
-    }),
-    [editor]
-  )
+    useImperativeHandle(
+      ref,
+      () => ({
+        clear: () => editor?.commands.clearContent(true),
+        focus: () => editor?.commands.focus(),
+        restore: (snapshot) => editor?.commands.setContent(snapshot.document),
+        snapshot: () => {
+          const document = editor?.getJSON() ?? plainDocument("")
+          return { document, parts: agentComposerDocumentToParts(document) }
+        },
+      }),
+      [editor]
+    )
 
-  return (
-    <EditorContent
-      editor={editor}
-      className="min-w-0 rounded-2xl bg-muted/70 [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:h-0 [&_.tiptap_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
-    />
-  )
-})
+    return (
+      <EditorContent
+        editor={editor}
+        className="min-w-0 rounded-2xl bg-muted/70 [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:h-0 [&_.tiptap_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
+      />
+    )
+  }
+)
 AgentComposer.displayName = "AgentComposer"

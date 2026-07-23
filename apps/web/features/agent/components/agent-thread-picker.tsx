@@ -41,7 +41,6 @@ export const AgentThreadToolbar = ({
   archiving,
   renaming,
   disabled,
-  draftOpen,
   onSelect,
   onCreate,
   onArchive,
@@ -55,7 +54,6 @@ export const AgentThreadToolbar = ({
   archiving: boolean
   renaming: boolean
   disabled: boolean
-  draftOpen: boolean
   onSelect: (threadId: string) => void
   onCreate: () => void
   onArchive: (threadId: string) => void
@@ -152,11 +150,7 @@ export const AgentThreadToolbar = ({
               <MessageSquareIcon aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate text-left">
                 {selectedThread?.title ??
-                  (loading
-                    ? "Loading threads…"
-                    : draftOpen
-                      ? "New conversation"
-                      : "Choose a private thread")}
+                  (loading ? "Loading threads…" : "New conversation")}
               </span>
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>

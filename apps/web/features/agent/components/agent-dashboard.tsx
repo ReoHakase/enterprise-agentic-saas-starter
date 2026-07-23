@@ -29,8 +29,12 @@ import {
   createAgentThread,
   updateAgentThreadTitle,
 } from "@/features/agent/api"
+import type { AgentComposerSnapshot } from "@/features/agent/components/agent-composer"
 import { AgentConversation } from "@/features/agent/components/agent-conversation"
-import { AgentNewThreadComposer } from "@/features/agent/components/agent-new-thread-composer"
+import {
+  AgentNewThreadComposer,
+  type AgentNewThreadInput,
+} from "@/features/agent/components/agent-new-thread-composer"
 import { AgentShortcutHelp } from "@/features/agent/components/agent-shortcut-help"
 import {
   AgentThreadItem,
@@ -79,8 +83,11 @@ export const AgentDashboard = ({
   const [pendingTransition, setPendingTransition] =
     useState<PendingThreadTransition>()
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
-  const [draftOpen, setDraftOpen] = useState(state.agentThread === null)
   const [autoSubmitThreadId, setAutoSubmitThreadId] = useState<string>()
+  const [initialComposerHandoff, setInitialComposerHandoff] = useState<{
+    threadId: string
+    snapshot: AgentComposerSnapshot
+  }>()
   const threadsQuery = useQuery(
     agentThreadsQueryOptions(apiClient, organizationId)
   )
@@ -94,7 +101,6 @@ export const AgentDashboard = ({
         await runtime.completeThreadSwitch(sourceThreadId, {
           discardDraft: false,
         })
-        setDraftOpen(targetThreadId === null)
         await setDiscrete({ agentThread: targetThreadId }, { history: "push" })
       } finally {
         runtime.cancelThreadSwitch()
@@ -107,7 +113,6 @@ export const AgentDashboard = ({
       const sourceThreadId = selectedThread?.id
       if (sourceThreadId === targetThreadId) return
       if (!sourceThreadId) {
-        setDraftOpen(false)
         void setDiscrete({ agentThread: targetThreadId }, { history: "push" })
         return
       }
@@ -127,12 +132,8 @@ export const AgentDashboard = ({
     [finishThreadSelection, runtime, selectedThread?.id, setDiscrete]
   )
   const createThreadMutation = useMutation({
-    mutationFn: async (input: {
-      composer: string
-      files: File[]
-      autoSubmit: boolean
-    }) => {
-      const thread = await createAgentThread(apiClient)
+    mutationFn: async (input: AgentNewThreadInput) => {
+      const thread = await createAgentThread(apiClient, input.permissionMode)
       runtime.setThreadComposer(thread.id, input.composer)
       let uploadError: unknown
       try {
@@ -142,13 +143,18 @@ export const AgentDashboard = ({
       } catch (error) {
         uploadError = error
       }
-      return { thread, autoSubmit: input.autoSubmit, uploadError }
+      return {
+        thread,
+        autoSubmit: input.autoSubmit,
+        snapshot: input.snapshot,
+        uploadError,
+      }
     },
-    onSuccess: async ({ thread, autoSubmit, uploadError }) => {
+    onSuccess: async ({ thread, autoSubmit, snapshot, uploadError }) => {
       await queryClient.invalidateQueries({
         queryKey: agentKeys.threads(organizationId),
       })
-      setDraftOpen(false)
+      setInitialComposerHandoff({ threadId: thread.id, snapshot })
       setAutoSubmitThreadId(autoSubmit ? thread.id : undefined)
       await setDiscrete({ agentThread: thread.id }, { history: "push" })
       if (uploadError) {
@@ -168,7 +174,6 @@ export const AgentDashboard = ({
         queryKey: agentKeys.threads(organizationId),
       })
       if (state.agentThread === threadId) {
-        setDraftOpen(true)
         await setDiscrete({ agentThread: null }, { history: "replace" })
       }
     },
@@ -216,10 +221,7 @@ export const AgentDashboard = ({
     runtime.beginThreadSwitch(missingThreadId)
     void runtime
       .completeThreadSwitch(missingThreadId, { discardDraft: true })
-      .then(() => {
-        setDraftOpen(true)
-        return setDiscrete({ agentThread: null }, { history: "replace" })
-      })
+      .then(() => setDiscrete({ agentThread: null }, { history: "replace" }))
       .finally(() => runtime.cancelThreadSwitch())
   }, [
     runtime,
@@ -237,7 +239,6 @@ export const AgentDashboard = ({
   const startThread = useCallback(() => {
     const sourceThreadId = selectedThread?.id
     if (!sourceThreadId) {
-      setDraftOpen(true)
       void setDiscrete({ agentThread: null }, { history: "push" })
       return
     }
@@ -254,14 +255,18 @@ export const AgentDashboard = ({
     void finishThreadSelection(sourceThreadId, null)
   }, [finishThreadSelection, runtime, selectedThread?.id, setDiscrete])
   const createFromDraft = useCallback(
-    (composer: string, files: File[], autoSubmit: boolean) =>
-      createDraftThread({ composer, files, autoSubmit }),
+    (input: AgentNewThreadInput) => createDraftThread(input),
     [createDraftThread]
   )
   const completeAutoSubmit = useCallback(
     () => setAutoSubmitThreadId(undefined),
     []
   )
+  const completeInitialComposerHandoff = useCallback((threadId: string) => {
+    setInitialComposerHandoff((current) =>
+      current?.threadId === threadId ? undefined : current
+    )
+  }, [])
   const archiveThread = useCallback(
     (threadId: string) => {
       const thread = threadsQuery.data?.find(
@@ -369,7 +374,6 @@ export const AgentDashboard = ({
             archiving={archivingThread}
             renaming={renamingThread}
             disabled={interactionDisabled}
-            draftOpen={draftOpen}
             onSelect={selectThread}
             onCreate={startThread}
             onArchive={archiveThread}
@@ -430,23 +434,20 @@ export const AgentDashboard = ({
             }
             autoSubmit={autoSubmitThreadId === selectedThread.id}
             onAutoSubmit={completeAutoSubmit}
+            initialComposerSnapshot={
+              initialComposerHandoff?.threadId === selectedThread.id
+                ? initialComposerHandoff.snapshot
+                : undefined
+            }
+            onInitialComposerSnapshotConsumed={completeInitialComposerHandoff}
           />
-        ) : draftOpen ? (
+        ) : (
           <AgentNewThreadComposer
+            organizationId={organizationId}
             disabled={interactionDisabled}
             creating={creatingThread}
             onCreate={createFromDraft}
           />
-        ) : (
-          <Card className="grid min-h-0 flex-1 place-items-center p-8 text-center">
-            <div>
-              <h2 className="font-semibold">Choose an Agent thread</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Threads are private to you and scoped to the active
-                organization.
-              </p>
-            </div>
-          </Card>
         )}
       </div>
       <AlertDialog

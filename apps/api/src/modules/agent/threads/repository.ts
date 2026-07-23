@@ -20,6 +20,7 @@ import {
   user,
   type AgentRunScope,
   type AgentRunStatus,
+  type AgentThreadPermissionMode,
 } from "@enterprise-agentic-saas/db/schema"
 import {
   and,
@@ -648,13 +649,24 @@ export const listAgentThreadsForSession = async (
 
 export const createAgentThreadForSession = async (
   db: Db,
-  input: { sessionId: string; userId: string; title: string; now?: Date }
+  input: {
+    sessionId: string
+    userId: string
+    title: string
+    permissionMode?: AgentThreadPermissionMode
+    now?: Date
+  }
 ): Promise<AgentThreadDto> => {
   try {
     return await db.transaction(async (tx) => {
       const now = input.now ?? new Date()
       const current = await requireLiveSession(tx, { ...input, now })
       await requireActiveMembership(tx, current)
+      const context = await ensureAgentSessionContextInTransaction(tx, {
+        sessionId: input.sessionId,
+        userId: input.userId,
+        now,
+      })
       const rows = await tx
         .insert(agentThreads)
         .values({
@@ -669,6 +681,17 @@ export const createAgentThreadForSession = async (
         .returning()
       const thread = rows[0]
       if (!thread) throw new Error("Agent thread insert returned no row")
+      await tx.insert(agentThreadPermissions).values({
+        id: crypto.randomUUID(),
+        organizationId: current.activeOrganizationId,
+        threadId: thread.id,
+        sessionId: input.sessionId,
+        userId: input.userId,
+        contextEpoch: context.contextEpoch,
+        mode: input.permissionMode ?? "ask_always",
+        createdAt: now,
+        updatedAt: now,
+      })
       return toThreadDto(thread, 0)
     })
   } catch (cause) {

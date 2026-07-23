@@ -178,7 +178,9 @@ test("実Agent release journeyが安全境界とcanonical stateを満たす", as
     agentShell.getByRole("combobox", { name: "Agent thread" })
   ).not.toContainText("New conversation")
   await expect(
-    agentShell.getByRole("button", { name: /^Context window \d+% used$/u })
+    agentShell.getByRole("button", {
+      name: /^Last request context \d+% used$/u,
+    })
   ).toBeVisible()
 
   await sendMessage(

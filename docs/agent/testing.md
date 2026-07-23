@@ -15,6 +15,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 
 - migrationのfresh/upgrade、既存row保持、trigger整合性
 - thread owner/tenant境界、message count、更新順とID tie break
+- thread作成時の`permissionMode`既定値、明示的Full access、invalid mode拒否、session/user/organization/context epoch境界、threadと初期permissionのtransaction整合性
 - title state/revision、manual CAS、auto/manual競合、最大80文字
 - context compaction threshold、最新12 message、summary idempotency
 - usage event idempotency、daily projection、price version切替、admin境界
@@ -37,11 +38,12 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 ### Web / mock Playwright
 
 - headerにorganization名なし、selector metadata、赤いarchive
-- 未保存draft、sample prompt、初回send/attachmentで作成
+- thread未選択、stale URL、archive後に新規composerを表示し、未保存draft、sample prompt、初回send/attachmentでだけ作成
+- 新規draftのAsk always既定値とFull access切替、共有mention候補、Tiptap snapshotの初回request引き継ぎ、thread作成失敗時のdraft/permission保持
 - inline approval、過去approval reload、expired preview
 - thinking/transient status/tool/source、trace重複なし、Issue個別link
 - Tiptap inline mentionの順序、削除、送信、失敗復元、reload
-- editor最大40vh、context ring tooltip、一行footer、desktop/mobile
+- editor最大40vh、observed主表示とestimated fallbackを分離したcontext ring tooltip、360px pane/mobileでのoverflow、一行footer
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
 ## Paid E2E

@@ -64,7 +64,9 @@ modelの将来設定変更で過去runの解釈を変えないため、run row�
 - page context
 - attachments
 
-providerが返した実績input tokenは`observedInputTokens`として別に保存・表示し、事前推定へ上書きしません。chat UIは円形context ringとhover/focus tooltipで内訳を表示し、月間costは表示しません。usage APIと管理画面向け集計は別契約として維持します。
+providerが返した直前runの実績input tokenは`observedInputTokens`として別に保存し、事前推定へ上書きしません。実績がある場合、chat UIの円形context ringはこの値を主表示と色判定に使い、tooltipで`Last request actual`と明示します。事前推定は`Preflight estimate`と`Estimated breakdown`へ分離します。まだ実績がない場合だけringを事前推定へfallbackし、表示文言とaccessible nameの両方で推定値だと明示します。
+
+tooltipはviewport内へ幅を制限した単一block wrapperを持ち、狭いAgent paneやmobileでもactual、estimate、内訳を横並びにしません。chat UIに月間costは表示せず、usage APIと管理画面向け集計は別契約として維持します。
 
 注意段階は70%=`notice`、85%=`warning`、95%=`critical`です。95%以上では古い履歴をdeterministic summaryへ圧縮し、最新12 messageを原文で保持します。summaryはorganization/thread、through sequence、estimated token、作成日時を持ち、再試行で同じ範囲を二重作成しません。
 

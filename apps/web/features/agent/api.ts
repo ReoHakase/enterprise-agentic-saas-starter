@@ -35,8 +35,14 @@ export const listAgentThreads = async (
     unwrap(await client.agent.threads.get({ fetch: { signal } }))
   )
 
-export const createAgentThread = async (client: ApiClient, title?: string) =>
-  parseAgentThread(unwrap(await client.agent.threads.post({ title })))
+export const createAgentThread = async (
+  client: ApiClient,
+  permissionMode: "ask_always" | "full_access",
+  title?: string
+) =>
+  parseAgentThread(
+    unwrap(await client.agent.threads.post({ title, permissionMode }))
+  )
 
 export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
   parseAgentThread(

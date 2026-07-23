@@ -1,6 +1,6 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, isNull, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import * as v from "valibot"
@@ -213,6 +213,109 @@ const configureAgentStreamCapture = () => {
 }
 
 describe("Agent public control plane", () => {
+  it("creates the initial thread permission in the thread transaction", async () => {
+    const { app, db } = await createFixture()
+    const fullAccessResponse = await app.handle(
+      request("/agent/threads", {
+        method: "POST",
+        body: { permissionMode: "full_access" },
+      })
+    )
+    expect(fullAccessResponse.status).toBe(201)
+    const fullAccessThread = v.parse(
+      agentThreadModel,
+      await fullAccessResponse.json()
+    )
+    const defaultResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    expect(defaultResponse.status).toBe(201)
+    const defaultThread = v.parse(
+      agentThreadModel,
+      await defaultResponse.json()
+    )
+    const otherSessionResponse = await app.handle(
+      request("/agent/threads", {
+        method: "POST",
+        body: { permissionMode: "full_access" },
+        userId: "agent-user-b",
+        sessionId: "agent-session-b",
+      })
+    )
+    expect(otherSessionResponse.status).toBe(201)
+    const otherSessionThread = v.parse(
+      agentThreadModel,
+      await otherSessionResponse.json()
+    )
+
+    const permissions = await db
+      .select({
+        contextEpoch: schema.agentThreadPermissions.contextEpoch,
+        mode: schema.agentThreadPermissions.mode,
+        organizationId: schema.agentThreadPermissions.organizationId,
+        sessionId: schema.agentThreadPermissions.sessionId,
+        threadId: schema.agentThreadPermissions.threadId,
+        userId: schema.agentThreadPermissions.userId,
+      })
+      .from(schema.agentThreadPermissions)
+    expect(permissions).toEqual(
+      expect.arrayContaining([
+        {
+          contextEpoch: 1,
+          mode: "full_access",
+          organizationId: "agent-org-a",
+          sessionId: "agent-session-a",
+          threadId: fullAccessThread.id,
+          userId: "agent-user-a",
+        },
+        {
+          contextEpoch: 1,
+          mode: "ask_always",
+          organizationId: "agent-org-a",
+          sessionId: "agent-session-a",
+          threadId: defaultThread.id,
+          userId: "agent-user-a",
+        },
+        {
+          contextEpoch: 1,
+          mode: "full_access",
+          organizationId: "agent-org-a",
+          sessionId: "agent-session-b",
+          threadId: otherSessionThread.id,
+          userId: "agent-user-b",
+        },
+      ])
+    )
+
+    const invalidResponse = await app.handle(
+      request("/agent/threads", {
+        method: "POST",
+        body: { permissionMode: "owner" },
+      })
+    )
+    expect(invalidResponse.status).toBe(400)
+    expect(await db.select().from(schema.agentThreads)).toHaveLength(3)
+
+    await db.run(sql`
+      create trigger fail_initial_agent_permission
+      before insert on agent_thread_permissions
+      begin
+        select raise(abort, 'initial_agent_permission_failure');
+      end
+    `)
+    const failedResponse = await app.handle(
+      request("/agent/threads", {
+        method: "POST",
+        body: { permissionMode: "full_access" },
+      })
+    )
+    expect(failedResponse.status).toBe(500)
+    expect(await db.select().from(schema.agentThreads)).toHaveLength(3)
+    expect(await db.select().from(schema.agentThreadPermissions)).toHaveLength(
+      3
+    )
+  })
+
   it("requires the trusted CSRF Origin before preparing a private run", async () => {
     const { app } = await createFixture()
     const inputs = configureAgentStreamCapture()

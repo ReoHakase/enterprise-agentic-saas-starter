@@ -52,7 +52,12 @@ export const listAgentThreads = (
 
 export const createAgentThread = (
   db: Db,
-  input: { sessionId: string; userId: string; title?: string }
+  input: {
+    sessionId: string
+    userId: string
+    title?: string
+    permissionMode: "ask_always" | "full_access"
+  }
 ) =>
   createAgentThreadForSession(db, {
     ...input,

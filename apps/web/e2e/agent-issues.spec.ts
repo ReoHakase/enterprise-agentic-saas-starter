@@ -161,6 +161,109 @@ test("Agent shellはconsole内で永続化しmobileではfull-screenになる", 
   await expect.poll(async () => (await pane.boundingBox())?.width).toBe(480)
 })
 
+test("未選択のAgent paneは権限とmentionを保った新規conversationから送信する", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto("/organization/alpha-operations/issues")
+  await page.getByRole("button", { name: "Open Agent" }).click()
+
+  const agent =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+  await expect(
+    agent.getByRole("combobox", { name: "Agent thread" })
+  ).toContainText("New conversation")
+  await expect(
+    agent.getByRole("region", { name: "Sample prompts" })
+  ).toBeVisible()
+  await expect(
+    agent.getByText("Choose an Agent thread", { exact: true })
+  ).toHaveCount(0)
+
+  const permission = agent
+    .getByRole("combobox")
+    .filter({ hasText: /Ask always|Full access/u })
+  await permission.click()
+  await page.getByRole("option", { name: /Full access/u }).click()
+  await expect(permission).toContainText("Full access")
+
+  const composer = agent.getByRole("textbox", { name: "Agent message" })
+  await composer.fill("Compare @")
+  await page
+    .getByRole("button", { name: /Issue #1: Review tenant audit log/u })
+    .click()
+  await composer.press("End")
+  await composer.pressSequentially("today")
+
+  const createRequestPromise = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/agent/threads") && request.method() === "POST"
+  )
+  const chatRequestPromise = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/agent/chat") && request.method() === "POST"
+  )
+  await agent.getByRole("button", { name: "Send", exact: true }).click()
+  const [createRequest, chatRequest] = await Promise.all([
+    createRequestPromise,
+    chatRequestPromise,
+  ])
+
+  expect(createRequest.postDataJSON()).toMatchObject({
+    permissionMode: "full_access",
+  })
+  expect(chatRequest.postDataJSON()).toMatchObject({
+    contentSegments: [
+      { type: "text", text: "Compare " },
+      {
+        type: "context_reference",
+        reference: { kind: "issue", id: "issue-a-1" },
+      },
+      { type: "text", text: " today" },
+    ],
+  })
+  await expect(page).toHaveURL(/[?&]agentThread=[^&]+/u)
+  await expect(
+    agent.getByRole("combobox").filter({ hasText: "Full access" })
+  ).toBeVisible()
+})
+
+test("staleなAgent thread URLは新規conversationへ正規化する", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto(
+    "/organization/alpha-operations/issues?agentThread=missing-agent-thread"
+  )
+  await page.getByRole("button", { name: "Open Agent" }).click()
+
+  const agent =
+    (page.viewportSize()?.width ?? 1280) < 768
+      ? page.getByRole("dialog", { name: "Agent" })
+      : page.getByRole("complementary", { name: "Agent" })
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname === "/organization/alpha-operations/issues" &&
+      !url.searchParams.has("agentThread")
+  )
+  await expect(
+    agent.getByRole("combobox", { name: "Agent thread" })
+  ).toContainText("New conversation")
+  await expect(
+    agent.getByRole("region", { name: "Sample prompts" })
+  ).toBeVisible()
+  await expect(
+    agent.getByRole("textbox", { name: "Agent message" })
+  ).toBeVisible()
+  await expect(
+    agent.getByRole("combobox").filter({ hasText: "Ask always" })
+  ).toBeVisible()
+})
+
 test("Agent paneは末尾付近を追従し右側minimapからturnへ移動できる", async ({
   context,
   page,
@@ -436,6 +539,12 @@ test("Agent threadはdraftと画像を分離しarchive時に一時画像を削�
     .click()
   await expect(page).toHaveURL(/\/organization\/alpha-operations\/agent$/u)
   await expect(page.getByText("Alpha triage", { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByRole("region", { name: "Sample prompts" })
+  ).toBeVisible()
+  await expect(
+    page.getByRole("textbox", { name: "Agent message" })
+  ).toBeVisible()
 
   await expect
     .poll(async () => {
@@ -518,10 +627,30 @@ test("inline mentionは順序付きrequestと履歴へ残りthread名を手動�
   ).toContainText("@Issue #1: Review tenant audit log")
 
   const contextRing = reloaded.getByRole("button", {
-    name: /^Context window \d+% used$/u,
+    name: /^Estimated context \d+% used$/u,
   })
   await contextRing.hover()
-  await expect(page.getByText("Estimated input tokens")).toBeVisible()
+  await expect(
+    page.getByText("No provider result yet. Showing the preflight estimate.")
+  ).toBeVisible()
+  await expect(page.getByText("Estimated breakdown")).toBeVisible()
+  const tooltip = page.locator('[data-slot="tooltip-content"]')
+  const viewportWidth = page.viewportSize()?.width
+  if (!viewportWidth) throw new Error("Expected a configured viewport")
+  const tooltipLayout = await tooltip.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    return {
+      left: bounds.left,
+      right: bounds.right,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }
+  })
+  expect(tooltipLayout.left).toBeGreaterThanOrEqual(0)
+  expect(tooltipLayout.right).toBeLessThanOrEqual(viewportWidth)
+  expect(tooltipLayout.scrollWidth).toBeLessThanOrEqual(
+    tooltipLayout.clientWidth
+  )
 })
 
 test("画像解析から承認付きIssue作成と恒久添付まで完了する", async ({

@@ -6,9 +6,12 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { ImagePlusIcon, SendIcon, StopCircleIcon } from "lucide-react"
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 
-import { AgentComposer } from "@/features/agent/components/agent-composer"
+import {
+  AgentComposer,
+  type AgentComposerSnapshot,
+} from "@/features/agent/components/agent-composer"
 import {
   AgentConversationViewport,
   buildAgentConversationGroups,
@@ -35,6 +38,8 @@ export const AgentConversation = ({
   disabled,
   autoSubmit,
   onAutoSubmit,
+  initialComposerSnapshot,
+  onInitialComposerSnapshotConsumed,
 }: {
   organizationId: string
   organizationSlug: string
@@ -43,6 +48,8 @@ export const AgentConversation = ({
   disabled: boolean
   autoSubmit: boolean
   onAutoSubmit: () => void
+  initialComposerSnapshot?: AgentComposerSnapshot
+  onInitialComposerSnapshotConsumed: (threadId: string) => void
 }) => {
   const messagesQuery = useQuery(
     agentMessagesQueryOptions(apiClient, organizationId, thread.id)
@@ -88,6 +95,8 @@ export const AgentConversation = ({
       initialMessages={messagesQuery.data}
       autoSubmit={autoSubmit}
       onAutoSubmit={onAutoSubmit}
+      initialComposerSnapshot={initialComposerSnapshot}
+      onInitialComposerSnapshotConsumed={onInitialComposerSnapshotConsumed}
     />
   )
 }
@@ -101,6 +110,8 @@ const AgentChatSession = ({
   initialMessages,
   autoSubmit,
   onAutoSubmit,
+  initialComposerSnapshot,
+  onInitialComposerSnapshotConsumed,
 }: {
   organizationId: string
   organizationSlug: string
@@ -110,6 +121,8 @@ const AgentChatSession = ({
   initialMessages: AgentChatMessage[]
   autoSubmit: boolean
   onAutoSubmit: () => void
+  initialComposerSnapshot?: AgentComposerSnapshot
+  onInitialComposerSnapshotConsumed: (threadId: string) => void
 }) => {
   const session = useAgentChatSession({
     organizationId,
@@ -130,6 +143,13 @@ const AgentChatSession = ({
       conversationGroups.flatMap((group) => (group.turn ? [group.turn] : [])),
     [conversationGroups]
   )
+  useEffect(() => {
+    if (!initialComposerSnapshot) return
+    const frame = requestAnimationFrame(() =>
+      onInitialComposerSnapshotConsumed(thread.id)
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [initialComposerSnapshot, onInitialComposerSnapshotConsumed, thread.id])
 
   return (
     <div
@@ -194,6 +214,7 @@ const AgentChatSession = ({
             candidates={session.mentionCandidates}
             disabled={runtime.frozen || disabled}
             draftText={runtime.composer}
+            initialSnapshot={initialComposerSnapshot}
             onDraftTextChange={runtime.setComposer}
           />
           {runtime.stagedAssets.some(

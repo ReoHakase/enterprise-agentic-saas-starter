@@ -2,7 +2,7 @@
 
 ## Thread
 
-listはowner/tenantを再検証し、`updatedAt DESC, id DESC`、保存message count付きで返す。新規UIはlocal draftで開始し、初回send/attachmentでrowを作る。
+listはowner/tenantを再検証し、`updatedAt DESC, id DESC`、保存message count付きで返す。新規UIはlocal draftで開始し、初回send/attachmentでrowを作る。`POST /agent/threads`のpermission modeは既定Ask alwaysで、threadとsession/user/organization/context epochへ束縛した初期permissionを同一transactionで作る。
 
 `rename_thread`は現在runの`untitled` threadだけを最大1回CAS更新する。80文字以下、approval不要。専用title Agentだけへ渡し、main Agentの任意選択へ依存しない。manual renameはrevision CASで`user` stateにし、自動titleで上書きしない。
 
@@ -10,7 +10,7 @@ OpenRouter経由のQwen/Alibabaはthinking mode中のforced `tool_choice`を拒�
 
 ## Context
 
-事前推定をsystem/skills/tools/history/page context/attachmentsに分け、provider実績と区別する。70/85/95%でnotice/warning/critical。95%以上は古い履歴をsummary化し最新12 messageを保持する。なお超過する場合は新規threadを案内する。
+事前推定をsystem/skills/tools/history/page context/attachmentsに分け、provider実績と区別する。ringは実績があれば直前request actual、なければ明示したpreflight estimateを主表示と色判定に使う。estimate内訳はactualと別sectionへ置く。70/85/95%でnotice/warning/critical。95%以上は古い履歴をsummary化し最新12 messageを保持する。なお超過する場合は新規threadを案内する。
 
 ## Usage
 

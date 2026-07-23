@@ -10,7 +10,7 @@ import {
   type ChatOnToolCallCallback,
   type UIMessage,
 } from "ai"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
   useCallback,
   useEffect,
@@ -28,7 +28,6 @@ import { executeAgentClientTool } from "@/features/agent/client-tools"
 import type {
   AgentComposerHandle,
   AgentComposerSnapshot,
-  AgentMentionValue,
 } from "@/features/agent/components/agent-composer"
 import { useAgentFormRegistry } from "@/features/agent/form-registry"
 import { isAgentHotkeyAllowed } from "@/features/agent/hotkey-scope"
@@ -46,8 +45,7 @@ import {
   resolveAgentSubmissionIdentity,
   shouldRetainAgentSubmission,
 } from "@/features/agent/submission-identity"
-import { membersQueryOptions } from "@/features/console/queries"
-import { issuesQueryOptions } from "@/features/issues/queries"
+import { useAgentMentionCandidates } from "@/features/agent/use-agent-mention-candidates"
 import { useIssueSearchState } from "@/features/issues/search-params"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
@@ -91,7 +89,6 @@ export const useAgentChatSession = ({
 }) => {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const pathname = usePathname()
   const formRegistry = useAgentFormRegistry()
   const { state: issueSearchState } = useIssueSearchState()
   const runtime = useAgentThreadRuntimeState(thread.id)
@@ -102,10 +99,7 @@ export const useAgentChatSession = ({
   )
   const [sendingAssetIds, setSendingAssetIds] = useState<string[]>([])
   const [transientStatus, setTransientStatus] = useState<string>()
-  const issuesQuery = useQuery(
-    issuesQueryOptions(apiClient, organizationId, issueSearchState)
-  )
-  const membersQuery = useQuery(membersQueryOptions(organizationId))
+  const mentionCandidates = useAgentMentionCandidates(organizationId)
   const contextQuery = useQuery(
     agentThreadContextQueryOptions(apiClient, organizationId, thread.id)
   )
@@ -264,22 +258,6 @@ export const useAgentChatSession = ({
       }),
     [registerSession, stopChat]
   )
-  const mentionCandidates = useMemo(() => {
-    const candidates: AgentMentionValue[] = [
-      { kind: "current_page", path: pathname, label: "Current page" },
-      ...(issuesQuery.data?.items.slice(0, 6).map((issue) => ({
-        kind: "issue" as const,
-        id: issue.id,
-        label: `Issue #${issue.number}: ${issue.title}`,
-      })) ?? []),
-      ...(membersQuery.data?.slice(0, 6).map((member) => ({
-        kind: "member" as const,
-        id: member.userId,
-        label: member.name,
-      })) ?? []),
-    ]
-    return candidates
-  }, [issuesQuery.data, membersQuery.data, pathname])
   const stopCurrentTurn = useCallback(() => void stopChat(), [stopChat])
   const submitMessage = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {

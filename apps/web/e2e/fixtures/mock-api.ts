@@ -1627,6 +1627,10 @@ Bun.serve({
     if (pathname === "/agent/threads" && request.method === "POST") {
       if (!activeOrganization) return invalid("active organization is required")
       const body = await readBody(request)
+      const permissionMode = body.permissionMode ?? "ask_always"
+      if (permissionMode !== "ask_always" && permissionMode !== "full_access") {
+        return invalid("permission mode is invalid")
+      }
       const thread: AgentThread = {
         id: `agent-thread-${sessionKey}-${state.nextAgentThreadId}`,
         organizationId: activeOrganization.id,
@@ -1641,6 +1645,7 @@ Bun.serve({
       }
       state.nextAgentThreadId += 1
       state.agentThreads.push(thread)
+      state.agentPermissions.set(thread.id, permissionMode)
       return json(agentThreadPayload(thread), 201)
     }
     const agentThreadMessagesMatch = pathname.match(

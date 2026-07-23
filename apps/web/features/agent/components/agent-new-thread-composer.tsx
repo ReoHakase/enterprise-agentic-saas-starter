@@ -4,7 +4,7 @@ import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useHotkeys } from "@tanstack/react-hotkeys"
-import { HandIcon, ImagePlusIcon, SendIcon } from "lucide-react"
+import { ImagePlusIcon, SendIcon } from "lucide-react"
 import {
   useCallback,
   useRef,
@@ -16,44 +16,83 @@ import {
 import {
   AgentComposer,
   type AgentComposerHandle,
-  type AgentMentionValue,
+  type AgentComposerSnapshot,
 } from "@/features/agent/components/agent-composer"
+import {
+  AgentPermissionSelect,
+  type AgentPermissionMode,
+} from "@/features/agent/components/agent-policy-control"
 import { AgentSamplePrompts } from "@/features/agent/components/agent-sample-prompts"
 import { isAgentHotkeyAllowed } from "@/features/agent/hotkey-scope"
+import { useAgentMentionCandidates } from "@/features/agent/use-agent-mention-candidates"
 
 const attachmentButtonRender = <span />
-const emptyMentionCandidates: AgentMentionValue[] = []
+
+export type AgentNewThreadInput = {
+  composer: string
+  snapshot: AgentComposerSnapshot
+  files: File[]
+  autoSubmit: boolean
+  permissionMode: AgentPermissionMode
+}
+
+const hasComposerContent = (snapshot: AgentComposerSnapshot) =>
+  snapshot.parts.some(
+    (part) =>
+      part.type === "data-context-reference" ||
+      (part.type === "text" && part.text.trim().length > 0)
+  )
 
 export const AgentNewThreadComposer = ({
+  organizationId,
   disabled,
   creating,
   onCreate,
 }: {
+  organizationId: string
   disabled: boolean
   creating: boolean
-  onCreate: (composer: string, files: File[], autoSubmit: boolean) => void
+  onCreate: (input: AgentNewThreadInput) => void
 }) => {
   const [composer, setComposer] = useState("")
+  const [permissionMode, setPermissionMode] =
+    useState<AgentPermissionMode>("ask_always")
   const formRef = useRef<HTMLFormElement>(null)
   const composerRef = useRef<AgentComposerHandle>(null)
+  const mentionCandidates = useAgentMentionCandidates(organizationId)
   const choosePrompt = useCallback((prompt: string) => setComposer(prompt), [])
   const submit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault()
-      const message = composer.trim()
-      if (!message || disabled || creating) return
-      onCreate(message, [], true)
+      const snapshot = composerRef.current?.snapshot()
+      if (!snapshot || !hasComposerContent(snapshot) || disabled || creating)
+        return
+      onCreate({
+        composer,
+        snapshot,
+        files: [],
+        autoSubmit: true,
+        permissionMode,
+      })
     },
-    [composer, creating, disabled, onCreate]
+    [composer, creating, disabled, onCreate, permissionMode]
   )
   const attach = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const files = [...(event.target.files ?? [])]
       event.target.value = ""
       if (files.length === 0 || disabled || creating) return
-      onCreate(composer, files, false)
+      const snapshot = composerRef.current?.snapshot()
+      if (!snapshot) return
+      onCreate({
+        composer,
+        snapshot,
+        files,
+        autoSubmit: false,
+        permissionMode,
+      })
     },
-    [composer, creating, disabled, onCreate]
+    [composer, creating, disabled, onCreate, permissionMode]
   )
   useHotkeys(
     [
@@ -83,7 +122,7 @@ export const AgentNewThreadComposer = ({
       >
         <AgentComposer
           ref={composerRef}
-          candidates={emptyMentionCandidates}
+          candidates={mentionCandidates}
           disabled={disabled || creating}
           draftText={composer}
           onDraftTextChange={setComposer}
@@ -110,9 +149,11 @@ export const AgentNewThreadComposer = ({
               <ImagePlusIcon data-icon="inline-start" /> Attach
             </Button>
           </label>
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <HandIcon className="size-3.5" /> Ask always
-          </span>
+          <AgentPermissionSelect
+            mode={permissionMode}
+            disabled={disabled || creating}
+            onModeChange={setPermissionMode}
+          />
           <Button
             className="ml-auto"
             type="submit"
