@@ -27,7 +27,6 @@
     }
   },
   "scripts": {
-    "build": "tsc --noEmit",
     "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
     "dev:mailpit": "portless run --name mailpit.enterprise-agentic-saas bun run src/development/mailpit-server.ts",
     "mailpit:reset": "rm -f .local/mailpit.db .local/mailpit.db-shm .local/mailpit.db-wal .local/mailpit.db-journal",

@@ -43,142 +43,188 @@ jobs:
       - name: Flake check
         run: nix flake check
 
-  quality:
-    name: Quality
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.13
+      - name: Run static checks in parallel
+        shell: bash
+        run: |
+          set -u
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          bun run --cwd packages/db db:check & db_check_pid=$!
+          bun run lint & lint_pid=$!
+          bun run format:check & format_check_pid=$!
 
-      - name: Check migration history
-        run: bun run --cwd packages/db db:check
+          failures=0
+          for pid in "$db_check_pid" "$lint_pid" "$format_check_pid"; do
+            if ! wait "$pid"; then
+              failures=1
+            fi
+          done
 
-      - name: Lint
-        run: bun run lint
+          exit "$failures"
 
-      - name: Format check
-        run: bun run format:check
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
-      - name: Typecheck
-        run: bun run typecheck
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - run: bun run typecheck
 
-      - name: Unit and integration tests
+  unit:
+    name: Unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+
+      - name: Run tests
         run: bun run test
 
       - name: Upload Vitest coverage
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: vitest-coverage
           path: |
             apps/*/coverage
             packages/*/coverage
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Build
-        run: bun run build
-        env:
-          NODE_ENV: production
-
-  storybook:
-    name: Storybook a11y and interactions
+  build:
+    name: Build · ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Web
+            package: "@enterprise-agentic-saas/web"
+          - name: API
+            package: "@enterprise-agentic-saas/api"
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - name: Build
+        run: bunx turbo run build --filter="${{ matrix.package }}"
+        env:
+          NODE_ENV: production
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.13
+  storybook-build:
+    name: Storybook build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
-
-      - name: Build Storybook
-        run: bun run build:storybook
-
-      - name: Test stories in light and dark mode
-        run: bun run test:storybook
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - run: bun run build:storybook
 
       - name: Upload Storybook
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: storybook-static
           path: packages/ui/storybook-static
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 7
 
-  e2e:
-    name: Playwright smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.13
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Chromium and WebKit
-        run: bunx playwright install --with-deps chromium webkit
-
-      - name: Run browser smoke tests
-        run: bun run test:e2e
-        env:
-          NODE_ENV: development
-
-      - name: Upload Playwright artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: |
-            apps/web/playwright-report
-            apps/web/test-results
-          if-no-files-found: error
-
-  cloudflare:
-    name: Cloudflare dry run
+  storybook-test:
+    name: Storybook browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Test stories in light and dark mode
+        run: bun run test:storybook
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+  e2e:
+    name: E2E · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Desktop Chrome
+            id: desktop-chrome
+            browser: chromium
+            command: env -u NO_COLOR bunx playwright test --project=desktop-chrome
+          - name: Pixel 7 Chrome
+            id: pixel-7-chrome
+            browser: chromium
+            command: env -u NO_COLOR bunx playwright test --project=pixel-7-chrome
+          - name: iPhone 13 WebKit
+            id: iphone-13-webkit
+            browser: webkit
+            command: env -u NO_COLOR bunx playwright test --project=iphone-13-webkit
+          - name: GitHub OAuth
+            id: github-oauth
+            browser: chromium
+            command: env -u NO_COLOR bunx playwright test --config=playwright.oauth.config.ts
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - name: Install browser
+        run: bunx playwright install --with-deps "${{ matrix.browser }}"
+      - name: Run E2E
+        working-directory: apps/web
+        run: ${{ matrix.command }}
+        env:
+          NODE_ENV: development
+
+      - name: Upload Playwright artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
         with:
-          bun-version: 1.3.13
+          name: playwright-${{ matrix.id }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+  cloudflare:
+    name: Cloudflare · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
-      - name: Build Workers without deploying
-        run: bun run build:cloudflare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Web
+            package: "@enterprise-agentic-saas/web"
+          - name: API
+            package: "@enterprise-agentic-saas/api"
+          - name: Agent
+            package: "@enterprise-agentic-saas/agent"
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-bun
+      - name: Build Worker without deploying
+        run: bunx turbo run build:cloudflare --filter="${{ matrix.package }}"
         env:
           NODE_ENV: production

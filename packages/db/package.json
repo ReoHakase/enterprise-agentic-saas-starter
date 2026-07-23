@@ -10,7 +10,6 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit",
     "db:check": "drizzle-kit check",
     "db:assert-local": "bun run src/assert-local.ts",
     "db:generate": "drizzle-kit generate",

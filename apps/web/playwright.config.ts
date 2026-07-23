@@ -6,7 +6,7 @@ const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000"
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: ["oauth/**", "agent/**"],
-  outputDir: "./test-results",
+  outputDir: "./test-results/app",
   // The local mock API intentionally keeps per-session state in memory. Keep
   // journeys serial so reset/setup is deterministic in CI and on laptops.
   fullyParallel: false,
@@ -14,7 +14,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: [["list"], ["html", { outputFolder: "playwright-report" }]],
+  reporter: [["list"], ["html", { outputFolder: "playwright-report/app" }]],
   use: {
     baseURL,
     trace: "retain-on-failure",

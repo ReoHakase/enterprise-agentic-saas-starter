@@ -76,6 +76,8 @@ Agent releaseでは通常のcheck/mock E2E後に、明示的なpaid `test:e2e:ag
 ## GitHub Actions
 
 - PR では **Quality**（Bun: lint / format / typecheck / test / build）と **Nix**（`nix flake check`）を **並列ジョブ**で実行する。
+- Bunを使うCI jobは`.github/actions/setup-bun`でBun 1.3.13、`~/.bun/install/cache`、`bun ci`を統一する。`node_modules`をcacheやartifactとして配布しない。
+- GitHub Actions workflowに`parallel` step構文はない。軽いstatic checkを同一runnerで同時に走らせる場合は、BashでPIDを保持して全commandの終了statusを集約する。typecheck、Vitest、build、browser test、Cloudflare buildは独立jobまたはmatrixへ分離する。
 - CI内のsecretはdotenvx/GitHub Secretsから注入する。
 - TursoやOAuth providerを使うE2EはPRではmock/smoke、mainでは実環境寄りなど段階化する。
 - Playwright browser install/cacheを考慮する。
