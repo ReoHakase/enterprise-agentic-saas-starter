@@ -205,6 +205,69 @@ test("Agent paneは末尾付近を追従し右側minimapからturnへ移動で�
   expect((minimapBox?.x ?? 0) + (minimapBox?.width ?? 0)).toBeLessThanOrEqual(
     (conversationBox?.x ?? 0) + (conversationBox?.width ?? 0)
   )
+  expect(minimapBox?.width).toBeLessThanOrEqual(24)
+  expect(
+    Math.abs(
+      (minimapBox?.y ?? 0) +
+        (minimapBox?.height ?? 0) / 2 -
+        ((conversationBox?.y ?? 0) + (conversationBox?.height ?? 0) / 2)
+    )
+  ).toBeLessThanOrEqual(1)
+  await expect
+    .poll(() =>
+      conversation.evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).paddingRight)
+      )
+    )
+    .toBe(0)
+
+  const markerCenters = await markers.evaluateAll((elements) =>
+    elements.map((element) => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.y + bounds.height / 2
+    })
+  )
+  const markerGaps = markerCenters.slice(1).map((center, index) => {
+    const previousCenter = markerCenters[index]
+    return previousCenter === undefined ? 0 : center - previousCenter
+  })
+  expect(Math.max(...markerGaps) - Math.min(...markerGaps)).toBeLessThanOrEqual(
+    1
+  )
+  const activeMarkerLine = markers.nth(5).locator("span[aria-hidden=true]")
+  const inactiveMarkerLine = markers.nth(4).locator("span[aria-hidden=true]")
+  await expect
+    .poll(async () => {
+      const [activeWidth, inactiveWidth] = await Promise.all([
+        activeMarkerLine.evaluate(
+          (element) => element.getBoundingClientRect().width
+        ),
+        inactiveMarkerLine.evaluate(
+          (element) => element.getBoundingClientRect().width
+        ),
+      ])
+      return activeWidth / inactiveWidth
+    })
+    .toBeCloseTo(1.5, 1)
+  await expect
+    .poll(() =>
+      inactiveMarkerLine.evaluate(
+        (element) => getComputedStyle(element).transitionDuration
+      )
+    )
+    .toBe("0.15s")
+
+  const detachedScrollTop = await conversation.evaluate((element) => {
+    element.scrollTop = Math.max(
+      0,
+      element.scrollHeight - element.clientHeight - 32
+    )
+    element.dispatchEvent(new Event("scroll"))
+    return element.scrollTop
+  })
+  await expect
+    .poll(() => conversation.evaluate((element) => element.scrollTop))
+    .toBe(detachedScrollTop)
 
   const firstMarker = minimap.getByRole("button", {
     name: /Jump to turn 1: Investigate fixture turn 1/u,

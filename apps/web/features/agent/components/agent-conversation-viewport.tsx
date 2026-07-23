@@ -11,10 +11,8 @@ import { isToolUIPart } from "ai"
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
   type WheelEvent,
 } from "react"
@@ -23,8 +21,6 @@ import type { AgentChatMessage } from "@/features/agent/schema"
 
 export const AGENT_CONVERSATION_BOTTOM_THRESHOLD = 96
 
-const markerEdgeInset = 8
-const markerMinimumGap = 12
 const turnPreviewTextLimit = 180
 const responsePreviewTextLimit = 240
 
@@ -42,18 +38,6 @@ export type AgentConversationGroup = {
   messages: AgentChatMessage[]
   turn?: AgentConversationTurnPreview
 }
-
-type MarkerPosition = {
-  id: string
-  top: number
-}
-
-type ViewportMetrics = {
-  activeTurnId?: string
-  markers: MarkerPosition[]
-}
-
-const emptyViewportMetrics: ViewportMetrics = { markers: [] }
 
 const normalizePreviewText = (value: string, limit: number) => {
   const normalized = value.replace(/\s+/gu, " ").trim()
@@ -147,59 +131,6 @@ export const isNearAgentConversationBottom = (
 ) =>
   metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold
 
-export const layoutAgentConversationMarkers = (
-  desiredPositions: number[],
-  height: number
-) => {
-  if (desiredPositions.length === 0 || height <= 0) return []
-  if (desiredPositions.length === 1) {
-    return [
-      Math.min(
-        Math.max(desiredPositions[0] ?? height / 2, markerEdgeInset),
-        Math.max(markerEdgeInset, height - markerEdgeInset)
-      ),
-    ]
-  }
-
-  const minimum = markerEdgeInset
-  const maximum = Math.max(minimum, height - markerEdgeInset)
-  const gap = Math.min(
-    markerMinimumGap,
-    (maximum - minimum) / (desiredPositions.length - 1)
-  )
-  const positions: number[] = []
-
-  for (const desired of desiredPositions) {
-    const previous = positions.at(-1)
-    const clamped = Math.min(Math.max(desired, minimum), maximum)
-    positions.push(
-      previous === undefined ? clamped : Math.max(clamped, previous + gap)
-    )
-  }
-
-  positions[positions.length - 1] = Math.min(
-    positions.at(-1) ?? maximum,
-    maximum
-  )
-  for (let index = positions.length - 2; index >= 0; index -= 1) {
-    positions[index] = Math.min(
-      positions[index] ?? minimum,
-      (positions[index + 1] ?? maximum) - gap
-    )
-  }
-
-  return positions
-}
-
-const viewportMetricsEqual = (left: ViewportMetrics, right: ViewportMetrics) =>
-  left.activeTurnId === right.activeTurnId &&
-  left.markers.length === right.markers.length &&
-  left.markers.every(
-    (marker, index) =>
-      marker.id === right.markers[index]?.id &&
-      Math.abs(marker.top - (right.markers[index]?.top ?? 0)) < 0.5
-  )
-
 const turnElementsFor = (content: HTMLElement) => [
   ...content.querySelectorAll<HTMLElement>("[data-agent-turn-id]"),
 ]
@@ -207,21 +138,15 @@ const turnElementsFor = (content: HTMLElement) => [
 const AgentConversationMinimapMarker = ({
   active,
   index,
-  marker,
   turn,
   onJump,
 }: {
   active: boolean
   index: number
-  marker: MarkerPosition
   turn: AgentConversationTurnPreview
   onJump: (turnId: string) => void
 }) => {
   const jump = useCallback(() => onJump(turn.id), [onJump, turn.id])
-  const style = useMemo<CSSProperties>(
-    () => ({ top: marker.top }),
-    [marker.top]
-  )
   const details = [
     turn.imageCount > 0
       ? `${turn.imageCount} image${turn.imageCount === 1 ? "" : "s"}`
@@ -238,18 +163,17 @@ const AgentConversationMinimapMarker = ({
     <Tooltip>
       <TooltipTrigger
         type="button"
-        className="group pointer-events-auto absolute right-0 grid h-4 w-12 -translate-y-1/2 place-items-center outline-none"
-        style={style}
+        className="group pointer-events-auto grid h-3 w-6 shrink-0 place-items-center outline-none"
         aria-label={`Jump to turn ${index + 1}: ${turn.prompt}`}
         aria-current={active ? "location" : undefined}
         onClick={jump}
       >
         <span
           className={cn(
-            "ml-auto h-0.5 w-12 origin-right rounded-full bg-muted-foreground/45",
+            "ml-auto h-0.5 w-6 origin-right rounded-full bg-muted-foreground/45 transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
             active
               ? "scale-x-100 bg-foreground"
-              : "scale-x-50 group-hover:scale-x-100 group-hover:bg-foreground group-focus-visible:scale-x-100 group-focus-visible:bg-foreground"
+              : "scale-x-[0.6666667] group-hover:scale-x-100 group-hover:bg-foreground group-focus-visible:scale-x-100 group-focus-visible:bg-foreground"
           )}
           aria-hidden="true"
         />
@@ -279,34 +203,28 @@ const AgentConversationMinimapMarker = ({
 
 const AgentConversationMinimap = ({
   activeTurnId,
-  markers,
   turns,
   onJump,
 }: {
   activeTurnId?: string
-  markers: MarkerPosition[]
   turns: AgentConversationTurnPreview[]
   onJump: (turnId: string) => void
 }) => (
   <TooltipProvider delay={250}>
     <nav
       data-slot="agent-conversation-minimap"
-      className="pointer-events-none absolute inset-y-2 right-3 z-10 w-12"
+      className="pointer-events-none absolute top-1/2 right-3 z-10 flex w-6 -translate-y-1/2 flex-col gap-2"
       aria-label="Conversation turns"
     >
-      {markers.map((marker, index) => {
-        const turn = turns[index]
-        return turn ? (
-          <AgentConversationMinimapMarker
-            key={marker.id}
-            active={marker.id === activeTurnId}
-            index={index}
-            marker={marker}
-            turn={turn}
-            onJump={onJump}
-          />
-        ) : null
-      })}
+      {turns.map((turn, index) => (
+        <AgentConversationMinimapMarker
+          key={turn.id}
+          active={turn.id === activeTurnId}
+          index={index}
+          turn={turn}
+          onJump={onJump}
+        />
+      ))}
     </nav>
   </TooltipProvider>
 )
@@ -323,8 +241,9 @@ export const AgentConversationViewport = ({
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
+  const previousScrollTopRef = useRef(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
-  const [metrics, setMetrics] = useState<ViewportMetrics>(emptyViewportMetrics)
+  const [activeTurnId, setActiveTurnId] = useState<string>()
   const showMinimap = enabled && turns.length >= 2
 
   const measure = useCallback(() => {
@@ -337,6 +256,7 @@ export const AgentConversationViewport = ({
         0,
         viewport.scrollHeight - viewport.clientHeight
       )
+      previousScrollTopRef.current = viewport.scrollTop
     }
 
     const turnElements = turnElementsFor(content)
@@ -344,26 +264,9 @@ export const AgentConversationViewport = ({
     const activeElement =
       turnElements.findLast((element) => element.offsetTop <= activeLine) ??
       turnElements[0]
-    const availableHeight = Math.max(0, viewport.clientHeight - 16)
-    const contentHeight = Math.max(viewport.scrollHeight, 1)
-    const desiredPositions = turnElements.map(
-      (element) =>
-        markerEdgeInset + (element.offsetTop / contentHeight) * availableHeight
-    )
-    const positions = layoutAgentConversationMarkers(
-      desiredPositions,
-      viewport.clientHeight
-    )
-    const nextMetrics: ViewportMetrics = {
-      activeTurnId: activeElement?.dataset.agentTurnId,
-      markers: turnElements.flatMap((element, index) => {
-        const id = element.dataset.agentTurnId
-        const top = positions[index]
-        return id && top !== undefined ? [{ id, top }] : []
-      }),
-    }
-    setMetrics((current) =>
-      viewportMetricsEqual(current, nextMetrics) ? current : nextMetrics
+    const nextActiveTurnId = activeElement?.dataset.agentTurnId
+    setActiveTurnId((current) =>
+      current === nextActiveTurnId ? current : nextActiveTurnId
     )
   }, [])
 
@@ -378,7 +281,16 @@ export const AgentConversationViewport = ({
   const handleScroll = useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
-    followingRef.current = isNearAgentConversationBottom(viewport)
+    const nextScrollTop = viewport.scrollTop
+    if (nextScrollTop < previousScrollTopRef.current) {
+      followingRef.current = false
+    } else if (
+      nextScrollTop > previousScrollTopRef.current &&
+      isNearAgentConversationBottom(viewport)
+    ) {
+      followingRef.current = true
+    }
+    previousScrollTopRef.current = nextScrollTop
     scheduleMeasure()
   }, [scheduleMeasure])
 
@@ -399,6 +311,7 @@ export const AgentConversationViewport = ({
         Math.max(0, target.offsetTop - 12),
         Math.max(0, viewport.scrollHeight - viewport.clientHeight)
       )
+      previousScrollTopRef.current = viewport.scrollTop
       followingRef.current = isNearAgentConversationBottom(viewport)
       scheduleMeasure()
     },
@@ -447,10 +360,7 @@ export const AgentConversationViewport = ({
       <div
         ref={viewportRef}
         data-slot="agent-conversation-viewport"
-        className={cn(
-          "absolute inset-0 overflow-y-auto [scrollbar-gutter:stable]",
-          showMinimap && "pr-14"
-        )}
+        className="absolute inset-0 overflow-y-auto [scrollbar-gutter:stable]"
         role="log"
         aria-label="Agent conversation"
         aria-live="polite"
@@ -467,8 +377,7 @@ export const AgentConversationViewport = ({
       </div>
       {showMinimap ? (
         <AgentConversationMinimap
-          activeTurnId={metrics.activeTurnId}
-          markers={metrics.markers}
+          activeTurnId={activeTurnId}
           turns={turns}
           onJump={jumpToTurn}
         />

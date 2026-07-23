@@ -9,7 +9,6 @@ import {
   AgentConversationViewport,
   buildAgentConversationGroups,
   isNearAgentConversationBottom,
-  layoutAgentConversationMarkers,
   type AgentConversationTurnPreview,
 } from "./agent-conversation-viewport"
 
@@ -188,7 +187,7 @@ describe("AgentConversationViewport", () => {
     })
   })
 
-  it("uses the inclusive 96px bottom boundary and collision-safe markers", () => {
+  it("uses the inclusive 96px bottom boundary", () => {
     expect(
       isNearAgentConversationBottom({
         clientHeight: 300,
@@ -203,16 +202,6 @@ describe("AgentConversationViewport", () => {
         scrollTop: 1000 - 300 - AGENT_CONVERSATION_BOTTOM_THRESHOLD - 1,
       })
     ).toBe(false)
-
-    const positions = layoutAgentConversationMarkers([8, 9, 10], 80)
-    const [first, second, third] = positions
-    if (first === undefined || second === undefined || third === undefined) {
-      throw new Error("Expected three marker positions")
-    }
-    expect(second - first).toBeGreaterThanOrEqual(12)
-    expect(third - second).toBeGreaterThanOrEqual(12)
-    expect(first).toBeGreaterThanOrEqual(8)
-    expect(third).toBeLessThanOrEqual(72)
   })
 
   it("follows content and viewport growth only while the reader stays near the bottom", () => {
@@ -241,11 +230,22 @@ describe("AgentConversationViewport", () => {
     act(flushAnimationFrames)
     expect(metrics.scrollTop).toBe(700)
 
+    metrics.scrollTop = 680
+    fireEvent.scroll(viewport)
+    fireEvent.scroll(viewport)
+    act(flushAnimationFrames)
+    expect(metrics.scrollTop).toBe(680)
+
     metrics.scrollHeight = 1100
     act(() => {
       triggerResizeObservers()
       flushAnimationFrames()
     })
+    expect(metrics.scrollTop).toBe(680)
+
+    metrics.scrollTop = 1100 - 300 - 95
+    fireEvent.scroll(viewport)
+    act(flushAnimationFrames)
     expect(metrics.scrollTop).toBe(800)
 
     metrics.clientHeight = 250
