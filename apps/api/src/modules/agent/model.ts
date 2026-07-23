@@ -6,6 +6,10 @@ import * as v from "valibot"
 
 import type { AgentCanonicalJsonValue } from "../../agent-client"
 import { isoTimestampModel } from "../../models/common"
+import {
+  FILE_LIST_DEFAULT_LIMIT,
+  FILE_LIST_MAX_LIMIT,
+} from "../files/constants"
 
 const identifierModel = v.pipe(
   v.string(),
@@ -48,6 +52,7 @@ const canonicalToolNames = [
   "create_issue",
   "delete_issue",
   "get_issue",
+  "read_issue_attachment_image",
   "read_account_context",
   "read_active_organization",
   "rename_thread",
@@ -600,6 +605,12 @@ export const getAgentImageInputModel = v.strictObject({
   assetId: identifierModel,
 })
 
+export const getAgentIssueAttachmentImageInputModel = v.strictObject({
+  grant: agentTokenModel,
+  issueId: identifierModel,
+  fileId: identifierModel,
+})
+
 export const finishAgentRunInputModel = v.strictObject({
   grant: agentTokenModel,
   outcome: v.picklist(["completed", "failed"]),
@@ -658,11 +669,35 @@ export const getAgentIssueInputModel = v.variant("lookup", [
     grant: agentTokenModel,
     lookup: v.literal("id"),
     id: identifierModel,
+    attachmentCursor: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(1024))
+    ),
+    attachmentLimit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(FILE_LIST_MAX_LIMIT)
+      ),
+      FILE_LIST_DEFAULT_LIMIT
+    ),
   }),
   v.strictObject({
     grant: agentTokenModel,
     lookup: v.literal("number"),
     number: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    attachmentCursor: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(1024))
+    ),
+    attachmentLimit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(FILE_LIST_MAX_LIMIT)
+      ),
+      FILE_LIST_DEFAULT_LIMIT
+    ),
   }),
 ])
 

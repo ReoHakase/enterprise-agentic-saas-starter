@@ -1,2 +1,2 @@
-export { issueReadTools } from "./read"
+export { issueReadTools, issueVisionTools } from "./read"
 export { issueWriteTools } from "./write"

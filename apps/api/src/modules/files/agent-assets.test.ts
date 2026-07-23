@@ -13,7 +13,10 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createApp } from "../../app"
 import { env } from "../../env"
-import { createAgentInternalApi } from "../agent/internal-api"
+import {
+  createAgentInternalApi,
+  createAgentInternalApp,
+} from "../agent/internal-api"
 import {
   issueAgentConnectionTicket,
   startAgentRun,
@@ -49,6 +52,7 @@ import {
   agentAssetObjectKey,
 } from "./constants"
 import { agentAssetDtoModel } from "./model"
+import { finalizePendingFile, reservePendingFile } from "./repository"
 import {
   configureFileStorageRuntime,
   resetFileStorageRuntimeForTest,
@@ -611,6 +615,60 @@ const seedReadyAssetBatch = async (
       .update(schema.agentAssets)
       .set({ status: "ready", updatedAt: now })
       .where(inArray(schema.agentAssets.id, assetIds))
+  })
+}
+
+const seedReadyIssueAttachment = async (
+  db: Db,
+  storage: ReturnType<typeof createRuntime>,
+  input: {
+    detectedImageFormat: "jpeg" | "png" | "webp" | "gif" | "avif" | null
+    fileId: string
+    issueId: string
+    organizationId?: string
+  }
+) => {
+  const organizationId = input.organizationId ?? "asset-org-a"
+  const objectKey = `private/${organizationId}/files/${input.fileId}`
+  const bytes = pngBytes()
+  const reserved = await reservePendingFile(db, {
+    declaredContentType:
+      input.detectedImageFormat === null
+        ? "application/pdf"
+        : `image/${input.detectedImageFormat}`,
+    detectedImageFormat: input.detectedImageFormat,
+    fileId: input.fileId,
+    filename:
+      input.detectedImageFormat === null
+        ? `${input.fileId}.pdf`
+        : `${input.fileId}.${input.detectedImageFormat}`,
+    objectKey,
+    organizationId,
+    ownerId: input.issueId,
+    ownerType: "issue",
+    sizeBytes: bytes.byteLength,
+    uploaderId: "asset-user-a",
+    uploadId: `upload-${input.fileId}`,
+  })
+  const object = await storage.runtime.bucket.put(
+    objectKey,
+    new Blob([bytes]),
+    {
+      httpMetadata: { contentType: "application/octet-stream" },
+      customMetadata: {
+        expectedSize: String(bytes.byteLength),
+        fileId: input.fileId,
+        uploadId: `upload-${input.fileId}`,
+      },
+    }
+  )
+  if (!object) throw new Error("Issue attachment fixture upload failed")
+  await finalizePendingFile(db, {
+    actorUserId: "asset-user-a",
+    etag: object.etag,
+    file: reserved.file,
+    imageHeight: input.detectedImageFormat === null ? null : 360,
+    imageWidth: input.detectedImageFormat === null ? null : 640,
   })
 }
 
@@ -1390,6 +1448,144 @@ describe("Agent staged image API and lifecycle", () => {
         sql`${schema.agentRuns.clientMessageId} in ('too-many-assets', 'too-many-bytes')`
       )
     expect(failedRuns).toEqual([])
+  })
+
+  it("revalidates Issue image ownership, transforms privately, and consumes idempotent vision quota", async () => {
+    const { db, now } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+    await db.insert(schema.issues).values([
+      {
+        id: "asset-issue-a",
+        organizationId: "asset-org-a",
+        number: 1,
+        title: "Image marker",
+        creatorId: "asset-user-a",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "asset-issue-a-other",
+        organizationId: "asset-org-a",
+        number: 2,
+        title: "Other owner",
+        creatorId: "asset-user-a",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "asset-issue-b",
+        organizationId: "asset-org-b",
+        number: 1,
+        title: "Other tenant",
+        creatorId: "asset-user-a",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
+    await seedReadyIssueAttachment(db, storage, {
+      detectedImageFormat: "png",
+      fileId: "asset-issue-image",
+      issueId: "asset-issue-a",
+    })
+    await seedReadyIssueAttachment(db, storage, {
+      detectedImageFormat: null,
+      fileId: "asset-issue-pdf",
+      issueId: "asset-issue-a",
+    })
+    await seedReadyIssueAttachment(db, storage, {
+      detectedImageFormat: "png",
+      fileId: "asset-other-tenant-image",
+      issueId: "asset-issue-b",
+      organizationId: "asset-org-b",
+    })
+
+    const connection = await openConnection(db)
+    const internal = createAgentInternalApi(db)
+    const run = await internal.startRun({
+      grant: connection.grant,
+      clientMessageId: "issue-image-run",
+    })
+    const modelImage = await internal.getIssueAttachmentImageForModel({
+      fileId: "asset-issue-image",
+      grant: run.grant,
+      issueId: "asset-issue-a",
+    })
+    expect(modelImage.status).toBe(200)
+    expect(modelImage.headers.get("content-type")).toBe("image/webp")
+    expect(modelImage.headers.get("cache-control")).toBe("private, no-store")
+    expect(modelImage.headers.get("content-length")).toBe("6")
+    expect(storage.images.transform).toHaveBeenLastCalledWith({
+      fit: "scale-down",
+      width: 2048,
+    })
+    expect(storage.images.output).toHaveBeenLastCalledWith({
+      anim: false,
+      format: "image/webp",
+      quality: 75,
+    })
+    expect(storage.get).toHaveBeenLastCalledWith(
+      "private/asset-org-a/files/asset-issue-image",
+      {
+        onlyIf: new Headers({ "if-match": '"agent-etag-1"' }),
+      }
+    )
+
+    const internalApp = createAgentInternalApp(db)
+    const routeResponse = await internalApp.handle(
+      new Request(
+        "http://agent-internal.invalid/internal/agent/issues/asset-issue-a/attachments/asset-issue-image/model",
+        { headers: { authorization: `Bearer ${run.grant}` } }
+      )
+    )
+    expect(routeResponse.status).toBe(200)
+    expect(routeResponse.headers.get("cache-control")).toBe("private, no-store")
+    await routeResponse.body?.cancel()
+
+    for (const candidate of [
+      {
+        issueId: "asset-issue-a-other",
+        fileId: "asset-issue-image",
+      },
+      {
+        issueId: "asset-issue-a",
+        fileId: "asset-issue-pdf",
+      },
+      {
+        issueId: "asset-issue-a",
+        fileId: "asset-other-tenant-image",
+      },
+      {
+        issueId: "asset-issue-a",
+        fileId: "missing-file",
+      },
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- all hidden resource variants must expose the same 404 contract.
+      await expect(
+        internal.getIssueAttachmentImageForModel({
+          ...candidate,
+          grant: run.grant,
+        })
+      ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    }
+
+    const visionBuckets = await db
+      .select({ count: schema.agentResourceUsageBuckets.count })
+      .from(schema.agentResourceUsageBuckets)
+      .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
+    expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
+
+    storage.setOutput({
+      bytes: new Uint8Array(AGENT_ASSET_MODEL_MAX_BYTES + 1),
+      contentLength: null,
+    })
+    await expect(
+      internal.getIssueAttachmentImageForModel({
+        fileId: "asset-issue-image",
+        grant: run.grant,
+        issueId: "asset-issue-a",
+      })
+    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
   })
 
   it("records a minimal file.uploaded audit inside zero-copy promotion", async () => {

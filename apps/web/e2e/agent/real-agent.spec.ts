@@ -49,7 +49,7 @@ const sendMessage = async (
     .toBeGreaterThan(previousCount)
   await expect(
     agentShell.getByRole("button", { name: "Send", exact: true })
-  ).toBeEnabled({ timeout: 150_000 })
+  ).toBeEnabled({ timeout: 360_000 })
   await expect(
     agentShell.getByText(
       "Agent response failed. You can retry the same draft safely."
@@ -278,6 +278,26 @@ test("実Agent release journeyが安全境界とcanonical stateを満たす", as
   await sendMessage(
     page,
     agentShell,
+    `Find the Issue titled "${imageIssueTitle}", call get_issue to inspect its attachment metadata, then call read_issue_attachment_image for preview.png. Describe its dominant color and the direction of its gradient.`
+  )
+  await expect(
+    agentShell.getByText(/get issue · output available/u).last()
+  ).toBeVisible({ timeout: 120_000 })
+  await expect(
+    agentShell
+      .getByText(/read issue attachment image · output available/u)
+      .last()
+  ).toBeVisible({ timeout: 120_000 })
+  await expect(assistantArticles(agentShell).last()).toContainText(
+    /(?:blue|青)/iu
+  )
+  await expect(assistantArticles(agentShell).last()).toContainText(
+    /(?:gradient|グラデーション)/iu
+  )
+
+  await sendMessage(
+    page,
+    agentShell,
     `Create an Issue titled "Rejected agent change ${runSuffix}" with priority low.`
   )
   await expect(
@@ -389,7 +409,10 @@ test("実Agent release journeyが安全境界とcanonical stateを満たす", as
   expect(serializedHistory).not.toContain("data-activity")
   expect(serializedHistory).toContain("data-agent-assets")
   expect(serializedHistory).toContain("attachmentAssetIds")
+  expect(serializedHistory).toContain("tool-read_issue_attachment_image")
   expect(serializedHistory).toContain("reasoning")
+  expect(serializedHistory).not.toContain("data:image")
+  expect(serializedHistory).not.toContain('"objectKey"')
   expect(
     Array.isArray(history) &&
       new Set(

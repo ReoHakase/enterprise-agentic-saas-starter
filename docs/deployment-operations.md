@@ -47,6 +47,8 @@ Web buildには`API_PUBLIC_URL`と`NEXT_PUBLIC_API_BASE_URL`を同じAPI origin�
 
 初回rolloutは全て`0`で3 Workerとbindingをdeployし、API smoke後にasset upload、run、vision、writeの順で段階的に`1`へ進めます。`0011_file_activity_backfill`の互換deployが必要な場合も、migration完了までは4値を全て`0`に固定し、workflowは1つでも`1`ならWorkerを変更する前に停止します。障害時はまず該当flagを`0`に戻して再deployし、データを削除したりsecretを消したりして停止しません。
 
+Issue添付画像toolのrolloutでは、既存環境の`AGENT_VISION_ENABLED`を一時的に`0`へ戻します。DB migrationやpublic file routeは追加せず、添付metadataを返す互換API/Webを先行し、Agent Workerとprivate model routeのsmoke後に`1`へ戻します。`0`の間も`get_issue`の添付metadataは利用でき、画像toolだけを登録しません。
+
 ## GitHub Environmentとsecret注入
 
 GitHub `production` Environmentでは、少なくとも次を登録します。
@@ -145,6 +147,7 @@ bun run --cwd apps/web deploy
 - Web custom domainの`/auth/sign-in`が200で、Agent Workerにcustom domain、route、preview URL、`workers.dev`公開がない。
 - Browserがcookie認証済み`POST /agent/chat`からprivate Agent runtimeのAI SDK streamを受け取れ、同じconnection ticketのreplay、別Origin、別threadは拒否される。
 - Agentから`AGENT_INTERNAL_API` named entrypointのprivate Elysia `/internal/agent/*`でread toolを実行でき、API public custom domainの同pathは404になり、public HTTP fallbackがない。
+- `get_issue`がready添付metadataをpageで返し、private Issue画像routeはowner/tenant/形式不一致を同じ404へ丸め、WebP・`private, no-store`だけを返す。canonical traceと3 Workerのtelemetryに画像bytes、base64、private URL、object keyがない。
 - 4つのAgent flagがGitHub Environmentと各runtimeで完全一致し、`0`時に該当機能がfail closed、`1`時だけ有効になる。
 - magic link / OAuth callbackのredirect originがproduction値。
 - 新規userが最初のorganizationを作成できる。

@@ -25,6 +25,7 @@
 | natural Web検索とquery guard | tools-approval | 実装済み | secret/PII/opaque ID、履歴・Issue・tool結果eval |
 | historical approval reload | tools-approval | 実装済み | session更新後GET、decision/resume scope test |
 | mention / page context / Issue link | assets-mentions | 実装済み | API再解決、cross-tenant、UI test |
+| Issue添付metadata / オンデマンド画像理解 | assets-mentions | 実装済み | pagination、private model route、4枚上限、metadata-only reload |
 | usage event / pricing / daily projection | usage-billing | 実装済み | idempotency、price version、失敗/cancel test |
 | Agent UI shortcut | chat-ui | 実装済み | IME、input、modal、desktop/mobile test |
 | deterministic release suite | testing | releaseごとに検証 | `bun run check`、mock browser、typegen、Cloudflare build |

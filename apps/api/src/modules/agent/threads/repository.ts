@@ -44,7 +44,10 @@ import type {
   AgentCanonicalContextReference,
   AgentConnection,
   AgentContextReferenceInput,
+  AgentGetIssueInput,
   AgentIssue,
+  AgentIssueAttachment,
+  AgentIssueDetail,
   AgentIssueLabel,
   AgentMember,
   AgentOrganizationContext,
@@ -56,6 +59,9 @@ import type {
 import { AppError, publicErrors } from "../../../errors/app-error"
 import { normalizeOrganizationRole } from "../../authorization/roles"
 import { bindAgentAssetsToRunInTransaction } from "../../files/agent-run-assets-repository"
+import { FILE_LIST_DEFAULT_LIMIT } from "../../files/constants"
+import type { FileDto } from "../../files/model"
+import { listReadyFilesByOwner } from "../../files/repository"
 import {
   findIssueById,
   findIssueByNumber,
@@ -295,6 +301,21 @@ const toAgentIssue = (issue: IssueDto): AgentIssue => ({
   revision: issue.revision,
   createdAt: issue.createdAt,
   updatedAt: issue.updatedAt,
+})
+
+const toAgentIssueAttachment = (file: FileDto): AgentIssueAttachment => ({
+  id: file.id,
+  filename: file.filename,
+  sizeBytes: file.sizeBytes,
+  declaredContentType: file.declaredContentType,
+  imageReadable: file.previewable,
+  textPreviewable: file.textPreviewable,
+  dimensions:
+    file.imageWidth !== null && file.imageHeight !== null
+      ? { width: file.imageWidth, height: file.imageHeight }
+      : null,
+  uploaderName: file.uploader.name,
+  createdAt: file.createdAt,
 })
 
 const permissionsForAgent = (
@@ -2238,10 +2259,8 @@ export const searchAgentIssues = async (
 
 export const getAgentIssue = async (
   db: Db,
-  input:
-    | { grant: string; lookup: "id"; id: string; now?: Date }
-    | { grant: string; lookup: "number"; number: number; now?: Date }
-): Promise<AgentIssue> => {
+  input: AgentGetIssueInput & { now?: Date }
+): Promise<AgentIssueDetail> => {
   try {
     return await withRunGrant(db, input, async (tx, context) => {
       const issue =
@@ -2257,7 +2276,22 @@ export const getAgentIssue = async (
       if (!issue) {
         throw publicErrors.notFound("Issue not found", { resource: "issue" })
       }
-      return toAgentIssue(issue)
+      const attachments = await listReadyFilesByOwner(tx, {
+        actorRole: context.role,
+        actorUserId: context.userId,
+        cursor: input.attachmentCursor,
+        limit: input.attachmentLimit ?? FILE_LIST_DEFAULT_LIMIT,
+        organizationId: context.organizationId,
+        ownerId: issue.id,
+        ownerType: "issue",
+      })
+      return {
+        ...toAgentIssue(issue),
+        attachments: {
+          items: attachments.items.map(toAgentIssueAttachment),
+          nextCursor: attachments.nextCursor,
+        },
+      }
     })
   } catch (cause) {
     return preserveAgentError(cause, "getAgentIssue")

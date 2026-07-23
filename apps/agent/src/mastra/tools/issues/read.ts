@@ -2,7 +2,9 @@ import { createTool } from "@mastra/core/tools"
 
 import {
   agentReadToolSchemas,
+  createAgentIssueImageHandler,
   createAgentReadHandlers,
+  issueAttachmentImageToModelOutput,
 } from "../../../tools/read"
 import {
   getProductAgentRuntime,
@@ -156,5 +158,38 @@ export const issueReadTools = {
         runtime.budget
       ).searchOrganizationMembers(input)
     },
+  }),
+}
+
+export const issueVisionTools = {
+  read_issue_attachment_image: createTool<
+    "read_issue_attachment_image",
+    typeof agentReadToolSchemas.issueAttachmentImage,
+    undefined,
+    undefined,
+    undefined,
+    ProductAgentRequestContext
+  >({
+    id: "read_issue_attachment_image",
+    description:
+      "Read one supported JPEG, PNG, WebP, or GIF attachment from an Issue when its visual contents are needed. Call get_issue first and use only an attachment marked imageReadable.",
+    inputSchema: agentReadToolSchemas.issueAttachmentImage,
+    strict: true,
+    mcp: readToolMetadata,
+    execute: (input, context) => {
+      const runtime = getProductAgentRuntime(context.requestContext)
+      if (!runtime.visionEnabled) {
+        throw new Error("Issue image capability is unavailable")
+      }
+      return createAgentIssueImageHandler(
+        runtime.api,
+        runtime.runGrant,
+        runtime.budget,
+        runtime.visionBudget
+      )(input)
+    },
+    // output schema validationはobjectをcloneし得るため、WeakMap keyの同一性を
+    // 維持するこのtoolではhandler内のclosed result constructionを正本にする。
+    toModelOutput: issueAttachmentImageToModelOutput,
   }),
 }

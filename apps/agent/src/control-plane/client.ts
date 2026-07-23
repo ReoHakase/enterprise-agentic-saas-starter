@@ -7,9 +7,11 @@ import {
   type AgentCreateIssueActionInput,
   type AgentDeleteIssueActionInput,
   type AgentGuardedWebSearchQuery,
+  type AgentGetIssueInput,
   type AgentInternalFetchBinding,
   type AgentIssue,
   type AgentIssueAction,
+  type AgentIssueDetail,
   type AgentIssueLabel,
   type AgentMember,
   type AgentOrganizationContext,
@@ -66,11 +68,7 @@ export type AgentInternalGateway = {
     input: BearerInput & { query?: string; limit?: number }
   ): Promise<AgentIssueLabel[]>
   searchIssues(input: AgentSearchIssuesInput): Promise<AgentIssue[]>
-  getIssue(
-    input:
-      | (BearerInput & { lookup: "id"; id: string })
-      | (BearerInput & { lookup: "number"; number: number })
-  ): Promise<AgentIssue>
+  getIssue(input: AgentGetIssueInput): Promise<AgentIssueDetail>
   prepareCreateIssue(
     input: BearerInput & {
       toolCallId: string
@@ -104,6 +102,9 @@ export type AgentInternalGateway = {
   ): Promise<AgentActionExecutionResult>
   getAgentImageForModel(
     input: BearerInput & { assetId: string }
+  ): Promise<Response>
+  getIssueAttachmentImageForModel(
+    input: BearerInput & { issueId: string; fileId: string }
   ): Promise<Response>
 }
 
@@ -306,14 +307,24 @@ export const createAgentInternalGateway = (
       ),
     getIssue: (input) =>
       input.lookup === "number"
-        ? unwrap<AgentIssue>(
+        ? unwrap<AgentIssueDetail>(
             client.internal.agent.issues["by-number"]({
               number: input.number,
-            }).get({ headers: headers(input.grant) })
+            }).get({
+              headers: headers(input.grant),
+              query: definedQuery({
+                attachmentCursor: input.attachmentCursor,
+                attachmentLimit: input.attachmentLimit,
+              }),
+            })
           )
-        : unwrap<AgentIssue>(
+        : unwrap<AgentIssueDetail>(
             client.internal.agent.issues({ issueId: input.id }).get({
               headers: headers(input.grant),
+              query: definedQuery({
+                attachmentCursor: input.attachmentCursor,
+                attachmentLimit: input.attachmentLimit,
+              }),
             })
           ),
     prepareCreateIssue: ({ grant, ...body }) =>
@@ -375,6 +386,13 @@ export const createAgentInternalGateway = (
       binding.fetch(
         new Request(
           `https://agent-internal.invalid/internal/agent/assets/${encodeURIComponent(assetId)}/model`,
+          { headers: headers(grant) }
+        )
+      ),
+    getIssueAttachmentImageForModel: ({ fileId, grant, issueId }) =>
+      binding.fetch(
+        new Request(
+          `https://agent-internal.invalid/internal/agent/issues/${encodeURIComponent(issueId)}/attachments/${encodeURIComponent(fileId)}/model`,
           { headers: headers(grant) }
         )
       ),

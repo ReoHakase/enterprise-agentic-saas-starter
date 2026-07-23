@@ -14,6 +14,16 @@ Agent WorkerにR2 bindingを渡しません。APIがACLとrun bindingを検証�
 
 Issue attachmentへの昇格はphysical storage objectとlogical claim/fileを分け、action previewとapprovalへ含めます。promotion、Issue mutation、claim transferは同じtransactionへ閉じます。一般的なowner変更APIは作りません。
 
+## Issue添付の読取
+
+`get_issue`はIssue本体と同時にready添付のmetadata pageを返します。既定50件、最大100件、opaque cursorで、項目はfile ID、filename、size、declared content type、`imageReadable`、`textPreviewable`、dimensions、uploader名、createdAtだけです。pending、R2 object key、ETag、保存URL、raw bytesは返しません。
+
+画像内容は自動取得しません。現在のユーザー要求または回答に必要で、`get_issue`の対象添付が`imageReadable: true`のときだけ`read_issue_attachment_image({ issueId, fileId })`を呼びます。PDF、text、AVIF、SVGはmetadataだけで、本文解析、OCR専用処理、public URLは提供しません。
+
+画像toolは`AGENT_VISION_ENABLED=1`のrunだけへ登録します。APIのprivate `GET /internal/agent/issues/:issueId/attachments/:fileId/model`はrun grant、live session、active organization、Issue owner、ready file、JPEG/PNG/WebP/GIFを複合条件で再検証し、tenant外、owner不一致、不存在、非対応画像を同じ404へ丸めます。R2 originalはCloudflare Imagesでmax edge 2,048px、WebP quality 75、animation無効へ変換し、unknown-lengthを含め4 MiBでbounded readします。user/organizationの日次vision quotaはrun IDとfile IDで冪等消費します。
+
+Agent Workerは画像bytesをtoolのcanonical outputへ入れず、実行結果オブジェクトをkeyにした一時`WeakMap`だけへ保持します。Mastra `toModelOutput`がmodel用media partへ変換した直後にsidecarを破棄します。stream、Turso、reload履歴、log、Sentryへbase64、private URL、object key、raw bytesを残しません。reload後のtool traceは`issueId`、`fileId`、`contentType=image/webp`、変換後`sizeBytes`だけです。現在messageのchat画像とIssue画像を合わせて1 run最大4枚とし、実際にmodelへ渡した枚数だけusageの`imageInputCount`へ加算します。
+
 ## Mention model
 
 composerの`@`候補は次です。

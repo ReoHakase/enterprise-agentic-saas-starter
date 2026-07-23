@@ -49,6 +49,7 @@ import { resumeIssueAction } from "./runtime/resume-issue-action"
 import { createRunSettlement } from "./runtime/settlement"
 import { stopOnPendingIssueAction } from "./runtime/stop-conditions"
 import { createAgentToolBudget } from "./tools/budget"
+import { createAgentVisionBudget } from "./tools/vision-budget"
 import { normalizeAgentUsage } from "./usage/normalize"
 
 // Keep provider stalls below the five-minute capability lifetime so the run can
@@ -176,6 +177,7 @@ const handleChat = async (
 
   const settlement = createRunSettlement(api, run.grant)
   const budget = createAgentToolBudget()
+  const visionBudget = createAgentVisionBudget(input.assetIds.length)
   const generatedThreadTitle: { current: AgentThreadRenameResult | null } = {
     current: null,
   }
@@ -191,6 +193,8 @@ const handleChat = async (
     runGrant: run.grant,
     settlement,
     timezone: input.timezone,
+    visionBudget,
+    visionEnabled: features.vision,
     writesEnabled: features.writes,
   })
 
@@ -301,7 +305,7 @@ const handleChat = async (
           grant: run.grant,
           ...normalizeAgentUsage({
             usage,
-            imageInputCount: input.assetIds.length,
+            imageInputCount: visionBudget.includedCount(),
             durationMs: Date.now() - runStartedAt,
             runEventId: `attempt_${run.attempt}`,
           }),
@@ -325,7 +329,7 @@ const handleChat = async (
           try {
             return normalizeAgentUsage({
               usage: await output.totalUsage,
-              imageInputCount: input.assetIds.length,
+              imageInputCount: visionBudget.includedCount(),
               durationMs: Date.now() - runStartedAt,
               runEventId: `attempt_${run.attempt}`,
             }).inputTokenCount

@@ -61,6 +61,8 @@ description: enterprise-agentic-saas-starterの認証付き汎用file storage、
 - repository queryはfile/owner IDだけで引かず、必ず`organizationId`を含める。DBもtyped owner tableのcomposite FKでtenant境界を強制する。
 - `FileOwnerAdapter` registryでowner存在確認、read/upload/delete権限、typed owner row、owner削除cleanupを分離する。
 - Issue ownerはmemberがlist/read/uploadできる。削除はuploader本人または`admin` / `super_admin`だけにする。
+- AgentのIssue画像readはpublic file routeを増やさず、API named entrypointの`/internal/agent/issues/:issueId/attachments/:fileId/model`だけを使う。run grant、live session、active organization、Issue owner、ready、JPEG/PNG/WebP/GIFを同じquery境界で再検証し、tenant外・owner不一致・不存在・非対応画像は同じ404へ丸める。
+- model向けIssue画像はR2 originalをmax edge 2,048px、WebP quality 75、animation無効へ変換し、unknown-length outputを4 MiBでmaterializeして`private, no-store` responseにする。chat画像と同じuser/organization日次vision quotaをrun ID + file IDで冪等消費する。
 - filename、内容、URL、object key、raw provider error、tenant/user/resource IDをlog、Sentry、auditへ出さない。auditは`file.uploaded` / `file.deleted`と安全なmetadataだけをtransaction内へ保存する。Issueの人向けtimeline eventだけは追加・削除時のfilename snapshotを値として保持する。
 
 ## DBとobject lifecycle（current v1）

@@ -1,13 +1,20 @@
-import type { AgentIssue } from "@enterprise-agentic-saas/api/agent-client"
-import { describe, expect, it } from "vitest"
+import type {
+  AgentIssue,
+  AgentIssueDetail,
+} from "@enterprise-agentic-saas/api/agent-client"
+import { describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 
 import type { AgentInternalGateway } from "../control-plane/client"
+import { createAgentToolBudget } from "./budget"
 import {
   agentReadToolSchemas,
+  createAgentIssueImageHandler,
   createAgentReadHandlers,
   createAgentReadTools,
+  issueAttachmentImageToModelOutput,
 } from "./read"
+import { createAgentVisionBudget } from "./vision-budget"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -36,12 +43,17 @@ const issue = (description = "description"): AgentIssue => ({
   updatedAt: "2026-07-22T00:00:00.000Z",
 })
 
+const issueDetail = (description = "description"): AgentIssueDetail => ({
+  ...issue(description),
+  attachments: { items: [], nextCursor: null },
+})
+
 const apiHarness = (options: { failAccount?: boolean } = {}) => {
   const grants: string[] = []
   const api: AgentReadApi = {
     getIssue: (input) => {
       grants.push(input.grant)
-      return Promise.resolve(issue())
+      return Promise.resolve(issueDetail())
     },
     readAccountContext: (input) => {
       grants.push(input.grant)
@@ -180,5 +192,83 @@ describe("createAgentReadHandlers", () => {
       "Agent read capability is unavailable"
     )
     await expect(handlers.readAccountContext()).rejects.not.toThrow(RUN_GRANT)
+  })
+})
+
+describe("Issue attachment image sidecar", () => {
+  it("keeps canonical output metadata-only and consumes the WeakMap sidecar once", async () => {
+    const getIssueAttachmentImageForModel = vi.fn<
+      AgentInternalGateway["getIssueAttachmentImageForModel"]
+    >(
+      async () =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          headers: {
+            "content-length": "3",
+            "content-type": "image/webp",
+          },
+        })
+    )
+    const visionBudget = createAgentVisionBudget()
+    const handler = createAgentIssueImageHandler(
+      { getIssueAttachmentImageForModel },
+      RUN_GRANT,
+      createAgentToolBudget(),
+      visionBudget
+    )
+
+    const output = await handler({
+      issueId: "issue_1",
+      fileId: "file_1",
+    })
+
+    expect(output).toEqual({
+      issueId: "issue_1",
+      fileId: "file_1",
+      contentType: "image/webp",
+      sizeBytes: 3,
+    })
+    expect(JSON.stringify(output)).not.toMatch(
+      /base64|data:|https?:|objectKey|AQID/
+    )
+    expect(visionBudget.includedCount()).toBe(1)
+
+    const modelOutput = issueAttachmentImageToModelOutput(output)
+    expect(modelOutput.value).toContainEqual({
+      type: "media",
+      data: "AQID",
+      mediaType: "image/webp",
+    })
+    expect(() => issueAttachmentImageToModelOutput(output)).toThrow(
+      "Issue attachment image is unavailable"
+    )
+  })
+
+  it("shares the four-image run limit with current-message images", async () => {
+    const getIssueAttachmentImageForModel = vi.fn<
+      AgentInternalGateway["getIssueAttachmentImageForModel"]
+    >(
+      async () =>
+        new Response(new Uint8Array([1]), {
+          headers: {
+            "content-length": "1",
+            "content-type": "image/webp",
+          },
+        })
+    )
+    const visionBudget = createAgentVisionBudget(3)
+    const handler = createAgentIssueImageHandler(
+      { getIssueAttachmentImageForModel },
+      RUN_GRANT,
+      createAgentToolBudget(),
+      visionBudget
+    )
+    const first = await handler({ issueId: "issue_1", fileId: "file_1" })
+    issueAttachmentImageToModelOutput(first)
+
+    await expect(
+      handler({ issueId: "issue_1", fileId: "file_2" })
+    ).rejects.toThrow("Agent image input limit reached")
+    expect(getIssueAttachmentImageForModel).toHaveBeenCalledTimes(1)
+    expect(visionBudget.includedCount()).toBe(4)
   })
 })

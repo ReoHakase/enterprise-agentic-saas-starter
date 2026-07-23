@@ -113,6 +113,53 @@ describe("canonical assistant message projection", () => {
     ])
   })
 
+  it("persists only safe metadata for Issue image tool traces", () => {
+    const projected = sanitizeAssistantMessage({
+      id: "assistant_issue_image",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-read_issue_attachment_image",
+          toolCallId: "call_issue_image",
+          state: "output-available",
+          input: { issueId: "issue_1", fileId: "file_1" },
+          output: {
+            issueId: "issue_1",
+            fileId: "file_1",
+            contentType: "image/webp",
+            sizeBytes: 3,
+          },
+          callProviderMetadata: {
+            mastra: {
+              modelOutput: {
+                type: "content",
+                value: [
+                  { type: "media", data: "AQID", mediaType: "image/webp" },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    })
+
+    expect(projected.parts).toEqual([
+      {
+        type: "tool-read_issue_attachment_image",
+        toolCallId: "call_issue_image",
+        state: "output-available",
+        input: { issueId: "issue_1", fileId: "file_1" },
+        output: {
+          issueId: "issue_1",
+          fileId: "file_1",
+          contentType: "image/webp",
+          sizeBytes: 3,
+        },
+      },
+    ])
+    expect(JSON.stringify(projected)).not.toContain("AQID")
+  })
+
   it("normalizes identifiers, static tool states, and oversized messages", () => {
     const message: UIMessage = {
       id: "invalid message id",

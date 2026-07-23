@@ -20,6 +20,8 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - usage event idempotency、daily projection、price version切替、admin境界
 - historical approval GETは現在ownerで読め、decision/resumeは元scope外で拒否
 - mention/page/file/memberのserver再解決とcross-tenant拒否
+- `get_issue`添付pagination、pending除外、owner/tenant境界、metadata projection
+- Issue画像private routeの対応形式、変換条件、unknown-length 4 MiB fence、quota冪等性、private/no-store header
 
 ### Agent
 
@@ -29,6 +31,8 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - query、拒否文字列、Issue本文がlog/Sentryへ残らない
 - 専用title Agentのforced rename、transient status sanitizer、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
+- vision flagによる画像tool登録、chat画像との合計4枚上限、WeakMap media sidecar、実model入力だけのusage加算
+- canonical履歴、stream、reload traceにbase64、private URL、object key、raw bytesがない
 
 ### Web / mock Playwright
 
@@ -56,6 +60,7 @@ release journey:
 8. thinking、transient status、tool traceのstreamとreload。完了/reload後statusなし、assistant重複なし
 9. context ringとusage event/cost projection API
 10. session更新後の過去approval reload
+11. 既知markerを持つseed Issue画像を`get_issue`から選び、画像toolを呼び、markerの内容を説明
 
 secret、provider response本文、DOM snapshot、video、trace、screenshotをartifactへ保存しません。run専用tmp directoryとmode 0600の`.dev.vars`を使い、cleanup時は自分が起動したprocessとvalidated tmp pathだけを削除します。
 

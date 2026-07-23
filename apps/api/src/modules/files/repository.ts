@@ -67,7 +67,7 @@ const toFileDto = (
   canDelete: row.stored.uploaderId === actor.userId || actor.role !== "member",
 })
 
-const baseFileQuery = (db: Db) =>
+const baseFileQuery = (db: Pick<Db, "select">) =>
   db
     .select(fileSelection)
     .from(files)
@@ -174,7 +174,7 @@ export const findReadyFileById = async (
 }
 
 export const listReadyFilesByOwner = async (
-  db: Db,
+  db: Pick<Db, "select">,
   input: {
     actorRole: OrganizationRole
     actorUserId: string

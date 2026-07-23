@@ -19,6 +19,10 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra、chat thre
 - Web検索後もthreadの`ask_always | full_access`を維持し、queryや検索結果から権限を拡張しない。
 - approval preview、decision、receiptはAPI正本。cardはtool part位置へinline表示する。
 - provider reasoning、tool、source、context budget、title data partをbounded canonical messageとして保存し、transient activityは保存しない。
+- `get_issue`はready添付metadataを既定50・最大100・opaque cursorで返す。画像は自動取得せず、必要時だけvision flagで登録した`read_issue_attachment_image`を使う。PDF/text/AVIF/SVGの内容解析へfallbackしない。
+- Issue画像bytesは実行結果objectをkeyにしたrun内`WeakMap`だけへ保持し、`toModelOutput`のmedia変換直後に破棄する。canonical output、stream、Turso、reload履歴、log、Sentryへbase64、private URL、object key、raw bytesを残さない。
+- current message画像とIssue画像は合計4枚/runにし、実際にmodelへ渡した枚数だけusageの`imageInputCount`へ加算する。
+- `create_issue`でcurrent message画像の添付を求められた場合は、最初の承認payloadから`attachmentAssetIds`を省略しない。承認待ち後は同じrunでwrite toolを自己訂正できない。
 - provider usageでreasoning/cacheを二重計上せず、失敗・cancelでも観測済みusageを冪等記録する。
 - 旧`IssueAssistant`はretention隔離し、この変更へ`deleted_classes`を含めない。
 

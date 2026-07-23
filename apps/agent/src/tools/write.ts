@@ -42,7 +42,13 @@ const issuePrioritySchema = z.enum([
 ])
 const dueDateSchema = z.iso.datetime({ offset: true })
 const labelsSchema = z.array(z.string().trim().min(1).max(40)).max(20)
-const attachmentAssetIdsSchema = z.array(identifierSchema).max(4).optional()
+const attachmentAssetIdsSchema = z
+  .array(identifierSchema)
+  .max(4)
+  .optional()
+  .describe(
+    "Current-message attachment asset IDs to promote into permanent Issue attachments. When the user asks to attach a current image, pass every exact ID supplied in the current message; otherwise omit this field."
+  )
 
 const mutableIssueFields = {
   assigneeId: optionalAssigneeSchema,

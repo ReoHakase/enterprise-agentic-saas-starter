@@ -107,9 +107,14 @@ describe("Agent internal HTTP gateway", () => {
       assetId: "asset_1",
       grant: RUN_GRANT,
     })
+    const issueImage = await test.gateway.getIssueAttachmentImageForModel({
+      fileId: "file_1",
+      grant: RUN_GRANT,
+      issueId: "issue_1",
+    })
     const requests = await Promise.all(test.requests)
 
-    expect(requests).toHaveLength(5)
+    expect(requests).toHaveLength(6)
     expect(requests[0]?.headers.authorization).toBeUndefined()
     expect(JSON.parse(requests[0]?.body ?? "null")).toEqual({
       threadId: "thread_1",
@@ -149,6 +154,11 @@ describe("Agent internal HTTP gateway", () => {
       "/internal/agent/assets/asset_1/model"
     )
     expect(image.headers.get("content-type")).toBe("image/webp")
+    expect(requests[5]?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
+    expect(new URL(requests[5]?.url ?? "").pathname).toBe(
+      "/internal/agent/issues/issue_1/attachments/file_1/model"
+    )
+    expect(issueImage.headers.get("content-type")).toBe("image/webp")
   })
 
   it("does not copy private error bodies or grants into Agent errors", async () => {

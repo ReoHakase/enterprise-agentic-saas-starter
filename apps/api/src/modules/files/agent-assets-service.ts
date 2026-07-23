@@ -16,14 +16,13 @@ import {
   AGENT_ASSET_MAX_BYTES,
   AGENT_ASSET_MAX_DIMENSION,
   AGENT_ASSET_MAX_PIXELS,
-  AGENT_ASSET_MODEL_MAX_BYTES,
-  AGENT_ASSET_MODEL_MAX_EDGE,
   FILE_PREVIEW_WIDTHS,
   agentAssetObjectKey,
   type FilePreviewWidth,
   type PreviewableImageFormat,
 } from "./constants"
 import type { AgentAssetDto } from "./model"
+import { createModelImageResponse } from "./model-image-service"
 import {
   getFileStorageRuntime,
   type FileR2Object,
@@ -702,83 +701,18 @@ export const previewAgentAsset = async (
   return browserPreviewResponse(transformed, etag)
 }
 
-const readBoundedImage = async (
-  body: ReadableStream<Uint8Array>,
-  maximumBytes: number
-) => {
-  const reader = body.getReader()
-  const chunks: Uint8Array[] = []
-  let byteLength = 0
-  try {
-    while (byteLength <= maximumBytes) {
-      // oxlint-disable-next-line no-await-in-loop -- unknown-length Images outputを上限+1でfenceする。
-      const result = await reader.read()
-      if (result.done) break
-      byteLength += result.value.byteLength
-      if (byteLength > maximumBytes) {
-        throw publicErrors.validation("Image is too large for model input", {
-          resource: "agent_asset",
-          reason: "model_image_too_large",
-        })
-      }
-      chunks.push(result.value)
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined)
-    reader.releaseLock()
-  }
-  const bytes = new Uint8Array(byteLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return bytes
-}
-
 export const getAgentImageForModel = async (
   db: Db,
   input: { grant: string; assetId: string }
 ): Promise<Response> => {
   const access = await findAgentRunAssetForModel(db, input)
-  const transformed = await transformAgentImage(
-    getRuntime(),
-    access,
-    AGENT_ASSET_MODEL_MAX_EDGE
-  )
-  const declaredLength = Number(transformed.headers.get("content-length"))
-  if (
-    Number.isFinite(declaredLength) &&
-    declaredLength > AGENT_ASSET_MODEL_MAX_BYTES
-  ) {
-    await transformed.body?.cancel().catch(() => undefined)
-    throw publicErrors.validation("Image is too large for model input", {
-      resource: "agent_asset",
-      reason: "model_image_too_large",
-    })
+  if (!access.storage.objectKey || !access.storage.etag) {
+    throw providerUnavailable("r2", "readAgentAssetImage")
   }
-  const outputContentType = transformed.headers
-    .get("content-type")
-    ?.split(";", 1)[0]
-    ?.trim()
-    .toLowerCase()
-  if (outputContentType !== "image/webp") {
-    await transformed.body?.cancel().catch(() => undefined)
-    throw providerUnavailable("images", "validateAgentAssetOutputType")
-  }
-  if (!transformed.body) {
-    throw providerUnavailable("images", "readAgentAssetOutput")
-  }
-  const bytes = await readBoundedImage(
-    transformed.body,
-    AGENT_ASSET_MODEL_MAX_BYTES
-  )
-  const headers = privateImageHeaders()
-  headers.set("Cache-Control", "private, no-store")
-  headers.set("Content-Length", String(bytes.byteLength))
-  return new Response(new Blob([bytes], { type: "image/webp" }), {
-    status: 200,
-    headers,
+  return createModelImageResponse(getRuntime(), {
+    etag: access.storage.etag,
+    objectKey: access.storage.objectKey,
+    resource: "agent_asset",
   })
 }
 

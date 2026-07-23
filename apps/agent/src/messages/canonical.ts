@@ -15,6 +15,7 @@ const canonicalToolNames: ReadonlySet<string> = new Set<AgentCanonicalToolName>(
     "create_issue",
     "delete_issue",
     "get_issue",
+    "read_issue_attachment_image",
     "read_account_context",
     "read_active_organization",
     "rename_thread",

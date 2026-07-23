@@ -42,6 +42,7 @@ const canonicalToolTypes = [
   "tool-create_issue",
   "tool-delete_issue",
   "tool-get_issue",
+  "tool-read_issue_attachment_image",
   "tool-read_account_context",
   "tool-read_active_organization",
   "tool-rename_thread",

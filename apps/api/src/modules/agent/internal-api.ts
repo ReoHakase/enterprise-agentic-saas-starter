@@ -7,6 +7,8 @@ import { errorPlugin } from "../../plugins/error"
 import { observabilityPlugin } from "../../plugins/observability"
 import { requestIdPlugin } from "../../plugins/request-id"
 import { getAgentImageForModel } from "../files/agent-assets-service"
+import { getIssueAttachmentImageForModel } from "../files/agent-issue-attachments-service"
+import { FILE_LIST_MAX_LIMIT } from "../files/constants"
 import {
   executeAgentApprovedAction,
   getAgentIssueActionDecision,
@@ -23,6 +25,7 @@ import {
   executeApprovedActionInputModel,
   finishAgentRunInputModel,
   getAgentImageInputModel,
+  getAgentIssueAttachmentImageInputModel,
   getAgentIssueInputModel,
   getIssueActionDecisionInputModel,
   guardAgentWebSearchInputModel,
@@ -130,11 +133,24 @@ const issueSearchQueryModel = v.strictObject({
 })
 
 const issueIdParamsModel = v.strictObject({ issueId: identifierModel })
+const issueAttachmentParamsModel = v.strictObject({
+  issueId: identifierModel,
+  fileId: identifierModel,
+})
 const issueNumberParamsModel = v.strictObject({
   number: positiveIntegerQueryModel,
 })
 const actionIdParamsModel = v.strictObject({ actionId: identifierModel })
 const assetIdParamsModel = v.strictObject({ assetId: identifierModel })
+
+const issueAttachmentQueryModel = v.strictObject({
+  attachmentCursor: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(1024))
+  ),
+  attachmentLimit: v.optional(
+    v.pipe(positiveIntegerQueryModel, v.maxValue(FILE_LIST_MAX_LIMIT))
+  ),
+})
 
 const prepareIssueActionBodyModel = v.variant("kind", [
   v.strictObject({
@@ -272,6 +288,14 @@ export const createAgentInternalApi = (db: Db) => ({
   },
   getIssue(input: v.InferInput<typeof getAgentIssueInputModel>) {
     return getAgentIssue(db, parseInternalInput(getAgentIssueInputModel, input))
+  },
+  getIssueAttachmentImageForModel(
+    input: v.InferInput<typeof getAgentIssueAttachmentImageInputModel>
+  ) {
+    return getIssueAttachmentImageForModel(
+      db,
+      parseInternalInput(getAgentIssueAttachmentImageInputModel, input)
+    )
   },
   prepareCreateIssue(input: v.InferInput<typeof prepareCreateIssueInputModel>) {
     return prepareCreateIssueAction(
@@ -428,23 +452,43 @@ export const createAgentInternalApp = (db: Db) => {
         )
         .get(
           "/issues/by-number/:number",
-          ({ params, request }) =>
+          ({ params, query, request }) =>
             api.getIssue({
+              attachmentCursor: query.attachmentCursor,
+              attachmentLimit: query.attachmentLimit,
               grant: bearerGrant(request),
               lookup: "number",
               number: params.number,
             }),
-          { params: issueNumberParamsModel }
+          {
+            params: issueNumberParamsModel,
+            query: issueAttachmentQueryModel,
+          }
+        )
+        .get(
+          "/issues/:issueId/attachments/:fileId/model",
+          ({ params, request }) =>
+            api.getIssueAttachmentImageForModel({
+              fileId: params.fileId,
+              grant: bearerGrant(request),
+              issueId: params.issueId,
+            }),
+          { params: issueAttachmentParamsModel }
         )
         .get(
           "/issues/:issueId",
-          ({ params, request }) =>
+          ({ params, query, request }) =>
             api.getIssue({
+              attachmentCursor: query.attachmentCursor,
+              attachmentLimit: query.attachmentLimit,
               grant: bearerGrant(request),
               lookup: "id",
               id: params.issueId,
             }),
-          { params: issueIdParamsModel }
+          {
+            params: issueIdParamsModel,
+            query: issueAttachmentQueryModel,
+          }
         )
         .post(
           "/actions",

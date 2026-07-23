@@ -2,7 +2,7 @@
 
 ## Tool境界
 
-初期server toolはaccount/organization pure read、Issue read/write、Web検索、thread renameに閉じます。billing、auth、member/role、invitation、organization設定のmutation toolは作りません。UI操作toolはbrowser内のallowlistだけを実行し、server authorizationには使いません。
+初期server toolはaccount/organization pure read、Issue read/write、Issue添付画像のオンデマンドread、Web検索、thread renameに閉じます。`get_issue`は添付metadataだけを返し、`read_issue_attachment_image`はvision flag有効時に必要な1画像だけをmodelへ渡します。billing、auth、member/role、invitation、organization設定のmutation toolは作りません。UI操作toolはbrowser内のallowlistだけを実行し、server authorizationには使いません。
 
 Mastra toolはintent adapterです。Valibot schema、tenant再認可、normalization、transaction、audit、idempotencyはAPI domain serviceへ置きます。Agent Workerはprivate run grantでtyped internal clientだけを呼びます。
 
@@ -69,3 +69,4 @@ decision/resume/executeは元session、organization、context epoch、thread/run
 - approvedだがresume通信断:同じreceiptへ収束するretry button
 - response loss: action receiptを再読し、Issue mutationを二重実行しない
 - Web検索失敗: Issue writeへfallbackせず、検索不能を明示
+- Issue画像read失敗: 別tenant・owner不一致・非対応を推測で区別せず、metadataだけで回答するか読取不能を明示。別routeやpublic URLへfallbackしない

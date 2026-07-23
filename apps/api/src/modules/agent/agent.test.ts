@@ -1415,6 +1415,78 @@ describe("Agent internal capability repository", () => {
 
   it("returns only allowlisted account, organization, member, label, and issue projections", async () => {
     const { db } = await createFixture()
+    const attachmentCreatedAt = new Date("2026-07-23T00:00:00.000Z")
+    await db.insert(schema.files).values([
+      {
+        id: "agent-file-image",
+        organizationId: "agent-org-a",
+        uploaderId: "agent-user-a",
+        uploadId: "agent-upload-image",
+        ownerType: "issue",
+        objectKey: "private/agent-file-image",
+        filename: "marker.jpeg",
+        sizeBytes: 1_024,
+        declaredContentType: "image/jpeg",
+        detectedImageFormat: "jpeg",
+        imageWidth: 640,
+        imageHeight: 480,
+        etag: "agent-file-image-etag",
+        status: "ready",
+        createdAt: attachmentCreatedAt,
+        updatedAt: attachmentCreatedAt,
+      },
+      {
+        id: "agent-file-pdf",
+        organizationId: "agent-org-a",
+        uploaderId: "agent-user-b",
+        uploadId: "agent-upload-pdf",
+        ownerType: "issue",
+        objectKey: "private/agent-file-pdf",
+        filename: "notes.pdf",
+        sizeBytes: 2_048,
+        declaredContentType: "application/pdf",
+        detectedImageFormat: null,
+        etag: "agent-file-pdf-etag",
+        status: "ready",
+        createdAt: new Date(attachmentCreatedAt.getTime() - 1_000),
+        updatedAt: attachmentCreatedAt,
+      },
+      {
+        id: "agent-file-pending",
+        organizationId: "agent-org-a",
+        uploaderId: "agent-user-a",
+        uploadId: "agent-upload-pending",
+        ownerType: "issue",
+        objectKey: "private/agent-file-pending",
+        filename: "pending.png",
+        sizeBytes: 512,
+        declaredContentType: "image/png",
+        detectedImageFormat: "png",
+        status: "pending",
+        createdAt: new Date(attachmentCreatedAt.getTime() + 1_000),
+        updatedAt: attachmentCreatedAt,
+      },
+    ])
+    await db.insert(schema.issueFileOwners).values([
+      {
+        fileId: "agent-file-image",
+        organizationId: "agent-org-a",
+        ownerType: "issue",
+        issueId: "agent-issue-a",
+      },
+      {
+        fileId: "agent-file-pdf",
+        organizationId: "agent-org-a",
+        ownerType: "issue",
+        issueId: "agent-issue-a",
+      },
+      {
+        fileId: "agent-file-pending",
+        organizationId: "agent-org-a",
+        ownerType: "issue",
+        issueId: "agent-issue-a",
+      },
+    ])
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
       userId: "agent-user-a",
@@ -1446,6 +1518,7 @@ describe("Agent internal capability repository", () => {
         internal.searchIssueLabels({ grant: run.grant, query: "back" }),
         internal.searchIssues({ grant: run.grant, search: "boundary" }),
         internal.getIssue({
+          attachmentLimit: 1,
           grant: run.grant,
           lookup: "number",
           number: 1,
@@ -1470,6 +1543,47 @@ describe("Agent internal capability repository", () => {
     expect(issues[0]).not.toHaveProperty("creatorId")
     expect(issue).toMatchObject({ id: "agent-issue-a", number: 1 })
     expect(issue).not.toHaveProperty("organizationId")
+    expect(issue.attachments.items).toEqual([
+      {
+        id: "agent-file-image",
+        filename: "marker.jpeg",
+        sizeBytes: 1_024,
+        declaredContentType: "image/jpeg",
+        imageReadable: true,
+        textPreviewable: false,
+        dimensions: { width: 640, height: 480 },
+        uploaderName: "Agent User A",
+        createdAt: attachmentCreatedAt.toISOString(),
+      },
+    ])
+    expect(issue.attachments.nextCursor).toEqual(expect.any(String))
+    expect(JSON.stringify(issue.attachments)).not.toContain("objectKey")
+    expect(JSON.stringify(issue.attachments)).not.toContain("etag")
+
+    const secondAttachmentPage = await internal.getIssue({
+      attachmentCursor: issue.attachments.nextCursor ?? undefined,
+      attachmentLimit: 1,
+      grant: run.grant,
+      lookup: "id",
+      id: issue.id,
+    })
+    expect(secondAttachmentPage.attachments).toMatchObject({
+      items: [
+        {
+          id: "agent-file-pdf",
+          imageReadable: false,
+          textPreviewable: false,
+          dimensions: null,
+          uploaderName: "Agent User B",
+        },
+      ],
+      nextCursor: null,
+    })
+    expect(
+      secondAttachmentPage.attachments.items.some(
+        (attachment) => attachment.id === "agent-file-pending"
+      )
+    ).toBe(false)
 
     await expect(
       internal.getIssue({

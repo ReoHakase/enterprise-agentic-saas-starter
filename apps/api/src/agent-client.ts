@@ -47,6 +47,25 @@ export type AgentIssue = {
   updatedAt: string
 }
 
+export type AgentIssueAttachment = {
+  id: string
+  filename: string
+  sizeBytes: number
+  declaredContentType: string
+  imageReadable: boolean
+  textPreviewable: boolean
+  dimensions: { width: number; height: number } | null
+  uploaderName: string
+  createdAt: string
+}
+
+export type AgentIssueDetail = AgentIssue & {
+  attachments: {
+    items: AgentIssueAttachment[]
+    nextCursor: string | null
+  }
+}
+
 export type AgentConnection = {
   grant: string
   expiresAt: string
@@ -125,6 +144,7 @@ export type AgentCanonicalToolName =
   | "create_issue"
   | "delete_issue"
   | "get_issue"
+  | "read_issue_attachment_image"
   | "read_account_context"
   | "read_active_organization"
   | "rename_thread"
@@ -398,6 +418,22 @@ export type AgentSearchIssuesInput = {
   /** 安定sortされたbounded first pageだけを返す。継続取得用cursorは未提供。 */
   limit?: number
 }
+
+export type AgentGetIssueInput =
+  | {
+      grant: string
+      lookup: "id"
+      id: string
+      attachmentCursor?: string
+      attachmentLimit?: number
+    }
+  | {
+      grant: string
+      lookup: "number"
+      number: number
+      attachmentCursor?: string
+      attachmentLimit?: number
+    }
 
 export type AgentInternalFetchBinding = {
   fetch(

@@ -7,6 +7,7 @@ import {
   publicWebResearchAgent,
   threadTitleAgent,
 } from "."
+import { productAgentToolsForFeatures } from "./agents/product-agent"
 import { publicWebResearchProviderOptions } from "./agents/public-web-research-agent"
 import { threadTitleProviderOptions } from "./agents/thread-title-agent"
 import { OPENROUTER_MODEL_ID } from "./models/openrouter"
@@ -48,6 +49,22 @@ describe("Mastra product agent registry", () => {
       "web_search",
     ])
     expect(productTools.web_search).not.toMatchObject({ type: "provider" })
+    const visionTools = productAgentToolsForFeatures({
+      visionEnabled: true,
+      writesEnabled: false,
+    })
+    expect(Object.keys(visionTools)).toContain("read_issue_attachment_image")
+    expect(
+      visionTools.read_issue_attachment_image?.outputSchema
+    ).toBeUndefined()
+    expect(
+      Object.keys(
+        productAgentToolsForFeatures({
+          visionEnabled: false,
+          writesEnabled: false,
+        })
+      )
+    ).not.toContain("read_issue_attachment_image")
 
     expect(mastra.getAgentById("public-web-research-agent")).toBe(
       publicWebResearchAgent
