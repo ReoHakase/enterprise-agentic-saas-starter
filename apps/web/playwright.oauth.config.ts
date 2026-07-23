@@ -78,6 +78,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { outputFolder: "playwright-report/oauth" }]],
   use: {
     baseURL: webOrigin,
@@ -99,7 +101,7 @@ export default defineConfig({
       command: "bun --no-env-file run e2e:github-emulator",
       url: `${githubOrigin}/meta`,
       reuseExistingServer: false,
-      timeout: 30_000,
+      timeout: 60_000,
       env: {
         ...oauthEnvironment,
         PORT: "4101",
@@ -110,7 +112,7 @@ export default defineConfig({
       command: "bun --no-env-file e2e/fixtures/oauth-api.ts",
       url: `${apiOrigin}/ready`,
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: 120_000,
       env: {
         ...oauthEnvironment,
         PORT: "3101",
@@ -120,7 +122,7 @@ export default defineConfig({
       command: "next dev --hostname 0.0.0.0 --port 3100 --turbopack",
       url: `${webOrigin}/auth/sign-in`,
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 180_000,
       env: {
         ...oauthEnvironment,
         API_PUBLIC_URL: apiOrigin,

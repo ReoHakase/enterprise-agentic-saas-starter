@@ -81,5 +81,6 @@ Agent releaseでは通常のcheck/mock E2E後に、明示的なpaid `test:e2e:ag
 - CI内のsecretはdotenvx/GitHub Secretsから注入する。
 - TursoやOAuth providerを使うE2EはPRではmock/smoke、mainでは実環境寄りなど段階化する。
 - Playwright browser install/cacheを考慮する。
+- App/OAuth Playwrightはtest 90秒、expect 15秒、mock/API起動60〜120秒、Next起動180秒を明示する。CI runnerではroute遷移が既定のexpect 5秒を超えうるため、`failOnFlakyTests`を維持したまま待機予算で吸収する。
 
 具体的な `package.json` scripts、`turbo.json`、GitHub Actions例が必要なときだけ `references/ci-quality.md` を読む。

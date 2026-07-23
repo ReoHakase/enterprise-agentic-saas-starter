@@ -78,8 +78,8 @@ export default defineConfig({
   reporter: [["list"]],
   // A single product run may legitimately consume the five-minute runtime
   // budget. The full release journey contains several independent runs.
-  timeout: 1_800_000,
-  expect: { timeout: 15_000 },
+  timeout: 2_400_000,
+  expect: { timeout: 30_000 },
   use: {
     baseURL: environment.webOrigin,
     // The paid response body must not be copied into test artifacts.
@@ -101,7 +101,7 @@ export default defineConfig({
       command: "bun --no-env-file run e2e:github-emulator",
       url: `${environment.githubOrigin}/meta`,
       reuseExistingServer: false,
-      timeout: 30_000,
+      timeout: 60_000,
       env: {
         ...commonEnvironment,
         PORT: String(environment.githubPort),
@@ -112,7 +112,7 @@ export default defineConfig({
       command: "bun --no-env-file e2e/fixtures/agent-stack.ts",
       url: `${environment.apiOrigin}/ready`,
       reuseExistingServer: false,
-      timeout: 180_000,
+      timeout: 240_000,
       env: {
         ...commonEnvironment,
         ...optionalOpenRouterEnvironment,
@@ -123,7 +123,7 @@ export default defineConfig({
       command: `next dev --hostname 0.0.0.0 --port ${environment.webPort} --turbopack`,
       url: `${environment.webOrigin}/auth/sign-in`,
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 180_000,
       env: {
         ...commonEnvironment,
         API_PUBLIC_URL: environment.apiOrigin,

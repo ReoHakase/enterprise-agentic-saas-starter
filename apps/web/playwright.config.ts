@@ -14,6 +14,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   reporter: [["list"], ["html", { outputFolder: "playwright-report/app" }]],
   use: {
     baseURL,
@@ -45,13 +47,13 @@ export default defineConfig({
           command: "bun run e2e:mock-api",
           url: "http://127.0.0.1:3001/health",
           reuseExistingServer: !process.env.CI,
-          timeout: 30_000,
+          timeout: 60_000,
         },
         {
           command: "bun run dev:e2e",
           url: `${baseURL}/auth/sign-in`,
           reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
+          timeout: 180_000,
           env: {
             ...process.env,
             API_PUBLIC_URL: "http://127.0.0.1:3001",
