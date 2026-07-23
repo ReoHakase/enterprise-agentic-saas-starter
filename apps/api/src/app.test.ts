@@ -73,6 +73,9 @@ const createSeededDb = async () => {
       "invitation_email_jobs",
       "issue_activity_events",
       "issue_comments",
+      "issue_thumbnail_selections",
+      "issue_file_owners",
+      "files",
       "audit_logs",
       "issues",
       "invitation",
@@ -203,6 +206,54 @@ const createSeededDb = async () => {
       updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       foreign key (organization_id) references organization(id) on delete cascade,
       foreign key (issue_id) references issues(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create table files (
+      id text primary key,
+      organization_id text not null,
+      uploader_id text not null,
+      upload_id text not null,
+      owner_type text not null,
+      object_key text not null,
+      filename text not null,
+      size_bytes integer not null,
+      declared_content_type text not null,
+      detected_image_format text,
+      image_width integer,
+      image_height integer,
+      etag text,
+      status text not null default 'pending',
+      storage_object_id text,
+      key_version integer,
+      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
+      foreign key (organization_id) references organization(id) on delete cascade,
+      unique (id, organization_id, owner_type)
+    )
+  `)
+  await db.run(sql`
+    create table issue_file_owners (
+      file_id text primary key,
+      organization_id text not null,
+      owner_type text not null default 'issue',
+      issue_id text not null,
+      foreign key (file_id, organization_id, owner_type)
+        references files(id, organization_id, owner_type) on delete cascade,
+      foreign key (issue_id) references issues(id) on delete cascade,
+      unique (file_id, organization_id, issue_id)
+    )
+  `)
+  await db.run(sql`
+    create table issue_thumbnail_selections (
+      organization_id text not null,
+      issue_id text not null,
+      file_id text not null,
+      primary key (issue_id, organization_id),
+      foreign key (issue_id) references issues(id) on delete cascade,
+      foreign key (file_id, organization_id, issue_id)
+        references issue_file_owners(file_id, organization_id, issue_id)
+        on delete cascade
     )
   `)
   await db.run(sql`
@@ -2847,6 +2898,249 @@ describe("issue-like issues", () => {
       pageSize: 10,
       total: 13,
     })
+  })
+
+  it("returns Issue summaries and selects or resets an authenticated thumbnail", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
+    const oldest = new Date("2026-07-20T00:00:00.000Z")
+    const newer = new Date("2026-07-21T00:00:00.000Z")
+    await db.insert(schema.issues).values({
+      id: "thumbnail-other-issue",
+      organizationId: "org_1",
+      number: 2,
+      title: "Other thumbnail owner",
+      creatorId: "user_1",
+      createdAt: oldest,
+      updatedAt: oldest,
+    })
+    await db.insert(schema.files).values([
+      {
+        id: "thumbnail-oldest",
+        organizationId: "org_1",
+        uploaderId: "user_1",
+        uploadId: "thumbnail-upload-oldest",
+        ownerType: "issue",
+        objectKey: "thumbnail/object-oldest",
+        filename: "oldest.png",
+        sizeBytes: 100,
+        declaredContentType: "image/png",
+        detectedImageFormat: "png",
+        imageWidth: 640,
+        imageHeight: 480,
+        etag: "etag-oldest",
+        status: "ready",
+        createdAt: oldest,
+        updatedAt: oldest,
+      },
+      {
+        id: "thumbnail-newer",
+        organizationId: "org_1",
+        uploaderId: "user_1",
+        uploadId: "thumbnail-upload-newer",
+        ownerType: "issue",
+        objectKey: "thumbnail/object-newer",
+        filename: "newer.jpg",
+        sizeBytes: 120,
+        declaredContentType: "image/jpeg",
+        detectedImageFormat: "jpeg",
+        imageWidth: 800,
+        imageHeight: 800,
+        etag: "etag-newer",
+        status: "ready",
+        createdAt: newer,
+        updatedAt: newer,
+      },
+      {
+        id: "thumbnail-avif",
+        organizationId: "org_1",
+        uploaderId: "user_1",
+        uploadId: "thumbnail-upload-avif",
+        ownerType: "issue",
+        objectKey: "thumbnail/object-avif",
+        filename: "unsupported.avif",
+        sizeBytes: 80,
+        declaredContentType: "image/avif",
+        detectedImageFormat: "avif",
+        imageWidth: 320,
+        imageHeight: 320,
+        etag: "etag-avif",
+        status: "ready",
+        createdAt: newer,
+        updatedAt: newer,
+      },
+      {
+        id: "thumbnail-other-owner",
+        organizationId: "org_1",
+        uploaderId: "user_1",
+        uploadId: "thumbnail-upload-other",
+        ownerType: "issue",
+        objectKey: "thumbnail/object-other",
+        filename: "other.png",
+        sizeBytes: 90,
+        declaredContentType: "image/png",
+        detectedImageFormat: "png",
+        imageWidth: 400,
+        imageHeight: 400,
+        etag: "etag-other",
+        status: "ready",
+        createdAt: newer,
+        updatedAt: newer,
+      },
+    ])
+    await db.insert(schema.issueFileOwners).values([
+      {
+        fileId: "thumbnail-oldest",
+        organizationId: "org_1",
+        issueId: "issue_1",
+      },
+      {
+        fileId: "thumbnail-newer",
+        organizationId: "org_1",
+        issueId: "issue_1",
+      },
+      {
+        fileId: "thumbnail-avif",
+        organizationId: "org_1",
+        issueId: "issue_1",
+      },
+      {
+        fileId: "thumbnail-other-owner",
+        organizationId: "org_1",
+        issueId: "thumbnail-other-issue",
+      },
+    ])
+    await db.insert(schema.issueComments).values([
+      {
+        id: "thumbnail-comment-1",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        authorId: "user_1",
+        body: "First",
+      },
+      {
+        id: "thumbnail-comment-2",
+        organizationId: "org_1",
+        issueId: "issue_1",
+        authorId: "user_1",
+        body: "Second",
+      },
+    ])
+
+    const listResponse = await app.handle(
+      jsonRequest(
+        "/issues?organizationId=org_1&sortBy=number&sortDirection=asc",
+        { userId: "user_1" }
+      )
+    )
+    expect(listResponse.status).toBe(200)
+    expect(await listResponse.json()).toMatchObject({
+      items: [
+        expect.objectContaining({
+          id: "issue_1",
+          attachmentCount: 3,
+          commentCount: 2,
+          thumbnail: expect.objectContaining({
+            id: "thumbnail-oldest",
+            filename: "oldest.png",
+          }),
+        }),
+        expect.objectContaining({
+          id: "thumbnail-other-issue",
+          attachmentCount: 1,
+          commentCount: 0,
+        }),
+      ],
+    })
+
+    const automatic = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail?organizationId=org_1", {
+        userId: "user_1",
+      })
+    )
+    expect(automatic.status).toBe(200)
+    expect(await automatic.json()).toMatchObject({
+      mode: "automatic",
+      file: { id: "thumbnail-oldest" },
+    })
+
+    const select = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail", {
+        method: "PUT",
+        userId: "user_1",
+        body: { organizationId: "org_1", fileId: "thumbnail-newer" },
+      })
+    )
+    expect(select.status).toBe(200)
+    expect(await select.json()).toMatchObject({
+      mode: "selected",
+      file: { id: "thumbnail-newer" },
+    })
+
+    const afterSelect = await db
+      .select({ revision: schema.issues.revision })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "issue_1"))
+    expect(afterSelect[0]?.revision).toBe(2)
+    const auditsAfterSelect = await db
+      .select()
+      .from(schema.auditLogs)
+      .where(
+        sql`${schema.auditLogs.targetId} = 'issue_1' and ${schema.auditLogs.action} = 'issue.updated'`
+      )
+    expect(auditsAfterSelect).toHaveLength(1)
+
+    const noOp = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail", {
+        method: "PUT",
+        userId: "user_1",
+        body: { organizationId: "org_1", fileId: "thumbnail-newer" },
+      })
+    )
+    expect(noOp.status).toBe(200)
+    const afterNoOp = await db
+      .select({ revision: schema.issues.revision })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "issue_1"))
+    expect(afterNoOp[0]?.revision).toBe(2)
+
+    const wrongOwner = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail", {
+        method: "PUT",
+        userId: "user_1",
+        body: {
+          organizationId: "org_1",
+          fileId: "thumbnail-other-owner",
+        },
+      })
+    )
+    expect(wrongOwner.status).toBe(404)
+    const unsupported = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail", {
+        method: "PUT",
+        userId: "user_1",
+        body: { organizationId: "org_1", fileId: "thumbnail-avif" },
+      })
+    )
+    expect(unsupported.status).toBe(400)
+
+    const reset = await app.handle(
+      jsonRequest("/issues/issue_1/thumbnail", {
+        method: "PUT",
+        userId: "user_1",
+        body: { organizationId: "org_1", fileId: null },
+      })
+    )
+    expect(reset.status).toBe(200)
+    expect(await reset.json()).toMatchObject({
+      mode: "automatic",
+      file: { id: "thumbnail-oldest" },
+    })
+    const afterReset = await db
+      .select({ revision: schema.issues.revision })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "issue_1"))
+    expect(afterReset[0]?.revision).toBe(3)
   })
 
   it("creates, filters, updates, loads, and comments on an issue", async () => {

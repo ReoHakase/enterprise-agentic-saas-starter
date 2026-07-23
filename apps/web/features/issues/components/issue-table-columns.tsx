@@ -1,9 +1,11 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
+import { FileIcon, MessageCircleIcon } from "lucide-react"
 import { useMemo } from "react"
 
 import { LocalDate } from "@/components/local-date"
+import { AuthenticatedFileImage } from "@/features/files/components/authenticated-file-image"
 
 import {
   IssueActionsCell,
@@ -29,7 +31,9 @@ export const useIssueColumns = ({
   onUpdate,
   onSelect,
   onRequestDelete,
+  organizationId,
 }: {
+  organizationId: string
   assignees: IssueAssigneeOption[]
   getIssueHref: (issue: IssueUiItem) => string
   onToggle: AsyncAction<[issue: IssueUiItem]>
@@ -42,13 +46,37 @@ export const useIssueColumns = ({
       {
         accessorKey: "number",
         header: ({ column }) => (
-          <SortableIssueHeader column={column} label="Number" />
+          <SortableIssueHeader
+            column={column}
+            label="#"
+            accessibleLabel="Number"
+          />
         ),
         cell: ({ row }) => (
           <span className="font-mono text-sm text-muted-foreground">
             #{row.original.number}
           </span>
         ),
+      },
+      {
+        id: "thumbnail",
+        header: () => <span className="sr-only">Thumbnail</span>,
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.thumbnail ? (
+            <AuthenticatedFileImage
+              file={row.original.thumbnail}
+              organizationId={organizationId}
+              sizes="64px"
+              className="size-16 max-w-none rounded-md border bg-muted object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <span
+              className="block size-16 rounded-md border border-dashed bg-muted/30"
+              aria-label="No thumbnail"
+            />
+          ),
       },
       {
         accessorKey: "title",
@@ -99,6 +127,38 @@ export const useIssueColumns = ({
         ),
       },
       {
+        id: "comments",
+        accessorFn: (issue) => issue.commentCount ?? 0,
+        header: "Comments",
+        enableSorting: false,
+        cell: ({ row }) =>
+          (row.original.commentCount ?? 0) > 0 ? (
+            <span
+              className="inline-flex items-center gap-1 text-muted-foreground tabular-nums"
+              aria-label={`${row.original.commentCount} comments`}
+            >
+              <MessageCircleIcon className="size-4" aria-hidden="true" />
+              {row.original.commentCount}
+            </span>
+          ) : null,
+      },
+      {
+        id: "files",
+        accessorFn: (issue) => issue.attachmentCount ?? 0,
+        header: "Files",
+        enableSorting: false,
+        cell: ({ row }) =>
+          (row.original.attachmentCount ?? 0) > 0 ? (
+            <span
+              className="inline-flex items-center gap-1 text-muted-foreground tabular-nums"
+              aria-label={`${row.original.attachmentCount} files`}
+            >
+              <FileIcon className="size-4" aria-hidden="true" />
+              {row.original.attachmentCount}
+            </span>
+          ) : null,
+      },
+      {
         id: "updatedAt",
         accessorFn: (issue) => issue.updatedAt,
         header: ({ column }) => (
@@ -126,5 +186,13 @@ export const useIssueColumns = ({
         ),
       },
     ],
-    [assignees, getIssueHref, onRequestDelete, onSelect, onToggle, onUpdate]
+    [
+      assignees,
+      getIssueHref,
+      onRequestDelete,
+      onSelect,
+      onToggle,
+      onUpdate,
+      organizationId,
+    ]
   )

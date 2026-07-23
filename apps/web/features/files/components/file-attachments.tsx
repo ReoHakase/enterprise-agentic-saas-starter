@@ -23,6 +23,7 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
 import {
@@ -31,6 +32,7 @@ import {
   ImageIcon,
   PaperclipIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
   Trash2Icon,
   UploadIcon,
   XIcon,
@@ -56,6 +58,11 @@ import {
   useFileUploads,
   type PendingFileUpload,
 } from "@/features/files/use-file-uploads"
+import { updateIssueThumbnail } from "@/features/issues/api"
+import {
+  issueKeys,
+  issueThumbnailQueryOptions,
+} from "@/features/issues/queries"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
@@ -130,11 +137,17 @@ const FileRow = ({
   organizationId,
   onRequestDelete,
   onRequestPreview,
+  onSelectThumbnail,
+  thumbnailPending,
+  thumbnailSelected,
 }: {
   file: FileDto
   organizationId: string
   onRequestDelete: (file: FileDto) => void
   onRequestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
+  onSelectThumbnail: (fileId: string) => void
+  thumbnailPending: boolean
+  thumbnailSelected: boolean
 }) => {
   const requestDelete = useCallback(
     () => onRequestDelete(file),
@@ -144,6 +157,10 @@ const FileRow = ({
     (event: MouseEvent<HTMLButtonElement>) =>
       onRequestPreview(file, event.currentTarget),
     [file, onRequestPreview]
+  )
+  const selectThumbnail = useCallback(
+    () => onSelectThumbnail(file.id),
+    [file.id, onSelectThumbnail]
   )
   const canPreview = file.previewable || file.textPreviewable
   const downloadUrl = buildFileDownloadUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
@@ -230,6 +247,22 @@ const FileRow = ({
             <LocalDate value={file.createdAt} includeTime />
           </div>
         </div>
+        {file.previewable ? (
+          thumbnailSelected ? (
+            <Badge variant="secondary">Thumbnail</Badge>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={thumbnailPending}
+              aria-label={`Use ${file.filename} as thumbnail`}
+              onClick={selectThumbnail}
+            >
+              Use as thumbnail
+            </Button>
+          )
+        ) : null}
         <a
           href={downloadUrl}
           download
@@ -273,6 +306,10 @@ export const FileAttachments = ({
   const filesQuery = useInfiniteQuery(
     filesQueryOptions(apiClient, organizationId, ownerType, ownerId)
   )
+  const thumbnailQuery = useQuery({
+    ...issueThumbnailQueryOptions(apiClient, organizationId, ownerId),
+    enabled: ownerType === "issue" && organizationId.length > 0,
+  })
   const ownerQueryKey = useMemo(
     () => fileKeys.owner(organizationId, ownerType, ownerId),
     [organizationId, ownerId, ownerType]
@@ -297,15 +334,28 @@ export const FileAttachments = ({
       // fails. Its normal query retry path can reconcile the stale timeline.
     }
   }, [onFilesChanged])
+  const invalidateAttachmentViews = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ownerQueryKey }),
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.lists(organizationId),
+      }),
+      ownerType === "issue"
+        ? queryClient.invalidateQueries({
+            queryKey: issueKeys.thumbnail(organizationId, ownerId),
+          })
+        : Promise.resolve(),
+    ])
+  }, [organizationId, ownerId, ownerQueryKey, ownerType, queryClient])
   const handleUploaded = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
+    await invalidateAttachmentViews()
     await notifyFilesChanged()
     toast.success("File uploaded")
-  }, [notifyFilesChanged, ownerQueryKey, queryClient])
+  }, [invalidateAttachmentViews, notifyFilesChanged])
   const handleCanceled = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
+    await invalidateAttachmentViews()
     await notifyFilesChanged()
-  }, [notifyFilesChanged, ownerQueryKey, queryClient])
+  }, [invalidateAttachmentViews, notifyFilesChanged])
   const { uploads, addFiles, retryUpload, cancelUpload } = useFileUploads({
     organizationId,
     ownerType,
@@ -318,7 +368,7 @@ export const FileAttachments = ({
       deleteFile(apiClient, { organizationId, fileId: file.id }),
     onSuccess: async () => {
       setFileToDelete(null)
-      await queryClient.invalidateQueries({ queryKey: ownerQueryKey })
+      await invalidateAttachmentViews()
       await notifyFilesChanged()
       toast.success("File deleted")
     },
@@ -326,7 +376,39 @@ export const FileAttachments = ({
       showConsoleApiErrorToast(error, "File deletion failed")
     },
   })
+  const thumbnailMutation = useMutation({
+    mutationFn: (fileId: string | null) =>
+      updateIssueThumbnail(apiClient, {
+        id: ownerId,
+        organizationId,
+        fileId,
+      }),
+    onSuccess: async (thumbnail) => {
+      queryClient.setQueryData(
+        issueKeys.thumbnail(organizationId, ownerId),
+        thumbnail
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: issueKeys.lists(organizationId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: issueKeys.detail(organizationId, ownerId),
+        }),
+      ])
+      toast.success(
+        thumbnail.mode === "selected"
+          ? "Thumbnail updated"
+          : "Thumbnail set to automatic"
+      )
+    },
+    onError: (error) => {
+      showConsoleApiErrorToast(error, "Thumbnail update failed")
+    },
+  })
   const { mutate: mutateDelete, isPending: deletePending } = deleteMutation
+  const { mutate: mutateThumbnail, isPending: thumbnailPending } =
+    thumbnailMutation
   const { refetch, fetchNextPage } = filesQuery
   const files = useMemo(
     () => filesQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -372,6 +454,14 @@ export const FileAttachments = ({
   const loadMore = useCallback(() => {
     void fetchNextPage()
   }, [fetchNextPage])
+  const selectThumbnail = useCallback(
+    (fileId: string) => mutateThumbnail(fileId),
+    [mutateThumbnail]
+  )
+  const resetThumbnail = useCallback(
+    () => mutateThumbnail(null),
+    [mutateThumbnail]
+  )
 
   return (
     <section
@@ -406,6 +496,18 @@ export const FileAttachments = ({
           <UploadIcon data-icon="inline-start" aria-hidden="true" />
           Add files
         </Button>
+        {thumbnailQuery.data?.mode === "selected" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={thumbnailPending}
+            onClick={resetThumbnail}
+          >
+            <RotateCcwIcon data-icon="inline-start" aria-hidden="true" />
+            Use oldest automatically
+          </Button>
+        ) : null}
       </div>
 
       {uploads.length > 0 ? (
@@ -452,6 +554,9 @@ export const FileAttachments = ({
               organizationId={organizationId}
               onRequestDelete={requestDelete}
               onRequestPreview={requestPreview}
+              onSelectThumbnail={selectThumbnail}
+              thumbnailPending={thumbnailPending}
+              thumbnailSelected={thumbnailQuery.data?.file?.id === file.id}
             />
           ))}
         </ul>

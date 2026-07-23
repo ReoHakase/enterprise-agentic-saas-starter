@@ -5,6 +5,7 @@ import {
   files,
   issueActivityEvents,
   issueFileOwners,
+  issueThumbnailSelections,
   member,
   issueComments,
   issues,
@@ -30,7 +31,11 @@ import {
   type SQL,
 } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
+import { AppError, publicErrors } from "../../errors/app-error"
+import {
+  isPreviewableImageFormat,
+  previewableImageFormats,
+} from "../files/constants"
 import { getFileOwnerAdapter } from "../files/owner-adapters"
 import { releaseDeletedFileStorageObjectsInTransaction } from "../files/storage-object-release"
 import {
@@ -54,6 +59,24 @@ export type IssueDto = {
   revision: number
   createdAt: string
   updatedAt: string
+}
+
+export type IssueThumbnailFileDto = {
+  id: string
+  filename: string
+  imageWidth: number | null
+  imageHeight: number | null
+}
+
+export type IssueThumbnailDto = {
+  mode: "automatic" | "selected"
+  file: IssueThumbnailFileDto | null
+}
+
+export type IssueListItemDto = IssueDto & {
+  attachmentCount: number
+  commentCount: number
+  thumbnail: IssueThumbnailFileDto | null
 }
 
 export type IssueMutationAuditContext = {
@@ -168,6 +191,22 @@ const toIssueDto = (issue: IssueRow): IssueDto => ({
   updatedAt: issue.updatedAt.toISOString(),
 })
 
+const thumbnailFileSelection = {
+  id: files.id,
+  filename: files.filename,
+  imageWidth: files.imageWidth,
+  imageHeight: files.imageHeight,
+}
+
+const toThumbnailFileDto = (
+  row: IssueThumbnailFileDto
+): IssueThumbnailFileDto => ({
+  id: row.id,
+  filename: row.filename,
+  imageWidth: row.imageWidth,
+  imageHeight: row.imageHeight,
+})
+
 const toIssueCommentDto = (
   comment: IssueCommentWithAuthorRow
 ): IssueCommentDto => {
@@ -273,6 +312,187 @@ const issueListOrder = (input: ListIssuesInput): SQL[] => {
   return [primary, ...tieBreakers]
 }
 
+const previewableFileCondition = inArray(files.detectedImageFormat, [
+  ...previewableImageFormats,
+])
+
+const findEffectiveIssueThumbnail = async (
+  db: Pick<Db, "select">,
+  input: { issueId: string; organizationId: string }
+): Promise<IssueThumbnailDto> => {
+  const selectedRows = await db
+    .select(thumbnailFileSelection)
+    .from(issueThumbnailSelections)
+    .innerJoin(
+      files,
+      and(
+        eq(files.id, issueThumbnailSelections.fileId),
+        eq(files.organizationId, issueThumbnailSelections.organizationId)
+      )
+    )
+    .where(
+      and(
+        eq(issueThumbnailSelections.issueId, input.issueId),
+        eq(issueThumbnailSelections.organizationId, input.organizationId),
+        eq(files.status, "ready"),
+        previewableFileCondition
+      )
+    )
+    .limit(1)
+  const selected = selectedRows[0]
+  if (selected) {
+    return { mode: "selected", file: toThumbnailFileDto(selected) }
+  }
+
+  const automaticRows = await db
+    .select(thumbnailFileSelection)
+    .from(issueFileOwners)
+    .innerJoin(
+      files,
+      and(
+        eq(files.id, issueFileOwners.fileId),
+        eq(files.organizationId, issueFileOwners.organizationId),
+        eq(files.ownerType, issueFileOwners.ownerType)
+      )
+    )
+    .where(
+      and(
+        eq(issueFileOwners.issueId, input.issueId),
+        eq(issueFileOwners.organizationId, input.organizationId),
+        eq(files.status, "ready"),
+        previewableFileCondition
+      )
+    )
+    .orderBy(asc(files.createdAt), asc(files.id))
+    .limit(1)
+
+  return {
+    mode: "automatic",
+    file: automaticRows[0] ? toThumbnailFileDto(automaticRows[0]) : null,
+  }
+}
+
+const loadIssueListSummaries = async (
+  db: Pick<Db, "select">,
+  input: { issueIds: string[]; organizationId: string }
+) => {
+  const [attachmentRows, commentRows, selectedRows] = await Promise.all([
+    db
+      .select({
+        issueId: issueFileOwners.issueId,
+        count: sql<number>`count(*)`,
+      })
+      .from(issueFileOwners)
+      .innerJoin(
+        files,
+        and(
+          eq(files.id, issueFileOwners.fileId),
+          eq(files.organizationId, issueFileOwners.organizationId),
+          eq(files.ownerType, issueFileOwners.ownerType)
+        )
+      )
+      .where(
+        and(
+          eq(issueFileOwners.organizationId, input.organizationId),
+          inArray(issueFileOwners.issueId, input.issueIds),
+          eq(files.status, "ready")
+        )
+      )
+      .groupBy(issueFileOwners.issueId),
+    db
+      .select({
+        issueId: issueComments.issueId,
+        count: sql<number>`count(*)`,
+      })
+      .from(issueComments)
+      .where(
+        and(
+          eq(issueComments.organizationId, input.organizationId),
+          inArray(issueComments.issueId, input.issueIds)
+        )
+      )
+      .groupBy(issueComments.issueId),
+    db
+      .select({
+        issueId: issueThumbnailSelections.issueId,
+        ...thumbnailFileSelection,
+      })
+      .from(issueThumbnailSelections)
+      .innerJoin(
+        files,
+        and(
+          eq(files.id, issueThumbnailSelections.fileId),
+          eq(files.organizationId, issueThumbnailSelections.organizationId)
+        )
+      )
+      .where(
+        and(
+          eq(issueThumbnailSelections.organizationId, input.organizationId),
+          inArray(issueThumbnailSelections.issueId, input.issueIds),
+          eq(files.status, "ready"),
+          previewableFileCondition
+        )
+      ),
+  ])
+  const defaultCandidates = db
+    .select({
+      issueId: issueFileOwners.issueId,
+      ...thumbnailFileSelection,
+      rank: sql<number>`row_number() over (
+        partition by ${issueFileOwners.issueId}
+        order by ${files.createdAt} asc, ${files.id} asc
+      )`.as("thumbnail_rank"),
+    })
+    .from(issueFileOwners)
+    .innerJoin(
+      files,
+      and(
+        eq(files.id, issueFileOwners.fileId),
+        eq(files.organizationId, issueFileOwners.organizationId),
+        eq(files.ownerType, issueFileOwners.ownerType)
+      )
+    )
+    .where(
+      and(
+        eq(issueFileOwners.organizationId, input.organizationId),
+        inArray(issueFileOwners.issueId, input.issueIds),
+        eq(files.status, "ready"),
+        previewableFileCondition
+      )
+    )
+    .as("default_thumbnail_candidates")
+  const defaultRows = await db
+    .select()
+    .from(defaultCandidates)
+    .where(eq(defaultCandidates.rank, 1))
+
+  const attachmentCounts = new Map(
+    attachmentRows.map((row) => [row.issueId, Number(row.count)])
+  )
+  const commentCounts = new Map(
+    commentRows.map((row) => [row.issueId, Number(row.count)])
+  )
+  const selectedThumbnails = new Map(
+    selectedRows.map((row) => [row.issueId, toThumbnailFileDto(row)])
+  )
+  const defaultThumbnails = new Map(
+    defaultRows.map((row) => [row.issueId, toThumbnailFileDto(row)])
+  )
+
+  return {
+    attachmentCounts,
+    commentCounts,
+    thumbnails: new Map(
+      input.issueIds.map((issueId) => [
+        issueId,
+        selectedThumbnails.get(issueId) ??
+          defaultThumbnails.get(issueId) ??
+          null,
+      ])
+    ),
+  }
+}
+
 export const listIssuesByOrganization = async (
   db: IssueReadDatabase,
   input: ListIssuesInput
@@ -298,7 +518,7 @@ export const listIssuePageByOrganization = async (
   db: Db,
   input: Omit<ListIssuesInput, "limit"> & { page: number }
 ): Promise<{
-  items: IssueDto[]
+  items: IssueListItemDto[]
   page: number
   pageSize: typeof ISSUE_LIST_PAGE_SIZE
   total: number
@@ -319,8 +539,25 @@ export const listIssuePageByOrganization = async (
           .limit(ISSUE_LIST_PAGE_SIZE)
           .offset((input.page - 1) * ISSUE_LIST_PAGE_SIZE),
       ])
+      const summaries =
+        rows.length === 0
+          ? {
+              attachmentCounts: new Map<string, number>(),
+              commentCounts: new Map<string, number>(),
+              thumbnails: new Map<string, IssueThumbnailFileDto | null>(),
+            }
+          : await loadIssueListSummaries(tx, {
+              issueIds: rows.map((row) => row.id),
+              organizationId: input.organizationId,
+            })
       return {
-        items: rows.map(toIssueDto),
+        items: rows.map((row) =>
+          Object.assign(toIssueDto(row), {
+            attachmentCount: summaries.attachmentCounts.get(row.id) ?? 0,
+            commentCount: summaries.commentCounts.get(row.id) ?? 0,
+            thumbnail: summaries.thumbnails.get(row.id) ?? null,
+          })
+        ),
         page: input.page,
         pageSize: ISSUE_LIST_PAGE_SIZE,
         total: Number(countRows[0]?.total ?? 0),
@@ -330,6 +567,162 @@ export const listIssuePageByOrganization = async (
     throw publicErrors.internal(cause, {
       module: "issues",
       operation: "listIssuePageByOrganization",
+    })
+  }
+}
+
+export const getEffectiveIssueThumbnail = async (
+  db: Db,
+  input: { issueId: string; organizationId: string }
+): Promise<IssueThumbnailDto> => {
+  try {
+    return await findEffectiveIssueThumbnail(db, input)
+  } catch (cause) {
+    throw publicErrors.internal(cause, {
+      module: "issues",
+      operation: "getEffectiveIssueThumbnail",
+    })
+  }
+}
+
+export const setIssueThumbnail = async (
+  db: Db,
+  input: {
+    actorUserId: string
+    fileId: string | null
+    issueId: string
+    organizationId: string
+    now?: Date
+  }
+): Promise<IssueThumbnailDto | null> => {
+  try {
+    return await db.transaction(async (tx) => {
+      const currentIssueRows = await tx
+        .select()
+        .from(issues)
+        .where(
+          and(
+            eq(issues.id, input.issueId),
+            eq(issues.organizationId, input.organizationId)
+          )
+        )
+        .limit(1)
+      const currentIssue = currentIssueRows[0]
+      if (!currentIssue) return null
+
+      if (input.fileId) {
+        const candidateRows = await tx
+          .select({
+            detectedImageFormat: files.detectedImageFormat,
+          })
+          .from(issueFileOwners)
+          .innerJoin(
+            files,
+            and(
+              eq(files.id, issueFileOwners.fileId),
+              eq(files.organizationId, issueFileOwners.organizationId),
+              eq(files.ownerType, issueFileOwners.ownerType)
+            )
+          )
+          .where(
+            and(
+              eq(issueFileOwners.fileId, input.fileId),
+              eq(issueFileOwners.issueId, input.issueId),
+              eq(issueFileOwners.organizationId, input.organizationId),
+              eq(files.status, "ready")
+            )
+          )
+          .limit(1)
+        const candidate = candidateRows[0]
+        if (!candidate) {
+          throw publicErrors.notFound("File not found", { resource: "file" })
+        }
+        if (!isPreviewableImageFormat(candidate.detectedImageFormat)) {
+          throw publicErrors.validation(
+            "Thumbnail must be a previewable image",
+            {
+              field: "fileId",
+              reason: "not_previewable",
+            }
+          )
+        }
+      }
+
+      const currentSelectionRows = await tx
+        .select({ fileId: issueThumbnailSelections.fileId })
+        .from(issueThumbnailSelections)
+        .where(
+          and(
+            eq(issueThumbnailSelections.issueId, input.issueId),
+            eq(issueThumbnailSelections.organizationId, input.organizationId)
+          )
+        )
+        .limit(1)
+      const currentFileId = currentSelectionRows[0]?.fileId ?? null
+      if (currentFileId === input.fileId) {
+        return findEffectiveIssueThumbnail(tx, input)
+      }
+
+      if (input.fileId) {
+        await tx
+          .insert(issueThumbnailSelections)
+          .values({
+            organizationId: input.organizationId,
+            issueId: input.issueId,
+            fileId: input.fileId,
+          })
+          .onConflictDoUpdate({
+            target: [
+              issueThumbnailSelections.issueId,
+              issueThumbnailSelections.organizationId,
+            ],
+            set: { fileId: input.fileId },
+          })
+      } else {
+        await tx
+          .delete(issueThumbnailSelections)
+          .where(
+            and(
+              eq(issueThumbnailSelections.issueId, input.issueId),
+              eq(issueThumbnailSelections.organizationId, input.organizationId)
+            )
+          )
+      }
+
+      const now = input.now ?? new Date()
+      await tx
+        .update(issues)
+        .set({
+          revision: sql`${issues.revision} + 1`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(issues.id, input.issueId),
+            eq(issues.organizationId, input.organizationId),
+            eq(issues.revision, currentIssue.revision)
+          )
+        )
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: "issue.updated",
+        targetType: "issue",
+        targetId: input.issueId,
+        metadata: issueAuditMetadata(currentIssue.number),
+        createdAt: now,
+      })
+
+      return findEffectiveIssueThumbnail(tx, input)
+    })
+  } catch (cause) {
+    if (cause instanceof AppError) {
+      throw cause
+    }
+    throw publicErrors.internal(cause, {
+      module: "issues",
+      operation: "setIssueThumbnail",
     })
   }
 }

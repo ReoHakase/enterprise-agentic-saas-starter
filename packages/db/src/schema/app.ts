@@ -545,10 +545,44 @@ export const issueFileOwners = sqliteTable(
       table.organizationId,
       table.issueId
     ),
+    uniqueIndex("issue_file_owners_file_organization_issue_uidx").on(
+      table.fileId,
+      table.organizationId,
+      table.issueId
+    ),
     check(
       "issue_file_owners_owner_type_check",
       sql`${table.ownerType} = 'issue'`
     ),
+  ]
+)
+
+export const issueThumbnailSelections = sqliteTable(
+  "issue_thumbnail_selections",
+  {
+    organizationId: text("organization_id").notNull(),
+    issueId: text("issue_id").notNull(),
+    fileId: text("file_id").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.issueId, table.organizationId],
+      name: "issue_thumbnail_selections_issue_organization_pk",
+    }),
+    foreignKey({
+      columns: [table.issueId, table.organizationId],
+      foreignColumns: [issues.id, issues.organizationId],
+      name: "issue_thumbnail_selections_issue_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.fileId, table.organizationId, table.issueId],
+      foreignColumns: [
+        issueFileOwners.fileId,
+        issueFileOwners.organizationId,
+        issueFileOwners.issueId,
+      ],
+      name: "issue_thumbnail_selections_file_owner_tenant_fk",
+    }).onDelete("cascade"),
   ]
 )
 

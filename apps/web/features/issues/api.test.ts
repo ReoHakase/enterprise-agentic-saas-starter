@@ -8,11 +8,13 @@ import {
   createIssueComment,
   deleteIssue,
   deleteIssueComment,
+  getIssueThumbnail,
   getIssueTimeline,
   listIssueComments,
   listIssues,
   updateIssue,
   updateIssueComment,
+  updateIssueThumbnail,
 } from "./api"
 
 const issue = {
@@ -72,7 +74,14 @@ describe("issues Eden API", () => {
       .mockResolvedValueOnce(Response.json(comment))
     const client = createApiClient("https://api.example.test")
 
-    await expect(listIssues(client, "org-1")).resolves.toEqual([issue])
+    await expect(listIssues(client, "org-1")).resolves.toEqual([
+      {
+        ...issue,
+        attachmentCount: 0,
+        commentCount: 0,
+        thumbnail: null,
+      },
+    ])
     await expect(
       createIssue(client, {
         organizationId: "org-1",
@@ -133,6 +142,59 @@ describe("issues Eden API", () => {
     await expect(listIssues(client, "org-1")).rejects.toThrow(
       "API response did not include data"
     )
+  })
+
+  it("gets, selects, and resets an Issue thumbnail", async () => {
+    const thumbnail = {
+      mode: "selected" as const,
+      file: {
+        id: "file-1",
+        filename: "thumbnail.png",
+        imageWidth: 640,
+        imageHeight: 480,
+      },
+    }
+    fetchMock
+      .mockResolvedValueOnce(Response.json(thumbnail))
+      .mockResolvedValueOnce(Response.json(thumbnail))
+      .mockResolvedValueOnce(
+        Response.json({ mode: "automatic", file: thumbnail.file })
+      )
+    const client = createApiClient("https://api.example.test")
+
+    await expect(
+      getIssueThumbnail(client, {
+        id: issue.id,
+        organizationId: "org-1",
+      })
+    ).resolves.toEqual(thumbnail)
+    await updateIssueThumbnail(client, {
+      id: issue.id,
+      organizationId: "org-1",
+      fileId: "file-1",
+    })
+    await updateIssueThumbnail(client, {
+      id: issue.id,
+      organizationId: "org-1",
+      fileId: null,
+    })
+
+    const selectCall = fetchMock.mock.calls[1]
+    const resetCall = fetchMock.mock.calls[2]
+    if (!selectCall || !resetCall) {
+      throw new Error("Expected thumbnail update requests")
+    }
+    const selectRequest = requestFrom(...selectCall)
+    const resetRequest = requestFrom(...resetCall)
+    expect(selectRequest.method).toBe("PUT")
+    await expect(selectRequest.json()).resolves.toMatchObject({
+      organizationId: "org-1",
+      fileId: "file-1",
+    })
+    await expect(resetRequest.json()).resolves.toMatchObject({
+      organizationId: "org-1",
+      fileId: null,
+    })
   })
 
   it("accepts file activity while treating timeline cursors as opaque strings", async () => {

@@ -34,6 +34,28 @@ export const issueSchema = v.object({
   updatedAt: apiTimestampSchema,
 })
 
+export const issueThumbnailFileSchema = v.object({
+  id: v.string(),
+  filename: v.string(),
+  imageWidth: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  imageHeight: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+})
+
+export const issueThumbnailSchema = v.object({
+  mode: v.picklist(["automatic", "selected"]),
+  file: v.nullable(issueThumbnailFileSchema),
+})
+
+export const issueListItemSchema = v.object({
+  ...issueSchema.entries,
+  attachmentCount: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0)),
+    0
+  ),
+  commentCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0)), 0),
+  thumbnail: v.optional(v.nullable(issueThumbnailFileSchema), null),
+})
+
 export const issueCommentSchema = v.object({
   id: v.string(),
   organizationId: v.string(),
@@ -50,7 +72,7 @@ export const issueCommentSchema = v.object({
 })
 
 export const issueListPageSchema = v.object({
-  items: v.array(issueSchema),
+  items: v.array(issueListItemSchema),
   page: v.pipe(v.number(), v.integer(), v.minValue(1)),
   pageSize: v.pipe(v.number(), v.integer(), v.minValue(1)),
   total: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -157,7 +179,9 @@ export const commentFormSchema = v.object({
 })
 
 export type Issue = v.InferOutput<typeof issueSchema>
+export type IssueListItem = v.InferOutput<typeof issueListItemSchema>
 export type IssueListPage = v.InferOutput<typeof issueListPageSchema>
+export type IssueThumbnail = v.InferOutput<typeof issueThumbnailSchema>
 export type IssueStatus = v.InferOutput<typeof issueStatusSchema>
 export type IssuePriority = v.InferOutput<typeof issuePrioritySchema>
 export type IssueComment = v.InferOutput<typeof issueCommentSchema>
@@ -170,6 +194,8 @@ export type CreateIssueFormValues = v.InferOutput<typeof createIssueFormSchema>
 export type UpdateIssueFormValues = v.InferOutput<typeof updateIssueFormSchema>
 
 export const parseIssue = (value: unknown) => v.parse(issueSchema, value)
+export const parseIssueThumbnail = (value: unknown) =>
+  v.parse(issueThumbnailSchema, value)
 export const parseIssueListPage = (value: unknown) =>
   v.parse(issueListPageSchema, value)
 export const parseIssueComment = (value: unknown) =>

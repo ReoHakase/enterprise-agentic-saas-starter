@@ -81,6 +81,9 @@ export const IssueDetailController = ({
       queryClient.invalidateQueries({
         queryKey: issueKeys.timeline(organizationId, issue.id),
       }),
+      queryClient.invalidateQueries({
+        queryKey: issueKeys.lists(organizationId),
+      }),
     ])
   }, [issue.id, organizationId, queryClient, refreshTimeline])
   const updateMutation = useMutation({
@@ -156,6 +159,9 @@ export const IssueDetailController = ({
         queryClient.invalidateQueries({
           queryKey: issueKeys.timeline(organizationId, issue.id),
         }),
+        queryClient.invalidateQueries({
+          queryKey: issueKeys.lists(organizationId),
+        }),
       ])
       toast.success("Comment added")
     },
@@ -195,6 +201,9 @@ export const IssueDetailController = ({
         }),
         queryClient.invalidateQueries({
           queryKey: issueKeys.timeline(organizationId, issue.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: issueKeys.lists(organizationId),
         }),
       ])
     },

@@ -10,17 +10,38 @@ import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { fileKeys } from "@/features/files/queries"
+import type { IssueThumbnail } from "@/features/issues/schema"
 
 const mocks = vi.hoisted(() => ({
   listFiles: vi.fn<() => Promise<FileListDto>>(),
   deleteFile: vi.fn<() => Promise<void>>(),
   getTextFilePreview: vi.fn<() => Promise<TextFilePreviewDto>>(),
+  getIssueThumbnail:
+    vi.fn<
+      (
+        client: unknown,
+        input: { id: string; organizationId: string },
+        signal?: AbortSignal
+      ) => Promise<IssueThumbnail>
+    >(),
+  updateIssueThumbnail:
+    vi.fn<
+      (
+        client: unknown,
+        input: { id: string; organizationId: string; fileId: string | null }
+      ) => Promise<IssueThumbnail>
+    >(),
 }))
 
 vi.mock("@/features/files/api", () => ({
   listFiles: mocks.listFiles,
   deleteFile: mocks.deleteFile,
   getTextFilePreview: mocks.getTextFilePreview,
+}))
+
+vi.mock("@/features/issues/api", () => ({
+  getIssueThumbnail: mocks.getIssueThumbnail,
+  updateIssueThumbnail: mocks.updateIssueThumbnail,
 }))
 
 vi.mock("@/lib/api-client", () => ({ apiClient: {} }))
@@ -88,6 +109,8 @@ describe("file attachments", () => {
     mocks.listFiles.mockReset()
     mocks.deleteFile.mockReset()
     mocks.getTextFilePreview.mockReset()
+    mocks.getIssueThumbnail.mockReset()
+    mocks.updateIssueThumbnail.mockReset()
     mocks.listFiles.mockResolvedValue({
       items: [imageFile, textFile, documentFile],
       nextCursor: null,
@@ -97,6 +120,28 @@ describe("file attachments", () => {
       content: "<script>alert('escaped')</script>",
       truncated: true,
     })
+    mocks.getIssueThumbnail.mockResolvedValue({
+      mode: "automatic",
+      file: null,
+    })
+    mocks.updateIssueThumbnail.mockImplementation(
+      async (_client: unknown, input: { fileId: string | null }) => ({
+        mode: input.fileId ? "selected" : "automatic",
+        file: input.fileId
+          ? {
+              id: input.fileId,
+              filename: imageFile.filename,
+              imageWidth: imageFile.imageWidth,
+              imageHeight: imageFile.imageHeight,
+            }
+          : {
+              id: imageFile.id,
+              filename: imageFile.filename,
+              imageWidth: imageFile.imageWidth,
+              imageHeight: imageFile.imageHeight,
+            },
+      })
+    )
   })
 
   it("renders private previews and authenticated downloads", async () => {
@@ -229,5 +274,41 @@ describe("file attachments", () => {
     )
     await waitFor(() => expect(mocks.listFiles).toHaveBeenCalledTimes(2))
     expect(onFilesChanged).toHaveBeenCalledOnce()
+  })
+
+  it("selects an image thumbnail and resets to the oldest image", async () => {
+    const user = userEvent.setup()
+    renderAttachments()
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Use architecture.png as thumbnail",
+      })
+    )
+    await waitFor(() =>
+      expect(mocks.updateIssueThumbnail).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          id: "issue-1",
+          organizationId: "org alpha",
+          fileId: "file-image",
+        }
+      )
+    )
+    expect(await screen.findByText("Thumbnail")).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole("button", { name: "Use oldest automatically" })
+    )
+    await waitFor(() =>
+      expect(mocks.updateIssueThumbnail).toHaveBeenLastCalledWith(
+        expect.anything(),
+        {
+          id: "issue-1",
+          organizationId: "org alpha",
+          fileId: null,
+        }
+      )
+    )
   })
 })

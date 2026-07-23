@@ -189,6 +189,7 @@ type SessionState = {
   files: StoredFileAttachment[]
   commentsByIssue: Map<string, IssueComment[]>
   activitiesByIssue: Map<string, IssueActivity[]>
+  thumbnailSelectionsByIssue: Map<string, string>
   membersByOrganization: Map<string, OrganizationMember[]>
   invitationsByOrganization: Map<string, OrganizationInvitation[]>
   deletionReceiptsByIdempotencyKey: Map<string, OrganizationDeletionReceipt>
@@ -314,7 +315,42 @@ const compareIssueValue = (
   return left < right ? -1 : 1
 }
 
-const listIssuePage = (issues: Issue[], searchParams: URLSearchParams) => {
+const effectiveIssueThumbnail = (state: SessionState, issue: Issue) => {
+  const candidates = state.files
+    .filter(
+      (file) =>
+        file.organizationId === issue.organizationId &&
+        file.owner.id === issue.id &&
+        file.previewable
+    )
+    .toSorted(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.id.localeCompare(right.id)
+    )
+  const selectedId = state.thumbnailSelectionsByIssue.get(issue.id)
+  const selected = selectedId
+    ? candidates.find((file) => file.id === selectedId)
+    : undefined
+  const file = selected ?? candidates[0] ?? null
+  return {
+    mode: selected ? ("selected" as const) : ("automatic" as const),
+    file: file
+      ? {
+          id: file.id,
+          filename: file.filename,
+          imageWidth: file.imageWidth,
+          imageHeight: file.imageHeight,
+        }
+      : null,
+  }
+}
+
+const listIssuePage = (
+  state: SessionState,
+  issues: Issue[],
+  searchParams: URLSearchParams
+) => {
   const search = searchParams.get("search")?.trim().toLowerCase()
   const status = searchParams.get("status")
   const priority = searchParams.get("priority")
@@ -361,7 +397,17 @@ const listIssuePage = (issues: Issue[], searchParams: URLSearchParams) => {
   })
   const pageSize = 10
   return {
-    items: filtered.slice((page - 1) * pageSize, page * pageSize),
+    items: filtered.slice((page - 1) * pageSize, page * pageSize).map((issue) =>
+      Object.assign({}, issue, {
+        attachmentCount: state.files.filter(
+          (file) =>
+            file.organizationId === issue.organizationId &&
+            file.owner.id === issue.id
+        ).length,
+        commentCount: state.commentsByIssue.get(issue.id)?.length ?? 0,
+        thumbnail: effectiveIssueThumbnail(state, issue).file,
+      })
+    ),
     page,
     pageSize,
     total: filtered.length,
@@ -479,6 +525,7 @@ const createState = (sessionKey: string): SessionState => {
       files: [],
       commentsByIssue: new Map(),
       activitiesByIssue: new Map(),
+      thumbnailSelectionsByIssue: new Map(),
       membersByOrganization: new Map(),
       invitationsByOrganization: new Map(),
       deletionReceiptsByIdempotencyKey: new Map(),
@@ -649,6 +696,27 @@ const createState = (sessionKey: string): SessionState => {
         content: "Private Beta tenant fixture content.",
       },
       {
+        id: "file-a-image-alternate",
+        organizationId: "org-a",
+        uploadId: "upload-a-image-alternate",
+        owner: { type: "issue", id: "issue-a-1" },
+        filename: "diagram-preview.png",
+        sizeBytes: 68,
+        declaredContentType: "image/png",
+        previewable: true,
+        textPreviewable: false,
+        imageWidth: 400,
+        imageHeight: 400,
+        uploader: {
+          id: user.id,
+          name: user.name,
+          profileImage: user.profileImage,
+        },
+        createdAt: "2026-07-13T11:30:00.000Z",
+        canDelete: true,
+        content: PREVIEW_PNG_BASE64,
+      },
+      {
         id: "file-a-image",
         organizationId: "org-a",
         uploadId: "upload-a-image",
@@ -750,6 +818,7 @@ const createState = (sessionKey: string): SessionState => {
         ],
       ],
     ]),
+    thumbnailSelectionsByIssue: new Map(),
     membersByOrganization: new Map([
       [
         "org-a",
@@ -912,7 +981,7 @@ const sessionKeyFor = (request: Request) => {
 const corsHeaders = {
   "access-control-allow-credentials": "true",
   "access-control-allow-headers": "content-type",
-  "access-control-allow-methods": "DELETE,GET,OPTIONS,PATCH,POST",
+  "access-control-allow-methods": "DELETE,GET,OPTIONS,PATCH,POST,PUT",
   "access-control-allow-origin": "http://127.0.0.1:3000",
   vary: "Origin",
 }
@@ -2526,6 +2595,9 @@ Bun.serve({
       if (!file) return notFound("File")
       if (!file.canDelete) return forbidden()
       state.files.splice(fileIndex, 1)
+      if (state.thumbnailSelectionsByIssue.get(file.owner.id) === file.id) {
+        state.thumbnailSelectionsByIssue.delete(file.owner.id)
+      }
       const activities = state.activitiesByIssue.get(file.owner.id) ?? []
       activities.push({
         type: "activity",
@@ -2882,6 +2954,7 @@ Bun.serve({
         deletedIssueIds.forEach((issueId) => {
           state.commentsByIssue.delete(issueId)
           state.activitiesByIssue.delete(issueId)
+          state.thumbnailSelectionsByIssue.delete(issueId)
         })
         state.membersByOrganization.delete(organizationId)
         state.invitationsByOrganization.delete(organizationId)
@@ -3025,6 +3098,7 @@ Bun.serve({
       if ("response" in access) return access.response
       return json(
         listIssuePage(
+          state,
           state.issues.filter(
             (issue) => issue.organizationId === access.organization.id
           ),
@@ -3138,6 +3212,49 @@ Bun.serve({
       return json({ items, nextCursor: null })
     }
 
+    const thumbnailMatch = pathname.match(/^\/issues\/([^/]+)\/thumbnail$/)
+    if (
+      thumbnailMatch?.[1] &&
+      (request.method === "GET" || request.method === "PUT")
+    ) {
+      const body = request.method === "PUT" ? await readBody(request) : {}
+      const organizationId =
+        request.method === "GET"
+          ? url.searchParams.get("organizationId")
+          : nonEmptyString(body.organizationId)
+      const access = resolveOrganization(state, organizationId)
+      if ("response" in access) return access.response
+      const issue = findIssue(state, thumbnailMatch[1], access.organization.id)
+      if (!issue) return notFound("Issue")
+
+      if (request.method === "PUT") {
+        const fileId = body.fileId === null ? null : nonEmptyString(body.fileId)
+        if (body.fileId !== null && !fileId) {
+          return invalid("fileId is invalid")
+        }
+        if (fileId) {
+          const candidate = state.files.find(
+            (file) =>
+              file.id === fileId &&
+              file.organizationId === issue.organizationId &&
+              file.owner.id === issue.id &&
+              file.previewable
+          )
+          if (!candidate) return notFound("File")
+        }
+        const currentFileId =
+          state.thumbnailSelectionsByIssue.get(issue.id) ?? null
+        if (currentFileId !== fileId) {
+          if (fileId) state.thumbnailSelectionsByIssue.set(issue.id, fileId)
+          else state.thumbnailSelectionsByIssue.delete(issue.id)
+          issue.revision += 1
+          issue.updatedAt = FIXED_MUTATION_NOW
+        }
+      }
+
+      return json(effectiveIssueThumbnail(state, issue))
+    }
+
     const issueMatch = pathname.match(/^\/issues\/([^/]+)$/)
     if (issueMatch?.[1]) {
       const body = request.method === "GET" ? {} : await readBody(request)
@@ -3222,6 +3339,7 @@ Bun.serve({
         )
         state.commentsByIssue.delete(issue.id)
         state.activitiesByIssue.delete(issue.id)
+        state.thumbnailSelectionsByIssue.delete(issue.id)
         return json(issue)
       }
     }

@@ -12,11 +12,13 @@ import {
   findIssueById,
   findIssueByNumber,
   findIssueCommentById,
+  getEffectiveIssueThumbnail,
   insertIssue,
   insertIssueComment,
   listIssueComments,
   listIssueTimeline,
   listIssuePageByOrganization,
+  setIssueThumbnail,
   updateIssueById,
   updateIssueCommentById,
   type ListIssuesInput,
@@ -102,6 +104,40 @@ export const getIssueByNumber = async (
     throw publicErrors.notFound("Issue not found", { resource: "issue" })
   }
   return issue
+}
+
+export const getIssueThumbnail = async (
+  db: Db,
+  input: { userId: string; issueId: string; organizationId: string }
+) => {
+  await getIssue(db, {
+    userId: input.userId,
+    id: input.issueId,
+    organizationId: input.organizationId,
+  })
+  return getEffectiveIssueThumbnail(db, input)
+}
+
+export const updateIssueThumbnail = async (
+  db: Db,
+  input: {
+    userId: string
+    issueId: string
+    organizationId: string
+    fileId: string | null
+  }
+) => {
+  await requireMembership(db, input)
+  const thumbnail = await setIssueThumbnail(db, {
+    actorUserId: input.userId,
+    fileId: input.fileId,
+    issueId: input.issueId,
+    organizationId: input.organizationId,
+  })
+  if (!thumbnail) {
+    throw publicErrors.notFound("Issue not found", { resource: "issue" })
+  }
+  return thumbnail
 }
 
 export const getIssueTimeline = async (

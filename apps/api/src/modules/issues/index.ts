@@ -11,6 +11,7 @@ import {
   deleteIssueParamsModel,
   getIssueQueryModel,
   getIssueByNumberParamsModel,
+  issueThumbnailModel,
   issueTimelinePageModel,
   issueTimelineQueryModel,
   listIssueCommentsResponseModel,
@@ -22,6 +23,7 @@ import {
   updateIssueBodyModel,
   updateIssueCommentBodyModel,
   updateIssueParamsModel,
+  updateIssueThumbnailBodyModel,
 } from "./model"
 import {
   createIssue,
@@ -32,9 +34,11 @@ import {
   getIssueByNumber,
   getIssueComments,
   getIssueTimeline,
+  getIssueThumbnail,
   listIssues,
   updateIssue,
   updateIssueComment,
+  updateIssueThumbnail,
 } from "./service"
 
 export const createIssuesModule = (db: Db) =>
@@ -116,6 +120,57 @@ export const createIssuesModule = (db: Db) =>
           operationId: "getIssue",
           summary: "issue詳細を取得",
           description: "idとorganization idを常に組み合わせて検索する。",
+          tags: ["Issues"],
+        },
+      }
+    )
+    .get(
+      "/issues/:id/thumbnail",
+      ({ authContext, organizationAccess, params }) =>
+        getIssueThumbnail(db, {
+          userId: authContext.user.id,
+          organizationId: organizationAccess.id,
+          issueId: params.id,
+        }),
+      {
+        organizationAccess: {
+          action: "issue.read",
+          source: "query",
+        },
+        params: updateIssueParamsModel,
+        query: getIssueQueryModel,
+        response: { 200: issueThumbnailModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "getIssueThumbnail",
+          summary: "issueの有効なthumbnailを取得",
+          description:
+            "明示選択があればそれを、なければ最古のpreview可能な添付画像を返す。",
+          tags: ["Issues"],
+        },
+      }
+    )
+    .put(
+      "/issues/:id/thumbnail",
+      ({ authContext, body, organizationAccess, params }) =>
+        updateIssueThumbnail(db, {
+          userId: authContext.user.id,
+          organizationId: organizationAccess.id,
+          issueId: params.id,
+          fileId: body.fileId,
+        }),
+      {
+        organizationAccess: {
+          action: "issue.update",
+          source: "body",
+        },
+        params: updateIssueParamsModel,
+        body: updateIssueThumbnailBodyModel,
+        response: { 200: issueThumbnailModel, ...tenantErrorResponses },
+        detail: {
+          operationId: "updateIssueThumbnail",
+          summary: "issueのthumbnail選択を更新",
+          description:
+            "Issueに属するpreview可能な画像を選択する。nullで最古画像の自動選択へ戻す。",
           tags: ["Issues"],
         },
       }

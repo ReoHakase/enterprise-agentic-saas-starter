@@ -1,6 +1,7 @@
 import type {
   Issue,
   IssueComment,
+  IssueListItem,
   IssuePriority,
   IssueStatus,
   UpdateIssueFormValues,
@@ -12,7 +13,8 @@ import type {
 
 export type { IssuePriority, IssueStatus }
 
-export type IssueUiItem = Omit<Issue, "organizationId">
+export type IssueUiItem = Omit<Issue, "organizationId"> &
+  Partial<Pick<IssueListItem, "attachmentCount" | "commentCount" | "thumbnail">>
 export type IssueCommentUiItem = Omit<
   IssueComment,
   "organizationId" | "issueId"

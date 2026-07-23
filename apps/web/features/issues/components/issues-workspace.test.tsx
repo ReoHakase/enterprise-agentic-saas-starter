@@ -24,6 +24,14 @@ const billingIssue: IssueUiItem = {
   revision: 1,
   createdAt: "2026-07-10T00:00:00.000Z",
   updatedAt: "2026-07-13T00:00:00.000Z",
+  attachmentCount: 3,
+  commentCount: 2,
+  thumbnail: {
+    id: "file-thumbnail",
+    filename: "issue-thumbnail.png",
+    imageWidth: 320,
+    imageHeight: 180,
+  },
 }
 
 const issues: IssueUiItem[] = [
@@ -36,6 +44,9 @@ const issues: IssueUiItem[] = [
     status: "closed",
     priority: "medium",
     labels: ["docs"],
+    attachmentCount: 0,
+    commentCount: 0,
+    thumbnail: null,
   },
   {
     ...billingIssue,
@@ -45,6 +56,9 @@ const issues: IssueUiItem[] = [
     status: "in_progress",
     priority: "high",
     labels: ["release"],
+    attachmentCount: 0,
+    commentCount: 0,
+    thumbnail: null,
   },
 ]
 const noIssues: IssueUiItem[] = []
@@ -185,16 +199,35 @@ describe("organization issues", () => {
     const headers = screen
       .getAllByRole("columnheader")
       .map((header) => header.textContent?.trim())
-    expect(headers.slice(0, 7)).toEqual([
-      "Number",
+    expect(headers.slice(0, 10)).toEqual([
+      "#",
+      "Thumbnail",
       "Name",
       "Status",
       "Priority",
       "Assignee",
       "Due date and time",
+      "Comments",
+      "Files",
       "Updated",
     ])
+    expect(screen.getByRole("button", { name: "Number" })).toHaveTextContent(
+      "#"
+    )
     expect(screen.getByText("#12")).toBeInTheDocument()
+    expect(screen.getByAltText("issue-thumbnail.png")).toHaveAttribute(
+      "sizes",
+      "64px"
+    )
+    expect(screen.getByAltText("issue-thumbnail.png")).toHaveClass("size-16")
+    expect(screen.getByLabelText("2 comments")).toHaveTextContent("2")
+    expect(screen.getByLabelText("3 files")).toHaveTextContent("3")
+    const emptyCountRow = screen.getByRole("row", {
+      name: /Document role permissions/u,
+    })
+    const emptyCells = within(emptyCountRow).getAllByRole("cell")
+    expect(emptyCells[7]).toBeEmptyDOMElement()
+    expect(emptyCells[8]).toBeEmptyDOMElement()
     expect(screen.getByTestId("status-open")).toHaveClass("bg-white")
     expect(screen.getByTestId("status-in-progress")).toHaveClass(
       "bg-violet-200"

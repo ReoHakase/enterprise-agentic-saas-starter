@@ -87,6 +87,15 @@ import type {
 } from "./types"
 
 const getIssueRowId = (issue: IssueUiItem) => issue.id
+const issueColumnClassName = (columnId: string) => {
+  if (columnId === "number") return "w-14 max-w-14 px-2"
+  if (columnId === "thumbnail") return "w-20 min-w-20 px-2"
+  if (columnId === "comments" || columnId === "files") {
+    return "w-20 min-w-20 text-center"
+  }
+  if (columnId === "actions") return "w-12"
+  return undefined
+}
 const ISSUE_FILTER_DEBOUNCE_MS = 300
 const tableSortOptions = [
   { label: "Updated", value: "updatedAt" },
@@ -156,6 +165,7 @@ export const IssuesTable = ({
     []
   )
   const columns = useIssueColumns({
+    organizationId,
     assignees,
     getIssueHref,
     onToggle,
@@ -480,7 +490,10 @@ export const IssuesTable = ({
                     {table.getHeaderGroups().map((headerGroup) => (
                       <TableRow key={headerGroup.id}>
                         {headerGroup.headers.map((header) => (
-                          <TableHead key={header.id}>
+                          <TableHead
+                            key={header.id}
+                            className={issueColumnClassName(header.column.id)}
+                          >
                             {header.isPlaceholder
                               ? null
                               : flexRender(
@@ -503,7 +516,10 @@ export const IssuesTable = ({
                           }
                         >
                           {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
+                            <TableCell
+                              key={cell.id}
+                              className={issueColumnClassName(cell.column.id)}
+                            >
                               {flexRender(
                                 cell.column.columnDef.cell,
                                 cell.getContext()

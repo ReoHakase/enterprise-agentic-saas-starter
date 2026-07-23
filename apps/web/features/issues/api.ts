@@ -6,8 +6,9 @@ import {
   parseIssueComment,
   parseIssueComments,
   parseIssueTimelinePage,
+  parseIssueThumbnail,
   parseIssueListPage,
-  type Issue,
+  type IssueListItem,
   type IssueListPage,
   type IssuePriority,
   type IssueStatus,
@@ -44,7 +45,7 @@ export function listIssues(
   client: ApiClient,
   organizationId: string,
   signal?: AbortSignal
-): Promise<Issue[]>
+): Promise<IssueListItem[]>
 export function listIssues(
   client: ApiClient,
   input: IssueListRequest,
@@ -69,6 +70,33 @@ export async function listIssues(
   )
   return typeof input === "string" ? page.items : page
 }
+
+export const getIssueThumbnail = async (
+  client: ApiClient,
+  input: { id: string; organizationId: string },
+  signal?: AbortSignal
+) =>
+  parseIssueThumbnail(
+    unwrap(
+      await client.issues({ id: input.id }).thumbnail.get({
+        query: { organizationId: input.organizationId },
+        fetch: { signal },
+      })
+    )
+  )
+
+export const updateIssueThumbnail = async (
+  client: ApiClient,
+  input: { id: string; organizationId: string; fileId: string | null }
+) =>
+  parseIssueThumbnail(
+    unwrap(
+      await client.issues({ id: input.id }).thumbnail.put({
+        organizationId: input.organizationId,
+        fileId: input.fileId,
+      })
+    )
+  )
 
 export const createIssue = async (
   client: ApiClient,

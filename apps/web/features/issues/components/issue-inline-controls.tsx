@@ -50,10 +50,12 @@ const issueActionsTrigger = <Button variant="ghost" size="icon-sm" />
 export const SortableIssueHeader = ({
   column,
   label,
+  accessibleLabel,
   showDescendingIcon,
 }: {
   column: Column<IssueUiItem, unknown>
   label: string
+  accessibleLabel?: string
   showDescendingIcon?: boolean
 }) => {
   const handleSort = useCallback(
@@ -62,7 +64,12 @@ export const SortableIssueHeader = ({
   )
 
   return (
-    <Button variant="ghost" size="sm" onClick={handleSort}>
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={accessibleLabel}
+      onClick={handleSort}
+    >
       {label}
       {showDescendingIcon && column.getIsSorted() === "desc" ? (
         <ArrowDownIcon data-icon="inline-end" aria-hidden="true" />

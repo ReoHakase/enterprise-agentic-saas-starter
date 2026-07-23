@@ -85,6 +85,7 @@ describe("database migrations", () => {
           "files",
           "invitation_email_jobs",
           "issue_file_owners",
+          "issue_thumbnail_selections",
           "organization_deletion_jobs",
           "organization_file_usage",
           "profile_image_cleanup_jobs",
@@ -103,6 +104,140 @@ describe("database migrations", () => {
           "member_organization_super_admin_uidx",
           "member_organization_user_uidx",
         ])
+      )
+    } finally {
+      client.close()
+    }
+  })
+
+  it("keeps Issue thumbnail selections tenant- and owner-bound", async () => {
+    const client = createClient({ url: "file::memory:" })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder })
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: [
+            "thumbnail-user",
+            "Thumbnail User",
+            "thumbnail@example.test",
+            1,
+            1,
+            1,
+          ],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["thumbnail-org", "Thumbnail Org", "thumbnail-org", 1],
+        },
+        {
+          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "thumbnail-issue-a",
+            "thumbnail-org",
+            1,
+            "Issue A",
+            "thumbnail-user",
+            1,
+            1,
+          ],
+        },
+        {
+          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "thumbnail-issue-b",
+            "thumbnail-org",
+            2,
+            "Issue B",
+            "thumbnail-user",
+            1,
+            1,
+          ],
+        },
+        {
+          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "thumbnail-file-a",
+            "thumbnail-org",
+            "thumbnail-user",
+            "thumbnail-upload-a",
+            "issue",
+            "thumbnail-object-a",
+            "a.png",
+            1,
+            "image/png",
+            "png",
+            1,
+            1,
+            "etag-a",
+            "ready",
+            1,
+            1,
+          ],
+        },
+        {
+          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "thumbnail-file-b",
+            "thumbnail-org",
+            "thumbnail-user",
+            "thumbnail-upload-b",
+            "issue",
+            "thumbnail-object-b",
+            "b.png",
+            1,
+            "image/png",
+            "png",
+            1,
+            1,
+            "etag-b",
+            "ready",
+            1,
+            1,
+          ],
+        },
+        {
+          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+          args: [
+            "thumbnail-file-a",
+            "thumbnail-org",
+            "issue",
+            "thumbnail-issue-a",
+          ],
+        },
+        {
+          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+          args: [
+            "thumbnail-file-b",
+            "thumbnail-org",
+            "issue",
+            "thumbnail-issue-b",
+          ],
+        },
+        {
+          sql: "insert into issue_thumbnail_selections(organization_id,issue_id,file_id) values(?,?,?)",
+          args: ["thumbnail-org", "thumbnail-issue-a", "thumbnail-file-a"],
+        },
+      ])
+
+      await expect(
+        client.execute({
+          sql: "update issue_thumbnail_selections set file_id = ? where organization_id = ? and issue_id = ?",
+          args: ["thumbnail-file-b", "thumbnail-org", "thumbnail-issue-a"],
+        })
+      ).rejects.toThrow(/foreign key constraint failed/i)
+
+      await client.execute({
+        sql: "delete from files where organization_id = ? and id = ?",
+        args: ["thumbnail-org", "thumbnail-file-a"],
+      })
+      expect(
+        (await client.execute("select file_id from issue_thumbnail_selections"))
+          .rows
+      ).toHaveLength(0)
+      expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
+        []
       )
     } finally {
       client.close()

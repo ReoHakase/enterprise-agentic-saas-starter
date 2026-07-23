@@ -38,6 +38,52 @@ test.beforeEach(async () => {
   await resetMockApi()
 })
 
+test("Issue一覧で64px thumbnailと非0件数を表示しviewport外へ漏らさない", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto("/organization/alpha-operations/issues")
+
+  const issueRow = page
+    .getByRole("link", { name: "Review tenant audit log", exact: true })
+    .locator("xpath=ancestor::tr")
+  const thumbnail = issueRow.getByRole("img", {
+    name: "architecture-preview.png",
+  })
+  await expect(thumbnail).toBeVisible()
+  const thumbnailBox = await thumbnail.boundingBox()
+  if (!thumbnailBox) throw new Error("Expected Issue thumbnail geometry")
+  expect(Math.abs(thumbnailBox.width - 64)).toBeLessThanOrEqual(1)
+  expect(Math.abs(thumbnailBox.height - 64)).toBeLessThanOrEqual(1)
+  await expect(issueRow.getByLabel("1 comments")).toBeVisible()
+  await expect(issueRow.getByLabel("3 files")).toBeVisible()
+
+  const emptyCountRow = page
+    .getByRole("link", { name: "Triage keyboard regression", exact: true })
+    .locator("xpath=ancestor::tr")
+  await expect(emptyCountRow.getByLabel(/comments|files/u)).toHaveCount(0)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    )
+  ).toBe(true)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const tableContainer = page.locator('[data-slot="table-container"]').first()
+  await expect(tableContainer).toBeVisible()
+  expect(
+    await tableContainer.evaluate(
+      (element) => element.scrollWidth > element.clientWidth
+    )
+  ).toBe(true)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    )
+  ).toBe(true)
+})
+
 test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", async ({
   context,
   page,
@@ -64,6 +110,43 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
     "href",
     /\/files\/organizations\/org-a\/file-a-seed\/download$/u
   )
+  const architectureDetails = modalAttachments.getByRole("group", {
+    name: "File details for architecture-preview.png",
+  })
+  const alternateDetails = modalAttachments.getByRole("group", {
+    name: "File details for diagram-preview.png",
+  })
+  await expect(
+    architectureDetails.getByText("Thumbnail", { exact: true })
+  ).toBeVisible()
+  const selectThumbnailResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/issues/issue-a-1/thumbnail") &&
+      response.request().method() === "PUT"
+  )
+  await alternateDetails
+    .getByRole("button", { name: "Use diagram-preview.png as thumbnail" })
+    .click()
+  expect((await selectThumbnailResponse).ok()).toBeTruthy()
+  await expect(
+    alternateDetails.getByText("Thumbnail", { exact: true })
+  ).toBeVisible()
+  await expect(
+    architectureDetails.getByText("Thumbnail", { exact: true })
+  ).toHaveCount(0)
+
+  const resetThumbnailResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/issues/issue-a-1/thumbnail") &&
+      response.request().method() === "PUT"
+  )
+  await modalAttachments
+    .getByRole("button", { name: "Use oldest automatically" })
+    .click()
+  expect((await resetThumbnailResponse).ok()).toBeTruthy()
+  await expect(
+    architectureDetails.getByText("Thumbnail", { exact: true })
+  ).toBeVisible()
 
   const modalTextTrigger = modalAttachments.getByRole("button", {
     name: "tenant-boundary-notes.txt",
@@ -114,17 +197,20 @@ test("Issueのmodal/pageで複数fileをupload・cancel・deleteできる", asyn
   await expect(filePreview).toHaveCount(0)
   await expect(issueDialog).toBeVisible()
   await expect(modalTextTrigger).toBeFocused()
-  const cardBoxAfter = await imageCard.boundingBox()
-  const thumbnailBoxAfter = await modalImageTrigger.boundingBox()
-  if (!cardBoxAfter || !thumbnailBoxAfter) {
-    throw new Error("Expected attachment card geometry after preview")
-  }
-  expect(
-    Math.abs(cardBoxAfter.width - cardBoxBefore.width)
-  ).toBeLessThanOrEqual(4)
-  expect(
-    Math.abs(thumbnailBoxAfter.height - thumbnailBoxBefore.height)
-  ).toBeLessThanOrEqual(4)
+  await expect
+    .poll(async () => {
+      const cardBoxAfter = await imageCard.boundingBox()
+      if (!cardBoxAfter) return Number.POSITIVE_INFINITY
+      return Math.abs(cardBoxAfter.width - cardBoxBefore.width)
+    })
+    .toBeLessThanOrEqual(4)
+  await expect
+    .poll(async () => {
+      const thumbnailBoxAfter = await modalImageTrigger.boundingBox()
+      if (!thumbnailBoxAfter) return Number.POSITIVE_INFINITY
+      return Math.abs(thumbnailBoxAfter.height - thumbnailBoxBefore.height)
+    })
+    .toBeLessThanOrEqual(4)
 
   await issueDialog.getByRole("button", { name: "Open full page" }).click()
   await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues\/1$/u)

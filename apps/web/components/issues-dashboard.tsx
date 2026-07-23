@@ -16,7 +16,7 @@ import type {
   IssueUpdate,
 } from "@/features/issues/components/types"
 import { issueKeys, issuesQueryOptions } from "@/features/issues/queries"
-import type { Issue } from "@/features/issues/schema"
+import type { IssueListItem } from "@/features/issues/schema"
 import {
   useIssueSearchState,
   withAgentThreadHref,
@@ -199,7 +199,7 @@ export const IssuesDashboard = ({
   )
 }
 
-const toIssueViewModel = (issue: Issue): IssueUiItem => ({
+const toIssueViewModel = (issue: IssueListItem): IssueUiItem => ({
   id: issue.id,
   number: issue.number,
   title: issue.title,
@@ -213,4 +213,7 @@ const toIssueViewModel = (issue: Issue): IssueUiItem => ({
   revision: issue.revision,
   createdAt: issue.createdAt,
   updatedAt: issue.updatedAt,
+  attachmentCount: issue.attachmentCount,
+  commentCount: issue.commentCount,
+  thumbnail: issue.thumbnail,
 })

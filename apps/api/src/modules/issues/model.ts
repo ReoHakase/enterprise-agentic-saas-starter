@@ -52,8 +52,27 @@ export const issueModel = v.pipe(
   })
 )
 
+export const issueThumbnailFileModel = v.object({
+  id: v.string(),
+  filename: v.string(),
+  imageWidth: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  imageHeight: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+})
+
+export const issueThumbnailModel = v.object({
+  mode: v.picklist(["automatic", "selected"]),
+  file: v.nullable(issueThumbnailFileModel),
+})
+
+export const issueListItemModel = v.object({
+  ...issueModel.entries,
+  attachmentCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  commentCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  thumbnail: v.nullable(issueThumbnailFileModel),
+})
+
 export const listIssuesResponseModel = v.object({
-  items: v.array(issueModel),
+  items: v.array(issueListItemModel),
   page: v.pipe(v.number(), v.integer(), v.minValue(1)),
   pageSize: v.literal(10),
   total: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -82,6 +101,11 @@ export const listIssuesQueryModel = v.object({
 
 export const getIssueQueryModel = v.object({
   organizationId: organizationIdModel,
+})
+
+export const updateIssueThumbnailBodyModel = v.object({
+  organizationId: organizationIdModel,
+  fileId: v.nullable(nonEmptyStringModel),
 })
 
 export const getIssueByNumberParamsModel = v.object({
