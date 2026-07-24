@@ -1,6 +1,7 @@
 # Agent Instructions
 
 このリポジトリでは、skills、references、agent向けドキュメントは原則日本語で書く。commit messageだけは既存運用に合わせる。
+日本語技術文書を作成または更新する前に、`docs/jargon.md`を読み、表記基準へ従う。
 
 ## Docsを正本にする
 

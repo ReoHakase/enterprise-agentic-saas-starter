@@ -215,19 +215,17 @@ active planは進捗、判断記録、検証証跡を更新します。完了後
 
 ## 言語と命名
 
-説明文は日本語を基本にします。ただしcode上の概念と識別子は英語へ統一します。
+説明文は日本語を基本にします。コード識別子、パス、設定値、製品や標準の正式名称は原文を維持し、
+一般的な説明へ必要性のない英単語を混ぜません。詳細な判断順序と推奨表記は
+[日本語技術文書の用語・表記基準](../jargon.md)を正本にします。
 
-英語を維持する例:
+コード上の概念を英語で維持する場合はインラインコードにし、初出で日本語の意味を説明します。
+例えば`port`、`adapter`、`composition root`はコード構成と一対一で対応する場合に維持できます。
+一方、一般説明では「ドメイン層」「アプリケーションサービス」「単体テスト」のように日本語または
+定着したカタカナ表記を使います。
 
-- `domain`, `application`, `service`
-- `port`, `adapter`, `repository`, `transport`
-- `controller`, `view`, `composition root`
-- `mock`, `fake`, `fixture`, `story`
-- `light`, `dark`, `dialog`
-- `unit`, `integration`, `E2E`, `VRT`
-- product、library、command、file、scriptの正式名
-
-同じ概念を文書では日本語、codeでは英語という形に分裂させないためです。
+コード上の責務名と依存方向は[命名とlayer](naming-and-layers.md)で定義し、日本語文章上の表記は
+用語・表記基準で定義します。用語の役割と文章上の表記を混同しません。
 
 ## 更新と廃止
 

@@ -6,6 +6,7 @@ created: 2026-07-24
 owners:
   - repository-maintainers
 linked_specs:
+  - docs/jargon.md
   - docs/architecture/knowledge-management.md
   - docs/architecture/naming-and-layers.md
   - docs/architecture/system-boundaries.md
@@ -89,6 +90,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 ### 1.1 文書構成
 
 - [x] `docs/architecture/apps/`と`packages/`を追加
+- [x] `docs/jargon.md`を追加し、AGENTSとdocs indexから参照
 - [x] `docs/testing/`をWeb/API/Agent/E2E/migration/VRTへ分割
 - [x] `docs/decisions/`とADRを追加
 - [x] `docs/exec-plans/`とtemplateを追加
@@ -444,7 +446,7 @@ git diff --name-status origin/main -- packages/db/drizzle
 | --- | --- | --- |
 | `bun run format:check` | pass | 696 files、2026-07-24 |
 | `git diff --check d23af9f --` | pass | whitespace errorなし |
-| docs metadata/link/anchor/ADR/reachability検査 | pass | 全docs 52文書、ADR 6件、全件が入口から到達可能 |
+| docs metadata/link/anchor/ADR/reachability検査 | pass | 全docs 53文書、ADR 6件、全件が入口から到達可能 |
 | `git diff --exit-code d23af9f -- .agents/skills .github/skills` | pass | generated skill直接変更なし |
 | `nix flake check` | pass | `checks.aarch64-darwin.agent-skills`とdevShell |
 | current docs diffのcorrectness/security/tests独立review | pass | P0〜P2 findingゼロ、2026-07-24 |

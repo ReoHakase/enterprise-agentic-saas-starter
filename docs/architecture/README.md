@@ -10,6 +10,7 @@ last_reviewed: 2026-07-24
 ## 共通
 
 - [知識管理](knowledge-management.md)
+- [日本語技術文書の用語・表記基準](../jargon.md)
 - [命名とlayer](naming-and-layers.md)
 - [システム境界](system-boundaries.md)
 - [品質強制](quality-enforcement.md)

@@ -10,15 +10,16 @@ last_reviewed: 2026-07-24
 ## 通常の読む順序
 
 1. [知識管理](architecture/knowledge-management.md)
-2. [命名とlayer](architecture/naming-and-layers.md)
-3. [システム境界](architecture/system-boundaries.md)
-4. [対象app/packageのarchitecture](architecture/README.md)
-5. [品質強制](architecture/quality-enforcement.md)
-6. [テスト戦略](testing/README.md)
-7. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
-8. [Codex harness](architecture/codex-harness.md)
-9. [ADR](decisions/README.md)
-10. 必要な[active exec plan](exec-plans/README.md)
+2. [日本語技術文書の用語・表記基準](jargon.md)
+3. [命名とlayer](architecture/naming-and-layers.md)
+4. [システム境界](architecture/system-boundaries.md)
+5. [対象app/packageのarchitecture](architecture/README.md)
+6. [品質強制](architecture/quality-enforcement.md)
+7. [テスト戦略](testing/README.md)
+8. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
+9. [Codex harness](architecture/codex-harness.md)
+10. [ADR](decisions/README.md)
+11. 必要な[active exec plan](exec-plans/README.md)
 
 ## 変更作業の開始順序
 
@@ -39,6 +40,7 @@ last_reviewed: 2026-07-24
 
 | 配置 | 責務 |
 | --- | --- |
+| [`docs/jargon.md`](jargon.md) | 日本語技術文書の用語、表記、例外 |
 | `docs/architecture/` | directory、dependency、runtime、qualityの規範 |
 | `docs/testing/` | test layer、runner、script、実行条件 |
 | `docs/decisions/` | 長期的な設計判断と代償 |
