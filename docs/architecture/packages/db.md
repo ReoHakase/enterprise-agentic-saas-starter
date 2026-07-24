@@ -41,11 +41,18 @@ packages/db/
 
 ## 依存関係
 
-他workspaceへ依存しません。schemaからclient、development、fakerをimportしません。
+runtime/sourceから他workspaceへ依存しません。共有TypeScript config等のtoolingは
+`devDependency`として利用できますが、source importやproduction dependencyにしません。
+schemaからclient、development、fakerをimportしません。
+`schema/**`はDrizzle schemaとpure DB contractだけを所有し、environment、network、seed、
+business permission、client connectionを参照しません。`development/**`と`test-support/**`は
+production entrypointから到達不能にし、development用途は明示subpathだけで公開します。
 
 ## repositoryとの境界
 
-business repositoryは`apps/api/modules/<module>/repository.ts`へ置きます。DB packageへ置くとuse case ownerが不明になり、すべてのdomainが一つのinfrastructure packageへcoupleするためです。
+business repositoryは小さいmoduleでは`apps/api/src/modules/<module>/repository.ts`、昇格した
+moduleでは`apps/api/src/modules/<module>/adapters/persistence/**`へ置きます。DB packageへ置くと
+use case ownerが不明になり、すべてのdomainが一つのinfrastructure packageへcoupleするためです。
 
 ## migration
 

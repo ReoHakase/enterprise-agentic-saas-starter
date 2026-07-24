@@ -40,6 +40,9 @@ component.stories.tsx
 - play testは代表interactionだけ
 - mock Agent APIはcanonical fixtureを共有
 
+Storyは見た目のcatalogだけでなく、production viewが受け取るstate/action contractを使います。
+component専用の別modelや、testだけ通る簡略hookを作りません。
+
 ## Browser Modeへ置くもの
 
 - focus、keyboard、dialog、portal
@@ -48,6 +51,27 @@ component.stories.tsx
 - 複数componentのinteraction
 - AI SDK stream + mock transport
 
+Agent UIはnetwork/transport boundaryをmockし、`useAgentChatSession`、parser、controller、componentを
+mockしません。productionとtestが同じstream parser、canonical message変換、state transitionを
+通ることで、UI testが実配線から乖離することを防ぎます。
+
+## canonical fixture
+
+Storybook、Browser Mode、E1、stream parser testは、privacy review済みのhand-authored fixtureを
+共有します。provider responseをrecordしてfixture化しません。
+
+代表scenario:
+
+- text only、thinking、transient status、source
+- one/multi tool、tool error
+- approval pending/approved/rejected/expired
+- stream interruption、retry、resume、reload
+- empty/loading/error/archived thread
+- attachment/mentionとprivate metadata非表示
+
+fixtureはsynthetic ID、bounded text、expected canonical partsを持ち、base64、private URL、object key、
+credential、real tenant dataを含めません。
+
 ## Playwrightへ残すもの
 
 - async RSC
@@ -55,6 +79,9 @@ component.stories.tsx
 - cross-origin、CORS、CSRF
 - reloadを跨ぐsession
 - actual network boundary
+
+細かなpane state、shortcut、focus、dialog、stream part表示はL4へ寄せます。PlaywrightはRSC、
+cookie、Worker、Service Binding、reloadを含む配線だけを重複なく確認します。
 
 ## 実行条件
 

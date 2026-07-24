@@ -1,3 +1,10 @@
+---
+title: 10 MB multipart upload memory smoke
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # 10 MB multipart upload memory smoke
 
 Agent chat画像の上限であるdecimal `10_000_000` bytesを、productionと同じElysia `multipart/form-data` schemaと`File.stream()`→R2 `put`の形でlocal workerdへ並列送信する診断用smokeです。専用の一時local R2 simulationだけを使い、Turso、production R2、Cloudflare API、OpenRouterなどのcredentialや外部課金は使いません。HTTP multipart uploadを測るものであり、R2 Multipart Upload APIは使いません。

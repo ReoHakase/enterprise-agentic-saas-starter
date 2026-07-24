@@ -1,3 +1,10 @@
+---
+title: 製品Agentのasset、mention、page context
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Asset、mention、page context
 
 ## Chat画像

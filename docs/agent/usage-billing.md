@@ -1,3 +1,10 @@
+---
+title: 製品Agentのusageとbilling
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Usageとbilling
 
 ## Usage event

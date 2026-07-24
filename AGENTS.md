@@ -2,20 +2,24 @@
 
 このリポジトリでは、skills、references、agent向けドキュメントは原則日本語で書く。commit messageだけは既存運用に合わせる。
 
-## Skillsを優先する
+## Docsを正本にする
 
-設計判断、実装規約、失敗から得た知見、環境依存の注意点は、通常の長い `docs/` より先に `.agents/local-skills/` へ反映する。
+仕様、設計理由、テスト戦略、運用上の不変条件は`docs/`とADRを正本にする。local skillへ
+規範本文を複製せず、発火条件、必読文書、作業順序、検証commandだけを置く。
 
-`.agents/local-skills` はrepo-local skillの正本、`.agents/skills` はNixが生成するagent実行用ディレクトリ。`.agents/skills` は直接編集しない。
+`.agents/local-skills`はrepo-local **skill artifactの編集元**、`.agents/skills`はNixが生成する
+agent実行用ディレクトリ。どちらも設計仕様の正本ではなく、`.agents/skills`は直接編集しない。
 
-次に該当する情報を得たら、作業の一部として自発的に関連skillを更新する:
+次に該当する場合は、先に関連docsまたはADRを更新し、skillの手順や必読文書にも影響するときだけ
+関連skillを更新する:
 
 - 次回のagentも同じ判断をする必要がある。
 - 一般的なモデル知識だけでは、このrepoの方針を誤りやすい。
 - Nix、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、Turso、Better Auth、Cloudflare、CIなど環境差分で失敗しやすい。
 - テンプレート利用者に再利用される可能性がある。
 
-既存skillに入らない関心ごとは、`description` で自然に発火できる単位の新しいskillとして追加する。巨大なumbrella skillにまとめない。
+既存skillに入らない作業手順は、`description`で自然に発火できる単位の新しいskillとして追加する。
+巨大なumbrella skillにまとめない。
 
 ## Repo前提
 
@@ -33,22 +37,8 @@
 - packageのOxlintは`--deny-warnings`で実行し、plugin warningをCIへ残さない。
 - 人向けrunbookは `/docs` に置き、入口は `docs/README.md` へ追加する。
 
-## Skill一覧
-
-- `package-management`: workspace layout、依存方向、package exports、API client配置。
-- `developer-environment`: `nix develop`、Bun、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、secret読込、agent向け記録。
-- `frontend`: Next.js、Cloudflare/OpenNext、web env、`packages/ui`、Storybook配置。
-- `backend-api`: Elysia、`apps/api`、feature modules、Valibot、Eden、OpenAPI、Sentry observability。
-- `database`: Turso/libSQL、Drizzle、SQLite schema、migration、DB plugin。
-- `auth-email`: Better Auth、organization/role、auth client、auth callback、認証と認可境界。
-- `email`: `packages/email`、React Email、Cloudflare Email Sending、console/noop sender、メールtemplate。
-- `error-handling`: `AppError`、`Error.cause`、safe response、redaction、logging、telemetry error。
-- `ci-quality`: GitHub Actions、oxlint、oxfmt、Vitest、Storybook test runner、Next build、CI品質ゲート。
-- `e2e-test`: Playwright、auth/org/permission導線、tenant境界、E2E data、Playwright MCP。
-- `file-storage-r2`: 認証付き`/files/*`、Cloudflare R2/Images、Turso metadata/quota、Issue attachment、local seed/reconcile。
-- `agent-runtime`: Cloudflare Agents SDK、3 Worker境界、tool、承認、自動許可、Issue CRUD、chat画像、client state、active organization切り替え。
-
-該当するskillの `SKILL.md` を先に読み、必要なときだけ同じskill内の `references/` を読む。
+Skill一覧とformatは[`.agents/local-skills/README.md`](.agents/local-skills/README.md)を参照する。
+変更領域に該当するskillを選び、skillが指定するdocsと必要なreferenceを読む。
 
 ---
 
@@ -61,18 +51,18 @@
 - テスト契約は`docs/testing/`
 - 永続的な設計判断は`docs/decisions/`
 - 複雑な作業の現在状態は`docs/exec-plans/active/`
-- local skillsは`.agents/local-skills/`を正本とし、生成先`.agents/skills/`を直接編集しない
+- local skill artifactは`.agents/local-skills/`を編集元とし、生成先`.agents/skills/`を直接編集しない
 
 ## 必須手順
 
-1. active exec planと関連仕様を読む
-2. `test_planner`で変更に必要なtest layerを決める
-3. production/test codeをwriteするagentは`implementer`一体に限定する
-4. 最小のdeterministicな検証を実行する
-5. current diffを別contextのread-only reviewerへ渡す
-6. correctness、security、testsのfindingを`implementer`へ戻す
-7. 修正後に検証とレビューを繰り返す
-8. 必須checkが失敗したまま完了扱いにしない
+1. active exec planを読む
+2. 変更領域のskillを選び、そのskillが指定するarchitecture、testing、ADRを読む
+3. `test_planner`で変更に必要なtest layerを決める
+4. production/test codeをwriteするagentは`implementer`一体に限定する
+5. 最小のdeterministicな検証を実行する
+6. current diffを別contextのread-only reviewerへ渡す
+7. correctness、security、testsのfindingを`implementer`へ戻す
+8. 修正後に検証とレビューを繰り返し、必須checkが失敗したまま完了扱いにしない
 
 ## source構成
 

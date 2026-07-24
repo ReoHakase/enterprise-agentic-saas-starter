@@ -17,6 +17,9 @@ supersedes:
 ## 決定
 
 `docs/`を仕様と設計理由の正本、local skillsをprocedure、`AGENTS.md`を短いcontractとします。
+`.agents/local-skills`はskill artifactの編集元、`.agents/skills`はNix生成物です。
+acceptedはmaintainerの承認状態を表し、main上にあるときだけ有効です。
+詳細な配置と優先順位は[知識管理と正本](../architecture/knowledge-management.md)に定義します。
 
 ## 理由
 
@@ -27,10 +30,13 @@ supersedes:
 - skillsを正本にする: 人間が一覧しにくく、長期仕様に不向き
 - AGENTS.mdへ全て書く: contextが肥大化し、path-specific ruleが読みにくい
 - docsとskillsへ同じ本文をcopyする: driftを再発させる
+- `docs/agent`を`docs/product-agent`へ即時改名する: 意味は明確になるが既存linkの変更量が大きい
 
 ## 結果
 
 Docs metadata、link check、skill validationが必要になります。
+`docs/agent`は製品Agent、`docs/architecture/codex-harness.md`はcoding agentという区別をindexへ
+明記し、path renameは必要性が増えるまでdeferします。
 
 ## 強制方法
 

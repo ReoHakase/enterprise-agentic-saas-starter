@@ -1,3 +1,10 @@
+---
+title: Cloudflare deploymentと運用
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Cloudflareデプロイと運用
 
 ## 対象

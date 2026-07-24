@@ -107,6 +107,10 @@ feature rootの責務:
 
 Web-local schemaはAPI transport typeの代用品ではありません。untrusted responseをUIへ表示する直前のruntime boundaryとして使います。
 
+`model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
+`fetch`、`useChat`、browser APIをimportしません。別featureから利用できるのは`index.ts`が
+明示exportしたcontractだけで、`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
+
 ## serverとclient
 
 - server codeは`server.tsx`、`lib/server/**`、`*.server.ts`へ置く
@@ -133,7 +137,12 @@ feature-view.tsx
 - Storybookでview stateを独立させたい
 - side effectのraceやcancelをunit testしたい
 
-`view`は`apiClient`、Query、router、toast、`useChat`を直接importしません。
+`view`は`apiClient`、Query、mutation、router、toast、`fetch`、`useChat`、chat transportを
+直接importせず、stateとactionをpropsで受けます。
+
+複数のasync state、cancel、approval、stream resumeが絡むflowはbooleanを増やさず、
+discriminated unionまたはreducer/state machineへ移します。これにより不可能なstateを型で消し、
+raceと復元をpure testで再現できます。
 
 ## portとadapter
 
@@ -148,6 +157,8 @@ export type NotificationPort = {
 ```
 
 単純なAPI wrapperを全てinterface化しません。`api.ts`や`queries.ts`で十分な場合はportを作りません。
+Sonner、router、Agent transportの具体実装はcontrollerまたはclient compositionで注入し、
+pure model/viewから暗黙のsingletonとして参照しません。
 
 ## componentとstory
 
@@ -187,6 +198,26 @@ feature-panel.stories.tsx
 ```
 
 同じfeature内部はrelative importを使い、別featureは`@/features/<feature>`からimportします。
+
+追加のlayer規則:
+
+- `model.ts`からcomponent/controller/adapterをimportしない
+- `view`から`api.ts`、`queries.ts`、router、toast、Agent transportをimportしない
+- `lib/shared`から`lib/client`または`lib/server`へ依存しない
+- app-wide `components/**`からdomain featureへ逆依存しない
+- client pathからNode builtin、`next/headers`、`next/server`、`server-only`をimportしない
+- `app/**`を再利用layerとしてfeatureからimportしない
+
+```ts
+// same feature: allowed
+import { reduceDraft } from "../model"
+
+// cross feature: allowed
+import { IssueLink } from "@/features/issues"
+
+// cross feature private path: forbidden
+import { IssueLink } from "@/features/issues/components/issue-link"
+```
 
 ## テスト配置
 

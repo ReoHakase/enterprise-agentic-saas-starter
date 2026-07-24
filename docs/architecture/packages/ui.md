@@ -29,17 +29,22 @@ packages/ui/src/
 ## 依存方向
 
 ```text
-lib
-  <- hooks
-  <- components
-  <- patterns
+patterns
+  -> components
+  -> hooks
+  -> lib
 ```
 
-primitiveからpatternへ依存しません。Next.js、TanStack Query、product feature、API clientをimportしません。
+矢印は`importer -> dependency`です。patternはcomponent/hook/lib、componentはhook/lib、hookはlibを
+importできます。primitive/componentからpattern、hookからcomponent/pattern、libからReact layerへの
+逆依存は禁止します。Next.js、TanStack Query、product feature、API client、server-only module、
+Node builtin、app alias、domain typeをimportしません。test/storyだけで使うfixtureはproduction
+exportへ含めません。
 
 ## 公開entrypoint
 
-wildcard exportはpublic surfaceを広げるため、最終的には明示exportへ寄せます。`internal/`はexportしません。
+wildcard exportはpublic surfaceを広げるため、明示exportへ移行します。`internal/`と
+`test-support/`はexportしません。
 
 ## componentとstory
 

@@ -41,6 +41,10 @@ contracts
 ```
 
 Templateからprovider、runtime、Auth、DB、UIをimportしません。Email UIとWeb UIはCSS/runtimeが異なるため共有しません。
+`contracts`と`runtime/types.ts`はReact Emailとprovider SDKを知りません。templateはprovider、
+runtime、environment、Cloudflare binding、Node APIをimportせず、concrete runtimeだけが
+environmentとadapterを選びます。
+test-supportとdevelopment Mailpitをproduction public entrypointから再exportしません。
 
 ## テスト
 

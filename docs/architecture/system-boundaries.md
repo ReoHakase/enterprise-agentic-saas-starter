@@ -15,8 +15,11 @@ last_reviewed: 2026-07-24
 - [禁止する依存](#禁止する依存)
 - [公開entrypoint](#公開entrypoint)
 - [test-support](#test-support)
+- [test codeの境界](#test-codeの境界)
 - [importの表記](#importの表記)
+- [browserとside-effect import](#browserとside-effect-import)
 - [強制方法](#強制方法)
+- [Oxlintで表現できない制約](#oxlintで表現できない制約)
 - [理由と代償](#理由と代償)
 - [受入条件](#受入条件)
 
@@ -25,6 +28,9 @@ last_reviewed: 2026-07-24
 workspace間のdependency directionを固定し、private implementationの移動がmonorepo全体の破壊的変更にならないようにします。
 
 ## workspace graph
+
+次の図はproduction/test sourceから解決されるworkspace importの**完全なallowlist**です。
+図にないruntime/source edgeは、同じpackageがmanifest上で解決できても禁止します。
 
 ```text
 apps/web
@@ -54,6 +60,13 @@ packages/typescript-config
   -> 他workspaceへ依存しない
 ```
 
+これはruntime/source graphであり、build/test用toolingのmanifest graphとは分けます。各workspaceが
+`@enterprise-agentic-saas/typescript-config`を`devDependency`に置き、`tsconfig.json`の
+`extends`で利用することは許可します。ただしsourceから同packageをimportせず、Knipの
+workspace isolationはruntime dependency、development dependency、source importを区別して
+検査します。Oxlint、Vitest、Storybook等のtooling dependencyも同様に、実行するworkspaceの
+`devDependency`として宣言します。
+
 ## 許可する依存
 
 ### apps
@@ -73,14 +86,15 @@ packages/typescript-config
 
 | importer | 禁止 |
 | --- | --- |
-| `apps/web` | DB、Email、Agent runtime、API server内部 |
+| `apps/web` | DB、Email、Agent runtime、GitHub emulator、`api/client`以外のAPI、`auth/client`以外のAuth |
 | `apps/api` | Web、Agent runtime、UI、GitHub emulator |
-| `apps/agent` | DB、Auth、Email、Web、API public client |
-| `apps/github-emulator` | API、Agent、DB、Email、UI |
+| `apps/agent` | DB、Auth、Email、Web、UI、GitHub emulator、`api/agent-client`以外のAPI |
+| `apps/github-emulator` | Web、API、Agent、DB、Email、UI |
 | `packages/auth` | app、API、UI |
 | `packages/db` | 他の全workspace |
 | `packages/email` | app、Auth、DB、UI、API |
 | `packages/ui` | app、API、Auth、DB、Email、Agent |
+| `packages/typescript-config` | runtime sourceと全workspace dependency |
 
 ## 公開entrypoint
 
@@ -99,6 +113,10 @@ import { privateService } from "@enterprise-agentic-saas/api/src/modules/example
 ```
 
 `exports`はdocumentationだけでなく、runtimeからprivate pathを到達不能にするboundaryです。
+feature/moduleの`index.ts`または`public.ts`、workspaceの`package.json#exports`、
+`no-restricted-imports`、resolved-path architecture checkは同じ公開面を表します。公開面を変更する
+ときは4つとexport-surface fixture testを同じPRで更新し、private directoryをwildcardで
+再exportしません。
 
 ## test-support
 
@@ -125,6 +143,22 @@ runtime adapter
 
 Agentのscripted modelは別のE2E Worker entrypointだけからimportし、production Workerへenvironment switchを追加しません。
 
+## test codeの境界
+
+test、story、E2E、fixtureはcomplexityとsize budgetだけをproductionより緩めます。次の境界は
+productionと同じか、より厳しくします。
+
+- workspace dependency direction
+- package public entrypointとdeep import禁止
+- domain/application/platformの依存方向
+- browser/server module分離
+- productionから`test-support`への依存禁止
+- AgentからDB/Auth/Email/Webへの依存禁止
+
+testを理由にprivate implementationへdeep importすると、public contractではなく配置を固定して
+refactorを妨げるためです。white-box unit testが必要なpure helperはowner module内へcolocateし、
+workspace外へ公開しません。
+
 ## importの表記
 
 - 同じfeature/module内部はrelative import
@@ -133,6 +167,27 @@ Agentのscripted modelは別のE2E Worker entrypointだけからimportし、prod
 - app routeからfeature private fileをdeep importしない
 
 absolute aliasを同じfeature内部で多用すると、cross-feature deep importとの区別がつかなくなるためです。
+
+`import/no-relative-parent-imports`は全体へ有効化しません。同じfeature/module内の
+`../model`のような正当なimportまで禁止するためです。cross-featureとcross-workspaceの境界は
+public entrypointとresolved pathで検査します。
+
+## browserとside-effect import
+
+browser entrypointではNode builtin、`next/headers`、`next/server`、`server-only`、server adapterを
+禁止します。`import/no-nodejs-modules`とpath規則を併用します。Oxlintは`"use client"`というfile内容を
+selectorにできないため、`*.client.tsx`、client専用directory、browser package entrypointという
+配置規約で対象を決めます。
+
+side-effect importは次の狭いallowlistだけを許可します。
+
+- CSS
+- `server-only`
+- `client-only`
+- test setupとして明示したfile
+
+telemetry、polyfill、provider登録を暗黙のside effectで注入せず、composition rootから明示的に
+初期化します。
 
 ## 強制方法
 
@@ -146,6 +201,31 @@ absolute aliasを同じfeature内部で多用すると、cross-feature deep impo
 | package graph | Turborepo、Knip、architecture check |
 
 Oxlintだけでresolved pathを完全には判定できないため、critical boundaryは独自architecture checkも実行します。
+
+`no-restricted-imports`のoverride配列は親設定へ追加ではなく置換されます。workspace設定は
+共通helperからworkspace禁止patternとlayer禁止patternを合成し、どちらか一方を落としません。
+このhelperのworkspace patternは上記allowlistから生成し、手書きの別一覧を正本にしません。
+architecture checkも同じallowlistを読み、代表fixtureで全許可edge、graph外edge、package deep
+import、type-only importを検査します。新workspaceまたはentrypointを追加するPRではallowlist、
+`package.json#exports`、fixtureを同時に更新します。
+
+`import/no-cycle`は全depth、`ignoreExternal: false`、`ignoreTypes: true`で開始します。type-only
+cycleはruntime初期化cycleを起こさず、移行時のnoiseを抑えられるためです。ただしtypeの設計cycleも
+public surface、Knip、architecture reviewで確認します。
+
+## Oxlintで表現できない制約
+
+文字列patternだけでは次を完全には判定できません。
+
+- aliasやpackage exportを解決した実体path
+- 同じaliasに見えるsame-featureとcross-feature import
+- computed dynamic import
+- `"use client"` directiveを持つfileだけへの規則
+- production entrypointからtest supportへ至る間接依存
+
+Rust regexのlookaroundや未安定なJS pluginへcritical boundaryを依存させません。
+`bun run check:architecture`がTypeScript/Bun resolution後のgraphを検査し、Oxlintは即時feedbackを
+担当します。
 
 ## 理由と代償
 
@@ -171,3 +251,5 @@ Oxlintだけでresolved pathを完全には判定できないため、critical b
 - AgentがDB/Auth/Emailをimportしない
 - test-supportがproduction bundleに入らない
 - Knip strict modeでworkspace isolation findingがゼロ
+- runtime/source graph外のworkspace edgeがfixtureを含めて全て拒否される
+- TypeScript config等のtooling dependencyがruntime graphへ混入しない

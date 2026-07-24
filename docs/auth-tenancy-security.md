@@ -1,3 +1,10 @@
+---
+title: 認証・認可・multi-tenant
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # 認証・認可・マルチテナント
 
 ## 認証と認可を分離する

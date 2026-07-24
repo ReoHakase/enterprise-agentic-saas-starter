@@ -96,6 +96,9 @@ apps/agent/src/
     e2e/
       worker.ts
       scripted-scenarios.ts
+
+    legacy/
+      issue-assistant.ts
 ```
 
 `index.ts`はMastra Studioのentrypoint、`worker.ts`はproduction Cloudflare Worker entrypointです。
@@ -125,6 +128,9 @@ core/ports
   -> Mastra、OpenRouter、API concrete clientを知らない
 ```
 
+`@enterprise-agentic-saas/api/agent-client`の具体clientをimportできるのはcontrol-plane adapterと
+compositionだけです。agent、runtime、tool executorはconsumer-owned portへ依存します。
+
 ## tool構造
 
 - `schema.ts`: modelに公開するinput contract
@@ -132,6 +138,15 @@ core/ports
 - `tool.ts`: `execute.ts`をMastra `createTool`へ接続するadapter
 
 この分割により、tool safety、call order、quota、output projectionをreal LLMなしでtestできます。
+
+`execute.ts`はMastra、model provider、API concrete clientをimportしません。処理順序を
+`validate -> authorize -> reserve idempotency -> write -> record usage -> bounded projection`へ固定し、
+各境界をportで観測可能にします。`tool.ts`はschemaとexecutorを`createTool`へつなぐ薄いwrapperで、
+authorizationやbusiness ruleを持ちません。
+
+public Web research agent/toolはtenant data、write tool、private control-plane portへ依存しません。
+一般化済みqueryだけを受け取る別compositionとし、同じAgentに「promptで使わないよう指示した」
+だけの分離は採用しません。
 
 ## model注入
 
@@ -147,16 +162,21 @@ export type ProductAgentDependencies = {
 ```
 
 production compositionだけがOpenRouter adapterを渡します。environment variableでproduction modelとscripted modelを切り替えません。
+Agent定義自身はOpenRouter等のconcrete model providerを選びません。
+
+Mastra Studioとproduction Workerは同じproduct compositionをloadし、request contextからAPI keyを
+解決する既存境界を維持します。Studio専用のagent、mock tool、固定credentialを作りません。
+scripted modelは別E2E entrypointだけへ注入します。
 
 ## テスト専用Worker
 
 free full-stack E2Eでは別entrypointを使います。
 
 ```text
-wrangler.toml
+wrangler.jsonc
   main = src/mastra/worker.ts
 
-wrangler.e2e.toml
+wrangler.e2e.jsonc
   main = src/mastra/e2e/worker.ts
 ```
 
@@ -168,7 +188,14 @@ wrangler.e2e.toml
 - public routeやproduction envでmodelを切り替えられない
 - production dry-run bundleにscripted modelのsentinelが含まれない
 - CIの一時Service BindingだけがE2E Workerを参照する
-- production deploy configが`wrangler.e2e.toml`を参照しない
+- production deploy configが`wrangler.e2e.jsonc`を参照しない
+
+## legacy retention
+
+旧`IssueAssistant`は`src/mastra/legacy/issue-assistant.ts`へ隔離し、通常runtimeから到達不能にします。
+既存のDurable Object class exportとWrangler migrationの`new_sqlite_classes`を保持し、旧endpointは
+`410 Gone`を返します。data export、backfill、件数、backup、retentionの別判断が完了するまで
+`deleted_classes`を追加しません。
 
 ## import boundary
 
@@ -190,6 +217,7 @@ apps/web/**
 ```
 
 `core/**`と`runtime/ports.ts`から`@mastra/*`、`@openrouter/*`、Sentry concrete SDKを禁止します。
+`agents/**`、`runtime/**`、`tools/**/execute.ts`からAPI concrete clientも禁止します。
 
 ## テスト配置
 

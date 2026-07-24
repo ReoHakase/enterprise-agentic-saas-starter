@@ -1,3 +1,10 @@
+---
+title: 製品Agentのtool、Web検索、approval
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Tool、Web検索、approval
 
 ## Tool境界

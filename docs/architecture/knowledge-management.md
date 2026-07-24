@@ -13,9 +13,11 @@ last_reviewed: 2026-07-24
 - [現在の問題](#現在の問題)
 - [決定](#決定)
 - [優先順位](#優先順位)
+- [情報の配置](#情報の配置)
 - [metadata](#metadata)
 - [仕様の有効化](#仕様の有効化)
 - [docsとskills](#docsとskills)
+- [製品Agentとcoding-agent](#製品agentとcoding-agent)
 - [ADR](#adr)
 - [exec plan](#exec-plan)
 - [言語と命名](#言語と命名)
@@ -64,15 +66,33 @@ local skillへ規範本文を複製しません。skillは関連docsを指し、
 
 ## 優先順位
 
-通常の参照順序は次です。
+意図と現在実行される挙動は分けて扱います。
 
-1. CI、schema、test、lintが機械的に強制する契約
-2. `main`上の`status: accepted`文書とADR
-3. accepted文書を参照するlocal skill
-4. `AGENTS.md`
-5. `status: proposed`文書
+1. `main`上の`status: accepted`文書とADRが、意図した仕様と設計理由の正本
+2. code、schema、test、CI、lintが、その仕様を現在実行・強制する契約
+3. accepted文書を参照するlocal skillが、作業時の手順
+4. `AGENTS.md`が、全作業に共通する短い契約と索引
+5. `status: proposed`文書が、未承認の次期案
 
-codeがaccepted文書と矛盾した場合、実装を自動的に仕様とみなしません。実装を直すか、文書とADRを変更して承認を受けます。
+実行可能な契約は現状を正確に示しますが、accepted文書と矛盾するcodeを自動的に新仕様とは
+みなしません。矛盾を見つけたら作業を止め、実装を仕様へ合わせるか、文書とADRを変更して承認を
+受けます。testを通すために文書を弱めることも、文書だけを変えて未実装を`active`とすることも
+禁止します。
+
+## 情報の配置
+
+| 情報 | 置き場所 | 理由 |
+| --- | --- | --- |
+| 要求、invariant、設計理由、代替案 | architecture文書またはADR | 人間とagentが一覧できる |
+| test layer、runner、cost、実行条件 | `docs/testing/` | test実装とcost判断を分離しない |
+| 一回の大規模変更の順序、進捗、証跡 | active exec plan | 永続仕様と途中状態を混ぜない |
+| CLI、障害対応、rollback checklist | runbook | 実行者が順番に追える |
+| 発火条件、必読文書、workflow、検証command | local skill | 必要な作業時だけ短くloadできる |
+| 型、schema、test、CI gate | code | 規則を機械的に強制できる |
+
+例えば「AgentからDBを直接importしない」はarchitecture文書とADRで理由を説明し、
+`package.json#exports`、Oxlint、architecture checkで強制します。skillにはその本文をcopyせず、
+必読文書と検証commandだけを書きます。
 
 ## metadata
 
@@ -92,7 +112,7 @@ last_reviewed: 2026-07-24
 | 値 | 意味 |
 | --- | --- |
 | `proposed` | 提案中であり、既存のaccepted仕様を上書きしない |
-| `accepted` | repository maintainerが承認し、mainへmerge済みの規範 |
+| `accepted` | repository maintainerが最終内容を承認した規範。main上にあるときだけ有効 |
 | `superseded` | 別文書へ置換済み。置換先linkが必須 |
 
 `implementation`:
@@ -123,9 +143,9 @@ exec planは`draft | active | completed | abandoned`を使います。仕様の�
 3. 旧docsとskillsの重複規則を削除
 4. metadata、link、skill validationを実行
 5. repository maintainerが最終diffをレビュー
-6. 規範文書とADRを`accepted`へ変更
-7. exec planを`completed`へ変更し`completed/`へ移動
-8. 同じPRをmainへmerge
+6. 規範文書とADRを`accepted`へ変更し、exec planを`completed`へ変更して`completed/`へ移す
+7. 上のstatus変更を含む最終headでも必須checkとreviewを確認する
+8. 同じPRをmainへmergeし、その時点でaccepted仕様とcompleted履歴を同時に有効化する
 
 移行途中のcommitを別PRとしてmergeしません。未mergeのbranchでは、現在のmainにある規則を通常feature changeの正本とします。
 
@@ -143,6 +163,20 @@ frontmatter
 ```
 
 skillへ長い設計理由、feature固有要件、テストmatrixを置きません。新しい知見が永続的な規則ならdocsまたはADRへ追加し、skillはlinkだけを更新します。
+
+`.agents/local-skills/`はskill artifactの編集元という意味での正本です。architectureやproduct仕様の
+正本という意味ではありません。生成先`.agents/skills/`はNixで同期し、直接編集しません。詳細は
+[local skills README](../../.agents/local-skills/README.md)を参照します。
+
+## 製品Agentとcoding agent
+
+`docs/agent/`は製品Agentの機能、security、operation、release acceptanceを扱います。
+Codex custom agent、reviewer、sole-writer、hookは
+[Codex harness](codex-harness.md)で扱います。
+
+`docs/agent/`を`docs/product-agent/`へ改名する案も検討しましたが、既存linkと運用参照の変更量に
+対して情報の責務はindexで十分区別できるため、今回の全面移行では現pathを維持します。将来、
+製品Agent以外のAgent仕様が増えて衝突する場合だけ独立ADRで改名します。
 
 ## ADR
 
@@ -198,6 +232,7 @@ active planは進捗、判断記録、検証証跡を更新します。完了後
 ## 更新と廃止
 
 - accepted文書の規範本文を変更するPRはowner reviewを必要とする
+- acceptedは承認状態を表し、mainへmergeされるまで既存mainの仕様を上書きしない
 - superseded文書は置換先を明記する
 - dead linkと孤立文書をCIで失敗させる
 - skillの必読文書が存在しない場合はCIを失敗させる

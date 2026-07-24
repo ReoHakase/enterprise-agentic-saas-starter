@@ -37,7 +37,9 @@ emulate
 valibot
 ```
 
-API、Agent、DB、Email、UIへ依存しません。production appからemulatorをimportしません。
+Web、API、Agent、DB、Email、UIへ依存しません。production appからemulatorをimportしません。
+Auth packageも`github-oauth` entrypoint以外はdeep importしません。fixtureとtest supportをpublic
+runtime entrypointから再exportしません。
 
 ## 理由
 

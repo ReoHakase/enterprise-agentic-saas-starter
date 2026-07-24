@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-001
 title: 文書、source構成、品質ゲート、テスト、Codex harnessの全面移行
-status: draft
+status: active
 created: 2026-07-24
 owners:
   - repository-maintainers
@@ -11,7 +11,12 @@ linked_specs:
   - docs/architecture/system-boundaries.md
   - docs/architecture/quality-enforcement.md
   - docs/architecture/codex-harness.md
+  - docs/architecture/apps/agent.md
   - docs/testing/README.md
+  - docs/testing/agent.md
+  - docs/testing/e2e.md
+  - docs/agent/architecture-security.md
+  - docs/agent/operations.md
 linked_adrs:
   - docs/decisions/ADR-001-docs-and-skills-source-of-truth.md
   - docs/decisions/ADR-002-layering-and-import-boundaries.md
@@ -49,7 +54,9 @@ linked_adrs:
 
 ## 一括切替
 
-段階的merge、legacy zone、warning-only期間、Knip/jscpd baselineを設けません。
+段階的merge、品質gate対象外のlegacy zone、warning-only期間、Knip/jscpd baselineを設けません。
+既存Durable Objectの削除事故を防ぐ`src/mastra/legacy/**` retention enclaveは全品質gateの対象にし、
+通常runtimeから到達不能にするため、この禁止には含めません。
 
 branch内では作業単位ごとにcommitできますが、各commitは同じPR内に留めます。最終検証が全てgreenになるまでmergeしません。
 
@@ -76,23 +83,24 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 
 ### 1.1 文書構成
 
-- [ ] `docs/architecture/apps/`と`packages/`を追加
-- [ ] `docs/testing/`をWeb/API/Agent/E2E/migration/VRTへ分割
-- [ ] `docs/decisions/`とADRを追加
-- [ ] `docs/exec-plans/`とtemplateを追加
-- [ ] `docs/README.md`を新indexへ更新
+- [x] `docs/architecture/apps/`と`packages/`を追加
+- [x] `docs/testing/`をWeb/API/Agent/E2E/migration/VRTへ分割
+- [x] `docs/decisions/`とADRを追加
+- [x] `docs/exec-plans/`とtemplateを追加
+- [x] `docs/README.md`を新indexへ更新
 
 ### 1.2 metadata
 
-- [ ] 規範文書を`proposed/planned`で開始
-- [ ] VRTを`proposed/deferred`
-- [ ] ADRを`proposed`
-- [ ] planを`active`へ変更して作業開始
+- [x] 規範文書を`proposed/planned`で開始
+- [x] VRTを`proposed/deferred`
+- [x] ADRを`proposed`
+- [x] planを`active`へ変更して作業開始
 - [ ] metadata/link validation scriptを追加
 
 ### 1.3 local skillsとAGENTS
 
 - [ ] root `AGENTS.md`を短いcontractへ置換
+- [ ] nested `AGENTS.md`を追加せず、workspace固有routingをlocal skillへ限定
 - [ ] local skillsを必読文書、Workflow、Validationへ短縮
 - [ ] generated `.agents/skills`を削除/編集しない
 - [ ] Nix sync後にskill一覧とlinkを検証
@@ -111,7 +119,9 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 
 ### 2.2 API
 
-- [ ] moduleを`domain/schema/ports/service/repository/routes/module`へ整理
+- [ ] moduleを`domain/schema/ports/service/repository/routes/module/public`へ整理
+- [ ] 別moduleへ公開する型とuse caseを`public.ts`の最小surfaceへ限定
+- [ ] cross-module private importを排除し、export-surface fixtureを追加
 - [ ] routeからrepository直接callを削除
 - [ ] serviceからElysia/Drizzle concrete importを削除
 - [ ] error registryをfinite codeへ変更
@@ -125,6 +135,10 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] `src/mastra/worker.ts`をproduction Worker entrypointにする
 - [ ] `composition/agents/core/runtime/tools/adapters`へ整理
 - [ ] toolを`schema/execute/tool`へ分ける
+- [ ] 旧`IssueAssistant`を`src/mastra/legacy/issue-assistant.ts`へ移動
+- [ ] Durable Object class exportと既存Wrangler `new_sqlite_classes`を保持
+- [ ] 旧endpointを`410 Gone`へ固定し、通常production runtimeからlegacy classへ到達不能にする
+- [ ] retention判断前にWrangler `deleted_classes`を追加しない
 - [ ] 旧`src/runtime|tools|messages|usage|control-plane`等を削除
 - [ ] import pathとtest pathを全更新
 - [ ] StudioとWorkerが同じcompositionをloadすることを確認
@@ -133,7 +147,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 
 - [ ] `src/mastra/test-support/scripted-model.ts`を追加
 - [ ] `src/mastra/e2e/worker.ts`を追加
-- [ ] `wrangler.e2e.toml`を追加
+- [ ] `wrangler.e2e.jsonc`を追加
 - [ ] production env switchを作らない
 - [ ] production bundleからtest sentinel不在を検査
 
@@ -183,6 +197,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] exact versionをpin
 - [ ] `.jscpd.json`を追加
 - [ ] production codeだけをscan
+- [ ] production/test/config/root scriptの代表fixtureでscan対象を検証
 - [ ] duplicateを3%以下へrefactor
 - [ ] baselineを作らない
 
@@ -234,7 +249,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] E2はscripted model Workerを使う
 - [ ] shared global resetをnamespace化
 - [ ] Chromium full、WebKit代表case
-- [ ] E4を1から2canaryへ縮小
+- [ ] E4を規範文書でIDを固定した2 canaryへ縮小し、各1回だけ実行
 
 ## 作業単位 5 Codex harness
 
@@ -263,7 +278,8 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 
 - [ ] `.codex/hooks.json`を追加
 - [ ] `SessionStart`でactive exec planを追加contextへ渡す
-- [ ] `PreToolUse`でpush、merge、deploy、`drizzle-kit push`をdeny
+- [ ] Rulesでpush、merge、deploy、destructive resetをprompt
+- [ ] `PreToolUse`で`drizzle-kit push`をdeny
 - [ ] `PreToolUse`で`.agents/skills/**`編集をdeny
 - [ ] `PostToolUse`でprotected harness file変更を通知
 - [ ] hook scriptをfixture JSONで直接test
@@ -294,7 +310,8 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] `browser`
 - [ ] `free-e2e`
 - [ ] `cloudflare-dry-run`
-- [ ] paid jobをnightly/releaseへ分離
+- [ ] paid jobをfingerprint変更のtrusted-SHA承認run、nightly、releaseへ分離
+- [ ] fork PRの`agent-eval-gate`をexact head treeへ紐づけ、未承認/stale resultでmergeさせない
 
 ### 6.3 Git hook
 
@@ -362,12 +379,21 @@ git diff --name-status origin/main -- packages/db/drizzle
 | 2026-07-24 | Agent codeを`src/mastra/**`へ集約 | ownershipとgate対象を明確にする |
 | 2026-07-24 | Ratchetを使わず全budgetを即時適用 | ユーザーが全面移行を選択したため |
 | 2026-07-24 | VRTはdeferred | flaky運用を先に導入しない |
+| 2026-07-24 | Oxlint初期budgetはmigration-friendlyな3段階 | 一括移行でwaiverと無意味な分割を生まない |
+| 2026-07-24 | testはsize budgetだけ緩め、import/security境界は共通 | test経由のarchitecture迂回を防ぐ |
+| 2026-07-24 | paid evalをbrowserless 3 profile、E4を固定2 canaryへ分離 | model behaviorとfull-stack配線の費用・原因を分離する |
+| 2026-07-24 | `docs/agent/` pathは維持しproduct Agentと明記 | renameのlink churnよりindexでの責務分離を優先する |
+| 2026-07-24 | root `AGENTS.md`だけを使いnested fileを作らない | client差による上書きとdocs/skillsとの三重管理を避ける |
 
 ## 検証証跡
 
 | command | 結果 | 証跡 |
 | --- | --- | --- |
-| pending | pending | pending |
+| `bun run format:check` | pass | 696 files、2026-07-24 |
+| `git diff --check d23af9f --` | pass | whitespace errorなし |
+| docs metadata/link/anchor/ADR/reachability検査 | pass | 全docs 52文書、ADR 6件、全件が入口から到達可能 |
+| `git diff --exit-code d23af9f -- .agents/skills .github/skills` | pass | generated skill直接変更なし |
+| `nix flake check` | pass | `checks.aarch64-darwin.agent-skills`とdevShell |
 
 ## リスクとrollback
 
@@ -397,6 +423,8 @@ git diff --name-status origin/main -- packages/db/drizzle
 - [ ] skillsとAGENTSが新正本を参照
 - [ ] app/package sourceが目標構造
 - [ ] Agent hand-written runtimeが`src/mastra/**`
+- [ ] `IssueAssistant`のclass exportと`new_sqlite_classes`が維持され、旧endpointが`410 Gone`
+- [ ] Agent Wrangler migrationに`deleted_classes`が追加されていない
 - [ ] Oxlint budget violationゼロ
 - [ ] Knip full/strict findingゼロ
 - [ ] jscpd threshold以下

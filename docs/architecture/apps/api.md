@@ -55,6 +55,7 @@ apps/api/src/
       repository.ts
       routes.ts
       module.ts
+      public.ts
       test-support.ts
 ```
 
@@ -71,8 +72,15 @@ apps/api/src/
 | `repository.ts` | Drizzle/libSQL adapter |
 | `routes.ts` | Elysia transport adapter |
 | `module.ts` | composition root |
+| `public.ts` | 別moduleへ公開する型とuse caseの最小surface |
 
 `routes.ts`から`repository.ts`を直接呼びません。
+
+`app.ts`だけが各moduleの`module.ts`をimportし、Elysia appへcompositionします。module Aから
+module Bを利用するときは`modules/<b>/public.ts`だけをimportし、`module.ts`、routes、service、
+repository、domainのprivate pathへ到達しません。`module.ts`を別moduleへ再exportしません。
+architecture fixtureは`app.ts -> module.ts`を許可し、`module A -> module B/public.ts`以外を
+拒否します。
 
 ```text
 routes -> service -> port <- repository
@@ -86,6 +94,23 @@ routes -> service -> port <- repository
 - `routes`はschemaとserviceをimportできる
 - `module.ts`だけがconcrete repositoryとserviceを接続する
 - 別moduleは`public.ts`またはmoduleの公開contractだけをimportする
+- `platform`はenv、observability、plugin、app-globalでdomain-neutralなruntime adapterだけを
+  所有し、moduleのdomain/serviceへ逆依存しない
+
+別moduleのuse caseを呼ぶ必要がある場合は、consumer applicationがportを所有し、provider moduleの
+`public.ts`をadapterで接続します。別moduleのrepositoryやserviceを直接importしてtransaction境界を
+横断しません。
+module固有portを実装するadapterもowner module内へ置きます。`platform`へ置けるadapterはrequest ID、
+telemetry、clock等のapp-global contractに限り、moduleをimportしません。
+
+| importer layer | 禁止する依存 |
+| --- | --- |
+| domain | application、transport、repository、platform、framework、DB |
+| application/service | Elysia、Drizzle、concrete provider、concrete repository |
+| transport/routes | concrete repository、provider SDK、別module private path |
+| platform | moduleのdomain/service/repository |
+
+composition rootだけがservice、repository、provider、transportを同時にimportできます。
 
 ## error
 
@@ -102,6 +127,21 @@ routes -> service -> port <- repository
 - validation field pathをallowlistする
 
 `domain` errorはHTTP statusを持たず、application/transport boundaryで`AppError`へmapします。
+
+Dependency failureはadapterで次の有限taxonomyへmapし、message文字列検索で分類しません。
+
+| failure | HTTP projection | 備考 |
+| --- | ---: | --- |
+| upstream rejected request | 502 | providerのraw本文は非公開 |
+| dependency unavailable | 503 | retry可能な場合だけ`Retry-After` |
+| dependency timeout | 504 | caller abortと区別する |
+| local rate/budget limit | 429 | local policyの有限code |
+| caller cancellation | request中断 | 500としてcaptureしない |
+| programming bug / unknown | 500 | safe messageだけ返す |
+
+domain errorにはHTTP statusを持たせません。adapterがtyped status/codeを受け取り、transportが
+registryからstatus、public message、capture policyを決めます。既存serviceを一律に`Result`型へ
+移すことは要求せず、期待されるfailureを明示した方が安全なboundaryだけでtyped resultを使います。
 
 ## plugin
 
@@ -132,6 +172,9 @@ apps/agent/**
 ```
 
 `platform/**`からdomain moduleへの逆依存も禁止します。
+
+`no-restricted-imports`とarchitecture checkはdomain/application/transport/platformを別々に検査し、
+workspace禁止patternと合成します。test fileも別module private pathへ抜けません。
 
 ## テスト配置
 

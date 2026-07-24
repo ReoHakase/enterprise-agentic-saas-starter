@@ -1,3 +1,10 @@
+---
+title: 製品Agentのthreadとcontext
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Threadとcontext
 
 ## Thread契約

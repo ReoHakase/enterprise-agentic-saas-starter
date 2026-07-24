@@ -7,18 +7,21 @@ applies_to:
   - apps/web/e2e/**
   - apps/agent/src/mastra/e2e/**
   - playwright*.config.ts
-  - wrangler*.toml
+  - wrangler*.jsonc
 ---
 
 # 統合E2Eテスト戦略
 
 ## テストlayer
 
-| layer | Browser | Stack | LLM | script | 実行 |
+| layer/profile | Browser | Stack | LLM | script | 実行 |
 | --- | ---: | --- | --- | --- | --- |
 | E1 | real | Web real、API/Agent mock | mock | `test:e2e` | PR selector |
-| E2 | real | Web/API/Agent/Auth/DB real | scripted model | `test:e2e` | PR selector |
-| E3 | none | Agent prompt/tool controlled | real paid | `test:eval:agent` | conditional/nightly |
+| E2 stack | real | Web/API/Agent/Auth/DB real | scripted model | `test:e2e` | PR selector |
+| E2 OAuth | real | Web/API/Auth/DB + GitHub emulator | none | `test:e2e` | PR selector |
+| E3 contract | none | real Agent prompt/schema + fake tool/control plane | real paid | `test:eval:agent` | conditional/nightly |
+| E3 stack | none | real Agent/private API/Auth/temporary DB | real paid | `test:eval:agent` | conditional/nightly |
+| E3 stability | none | selected contract/stack caseを独立stateで反復 | real paid | `test:eval:agent` | conditional/nightly |
 | E4 | real | full real temporary stack | real paid | `test:e2e:agent` | release candidate |
 
 ## E1
@@ -49,26 +52,37 @@ Mock APIはproduction contractのstatus分類を再現しますが、authorizati
 
 Agent E2E Workerは`src/mastra/e2e/worker.ts`を使い、production env switchを作りません。
 
+OAuth subprofileは外部GitHubや実credentialを使わず、`apps/github-emulator`、real API/Auth、
+temporary DB、dedicated Next distでauthorize、state、callback、token、userinfo、session/account保存を
+通します。`packages/auth`のOAuth contract/callbackまたはemulator変更時にselectorが必ず選びます。
+旧`test:e2e:oauth`を公開root scriptとして残さず、`test:e2e` aggregate内で起動します。
+
 ## E3
 
-Browserなしのpaid evalです。E4より安く速く、model behaviourだけを切り分けます。
+Browserなしのpaid evalです。contract、stack、3/3 stabilityの内部profileを
+`test:eval:agent`へまとめます。E4より安く速く、model behaviourとAgent/API配線をbrowserから
+切り分けます。
 
 ## E4
 
-1から2本のcanaryへ限定します。
+次の固定2 canaryへ限定し、各caseをretryなしで1回ずつ実行します。
 
-1. 自然文からread toolとsource表示
-2. approval付きwriteまたは画像付き作成
+1. `agent-canary-read-source`: 自然文からread/Web検索tool、source、Issue linkを表示
+2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を実行し、DB/file/claimを確認
 
 Trace、video、screenshot、provider本文へsecretが入るため、paid suiteではartifact policyを厳格化します。
 
 ## 高速化
 
 - setupはAPI fixtureで行い、対象でないUI操作を省く
-- test namespaceをrun/worker/test単位に分ける
+- test namespaceをrun/worker/test/organization/user/DB/R2単位に分ける
 - shared reset stateを廃止しparallel実行可能にする
-- PRはChromium full smoke、WebKit代表case
-- nightlyでbrowser matrixを広げる
+- loginそのものを検証するcase以外はAPI setupでsession/fixtureを作る
+- PRはChromium full smoke、WebKit代表caseのpairwise matrix
+- nightlyでbrowser、viewport、permission modeのpairwise coverageを広げる
+
+同じglobal account、organization、DB file、R2 prefixをworker間で共有しません。cleanupは自分の
+namespaceだけを削除し、失敗時も別workerのstateを消しません。
 
 ## 選択規則
 

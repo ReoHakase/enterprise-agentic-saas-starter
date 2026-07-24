@@ -46,4 +46,6 @@ bun run --cwd apps/web cf:typegen
 bun run build:cloudflare
 ```
 
-Agent behavior変更はmockだけで完了にせず、[paid E2E仕様](../../../docs/agent/testing.md#paid-e2e)のrelease scenarioと3回evalを通す。
+Agent behavior変更はmockだけで完了にせず、
+[browserless paid eval](../../../docs/agent/testing.md#browserless-paid-eval)の3回evalを実行し、
+release candidateでは[paid full-stack canary](../../../docs/agent/testing.md#paid-full-stack-canary)も通す。

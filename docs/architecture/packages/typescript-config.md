@@ -28,10 +28,15 @@ packages/typescript-config/
 
 ## 原則
 
-- `base.json`へ全runtime共通のstrict option
-- runtime固有のlib、module、JSXは派生config
+- `base.json`: 全runtime共通のstrict option。DOM/Node/Worker固有型を入れない
+- `bun.json`: Bun/Node系scriptとpackage
+- `cloudflare-worker.json`: Web Worker libとCloudflare runtime
+- `react-library.json`: React DOM libraryとdeclaration生成
+- `nextjs.json`: Next.js App RouterとJSX/plugin
 - app固有のpath aliasやincludeは各workspace
 - Oxlint、Oxfmt、test configを混ぜない
+- runtime source、test support、postinstall scriptを持たない
+- dependenciesを持たず、利用workspaceが必要な型/runtimeを自分で宣言する
 
 ## 受入条件
 

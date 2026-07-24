@@ -1,4 +1,15 @@
+---
+title: 現行architecture
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # アーキテクチャ
+
+この文書は全面移行前の現行実装contractを記録します。移行後のdirectory、layer、import targetは
+[`docs/architecture/`](architecture/README.md)を正本とし、この文書の固有要件を移し終えてから
+supersedeします。
 
 ## 目的
 

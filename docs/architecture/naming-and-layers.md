@@ -11,6 +11,7 @@ last_reviewed: 2026-07-24
 
 - [目的](#目的)
 - [共通原則](#共通原則)
+- [dependency inversion](#dependency-inversion)
 - [featureとmodule](#featureとmodule)
 - [domain](#domain)
 - [applicationとservice](#applicationとservice)
@@ -18,6 +19,7 @@ last_reviewed: 2026-07-24
 - [adapter](#adapter)
 - [repository](#repository)
 - [transport](#transport)
+- [platform](#platform)
 - [controllerとview](#controllerとview)
 - [composition-root](#composition-root)
 - [mockとfakeとfixture](#mockとfakeとfixture)
@@ -45,6 +47,26 @@ domain
 内側は外側のframeworkをimportしません。外側は内側を利用できます。
 
 小さなfeatureへ空のlayer directoryを大量に作りません。ただし全面移行後の規則が曖昧にならないよう、責務が二つ以上あるfeatureは最終形へ分けます。
+
+layerは論理的な依存方向であり、特定のdirectory名そのものではありません。小さいmoduleはflatな
+`domain.ts`、`service.ts`、`repository.ts`で同じ方向を表せます。逆にdirectory名が
+`domain/`でもframeworkやDBをimportすればdomain layerではありません。
+
+## dependency inversion
+
+applicationが必要とする能力の型であるportは、内側のapplication ownerが定義します。外側の
+adapterがそのportを実装し、composition rootだけが具体実装を接続します。
+
+```text
+transport -> application -> domain
+                  |
+                  v
+             outbound port <- adapter <- DB/provider/browser
+```
+
+この向きにする理由は、applicationがDrizzle、provider SDK、Next routerの選択へ依存せず、
+同じuse caseをfake portでdeterministicに検証できるようにするためです。adapter側にinterfaceを
+置いてapplicationへ逆輸入する方式は、外側が内側の契約を所有するため採用しません。
 
 ## featureとmodule
 
@@ -129,6 +151,10 @@ portを作らない対象:
 
 何でもportにするとimplementationを隠すだけのceremonyが増えます。
 
+portは「testでmockしたいから」だけでは作りません。外部IOまたはpolicy上の境界で、複数の
+implementation、failure taxonomy、call order、security invariantのいずれかを明示する必要がある
+場合に作ります。
+
 ## adapter
 
 `adapter`はportを具体的なtechnologyへ接続します。
@@ -163,6 +189,22 @@ adapterは外側のSDK errorを内側のerror taxonomyへ変換します。raw p
 APIではElysia routeとValibot schema、WebではEden clientやAgent stream transportが該当します。
 
 transportはapplicationを呼び、repositoryを直接呼びません。
+
+## platform
+
+`platform`はapp全体へ一度だけ接続するruntime concernを所有します。
+
+- environment validation
+- observability
+- request ID
+- framework plugin
+- shared runtime adapter
+
+feature/module固有のbusiness rule、repository、port adapterを`platform`へ移しません。
+`platform`が利用・実装できるのはrequest ID、telemetry、clock等、app-globalでdomain-neutralな
+contractだけです。module固有portのadapterはowner moduleへ置き、composition rootから接続します。
+domain moduleが`platform`へ依存する逆向きは禁止します。万能な`shared` directoryにしないため、
+ownerがfeature/moduleにあるcodeはowner側へ残します。
 
 ## controllerとview
 
@@ -257,6 +299,11 @@ components/feature-panel/
 - import pathを短くするだけのbarrel
 
 barrelを増やすとcycleとdead exportを発見しにくくなるためです。
+
+public entrypointは利用者に必要な最小surfaceだけを明示exportし、`internal/`、`adapters/`、
+`repository.ts`、test supportを再exportしません。packageの`exports`、feature/moduleの
+`index.ts`または`public.ts`、lint/architecture checkは同じ境界を表し、一方を変えるPRでは
+残りも同時に更新します。
 
 ## directoryへ分ける基準
 

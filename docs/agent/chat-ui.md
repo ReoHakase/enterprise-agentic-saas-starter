@@ -1,3 +1,10 @@
+---
+title: 製品AgentのChat UI/UX
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Chat UI/UX
 
 ## Shellとheader

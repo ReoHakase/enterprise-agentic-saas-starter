@@ -11,7 +11,8 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 
 - 開発環境は `nix develop` で定義する。
 - Bunはpackage manager/runtimeとして使う。
-- repo固有skillは `.agents/local-skills` を正本としてgit管理する。
+- repo固有skill artifactは `.agents/local-skills` を編集元としてgit管理する。設計仕様の正本は
+  `docs/`とADRであり、skillへ規範本文を複製しない。
 - `.agents/skills` は `agent-skills-nix` が生成するagent実行用ディレクトリとして扱い、直接編集しない。
 - 外部skillとMCP設定は `agent-skills-nix` / `mcp-servers-nix` を `flake.lock` でpinし、`nix develop` の `sync-agent-config` で生成する。
 - 生成されたskill（例: `.agents/skills/next-best-practices`, `.agents/skills/developer-environment`）はこのrepoで直接編集しない。
@@ -41,7 +42,8 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 - `flake.nix`から`bunx`で起動するMCP packageもbare nameにせずexact versionを指定する。生成configだけがNix storeにあっても、bare npm specでは同期時に取得versionが変わる。
 - Cloudflare local envは各appの `.dev.vars`、共有key一覧は `.dev.vars.example` に置く。production secretはCloudflare/GitHub secretへ置き、`.dev.vars` をcommitしない。
 - local/testの`EMAIL_FROM`は未設定でも`packages/email`の共通resolverが`noreply@example.test`を補う。本番は補わずenv validationでfail-fastするため、Cloudflareで検証済みsenderを必ず設定する。
-- 人向けrunbookの入口は `docs/README.md`。repo固有の判断をskillへ先に反映し、実行手順と運用checklistを `/docs` に展開する。
+- 人向けrunbookと規範文書の入口は `docs/README.md`。永続的な判断はdocsまたはADRへ先に反映し、
+  skillは必読文書、作業手順、検証commandだけを案内する。
 
 ## Spotlight
 
@@ -58,14 +60,19 @@ description: enterprise-agentic-saas-starterのnix develop、Bun、agent-skills-
 
 ## agent向けドキュメント化
 
-このrepoで設計判断・実装規約・失敗から得た運用知識が増えたら、通常の長い `docs/` より先に `.agents/local-skills/<topic>` へ反映する。
+このrepoで設計判断、実装規約、失敗から得た運用知識が増えたら、まず`docs/`またはADRへ
+反映する。skillの発火条件、必読文書、手順、検証commandが変わる場合だけ
+`.agents/local-skills/<topic>`も更新する。
 
 追加・更新の基準:
 
-- agentが次回も同じ判断をする必要がある。
+- agentが次回も同じ手順または検証を実行する必要がある。
 - modelが一般知識だけでは間違えやすいrepo固有ルールである。
 - CI、secret、MCP、Nix、Turso、Better Authなど、環境差分で失敗しやすい。
-- 一度きりの説明ではなく、テンプレート利用者にも再利用される。
+- 一度きりの説明ではなく、テンプレート利用者にも再利用される手順である。
+
+設計理由、feature固有要件、test matrixはskillへ置かず、関連docsへのlinkで参照する。
+`.agents/local-skills/README.md`のformatと禁止事項に従う。
 
 外部skillの更新はskill本文を直接編集せず、`flake.lock` の input 更新で行う。
 

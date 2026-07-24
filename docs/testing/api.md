@@ -32,6 +32,17 @@ Drizzle query builderをmockしません。実libSQLで次を検証します。
 - concurrency
 - audit/outbox atomicity
 
+## application
+
+serviceはfake portで次を検証します。
+
+- authorizationとtenant contextを最初に確認する
+- portのcall orderと引数
+- duplicate/idempotency
+- transaction途中のfailureとrollback projection
+- cancellation/timeoutの伝播
+- failure時に後続write、usage、notificationを呼ばない
+
 ## HTTP
 
 - request/response schema
@@ -43,7 +54,31 @@ Drizzle query builderをmockしません。実libSQLで次を検証します。
 
 ## error検証集合
 
-`Error`以外のthrow、getter/Proxy、circular object、secret付きcause、telemetry failureを投入し、error handler自身がthrowしないことを確認します。
+次をtable-drivenに投入し、error handler自身がthrowしないことを確認します。
+
+- string、number、`null`、plain object
+- throwing getter、Proxy、circular object、`__proto__`
+- 極端に長いmessage、invalid status/code
+- secret付きcause、raw provider/DB response
+- abort、dependency timeout、local rate limit
+- telemetry/Sentry自身のthrow
+
+全caseでsecret、stack、cause、private context、provider本文を返さず、request ID、
+`Cache-Control: no-store`、有限error codeを返します。`Retry-After`はregistryでretryableと定義した
+429/503だけへ付け、Sentry attributeはallowlistだけを送ります。
+
+## real HTTPを使う範囲
+
+`app.handle()`で表現できない次だけをephemeral HTTPで検証します。
+
+- cookieとCORS/Origin
+- streaming/backpressure/disconnect
+- multipart body
+
+business rule、schema、authorization matrixをreal serverへ重複させません。
+Service Binding、named entrypoint、workerd固有adapter behaviorは通常のBun/Elysia serverで再現せず、
+free full-stack E2とCloudflare dry-runへ置きます。A6 dry-runはbundle/configの静的成立を確認し、
+実際のrequest behaviorはE2が担当します。
 
 ## 実行条件
 

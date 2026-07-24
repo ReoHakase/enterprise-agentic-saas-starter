@@ -1,3 +1,10 @@
+---
+title: API / OpenAPI
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # API / OpenAPI
 
 ## 入口

@@ -1,3 +1,10 @@
+---
+title: Observability
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # Observability
 
 このrepoではSentryをapplication observabilityの正本、Cloudflare Workers Observabilityをplatform runtimeの補助、Spotlightをlocal Sentry envelopeの確認先にする。productionで同じWorkerのlogs/tracesをSentry SDKとCloudflare OTLP destinationの両方から送ると重複するため、初期構成ではapplication codeからSentry SDKへ送る経路だけを有効にする。

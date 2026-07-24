@@ -1,11 +1,19 @@
+---
+title: 製品Agentのtestとrelease gate
+status: proposed
+implementation: planned
+last_reviewed: 2026-07-24
+---
+
 # Testとrelease gate
 
 ## 保証範囲
 
-Agent releaseは次の2層を分離します。
+Agent releaseは次の3層を分離します。
 
-1. deterministic safety: schema、tenant、capability、query guard、idempotency、stream projection、UI state
-2. probabilistic behavior: 実OpenRouter Qwen3.6 Flashがtoolを正しく選び、全scenarioを3回連続で完了すること
+1. deterministic core: schema、tenant、capability、query guard、idempotency、stream projection
+2. browser feature integration: UI state、RSC、cookie、Worker/Service Binding配線
+3. probabilistic verification: L6は全指定caseを独立stateで3/3、L7は固定canaryを各1回完了すること
 
 LLMの回答文面一致はassertしません。tool call、tool inputの安全性、DB state、canonical stream part、approval state、Issue link、usage eventをassertします。
 
@@ -35,7 +43,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - vision flagによる画像tool登録、chat画像との合計4枚上限、WeakMap media sidecar、実model入力だけのusage加算
 - canonical履歴、stream、reload traceにbase64、private URL、object key、raw bytesがない
 
-### Web / mock Playwright
+### Web / Browser Modeとfree Playwright
 
 - headerにorganization名なし、selector metadata、赤いarchive
 - thread未選択、stale URL、archive後に新規composerを表示し、未保存draft、sample prompt、初回send/attachmentでだけ作成
@@ -46,43 +54,83 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - editor最大40vh、observed主表示とestimated fallbackを分離したcontext ring tooltip、360px pane/mobileでのoverflow、一行footer
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
-## Paid E2E
+pane state、shortcut、focus、approval UI、stream part表示はStorybook/Browser Modeで検証します。
+RSC、cookie、reload、API/Agent Worker配線だけをfree Playwright E1/E2へ残します。mockは
+network/transport boundaryに置き、production hook、parser、controller、componentを差し替えません。
 
-`bun run test:e2e:agent`は一時Turso、real API/Agent Service Binding、real Better Auth session、OpenRouter `qwen/qwen3.6-flash`を使います。標準mock E2Eへ混ぜません。
+## Browserless paid eval
 
-release journey:
+`bun run test:eval:agent`はrelease modelを使い、browserなしで次のscenarioを検証します。
 
-1. renameを依頼しない最初のmessageで専用title Agentによる自動titleを確認
-2. 明示prefixなしの自然なWeb検索とsource part
-3. 過去履歴、Issue read、tool resultを材料に一般化した検索
-4. Issue readとorganization slug付き個別link
-5. Ask alwaysのYes / Noと、Full accessでcardなしの即時write
-6. 1つのmessageで画像upload、自然な公開Web検索、画像付きIssue作成を行い、tool input、DB Issue/file/claim、preview、個別pageを確認
-7. Issue/member/current page mentionのserver解決
-8. thinking、transient status、tool traceのstreamとreload。完了/reload後statusなし、assistant重複なし
-9. context ringとusage event/cost projection API
-10. session更新後の過去approval reload
-11. 既知markerを持つseed Issue画像を`get_issue`から選び、画像toolを呼び、markerの内容を説明
+contract profile:
 
-secret、provider response本文、DOM snapshot、video、trace、screenshotをartifactへ保存しません。run専用tmp directoryとmode 0600の`.dev.vars`を使い、cleanup時は自分が起動したprocessとvalidated tmp pathだけを削除します。
+1. 明示prefixなしの自然なWeb検索とsource part
+2. 過去履歴、Issue read、tool resultを材料に一般化した検索
+3. Issue readとorganization slug付き個別link
+4. Ask alwaysのapproval前write禁止と、Full accessの許可された即時write
+5. 既知markerを持つsynthetic Issue画像を選び、必要な画像toolを呼ぶ
+
+stack profile:
+
+1. 専用title Agentの自動titleとmanual rename race
+2. 画像upload、公開Web検索、画像付きIssue作成のtool inputとDB/file/claim
+3. Issue/member/current page mentionのserver再解決
+4. thinking、transient status、tool/source traceのcanonical persistence
+5. context usage event/cost projection
+6. session更新後の過去approval reload
+
+authorization、tenant、privacy、idempotency、approval、tool allowlistはdeterministic assertionで
+判定します。自然言語の品質、関連性、説明の完全性だけをscorerの対象にします。
+
+## Paid full-stack canary
+
+`bun run test:e2e:agent`は一時Turso、real API/Agent Service Binding、real Better Auth session、
+release modelを使い、標準free E2Eへ混ぜません。E4は次の固定2本を各1回実行します。
+
+1. `agent-canary-read-source`: 自然文からread/Web検索tool、source、Issue linkを表示する
+2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を完了する
+
+上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、
+browserless contract/stack eval、E4 canaryへ責務を配分します。
+
+L6/L7のsecret owner、env隔離、artifact禁止、cleanupは
+[Paid test secret](./operations.md#paid-test-secret)を共通契約とします。
 
 ## 3回eval
 
-`bun run test:eval:agent`は各release scenarioを独立状態で3回実行し、3/3成功を要求します。一試行でも安全境界違反、tool不選択、誤ったwrite、stream欠落、DB不一致があればfailです。retryで成功率を隠しません。provider 429/5xxは別のinfrastructure failureとして記録し、合格へ数えません。
+`bun run test:eval:agent`は各release scenarioを独立状態で3回実行し、3/3成功を要求します。
+一試行でも安全境界違反、tool不選択、誤ったwrite、stream欠落、DB不一致があればfailです。
+retryで成功率を隠しません。provider 429/5xxは別のinfrastructure failureとして記録し、
+合格へ数えません。E4 browser canary自体は1回だけとし、flaky retryを設定しません。
 
-## 最終command
+## 常時実行するfree gate
 
 ```sh
-bun run --cwd packages/db db:generate
-bun run --cwd packages/db db:migrate
+bun run --cwd packages/db db:check
 bun run check
 bun run test:e2e
-bun run test:e2e:agent
-bun run test:eval:agent
 bun run --cwd apps/api cf:typegen
 bun run --cwd apps/agent cf:typegen
 bun run --cwd apps/web cf:typegen
 bun run build:cloudflare
+```
+
+Schema変更時はtemporary outputへのgenerateによるschema drift、migration history、isolated migration
+suiteも実行します。release testから開発DBへ`db:migrate`を実行しません。
+
+## Agent fingerprint変更時
+
+```sh
+bun run test:eval:agent
+```
+
+## Release candidate
+
+安いL6を先に通し、その後にL7を各1回実行します。
+
+```sh
+bun run test:eval:agent
+bun run test:e2e:agent
 ```
 
 加えてskill validation、docs link check、UI向け禁止用語checkを通します。warning、flaky、未説明・意図しないskip、未cleanup processが残る場合は完了扱いにしません。browser能力差による計画skipは理由と代替coverageをtest内へ明記します。

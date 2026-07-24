@@ -1,3 +1,10 @@
+---
+title: Local development
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # ローカル開発
 
 ## 前提

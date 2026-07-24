@@ -73,59 +73,78 @@ Knipとjscpdはmonorepo全体を解析するため、Turbo workspace taskへ分�
 
 ## Oxlint上限
 
-### production domain/application
+既存codeを一度のPRで移行でき、以後の肥大化を止められる初期budgetを次に固定します。
 
-| rule | budget |
-| --- | ---: |
-| `complexity` | 10 |
-| `max-depth` | 4 |
-| `max-lines-per-function` | 80 |
-| `max-statements` | 40 |
-| `max-lines` | 350 |
-| `max-params` | 4 |
+| rule | production core | React / adapter / transport | test / story / E2E / fixture |
+| --- | ---: | ---: | ---: |
+| `complexity`（modified） | 25 | 30 | 50 |
+| `max-depth` | 4 | 5 | 8 |
+| `max-lines` | 1000 | 1000 | 4000 |
+| `max-lines-per-function` | 250 | 300 | 1000 |
+| `max-params` | 6 | 6 | 10 |
+| `max-statements` | 100 | 120 | 500 |
+| `max-nested-callbacks` | 4 | 5 | 10 |
+| `max-classes-per-file` | 2 | 2 | 8 |
+| `unicorn/max-nested-calls` | 6 | 6 | 10 |
+| `react/jsx-max-depth` | 対象外 | 9 | 12 |
+| `vitest/max-nested-describe` | 対象外 | 対象外 | 5 |
 
-### React controller/view、adapter、transport
+`max-lines`と`max-lines-per-function`は`skipBlankLines: true`、`skipComments: true`、
+`max-lines-per-function`は`IIFEs: true`を使います。`max-params`は`countThis: "never"`、
+`max-statements`は`ignoreTopLevelFunctions: false`とし、entrypointという名前だけで巨大処理を
+除外しません。test overrideは最も最後に適用し、production fileへ誤適用しないことをconfig testで
+検証します。
 
-| rule | budget |
-| --- | ---: |
-| `complexity` | 12 |
-| `max-depth` | 4 |
-| `max-lines-per-function` | 100 |
-| `max-statements` | 50 |
-| `max-lines` | 400 |
-| `max-params` | 5 |
-| `react/jsx-max-depth` | 5 |
+この値は理想値ではなく全面移行のhard gateです。初回から80行やcomplexity 10を要求すると、
+意味のないhelper分割や大量waiverを生みやすいため採用しません。移行後に実測分布を基に厳しくする
+場合は、既存違反を作らない別PRでbudgetを下げます。test codeはscenario表現のため緩めますが、
+import、security、tenant、focused/disabled testの規則は緩めません。
 
-### test、story、E2E
+### profile selector
 
-| rule | budget |
-| --- | ---: |
-| `complexity` | 15 |
-| `max-depth` | 5 |
-| `max-lines-per-function` | 150 |
-| `max-statements` | 80 |
-| `max-lines` | 700 |
-| `max-params` | 6 |
-| `vitest/max-nested-describe` | 3 |
+Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 
-`skipBlankLines`と`skipComments`を有効にします。大きなfixtureはcode fileではなくdata fixtureへ分離します。
+| 順序 | profile | exact glob |
+| ---: | --- | --- |
+| 0 | lint対象外 | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra}/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`apps/agent/src/cloudflare-env.d.ts`、`packages/db/drizzle/**` |
+| 1 | production core（default） | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る |
+| 2 | React | `apps/web/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}` |
+| 2 | adapter / transport | `apps/api/src/modules/**/{routes,repository,module}.ts`、`apps/api/src/modules/**/adapters/{http,persistence}/**/*.{ts,tsx}`、`apps/api/src/platform/**/*.ts`、`apps/agent/src/mastra/{adapters,composition}/**/*.{ts,tsx}`、`apps/agent/src/mastra/{index,worker}.ts`、`apps/github-emulator/src/**/*.{ts,tsx}`、`packages/auth/src/**/*.{ts,tsx}`、`packages/email/src/{runtime,providers,development}/**/*.{ts,tsx}` |
+| 2 | config / script | `**/*.config.{js,mjs,cjs,ts,mts,cts}`、`**/scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}` |
+| 3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}` |
+
+`fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。config testは各globの
+代表pathと境界上のpathをprofile resolverへ入力し、意図したprofileが一つに決まること、未知の
+production sourceがcoreへfall backすること、flat/昇格済みAPI adapterが同じprofileになること、
+testが最後に上書きすることを検証します。
 
 共通例:
 
 ```ts
 export const productionBudgets = {
-  complexity: ["error", { max: 10 }],
+  complexity: ["error", { max: 25, variant: "modified" }],
   "max-depth": ["error", { max: 4 }],
   "max-lines-per-function": [
     "error",
-    { max: 80, skipBlankLines: true, skipComments: true },
+    {
+      max: 250,
+      skipBlankLines: true,
+      skipComments: true,
+      IIFEs: true,
+    },
   ],
-  "max-statements": ["error", { max: 40 }],
+  "max-statements": [
+    "error",
+    { max: 100, ignoreTopLevelFunctions: false },
+  ],
   "max-lines": [
     "error",
-    { max: 350, skipBlankLines: true, skipComments: true },
+    { max: 1000, skipBlankLines: true, skipComments: true },
   ],
-  "max-params": ["error", 4],
+  "max-params": ["error", { max: 6, countThis: "never" }],
+  "max-nested-callbacks": ["error", { max: 4 }],
+  "max-classes-per-file": ["error", { max: 2 }],
+  "unicorn/max-nested-calls": ["error", { max: 6 }],
 } as const
 ```
 
@@ -135,13 +154,15 @@ Budget超過をdisable commentで解決せず、責務分割を行います。
 
 共通:
 
-- `import/no-cycle`
+- `import/no-cycle`: all depth、`ignoreExternal: false`、`ignoreTypes: true`
 - `import/no-self-import`
-- `import/no-duplicates`
+- `import/no-duplicates`: `considerQueryString: true`、`preferInline: false`
 - `typescript/no-require-imports`
 - side-effect importはCSS、`server-only`、test setup等のallowlistだけ
 
 workspace/layer別の`no-restricted-imports`は各architecture文書のdependency directionを実装します。
+overrideではpattern配列がmergeされないため、共通config helperでworkspace境界とlayer境界を
+明示的に合成します。test overrideでもこの配列を落としません。
 
 Oxlintがresolved path zoneを完全に表現できない部分は、`bun run check:architecture`で実際の解決先を検査します。`check:architecture`は最初から`check:static`へ含め、optionalな後付けにしません。
 
@@ -200,10 +221,21 @@ production TypeScript/TSXのcopy-pasteを検出します。
 
 ```json
 {
+  "path": [
+    "apps/*/src",
+    "apps/web/app",
+    "apps/web/components",
+    "apps/web/features",
+    "apps/web/hooks",
+    "apps/web/lib",
+    "packages/*/src"
+  ],
   "threshold": 3,
   "minTokens": 70,
   "minLines": 8,
   "mode": "mild",
+  "format": ["typescript", "tsx"],
+  "output": "test-results/jscpd",
   "reporters": ["console", "json"],
   "ignore": [
     "**/*.test.*",
@@ -211,6 +243,8 @@ production TypeScript/TSXのcopy-pasteを検出します。
     "**/e2e/**",
     "**/test-support/**",
     "**/fixtures/**",
+    "**/*.config.*",
+    "**/scripts/**",
     "**/drizzle/**",
     "**/generated/**",
     "**/dist/**",
@@ -220,6 +254,10 @@ production TypeScript/TSXのcopy-pasteを検出します。
 ```
 
 Test codeは別の重複特性を持つためproduction thresholdへ混ぜません。共通test helperへ抽出する価値があるduplicateはKnip/reviewで扱います。
+root、config、script、docsを含むrepository全体を入力にせず、`path`をproduction source rootへ
+固定します。ignoreはそのroot内のtest/story/E2E/code fixture/generatedだけを除外します。
+config testではproduction sourceがscan対象、test/config/root scriptが対象外になる代表fixtureを
+実行し、入力path追加漏れとignoreの過剰化を検出します。
 
 thresholdを超える場合は全面移行PR内でrefactorします。baseline比較による段階導入はしません。
 
@@ -257,7 +295,8 @@ cloudflare-dry-run
 - `free-e2e`: selectorに基づくE1/E2
 - `cloudflare-dry-run`: Web/API/Agent production bundle
 
-Paid testはfork PRへsecretを渡さず、nightlyまたはrelease candidateで実行します。
+Paid testはfork PRへsecretを渡しません。Agent behaviour fingerprintが変わるPRは、repo-owned
+trusted refへ固定したmaintainer承認runをrequiredにします。nightlyとrelease candidateでも実行します。
 
 ## 例外
 
@@ -293,5 +332,6 @@ Ruleを目的ではなく責務境界のsignalとして扱い、意味のないh
 - 全sourceがbudget内
 - Knip full/strict findingがゼロ
 - jscpd threshold以下
+- jscpdがproduction sourceだけをscanする
 - broad ignoreとbaseline fileがない
 - `bun run check`がlocal/CIで成功する

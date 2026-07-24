@@ -20,7 +20,7 @@ applies_to:
 - [目的](#目的)
 - [範囲](#範囲)
 - [構成](#構成)
-- [AGENTSmd](#agents.md)
+- [AGENTS.md](#agentsmd)
 - [local skills](#local-skills)
 - [ADRとexec plan](#adrとexec-plan)
 - [custom agents](#custom-agents)
@@ -70,13 +70,16 @@ Spotlight、worktree隔離、runtime observability、performance monitoringはap
 
 ## AGENTS.md
 
-Codexはproject rootからcurrent directoryまで`AGENTS.md`を読み、近いfileを後から適用します。rootは共通contract、nested fileはworkspace固有のcommandとboundaryだけを持ちます。
+このrepositoryはroot `AGENTS.md`一つだけをcoding agentの共通contractにします。nested
+`AGENTS.md`は作りません。近いfileがroot contractを上書きするclient差と、同じworkspace境界を
+docs、skill、nested instructionへ三重記載するdriftを避けるためです。変更領域固有の必読文書、
+command、boundaryはlocal skillがroutingします。
 
 全規範を`AGENTS.md`へcopyしません。default size limitやcontext pollutionを避けるため、詳細はdocsとskillsへ分けます。
 
 ## local skills
 
-skillはtask固有の手順です。
+skillは変更領域固有のworkflowです。
 
 ```text
 必読文書
@@ -85,7 +88,9 @@ Validation
 禁止事項
 ```
 
-Skillはarchitectureの正本ではありません。Nix生成先`.agents/skills`を直接編集せず、`.agents/local-skills`を正本にします。
+Skillはarchitectureの正本ではありません。Nix生成先`.agents/skills`を直接編集せず、
+`.agents/local-skills`をskill artifactの編集元にします。formatと責務は
+[local skills README](../../.agents/local-skills/README.md)を参照します。
 
 ## ADRとexec plan
 
@@ -225,11 +230,16 @@ repository単位の`.codex/hooks.json`を使用し、hook scriptは`.codex/hooks
 
 | event | script | 責務 |
 | --- | --- | --- |
-| `SessionStart` | `session_start.py` | active exec planと正本の場所を追加contextとして渡す |
-| `PreToolUse` | `pre_tool_use_policy.py` | push、merge、deploy、`drizzle-kit push`、generated skill編集をdenyする |
-| `PostToolUse` | `post_tool_use_review.py` | protected harness file変更時にADR、exec plan、独立レビューを通知する |
+| `SessionStart` | `session-start.ts` | active exec planと正本の場所を追加contextとして渡す |
+| `PreToolUse` | `pre-tool-use-policy.ts` | `drizzle-kit push`とgenerated skill編集をhard denyする |
+| `PostToolUse` | `post-tool-use-review.ts` | protected harness file変更時にADR、exec plan、独立レビューを通知する |
 
-hook commandはgit rootから絶対位置を解決します。Codexをsubdirectoryから開始しても`.codex/hooks/`を見失わないためです。
+hook scriptはrepositoryのBun/TypeScript toolchainへ統一し、commandはgit rootから絶対位置を
+解決します。Codexをsubdirectoryから開始しても`.codex/hooks/`を見失わないためです。
+
+push、merge、deploy、destructive resetは明示承認を可能にするため`.codex/rules`で`prompt`にし、
+hookで常時denyしません。一方、repository契約上いかなる通常作業でも許可しない`drizzle-kit push`と
+generated skill直接編集だけはhookでもfail-closedにします。
 
 Hooksは補助的なguardrailであり、次の代替にはしません。
 
@@ -239,7 +249,10 @@ Hooksは補助的なguardrailであり、次の代替にはしません。
 - reviewerのread-only sandbox
 - application側の認可
 
-現時点では`type: "command"`だけを使用します。`prompt`と`agent` handlerは設定に書きません。導入時はsafe/deny両方のfixture inputでhook scriptを直接testし、Codex session上でも発火を確認します。
+現時点では`type: "command"`だけを使用します。`prompt`と`agent` handlerは設定に書きません。
+導入時はsafe/deny/malformed inputのfixtureでhook scriptを直接testし、Codex session上でも発火を
+確認します。session contextやread-only probeの成功は設定fileの存在だけでなく、実行したclient
+versionと結果をexec planへ記録します。
 
 ## MCP
 

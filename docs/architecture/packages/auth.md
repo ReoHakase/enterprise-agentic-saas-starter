@@ -36,11 +36,16 @@ packages/auth/src/
 - `@enterprise-agentic-saas/auth/github-oauth`
 - `@enterprise-agentic-saas/auth/openapi`
 
-`client.ts`からDB、Email、Node builtin、server codeをimportしません。
+`client.ts`からDB、Email、Node builtin、`process.env`、`server-only`、server codeをimportしません。
+`github-oauth.ts`はemulatorとserverが共有するprotocol/schemaだけを公開し、Better Auth server
+factory、instance/callback、DB/Email adapter、runtime env、credentialをimportまたは再exportしません。
+`server/**`だけがDB/Emailへ依存できます。
 
 ## 依存関係
 
 serverだけがDBとEmail adapterを利用できます。UI、API、Web、Agentへ逆依存しません。
+client entrypointはbrowser向けarchitecture checkでNode builtin、`server-only`、server pathへの
+推移的依存も検査します。
 
 ## テスト
 

@@ -1,4 +1,15 @@
+---
+title: 現行test実装runbook
+status: proposed
+implementation: active
+last_reviewed: 2026-07-24
+---
+
 # テスト戦略
+
+この文書は全面移行前の現行suiteとfeature固有の回帰要件を記録します。移行後のlayer、公開script、
+selector、cost contractは[`docs/testing/`](testing/README.md)を正本とし、固有要件を移し終えてから
+supersedeします。
 
 ## 責務分担
 

@@ -11,6 +11,8 @@ last_reviewed: 2026-07-24
 
 - [目的](#目的)
 - [文書一覧](#文書一覧)
+- [三層モデル](#三層モデル)
+- [L0からL7](#l0からl7)
 - [公開script](#公開script)
 - [bun-run-test](#bun-run-testの範囲)
 - [実行頻度](#実行頻度)
@@ -33,6 +35,41 @@ last_reviewed: 2026-07-24
 - [統合E2E](e2e.md)
 - [DB migration](database-migrations.md)
 - [VRT](visual-regression.md)
+
+## 三層モデル
+
+全体を次の三層として設計します。
+
+```text
+deterministic core
+  tool / policy / schema / application / repository / scripted Agent loop
+        ↓
+browser feature integration
+  component / Storybook / Browser Mode / free Playwright
+        ↓
+probabilistic canary
+  real-model eval / paid full-stack browser canary
+```
+
+同じinvariantを上位layerだけで保証しません。authorization、tenant、idempotency、approval、
+privacy、tool orderはdeterministic coreでhard assertionにし、browserは配線、real modelは
+選択behaviorだけを確認します。
+
+## L0からL7
+
+| level | 主対象 | browser | real model | 公開script |
+| --- | --- | ---: | ---: | --- |
+| L0 | lint、type、architecture、bundle isolation | no | no | `check` |
+| L1 | pure unit、domain、schema、state reducer | no | no | `test` |
+| L2 | tool executor、scripted Agent loop | no | no | `test` |
+| L3 | repository、HTTP、private API、temporary DB | no | no | `test` |
+| L4 | Storybook、Browser Mode、a11y、feature integration | yes | no | `test:browser` |
+| L5 | E1 mocked journey / E2 free full-stack journey | yes | no | `test:e2e` |
+| L6 | browserless real-model contract/stack/stability eval | no | yes | `test:eval:agent` |
+| L7 | 固定2本のfull-stack paid canaryを各1回 | yes | yes | `test:e2e:agent` |
+
+VRTは現在導入しません。L4はinteraction、real CSS/browser behavior、a11yまでを担当し、
+screenshot baselineは[将来方針](visual-regression.md)としてdeferします。
 
 ## 公開script
 
@@ -66,6 +103,9 @@ bun run test:e2e:agent
 - external cloud、real browser、paid modelを必要としないintegration
 
 重要なtenant/security contractをE2Eまで遅らせないためです。
+
+Root scriptはlevel数ではなくruntimeとcostで5本へ集約します。内部profileやsuiteを追加しても
+公開script名を増やしません。
 
 ## 実行頻度
 
@@ -104,15 +144,20 @@ PR:
 
 ```text
 base SHA = github.event.pull_request.base.sha
-head SHA = github.sha
+head SHA = github.event.pull_request.head.sha
+merge SHA = github.sha
 checkout fetch-depth = 0
 ```
+
+`pull_request` eventの`github.sha`はsynthetic merge commitなのでheadとして扱いません。selectorは
+base/headを比較し、browserless paid evalは実際にmergeされる候補を表すmerge treeを検証します。
 
 main push:
 
 ```text
 base SHA = github.event.before
 head SHA = github.sha
+merge SHA = not-applicable
 ```
 
 次の場合はfull free suiteへfail-safeします。
@@ -124,6 +169,19 @@ head SHA = github.sha
 - path selector失敗
 
 Fork PRへpaid secretを渡しません。
+
+Agent behaviour fingerprintが変わるfork PRは、free suite成功だけではmergeできません。maintainerが
+workflow、dependency、eval harnessを含むexact diffを確認し、同じcommitをrepo-owned
+`eval/<head-sha>` refへ明示的に取り込んだ後、default branch上の保護されたworkflowを
+`workflow_dispatch`します。workflowはfull 40文字head SHAがそのrefから到達可能であること、PR head
+treeが一致すること、base SHAがまだcurrentであることを確認します。baseとheadからcandidate mergeを
+再構成し、PRのmerge treeと一致した場合だけL6を実行します。`pull_request_target`でfork codeを直接
+実行せず、fork workflow、fork environment、browser、Web/APIへsecretを渡しません。
+
+required check `agent-eval-gate`はselectorがL6不要なら成功、必要なら
+`base SHA + head SHA + merge tree + protected workflow/harness revision`が完全一致する承認runが
+成功するまでpendingです。base update、head update、merge conflict解消、protected harness変更で
+以前の結果を無効化します。承認されないfork PRはmerge不可とします。
 
 ## 変更pathとsuiteの対応
 
@@ -138,7 +196,11 @@ Package graphだけでは逆方向のriskを表せないため、追加mapping�
 | `packages/db/drizzle/**` | DB full migration + API full test + E2 |
 | `apps/agent/src/mastra/**` | Agent full test + E2 |
 | Service Binding/Wrangler config | API/Agent build + E2 |
-| API client export | Web test + E1 |
+| API client export、一般的なClient UI | Web test + E1 |
+| Web server/RSC、middleware、auth/session、cookie、Origin/CORS/CSRF、credentialed transport | E2 |
+| Playwright/Web server config | E2 |
+| `packages/auth/**`のOAuth contract/callback | E2 OAuth profile |
+| `apps/github-emulator/**` | E2 OAuth profile |
 | UI primitive | packages/ui browser + affected Web test |
 
 Mappingはversion-controlled scriptにし、判定不能時は追加suiteを実行します。
@@ -148,12 +210,15 @@ Mappingはversion-controlled scriptにし、判定不能時は追加suiteを実�
 PRでは`free-e2e` job自体を常に起動し、selectorがE1/E2を選びます。
 
 - docs-onlyで生成設定に影響しない場合はskip
-- Web/UI/API client変更はE1
-- API/Agent/Auth/DB/Service Binding変更はE2
+- 一般的なWeb Client UI、UI package、API client変更はE1
+- Web server/auth/cookie/Origin/CORS/CSRF、API/Agent/Auth/DB/Service Binding変更はE2
+- OAuth contract/callback、GitHub emulator変更はE2 OAuth profile
 - 両方に該当すればE1+E2
 - 判定失敗はE1+E2
 
 条件がjob定義とdocsで揺れないよう、一つのselector scriptを正本にします。
+selector fixtureは一般UI、server/auth/cookie、OAuth、Agent/DB、docs-only、unknown pathを持ち、
+OAuth profileやE2をE1だけへ縮退できないことを固定します。
 
 ## coverage
 

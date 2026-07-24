@@ -17,6 +17,10 @@ Unit、browser、E2E、paid LLMが混ざると、通常確認が遅くなりpaid
 ## 決定
 
 Root test scriptを`test`、`test:browser`、`test:e2e`、`test:eval:agent`、`test:e2e:agent`へ限定し、runtimeとcostで分けます。
+内部はL0からL7へ分類し、deterministic core、browser feature integration、probabilistic canaryの
+三層にします。paid evalはcontract/stack/3回stabilityをbrowserlessで実行し、paid browser E4は
+規範文書でIDを固定した2本のcanaryを各1回だけ実行します。VRTはdeferします。
+layer mappingと実行条件は[テスト戦略](../testing/README.md)に定義します。
 
 ## 理由
 
@@ -27,10 +31,13 @@ Root test scriptを`test`、`test:browser`、`test:e2e`、`test:eval:agent`、`t
 - layerごとに多数のscript: interfaceが増え、実行漏れが起きる
 - 全て`test`へ含める: 日常実行が重くなる
 - 全てE2E: 遅くflakyで原因分離が難しい
+- VRTを同時導入: browser/font/GPU固定とbaseline review運用が未成熟
 
 ## 結果
 
 Selector、path mapping、base SHA処理が必要になります。
+Security、tenant、approval、privacy、idempotencyはLLM scorerではなくdeterministic assertionで
+判定します。自然言語品質だけをscorerへ委ねます。
 
 ## 強制方法
 

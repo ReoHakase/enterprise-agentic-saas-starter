@@ -1,6 +1,20 @@
+---
+title: 製品Agent仕様の入口
+status: proposed
+implementation: not-applicable
+last_reviewed: 2026-07-24
+---
+
 # Agent仕様
 
-このディレクトリは、製品Agentの仕様、実装境界、release gateの正本です。過去の機能・test草案にあった有効な要件はここへ統合済みで、草案なしで設計と検証範囲を追跡できます。
+このディレクトリは、製品Agentの仕様、実装境界、release acceptanceの正本です。coding agent、
+Codex custom agent、reviewer、sole-writerの契約は
+[`docs/architecture/codex-harness.md`](../architecture/codex-harness.md)を参照します。
+
+過去の機能・test草案にあった有効な要件はここへ統合し、草案なしで設計と検証範囲を追跡します。
+test layerと公開commandの正本は[`docs/testing/agent.md`](../testing/agent.md)と
+[`docs/testing/e2e.md`](../testing/e2e.md)であり、このdirectoryは製品scenarioとrelease acceptanceを
+所有します。
 
 ## 読む順序
 
@@ -28,8 +42,8 @@
 | Issue添付metadata / オンデマンド画像理解 | assets-mentions | 実装済み | pagination、private model route、4枚上限、metadata-only reload |
 | usage event / pricing / daily projection | usage-billing | 実装済み | idempotency、price version、失敗/cancel test |
 | Agent UI shortcut | chat-ui | 実装済み | IME、input、modal、desktop/mobile test |
-| deterministic release suite | testing | releaseごとに検証 | `bun run check`、mock browser、typegen、Cloudflare build |
-| paid E2E / 3回eval | testing | releaseごとに検証 | `test:e2e:agent` 1回、`test:eval:agent` 3/3成功 |
+| deterministic release suite | testing | releaseごとに検証 | `bun run check`、Browser Mode/free E2E、typegen、Cloudflare build |
+| paid eval / E2E canary | testing | releaseごとに検証 | browserless eval 3/3、固定E4 canary 2本を各1回 |
 
 「実装済み」はcode pathが存在することを示し、「検証済み」は[Testとrelease gate](./testing.md)の対応gateが成功したことを示します。確率的なLLM出力は文面一致で保証せず、tool call、stream part、DB state、安全境界を検証します。
 
