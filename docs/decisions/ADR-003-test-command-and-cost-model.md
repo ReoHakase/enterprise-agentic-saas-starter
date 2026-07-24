@@ -25,6 +25,21 @@ layer mappingと実行条件は[テスト戦略](../testing/README.md)に定義�
 ## 理由
 
 最も低いdeterministic layerへ保証を置き、real browserとpaid LLMを配線確認へ限定するためです。
+production parser、controller、tool executor、repositoryをmockせず、非決定的なmodel/network境界だけを
+差し替えることで、test専用実装ではなくproduction contractを検証します。
+
+browser-import可能なcomponentは全てL4のStorybook catalogueへ置き、route/Server Component/cookie等の
+browser featureでは閉じない境界だけをL5へ残します。loading/ready/errorのDOM geometry assertionは
+pixel baselineを持たないためVRTではなく、VRT deferredのまま必須にできます。
+
+Agent behaviour fingerprint変更ではselected caseを一回だけ実行する案を採用せず、各caseを独立stateで
+3回実行し3/3を要求します。一回の偶然成功をrequired gateにしないためです。費用はtrialを削るので
+はなく、browserless化、fingerprintによるcase選択、case/runごとのtoken、tool、time、cost上限で
+制御します。release時にbrowserとreal modelを同時に使うL7だけは固定二本を各一回、retryなしにします。
+
+`bun run check`はbrowserを必要としないL0からL3を全件含め、L4は独立したrequired browser CIにします。
+pre-pushへbrowser起動を入れて回避を誘発せず、PRではStorybook/Browser Modeをskip可能な任意checkに
+しないためです。
 
 ## 検討した代替案
 
@@ -32,6 +47,8 @@ layer mappingと実行条件は[テスト戦略](../testing/README.md)に定義�
 - 全て`test`へ含める: 日常実行が重くなる
 - 全てE2E: 遅くflakyで原因分離が難しい
 - VRTを同時導入: browser/font/GPU固定とbaseline review運用が未成熟
+- fingerprint変更をselected case各1回: 費用は低いが、非決定的なmodelの偶然成功をrequired gateで
+  見逃す
 
 ## 結果
 

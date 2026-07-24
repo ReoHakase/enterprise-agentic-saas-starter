@@ -10,9 +10,11 @@ last_reviewed: 2026-07-24
 ## 目次
 
 - [目的](#目的)
+- [背景](#背景)
 - [文書一覧](#文書一覧)
 - [三層モデル](#三層モデル)
 - [L0からL7](#l0からl7)
+- [layer選択規則](#layer選択規則)
 - [公開script](#公開script)
 - [bun-run-test](#bun-run-testの範囲)
 - [実行頻度](#実行頻度)
@@ -26,6 +28,24 @@ last_reviewed: 2026-07-24
 ## 目的
 
 同じbugを最も低く、速く、deterministicなlayerで検出し、real browserとpaid LLMの実行を最小化します。
+
+## 背景
+
+このrepositoryは、pure functionだけでなく、tenant authorization、transaction、Agent tool、
+stream、Server Component、browser focus、real modelの選択までを一つのproduct flowで扱います。これらを
+unit testとpaid browser E2Eの二択にすると、次の問題が起きます。
+
+- unit testでは個々のhelperが通っても、tool schema、executor、private API、DB、streamの接続不良を
+  検出できない
+- full-stack testだけでは、失敗原因がmodel、browser、network、Worker、Auth、DBのどこかを
+  切り分けられない
+- real modelとreal browserを日常gateへ混ぜると、費用、rate limit、時間、非決定性により実行が
+  避けられる
+- production parser、controller、repositoryまでmockすると、test用の別実装だけが正しくなる
+- authorization、privacy、approval等を自然言語の採点へ委ねると、安全性が確率的になる
+
+そこで、production codeをできるだけ実物のまま保ち、非決定的または外部の境界だけを低い層で
+差し替えます。上位層は下位層の再実装ではなく、下位では観測できない配線だけを追加で確認します。
 
 ## 文書一覧
 
@@ -70,6 +90,37 @@ privacy、tool orderはdeterministic coreでhard assertionにし、browserは配
 
 VRTは現在導入しません。L4はinteraction、real CSS/browser behavior、a11yまでを担当し、
 screenshot baselineは[将来方針](visual-regression.md)としてdeferします。
+
+## layer選択規則
+
+invariantは、それを観測できる最も低い層へ置きます。
+
+| 検証対象 | 最低layer | 実物のまま通すもの | 差し替えてよい境界 |
+| --- | --- | --- | --- |
+| pure transition、schema、policy | L1 | domain/core | clock、ID等のport |
+| tool order、approval、usage、stream projection | L2 | prompt、tool schema、executor、runtime | model output、control-plane port |
+| tenant query、transaction、HTTP/private API | L3 | repository、migration済みlibSQL、app composition | external provider |
+| focus、portal、CSS、component state | L4 | production view/controller/hook、real browser DOM | network/model transport |
+| Server Component、cookie、middleware、Worker配線 | L5 | routeと対象stack | LLMだけscripted model |
+| prompt/modelによるtool選択 | L6 | real prompt、real model、対象stack | browser |
+| release時のend-to-end配線 | L7 | temporary full stack、browser、real model | production dataとproduction credential |
+
+適用規則:
+
+1. 上位layerがgreenでも、同じsecurity/business invariantの下位hard assertionを削除しない。
+2. 一つのscenarioを全layerへ複製しない。上位ではそのlayer固有の境界だけをassertする。
+3. fakeはconsumerが所有するport、network、model/provider境界へ置く。productionのschema parser、
+   controller、hook、executor、repositoryをtest doubleへ置換しない。
+4. repositoryとtransactionはL3で実libSQLを使い、query builderの振る舞いをmockで再現しない。
+5. browser capabilityはhappy-domへ期待せずL4/L5、model selectionだけはL6、browserとmodelを
+   同時に必要とする最小canaryだけをL7へ置く。
+6. authorization、tenant、idempotency、approval前write禁止、privacy、tool allowlistは
+   deterministic assertionで判定する。LLM judgeは文章品質だけに使う。
+7. layer間のfixtureは同じcanonical contractを共有するが、mutable stateとrun namespaceは共有しない。
+
+L6とL7を分けるのは、model behaviourの失敗とbrowser/full-stack wiringの失敗を同じ高価なrunで
+混ぜないためです。多くのmodel回帰はbrowserlessなL6で再現し、L7は規範文書で固定した二つの
+release canaryだけにします。
 
 ## 公開script
 
@@ -197,11 +248,14 @@ Package graphだけでは逆方向のriskを表せないため、追加mapping�
 | `apps/agent/src/mastra/**` | Agent full test + E2 |
 | Service Binding/Wrangler config | API/Agent build + E2 |
 | API client export、一般的なClient UI | Web test + E1 |
-| Web server/RSC、middleware、auth/session、cookie、Origin/CORS/CSRF、credentialed transport | E2 |
+| Web server/Server Component、middleware、auth/session、cookie、Origin/CORS/CSRF、credentialed transport | E2 |
 | Playwright/Web server config | E2 |
 | `packages/auth/**`のOAuth contract/callback | E2 OAuth profile |
 | `apps/github-emulator/**` | E2 OAuth profile |
 | UI primitive | packages/ui browser + affected Web test |
+| browser-import可能component、story metadata | Story coverage check + affected Storybook/Browser Mode |
+| client Suspense、Skeleton、React Error Boundary | Web Browser Mode |
+| async Server Component、Next.js `loading.tsx` / `error.tsx` | E2 |
 
 Mappingはversion-controlled scriptにし、判定不能時は追加suiteを実行します。
 
@@ -235,3 +289,6 @@ OAuth profileやE2をE1だけへ縮退できないことを固定します。
 - base SHA不明時にfullへ縮退する
 - API repository変更でDB testが追加実行される
 - free E2E条件がselector script一か所にある
+- browser-import可能なcomponentのstory coverageが100%
+- client Suspense/Error BoundaryのBrowser Mode layout contractがgreen
+- async Server Component routeのloading/ready/error/retry E2 layout contractがgreen

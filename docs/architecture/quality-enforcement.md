@@ -38,7 +38,9 @@ coding agentが大きいfunction、深いnesting、dead code、undeclared depend
 
 ## 全面適用
 
-ratchetや既存違反baselineは使いません。全面移行PRで既存sourceを全てbudget内へrefactorし、最終merge時点から全ruleをerrorにします。
+main上で既存違反baselineを維持する段階導入は行いません。全面移行branch内では、source分割が
+完了した作業単位ごとに上限を狭め、最終PRでは全sourceを後述の目標budget内へ入れます。各時点の
+上限は常にerrorであり、warning-onlyの移行期間は作りません。
 
 除外できるのは次だけです。
 
@@ -78,7 +80,7 @@ Knipとjscpdはmonorepo全体を解析するため、Turbo workspace taskへ分�
 | rule | production core | React / adapter / transport | test / story / E2E / fixture |
 | --- | ---: | ---: | ---: |
 | `complexity`（modified） | 25 | 30 | 50 |
-| `max-depth` | 4 | 5 | 8 |
+| `max-depth` | 6 | 6 | 12 |
 | `max-lines` | 1000 | 1000 | 4000 |
 | `max-lines-per-function` | 250 | 300 | 1000 |
 | `max-params` | 6 | 6 | 10 |
@@ -89,16 +91,41 @@ Knipとjscpdはmonorepo全体を解析するため、Turbo workspace taskへ分�
 | `react/jsx-max-depth` | 対象外 | 9 | 12 |
 | `vitest/max-nested-describe` | 対象外 | 対象外 | 5 |
 
+### branch内の縮小と最終目標
+
+初期budgetは最初の全面lintを成立させるためのworking ceilingです。Web、API、Agent、packages、
+testの各source再編が終わるたびに、profile別の実測最大値と95 percentileを記録し、変更済み領域を
+除外せずに通せる次の値へconfigを狭めます。上限変更、対応refactor、profile resolver test、
+実測証跡は同じcommitへ入れます。
+
+最終PRの完了条件は次です。
+
+| rule | production core | React / adapter / transport | test / story / E2E / fixture |
+| --- | ---: | ---: | ---: |
+| `max-depth` | 6 | 6 | 12 |
+| `max-lines` | 500 | 500 | 1000 |
+| `max-lines-per-function` | 250 | 250 | 500 |
+| `max-params` | 6 | 6 | 10 |
+| `max-statements` | 100 | 100 | 500 |
+| `max-nested-callbacks` | 4 | 4 | 10 |
+
+一度狭めた値を後続作業で広げません。初期値がすでに目標値と同じruleは最初から維持し、目標より
+厳しい値へ安全に下げられた場合も戻しません。`complexity`、`max-classes-per-file`、
+`unicorn/max-nested-calls`、`react/jsx-max-depth`も初期hard gateのまま残し、実測に基づく縮小は
+できますが、上の6 ruleを緩める交換条件にはしません。per-file disable、既存file除外、testへの
+production profile誤適用で目標達成を装いません。
+
 `max-lines`と`max-lines-per-function`は`skipBlankLines: true`、`skipComments: true`、
 `max-lines-per-function`は`IIFEs: true`を使います。`max-params`は`countThis: "never"`、
 `max-statements`は`ignoreTopLevelFunctions: false`とし、entrypointという名前だけで巨大処理を
 除外しません。test overrideは最も最後に適用し、production fileへ誤適用しないことをconfig testで
 検証します。
 
-この値は理想値ではなく全面移行のhard gateです。初回から80行やcomplexity 10を要求すると、
-意味のないhelper分割や大量waiverを生みやすいため採用しません。移行後に実測分布を基に厳しくする
-場合は、既存違反を作らない別PRでbudgetを下げます。test codeはscenario表現のため緩めますが、
-import、security、tenant、focused/disabled testの規則は緩めません。
+初期値は最初のworking gateであり、最終値は全面移行PRのhard gateです。初回から80行や
+complexity 10を要求すると意味のないhelper分割や大量waiverを生みやすいため採用しません。
+最終目標を満たした後、さらに実測分布を基に厳しくする場合だけ、既存違反を作らない別PRで
+budgetを下げます。test codeはscenario表現のため緩めますが、import、security、tenant、
+focused/disabled testの規則は緩めません。
 
 ### profile selector
 
@@ -121,9 +148,9 @@ testが最後に上書きすることを検証します。
 共通例:
 
 ```ts
-export const productionBudgets = {
+export const initialProductionBudgets = {
   complexity: ["error", { max: 25, variant: "modified" }],
-  "max-depth": ["error", { max: 4 }],
+  "max-depth": ["error", { max: 6 }],
   "max-lines-per-function": [
     "error",
     {
@@ -164,7 +191,28 @@ workspace/layer別の`no-restricted-imports`は各architecture文書のdependenc
 overrideではpattern配列がmergeされないため、共通config helperでworkspace境界とlayer境界を
 明示的に合成します。test overrideでもこの配列を落としません。
 
-Oxlintがresolved path zoneを完全に表現できない部分は、`bun run check:architecture`で実際の解決先を検査します。`check:architecture`は最初から`check:static`へ含め、optionalな後付けにしません。
+Oxlintがresolved path zoneを完全に表現できない部分は、`bun run check:architecture`で実際の解決先を
+検査します。`check:architecture`は最初から`check:static`へ含め、optionalな後付けにしません。
+同じcheckで次の構造契約も検査します。
+
+- `apps/web/features/<feature>/`直下にReact `.tsx`がなく、全componentが`components/**`配下にある
+- browserからimportできるcomponentがnamed Storybook storyで実際に描画されていること、
+  実componentを参照しないstory
+- Storybook coverage例外のexact path、理由、責任者、削除条件
+- client側でSuspense対応APIや`lazy`等を使うcomponentに、Reactの`<Suspense>`、Skeleton、
+  React Error Boundary、Browser Mode testがあること
+- async Server Componentを使うrouteの`loading.tsx` / `error.tsx`がfeatureの同じ
+  Skeleton/error viewを再利用し、Playwright E2があること
+
+componentを別fileへ移動しただけでcoverage対象外にならないよう、production import graphとASTの
+両方から対象を求め、代表fixtureでpackage export、feature export、private cross-file component、
+app配下の非special component、許可例外、欠落story、実componentを描画しないstoryを検証します。
+client側のSuspense/Error Boundary検査は解決可能なfirst-party browser import graph全体を辿り、
+local/shared hook、controller、client lib、provider、re-exportを含めます。Server Component側は
+route segmentと`loading.tsx` / `error.tsx`のimportを別に検査します。直接利用、hook経由、
+re-export経由、async Server Component、Suspenseを必要としないcomponent、必要fileを欠くcomponentの
+fixtureを持ちます。
+componentとstory、componentとSuspense/Error Boundaryの対応IDやmanifestは作りません。
 
 ## Oxfmt
 
@@ -180,8 +228,10 @@ Web/UI:
 - Playwrightの`waitForTimeout`、`networkidle`、focused testを禁止
 - Vitestのdisabled/focused testをerror
 - `test.skip`は理由と代替coverageをcode commentへ明記
+- Error Boundary testはraw error/URL/private IDのsentinelがDOMと読み上げ領域へ出ないことを検証
 
-JSDoc/TSDocを全functionへ強制しません。public export、security invariant、非自明なcompatibility boundaryだけを対象にします。型と名前で明白なprivate helperへの重複説明を避けるためです。
+JSDoc/TSDocを全functionへ強制しません。public export、security invariant、非自明なcompatibility
+要件だけを対象にします。型と名前で明白なprivate helperへの重複説明を避けるためです。
 
 ## Knip
 
@@ -208,7 +258,7 @@ full modeはtest、Storybook、configを含む全codeを解析します。`--str
 - root sourceが必要ならworkspace `.`へ設定する
 - dynamic entrypointは狭いpatternで明示する
 - wildcard ignoreでfalse positiveを消さない
-- `ignoreDependencies`にはissue、owner、理由をcommentで残す
+- `ignoreDependencies`にはissue、責任者、理由をcommentで残す
 - generated `.agents/skills`、build output、migration snapshotは解析対象外
 
 全面移行PRではfindingを全て解消し、baselineをcommitしません。
@@ -305,7 +355,7 @@ Permanent overrideに必須:
 - exact file glob
 - rule名
 - 技術的理由
-- owner
+- 責任者
 - 削除条件
 
 Temporary waiverはmainへmergeしません。全面移行完了条件は全budgetへの適合です。
@@ -329,9 +379,12 @@ Ruleを目的ではなく責務境界のsignalとして扱い、意味のないh
 ## 受入条件
 
 - Oxlint warningがゼロ
-- 全sourceがbudget内
+- 全sourceが初期budgetではなく最終目標budget内
 - Knip full/strict findingがゼロ
 - jscpd threshold以下
+- browserからimportできるcomponentのstory coverageが100%で、実componentを参照しないstoryがない
+- client側の`<Suspense>`、Skeleton、Error Boundary、Browser Mode testに欠落がない
+- async Server Component routeの`loading.tsx`、`error.tsx`、Playwright E2に欠落がない
 - jscpdがproduction sourceだけをscanする
 - broad ignoreとbaseline fileがない
 - `bun run check`がlocal/CIで成功する

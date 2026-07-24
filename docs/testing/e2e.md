@@ -28,12 +28,29 @@ applies_to:
 
 対象:
 
-- route、RSC shell
+- route、Server Component shell
 - form、keyboard、responsive
 - error/retry
 - mock Agent stream
 
 Mock APIはproduction contractのstatus分類を再現しますが、authorizationの正しさを証明しません。
+
+### route boundary matrix
+
+async Server ComponentとNext.js routeのloading/error処理はBrowser Modeで再現せず、
+E1/E2で代表routeを検証します。
+one-shot API delay/faultを使ってready、loading、error、retryを作り、次を確認します。
+
+- desktop `1280x720`と代表mobile viewportでpersistent shellが同じDOM/layout slotを維持する
+- sidebar、header、PageShell、contentのgeometryが
+  [Webテスト契約](web.md#suspenseとerror-boundaryのlayout-stability)の許容値内
+- horizontal overflowがなく、stable scrollbar gutterを維持する
+- error headingへのfocus、reset後のfocus順、scroll positionが安定する
+- nested boundary遷移でouter shellをremountしない
+
+全component stateをPlaywrightへ複製せず、Next.js route、Server Component、networkの結合だけを
+選びます。失敗時のscreenshotは
+診断artifactとして保存できますが、`toHaveScreenshot`やbaseline比較には使いません。
 
 ## E2
 
@@ -63,6 +80,11 @@ Browserなしのpaid evalです。contract、stack、3/3 stabilityの内部profi
 `test:eval:agent`へまとめます。E4より安く速く、model behaviourとAgent/API配線をbrowserから
 切り分けます。
 
+stack profileはAgent/APIを別processまたはworkerd isolateとして起動し、named Service Bindingと
+公開`agent-client` contractだけで接続します。app間のprivate source importや一つのin-process appへ
+合成するtest harnessを作りません。real model credentialはAgent isolateだけ、synthetic Authと
+temporary DBはAPI側だけに渡します。
+
 ## E4
 
 次の固定2 canaryへ限定し、各caseをretryなしで1回ずつ実行します。
@@ -91,6 +113,7 @@ namespaceだけを削除し、失敗時も別workerのstateを消しません。
 ## 受入条件
 
 - E2でproduction Workerと同じcontrol plane契約を通る
+- representative routeでloading/error/retryのgeometry、focus、overflowが安定する
 - E2のproduction bundleにscripted modelが入らない
 - E4がacceptance suite全体にならない
 - shared stateを理由に全suiteをworkers 1へ固定しない

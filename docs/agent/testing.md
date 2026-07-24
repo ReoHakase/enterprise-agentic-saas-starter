@@ -12,7 +12,7 @@ last_reviewed: 2026-07-24
 Agent releaseは次の3層を分離します。
 
 1. deterministic core: schema、tenant、capability、query guard、idempotency、stream projection
-2. browser feature integration: UI state、RSC、cookie、Worker/Service Binding配線
+2. browser feature integration: UI state、Server Component、cookie、Worker/Service Binding配線
 3. probabilistic verification: L6は全指定caseを独立stateで3/3、L7は固定canaryを各1回完了すること
 
 LLMの回答文面一致はassertしません。tool call、tool inputの安全性、DB state、canonical stream part、approval state、Issue link、usage eventをassertします。
@@ -22,14 +22,14 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 ### DB / API
 
 - migrationのfresh/upgrade、既存row保持、trigger整合性
-- thread owner/tenant境界、message count、更新順とID tie break
+- thread所有者/tenant境界、message count、更新順とID tie break
 - thread作成時の`permissionMode`既定値、明示的Full access、invalid mode拒否、session/user/organization/context epoch境界、threadと初期permissionのtransaction整合性
 - title state/revision、manual CAS、auto/manual競合、最大80文字
 - context compaction threshold、最新12 message、summary idempotency
 - usage event idempotency、daily projection、price version切替、admin境界
 - historical approval GETは現在ownerで読め、decision/resumeは元scope外で拒否
 - mention/page/file/memberのserver再解決とcross-tenant拒否
-- `get_issue`添付pagination、pending除外、owner/tenant境界、metadata projection
+- `get_issue`添付pagination、pending除外、file所有者/tenant境界、metadata projection
 - Issue画像private routeの対応形式、変換条件、unknown-length 4 MiB fence、quota冪等性、private/no-store header
 
 ### Agent
@@ -55,7 +55,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
 pane state、shortcut、focus、approval UI、stream part表示はStorybook/Browser Modeで検証します。
-RSC、cookie、reload、API/Agent Worker配線だけをfree Playwright E1/E2へ残します。mockは
+Server Component、cookie、reload、API/Agent Worker配線だけをfree Playwright E1/E2へ残します。mockは
 network/transport boundaryに置き、production hook、parser、controller、componentを差し替えません。
 
 ## Browserless paid eval
@@ -93,7 +93,7 @@ release modelを使い、標準free E2Eへ混ぜません。E4は次の固定2�
 上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、
 browserless contract/stack eval、E4 canaryへ責務を配分します。
 
-L6/L7のsecret owner、env隔離、artifact禁止、cleanupは
+L6/L7のsecret管理責任者、env隔離、artifact禁止、cleanupは
 [Paid test secret](./operations.md#paid-test-secret)を共通契約とします。
 
 ## 3回eval

@@ -17,6 +17,7 @@ applies_to:
 - [依存方向](#依存方向)
 - [error](#error)
 - [plugin](#plugin)
+- [OpenAPIとScalar](#openapiとscalar)
 - [repository](#repository)
 - [import境界](#import-boundary)
 - [テスト配置](#テスト配置)
@@ -41,6 +42,9 @@ apps/api/src/
     env/
     observability/
     plugins/
+      openapi.ts
+    openapi/
+      normalize-auth-schema.ts
 
   errors/
     app-error.ts
@@ -66,17 +70,17 @@ apps/api/src/
 | file | 責務 |
 | --- | --- |
 | `domain.ts` | pure invariant、state transition、domain error |
-| `schema.ts` | Valibot request/response contract |
+| `schema.ts` | Valibot request/response contractとOpenAPIへ出す英語schema/property description |
 | `ports.ts` | applicationが必要とするoutbound capability |
 | `service.ts` | use case、authorization、transaction orchestration |
 | `repository.ts` | Drizzle/libSQL adapter |
-| `routes.ts` | Elysia transport adapter |
-| `module.ts` | composition root |
+| `routes.ts` | Elysia transport adapterとroute `detail`の英語operation description |
+| `module.ts` | concrete repositoryとserviceを接続し、routeをElysia appへ登録する |
 | `public.ts` | 別moduleへ公開する型とuse caseの最小surface |
 
 `routes.ts`から`repository.ts`を直接呼びません。
 
-`app.ts`だけが各moduleの`module.ts`をimportし、Elysia appへcompositionします。module Aから
+`app.ts`だけが各moduleの`module.ts`をimportし、各routeをElysia appへ登録します。module Aから
 module Bを利用するときは`modules/<b>/public.ts`だけをimportし、`module.ts`、routes、service、
 repository、domainのprivate pathへ到達しません。`module.ts`を別moduleへ再exportしません。
 architecture fixtureは`app.ts -> module.ts`を許可し、`module A -> module B/public.ts`以外を
@@ -110,7 +114,7 @@ telemetry、clock等のapp-global contractに限り、moduleをimportしませ�
 | transport/routes | concrete repository、provider SDK、別module private path |
 | platform | moduleのdomain/service/repository |
 
-composition rootだけがservice、repository、provider、transportを同時にimportできます。
+`app.ts`と各moduleの`module.ts`だけがservice、repository、provider、transportを同時にimportできます。
 
 ## error
 
@@ -147,9 +151,41 @@ registryからstatus、public message、capture policyを決めます。既存se
 
 - core plugin: request ID、observability、error、CSRF、OpenAPI
 - entrypoint plugin: Auth、CORS、server timing
-- pluginは名前を持ち、compositionに閉じる
+- pluginは名前を持ち、app作成関数からだけ登録する
 - serviceへElysia contextを漏らさない
 - public appとprivate Agent appを合成しない
+
+## OpenAPIとScalar
+
+`apps/api`はapp-owned routeとBetter Auth/library routeを一つの`/openapi/json`へ統合し、Scalarを
+`/openapi`で提供します。詳細なconsumer contractは[API / OpenAPI](../../api-openapi.md)を正本にします。
+
+- `platform/plugins/openapi.ts`はElysiaの`openapi({ documentation, scalar })`を設定する
+- `platform/openapi/normalize-auth-schema.ts`はBetter Authの3.1 fragmentを3.0.3へ変換するだけで、
+  人向けdescriptionを所有しない
+- app-owned request/responseはValibot/Elysia route schemaを正本にする
+- app-owned operationの英語`operationId`、summary、description、tag、`x-*`分類は各Elysia routeの
+  `detail`へ書く
+- request/response全体とpropertyの英語descriptionは、そのrouteへ渡すValibot schema metadataへ書く
+- Better Authは有効pluginから実生成したschemaを正本にし、body/responseを手書きで複製しない
+- global `info`、tag/security scheme description、Scalar設定はElysia OpenAPI pluginへ書く
+- Better Authの生成fragmentはElysia OpenAPI plugin内でprefix付与、normalization、英語metadata/security
+  の補足を行い、Elysia `openapi({ documentation })`へ渡す
+- public API appのElysia route、各modeのBetter Auth実生成operation、最終OpenAPIの和集合を検証する
+- GitHub plugin topologyとOAuth emulator modeをfresh processで別々に検証する
+- libraryが登録するがproduct policyで無効なrouteは`x-route-status: configured-disabled`と明示する
+- private `/internal/agent/**`、development/test routeをpublic documentへ含めない
+- OpenAPIの説明をYAML/YML/JSON、生成済みspec、独立metadata registryへ書かない
+
+repo向けsource commentと規範文書は日本語でよいですが、Scalarへ出る`info`、tag、summary、
+description、response、security、schema/propertyの人向け文言は詳細な英語にします。fallbackで
+`GET auth / path`のような機械生成文言を本番documentへ残しません。
+
+OpenAPI normalizationはBetter AuthのOpenAPI 3.1 fragmentの明示allowlist subsetだけを
+semantics-preservingに3.0.3へ変換し、未対応keyword/type unionはJSON Pointer付きで起動/testを
+fail-fastします。raw generated securityを一律に信用せず、public callback、
+session-required、cookie/bearer等の実runtimeをElysia OpenAPI plugin内でoperation単位に補足します。
+Scalarはauth永続化、telemetry、Agent/uploadを無効にし、credentialやPIIをexampleへ埋め込みません。
 
 ## repository
 
@@ -181,6 +217,7 @@ workspace禁止patternと合成します。test fileも別module private pathへ
 - domain/service: Vitest Node
 - repository: Vitest + in-memory/temp libSQL
 - HTTP: `app.handle(new Request())`
+- OpenAPI: Elysia route + 両auth modeの実generated schema + 最終document/runtime parity
 - narrow real HTTP: date/cookie/stream contractだけ
 - Worker bundle: Wrangler dry-run
 
@@ -193,11 +230,15 @@ workspace禁止patternと合成します。test fileも別module private pathへ
 - Elysia型推論を維持しながらrouteを薄くする
 - DBとHTTPからbusiness ruleを隔離する
 - repositoryを実DBで検証し、mockの偽陽性を避ける
+- Better Authの実生成schemaを使い、library upgradeとruntime contractのdriftを検出する
+- app routeの実装、validation、英語OpenAPI説明を同じElysia moduleでreviewできる
+- consumer品質のためにBetter Auth routeを手で複製せず、Elysia OpenAPI pluginで生成結果を補足する
 
 ### 代償
 
-- module composition codeが増える
+- moduleの接続codeが増える
 - error mappingを明示する必要がある
+- Better Auth upgrade時にElysia OpenAPI pluginのmetadata/security補足を見直す必要がある
 - 小さいmoduleではfile数が増える
 
 小さいmoduleはflat構造を維持し、責務のないdirectoryは作りません。
@@ -210,3 +251,6 @@ workspace禁止patternと合成します。test fileも別module private pathへ
 - tenant queryにorganizationIdがある
 - raw error messageがHTTPへ出ない
 - public/private Agent appが分離されている
+- public/library routeとOpenAPI operationがexactly once一致する
+- Scalar consumer metadataが詳細な英語で、private routeやcredential exampleがない
+- app routeの説明がElysia `detail`とValibot metadataにあり、外部YAML/JSON description sourceがない

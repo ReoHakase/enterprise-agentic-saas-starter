@@ -141,7 +141,8 @@ package public entrypoint
 runtime adapter
 ```
 
-Agentのscripted modelは別のE2E Worker entrypointだけからimportし、production Workerへenvironment switchを追加しません。
+Agentのscripted modelはVitest/test entrypointと別のE2E Worker entrypointだけからimportします。
+production Workerへenvironment switchを追加しません。
 
 ## test codeの境界
 

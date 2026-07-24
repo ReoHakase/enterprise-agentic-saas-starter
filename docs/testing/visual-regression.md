@@ -25,6 +25,11 @@ PR required VRT job
 
 理由は、OS、font、browser、GPU差によるflakyを先に運用へ持ち込まず、component分割、Storybook、Browser Mode、a11yを安定させるためです。
 
+一方、loading/error/ready間のlayout shift防止は現在の必須contractです。これはscreenshotを比較せず、
+固定したbrowserでstable slotのDOM identity、`DOMRect`、horizontal overflow、
+Layout Instability APIをassertするため、VRTには分類しません。詳細は
+[Webテスト戦略](./web.md#suspenseとerror-boundaryのlayout-stability)を参照します。
+
 ## 導入条件
 
 - Linux/browser/fontを固定できる
@@ -46,4 +51,5 @@ Storybook storyをvisual caseの入力として再利用し、選択したstory�
 
 ## 受入条件
 
-現在のrepositoryにVRT script、test file、baselineが存在しないこと。
+- 現在のrepositoryにVRT script、test file、baselineが存在しない
+- geometry-based layout stability testはVRTなしで実行される

@@ -166,7 +166,8 @@ Agent定義自身はOpenRouter等のconcrete model providerを選びません。
 
 Mastra Studioとproduction Workerは同じproduct compositionをloadし、request contextからAPI keyを
 解決する既存境界を維持します。Studio専用のagent、mock tool、固定credentialを作りません。
-scripted modelは別E2E entrypointだけへ注入します。
+Vitestはagent factoryへscripted modelを直接注入できます。Workerとして実行するときだけ別E2E
+entrypointへ注入し、production Workerやenvironment variableから選べるswitchは作りません。
 
 ## テスト専用Worker
 
@@ -180,7 +181,8 @@ wrangler.e2e.jsonc
   main = src/mastra/e2e/worker.ts
 ```
 
-`e2e/worker.ts`だけが`test-support/scripted-model.ts`をimportします。
+Worker entrypointのうち`e2e/worker.ts`だけが`test-support/scripted-model.ts`をimportします。
+Vitestはtest fileからtest-supportを直接importしてfactoryへ渡せます。
 
 安全条件:
 
@@ -223,7 +225,8 @@ apps/web/**
 
 - core/tool executor: `bun run test`
 - scripted model loop: `bun run test`
-- private API + temporary DB integration: `bun run test`
+- Agent-owned `agent-client` port contract: `bun run test`
+- private API + temporary DB integrationはAPI-owned `bun run test`
 - real model dataset eval: `bun run test:eval:agent`
 - full paid browser canary: `bun run test:e2e:agent`
 
@@ -251,3 +254,4 @@ apps/web/**
 - AgentからDB/Auth/Email importがない
 - tool executorがMastraなしでtest可能
 - scripted model integrationが`bun run test`で実行される
+- API private appをsource importせず、`agent-client`公開contractだけを使う

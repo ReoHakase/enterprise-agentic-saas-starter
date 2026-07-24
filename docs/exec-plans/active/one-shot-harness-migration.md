@@ -11,8 +11,13 @@ linked_specs:
   - docs/architecture/system-boundaries.md
   - docs/architecture/quality-enforcement.md
   - docs/architecture/codex-harness.md
+  - docs/architecture/apps/web.md
+  - docs/architecture/apps/api.md
   - docs/architecture/apps/agent.md
+  - docs/api-openapi.md
   - docs/testing/README.md
+  - docs/testing/web.md
+  - docs/testing/api.md
   - docs/testing/agent.md
   - docs/testing/e2e.md
   - docs/agent/architecture-security.md
@@ -114,8 +119,17 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] same-feature alias importをrelativeへ変更
 - [ ] cross-feature deep importをpublic entrypointへ変更
 - [ ] 大きいcomponentをcontroller/viewへ分割
-- [ ] `boundary.tsx`を具体名へ変更
+- [ ] `boundary.tsx`のような曖昧名を`suspense.tsx`または`error-boundary.client.tsx`へ変更
 - [ ] test/storyの過剰分割を整理
+- [ ] feature directory直下のReact `.tsx`を`components/**`へ移す
+- [ ] browserからimportできる全componentを、実componentを描画するnamed storyで検証する
+- [ ] apps/webのdomain/view storyを実行できるStorybook projectへ統合する
+- [ ] client render中に待機し得るcomponentへReactの`<Suspense>`、Skeleton、React Error Boundary、
+      Browser Mode testを追加する
+- [ ] async Server Component routeへ`loading.tsx`、`error.tsx`、Playwright E2を追加する
+- [ ] Error Boundaryへsecret/private ID入りsentinelをthrowし、DOMと読み上げ領域へraw errorが
+      出ないtestを追加する
+- [ ] route `loading.tsx` / `error.tsx`をfeatureのSkeleton/error表示へ委譲する薄いfileにする
 
 ### 2.2 API
 
@@ -127,6 +141,15 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] error registryをfinite codeへ変更
 - [ ] error handlerのtelemetry failureをsafeにする
 - [ ] public/private Agent appを再確認
+- [ ] Scalar/OpenAPIのconsumer-facing metadataを詳細な英語へ統一
+- [ ] app-owned operationの英語説明を各Elysia routeの`detail`へ置き、request/response/property説明を
+      routeへ渡すValibot schema metadataへ置く
+- [ ] public API appのElysia route、Better Auth実生成operation、最終OpenAPIのexact unionを検証する
+- [ ] Better Auth schemaを複製せず、Elysia OpenAPI plugin内で生成fragmentの英語metadata/securityを
+      補足する
+- [ ] OpenAPIの説明を持つYAML/YML/JSON、生成済みspec、独立metadata registryを追加しない
+- [ ] standard securityと`x-route-status` / `x-auth-context` / `x-audience`を全operationへ付ける
+- [ ] private Agent、development、test routeがpublic OpenAPIへ入らないようにする
 
 ### 2.3 Agent
 
@@ -170,6 +193,8 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] `import/no-cycle`等を有効化
 - [ ] workspace/layer別`no-restricted-imports`
 - [ ] generated/migrationだけを狭くexclude
+- [ ] source再編の各作業単位でprofile別の最大値と95 percentileを記録して上限を狭める
+- [ ] 最終PRで6 ruleを`quality-enforcement.md`の最終目標値まで狭める
 - [ ] 全違反をrefactorし、disable commentを残さない
 
 ### 3.2 architecture検査
@@ -180,6 +205,11 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] Agent old source root
 - [ ] package -> app
 - [ ] public entrypoint export
+- [ ] browserからimportできるcomponent -> 実componentを描画するnamed Storybook story
+- [ ] clientで待機し得るcomponent -> Suspense / Skeleton / Error Boundary / Browser Mode test
+- [ ] async Server Component route -> loading.tsx / error.tsx / Playwright E2
+- [ ] OpenAPI人向けmetadata -> Elysia route `detail` / route Valibot metadata / Elysia OpenAPI plugin
+- [ ] OpenAPI YAML/JSON、生成済みspec、独立metadata registryの禁止pathとproduction import
 
 をresolved pathで検査するscriptを追加します。
 
@@ -215,7 +245,10 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] happy-dom unit/DOMを維持
 - [ ] apps/webにBrowser Mode projectを追加
 - [ ] apps/web Storybookを追加またはdomain storyを実行可能にする
+- [ ] browserからimportできる全componentをnamed storyで実際に描画する
+- [ ] story coverage checkでmissing/orphan/実component非参照/例外metadataを検査
 - [ ] `light`全interaction/a11y、`dark`theme-sensitiveだけ
+- [ ] loading/ready/error/retryを同一runで遷移させ、geometry、focus、overflowをBrowser Modeで検証
 - [ ] mock Agent fixtureをstory/browser/E1で共有
 - [ ] VRT file/scriptを追加しない
 
@@ -224,6 +257,12 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] domain/service/repository/HTTP contractを分離
 - [ ] repositoryはreal libSQL
 - [ ] error corpus追加
+- [ ] GitHub plugin/OAuth emulator両modeをfresh processで起動して実Better Auth operation集合を検証
+- [ ] 英語metadataのfield別下限/fallback拒否、security、`x-*`分類、OpenAPI 3.0.3、
+      Scalar safetyを検証
+- [ ] app-owned説明がElysia `detail`/Valibot metadataから生成され、外部YAML/JSON sourceがないことを検証
+- [ ] final OpenAPIのexample/default/header/cookieを再帰走査するcredential/PII leakage gateを追加
+- [ ] public/library route exactly-onceとprivate/dev/test route absenceを検証
 - [ ] path mappingでAPI repository変更時にDB full test
 
 ### 4.3 Agent
@@ -231,8 +270,13 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] tool executor unit
 - [ ] scripted model agent loop
 - [ ] approval/resume/stream/usage
-- [ ] private API + temporary DB integration
+- [ ] API-owned private app + temporary DB integration
+- [ ] G4をAgent-owned runtime/client contractとAPI-owned private app/migration済みDB suiteに分ける
+- [ ] G4でapp間private source importを作らず、実Service Binding配線はE2で検証
 - [ ] paid evalをbrowserなしへ移動
+- [ ] paid stack evalはAgent/APIを別isolateで起動し、public client/Service Bindingだけで接続
+- [ ] `apps/agent/evals/eval-budgets.json`へcase/profile/workflowのtoken、tool、time、cost上限を実装
+- [ ] pricing/usage不明、hard maximum超過、stale case IDをfailするbudget validatorを追加
 
 ### 4.4 migration
 
@@ -249,6 +293,8 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [ ] E2はscripted model Workerを使う
 - [ ] shared global resetをnamespace化
 - [ ] Chromium full、WebKit代表case
+- [ ] Next.js routeとServer Componentのloading/error/retryでpersistent shell、geometry、focus、
+      overflowを検証
 - [ ] E4を規範文書でIDを固定した2 canaryへ縮小し、各1回だけ実行
 
 ## 作業単位 5 Codex harness
@@ -288,6 +334,8 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 ### 5.5 レビュー手順
 
 - [ ] `test_planner`をimplementation前に実行
+- [ ] `test_planner`が変更componentごとのstory、client Browser Mode、Server Component route E2の
+      要否を返す
 - [ ] `implementer`だけがwrite
 - [ ] 三reviewerをcurrent diffへ実行
 - [ ] finding formatを検証
@@ -327,6 +375,7 @@ nix flake check
 bun run check
 bun run test:browser
 bun run test:e2e
+bun run --cwd apps/api test -- openapi
 bun run build
 bun run build:storybook
 bun run build:cloudflare
@@ -377,13 +426,17 @@ git diff --name-status origin/main -- packages/db/drizzle
 | --- | --- | --- |
 | 2026-07-24 | 段階mergeを行わず一つのPRでcutover | 新旧規則の並存を避ける |
 | 2026-07-24 | Agent codeを`src/mastra/**`へ集約 | ownershipとgate対象を明確にする |
-| 2026-07-24 | Ratchetを使わず全budgetを即時適用 | ユーザーが全面移行を選択したため |
+| 2026-07-24 | main baselineを作らず、branch内で上限を段階的に狭めて最終目標を全面適用 | 一括移行を保ちつつ、責務分割と同時に無理なくhard gateを縮小するため |
 | 2026-07-24 | VRTはdeferred | flaky運用を先に導入しない |
 | 2026-07-24 | Oxlint初期budgetはmigration-friendlyな3段階 | 一括移行でwaiverと無意味な分割を生まない |
 | 2026-07-24 | testはsize budgetだけ緩め、import/security境界は共通 | test経由のarchitecture迂回を防ぐ |
 | 2026-07-24 | paid evalをbrowserless 3 profile、E4を固定2 canaryへ分離 | model behaviorとfull-stack配線の費用・原因を分離する |
 | 2026-07-24 | `docs/agent/` pathは維持しproduct Agentと明記 | renameのlink churnよりindexでの責務分離を優先する |
 | 2026-07-24 | root `AGENTS.md`だけを使いnested fileを作らない | client差による上書きとdocs/skillsとの三重管理を避ける |
+| 2026-07-24 | browserからimportできる全componentをStorybook対象にする | UI stateの発見可能性とa11y/interaction gateを例外なく保つため |
+| 2026-07-24 | DOM geometry testを必須にし、pixel VRTはdefer | layout shiftをdeterministicに検出しつつbaseline運用を増やさないため |
+| 2026-07-24 | Scalar向けmetadataは英語、repo規範文書は日本語 | consumer-facing API品質とrepositoryの言語契約を両立するため |
+| 2026-07-24 | OpenAPI説明はElysia route/schema/pluginのTypeScriptだけを正本にする | route実装とのdriftを防ぎ、YAML/JSONや別metadata registryとの二重管理を作らないため |
 
 ## 検証証跡
 
@@ -394,6 +447,7 @@ git diff --name-status origin/main -- packages/db/drizzle
 | docs metadata/link/anchor/ADR/reachability検査 | pass | 全docs 52文書、ADR 6件、全件が入口から到達可能 |
 | `git diff --exit-code d23af9f -- .agents/skills .github/skills` | pass | generated skill直接変更なし |
 | `nix flake check` | pass | `checks.aarch64-darwin.agent-skills`とdevShell |
+| current docs diffのcorrectness/security/tests独立review | pass | P0〜P2 findingゼロ、2026-07-24 |
 
 ## リスクとrollback
 
@@ -425,9 +479,16 @@ git diff --name-status origin/main -- packages/db/drizzle
 - [ ] Agent hand-written runtimeが`src/mastra/**`
 - [ ] `IssueAssistant`のclass exportと`new_sqlite_classes`が維持され、旧endpointが`410 Gone`
 - [ ] Agent Wrangler migrationに`deleted_classes`が追加されていない
-- [ ] Oxlint budget violationゼロ
+- [ ] Oxlintが最終目標budget（production/React 500 lines、test 1000 lines等）で違反ゼロ
 - [ ] Knip full/strict findingゼロ
 - [ ] jscpd threshold以下
+- [ ] browserからimportできるcomponentのstory coverage 100%、missingと実component非参照storyゼロ
+- [ ] clientで待機し得る全componentにSuspense/Skeleton/Error Boundary/Browser Mode testがある
+- [ ] async Server Component routeにloading.tsx/error.tsx/Playwright E2があり、geometry test成功
+- [ ] Scalar/OpenAPI metadataが詳細な英語で、両auth modeのroute coverage/parity test成功
+- [ ] OpenAPIの説明がElysia route/schema/pluginのTypeScript内にあり、外部YAML/JSON description
+      sourceがない
+- [ ] Agent paid eval budget manifestが全caseを覆い、hard maximumとworkflow cap検査が成功
 - [ ] `bun run check`成功
 - [ ] `test:browser`成功
 - [ ] free E2E成功

@@ -17,7 +17,7 @@ applies_to:
 | G1 | core、policy、usage、message | none | Vitest | `test` |
 | G2 | tool executor | none | Vitest | `test` |
 | G3 | agent loop、tool call、approval、stream | scripted model | Vitest | `test` |
-| G4 | private API、capability、temporary DB | scripted model | Vitest/in-process app | `test` |
+| G4 | Agent/API contract、capability、temporary DB | scripted request/model | owner別Vitest | `test` |
 | G5 | prompt/tool behaviour | real paid model | Vitest/Mastra eval | `test:eval:agent` |
 
 G1からG4がrelease gateの決定論的な正本です。G5はmodel selectionの回帰を検出しますが、
@@ -66,12 +66,58 @@ scripted modelは順序付きoutputを返すstandard test implementationへ集�
 増やしません。stream chunk、delay、abort、usage、malformed partをscriptで表現できるようにし、
 real prompt、real tool schema、real executorを通します。
 
+## G4 contract integration
+
+G4はbrowserとreal modelを使わず、hard import boundaryを保った二つのowner suiteに分けます。
+
+Agent-owned suite:
+
+- real Agent factory、runtime、tool schema、tool executor
+- productionの`@enterprise-agentic-saas/api/agent-client` contractを実装するobservable fake port
+- factoryへ直接注入するstandard scripted model
+
+API-owned suite:
+
+- real private Agent API appとcapability検証
+- repositoryが使用する全migrationを適用したtestごとのtemporary libSQL
+- signed synthetic requestとproduction control-plane schema/client contract
+
+Agent testからAPI private appをsource importせず、API testからAgent runtimeをimportしません。
+cross-appで共有できるのは公開`agent-client` contractだけです。Agent stream fixtureはAgent owner内、
+API request/DB fixtureはAPI owner内へ置きます。決定論的なService Binding、二Worker、実HTTP配線は
+free full-stack E2が担当します。
+
+ここで検証するのはowner内の個別helperではなく、公開contractまでの整合性です。
+
+Agent-owned assertion:
+
+- tool/input/order、approval stop/resume、bounded call count
+- public portへ渡すcapability/action/idempotency input
+- canonical streamとusage projection、secret/private metadata非公開
+- timeout、abort、port failure後に後続port callを行わない
+
+API-owned assertion:
+
+- capabilityのsignature、expiry、scope、context epoch、replay
+- active organizationとresource organizationのtenant一致
+- idempotency reserveからwrite、audit、usage persistenceまでの順序と二重実行防止
+- approval前write禁止、同じaction resume、DB failure時のrollbackと後続call数0
+- testごとのDB、clock、ID、run namespace分離と、成功/失敗後のcleanup
+
+E2だけがAgentのtool action、canonical stream、usage projectionとAPIのDB、audit、usage persistenceを
+一つのcross-Worker scenarioで突き合わせます。G4の片側だけでは観測できない一致をassertしません。
+
+scripted modelはAgent-owned Vitestでfactoryへ直接注入できます。禁止するのはproduction Workerや
+production environmentで選択可能なmodel switchであり、test専用Workerだけが唯一の注入経路という
+意味ではありません。free full-stack E2でWorker境界を通す場合だけ、別E2E entrypointを使います。
+
 ## G5 paid eval
 
 公開commandは`test:eval:agent`一つのまま、内部profileを三つに分けます。
 
 1. contract eval: real model + fake tool/control planeでtool selectionとinputを測る
-2. stack eval: real Agent/private API/temporary DB + real model、browserなしで配線を測る
+2. stack eval: isolated Agent/API Worker、Service Binding、Auth、temporary DB + real modelを
+   browserなしで測る
 3. stability dataset: 独立stateで同じbehaviorを3回実行し、3/3成功を要求する
 
 対象:
@@ -85,6 +131,12 @@ real prompt、real tool schema、real executorを通します。
 security gateは通常のassertまたはMastra gateでhard failさせます。LLM scorerへ委ねてよいのは
 自然言語の品質、関連性、説明の完全性だけです。authorization、tenant、privacy、idempotency、
 approval、tool allowlistをLLM judgeで合否判定しません。
+
+stack evalはAgentからAPI private sourceをimportするin-process appを作りません。production-shapedな
+Agent/API Workerを別process/workerd isolateで起動し、公開`agent-client`とnamed Service Bindingだけで
+通信します。synthetic Auth/tenant、temporary DB、run namespaceを使い、real model credentialは
+Agent isolateだけへ渡します。E2との差はscripted modelをreal modelへ置き換える点、E4との差は
+browser/Webを起動しない点です。
 
 PR常時実行にせず、Agent behaviour fingerprint変更、nightly、release candidateで実行します。
 fingerprintにはprompt、model ID、tool description/schema、tool allowlist、stop condition、policy、
@@ -105,6 +157,46 @@ stream projection、dataset、無関係docs、`behaviourRoots`配下の未分類
 変更し、期待するcase選択を固定します。
 workflowと手作業の「Agent behavior変更」判断を別の正本にしません。
 
+### profile、trial、resource budget
+
+| trigger | profile / case | trial | browser |
+| --- | --- | ---: | ---: |
+| behaviour fingerprint変更 | selectorが選んだcontract/stack/stability case | 各3回、3/3必須 | no |
+| nightly | 全contract/stack/stability dataset | 各3回、3/3必須 | no |
+| release candidate | 全G5の3/3後、固定L7 canary 2本 | L7は各1回、retryなし | L7のみyes |
+
+fingerprint変更でも1回だけに縮めません。偶然成功した一回をrequired gateにしないためで、費用は
+browserを外すこと、fingerprintからcaseを選ぶこと、datasetをboundedにすることで制御します。
+selectorがcaseを安全に絞れない場合は全G5へfail-safeします。
+
+`apps/agent/evals/eval-budgets.json`をbudgetの正本にし、version、pricing source/as-of、
+profile default、case override、workflow capを持たせます。各caseは`timeoutMs`、
+`maxModelSteps`、`maxToolCalls`、`maxInputTokens`、`maxOutputTokens`、`maxCostUsd`を正の数で必須とし、
+case overrideはprofile hard maximum以下にだけ狭められます。
+
+| hard maximum | L6 per trial | L7 per canary |
+| --- | ---: | ---: |
+| `timeoutMs` | 300,000 | 600,000 |
+| `maxModelSteps` | 12 | 16 |
+| `maxToolCalls` | 8 | 12 |
+| `maxInputTokens` | 65,536 | 65,536 |
+| `maxOutputTokens` | 8,192 | 8,192 |
+| `maxCostUsd` | 2.00 | 5.00 |
+
+| workflow | wall-clock cap | aggregate cost cap |
+| --- | ---: | ---: |
+| fingerprint approval run | 60 minutes | USD 30 |
+| nightly G5 | 180 minutes | USD 100 |
+| release G5 + fixed L7 | 240 minutes | USD 120 |
+
+この値は消費目標ではなく、multi-tool、approval resume、固定image-write canaryを許しつつrunaway loopを
+止めるrepository hard ceilingです。通常caseはmanifestでさらに小さい上限を持ちます。
+costはpinしたmodel IDとversion管理したpricing tableから事前見積りし、provider usageで事後照合します。
+pricing情報またはusageを取得できずcapを証明できないrunはpassにしません。hard maximumやaggregate
+ceilingの引上げはbudget fileだけの無言変更にせず、owner、理由、pricing evidenceを伴うADR reviewを
+必要とします。未設定、上限超過、provider側の無制限retryを許可せず、budget超過はbehavior passでは
+なく明示的なbudget failureです。
+
 ## dataset
 
 Synthetic dataだけをversion管理します。各caseはstable ID、dataset version、input context、
@@ -118,5 +210,9 @@ Provider 429/5xx/timeoutはbehavior failureと分けたinfrastructure failureと
 
 - real LLMなしでmulti-step loopを検証できる
 - paid evalがbrowserから分離される
+- G4のAPI-owned suiteがmigration済みtemporary DBとreal private APIを通る
+- G4でAgent/API private sourceを相互importせず、公開contractの両側を検証する
+- fingerprint変更のselected caseが3/3成功する
+- `eval-budgets.json`が全paid caseとworkflowのhard maximumを満たす
 - retryでbehaviour failureを隠さない
 - provider 429/5xxをbehaviour passへ数えない
