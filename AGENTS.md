@@ -49,3 +49,63 @@
 - `agent-runtime`: Cloudflare Agents SDK、3 Worker境界、tool、承認、自動許可、Issue CRUD、chat画像、client state、active organization切り替え。
 
 該当するskillの `SKILL.md` を先に読み、必要なときだけ同じskill内の `references/` を読む。
+
+---
+
+# リポジトリ共通契約
+
+## 正本
+
+- 文書の入口は`docs/README.md`
+- 設計文書は`docs/architecture/`
+- テスト契約は`docs/testing/`
+- 永続的な設計判断は`docs/decisions/`
+- 複雑な作業の現在状態は`docs/exec-plans/active/`
+- local skillsは`.agents/local-skills/`を正本とし、生成先`.agents/skills/`を直接編集しない
+
+## 必須手順
+
+1. active exec planと関連仕様を読む
+2. `test_planner`で変更に必要なtest layerを決める
+3. production/test codeをwriteするagentは`implementer`一体に限定する
+4. 最小のdeterministicな検証を実行する
+5. current diffを別contextのread-only reviewerへ渡す
+6. correctness、security、testsのfindingを`implementer`へ戻す
+7. 修正後に検証とレビューを繰り返す
+8. 必須checkが失敗したまま完了扱いにしない
+
+## source構成
+
+- `apps/web`はNext.js compositionとdomain-specific UIを所有する
+- `apps/api`はHTTP、authorization、transaction、DB adapterを所有する
+- `apps/agent`の手書きruntimeは`apps/agent/src/mastra/**`へ置く
+- `packages/ui`はdomain-independent UIだけを所有する
+- `packages/db`はschema、migration、client、development DB toolingだけを所有する
+- workspaceを越えるimportは`package.json#exports`で公開したentrypointだけを使う
+
+## 品質契約
+
+- Oxlint warningはerrorとして扱う
+- complexity、function size、file size、nesting budgetを迂回しない
+- Knipのdead codeとdependency findingをignoreで隠さない
+- jscpdのduplicateを広いignoreで隠さない
+- unrelated changeでCI、lint、coverage、test、reviewer instructionを弱めない
+- generated file、migration、lockfileを手編集する前に所有規則を確認する
+
+## テスト契約
+
+- `bun run test`は外部cloud、real browser、paid LLMを必要としないunit/integrationを全て含む
+- UI interactionとa11yは`bun run test:browser`
+- free E2Eは`bun run test:e2e`
+- paid model evalは`bun run test:eval:agent`
+- paid full-stack canaryは`bun run test:e2e:agent`
+- VRTは現時点で実施しない
+
+## 禁止事項
+
+- production deploy、Git push、PR merge、remote DB変更を明示承認なしで実行しない
+- `drizzle-kit push`を使用しない
+- `main`に存在するmigrationを変更しない
+- `apps/agent`からDB、Auth、Email、Webを直接importしない
+- reviewer agentからfileをwriteしない
+- protected harness fileの変更を通常feature changeへ混ぜない
