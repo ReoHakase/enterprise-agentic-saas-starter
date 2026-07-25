@@ -4,7 +4,7 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Cropper from "react-easy-crop"
 
-import type { ImageCropArea } from "../lib/create-cropped-image"
+import type { ImageCropArea } from "../../lib/create-cropped-image"
 
 type ImageCropShape = "circle" | "rounded"
 

@@ -7,8 +7,8 @@ import {
 import { type FormEvent, useCallback } from "react"
 import { expect, fn, userEvent, within } from "storybook/test"
 
-import { Badge } from "./badge"
-import { Button } from "./button"
+import { Badge } from "../badge/badge"
+import { Button } from "../button/button"
 import {
   Dialog,
   DialogClose,
@@ -20,19 +20,9 @@ import {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-} from "./dialog"
-import { Field, FieldGroup, FieldLabel } from "./field"
-import { Input } from "./input"
-import {
-  Sidebar,
-  SidebarMenuAction,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuSkeleton,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-} from "./sidebar"
+} from "../dialog/dialog"
+import { Field, FieldGroup, FieldLabel } from "../field/field"
+import { Input } from "../input/input"
 import {
   SidebarContent,
   SidebarFooter,
@@ -49,7 +39,17 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarSeparator,
-} from "./sidebar-structure"
+} from "../sidebar-structure/sidebar-structure"
+import {
+  Sidebar,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuSkeleton,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from "../sidebar/sidebar"
 import {
   Table,
   TableBody,
@@ -59,7 +59,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "./table"
+} from "../table/table"
 
 const members = [
   { name: "Avery Stone", email: "avery@example.com", role: "Super Admin" },

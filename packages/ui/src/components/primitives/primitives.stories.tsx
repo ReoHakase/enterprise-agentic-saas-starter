@@ -3,13 +3,13 @@ import { CalendarIcon, SearchIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { fn } from "storybook/test"
 
-import { Button } from "./button"
 import {
   ButtonGroup,
   ButtonGroupSeparator,
   ButtonGroupText,
-} from "./button-group"
-import { Calendar, CalendarDayButton } from "./calendar"
+} from "../button-group/button-group"
+import { Button } from "../button/button"
+import { Calendar, CalendarDayButton } from "../calendar/calendar"
 import {
   Card,
   CardAction,
@@ -18,8 +18,8 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "./card"
-import { Checkbox } from "./checkbox"
+} from "../card/card"
+import { Checkbox } from "../checkbox/checkbox"
 import {
   Combobox,
   ComboboxChip,
@@ -36,7 +36,7 @@ import {
   ComboboxSeparator,
   ComboboxTrigger,
   ComboboxValue,
-} from "./combobox"
+} from "../combobox/combobox"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -53,7 +53,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "./dropdown-menu"
+} from "../dropdown-menu/dropdown-menu"
 import {
   Empty,
   EmptyContent,
@@ -61,7 +61,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "./empty"
+} from "../empty/empty"
 import {
   Field,
   FieldContent,
@@ -73,8 +73,8 @@ import {
   FieldSeparator,
   FieldSet,
   FieldTitle,
-} from "./field"
-import { ImageCropper } from "./image-cropper"
+} from "../field/field"
+import { ImageCropper } from "../image-cropper/image-cropper"
 import {
   InputGroup,
   InputGroupAddon,
@@ -82,8 +82,8 @@ import {
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-} from "./input-group"
-import { Label } from "./label"
+} from "../input-group/input-group"
+import { Label } from "../label/label"
 import {
   Popover,
   PopoverContent,
@@ -91,8 +91,8 @@ import {
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "./popover"
-import { ScrollArea, ScrollBar } from "./scroll-area"
+} from "../popover/popover"
+import { ScrollArea, ScrollBar } from "../scroll-area/scroll-area"
 import {
   Select,
   SelectContent,
@@ -104,8 +104,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "./select"
-import { Separator } from "./separator"
+} from "../select/select"
+import { Separator } from "../separator/separator"
 import {
   Sheet,
   SheetClose,
@@ -115,19 +115,19 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "./sheet"
-import { Skeleton } from "./skeleton"
-import { Slider } from "./slider"
-import { Toaster } from "./sonner"
-import { Spinner } from "./spinner"
-import { Switch } from "./switch"
-import { Textarea } from "./textarea"
+} from "../sheet/sheet"
+import { Skeleton } from "../skeleton/skeleton"
+import { Slider } from "../slider/slider"
+import { Toaster } from "../sonner/sonner"
+import { Spinner } from "../spinner/spinner"
+import { Switch } from "../switch/switch"
+import { Textarea } from "../textarea/textarea"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "./tooltip"
+} from "../tooltip/tooltip"
 
 const options = ["Alpha", "Beta", "Gamma"]
 const calendarComponents = { DayButton: CalendarDayButton }

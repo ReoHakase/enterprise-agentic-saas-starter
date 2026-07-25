@@ -72,7 +72,7 @@ linked_adrs:
 - [x] API platform境界を移動した
 - [x] Web feature公開境界を移動した
 - [x] Web componentをdirectory化した
-- [ ] UI componentをdirectory化した
+- [x] UI componentをdirectory化した
 - [ ] StorybookをCSF Nextへ移行した
 - [ ] package所有testを整備した
 - [ ] W1-W6を実装した
@@ -93,21 +93,24 @@ linked_adrs:
 
 ## 検証証跡
 
-| command                            | 結果    | 証跡                                                    |
-| ---------------------------------- | ------- | ------------------------------------------------------- |
-| Markdown formatとlink検査          | pending | 完了時に記録する                                        |
-| workspace lint、typecheck、test    | pending | 完了時に記録する                                        |
-| `bun run check`                    | pending | 完了時に記録する                                        |
-| `bun run test:browser`             | pending | 完了時に記録する                                        |
-| `bun run test:e2e`                 | pending | 完了時に記録する                                        |
-| Storybook、Cloudflare、Nix build   | pending | 完了時に記録する                                        |
-| `bun run --cwd apps/api lint`      | success | warningなし                                             |
-| `bun run --cwd apps/api typecheck` | success | 型errorなし                                             |
-| `bun run --cwd apps/api test`      | success | 55 files、319 tests。localhost利用のためsandbox外で実行 |
-| `bun run --cwd apps/web lint`      | success | feature公開入口移行後、warningなし                      |
-| `bun run --cwd apps/web typecheck` | success | feature公開入口移行後、型errorなし                      |
-| `bun run --cwd apps/web test`      | success | 70 files、317 tests                                     |
-| Web component directory検査        | success | app-wideとfeature componentの直下fileなし               |
+| command                               | 結果    | 証跡                                                    |
+| ------------------------------------- | ------- | ------------------------------------------------------- |
+| Markdown formatとlink検査             | pending | 完了時に記録する                                        |
+| workspace lint、typecheck、test       | pending | 完了時に記録する                                        |
+| `bun run check`                       | pending | 完了時に記録する                                        |
+| `bun run test:browser`                | pending | 完了時に記録する                                        |
+| `bun run test:e2e`                    | pending | 完了時に記録する                                        |
+| Storybook、Cloudflare、Nix build      | pending | 完了時に記録する                                        |
+| `bun run --cwd apps/api lint`         | success | warningなし                                             |
+| `bun run --cwd apps/api typecheck`    | success | 型errorなし                                             |
+| `bun run --cwd apps/api test`         | success | 55 files、319 tests。localhost利用のためsandbox外で実行 |
+| `bun run --cwd apps/web lint`         | success | feature公開入口移行後、warningなし                      |
+| `bun run --cwd apps/web typecheck`    | success | feature公開入口移行後、型errorなし                      |
+| `bun run --cwd apps/web test`         | success | 70 files、317 tests                                     |
+| Web component directory検査           | success | app-wideとfeature componentの直下fileなし               |
+| `bun run --cwd packages/ui lint`      | success | warningなし                                             |
+| `bun run --cwd packages/ui typecheck` | success | 公開subpath維持後、型errorなし                          |
+| `bun run --cwd packages/ui test`      | success | 8 files、20 tests                                       |
 
 ## リスクとrollback
 

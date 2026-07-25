@@ -50,7 +50,7 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["src/components/calendar.tsx"],
+      files: ["src/components/calendar/calendar.tsx"],
       rules: {
         // React DayPickerのcomponents slotへ渡すmemoized rendererをnested componentと誤認する。
         "react/no-unstable-nested-components": "off",
@@ -89,7 +89,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["src/components/label.tsx"],
+      files: ["src/components/label/label.tsx"],
       rules: {
         // このprimitiveはhtmlForまたはchildrenによる関連付けを呼び出し側へ委譲する。
         "jsx-a11y/label-has-associated-control": "off",

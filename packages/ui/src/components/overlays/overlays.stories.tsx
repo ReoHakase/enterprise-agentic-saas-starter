@@ -15,8 +15,8 @@ import {
   AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "./alert-dialog"
-import { Button } from "./button"
+} from "../alert-dialog/alert-dialog"
+import { Button } from "../button/button"
 import {
   Drawer,
   DrawerClose,
@@ -29,7 +29,7 @@ import {
   DrawerSwipeHandle,
   DrawerTitle,
   DrawerTrigger,
-} from "./drawer"
+} from "../drawer/drawer"
 
 const destructiveButtonRender = <Button variant="destructive" />
 const outlineButtonRender = <Button variant="outline" />

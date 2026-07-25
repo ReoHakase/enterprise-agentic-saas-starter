@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { useCallback } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { ImageCropArea } from "../lib/create-cropped-image"
+import type { ImageCropArea } from "../../lib/create-cropped-image"
 import { ImageCropper, type ImageCropPoint } from "./image-cropper"
 
 type CropperMockProps = {
