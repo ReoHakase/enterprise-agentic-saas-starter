@@ -1,6 +1,6 @@
 import { PageShell } from "@/components/page-shell"
-import { IssueDetailController } from "@/features/issues/components/issue-detail-controller"
-import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
+import { IssueDetailController } from "@/features/issues/detail-controller.public"
+import { OrganizationActivationGate } from "@/features/organizations/activation-gate.public"
 import { loadIssueDetail } from "@/lib/server/issue-detail"
 
 export default async function IssuePage({

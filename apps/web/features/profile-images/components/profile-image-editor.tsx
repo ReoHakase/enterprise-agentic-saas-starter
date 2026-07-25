@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation"
 import {
   type ChangeEvent,
   type MouseEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useRef,
@@ -36,18 +37,16 @@ import { toast } from "sonner"
 
 import { OrganizationProfileImage } from "@/components/organization-identity"
 import { UserProfileImage } from "@/components/user-identity"
-import { accountKeys } from "@/features/account/queries"
-import { consoleKeys } from "@/features/console/queries"
-import { fileKeys } from "@/features/files/queries"
-import { registerFileUpload } from "@/features/files/uploads"
-import { issueKeys } from "@/features/issues/queries"
-import {
-  deleteOrganizationProfileImage,
-  deleteUserProfileImage,
-} from "@/features/profile-images/api"
+import { accountKeys } from "@/features/account/queries.public"
+import { consoleKeys } from "@/features/console/queries.public"
+import { fileKeys } from "@/features/files/queries.public"
+import { registerFileUpload } from "@/features/files/uploads.public"
+import { issueKeys } from "@/features/issues/queries.public"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 import { isFirstPartyProfileImageUrl } from "@/lib/profile-image-url"
+
+import { deleteOrganizationProfileImage, deleteUserProfileImage } from "../api"
 
 const acceptedProfileImageTypes = new Set([
   "image/jpeg",
@@ -91,6 +90,159 @@ const pickerError = (file: File) => {
 
 const uploadErrorText =
   "The profile image could not be uploaded. Check the image and try again."
+
+type ProfileImageCardProps = {
+  busy: boolean
+  cancelUpload: () => void
+  hasUploadedProfileImage: boolean
+  inputRef: RefObject<HTMLInputElement | null>
+  openPicker: () => void
+  preparedUpload: boolean
+  props: ProfileImageEditorProps
+  requestRemove: () => void
+  retryUpload: () => void
+  selectSource: (event: ChangeEvent<HTMLInputElement>) => void
+  uploadError?: string
+  uploadProgress?: number
+}
+
+const ProfileImageCard = ({
+  busy,
+  cancelUpload,
+  hasUploadedProfileImage,
+  inputRef,
+  openPicker,
+  preparedUpload,
+  props,
+  requestRemove,
+  retryUpload,
+  selectSource,
+  uploadError,
+  uploadProgress,
+}: ProfileImageCardProps) => (
+  <div className="flex min-w-0 flex-col gap-4 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center">
+    {props.subject === "user" ? (
+      <UserProfileImage user={props} className="size-16" />
+    ) : (
+      <OrganizationProfileImage organization={props} className="size-16" />
+    )}
+    <div className="min-w-0 flex-1">
+      <p className="font-medium">Profile image</p>
+      <p className="text-sm text-muted-foreground">
+        PNG, JPEG, or WebP up to 10 MB. The image will be cropped to a square.
+      </p>
+      {uploadProgress !== undefined ? (
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <progress
+              className="h-1.5 min-w-0 flex-1 accent-primary"
+              max={100}
+              value={uploadProgress}
+              aria-label="Uploading profile image"
+            />
+            <span className="w-9 text-right text-xs text-muted-foreground tabular-nums">
+              {Math.round(uploadProgress)}%
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={cancelUpload}
+          >
+            Cancel upload
+          </Button>
+        </div>
+      ) : null}
+      {uploadError ? (
+        <FieldError className="mt-2" role="alert">
+          {uploadError}
+        </FieldError>
+      ) : null}
+      {preparedUpload && uploadProgress === undefined ? (
+        <Button
+          className="mt-3"
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={retryUpload}
+        >
+          <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
+          Retry upload
+        </Button>
+      ) : null}
+    </div>
+    <div className="flex shrink-0 flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={busy}
+        onClick={openPicker}
+      >
+        <ImagePlusIcon data-icon="inline-start" aria-hidden="true" />
+        {props.profileImage ? "Replace" : "Choose image"}
+      </Button>
+      {hasUploadedProfileImage ? (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={requestRemove}
+        >
+          <Trash2Icon data-icon="inline-start" aria-hidden="true" />
+          Remove
+        </Button>
+      ) : null}
+    </div>
+    <input
+      ref={inputRef}
+      type="file"
+      className="sr-only"
+      aria-label="Choose profile image"
+      accept={profileImageAccept}
+      onChange={selectSource}
+      tabIndex={-1}
+    />
+  </div>
+)
+
+const RemoveProfileImageDialog = ({
+  error,
+  onOpenChange,
+  onRemove,
+  open,
+  pending,
+}: {
+  error?: string
+  onOpenChange: (open: boolean) => void
+  onRemove: (event: MouseEvent<HTMLButtonElement>) => void
+  open: boolean
+  pending: boolean
+}) => (
+  <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Remove profile image?</AlertDialogTitle>
+        <AlertDialogDescription>
+          The previous profile image will be restored when one is available.
+          Otherwise initials or an organization symbol will be shown.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      {error ? <FieldError role="alert">{error}</FieldError> : null}
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+        <AlertDialogAction
+          variant="destructive"
+          disabled={pending}
+          onClick={onRemove}
+        >
+          {pending ? <Spinner data-icon="inline-start" /> : null}
+          Remove image
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+)
 
 export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
   const router = useRouter()
@@ -298,91 +450,20 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
 
   return (
     <>
-      <div className="flex min-w-0 flex-col gap-4 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center">
-        {props.subject === "user" ? (
-          <UserProfileImage user={props} className="size-16" />
-        ) : (
-          <OrganizationProfileImage organization={props} className="size-16" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">Profile image</p>
-          <p className="text-sm text-muted-foreground">
-            PNG, JPEG, or WebP up to 10 MB. The image will be cropped to a
-            square.
-          </p>
-          {uploadProgress !== undefined ? (
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <progress
-                  className="h-1.5 min-w-0 flex-1 accent-primary"
-                  max={100}
-                  value={uploadProgress}
-                  aria-label="Uploading profile image"
-                />
-                <span className="w-9 text-right text-xs text-muted-foreground tabular-nums">
-                  {Math.round(uploadProgress)}%
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={cancelUpload}
-              >
-                Cancel upload
-              </Button>
-            </div>
-          ) : null}
-          {uploadError ? (
-            <FieldError className="mt-2" role="alert">
-              {uploadError}
-            </FieldError>
-          ) : null}
-          {preparedUpload && uploadProgress === undefined ? (
-            <Button
-              className="mt-3"
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={retryUpload}
-            >
-              <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-              Retry upload
-            </Button>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy}
-            onClick={openPicker}
-          >
-            <ImagePlusIcon data-icon="inline-start" aria-hidden="true" />
-            {props.profileImage ? "Replace" : "Choose image"}
-          </Button>
-          {hasUploadedProfileImage ? (
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={requestRemove}
-            >
-              <Trash2Icon data-icon="inline-start" aria-hidden="true" />
-              Remove
-            </Button>
-          ) : null}
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          className="sr-only"
-          aria-label="Choose profile image"
-          accept={profileImageAccept}
-          onChange={selectSource}
-          tabIndex={-1}
-        />
-      </div>
+      <ProfileImageCard
+        busy={busy}
+        cancelUpload={cancelUpload}
+        hasUploadedProfileImage={hasUploadedProfileImage}
+        inputRef={inputRef}
+        openPicker={openPicker}
+        preparedUpload={preparedUpload !== undefined}
+        props={props}
+        requestRemove={requestRemove}
+        retryUpload={retryUpload}
+        selectSource={selectSource}
+        uploadError={uploadError}
+        uploadProgress={uploadProgress}
+      />
 
       {source ? (
         <ImageCropDialog
@@ -400,33 +481,13 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         />
       ) : null}
 
-      <AlertDialog open={removeOpen} onOpenChange={handleRemoveOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove profile image?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The previous profile image will be restored when one is available.
-              Otherwise initials or an organization symbol will be shown.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {removeError ? (
-            <FieldError role="alert">{removeError}</FieldError>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={removePending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={removePending}
-              onClick={removeProfileImage}
-            >
-              {removePending ? <Spinner data-icon="inline-start" /> : null}
-              Remove image
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <RemoveProfileImageDialog
+        error={removeError}
+        onOpenChange={handleRemoveOpenChange}
+        onRemove={removeProfileImage}
+        open={removeOpen}
+        pending={removePending}
+      />
     </>
   )
 }

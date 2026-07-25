@@ -8,25 +8,21 @@ import { useQuery } from "@tanstack/react-query"
 import { ImagePlusIcon, SendIcon, StopCircleIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo } from "react"
 
-import {
-  AgentComposer,
-  type AgentComposerSnapshot,
-} from "@/features/agent/components/agent-composer"
+import { apiClient } from "@/lib/api-client"
+
+import { agentMessagesQueryOptions } from "../queries"
+import type { AgentChatMessage, AgentThread } from "../schema"
+import { useAgentChatSession } from "../use-agent-chat-session"
+import { AgentComposer, type AgentComposerSnapshot } from "./agent-composer"
 import {
   AgentConversationViewport,
   buildAgentConversationGroups,
-} from "@/features/agent/components/agent-conversation-viewport"
-import { AgentMessage } from "@/features/agent/components/agent-message"
-import { AgentMeters } from "@/features/agent/components/agent-meters"
-import { AgentPolicyControl } from "@/features/agent/components/agent-policy-control"
-import { AgentSamplePrompts } from "@/features/agent/components/agent-sample-prompts"
-import { AgentStagedAsset } from "@/features/agent/components/agent-staged-asset"
-import { agentMessagesQueryOptions } from "@/features/agent/queries"
-import type { AgentChatMessage, AgentThread } from "@/features/agent/schema"
-import { useAgentChatSession } from "@/features/agent/use-agent-chat-session"
-import { apiClient } from "@/lib/api-client"
-
-export { extractPendingActionIds } from "@/features/agent/use-agent-chat-session"
+} from "./agent-conversation-viewport"
+import { AgentMessage } from "./agent-message"
+import { AgentMeters } from "./agent-meters"
+import { AgentPolicyControl } from "./agent-policy-control"
+import { AgentSamplePrompts } from "./agent-sample-prompts"
+import { AgentStagedAsset } from "./agent-staged-asset"
 
 const attachmentButtonRender = <span />
 

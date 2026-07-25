@@ -59,11 +59,12 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
-import type { OrganizationMember } from "@/features/members/schema"
 import {
   roleLabel,
   type OrganizationRole,
-} from "@/features/organizations/schema"
+} from "@/features/organizations/schema.public"
+
+import type { OrganizationMember } from "../schema"
 
 const invitationRoleOptions = [
   { label: "Member", value: "member" },
@@ -330,25 +331,10 @@ export const MembersTable = ({
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length}>
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <UsersRoundIcon aria-hidden="true" />
-                        </EmptyMedia>
-                        <EmptyTitle>
-                          {search ? "No matching members" : "No members"}
-                        </EmptyTitle>
-                        <EmptyDescription>
-                          {search
-                            ? "Try a different name or email address."
-                            : "Invite the first member to this organization."}
-                        </EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  </TableCell>
-                </TableRow>
+                <EmptyMembersRow
+                  columnCount={columns.length}
+                  filtered={Boolean(search)}
+                />
               )}
             </TableBody>
           </Table>
@@ -357,6 +343,34 @@ export const MembersTable = ({
     </div>
   )
 }
+
+const EmptyMembersRow = ({
+  columnCount,
+  filtered,
+}: {
+  columnCount: number
+  filtered: boolean
+}) => (
+  <TableRow>
+    <TableCell colSpan={columnCount}>
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <UsersRoundIcon aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle>
+            {filtered ? "No matching members" : "No members"}
+          </EmptyTitle>
+          <EmptyDescription>
+            {filtered
+              ? "Try a different name or email address."
+              : "Invite the first member to this organization."}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </TableCell>
+  </TableRow>
+)
 
 const memberColumnClass = (columnId: string) => {
   if (columnId === "user") {

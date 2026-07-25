@@ -12,12 +12,10 @@ import { HandIcon, ShieldCheckIcon } from "lucide-react"
 import { useCallback } from "react"
 import { toast } from "sonner"
 
-import { putAgentApprovalPolicy } from "@/features/agent/api"
-import {
-  agentApprovalPolicyQueryOptions,
-  agentKeys,
-} from "@/features/agent/queries"
 import { apiClient } from "@/lib/api-client"
+
+import { putAgentApprovalPolicy } from "../api"
+import { agentApprovalPolicyQueryOptions, agentKeys } from "../queries"
 
 const policyOptions = [
   {
@@ -65,7 +63,10 @@ export const AgentPermissionSelect = ({
       disabled={disabled}
       onValueChange={selectMode}
     >
-      <SelectTrigger className="min-w-40 sm:w-auto">
+      <SelectTrigger
+        className="min-w-40 sm:w-auto"
+        aria-label="Agent permission"
+      >
         <SelectedIcon data-icon="inline-start" />
         {selected.label}
       </SelectTrigger>

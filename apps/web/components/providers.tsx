@@ -12,7 +12,7 @@ import { useCallback, useState, type PropsWithChildren } from "react"
 
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider"
-import { shouldRetryConsoleQuery } from "@/features/console/error"
+import { shouldRetryConsoleQuery } from "@/features/console/error.public"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 import { clientEnv } from "@/lib/env.client"
 

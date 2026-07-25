@@ -5,32 +5,87 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import { apiClient } from "@/lib/api-client"
+
 import {
   createIssueComment,
   deleteIssueComment,
   getIssueTimeline,
   updateIssue,
   updateIssueComment,
-} from "@/features/issues/api"
+} from "../api"
 import {
   getIssueUpdateFields,
   issueUpdateFields,
   mergeIssueUpdateResponse,
   type IssueUpdateField,
-} from "@/features/issues/issue-update-state"
-import { issueKeys } from "@/features/issues/queries"
-import type {
-  Issue,
-  IssueTimelinePage,
-  IssueTimelineItem,
-} from "@/features/issues/schema"
-import { apiClient } from "@/lib/api-client"
-
+} from "../issue-update-state"
+import { issueKeys } from "../queries"
+import type { Issue, IssueTimelinePage, IssueTimelineItem } from "../schema"
 import { IssueDetailDialog } from "./issue-detail-dialog"
 import type { IssueAssigneeOption, IssueUiItem, IssueUpdate } from "./types"
 
 const emptyLabelSuggestions: string[] = []
+
+const getPendingIssueFields = (
+  pendingUpdateCounts: Partial<Record<IssueUpdateField, number>>
+) =>
+  new Set(
+    issueUpdateFields.filter((field) => (pendingUpdateCounts[field] ?? 0) > 0)
+  )
+
+type IssueDetailOperations = {
+  createComment: (body: string) => Promise<unknown>
+  deleteComment: (commentId: string) => Promise<unknown>
+  issueRef: { current: Issue }
+  updateComment: (input: {
+    body: string
+    commentId: string
+  }) => Promise<unknown>
+  updateIssue: (update: IssueUpdate) => Promise<unknown>
+}
+
+const useIssueDetailOperations = ({
+  createComment,
+  deleteComment,
+  issueRef,
+  updateComment,
+  updateIssue: updateIssueOperation,
+}: IssueDetailOperations) => {
+  const handleUpdate = useCallback(
+    async (_issue: IssueUiItem, update: IssueUpdate) => {
+      await updateIssueOperation(update)
+      return issueRef.current
+    },
+    [issueRef, updateIssueOperation]
+  )
+  const handleCreateComment = useCallback(
+    async (_issue: IssueUiItem, body: string) => {
+      await createComment(body)
+    },
+    [createComment]
+  )
+  const handleUpdateComment = useCallback(
+    async (_issue: IssueUiItem, commentId: string, body: string) => {
+      await updateComment({ body, commentId })
+    },
+    [updateComment]
+  )
+  const handleDeleteComment = useCallback(
+    async (_issue: IssueUiItem, commentId: string) => {
+      await deleteComment(commentId)
+    },
+    [deleteComment]
+  )
+
+  return {
+    handleCreateComment,
+    handleDeleteComment,
+    handleUpdate,
+    handleUpdateComment,
+  }
+}
 
 export const IssueDetailController = ({
   initialIssue,
@@ -229,48 +284,29 @@ export const IssueDetailController = ({
   const { mutateAsync: deleteCommentAsync, isPending: deleteCommentPending } =
     deleteCommentMutation
   const { mutate: loadOlderPage, isPending: loadingOlder } = loadOlderMutation
-
   const sortedTimeline = useMemo(() => timeline.toReversed(), [timeline])
   const pendingFields = useMemo(
-    () =>
-      new Set(
-        issueUpdateFields.filter(
-          (field) => (pendingUpdateCounts[field] ?? 0) > 0
-        )
-      ),
+    () => getPendingIssueFields(pendingUpdateCounts),
     [pendingUpdateCounts]
   )
-  const handleUpdate = useCallback(
-    async (_issue: IssueUiItem, update: IssueUpdate) => {
-      await updateIssueAsync(update)
-      return issueRef.current
-    },
-    [updateIssueAsync]
-  )
-  const handleCreateComment = useCallback(
-    async (_issue: IssueUiItem, body: string) => {
-      await createCommentAsync(body)
-    },
-    [createCommentAsync]
-  )
-  const handleUpdateComment = useCallback(
-    async (_issue: IssueUiItem, commentId: string, body: string) => {
-      await updateCommentAsync({ commentId, body })
-    },
-    [updateCommentAsync]
-  )
-  const handleDeleteComment = useCallback(
-    async (_issue: IssueUiItem, commentId: string) => {
-      await deleteCommentAsync(commentId)
-    },
-    [deleteCommentAsync]
-  )
+  const {
+    handleCreateComment,
+    handleDeleteComment,
+    handleUpdate,
+    handleUpdateComment,
+  } = useIssueDetailOperations({
+    createComment: createCommentAsync,
+    deleteComment: deleteCommentAsync,
+    issueRef,
+    updateComment: updateCommentAsync,
+    updateIssue: updateIssueAsync,
+  })
   const close = useCallback(() => {
     if (mode === "page") {
       router.push(canonicalHref.slice(0, canonicalHref.lastIndexOf("/")))
-      return
+    } else {
+      router.back()
     }
-    router.back()
   }, [canonicalHref, mode, router])
   const loadOlder = useCallback(() => {
     if (nextCursor) loadOlderPage(nextCursor)

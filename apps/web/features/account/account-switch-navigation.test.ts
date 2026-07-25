@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { resolveAccountSwitchReturnTo } from "./account-switch-navigation"
+import { resolveAccountSwitchReturnTo } from "./account-switch-return-to"
 
 describe("resolveAccountSwitchReturnTo", () => {
   it("keeps an explicit same-origin workflow return path", () => {

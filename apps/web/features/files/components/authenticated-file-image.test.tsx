@@ -2,11 +2,11 @@ import { FILE_PREVIEW_WIDTHS } from "@enterprise-agentic-saas/api/client"
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
+import { AuthenticatedFileImage } from "./authenticated-file-image"
 import {
-  AuthenticatedFileImage,
   buildFileImageSourceSet,
   getFilePreviewCandidates,
-} from "./authenticated-file-image"
+} from "./authenticated-file-image-source"
 
 const file = {
   id: "file-1",

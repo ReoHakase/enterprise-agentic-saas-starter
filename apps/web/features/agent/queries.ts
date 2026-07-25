@@ -4,7 +4,6 @@ import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 import {
   getAgentAction,
   getAgentApprovalPolicy,
-  getAgentMonthlyUsage,
   getAgentThreadContext,
   listAgentMessages,
   listAgentThreads,
@@ -22,8 +21,6 @@ export const agentKeys = {
     [...agentKeys.all, "policy", organizationId, threadId] as const,
   context: (organizationId: string, threadId: string) =>
     [...agentKeys.all, "context", organizationId, threadId] as const,
-  usage: (organizationId: string) =>
-    [...agentKeys.all, "usage", organizationId] as const,
 }
 
 const createAgentThreadsQueryFn =
@@ -46,10 +43,6 @@ const createAgentThreadContextQueryFn =
   (client: ApiClient, threadId: string) =>
   ({ signal }: QueryFunctionContext) =>
     getAgentThreadContext(client, threadId, signal)
-const createAgentUsageQueryFn =
-  (client: ApiClient) =>
-  ({ signal }: QueryFunctionContext) =>
-    getAgentMonthlyUsage(client, signal)
 
 export const agentThreadsQueryOptions = (
   client: ApiClient,
@@ -106,14 +99,4 @@ export const agentThreadContextQueryOptions = (
     queryKey: agentKeys.context(organizationId, threadId),
     queryFn: createAgentThreadContextQueryFn(client, threadId),
     enabled: organizationId.length > 0 && threadId.length > 0,
-  })
-
-export const agentUsageQueryOptions = (
-  client: ApiClient,
-  organizationId: string
-) =>
-  queryOptions({
-    queryKey: agentKeys.usage(organizationId),
-    queryFn: createAgentUsageQueryFn(client),
-    enabled: organizationId.length > 0,
   })

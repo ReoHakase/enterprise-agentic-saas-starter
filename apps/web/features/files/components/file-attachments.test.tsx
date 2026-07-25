@@ -9,8 +9,19 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { fileKeys } from "@/features/files/queries"
-import type { IssueThumbnail } from "@/features/issues/schema"
+import type * as IssueQueriesPublic from "@/features/issues/queries.public"
+
+import { fileKeys } from "../queries"
+
+type IssueThumbnail = {
+  mode: "automatic" | "selected"
+  file: {
+    id: string
+    filename: string
+    imageWidth: number | null
+    imageHeight: number | null
+  } | null
+}
 
 const mocks = vi.hoisted(() => ({
   listFiles: vi.fn<() => Promise<FileListDto>>(),
@@ -33,16 +44,36 @@ const mocks = vi.hoisted(() => ({
     >(),
 }))
 
-vi.mock("@/features/files/api", () => ({
+vi.mock("../api", () => ({
   listFiles: mocks.listFiles,
   deleteFile: mocks.deleteFile,
   getTextFilePreview: mocks.getTextFilePreview,
 }))
 
-vi.mock("@/features/issues/api", () => ({
-  getIssueThumbnail: mocks.getIssueThumbnail,
+vi.mock("@/features/issues/api.public", () => ({
   updateIssueThumbnail: mocks.updateIssueThumbnail,
 }))
+
+vi.mock("@/features/issues/queries.public", async (importOriginal) => {
+  const original = await importOriginal<typeof IssueQueriesPublic>()
+  return {
+    ...original,
+    issueThumbnailQueryOptions: (
+      client: unknown,
+      organizationId: string,
+      issueId: string
+    ) => ({
+      queryKey: original.issueKeys.thumbnail(organizationId, issueId),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        mocks.getIssueThumbnail(
+          client,
+          { id: issueId, organizationId },
+          signal
+        ),
+      enabled: organizationId.length > 0 && issueId.length > 0,
+    }),
+  }
+})
 
 vi.mock("@/lib/api-client", () => ({ apiClient: {} }))
 

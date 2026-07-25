@@ -1,4 +1,4 @@
-export class AuthSessionRequestError extends Error {
+class AuthSessionRequestError extends Error {
   readonly status: number
 
   constructor(status: number) {

@@ -103,8 +103,3 @@ export const createSignUpFormSchema = (
     )
   )
 }
-
-export type MagicLinkFormValues = v.InferOutput<typeof magicLinkFormSchema>
-export type ForgotPasswordFormValues = v.InferOutput<
-  typeof forgotPasswordFormSchema
->

@@ -3,9 +3,9 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { OrganizationDetail } from "@/features/organizations/schema"
-import { ConsoleApiError } from "@/lib/console-api"
+import { ConsoleApiError } from "@/features/console/api.public"
 
+import type { OrganizationDetail } from "../schema"
 import { OrganizationDangerZone } from "./organization-danger-zone"
 
 type DeleteOrganization = (

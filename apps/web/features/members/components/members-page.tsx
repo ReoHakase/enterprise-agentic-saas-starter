@@ -12,17 +12,15 @@ import { useQuery } from "@tanstack/react-query"
 import { RefreshCwIcon, UsersRoundIcon } from "lucide-react"
 import { useCallback } from "react"
 
-import { getConsoleApiErrorText } from "@/features/console/error"
+import { getConsoleApiErrorText } from "@/features/console/error.public"
 import {
   invitationsQueryOptions,
   membersQueryOptions,
-} from "@/features/console/queries"
-import { MembersPanel } from "@/features/members/components/members-panel"
-import type {
-  OrganizationInvitation,
-  OrganizationMember,
-} from "@/features/members/schema"
-import type { OrganizationDetail } from "@/features/organizations/schema"
+} from "@/features/console/queries.public"
+import type { OrganizationDetail } from "@/features/organizations/schema.public"
+
+import type { OrganizationInvitation, OrganizationMember } from "../schema"
+import { MembersPanel } from "./members-panel"
 
 const noInvitations: OrganizationInvitation[] = []
 

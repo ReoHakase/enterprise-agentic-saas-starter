@@ -1,7 +1,7 @@
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import * as v from "valibot"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
+import { safeAuthErrorMessage } from "@/features/auth"
 
 export const invitationFallbacks = {
   accept: "Invitation could not be accepted. Try again.",

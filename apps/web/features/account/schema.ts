@@ -1,21 +1,21 @@
 import * as v from "valibot"
 
-import { organizationSummarySchema } from "@/features/organizations/schema"
+import { organizationSummarySchema } from "@/features/organizations/schema.public"
 
-export const userProfileSchema = v.object({
+const userProfileSchema = v.object({
   id: v.string(),
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
   profileImage: v.nullable(v.string()),
 })
 
-export const meSchema = v.object({
+const meSchema = v.object({
   user: userProfileSchema,
   activeOrganizationId: v.nullable(v.string()),
   organizations: v.array(organizationSummarySchema),
 })
 
-export const userSessionSchema = v.object({
+const userSessionSchema = v.object({
   id: v.string(),
   current: v.boolean(),
   expiresAt: v.string(),
@@ -25,16 +25,16 @@ export const userSessionSchema = v.object({
   userAgent: v.nullable(v.string()),
 })
 
-export const userSessionListSchema = v.array(userSessionSchema)
+const userSessionListSchema = v.array(userSessionSchema)
 
-export const linkedAccountSchema = v.object({
+const linkedAccountSchema = v.object({
   id: v.optional(v.string()),
   accountId: v.optional(v.string()),
   providerId: v.string(),
   createdAt: v.optional(v.nullable(v.union([v.string(), v.date()]))),
 })
 
-export const userPasskeySchema = v.object({
+const userPasskeySchema = v.object({
   id: v.string(),
   name: v.optional(v.nullable(v.string())),
   createdAt: v.optional(v.nullable(v.union([v.string(), v.date()]))),
@@ -42,12 +42,12 @@ export const userPasskeySchema = v.object({
   backedUp: v.optional(v.nullable(v.boolean())),
 })
 
-export const securityMethodsSchema = v.object({
+const securityMethodsSchema = v.object({
   accounts: v.array(linkedAccountSchema),
   passkeys: v.array(userPasskeySchema),
 })
 
-export const deviceAccountSchema = v.pipe(
+const deviceAccountSchema = v.pipe(
   v.object({
     session: v.object({ token: v.string() }),
     user: v.object({
@@ -68,7 +68,7 @@ export const deviceAccountSchema = v.pipe(
   }))
 )
 
-export const deviceAccountListSchema = v.array(deviceAccountSchema)
+const deviceAccountListSchema = v.array(deviceAccountSchema)
 
 export const profileFormSchema = v.object({
   name: v.pipe(

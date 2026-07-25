@@ -26,8 +26,7 @@ import { useIsMutating } from "@tanstack/react-query"
 import { type FormEvent, useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
-import { createSignUpFormSchema } from "@/features/auth/schema"
+import { safeAuthErrorMessage, createSignUpFormSchema } from "@/features/auth"
 import { useFetchOptions } from "@/lib/auth/fetch-options"
 
 import { AdditionalField } from "./additional-field"
@@ -53,11 +52,11 @@ const signUpFailedMessage =
 const additionalFieldFailedMessage =
   "Check the additional account details and try again."
 
-export function SignUp({
+const useSignUpController = ({
   className,
   socialLayout,
   socialPosition = "bottom",
-}: SignUpProps) {
+}: SignUpProps) => {
   const {
     additionalFields,
     authClient,
@@ -205,75 +204,104 @@ export function SignUp({
     []
   )
 
-  return (
-    <Card className={cn("w-full max-w-sm", className)}>
-      <CardHeader>
-        <CardTitle className="text-xl font-semibold">
-          {localization.auth.signUp}
-        </CardTitle>
-        <CardDescription>
-          Create your account, then set up your first organization.
-        </CardDescription>
-      </CardHeader>
+  return {
+    Captcha,
+    Link,
+    additionalFields,
+    className,
+    clearSubmitError,
+    emailAndPassword,
+    form,
+    formElement,
+    handleSubmit,
+    isConfirmPasswordVisible,
+    isPasswordVisible,
+    isPending,
+    localization,
+    plugins,
+    requireName,
+    showSeparator,
+    signInHref,
+    signUpEmailPending,
+    socialLayout,
+    socialPosition,
+    socialProviders,
+    submitError,
+    toggleConfirmPassword,
+    togglePassword,
+  }
+}
 
-      <CardContent>
-        <div className="flex flex-col gap-6">
-          {socialPosition === "top" ? (
-            <>
-              {socialProviders && socialProviders.length > 0 ? (
-                <ProviderButtons socialLayout={socialLayout} />
-              ) : null}
-              {showSeparator ? (
-                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
-                  {localization.auth.or}
-                </FieldSeparator>
-              ) : null}
-            </>
-          ) : null}
+const SignUpCard = ({
+  Captcha,
+  Link,
+  additionalFields,
+  className,
+  clearSubmitError,
+  emailAndPassword,
+  form,
+  formElement,
+  handleSubmit,
+  isConfirmPasswordVisible,
+  isPasswordVisible,
+  isPending,
+  localization,
+  plugins,
+  requireName,
+  showSeparator,
+  signInHref,
+  signUpEmailPending,
+  socialLayout,
+  socialPosition,
+  socialProviders,
+  submitError,
+  toggleConfirmPassword,
+  togglePassword,
+}: ReturnType<typeof useSignUpController>) => (
+  <Card className={cn("w-full max-w-sm", className)}>
+    <CardHeader>
+      <CardTitle className="text-xl font-semibold">
+        {localization.auth.signUp}
+      </CardTitle>
+      <CardDescription>
+        Create your account, then set up your first organization.
+      </CardDescription>
+    </CardHeader>
 
-          {emailAndPassword?.enabled ? (
-            <form ref={formElement} onSubmit={handleSubmit} noValidate>
-              <FieldGroup>
-                {requireName ? (
-                  <form.Field name="name">
-                    {(field) => {
-                      const invalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid
-                      return (
-                        <AuthTextField
-                          name={field.name}
-                          type="text"
-                          autoComplete="name"
-                          label={localization.auth.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onEdit={clearSubmitError}
-                          onValueChange={field.handleChange}
-                          placeholder={localization.auth.namePlaceholder}
-                          disabled={isPending}
-                          invalid={invalid}
-                          errors={field.state.meta.errors}
-                        />
-                      )
-                    }}
-                  </form.Field>
-                ) : null}
+    <CardContent>
+      <div className="flex flex-col gap-6">
+        {socialPosition === "top" ? (
+          <>
+            {socialProviders && socialProviders.length > 0 ? (
+              <ProviderButtons socialLayout={socialLayout} />
+            ) : null}
+            {showSeparator ? (
+              <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
+                {localization.auth.or}
+              </FieldSeparator>
+            ) : null}
+          </>
+        ) : null}
 
-                <form.Field name="email">
+        {emailAndPassword?.enabled ? (
+          <form ref={formElement} onSubmit={handleSubmit} noValidate>
+            <FieldGroup>
+              {requireName ? (
+                <form.Field name="name">
                   {(field) => {
                     const invalid =
                       field.state.meta.isTouched && !field.state.meta.isValid
                     return (
                       <AuthTextField
                         name={field.name}
-                        type="email"
-                        autoComplete="email"
-                        label={localization.auth.email}
+                        type="text"
+                        autoComplete="name"
+                        label={localization.auth.name}
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onEdit={clearSubmitError}
                         onValueChange={field.handleChange}
-                        placeholder={localization.auth.emailPlaceholder}
+                        placeholder={localization.auth.namePlaceholder}
                         disabled={isPending}
                         invalid={invalid}
                         errors={field.state.meta.errors}
@@ -281,19 +309,70 @@ export function SignUp({
                     )
                   }}
                 </form.Field>
+              ) : null}
 
-                {additionalFields?.map((field) =>
-                  field.signUp === "above" ? (
-                    <AdditionalField
-                      key={field.name}
+              <form.Field name="email">
+                {(field) => {
+                  const invalid =
+                    field.state.meta.isTouched && !field.state.meta.isValid
+                  return (
+                    <AuthTextField
                       name={field.name}
-                      field={field}
-                      isPending={isPending}
+                      type="email"
+                      autoComplete="email"
+                      label={localization.auth.email}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onEdit={clearSubmitError}
+                      onValueChange={field.handleChange}
+                      placeholder={localization.auth.emailPlaceholder}
+                      disabled={isPending}
+                      invalid={invalid}
+                      errors={field.state.meta.errors}
                     />
-                  ) : null
-                )}
+                  )
+                }}
+              </form.Field>
 
-                <form.Field name="password">
+              {additionalFields?.map((field) =>
+                field.signUp === "above" ? (
+                  <AdditionalField
+                    key={field.name}
+                    name={field.name}
+                    field={field}
+                    isPending={isPending}
+                  />
+                ) : null
+              )}
+
+              <form.Field name="password">
+                {(field) => {
+                  const invalid =
+                    field.state.meta.isTouched && !field.state.meta.isValid
+                  return (
+                    <AuthPasswordField
+                      name={field.name}
+                      autoComplete="new-password"
+                      label={localization.auth.password}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onEdit={clearSubmitError}
+                      onValueChange={field.handleChange}
+                      placeholder={localization.auth.passwordPlaceholder}
+                      disabled={isPending}
+                      invalid={invalid}
+                      errors={field.state.meta.errors}
+                      visible={isPasswordVisible}
+                      onToggleVisibility={togglePassword}
+                      hidePasswordLabel={localization.auth.hidePassword}
+                      showPasswordLabel={localization.auth.showPassword}
+                    />
+                  )
+                }}
+              </form.Field>
+
+              {emailAndPassword.confirmPassword ? (
+                <form.Field name="confirmPassword">
                   {(field) => {
                     const invalid =
                       field.state.meta.isTouched && !field.state.meta.isValid
@@ -301,119 +380,96 @@ export function SignUp({
                       <AuthPasswordField
                         name={field.name}
                         autoComplete="new-password"
-                        label={localization.auth.password}
+                        label={localization.auth.confirmPassword}
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onEdit={clearSubmitError}
                         onValueChange={field.handleChange}
-                        placeholder={localization.auth.passwordPlaceholder}
+                        placeholder={
+                          localization.auth.confirmPasswordPlaceholder
+                        }
                         disabled={isPending}
                         invalid={invalid}
                         errors={field.state.meta.errors}
-                        visible={isPasswordVisible}
-                        onToggleVisibility={togglePassword}
+                        visible={isConfirmPasswordVisible}
+                        onToggleVisibility={toggleConfirmPassword}
                         hidePasswordLabel={localization.auth.hidePassword}
                         showPasswordLabel={localization.auth.showPassword}
                       />
                     )
                   }}
                 </form.Field>
+              ) : null}
 
-                {emailAndPassword.confirmPassword ? (
-                  <form.Field name="confirmPassword">
-                    {(field) => {
-                      const invalid =
-                        field.state.meta.isTouched && !field.state.meta.isValid
-                      return (
-                        <AuthPasswordField
-                          name={field.name}
-                          autoComplete="new-password"
-                          label={localization.auth.confirmPassword}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onEdit={clearSubmitError}
-                          onValueChange={field.handleChange}
-                          placeholder={
-                            localization.auth.confirmPasswordPlaceholder
-                          }
-                          disabled={isPending}
-                          invalid={invalid}
-                          errors={field.state.meta.errors}
-                          visible={isConfirmPasswordVisible}
-                          onToggleVisibility={toggleConfirmPassword}
-                          hidePasswordLabel={localization.auth.hidePassword}
-                          showPasswordLabel={localization.auth.showPassword}
-                        />
-                      )
-                    }}
-                  </form.Field>
-                ) : null}
+              {additionalFields?.map((field) =>
+                field.signUp && field.signUp !== "above" ? (
+                  <AdditionalField
+                    key={field.name}
+                    name={field.name}
+                    field={field}
+                    isPending={isPending}
+                  />
+                ) : null
+              )}
 
-                {additionalFields?.map((field) =>
-                  field.signUp && field.signUp !== "above" ? (
-                    <AdditionalField
-                      key={field.name}
-                      name={field.name}
-                      field={field}
-                      isPending={isPending}
-                    />
-                  ) : null
-                )}
-
-                {Captcha ? (
-                  <div className="flex justify-center">
-                    <Captcha />
-                  </div>
-                ) : null}
-                {submitError ? <FieldError>{submitError}</FieldError> : null}
-
-                <div className="flex flex-col gap-3">
-                  <form.Subscribe selector={selectCanSubmit}>
-                    {(canSubmit) => (
-                      <Button type="submit" disabled={isPending || !canSubmit}>
-                        {signUpEmailPending ? <Spinner /> : null}
-                        {localization.auth.signUp}
-                      </Button>
-                    )}
-                  </form.Subscribe>
-                  {plugins.flatMap((plugin) =>
-                    (plugin.authButtons ?? []).map((AuthButton, index) => (
-                      <AuthButton
-                        key={`${plugin.id}-${index.toString()}`}
-                        view="signUp"
-                      />
-                    ))
-                  )}
+              {Captcha ? (
+                <div className="flex justify-center">
+                  <Captcha />
                 </div>
-              </FieldGroup>
-            </form>
-          ) : null}
-
-          {socialPosition === "bottom" ? (
-            <>
-              {showSeparator ? (
-                <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
-                  {localization.auth.or}
-                </FieldSeparator>
               ) : null}
-              {socialProviders && socialProviders.length > 0 ? (
-                <ProviderButtons socialLayout={socialLayout} />
-              ) : null}
-            </>
-          ) : null}
-        </div>
+              {submitError ? <FieldError>{submitError}</FieldError> : null}
 
-        {emailAndPassword?.enabled ? (
-          <div className="mt-4 flex w-full flex-col items-center gap-3">
-            <FieldDescription className="text-center">
-              {localization.auth.alreadyHaveAnAccount}{" "}
-              <Link href={signInHref} className="underline underline-offset-4">
-                {localization.auth.signIn}
-              </Link>
-            </FieldDescription>
-          </div>
+              <div className="flex flex-col gap-3">
+                <form.Subscribe selector={selectCanSubmit}>
+                  {(canSubmit) => (
+                    <Button type="submit" disabled={isPending || !canSubmit}>
+                      {signUpEmailPending ? <Spinner /> : null}
+                      {localization.auth.signUp}
+                    </Button>
+                  )}
+                </form.Subscribe>
+                {plugins.flatMap((plugin) =>
+                  (plugin.authButtons ?? []).map((AuthButton, index) => (
+                    <AuthButton
+                      key={`${plugin.id}-${index.toString()}`}
+                      view="signUp"
+                    />
+                  ))
+                )}
+              </div>
+            </FieldGroup>
+          </form>
         ) : null}
-      </CardContent>
-    </Card>
-  )
+
+        {socialPosition === "bottom" ? (
+          <>
+            {showSeparator ? (
+              <FieldSeparator className="flex items-center text-xs *:data-[slot=field-separator-content]:bg-card">
+                {localization.auth.or}
+              </FieldSeparator>
+            ) : null}
+            {socialProviders && socialProviders.length > 0 ? (
+              <ProviderButtons socialLayout={socialLayout} />
+            ) : null}
+          </>
+        ) : null}
+      </div>
+
+      {emailAndPassword?.enabled ? (
+        <div className="mt-4 flex w-full flex-col items-center gap-3">
+          <FieldDescription className="text-center">
+            {localization.auth.alreadyHaveAnAccount}{" "}
+            <Link href={signInHref} className="underline underline-offset-4">
+              {localization.auth.signIn}
+            </Link>
+          </FieldDescription>
+        </div>
+      ) : null}
+    </CardContent>
+  </Card>
+)
+
+export function SignUp(props: SignUpProps) {
+  const controller = useSignUpController(props)
+  return <SignUpCard {...controller} />
 }

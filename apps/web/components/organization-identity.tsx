@@ -34,23 +34,3 @@ export const OrganizationProfileImage = ({
     </AvatarFallback>
   </Avatar>
 )
-
-export const OrganizationIdentity = ({
-  organization,
-  className,
-  profileImageClassName,
-}: {
-  organization: OrganizationIdentityValue
-  className?: string
-  profileImageClassName?: string
-}) => (
-  <div className={cn("flex min-w-0 items-center gap-3", className)}>
-    <OrganizationProfileImage
-      organization={organization}
-      className={profileImageClassName}
-    />
-    <p className="truncate text-sm font-medium">
-      {organization.name?.trim() || "Unknown organization"}
-    </p>
-  </div>
-)

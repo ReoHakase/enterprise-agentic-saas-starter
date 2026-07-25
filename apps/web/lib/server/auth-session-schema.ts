@@ -1,6 +1,6 @@
 import * as v from "valibot"
 
-export const sessionSchema = v.object({
+const sessionSchema = v.object({
   session: v.object({
     id: v.string(),
     userId: v.string(),

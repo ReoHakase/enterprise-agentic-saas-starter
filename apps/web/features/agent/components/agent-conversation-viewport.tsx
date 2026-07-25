@@ -17,9 +17,8 @@ import {
   type WheelEvent,
 } from "react"
 
-import type { AgentChatMessage } from "@/features/agent/schema"
-
-export const AGENT_CONVERSATION_BOTTOM_THRESHOLD = 96
+import type { AgentChatMessage } from "../schema"
+import { isNearAgentConversationBottom } from "./agent-conversation-scroll"
 
 const turnPreviewTextLimit = 180
 const responsePreviewTextLimit = 240
@@ -124,12 +123,6 @@ export const buildAgentConversationGroups = (
 
   return groups
 }
-
-export const isNearAgentConversationBottom = (
-  metrics: Pick<HTMLElement, "clientHeight" | "scrollHeight" | "scrollTop">,
-  threshold = AGENT_CONVERSATION_BOTTOM_THRESHOLD
-) =>
-  metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold
 
 const turnElementsFor = (content: HTMLElement) => [
   ...content.querySelectorAll<HTMLElement>("[data-agent-turn-id]"),
@@ -244,12 +237,20 @@ export const AgentConversationViewport = ({
   const previousScrollTopRef = useRef(0)
   const animationFrameRef = useRef<number | undefined>(undefined)
   const [activeTurnId, setActiveTurnId] = useState<string>()
+  const [hasVerticalOverflow, setHasVerticalOverflow] = useState(false)
   const showMinimap = enabled && turns.length >= 2
 
   const measure = useCallback(() => {
     const viewport = viewportRef.current
     const content = contentRef.current
-    if (!viewport || !content) return
+    if (!viewport) return
+
+    const nextHasVerticalOverflow =
+      viewport.scrollHeight > viewport.clientHeight
+    setHasVerticalOverflow((current) =>
+      current === nextHasVerticalOverflow ? current : nextHasVerticalOverflow
+    )
+    if (!enabled || !content) return
 
     if (followingRef.current) {
       viewport.scrollTop = Math.max(
@@ -268,7 +269,7 @@ export const AgentConversationViewport = ({
     setActiveTurnId((current) =>
       current === nextActiveTurnId ? current : nextActiveTurnId
     )
-  }, [])
+  }, [enabled])
 
   const scheduleMeasure = useCallback(() => {
     if (animationFrameRef.current !== undefined) return
@@ -319,14 +320,13 @@ export const AgentConversationViewport = ({
   )
 
   useEffect(() => {
-    if (!enabled) return
     const viewport = viewportRef.current
     const content = contentRef.current
-    if (!viewport || !content) return
+    if (!viewport) return
 
     const observer = new ResizeObserver(scheduleMeasure)
     observer.observe(viewport)
-    observer.observe(content)
+    if (content) observer.observe(content)
     scheduleMeasure()
 
     return () => {
@@ -345,12 +345,24 @@ export const AgentConversationViewport = ({
   if (!enabled) {
     return (
       <div
-        className="min-h-72 flex-1 space-y-4 overflow-y-auto"
-        role="log"
-        aria-label="Agent conversation"
-        aria-live="polite"
+        ref={viewportRef}
+        data-testid="agent-conversation-viewport"
+        className="min-h-72 flex-1 overflow-y-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+        role={hasVerticalOverflow ? "region" : undefined}
+        aria-label={
+          hasVerticalOverflow ? "Scrollable Agent conversation" : undefined
+        }
+        tabIndex={hasVerticalOverflow ? 0 : undefined}
       >
-        {children}
+        <div
+          ref={contentRef}
+          className="space-y-4"
+          role="log"
+          aria-label="Agent conversation"
+          aria-live="polite"
+        >
+          {children}
+        </div>
       </div>
     )
   }
@@ -360,10 +372,13 @@ export const AgentConversationViewport = ({
       <div
         ref={viewportRef}
         data-slot="agent-conversation-viewport"
-        className="scrollbar-gutter-stable absolute inset-0 overflow-y-auto"
-        role="log"
-        aria-label="Agent conversation"
-        aria-live="polite"
+        data-testid="agent-conversation-viewport"
+        className="scrollbar-gutter-stable absolute inset-0 overflow-y-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+        role={hasVerticalOverflow ? "region" : undefined}
+        aria-label={
+          hasVerticalOverflow ? "Scrollable Agent conversation" : undefined
+        }
+        tabIndex={hasVerticalOverflow ? 0 : undefined}
         onScroll={handleScroll}
         onWheel={handleWheel}
       >
@@ -371,6 +386,9 @@ export const AgentConversationViewport = ({
           ref={contentRef}
           data-slot="agent-conversation-content"
           className="space-y-4"
+          role="log"
+          aria-label="Agent conversation"
+          aria-live="polite"
         >
           {children}
         </div>

@@ -1,15 +1,15 @@
 import { QueryClient } from "@tanstack/react-query"
 import { describe, expect, it, vi } from "vitest"
 
-import type { Me } from "@/features/account/schema"
-import { agentKeys } from "@/features/agent/queries"
-import { consoleKeys } from "@/features/console/queries"
-import { fileKeys } from "@/features/files/queries"
-import { registerFileUpload } from "@/features/files/uploads"
-import { issueKeys } from "@/features/issues/queries"
-import type { OrganizationSummary } from "@/features/organizations/schema"
+import type { Me } from "@/features/account/schema.public"
+import { agentKeys } from "@/features/agent/queries.public"
+import { consoleKeys } from "@/features/console/queries.public"
+import { fileKeys } from "@/features/files/queries.public"
+import { registerFileUpload } from "@/features/files/uploads.public"
+import { issueKeys } from "@/features/issues/queries.public"
 
-import { cacheActiveOrganization, prepareOrganizationSwitch } from "./cache"
+import { prepareOrganizationSwitch } from "./cache"
+import type { OrganizationSummary } from "./schema"
 
 const permissions = {
   canDeleteOrganization: true,
@@ -46,7 +46,7 @@ const organizations: OrganizationSummary[] = [
 ]
 
 describe("organization query cache", () => {
-  it("updates organization and me caches without refetching old tenant data", () => {
+  it("updates organization and me caches without refetching old tenant data", async () => {
     const queryClient = new QueryClient()
     const me: Me = {
       activeOrganizationId: "org-alpha",
@@ -61,7 +61,7 @@ describe("organization query cache", () => {
     queryClient.setQueryData(consoleKeys.organizations(), organizations)
     queryClient.setQueryData(consoleKeys.me(), me)
 
-    cacheActiveOrganization(queryClient, "org-beta")
+    await prepareOrganizationSwitch(queryClient, "org-beta")
 
     expect(
       queryClient

@@ -37,22 +37,23 @@ import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button"
 import { UserProfileImage } from "@/components/user-identity"
-import { navigateAfterAccountSwitch } from "@/features/account/account-switch-navigation"
+import { revokeAgentContext } from "@/features/agent/api.public"
+import {
+  hasOrganizationSwitchRisks,
+  type OrganizationSwitchRisks,
+} from "@/features/agent/runtime-state.public"
+import { apiClient } from "@/lib/api-client"
+import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
+import type { Me } from "@/lib/console-api"
+
+import { navigateAfterAccountSwitch } from "../account-switch-navigation"
 import {
   completeMultiSessionAction,
   createDeviceAccountsQueryFn,
   createMultiSessionCapabilities,
-} from "@/features/account/multi-session-client"
-import { accountKeys } from "@/features/account/queries"
-import type { DeviceAccount } from "@/features/account/schema"
-import { revokeAgentContext } from "@/features/agent/api"
-import {
-  hasOrganizationSwitchRisks,
-  type OrganizationSwitchRisks,
-} from "@/features/agent/runtime-state"
-import { apiClient } from "@/lib/api-client"
-import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
-import type { Me } from "@/lib/console-api"
+} from "../multi-session-client"
+import { accountKeys } from "../queries"
+import type { DeviceAccount } from "../schema"
 
 type AccountSwitcherDialogProps = {
   addAccountHref?: string
@@ -285,67 +286,94 @@ export const AccountSwitcherDialog = ({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={revokeTarget !== undefined}
-        onOpenChange={handleRevokeDialogOpenChange}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Remove account from this device?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {revokeTarget?.user.email} will be signed out on this device. The
-              account and its organization data will not be deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={revokeMutation.isPending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={revokeMutation.isPending}
-              onClick={revokeAccount}
-            >
-              {revokeMutation.isPending ? (
-                <Spinner data-icon="inline-start" />
-              ) : null}
-              Remove account
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={switchTarget !== undefined}
-        onOpenChange={handleSwitchDialogOpenChange}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Discard local Agent work and switch account?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              The old session Agent context will be revoked before account
-              switching. Unsent messages, uploads, approvals, and Issue form
-              drafts are cleared only after the account switch succeeds. Images
-              already uploaded keep their normal short retention period.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelAccountSwitch}>
-              Stay here
-            </AlertDialogCancel>
-            <Button onClick={confirmAccountSwitch}>
-              Discard local draft and switch
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AccountSwitchDialogs
+        cancelAccountSwitch={cancelAccountSwitch}
+        confirmAccountSwitch={confirmAccountSwitch}
+        handleRevokeDialogOpenChange={handleRevokeDialogOpenChange}
+        handleSwitchDialogOpenChange={handleSwitchDialogOpenChange}
+        revokeAccount={revokeAccount}
+        revokePending={revokeMutation.isPending}
+        revokeTarget={revokeTarget}
+        switchTarget={switchTarget}
+      />
     </>
   )
 }
+
+const AccountSwitchDialogs = ({
+  cancelAccountSwitch,
+  confirmAccountSwitch,
+  handleRevokeDialogOpenChange,
+  handleSwitchDialogOpenChange,
+  revokeAccount,
+  revokePending,
+  revokeTarget,
+  switchTarget,
+}: {
+  cancelAccountSwitch: () => void
+  confirmAccountSwitch: () => void
+  handleRevokeDialogOpenChange: (open: boolean) => void
+  handleSwitchDialogOpenChange: (open: boolean) => void
+  revokeAccount: () => void
+  revokePending: boolean
+  revokeTarget?: DeviceAccount
+  switchTarget?: DeviceAccount
+}) => (
+  <>
+    <AlertDialog
+      open={revokeTarget !== undefined}
+      onOpenChange={handleRevokeDialogOpenChange}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove account from this device?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {revokeTarget?.user.email} will be signed out on this device. The
+            account and its organization data will not be deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={revokePending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={revokePending}
+            onClick={revokeAccount}
+          >
+            {revokePending ? <Spinner data-icon="inline-start" /> : null}
+            Remove account
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog
+      open={switchTarget !== undefined}
+      onOpenChange={handleSwitchDialogOpenChange}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Discard local Agent work and switch account?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            The old session Agent context will be revoked before account
+            switching. Unsent messages, uploads, approvals, and Issue form
+            drafts are cleared only after the account switch succeeds. Images
+            already uploaded keep their normal short retention period.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={cancelAccountSwitch}>
+            Stay here
+          </AlertDialogCancel>
+          <Button onClick={confirmAccountSwitch}>
+            Discard local draft and switch
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
+)
 
 const DeviceAccountRow = ({
   account,

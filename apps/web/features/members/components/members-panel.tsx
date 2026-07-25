@@ -5,27 +5,28 @@ import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import { isStepUpRequiredError } from "@/features/console/api"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { consoleKeys } from "@/features/console/queries"
-import { InvitationsSection } from "@/features/members/components/invitations-section"
-import { InviteMemberDialog } from "@/features/members/components/invite-member-dialog"
-import {
-  MemberConfirmationDialog,
-  StepUpDialog,
-  type StepUpRequest,
-} from "@/features/members/components/member-confirmation-dialog"
-import { MembersTable } from "@/features/members/components/members-table"
+import { isStepUpRequiredError } from "@/features/console/api.public"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import { consoleKeys } from "@/features/console/queries.public"
+import type {
+  OrganizationDetail,
+  OrganizationRole,
+} from "@/features/organizations/schema.public"
+import { browserConsoleApi } from "@/lib/browser/console-api"
+
 import type {
   BulkInvitationInput,
   OrganizationInvitation,
   OrganizationMember,
-} from "@/features/members/schema"
-import type {
-  OrganizationDetail,
-  OrganizationRole,
-} from "@/features/organizations/schema"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+} from "../schema"
+import { InvitationsSection } from "./invitations-section"
+import { InviteMemberDialog } from "./invite-member-dialog"
+import {
+  MemberConfirmationDialog,
+  StepUpDialog,
+  type StepUpRequest,
+} from "./member-confirmation-dialog"
+import { MembersTable } from "./members-table"
 
 type MemberMutationInput =
   | {

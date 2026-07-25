@@ -17,14 +17,15 @@ import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { UserIdentity } from "@/components/user-identity"
-import { profileFormSchema, type UserProfile } from "@/features/account/schema"
-import { consoleKeys } from "@/features/console/queries"
-import { ProfileImageEditor } from "@/features/profile-images/components/profile-image-editor"
+import { consoleKeys } from "@/features/console/queries.public"
+import { ProfileImageEditor } from "@/features/profile-images/editor.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
 } from "@/lib/console-api"
+
+import { profileFormSchema, type UserProfile } from "../schema"
 
 const selectProfileSubmitState = (state: {
   canSubmit: boolean

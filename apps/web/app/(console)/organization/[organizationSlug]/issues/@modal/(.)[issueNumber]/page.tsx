@@ -1,4 +1,4 @@
-import { IssueDetailController } from "@/features/issues/components/issue-detail-controller"
+import { IssueDetailController } from "@/features/issues/detail-controller.public"
 import { loadIssueDetail } from "@/lib/server/issue-detail"
 
 export default async function IssueModalPage({

@@ -4,9 +4,8 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { issueKeys } from "@/features/issues/queries"
-import type { Issue, IssueTimelinePage } from "@/features/issues/schema"
-
+import { issueKeys } from "../queries"
+import type { Issue, IssueTimelinePage } from "../schema"
 import type { IssueAssigneeOption } from "./types"
 
 const mocks = vi.hoisted(() => ({
@@ -20,7 +19,7 @@ vi.mock("next/navigation", () => ({
   }),
 }))
 
-vi.mock("@/features/issues/api", () => ({
+vi.mock("../api", () => ({
   createIssueComment: vi.fn<() => void>(),
   deleteIssueComment: vi.fn<() => void>(),
   getIssueTimeline: mocks.getIssueTimeline,

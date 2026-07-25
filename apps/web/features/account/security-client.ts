@@ -1,13 +1,11 @@
-import type { SecurityMethods } from "@/features/account/schema"
-import { parseSecurityMethods } from "@/features/account/schema"
-import {
-  parseSafeAuthError,
-  type PublicAuthErrorCode,
-} from "@/features/auth/error"
+import { parseSafeAuthError, type PublicAuthErrorCode } from "@/features/auth"
+
+import type { SecurityMethods } from "./schema"
+import { parseSecurityMethods } from "./schema"
 
 const authenticationRequestFailedMessage = "Authentication request failed"
 
-export class SecurityMutationError extends Error {
+class SecurityMutationError extends Error {
   readonly code?: PublicAuthErrorCode
 
   constructor({

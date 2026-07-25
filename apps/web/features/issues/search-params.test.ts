@@ -1,14 +1,17 @@
+import { createLoader } from "nuqs/server"
 import { describe, expect, it } from "vitest"
 
 import {
+  buildIssueListHref,
   defaultIssueSearchState,
   issueListQueryKeyState,
-  loadIssueSearchParams,
-  mergeIssueSearchPatch,
+  issueSearchParsers,
   serializeIssueSearchParams,
   toIssueListRequest,
   withAgentThreadHref,
 } from "./search-params"
+
+const loadIssueSearchParams = createLoader(issueSearchParsers)
 
 describe("issue search params", () => {
   it("normalizes invalid and missing URL values to safe defaults", () => {
@@ -61,11 +64,9 @@ describe("issue search params", () => {
       agentThread: "thread-9",
     }
 
-    expect(mergeIssueSearchPatch(current, { priority: "urgent" })).toEqual({
-      ...current,
-      priority: "urgent",
-      page: 1,
-    })
+    expect(
+      buildIssueListHref("acme", current, { priority: "urgent" }).state
+    ).toEqual({ ...current, priority: "urgent", page: 1 })
     expect(withAgentThreadHref("/organization/acme/members", "thread-9")).toBe(
       "/organization/acme/members?agentThread=thread-9"
     )

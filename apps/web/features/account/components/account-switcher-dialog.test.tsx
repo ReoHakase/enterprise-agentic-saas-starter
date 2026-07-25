@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { OrganizationSwitchRisks } from "@/features/agent/runtime-state"
+import type { OrganizationSwitchRisks } from "@/features/agent/runtime-state.public"
 
 import { AccountSwitcherDialog } from "./account-switcher-dialog"
 
@@ -35,7 +35,7 @@ vi.mock("@better-auth-ui/react", () => ({
   useAuth: () => ({ authClient }),
 }))
 
-vi.mock("@/features/account/account-switch-navigation", () => ({
+vi.mock("../account-switch-navigation", () => ({
   navigateAfterAccountSwitch: mocks.navigateAfterAccountSwitch,
 }))
 

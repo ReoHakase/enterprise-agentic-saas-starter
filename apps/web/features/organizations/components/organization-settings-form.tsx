@@ -16,14 +16,8 @@ import { toast } from "sonner"
 import { FormTextField } from "@/components/form-text-field"
 import { LinkButton } from "@/components/link-button"
 import { OrganizationProfileImage } from "@/components/organization-identity"
-import { consoleKeys } from "@/features/console/queries"
-import { OrganizationDangerZone } from "@/features/organizations/components/organization-danger-zone"
-import {
-  organizationFormSchema,
-  roleLabel,
-  type OrganizationDetail,
-} from "@/features/organizations/schema"
-import { ProfileImageEditor } from "@/features/profile-images/components/profile-image-editor"
+import { consoleKeys } from "@/features/console/queries.public"
+import { ProfileImageEditor } from "@/features/profile-images/editor.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,
@@ -31,6 +25,13 @@ import {
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
 } from "@/lib/console-api"
+
+import {
+  organizationFormSchema,
+  roleLabel,
+  type OrganizationDetail,
+} from "../schema"
+import { OrganizationDangerZone } from "./organization-danger-zone"
 
 const organizationIdentityFields = ["name", "slug"] as const
 

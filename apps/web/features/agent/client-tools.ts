@@ -4,9 +4,12 @@ import {
   buildIssueListHref,
   type IssueSearchState,
   withAgentThreadHref,
-} from "@/features/issues/search-params"
+} from "@/features/issues/search-params-shared.public"
 
-import type { AgentIssueFormValues, AgentFormSnapshot } from "./form-registry"
+import type {
+  AgentFormSnapshot,
+  AgentIssueFormValues,
+} from "./components/form-registry"
 
 const boundedString = (maximum: number) =>
   v.pipe(v.string(), v.maxLength(maximum))
@@ -60,7 +63,7 @@ const clientToolSchemas = {
   }),
 } as const
 
-export type AgentClientToolName = keyof typeof clientToolSchemas
+type AgentClientToolName = keyof typeof clientToolSchemas
 
 type ClientToolDependencies = {
   organizationId: string

@@ -2,7 +2,7 @@
 
 import { useCallback } from "react"
 
-export const boundaryReloadFallbackMs = 1_000
+import { boundaryReloadFallbackMs } from "./boundary-retry-timing"
 
 let pendingReloadTimer: number | undefined
 

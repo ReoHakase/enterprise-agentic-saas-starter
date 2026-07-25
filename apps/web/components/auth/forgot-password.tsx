@@ -21,8 +21,7 @@ import { MailCheckIcon } from "lucide-react"
 import { type FormEvent, useCallback, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
-import { forgotPasswordFormSchema } from "@/features/auth/schema"
+import { safeAuthErrorMessage, forgotPasswordFormSchema } from "@/features/auth"
 import { useFetchOptions } from "@/lib/auth/fetch-options"
 
 import { AuthTextField, selectCanSubmit } from "./auth-form-field"

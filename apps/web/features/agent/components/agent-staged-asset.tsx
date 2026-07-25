@@ -5,7 +5,7 @@ import { XIcon } from "lucide-react"
 import { useCallback } from "react"
 import { toast } from "sonner"
 
-import type { StagedAgentAsset } from "@/features/agent/runtime-state"
+import type { StagedAgentAsset } from "./runtime-state"
 
 export const AgentStagedAsset = ({
   item,

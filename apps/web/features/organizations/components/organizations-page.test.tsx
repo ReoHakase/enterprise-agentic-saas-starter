@@ -3,9 +3,9 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { OrganizationSummary } from "@/features/organizations/schema"
-import { ConsoleApiError } from "@/lib/console-api"
+import { ConsoleApiError } from "@/features/console/api.public"
 
+import type { OrganizationSummary } from "../schema"
 import { OrganizationsPage } from "./organizations-page"
 
 const mocks = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   createOrganization: vi.fn<(input: unknown) => Promise<unknown>>(),
   hasOrganizationSwitchRisks: vi.fn<() => boolean>(),
   listOrganizations: vi.fn<() => Promise<unknown>>(),
-  push: vi.fn<(href: string) => void>(),
+  navigateAfterOrganizationSwitch: vi.fn<(href: string) => void>(),
   replace: vi.fn<(href: string) => void>(),
   refresh: vi.fn<() => void>(),
   toastError:
@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
-vi.mock("@/features/agent/runtime-state", () => ({
+vi.mock("@/features/agent/runtime-state.public", () => ({
   hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
   useAgentRuntimeState: () => ({
     beginOrganizationSwitch: mocks.beginOrganizationSwitch,
@@ -41,10 +41,17 @@ vi.mock("@/lib/browser/console-api", () => ({
   },
 }))
 
+vi.mock("../organization-switch-flash", () => ({
+  navigateAfterOrganizationSwitch: (
+    _storage: Storage,
+    _location: Location,
+    href: string
+  ) => mocks.navigateAfterOrganizationSwitch(href),
+}))
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/organizations",
   useRouter: () => ({
-    push: mocks.push,
     replace: mocks.replace,
     refresh: mocks.refresh,
   }),
@@ -200,9 +207,12 @@ describe("OrganizationsPage", () => {
     await waitFor(() => {
       expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
     })
-    expect(mocks.push).toHaveBeenCalledWith("/organization/beta/members")
+    expect(mocks.navigateAfterOrganizationSwitch).toHaveBeenCalledWith(
+      "/organization/beta/members"
+    )
     expect(mocks.replace).not.toHaveBeenCalled()
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
   })
 
   it("keeps risky local Agent work until the user confirms the switch", async () => {

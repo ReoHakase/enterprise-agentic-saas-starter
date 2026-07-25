@@ -15,29 +15,20 @@ export const consoleKeys = {
   sessions: () => [...consoleKeys.all, "sessions"] as const,
 }
 
-export const meQueryOptions = () =>
-  queryOptions({
-    queryKey: consoleKeys.me(),
-    queryFn: ({ signal }) => browserConsoleApi.getMe(signal),
-  })
-
 export const organizationsQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.organizations(),
     queryFn: ({ signal }) => browserConsoleApi.listOrganizations(signal),
   })
 
-export const organizationQueryOptions = (organizationId: string) =>
+export const membersQueryOptions = (
+  organizationId: string,
+  scope?: "agent-mention-candidates"
+) =>
   queryOptions({
-    queryKey: consoleKeys.organization(organizationId),
-    queryFn: ({ signal }) =>
-      browserConsoleApi.getOrganization(organizationId, signal),
-    enabled: organizationId.length > 0,
-  })
-
-export const membersQueryOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: consoleKeys.members(organizationId),
+    queryKey: scope
+      ? [...consoleKeys.members(organizationId), scope]
+      : consoleKeys.members(organizationId),
     queryFn: ({ signal }) =>
       browserConsoleApi.listMembers(organizationId, signal),
     enabled: organizationId.length > 0,

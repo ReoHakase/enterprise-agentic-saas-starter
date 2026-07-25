@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   AuthRouteError,
-  AuthRouteLoading,
   InvitationRouteError,
-  InvitationRouteLoading,
   RootRouteError,
+} from "./public-route-error-boundary.client"
+import {
+  AuthRouteLoading,
+  InvitationRouteLoading,
   RootRouteLoading,
-} from "./public-boundary"
+} from "./public-route-suspense"
 
 const navigation = vi.hoisted(() => ({
   pathname: "/auth/sign-in",

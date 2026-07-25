@@ -5,7 +5,7 @@ import { FileIcon, MessageCircleIcon } from "lucide-react"
 import { useMemo } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { AuthenticatedFileImage } from "@/features/files/components/authenticated-file-image"
+import { AuthenticatedFileImage } from "@/features/files/authenticated-image.public"
 
 import {
   IssueActionsCell,
@@ -72,10 +72,9 @@ export const useIssueColumns = ({
               loading="lazy"
             />
           ) : (
-            <span
-              className="block size-16 rounded-md border border-dashed bg-muted/30"
-              aria-label="No thumbnail"
-            />
+            <span className="block size-16 rounded-md border border-dashed bg-muted/30">
+              <span className="sr-only">No thumbnail</span>
+            </span>
           ),
       },
       {

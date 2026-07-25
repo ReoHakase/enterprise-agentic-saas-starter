@@ -4,19 +4,27 @@ import { useQuery } from "@tanstack/react-query"
 import { usePathname } from "next/navigation"
 import { useMemo } from "react"
 
-import type { AgentMentionValue } from "@/features/agent/components/agent-composer"
-import { membersQueryOptions } from "@/features/console/queries"
-import { issuesQueryOptions } from "@/features/issues/queries"
-import { useIssueSearchState } from "@/features/issues/search-params"
+import { membersQueryOptions } from "@/features/console/queries.public"
+import { issuesQueryOptions } from "@/features/issues/queries.public"
+import { useIssueSearchState } from "@/features/issues/search-params.public"
 import { apiClient } from "@/lib/api-client"
+
+import type { AgentMentionValue } from "./components/agent-composer"
 
 export const useAgentMentionCandidates = (organizationId: string) => {
   const pathname = usePathname()
   const { state: issueSearchState } = useIssueSearchState()
   const issuesQuery = useQuery(
-    issuesQueryOptions(apiClient, organizationId, issueSearchState)
+    issuesQueryOptions(
+      apiClient,
+      organizationId,
+      issueSearchState,
+      "agent-mention-candidates"
+    )
   )
-  const membersQuery = useQuery(membersQueryOptions(organizationId))
+  const membersQuery = useQuery(
+    membersQueryOptions(organizationId, "agent-mention-candidates")
+  )
 
   return useMemo<AgentMentionValue[]>(
     () => [

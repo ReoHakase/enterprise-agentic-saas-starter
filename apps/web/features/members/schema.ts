@@ -1,8 +1,8 @@
 import * as v from "valibot"
 
-import { organizationRoleSchema } from "@/features/organizations/schema"
+import { organizationRoleSchema } from "@/features/organizations/schema.public"
 
-export const organizationMemberSchema = v.object({
+const organizationMemberSchema = v.object({
   id: v.string(),
   userId: v.string(),
   name: v.string(),
@@ -12,7 +12,7 @@ export const organizationMemberSchema = v.object({
   createdAt: v.string(),
 })
 
-export const organizationInvitationStatusSchema = v.picklist([
+const organizationInvitationStatusSchema = v.picklist([
   "pending",
   "accepted",
   "rejected",
@@ -20,14 +20,14 @@ export const organizationInvitationStatusSchema = v.picklist([
   "expired",
 ])
 
-export const organizationInvitationInviterSchema = v.object({
+const organizationInvitationInviterSchema = v.object({
   id: v.string(),
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
   profileImage: v.nullable(v.string()),
 })
 
-export const organizationInvitationSchema = v.object({
+const organizationInvitationSchema = v.object({
   id: v.string(),
   email: v.pipe(v.string(), v.email()),
   role: v.picklist(["admin", "member"]),
@@ -39,8 +39,8 @@ export const organizationInvitationSchema = v.object({
   createdAt: v.string(),
 })
 
-export const memberListSchema = v.array(organizationMemberSchema)
-export const invitationListSchema = v.array(organizationInvitationSchema)
+const memberListSchema = v.array(organizationMemberSchema)
+const invitationListSchema = v.array(organizationInvitationSchema)
 
 const invitationEmailSchema = v.pipe(
   v.string(),
@@ -86,7 +86,7 @@ export const invitationFormSchema = v.object({
   role: v.picklist(["admin", "member"]),
 })
 
-export const bulkInvitationResponseSchema = v.pipe(
+const bulkInvitationResponseSchema = v.pipe(
   v.object({
     invitations: invitationListSchema,
     queuedCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
@@ -98,13 +98,13 @@ export const bulkInvitationResponseSchema = v.pipe(
   )
 )
 
-export const resendInvitationResponseSchema = v.object({
+const resendInvitationResponseSchema = v.object({
   invitation: organizationInvitationSchema,
   delivery: v.literal("queued"),
   revived: v.boolean(),
 })
 
-export const memberConfirmationFormSchema = v.object({
+const memberConfirmationFormSchema = v.object({
   confirmation: v.string(),
 })
 
@@ -137,12 +137,6 @@ export type BulkInvitationInput = {
   emails: string[]
   role: InvitationFormValues["role"]
 }
-export type BulkInvitationResponse = v.InferOutput<
-  typeof bulkInvitationResponseSchema
->
-export type ResendInvitationResponse = v.InferOutput<
-  typeof resendInvitationResponseSchema
->
 export type MemberConfirmationFormValues = v.InferOutput<
   typeof memberConfirmationFormSchema
 >
@@ -150,8 +144,6 @@ export type MemberConfirmationFormValues = v.InferOutput<
 export const parseMembers = (value: unknown) => v.parse(memberListSchema, value)
 export const parseInvitations = (value: unknown) =>
   v.parse(invitationListSchema, value)
-export const parseInvitation = (value: unknown) =>
-  v.parse(organizationInvitationSchema, value)
 export const parseBulkInvitationResponse = (value: unknown) =>
   v.parse(bulkInvitationResponseSchema, value)
 export const parseResendInvitationResponse = (value: unknown) =>

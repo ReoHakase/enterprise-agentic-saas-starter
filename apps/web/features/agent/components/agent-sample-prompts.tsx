@@ -3,7 +3,7 @@
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { useCallback } from "react"
 
-export const agentSamplePrompts = [
+const agentSamplePrompts = [
   "Show the most urgent open Issues and explain why they need attention.",
   "Summarize the current page and suggest the next action.",
   "Search the Web for recent guidance relevant to our current Issue.",

@@ -4,11 +4,9 @@ import { useChat, type UseChatHelpers } from "@ai-sdk/react"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  isToolUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
   type ChatOnFinishCallback,
   type ChatOnToolCallCallback,
-  type UIMessage,
 } from "ai"
 import { useRouter } from "next/navigation"
 import {
@@ -21,34 +19,29 @@ import {
   type FormEvent,
 } from "react"
 import { toast } from "sonner"
-import * as v from "valibot"
 
-import { createAgentChatTransport } from "@/features/agent/chat-transport"
-import { executeAgentClientTool } from "@/features/agent/client-tools"
+import { issueKeys } from "@/features/issues/queries.public"
+import { useIssueSearchState } from "@/features/issues/search-params.public"
+import { apiClient } from "@/lib/api-client"
+import { clientEnv } from "@/lib/env.client"
+
+import { createAgentChatTransport } from "./chat-transport"
+import { executeAgentClientTool } from "./client-tools"
 import type {
   AgentComposerHandle,
   AgentComposerSnapshot,
-} from "@/features/agent/components/agent-composer"
-import { useAgentFormRegistry } from "@/features/agent/form-registry"
-import { isAgentHotkeyAllowed } from "@/features/agent/hotkey-scope"
-import {
-  agentKeys,
-  agentThreadContextQueryOptions,
-} from "@/features/agent/queries"
-import { useAgentThreadRuntimeState } from "@/features/agent/runtime-state"
-import {
-  pendingActionToolOutputSchema,
-  type AgentChatMessage,
-  type AgentThread,
-} from "@/features/agent/schema"
+} from "./components/agent-composer"
+import { useAgentFormRegistry } from "./components/form-registry"
+import { useAgentThreadRuntimeState } from "./components/runtime-state"
+import { isAgentHotkeyAllowed } from "./hotkey-scope"
+import { extractPendingActionIds } from "./pending-action-ids"
+import { agentKeys, agentThreadContextQueryOptions } from "./queries"
+import { type AgentChatMessage, type AgentThread } from "./schema"
 import {
   resolveAgentSubmissionIdentity,
   shouldRetainAgentSubmission,
-} from "@/features/agent/submission-identity"
-import { useAgentMentionCandidates } from "@/features/agent/use-agent-mention-candidates"
-import { useIssueSearchState } from "@/features/issues/search-params"
-import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
+} from "./submission-identity"
+import { useAgentMentionCandidates } from "./use-agent-mention-candidates"
 
 const closeHttpChatSession = () => undefined
 const hasComposerContent = (snapshot: AgentComposerSnapshot) =>
@@ -58,16 +51,171 @@ const hasComposerContent = (snapshot: AgentComposerSnapshot) =>
       (part.type === "text" && part.text.trim().length > 0)
   )
 
-export const extractPendingActionIds = (messages: UIMessage[]) => {
-  const ids = new Set<string>()
-  for (const message of messages) {
-    for (const part of message.parts) {
-      if (!isToolUIPart(part) || part.state !== "output-available") continue
-      const parsed = v.safeParse(pendingActionToolOutputSchema, part.output)
-      if (parsed.success) ids.add(parsed.output.actionId)
-    }
+type AgentThreadRuntime = ReturnType<typeof useAgentThreadRuntimeState>
+
+const useAgentToolCall = ({
+  disabled,
+  formRegistry,
+  issueSearchState,
+  navigate,
+  organizationId,
+  organizationSlug,
+  runtime,
+}: {
+  disabled: boolean
+  formRegistry: ReturnType<typeof useAgentFormRegistry>
+  issueSearchState: ReturnType<typeof useIssueSearchState>["state"]
+  navigate: ReturnType<typeof useRouter>["push"]
+  organizationId: string
+  organizationSlug: string
+  runtime: AgentThreadRuntime
+}) => {
+  const addToolOutputRef = useRef<
+    UseChatHelpers<AgentChatMessage>["addToolOutput"] | undefined
+  >(undefined)
+  const handleToolCall = useCallback<ChatOnToolCallCallback<AgentChatMessage>>(
+    async ({ toolCall }) => {
+      const addToolOutput = addToolOutputRef.current
+      if (!addToolOutput) return
+      try {
+        const output = await executeAgentClientTool(
+          toolCall.toolName,
+          toolCall.input,
+          {
+            organizationId,
+            organizationSlug,
+            frozen: runtime.frozen || disabled,
+            navigate,
+            issueSearchState,
+            readForm: formRegistry.read,
+            patchForm: formRegistry.patch,
+          }
+        )
+        void addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          output,
+        })
+      } catch (error) {
+        const errorText =
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : "Client tool failed."
+        void addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          state: "output-error",
+          errorText: errorText.slice(0, 500),
+        })
+      }
+    },
+    [
+      disabled,
+      formRegistry,
+      issueSearchState,
+      navigate,
+      organizationId,
+      organizationSlug,
+      runtime.frozen,
+    ]
+  )
+  return { addToolOutputRef, handleToolCall }
+}
+
+const useAgentChatFinish = ({
+  composerRef,
+  organizationId,
+  pendingComposerSnapshotRef,
+  pendingSubmissionRef,
+  queryClient,
+  runtime,
+  setSendingAssetIds,
+  setTransientStatus,
+  threadId,
+}: {
+  composerRef: { current: AgentComposerHandle | null }
+  organizationId: string
+  pendingComposerSnapshotRef: {
+    current: AgentComposerSnapshot | undefined
   }
-  return [...ids]
+  pendingSubmissionRef: { current: AgentThreadRuntime["pendingSubmission"] }
+  queryClient: ReturnType<typeof useQueryClient>
+  runtime: AgentThreadRuntime
+  setSendingAssetIds: (assetIds: string[]) => void
+  setTransientStatus: (status?: string) => void
+  threadId: string
+}) =>
+  useCallback<ChatOnFinishCallback<AgentChatMessage>>(
+    ({ isAbort, isDisconnect, isError }) => {
+      setTransientStatus(undefined)
+      if (shouldRetainAgentSubmission({ isAbort, isDisconnect, isError })) {
+        setSendingAssetIds([])
+        const failedSnapshot = pendingComposerSnapshotRef.current
+        const currentSnapshot = composerRef.current?.snapshot()
+        if (
+          failedSnapshot &&
+          currentSnapshot &&
+          !hasComposerContent(currentSnapshot)
+        ) {
+          composerRef.current?.restore(failedSnapshot)
+        }
+        if (pendingSubmissionRef.current) {
+          toast.error(
+            isAbort
+              ? "The Agent response was stopped. Your local draft was kept."
+              : "The Agent response failed. Your local draft was kept."
+          )
+        }
+        return
+      }
+      if (pendingSubmissionRef.current) {
+        pendingSubmissionRef.current = undefined
+        runtime.setPendingSubmission(undefined)
+        runtime.clearStagedAssetsAfterSend()
+        pendingComposerSnapshotRef.current = undefined
+        setSendingAssetIds([])
+      }
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: agentKeys.messages(organizationId, threadId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: agentKeys.threads(organizationId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: agentKeys.context(organizationId, threadId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: issueKeys.all,
+        }),
+      ])
+    },
+    [
+      composerRef,
+      organizationId,
+      pendingComposerSnapshotRef,
+      pendingSubmissionRef,
+      queryClient,
+      runtime,
+      setSendingAssetIds,
+      setTransientStatus,
+      threadId,
+    ]
+  )
+
+const useAutoSubmitAgentMessage = (
+  autoSubmit: boolean,
+  composerFormRef: { current: HTMLFormElement | null },
+  onAutoSubmit: () => void
+) => {
+  useEffect(() => {
+    if (!autoSubmit) return
+    const frame = requestAnimationFrame(() => {
+      composerFormRef.current?.requestSubmit()
+      onAutoSubmit()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [autoSubmit, composerFormRef, onAutoSubmit])
 }
 
 export const useAgentChatSession = ({
@@ -111,101 +259,28 @@ export const useAgentChatSession = ({
       }),
     [thread.id]
   )
-  const addToolOutputRef = useRef<
-    UseChatHelpers<AgentChatMessage>["addToolOutput"] | undefined
-  >(undefined)
   const pendingSubmissionRef = useRef(runtime.pendingSubmission)
   pendingSubmissionRef.current = runtime.pendingSubmission
-  const handleToolCall = useCallback<ChatOnToolCallCallback<AgentChatMessage>>(
-    async ({ toolCall }) => {
-      const addToolOutput = addToolOutputRef.current
-      if (!addToolOutput) return
-      try {
-        const output = await executeAgentClientTool(
-          toolCall.toolName,
-          toolCall.input,
-          {
-            organizationId,
-            organizationSlug,
-            frozen: runtime.frozen || disabled,
-            navigate: router.push,
-            issueSearchState,
-            readForm: formRegistry.read,
-            patchForm: formRegistry.patch,
-          }
-        )
-        void addToolOutput({
-          tool: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          output,
-        })
-      } catch (error) {
-        const errorText =
-          error instanceof Error && error.message.trim().length > 0
-            ? error.message
-            : "Client tool failed."
-        void addToolOutput({
-          tool: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          state: "output-error",
-          errorText: errorText.slice(0, 500),
-        })
-      }
-    },
-    [
-      formRegistry,
-      organizationId,
-      organizationSlug,
-      router.push,
-      runtime.frozen,
-      disabled,
-      issueSearchState,
-    ]
-  )
-  const finishChat = useCallback<ChatOnFinishCallback<AgentChatMessage>>(
-    ({ isAbort, isDisconnect, isError }) => {
-      setTransientStatus(undefined)
-      if (shouldRetainAgentSubmission({ isAbort, isDisconnect, isError })) {
-        setSendingAssetIds([])
-        const failedSnapshot = pendingComposerSnapshotRef.current
-        const currentSnapshot = composerRef.current?.snapshot()
-        if (
-          failedSnapshot &&
-          currentSnapshot &&
-          !hasComposerContent(currentSnapshot)
-        ) {
-          composerRef.current?.restore(failedSnapshot)
-        }
-        if (pendingSubmissionRef.current) {
-          toast.error(
-            isAbort
-              ? "The Agent response was stopped. Your local draft was kept."
-              : "The Agent response failed. Your local draft was kept."
-          )
-        }
-        return
-      }
-      if (pendingSubmissionRef.current) {
-        pendingSubmissionRef.current = undefined
-        runtime.setPendingSubmission(undefined)
-        runtime.clearStagedAssetsAfterSend()
-        pendingComposerSnapshotRef.current = undefined
-        setSendingAssetIds([])
-      }
-      void Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: agentKeys.messages(organizationId, thread.id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: agentKeys.threads(organizationId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: agentKeys.context(organizationId, thread.id),
-        }),
-      ])
-    },
-    [organizationId, queryClient, runtime, thread.id]
-  )
+  const { addToolOutputRef, handleToolCall } = useAgentToolCall({
+    disabled,
+    formRegistry,
+    issueSearchState,
+    navigate: router.push,
+    organizationId,
+    organizationSlug,
+    runtime,
+  })
+  const finishChat = useAgentChatFinish({
+    composerRef,
+    organizationId,
+    pendingComposerSnapshotRef,
+    pendingSubmissionRef,
+    queryClient,
+    runtime,
+    setSendingAssetIds,
+    setTransientStatus,
+    threadId: thread.id,
+  })
   const chat = useChat<AgentChatMessage>({
     id: thread.id,
     messages: initialMessages,
@@ -344,14 +419,7 @@ export const useAgentChatSession = ({
     },
     [runtime]
   )
-  useEffect(() => {
-    if (!autoSubmit) return
-    const frame = requestAnimationFrame(() => {
-      composerFormRef.current?.requestSubmit()
-      onAutoSubmit()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [autoSubmit, onAutoSubmit])
+  useAutoSubmitAgentMessage(autoSubmit, composerFormRef, onAutoSubmit)
   useHotkeys(
     [
       {

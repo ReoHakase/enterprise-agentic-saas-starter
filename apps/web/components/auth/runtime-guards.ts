@@ -4,8 +4,6 @@ import type {
 } from "@better-auth-ui/react"
 import type { ComponentType } from "react"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
-
 const isPropertyContainer = (
   value: unknown
 ): value is object | ((...args: never[]) => unknown) =>
@@ -53,6 +51,3 @@ export const formDataString = (formData: FormData, name: string) => {
   const value = formData.get(name)
   return typeof value === "string" ? value : ""
 }
-
-export const authErrorMessage = (error: unknown, fallback = "Request failed") =>
-  safeAuthErrorMessage(error, fallback)

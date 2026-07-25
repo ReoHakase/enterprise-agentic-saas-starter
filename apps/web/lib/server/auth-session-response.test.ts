@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  AuthSessionRequestError,
-  readAuthSessionResult,
-} from "./auth-session-response"
+import { readAuthSessionResult } from "./auth-session-response"
 
 describe("readAuthSessionResult", () => {
   it("treats only 401 as an unauthenticated session", () => {
@@ -15,7 +12,18 @@ describe("readAuthSessionResult", () => {
   it("surfaces an API outage to the route error boundary", () => {
     expect(() =>
       readAuthSessionResult({ data: null, error: { status: 503 } })
-    ).toThrow(new AuthSessionRequestError(503))
+    ).toThrow("Session request failed with status 503")
+    const error = (() => {
+      try {
+        readAuthSessionResult({ data: null, error: { status: 503 } })
+      } catch (requestError) {
+        return requestError
+      }
+    })()
+    expect(error).toMatchObject({
+      name: "AuthSessionRequestError",
+      status: 503,
+    })
   })
 
   it("returns a successful session payload", () => {

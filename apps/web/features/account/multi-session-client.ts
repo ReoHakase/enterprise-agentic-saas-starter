@@ -1,4 +1,4 @@
-import { parseDeviceAccounts } from "@/features/account/schema"
+import { parseDeviceAccounts } from "./schema"
 
 export type MultiSessionCapabilities = {
   listDeviceSessions?: () => Promise<unknown>

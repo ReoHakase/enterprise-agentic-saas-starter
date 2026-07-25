@@ -2,10 +2,8 @@ import { act, renderHook } from "@testing-library/react"
 import type { PropsWithChildren } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-  boundaryReloadFallbackMs,
-  useBoundaryRetry,
-} from "./use-boundary-retry"
+import { boundaryReloadFallbackMs } from "./boundary-retry-timing"
+import { useBoundaryRetry } from "./use-boundary-retry"
 
 const browser = vi.hoisted(() => ({ reload: vi.fn<() => void>() }))
 

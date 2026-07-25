@@ -1,7 +1,7 @@
 import { createApiClient } from "@enterprise-agentic-saas/api/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api"
+import { ConsoleApiError } from "@/features/console/api.public"
 
 import {
   createIssue,
@@ -10,7 +10,6 @@ import {
   deleteIssueComment,
   getIssueThumbnail,
   getIssueTimeline,
-  listIssueComments,
   listIssues,
   updateIssue,
   updateIssueComment,
@@ -68,7 +67,6 @@ describe("issues Eden API", () => {
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
-      .mockResolvedValueOnce(Response.json([comment]))
       .mockResolvedValueOnce(Response.json(comment))
       .mockResolvedValueOnce(Response.json(comment))
       .mockResolvedValueOnce(Response.json(comment))
@@ -100,9 +98,6 @@ describe("issues Eden API", () => {
     await expect(
       deleteIssue(client, { id: issue.id, organizationId: "org-1" })
     ).resolves.toEqual(issue)
-    await expect(
-      listIssueComments(client, { id: issue.id, organizationId: "org-1" })
-    ).resolves.toEqual([comment])
     await expect(
       createIssueComment(client, {
         id: issue.id,

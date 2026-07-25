@@ -49,12 +49,16 @@ import {
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
-import type { UserSession } from "@/features/account/schema"
-import { describeSessionClient } from "@/features/account/user-agent"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { consoleKeys, sessionsQueryOptions } from "@/features/console/queries"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import {
+  consoleKeys,
+  sessionsQueryOptions,
+} from "@/features/console/queries.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { getConsoleApiErrorText } from "@/lib/console-api"
+
+import type { UserSession } from "../schema"
+import { describeSessionClient } from "../user-agent"
 
 export const SessionsPanel = () => {
   const queryClient = useQueryClient()
@@ -376,7 +380,11 @@ const sessionColumnClass = (columnId: string) => {
 }
 
 const SessionsSkeleton = () => (
-  <div className="flex flex-col gap-2" aria-label="Loading sessions">
+  <div
+    className="flex flex-col gap-2"
+    role="status"
+    aria-label="Loading sessions"
+  >
     <Skeleton className="h-20 w-full rounded-xl" />
     <Skeleton className="h-20 w-full rounded-xl" />
   </div>

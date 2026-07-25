@@ -2,13 +2,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { AgentChatMessage } from "@/features/agent/schema"
-
+import type { AgentChatMessage } from "../schema"
+import { isNearAgentConversationBottom } from "./agent-conversation-scroll"
 import {
-  AGENT_CONVERSATION_BOTTOM_THRESHOLD,
   AgentConversationViewport,
   buildAgentConversationGroups,
-  isNearAgentConversationBottom,
   type AgentConversationTurnPreview,
 } from "./agent-conversation-viewport"
 
@@ -192,14 +190,14 @@ describe("AgentConversationViewport", () => {
       isNearAgentConversationBottom({
         clientHeight: 300,
         scrollHeight: 1000,
-        scrollTop: 1000 - 300 - AGENT_CONVERSATION_BOTTOM_THRESHOLD,
+        scrollTop: 1000 - 300 - 96,
       })
     ).toBe(true)
     expect(
       isNearAgentConversationBottom({
         clientHeight: 300,
         scrollHeight: 1000,
-        scrollTop: 1000 - 300 - AGENT_CONVERSATION_BOTTOM_THRESHOLD - 1,
+        scrollTop: 1000 - 300 - 96 - 1,
       })
     ).toBe(false)
   })
@@ -215,7 +213,7 @@ describe("AgentConversationViewport", () => {
         </div>
       </AgentConversationViewport>
     )
-    const viewport = screen.getByRole("log", { name: "Agent conversation" })
+    const viewport = screen.getByTestId("agent-conversation-viewport")
     const firstTurn = screen.getByTestId("turn-1")
     const secondTurn = screen.getByTestId("turn-2")
     const metrics: MutableViewportMetrics = {
@@ -228,6 +226,9 @@ describe("AgentConversationViewport", () => {
     setTurnOffset(secondTurn, 600)
 
     act(flushAnimationFrames)
+    expect(viewport).toHaveAttribute("role", "region")
+    expect(viewport).toHaveAccessibleName("Scrollable Agent conversation")
+    expect(viewport).toHaveAttribute("tabindex", "0")
     expect(metrics.scrollTop).toBe(700)
 
     metrics.scrollTop = 680
@@ -306,7 +307,7 @@ describe("AgentConversationViewport", () => {
         </div>
       </AgentConversationViewport>
     )
-    const viewport = screen.getByRole("log", { name: "Agent conversation" })
+    const viewport = screen.getByTestId("agent-conversation-viewport")
     const firstTurn = screen.getByTestId("turn-1")
     const secondTurn = screen.getByTestId("turn-2")
     const metrics: MutableViewportMetrics = {
@@ -349,8 +350,18 @@ describe("AgentConversationViewport", () => {
     expect(
       screen.queryByRole("navigation", { name: "Conversation turns" })
     ).not.toBeInTheDocument()
+    const viewport = screen.getByTestId("agent-conversation-viewport")
+    installViewportMetrics(viewport, {
+      clientHeight: 300,
+      scrollHeight: 500,
+      scrollTop: 0,
+    })
+    act(flushAnimationFrames)
     expect(
       screen.getByRole("log", { name: "Agent conversation" })
     ).toHaveAttribute("aria-live", "polite")
+    expect(viewport).toHaveAttribute("role", "region")
+    expect(viewport).toHaveAccessibleName("Scrollable Agent conversation")
+    expect(viewport).toHaveAttribute("tabindex", "0")
   })
 })

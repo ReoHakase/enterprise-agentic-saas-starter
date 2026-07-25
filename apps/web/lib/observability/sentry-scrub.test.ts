@@ -4,7 +4,6 @@ import {
   beforeSendSentryError,
   beforeSendSentryLog,
   scrubSentryBreadcrumb,
-  scrubSentryText,
 } from "./sentry-scrub"
 
 describe("Sentry telemetry scrubbing", () => {
@@ -50,13 +49,14 @@ describe("Sentry telemetry scrubbing", () => {
   it("scrubs credentials, database URLs, emails, and identifiers from text", () => {
     const input =
       "Bearer abc libsql://db.example.com?authToken=secret user@example.com 123e4567-e89b-12d3-a456-426614174000"
-
-    expect(scrubSentryText(input)).not.toContain("abc")
-    expect(scrubSentryText(input)).not.toContain("libsql://")
-    expect(scrubSentryText(input)).not.toContain("user@example.com")
-    expect(scrubSentryText(input)).not.toContain(
-      "123e4567-e89b-12d3-a456-426614174000"
+    const output = String(
+      beforeSendSentryLog({ level: "error", message: input }).message
     )
+
+    expect(output).not.toContain("abc")
+    expect(output).not.toContain("libsql://")
+    expect(output).not.toContain("user@example.com")
+    expect(output).not.toContain("123e4567-e89b-12d3-a456-426614174000")
   })
 
   it("drops input breadcrumbs and sanitizes structured logs", () => {

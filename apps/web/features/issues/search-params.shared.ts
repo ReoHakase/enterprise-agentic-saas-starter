@@ -1,5 +1,4 @@
 import {
-  createLoader,
   createParser,
   createSerializer,
   parseAsInteger,
@@ -69,12 +68,11 @@ export const defaultIssueSearchState: IssueSearchState = {
   agentThread: "",
 }
 
-export const loadIssueSearchParams = createLoader(issueSearchParsers)
 export const serializeIssueSearchParams = createSerializer(issueSearchParsers)
 
 export type IssueSearchPatch = Partial<Omit<IssueSearchState, "agentThread">>
 
-export const mergeIssueSearchPatch = (
+const mergeIssueSearchPatch = (
   current: IssueSearchState,
   patch: IssueSearchPatch
 ): IssueSearchState => ({

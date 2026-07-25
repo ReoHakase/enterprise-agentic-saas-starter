@@ -1,10 +1,13 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console/api"
+import {
+  ConsoleApiError,
+  toConsoleApiError,
+} from "@/features/console/api.public"
+
 import {
   parseIssue,
   parseIssueComment,
-  parseIssueComments,
   parseIssueTimelinePage,
   parseIssueThumbnail,
   parseIssueListPage,
@@ -12,12 +15,12 @@ import {
   type IssueListPage,
   type IssuePriority,
   type IssueStatus,
-} from "@/features/issues/schema"
+} from "./schema"
 import {
   defaultIssueSearchState,
   toIssueListRequest,
   type IssueListRequest,
-} from "@/features/issues/search-params.shared"
+} from "./search-params.shared"
 
 type EdenResult = {
   data: unknown
@@ -186,20 +189,6 @@ export const deleteIssue = async (
     unwrap(
       await client.issues({ id: input.id }).delete({
         organizationId: input.organizationId,
-      })
-    )
-  )
-
-export const listIssueComments = async (
-  client: ApiClient,
-  input: { id: string; organizationId: string },
-  signal?: AbortSignal
-) =>
-  parseIssueComments(
-    unwrap(
-      await client.issues({ id: input.id }).comments.get({
-        query: { organizationId: input.organizationId },
-        fetch: { signal },
       })
     )
   )

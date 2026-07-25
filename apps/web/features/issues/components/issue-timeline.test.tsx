@@ -2,8 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
-import type { IssueActivity } from "@/features/issues/schema"
-
+import type { IssueActivity } from "../schema"
 import { IssueActivityItem } from "./issue-activity"
 import { IssueComment } from "./issue-comment"
 import type { IssueCommentUiItem, IssueUiItem } from "./types"

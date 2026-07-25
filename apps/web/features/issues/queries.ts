@@ -1,16 +1,12 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 
-import {
-  getIssueThumbnail,
-  listIssueComments,
-  listIssues,
-} from "@/features/issues/api"
+import { getIssueThumbnail, listIssues } from "./api"
 import {
   issueListQueryKeyState,
   toIssueListRequest,
   type IssueSearchState,
-} from "@/features/issues/search-params.shared"
+} from "./search-params.shared"
 
 export const issueKeys = {
   all: ["issues"] as const,
@@ -38,11 +34,6 @@ const createIssuesQueryFn =
   ({ signal }: QueryFunctionContext) =>
     listIssues(client, toIssueListRequest(organizationId, state), signal)
 
-const createIssueCommentsQueryFn =
-  (client: ApiClient, organizationId: string, issueId: string) =>
-  ({ signal }: QueryFunctionContext) =>
-    listIssueComments(client, { id: issueId, organizationId }, signal)
-
 const createIssueThumbnailQueryFn =
   (client: ApiClient, organizationId: string, issueId: string) =>
   ({ signal }: QueryFunctionContext) =>
@@ -51,23 +42,15 @@ const createIssueThumbnailQueryFn =
 export const issuesQueryOptions = (
   client: ApiClient,
   organizationId: string,
-  state: IssueSearchState
+  state: IssueSearchState,
+  scope?: "agent-mention-candidates"
 ) =>
   queryOptions({
-    queryKey: issueKeys.list(organizationId, state),
+    queryKey: scope
+      ? [...issueKeys.list(organizationId, state), scope]
+      : issueKeys.list(organizationId, state),
     queryFn: createIssuesQueryFn(client, organizationId, state),
     enabled: organizationId.length > 0,
-  })
-
-export const issueCommentsQueryOptions = (
-  client: ApiClient,
-  organizationId: string,
-  issueId: string
-) =>
-  queryOptions({
-    queryKey: issueKeys.comments(organizationId, issueId),
-    queryFn: createIssueCommentsQueryFn(client, organizationId, issueId),
-    enabled: organizationId.length > 0 && issueId.length > 0,
   })
 
 export const issueThumbnailQueryOptions = (

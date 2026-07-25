@@ -1,6 +1,9 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console/api"
+import {
+  ConsoleApiError,
+  toConsoleApiError,
+} from "@/features/console/api.public"
 
 import {
   parseAgentActionExecutionResult,
@@ -8,7 +11,6 @@ import {
   parseAgentContextRevocation,
   parseAgentIssueAction,
   parseAgentMessages,
-  parseAgentMonthlyUsage,
   parseAgentThread,
   parseAgentThreadContext,
   parseAgentThreads,
@@ -85,19 +87,6 @@ export const getAgentThreadContext = async (
       await client.agent
         .threads({ threadId })
         .context.get({ fetch: { signal } })
-    )
-  )
-
-export const getAgentMonthlyUsage = async (
-  client: ApiClient,
-  signal?: AbortSignal
-) =>
-  parseAgentMonthlyUsage(
-    unwrap(
-      await client.agent.usage.monthly.get({
-        query: {},
-        fetch: { signal },
-      })
     )
   )
 

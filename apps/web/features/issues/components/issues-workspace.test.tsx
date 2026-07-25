@@ -2,9 +2,8 @@ import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
-import type { IssueTimelineItem } from "@/features/issues/schema"
-import { defaultIssueSearchState } from "@/features/issues/search-params"
-
+import type { IssueTimelineItem } from "../schema"
+import { defaultIssueSearchState } from "../search-params"
 import { IssueDetailDialog } from "./issue-detail-dialog"
 import { IssueModalRouteShell } from "./issue-modal-route-shell"
 import { IssuesWorkspace } from "./issues-workspace"
@@ -87,7 +86,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn<() => void>() }),
 }))
 
-vi.mock("@/features/files/components/file-attachments", () => ({
+vi.mock("@/features/files/attachments.public", () => ({
   FileAttachments: () => (
     <section aria-label="Attachments">Attachments</section>
   ),

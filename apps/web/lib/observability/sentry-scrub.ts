@@ -60,7 +60,7 @@ const normalizeDynamicPaths = (value: string): string =>
     value
   )
 
-export const scrubSentryText = (value: string): string =>
+const scrubSentryText = (value: string): string =>
   normalizeDynamicPaths(value)
     .replaceAll(/\b(?:Bearer|Basic)\s+[^\s,;]+/giu, REDACTED)
     .replaceAll(
@@ -78,7 +78,7 @@ export const scrubSentryText = (value: string): string =>
     )
     .replaceAll(/\b(https?:\/\/[^\s?#]+)\?[^\s#]*/giu, "$1?[redacted]")
 
-export const scrubSentryUrl = (value: string): string => {
+const scrubSentryUrl = (value: string): string => {
   try {
     const url = new URL(value)
     url.username = ""

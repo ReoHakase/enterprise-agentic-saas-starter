@@ -1,6 +1,7 @@
 "use client"
 
 import { authMutationKeys } from "@better-auth-ui/core"
+import { magicLinkPlugin as coreMagicLinkPlugin } from "@better-auth-ui/core/plugins"
 import {
   useAuth,
   useAuthPlugin,
@@ -28,11 +29,9 @@ import { ArrowRightIcon, MailCheckIcon } from "lucide-react"
 import { type FormEvent, useCallback, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
-import { magicLinkFormSchema } from "@/features/auth/schema"
+import { safeAuthErrorMessage, magicLinkFormSchema } from "@/features/auth"
 import { useIsHydrated } from "@/hooks/use-is-hydrated"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
-import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
 import { AuthTextField, selectCanSubmit } from "./auth-form-field"
 import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
@@ -68,7 +67,8 @@ export function MagicLink({
   } = useAuth()
   const authRoute = useAuthRouteState()
   const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
-  const { localization: magicLinkLocalization } = useAuthPlugin(magicLinkPlugin)
+  const { localization: magicLinkLocalization } =
+    useAuthPlugin(coreMagicLinkPlugin)
   const isHydrated = useIsHydrated()
   const requestedEmail = useRef("")
   const [sentTo, setSentTo] = useState<string>()
@@ -232,7 +232,7 @@ export function MagicLink({
                   <div className="flex flex-col gap-3">
                     <PasskeySignInButton />
                     {plugins.flatMap((plugin) =>
-                      (plugin.id === magicLinkPlugin.id
+                      (plugin.id === coreMagicLinkPlugin.id
                         ? []
                         : (plugin.authButtons ?? [])
                       ).map((AuthButton, index) => (

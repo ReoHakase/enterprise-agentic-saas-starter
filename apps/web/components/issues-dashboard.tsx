@@ -5,22 +5,24 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { getConsoleApiErrorText } from "@/features/console/error"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { membersQueryOptions } from "@/features/console/queries"
-import { createIssue, deleteIssue, updateIssue } from "@/features/issues/api"
-import { IssuesWorkspace } from "@/features/issues/components/issues-workspace"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import { getConsoleApiErrorText } from "@/features/console/error.public"
+import { membersQueryOptions } from "@/features/console/queries.public"
+import {
+  createIssue,
+  deleteIssue,
+  updateIssue,
+} from "@/features/issues/api.public"
+import { issueKeys, issuesQueryOptions } from "@/features/issues/queries.public"
+import type { IssueListItem } from "@/features/issues/schema.public"
+import { withAgentThreadHref } from "@/features/issues/search-params-shared.public"
+import { useIssueSearchState } from "@/features/issues/search-params.public"
 import type {
   IssueAssigneeOption,
   IssueUiItem,
   IssueUpdate,
-} from "@/features/issues/components/types"
-import { issueKeys, issuesQueryOptions } from "@/features/issues/queries"
-import type { IssueListItem } from "@/features/issues/schema"
-import {
-  useIssueSearchState,
-  withAgentThreadHref,
-} from "@/features/issues/search-params"
+} from "@/features/issues/workspace-types.public"
+import { IssuesWorkspace } from "@/features/issues/workspace.public"
 import { apiClient } from "@/lib/api-client"
 
 type IssuesDashboardProps = {

@@ -6,7 +6,7 @@ export const organizationRoleSchema = v.picklist([
   "member",
 ])
 
-export const organizationPermissionsSchema = v.object({
+const organizationPermissionsSchema = v.object({
   canEditOrganization: v.boolean(),
   canInviteMembers: v.boolean(),
   canManageMembers: v.boolean(),
@@ -32,13 +32,13 @@ export const organizationSummarySchema = v.object({
   permissions: organizationPermissionsSchema,
 })
 
-export const organizationDetailSchema = v.object({
+const organizationDetailSchema = v.object({
   ...organizationSummarySchema.entries,
   createdAt: v.string(),
   invitationCount: v.pipe(v.number(), v.integer()),
 })
 
-export const organizationListSchema = v.array(organizationSummarySchema)
+const organizationListSchema = v.array(organizationSummarySchema)
 
 const reservedOrganizationSlugs = new Set([
   "admin",
@@ -54,7 +54,7 @@ const reservedOrganizationSlugs = new Set([
   "issues",
 ])
 
-export const organizationDeletionReceiptSchema = v.object({
+const organizationDeletionReceiptSchema = v.object({
   deletionId: v.string(),
   organizationId: v.string(),
   status: v.literal("deleted"),
@@ -97,19 +97,10 @@ export const createOrganizationDeletionFormSchema = (expectedSlug: string) =>
   })
 
 export type OrganizationRole = v.InferOutput<typeof organizationRoleSchema>
-export type OrganizationPermissions = v.InferOutput<
-  typeof organizationPermissionsSchema
->
 export type OrganizationSummary = v.InferOutput<
   typeof organizationSummarySchema
 >
 export type OrganizationDetail = v.InferOutput<typeof organizationDetailSchema>
-export type OrganizationDeletionReceipt = v.InferOutput<
-  typeof organizationDeletionReceiptSchema
->
-export type OrganizationFormValues = v.InferOutput<
-  typeof organizationFormSchema
->
 
 export const parseOrganization = (value: unknown) =>
   v.parse(organizationDetailSchema, value)

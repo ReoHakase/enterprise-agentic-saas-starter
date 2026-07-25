@@ -1,41 +1,12 @@
 "use client"
 
-import {
-  buildFileDownloadUrl,
-  type FileDto,
-} from "@enterprise-agentic-saas/api/client"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@enterprise-agentic-saas/ui/components/alert-dialog"
-import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
-import {
-  Button,
-  buttonVariants,
-} from "@enterprise-agentic-saas/ui/components/button"
-import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
+import type { FileDto } from "@enterprise-agentic-saas/api/client"
 import {
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import {
-  DownloadIcon,
-  FileIcon,
-  ImageIcon,
-  PaperclipIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  UploadIcon,
-  XIcon,
-} from "lucide-react"
 import {
   useCallback,
   useEffect,
@@ -44,248 +15,21 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type MouseEvent,
 } from "react"
 import { toast } from "sonner"
 
-import { LocalDate } from "@/components/local-date"
-import { UserProfileImage } from "@/components/user-identity"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { deleteFile, type FileOwnerType } from "@/features/files/api"
-import { formatFileSize } from "@/features/files/format"
-import { fileKeys, filesQueryOptions } from "@/features/files/queries"
-import {
-  useFileUploads,
-  type PendingFileUpload,
-} from "@/features/files/use-file-uploads"
-import { updateIssueThumbnail } from "@/features/issues/api"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import { updateIssueThumbnail } from "@/features/issues/api.public"
 import {
   issueKeys,
   issueThumbnailQueryOptions,
-} from "@/features/issues/queries"
+} from "@/features/issues/queries.public"
 import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
 
-import { AuthenticatedFileImage } from "./authenticated-file-image"
-import { FilePreviewDialog } from "./file-preview-dialog"
-
-const attachmentSizes = "(max-width: 640px) 100vw, 320px"
-
-const UploadRow = ({
-  upload,
-  onCancel,
-  onRetry,
-}: {
-  upload: PendingFileUpload
-  onCancel: (id: string) => void
-  onRetry: (id: string) => void
-}) => {
-  const cancel = useCallback(() => onCancel(upload.id), [onCancel, upload.id])
-  const retry = useCallback(() => onRetry(upload.id), [onRetry, upload.id])
-
-  return (
-    <li className="flex min-w-0 items-center gap-3 rounded-xl border bg-muted/20 p-3">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground">
-        <UploadIcon aria-hidden="true" className="size-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <p className="truncate text-sm font-medium">{upload.file.name}</p>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {formatFileSize(upload.file.size)}
-          </span>
-        </div>
-        {upload.status === "failed" ? (
-          <p role="alert" className="mt-1 text-xs text-destructive">
-            {upload.error}
-          </p>
-        ) : (
-          <div className="mt-2 flex items-center gap-2">
-            <progress
-              className="h-1.5 min-w-0 flex-1 accent-primary"
-              max={100}
-              value={upload.progress}
-              aria-label={`Uploading ${upload.file.name}`}
-            />
-            <span className="w-9 text-right text-xs text-muted-foreground tabular-nums">
-              {Math.round(upload.progress)}%
-            </span>
-          </div>
-        )}
-      </div>
-      {upload.status === "failed" ? (
-        <Button type="button" variant="outline" size="sm" onClick={retry}>
-          <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-          Retry
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Cancel upload for ${upload.file.name}`}
-        onClick={cancel}
-      >
-        <XIcon aria-hidden="true" />
-      </Button>
-    </li>
-  )
-}
-
-const FileRow = ({
-  file,
-  organizationId,
-  onRequestDelete,
-  onRequestPreview,
-  onSelectThumbnail,
-  thumbnailGroupName,
-  thumbnailEditing,
-  thumbnailPending,
-  thumbnailSelected,
-}: {
-  file: FileDto
-  organizationId: string
-  onRequestDelete: (file: FileDto) => void
-  onRequestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
-  onSelectThumbnail: (fileId: string) => void
-  thumbnailGroupName: string
-  thumbnailEditing: boolean
-  thumbnailPending: boolean
-  thumbnailSelected: boolean
-}) => {
-  const requestDelete = useCallback(
-    () => onRequestDelete(file),
-    [file, onRequestDelete]
-  )
-  const requestPreview = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) =>
-      onRequestPreview(file, event.currentTarget),
-    [file, onRequestPreview]
-  )
-  const selectThumbnail = useCallback(
-    () => onSelectThumbnail(file.id),
-    [file.id, onSelectThumbnail]
-  )
-  const canPreview = file.previewable || file.textPreviewable
-  const downloadUrl = buildFileDownloadUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
-    organizationId,
-    fileId: file.id,
-  })
-
-  return (
-    <li className="overflow-hidden rounded-xl border bg-card">
-      {file.previewable ? (
-        <button
-          type="button"
-          className="flex max-h-72 min-h-36 w-full items-center justify-center overflow-hidden border-b bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-          aria-label={`Preview image ${file.filename}`}
-          onClick={requestPreview}
-        >
-          <AuthenticatedFileImage
-            file={file}
-            organizationId={organizationId}
-            sizes={attachmentSizes}
-            className="max-h-72 w-full object-contain"
-            loading="lazy"
-          />
-        </button>
-      ) : null}
-      <div
-        role="group"
-        aria-label={`File details for ${file.filename}`}
-        className="flex min-h-16 min-w-0 items-center gap-3 p-3"
-      >
-        <div className="min-w-0 flex-1">
-          {canPreview ? (
-            <button
-              type="button"
-              data-slot="file-filename"
-              className="flex max-w-full min-w-0 items-center gap-1.5 text-left text-sm font-medium hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              title={file.filename}
-              onClick={requestPreview}
-            >
-              {file.previewable ? (
-                <ImageIcon
-                  data-slot="file-icon"
-                  data-testid={`file-icon-${file.id}`}
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground"
-                />
-              ) : (
-                <FileIcon
-                  data-slot="file-icon"
-                  data-testid={`file-icon-${file.id}`}
-                  aria-hidden="true"
-                  className="size-4 shrink-0 text-muted-foreground"
-                />
-              )}
-              <span className="truncate">{file.filename}</span>
-            </button>
-          ) : (
-            <p
-              data-slot="file-filename"
-              className="flex min-w-0 items-center gap-1.5 text-sm font-medium"
-              title={file.filename}
-            >
-              <FileIcon
-                data-slot="file-icon"
-                data-testid={`file-icon-${file.id}`}
-                aria-hidden="true"
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-              <span className="truncate">{file.filename}</span>
-            </p>
-          )}
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span>{formatFileSize(file.sizeBytes)}</span>
-            <span aria-hidden="true">·</span>
-            <span
-              data-slot="file-uploader"
-              className="flex min-w-0 items-center gap-1.5"
-              aria-label={`Uploaded by ${file.uploader.name}`}
-            >
-              <UserProfileImage user={file.uploader} className="size-5" />
-              <span className="truncate">{file.uploader.name}</span>
-            </span>
-            <span aria-hidden="true">·</span>
-            <LocalDate value={file.createdAt} includeTime />
-          </div>
-        </div>
-        {thumbnailEditing ? (
-          <input
-            type="radio"
-            name={thumbnailGroupName}
-            value={file.id}
-            checked={thumbnailSelected}
-            disabled={!file.previewable || thumbnailPending}
-            aria-label={`Use ${file.filename} as thumbnail`}
-            className="size-4 shrink-0 accent-primary"
-            onChange={selectThumbnail}
-          />
-        ) : null}
-        <a
-          href={downloadUrl}
-          download
-          className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-          aria-label={`Download ${file.filename}`}
-        >
-          <DownloadIcon aria-hidden="true" />
-        </a>
-        {file.canDelete ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Delete ${file.filename}`}
-            onClick={requestDelete}
-          >
-            <Trash2Icon aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
-    </li>
-  )
-}
+import { deleteFile, type FileOwnerType } from "../api"
+import { fileKeys, filesQueryOptions } from "../queries"
+import { useFileUploads } from "../use-file-uploads"
+import { fileAttachmentsView as FileAttachmentsView } from "./file-attachments-view"
 
 export const FileAttachments = ({
   organizationId,
@@ -491,199 +235,44 @@ export const FileAttachments = ({
   }, [mutateThumbnail, thumbnailChanged, thumbnailDraftFileId])
 
   return (
-    <section
-      data-slot="issue-attachments"
-      className="flex min-w-0 flex-col gap-4"
-      aria-labelledby="attachments-heading"
-    >
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <PaperclipIcon aria-hidden="true" className="size-4" />
-            <h3 id="attachments-heading" className="font-medium">
-              Attachments
-            </h3>
-            {files.length > 0 ? (
-              <Badge variant="secondary">{files.length}</Badge>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Files are private to members of this organization.
-          </p>
-        </div>
-        <input
-          ref={inputRef}
-          className="sr-only"
-          type="file"
-          multiple
-          aria-label="Choose files to upload"
-          onChange={selectFiles}
-        />
-        <div
-          role="group"
-          aria-label="Attachment actions"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={openPicker}
-          >
-            <UploadIcon data-icon="inline-start" aria-hidden="true" />
-            Add files
-          </Button>
-          {ownerType === "issue" && files.length > 0 ? (
-            thumbnailEditing ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={thumbnailPending}
-                  onClick={closeThumbnailEditor}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={!thumbnailChanged || thumbnailPending}
-                  onClick={confirmThumbnail}
-                >
-                  Confirm
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={
-                  thumbnailQuery.isPending ||
-                  thumbnailQuery.isError ||
-                  thumbnailPending
-                }
-                onClick={openThumbnailEditor}
-              >
-                <ImageIcon
-                  data-icon="inline-start"
-                  data-testid="change-thumbnail-icon"
-                  aria-hidden="true"
-                />
-                Change thumbnail
-              </Button>
-            )
-          ) : null}
-        </div>
-      </div>
-
-      {uploads.length > 0 ? (
-        <ul aria-label="File uploads" className="flex flex-col gap-2">
-          {uploads.map((upload) => (
-            <UploadRow
-              key={upload.id}
-              upload={upload}
-              onCancel={cancelUpload}
-              onRetry={retryUpload}
-            />
-          ))}
-        </ul>
-      ) : null}
-
-      {filesQuery.isPending ? (
-        <div
-          role="status"
-          aria-label="Loading attachments"
-          className="flex min-h-24 items-center justify-center rounded-xl border border-dashed"
-        >
-          <Spinner />
-        </div>
-      ) : filesQuery.isError ? (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
-        >
-          <p className="text-sm">Attachments could not be loaded.</p>
-          <Button type="button" variant="outline" size="sm" onClick={retryList}>
-            <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-            Try again
-          </Button>
-        </div>
-      ) : files.length > 0 ? (
-        <ul
-          aria-label="Attachments"
-          className="grid min-w-0 gap-3 xl:grid-cols-2"
-        >
-          {files.map((file) => (
-            <FileRow
-              key={file.id}
-              file={file}
-              organizationId={organizationId}
-              onRequestDelete={requestDelete}
-              onRequestPreview={requestPreview}
-              onSelectThumbnail={selectThumbnail}
-              thumbnailGroupName={thumbnailGroupName}
-              thumbnailEditing={thumbnailEditing}
-              thumbnailPending={thumbnailPending}
-              thumbnailSelected={thumbnailDraftFileId === file.id}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-          No files attached yet.
-        </p>
-      )}
-
-      {filesQuery.hasNextPage ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={filesQuery.isFetchingNextPage}
-          onClick={loadMore}
-        >
-          {filesQuery.isFetchingNextPage ? <Spinner /> : null}
-          Load more files
-        </Button>
-      ) : null}
-
-      <FilePreviewDialog
-        organizationId={organizationId}
-        files={previewableFiles}
-        selectedFileId={previewFileId}
-        finalFocusRef={previewTriggerRef}
-        onSelectFile={selectPreviewFile}
-        onClose={closePreview}
-      />
-
-      <AlertDialog
-        open={fileToDelete !== null}
-        onOpenChange={handleDeleteOpenChange}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this file?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently removes the file for every organization member.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletePending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={deletePending}
-              onClick={confirmDelete}
-            >
-              {deletePending ? <Spinner /> : <Trash2Icon />}
-              Delete file
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </section>
+    <FileAttachmentsView
+      organizationId={organizationId}
+      ownerType={ownerType}
+      files={files}
+      uploads={uploads}
+      inputRef={inputRef}
+      selectFiles={selectFiles}
+      openPicker={openPicker}
+      cancelUpload={cancelUpload}
+      retryUpload={retryUpload}
+      thumbnailEditing={thumbnailEditing}
+      thumbnailPending={thumbnailPending}
+      thumbnailQueryPending={thumbnailQuery.isPending}
+      thumbnailQueryError={thumbnailQuery.isError}
+      closeThumbnailEditor={closeThumbnailEditor}
+      thumbnailChanged={thumbnailChanged}
+      confirmThumbnail={confirmThumbnail}
+      openThumbnailEditor={openThumbnailEditor}
+      filesPending={filesQuery.isPending}
+      filesError={filesQuery.isError}
+      retryList={retryList}
+      requestDelete={requestDelete}
+      requestPreview={requestPreview}
+      selectThumbnail={selectThumbnail}
+      thumbnailGroupName={thumbnailGroupName}
+      thumbnailDraftFileId={thumbnailDraftFileId}
+      hasNextPage={filesQuery.hasNextPage}
+      fetchingNextPage={filesQuery.isFetchingNextPage}
+      loadMore={loadMore}
+      previewableFiles={previewableFiles}
+      previewFileId={previewFileId}
+      previewTriggerRef={previewTriggerRef}
+      selectPreviewFile={selectPreviewFile}
+      closePreview={closePreview}
+      fileToDelete={fileToDelete}
+      handleDeleteOpenChange={handleDeleteOpenChange}
+      deletePending={deletePending}
+      confirmDelete={confirmDelete}
+    />
   )
 }

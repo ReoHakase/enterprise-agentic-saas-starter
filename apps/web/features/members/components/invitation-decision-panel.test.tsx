@@ -1,14 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-  InvitationAuthenticationError,
-  type InvitationContext,
-} from "@/features/members/api"
 import { clientEnv } from "@/lib/env.client"
 
+import { InvitationAuthenticationError, type InvitationContext } from "../api"
 import { InvitationDecisionPanel } from "./invitation-decision-panel"
 
 const mocks = vi.hoisted(() => ({
@@ -26,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
-vi.mock("@/features/members/api", () => ({
+vi.mock("../api", () => ({
   decideInvitation: mocks.decideInvitation,
   InvitationAuthenticationError: class extends Error {},
   InvitationDecisionError: class InvitationDecisionError extends Error {},
@@ -36,7 +34,7 @@ vi.mock("@/features/members/api", () => ({
   },
 }))
 
-vi.mock("@/features/account/components/account-switcher-dialog", () => ({
+vi.mock("@/features/account/account-switcher-dialog.public", () => ({
   AccountSwitcherDialog: ({ open }: { open: boolean }) =>
     open ? <div role="dialog">Device accounts</div> : null,
 }))
@@ -130,6 +128,44 @@ describe("InvitationDecisionPanel", () => {
 
     await actor.click(screen.getByRole("button", { name: "Switch account" }))
     expect(screen.getByRole("dialog")).toHaveTextContent("Device accounts")
+  })
+
+  it("keeps invitation decisions inert until hydration", async () => {
+    const container = document.createElement("div")
+    const panel = (
+      <QueryClientProvider client={new QueryClient()}>
+        <InvitationDecisionPanel
+          currentUserEmail={currentUser.email}
+          currentUserId={currentUser.id}
+          currentUserProfileImage={currentUser.profileImage}
+          currentUserName={currentUser.name}
+          invitation={invitation}
+          invitationId="invitation-1"
+          state="ready"
+        />
+      </QueryClientProvider>
+    )
+    container.innerHTML = renderToString(panel)
+    document.body.appendChild(container)
+
+    expect(
+      within(container).getByRole("button", { name: "Reject" })
+    ).toBeDisabled()
+    expect(
+      within(container).getByRole("button", { name: "Accept invitation" })
+    ).toBeDisabled()
+
+    render(panel, { container, hydrate: true })
+    await waitFor(() => {
+      expect(
+        within(container).getByRole("button", { name: "Reject" })
+      ).toBeEnabled()
+      expect(
+        within(container).getByRole("button", {
+          name: "Accept invitation",
+        })
+      ).toBeEnabled()
+    })
   })
 
   it("shows organization context and accepts only from the matching account", async () => {

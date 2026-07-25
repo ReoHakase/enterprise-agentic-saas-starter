@@ -26,8 +26,10 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
-import { createResetPasswordFormSchema } from "@/features/auth/schema"
+import {
+  safeAuthErrorMessage,
+  createResetPasswordFormSchema,
+} from "@/features/auth"
 
 import { AuthPasswordField, selectCanSubmit } from "./auth-form-field"
 

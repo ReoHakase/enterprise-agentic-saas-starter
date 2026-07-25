@@ -9,47 +9,11 @@ import Link from "next/link"
 import * as v from "valibot"
 
 import { MessageResponse } from "@/components/ai-elements/message"
-import { AgentApprovalCard } from "@/features/agent/components/agent-approval-card"
-import {
-  pendingActionToolOutputSchema,
-  type AgentChatMessage,
-} from "@/features/agent/schema"
 import { clientEnv } from "@/lib/env.client"
 
-export const issueLinksFromToolOutput = (toolName: string, output: unknown) => {
-  if (
-    toolName !== "get_issue" &&
-    toolName !== "search_issues" &&
-    toolName !== "create_issue" &&
-    toolName !== "update_issue"
-  )
-    return []
-  const rawCandidates = Array.isArray(output) ? output : [output]
-  const candidates = rawCandidates.flatMap((candidate) => {
-    if (
-      (toolName === "create_issue" || toolName === "update_issue") &&
-      candidate &&
-      typeof candidate === "object"
-    ) {
-      const issue = Reflect.get(candidate, "issue")
-      return issue && typeof issue === "object" ? [issue] : []
-    }
-    return [candidate]
-  })
-  return candidates.flatMap((candidate) => {
-    if (!candidate || typeof candidate !== "object") return []
-    const number = Reflect.get(candidate, "number")
-    const title = Reflect.get(candidate, "title")
-    return Number.isInteger(number) && Number(number) > 0
-      ? [
-          {
-            number: Number(number),
-            title: typeof title === "string" ? title : `Issue #${number}`,
-          },
-        ]
-      : []
-  })
-}
+import { pendingActionToolOutputSchema, type AgentChatMessage } from "../schema"
+import { AgentApprovalCard } from "./agent-approval-card"
+import { issueLinksFromToolOutput } from "./issue-links-from-tool-output"
 
 export const AgentMessage = ({
   message,

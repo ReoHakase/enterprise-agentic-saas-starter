@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Suspense } from "react"
 
-import { ConsoleShellSkeleton } from "@/components/console-boundary"
+import { ConsoleShellSkeleton } from "@/components/console-route-suspense"
 import { ConsoleShell } from "@/components/console-shell"
 import { getConsoleContext } from "@/lib/server/console-context"
 

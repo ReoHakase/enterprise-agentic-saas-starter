@@ -2,11 +2,11 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
 import {
-  bulkInvitationResponseSchema,
   invitationFormSchema,
   normalizeInvitationEmails,
-  organizationInvitationSchema,
-  resendInvitationResponseSchema,
+  parseBulkInvitationResponse,
+  parseInvitations,
+  parseResendInvitationResponse,
 } from "./schema"
 
 const invitation = {
@@ -72,34 +72,29 @@ describe("bulk invitation schema", () => {
   })
 
   it("rejects queued response counts that do not match invitation records", () => {
-    const result = v.safeParse(bulkInvitationResponseSchema, {
-      invitations: [],
-      queuedCount: 1,
-      delivery: "queued",
-    })
-
-    expect(result.success).toBe(false)
+    expect(() =>
+      parseBulkInvitationResponse({
+        invitations: [],
+        queuedCount: 1,
+        delivery: "queued",
+      })
+    ).toThrow("Invitation response count does not match its records.")
   })
 
   it("requires a safe invitation status and nested inviter identity", () => {
-    expect(v.safeParse(organizationInvitationSchema, invitation).success).toBe(
-      true
-    )
-    expect(
-      v.safeParse(organizationInvitationSchema, {
-        ...invitation,
-        status: "unknown",
-      }).success
-    ).toBe(false)
+    expect(parseInvitations([invitation])).toEqual([invitation])
+    expect(() =>
+      parseInvitations([{ ...invitation, status: "unknown" }])
+    ).toThrow("Invalid type")
     const { inviter: _inviter, ...withoutInviter } = invitation
-    expect(
-      v.safeParse(organizationInvitationSchema, withoutInviter).success
-    ).toBe(false)
+    expect(() => parseInvitations([withoutInviter])).toThrow(
+      'Expected "inviter"'
+    )
   })
 
   it("parses resend revival metadata with the renewed invitation", () => {
     expect(
-      v.parse(resendInvitationResponseSchema, {
+      parseResendInvitationResponse({
         invitation,
         delivery: "queued",
         revived: true,

@@ -21,10 +21,11 @@ import { AppState } from "@/components/app-state"
 import {
   hasOrganizationSwitchRisks,
   useAgentRuntimeState,
-} from "@/features/agent/runtime-state"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast"
-import { prepareOrganizationSwitch } from "@/features/organizations/cache"
+} from "@/features/agent/runtime-state.public"
+import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
+
+import { prepareOrganizationSwitch } from "../cache"
 
 export const OrganizationActivationGate = ({
   organizationId,

@@ -3,20 +3,29 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api"
-import type {
-  BulkInvitationInput,
-  BulkInvitationResponse,
-  OrganizationInvitation,
-  OrganizationMember,
-  ResendInvitationResponse,
-} from "@/features/members/schema"
+import { ConsoleApiError } from "@/features/console/api.public"
 import type {
   OrganizationDetail,
   OrganizationRole,
-} from "@/features/organizations/schema"
+} from "@/features/organizations/schema.public"
 
+import type {
+  BulkInvitationInput,
+  OrganizationInvitation,
+  OrganizationMember,
+} from "../schema"
 import { MembersPanel } from "./members-panel"
+
+type BulkInvitationResponse = {
+  invitations: OrganizationInvitation[]
+  queuedCount: number
+  delivery: "queued"
+}
+type ResendInvitationResponse = {
+  invitation: OrganizationInvitation
+  delivery: "queued"
+  revived: boolean
+}
 
 type UpdateMemberRole = (
   organizationId: string,

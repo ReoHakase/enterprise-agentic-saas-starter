@@ -33,7 +33,7 @@ export const AuthRouteFrame = ({
         {children}
       </div>
 
-      <p className="px-6 text-center text-xs text-muted-foreground">
+      <p className="px-6 text-center text-xs text-foreground/70">
         By continuing, you agree to the workspace terms and acknowledge the
         privacy policy.
       </p>

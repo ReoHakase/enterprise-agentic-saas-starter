@@ -1,5 +1,1 @@
-import { RouteLoading } from "@/components/app-state"
-
-export default function ConsoleLoading() {
-  return <RouteLoading />
-}
+export { ConsoleRouteSkeleton as default } from "@/features/console/route-skeletons.public"

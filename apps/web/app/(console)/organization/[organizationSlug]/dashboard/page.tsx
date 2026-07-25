@@ -22,12 +22,12 @@ import { notFound } from "next/navigation"
 
 import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
-import { listIssues } from "@/features/issues/api"
+import { listIssues } from "@/features/issues/api.public"
 import {
   defaultIssueSearchState,
   toIssueListRequest,
-} from "@/features/issues/search-params.shared"
-import { OrganizationActivationGate } from "@/features/organizations/components/organization-activation-gate"
+} from "@/features/issues/search-params-shared.public"
+import { OrganizationActivationGate } from "@/features/organizations/activation-gate.public"
 import { createServerApiClient } from "@/lib/server/api-client"
 import { getCookieHeader } from "@/lib/server/auth"
 import { getConsoleContext } from "@/lib/server/console-context"

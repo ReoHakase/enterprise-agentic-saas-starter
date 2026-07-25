@@ -6,14 +6,14 @@ import {
 } from "@enterprise-agentic-saas/api/client"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import type { FileOwnerType } from "@/features/files/api"
+import { clientEnv } from "@/lib/env.client"
+
+import type { FileOwnerType } from "./api"
+import { MAX_CONCURRENT_FILE_UPLOADS } from "./file-upload-limits"
 import {
   registerFileUpload,
   registerFileUploadQueueCancellation,
-} from "@/features/files/uploads"
-import { clientEnv } from "@/lib/env.client"
-
-export const MAX_CONCURRENT_FILE_UPLOADS = 3
+} from "./uploads"
 
 export type PendingFileUpload = {
   id: string

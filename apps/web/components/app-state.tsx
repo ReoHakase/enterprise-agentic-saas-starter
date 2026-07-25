@@ -80,6 +80,7 @@ export const RouteLoading = ({
     aria-live="polite"
     role="status"
     data-slot="page-shell"
+    data-route-boundary="true"
     data-boundary-state="loading"
   >
     <div className="contents" aria-hidden="true">

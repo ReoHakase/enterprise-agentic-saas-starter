@@ -1,12 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query"
 
-import type { Me } from "@/features/account/schema"
-import { agentKeys } from "@/features/agent/queries"
-import { consoleKeys } from "@/features/console/queries"
-import { fileKeys } from "@/features/files/queries"
-import { cancelActiveFileUploads } from "@/features/files/uploads"
-import { issueKeys } from "@/features/issues/queries"
-import type { OrganizationSummary } from "@/features/organizations/schema"
+import type { Me } from "@/features/account/schema.public"
+import { agentKeys } from "@/features/agent/queries.public"
+import { consoleKeys } from "@/features/console/queries.public"
+import { fileKeys } from "@/features/files/queries.public"
+import { cancelActiveFileUploads } from "@/features/files/uploads.public"
+import { issueKeys } from "@/features/issues/queries.public"
+
+import type { OrganizationSummary } from "./schema"
 
 const markActiveOrganization = (
   organizations: OrganizationSummary[],
@@ -17,7 +18,7 @@ const markActiveOrganization = (
     active: organization.id === organizationId,
   }))
 
-export const cacheActiveOrganization = (
+const cacheActiveOrganization = (
   queryClient: QueryClient,
   organizationId: string
 ) => {
@@ -42,7 +43,7 @@ export const cacheActiveOrganization = (
   )
 }
 
-export const cancelTenantWorkForOrganizationSwitch = async (
+const cancelTenantWorkForOrganizationSwitch = async (
   queryClient: QueryClient
 ) => {
   cancelActiveFileUploads()

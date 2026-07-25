@@ -4,20 +4,21 @@ import {
   parseMe,
   parseUserProfile,
   parseUserSessions,
-} from "@/features/account/schema"
-import { ConsoleApiError, toConsoleApiError } from "@/features/console/error"
+} from "@/features/account/schema.public"
 import {
   parseBulkInvitationResponse,
   parseInvitations,
   parseMembers,
   parseResendInvitationResponse,
-} from "@/features/members/schema"
+} from "@/features/members/schema.public"
 import {
   parseOrganizationDeletionReceipt,
   parseOrganization,
   parseOrganizations,
   type OrganizationRole,
-} from "@/features/organizations/schema"
+} from "@/features/organizations/schema.public"
+
+import { ConsoleApiError, toConsoleApiError } from "./error"
 
 type ConsoleApiOptions = {
   baseUrl: string
@@ -59,9 +60,7 @@ export {
   ConsoleApiError,
   isStepUpRequiredError,
   toConsoleApiError,
-  type ConsoleApiErrorContext,
-  type ConsoleApiFieldErrors,
-} from "@/features/console/error"
+} from "./error"
 
 export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
   const client = createApiClient(baseUrl, {

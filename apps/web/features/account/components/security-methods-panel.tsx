@@ -35,19 +35,20 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo } from "react"
 import { toast } from "sonner"
 
-import type { LinkedAccount, UserPasskey } from "@/features/account/schema"
+import { createAuthCallbackURL } from "@/lib/auth/callback-url"
+
+import type { LinkedAccount, UserPasskey } from "../schema"
 import {
   completeSecurityMutation,
   createSecurityAuthCapabilities,
   hasSecurityMethodsCapability,
   loadSecurityMethods,
   securityMutationErrorMessage,
-} from "@/features/account/security-client"
+} from "../security-client"
 import {
   securityMethodsKey,
   usePasskeyRegistration,
-} from "@/features/account/use-passkey-registration"
-import { createAuthCallbackURL } from "@/lib/auth/callback-url"
+} from "../use-passkey-registration"
 
 const securityMutationFallback =
   "The security method could not be updated. Try again."
@@ -432,7 +433,11 @@ const PasskeyStepUpDialog = ({
 )
 
 const SecurityMethodsSkeleton = () => (
-  <div className="grid gap-3" aria-label="Loading security methods">
+  <div
+    className="grid gap-3"
+    role="status"
+    aria-label="Loading security methods"
+  >
     <Skeleton className="h-24 w-full rounded-xl" />
     <Skeleton className="h-24 w-full rounded-xl" />
   </div>

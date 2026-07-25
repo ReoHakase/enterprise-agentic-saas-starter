@@ -2,7 +2,7 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
 import {
-  agentApprovalPolicySchema,
+  parseAgentApprovalPolicy,
   parseAgentMessages,
   pendingActionToolOutputSchema,
 } from "./schema"
@@ -26,7 +26,7 @@ describe("agent public schemas", () => {
 
   it("keeps automatic permission state server-authored", () => {
     expect(
-      v.parse(agentApprovalPolicySchema, {
+      parseAgentApprovalPolicy({
         mode: "full_access",
         expiresAt: "2026-07-22T01:00:00.000Z",
         permissions: {

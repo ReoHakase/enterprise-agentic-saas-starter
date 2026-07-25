@@ -33,8 +33,8 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserProfileImage } from "@/components/user-identity"
-import { commentFormSchema } from "@/features/issues/schema"
 
+import { commentFormSchema } from "../schema"
 import {
   selectSubmitState,
   type StringFieldApi,

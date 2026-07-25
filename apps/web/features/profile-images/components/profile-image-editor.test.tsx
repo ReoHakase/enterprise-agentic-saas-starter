@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { useCallback } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { accountKeys } from "@/features/account/queries"
+import { accountKeys } from "@/features/account/queries.public"
 
 import { ProfileImageEditor } from "./profile-image-editor"
 
@@ -57,7 +57,7 @@ vi.mock("@enterprise-agentic-saas/ui/components/image-crop-dialog", () => ({
   },
 }))
 
-vi.mock("@/features/profile-images/api", () => ({
+vi.mock("../api", () => ({
   deleteOrganizationProfileImage: mocks.deleteOrganizationProfileImage,
   deleteUserProfileImage: mocks.deleteUserProfileImage,
 }))

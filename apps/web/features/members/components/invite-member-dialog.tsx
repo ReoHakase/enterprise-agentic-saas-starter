@@ -30,18 +30,19 @@ import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { MailPlusIcon } from "lucide-react"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 
+import { isStepUpRequiredError } from "@/features/console/api.public"
 import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
-  isStepUpRequiredError,
-} from "@/features/console/error"
+} from "@/features/console/error.public"
+import { roleLabel } from "@/features/organizations/schema.public"
+
 import {
   invitationFormSchema,
   normalizeInvitationEmails,
   type BulkInvitationInput,
   type InvitationFormValues,
-} from "@/features/members/schema"
-import { roleLabel } from "@/features/organizations/schema"
+} from "../schema"
 
 const invitationRoleOptions = [
   { label: "Member", value: "member" },

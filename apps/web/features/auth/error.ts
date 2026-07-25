@@ -83,7 +83,7 @@ const errorCode = (error: unknown) => {
   }
 }
 
-export type SafeAuthError = {
+type SafeAuthError = {
   code?: PublicAuthErrorCode
   message: string
 }

@@ -5,7 +5,10 @@ import type {
   TextFilePreviewDto,
 } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console/api"
+import {
+  ConsoleApiError,
+  toConsoleApiError,
+} from "@/features/console/api.public"
 
 export type { FileOwnerType }
 

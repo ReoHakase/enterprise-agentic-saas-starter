@@ -8,9 +8,9 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   AgentRuntimeProvider,
-  toAgentImageUploadError,
   useAgentThreadRuntimeState,
 } from "./runtime-state"
+import { toAgentImageUploadError } from "./runtime-state-types"
 
 const formRegistry = vi.hoisted(() => ({
   clear: vi.fn<() => void>(),

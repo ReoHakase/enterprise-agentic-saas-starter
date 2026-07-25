@@ -1,9 +1,5 @@
 "use client"
 
-import {
-  buildAgentAssetPreviewUrl,
-  FILE_PREVIEW_WIDTHS,
-} from "@enterprise-agentic-saas/api/client"
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
@@ -18,12 +14,13 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
-import { decideAgentAction, resumeAgentAction } from "@/features/agent/api"
-import { agentActionQueryOptions, agentKeys } from "@/features/agent/queries"
-import type { AgentIssueAction } from "@/features/agent/schema"
-import { issueKeys } from "@/features/issues/queries"
+import { issueKeys } from "@/features/issues/queries.public"
 import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
+
+import { decideAgentAction, resumeAgentAction } from "../api"
+import { agentActionQueryOptions, agentKeys } from "../queries"
+import type { AgentIssueAction } from "../schema"
+import { AgentApprovalAttachments } from "./agent-approval-attachments"
 
 export const AgentApprovalCard = ({
   organizationId,
@@ -200,59 +197,6 @@ export const AgentApprovalCard = ({
     </Card>
   )
 }
-
-type AgentApprovalAttachment = NonNullable<
-  AgentIssueAction["preview"]
->["attachments"][number]
-
-export const AgentApprovalAttachments = ({
-  organizationId,
-  attachments,
-}: {
-  organizationId: string
-  attachments: AgentApprovalAttachment[]
-}) => (
-  <section
-    className="space-y-2 rounded-lg border bg-background/80 p-3"
-    aria-label="Issue attachments awaiting approval"
-  >
-    <p className="text-sm font-medium">
-      These images will become permanent Issue attachments if you approve this
-      action.
-    </p>
-    <p className="text-xs text-muted-foreground">
-      They will remain with the Issue after the temporary chat-image retention
-      period ends.
-    </p>
-    <div className="grid gap-3 sm:grid-cols-2">
-      {attachments.map((attachment) => (
-        <figure
-          key={attachment.assetId}
-          className="overflow-hidden rounded-md border bg-muted/30"
-        >
-          {/* This authenticated private image must bypass the Next optimizer. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="max-h-64 w-full object-contain"
-            src={buildAgentAssetPreviewUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
-              organizationId,
-              assetId: attachment.assetId,
-              width: FILE_PREVIEW_WIDTHS[1],
-            })}
-            alt={`Attachment preview: ${attachment.filename}`}
-            loading="lazy"
-          />
-          <figcaption className="border-t px-2 py-1.5 text-xs">
-            <span className="block truncate">{attachment.filename}</span>
-            <span className="text-muted-foreground">
-              {Math.ceil(attachment.sizeBytes / 1024)} KB
-            </span>
-          </figcaption>
-        </figure>
-      ))}
-    </div>
-  </section>
-)
 
 const formatActionValue = (
   value: AgentIssueAction["preview"] extends infer Preview

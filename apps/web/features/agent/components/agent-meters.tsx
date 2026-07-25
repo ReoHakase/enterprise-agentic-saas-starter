@@ -109,14 +109,14 @@ export const AgentMeters = ({
               {budget.contextWindowTokens.toLocaleString()}
             </span>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-background/80">
             {hasObservedInput
               ? "Provider-reported input tokens from the last request."
               : "No provider result yet. Showing the preflight estimate."}
           </p>
           {hasObservedInput ? (
             <div className="flex justify-between gap-4 border-t border-background/20 pt-2">
-              <span className="text-muted-foreground">Preflight estimate</span>
+              <span className="text-background/80">Preflight estimate</span>
               <span className="shrink-0 whitespace-nowrap">
                 {budget.estimated.total.toLocaleString()}
               </span>
@@ -127,7 +127,7 @@ export const AgentMeters = ({
             <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
               {budgetRows.map((row) => (
                 <div key={row.key} className="contents">
-                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dt className="text-background/80">{row.label}</dt>
                   <dd className="whitespace-nowrap">
                     {budget.estimated[row.key].toLocaleString()}
                   </dd>

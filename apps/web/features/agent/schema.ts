@@ -4,7 +4,7 @@ import * as v from "valibot"
 const timestamp = v.pipe(v.string(), v.isoTimestamp())
 const identifier = v.pipe(v.string(), v.minLength(1), v.maxLength(128))
 
-export type AgentChatAssetData = {
+type AgentChatAssetData = {
   assetIds: string[]
   assets?: Array<{
     id: string
@@ -202,7 +202,7 @@ const normalizeCanonicalMessagePart = (
   return part
 }
 
-export const agentThreadSchema = v.object({
+const agentThreadSchema = v.object({
   id: identifier,
   title: v.string(),
   titleRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -211,9 +211,9 @@ export const agentThreadSchema = v.object({
   createdAt: timestamp,
   updatedAt: timestamp,
 })
-export const agentThreadListSchema = v.array(agentThreadSchema)
+const agentThreadListSchema = v.array(agentThreadSchema)
 const actionValueSchema = v.union([v.string(), v.array(v.string()), v.null()])
-export const agentIssueActionSchema = v.object({
+const agentIssueActionSchema = v.object({
   id: identifier,
   kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
   status: v.picklist([
@@ -262,7 +262,7 @@ export const agentIssueActionSchema = v.object({
   expiresAt: timestamp,
   completedAt: v.nullable(timestamp),
 })
-export const agentActionExecutionResultSchema = v.object({
+const agentActionExecutionResultSchema = v.object({
   actionId: identifier,
   kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
   status: v.literal("succeeded"),
@@ -273,7 +273,7 @@ export const agentActionExecutionResultSchema = v.object({
     deleted: v.boolean(),
   }),
 })
-export const agentApprovalPolicySchema = v.object({
+const agentApprovalPolicySchema = v.object({
   mode: v.picklist(["ask_always", "full_access"]),
   permissions: v.object({
     createIssue: v.boolean(),
@@ -281,29 +281,16 @@ export const agentApprovalPolicySchema = v.object({
     deleteIssue: v.boolean(),
   }),
 })
-export const agentContextRevocationSchema = v.object({
+const agentContextRevocationSchema = v.object({
   contextEpoch: v.pipe(v.number(), v.integer(), v.minValue(1)),
 })
-export const agentThreadContextSchema = v.object({
+const agentThreadContextSchema = v.object({
   threadId: identifier,
   messageCount: v.number(),
   estimatedHistoryTokens: v.number(),
   latestSummaryThroughSequence: v.nullable(v.number()),
   latestSummaryEstimatedTokens: v.nullable(v.number()),
 })
-export const agentMonthlyUsageSchema = v.object({
-  month: v.string(),
-  totals: v.object({
-    runCount: v.number(),
-    inputTokenCount: v.number(),
-    outputTokenCount: v.number(),
-    reasoningTokenCount: v.number(),
-    totalTokenCount: v.number(),
-    costMicros: v.number(),
-  }),
-  byModel: v.array(v.unknown()),
-})
-
 export const pendingActionToolOutputSchema = v.object({
   status: v.literal("pending"),
   actionId: identifier,
@@ -311,14 +298,7 @@ export const pendingActionToolOutputSchema = v.object({
 
 export type AgentThread = v.InferOutput<typeof agentThreadSchema>
 export type AgentIssueAction = v.InferOutput<typeof agentIssueActionSchema>
-export type AgentActionExecutionResult = v.InferOutput<
-  typeof agentActionExecutionResultSchema
->
-export type AgentApprovalPolicy = v.InferOutput<
-  typeof agentApprovalPolicySchema
->
 export type AgentThreadContext = v.InferOutput<typeof agentThreadContextSchema>
-export type AgentMonthlyUsage = v.InferOutput<typeof agentMonthlyUsageSchema>
 
 export const parseAgentThreads = (value: unknown) =>
   v.parse(agentThreadListSchema, value)
@@ -345,5 +325,3 @@ export const parseAgentContextRevocation = (value: unknown) =>
   v.parse(agentContextRevocationSchema, value)
 export const parseAgentThreadContext = (value: unknown) =>
   v.parse(agentThreadContextSchema, value)
-export const parseAgentMonthlyUsage = (value: unknown) =>
-  v.parse(agentMonthlyUsageSchema, value)

@@ -26,11 +26,7 @@ import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field"
 import { LinkButton } from "@/components/link-button"
-import { consoleKeys } from "@/features/console/queries"
-import {
-  createOrganizationDeletionFormSchema,
-  type OrganizationDetail,
-} from "@/features/organizations/schema"
+import { consoleKeys } from "@/features/console/queries.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,
@@ -39,6 +35,11 @@ import {
   hasConsoleApiFieldError,
   isStepUpRequiredError,
 } from "@/lib/console-api"
+
+import {
+  createOrganizationDeletionFormSchema,
+  type OrganizationDetail,
+} from "../schema"
 
 const organizationDeletionFields = ["slug", "confirmation"] as const
 const deleteOrganizationTrigger = (
@@ -52,6 +53,58 @@ const getReauthenticationHref = (action = "organization.delete") => {
   const redirectTo = `${globalThis.location.pathname}${globalThis.location.search}`
   return `/auth/sign-in?reauth=1&action=${encodeURIComponent(action)}&redirectTo=${encodeURIComponent(redirectTo)}`
 }
+
+const OrganizationSensitiveControls = ({
+  organization,
+}: {
+  organization: OrganizationDetail
+}) => (
+  <section
+    className="flex flex-col gap-3 border-t pt-6"
+    aria-labelledby="danger-zone-heading"
+  >
+    <div className="flex items-start gap-3">
+      <ShieldAlertIcon
+        className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <div>
+        <h2 id="danger-zone-heading" className="font-medium">
+          Sensitive controls
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Only the Super Admin can transfer ownership or permanently delete this
+          organization.
+        </p>
+      </div>
+    </div>
+    <LinkButton
+      className="w-fit"
+      variant="outline"
+      href={`/organization/${organization.slug}/members`}
+    >
+      Review members and ownership
+    </LinkButton>
+  </section>
+)
+
+const DangerZoneHeader = () => (
+  <div className="flex items-start gap-3">
+    <ShieldAlertIcon
+      className="mt-0.5 size-5 shrink-0 text-destructive"
+      aria-hidden="true"
+    />
+    <div className="min-w-0 flex-1">
+      <h2 id="danger-zone-heading" className="font-medium">
+        Danger zone
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Deletion is immediate and irreversible. Members lose access at once;
+        attachment cleanup continues safely in the background.
+      </p>
+    </div>
+  </div>
+)
 
 export const OrganizationDangerZone = ({
   organization,
@@ -236,35 +289,7 @@ export const OrganizationDangerZone = ({
   )
 
   if (organization.role !== "super_admin") {
-    return (
-      <section
-        className="flex flex-col gap-3 border-t pt-6"
-        aria-labelledby="danger-zone-heading"
-      >
-        <div className="flex items-start gap-3">
-          <ShieldAlertIcon
-            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <div>
-            <h2 id="danger-zone-heading" className="font-medium">
-              Sensitive controls
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Only the Super Admin can transfer ownership or permanently delete
-              this organization.
-            </p>
-          </div>
-        </div>
-        <LinkButton
-          className="w-fit"
-          variant="outline"
-          href={`/organization/${organization.slug}/members`}
-        >
-          Review members and ownership
-        </LinkButton>
-      </section>
-    )
+    return <OrganizationSensitiveControls organization={organization} />
   }
 
   return (
@@ -272,21 +297,7 @@ export const OrganizationDangerZone = ({
       className="flex flex-col gap-4 border-t border-destructive/30 pt-6"
       aria-labelledby="danger-zone-heading"
     >
-      <div className="flex items-start gap-3">
-        <ShieldAlertIcon
-          className="mt-0.5 size-5 shrink-0 text-destructive"
-          aria-hidden="true"
-        />
-        <div className="min-w-0 flex-1">
-          <h2 id="danger-zone-heading" className="font-medium">
-            Danger zone
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Deletion is immediate and irreversible. Members lose access at once;
-            attachment cleanup continues safely in the background.
-          </p>
-        </div>
-      </div>
+      <DangerZoneHeader />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <LinkButton

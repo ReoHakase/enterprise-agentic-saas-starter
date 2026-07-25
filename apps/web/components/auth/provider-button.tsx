@@ -9,7 +9,7 @@ import type { SocialProvider } from "better-auth/social-providers"
 import { type ComponentProps, useCallback } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
+import { safeAuthErrorMessage } from "@/features/auth"
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
 import { useAuthRouteState } from "./auth-route-scope"

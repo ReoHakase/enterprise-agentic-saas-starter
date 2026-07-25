@@ -13,8 +13,9 @@ vi.mock("@enterprise-agentic-saas/api/client", () => ({
   uploadFileWithProgress: mocks.uploadFileWithProgress,
 }))
 
+import { MAX_CONCURRENT_FILE_UPLOADS } from "./file-upload-limits"
 import { cancelActiveFileUploads } from "./uploads"
-import { MAX_CONCURRENT_FILE_UPLOADS, useFileUploads } from "./use-file-uploads"
+import { useFileUploads } from "./use-file-uploads"
 
 const uploadedFile = (id: string): FileDto => ({
   id,

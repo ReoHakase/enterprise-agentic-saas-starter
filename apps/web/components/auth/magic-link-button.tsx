@@ -1,6 +1,7 @@
 "use client"
 
 import { type AuthView, authMutationKeys } from "@better-auth-ui/core"
+import { magicLinkPlugin as coreMagicLinkPlugin } from "@better-auth-ui/core/plugins"
 import { useAuth, useAuthPlugin } from "@better-auth-ui/react"
 import {
   Button,
@@ -9,8 +10,6 @@ import {
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
 import { Lock, Mail } from "lucide-react"
-
-import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
 import { createScopedAuthViewHref, useAuthRouteState } from "./auth-route-scope"
 
@@ -38,7 +37,7 @@ export function MagicLinkButton({ view }: MagicLinkButtonProps) {
   const isPending = signInMutating + signUpMutating > 0
 
   const { localization: magicLinkLocalization, viewPaths: magicLinkViewPaths } =
-    useAuthPlugin(magicLinkPlugin)
+    useAuthPlugin(coreMagicLinkPlugin)
 
   const isMagicLinkView = view === "magicLink"
 

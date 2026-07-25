@@ -35,11 +35,11 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserProfileImage } from "@/components/user-identity"
-import { formatFileSize } from "@/features/files/format"
-import { textFilePreviewQueryOptions } from "@/features/files/queries"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
+import { formatFileSize } from "../format"
+import { textFilePreviewQueryOptions } from "../queries"
 import { AuthenticatedFileImage } from "./authenticated-file-image"
 
 const fullscreenImageSizes = "100vw"

@@ -1,5 +1,1 @@
-import { RouteLoading } from "@/components/app-state"
-
-export default function MembersLoading() {
-  return <RouteLoading label="Loading organization members" variant="members" />
-}
+export { MembersRouteSkeleton as default } from "@/features/console/route-skeletons.public"

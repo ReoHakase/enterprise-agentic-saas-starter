@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { agentComposerDocumentToParts } from "./agent-composer"
+import { agentComposerDocumentToParts } from "./agent-composer-document"
 
 describe("AgentComposer document projection", () => {
   it("preserves text and inline context references in document order", () => {

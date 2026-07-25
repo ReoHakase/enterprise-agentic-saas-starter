@@ -14,7 +14,7 @@ export type UserIdentityValue = {
   profileImage?: string | null
 }
 
-export const getUserInitials = ({ name, email }: UserIdentityValue) => {
+const getUserInitials = ({ name, email }: UserIdentityValue) => {
   const normalizedName = name?.trim()
   if (normalizedName) {
     const parts = normalizedName.split(/\s+/).filter(Boolean)

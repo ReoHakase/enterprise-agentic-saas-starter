@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { prepareAgentChatBody } from "./chat-transport"
+import { prepareAgentChatBody } from "./chat-request-body"
 import type { AgentChatMessage } from "./schema"
 
 const historicalMessage: AgentChatMessage = {

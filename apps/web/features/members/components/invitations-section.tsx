@@ -59,11 +59,12 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
+import { roleLabel } from "@/features/organizations/schema.public"
+
 import type {
   OrganizationInvitation,
   OrganizationInvitationStatus,
-} from "@/features/members/schema"
-import { roleLabel } from "@/features/organizations/schema"
+} from "../schema"
 
 const cancelInvitationTrigger = (
   <Button variant="ghost" size="xs">
@@ -85,10 +86,9 @@ type InvitationMutationState = {
   pending: boolean
 }
 
-const idleInvitationMutationState: InvitationMutationState = { pending: false }
-const InvitationMutationContext = createContext<InvitationMutationState>(
-  idleInvitationMutationState
-)
+const InvitationMutationContext = createContext<InvitationMutationState>({
+  pending: false,
+})
 
 const invitationRoleSorting: SortingFn<OrganizationInvitation> = (
   first,

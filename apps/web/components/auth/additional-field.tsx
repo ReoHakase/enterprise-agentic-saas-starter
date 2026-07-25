@@ -7,56 +7,30 @@ import {
 import { useAuth } from "@better-auth-ui/react"
 import { buttonVariants } from "@enterprise-agentic-saas/ui/components/button"
 import { Calendar } from "@enterprise-agentic-saas/ui/components/calendar"
-import { Checkbox } from "@enterprise-agentic-saas/ui/components/checkbox"
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@enterprise-agentic-saas/ui/components/combobox"
 import {
   Field,
-  FieldContent,
   FieldError,
   FieldLabel,
 } from "@enterprise-agentic-saas/ui/components/field"
 import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@enterprise-agentic-saas/ui/components/input-group"
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@enterprise-agentic-saas/ui/components/popover"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@enterprise-agentic-saas/ui/components/select"
 import { Slider } from "@enterprise-agentic-saas/ui/components/slider"
-import { Switch } from "@enterprise-agentic-saas/ui/components/switch"
-import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { format } from "date-fns"
-import { CalendarIcon, Check, ChevronDownIcon, Copy } from "lucide-react"
+import { CalendarIcon, ChevronDownIcon } from "lucide-react"
 import {
   type ChangeEvent,
   type FormEvent,
   useCallback,
   useMemo,
-  useRef,
   useState,
 } from "react"
-import { toast } from "sonner"
+
+import { additionalFieldControl as AdditionalFieldControl } from "./additional-field-controls"
 
 export type AdditionalFieldProps = {
   name: string
@@ -65,7 +39,6 @@ export type AdditionalFieldProps = {
 }
 
 const padTimePart = (value: number) => value.toString().padStart(2, "0")
-const emptyOptions: NonNullable<AdditionalFieldConfig["options"]> = []
 const ignoreInputChange = () => undefined
 
 /** Convert a `defaultValue` into a `Date` for the calendar. */
@@ -83,46 +56,6 @@ function formatTime(date: Date) {
   return `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`
 }
 
-/**
- * Icon-only copy button used as an `InputGroupAddon`. `getValue` is invoked
- * lazily on click so the button copies the input's *live* value rather than a
- * stale snapshot — important when paired with editable inputs.
- */
-function CopyButton({
-  getValue,
-  isDisabled,
-}: {
-  getValue: () => string | undefined
-  isDisabled?: boolean
-}) {
-  const { localization } = useAuth()
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    const value = getValue()
-    if (!value) return
-
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      toast.error("The value could not be copied.")
-    }
-  }, [getValue])
-
-  return (
-    <InputGroupButton
-      aria-label={localization.settings.copyToClipboard}
-      title={localization.settings.copyToClipboard}
-      onClick={handleCopy}
-      disabled={isDisabled}
-    >
-      {copied ? <Check /> : <Copy />}
-    </InputGroupButton>
-  )
-}
-
 /** Renders a single additional user field via shadcn primitives. */
 export function AdditionalField({
   name,
@@ -130,18 +63,6 @@ export function AdditionalField({
   isPending,
 }: AdditionalFieldProps) {
   const inputType = resolveInputType(field)
-  // Used by `inputType: "input"` with `copyable: true` so the copy button
-  // reads the input's *live* value rather than a stale `defaultValue`.
-  const inputRef = useRef<HTMLInputElement>(null)
-  const fieldOptions = field.options ?? emptyOptions
-  const selectItems = useMemo(
-    () => [
-      { label: field.placeholder ?? "Select an option", value: null },
-      ...fieldOptions,
-    ],
-    [field.placeholder, fieldOptions]
-  )
-  const getInputValue = useCallback(() => inputRef.current?.value, [])
 
   if (field.render) {
     return <>{field.render({ name, field, isPending })}</>
@@ -163,271 +84,21 @@ export function AdditionalField({
     )
   }
 
-  if (inputType === "textarea") {
-    return (
-      <Field>
-        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-        <Textarea
-          id={name}
-          name={name}
-          defaultValue={
-            field.defaultValue == null ? undefined : String(field.defaultValue)
-          }
-          placeholder={field.placeholder}
-          required={field.required}
-          readOnly={field.readOnly}
-          disabled={isPending}
-        />
-
-        <FieldError />
-      </Field>
-    )
-  }
-
-  if (inputType === "number") {
-    const maxFractionDigits = field.formatOptions?.maximumFractionDigits
-
-    return (
-      <Field>
-        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-        <Input
-          id={name}
-          name={name}
-          type="number"
-          inputMode={maxFractionDigits ? "decimal" : "numeric"}
-          min={field.min}
-          max={field.max}
-          step={
-            field.step ??
-            (maxFractionDigits ? 1 / 10 ** maxFractionDigits : undefined)
-          }
-          defaultValue={
-            field.defaultValue == null
-              ? undefined
-              : typeof field.defaultValue === "number"
-                ? field.defaultValue
-                : String(field.defaultValue)
-          }
-          placeholder={field.placeholder}
-          required={field.required}
-          readOnly={field.readOnly}
-          disabled={isPending}
-        />
-
-        <FieldError />
-      </Field>
-    )
-  }
-
   if (inputType === "slider") {
     return <SliderField name={name} field={field} isPending={isPending} />
-  }
-
-  if (inputType === "switch") {
-    return (
-      <Field orientation="horizontal">
-        <Switch
-          id={name}
-          name={name}
-          defaultChecked={
-            field.defaultValue === true || field.defaultValue === "true"
-          }
-          disabled={isPending || field.readOnly}
-        />
-
-        <FieldContent>
-          <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-        </FieldContent>
-      </Field>
-    )
-  }
-
-  if (inputType === "checkbox") {
-    return (
-      <Field orientation="horizontal">
-        <Checkbox
-          id={name}
-          name={name}
-          defaultChecked={
-            field.defaultValue === true || field.defaultValue === "true"
-          }
-          required={field.required}
-          disabled={isPending || field.readOnly}
-        />
-
-        <FieldContent>
-          <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-        </FieldContent>
-      </Field>
-    )
-  }
-
-  if (inputType === "select") {
-    return (
-      <Field>
-        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-        <Select
-          items={selectItems}
-          name={name}
-          defaultValue={
-            field.defaultValue != null ? String(field.defaultValue) : null
-          }
-          required={field.required}
-          disabled={isPending || field.readOnly}
-        >
-          <SelectTrigger id={name} className="w-full">
-            <SelectValue>
-              {(value) =>
-                selectItems.find((item) => item.value === value)?.label ??
-                field.placeholder ??
-                "Select an option"
-              }
-            </SelectValue>
-          </SelectTrigger>
-
-          <SelectContent>
-            <SelectGroup>
-              {fieldOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-
-        <FieldError />
-      </Field>
-    )
-  }
-
-  if (inputType === "combobox") {
-    return (
-      <Field>
-        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-        <Combobox
-          items={fieldOptions}
-          name={name}
-          defaultValue={
-            field.defaultValue != null ? String(field.defaultValue) : undefined
-          }
-          required={field.required}
-          disabled={isPending || field.readOnly}
-        >
-          <ComboboxInput placeholder={field.placeholder} id={name} />
-
-          <ComboboxContent>
-            <ComboboxEmpty>No items found.</ComboboxEmpty>
-
-            <ComboboxList>
-              {(option) => (
-                <ComboboxItem key={option.value} value={option}>
-                  {option.label}
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-          </ComboboxContent>
-        </Combobox>
-
-        <FieldError />
-      </Field>
-    )
   }
 
   if (inputType === "date" || inputType === "datetime") {
     return <DateInput name={name} field={field} isPending={isPending} />
   }
 
-  // inputType === "input"
-  const hasPrefix = field.prefix != null
-  const hasSuffix = field.suffix != null || field.copyable
-
-  // When `inputType: "input"` is paired with `type: "number"`, restrict the
-  // native input to numbers. `formatOptions.maximumFractionDigits` enables
-  // fractional input via `step`.
-  const isNumeric = field.type === "number"
-  const maxFractionDigits = field.formatOptions?.maximumFractionDigits
-  const nativeInputType = isNumeric ? "number" : undefined
-  const nativeInputMode = isNumeric
-    ? maxFractionDigits
-      ? "decimal"
-      : "numeric"
-    : undefined
-  const nativeStep = maxFractionDigits ? 1 / 10 ** maxFractionDigits : undefined
-
-  if (hasPrefix || hasSuffix) {
-    return (
-      <Field>
-        <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-        <InputGroup>
-          {hasPrefix && (
-            <InputGroupAddon align="inline-start">
-              {field.prefix}
-            </InputGroupAddon>
-          )}
-
-          <InputGroupInput
-            ref={inputRef}
-            id={name}
-            name={name}
-            type={nativeInputType}
-            inputMode={nativeInputMode}
-            step={nativeStep}
-            defaultValue={
-              field.defaultValue == null
-                ? undefined
-                : String(field.defaultValue)
-            }
-            placeholder={field.placeholder}
-            required={field.required}
-            readOnly={field.readOnly}
-            disabled={isPending}
-          />
-
-          {field.copyable ? (
-            <InputGroupAddon align="inline-end">
-              <CopyButton getValue={getInputValue} isDisabled={isPending} />
-            </InputGroupAddon>
-          ) : (
-            field.suffix != null && (
-              <InputGroupAddon align="inline-end">
-                {field.suffix}
-              </InputGroupAddon>
-            )
-          )}
-        </InputGroup>
-
-        <FieldError />
-      </Field>
-    )
-  }
-
   return (
-    <Field>
-      <FieldLabel htmlFor={name}>{field.label}</FieldLabel>
-
-      <Input
-        id={name}
-        name={name}
-        type={nativeInputType}
-        inputMode={nativeInputMode}
-        step={nativeStep}
-        defaultValue={
-          field.defaultValue == null ? undefined : String(field.defaultValue)
-        }
-        placeholder={field.placeholder}
-        required={field.required}
-        readOnly={field.readOnly}
-        disabled={isPending}
-      />
-
-      <FieldError />
-    </Field>
+    <AdditionalFieldControl
+      inputType={inputType}
+      name={name}
+      field={field}
+      isPending={isPending}
+    />
   )
 }
 

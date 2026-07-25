@@ -3,11 +3,11 @@ import type { UIMessage } from "ai"
 import { createElement } from "react"
 import { describe, expect, it, vi } from "vitest"
 
-import { parseAgentMessages } from "@/features/agent/schema"
-
-import { AgentApprovalAttachments } from "./agent-approval-card"
-import { extractPendingActionIds } from "./agent-conversation"
-import { AgentMessage, issueLinksFromToolOutput } from "./agent-message"
+import { extractPendingActionIds } from "../pending-action-ids"
+import { parseAgentMessages } from "../schema"
+import { AgentApprovalAttachments } from "./agent-approval-attachments"
+import { AgentMessage } from "./agent-message"
+import { issueLinksFromToolOutput } from "./issue-links-from-tool-output"
 
 describe("agent action projection", () => {
   it("deduplicates canonical action IDs from completed tool outputs", () => {

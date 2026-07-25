@@ -10,7 +10,7 @@ import {
   securityMutationErrorCode,
   securityMutationErrorMessage,
   type SecurityAuthCapabilities,
-} from "@/features/account/security-client"
+} from "./security-client"
 
 type AddPasskey = NonNullable<
   NonNullable<SecurityAuthCapabilities["passkey"]>["addPasskey"]

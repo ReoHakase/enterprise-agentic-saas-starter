@@ -34,16 +34,17 @@ import {
   useState,
 } from "react"
 
+import { isStepUpRequiredError } from "@/features/console/api.public"
 import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
-  isStepUpRequiredError,
-} from "@/features/console/error"
+} from "@/features/console/error.public"
+
 import {
   createMemberConfirmationFormSchema,
   type MemberConfirmationFormValues,
   type OrganizationMember,
-} from "@/features/members/schema"
+} from "../schema"
 
 export type StepUpRequest = {
   action?: string

@@ -1,0 +1,1 @@
+export const MAX_CONCURRENT_FILE_UPLOADS = 3

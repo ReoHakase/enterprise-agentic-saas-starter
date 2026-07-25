@@ -13,18 +13,18 @@ import {
   type FormEvent,
 } from "react"
 
+import { isAgentHotkeyAllowed } from "../hotkey-scope"
+import { useAgentMentionCandidates } from "../use-agent-mention-candidates"
 import {
   AgentComposer,
   type AgentComposerHandle,
   type AgentComposerSnapshot,
-} from "@/features/agent/components/agent-composer"
+} from "./agent-composer"
 import {
   AgentPermissionSelect,
   type AgentPermissionMode,
-} from "@/features/agent/components/agent-policy-control"
-import { AgentSamplePrompts } from "@/features/agent/components/agent-sample-prompts"
-import { isAgentHotkeyAllowed } from "@/features/agent/hotkey-scope"
-import { useAgentMentionCandidates } from "@/features/agent/use-agent-mention-candidates"
+} from "./agent-policy-control"
+import { AgentSamplePrompts } from "./agent-sample-prompts"
 
 const attachmentButtonRender = <span />
 

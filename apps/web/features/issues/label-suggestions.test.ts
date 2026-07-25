@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import type { Issue } from "@/features/issues/schema"
-
 import { deriveIssueLabelSuggestions } from "./label-suggestions"
+import type { Issue } from "./schema"
 
 const issue = (id: string, labels: string[]): Issue => ({
   id,

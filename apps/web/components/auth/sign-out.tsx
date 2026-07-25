@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 
-import { safeAuthErrorMessage } from "@/features/auth/error"
+import { safeAuthErrorMessage } from "@/features/auth"
 import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 
 export type SignOutProps = {

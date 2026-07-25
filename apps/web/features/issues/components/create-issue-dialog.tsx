@@ -20,9 +20,9 @@ import { PlusIcon } from "lucide-react"
 import { useCallback, useMemo, useState, type FormEvent } from "react"
 import * as v from "valibot"
 
-import { useRegisterAgentForm } from "@/features/agent/form-registry"
-import { createIssueFormSchema } from "@/features/issues/schema"
+import { useRegisterAgentForm } from "@/features/agent/form-registry.public"
 
+import { createIssueFormSchema } from "../schema"
 import {
   selectSubmitState,
   type StringFieldApi,

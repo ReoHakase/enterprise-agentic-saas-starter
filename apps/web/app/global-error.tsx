@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 
-import { StandaloneRouteError } from "@/components/public-boundary"
+import { StandaloneRouteError } from "@/components/public-route-error-boundary.client"
 
 export default function GlobalError({
   error,

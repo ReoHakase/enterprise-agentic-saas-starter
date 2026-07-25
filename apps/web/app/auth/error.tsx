@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 
-import { AuthRouteError } from "@/components/public-boundary"
+import { AuthRouteError } from "@/components/public-route-error-boundary.client"
 
 export default function AuthError({
   error,

@@ -14,7 +14,6 @@ import {
 
 import type {
   IssueAssigneeOption,
-  IssueCommentUiItem,
   IssuePriority,
   IssueStatus,
   IssueUiItem,
@@ -53,7 +52,6 @@ export const priorityFilterOptions = [
 ]
 
 export const emptyAssigneeOptions: IssueAssigneeOption[] = []
-export const emptyIssueComments: IssueCommentUiItem[] = []
 
 export const isIssueStatus = (value: string | null): value is IssueStatus =>
   value === "open" || value === "in_progress" || value === "closed"

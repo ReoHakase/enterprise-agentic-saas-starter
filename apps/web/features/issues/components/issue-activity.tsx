@@ -19,8 +19,8 @@ import type { ReactNode } from "react"
 
 import { LocalDate } from "@/components/local-date"
 import { UserProfileImage } from "@/components/user-identity"
-import type { IssueActivity } from "@/features/issues/schema"
 
+import type { IssueActivity } from "../schema"
 import {
   isIssuePriority,
   isIssueStatus,

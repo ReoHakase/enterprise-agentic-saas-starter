@@ -30,7 +30,7 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn<() => void>() },
 }))
 
-vi.mock("@/features/agent/runtime-state", () => ({
+vi.mock("@/features/agent/runtime-state.public", () => ({
   hasOrganizationSwitchRisks: () => false,
   useAgentRuntimeState: () => ({
     beginOrganizationSwitch: mocks.beginOrganizationSwitch,
@@ -39,11 +39,11 @@ vi.mock("@/features/agent/runtime-state", () => ({
   }),
 }))
 
-vi.mock("@/features/console/error-toast", () => ({
+vi.mock("@/features/console/error-toast.public", () => ({
   showConsoleApiErrorToast: mocks.showError,
 }))
 
-vi.mock("@/features/organizations/cache", () => ({
+vi.mock("../cache", () => ({
   prepareOrganizationSwitch: mocks.prepareOrganizationSwitch,
 }))
 

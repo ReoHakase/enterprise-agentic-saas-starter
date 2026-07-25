@@ -18,18 +18,20 @@ import { toast } from "sonner"
 import { LinkButton } from "@/components/link-button"
 import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
-import { AccountSwitcherDialog } from "@/features/account/components/account-switcher-dialog"
-import { consoleKeys } from "@/features/console/queries"
+import { AccountSwitcherDialog } from "@/features/account/account-switcher-dialog.public"
+import { consoleKeys } from "@/features/console/queries.public"
+import { roleLabel } from "@/features/organizations/schema.public"
+import { useIsHydrated } from "@/hooks/use-is-hydrated"
+import { createInvitationPath } from "@/lib/auth/invitation-path"
+import { clientEnv } from "@/lib/env.client"
+
 import {
   decideInvitation,
   InvitationAuthenticationError,
   InvitationDecisionError,
   invitationFallbacks,
   type InvitationContext,
-} from "@/features/members/api"
-import { roleLabel } from "@/features/organizations/schema"
-import { createInvitationPath } from "@/lib/auth/invitation-path"
-import { clientEnv } from "@/lib/env.client"
+} from "../api"
 
 type InvitationUser = {
   id: string
@@ -92,6 +94,7 @@ export const InvitationDecisionPanel = (
 ) => {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const isHydrated = useIsHydrated()
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false)
   const authenticatedProps = props.state === "signed_out" ? undefined : props
   const currentUserEmail = authenticatedProps?.currentUserEmail
@@ -276,7 +279,12 @@ export const InvitationDecisionPanel = (
     : undefined
 
   return (
-    <section data-slot="invitation-panel" className={panelClassName}>
+    <section
+      data-slot="invitation-panel"
+      data-route-boundary="true"
+      data-boundary-state="ready"
+      className={panelClassName}
+    >
       <InvitationIcon icon="invitation" />
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -305,12 +313,12 @@ export const InvitationDecisionPanel = (
       <div className="mt-auto flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button
           variant="outline"
-          disabled={isPending}
+          disabled={!isHydrated || isPending}
           onClick={rejectInvitation}
         >
           Reject
         </Button>
-        <Button disabled={isPending} onClick={acceptInvitation}>
+        <Button disabled={!isHydrated || isPending} onClick={acceptInvitation}>
           {isPending ? <Spinner data-icon="inline-start" /> : null}
           Accept invitation
         </Button>

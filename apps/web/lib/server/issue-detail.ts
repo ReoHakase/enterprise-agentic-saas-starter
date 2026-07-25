@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation"
 
-import { ConsoleApiError } from "@/features/console/api"
+import { ConsoleApiError } from "@/features/console/api.public"
 import {
   getIssueByNumber,
   getIssueTimeline,
   listIssues,
-} from "@/features/issues/api"
-import type { IssueAssigneeOption } from "@/features/issues/components/types"
-import { deriveIssueLabelSuggestions } from "@/features/issues/label-suggestions"
+} from "@/features/issues/api.public"
+import { deriveIssueLabelSuggestions } from "@/features/issues/label-suggestions.public"
+import type { IssueAssigneeOption } from "@/features/issues/workspace-types.public"
 
 import { createServerApiClient } from "./api-client"
 import { getCookieHeader } from "./auth"

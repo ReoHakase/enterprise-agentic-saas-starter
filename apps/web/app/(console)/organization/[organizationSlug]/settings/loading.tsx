@@ -1,10 +1,1 @@
-import { RouteLoading } from "@/components/app-state"
-
-export default function OrganizationSettingsLoading() {
-  return (
-    <RouteLoading
-      label="Loading organization settings"
-      variant="organization-settings"
-    />
-  )
-}
+export { OrganizationSettingsRouteSkeleton as default } from "@/features/console/route-skeletons.public"

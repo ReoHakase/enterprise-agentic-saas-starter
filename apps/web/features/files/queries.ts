@@ -5,11 +5,7 @@ import {
   type QueryFunctionContext,
 } from "@tanstack/react-query"
 
-import {
-  getTextFilePreview,
-  listFiles,
-  type FileOwnerType,
-} from "@/features/files/api"
+import { getTextFilePreview, listFiles, type FileOwnerType } from "./api"
 
 export const fileKeys = {
   all: ["files"] as const,

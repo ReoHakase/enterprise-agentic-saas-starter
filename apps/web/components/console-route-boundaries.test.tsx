@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   ConsoleContentError,
   ConsoleShellError,
-  ConsoleShellSkeleton,
+} from "./console-route-error-boundary.client"
+import {
   getConsoleErrorPresentation,
   getConsoleLoadingPresentation,
-} from "./console-boundary"
+} from "./console-route-presentations"
+import { ConsoleShellSkeleton } from "./console-route-suspense"
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",

@@ -35,6 +35,7 @@ export const PageShell = ({
   action: Action,
   actionHref,
   actionLabel,
+  boundaryState = "ready",
   children,
 }: {
   title: string
@@ -42,11 +43,15 @@ export const PageShell = ({
   action?: ComponentType
   actionHref?: string
   actionLabel?: string
+  boundaryState?: "loading" | "ready"
   children: ReactNode
 }) => (
   <div
     data-slot="page-shell"
+    data-route-boundary="true"
+    data-boundary-state={boundaryState}
     className="flex w-full max-w-full min-w-0 flex-col gap-6 xl:max-w-7xl"
+    aria-busy={boundaryState === "loading" ? true : undefined}
   >
     <PageHeader>
       <PageHeaderCopy>

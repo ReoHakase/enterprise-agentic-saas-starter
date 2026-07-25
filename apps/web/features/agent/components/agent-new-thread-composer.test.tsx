@@ -8,7 +8,7 @@ import {
   type AgentNewThreadInput,
 } from "./agent-new-thread-composer"
 
-vi.mock("@/features/agent/use-agent-mention-candidates", () => ({
+vi.mock("../use-agent-mention-candidates", () => ({
   useAgentMentionCandidates: () => [
     {
       kind: "issue",
@@ -18,7 +18,7 @@ vi.mock("@/features/agent/use-agent-mention-candidates", () => ({
   ],
 }))
 
-vi.mock("@/features/agent/components/agent-composer", async () => {
+vi.mock("./agent-composer", async () => {
   const React = await import("react")
   return {
     AgentComposer: React.forwardRef(
@@ -94,7 +94,9 @@ describe("AgentNewThreadComposer", () => {
       "Summarize the current page and suggest the next action."
     )
     expect(onCreate).not.toHaveBeenCalled()
-    expect(screen.getByRole("combobox")).toHaveTextContent("Ask always")
+    expect(
+      screen.getByRole("combobox", { name: "Agent permission" })
+    ).toHaveTextContent("Ask always")
   })
 
   it("keeps permission and inline mention data in the first thread handoff", async () => {
@@ -109,7 +111,9 @@ describe("AgentNewThreadComposer", () => {
       />
     )
 
-    const permission = screen.getByRole("combobox")
+    const permission = screen.getByRole("combobox", {
+      name: "Agent permission",
+    })
     await user.click(permission)
     await user.click(screen.getByRole("option", { name: /Full access/u }))
 
