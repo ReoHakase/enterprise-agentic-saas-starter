@@ -43,6 +43,10 @@ export default defineMain({
             workspace,
             "test-support/storybook/next-navigation.ts"
           ),
+          "next-themes": path.join(
+            workspace,
+            "test-support/storybook/next-themes.tsx"
+          ),
           "nuqs/adapters/next/app": path.join(
             workspace,
             "test-support/storybook/nuqs-next-app.ts"

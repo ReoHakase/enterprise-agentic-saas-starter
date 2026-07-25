@@ -1,7 +1,7 @@
 import { useForm } from "@tanstack/react-form"
 
 import preview from "#storybook/preview"
-import type { Me } from "@/lib/console-api"
+import type { Me } from "@/features/account"
 
 import { ConsoleShell } from "../console-shell/console-shell"
 import { FormTextField } from "../form-text-field/form-text-field"

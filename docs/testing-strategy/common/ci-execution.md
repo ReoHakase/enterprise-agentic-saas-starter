@@ -1,7 +1,7 @@
 ---
 title: CIとテスト実行契約
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - package.json
@@ -17,14 +17,16 @@ applies_to:
 
 開発者がテスト層の全名称を覚えなくても、実行環境と費用に応じた少数の公開スクリプトで適切な検査を実行できるようにします。
 
-高速化に失敗した場合はテスト省略ではなく、より広い無料テスト実行へ縮退します。
+通常PRと`main`では無料テストを全件実行し、変更選択による見落としを作りません。
+
+affected / changedによる選択は後続作業へ延期します。導入時は新しい公開scriptを増やさず、base解決失敗やselector失敗で全無料suiteへ縮退する契約を別のADRで確定します。
 
 ## 公開スクリプト
 
 ```json
 {
   "scripts": {
-    "test": "turbo run test",
+    "test": "vitest run --config vitest.config.ts && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",
@@ -45,7 +47,7 @@ applies_to:
 
 ```json
 {
-  "check": "bun run lint && bun run format:check && bun run typecheck && bun run test"
+  "check": "bun run check:static && bun run format:check && bun run typecheck && bun run test"
 }
 ```
 
@@ -53,134 +55,65 @@ applies_to:
 
 ## 実行頻度
 
-| スクリプト        | ローカル | pre-push   | PR                               | `main`     | nightly      | release candidate  |
-| ----------------- | -------- | ---------- | -------------------------------- | ---------- | ------------ | ------------------ |
-| `check`           | 常時     | 必須       | affected + 明示追加              | full       | full         | full               |
-| `test:browser`    | UI変更時 | 任意       | affected                         | full       | full         | full               |
-| `test:e2e`        | 必要時   | 任意       | 変更pathに応じる                 | full       | full         | full               |
-| `test:eval:agent` | 明示     | 実行しない | fingerprint変更 + approval時だけ | 任意       | full dataset | release dataset    |
-| `test:e2e:full`   | 明示     | 実行しない | 実行しない                       | 実行しない | 任意canary   | 必須または明示判断 |
-
-## ローカル変更選択
-
-Vitestの`--changed`はworkspace内の高速feedbackに使います。
-
-```sh
-bun --cwd apps/web run test -- \
-  --changed=origin/main \
-  --coverage.enabled=false
-```
-
-未commit差分:
-
-```sh
-bun --cwd apps/web run test -- \
-  --changed \
-  --coverage.enabled=false
-```
-
-`--changed`はrequired CIの唯一の根拠にしません。module graphに現れないmigration SQL、CSS、Storybook config、generated fileは`forceRerunTriggers`へ登録します。
-
-## CI変更選択
-
-PR CIは二段階で選択します。
-
-1. Turborepoの`--affected`でworkspaceとdownstream consumerを選ぶ
-2. 変更pathと追加suiteの対応表で、依存方向だけでは選べないtestを追加する
-
-### 基準SHA
-
-`pull_request`:
-
-```text
-base = github.event.pull_request.base.sha
-head = github.sha
-```
-
-`main` push:
-
-```text
-base = github.event.before
-head = github.sha
-```
-
-checkoutはfull historyまたは必要なbase commitを取得します。base不明、zero SHA、fetch失敗、selector失敗では無料testのfull runへ縮退します。
-
-## 変更pathと追加suite
-
-| 変更path                                   | 必ず追加する検査                                          |
-| ------------------------------------------ | --------------------------------------------------------- |
-| `packages/db/src/schema/**`                | DB full test、history、schema drift、API A3/A4、E1        |
-| `packages/db/drizzle/**`                   | DB full test、history、schema drift、E1                   |
-| `apps/api/src/modules/**/repository*`      | API full test、DB full test、必要なE1                     |
-| `apps/api/src/modules/**/authorization/**` | API full test、Auth relevant test、E1                     |
-| `packages/auth/**`                         | Auth full test、API mount test、Web auth test、E1         |
-| `packages/email/**`                        | Email full test、API mail command test、必要なE1          |
-| `packages/ui/src/**`                       | UI test、UI browser、consumer Web affected test、必要なW6 |
-| `apps/web/features/**`                     | Web test、必要なW3/W4、criticalな場合W6                   |
-| `apps/web/app/**`、`middleware.ts`         | Web test、W6、critical route変更ならE1                    |
-| `apps/agent/src/**`                        | G1-G4、E1、fingerprint変更ならG5候補                      |
-| prompt、model setting、tool schema         | G1-G4、G5、release時E2                                    |
-| E2E config、fixture、selector              | E1 full                                                   |
-| test selector自体                          | 全無料test                                                |
-| docsだけ                                   | code generationまたはconfigへ影響しない限りE1不要         |
-
-対応表は可能なら`scripts/ci/select-test-suites.ts`を正本とし、文書を同じdataから生成または検証します。
+| スクリプト        | ローカル | pre-push   | PR         | `main`     | nightly      | release candidate  |
+| ----------------- | -------- | ---------- | ---------- | ---------- | ------------ | ------------------ |
+| `check`           | 常時     | 必須       | full       | full       | full         | full               |
+| `test:browser`    | UI変更時 | 任意       | full       | full       | full         | full               |
+| `test:e2e`        | 必要時   | 任意       | full       | full       | full         | full               |
+| `test:eval:agent` | 明示     | 実行しない | 実行しない | 実行しない | full dataset | release dataset    |
+| `test:e2e:full`   | 明示     | 実行しない | 実行しない | 実行しない | 任意canary   | 必須または明示判断 |
 
 ## CI job
 
-推奨job:
+必須job:
 
 ```text
 nix
 quality
+static-quality
 browser
-e2e-deterministic
-cloudflare
-paid-eval
-release-e2e
+free-e2e
+cloudflare-dry-run
 ```
 
 ### quality
 
+- format
+- typecheck
+- full `test`
+- build
+
+### static-quality
+
 - DB history check
 - DB schema drift
 - migration immutability
-- lint、architecture check
-- format
-- typecheck
-- affected `test`
-- build
+- lint、Knip、jscpd
 
 ### browser
 
-- Chromium install/cache
-- affected `test:browser`
+- pinned Chromium、WebKit install
+- full `test:browser`
 - Storybook/a11y report
 - failure artifact
 
-### e2e-deterministic
+### free-e2e
 
 - `test:e2e`
 - provider secretなし
 - temporary DB、Wrangler state
 - failure artifact
 
-### paid-eval
+### cloudflare-dry-run
 
-- protected workflow
-- `test:eval:agent`
-- behaviour fingerprint
-- bounded artifact
-- fork PRでは実行しない
+- Web、API、Agentのproduction bundle
+- deployなし
 
-### release-e2e
+### paid workflow
 
-- manual approval
-- isolated release environment
-- `test:e2e:full`
-- remote write allowlist
-- strict artifact policy
+`test:eval:agent`と`test:e2e:full`は通常CIへ含めません。保護された`Agent paid tests`
+workflowでだけ実行し、E2はmanual approval、isolated environment、remote write allowlist、strict
+artifact policyを要求します。
 
 ## cache
 
@@ -217,13 +150,13 @@ fork PRへ有料secretを渡しません。
 - G5
 - E2
 
-変更選択が困難な場合、無料testは減らさずfull runへ縮退します。
+fork PRでも無料testは全件実行します。
 
 ## artifact retention
 
 - source mapとcoverage: 通常retention
 - E1 trace/video: failure時のみ、短期retention
-- Storybook static build: 必要なPRだけ
+- Storybook static build: 各PRで短期retention
 - G5/E2: bounded metadataのみ、最短retention
 - secret、cookie、private contentが含まれたartifactはupload前に拒否する
 
@@ -231,9 +164,8 @@ fork PRへ有料secretを渡しません。
 
 - root public scriptが実行環境と費用で整理される
 - layerごとのroot scriptを増やさない
-- `--changed`と`--affected`の用途が区別される
-- API repository変更でDB testが追加される
-- Web app route変更でW6が選ばれる
-- Agent fingerprint変更だけがG5候補になる
-- selector失敗がtest省略ではなくfull無料実行へ縮退する
+- PRと`main`で無料suiteを全件実行する
+- API repositoryとDB testを同じ無料suiteで検証する
+- Web app routeをW6で検証する
+- G5とE2を通常PRから隔離する
 - fork PRへ有料secretを渡さない

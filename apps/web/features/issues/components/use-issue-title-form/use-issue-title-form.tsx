@@ -10,7 +10,7 @@ import {
   clearConsoleApiFieldError,
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
-} from "@/lib/console-api"
+} from "@/features/console"
 
 import { issueTitleFormSchema } from "../../schema"
 import {

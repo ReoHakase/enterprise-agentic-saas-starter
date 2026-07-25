@@ -42,7 +42,7 @@ import {
   ConsoleFrameHeader,
 } from "@/components/console-frame/console-frame"
 import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
-import { AccountSwitcherDialog } from "@/features/account"
+import { AccountSwitcherDialog, type Me } from "@/features/account"
 import {
   AgentFormRegistryProvider,
   AgentRuntimeProvider,
@@ -59,9 +59,9 @@ import {
   prepareOrganizationSwitch,
   queueOrganizationSwitchFlash,
   resolveOrganizationRouteContext,
+  roleLabel,
 } from "@/features/organizations"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { roleLabel, type Me } from "@/lib/console-api"
 
 import {
   organizationSwitcher as OrganizationSwitcher,

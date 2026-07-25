@@ -54,6 +54,7 @@ const browserAliases = {
     dirname,
     "test-support/storybook/next-navigation.ts"
   ),
+  "next-themes": path.join(dirname, "test-support/storybook/next-themes.tsx"),
   "nuqs/adapters/next/app": path.join(
     dirname,
     "test-support/storybook/nuqs-next-app.ts"
@@ -74,7 +75,6 @@ const storybookProject = (theme: "light" | "dark") => ({
     storybookTest({
       configDir: path.join(dirname, ".storybook"),
       initialGlobals: { theme },
-      storybookScript: "bun run storybook",
       ...(theme === "dark" ? { tags: { include: ["theme-sensitive"] } } : {}),
     }),
   ],

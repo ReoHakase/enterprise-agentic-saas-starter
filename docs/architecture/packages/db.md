@@ -56,7 +56,7 @@ use case ownerが不明になり、すべてのdomainが一つのinfrastructure 
 
 ## migration
 
-`drizzle/`のSQL、snapshot、journalをappend-only historyとしてcommitします。詳細は[テスト戦略](../../testing/database-migrations.md)を参照します。
+`drizzle/`のSQL、snapshot、journalをappend-only historyとしてcommitします。詳細は[DBテスト戦略](../../testing-strategy/packages/db.md)を参照します。
 
 ## テスト
 

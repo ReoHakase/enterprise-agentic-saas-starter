@@ -11,9 +11,9 @@ last_reviewed: 2026-07-25
 
 Agent releaseは次の3層を分離します。
 
-1. deterministic core: schema、tenant、capability、query guard、idempotency、stream projection
-2. browser feature integration: UI state、Server Component、cookie、Worker/Service Binding配線
-3. probabilistic verification: L6は全指定caseを独立stateで3/3、L7は固定canaryを各1回完了すること
+1. deterministic core: G1-G4でschema、tenant、capability、query guard、idempotency、stream projection
+2. browser feature integration: W3、W4、W6とE1でUI state、Server Component、cookie、Worker/Service Binding配線
+3. probabilistic verification: G5は全指定caseを独立stateで3/3、E2は固定canaryを各1回完了すること
 
 LLMの回答文面一致はassertしません。tool call、tool inputの安全性、DB state、canonical stream part、approval state、Issue link、usage eventをassertします。
 
@@ -59,7 +59,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
 pane state、shortcut、focus、approval UI、stream part表示はStorybook/Browser Modeで検証します。
-Server Component、cookie、reload、API/Agent Worker配線だけをfree Playwright E1/E2へ残します。mockは
+Web内のServer Component、cookie、reloadはW6、API/Agent Workerを含む最終配線はE1へ残します。mockは
 network/transport boundaryに置き、production hook、parser、controller、componentを差し替えません。
 
 ## Browserless paid eval
@@ -88,16 +88,16 @@ authorization、tenant、privacy、idempotency、approval、tool allowlistはdet
 
 ## Paid full-stack canary
 
-`bun run test:e2e:agent`は一時Turso、real API/Agent Service Binding、real Better Auth session、
-release modelを使い、標準free E2Eへ混ぜません。E4は次の固定2本を各1回実行します。
+`bun run test:e2e:full`は一時Turso、real API/Agent Service Binding、real Better Auth session、
+release modelを使い、標準free E2Eへ混ぜません。E2は次の固定2本を各1回実行します。
 
 1. `agent-canary-read-source`: 明示した公開検索語からread/Web検索tool、source、Issue linkを表示する
 2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を完了する
 
 上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、
-browserless contract/stack eval、E4 canaryへ責務を配分します。
+browserless G5 eval、E2 canaryへ責務を配分します。
 
-L6/L7のsecret管理責任者、env隔離、artifact禁止、cleanupは
+G5/E2のsecret管理責任者、env隔離、artifact禁止、cleanupは
 [Paid test secret](./operations.md#paid-test-secret)を共通契約とします。
 
 ## 3回eval
@@ -105,7 +105,7 @@ L6/L7のsecret管理責任者、env隔離、artifact禁止、cleanupは
 `bun run test:eval:agent`は各release scenarioを独立状態で3回実行し、3/3成功を要求します。
 一試行でも安全境界違反、tool不選択、誤ったwrite、stream欠落、DB不一致があればfailです。
 retryで成功率を隠しません。provider 429/5xxは別のinfrastructure failureとして記録し、
-合格へ数えません。E4 browser canary自体は1回だけとし、flaky retryを設定しません。
+合格へ数えません。E2 browser canary自体は1回だけとし、flaky retryを設定しません。
 
 ## 常時実行するfree gate
 
@@ -130,11 +130,11 @@ bun run test:eval:agent
 
 ## Release candidate
 
-安いL6を先に通し、その後にL7を各1回実行します。
+安いG5を先に通し、その後にE2を各1回実行します。
 
 ```sh
 bun run test:eval:agent
-bun run test:e2e:agent
+bun run test:e2e:full
 ```
 
 加えてskill validation、docs link check、UI向け禁止用語checkを通します。warning、flaky、未説明・意図しないskip、未cleanup processが残る場合は完了扱いにしません。browser能力差による計画skipは理由と代替coverageをtest内へ明記します。

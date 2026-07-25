@@ -1,7 +1,7 @@
 ---
 title: Product Agentテスト戦略
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/agent/**
@@ -53,10 +53,15 @@ apps/agent/src/mastra/
 
   test-support/
     scripted-model.ts
-    fake-control-plane.ts
-    fixtures.ts
 
-  composition.ts
+  composition/
+  e2e/
+  evals/
+  skills/
+  workflows/
+  legacy/
+  index.ts
+  server.ts
   worker.ts
 ```
 

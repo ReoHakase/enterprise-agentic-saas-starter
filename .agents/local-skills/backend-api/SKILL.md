@@ -10,7 +10,7 @@ description: enterprise-agentic-saas-starterのElysia API、authorization、tran
 - [API設計](../../../docs/architecture/apps/api.md)
 - [命名とlayer](../../../docs/architecture/naming-and-layers.md)
 - [API / OpenAPI](../../../docs/api-openapi.md)
-- [APIテスト戦略](../../../docs/testing/api.md)
+- [APIテスト戦略](../../../docs/testing-strategy/apps/api.md)
 
 ## Workflow
 

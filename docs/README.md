@@ -15,7 +15,7 @@ last_reviewed: 2026-07-25
 4. [システム境界](architecture/system-boundaries.md)
 5. [対象app/packageのarchitecture](architecture/README.md)
 6. [品質強制](architecture/quality-enforcement.md)
-7. [テスト戦略](testing/README.md)
+7. [テスト戦略](testing-strategy/README.md)
 8. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
 9. [Codex harness](architecture/codex-harness.md)
 10. [ADR](decisions/README.md)
@@ -42,7 +42,7 @@ last_reviewed: 2026-07-25
 | -------------------------------- | ------------------------------------------------------------- |
 | [`docs/jargon.md`](jargon.md)    | 日本語技術文書の用語、表記、例外                              |
 | `docs/architecture/`             | directory、dependency、runtime、qualityの規範                 |
-| `docs/testing/`                  | test layer、runner、script、実行条件                          |
+| `docs/testing-strategy/`         | test layer、runner、script、実行条件                          |
 | `docs/decisions/`                | 長期的な設計判断と代償                                        |
 | `docs/exec-plans/`               | 複雑な作業の進捗、判断、検証証跡                              |
 | [`docs/agent/`](agent/README.md) | 製品Agentの機能、security、受入仕様                           |

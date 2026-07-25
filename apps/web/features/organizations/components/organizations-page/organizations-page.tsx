@@ -55,11 +55,11 @@ import {
   type OrganizationSwitchRisks,
 } from "@/features/agent"
 import {
+  getConsoleApiErrorText,
   showConsoleApiErrorToast,
   organizationsQueryOptions,
 } from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { getConsoleApiErrorText } from "@/lib/console-api"
 
 import { prepareOrganizationSwitch } from "../../cache"
 import { navigateAfterOrganizationSwitch } from "../../organization-switch-flash"

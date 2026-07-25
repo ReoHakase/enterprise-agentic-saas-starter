@@ -1,7 +1,7 @@
 ---
 title: DBパッケージテスト戦略
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - packages/db/**
@@ -96,8 +96,6 @@ DB層の実行テストとは別に、共通S0で次を検査します。
 
 ```sh
 bun --cwd packages/db run db:check
-bun run check:db-schema-drift
-bun run check:migration-history
 ```
 
 ## DB1: DB補助ロジック単体テスト
@@ -183,7 +181,7 @@ DB5は通常のquery correctnessではなく、開発・運用commandが誤っ�
 | pagination、business query、DB error mapping         | API A3     |
 | transactionを使う業務順序                            | API A2、A3 |
 
-API repository変更時には、API A3だけでなくDB packageのfull testを追加実行します。dependency graph上はAPIからDBへの一方向依存であり、Turborepo `--affected`だけではDB testが選ばれない場合があるためです。
+API repository変更時には、API A3だけでなくDB packageのfull testも実行します。repositoryのSQL利用とDB constraintの両方を確認するためです。
 
 ## 実行
 
@@ -192,7 +190,7 @@ bun --cwd packages/db run db:check
 bun --cwd packages/db run test
 ```
 
-migration、schema、repository、DB infrastructure変更ではfull suiteを実行します。`--changed`を使う場合も`drizzle/**`、`src/schema/**`、`drizzle.config.ts`を`forceRerunTriggers`へ含めます。
+migration、schema、repository、DB infrastructure変更ではfull suiteを実行します。
 
 ## 受入条件
 

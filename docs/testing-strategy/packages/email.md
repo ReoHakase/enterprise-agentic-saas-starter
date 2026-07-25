@@ -1,7 +1,7 @@
 ---
 title: Emailパッケージテスト戦略
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - packages/email/**
@@ -26,10 +26,8 @@ packages/email/src/
   config.ts
 
   contracts/
+  components/
   templates/
-    components/
-    authentication/
-    organization/
   render/
   runtime/
   providers/
@@ -46,12 +44,12 @@ packages/email/src/
 
 ## テスト層
 
-| 名前                                           | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                              | 実物として使うもの                                               | 差し替えるもの                                    | 対象コード/ファイル                                                                   | Test Runner                   | 実行速度   | CI時間課金以外の費用               | 量         |
-| ---------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------- | ---------- | ---------------------------------- | ---------- |
-| **メール契約単体テスト (MAIL1)**               | 単体                | <ul><li>recipient、subject data、template input、locale、public URLのschemaを確認する</li><li>header injection、invalid address、過大subject、missing required fieldを拒否することを確認する</li><li>provider非依存のmail commandとerror分類を確認する</li><li>private fieldやtokenが意図せずtemplate inputへ含まれないことを確認する</li></ul>                                                         | contract、schema、config parser、URL builder                     | clock、ID、environment                            | `packages/email/src/contracts/**`、pure config、template input builder                | Vitest Node                   | 極めて速い | なし                               | 多い       |
-| **メールテンプレート描画統合テスト (MAIL2)**   | 統合                | <ul><li>React Email templateをHTMLとplain textへ描画し、必須内容とlinkを確認する</li><li>optional section、長いorganization名、Unicode、空の補足情報を確認する</li><li>危険なHTMLがescapeされ、secretや内部objectが出力されないことを確認する</li><li>dark mode、email client差を考慮した構造上のfallbackを確認する</li><li>全文snapshotだけに依存せず、意味的なheading、link、textを確認する</li></ul> | React Email component、renderer、template partial                | provider、SMTP、network、clock                    | `packages/email/src/templates/**`、`render/**`、template fixture                      | Vitest + React Email renderer | 速いから中 | なし                               | 厚くする   |
-| **メールproviderアダプター統合テスト (MAIL3)** | 統合                | <ul><li>mail commandがprovider requestへ正しくserialiseされることを確認する</li><li>from、to、subject、HTML、text、reply-to、idempotency metadataを確認する</li><li>429、5xx、timeout、invalid responseを有限なerrorへ変換することを確認する</li><li>retry可能errorと恒久errorを区別し、secretをlogへ出さないことを確認する</li></ul>                                                                   | provider adapter、HTTP client、runtime selector                  | provider endpointはmock server、credentialはdummy | `packages/email/src/providers/**`、`runtime/**`、provider request mapper              | Vitest + mock HTTP server     | 中         | provider sandboxを使わない限りなし | 必要な範囲 |
-| **ローカルメール配信統合テスト (MAIL4)**       | 統合                | <ul><li>local runtimeがMailpitまたはlocal inboxへ実際にメールを配送できることを確認する</li><li>messageが期待するrecipient、subject、HTML、textで受信されることを確認する</li><li>development sessionの検出、再利用、終了所有権を確認する</li><li>productionでlocal adapterを選択できないことを確認する</li></ul>                                                                                       | local Mailpit、local adapter、実HTTPまたはSMTP、rendered message | production provider、実domain、実recipient        | `packages/email/src/development/**`、local runtime selector、Mailpit integration test | Vitest + local Mailpit        | 遅い       | なし                               | 少数       |
+| 名前                                           | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                              | 実物として使うもの                                  | 差し替えるもの                                    | 対象コード/ファイル                                                                 | Test Runner                     | 実行速度   | CI時間課金以外の費用               | 量         |
+| ---------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------- | ---------- | ---------------------------------- | ---------- |
+| **メール契約単体テスト (MAIL1)**               | 単体                | <ul><li>recipient、subject data、template input、locale、public URLのschemaを確認する</li><li>header injection、invalid address、過大subject、missing required fieldを拒否することを確認する</li><li>provider非依存のmail commandとerror分類を確認する</li><li>private fieldやtokenが意図せずtemplate inputへ含まれないことを確認する</li></ul>                                                         | contract、schema、config parser、URL builder        | clock、ID、environment                            | `packages/email/src/contracts/**`、pure config、template input builder              | Vitest Node                     | 極めて速い | なし                               | 多い       |
+| **メールテンプレート描画統合テスト (MAIL2)**   | 統合                | <ul><li>React Email templateをHTMLとplain textへ描画し、必須内容とlinkを確認する</li><li>optional section、長いorganization名、Unicode、空の補足情報を確認する</li><li>危険なHTMLがescapeされ、secretや内部objectが出力されないことを確認する</li><li>dark mode、email client差を考慮した構造上のfallbackを確認する</li><li>全文snapshotだけに依存せず、意味的なheading、link、textを確認する</li></ul> | React Email component、renderer、template partial   | provider、SMTP、network、clock                    | `packages/email/src/templates/**`、`render/**`、template fixture                    | Vitest + React Email renderer   | 速いから中 | なし                               | 厚くする   |
+| **メールproviderアダプター統合テスト (MAIL3)** | 統合                | <ul><li>mail commandがprovider requestへ正しくserialiseされることを確認する</li><li>from、to、subject、HTML、text、reply-to、idempotency metadataを確認する</li><li>429、5xx、timeout、invalid responseを有限なerrorへ変換することを確認する</li><li>retry可能errorと恒久errorを区別し、secretをlogへ出さないことを確認する</li></ul>                                                                   | provider adapter、HTTP client、runtime selector     | provider endpointはmock server、credentialはdummy | `packages/email/src/providers/**`、`runtime/**`、provider request mapper            | Vitest + mock HTTP server       | 中         | provider sandboxを使わない限りなし | 必要な範囲 |
+| **ローカルメール境界統合テスト (MAIL4)**       | 統合                | <ul><li>local adapterがMailpit HTTP contractへ期待するrecipient、subject、HTML、textだけを送ることを確認する</li><li>development sessionの検出、readiness再試行、bounded timeoutを確認する</li><li>loopback以外のendpointとproduction/test runtimeでlocal adapterを拒否することを確認する</li><li>private render propsをtransportへ渡さないことを確認する</li></ul>                                     | local adapter、実Request/Response、rendered message | Mailpit process、production provider、実recipient | `packages/email/src/development/**`、`providers/mailpit.ts`、local runtime selector | Vitest + injected HTTP boundary | 速い       | なし                               | 少数       |
 
 ## MAIL1: メール契約単体テスト
 
@@ -93,11 +91,11 @@ providerを変更する場合は次を確認します。
 - payload size
 - log redaction
 
-## MAIL4: ローカルメール配信統合テスト
+## MAIL4: ローカルメール境界統合テスト
 
-MAIL4は通常のtemplate testではなく、local development runtimeが実際に利用できることを確認します。
+MAIL4は通常のtemplate testではなく、local development runtimeとMailpit HTTP境界が安全に接続されることを確認します。常時実行するpackage testではMailpit processを起動せず、注入した`fetch`と実`Request`/`Response`で送信payload、response、timeout、endpoint制約を検査します。Mailpit process自体の起動確認はdevelopment commandのmanual smokeに限定します。
 
-E1で代表journeyのメール到達を確認する場合でも、全templateとprovider errorをE2Eで繰り返しません。
+E1で代表journeyのメール到達を追加する場合でも、全templateとprovider errorをE2Eで繰り返しません。
 
 ## APIとの責務分担
 
@@ -108,7 +106,7 @@ E1で代表journeyのメール到達を確認する場合でも、全templateと
 | template input contract                   | MAIL1      |
 | HTML/plain text rendering                 | MAIL2      |
 | provider requestとerror mapping           | MAIL3      |
-| local inboxへの配送                       | MAIL4      |
+| local Mailpit HTTP境界                    | MAIL4      |
 | representative business journeyからの到達 | E1         |
 
 ## 実行
@@ -117,7 +115,7 @@ E1で代表journeyのメール到達を確認する場合でも、全templateと
 bun --cwd packages/email run test
 ```
 
-MAIL4はlocal service起動が必要なため、通常`test`へ含めるか専用integration projectにするかを実測で決めます。外す場合も`main`またはnightlyで必ず実行します。
+MAIL4は外部service不要の決定的testとして通常`test`へ含めます。
 
 ## 受入条件
 
@@ -125,5 +123,5 @@ MAIL4はlocal service起動が必要なため、通常`test`へ含めるか専�
 - templateがDB、Auth、UI、providerへ依存しない
 - HTMLとplain textを意味的に検査する
 - provider errorとretry分類を検査する
-- local Mailpit integrationを代表caseで検査する
+- local Mailpit HTTP境界とdevelopment sessionを代表caseで検査する
 - API serviceの業務判断とEmail packageの責務が混ざらない

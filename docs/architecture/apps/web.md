@@ -2,7 +2,7 @@
 title: apps/webの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 applies_to:
   - apps/web/**
 ---
@@ -41,9 +41,12 @@ apps/web/
     layout.tsx
 
   components/
-    providers.tsx
-    console-shell.tsx
-    route-error.tsx
+    providers/
+      providers.tsx
+    console-shell/
+      console-shell.tsx
+    route-error/
+      route-error.tsx
 
   features/
     <feature>/
@@ -57,9 +60,10 @@ apps/web/
         use-<feature>-controller.ts
 
       components/
-        <component-name>.tsx
-        <component-name>.test.tsx
-        <component-name>.stories.tsx
+        <component-name>/
+          <component-name>.tsx
+          <component-name>.test.tsx
+          <component-name>.stories.tsx
 
         <screen-name>/
           server.tsx
@@ -89,8 +93,8 @@ apps/web/
 Client Component、Skeleton、error表示を含め、必ず`components/`配下へ置きます。feature directory
 直下へ`.tsx`を置きません。
 
-単純なcomponentは`components/<component-name>.tsx`だけで始めます。同じ画面に関連するcomponentが
-増えた場合だけ`components/<screen-name>/`へまとめます。全featureへ同じ空directoryや雛形fileを
+単純なcomponentも`components/<component-name>/<component-name>.tsx`へ置きます。同じ画面に関連する
+componentは`components/<screen-name>/`へまとめます。全featureへ同じ空directoryや雛形fileを
 生成しません。
 
 ## app directory
@@ -127,14 +131,16 @@ feature rootの責務:
 | `queries.ts`                     | TanStack Query options                                   |
 | `hooks/use-*-controller.ts`      | browserで動くAPI呼出、router、toast等と表示用stateの接続 |
 | `components/<screen>/server.tsx` | Server Componentでの初期data取得と画面の組立て           |
-| `index.ts`                       | feature外へ公開する最小surface                           |
+| `index.ts`                       | browser-safeなfeature公開surface                         |
+| `server.ts`                      | `server-only`なfeature公開surface                        |
 
 Web-local schemaはAPI transport typeの代用品ではありません。untrusted responseをUIへ表示する
 直前のruntime validationに使います。
 
 `model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
 `fetch`、`useChat`、browser APIをimportしません。別featureから利用できるのは`index.ts`が
-明示exportしたcontractだけで、`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
+明示exportしたbrowser-safe contractと`server.ts`が公開したserver-only contractだけで、
+`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
 
 ### Browserのserver state
 
@@ -191,7 +197,7 @@ browserで子componentがrender中にthrowした予期しないerrorを捕捉し
 出すReact componentを指します。
 
 async Server Componentのerrorはclient用React Error Boundaryでは捕捉できません。Next.js route
-segmentの`loading.tsx`と`error.tsx`で扱い、後述のPlaywright E2で検証します。
+segmentの`loading.tsx`と`error.tsx`で扱い、後述のPlaywright W6で検証します。
 
 一つの非同期画面は、必要に応じて次のfileを`components/<screen>/`へ置きます。
 
@@ -244,13 +250,13 @@ async Server Componentを使うNext.js route segmentには`loading.tsx`と`error
 Client Componentであり、Next.jsがそのroute segmentのError Boundaryを作ります。`error.tsx`は
 `reset` callbackだけをerror viewへ渡し、受け取ったraw `error` objectをpropsまたはDOMへ渡しません。
 複数routeで同じSkeletonまたはerror viewを共有するのは、外側のshellと予約するlayout spaceが同じ
-場合だけです。各routeのloading、error、retry、ready遷移はPlaywright E2で検証します。
+場合だけです。各routeのloading、error、retry、ready遷移はPlaywright W6で検証します。
 route固有の証跡はstate surfaceの`data-route-boundary="true"`をassertし、共有
 `data-console-shell`だけのloading/error遷移をそのrouteの証跡には数えません。geometry、focus、
 overflowは代表routeのshared-boundary matrixで重ねて検証します。
 
 client側のSuspense対応画面は対象componentのBrowser Mode test、async Server Component routeは
-実routeを通るPlaywright E2で検証します。新しい画面やrouteのreviewでは、Skeleton、
+実routeを通るPlaywright W6で検証します。新しい画面やrouteのreviewでは、Skeleton、
 Error Boundary、`loading.tsx`、`error.tsx`と対応testを同じ変更で確認します。
 
 対応表、独自source graph、architecture checkerは追加しません。local/shared hookやre-exportへ
@@ -278,9 +284,10 @@ pure model/viewから暗黙のsingletonとして参照しません。
 基本形:
 
 ```text
-feature-panel.tsx
-feature-panel.test.tsx
-feature-panel.stories.tsx
+feature-panel/
+  feature-panel.tsx
+  feature-panel.test.tsx
+  feature-panel.stories.tsx
 ```
 
 - `test.tsx`: happy-domでDOM contract
@@ -288,11 +295,11 @@ feature-panel.stories.tsx
 - `browser.test.tsx`: real QueryClient、必要な範囲だけのtransport stub、chat transportなどfeature integrationだけ
 - `visual.test.tsx`: 現在は作らない
 
-Storybook projectがbrowserでimport可能なReact componentには、公開/privateを問わずstoryを
-必須にします。対象はfirst-party `.tsx` moduleのdefault component export、uppercase named
-function/class、`memo`/`forwardRef`/component HOC等へ解決されるexportで、`"use client"` graphから
-server-only edgeなしに到達できるものです。module自身に`"use client"`がなくてもclient graphへ
-合法に入るpure componentを含みます。
+Storybook projectがbrowserでimport可能なpublic componentと主要Viewにはnamed storyを必須にします。
+対象はfirst-party `.tsx` moduleのdefault component export、uppercase named function/class、
+`memo`/`forwardRef`/component HOC等へ解決されるexportで、`"use client"` graphからserver-only edge
+なしに到達できるものです。module自身に`"use client"`がなくてもclient graphへ合法に入るpure
+componentを含みます。
 
 - `packages/ui/src/**`のbrowser component
 - `apps/web/**/*.tsx`から後述の構造上の除外を引いたbrowser component/view
@@ -305,16 +312,17 @@ browser componentではなくEmail preview/render testが検証を担当しま�
 import可能ならviewへ抽出し、そのviewにはstoryを作ります。dead/legacy componentはstory免除にせず
 削除します。
 
-各componentは少なくとも一つのnamed storyで実componentを描画します。`.stories.tsx`が存在する
-だけ、またはstory専用の代替componentだけを描画する状態はreviewで拒否します。repo全体を走査する
-story coverage checkerは置かず、Storybookが収集したstoryの実render、interaction、a11yを
-Browser Modeで検証します。
+public componentと主要Viewは少なくとも一つのnamed storyで実componentを描画します。
+親からしか使わないprivate subcomponentは、publicな親story内で実物が描画・操作される場合に
+個別storyを要求しません。`.stories.tsx`が存在するだけ、またはstory専用の代替componentだけを
+描画する状態はreviewで拒否します。repo全体を走査するstory coverage checkerは置かず、
+Storybookが収集したstoryの実render、interaction、a11yをBrowser Modeで検証します。
 
 story fileはcomponentの近くに置きますが、file名の機械的な一対一対応は要求しません。
 `issue-table.tsx`を扱う`issue-table.stories.tsx`のような配置でも、同じ画面のReady、Loading、
 Errorをまとめた`components/issue-screen/async-states.stories.tsx`でも構いません。一つのstory fileで
-複数componentを扱え、一つのcomponentを複数stateのstoryで描画できます。別moduleを組み合わせる
-integration storyだけでは、個々のcomponentのcoverageを代用できません。
+複数componentを扱え、一つのcomponentを複数stateのstoryで描画できます。private subcomponentは
+親storyの操作とassertionから到達できることを確認します。
 
 browser専用環境なしではimportできない処理がある場合は、その処理をhookまたはportの後ろへ置き、
 描画部分を通常のReact componentとしてStorybookからimportできるようにします。例外allowlistには
@@ -389,7 +397,7 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 - side effectをviewから分離し、Storybookとunit testを使いやすくする
 - loading/errorを付随的なroute fallbackではなく同じlayout contractのstateとして扱い、
   navigation時のlayout shift、focus loss、retry不能を防ぐ
-- 全browser componentをStorybook catalogueへ置き、未到達stateとa11y regressionを実装時に発見する
+- public componentと主要ViewをStorybook catalogueへ置き、未到達stateとa11y regressionを実装時に発見する
 - cross-feature couplingをpublic entrypointへ限定する
 
 ### 代償
@@ -408,10 +416,10 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 - viewからQuery/router/toast/API importがない
 - browser codeからserver module importがない
 - cross-feature deep importがない
-- 新規または変更したbrowser componentに実componentを描画するnamed storyがある
+- 新規または変更したpublic componentと主要Viewに実componentを描画するnamed storyがある
 - feature directory直下にReact componentの`.tsx`がない
 - client render中に待機し得るcomponentに`<Suspense>`、Skeleton、React Error Boundary、
   Browser Mode testがある
-- async Server Componentのrouteに`loading.tsx`、`error.tsx`、Playwright E2がある
+- async Server Componentのrouteに`loading.tsx`、`error.tsx`、Playwright W6がある
 - Error Boundaryがraw error、URL/query、private identifierをDOMまたは読み上げ領域へ出さない
 - ready/loading/error transitionでlayout shiftとhorizontal overflowがない

@@ -52,10 +52,10 @@ import { LocalDate } from "@/components/local-date/local-date"
 import {
   showConsoleApiErrorToast,
   consoleKeys,
+  getConsoleApiErrorText,
   sessionsQueryOptions,
 } from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { getConsoleApiErrorText } from "@/lib/console-api"
 
 import type { UserSession } from "../../schema"
 import { describeSessionClient } from "../../user-agent"

@@ -11,7 +11,7 @@ try {
       additionalContext: [
         "このrepositoryではroot AGENTS.mdを共通contractとして使う。",
         "作業前にdocs/exec-plans/active/のactive plan、docs/architecture/README.md、",
-        "変更領域のlocal skill、docs/testing/README.md、関連ADRを読む。",
+        "変更領域のlocal skill、docs/testing-strategy/README.md、関連ADRを読む。",
         "仕様と設計理由の正本はdocs/、skill artifactの編集元は.agents/local-skills/である。",
       ].join(""),
     },

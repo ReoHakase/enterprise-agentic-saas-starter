@@ -1,8 +1,9 @@
 ---
 id: PLAN-2026-007
 title: testing strategy全面移行
-status: active
+status: completed
 created: 2026-07-26
+completed: 2026-07-26
 owners:
   - repository-maintainers
 linked_specs:
@@ -62,7 +63,7 @@ linked_adrs:
 8. Web W1-W6を整備する
 9. E1/E2 configとscriptを分離する
 10. coverage対象と閾値を確定する
-11. affected CIとfull fallbackを実装する
+11. 通常CIが全無料suiteを実行する契約を確認する
 12. 文書、skill、hookを新しい正本へ切り替える
 
 ## 進捗
@@ -78,8 +79,8 @@ linked_adrs:
 - [x] W1-W6を実装した
 - [x] E1/E2を分離した
 - [x] coverageを確定した
-- [ ] affected CIを実装した
-- [ ] 文書をcutoverしplanをcompletedへ移した
+- [x] 通常CIの全無料suite実行を確認した
+- [x] 文書をcutoverしplanをcompletedへ移した
 
 ## 判断記録
 
@@ -87,20 +88,21 @@ linked_adrs:
 | ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
 | 2026-07-26 | Agent runtimeは`src/mastra/**`へ集約する       | ADR-005と現行codeへ整合させる                                  |
 | 2026-07-26 | repository専用architecture checkerを追加しない | 既存のexports、lint、Knip、build、package testで境界を強制する |
-| 2026-07-26 | paid full-stackは`test:e2e:full`だけを公開する | 互換aliasを残さず費用境界を明確にする                          |
+| 2026-07-26 | paid full-stackは`test:e2e:full`だけを公開する | 旧commandを残さず費用境界を明確にする                          |
 | 2026-07-26 | componentを常にdirectoryへ置く                 | test、story、fixtureのcolocationを一貫させる                   |
 | 2026-07-26 | private subcomponentは親storyで検証できる      | publicな利用面へstoryを集中させる                              |
+| 2026-07-26 | CI変更選択は後続作業へ分離する                 | selector用のscriptを増やさず、今回は全無料suiteを維持する      |
 
 ## 検証証跡
 
 | command                               | 結果    | 証跡                                                    |
 | ------------------------------------- | ------- | ------------------------------------------------------- |
-| Markdown formatとlink検査             | pending | 完了時に記録する                                        |
-| workspace lint、typecheck、test       | pending | 完了時に記録する                                        |
-| `bun run check`                       | pending | 完了時に記録する                                        |
-| `bun run test:browser`                | pending | 完了時に記録する                                        |
-| `bun run test:e2e`                    | pending | 完了時に記録する                                        |
-| Storybook、Cloudflare、Nix build      | pending | 完了時に記録する                                        |
+| Markdown formatとlink検査             | success | 76 Markdown fileのlocal linkと全1108 fileのformatが成功 |
+| workspace lint、typecheck、test       | success | 9 workspaceすべて成功                                   |
+| `bun run check`                       | success | static、format、typecheck、rootとworkspace testが成功   |
+| `bun run test:browser`                | success | UI 30、Web 109、W6 Chromium 16、WebKit 1 tests          |
+| `bun run test:e2e`                    | success | 決定的E1 3 tests                                        |
+| Storybook、Cloudflare、Nix build      | success | Storybook 2、Cloudflare 3、Nix flake checkが成功        |
 | `bun run --cwd apps/api lint`         | success | warningなし                                             |
 | `bun run --cwd apps/api typecheck`    | success | 型errorなし                                             |
 | `bun run --cwd apps/api test`         | success | 55 files、319 tests。localhost利用のためsandbox外で実行 |
@@ -145,6 +147,6 @@ linked_adrs:
 - current code、architecture、testing strategyが同じ配置とcommandを指す
 - 無料suiteとbuildがすべて成功する
 - paid E2が通常検証から隔離される
-- `docs/testing/`と移行専用文書、旧分類、互換aliasが残らない
+- 廃止したtest文書、旧分類、旧commandが残らない
 - `*.public.ts`、CSF 3、feature root本番`.tsx`が残らない
 - planをcompletedへ移し、最終検証証跡を記録する

@@ -43,6 +43,15 @@ export const storybookApiHandlers = [
     await delay("infinite")
     return HttpResponse.json({})
   }),
+  http.get("*/agent/threads/:threadId/context", ({ params }) =>
+    HttpResponse.json({
+      threadId: String(params.threadId),
+      messageCount: 0,
+      estimatedHistoryTokens: 0,
+      latestSummaryThroughSequence: null,
+      latestSummaryEstimatedTokens: null,
+    })
+  ),
   http.get("*/agent/threads/:threadId/messages", () => HttpResponse.json([])),
   http.get("*/agent/threads/:threadId/permission", () =>
     HttpResponse.json({

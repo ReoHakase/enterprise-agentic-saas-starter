@@ -44,7 +44,6 @@ import {
 } from "@/features/agent"
 import { apiClient } from "@/lib/api-client"
 import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
-import type { Me } from "@/lib/console-api"
 
 import { navigateAfterAccountSwitch } from "../../account-switch-navigation"
 import {
@@ -53,7 +52,7 @@ import {
   createMultiSessionCapabilities,
 } from "../../multi-session-client"
 import { accountKeys } from "../../queries"
-import type { DeviceAccount } from "../../schema"
+import type { DeviceAccount, Me } from "../../schema"
 
 type AccountSwitcherDialogProps = {
   addAccountHref?: string

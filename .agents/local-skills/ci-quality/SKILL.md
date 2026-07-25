@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 
 - [品質強制](../../../docs/architecture/quality-enforcement.md)
 - [システム境界](../../../docs/architecture/system-boundaries.md)
-- [テスト戦略](../../../docs/testing/README.md)
+- [テスト戦略](../../../docs/testing-strategy/README.md)
 - [Codex harness](../../../docs/architecture/codex-harness.md)
 
 ## Workflow
@@ -19,7 +19,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 3. test fileはcomplexity/size/nestingだけを緩め、import/security/tenant境界を緩めない。
 4. `check:static`へOxlint、Knip full/strict、jscpdを集約する。
 5. rootの公開test scriptを`test`、`test:browser`、`test:e2e`、`test:eval:agent`、
-   `test:e2e:agent`の5本へ限定する。
+   `test:e2e:full`の5本へ限定する。
 6. CIをNix、quality、static-quality、browser、free-e2e、cloudflare-dry-runへ分ける。
 7. paid suiteはfork PRへsecretを渡さず、fingerprint change/nightly/release条件で実行する。
 
@@ -31,7 +31,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 - `bun run build:cloudflare`
 - config/skill/Nix変更時: `nix flake check`
 - paid条件該当時: `bun run test:eval:agent`
-- release candidateだけ: `bun run test:e2e:agent`
+- release candidateだけ: `bun run test:e2e:full`
 
 変更中は最小のworkspace checkから始め、active exec planが指定する最終gateを全て実行します。
 

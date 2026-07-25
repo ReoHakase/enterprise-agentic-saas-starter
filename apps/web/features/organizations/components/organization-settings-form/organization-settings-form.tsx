@@ -16,15 +16,15 @@ import { toast } from "sonner"
 import { FormTextField } from "@/components/form-text-field/form-text-field"
 import { LinkButton } from "@/components/link-button/link-button"
 import { OrganizationProfileImage } from "@/components/organization-identity/organization-identity"
-import { consoleKeys } from "@/features/console"
-import { ProfileImageEditor } from "@/features/profile-images"
-import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,
+  consoleKeys,
   getConsoleApiErrorText,
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
-} from "@/lib/console-api"
+} from "@/features/console"
+import { ProfileImageEditor } from "@/features/profile-images"
+import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import {
   organizationFormSchema,

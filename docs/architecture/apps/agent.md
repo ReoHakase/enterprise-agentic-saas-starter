@@ -228,7 +228,7 @@ apps/web/**
 - Agent-owned `agent-client` port contract: `bun run test`
 - private API + temporary DB integrationはAPI-owned `bun run test`
 - real model dataset eval: `bun run test:eval:agent`
-- full paid browser canary: `bun run test:e2e:agent`
+- full paid browser canary: `bun run test:e2e:full`
 
 ## 理由と代償
 

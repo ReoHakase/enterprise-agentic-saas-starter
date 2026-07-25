@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのturbo.json、task graph、cache�
 
 - [システム境界](../../../docs/architecture/system-boundaries.md)
 - [品質強制](../../../docs/architecture/quality-enforcement.md)
-- [テスト実行契約](../../../docs/testing/README.md)
+- [テスト実行契約](../../../docs/testing-strategy/common/ci-execution.md)
 
 ## Workflow
 
@@ -17,7 +17,7 @@ description: enterprise-agentic-saas-starterのturbo.json、task graph、cache�
 2. 実処理はpackage scriptへ置き、root scriptは安定した公開commandだけをdelegateする。
 3. cache可能性とsecretの有無を分け、paid/E2E/deploy taskは明示的にcacheを無効化する。
 4. dependency graphを`dependsOn`で表し、順序をshell scriptへ隠さない。
-5. affected workspaceとroot公開commandの両方を検証する。
+5. workspace taskとroot公開commandの両方を検証する。
 
 ## Validation
 

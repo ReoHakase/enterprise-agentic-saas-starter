@@ -26,7 +26,7 @@ import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react"
 
 import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
 import { withAgentThreadHref } from "@/features/issues"
-import type { OrganizationSummary } from "@/lib/console-api"
+import type { OrganizationSummary } from "@/features/organizations"
 
 type NavigationItem = {
   href: string

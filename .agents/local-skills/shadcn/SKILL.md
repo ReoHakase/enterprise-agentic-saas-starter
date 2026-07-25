@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterでshadcn/ui componentを検索、�
 
 - [UI package設計](../../../docs/architecture/packages/ui.md)
 - [Web設計](../../../docs/architecture/apps/web.md)
-- [Webテスト戦略](../../../docs/testing/web.md)
+- [Webテスト戦略](../../../docs/testing-strategy/apps/web.md)
 
 ## Workflow
 

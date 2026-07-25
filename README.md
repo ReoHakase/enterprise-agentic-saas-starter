@@ -225,9 +225,8 @@ bun run build:cloudflare
 
 > [!NOTE]
 > [`docs/testing-strategy/`](docs/testing-strategy/README.md)は、ワークスペース別のテスト所有権と
-> 決定的E2E・完全E2Eへの整理を定める移行先の仕様です。現在は
-> [`testing strategy全面移行`](docs/exec-plans/active/testing-strategy-migration.md)に沿って
-> 移行中です。有料の完全E2Eは`test:e2e:full`だけを公開し、通常のPRでは実行しません。
+> 決定的E2E・完全E2Eへの整理を定める正本です。有料の完全E2Eは`test:e2e:full`だけを
+> 公開し、通常のPRでは実行しません。
 
 ## 📚 文書
 

@@ -1,27 +1,25 @@
 ---
 id: ADR-003
 title: test commandとcost layer
-status: accepted
+status: superseded
 date: 2026-07-24
 owners:
   - repository-maintainers
 supersedes:
   - none
+superseded_by:
+  - ADR-007
 ---
 
 # ADR-003 test commandとcost layer
 
 ## 背景
 
-Unit、browser、E2E、paid LLMが混ざると、通常確認が遅くなりpaid実行を避けにくくなります。
+Unit、browser、E2E、paid LLMが混ざると、通常確認が遅くなりpaid実行を避けにくくなります。この判断は[ADR-007](./ADR-007-workspace-testing-strategy.md)に置き換えられました。
 
 ## 決定
 
-Root test scriptを`test`、`test:browser`、`test:e2e`、`test:eval:agent`、`test:e2e:agent`へ限定し、runtimeとcostで分けます。
-内部はL0からL7へ分類し、deterministic core、browser feature integration、probabilistic canaryの
-三層にします。paid evalはcontract/stack/3回stabilityをbrowserlessで実行し、paid browser E4は
-規範文書でIDを固定した2本のcanaryを各1回だけ実行します。VRTはdeferします。
-layer mappingと実行条件は[テスト戦略](../testing/README.md)に定義します。
+Root test scriptをruntimeとcostで分け、deterministic core、browser feature integration、probabilistic canaryを独立させる方針を採用しました。現在のscript名、workspace別分類、実行条件は[テスト戦略](../testing-strategy/README.md)とADR-007を正本とします。
 
 ## 理由
 
@@ -29,16 +27,15 @@ layer mappingと実行条件は[テスト戦略](../testing/README.md)に定義�
 production parser、controller、tool executor、repositoryをmockせず、非決定的なmodel/network境界だけを
 差し替えることで、test専用実装ではなくproduction contractを検証します。
 
-browser-import可能なcomponentは全てL4のStorybook catalogueへ置き、route/Server Component/cookie等の
-browser featureでは閉じない境界だけをL5へ残します。loading/ready/errorのDOM geometry assertionは
-pixel baselineを持たないためVRTではなく、VRT deferredのまま必須にできます。
+public componentと主要ViewはStorybook catalogueへ置き、route、Server Component、cookie等の
+browser featureでは閉じない境界はPlaywrightへ残します。loading、ready、errorのDOM geometry assertionはpixel baselineを持たないため、VRTを実装しなくても必須にできます。
 
 Agent behaviourを確認するpaid evalでは、各caseを独立stateで3回実行し3/3を要求します。一回の
 偶然成功を合格にしないためです。Paid testは通常PRから分離し、
 maintainerの明示実行、nightly、releaseだけに限定します。repository固有のcost計算や予算validatorは
-持ちません。release時にbrowserとreal modelを同時に使うL7だけは固定二本を各一回、retryなしにします。
+持ちません。release時にbrowserとreal modelを同時に使うcanaryだけは固定二本を各一回、retryなしにします。
 
-`bun run check`はbrowserを必要としないL0からL3を全件含め、L4は独立したrequired browser CIにします。
+`bun run check`はbrowserを必要としないdeterministic testを全件含め、browser testは独立したrequired CIにします。
 pre-pushへbrowser起動を入れて回避を誘発せず、PRではStorybook/Browser Modeをskip可能な任意checkに
 しないためです。
 
@@ -67,6 +64,6 @@ Security、tenant、approval、privacy、idempotencyはLLM scorerではなくdet
 
 ## 検証
 
-- local/full/affected execution test
+- localとCIのfull execution test
 - free E2E aggregate
 - paid suiteが通常PRから分離されること

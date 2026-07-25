@@ -1,7 +1,7 @@
 ---
 title: テストカバレッジ収集仕様
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/**
@@ -125,6 +125,19 @@ coverage: {
 
 自動的なthreshold更新を通常CIで有効にしません。改善が偶然の実行経路によるものか、意味のあるテスト追加によるものかを確認できないためです。
 
+現在の全体threshold:
+
+| workspace       | statements | branches | functions | lines |
+| --------------- | ---------: | -------: | --------: | ----: |
+| Agent           |         97 |       92 |       100 |    98 |
+| API             |         87 |       68 |        91 |    88 |
+| GitHub emulator |         98 |       97 |        95 |   100 |
+| Web             |         85 |       71 |        81 |    86 |
+| Auth            |         92 |       90 |       100 |    92 |
+| DB              |         94 |       75 |        93 |    95 |
+| Email           |         97 |       89 |       100 |    97 |
+| UI              |         91 |       83 |        87 |    90 |
+
 ## coverage例外
 
 coverage ignore commentは最後の手段です。使用時は次を記載します。
@@ -136,18 +149,6 @@ coverage ignore commentは最後の手段です。使用時は次を記載しま
 
 大きなfileまたはbranch全体をignoreしません。
 
-## `--changed`との関係
-
-ローカルの`--changed`実行ではcoverageを無効化します。
-
-```sh
-bun --cwd apps/web run test -- \
-  --changed=origin/main \
-  --coverage.enabled=false
-```
-
-変更関連テストだけのcoverageは、全source coverageと異なる意味になるため、required CIのthresholdへ使いません。
-
 ## reportとartifact
 
 必須report:
@@ -157,17 +158,14 @@ bun --cwd apps/web run test -- \
 - LCOV
 - HTML
 
-配置例:
+各workspace内の配置:
 
 ```text
 coverage/
-  apps-web/
-  apps-api/
-  apps-agent/
-  packages-db/
-  packages-auth/
-  packages-ui/
-  packages-email/
+  node/
+    coverage-summary.json
+    lcov.info
+    index.html
   browser/
 ```
 

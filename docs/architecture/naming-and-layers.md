@@ -46,7 +46,7 @@ domain
 
 内側は外側のframeworkをimportしません。外側は内側を利用できます。
 
-小さなfeatureへ空のlayer directoryを大量に作りません。ただし全面移行後の規則が曖昧にならないよう、責務が二つ以上あるfeatureは最終形へ分けます。
+小さなfeatureへ空のlayer directoryを大量に作りません。責務が二つ以上あるfeatureは依存方向が明確になる形へ分けます。
 
 layerは論理的な依存方向であり、特定のdirectory名そのものではありません。小さいmoduleはflatな
 `domain.ts`、`service.ts`、`repository.ts`で同じ方向を表せます。逆にdirectory名が

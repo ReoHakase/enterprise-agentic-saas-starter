@@ -10,7 +10,7 @@ import {
 import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
-} from "@/lib/console-api"
+} from "@/features/console"
 
 import type {
   IssueAssigneeOption,

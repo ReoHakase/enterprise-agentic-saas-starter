@@ -10,7 +10,7 @@ import {
   clearConsoleApiFieldError,
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
-} from "@/lib/console-api"
+} from "@/features/console"
 
 import { issueDescriptionFormSchema } from "../../schema"
 import type { StringFieldApi, SubmitSelection } from "../form-types/form-types"

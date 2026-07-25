@@ -33,8 +33,9 @@ import { useCallback, useEffect, useState } from "react"
 import { DropdownMenuLinkItem } from "@/components/navigation-link/navigation-link"
 import { OrganizationProfileImage } from "@/components/organization-identity/organization-identity"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
+import type { Me } from "@/features/account"
 import { withAgentThreadHref } from "@/features/issues"
-import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
+import { roleLabel, type OrganizationSummary } from "@/features/organizations"
 
 const organizationSwitcherTrigger = (
   <SidebarMenuButton size="lg" tooltip="Switch organization" />

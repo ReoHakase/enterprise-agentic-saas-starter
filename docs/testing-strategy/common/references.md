@@ -1,6 +1,6 @@
 ---
 title: テスト戦略参考資料
-status: proposed
+status: accepted
 implementation: not-applicable
 last_reviewed: 2026-07-26
 ---
@@ -78,7 +78,5 @@ last_reviewed: 2026-07-26
 
 ## Turborepo
 
-- `--affected`
-  - https://turborepo.com/docs/crafting-your-repository/constructing-ci#using---affected
 - `turbo run`
   - https://turborepo.com/docs/reference/run

@@ -6,7 +6,7 @@
 ## 正本とrouting
 
 - 文書の入口は[`docs/README.md`](docs/README.md)。
-- 設計は`docs/architecture/`、test契約は`docs/testing/`、永続的判断は`docs/decisions/`、
+- 設計は`docs/architecture/`、test契約は`docs/testing-strategy/`、永続的判断は`docs/decisions/`、
   作業状態は`docs/exec-plans/active/`を正本にする。
 - `.agents/local-skills/`はrepo-local skill artifactの編集元であり、`.agents/skills/`はNix生成先。
 - 仕様や理由をskillへ複製しない。変更領域のskillが指定するdocs、ADR、active planを先に読む。
@@ -37,7 +37,7 @@
 - `bun run test:browser`: UI interactionとa11y。
 - `bun run test:e2e`: free E2E。
 - `bun run test:eval:agent`: paid model eval。
-- `bun run test:e2e:agent`: paid full-stack canary。
+- `bun run test:e2e:full`: paid full-stack canary。
 - Oxlint warning、Knip full/strict、jscpd findingをignoreやbaselineで隠さない。
 - Cloudflare構成変更は`bun run build:cloudflare`、DB変更は`generate + migrate`と`db:check`を通す。
 

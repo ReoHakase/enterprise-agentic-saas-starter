@@ -12,9 +12,10 @@ Codex custom agent、reviewer、sole-writerの契約は
 [`docs/architecture/codex-harness.md`](../architecture/codex-harness.md)を参照します。
 
 過去の機能・test草案にあった有効な要件はここへ統合し、草案なしで設計と検証範囲を追跡します。
-test layerと公開commandの正本は[`docs/testing/agent.md`](../testing/agent.md)と
-[`docs/testing/e2e.md`](../testing/e2e.md)であり、このdirectoryは製品scenarioとrelease acceptanceを
-所有します。
+test layerと公開commandの正本は
+[`docs/testing-strategy/apps/agent.md`](../testing-strategy/apps/agent.md)と
+[`docs/testing-strategy/e2e.md`](../testing-strategy/e2e.md)であり、このdirectoryは製品scenarioと
+release acceptanceを所有します。
 
 ## 読む順序
 
@@ -43,7 +44,7 @@ test layerと公開commandの正本は[`docs/testing/agent.md`](../testing/agent
 | usage event / pricing / daily projection          | usage-billing         | 実装済み          | idempotency、price version、失敗/cancel test                              |
 | Agent UI shortcut                                 | chat-ui               | 実装済み          | IME、input、modal、desktop/mobile test                                    |
 | deterministic release suite                       | testing               | releaseごとに検証 | `bun run check`、Browser Mode/free E2E、typegen、Cloudflare build         |
-| paid eval / E2E canary                            | testing               | releaseごとに検証 | browserless eval 3/3、固定E4 canary 2本を各1回                            |
+| paid eval / E2E canary                            | testing               | releaseごとに検証 | browserless G5 eval 3/3、固定E2 canary 2本を各1回                         |
 
 「実装済み」はcode pathが存在することを示し、「検証済み」は[Testとrelease gate](./testing.md)の対応gateが成功したことを示します。確率的なLLM出力は文面一致で保証せず、tool call、stream part、DB state、安全境界を検証します。
 

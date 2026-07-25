@@ -115,9 +115,9 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-bun
 
-      - name: Install Chromium
+      - name: Install browser-suite browsers
         working-directory: apps/web
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium webkit
 
       - name: Run Storybook and Browser Mode tests
         run: bun run test:browser

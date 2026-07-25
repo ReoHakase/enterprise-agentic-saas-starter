@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { AnchorHTMLAttributes } from "react"
 import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -82,7 +83,13 @@ vi.mock("@better-auth-ui/react", () => {
         rememberMe: true,
         requireEmailVerification: false,
       },
-      Link: "a",
+      Link: ({
+        children,
+        prefetch: _prefetch,
+        ...props
+      }: AnchorHTMLAttributes<HTMLAnchorElement> & { prefetch?: boolean }) => (
+        <a {...props}>{children}</a>
+      ),
       localization: {
         auth: {
           alreadyHaveAnAccount: "Already have an account?",

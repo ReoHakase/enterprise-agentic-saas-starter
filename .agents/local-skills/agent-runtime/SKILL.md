@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra runtime、t
 
 - [Agent設計](../../../docs/architecture/apps/agent.md)
 - [Agent仕様](../../../docs/agent/README.md)
-- [Agentテスト戦略](../../../docs/testing/agent.md)
+- [Agentテスト戦略](../../../docs/testing-strategy/apps/agent.md)
 - securityやapproval変更時: [Agent security](../../../docs/agent/architecture-security.md)
 
 ## Workflow

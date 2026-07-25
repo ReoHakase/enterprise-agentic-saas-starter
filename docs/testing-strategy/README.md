@@ -1,7 +1,7 @@
 ---
 title: テスト戦略仕様書
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/**
@@ -26,7 +26,7 @@ applies_to:
 
 ### ワークスペース別のテスト層を維持する
 
-API、Web、Agent、DB、認証、UI、メールでは、適切な実行環境と失敗原因が異なります。全ワークスペースを一つの`L1`から`L7`へ押し込まず、次の分類を正本とします。
+API、Web、Agent、DB、認証、UI、メールでは、適切な実行環境と失敗原因が異なります。全ワークスペースを一つの共通番号へ押し込まず、次の分類を正本とします。
 
 - API: `A1`から`A5`
 - Web: `W1`から`W6`
@@ -181,7 +181,7 @@ E2E
 ```json
 {
   "scripts": {
-    "test": "turbo run test",
+    "test": "vitest run --config vitest.config.ts && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",

@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのNext.js App Router、feature UI�
 
 - [Web設計](../../../docs/architecture/apps/web.md)
 - [UI package設計](../../../docs/architecture/packages/ui.md)
-- [Webテスト戦略](../../../docs/testing/web.md)
+- [Webテスト戦略](../../../docs/testing-strategy/apps/web.md)
 - [命名とlayer](../../../docs/architecture/naming-and-layers.md)
 
 ## Workflow

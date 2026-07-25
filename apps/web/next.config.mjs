@@ -85,4 +85,6 @@ export default withSentryConfig(nextConfig, {
   },
 })
 
-initOpenNextCloudflareForDev()
+if (process.env.NODE_ENV === "development") {
+  initOpenNextCloudflareForDev()
+}

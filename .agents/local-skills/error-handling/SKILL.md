@@ -8,7 +8,7 @@ description: enterprise-agentic-saas-starterのAppError、public error contract�
 ## 必読文書
 
 - [API設計](../../../docs/architecture/apps/api.md)
-- [APIテスト戦略](../../../docs/testing/api.md)
+- [APIテスト戦略](../../../docs/testing-strategy/apps/api.md)
 - [Observability](../../../docs/observability.md)
 - [API / OpenAPI](../../../docs/api-openapi.md)
 

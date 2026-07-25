@@ -1,7 +1,7 @@
 ---
 title: E2Eテスト戦略
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/web/e2e/**
@@ -224,7 +224,7 @@ state isolation後にparallel executionを有効にします。
 
 ### reuse
 
-- browser installをCI cacheする
+- pinned versionのbrowserをCIでinstallする
 - migration済みtemplate DBをcopyする
 - expensive seedをsuite単位で再利用する
 - mock/provider serverをworker単位で再利用する

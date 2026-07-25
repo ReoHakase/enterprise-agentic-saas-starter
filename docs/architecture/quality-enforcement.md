@@ -41,9 +41,8 @@ coding agentが大きいfunction、深いnesting、dead code、undeclared depend
 
 ## 全面適用
 
-main上で既存違反baselineを維持する段階導入は行いません。全面移行branch内では、source分割が
-完了した作業単位ごとに上限を狭め、最終PRでは全sourceを後述の目標budget内へ入れます。各時点の
-上限は常にerrorであり、warning-onlyの移行期間は作りません。
+main上で既存違反baselineを維持する段階導入は行いません。全sourceへ後述のbudgetを直接適用し、
+超過は常にerrorとして扱います。
 
 除外できるのは次だけです。
 
@@ -69,7 +68,7 @@ root script:
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",
-    "test:e2e:agent": "turbo run test:e2e:agent --filter=@enterprise-agentic-saas/web"
+    "test:e2e:full": "turbo run test:e2e:full --filter=@enterprise-agentic-saas/web"
   }
 }
 ```
@@ -196,7 +195,7 @@ full modeはtest、Storybook、configを含む全codeを解析します。`--str
 - `ignoreDependencies`にはissue、責任者、理由をcommentで残す
 - generated `.agents/skills`、build output、migration snapshotは解析対象外
 
-全面移行PRではfindingを全て解消し、baselineをcommitしません。
+findingは同じ変更で全て解消し、baselineをcommitしません。
 
 ## jscpd
 
@@ -243,7 +242,7 @@ root、config、script、docsを含むrepository全体を入力にせず、`path
 固定します。ignoreはそのroot内のtest/story/E2E/code fixture/generatedだけを除外します。
 入力pathとignoreは`.jscpd.json`を正本にし、広い除外をreviewで拒否します。
 
-thresholdを超える場合は全面移行PR内でrefactorします。baseline比較による段階導入はしません。
+thresholdを超える場合は同じ変更内でrefactorします。baseline比較による段階導入はしません。
 
 ## Git hook
 
@@ -275,7 +274,7 @@ cloudflare-dry-run
 - `quality`: format、typecheck、`bun run test`、build
 - `static-quality`: Oxlint、Knip full/strict、jscpd
 - `browser`: Storybook/Browser Mode
-- `free-e2e`: E1、scripted Agent E2、OAuth E2のfull free suite
+- `free-e2e`: E1のfull free suite
 - `cloudflare-dry-run`: Web/API/Agent production bundle
 
 Paid testはfork PRへsecretを渡さず、通常PRのrequired checkにも含めません。maintainerの明示実行、
@@ -291,7 +290,7 @@ Permanent overrideに必須:
 - 責任者
 - 削除条件
 
-Temporary waiverはmainへmergeしません。全面移行完了条件は全budgetへの適合です。
+Temporary waiverはmainへmergeしません。全変更をbudgetへ適合させます。
 
 ## 理由と代償
 
@@ -303,7 +302,7 @@ Temporary waiverはmainへmergeしません。全面移行完了条件は全budg
 
 ### 代償
 
-- 全面移行PRのrefactor量が大きい
+- 既存違反を発見した変更のrefactor量が大きくなることがある
 - budgetへ合わせるだけの不自然な分割が起こり得る
 - Knip/jscpdのfalse positive調査が必要
 
@@ -317,7 +316,7 @@ Ruleを目的ではなく責務境界のsignalとして扱い、意味のないh
 - jscpd threshold以下
 - exported browser componentにnamed storyがあり、Storybook/Browser Mode testが成功する
 - client側の`<Suspense>`、Skeleton、Error Boundaryを対象component testで検証する
-- async Server Component routeの`loading.tsx`、`error.tsx`、Playwright E2に欠落がない
+- async Server Component routeの`loading.tsx`、`error.tsx`、Playwright W6に欠落がない
 - jscpdがproduction sourceだけをscanする
 - broad ignoreとbaseline fileがない
 - `bun run check`がlocal/CIで成功する

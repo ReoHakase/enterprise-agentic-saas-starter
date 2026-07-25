@@ -9,7 +9,7 @@ description: enterprise-agentic-saas-starterのTurso/libSQL、Drizzle schema、m
 
 - [DB package設計](../../../docs/architecture/packages/db.md)
 - [Database lifecycle](../../../docs/database-lifecycle.md)
-- [Migrationテスト](../../../docs/testing/database-migrations.md)
+- [DBテスト戦略](../../../docs/testing-strategy/packages/db.md)
 - tenant変更時: [認証・認可・マルチテナント](../../../docs/auth-tenancy-security.md)
 
 ## Workflow

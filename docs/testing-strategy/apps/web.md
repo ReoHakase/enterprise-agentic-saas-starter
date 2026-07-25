@@ -1,7 +1,7 @@
 ---
 title: Webテスト戦略
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/web/**
@@ -265,7 +265,7 @@ Web固有の判断:
 {
   "scripts": {
     "test": "vitest run --project=unit",
-    "test:browser": "vitest run --project=storybook-light --project=storybook-dark --project=browser --project=app-integration"
+    "test:browser": "vitest run --project=storybook-light --project=storybook-dark && vitest run --project=browser && bun run build:test:browser:app && bun run test:browser:app:chromium && bun run test:browser:app:webkit"
   }
 }
 ```

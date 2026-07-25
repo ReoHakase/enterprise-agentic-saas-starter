@@ -17,11 +17,11 @@ linked_specs:
   - docs/architecture/apps/api.md
   - docs/architecture/apps/agent.md
   - docs/api-openapi.md
-  - docs/testing/README.md
-  - docs/testing/web.md
-  - docs/testing/api.md
-  - docs/testing/agent.md
-  - docs/testing/e2e.md
+  - docs/testing-strategy/README.md
+  - docs/testing-strategy/apps/web.md
+  - docs/testing-strategy/apps/api.md
+  - docs/testing-strategy/apps/agent.md
+  - docs/testing-strategy/e2e.md
   - docs/agent/architecture-security.md
   - docs/agent/operations.md
 linked_adrs:
@@ -92,7 +92,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 
 - [x] `docs/architecture/apps/`と`packages/`を追加
 - [x] `docs/jargon.md`を追加し、AGENTSとdocs indexから参照
-- [x] `docs/testing/`をWeb/API/Agent/E2E/migration/VRTへ分割
+- [x] test契約をWeb/API/Agent/E2E/migration/VRTへ分割
 - [x] `docs/decisions/`とADRを追加
 - [x] `docs/exec-plans/`とtemplateを追加
 - [x] `docs/README.md`を新indexへ更新
@@ -129,7 +129,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [x] apps/webのdomain/view storyを実行できるStorybook projectへ統合する
 - [x] client render中に待機し得るcomponentへReactの`<Suspense>`、Skeleton、React Error Boundary、
       Browser Mode testを追加する
-- [x] async Server Component routeへ`loading.tsx`、`error.tsx`、Playwright E2を追加する
+- [x] async Server Component routeへ`loading.tsx`、`error.tsx`、Playwright W6を追加する
 - [x] Error Boundaryへsecret/private ID入りsentinelをthrowし、DOMと読み上げ領域へraw errorが
       出ないtestを追加する
 - [x] route `loading.tsx` / `error.tsx`をfeatureのSkeleton/error表示へ委譲する薄いfileにする
@@ -291,7 +291,7 @@ branch内では作業単位ごとにcommitできますが、各commitは同じPR
 - [x] Chromium full、WebKit代表case
 - [x] Next.js routeとServer Componentのloading/error/retryでpersistent shell、geometry、focus、
       overflowを検証
-- [x] E4を規範文書でIDを固定した2 canaryへ縮小し、各1回だけ実行
+- [x] paid full-stackを規範文書でIDを固定した2 canaryへ縮小し、各1回だけ実行
 
 ## 作業単位 5 Codex harness
 
@@ -391,7 +391,7 @@ bun run test:eval:agent
 Release candidateだけ:
 
 ```sh
-bun run test:e2e:agent
+bun run test:e2e:full
 ```
 
 このrunではリポジトリ管理者の明示指示により、paid testとその予算検証を実行していません。
@@ -432,7 +432,7 @@ git diff --name-status origin/main -- packages/db/drizzle
 | 2026-07-24 | VRTはdeferred                                                                                                                   | flaky運用を先に導入しない                                                                                                                |
 | 2026-07-24 | Oxlint初期budgetはmigration-friendlyな3段階                                                                                     | 一括移行でwaiverと無意味な分割を生まない                                                                                                 |
 | 2026-07-24 | testはsize budgetだけ緩め、import/security境界は共通                                                                            | test経由のarchitecture迂回を防ぐ                                                                                                         |
-| 2026-07-24 | paid evalをbrowserなしのread/write 2 case各3 trial、E4を固定2 canaryへ分離                                                      | model behaviorとfull-stack配線の費用・原因を分離する                                                                                     |
+| 2026-07-24 | paid evalをbrowserなしのread/write 2 case各3 trial、paid full-stackを固定2 canaryへ分離                                         | model behaviorとfull-stack配線の費用・原因を分離する                                                                                     |
 | 2026-07-24 | `docs/agent/` pathは維持しproduct Agentと明記                                                                                   | renameのlink churnよりindexでの責務分離を優先する                                                                                        |
 | 2026-07-24 | root `AGENTS.md`だけを使いnested fileを作らない                                                                                 | client差による上書きとdocs/skillsとの三重管理を避ける                                                                                    |
 | 2026-07-24 | exported browser componentをStorybook対象にする                                                                                 | UI stateの発見可能性とa11y/interaction gateを保つため                                                                                    |
@@ -461,7 +461,7 @@ git diff --name-status origin/main -- packages/db/drizzle
 | `nix flake check`                                                 | pass    | `checks.aarch64-darwin.agent-skills`とdevShell                                                                              |
 | `bun run check`                                                   | pass    | Oxlint、Knip full/strict、jscpd、format、typecheck、free unit/integration。repository policy testとCodex harness testを含む |
 | `bun run test:browser`                                            | pass    | UI 30件、Web 109件                                                                                                          |
-| `bun run test:e2e`                                                | pass    | E1 core 8件、route contract 9件、scripted Agent E2 1件、OAuth/WebAuthn E2 2件                                               |
+| `bun run test:e2e`                                                | pass    | 当時のfree E2E aggregate 20件                                                                                               |
 | `bun run --cwd apps/api test -- openapi --coverage.enabled=false` | pass    | 実app生成OpenAPI contract 1件                                                                                               |
 | `bun run build`                                                   | pass    | 全workspace build                                                                                                           |
 | `bun run build:storybook`                                         | pass    | WebとUIのStorybook static build                                                                                             |
@@ -509,7 +509,7 @@ git diff --name-status origin/main -- packages/db/drizzle
 - [x] jscpd threshold以下
 - [x] exported browser componentにnamed storyがあり、Storybook/Browser Mode testが成功
 - [x] clientの主要な待機状態にSuspense/Skeleton/Error Boundary/Browser Mode testがある
-- [x] async Server Component routeにloading.tsx/error.tsx/Playwright E2があり、geometry test成功
+- [x] async Server Component routeにloading.tsx/error.tsx/Playwright W6があり、geometry test成功
 - [x] 実app生成OpenAPIのoperation ID、英語metadata、security分類、主要schema、Scalar設定test成功
 - [x] `bun run check`成功
 - [x] `test:browser`成功

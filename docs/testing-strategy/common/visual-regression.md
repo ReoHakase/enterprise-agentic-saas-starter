@@ -1,6 +1,6 @@
 ---
 title: 視覚回帰テスト方針
-status: proposed
+status: accepted
 implementation: deferred
 last_reviewed: 2026-07-26
 applies_to:

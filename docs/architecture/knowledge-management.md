@@ -84,7 +84,7 @@ local skillへ規範本文を複製しません。skillは関連docsを指し、
 | 情報                                      | 置き場所                  | 理由                           |
 | ----------------------------------------- | ------------------------- | ------------------------------ |
 | 要求、invariant、設計理由、代替案         | architecture文書またはADR | 人間とagentが一覧できる        |
-| test layer、runner、cost、実行条件        | `docs/testing/`           | test実装とcost判断を分離しない |
+| test layer、runner、cost、実行条件        | `docs/testing-strategy/`  | test実装とcost判断を分離しない |
 | 一回の大規模変更の順序、進捗、証跡        | active exec plan          | 永続仕様と途中状態を混ぜない   |
 | CLI、障害対応、rollback checklist         | runbook                   | 実行者が順番に追える           |
 | 発火条件、必読文書、workflow、検証command | local skill               | 必要な作業時だけ短くloadできる |
@@ -136,7 +136,7 @@ exec planは`draft | active | completed | abandoned`を使います。仕様の�
 
 ## 仕様の有効化
 
-全面移行PRでは次を一つの切替として実施します。
+複数の正本を同時に変える大規模PRでは、次を一つの切替として実施します。
 
 1. 新docs、ADR、exec planを`proposed`または`draft`で追加
 2. source、品質ゲート、テスト、Codex設定を最終形へ変更
@@ -146,7 +146,7 @@ exec planは`draft | active | completed | abandoned`を使います。仕様の�
 6. 上のstatus変更を含む最終headでも必須checkとreviewを確認する
 7. 同じPRをmainへmergeし、その時点でaccepted仕様とcompleted履歴を同時に有効化する
 
-移行途中のcommitを別PRとしてmergeしません。未mergeのbranchでは、現在のmainにある規則を通常feature changeの正本とします。
+切替途中のcommitを別PRとしてmergeしません。未mergeのbranchでは、現在のmainにある規則を通常feature changeの正本とします。
 
 ## docsとskills
 
@@ -174,7 +174,7 @@ Codex custom agent、reviewer、sole-writer、hookは
 [Codex harness](codex-harness.md)で扱います。
 
 `docs/agent/`を`docs/product-agent/`へ改名する案も検討しましたが、既存linkと運用参照の変更量に
-対して情報の責務はindexで十分区別できるため、今回の全面移行では現pathを維持します。将来、
+対して情報の責務はindexで十分区別できるため、現pathを維持します。将来、
 製品Agent以外のAgent仕様が増えて衝突する場合だけ独立ADRで改名します。
 
 ## ADR

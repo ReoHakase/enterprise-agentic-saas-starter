@@ -1,6 +1,6 @@
 "use client"
 
-import { createConsoleApi } from "@/lib/console-api"
+import { createConsoleApi } from "@/features/console"
 import { clientEnv } from "@/lib/env.client"
 
 type BrowserConsoleApi = ReturnType<typeof createConsoleApi>

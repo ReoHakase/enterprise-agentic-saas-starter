@@ -1,7 +1,7 @@
 ---
 title: 静的検査仕様
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/**
@@ -69,7 +69,7 @@ applies_to:
 
 ## 実装方針
 
-境界はpackage exports、TypeScript、Oxlint、Knip、build、package所有testで強制します。テスト選択scriptは実行対象を決めるだけで、architecture checkerとして扱いません。repository専用のarchitecture checkerまたは`check:structure`は追加しません。
+境界はpackage exports、TypeScript、Oxlint、Knip、build、package所有testで強制します。repository専用のarchitecture checkerまたは`check:structure`は追加しません。
 
 例外は次をすべて持つ必要があります。
 

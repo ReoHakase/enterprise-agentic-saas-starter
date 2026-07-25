@@ -1,7 +1,7 @@
 import "server-only"
 import { cache } from "react"
 
-import { createConsoleApi } from "@/lib/console-api"
+import { createConsoleApi } from "@/features/console"
 import { serverEnv } from "@/lib/env.server"
 import { getCookieHeader } from "@/lib/server/auth"
 

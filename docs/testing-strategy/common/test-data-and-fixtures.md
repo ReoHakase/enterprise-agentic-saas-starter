@@ -1,7 +1,7 @@
 ---
 title: テストデータとfixture仕様
-status: proposed
-implementation: planned
+status: accepted
+implementation: active
 last_reviewed: 2026-07-26
 applies_to:
   - apps/**
