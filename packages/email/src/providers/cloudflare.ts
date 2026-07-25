@@ -1,6 +1,10 @@
-import type { EmailTemplate, SendEmail, SendEmailInput } from "../types"
+import type {
+  EmailTemplate,
+  SendEmail,
+  SendEmailInput,
+} from "../contracts/email"
 
-export type CloudflareEmailMessage = {
+type CloudflareEmailMessage = {
   to: string
   from: string | { email: string; name?: string }
   subject: string
@@ -54,9 +58,7 @@ const knownErrorCodes = [
 
 const knownErrorCodeSet: ReadonlySet<string> = new Set(knownErrorCodes)
 
-export type CloudflareEmailErrorCode =
-  | (typeof knownErrorCodes)[number]
-  | "E_UNKNOWN"
+type CloudflareEmailErrorCode = (typeof knownErrorCodes)[number] | "E_UNKNOWN"
 
 const retryableCodes = new Set<CloudflareEmailErrorCode>([
   "E_RATE_LIMIT_EXCEEDED",

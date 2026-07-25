@@ -2,10 +2,7 @@ import { spawn } from "node:child_process"
 import { chmod, mkdir } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 
-import {
-  removeMailpitDevelopmentSession,
-  writeMailpitDevelopmentSession,
-} from "./mailpit-session"
+import { writeMailpitDevelopmentSession } from "./mailpit-session"
 
 const emailRoot = fileURLToPath(new URL("../../", import.meta.url))
 
@@ -53,18 +50,18 @@ const main = async () => {
   process.once("SIGINT", forwardInterrupt)
   process.once("SIGTERM", forwardTerminate)
 
-  let token: string | undefined
+  let cleanupSession: (() => Promise<void>) | undefined
   try {
     const session = await writeMailpitDevelopmentSession(
       `http://${host}:${port.toString()}`
     )
-    token = session.token
+    cleanupSession = session.cleanup
     process.exitCode = await exited
   } finally {
     process.off("SIGINT", forwardInterrupt)
     process.off("SIGTERM", forwardTerminate)
     mailpit.kill()
-    if (token) await removeMailpitDevelopmentSession(token)
+    await cleanupSession?.()
   }
 }
 

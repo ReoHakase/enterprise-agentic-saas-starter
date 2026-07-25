@@ -1,12 +1,16 @@
-import type { EmailTemplate, SendEmail, SendEmailInput } from "../types"
-import type { EmailRuntime } from "./configured"
+import type {
+  EmailRuntime,
+  EmailTemplate,
+  SendEmail,
+  SendEmailInput,
+} from "../contracts/email"
 
-export type MailpitEmailAddress = {
+type MailpitEmailAddress = {
   Email: string
   Name?: string
 }
 
-export type MailpitSendMessage = {
+type MailpitSendMessage = {
   From: MailpitEmailAddress
   To: [MailpitEmailAddress]
   Subject: string
@@ -15,10 +19,7 @@ export type MailpitSendMessage = {
   Tags: [EmailTemplate]
 }
 
-export type MailpitDeliveryErrorCode =
-  | "E_HTTP"
-  | "E_NETWORK"
-  | "E_VALIDATION_ERROR"
+type MailpitDeliveryErrorCode = "E_HTTP" | "E_NETWORK" | "E_VALIDATION_ERROR"
 
 const assertEmailAddress = (address: string, field: "from" | "to") => {
   const normalized = address.trim()
@@ -83,7 +84,7 @@ const toMailpitMessage = (
   Tags: [input.template],
 })
 
-export class MailpitConfigurationError extends Error {
+class MailpitConfigurationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "MailpitConfigurationError"

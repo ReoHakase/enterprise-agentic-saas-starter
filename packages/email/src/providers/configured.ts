@@ -1,9 +1,7 @@
+import type { EmailProvider, EmailRuntime } from "../contracts/email"
 import { createConsoleSender } from "./console"
 import { createMailpitEmailSender } from "./mailpit"
 import { createNoopSender } from "./noop"
-
-export type EmailProvider = "cloudflare" | "console" | "mailpit" | "noop"
-export type EmailRuntime = "development" | "production" | "test"
 
 export const createConfiguredEmailSender = ({
   provider,

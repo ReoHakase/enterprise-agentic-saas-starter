@@ -1,6 +1,6 @@
 import { AppEmail, EmailParagraph } from "../components/app-email"
-import { renderEmail } from "../render"
-import type { RenderedEmail } from "../types"
+import type { RenderedEmail } from "../contracts/email"
+import { renderEmail } from "../render/index"
 
 export type OrganizationInvitationEmailProps = {
   appName: string
@@ -9,7 +9,7 @@ export type OrganizationInvitationEmailProps = {
   inviterName?: string
 }
 
-export const OrganizationInvitationEmail = ({
+const OrganizationInvitationEmail = ({
   appName,
   organizationName,
   invitationUrl,

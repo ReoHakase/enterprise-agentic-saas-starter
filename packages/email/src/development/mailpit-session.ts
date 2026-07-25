@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 
 const emailRoot = fileURLToPath(new URL("../../", import.meta.url))
 const developmentDirectory = `${emailRoot}.local`
-export const mailpitDevelopmentSessionPath = `${developmentDirectory}/mailpit-session.json`
+const mailpitDevelopmentSessionPath = `${developmentDirectory}/mailpit-session.json`
 
 const localHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -78,10 +78,13 @@ export const writeMailpitDevelopmentSession = async (url: string) => {
     { encoding: "utf8", mode: 0o600 }
   )
   await chmod(mailpitDevelopmentSessionPath, 0o600)
-  return session
+  return {
+    ...session,
+    cleanup: () => removeMailpitDevelopmentSession(session.token),
+  }
 }
 
-export const removeMailpitDevelopmentSession = async (token: string) => {
+const removeMailpitDevelopmentSession = async (token: string) => {
   try {
     const current = await readMailpitDevelopmentSession()
     if (current.token === token) {

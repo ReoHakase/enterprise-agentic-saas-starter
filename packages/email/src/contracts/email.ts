@@ -3,6 +3,9 @@ export type EmailTemplate =
   | "organization_invitation"
   | "verification"
 
+export type EmailProvider = "cloudflare" | "console" | "mailpit" | "noop"
+export type EmailRuntime = "development" | "production" | "test"
+
 export type SendEmailInput = {
   to: string
   template: EmailTemplate

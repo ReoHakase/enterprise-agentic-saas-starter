@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
-  createCloudflareEmailSender,
-  createConsoleSender,
-  createConfiguredEmailSender,
-  createMailpitEmailSender,
-  createNoopSender,
-  MailpitConfigurationError,
   renderMagicLinkEmail,
   renderOrganizationInvitationEmail,
   renderVerificationEmail,
@@ -14,6 +8,11 @@ import {
   resolveEmailProvider,
   resolveMailpitUrl,
 } from "./index"
+import { createCloudflareEmailSender } from "./providers/cloudflare"
+import { createConfiguredEmailSender } from "./providers/configured"
+import { createConsoleSender } from "./providers/console"
+import { createMailpitEmailSender } from "./providers/mailpit"
+import { createNoopSender } from "./providers/noop"
 
 describe("email configuration", () => {
   it("uses a non-deliverable local address when EMAIL_FROM is omitted locally", () => {
@@ -270,7 +269,7 @@ describe("email senders", () => {
         from: "auth@example.com",
         runtime: "development",
       })
-    ).toThrow(MailpitConfigurationError)
+    ).toThrow(/MAILPIT_URL/)
   })
 
   it.each(["production", "test"] as const)(

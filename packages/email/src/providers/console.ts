@@ -1,4 +1,4 @@
-import type { SendEmail, SendEmailInput } from "../types"
+import type { SendEmail, SendEmailInput } from "../contracts/email"
 
 export type ConsoleEmailEvent = {
   template: SendEmailInput["template"]
@@ -12,9 +12,7 @@ const recipientDomain = (address: string) => {
   return separator < 0 ? null : address.slice(separator + 1).toLowerCase()
 }
 
-export const toConsoleEmailEvent = (
-  input: SendEmailInput
-): ConsoleEmailEvent => ({
+const toConsoleEmailEvent = (input: SendEmailInput): ConsoleEmailEvent => ({
   template: input.template,
   recipientDomain: recipientDomain(input.to),
 })
