@@ -1,0 +1,37 @@
+[agents]
+max_threads = 5
+interrupt_message = true
+
+[agents.test_planner]
+description = "変更前にinvariant、最小のdeterministic test layer、browser/paid testの要否を決めるread-only planner。"
+config_file = "agents/test_planner.toml"
+
+[agents.implementer]
+description = "承認済みplanを実装し、production/test/docs/configの変更とdeterministic validationを担う唯一のwriter。"
+config_file = "agents/implementer.toml"
+
+[agents.reviewer_correctness]
+description = "current diffのlogic、contract、architecture、regressionを証拠付きで確認するread-only reviewer。"
+config_file = "agents/reviewer_correctness.toml"
+
+[agents.reviewer_security]
+description = "current diffの認証、認可、tenant、secret、private data、destructive flowを確認するread-only reviewer。"
+config_file = "agents/reviewer_security.toml"
+
+[agents.reviewer_tests]
+description = "current diffのmissing test、false positive、flaky、over-mock、cost layerを確認するread-only reviewer。"
+config_file = "agents/reviewer_tests.toml"
+
+[mcp_servers.next-devtools-mcp]
+command = "/bin/zsh"
+args = ["-lic", "-c", "exec bunx -y next-devtools-mcp"]
+id = ""
+
+[mcp_servers.chrome-devtools-mcp]
+command = "/bin/zsh"
+args = ["-lic", "-c", "exec bunx -y chrome-devtools-mcp"]
+id = ""
+
+[mcp_servers.next-devtools-mcp.env]
+
+[mcp_servers.chrome-devtools-mcp.env]

@@ -1,0 +1,305 @@
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Git pushは明示承認が必要です。",
+    match = ["git push", "git push origin feature"],
+    not_match = ["git status", "git fetch origin"],
+)
+
+prefix_rule(
+    pattern = ["/usr/bin/git", "push"],
+    decision = "prompt",
+    justification = "absolute pathからのGit pushも明示承認が必要です。",
+    match = ["/usr/bin/git push", "/usr/bin/git push origin feature"],
+    not_match = ["/usr/bin/git status"],
+)
+
+prefix_rule(
+    pattern = ["env", "git", "push"],
+    decision = "prompt",
+    justification = "env wrapper経由のGit pushも明示承認が必要です。",
+    match = ["env git push", "env git push origin feature"],
+    not_match = ["env git status"],
+)
+
+prefix_rule(
+    pattern = ["git", "merge"],
+    decision = "prompt",
+    justification = "branch mergeは明示承認が必要です。",
+    match = ["git merge main", "git merge --no-ff feature"],
+    not_match = ["git merge-base main HEAD"],
+)
+
+prefix_rule(
+    pattern = ["gh", "pr", "merge"],
+    decision = "prompt",
+    justification = "PR mergeは明示承認が必要です。",
+    match = ["gh pr merge 42", "gh pr merge 42 --squash"],
+    not_match = ["gh pr view 42"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "deploy"],
+    decision = "prompt",
+    justification = "Cloudflare deployは明示承認が必要です。",
+    match = ["wrangler deploy", "wrangler deploy --env production"],
+)
+
+prefix_rule(
+    pattern = [["bunx", "npx"], "wrangler", "deploy"],
+    decision = "prompt",
+    justification = "Cloudflare deployは明示承認が必要です。",
+    match = ["bunx wrangler deploy", "npx wrangler deploy --env production"],
+)
+
+prefix_rule(
+    pattern = ["bunx", "--bun", "wrangler", "deploy"],
+    decision = "prompt",
+    justification = "Cloudflare deployは明示承認が必要です。",
+    match = ["bunx --bun wrangler deploy"],
+)
+
+prefix_rule(
+    pattern = ["npx", "-y", "wrangler", "deploy"],
+    decision = "prompt",
+    justification = "Cloudflare deployは明示承認が必要です。",
+    match = ["npx -y wrangler deploy"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "rollback"],
+    decision = "prompt",
+    justification = "Cloudflare Workerのrollbackは明示承認が必要です。",
+    match = ["wrangler rollback"],
+)
+
+prefix_rule(
+    pattern = [["bunx", "npx"], "wrangler", "rollback"],
+    decision = "prompt",
+    justification = "Cloudflare Workerのrollbackは明示承認が必要です。",
+    match = ["bunx wrangler rollback", "npx wrangler rollback"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "versions", "rollback"],
+    decision = "prompt",
+    justification = "Cloudflare Workerのrollbackは明示承認が必要です。",
+    match = ["wrangler versions rollback"],
+)
+
+prefix_rule(
+    pattern = ["opennextjs-cloudflare", "deploy"],
+    decision = "prompt",
+    justification = "OpenNextによるproduction deployは明示承認が必要です。",
+    match = ["opennextjs-cloudflare deploy"],
+)
+
+prefix_rule(
+    pattern = [["bunx", "npx"], "opennextjs-cloudflare", "deploy"],
+    decision = "prompt",
+    justification = "OpenNextによるproduction deployは明示承認が必要です。",
+    match = [
+        "bunx opennextjs-cloudflare deploy",
+        "npx opennextjs-cloudflare deploy",
+    ],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", "deploy"],
+    decision = "prompt",
+    justification = "production deployは明示承認が必要です。",
+    match = ["bun run deploy", "bun run deploy --filter web"],
+    not_match = ["bun run build:cloudflare"],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", "--cwd", ["apps/agent", "apps/api", "apps/web"], "deploy"],
+    decision = "prompt",
+    justification = "production deployは明示承認が必要です。",
+    match = [
+        "bun run --cwd apps/agent deploy",
+        "bun run --cwd apps/api deploy",
+        "bun run --cwd apps/web deploy",
+    ],
+)
+
+prefix_rule(
+    pattern = ["turbo", "run", "deploy"],
+    decision = "prompt",
+    justification = "workspace deployは明示承認が必要です。",
+    match = ["turbo run deploy"],
+)
+
+prefix_rule(
+    pattern = ["bunx", "turbo", "run", "deploy"],
+    decision = "prompt",
+    justification = "workspace deployは明示承認が必要です。",
+    match = ["bunx turbo run deploy"],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", "dev:db:reset"],
+    decision = "prompt",
+    justification = "database resetは既存local dataを破棄するため明示承認が必要です。",
+    match = ["bun run dev:db:reset"],
+    not_match = ["bun run dev:db:seed"],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", "--cwd", "packages/db", "db:reset"],
+    decision = "prompt",
+    justification = "database resetは既存local dataを破棄するため明示承認が必要です。",
+    match = ["bun run --cwd packages/db db:reset"],
+)
+
+prefix_rule(
+    pattern = ["bun", ["scripts/reset-local-data.ts", "packages/db/src/reset.ts"]],
+    decision = "prompt",
+    justification = "database reset scriptの直接実行は明示承認が必要です。",
+    match = [
+        "bun scripts/reset-local-data.ts",
+        "bun packages/db/src/reset.ts",
+    ],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "d1", "execute", "--remote"],
+    decision = "prompt",
+    justification = "remote database変更は明示承認が必要です。",
+    match = ["wrangler d1 execute --remote production"],
+    not_match = ["wrangler d1 execute --local development"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "d1", "migrations", "apply", "--remote"],
+    decision = "prompt",
+    justification = "remote database migrationは明示承認が必要です。",
+    match = ["wrangler d1 migrations apply --remote production"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "d1", "time-travel", "restore"],
+    decision = "prompt",
+    justification = "remote database restoreは明示承認が必要です。",
+    match = ["wrangler d1 time-travel restore production"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "d1", ["create", "delete"]],
+    decision = "prompt",
+    justification = "remote databaseの作成または削除は明示承認が必要です。",
+    match = [
+        "wrangler d1 create production",
+        "wrangler d1 delete production",
+    ],
+)
+
+prefix_rule(
+    pattern = ["turso", "db", ["branch", "config", "create", "destroy", "import", "replicate", "shell", "tokens", "unarchive"]],
+    decision = "prompt",
+    justification = "remote Turso databaseの変更またはSQL実行は明示承認が必要です。",
+    match = [
+        "turso db destroy production --yes",
+        "turso db shell production \"DELETE FROM users\"",
+        "turso db import production.db",
+    ],
+    not_match = [
+        "turso db list",
+        "turso db show production",
+        "turso db inspect production",
+    ],
+)
+
+prefix_rule(
+    pattern = ["turso", "db", ["-c", "--config-path"]],
+    decision = "prompt",
+    justification = "remote Turso databaseの変更またはSQL実行は明示承認が必要です。",
+    match = [
+        "turso db -c /tmp/turso shell production \"DELETE FROM users\"",
+        "turso db --config-path /tmp/turso destroy production --yes",
+    ],
+)
+
+prefix_rule(
+    pattern = ["turso", ["-c", "--config-path"]],
+    decision = "prompt",
+    justification = "remote Turso databaseの変更またはSQL実行は明示承認が必要です。",
+    match = [
+        "turso -c /tmp/turso db shell production \"DELETE FROM users\"",
+        "turso --config-path /tmp/turso db destroy production --yes",
+    ],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", ["db:migrate", "db:prepare"]],
+    decision = "prompt",
+    justification = "接続先に依存するdatabase migrationは明示承認が必要です。local開発ではdb:bootstrapを使用してください。",
+    match = ["bun run db:migrate", "bun run db:prepare"],
+    not_match = ["bun run db:bootstrap", "bun run db:check"],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", "--cwd", "packages/db", ["db:migrate", "db:prepare"]],
+    decision = "prompt",
+    justification = "接続先に依存するdatabase migrationは明示承認が必要です。local開発ではdb:bootstrapを使用してください。",
+    match = [
+        "bun run --cwd packages/db db:migrate",
+        "bun run --cwd packages/db db:prepare",
+    ],
+    not_match = [
+        "bun run --cwd packages/db db:bootstrap",
+        "bun run --cwd packages/db db:check",
+    ],
+)
+
+prefix_rule(
+    pattern = ["node", "node_modules/drizzle-kit/bin.cjs", "migrate"],
+    decision = "prompt",
+    justification = "Drizzle migrationの直接実行は接続先確認と明示承認が必要です。",
+    match = ["node node_modules/drizzle-kit/bin.cjs migrate"],
+    not_match = ["node node_modules/drizzle-kit/bin.cjs check"],
+)
+
+prefix_rule(
+    pattern = ["git", "status"],
+    decision = "allow",
+    justification = "read-only repository inspectionです。",
+    match = ["git status", "git status --short"],
+)
+
+prefix_rule(
+    pattern = ["git", "diff"],
+    decision = "allow",
+    justification = "read-only repository inspectionです。",
+    match = ["git diff", "git diff --stat"],
+)
+
+prefix_rule(
+    pattern = ["rg"],
+    decision = "allow",
+    justification = "read-only source inspectionです。",
+    match = ["rg TODO", "rg --files"],
+)
+
+prefix_rule(
+    pattern = ["bun", "run", ["check", "check:static", "test", "test:browser", "test:e2e", "build:cloudflare"]],
+    decision = "allow",
+    justification = "repository契約で定義したlocal validationです。",
+    match = [
+        "bun run check",
+        "bun run check:static",
+        "bun run test",
+        "bun run test:browser",
+        "bun run test:e2e",
+        "bun run build:cloudflare",
+    ],
+    not_match = ["bun run deploy"],
+)
+
+prefix_rule(
+    pattern = ["nix", "flake", "check"],
+    decision = "allow",
+    justification = "read-only Nix validationです。",
+    match = ["nix flake check"],
+    not_match = ["nix flake update"],
+)
