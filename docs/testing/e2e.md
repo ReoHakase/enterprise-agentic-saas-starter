@@ -40,6 +40,10 @@ core journeyはNext.js development serverのcompileとRSC navigationを飢餓状
 決定的にします。core journeyをserial化せず、`test:e2e` aggregateはE1 core、E1 route contract、
 scripted Agent E2、OAuth E2の順を維持します。
 
+E1 coreは依存setup projectでpublic auth、dashboard、Issue一覧の代表routeを1 workerでcompileしてから、
+Chromiumと代表WebKitを最大3 workersで開始します。cold compileを各testのretryへ委ねず、warm-upの失敗も
+E1失敗として扱います。
+
 ### route boundary matrix
 
 async Server ComponentとNext.js routeのloading/error処理はBrowser Modeで再現せず、対象routeごとの

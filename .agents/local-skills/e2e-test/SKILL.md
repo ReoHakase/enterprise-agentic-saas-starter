@@ -21,8 +21,9 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 3. OAuth emulator suiteは`test:e2e`内のE2 profileに集約し、独立root scriptを追加しない。
 4. run/worker/test/organization/user/DB/R2をnamespace化し、共有resetを作らない。
 5. setupは対象がloginそのものでない限りAPI fixtureを使う。
-6. Agent behavior変更はbrowserless L6を先に実行し、release candidateだけL7 canaryを実行する。
-7. paid runnerが起動したchild processとtmp resourceだけを終了時にcleanupする。
+6. E1 coreは依存setup projectで代表routeをcold compileしてから最大3 workersで開始する。
+7. Agent behavior変更はbrowserless L6を先に実行し、release candidateだけL7 canaryを実行する。
+8. paid runnerが起動したchild processとtmp resourceだけを終了時にcleanupする。
 
 ## Validation
 
