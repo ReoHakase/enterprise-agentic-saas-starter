@@ -34,7 +34,7 @@ export const appE2eConfig = {
           timeout: 60_000,
         },
         {
-          command: "bun run dev:e2e",
+          command: "bun run start:e2e:app",
           url: `${baseURL}/auth/sign-in`,
           reuseExistingServer: !process.env.CI,
           timeout: 180_000,
@@ -53,20 +53,10 @@ export default defineConfig({
   testIgnore: ["**/oauth/**", "**/agent/**", "route-contracts.spec.ts"],
   projects: [
     {
-      name: "e1-warmup",
-      testMatch: ["e1-warmup.setup.ts"],
-      use: {
-        ...devices["Desktop Chrome"],
-        viewport: { width: 1280, height: 720 },
-      },
-    },
-    {
       name: "e1-chromium",
-      dependencies: ["e1-warmup"],
       testIgnore: [
         "**/agent/**",
         "**/oauth/**",
-        "e1-warmup.setup.ts",
         "e1-webkit.spec.ts",
         "route-contracts.spec.ts",
       ],
@@ -77,7 +67,6 @@ export default defineConfig({
     },
     {
       name: "e1-webkit-representative",
-      dependencies: ["e1-warmup"],
       testMatch: ["e1-webkit.spec.ts"],
       use: { ...devices["iPhone 13"] },
     },

@@ -109,12 +109,13 @@ export default defineConfig({
       },
     },
     {
-      command: `next dev --hostname 0.0.0.0 --port ${environment.webPort} --turbopack`,
+      command: `next build && next start --hostname 0.0.0.0 --port ${environment.webPort}`,
       url: `${environment.webOrigin}/auth/sign-in`,
       reuseExistingServer: false,
       timeout: 180_000,
       env: {
         ...commonEnvironment,
+        NODE_ENV: "production",
         API_PUBLIC_URL: environment.apiOrigin,
         NEXT_DIST_DIR: ".next-e2e-scripted-agent",
         NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,

@@ -1,6 +1,10 @@
 import type { BrowserContext, Page } from "@playwright/test"
 
-import { expect, test } from "./fixtures/test"
+import {
+  expect,
+  productionServerComponentRenderError,
+  test,
+} from "./fixtures/test"
 
 const mockApiUrl = "http://127.0.0.1:3001"
 
@@ -104,6 +108,20 @@ const navigateToContract = async (
     .click()
 }
 
+const blockRoutePrefetches = async (page: Page) => {
+  await page.route("**/*", async (route) => {
+    const headers = route.request().headers()
+    if (
+      headers["next-router-prefetch"] === "1" ||
+      headers.purpose === "prefetch"
+    ) {
+      await route.abort()
+      return
+    }
+    await route.continue()
+  })
+}
+
 const openReadySourceRoute = async (
   page: Page,
   contract: ConsoleRouteContract
@@ -130,9 +148,12 @@ const verifyConsoleRouteContract = async ({
 }) => {
   allowClientErrors(
     /Injected route contract outage/,
-    /Failed to load resource.*503/
+    /Failed to load resource.*503/,
+    /Failed to load resource: net::ERR_FAILED .*\?_rsc=/,
+    productionServerComponentRenderError
   )
   await useSession(context, "admin")
+  await blockRoutePrefetches(page)
 
   await openReadySourceRoute(page, contract)
   await createRequestDelay(context, contract.requestPath)
@@ -176,7 +197,8 @@ const verifyInvitationRouteContract = async ({
   allowClientErrors(
     /Injected route contract outage/,
     /Session request failed with status 503/,
-    /Failed to load resource.*503/
+    /Failed to load resource.*503/,
+    productionServerComponentRenderError
   )
   await useSession(context, "new-user")
 

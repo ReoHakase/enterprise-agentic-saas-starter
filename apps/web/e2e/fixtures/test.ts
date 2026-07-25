@@ -18,6 +18,9 @@ type ClientDiagnosticsFixtures = {
 
 const mockApiUrl = "http://127.0.0.1:3001"
 
+export const productionServerComponentRenderError =
+  /An error occurred in the Server Components render\. The specific message is omitted in production builds/
+
 const hashTestId = (value: string) => {
   let hash = 2_166_136_261
   for (const character of value) {

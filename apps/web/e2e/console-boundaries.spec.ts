@@ -1,6 +1,10 @@
 import type { BrowserContext, Locator, Page } from "@playwright/test"
 
-import { expect, test } from "./fixtures/test"
+import {
+  expect,
+  productionServerComponentRenderError,
+  test,
+} from "./fixtures/test"
 
 const mockApiUrl = "http://127.0.0.1:3001"
 const geometryTolerance = 1
@@ -327,6 +331,7 @@ test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを�
       .locator(
         '[data-slot="page-shell"][data-boundary-state="loading"][aria-label="Loading organization issues"]'
       )
+      .first()
   ).toBeVisible()
   await expect(
     page
@@ -383,7 +388,8 @@ test("console error boundaryは実画面と同じshell geometryを維持して�
 }) => {
   allowClientErrors(
     /Injected console boundary outage/,
-    /Failed to load resource.*503/
+    /Failed to load resource.*503/,
+    productionServerComponentRenderError
   )
   await useAdminSession(context)
   const loadedGeometry = await readLoadedDashboardGeometry(page)
@@ -444,7 +450,8 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
 }) => {
   allowClientErrors(
     /Injected dashboard boundary outage/,
-    /Failed to load resource.*503/
+    /Failed to load resource.*503/,
+    productionServerComponentRenderError
   )
   await useAdminSession(context)
   const loadedDashboardGeometry = await readLoadedDashboardGeometry(page)

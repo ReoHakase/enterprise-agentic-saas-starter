@@ -33,16 +33,12 @@ applies_to:
 
 E1 fixtureは画面表示に必要な固定responseとone-shot delay/faultだけを返し、製品APIのCRUD、
 authorization、tenant policyを再実装しません。それらはunit/integrationと実stack E2/OAuthで
-検証します。E1はparallelなcore journey、one-shot delay/faultを使うroute contractの順に
-別processで実行します。
-core journeyはNext.js development serverのcompileとRSC navigationを飢餓状態にしないよう最大3 workersで
-並列実行します。route contractだけを`--workers=1`へ固定し、mock transport内で共有するruleの消費順を
-決定的にします。core journeyをserial化せず、`test:e2e` aggregateはE1 core、E1 route contract、
-scripted Agent E2、OAuth E2の順を維持します。
-
-E1 coreは依存setup projectでpublic auth、dashboard、Issue一覧の代表routeを1 workerでcompileしてから、
-Chromiumと代表WebKitを最大3 workersで開始します。cold compileを各testのretryへ委ねず、warm-upの失敗も
-E1失敗として扱います。
+検証します。E1は同じAPI fixture originを埋め込んだproduction buildを1回作成し、parallelな
+core journey、one-shot delay/faultを使うroute contractの順に`next start`で検証します。
+core journeyはChromiumを最大3 workersで並列実行し、代表WebKitは別Playwright processと新しい
+`next start` processで単独実行します。route contractだけを`--workers=1`へ固定し、mock transport内で
+共有するruleの消費順を決定的にします。core journeyをserial化せず、`test:e2e` aggregateはE1 core、
+E1 route contract、scripted Agent E2、OAuth E2の順を維持します。
 
 ### route boundary matrix
 
@@ -82,9 +78,9 @@ state遷移をE1/E2、geometryとfocusのmatrixを代表routeで検証します�
 Agent E2E Workerは`src/mastra/e2e/worker.ts`を使い、production env switchを作りません。
 
 OAuth subprofileは外部GitHubや実credentialを使わず、`apps/github-emulator`、real API/Auth、
-temporary DB、dedicated Next distでauthorize、state、callback、token、userinfo、session/account保存を
-通します。旧`test:e2e:oauth`を公開root scriptとして残さず、通常PRで常に実行する`test:e2e`
-aggregate内で起動します。
+temporary DB、dedicated Next production buildでauthorize、state、callback、token、userinfo、
+session/account保存を通します。旧`test:e2e:oauth`を公開root scriptとして残さず、通常PRで常に実行する
+`test:e2e` aggregate内で起動します。
 
 OAuth runごとに新しいemulator process、synthetic user、fresh DBを作り、fixture `finally`と
 global teardownの両方でrun固有resourceだけをcleanupします。`emulate.reset()`は発行済みtoken mapを
@@ -120,10 +116,10 @@ Trace、video、screenshot、provider本文へsecretが入るため、paid suite
 同じglobal account、organization、DB file、R2 prefixをworker間で共有しません。cleanupは自分の
 namespaceだけを削除し、失敗時も別workerのstateを消しません。
 
-Playwrightが起動するNext.jsはprofileごとに`NEXT_DIST_DIR`を分離します。E1は`.next-e2e`、scripted
-Agent E2は`.next-e2e-scripted-agent`、OAuthは`.next-e2e-oauth`、paid E4は`.next-e2e-agent`を使い、
-通常の`bun run dev`が使う`.next`とdevelopment lockを共有しません。testのためにdeveloper-owned
-processを停止しません。
+Playwrightが起動するNext.jsはfree E2Eでdevelopment serverを使わず、profileごとにproduction buildを
+作成して`next start`で起動します。`NEXT_DIST_DIR`も分離し、E1は`.next-e2e`、scripted Agent E2は
+`.next-e2e-scripted-agent`、OAuthは`.next-e2e-oauth`、paid E4は`.next-e2e-agent`を使います。
+通常の`bun run dev`が使う`.next`とlockを共有せず、testのためにdeveloper-owned processを停止しません。
 
 Turboのstrict envでは`CI`と外部server用`PLAYWRIGHT_BASE_URL`を`passThroughEnv`へ明示します。
 CIではretry、`forbidOnly`、既存server非再利用、`failOnFlakyTests`を有効にし、途中成功をgreenへ
