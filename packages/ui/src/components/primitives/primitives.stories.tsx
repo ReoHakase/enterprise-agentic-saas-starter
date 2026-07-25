@@ -1,7 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { CalendarIcon, SearchIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { fn } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import {
   ButtonGroup,
@@ -414,28 +415,25 @@ const CropperFixture = () => {
   )
 }
 
-const meta = {
+const meta = preview.meta({
   title: "Components/Primitive Inventory",
   component: Card,
   tags: ["autodocs", "theme-sensitive"],
   parameters: { layout: "centered" },
-} satisfies Meta<typeof Card>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const StaticPrimitives: Story = {
+export const StaticPrimitives = meta.story({
   render: () => <StaticPrimitivesFixture />,
-}
+})
 
-export const SelectionPrimitives: Story = {
+export const SelectionPrimitives = meta.story({
   render: () => <SelectionPrimitivesFixture />,
-}
+})
 
-export const OverlayPrimitives: Story = {
+export const OverlayPrimitives = meta.story({
   render: () => <OverlayPrimitivesFixture />,
-}
+})
 
-export const ImageCropAndToast: Story = {
+export const ImageCropAndToast = meta.story({
   render: () => <CropperFixture />,
-}
+})

@@ -1,9 +1,10 @@
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Provider as JotaiProvider, createStore } from "jotai"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 import { useState } from "react"
 import { fn } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import type { AgentChatMessage, AgentThread } from "../../schema"
 import { agentShellOpenAtom } from "../../shell-state"
@@ -235,36 +236,33 @@ const ShellCatalogue = () => (
   </NuqsAdapter>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Agent/Component Catalogue",
   component: ComposerCatalogue,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof ComposerCatalogue>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const ComposerAndPermission: Story = {
+export const ComposerAndPermission = meta.story({
   render: () => (
     <AgentProviderHarness>
       <ComposerCatalogue />
     </AgentProviderHarness>
   ),
-}
+})
 
-export const ApprovalLoadingAndAttachments: Story = {
+export const ApprovalLoadingAndAttachments = meta.story({
   render: () => <ApprovalCatalogue />,
-}
+})
 
-export const ConversationLoadingAndMessage: Story = {
+export const ConversationLoadingAndMessage = meta.story({
   render: () => <ConversationCatalogue />,
-}
+})
 
-export const ThreadControls: Story = {
+export const ThreadControls = meta.story({
   render: () => <ThreadControlsCatalogue />,
-}
+})
 
-export const PermissionPolicyLoading: Story = {
+export const PermissionPolicyLoading = meta.story({
   render: () => (
     <AgentPolicyControl
       organizationId="org-1"
@@ -272,9 +270,9 @@ export const PermissionPolicyLoading: Story = {
       disabled={false}
     />
   ),
-}
+})
 
-export const DashboardLoading: Story = {
+export const DashboardLoading = meta.story({
   render: () => (
     <AgentProviderHarness>
       <AgentDashboard
@@ -284,16 +282,16 @@ export const DashboardLoading: Story = {
       />
     </AgentProviderHarness>
   ),
-}
+})
 
-export const ShortcutReference: Story = {
+export const ShortcutReference = meta.story({
   render: () => <AgentShortcutHelp open onOpenChange={noop} />,
-}
+})
 
-export const RuntimeScope: Story = {
+export const RuntimeScope = meta.story({
   render: () => <RuntimeCatalogue />,
-}
+})
 
-export const PersistentShell: Story = {
+export const PersistentShell = meta.story({
   render: () => <ShellCatalogue />,
-}
+})

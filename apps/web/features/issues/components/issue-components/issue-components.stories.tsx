@@ -1,4 +1,3 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import {
   getCoreRowModel,
   type ColumnDef,
@@ -6,6 +5,7 @@ import {
 } from "@tanstack/react-table"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
+import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 import { AgentFormRegistryProvider } from "@/features/agent"
 
@@ -273,61 +273,58 @@ const TableCatalogue = () => (
   />
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Issues/Component Catalogue",
   component: IssueMetrics,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof IssueMetrics>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const StatusSummary: Story = {
+export const StatusSummary = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <IssueMetrics open={4} inProgress={2} closed={7} />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const StatusAndMetadataControls: Story = {
+export const StatusAndMetadataControls = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <MetadataControlsCatalogue />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const TableInlineControls: Story = {
+export const TableInlineControls = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <InlineControlsCatalogue />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const StatusBadges: Story = {
+export const StatusBadges = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <BadgeCatalogue />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const TextFormFields: Story = {
+export const TextFormFields = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <FormFieldCatalogue />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const DetailEditorFields: Story = {
+export const DetailEditorFields = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -344,18 +341,18 @@ export const DetailEditorFields: Story = {
       </div>
     </IssueStoryFrame>
   ),
-}
+})
 
-export const IssueTable: Story = {
+export const IssueTable = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
       <TableCatalogue />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const IssueWorkspace: Story = {
+export const IssueWorkspace = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -378,9 +375,9 @@ export const IssueWorkspace: Story = {
       />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const CreateIssue: Story = {
+export const CreateIssue = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -396,9 +393,9 @@ export const CreateIssue: Story = {
       ).toBeVisible()
     )
   },
-}
+})
 
-export const TimelineItems: Story = {
+export const TimelineItems = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -413,9 +410,9 @@ export const TimelineItems: Story = {
       </ol>
     </IssueStoryFrame>
   ),
-}
+})
 
-export const IssueDetail: Story = {
+export const IssueDetail = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -436,9 +433,9 @@ export const IssueDetail: Story = {
       />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const ControlledIssueDetail: Story = {
+export const ControlledIssueDetail = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -453,9 +450,9 @@ export const ControlledIssueDetail: Story = {
       />
     </IssueStoryFrame>
   ),
-}
+})
 
-export const InterceptedRouteShell: Story = {
+export const InterceptedRouteShell = meta.story({
   args: { open: 4, inProgress: 2, closed: 7 },
   render: () => (
     <IssueStoryFrame>
@@ -464,4 +461,4 @@ export const InterceptedRouteShell: Story = {
       </IssueModalRouteShell>
     </IssueStoryFrame>
   ),
-}
+})

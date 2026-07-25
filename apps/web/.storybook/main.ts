@@ -1,14 +1,13 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { StorybookConfig } from "@storybook/react-vite"
-import react from "@vitejs/plugin-react"
+import { defineMain } from "@storybook/nextjs-vite/node"
 import { mergeConfig } from "vite"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const workspace = path.resolve(dirname, "..")
 
-const config: StorybookConfig = {
+export default defineMain({
   stories: ["../{app,components,features}/**/*.stories.@(ts|tsx)"],
   addons: [
     "@storybook/addon-a11y",
@@ -17,7 +16,7 @@ const config: StorybookConfig = {
     "@storybook/addon-vitest",
   ],
   framework: {
-    name: "@storybook/react-vite",
+    name: "@storybook/nextjs-vite",
     options: {},
   },
   docs: {
@@ -28,18 +27,9 @@ const config: StorybookConfig = {
       define: {
         "process.env": "{}",
       },
-      plugins: [react()],
       resolve: {
         alias: {
           "@": workspace,
-          "next/link": path.join(
-            workspace,
-            "test-support/storybook/next-link.tsx"
-          ),
-          "next/navigation": path.join(
-            workspace,
-            "test-support/storybook/next-navigation.ts"
-          ),
           "nuqs/adapters/next/app": path.join(
             workspace,
             "test-support/storybook/nuqs-next-app.ts"
@@ -52,6 +42,4 @@ const config: StorybookConfig = {
       },
     })
   },
-}
-
-export default config
+})

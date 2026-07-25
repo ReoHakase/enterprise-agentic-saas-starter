@@ -1,9 +1,10 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { Button } from "./button"
 
-const meta = {
+const meta = preview.meta({
   title: "Components/Button",
   component: Button,
   tags: ["autodocs", "theme-sensitive"],
@@ -23,13 +24,9 @@ const meta = {
       ],
     },
   },
-} satisfies Meta<typeof Button>
+})
 
-export default meta
-
-type Story = StoryObj<typeof meta>
-
-export const Primary: Story = {
+export const Primary = meta.story({
   args: {
     onClick: fn(),
   },
@@ -41,9 +38,9 @@ export const Primary: Story = {
     await userEvent.click(button)
     await expect(args.onClick).toHaveBeenCalledOnce()
   },
-}
+})
 
-export const Destructive: Story = {
+export const Destructive = meta.story({
   args: {
     children: "Delete organization",
     variant: "destructive",
@@ -57,9 +54,9 @@ export const Destructive: Story = {
     await userEvent.click(button)
     await expect(args.onClick).toHaveBeenCalledOnce()
   },
-}
+})
 
-export const Disabled: Story = {
+export const Disabled = meta.story({
   args: {
     children: "Invitation sent",
     disabled: true,
@@ -70,4 +67,4 @@ export const Disabled: Story = {
     await expect(button).toBeDisabled()
     await expect(args.onClick).not.toHaveBeenCalled()
   },
-}
+})

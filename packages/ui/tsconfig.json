@@ -3,7 +3,8 @@
   "compilerOptions": {
     "paths": {
       "@enterprise-agentic-saas/ui/*": ["./src/*"]
-    }
+    },
+    "types": ["vite/client"]
   },
   "include": ["."],
   "exclude": ["node_modules", "dist", "oxlint.config.ts"]

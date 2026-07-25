@@ -1,15 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
+import preview from "#storybook/preview"
 
 import { IssueDetailRouteSkeleton } from "./issue-detail-route-skeleton"
 
-const meta = {
+const meta = preview.meta({
   title: "Issues/Detail Route Skeleton",
   component: IssueDetailRouteSkeleton,
   tags: ["autodocs", "theme-sensitive"],
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof IssueDetailRouteSkeleton>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const Loading: Story = {}
+export const Loading = meta.story({})

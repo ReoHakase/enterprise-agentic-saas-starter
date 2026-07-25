@@ -1,4 +1,3 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import {
   LayoutDashboardIcon,
   ListChecksIcon,
@@ -6,6 +5,8 @@ import {
 } from "lucide-react"
 import { type FormEvent, useCallback } from "react"
 import { expect, fn, userEvent, within } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { Badge } from "../badge/badge"
 import { Button } from "../button/button"
@@ -66,6 +67,7 @@ const members = [
   { name: "Jordan Lee", email: "jordan@example.com", role: "Admin" },
   { name: "Kai Brooks", email: "kai@example.com", role: "Member" },
 ]
+const ignoreInvite = () => undefined
 const dialogTriggerButtonRender = <Button />
 const dialogCloseButtonRender = <Button type="button" variant="outline" />
 
@@ -267,17 +269,16 @@ const MembersPattern = ({
   )
 }
 
-const meta = {
-  title: "Patterns/SaaS Console",
-  component: SidebarPattern,
-  tags: ["autodocs"],
-  parameters: { layout: "centered" },
-} satisfies Meta<typeof SidebarPattern>
+const meta = preview
+  .type<{ args: { onInvite?: (email: string) => void } }>()
+  .meta({
+    title: "Patterns/SaaS Console",
+    component: SidebarPattern,
+    tags: ["autodocs"],
+    parameters: { layout: "centered" },
+  })
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const ResponsiveSidebar: Story = {
+export const ResponsiveSidebar = meta.story({
   play: async ({ canvasElement }) => {
     const sidebar = canvasElement.querySelector(
       '[data-slot="sidebar"][data-state]'
@@ -296,10 +297,12 @@ export const ResponsiveSidebar: Story = {
     await userEvent.keyboard("{Control>}b{/Control}")
     await expect(sidebar).toHaveAttribute("data-state", "expanded")
   },
-}
+})
 
-export const MemberTableAndDialog: StoryObj<typeof MembersPattern> = {
-  render: (args) => <MembersPattern {...args} />,
+export const MemberTableAndDialog = meta.story({
+  render: ({ onInvite }) => (
+    <MembersPattern onInvite={onInvite ?? ignoreInvite} />
+  ),
   args: { onInvite: fn() },
   play: async ({ args, canvas }) => {
     await expect(canvas.getByRole("table")).toHaveAccessibleName(
@@ -318,4 +321,4 @@ export const MemberTableAndDialog: StoryObj<typeof MembersPattern> = {
     await userEvent.click(body.getByRole("button", { name: "Send invitation" }))
     await expect(args.onInvite).toHaveBeenCalledWith("new-member@example.com")
   },
-}
+})

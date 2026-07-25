@@ -73,7 +73,7 @@ linked_adrs:
 - [x] Web feature公開境界を移動した
 - [x] Web componentをdirectory化した
 - [x] UI componentをdirectory化した
-- [ ] StorybookをCSF Nextへ移行した
+- [x] StorybookをCSF Nextへ移行した
 - [ ] package所有testを整備した
 - [ ] W1-W6を実装した
 - [ ] E1/E2を分離した
@@ -111,6 +111,12 @@ linked_adrs:
 | `bun run --cwd packages/ui lint`      | success | warningなし                                             |
 | `bun run --cwd packages/ui typecheck` | success | 公開subpath維持後、型errorなし                          |
 | `bun run --cwd packages/ui test`      | success | 8 files、20 tests                                       |
+| Web、UI Storybook CSF形式検査         | success | 全22 storyが`preview.meta`と`meta.story`を使用          |
+| `bun run --cwd apps/web lint`         | success | CSF NextとMSW追加後、warningなし                        |
+| `bun run --cwd apps/web typecheck`    | success | Next.js Vite framework追加後、型errorなし               |
+| `bun run --cwd packages/ui lint`      | success | CSF Next移行後、warningなし                             |
+| `bun run --cwd packages/ui typecheck` | success | CSF Next移行後、型errorなし                             |
+| Web、UI Storybook build               | success | Storybook 10.5.3で両方のstatic buildが成功              |
 
 ## リスクとrollback
 

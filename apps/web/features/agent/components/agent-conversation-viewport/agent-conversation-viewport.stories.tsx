@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { agentConversationTurns } from "../../test-support/fixtures"
 import { AgentConversationViewport } from "./agent-conversation-viewport"
@@ -23,7 +24,7 @@ const ConversationFixture = () => (
   </div>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Agent/Conversation Viewport",
   component: AgentConversationViewport,
   tags: ["autodocs", "theme-sensitive"],
@@ -35,12 +36,9 @@ const meta = {
     enabled: true,
     turns: conversationTurns,
   },
-} satisfies Meta<typeof AgentConversationViewport>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const WithMinimap: Story = {
+export const WithMinimap = meta.story({
   render: () => <ConversationFixture />,
   play: async ({ canvas }) => {
     const viewport = canvas.getByTestId("agent-conversation-viewport")
@@ -52,4 +50,4 @@ export const WithMinimap: Story = {
     )
     await expect(viewport).toHaveProperty("scrollTop", 0)
   },
-}
+})

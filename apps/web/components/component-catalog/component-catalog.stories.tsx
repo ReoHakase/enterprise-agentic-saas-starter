@@ -9,9 +9,10 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@enterprise-agentic-saas/ui/components/sidebar"
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { AlertTriangleIcon } from "lucide-react"
 import { fn } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { MessageResponse } from "../ai-elements/message/message"
 import { AppState, RouteLoading } from "../app-state/app-state"
@@ -139,25 +140,22 @@ const ProviderCatalogue = () => (
   </Providers>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Shared Component Catalogue",
   component: LayoutCatalogue,
   tags: ["autodocs"],
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof LayoutCatalogue>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const ConsoleLayout: Story = {
+export const ConsoleLayout = meta.story({
   render: () => <LayoutCatalogue />,
-}
+})
 
-export const Identities: Story = {
+export const Identities = meta.story({
   render: () => <IdentityCatalogue />,
-}
+})
 
-export const EmptyAndLoading: Story = {
+export const EmptyAndLoading = meta.story({
   render: () => (
     <div className="grid gap-6">
       <AppState
@@ -168,77 +166,77 @@ export const EmptyAndLoading: Story = {
       <RouteLoading label="Loading issues" variant="issues" />
     </div>
   ),
-}
+})
 
-export const ConsoleBoundaries: Story = {
+export const ConsoleBoundaries = meta.story({
   render: () => (
     <ConsoleBoundaryShell state="loading">
       <RouteLoading variant="dashboard" />
     </ConsoleBoundaryShell>
   ),
-}
+})
 
-export const ConsoleLoadingBoundary: Story = {
+export const ConsoleLoadingBoundary = meta.story({
   render: () => <ConsoleShellSkeleton />,
-}
+})
 
-export const ConsoleContentFailure: Story = {
+export const ConsoleContentFailure = meta.story({
   render: () => <ConsoleContentError reset={reset} />,
-}
+})
 
-export const ConsoleShellFailure: Story = {
+export const ConsoleShellFailure = meta.story({
   render: () => <ConsoleShellError reset={reset} />,
-}
+})
 
-export const AuthenticationFrame: Story = {
+export const AuthenticationFrame = meta.story({
   render: () => (
     <AuthRouteFrame>
       <div className="rounded-2xl border p-5">Authentication form</div>
     </AuthRouteFrame>
   ),
-}
+})
 
-export const InvitationFrame: Story = {
+export const InvitationFrame = meta.story({
   render: () => (
     <InvitationRouteFrame>
       <div className="rounded-2xl border p-5">Invitation</div>
     </InvitationRouteFrame>
   ),
-}
+})
 
-export const AuthenticationLoading: Story = {
+export const AuthenticationLoading = meta.story({
   render: () => <AuthRouteLoading />,
-}
+})
 
-export const InvitationLoading: Story = {
+export const InvitationLoading = meta.story({
   render: () => <InvitationRouteLoading />,
-}
+})
 
-export const RootLoading: Story = {
+export const RootLoading = meta.story({
   render: () => <RootRouteLoading />,
-}
+})
 
-export const AuthenticationFailure: Story = {
+export const AuthenticationFailure = meta.story({
   render: () => <AuthRouteError reset={reset} />,
-}
+})
 
-export const InvitationFailure: Story = {
+export const InvitationFailure = meta.story({
   render: () => <InvitationRouteError reset={reset} />,
-}
+})
 
-export const StandaloneFailure: Story = {
+export const StandaloneFailure = meta.story({
   render: () => <StandaloneRouteError reset={reset} />,
-}
+})
 
-export const RootFailure: Story = {
+export const RootFailure = meta.story({
   render: () => <RootRouteError reset={reset} />,
-}
+})
 
-export const ApplicationProviders: Story = {
+export const ApplicationProviders = meta.story({
   render: () => <ProviderCatalogue />,
-}
+})
 
-export const AgentMessageResponse: Story = {
+export const AgentMessageResponse = meta.story({
   render: () => (
     <div className="max-w-2xl rounded-2xl border p-5">
       <MessageResponse>
@@ -248,4 +246,4 @@ export const AgentMessageResponse: Story = {
       </MessageResponse>
     </div>
   ),
-}
+})

@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import {
   Avatar,
@@ -10,17 +11,14 @@ import {
   AvatarImage,
 } from "./avatar"
 
-const meta = {
+const meta = preview.meta({
   title: "Components/Avatar",
   component: Avatar,
   tags: ["autodocs", "theme-sensitive"],
   parameters: { layout: "centered" },
-} satisfies Meta<typeof Avatar>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const UserProfileImage: Story = {
+export const UserProfileImage = meta.story({
   args: {
     shape: "circle",
     children: <AvatarFallback>RH</AvatarFallback>,
@@ -31,9 +29,9 @@ export const UserProfileImage: Story = {
       "circle"
     )
   },
-}
+})
 
-export const OrganizationProfileImage: Story = {
+export const OrganizationProfileImage = meta.story({
   args: {
     shape: "rounded",
     children: <AvatarFallback>AC</AvatarFallback>,
@@ -44,9 +42,9 @@ export const OrganizationProfileImage: Story = {
       "rounded"
     )
   },
-}
+})
 
-export const PresenceGroup: Story = {
+export const PresenceGroup = meta.story({
   render: () => (
     <AvatarGroup aria-label="Active collaborators">
       <Avatar>
@@ -68,4 +66,4 @@ export const PresenceGroup: Story = {
       </AvatarGroupCount>
     </AvatarGroup>
   ),
-}
+})

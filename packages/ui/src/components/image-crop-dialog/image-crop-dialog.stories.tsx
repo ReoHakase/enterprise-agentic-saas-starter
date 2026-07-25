@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { ImageCropDialog } from "./image-crop-dialog"
 
@@ -15,7 +16,7 @@ const source = new Blob(
 )
 const invalidSource = new Blob(["not an image"], { type: "image/png" })
 
-const meta = {
+const meta = preview.meta({
   title: "Components/Image Crop Dialog",
   component: ImageCropDialog,
   tags: ["autodocs", "theme-sensitive"],
@@ -31,12 +32,9 @@ const meta = {
   argTypes: {
     source: { control: false },
   },
-} satisfies Meta<typeof ImageCropDialog>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const Circular: Story = {
+export const Circular = meta.story({
   args: { shape: "circle" },
   play: async ({ args }) => {
     const body = within(document.body)
@@ -67,9 +65,9 @@ export const Circular: Story = {
     await expect(result).toMatchObject({ height: 512, width: 512 })
     await expect(args.onError).not.toHaveBeenCalled()
   },
-}
+})
 
-export const RoundedSquare: Story = {
+export const RoundedSquare = meta.story({
   args: { shape: "rounded" },
   play: async () => {
     const body = within(document.body)
@@ -84,9 +82,9 @@ export const RoundedSquare: Story = {
       expect(body.getByRole("button", { name: "Use image" })).toBeEnabled()
     )
   },
-}
+})
 
-export const DecodeError: Story = {
+export const DecodeError = meta.story({
   args: { source: invalidSource },
   play: async ({ args }) => {
     const body = within(document.body)
@@ -101,4 +99,4 @@ export const DecodeError: Story = {
     await expect(args.onError).toHaveBeenCalledOnce()
     await expect(args.onConfirm).not.toHaveBeenCalled()
   },
-}
+})

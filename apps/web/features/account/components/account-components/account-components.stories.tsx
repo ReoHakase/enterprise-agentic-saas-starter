@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { fn } from "storybook/test"
 
+import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 
 import { AccountSwitcherDialog } from "../account-switcher-dialog/account-switcher-dialog"
@@ -22,43 +22,40 @@ const AccountStoryFrame = ({ children }: { children: React.ReactNode }) => (
   </Providers>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Account/Component Catalogue",
   component: ProfileForm,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof ProfileForm>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const Profile: Story = {
+export const Profile = meta.story({
   args: { user },
   render: () => (
     <AccountStoryFrame>
       <ProfileForm user={user} />
     </AccountStoryFrame>
   ),
-}
+})
 
-export const SessionsLoading: Story = {
+export const SessionsLoading = meta.story({
   args: { user },
   render: () => (
     <AccountStoryFrame>
       <SessionsPanel />
     </AccountStoryFrame>
   ),
-}
+})
 
-export const SecurityMethodsLoading: Story = {
+export const SecurityMethodsLoading = meta.story({
   args: { user },
   render: () => (
     <AccountStoryFrame>
       <SecurityMethodsPanel />
     </AccountStoryFrame>
   ),
-}
+})
 
-export const AccountSwitcherLoading: Story = {
+export const AccountSwitcherLoading = meta.story({
   args: { user },
   render: () => (
     <AccountStoryFrame>
@@ -70,4 +67,4 @@ export const AccountSwitcherLoading: Story = {
       />
     </AccountStoryFrame>
   ),
-}
+})

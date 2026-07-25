@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
+import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 import type { OrganizationDetail } from "@/features/organizations"
 
@@ -85,16 +85,13 @@ const MemberStoryFrame = ({ children }: { children: React.ReactNode }) => (
   </Providers>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Members/Component Catalogue",
   component: MemberStoryFrame,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof MemberStoryFrame>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const FullMembersPage: Story = {
+export const FullMembersPage = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -105,9 +102,9 @@ export const FullMembersPage: Story = {
       />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const MembersManagementPanel: Story = {
+export const MembersManagementPanel = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -118,9 +115,9 @@ export const MembersManagementPanel: Story = {
       />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const MemberTable: Story = {
+export const MemberTable = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -137,9 +134,9 @@ export const MemberTable: Story = {
       />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const PendingInvitations: Story = {
+export const PendingInvitations = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -157,9 +154,9 @@ export const PendingInvitations: Story = {
       />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const InviteMembers: Story = {
+export const InviteMembers = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -181,9 +178,9 @@ export const InviteMembers: Story = {
       ).toBeVisible()
     )
   },
-}
+})
 
-export const ConfirmMemberRemoval: Story = {
+export const ConfirmMemberRemoval = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
@@ -196,22 +193,22 @@ export const ConfirmMemberRemoval: Story = {
       />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const RecentSignInRequired: Story = {
+export const RecentSignInRequired = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
       <StepUpDialog request={stepUpRequest} onClose={noop} />
     </MemberStoryFrame>
   ),
-}
+})
 
-export const SignedOutInvitation: Story = {
+export const SignedOutInvitation = meta.story({
   args: { children: null },
   render: () => (
     <MemberStoryFrame>
       <InvitationDecisionPanel invitationId="invitation-1" state="signed_out" />
     </MemberStoryFrame>
   ),
-}
+})

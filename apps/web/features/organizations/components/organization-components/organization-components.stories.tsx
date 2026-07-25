@@ -1,5 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
-
+import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 import {
   AgentFormRegistryProvider,
@@ -71,43 +70,40 @@ const OrganizationStoryFrame = ({
   </Providers>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Organizations/Component Catalogue",
   component: OrganizationStoryFrame,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof OrganizationStoryFrame>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const OrganizationList: Story = {
+export const OrganizationList = meta.story({
   args: { children: null },
   render: () => (
     <OrganizationStoryFrame>
       <OrganizationsPage initialOrganizations={organizations} />
     </OrganizationStoryFrame>
   ),
-}
+})
 
-export const OrganizationSettings: Story = {
+export const OrganizationSettings = meta.story({
   args: { children: null },
   render: () => (
     <OrganizationStoryFrame>
       <OrganizationSettingsForm organization={organization} />
     </OrganizationStoryFrame>
   ),
-}
+})
 
-export const OrganizationDeletionBoundary: Story = {
+export const OrganizationDeletionBoundary = meta.story({
   args: { children: null },
   render: () => (
     <OrganizationStoryFrame>
       <OrganizationDangerZone organization={organization} />
     </OrganizationStoryFrame>
   ),
-}
+})
 
-export const InactiveOrganization: Story = {
+export const InactiveOrganization = meta.story({
   args: { children: null },
   render: () => (
     <OrganizationStoryFrame>
@@ -117,4 +113,4 @@ export const InactiveOrganization: Story = {
       />
     </OrganizationStoryFrame>
   ),
-}
+})

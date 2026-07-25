@@ -1,21 +1,19 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { AgentSamplePrompts } from "./agent-sample-prompts"
 
-const meta = {
+const meta = preview.meta({
   title: "Agent/Sample Prompts",
   component: AgentSamplePrompts,
   tags: ["autodocs", "theme-sensitive"],
   args: {
     onSelect: fn(),
   },
-} satisfies Meta<typeof AgentSamplePrompts>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const Ready: Story = {
+export const Ready = meta.story({
   play: async ({ args, canvas }) => {
     await userEvent.click(
       canvas.getByRole("button", {
@@ -26,4 +24,4 @@ export const Ready: Story = {
       "Summarize the current page and suggest the next action."
     )
   },
-}
+})

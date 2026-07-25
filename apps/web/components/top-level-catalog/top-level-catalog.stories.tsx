@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useForm } from "@tanstack/react-form"
 
+import preview from "#storybook/preview"
 import type { Me } from "@/lib/console-api"
 
 import { ConsoleShell } from "../console-shell/console-shell"
@@ -57,7 +57,7 @@ const CatalogueTextField = () => {
   )
 }
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Application Components",
   component: IssuesDashboard,
   decorators: [
@@ -71,14 +71,11 @@ const meta = {
     organizationId: "",
     organizationSlug: "acme",
   },
-} satisfies Meta<typeof IssuesDashboard>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
+export const EmptyIssuesDashboard = meta.story({})
 
-export const EmptyIssuesDashboard: Story = {}
-
-export const ConsoleWorkspace: Story = {
+export const ConsoleWorkspace = meta.story({
   render: () => (
     <ConsoleShell me={catalogueMe}>
       <section
@@ -94,8 +91,8 @@ export const ConsoleWorkspace: Story = {
       </section>
     </ConsoleShell>
   ),
-}
+})
 
-export const ReusableFormField: Story = {
+export const ReusableFormField = meta.story({
   render: () => <CatalogueTextField />,
-}
+})

@@ -1,7 +1,8 @@
 import type { FileDto } from "@enterprise-agentic-saas/api/client"
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useRef } from "react"
 import { fn } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { AuthenticatedFileImage } from "../authenticated-file-image/authenticated-file-image"
 import { FileAttachments } from "../file-attachments/file-attachments"
@@ -60,19 +61,16 @@ const AttachmentsCatalogue = () => (
   </div>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Files/Component Catalogue",
   component: AttachmentsCatalogue,
   parameters: { layout: "fullscreen" },
-} satisfies Meta<typeof AttachmentsCatalogue>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const AttachmentsLoading: Story = {
+export const AttachmentsLoading = meta.story({
   render: () => <AttachmentsCatalogue />,
-}
+})
 
-export const AuthenticatedImagePreview: Story = {
+export const AuthenticatedImagePreview = meta.story({
   render: () => <PreviewCatalogue />,
-}
+})

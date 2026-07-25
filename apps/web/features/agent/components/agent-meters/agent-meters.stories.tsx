@@ -1,11 +1,12 @@
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import { agentContextBudgetMessages } from "../../test-support/fixtures"
 import { AgentMeters } from "./agent-meters"
 
-const meta = {
+const meta = preview.meta({
   title: "Agent/Context Meter",
   component: AgentMeters,
   tags: ["autodocs", "theme-sensitive"],
@@ -19,12 +20,9 @@ const meta = {
   args: {
     streamedMessages: [...agentContextBudgetMessages.estimated],
   },
-} satisfies Meta<typeof AgentMeters>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const Estimated: Story = {
+export const Estimated = meta.story({
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement.ownerDocument.body)
     await userEvent.hover(
@@ -34,9 +32,9 @@ export const Estimated: Story = {
       expect(canvas.getByText("Estimated breakdown")).toBeVisible()
     )
   },
-}
+})
 
-export const NearLimit: Story = {
+export const NearLimit = meta.story({
   args: {
     streamedMessages: [...agentContextBudgetMessages.nearLimit],
   },
@@ -46,4 +44,4 @@ export const NearLimit: Story = {
       canvas.getByRole("button", { name: "Last request context 95% used" })
     ).toBeVisible()
   },
-}
+})

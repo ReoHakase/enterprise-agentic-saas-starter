@@ -1,9 +1,13 @@
-import { withThemeByClassName } from "@storybook/addon-themes"
-import type { Preview } from "@storybook/react-vite"
+import addonA11y from "@storybook/addon-a11y"
+import addonDocs from "@storybook/addon-docs"
+import addonThemes, { withThemeByClassName } from "@storybook/addon-themes"
+import addonVitest from "@storybook/addon-vitest"
+import { definePreview } from "@storybook/react-vite"
 
 import "../src/styles/globals.css"
 
-const preview: Preview = {
+export default definePreview({
+  addons: [addonA11y(), addonDocs(), addonThemes(), addonVitest()],
   decorators: [
     withThemeByClassName({
       themes: {
@@ -25,6 +29,4 @@ const preview: Preview = {
     },
     layout: "centered",
   },
-}
-
-export default preview
+})

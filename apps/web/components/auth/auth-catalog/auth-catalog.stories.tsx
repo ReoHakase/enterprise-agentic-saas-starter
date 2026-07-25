@@ -1,10 +1,10 @@
 import type { AdditionalField as AdditionalFieldConfig } from "@better-auth-ui/core"
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { fn } from "storybook/test"
 
+import preview from "#storybook/preview"
 import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 
 import { AdditionalField } from "../additional-field/additional-field"
@@ -85,7 +85,7 @@ const AuthStoryScope = ({ children }: { children: ReactNode }) => (
   </AuthProvider>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Web/Authentication",
   component: Auth,
   decorators: [
@@ -95,16 +95,13 @@ const meta = {
       </AuthStoryScope>
     ),
   ],
-} satisfies Meta<typeof Auth>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const RoutedSignIn: Story = {
+export const RoutedSignIn = meta.story({
   args: { view: "signIn" },
-}
+})
 
-export const FormFields: Story = {
+export const FormFields = meta.story({
   render: () => (
     <div className="grid max-w-sm gap-5">
       <AuthTextField
@@ -141,29 +138,29 @@ export const FormFields: Story = {
       <AdditionalField name="department" field={additionalField} />
     </div>
   ),
-}
+})
 
-export const PasswordSignIn: Story = {
+export const PasswordSignIn = meta.story({
   render: () => <SignIn />,
-}
+})
 
-export const PasswordSignUp: Story = {
+export const PasswordSignUp = meta.story({
   render: () => <SignUp />,
-}
+})
 
-export const MagicLinkSignIn: Story = {
+export const MagicLinkSignIn = meta.story({
   render: () => <MagicLink />,
-}
+})
 
-export const ForgotPasswordForm: Story = {
+export const ForgotPasswordForm = meta.story({
   render: () => <ForgotPassword />,
-}
+})
 
-export const ResetPasswordForm: Story = {
+export const ResetPasswordForm = meta.story({
   render: () => <ResetPassword />,
-}
+})
 
-export const AuthenticationMethods: Story = {
+export const AuthenticationMethods = meta.story({
   render: () => (
     <div className="grid max-w-sm gap-3">
       <ProviderButtons />
@@ -172,8 +169,8 @@ export const AuthenticationMethods: Story = {
       <PasskeySignInButton />
     </div>
   ),
-}
+})
 
-export const SigningOut: Story = {
+export const SigningOut = meta.story({
   render: () => <SignOut />,
-}
+})

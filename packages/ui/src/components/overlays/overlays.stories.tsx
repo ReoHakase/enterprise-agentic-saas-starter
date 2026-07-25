@@ -1,6 +1,7 @@
-import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Trash2Icon } from "lucide-react"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+
+import preview from "#storybook/preview"
 
 import {
   AlertDialog,
@@ -91,17 +92,14 @@ const MobileNavigationDrawer = () => (
   </Drawer>
 )
 
-const meta = {
+const meta = preview.meta({
   title: "Components/Overlays",
   component: DestructiveConfirmation,
   tags: ["autodocs"],
   parameters: { layout: "centered" },
-} satisfies Meta<typeof DestructiveConfirmation>
+})
 
-export default meta
-type Story = StoryObj<typeof meta>
-
-export const DestructiveAlert: Story = {
+export const DestructiveAlert = meta.story({
   args: { onConfirm: fn() },
   play: async ({ args, canvas }) => {
     const trigger = canvas.getByRole("button", { name: "Delete organization" })
@@ -121,9 +119,9 @@ export const DestructiveAlert: Story = {
     )
     await expect(args.onConfirm).toHaveBeenCalledOnce()
   },
-}
+})
 
-export const MobileDrawer: StoryObj<typeof MobileNavigationDrawer> = {
+export const MobileDrawer = meta.story({
   render: () => <MobileNavigationDrawer />,
   play: async ({ canvas }) => {
     const trigger = canvas.getByRole("button", {
@@ -140,4 +138,4 @@ export const MobileDrawer: StoryObj<typeof MobileNavigationDrawer> = {
     await userEvent.click(body.getByRole("button", { name: "Done" }))
     await waitFor(() => expect(trigger).toHaveFocus(), { timeout: 5_000 })
   },
-}
+})
