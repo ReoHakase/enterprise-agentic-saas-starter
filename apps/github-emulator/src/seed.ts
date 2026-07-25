@@ -2,7 +2,7 @@ import type { SeedConfig } from "emulate"
 
 import type { GitHubEmulatorConfig } from "./config"
 
-export const LOCAL_GITHUB_USER = {
+const LOCAL_GITHUB_USER = {
   login: "oauth-alice",
   name: "OAuth Alice",
   email: "oauth-alice@example.test",

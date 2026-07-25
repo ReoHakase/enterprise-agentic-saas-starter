@@ -1,14 +1,11 @@
 import type { Emulator, EmulatorOptions } from "emulate"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { GitHubEmulatorConfig } from "./config"
-import {
-  createGracefulShutdown,
-  type CreateEmulator,
-  GitHubEmulatorReadinessError,
-  startGitHubEmulator,
-  waitForGitHubEmulatorReady,
-} from "./emulator"
+import { createGracefulShutdown, startGitHubEmulator } from "./emulator"
+
+type StartDependencies = NonNullable<Parameters<typeof startGitHubEmulator>[1]>
+type CreateEmulator = NonNullable<StartDependencies["create"]>
 
 const CONFIG: GitHubEmulatorConfig = {
   port: 4001,
@@ -22,6 +19,10 @@ const createFakeEmulator = (close: () => Promise<void>): Emulator => ({
   url: CONFIG.baseUrl,
   reset: () => undefined,
   close,
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe("startGitHubEmulator", () => {
@@ -66,41 +67,43 @@ describe("startGitHubEmulator", () => {
       startGitHubEmulator(CONFIG, {
         create,
         waitUntilReady: async () => {
-          throw new GitHubEmulatorReadinessError()
+          throw new Error("readiness failed")
         },
       })
-    ).rejects.toBeInstanceOf(GitHubEmulatorReadinessError)
+    ).rejects.toThrow("readiness failed")
     expect(calls).toEqual(["close"])
   })
-})
 
-describe("waitForGitHubEmulatorReady", () => {
-  it("/metaが成功するまでbounded retryする", async () => {
+  it("既定readiness checkは/metaが成功するまでbounded retryする", async () => {
     let calls = 0
+    const expected = createFakeEmulator(async () => undefined)
+    const create: CreateEmulator = async () => expected
 
-    await expect(
-      waitForGitHubEmulatorReady(4001, {
-        attempts: 3,
-        intervalMs: 0,
-        fetch: async () => {
-          calls += 1
-          return new Response(null, { status: calls === 2 ? 200 : 503 })
-        },
-      })
-    ).resolves.toBeUndefined()
+    vi.stubGlobal("fetch", async () => {
+      calls += 1
+      return new Response(null, { status: calls === 2 ? 200 : 503 })
+    })
+
+    await expect(startGitHubEmulator(CONFIG, { create })).resolves.toBe(
+      expected
+    )
     expect(calls).toBe(2)
   })
 
-  it("retry上限を超えたらstable errorにする", async () => {
-    await expect(
-      waitForGitHubEmulatorReady(4001, {
-        attempts: 2,
-        intervalMs: 0,
-        fetch: async () => {
-          throw new Error("connection refused")
-        },
-      })
-    ).rejects.toBeInstanceOf(GitHubEmulatorReadinessError)
+  it("既定readiness checkのretry上限を超えたらstable errorにする", async () => {
+    const create: CreateEmulator = async () =>
+      createFakeEmulator(async () => undefined)
+
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("connection refused")
+    })
+
+    await expect(startGitHubEmulator(CONFIG, { create })).rejects.toMatchObject(
+      {
+        name: "GitHubEmulatorReadinessError",
+        message: "GitHub OAuth emulatorのreadiness確認がtimeoutしました。",
+      }
+    )
   })
 })
 

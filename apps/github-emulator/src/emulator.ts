@@ -3,7 +3,7 @@ import { createEmulator, type Emulator, type EmulatorOptions } from "emulate"
 import type { GitHubEmulatorConfig } from "./config"
 import { createGitHubOAuthSeed } from "./seed"
 
-export type CreateEmulator = (options: EmulatorOptions) => Promise<Emulator>
+type CreateEmulator = (options: EmulatorOptions) => Promise<Emulator>
 export type ExitProcess = (code: number) => void
 
 type ReadinessOptions = {
@@ -20,7 +20,7 @@ type StartDependencies = {
   waitUntilReady?: (port: number) => Promise<void>
 }
 
-export class GitHubEmulatorReadinessError extends Error {
+class GitHubEmulatorReadinessError extends Error {
   constructor() {
     super("GitHub OAuth emulatorのreadiness確認がtimeoutしました。")
     this.name = "GitHubEmulatorReadinessError"
@@ -32,7 +32,7 @@ const delay = (milliseconds: number) =>
     setTimeout(resolve, milliseconds)
   })
 
-export const waitForGitHubEmulatorReady = async (
+const waitForGitHubEmulatorReady = async (
   port: number,
   options: ReadinessOptions = {}
 ) => {

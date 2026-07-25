@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { GitHubEmulatorConfig } from "./config"
-import { createGitHubOAuthSeed, LOCAL_GITHUB_USER } from "./seed"
+import { createGitHubOAuthSeed } from "./seed"
 
 const CONFIG: GitHubEmulatorConfig = {
   port: 4001,
@@ -15,7 +15,15 @@ describe("createGitHubOAuthSeed", () => {
   it("deterministic userとstrict OAuth appを毎回seedする", () => {
     expect(createGitHubOAuthSeed(CONFIG)).toEqual({
       github: {
-        users: [LOCAL_GITHUB_USER],
+        users: [
+          {
+            login: "oauth-alice",
+            name: "OAuth Alice",
+            email: "oauth-alice@example.test",
+            bio: "Deterministic local OAuth test account",
+            site_admin: false,
+          },
+        ],
         oauth_apps: [
           {
             client_id: CONFIG.clientId,
