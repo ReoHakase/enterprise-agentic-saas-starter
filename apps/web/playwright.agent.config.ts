@@ -99,7 +99,7 @@ const config = defineConfig({
   webServer: [
     {
       command: "bun --no-env-file run e2e:github-emulator",
-      url: `${environment.githubOrigin}/meta`,
+      url: `http://127.0.0.1:${environment.githubPort}/meta`,
       reuseExistingServer: false,
       timeout: 60_000,
       env: {

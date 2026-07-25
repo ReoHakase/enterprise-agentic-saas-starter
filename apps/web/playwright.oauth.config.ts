@@ -99,7 +99,7 @@ export default defineConfig({
   webServer: [
     {
       command: "bun --no-env-file run e2e:github-emulator",
-      url: `${githubOrigin}/meta`,
+      url: "http://127.0.0.1:4101/meta",
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
