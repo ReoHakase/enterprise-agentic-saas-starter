@@ -7,6 +7,7 @@ import { toJsonSchema } from "@valibot/to-json-schema"
 import { Elysia } from "elysia"
 
 import { env } from "../env"
+import { normalizeAuthOpenApiSchema } from "../openapi/normalize-auth-schema"
 
 const HTTP_METHODS = new Set([
   "delete",
@@ -54,57 +55,6 @@ const isOpenApiPaths = (value: unknown): value is OpenApiPaths =>
 const isOpenApiSchemas = (value: unknown): value is OpenApiSchemas =>
   isJsonObject(value) &&
   Object.values(value).every((schema) => isJsonObject(schema))
-
-/**
- * Better Auth 1.6 generates OpenAPI 3.1 nullable types while Elysia 1.4 emits
- * OpenAPI 3.0.3. Normalize the generated fragment before merging so the
- * unified document does not mix incompatible schema dialects.
- */
-const normalizeOpenApi31Value = (value: unknown): JsonValue => {
-  if (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "number" ||
-    typeof value === "string"
-  ) {
-    return value
-  }
-  if (Array.isArray(value)) {
-    return value.map(normalizeOpenApi31Value)
-  }
-  if (typeof value !== "object") {
-    throw new TypeError("Better Auth OpenAPI contains a non-JSON value")
-  }
-
-  const normalized = Object.fromEntries(
-    Object.entries(value).flatMap(([key, item]) =>
-      item === undefined ? [] : [[key, normalizeOpenApi31Value(item)]]
-    )
-  )
-  const type = normalized.type
-  if (Array.isArray(type) && type.includes("null")) {
-    const nonNullTypes = type.filter((item) => item !== "null")
-    if (nonNullTypes.length !== 1 || typeof nonNullTypes[0] !== "string") {
-      throw new TypeError(
-        "Better Auth OpenAPI nullable type cannot be represented in OpenAPI 3.0"
-      )
-    }
-    normalized.type = nonNullTypes[0]
-    normalized.nullable = true
-  }
-
-  const reference = normalized.$ref
-  if (typeof reference === "string" && Object.keys(normalized).length > 1) {
-    const siblings = Object.fromEntries(
-      Object.entries(normalized).filter(([key]) => key !== "$ref")
-    )
-    return {
-      allOf: [{ $ref: reference }, siblings],
-    }
-  }
-
-  return normalized
-}
 
 const normalizeAuthTag = (tag: string): string => {
   if (tag === "Default") {
@@ -165,7 +115,7 @@ const authOperationClassifications = (path: string, operation: JsonObject) => {
 }
 
 const createAuthSecuritySchemes = (value: unknown): OpenApiSecuritySchemes => {
-  const normalized = normalizeOpenApi31Value(value)
+  const normalized = normalizeAuthOpenApiSchema(value)
   if (!isJsonObject(normalized)) {
     throw new TypeError(
       "Better Auth OpenAPI security schemes must be an object"
@@ -217,7 +167,7 @@ const createAuthOpenApiFragment = (schema: AuthOpenApiSchema) => {
   const paths = Object.fromEntries(
     Object.entries(schema.paths).map(([path, pathItem]) => {
       const prefixedPath = `/auth${path}`
-      const normalizedPathItem = normalizeOpenApi31Value(pathItem)
+      const normalizedPathItem = normalizeAuthOpenApiSchema(pathItem)
       if (!isJsonObject(normalizedPathItem)) {
         throw new TypeError("Better Auth OpenAPI path item must be an object")
       }
@@ -256,7 +206,7 @@ const createAuthOpenApiFragment = (schema: AuthOpenApiSchema) => {
       return [prefixedPath, documentedPathItem]
     })
   )
-  const schemas = normalizeOpenApi31Value(schema.components.schemas)
+  const schemas = normalizeAuthOpenApiSchema(schema.components.schemas)
   if (!isOpenApiPaths(paths) || !isOpenApiSchemas(schemas)) {
     throw new TypeError("Better Auth OpenAPI paths and schemas are invalid")
   }

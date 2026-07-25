@@ -19,7 +19,7 @@ describe("API email environment", () => {
   it("accepts the configurable local Mailpit endpoint", async () => {
     setEmailEnv(" https://mailpit.enterprise-agentic-saas.localhost ")
 
-    const { env } = await import("./env")
+    const { env } = await import("./index")
 
     expect(env.EMAIL_PROVIDER).toBe("mailpit")
     expect(env.MAILPIT_URL).toBe(
@@ -33,7 +33,7 @@ describe("API email environment", () => {
     vi.stubEnv("EMAIL_FROM", "")
     vi.stubEnv("MAILPIT_URL", "")
 
-    const { env } = await import("./env")
+    const { env } = await import("./index")
 
     expect(env.EMAIL_PROVIDER).toBe("mailpit")
     expect(env.EMAIL_FROM).toBe("noreply@example.test")
@@ -53,7 +53,7 @@ describe("API email environment", () => {
       vi.stubEnv("EMAIL_FROM", "noreply@example.com")
       vi.stubEnv("MAILPIT_URL", "")
 
-      const { env } = await import("./env")
+      const { env } = await import("./index")
 
       expect(env.EMAIL_PROVIDER).toBe(expectedProvider)
       expect(env.MAILPIT_URL).toBeUndefined()
@@ -67,7 +67,7 @@ describe("API email environment", () => {
       .mockImplementation(() => undefined)
 
     try {
-      await expect(import("./env")).rejects.toThrow(
+      await expect(import("./index")).rejects.toThrow(
         "Invalid environment variables"
       )
     } finally {
@@ -86,7 +86,7 @@ describe("API email environment", () => {
     async (value, expected) => {
       vi.stubEnv("AGENT_ASSET_UPLOAD_ENABLED", value)
 
-      const { env } = await import("./env")
+      const { env } = await import("./index")
 
       expect(env.AGENT_ASSET_UPLOAD_ENABLED).toBe(expected)
     }

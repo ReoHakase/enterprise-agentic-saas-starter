@@ -25,18 +25,18 @@ import {
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
-import { configureObservability } from "./observability/runtime"
-import { createSentryObservabilityRuntime } from "./observability/sentry-adapter"
+import { configureObservability } from "./platform/observability/runtime"
+import { createSentryObservabilityRuntime } from "./platform/observability/sentry-adapter"
 import {
   filterSentryIntegrations,
   sentryPrivacyOptions,
   SPOTLIGHT_DSN,
-} from "./observability/sentry-options"
-import { resolveSpotlightTarget } from "./observability/spotlight"
-import { withStructuredConsole } from "./observability/structured-console"
-import { authPlugin } from "./plugins/auth"
-import { corsPlugin } from "./plugins/cors"
-import { serverTimingPlugin } from "./plugins/server-timing"
+} from "./platform/observability/sentry-options"
+import { resolveSpotlightTarget } from "./platform/observability/spotlight"
+import { withStructuredConsole } from "./platform/observability/structured-console"
+import { authPlugin } from "./platform/plugins/auth"
+import { corsPlugin } from "./platform/plugins/cors"
+import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
 type WorkerSentryEnv = {
   AGENT_RUNTIME: AgentRuntimeBinding

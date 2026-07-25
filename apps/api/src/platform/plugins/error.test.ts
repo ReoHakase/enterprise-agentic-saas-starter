@@ -73,7 +73,7 @@ vi.mock("../observability/runtime", () => ({
   recordObservedHttpStatus: observability.recordHttpStatus,
 }))
 
-import { publicErrors } from "../errors/app-error"
+import { publicErrors } from "../../errors/app-error"
 import { errorPlugin, projectErrorForResponse } from "./error"
 import { requestIdPlugin } from "./request-id"
 

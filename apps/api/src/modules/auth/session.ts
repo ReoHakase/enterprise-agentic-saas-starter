@@ -1,5 +1,5 @@
-import { env } from "../../env"
 import { publicErrors } from "../../errors/app-error"
+import { env } from "../../platform/env"
 
 export type SessionUser = {
   id: string

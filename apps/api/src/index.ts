@@ -1,4 +1,4 @@
-import { initializeBunObservability } from "./observability/sentry-bun"
+import { initializeBunObservability } from "./platform/observability/sentry-bun"
 
 initializeBunObservability()
 
@@ -12,10 +12,10 @@ const [
 ] = await Promise.all([
   import("@enterprise-agentic-saas/db"),
   import("./app"),
-  import("./env"),
-  import("./plugins/auth"),
-  import("./plugins/cors"),
-  import("./plugins/server-timing"),
+  import("./platform/env"),
+  import("./platform/plugins/auth"),
+  import("./platform/plugins/cors"),
+  import("./platform/plugins/server-timing"),
 ])
 
 const app = createApp(db)

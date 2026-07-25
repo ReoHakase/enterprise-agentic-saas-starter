@@ -9,7 +9,7 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterEach } from "vitest"
 
 import { createApp } from "../../app"
-import { env } from "../../env"
+import { env } from "../../platform/env"
 import { createAgentInternalApi } from "./internal-api"
 import {
   createAgentThreadForSession,

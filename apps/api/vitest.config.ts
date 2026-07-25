@@ -13,9 +13,9 @@ export default defineConfig({
         "src/client.ts",
         "src/modules/organizations/routes/deletion-access.ts",
         "src/modules/organizations/deletion-jobs.ts",
-        "src/observability/sanitize.ts",
-        "src/observability/spotlight.ts",
-        "src/plugins/request-id.ts",
+        "src/platform/observability/sanitize.ts",
+        "src/platform/observability/spotlight.ts",
+        "src/platform/plugins/request-id.ts",
       ],
       thresholds: {
         statements: 70,

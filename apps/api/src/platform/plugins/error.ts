@@ -1,7 +1,7 @@
 import { Elysia, ValidationError } from "elysia"
 
-import { AppError, sanitizePublicErrorContext } from "../errors/app-error"
-import { errorDefinition } from "../errors/error-registry"
+import { AppError, sanitizePublicErrorContext } from "../../errors/app-error"
+import { errorDefinition } from "../../errors/error-registry"
 import {
   captureObservedException,
   recordObservedHttpStatus,

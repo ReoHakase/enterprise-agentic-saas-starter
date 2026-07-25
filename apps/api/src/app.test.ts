@@ -14,9 +14,9 @@ import {
   jsonRequest,
   testDb,
 } from "./app.test-support"
-import { env } from "./env"
 import { resolveAndPersistActiveOrganizationId } from "./modules/users/repository"
-import { corsPlugin } from "./plugins/cors"
+import { env } from "./platform/env"
+import { corsPlugin } from "./platform/plugins/cors"
 
 const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
   invitationEmailRenderSpy: vi.fn<

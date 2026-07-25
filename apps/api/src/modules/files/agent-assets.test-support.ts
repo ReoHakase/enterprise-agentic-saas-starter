@@ -3,7 +3,7 @@ import * as schema from "@enterprise-agentic-saas/db/schema"
 import { eq, inArray } from "drizzle-orm"
 import { vi } from "vitest"
 
-import { env } from "../../env"
+import { env } from "../../platform/env"
 import {
   AGENT_USAGE_HOUR_MS,
   createAgentInternalApi,

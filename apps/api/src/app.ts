@@ -16,12 +16,12 @@ import { createIssuesModule } from "./modules/issues/module"
 import { createOrganizationsModule } from "./modules/organizations/module"
 import { createProfileImagesModule } from "./modules/profile-images/module"
 import { createUsersModule } from "./modules/users/module"
-import { withObservedSpan } from "./observability/runtime"
-import { csrfPlugin } from "./plugins/csrf"
-import { errorPlugin } from "./plugins/error"
-import { observabilityPlugin } from "./plugins/observability"
-import { openApiPlugin } from "./plugins/openapi"
-import { requestIdPlugin } from "./plugins/request-id"
+import { withObservedSpan } from "./platform/observability/runtime"
+import { csrfPlugin } from "./platform/plugins/csrf"
+import { errorPlugin } from "./platform/plugins/error"
+import { observabilityPlugin } from "./platform/plugins/observability"
+import { openApiPlugin } from "./platform/plugins/openapi"
+import { requestIdPlugin } from "./platform/plugins/request-id"
 
 export const createApp = (db: Db) => {
   const authorization = createAuthorizationModule(db)

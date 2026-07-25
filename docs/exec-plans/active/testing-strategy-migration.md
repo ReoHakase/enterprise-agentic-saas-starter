@@ -69,7 +69,7 @@ linked_adrs:
 
 - [x] testing strategyの合意事項を文書へ反映した
 - [x] ADR-007とactive exec planを作成した
-- [ ] API platform境界を移動した
+- [x] API platform境界を移動した
 - [ ] Web feature公開境界を移動した
 - [ ] Web componentをdirectory化した
 - [ ] UI componentをdirectory化した
@@ -93,14 +93,17 @@ linked_adrs:
 
 ## 検証証跡
 
-| command                          | 結果    | 証跡             |
-| -------------------------------- | ------- | ---------------- |
-| Markdown formatとlink検査        | pending | 完了時に記録する |
-| workspace lint、typecheck、test  | pending | 完了時に記録する |
-| `bun run check`                  | pending | 完了時に記録する |
-| `bun run test:browser`           | pending | 完了時に記録する |
-| `bun run test:e2e`               | pending | 完了時に記録する |
-| Storybook、Cloudflare、Nix build | pending | 完了時に記録する |
+| command                            | 結果    | 証跡                                                    |
+| ---------------------------------- | ------- | ------------------------------------------------------- |
+| Markdown formatとlink検査          | pending | 完了時に記録する                                        |
+| workspace lint、typecheck、test    | pending | 完了時に記録する                                        |
+| `bun run check`                    | pending | 完了時に記録する                                        |
+| `bun run test:browser`             | pending | 完了時に記録する                                        |
+| `bun run test:e2e`                 | pending | 完了時に記録する                                        |
+| Storybook、Cloudflare、Nix build   | pending | 完了時に記録する                                        |
+| `bun run --cwd apps/api lint`      | success | warningなし                                             |
+| `bun run --cwd apps/api typecheck` | success | 型errorなし                                             |
+| `bun run --cwd apps/api test`      | success | 55 files、319 tests。localhost利用のためsandbox外で実行 |
 
 ## リスクとrollback
 

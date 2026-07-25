@@ -2,9 +2,9 @@ import { Elysia } from "elysia"
 import * as v from "valibot"
 
 import { publicErrors } from "../../errors/app-error"
-import { errorPlugin } from "../../plugins/error"
-import { observabilityPlugin } from "../../plugins/observability"
-import { requestIdPlugin } from "../../plugins/request-id"
+import { errorPlugin } from "../../platform/plugins/error"
+import { observabilityPlugin } from "../../platform/plugins/observability"
+import { requestIdPlugin } from "../../platform/plugins/request-id"
 import { agentInternalAuthorizationModel } from "./action-schema"
 import {
   actionIdParamsModel,

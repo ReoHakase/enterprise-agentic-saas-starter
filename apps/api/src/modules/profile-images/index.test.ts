@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createApp } from "../../app"
-import { env } from "../../env"
+import { env } from "../../platform/env"
 import {
   configureFileStorageRuntime,
   resetFileStorageRuntimeForTest,

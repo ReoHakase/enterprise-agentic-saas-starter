@@ -6,7 +6,7 @@ import {
 import { defineEnv } from "envin"
 import * as v from "valibot"
 
-import { resolveExplicitlyEnabledFlag } from "./runtime-flags"
+import { resolveExplicitlyEnabledFlag } from "../../runtime-flags"
 
 const commaSeparatedList = v.pipe(
   v.optional(v.string()),

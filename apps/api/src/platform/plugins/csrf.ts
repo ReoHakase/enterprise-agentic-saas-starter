@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 
+import { publicErrors } from "../../errors/app-error"
 import { env } from "../env"
-import { publicErrors } from "../errors/app-error"
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"])
 
