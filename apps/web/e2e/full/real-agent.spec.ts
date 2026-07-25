@@ -23,7 +23,7 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
       origin
     )
   ) {
-    throw new Error("Agent E2E API origin metadata is invalid")
+    throw new Error("Full E2E API origin metadata is invalid")
   }
   return origin
 }

@@ -76,7 +76,7 @@ linked_adrs:
 - [x] StorybookをCSF Nextへ移行した
 - [x] package所有testを整備した
 - [x] W1-W6を実装した
-- [ ] E1/E2を分離した
+- [x] E1/E2を分離した
 - [ ] coverageを確定した
 - [ ] affected CIを実装した
 - [ ] 文書をcutoverしplanをcompletedへ移した
@@ -127,6 +127,10 @@ linked_adrs:
 | Web W6 Chromium                       | success | 16 Playwright tests                                     |
 | Web W6 WebKit代表                     | success | 1 Playwright test                                       |
 | Web Storybook build                   | success | CSF Next、MSW global handlerを含むstatic buildが成功    |
+| 決定的E1                              | success | 実stackとscripted modelで3 Playwright tests             |
+| E2 config静的検査                     | success | 2 canaryを列挙し、有料実行は未実施                      |
+| E2 approval、secret guard             | success | どちらか一方が欠ける場合はserver起動前に拒否            |
+| root公開test script                   | success | 費用境界別の5 scriptだけを公開                          |
 
 ## リスクとrollback
 

@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import { chmod, mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import {
@@ -31,43 +31,10 @@ const requireOpenRouterKey = (value: string | undefined) => {
   const key = value?.trim()
   if (!key || /[\r\n]/u.test(key)) {
     throw new Error(
-      "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
+      "Full E2E requires OPENROUTER_API_KEY from the approved environment"
     )
   }
   return key
-}
-
-const unquoteDotenvValue = (value: string) => {
-  const trimmed = value.trim()
-  if (
-    trimmed.length >= 2 &&
-    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'")))
-  ) {
-    return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-const readOpenRouterKey = async () => {
-  if (process.env.OPENROUTER_API_KEY) {
-    return requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
-  }
-  let contents = ""
-  try {
-    contents = await readFile(resolve(agentWorkspace, ".env.local"), "utf8")
-  } catch {
-    throw new Error(
-      "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
-    )
-  }
-  const entry = contents
-    .split(/\r?\n/u)
-    .find((line) => /^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=/u.test(line))
-  const separator = entry?.indexOf("=") ?? -1
-  return requireOpenRouterKey(
-    separator >= 0 ? unquoteDotenvValue(entry?.slice(separator + 1) ?? "") : ""
-  )
 }
 
 const writePrivateFile = async (path: string, contents: string) => {
@@ -136,7 +103,9 @@ const main = async () => {
   const environment = createAgentE2EEnvironment(
     process.env.AGENT_E2E_RUN_ID ?? ""
   )
-  const openRouterApiKey = scriptedAgent ? null : await readOpenRouterKey()
+  const openRouterApiKey = scriptedAgent
+    ? null
+    : requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
   let turso: ManagedProcess | undefined
   let wrangler: ManagedProcess | undefined
   let stopping = false

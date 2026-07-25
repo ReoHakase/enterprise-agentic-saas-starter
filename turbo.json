@@ -115,10 +115,10 @@
       "outputs": ["test-results/**", "playwright-report/**"],
       "passThroughEnv": ["CI", "PLAYWRIGHT_BASE_URL"]
     },
-    "test:e2e:agent": {
+    "test:e2e:full": {
       "cache": false,
       "outputs": [],
-      "passThroughEnv": ["CI", "OPENROUTER_API_KEY"]
+      "passThroughEnv": ["CI", "OPENROUTER_API_KEY", "PAID_E2E_APPROVED"]
     },
     "test:eval:agent": {
       "cache": false,

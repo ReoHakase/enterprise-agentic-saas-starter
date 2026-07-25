@@ -6,11 +6,11 @@ on:
       suite:
         description: Paid test suite
         required: true
-        default: l6
+        default: eval
         type: choice
         options:
-          - l6
-          - l7
+          - eval
+          - full
           - all
   schedule:
     - cron: "23 17 * * *"
@@ -41,18 +41,19 @@ jobs:
       - uses: ./.github/actions/setup-bun
 
       - name: Run browserless Agent evals
-        if: ${{ github.event_name == 'schedule' || github.event_name == 'release' || inputs.suite == 'l6' || inputs.suite == 'all' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'release' || inputs.suite == 'eval' || inputs.suite == 'all' }}
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: nix develop --command bun run test:eval:agent
 
       - name: Install Chromium
-        if: ${{ github.event_name == 'release' || inputs.suite == 'l7' || inputs.suite == 'all' }}
+        if: ${{ github.event_name == 'release' || inputs.suite == 'full' || inputs.suite == 'all' }}
         working-directory: apps/web
         run: bunx playwright@1.61.1 install --with-deps chromium
 
       - name: Run full-stack Agent canaries
-        if: ${{ github.event_name == 'release' || inputs.suite == 'l7' || inputs.suite == 'all' }}
+        if: ${{ github.event_name == 'release' || inputs.suite == 'full' || inputs.suite == 'all' }}
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: nix develop --command bun run test:e2e:agent
+          PAID_E2E_APPROVED: "1"
+        run: nix develop --command bun run test:e2e:full

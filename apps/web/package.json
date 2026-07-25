@@ -31,10 +31,8 @@
     "test:browser:app:webkit": "bun run scripts/run-w6-webkit.ts",
     "test:browser:components": "vitest run --project=storybook-light --project=storybook-dark --project=browser",
     "test:browser:mock-api": "bun run test/app/fixtures/mock-api.ts",
-    "test:e2e": "bun run test:e2e:scripted-agent && bun run test:e2e:oauth",
-    "test:e2e:agent": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.agent.config.ts",
-    "test:e2e:oauth": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.oauth.config.ts",
-    "test:e2e:scripted-agent": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.e2.config.ts",
+    "test:e2e": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.deterministic.config.ts",
+    "test:e2e:full": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.full.config.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

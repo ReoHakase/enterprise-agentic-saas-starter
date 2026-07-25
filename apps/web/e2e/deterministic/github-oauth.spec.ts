@@ -4,7 +4,7 @@ const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
 const apiLoopbackOrigin = "http://127.0.0.1:3101"
 const githubOrigin = "http://127.0.0.1:4101"
 
-test("GitHub emulatorで認証しsessionを永続化できる", async ({
+test("決定的GitHub emulatorで認証しsessionを永続化できる", async ({
   context,
   page,
 }) => {

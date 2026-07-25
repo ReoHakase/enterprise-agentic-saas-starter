@@ -144,7 +144,7 @@
     "test": "vitest run --config vitest.config.ts && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
-    "test:e2e:agent": "turbo run test:e2e:agent --filter=@enterprise-agentic-saas/web",
+    "test:e2e:full": "turbo run test:e2e:full --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",
     "typecheck": "turbo run typecheck"
   },

@@ -13,7 +13,7 @@ const recordArray = (
 ): Record<string, unknown>[] => {
   const value = Reflect.get(record, key)
   if (!Array.isArray(value) || !value.every(isRecord)) {
-    throw new Error(`Scripted Agent E2E ${key} is invalid`)
+    throw new Error(`Deterministic Agent E2E ${key} is invalid`)
   }
   return value
 }
@@ -24,7 +24,7 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
     typeof origin !== "string" ||
     !/^http:\/\/127\.0\.0\.1:\d+$/u.test(origin)
   ) {
-    throw new Error("Scripted Agent E2E API origin metadata is invalid")
+    throw new Error("Deterministic Agent E2E API origin metadata is invalid")
   }
   return origin
 }
