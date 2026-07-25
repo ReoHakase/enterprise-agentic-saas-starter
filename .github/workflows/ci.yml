@@ -138,7 +138,9 @@ jobs:
 
   free-e2e:
     name: Free E2E
-    runs-on: ubuntu-latest
+    # Playwright WebKit 26 intermittently loses its network process on the
+    # ubuntu-24.04 hosted image before the first navigation.
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
