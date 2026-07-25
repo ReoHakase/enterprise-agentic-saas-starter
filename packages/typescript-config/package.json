@@ -3,6 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "license": "PROPRIETARY",
+  "exports": {
+    "./base.json": "./base.json",
+    "./bun.json": "./bun.json",
+    "./cloudflare-worker.json": "./cloudflare-worker.json",
+    "./nextjs.json": "./nextjs.json",
+    "./react-library.json": "./react-library.json"
+  },
   "publishConfig": {
     "access": "public"
   }
