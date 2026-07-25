@@ -2,6 +2,8 @@
   "name": "enterprise-agentic-saas-starter",
   "version": "0.0.1",
   "private": true,
+  "license": "Apache-2.0",
+  "author": "白田連大 (Reo Hakuta)",
   "workspaces": {
     "packages": [
       "apps/*",
