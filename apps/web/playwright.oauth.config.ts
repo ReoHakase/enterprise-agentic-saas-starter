@@ -89,7 +89,7 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "github-oauth-chromium",
+      name: "oauth-chromium",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 720 },

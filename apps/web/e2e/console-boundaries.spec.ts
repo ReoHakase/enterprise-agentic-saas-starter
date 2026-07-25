@@ -21,11 +21,6 @@ type ConsoleShellGeometry = {
   sidebarContainer: ElementGeometry | null
 }
 
-const resetMockApi = async () => {
-  const response = await fetch(`${mockApiUrl}/__e2e/reset`, { method: "POST" })
-  expect(response.ok).toBeTruthy()
-}
-
 const useAdminSession = async (context: BrowserContext) => {
   await context.addCookies([
     {
@@ -44,7 +39,6 @@ const navigateFromConsoleSidebar = async (page: Page, label: string) => {
     await page.getByRole("button", { name: "Toggle Sidebar" }).click()
     await expect(page.getByRole("dialog", { name: "Sidebar" })).toBeVisible()
   }
-
   await page
     .getByRole("link", { name: label, exact: true })
     .click({ noWaitAfter: true })
@@ -269,10 +263,6 @@ const readLoadedDashboardGeometry = async (page: Page) => {
   return geometry
 }
 
-test.beforeEach(async () => {
-  await resetMockApi()
-})
-
 test("console loadingは実画面と同じshell geometryを維持する", async ({
   context,
   page,
@@ -312,22 +302,16 @@ test("console loadingは実画面と同じshell geometryを維持する", async 
 })
 
 test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを維持する", async ({
-  browserName,
   context,
   page,
 }) => {
   await useAdminSession(context)
   const dashboardGeometry = await readLoadedDashboardGeometry(page)
-  const readyShell =
-    browserName === "webkit"
-      ? null
-      : await page.locator("[data-console-shell]:visible").elementHandle()
-  if (browserName !== "webkit" && !readyShell) {
+  const readyShell = await page
+    .locator("[data-console-shell]:visible")
+    .elementHandle()
+  if (!readyShell) {
     throw new Error("the ready console shell was not mounted")
-  }
-
-  if (browserName === "webkit") {
-    await page.goto("about:blank")
   }
 
   const delayResponse = await context.request.post(
@@ -336,15 +320,7 @@ test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを�
   )
   expect(delayResponse.status()).toBe(201)
 
-  const navigation =
-    browserName === "webkit"
-      ? page.goto(
-          "/organization/alpha-operations/issues?boundary-state=nested-loading"
-        )
-      : null
-  if (!navigation) {
-    await navigateFromConsoleSidebar(page, "Issues")
-  }
+  await navigateFromConsoleSidebar(page, "Issues")
   await expect(
     page
       .locator("[data-console-shell]:visible")
@@ -358,18 +334,13 @@ test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを�
       .locator('[data-slot="console-header"]'),
     "the selected organization header should survive route loading"
   ).toContainText("Alpha Operations")
-  if (readyShell) {
-    expect(
-      await page
-        .locator("[data-console-shell]:visible")
-        .evaluate(
-          (shell, previousShell) => shell === previousShell,
-          readyShell
-        ),
-      "nested loading should preserve the mounted console shell"
-    ).toBeTruthy()
-  }
-  if ((page.viewportSize()?.width ?? 0) < 768 && !navigation) {
+  expect(
+    await page
+      .locator("[data-console-shell]:visible")
+      .evaluate((shell, previousShell) => shell === previousShell, readyShell),
+    "nested loading should preserve the mounted console shell"
+  ).toBeTruthy()
+  if ((page.viewportSize()?.width ?? 0) < 768) {
     await expect(page.getByRole("dialog", { name: "Sidebar" })).toBeHidden()
   }
   const loadingGeometry = await readConsoleShellGeometry(page)
@@ -380,21 +351,15 @@ test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを�
     "nested loading"
   )
 
-  await navigation
   await expect(
     page.getByRole("heading", { name: "Issues", level: 1 })
   ).toBeVisible()
-  if (readyShell) {
-    expect(
-      await page
-        .locator("[data-console-shell]:visible")
-        .evaluate(
-          (shell, previousShell) => shell === previousShell,
-          readyShell
-        ),
-      "loaded Issues should keep the same console shell"
-    ).toBeTruthy()
-  }
+  expect(
+    await page
+      .locator("[data-console-shell]:visible")
+      .evaluate((shell, previousShell) => shell === previousShell, readyShell),
+    "loaded Issues should keep the same console shell"
+  ).toBeTruthy()
   const loadedIssuesGeometry = await readConsoleShellGeometry(page)
   await expectShellContract(page, loadedIssuesGeometry)
   expectConsoleFrameGeometryToMatch(

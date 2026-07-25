@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import {
+  agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
   parseAgentE2ERunId,
 } from "./e2e/fixtures/agent-e2e-environment"
@@ -36,4 +37,9 @@ describe("Agent E2E environment", () => {
       )
     }
   )
+
+  it("selects existing scripted and production Worker entrypoints", () => {
+    expect(agentE2EWorkerEntrypoint(true)).toBe("src/mastra/e2e/worker.ts")
+    expect(agentE2EWorkerEntrypoint(false)).toBe("src/mastra/worker.ts")
+  })
 })

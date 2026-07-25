@@ -7,6 +7,9 @@ const RUN_DIRECTORY_PATTERN = /^enterprise-agentic-saas-agent-e2e-[1-9][0-9]*$/
 
 export type AgentE2EEnvironment = ReturnType<typeof createAgentE2EEnvironment>
 
+export const agentE2EWorkerEntrypoint = (scriptedAgent: boolean): string =>
+  scriptedAgent ? "src/mastra/e2e/worker.ts" : "src/mastra/worker.ts"
+
 export const parseAgentE2ERunId = (value: string | number): number => {
   const runId = typeof value === "number" ? value : Number(value)
   if (!Number.isSafeInteger(runId) || runId <= 0) {

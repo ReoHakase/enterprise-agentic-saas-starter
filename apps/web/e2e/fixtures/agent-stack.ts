@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import {
+  agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
   removeAgentE2EArtifacts,
 } from "./agent-e2e-environment"
@@ -26,9 +27,9 @@ const sleep = (milliseconds: number) =>
     setTimeout(resolvePromise, milliseconds)
   )
 
-const requireOpenRouterKey = (value: string | undefined): string => {
+const requireOpenRouterKey = (value: string | undefined) => {
   const key = value?.trim()
-  if (!key || key.length < 24 || /[\r\n]/u.test(key)) {
+  if (!key || /[\r\n]/u.test(key)) {
     throw new Error(
       "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
     )
@@ -36,7 +37,7 @@ const requireOpenRouterKey = (value: string | undefined): string => {
   return key
 }
 
-const unquoteDotenvValue = (value: string): string => {
+const unquoteDotenvValue = (value: string) => {
   const trimmed = value.trim()
   if (
     trimmed.length >= 2 &&
@@ -48,12 +49,11 @@ const unquoteDotenvValue = (value: string): string => {
   return trimmed
 }
 
-const readOpenRouterKey = async (): Promise<string> => {
+const readOpenRouterKey = async () => {
   if (process.env.OPENROUTER_API_KEY) {
     return requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
   }
-
-  let contents: string
+  let contents = ""
   try {
     contents = await readFile(resolve(agentWorkspace, ".env.local"), "utf8")
   } catch {
@@ -61,7 +61,6 @@ const readOpenRouterKey = async (): Promise<string> => {
       "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
     )
   }
-
   const entry = contents
     .split(/\r?\n/u)
     .find((line) => /^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=/u.test(line))
@@ -133,11 +132,11 @@ const main = async () => {
   if (process.env.NODE_ENV === "production") {
     throw new Error("Agent E2E stack cannot run in production")
   }
-
+  const scriptedAgent = process.env.AGENT_E2E_SCRIPTED === "1"
   const environment = createAgentE2EEnvironment(
     process.env.AGENT_E2E_RUN_ID ?? ""
   )
-  const openRouterApiKey = await readOpenRouterKey()
+  const openRouterApiKey = scriptedAgent ? null : await readOpenRouterKey()
   let turso: ManagedProcess | undefined
   let wrangler: ManagedProcess | undefined
   let stopping = false
@@ -241,7 +240,7 @@ const main = async () => {
     }
     const agentConfig = {
       name: environment.agentWorkerName,
-      main: resolve(agentWorkspace, "src/worker.ts"),
+      main: resolve(agentWorkspace, agentE2EWorkerEntrypoint(scriptedAgent)),
       compatibility_date: "2026-07-22",
       compatibility_flags: ["nodejs_compat"],
       workers_dev: false,
@@ -253,7 +252,9 @@ const main = async () => {
           entrypoint: "AgentInternalApi",
         },
       ],
-      secrets: { required: ["OPENROUTER_API_KEY"] },
+      ...(scriptedAgent
+        ? {}
+        : { secrets: { required: ["OPENROUTER_API_KEY"] } }),
       observability: { enabled: false },
       vars: {
         NODE_ENV: "development",
@@ -276,10 +277,12 @@ const main = async () => {
         environment.agentConfigPath,
         `${JSON.stringify(agentConfig, null, 2)}\n`
       ),
-      writePrivateFile(
-        environment.agentDevVarsPath,
-        `OPENROUTER_API_KEY=${JSON.stringify(openRouterApiKey)}\n`
-      ),
+      openRouterApiKey
+        ? writePrivateFile(
+            environment.agentDevVarsPath,
+            `OPENROUTER_API_KEY=${JSON.stringify(openRouterApiKey)}\n`
+          )
+        : writePrivateFile(environment.agentDevVarsPath, "\n"),
     ])
 
     wrangler = Bun.spawn(

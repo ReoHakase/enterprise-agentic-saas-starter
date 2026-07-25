@@ -1,10 +1,48 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { storybookTest } from "@storybook/addon-vitest/vitest-plugin"
 import react from "@vitejs/plugin-react"
+import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
+const unitCoverageEnabled = process.argv.includes("--project=unit")
+const browserAliases = {
+  "next/link": path.join(dirname, "test-support/storybook/next-link.tsx"),
+  "next/navigation": path.join(
+    dirname,
+    "test-support/storybook/next-navigation.ts"
+  ),
+  "nuqs/adapters/next/app": path.join(
+    dirname,
+    "test-support/storybook/nuqs-next-app.ts"
+  ),
+}
+
+const storybookProject = (theme: "light" | "dark") => ({
+  extends: true as const,
+  define: {
+    "process.env": "{}",
+  },
+  plugins: [
+    storybookTest({
+      configDir: path.join(dirname, ".storybook"),
+      initialGlobals: { theme },
+      storybookScript: "bun run storybook",
+      ...(theme === "dark" ? { tags: { include: ["theme-sensitive"] } } : {}),
+    }),
+  ],
+  test: {
+    name: `storybook-${theme}`,
+    browser: {
+      enabled: true,
+      provider: playwright({}),
+      headless: true,
+      instances: [{ browser: "chromium" as const }],
+    },
+  },
+})
 
 export default defineConfig({
   plugins: [react()],
@@ -15,7 +53,7 @@ export default defineConfig({
   },
   test: {
     coverage: {
-      enabled: true,
+      enabled: unitCoverageEnabled,
       provider: "v8",
       reporter: ["text", "json-summary"],
       reportsDirectory: "./coverage",
@@ -48,8 +86,42 @@ export default defineConfig({
         lines: 75,
       },
     },
-    environment: "happy-dom",
-    include: ["**/*.test.{ts,tsx}"],
-    setupFiles: ["./vitest.setup.ts"],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          environment: "happy-dom",
+          include: [
+            "*.test.{ts,tsx}",
+            "{components,features,hooks,lib,testing}/**/*.test.{ts,tsx}",
+          ],
+          exclude: ["**/*.browser.test.{ts,tsx}"],
+          setupFiles: ["./vitest.setup.ts"],
+        },
+      },
+      storybookProject("light"),
+      storybookProject("dark"),
+      {
+        extends: true,
+        define: {
+          "process.env": "{}",
+        },
+        resolve: { alias: browserAliases },
+        test: {
+          name: "browser",
+          include: [
+            "{components,features,hooks,lib,testing}/**/*.browser.test.{ts,tsx}",
+          ],
+          setupFiles: ["./vitest.browser.setup.ts"],
+          browser: {
+            enabled: true,
+            provider: playwright({}),
+            headless: true,
+            instances: [{ browser: "chromium" }],
+          },
+        },
+      },
+    ],
   },
 })

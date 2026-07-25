@@ -5,8 +5,6 @@ import {
   parseAgentE2ERunId,
 } from "./e2e/fixtures/agent-e2e-environment"
 
-// Playwright evaluates this module again in its worker process. Persist the
-// coordinator's run id so every process derives the same ports and temp root.
 const runId = parseAgentE2ERunId(process.env.AGENT_E2E_RUN_ID ?? process.pid)
 process.env.AGENT_E2E_RUN_ID = String(runId)
 const environment = createAgentE2EEnvironment(runId)
@@ -32,7 +30,7 @@ const inheritedEnvironment = Object.fromEntries(
 const commonEnvironment = {
   ...inheritedEnvironment,
   NODE_ENV: "development",
-  APP_NAME: "Enterprise Agentic SaaS Agent E2E",
+  APP_NAME: "Enterprise Agentic SaaS Scripted Agent E2E",
   APP_BASE_URL: environment.webOrigin,
   API_PUBLIC_URL: environment.apiOrigin,
   BETTER_AUTH_URL: environment.apiOrigin,
@@ -44,52 +42,43 @@ const commonEnvironment = {
   GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
   GITHUB_OAUTH_CALLBACK_URL: callbackUrl,
   SENTRY_DSN: "",
-  SENTRY_ENVIRONMENT: "agent-e2e",
+  SENTRY_ENVIRONMENT: "agent-e2e-scripted",
   SENTRY_RELEASE: "",
   SENTRY_SPOTLIGHT: "",
   SENTRY_TRACES_SAMPLE_RATE: "0",
   NEXT_PUBLIC_SENTRY_DSN: "",
-  NEXT_PUBLIC_SENTRY_ENVIRONMENT: "agent-e2e",
+  NEXT_PUBLIC_SENTRY_ENVIRONMENT: "agent-e2e-scripted",
   NEXT_PUBLIC_SENTRY_ERROR_SAMPLE_RATE: "0",
   NEXT_PUBLIC_SENTRY_SPOTLIGHT: "",
   NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE: "0",
   NEXT_TELEMETRY_DISABLED: "1",
 }
 
-const suppliedOpenRouterApiKey = process.env.OPENROUTER_API_KEY
-delete process.env.OPENROUTER_API_KEY
-const optionalOpenRouterEnvironment: Record<string, string> = {}
-if (suppliedOpenRouterApiKey) {
-  optionalOpenRouterEnvironment.OPENROUTER_API_KEY = suppliedOpenRouterApiKey
-}
-
-const config = defineConfig({
+export default defineConfig({
   testDir: "./e2e/agent",
-  testMatch: "real-agent.spec.ts",
-  outputDir: `${environment.temporaryRoot}/playwright-results`,
+  testMatch: "scripted-agent.spec.ts",
+  outputDir: "test-results/scripted-agent",
   metadata: {
     agentE2ERunId: environment.runId,
     agentE2EApiOrigin: environment.apiOrigin,
+    agentE2EMode: "scripted",
   },
-  fullyParallel: false,
+  fullyParallel: true,
   failOnFlakyTests: true,
-  forbidOnly: true,
+  forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: 1,
-  reporter: [["list"]],
-  // Paid Agent canaries run serially against one isolated local stack.
-  timeout: 600_000,
+  timeout: 180_000,
   expect: { timeout: 30_000 },
+  reporter: [["list"]],
   use: {
     baseURL: environment.webOrigin,
-    // The paid response body must not be copied into test artifacts.
-    trace: "off",
-    screenshot: "off",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     video: "off",
   },
   projects: [
     {
-      name: "e4-agent-canaries-chromium",
+      name: "e2-scripted-agent-chromium",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 720 },
@@ -116,7 +105,7 @@ const config = defineConfig({
       env: {
         ...commonEnvironment,
         AGENT_E2E_RUN_ID: String(environment.runId),
-        ...optionalOpenRouterEnvironment,
+        AGENT_E2E_SCRIPTED: "1",
       },
     },
     {
@@ -127,11 +116,9 @@ const config = defineConfig({
       env: {
         ...commonEnvironment,
         API_PUBLIC_URL: environment.apiOrigin,
-        NEXT_DIST_DIR: `${environment.temporaryRoot}/next`,
+        NEXT_DIST_DIR: ".next-e2e-scripted-agent",
         NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,
       },
     },
   ],
 })
-
-export default config

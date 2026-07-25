@@ -1,6 +1,7 @@
 import {
   expect,
   test as base,
+  type APIRequestContext,
   type ConsoleMessage,
   type Page,
 } from "@playwright/test"
@@ -12,6 +13,28 @@ type ClientDiagnosticsFixtures = {
     allowedPatterns: RegExp[]
     browserName: string
   }
+  e2eNamespace: string
+}
+
+const mockApiUrl = "http://127.0.0.1:3001"
+
+const hashTestId = (value: string) => {
+  let hash = 2_166_136_261
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+const resetNamespace = async (
+  request: APIRequestContext,
+  namespace: string
+) => {
+  const response = await request.post(`${mockApiUrl}/__e2e/reset`, {
+    headers: { "x-e2e-namespace": namespace },
+  })
+  expect(response.ok()).toBeTruthy()
 }
 
 const formatConsoleError = (message: ConsoleMessage) => {
@@ -39,6 +62,42 @@ const watchClientErrors = (page: Page) => {
 }
 
 export const test = base.extend<ClientDiagnosticsFixtures>({
+  e2eNamespace: [
+    async ({ context, request }, use, testInfo) => {
+      if (!testInfo.project.name.startsWith("e1-")) {
+        await use("external-stack")
+        return
+      }
+
+      const namespace = [
+        "e2e",
+        testInfo.project.name,
+        testInfo.workerIndex,
+        testInfo.retry,
+        hashTestId(testInfo.testId),
+      ]
+        .join("-")
+        .replaceAll(/[^A-Za-z0-9_-]/g, "-")
+
+      await context.addCookies([
+        {
+          name: "e2e-namespace",
+          value: namespace,
+          domain: "127.0.0.1",
+          path: "/",
+          sameSite: "Lax",
+        },
+      ])
+      await resetNamespace(request, namespace)
+
+      try {
+        await use(namespace)
+      } finally {
+        await resetNamespace(request, namespace)
+      }
+    },
+    { auto: true },
+  ],
   clientErrorPolicy: async ({ browserName }, use) => {
     await use({ allowedPatterns: [], browserName })
   },
