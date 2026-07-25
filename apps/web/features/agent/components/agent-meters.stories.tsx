@@ -1,6 +1,6 @@
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import { agentContextBudgetMessages } from "../test-support/scenarios"
 import { AgentMeters } from "./agent-meters"
@@ -30,7 +30,9 @@ export const Estimated: Story = {
     await userEvent.hover(
       canvas.getByRole("button", { name: "Estimated context 1% used" })
     )
-    await expect(await canvas.findByText("Estimated breakdown")).toBeVisible()
+    await waitFor(() =>
+      expect(canvas.getByText("Estimated breakdown")).toBeVisible()
+    )
   },
 }
 
