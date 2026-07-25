@@ -176,7 +176,7 @@ afterEach(() => {
 describe("Agent browser interactions", () => {
   it("hands off a real inline mention with the default Ask always policy", async () => {
     const { requests } = installApiTransport()
-    const actor = userEvent.setup({ delay: 1 })
+    const actor = userEvent.setup()
     const onCreate = vi.fn<(input: AgentNewThreadInput) => void>()
     renderAgentUi(
       <AgentNewThreadComposer
@@ -203,15 +203,25 @@ describe("Agent browser interactions", () => {
       name: "Agent message",
     })
     await actor.click(composer)
-    await actor.type(composer, "Compare ")
-    await waitFor(() => expect(composer.textContent).toBe("Compare "))
-    await actor.type(composer, "@review")
+    const typeCommittedText = async (
+      text: string,
+      committedText = composer.textContent ?? ""
+    ): Promise<void> => {
+      const [character, ...remainingCharacters] = Array.from(text)
+      if (!character) return
+
+      const nextCommittedText = `${committedText}${character}`
+      await actor.keyboard(character)
+      await waitFor(() => expect(composer.textContent).toBe(nextCommittedText))
+      await typeCommittedText(remainingCharacters.join(""), nextCommittedText)
+    }
+    await typeCommittedText("Compare @review")
     await actor.click(
       await screen.findByRole("button", {
         name: /Issue #7: Review tenant audit log/u,
       })
     )
-    await actor.type(composer, "today")
+    await typeCommittedText("today")
     await actor.click(screen.getByRole("button", { name: "Send" }))
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledOnce())
