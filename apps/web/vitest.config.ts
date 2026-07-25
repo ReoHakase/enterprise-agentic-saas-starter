@@ -10,7 +10,7 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
 const nodeCoverageIncludes = [
-  "components/auth/runtime-guards.ts",
+  "features/auth/runtime-guards.ts",
   "features/account/components/**/*.tsx",
   "features/account/multi-session-client.ts",
   "features/account/schema.ts",
@@ -26,7 +26,7 @@ const nodeCoverageIncludes = [
   "features/members/schema.ts",
   "features/organizations/components/**/*.tsx",
   "features/organizations/schema.ts",
-  "lib/auth/redirect-to.ts",
+  "features/auth/redirect-to.ts",
   "lib/observability/sentry-runtime.ts",
   "lib/observability/sentry-scrub.ts",
   "lib/server/auth-session-response.ts",

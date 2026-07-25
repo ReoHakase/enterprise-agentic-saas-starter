@@ -8,11 +8,11 @@ import {
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
 import { usePathname, useSearchParams } from "next/navigation"
 
-import { ConsoleShellSkeleton } from "@/components/console-route-suspense/console-route-suspense"
 import {
   AuthRouteFrame,
   InvitationRouteFrame,
 } from "@/components/public-route-frame/public-route-frame"
+import { ConsoleShellSkeleton } from "@/features/console"
 
 export const AuthRouteLoading = () => {
   const pathname = usePathname()

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 
-import { ConsoleRouteErrorBoundary } from "../console-route-error-boundary.client/console-route-error-boundary.client"
+import { ConsoleRouteErrorBoundary } from "./client"
 
 const captureException = vi.hoisted(() => vi.fn<(error: unknown) => void>())
 const reset = vi.fn<() => void>()

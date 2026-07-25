@@ -17,11 +17,11 @@ import {
 import { usePathname, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef } from "react"
 
-import { ConsoleShellError } from "@/components/console-route-error-boundary.client/console-route-error-boundary.client"
 import {
   AuthRouteFrame,
   InvitationRouteFrame,
 } from "@/components/public-route-frame/public-route-frame"
+import { ConsoleShellError } from "@/features/console"
 import { useBoundaryRetry } from "@/hooks/use-boundary-retry"
 
 export const AuthRouteError = ({ reset }: { reset: () => void }) => {

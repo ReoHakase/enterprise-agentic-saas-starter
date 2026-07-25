@@ -8,6 +8,7 @@ export {
   AgentShell,
   AgentShellTrigger,
 } from "./components/agent-shell/agent-shell"
+export { MessageResponse } from "./components/message-response/message-response"
 export {
   AgentRuntimeProvider,
   hasOrganizationSwitchRisks,

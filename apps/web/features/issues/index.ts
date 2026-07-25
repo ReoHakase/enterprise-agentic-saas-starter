@@ -10,6 +10,7 @@ export {
 export { IssueDetailController } from "./components/issue-detail-controller/issue-detail-controller"
 export { IssueDetailRouteSkeleton } from "./components/issue-detail-route-skeleton/issue-detail-route-skeleton"
 export { IssueModalRouteShell } from "./components/issue-modal-route-shell/issue-modal-route-shell"
+export { IssuesDashboard } from "./components/issues-dashboard/client"
 export { IssuesWorkspace } from "./components/issues-workspace/issues-workspace"
 export type {
   IssueAssigneeOption,

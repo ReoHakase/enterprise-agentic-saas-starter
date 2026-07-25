@@ -35,7 +35,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo } from "react"
 import { toast } from "sonner"
 
-import { createAuthCallbackURL } from "@/lib/auth/callback-url"
+import { createAuthCallbackURL } from "@/features/auth"
 
 import {
   securityMethodsKey,

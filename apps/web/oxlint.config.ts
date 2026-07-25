@@ -111,7 +111,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["components/auth/**/*.tsx"],
+      files: ["features/auth/components/**/*.tsx"],
       rules: {
         // Better Auth UI互換componentは公式surfaceと同じfunction declarationを保つ。
         "func-style": "off",
@@ -120,7 +120,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["lib/auth/auth-plugin.ts"],
+      files: ["features/auth/auth-plugin.ts"],
       rules: {
         "typescript/consistent-type-definitions": "off",
       },

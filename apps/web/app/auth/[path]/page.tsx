@@ -2,10 +2,8 @@ import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { Auth } from "@/components/auth/auth"
-import { AuthRouteScope } from "@/components/auth/auth-route-scope/auth-route-scope"
 import { AuthRouteFrame } from "@/components/public-route-frame/public-route-frame"
-import { sanitizeAuthRedirectTo } from "@/lib/auth/redirect-to"
+import { Auth, AuthRouteScope, sanitizeAuthRedirectTo } from "@/features/auth"
 
 type AuthPageProps = {
   params: Promise<{

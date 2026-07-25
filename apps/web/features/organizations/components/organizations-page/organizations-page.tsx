@@ -46,7 +46,6 @@ import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button/link-button"
-import { OrganizationProfileImage } from "@/components/organization-identity/organization-identity"
 import { PageShell } from "@/components/page-shell/page-shell"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 import {
@@ -65,6 +64,7 @@ import { prepareOrganizationSwitch } from "../../cache"
 import { navigateAfterOrganizationSwitch } from "../../organization-switch-flash"
 import { roleLabel, type OrganizationSummary } from "../../schema"
 import { organizationCreateAction as OrganizationCreateAction } from "../organization-create-action/organization-create-action"
+import { OrganizationProfileImage } from "../organization-identity/organization-identity"
 
 const getOrganizationRowId = (organization: OrganizationSummary) =>
   organization.id

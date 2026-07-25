@@ -4,8 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { useCallback, useEffect, useState } from "react"
 import { describe, expect, it } from "vitest"
 
-import { ConsoleContentError } from "@/components/console-route-error-boundary.client/console-route-error-boundary.client"
-
+import { ConsoleContentError } from "./components/console-route-error-boundary/view"
 import { DashboardRouteSkeleton } from "./components/console-route-skeletons/console-route-skeletons"
 
 type RouteState = "error" | "loading" | "ready"

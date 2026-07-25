@@ -8,7 +8,6 @@ import { getToolName, isToolUIPart } from "ai"
 import Link from "next/link"
 import * as v from "valibot"
 
-import { MessageResponse } from "@/components/ai-elements/message/message"
 import { clientEnv } from "@/lib/env.client"
 
 import {
@@ -17,6 +16,7 @@ import {
 } from "../../schema"
 import { AgentApprovalCard } from "../agent-approval-card/agent-approval-card"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
+import { MessageResponse } from "../message-response/message-response"
 
 export const AgentMessage = ({
   message,

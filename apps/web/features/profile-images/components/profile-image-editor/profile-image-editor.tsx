@@ -35,12 +35,12 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { OrganizationProfileImage } from "@/components/organization-identity/organization-identity"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 import { accountKeys } from "@/features/account"
 import { consoleKeys } from "@/features/console"
 import { fileKeys, registerFileUpload } from "@/features/files"
 import { issueKeys } from "@/features/issues"
+import { OrganizationProfileImage } from "@/features/organizations"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 import { isFirstPartyProfileImageUrl } from "@/lib/profile-image-url"

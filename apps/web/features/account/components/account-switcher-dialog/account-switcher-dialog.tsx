@@ -42,8 +42,8 @@ import {
   hasOrganizationSwitchRisks,
   type OrganizationSwitchRisks,
 } from "@/features/agent"
+import { clearAuthenticatedQueryCache } from "@/features/auth"
 import { apiClient } from "@/lib/api-client"
-import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 
 import { navigateAfterAccountSwitch } from "../../account-switch-navigation"
 import {

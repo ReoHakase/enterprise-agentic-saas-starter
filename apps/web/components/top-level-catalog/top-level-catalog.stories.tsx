@@ -2,10 +2,10 @@ import { useForm } from "@tanstack/react-form"
 
 import preview from "#storybook/preview"
 import type { Me } from "@/features/account"
+import { ConsoleShell } from "@/features/console"
+import { IssuesDashboard } from "@/features/issues"
 
-import { ConsoleShell } from "../console-shell/console-shell"
 import { FormTextField } from "../form-text-field/form-text-field"
-import { IssuesDashboard } from "../issues-dashboard/issues-dashboard"
 import { Providers } from "../providers/providers"
 
 const catalogueMe = {

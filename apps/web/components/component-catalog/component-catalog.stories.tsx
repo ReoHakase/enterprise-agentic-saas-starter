@@ -13,29 +13,25 @@ import { AlertTriangleIcon } from "lucide-react"
 import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
-
-import { MessageResponse } from "../ai-elements/message/message"
-import { AppState, RouteLoading } from "../app-state/app-state"
+import { MessageResponse } from "@/features/agent"
 import {
+  ConsoleBoundaryShell,
+  ConsoleContentError,
   ConsoleFrame,
   ConsoleFrameContent,
   ConsoleFrameHeader,
-} from "../console-frame/console-frame"
-import {
-  ConsoleContentError,
   ConsoleShellError,
-} from "../console-route-error-boundary.client/console-route-error-boundary.client"
-import {
-  ConsoleBoundaryShell,
   ConsoleShellSkeleton,
-} from "../console-route-suspense/console-route-suspense"
+} from "@/features/console"
+import { OrganizationProfileImage } from "@/features/organizations"
+
+import { AppState, RouteLoading } from "../app-state/app-state"
 import { LinkButton } from "../link-button/link-button"
 import { LocalDate } from "../local-date/local-date"
 import {
   DropdownMenuLinkItem,
   SidebarMenuLinkButton,
 } from "../navigation-link/navigation-link"
-import { OrganizationProfileImage } from "../organization-identity/organization-identity"
 import {
   PageHeader,
   PageHeaderCopy,

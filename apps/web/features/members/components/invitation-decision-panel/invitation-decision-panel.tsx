@@ -19,10 +19,10 @@ import { LinkButton } from "@/components/link-button/link-button"
 import { LocalDate } from "@/components/local-date/local-date"
 import { UserIdentity } from "@/components/user-identity/user-identity"
 import { AccountSwitcherDialog } from "@/features/account"
+import { createInvitationPath } from "@/features/auth"
 import { consoleKeys } from "@/features/console"
 import { roleLabel } from "@/features/organizations"
 import { useIsHydrated } from "@/hooks/use-is-hydrated"
-import { createInvitationPath } from "@/lib/auth/invitation-path"
 import { clientEnv } from "@/lib/env.client"
 
 import {

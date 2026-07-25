@@ -2,7 +2,7 @@ import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
-import { ConsoleRouteErrorBoundary } from "../console-route-error-boundary.client/console-route-error-boundary.client"
+import { ConsoleRouteErrorBoundary } from "../console-route-error-boundary/client"
 import {
   AccountSettingsRouteSkeleton,
   ConsoleRouteSkeleton,

@@ -10,10 +10,9 @@ import { useRouter } from "next/navigation"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 import { useCallback, useState, type PropsWithChildren } from "react"
 
-import { AuthProvider } from "@/components/auth/auth-provider/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider/theme-provider"
+import { AuthProvider, magicLinkPlugin } from "@/features/auth"
 import { shouldRetryConsoleQuery } from "@/features/console"
-import { magicLinkPlugin } from "@/lib/auth/magic-link-plugin"
 import { clientEnv } from "@/lib/env.client"
 
 const authBasePaths = {

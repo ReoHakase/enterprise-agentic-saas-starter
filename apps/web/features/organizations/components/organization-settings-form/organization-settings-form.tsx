@@ -15,7 +15,6 @@ import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field/form-text-field"
 import { LinkButton } from "@/components/link-button/link-button"
-import { OrganizationProfileImage } from "@/components/organization-identity/organization-identity"
 import {
   clearConsoleApiFieldError,
   consoleKeys,
@@ -32,6 +31,7 @@ import {
   type OrganizationDetail,
 } from "../../schema"
 import { OrganizationDangerZone } from "../organization-danger-zone/organization-danger-zone"
+import { OrganizationProfileImage } from "../organization-identity/organization-identity"
 
 const organizationIdentityFields = ["name", "slug"] as const
 
