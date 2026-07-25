@@ -5,7 +5,7 @@ import { FileIcon, MessageCircleIcon } from "lucide-react"
 import { useMemo } from "react"
 
 import { LocalDate } from "@/components/local-date"
-import { AuthenticatedFileImage } from "@/features/files/authenticated-image.public"
+import { AuthenticatedFileImage } from "@/features/files"
 
 import {
   IssueActionsCell,

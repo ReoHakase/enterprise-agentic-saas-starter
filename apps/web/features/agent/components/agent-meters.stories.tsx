@@ -2,7 +2,7 @@ import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
-import { agentContextBudgetMessages } from "../test-support/scenarios"
+import { agentContextBudgetMessages } from "../test-support/fixtures"
 import { AgentMeters } from "./agent-meters"
 
 const meta = {

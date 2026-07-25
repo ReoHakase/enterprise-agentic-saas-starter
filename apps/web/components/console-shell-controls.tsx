@@ -33,7 +33,7 @@ import { useCallback, useEffect, useState } from "react"
 import { DropdownMenuLinkItem } from "@/components/navigation-link"
 import { OrganizationProfileImage } from "@/components/organization-identity"
 import { UserProfileImage } from "@/components/user-identity"
-import { withAgentThreadHref } from "@/features/issues/search-params-shared.public"
+import { withAgentThreadHref } from "@/features/issues"
 import { roleLabel, type Me, type OrganizationSummary } from "@/lib/console-api"
 
 const organizationSwitcherTrigger = (

@@ -5,24 +5,25 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
-import { getConsoleApiErrorText } from "@/features/console/error.public"
-import { membersQueryOptions } from "@/features/console/queries.public"
+import {
+  showConsoleApiErrorToast,
+  getConsoleApiErrorText,
+  membersQueryOptions,
+} from "@/features/console"
 import {
   createIssue,
   deleteIssue,
+  issueKeys,
+  issuesQueryOptions,
+  IssuesWorkspace,
   updateIssue,
-} from "@/features/issues/api.public"
-import { issueKeys, issuesQueryOptions } from "@/features/issues/queries.public"
-import type { IssueListItem } from "@/features/issues/schema.public"
-import { withAgentThreadHref } from "@/features/issues/search-params-shared.public"
-import { useIssueSearchState } from "@/features/issues/search-params.public"
-import type {
-  IssueAssigneeOption,
-  IssueUiItem,
-  IssueUpdate,
-} from "@/features/issues/workspace-types.public"
-import { IssuesWorkspace } from "@/features/issues/workspace.public"
+  useIssueSearchState,
+  withAgentThreadHref,
+  type IssueAssigneeOption,
+  type IssueListItem,
+  type IssueUiItem,
+  type IssueUpdate,
+} from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
 
 type IssuesDashboardProps = {

@@ -70,7 +70,7 @@ linked_adrs:
 - [x] testing strategyの合意事項を文書へ反映した
 - [x] ADR-007とactive exec planを作成した
 - [x] API platform境界を移動した
-- [ ] Web feature公開境界を移動した
+- [x] Web feature公開境界を移動した
 - [ ] Web componentをdirectory化した
 - [ ] UI componentをdirectory化した
 - [ ] StorybookをCSF Nextへ移行した
@@ -104,6 +104,9 @@ linked_adrs:
 | `bun run --cwd apps/api lint`      | success | warningなし                                             |
 | `bun run --cwd apps/api typecheck` | success | 型errorなし                                             |
 | `bun run --cwd apps/api test`      | success | 55 files、319 tests。localhost利用のためsandbox外で実行 |
+| `bun run --cwd apps/web lint`      | success | feature公開入口移行後、warningなし                      |
+| `bun run --cwd apps/web typecheck` | success | feature公開入口移行後、型errorなし                      |
+| `bun run --cwd apps/web test`      | success | 70 files、317 tests                                     |
 
 ## リスクとrollback
 

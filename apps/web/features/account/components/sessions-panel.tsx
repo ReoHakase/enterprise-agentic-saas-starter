@@ -49,11 +49,11 @@ import {
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
 import {
+  showConsoleApiErrorToast,
   consoleKeys,
   sessionsQueryOptions,
-} from "@/features/console/queries.public"
+} from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { getConsoleApiErrorText } from "@/lib/console-api"
 

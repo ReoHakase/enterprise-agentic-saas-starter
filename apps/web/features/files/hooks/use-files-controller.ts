@@ -8,12 +8,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { clientEnv } from "@/lib/env.client"
 
-import type { FileOwnerType } from "./api"
-import { MAX_CONCURRENT_FILE_UPLOADS } from "./file-upload-limits"
+import type { FileOwnerType } from "../api"
+import { MAX_CONCURRENT_FILE_UPLOADS } from "../file-upload-limits"
 import {
   registerFileUpload,
   registerFileUploadQueueCancellation,
-} from "./uploads"
+} from "../uploads"
 
 export type PendingFileUpload = {
   id: string
@@ -37,7 +37,7 @@ const safeUploadError =
 
 const newUploadId = () => crypto.randomUUID()
 
-export const useFileUploads = ({
+export const useFilesController = ({
   organizationId,
   ownerType,
   ownerId,

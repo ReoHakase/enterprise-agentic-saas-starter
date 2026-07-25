@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
 import { Providers } from "@/components/providers"
-import type { OrganizationDetail } from "@/features/organizations/schema.public"
+import type { OrganizationDetail } from "@/features/organizations"
 
 import type { OrganizationInvitation, OrganizationMember } from "../schema"
 import { InvitationDecisionPanel } from "./invitation-decision-panel"

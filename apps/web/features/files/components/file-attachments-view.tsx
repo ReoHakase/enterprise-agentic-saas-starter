@@ -24,7 +24,7 @@ import {
 import { type ChangeEvent, type RefObject } from "react"
 
 import type { FileOwnerType } from "../api"
-import type { PendingFileUpload } from "../use-file-uploads"
+import type { PendingFileUpload } from "../hooks/use-files-controller"
 import {
   fileRow as FileRow,
   uploadRow as UploadRow,

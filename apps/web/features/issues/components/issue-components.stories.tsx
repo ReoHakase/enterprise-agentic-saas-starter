@@ -7,7 +7,7 @@ import {
 import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
 import { Providers } from "@/components/providers"
-import { AgentFormRegistryProvider } from "@/features/agent/form-registry.public"
+import { AgentFormRegistryProvider } from "@/features/agent"
 
 import type {
   Issue,
@@ -15,7 +15,7 @@ import type {
   IssueTimelineItem,
   IssueTimelinePage,
 } from "../schema"
-import { defaultIssueSearchState } from "../search-params-shared.public"
+import { defaultIssueSearchState } from "../search-params.shared"
 import { CreateIssueDialog } from "./create-issue-dialog"
 import type { StringFieldApi } from "./form-types"
 import { IssueActivityItem } from "./issue-activity"

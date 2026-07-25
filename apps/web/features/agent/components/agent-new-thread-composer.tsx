@@ -13,8 +13,8 @@ import {
   type FormEvent,
 } from "react"
 
+import { useAgentMentionCandidates } from "../hooks/use-agent-mention-candidates"
 import { isAgentHotkeyAllowed } from "../hotkey-scope"
-import { useAgentMentionCandidates } from "../use-agent-mention-candidates"
 import {
   AgentComposer,
   type AgentComposerHandle,

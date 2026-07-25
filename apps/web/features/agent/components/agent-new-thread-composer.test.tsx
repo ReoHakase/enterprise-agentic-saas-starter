@@ -8,7 +8,7 @@ import {
   type AgentNewThreadInput,
 } from "./agent-new-thread-composer"
 
-vi.mock("../use-agent-mention-candidates", () => ({
+vi.mock("../hooks/use-agent-mention-candidates", () => ({
   useAgentMentionCandidates: () => [
     {
       kind: "issue",

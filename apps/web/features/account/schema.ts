@@ -1,6 +1,6 @@
 import * as v from "valibot"
 
-import { organizationSummarySchema } from "@/features/organizations/schema.public"
+import { organizationSummarySchema } from "@/features/organizations/schema"
 
 const userProfileSchema = v.object({
   id: v.string(),

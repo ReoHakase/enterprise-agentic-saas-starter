@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import * as v from "valibot"
 
-import { useRegisterAgentForm } from "@/features/agent/form-registry.public"
+import { useRegisterAgentForm } from "@/features/agent"
 
 import type { IssueUiItem } from "./types"
 import type { IssueDescriptionFormState } from "./use-issue-description-form"

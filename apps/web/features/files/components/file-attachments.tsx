@@ -18,17 +18,17 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
-import { updateIssueThumbnail } from "@/features/issues/api.public"
+import { showConsoleApiErrorToast } from "@/features/console"
 import {
+  updateIssueThumbnail,
   issueKeys,
   issueThumbnailQueryOptions,
-} from "@/features/issues/queries.public"
+} from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
 
 import { deleteFile, type FileOwnerType } from "../api"
+import { useFilesController } from "../hooks/use-files-controller"
 import { fileKeys, filesQueryOptions } from "../queries"
-import { useFileUploads } from "../use-file-uploads"
 import { fileAttachmentsView as FileAttachmentsView } from "./file-attachments-view"
 
 export const FileAttachments = ({
@@ -110,7 +110,7 @@ export const FileAttachments = ({
     await invalidateAttachmentViews()
     await notifyFilesChanged()
   }, [invalidateAttachmentViews, notifyFilesChanged])
-  const { uploads, addFiles, retryUpload, cancelUpload } = useFileUploads({
+  const { uploads, addFiles, retryUpload, cancelUpload } = useFilesController({
     organizationId,
     ownerType,
     ownerId,

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   defaultIssueSearchState,
   type IssueSearchState,
-} from "@/features/issues/search-params-shared.public"
+} from "@/features/issues"
 
 import { executeAgentClientTool } from "./client-tools"
 

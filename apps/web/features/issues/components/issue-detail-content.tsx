@@ -1,6 +1,6 @@
 import { Separator } from "@enterprise-agentic-saas/ui/components/separator"
 
-import { FileAttachments } from "@/features/files/attachments.public"
+import { FileAttachments } from "@/features/files"
 
 import { issueDetailDescription as IssueDetailDescription } from "./issue-detail-description"
 import { issueDetailDiscussion as IssueDetailDiscussion } from "./issue-detail-discussion"

@@ -1,9 +1,6 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import {
-  ConsoleApiError,
-  toConsoleApiError,
-} from "@/features/console/api.public"
+import { ConsoleApiError, toConsoleApiError } from "@/features/console"
 
 import {
   parseAgentActionExecutionResult,

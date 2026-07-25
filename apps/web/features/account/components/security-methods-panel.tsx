@@ -37,6 +37,10 @@ import { toast } from "sonner"
 
 import { createAuthCallbackURL } from "@/lib/auth/callback-url"
 
+import {
+  securityMethodsKey,
+  useAccountController,
+} from "../hooks/use-account-controller"
 import type { LinkedAccount, UserPasskey } from "../schema"
 import {
   completeSecurityMutation,
@@ -45,10 +49,6 @@ import {
   loadSecurityMethods,
   securityMutationErrorMessage,
 } from "../security-client"
-import {
-  securityMethodsKey,
-  usePasskeyRegistration,
-} from "../use-passkey-registration"
 
 const securityMutationFallback =
   "The security method could not be updated. Try again."
@@ -151,7 +151,7 @@ export const SecurityMethodsPanel = () => {
       }),
     [githubAccount?.accountId, mutate]
   )
-  const passkeyRegistration = usePasskeyRegistration(
+  const passkeyRegistration = useAccountController(
     capabilities.passkey?.addPasskey
   )
   const deletePasskey = useCallback(

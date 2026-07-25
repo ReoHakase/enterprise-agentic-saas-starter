@@ -1,6 +1,6 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { toConsoleApiError } from "@/features/console/api.public"
+import { toConsoleApiError } from "@/features/console"
 
 export const deleteUserProfileImage = async (client: ApiClient) => {
   const result = await client.files["profile-images"].users.me.delete()

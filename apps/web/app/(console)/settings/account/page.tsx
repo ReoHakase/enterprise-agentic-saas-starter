@@ -1,7 +1,9 @@
 import { PageShell } from "@/components/page-shell"
-import { ProfileForm } from "@/features/account/profile-form.public"
-import { SecurityMethodsPanel } from "@/features/account/security-methods-panel.public"
-import { SessionsPanel } from "@/features/account/sessions-panel.public"
+import {
+  ProfileForm,
+  SecurityMethodsPanel,
+  SessionsPanel,
+} from "@/features/account"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 export default async function AccountSettingsPage() {

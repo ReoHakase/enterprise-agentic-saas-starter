@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type * as AccountPublic from "@/features/account"
 import { clientEnv } from "@/lib/env.client"
 
 import { InvitationAuthenticationError, type InvitationContext } from "../api"
@@ -34,10 +35,14 @@ vi.mock("../api", () => ({
   },
 }))
 
-vi.mock("@/features/account/account-switcher-dialog.public", () => ({
-  AccountSwitcherDialog: ({ open }: { open: boolean }) =>
-    open ? <div role="dialog">Device accounts</div> : null,
-}))
+vi.mock("@/features/account", async (importOriginal) => {
+  const original = await importOriginal<typeof AccountPublic>()
+  return {
+    ...original,
+    AccountSwitcherDialog: ({ open }: { open: boolean }) =>
+      open ? <div role="dialog">Device accounts</div> : null,
+  }
+})
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),

@@ -26,7 +26,7 @@ import { toast } from "sonner"
 
 import { FormTextField } from "@/components/form-text-field"
 import { LinkButton } from "@/components/link-button"
-import { consoleKeys } from "@/features/console/queries.public"
+import { consoleKeys } from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,

@@ -12,12 +12,12 @@ import { useQuery } from "@tanstack/react-query"
 import { RefreshCwIcon, UsersRoundIcon } from "lucide-react"
 import { useCallback } from "react"
 
-import { getConsoleApiErrorText } from "@/features/console/error.public"
 import {
+  getConsoleApiErrorText,
   invitationsQueryOptions,
   membersQueryOptions,
-} from "@/features/console/queries.public"
-import type { OrganizationDetail } from "@/features/organizations/schema.public"
+} from "@/features/console"
+import type { OrganizationDetail } from "@/features/organizations"
 
 import type { OrganizationInvitation, OrganizationMember } from "../schema"
 import { MembersPanel } from "./members-panel"

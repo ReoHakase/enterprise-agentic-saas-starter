@@ -20,27 +20,26 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { issueKeys } from "@/features/issues/queries.public"
-import { useIssueSearchState } from "@/features/issues/search-params.public"
+import { issueKeys, useIssueSearchState } from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
-import { createAgentChatTransport } from "./chat-transport"
-import { executeAgentClientTool } from "./client-tools"
+import { createAgentChatTransport } from "../chat-transport"
+import { executeAgentClientTool } from "../client-tools"
 import type {
   AgentComposerHandle,
   AgentComposerSnapshot,
-} from "./components/agent-composer"
-import { useAgentFormRegistry } from "./components/form-registry"
-import { useAgentThreadRuntimeState } from "./components/runtime-state"
-import { isAgentHotkeyAllowed } from "./hotkey-scope"
-import { extractPendingActionIds } from "./pending-action-ids"
-import { agentKeys, agentThreadContextQueryOptions } from "./queries"
-import { type AgentChatMessage, type AgentThread } from "./schema"
+} from "../components/agent-composer"
+import { useAgentFormRegistry } from "../components/form-registry"
+import { useAgentThreadRuntimeState } from "../components/runtime-state"
+import { isAgentHotkeyAllowed } from "../hotkey-scope"
+import { extractPendingActionIds } from "../pending-action-ids"
+import { agentKeys, agentThreadContextQueryOptions } from "../queries"
+import { type AgentChatMessage, type AgentThread } from "../schema"
 import {
   resolveAgentSubmissionIdentity,
   shouldRetainAgentSubmission,
-} from "./submission-identity"
+} from "../submission-identity"
 import { useAgentMentionCandidates } from "./use-agent-mention-candidates"
 
 const closeHttpChatSession = () => undefined
@@ -218,7 +217,7 @@ const useAutoSubmitAgentMessage = (
   }, [autoSubmit, composerFormRef, onAutoSubmit])
 }
 
-export const useAgentChatSession = ({
+export const useAgentController = ({
   organizationId,
   organizationSlug,
   thread,

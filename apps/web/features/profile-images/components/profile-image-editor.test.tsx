@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { useCallback } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { accountKeys } from "@/features/account/queries.public"
+import { accountKeys } from "@/features/account"
 
 import { ProfileImageEditor } from "./profile-image-editor"
 

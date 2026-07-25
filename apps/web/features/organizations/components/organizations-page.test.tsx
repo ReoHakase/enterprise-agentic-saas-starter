@@ -3,7 +3,8 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api.public"
+import type * as AgentPublic from "@/features/agent"
+import { ConsoleApiError } from "@/features/console"
 
 import type { OrganizationSummary } from "../schema"
 import { OrganizationsPage } from "./organizations-page"
@@ -24,14 +25,18 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
-vi.mock("@/features/agent/runtime-state.public", () => ({
-  hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
-  useAgentRuntimeState: () => ({
-    beginOrganizationSwitch: mocks.beginOrganizationSwitch,
-    cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
-    completeOrganizationSwitch: mocks.completeOrganizationSwitch,
-  }),
-}))
+vi.mock("@/features/agent", async (importOriginal) => {
+  const original = await importOriginal<typeof AgentPublic>()
+  return {
+    ...original,
+    hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
+    useAgentRuntimeState: () => ({
+      beginOrganizationSwitch: mocks.beginOrganizationSwitch,
+      cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
+      completeOrganizationSwitch: mocks.completeOrganizationSwitch,
+    }),
+  }
+})
 
 vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: {

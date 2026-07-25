@@ -13,9 +13,9 @@ vi.mock("@enterprise-agentic-saas/api/client", () => ({
   uploadFileWithProgress: mocks.uploadFileWithProgress,
 }))
 
-import { MAX_CONCURRENT_FILE_UPLOADS } from "./file-upload-limits"
-import { cancelActiveFileUploads } from "./uploads"
-import { useFileUploads } from "./use-file-uploads"
+import { MAX_CONCURRENT_FILE_UPLOADS } from "../file-upload-limits"
+import { cancelActiveFileUploads } from "../uploads"
+import { useFilesController } from "./use-files-controller"
 
 const uploadedFile = (id: string): FileDto => ({
   id,
@@ -48,7 +48,7 @@ describe("file upload queue", () => {
     )
     const onUploaded = vi.fn<() => Promise<void>>().mockResolvedValue()
     const { result } = renderHook(() =>
-      useFileUploads({
+      useFilesController({
         organizationId: "org-1",
         ownerType: "issue",
         ownerId: "issue-1",
@@ -116,7 +116,7 @@ describe("file upload queue", () => {
     )
     const onCanceled = vi.fn<() => Promise<void>>().mockResolvedValue()
     const { result } = renderHook(() =>
-      useFileUploads({
+      useFilesController({
         organizationId: "org-1",
         ownerType: "issue",
         ownerId: "issue-1",
@@ -161,7 +161,7 @@ describe("file upload queue", () => {
         })
     )
     const { result } = renderHook(() =>
-      useFileUploads({
+      useFilesController({
         organizationId: "org-1",
         ownerType: "issue",
         ownerId: "issue-1",

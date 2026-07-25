@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { expect, userEvent } from "storybook/test"
 
-import { agentConversationTurns } from "../test-support/scenarios"
+import { agentConversationTurns } from "../test-support/fixtures"
 import { AgentConversationViewport } from "./agent-conversation-viewport"
 
 const conversationTurns = [...agentConversationTurns]

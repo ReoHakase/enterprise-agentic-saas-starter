@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import { isStepUpRequiredError } from "@/features/console/api.public"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
-import { consoleKeys } from "@/features/console/queries.public"
+import {
+  isStepUpRequiredError,
+  showConsoleApiErrorToast,
+  consoleKeys,
+} from "@/features/console"
 import type {
   OrganizationDetail,
   OrganizationRole,
-} from "@/features/organizations/schema.public"
+} from "@/features/organizations"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import type {

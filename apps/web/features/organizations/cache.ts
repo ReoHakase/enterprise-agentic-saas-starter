@@ -1,11 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query"
 
-import type { Me } from "@/features/account/schema.public"
-import { agentKeys } from "@/features/agent/queries.public"
-import { consoleKeys } from "@/features/console/queries.public"
-import { fileKeys } from "@/features/files/queries.public"
-import { cancelActiveFileUploads } from "@/features/files/uploads.public"
-import { issueKeys } from "@/features/issues/queries.public"
+import type { Me } from "@/features/account"
+import { agentKeys } from "@/features/agent"
+import { consoleKeys } from "@/features/console"
+import { fileKeys, cancelActiveFileUploads } from "@/features/files"
+import { issueKeys } from "@/features/issues"
 
 import type { OrganizationSummary } from "./schema"
 

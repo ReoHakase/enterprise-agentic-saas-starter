@@ -21,8 +21,8 @@ import { AppState } from "@/components/app-state"
 import {
   hasOrganizationSwitchRisks,
   useAgentRuntimeState,
-} from "@/features/agent/runtime-state.public"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+} from "@/features/agent"
+import { showConsoleApiErrorToast } from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import { prepareOrganizationSwitch } from "../cache"

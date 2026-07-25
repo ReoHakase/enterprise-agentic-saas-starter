@@ -4,8 +4,10 @@ import { notFound } from "next/navigation"
 import { AppState } from "@/components/app-state"
 import { LinkButton } from "@/components/link-button"
 import { PageShell } from "@/components/page-shell"
-import { OrganizationActivationGate } from "@/features/organizations/activation-gate.public"
-import { OrganizationSettingsForm } from "@/features/organizations/settings-form.public"
+import {
+  OrganizationActivationGate,
+  OrganizationSettingsForm,
+} from "@/features/organizations"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type OrganizationSettingsPageProps = {

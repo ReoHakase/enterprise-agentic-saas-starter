@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { OrganizationSwitchRisks } from "@/features/agent/runtime-state.public"
+import type { OrganizationSwitchRisks } from "@/features/agent"
 
 import { AccountSwitcherDialog } from "./account-switcher-dialog"
 

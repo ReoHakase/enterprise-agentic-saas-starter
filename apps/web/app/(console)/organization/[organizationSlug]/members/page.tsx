@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation"
 
 import { PageShell } from "@/components/page-shell"
-import { getConsoleApiErrorText } from "@/features/console/error.public"
-import { MembersPage as MembersPageContent } from "@/features/members/members-page.public"
-import type { OrganizationInvitation } from "@/features/members/schema.public"
-import { OrganizationActivationGate } from "@/features/organizations/activation-gate.public"
+import { getConsoleApiErrorText } from "@/features/console"
+import { MembersPage as MembersPageContent } from "@/features/members"
+import type { OrganizationInvitation } from "@/features/members"
+import { OrganizationActivationGate } from "@/features/organizations"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type MembersPageProps = {

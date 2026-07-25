@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date"
-import { issueKeys } from "@/features/issues/queries.public"
+import { issueKeys } from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
 
 import { decideAgentAction, resumeAgentAction } from "../api"

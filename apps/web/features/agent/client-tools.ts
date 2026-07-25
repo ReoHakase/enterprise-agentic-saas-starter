@@ -4,7 +4,7 @@ import {
   buildIssueListHref,
   type IssueSearchState,
   withAgentThreadHref,
-} from "@/features/issues/search-params-shared.public"
+} from "@/features/issues"
 
 import type {
   AgentFormSnapshot,

@@ -34,11 +34,11 @@ import {
   useState,
 } from "react"
 
-import { isStepUpRequiredError } from "@/features/console/api.public"
 import {
+  isStepUpRequiredError,
   getConsoleApiErrorText,
   getConsoleApiFieldError,
-} from "@/features/console/error.public"
+} from "@/features/console"
 
 import {
   createMemberConfirmationFormSchema,

@@ -1,1 +1,1 @@
-export { OnboardingRouteSkeleton as default } from "@/features/console/route-skeletons.public"
+export { OnboardingRouteSkeleton as default } from "@/features/console"

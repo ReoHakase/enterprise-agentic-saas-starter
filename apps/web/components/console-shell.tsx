@@ -42,24 +42,26 @@ import {
   ConsoleFrameHeader,
 } from "@/components/console-frame"
 import { SidebarMenuLinkButton } from "@/components/navigation-link"
-import { AccountSwitcherDialog } from "@/features/account/account-switcher-dialog.public"
-import { AgentFormRegistryProvider } from "@/features/agent/form-registry.public"
+import { AccountSwitcherDialog } from "@/features/account"
 import {
+  AgentFormRegistryProvider,
   AgentRuntimeProvider,
   hasOrganizationSwitchRisks,
   useAgentRuntimeState,
   type OrganizationSwitchRisks,
-} from "@/features/agent/runtime-state.public"
-import { AgentShell, AgentShellTrigger } from "@/features/agent/shell.public"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
-import { withAgentThreadHref } from "@/features/issues/search-params-shared.public"
-import { useIssueSearchState } from "@/features/issues/search-params.public"
-import { prepareOrganizationSwitch } from "@/features/organizations/cache.public"
+  AgentShell,
+  AgentShellTrigger,
+} from "@/features/agent"
+import { showConsoleApiErrorToast } from "@/features/console"
+import { withAgentThreadHref, useIssueSearchState } from "@/features/issues"
+import {
+  prepareOrganizationSwitch,
+  resolveOrganizationRouteContext,
+} from "@/features/organizations"
 import {
   consumeOrganizationSwitchFlash,
   queueOrganizationSwitchFlash,
 } from "@/features/organizations/organization-switch-flash"
-import { resolveOrganizationRouteContext } from "@/features/organizations/route-context.public"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me } from "@/lib/console-api"
 

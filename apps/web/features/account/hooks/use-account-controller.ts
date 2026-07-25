@@ -10,7 +10,7 @@ import {
   securityMutationErrorCode,
   securityMutationErrorMessage,
   type SecurityAuthCapabilities,
-} from "./security-client"
+} from "../security-client"
 
 type AddPasskey = NonNullable<
   NonNullable<SecurityAuthCapabilities["passkey"]>["addPasskey"]
@@ -51,7 +51,7 @@ const consumePendingPasskeyAction = () => {
   }
 }
 
-export const usePasskeyRegistration = (addPasskey: AddPasskey | undefined) => {
+export const useAccountController = (addPasskey: AddPasskey | undefined) => {
   const queryClient = useQueryClient()
   const router = useRouter()
   const triggerRef = useRef<HTMLButtonElement>(null)

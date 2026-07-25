@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import { consoleKeys } from "@/features/console/queries.public"
+import { consoleKeys } from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   clearConsoleApiFieldError,

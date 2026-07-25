@@ -59,10 +59,7 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
-import {
-  roleLabel,
-  type OrganizationRole,
-} from "@/features/organizations/schema.public"
+import { roleLabel, type OrganizationRole } from "@/features/organizations"
 
 import type { OrganizationMember } from "../schema"
 

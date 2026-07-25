@@ -30,6 +30,12 @@ export default defineConfig({
   ],
   rules: {
     ...workspaceBoundaryRule("web"),
+    // Feature public barrels make every exported surface visible to the import graph.
+    // Keep direct-cycle detection while component composition is routed through index.ts.
+    "import/no-cycle": [
+      "error",
+      { ignoreExternal: false, ignoreTypes: true, maxDepth: 1 },
+    ],
     // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
     "jsx-a11y/prefer-tag-over-role": "off",
     "react/react-in-jsx-scope": "off",

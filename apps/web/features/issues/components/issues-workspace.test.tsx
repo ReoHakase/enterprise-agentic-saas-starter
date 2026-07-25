@@ -2,6 +2,8 @@ import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
+import type * as FilesPublic from "@/features/files"
+
 import type { IssueTimelineItem } from "../schema"
 import { defaultIssueSearchState } from "../search-params"
 import { IssueDetailDialog } from "./issue-detail-dialog"
@@ -86,11 +88,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn<() => void>() }),
 }))
 
-vi.mock("@/features/files/attachments.public", () => ({
-  FileAttachments: () => (
-    <section aria-label="Attachments">Attachments</section>
-  ),
-}))
+vi.mock("@/features/files", async (importOriginal) => {
+  const original = await importOriginal<typeof FilesPublic>()
+  return {
+    ...original,
+    FileAttachments: () => (
+      <section aria-label="Attachments">Attachments</section>
+    ),
+  }
+})
 
 const timeline: IssueTimelineItem[] = [
   {

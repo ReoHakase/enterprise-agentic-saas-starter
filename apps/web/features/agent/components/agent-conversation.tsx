@@ -10,9 +10,9 @@ import { useCallback, useEffect, useMemo } from "react"
 
 import { apiClient } from "@/lib/api-client"
 
+import { useAgentController } from "../hooks/use-agent-controller"
 import { agentMessagesQueryOptions } from "../queries"
 import type { AgentChatMessage, AgentThread } from "../schema"
-import { useAgentChatSession } from "../use-agent-chat-session"
 import { AgentComposer, type AgentComposerSnapshot } from "./agent-composer"
 import {
   AgentConversationViewport,
@@ -120,7 +120,7 @@ const AgentChatSession = ({
   initialComposerSnapshot?: AgentComposerSnapshot
   onInitialComposerSnapshotConsumed: (threadId: string) => void
 }) => {
-  const session = useAgentChatSession({
+  const session = useAgentController({
     organizationId,
     organizationSlug,
     thread,

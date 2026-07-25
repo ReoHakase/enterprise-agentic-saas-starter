@@ -4,11 +4,11 @@ export {
   getConsoleApiFieldError,
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
-} from "@/features/console/error.public"
-export { isStepUpRequiredError } from "@/features/console/api.public"
-export { createConsoleApi } from "@/features/console/api.public"
-export { type Me } from "@/features/account/schema.public"
+} from "@/features/console/error"
+export { isStepUpRequiredError } from "@/features/console/error"
+export { createConsoleApi } from "@/features/console/api"
+export { type Me } from "@/features/account/schema"
 export {
   roleLabel,
   type OrganizationSummary,
-} from "@/features/organizations/schema.public"
+} from "@/features/organizations/schema"

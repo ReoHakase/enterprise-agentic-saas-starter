@@ -17,8 +17,8 @@ import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { UserIdentity } from "@/components/user-identity"
-import { consoleKeys } from "@/features/console/queries.public"
-import { ProfileImageEditor } from "@/features/profile-images/editor.public"
+import { consoleKeys } from "@/features/console"
+import { ProfileImageEditor } from "@/features/profile-images"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import {
   getConsoleApiErrorText,

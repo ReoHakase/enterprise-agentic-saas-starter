@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { PageShell } from "@/components/page-shell"
-import { OrganizationActivationGate } from "@/features/organizations/activation-gate.public"
+import { OrganizationActivationGate } from "@/features/organizations"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 export const metadata: Metadata = {

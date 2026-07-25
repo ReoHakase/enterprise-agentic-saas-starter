@@ -37,11 +37,11 @@ import { toast } from "sonner"
 
 import { LinkButton } from "@/components/link-button"
 import { UserProfileImage } from "@/components/user-identity"
-import { revokeAgentContext } from "@/features/agent/api.public"
 import {
+  revokeAgentContext,
   hasOrganizationSwitchRisks,
   type OrganizationSwitchRisks,
-} from "@/features/agent/runtime-state.public"
+} from "@/features/agent"
 import { apiClient } from "@/lib/api-client"
 import { clearAuthenticatedQueryCache } from "@/lib/auth/query-cache"
 import type { Me } from "@/lib/console-api"

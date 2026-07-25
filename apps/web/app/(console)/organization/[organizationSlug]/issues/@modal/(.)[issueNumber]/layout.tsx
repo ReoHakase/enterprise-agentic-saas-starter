@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 
-import { IssueModalRouteShell } from "@/features/issues/modal-shell.public"
+import { IssueModalRouteShell } from "@/features/issues"
 
 export default function IssueModalLayout({
   children,

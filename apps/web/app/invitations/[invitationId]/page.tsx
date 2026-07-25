@@ -1,6 +1,8 @@
 import { InvitationRouteFrame } from "@/components/public-route-frame"
-import { getInvitationContext } from "@/features/members/api.public"
-import { InvitationDecisionPanel } from "@/features/members/invitation-panel.public"
+import {
+  getInvitationContext,
+  InvitationDecisionPanel,
+} from "@/features/members"
 import { serverEnv } from "@/lib/env.server"
 import { getCookieHeader, getSession } from "@/lib/server/auth"
 

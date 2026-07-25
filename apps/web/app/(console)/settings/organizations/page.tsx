@@ -1,4 +1,4 @@
-import { OrganizationsPage } from "@/features/organizations/organizations-page.public"
+import { OrganizationsPage } from "@/features/organizations"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 export default async function OrganizationSettingsListPage() {

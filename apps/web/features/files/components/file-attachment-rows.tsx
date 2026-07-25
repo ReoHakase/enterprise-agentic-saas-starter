@@ -24,7 +24,7 @@ import { UserProfileImage } from "@/components/user-identity"
 import { clientEnv } from "@/lib/env.client"
 
 import { formatFileSize } from "../format"
-import type { PendingFileUpload } from "../use-file-uploads"
+import type { PendingFileUpload } from "../hooks/use-files-controller"
 import { AuthenticatedFileImage } from "./authenticated-file-image"
 
 const attachmentSizes = "(max-width: 640px) 100vw, 320px"

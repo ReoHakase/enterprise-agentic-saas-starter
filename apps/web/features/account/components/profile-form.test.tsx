@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api.public"
+import { ConsoleApiError } from "@/features/console"
 
 import { ProfileForm } from "./profile-form"
 

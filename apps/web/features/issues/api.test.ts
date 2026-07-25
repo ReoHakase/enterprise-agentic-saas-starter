@@ -1,7 +1,7 @@
 import { createApiClient } from "@enterprise-agentic-saas/api/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api.public"
+import { ConsoleApiError } from "@/features/console"
 
 import {
   createIssue,

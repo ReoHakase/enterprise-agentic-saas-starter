@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 
 import { Providers } from "@/components/providers"
-import { AgentFormRegistryProvider } from "@/features/agent/form-registry.public"
-import { AgentRuntimeProvider } from "@/features/agent/runtime-state.public"
+import {
+  AgentFormRegistryProvider,
+  AgentRuntimeProvider,
+} from "@/features/agent"
 
 import type { OrganizationDetail, OrganizationSummary } from "../schema"
 import { OrganizationActivationGate } from "./organization-activation-gate"

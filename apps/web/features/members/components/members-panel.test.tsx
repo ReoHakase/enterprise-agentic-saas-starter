@@ -3,11 +3,11 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console/api.public"
+import { ConsoleApiError } from "@/features/console"
 import type {
   OrganizationDetail,
   OrganizationRole,
-} from "@/features/organizations/schema.public"
+} from "@/features/organizations"
 
 import type {
   BulkInvitationInput,

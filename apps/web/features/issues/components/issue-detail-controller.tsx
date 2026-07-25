@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
+import { showConsoleApiErrorToast } from "@/features/console"
 import { apiClient } from "@/lib/api-client"
 
 import {

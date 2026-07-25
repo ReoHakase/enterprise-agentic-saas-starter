@@ -4,19 +4,19 @@ import {
   parseMe,
   parseUserProfile,
   parseUserSessions,
-} from "@/features/account/schema.public"
+} from "@/features/account/schema"
 import {
   parseBulkInvitationResponse,
   parseInvitations,
   parseMembers,
   parseResendInvitationResponse,
-} from "@/features/members/schema.public"
+} from "@/features/members/schema"
 import {
   parseOrganizationDeletionReceipt,
   parseOrganization,
   parseOrganizations,
   type OrganizationRole,
-} from "@/features/organizations/schema.public"
+} from "@/features/organizations/schema"
 
 import { ConsoleApiError, toConsoleApiError } from "./error"
 

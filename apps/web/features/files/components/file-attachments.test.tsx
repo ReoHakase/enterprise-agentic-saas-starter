@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type * as IssueQueriesPublic from "@/features/issues/queries.public"
+import type * as IssueQueriesPublic from "@/features/issues"
 
 import { fileKeys } from "../queries"
 
@@ -50,14 +50,11 @@ vi.mock("../api", () => ({
   getTextFilePreview: mocks.getTextFilePreview,
 }))
 
-vi.mock("@/features/issues/api.public", () => ({
-  updateIssueThumbnail: mocks.updateIssueThumbnail,
-}))
-
-vi.mock("@/features/issues/queries.public", async (importOriginal) => {
+vi.mock("@/features/issues", async (importOriginal) => {
   const original = await importOriginal<typeof IssueQueriesPublic>()
   return {
     ...original,
+    updateIssueThumbnail: mocks.updateIssueThumbnail,
     issueThumbnailQueryOptions: (
       client: unknown,
       organizationId: string,

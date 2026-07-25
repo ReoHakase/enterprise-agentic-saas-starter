@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type * as AgentPublic from "@/features/agent"
+import type * as ConsolePublic from "@/features/console"
+
 import { OrganizationActivationGate } from "./organization-activation-gate"
 
 const mocks = vi.hoisted(() => ({
@@ -30,18 +33,26 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn<() => void>() },
 }))
 
-vi.mock("@/features/agent/runtime-state.public", () => ({
-  hasOrganizationSwitchRisks: () => false,
-  useAgentRuntimeState: () => ({
-    beginOrganizationSwitch: mocks.beginOrganizationSwitch,
-    cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
-    completeOrganizationSwitch: mocks.completeOrganizationSwitch,
-  }),
-}))
+vi.mock("@/features/agent", async (importOriginal) => {
+  const original = await importOriginal<typeof AgentPublic>()
+  return {
+    ...original,
+    hasOrganizationSwitchRisks: () => false,
+    useAgentRuntimeState: () => ({
+      beginOrganizationSwitch: mocks.beginOrganizationSwitch,
+      cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
+      completeOrganizationSwitch: mocks.completeOrganizationSwitch,
+    }),
+  }
+})
 
-vi.mock("@/features/console/error-toast.public", () => ({
-  showConsoleApiErrorToast: mocks.showError,
-}))
+vi.mock("@/features/console", async (importOriginal) => {
+  const original = await importOriginal<typeof ConsolePublic>()
+  return {
+    ...original,
+    showConsoleApiErrorToast: mocks.showError,
+  }
+})
 
 vi.mock("../cache", () => ({
   prepareOrganizationSwitch: mocks.prepareOrganizationSwitch,

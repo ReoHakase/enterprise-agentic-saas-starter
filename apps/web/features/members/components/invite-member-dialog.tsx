@@ -30,12 +30,12 @@ import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { MailPlusIcon } from "lucide-react"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 
-import { isStepUpRequiredError } from "@/features/console/api.public"
 import {
+  isStepUpRequiredError,
   getConsoleApiErrorText,
   getConsoleApiFieldError,
-} from "@/features/console/error.public"
-import { roleLabel } from "@/features/organizations/schema.public"
+} from "@/features/console"
+import { roleLabel } from "@/features/organizations"
 
 import {
   invitationFormSchema,

@@ -10,7 +10,7 @@ import type { AgentIssueAction } from "../schema"
 import {
   agentContextBudgetMessages,
   agentConversationTurns,
-} from "../test-support/scenarios"
+} from "../test-support/fixtures"
 import { AgentApprovalCard } from "./agent-approval-card"
 import { AgentConversationViewport } from "./agent-conversation-viewport"
 import { AgentMeters } from "./agent-meters"

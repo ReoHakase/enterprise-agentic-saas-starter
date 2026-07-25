@@ -1,12 +1,11 @@
 import { QueryClient } from "@tanstack/react-query"
 import { describe, expect, it, vi } from "vitest"
 
-import type { Me } from "@/features/account/schema.public"
-import { agentKeys } from "@/features/agent/queries.public"
-import { consoleKeys } from "@/features/console/queries.public"
-import { fileKeys } from "@/features/files/queries.public"
-import { registerFileUpload } from "@/features/files/uploads.public"
-import { issueKeys } from "@/features/issues/queries.public"
+import type { Me } from "@/features/account"
+import { agentKeys } from "@/features/agent"
+import { consoleKeys } from "@/features/console"
+import { fileKeys, registerFileUpload } from "@/features/files"
+import { issueKeys } from "@/features/issues"
 
 import { prepareOrganizationSwitch } from "./cache"
 import type { OrganizationSummary } from "./schema"

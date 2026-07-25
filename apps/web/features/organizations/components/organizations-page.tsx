@@ -53,9 +53,11 @@ import {
   hasOrganizationSwitchRisks,
   useAgentRuntimeState,
   type OrganizationSwitchRisks,
-} from "@/features/agent/runtime-state.public"
-import { showConsoleApiErrorToast } from "@/features/console/error-toast.public"
-import { organizationsQueryOptions } from "@/features/console/queries.public"
+} from "@/features/agent"
+import {
+  showConsoleApiErrorToast,
+  organizationsQueryOptions,
+} from "@/features/console"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { getConsoleApiErrorText } from "@/lib/console-api"
 

@@ -59,7 +59,7 @@ import {
 
 import { LocalDate } from "@/components/local-date"
 import { UserIdentity } from "@/components/user-identity"
-import { roleLabel } from "@/features/organizations/schema.public"
+import { roleLabel } from "@/features/organizations"
 
 import type {
   OrganizationInvitation,
