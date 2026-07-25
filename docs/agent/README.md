@@ -1,8 +1,8 @@
 ---
 title: 製品Agent仕様の入口
-status: proposed
+status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # Agent仕様
@@ -36,7 +36,7 @@ test layerと公開commandの正本は[`docs/testing/agent.md`](../testing/agent
 | thread count / sort / archive / auto/manual title | threads-context | 実装済み | DB/API/component/E2E |
 | context meter / compaction | threads-context | 実装済み | threshold、summary、provider usage test |
 | thinking / transient status / tool / source表示 | chat-ui | 実装済み | canonical保存、完了時消去、reload、desktop/mobile |
-| natural Web検索とquery guard | tools-approval | 実装済み | secret/PII/opaque ID、履歴・Issue・tool結果eval |
+| 公開情報だけの検索語とquery guard | tools-approval | 実装済み | ユーザーが明示した検索語、secret/PII/opaque ID、履歴・Issue・tool結果eval |
 | historical approval reload | tools-approval | 実装済み | session更新後GET、decision/resume scope test |
 | mention / page context / Issue link | assets-mentions | 実装済み | API再解決、cross-tenant、UI test |
 | Issue添付metadata / オンデマンド画像理解 | assets-mentions | 実装済み | pagination、private model route、4枚上限、metadata-only reload |
@@ -52,7 +52,7 @@ test layerと公開commandの正本は[`docs/testing/agent.md`](../testing/agent
 - browserやAgent WorkerへJWT署名鍵を配る方式
 - 独自`x-csrf-token` headerを増やす方式
 - Mastra Memoryをtenantデータやthread履歴の正本にする方式
-- `Web検索:`という明示prefixだけをdeclassificationとする方式
+- モデルが生成した`Web検索:`接頭辞だけを公開情報の根拠とする方式
 - model文面をapproval preview、authorization、Issue linkの根拠にする方式
 - API/Web/Agent間の旧interface互換layer
 

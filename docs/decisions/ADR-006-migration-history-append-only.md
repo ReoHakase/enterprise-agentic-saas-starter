@@ -1,7 +1,7 @@
 ---
 id: ADR-006
 title: migration history append-only
-status: proposed
+status: accepted
 date: 2026-07-24
 owners:
   - repository-maintainers

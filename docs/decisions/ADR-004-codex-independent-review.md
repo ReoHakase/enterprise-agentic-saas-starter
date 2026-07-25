@@ -1,7 +1,7 @@
 ---
 id: ADR-004
 title: Codex独立review
-status: proposed
+status: accepted
 date: 2026-07-24
 owners:
   - repository-maintainers

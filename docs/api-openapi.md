@@ -1,8 +1,8 @@
 ---
 title: API / OpenAPI
-status: proposed
+status: accepted
 implementation: active
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # API / OpenAPI
@@ -144,7 +144,7 @@ OpenAPI documentの人向け説明をYAML、YML、JSON、生成済みspec、別m
 `openapi.yaml`や`openapi.json`をcommitして正本にせず、`/openapi/json`はElysiaが生成する結果として
 test時または実行時にだけ取得します。
 
-`bun run check:architecture`はGit管理対象の次のpathを禁止します。
+Git管理対象へ次のpathを追加しません。
 
 ```text
 **/{openapi,swagger}.{yaml,yml,json}
@@ -153,11 +153,11 @@ apps/api/**/{metadata,descriptions,operations,schemas,paths}.{yaml,yml,json}
 apps/api/**/{openapi-metadata,openapi-descriptions,operation-metadata,schema-metadata,route-inventory}.{ts,js,json,yaml,yml}
 ```
 
-file名を変えた迂回も防ぐため、同じcheckは人向け`summary`/`description`/tagのsourceをASTで追跡し、
-app routeではElysia `detail`またはそのrouteが使うValibot metadata、global/Better Authでは
-Elysia OpenAPI plugin内だけを許可します。`apps/api/test/openapi-fixtures/**`だけはcheckerと
-normalizerのnegative test dataを置けますが、production sourceからimportせず、製品説明の正本に
-しません。生成結果を確認する`/tmp/openapi.json`はrepository外の一時fileなので対象外です。
+file名を変えた別metadata registryもcode reviewで拒否します。app routeではElysia `detail`または
+そのrouteが使うValibot metadata、global/Better AuthではElysia OpenAPI plugin内だけを許可します。
+専用AST scannerやnegative fixtureは追加せず、実appから生成するOpenAPI contract testで最終documentの
+metadata、schema、security、route parityを検証します。生成結果を確認する`/tmp/openapi.json`は
+repository外の一時fileなので対象外です。
 
 ## Elysia codeとの同一管理
 
@@ -275,7 +275,7 @@ credentialやproduction DBをtestへ渡す意味ではありません。
 5. Better Auth補足codeのkeyが実生成operation/schemaへexactly once一致し、missing/stale keyがない
 6. 全operationにunique operation ID、英語metadata、declared tag、正確なsecurity、response schemaがある
 7. app-owned routeの説明がElysia `detail`とValibot metadataから生成される
-8. 禁止pathとAST source検査により、外部spec/metadata sourceが存在しない
+8. 禁止パスに外部OpenAPI仕様または独立メタデータ情報源が存在しないことをコードレビューで確認する
 9. OpenAPI 3.0.3 validatorでdangling `$ref`、3.1 keyword残留、不正schemaがない
 10. `/openapi`が`/openapi/json`を読み、Scalarの安全設定と`/auth/reference` 404を維持する
 11. final documentを再帰走査し、`example`、`examples`、`default`、header/cookie/security exampleに

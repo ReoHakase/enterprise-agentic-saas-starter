@@ -1,7 +1,7 @@
 ---
 id: ADR-002
 title: layerとimport boundary
-status: proposed
+status: accepted
 date: 2026-07-24
 owners:
   - repository-maintainers
@@ -16,7 +16,7 @@ Directory名だけではdependency directionを保証できず、deep importとf
 
 ## 決定
 
-`domain`、`application`、`port`、`adapter`、`repository`、`transport`、`controller`、`view`を共通概念とし、workspace/packageごとのpublic entrypointとOxlint/architecture checkで強制します。
+`domain`、`application`、`port`、`adapter`、`repository`、`transport`、`controller`、`view`を共通概念とし、workspace/packageごとのpublic entrypoint、Oxlint、Knip、package-owned testとreviewで強制します。
 layerはdirectory名ではなく依存方向です。application ownerがportを定義し、adapterが実装、
 composition rootが接続します。
 詳細は[命名とlayer](../architecture/naming-and-layers.md)と
@@ -37,7 +37,7 @@ composition rootが接続します。
 ## 結果
 
 Composition codeとpublic entrypointが増えます。小さいfeatureはflat structureを許可します。
-`package.json#exports`、feature/module public entrypoint、Oxlint、resolved-path checkを同じboundaryへ
+`package.json#exports`、feature/module public entrypoint、Oxlint、Knip、export-surface testを同じboundaryへ
 揃えます。test codeはsize budgetだけを緩め、dependency/security boundaryは緩めません。
 
 ## 強制方法
@@ -45,7 +45,7 @@ Composition codeとpublic entrypointが増えます。小さいfeatureはflat st
 - package exports
 - Oxlint `no-restricted-imports`、`import/no-cycle`（type-only cycleは初期移行では無視）
 - Knip strict
-- architecture check
+- production build、package-owned test、code review
 
 ## 検証
 

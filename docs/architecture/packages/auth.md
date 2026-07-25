@@ -1,8 +1,8 @@
 ---
 title: packages/authの設計
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - packages/auth/**
 ---
@@ -44,8 +44,8 @@ factory、instance/callback、DB/Email adapter、runtime env、credentialをimpo
 ## 依存関係
 
 serverだけがDBとEmail adapterを利用できます。UI、API、Web、Agentへ逆依存しません。
-client entrypointはbrowser向けarchitecture checkでNode builtin、`server-only`、server pathへの
-推移的依存も検査します。
+client entrypointへの直接importはOxlint、公開面と推移的なserver dependencyはpackage exports、
+Knip、Web buildとpackage testで検査します。
 
 ## テスト
 

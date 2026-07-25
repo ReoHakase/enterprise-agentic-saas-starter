@@ -1,8 +1,8 @@
 ---
 title: VRT将来方針
-status: proposed
+status: accepted
 implementation: deferred
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 applies_to:
   - apps/web/**
   - packages/ui/**

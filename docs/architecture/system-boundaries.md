@@ -1,8 +1,8 @@
 ---
 title: システム境界とworkspace依存
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # システム境界とworkspace依存
@@ -114,8 +114,8 @@ import { privateService } from "@enterprise-agentic-saas/api/src/modules/example
 
 `exports`はdocumentationだけでなく、runtimeからprivate pathを到達不能にするboundaryです。
 feature/moduleの`index.ts`または`public.ts`、workspaceの`package.json#exports`、
-`no-restricted-imports`、resolved-path architecture checkは同じ公開面を表します。公開面を変更する
-ときは4つとexport-surface fixture testを同じPRで更新し、private directoryをwildcardで
+`no-restricted-imports`、Knip strict、export-surface testは同じ公開面を表します。公開面を変更する
+ときはこれらを同じPRで更新し、private directoryをwildcardで
 再exportしません。
 
 ## test-support
@@ -171,14 +171,15 @@ absolute aliasを同じfeature内部で多用すると、cross-feature deep impo
 
 `import/no-relative-parent-imports`は全体へ有効化しません。同じfeature/module内の
 `../model`のような正当なimportまで禁止するためです。cross-featureとcross-workspaceの境界は
-public entrypointとresolved pathで検査します。
+public entrypoint、`package.json#exports`、文字列としてのOxlint規則、Knip、build、code reviewで
+検査します。
 
 ## browserとside-effect import
 
 browser entrypointではNode builtin、`next/headers`、`next/server`、`server-only`、server adapterを
-禁止します。`import/no-nodejs-modules`とpath規則を併用します。Oxlintは`"use client"`というfile内容を
-selectorにできないため、`*.client.tsx`、client専用directory、browser package entrypointという
-配置規約で対象を決めます。
+禁止します。Oxlintは`"use client"`というfile内容をselectorにできないため、`*.client.tsx`、
+client専用directory、browser package entrypointという配置規約で対象を決め、Next.js/TypeScriptの
+buildとcode reviewでserver edgeがないことを確認します。
 
 side-effect importは次の狭いallowlistだけを許可します。
 
@@ -198,17 +199,13 @@ telemetry、polyfill、provider登録を暗黙のside effectで注入せず、co
 | 文字列としての禁止import | Oxlint `no-restricted-imports` |
 | cycle | Oxlint `import/no-cycle` |
 | undeclared/unused dependency | Knip |
-| resolved path zone | architecture check script |
-| package graph | Turborepo、Knip、architecture check |
-
-Oxlintだけでresolved pathを完全には判定できないため、critical boundaryは独自architecture checkも実行します。
+| package graph / workspace isolation | Turborepo、Knip |
+| source配置 | architecture文書とcode review |
 
 `no-restricted-imports`のoverride配列は親設定へ追加ではなく置換されます。workspace設定は
-共通helperからworkspace禁止patternとlayer禁止patternを合成し、どちらか一方を落としません。
-このhelperのworkspace patternは上記allowlistから生成し、手書きの別一覧を正本にしません。
-architecture checkも同じallowlistを読み、代表fixtureで全許可edge、graph外edge、package deep
-import、type-only importを検査します。新workspaceまたはentrypointを追加するPRではallowlist、
-`package.json#exports`、fixtureを同時に更新します。
+共通helperからworkspace禁止patternを生成します。新workspaceまたはentrypointを追加するPRでは
+allowlist、`package.json#exports`、package manifestを同時に更新し、OxlintとKnipで検証します。
+独自module resolverやimport graphは追加しません。
 
 `import/no-cycle`は全depth、`ignoreExternal: false`、`ignoreTypes: true`で開始します。type-only
 cycleはruntime初期化cycleを起こさず、移行時のnoiseを抑えられるためです。ただしtypeの設計cycleも
@@ -225,8 +222,8 @@ public surface、Knip、architecture reviewで確認します。
 - production entrypointからtest supportへ至る間接依存
 
 Rust regexのlookaroundや未安定なJS pluginへcritical boundaryを依存させません。
-`bun run check:architecture`がTypeScript/Bun resolution後のgraphを検査し、Oxlintは即時feedbackを
-担当します。
+これらはpackage exports、production build、package-owned testとcode reviewで検証します。
+repo専用module graph、architecture checker、ESLintは追加しません。
 
 ## 理由と代償
 

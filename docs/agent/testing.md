@@ -1,8 +1,8 @@
 ---
 title: 製品Agentのtestとrelease gate
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # Testとrelease gate
@@ -34,9 +34,13 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 
 ### Agent
 
-- 自然なWeb検索をcurrent message、履歴、Issue、page context、tool resultから選ぶ
-- private固有情報を一般化した公開query
-- credential、email、電話、住所、member identity、opaque IDの拒否
+- 現在のメッセージ、履歴、Issue、ページコンテキスト、ツール結果からWeb検索の必要性だけを判断する
+- 保存済みユーザーメッセージの公開情報だけの検索語と、ツールへ渡す`query`の完全一致
+- 明示行がない場合にモデルが検索を自己承認せず、公開情報だけの言い換えを求める
+- credential、email、電話、住所、メンバー識別情報、opaque IDの拒否
+- 組織、Issue、ページコンテキスト、スレッド履歴との完全一致を拒否し、曖昧な部分一致も
+  公開情報だけへ言い換えて再送するまで拒否
+- メンバー識別情報、Issue、message、文字数の検査上限を超えた場合の拒否
 - query、拒否文字列、Issue本文がlog/Sentryへ残らない
 - 専用title Agentのforced rename、transient status sanitizer、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
@@ -64,8 +68,8 @@ network/transport boundaryに置き、production hook、parser、controller、co
 
 contract profile:
 
-1. 明示prefixなしの自然なWeb検索とsource part
-2. 過去履歴、Issue read、tool resultを材料に一般化した検索
+1. ユーザーが明示した公開情報だけの検索語によるWeb検索と`source part`
+2. 過去履歴、Issue read、ツール結果を材料に検索の必要性を判断し、明示行がなければ言い換えを求める
 3. Issue readとorganization slug付き個別link
 4. Ask alwaysのapproval前write禁止と、Full accessの許可された即時write
 5. 既知markerを持つsynthetic Issue画像を選び、必要な画像toolを呼ぶ
@@ -87,7 +91,7 @@ authorization、tenant、privacy、idempotency、approval、tool allowlistはdet
 `bun run test:e2e:agent`は一時Turso、real API/Agent Service Binding、real Better Auth session、
 release modelを使い、標準free E2Eへ混ぜません。E4は次の固定2本を各1回実行します。
 
-1. `agent-canary-read-source`: 自然文からread/Web検索tool、source、Issue linkを表示する
+1. `agent-canary-read-source`: 明示した公開検索語からread/Web検索tool、source、Issue linkを表示する
 2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を完了する
 
 上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、

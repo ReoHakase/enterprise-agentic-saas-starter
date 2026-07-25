@@ -1,8 +1,8 @@
 ---
 title: 日本語技術文書の用語・表記基準
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - AGENTS.md
   - docs/**/*.md
@@ -73,14 +73,11 @@ P2の指摘を例外承認する場合は、承認者と有効期限を必須に
 
 ## 適用状態
 
-この文書の`status: proposed`と`implementation: planned`は、最終規範としてまだ`main`へ
-導入されていないことを表します。一括移行ブランチでは、`AGENTS.md`がこの文書を移行対象文書の
-作成・更新・レビュー基準として指定します。この指定は、変更していない既存文書を遡って不合格に
-したり、現在の`main`にある承認済み仕様を上書きしたりするものではありません。
-
-最終差分の承認と必須検査が完了した時点で、[知識管理](architecture/knowledge-management.md)の
-切替手順に従い、`status: accepted`と`implementation: active`へ変更してから`main`へ
-マージします。
+この文書の`status: accepted`はリポジトリ管理者が最終内容を承認済みであること、
+`implementation: active`は文書、skill、機械検査へ反映済みであることを表します。
+[知識管理](architecture/knowledge-management.md)の切替手順に従い、この状態を含む変更が`main`へ
+マージされた時点でリポジトリの正本として有効になります。未マージのブランチでは、現在の`main`に
+ある承認済み仕様を通常変更の正本として優先します。
 
 ## 表記の原則
 

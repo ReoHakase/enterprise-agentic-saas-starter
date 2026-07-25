@@ -1,8 +1,8 @@
 ---
 title: ADR運用
-status: proposed
+status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # ADR運用

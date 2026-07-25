@@ -1,8 +1,8 @@
 ---
 title: 設計仕様の目次
-status: proposed
+status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # 設計仕様の目次

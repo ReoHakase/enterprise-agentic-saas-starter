@@ -1,8 +1,8 @@
 ---
 title: 統合E2Eテスト戦略
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - apps/web/e2e/**
   - apps/agent/src/mastra/e2e/**
@@ -16,12 +16,10 @@ applies_to:
 
 | layer/profile | Browser | Stack | LLM | script | 実行 |
 | --- | ---: | --- | --- | --- | --- |
-| E1 | real | Web real、API/Agent mock | mock | `test:e2e` | PR selector |
-| E2 stack | real | Web/API/Agent/Auth/DB real | scripted model | `test:e2e` | PR selector |
-| E2 OAuth | real | Web/API/Auth/DB + GitHub emulator | none | `test:e2e` | PR selector |
-| E3 contract | none | real Agent prompt/schema + fake tool/control plane | real paid | `test:eval:agent` | conditional/nightly |
-| E3 stack | none | real Agent/private API/Auth/temporary DB | real paid | `test:eval:agent` | conditional/nightly |
-| E3 stability | none | selected contract/stack caseを独立stateで反復 | real paid | `test:eval:agent` | conditional/nightly |
+| E1 | real | Web real、最小static API fixture | none | `test:e2e` | 通常PR full |
+| E2 stack | real | Web/API/Agent/Auth/DB real | scripted model | `test:e2e` | 通常PR full |
+| E2 OAuth | real | Web/API/Auth/DB + GitHub emulator | none | `test:e2e` | 通常PR full |
+| E3 | none | real Agent/private API/Auth/temporary DB | real paid | `test:eval:agent` | explicit/nightly/release |
 | E4 | real | full real temporary stack | real paid | `test:e2e:agent` | release candidate |
 
 ## E1
@@ -29,24 +27,34 @@ applies_to:
 対象:
 
 - route、Server Component shell
-- form、keyboard、responsive
-- error/retry
-- mock Agent stream
+- cookieとredirect
+- responsive shell
+- loading、error、retry
 
-Mock APIはproduction contractのstatus分類を再現しますが、authorizationの正しさを証明しません。
+E1 fixtureは画面表示に必要な固定responseとone-shot delay/faultだけを返し、製品APIのCRUD、
+authorization、tenant policyを再実装しません。それらはunit/integrationと実stack E2/OAuthで
+検証します。E1はparallelなcore journey、one-shot delay/faultを使うroute contractの順に
+別processで実行します。
+core journeyはNext.js development serverのcompileとRSC navigationを飢餓状態にしないよう最大3 workersで
+並列実行します。route contractだけを`--workers=1`へ固定し、mock transport内で共有するruleの消費順を
+決定的にします。core journeyをserial化せず、`test:e2e` aggregateはE1 core、E1 route contract、
+scripted Agent E2、OAuth E2の順を維持します。
 
 ### route boundary matrix
 
-async Server ComponentとNext.js routeのloading/error処理はBrowser Modeで再現せず、
-E1/E2で代表routeを検証します。
-one-shot API delay/faultを使ってready、loading、error、retryを作り、次を確認します。
+async Server ComponentとNext.js routeのloading/error処理はBrowser Modeで再現せず、対象routeごとの
+state遷移をE1/E2、geometryとfocusのmatrixを代表routeで検証します。対象routeのtestは、共有layout
+ではなくそのsegment固有のdata requestへone-shot API delay/faultを入れ、
+`data-route-boundary="true"`のready、loading、error、retryを確認します。この間もouter
+`data-console-shell`はreadyのまま維持します。代表routeではさらに次を確認します。
 
-- desktop `1280x720`と代表mobile viewportでpersistent shellが同じDOM/layout slotを維持する
+- デスクトップ`1280x720`でloading/error/retry、外側shellの維持、DOM座標を検証する
+- WebKitの代表モバイル表示では公開ルートとテナントルートの主要表示、横方向のoverflowを検証する
 - sidebar、header、PageShell、contentのgeometryが
   [Webテスト契約](web.md#suspenseとerror-boundaryのlayout-stability)の許容値内
-- horizontal overflowがなく、stable scrollbar gutterを維持する
-- error headingへのfocus、reset後のfocus順、scroll positionが安定する
-- nested boundary遷移でouter shellをremountしない
+- horizontal overflowがない
+- error headingへfocusし、reset後にready stateへ戻る
+- `nested boundary`遷移で外側shellを再mountしない
 
 全component stateをPlaywrightへ複製せず、Next.js route、Server Component、networkの結合だけを
 選びます。失敗時のscreenshotは
@@ -71,25 +79,27 @@ Agent E2E Workerは`src/mastra/e2e/worker.ts`を使い、production env switch�
 
 OAuth subprofileは外部GitHubや実credentialを使わず、`apps/github-emulator`、real API/Auth、
 temporary DB、dedicated Next distでauthorize、state、callback、token、userinfo、session/account保存を
-通します。`packages/auth`のOAuth contract/callbackまたはemulator変更時にselectorが必ず選びます。
-旧`test:e2e:oauth`を公開root scriptとして残さず、`test:e2e` aggregate内で起動します。
+通します。旧`test:e2e:oauth`を公開root scriptとして残さず、通常PRで常に実行する`test:e2e`
+aggregate内で起動します。
+
+OAuth runごとに新しいemulator process、synthetic user、fresh DBを作り、fixture `finally`と
+global teardownの両方でrun固有resourceだけをcleanupします。`emulate.reset()`は発行済みtoken mapを
+完全には消さないためtest isolation境界に使いません。Passkey成功系はChromiumのvirtual authenticatorで
+実WebAuthn ceremonyを通し、`navigator.credentials.create`やAPI responseをmockしません。
 
 ## E3
 
-Browserなしのpaid evalです。contract、stack、3/3 stabilityの内部profileを
-`test:eval:agent`へまとめます。E4より安く速く、model behaviourとAgent/API配線をbrowserから
-切り分けます。
-
-stack profileはAgent/APIを別processまたはworkerd isolateとして起動し、named Service Bindingと
-公開`agent-client` contractだけで接続します。app間のprivate source importや一つのin-process appへ
-合成するtest harnessを作りません。real model credentialはAgent isolateだけ、synthetic Authと
-temporary DBはAPI側だけに渡します。
+Browserなしのpaid evalです。readとapproved writeの2 caseだけをfresh stateで各3回直接実行し、
+fake tool/control planeや別contract profileを作りません。Agent/APIを別processまたはworkerd
+isolateとして起動し、named Service Bindingと公開`agent-client` contractだけで接続します。app間の
+private source importや一つのin-process appへ合成するtest harnessを作りません。real model
+credentialはAgent isolateだけ、synthetic Authとtemporary DBはAPI側だけに渡します。
 
 ## E4
 
 次の固定2 canaryへ限定し、各caseをretryなしで1回ずつ実行します。
 
-1. `agent-canary-read-source`: 自然文からread/Web検索tool、source、Issue linkを表示
+1. `agent-canary-read-source`: 明示した公開検索語からread/Web検索tool、source、Issue linkを表示
 2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を実行し、DB/file/claimを確認
 
 Trace、video、screenshot、provider本文へsecretが入るため、paid suiteではartifact policyを厳格化します。
@@ -106,9 +116,19 @@ Trace、video、screenshot、provider本文へsecretが入るため、paid suite
 同じglobal account、organization、DB file、R2 prefixをworker間で共有しません。cleanupは自分の
 namespaceだけを削除し、失敗時も別workerのstateを消しません。
 
-## 選択規則
+Playwrightが起動するNext.jsはprofileごとに`NEXT_DIST_DIR`を分離します。E1は`.next-e2e`、scripted
+Agent E2は`.next-e2e-scripted-agent`、OAuthは`.next-e2e-oauth`、paid E4は`.next-e2e-agent`を使い、
+通常の`bun run dev`が使う`.next`とdevelopment lockを共有しません。testのためにdeveloper-owned
+processを停止しません。
 
-`free-e2e` jobは常時起動し、一つのscriptがE1/E2を選びます。判定不能時は両方実行します。
+Turboのstrict envでは`CI`と外部server用`PLAYWRIGHT_BASE_URL`を`passThroughEnv`へ明示します。
+CIではretry、`forbidOnly`、既存server非再利用、`failOnFlakyTests`を有効にし、途中成功をgreenへ
+丸めません。
+
+## 実行規則
+
+`free-e2e` jobは通常PR、fork PR、mainで常時起動し、E1、scripted Agent E2、OAuth E2を全件実行します。
+repo固有のpath selectorやbase SHA fallbackは持ちません。
 
 ## 受入条件
 

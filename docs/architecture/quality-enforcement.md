@@ -1,8 +1,8 @@
 ---
 title: 品質強制
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -10,6 +10,9 @@ applies_to:
   - knip.config.ts
   - .jscpd.json
   - lefthook.yml
+  - vitest.config.ts
+  - .codex/**/*.test.ts
+  - .github/**/*.test.ts
   - .github/workflows/**
 ---
 
@@ -60,9 +63,9 @@ root script:
 {
   "scripts": {
     "check": "bun run check:static && bun run format:check && bun run typecheck && bun run test",
-    "check:static": "bun run lint && bun run check:architecture && knip && knip --strict && jscpd --config .jscpd.json",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
+    "check:static": "bun run lint && knip && knip --strict && jscpd --config .jscpd.json",
+    "lint": "bun run lint:root && turbo run lint",
+    "test": "vitest run --config vitest.config.ts && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",
@@ -75,107 +78,50 @@ Knipとjscpdはmonorepo全体を解析するため、Turbo workspace taskへ分�
 
 ## Oxlint上限
 
-既存codeを一度のPRで移行でき、以後の肥大化を止められる初期budgetを次に固定します。
+現在のhard budgetを次に固定します。
 
 | rule | production core | React / adapter / transport | test / story / E2E / fixture |
 | --- | ---: | ---: | ---: |
 | `complexity`（modified） | 25 | 30 | 50 |
-| `max-depth` | 6 | 6 | 12 |
-| `max-lines` | 1000 | 1000 | 4000 |
-| `max-lines-per-function` | 250 | 300 | 1000 |
-| `max-params` | 6 | 6 | 10 |
-| `max-statements` | 100 | 120 | 500 |
-| `max-nested-callbacks` | 4 | 5 | 10 |
-| `max-classes-per-file` | 2 | 2 | 8 |
-| `unicorn/max-nested-calls` | 6 | 6 | 10 |
-| `react/jsx-max-depth` | 対象外 | 9 | 12 |
-| `vitest/max-nested-describe` | 対象外 | 対象外 | 5 |
-
-### branch内の縮小と最終目標
-
-初期budgetは最初の全面lintを成立させるためのworking ceilingです。Web、API、Agent、packages、
-testの各source再編が終わるたびに、profile別の実測最大値と95 percentileを記録し、変更済み領域を
-除外せずに通せる次の値へconfigを狭めます。上限変更、対応refactor、profile resolver test、
-実測証跡は同じcommitへ入れます。
-
-最終PRの完了条件は次です。
-
-| rule | production core | React / adapter / transport | test / story / E2E / fixture |
-| --- | ---: | ---: | ---: |
 | `max-depth` | 6 | 6 | 12 |
 | `max-lines` | 500 | 500 | 1000 |
 | `max-lines-per-function` | 250 | 250 | 500 |
 | `max-params` | 6 | 6 | 10 |
 | `max-statements` | 100 | 100 | 500 |
 | `max-nested-callbacks` | 4 | 4 | 10 |
+| `max-classes-per-file` | 2 | 2 | 8 |
+| `unicorn/max-nested-calls` | 6 | 6 | 10 |
+| `react/jsx-max-depth` | 対象外 | 9 | 12 |
+| `vitest/max-nested-describe` | 対象外 | 対象外 | 5 |
 
-一度狭めた値を後続作業で広げません。初期値がすでに目標値と同じruleは最初から維持し、目標より
-厳しい値へ安全に下げられた場合も戻しません。`complexity`、`max-classes-per-file`、
-`unicorn/max-nested-calls`、`react/jsx-max-depth`も初期hard gateのまま残し、実測に基づく縮小は
-できますが、上の6 ruleを緩める交換条件にはしません。per-file disable、既存file除外、testへの
-production profile誤適用で目標達成を装いません。
+上限へ合わせるためだけの`part-*`分割や責務のないhelper抽出は行わず、責務境界が明確になる場合だけ
+分割します。値を広げる変更、per-file disable、既存file除外、testへのproduction profile誤適用で
+適合を装いません。
 
 `max-lines`と`max-lines-per-function`は`skipBlankLines: true`、`skipComments: true`、
 `max-lines-per-function`は`IIFEs: true`を使います。`max-params`は`countThis: "never"`、
 `max-statements`は`ignoreTopLevelFunctions: false`とし、entrypointという名前だけで巨大処理を
-除外しません。test overrideは最も最後に適用し、production fileへ誤適用しないことをconfig testで
-検証します。
+除外しません。test overrideは最も最後に適用します。
 
-初期値は最初のworking gateであり、最終値は全面移行PRのhard gateです。初回から80行や
-complexity 10を要求すると意味のないhelper分割や大量waiverを生みやすいため採用しません。
-最終目標を満たした後、さらに実測分布を基に厳しくする場合だけ、既存違反を作らない別PRで
-budgetを下げます。test codeはscenario表現のため緩めますが、import、security、tenant、
+test codeはscenario表現のためsize budgetだけを緩めますが、import、security、tenant、
 focused/disabled testの規則は緩めません。
 
 ### profile selector
 
 Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 
-| 順序 | profile | exact glob |
+| 順序 | profile | selector |
 | ---: | --- | --- |
-| 0 | lint対象外 | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra}/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`apps/agent/src/cloudflare-env.d.ts`、`packages/db/drizzle/**` |
+| 0 | lint対象外 | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/drizzle/**`、`**/{storybook-static,playwright-report,test-results}/**` |
 | 1 | production core（default） | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る |
 | 2 | React | `apps/web/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}` |
-| 2 | adapter / transport | `apps/api/src/modules/**/{routes,repository,module}.ts`、`apps/api/src/modules/**/adapters/{http,persistence}/**/*.{ts,tsx}`、`apps/api/src/platform/**/*.ts`、`apps/agent/src/mastra/{adapters,composition}/**/*.{ts,tsx}`、`apps/agent/src/mastra/{index,worker}.ts`、`apps/github-emulator/src/**/*.{ts,tsx}`、`packages/auth/src/**/*.{ts,tsx}`、`packages/email/src/{runtime,providers,development}/**/*.{ts,tsx}` |
-| 2 | config / script | `**/*.config.{js,mjs,cjs,ts,mts,cts}`、`**/scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}` |
+| 2 | adapter / transport | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`lib/server/**`とconfig、GitHub emulator、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする |
 | 3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}` |
 
-`fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。config testは各globの
-代表pathと境界上のpathをprofile resolverへ入力し、意図したprofileが一つに決まること、未知の
-production sourceがcoreへfall backすること、flat/昇格済みAPI adapterが同じprofileになること、
-testが最後に上書きすることを検証します。
-
-共通例:
-
-```ts
-export const initialProductionBudgets = {
-  complexity: ["error", { max: 25, variant: "modified" }],
-  "max-depth": ["error", { max: 6 }],
-  "max-lines-per-function": [
-    "error",
-    {
-      max: 250,
-      skipBlankLines: true,
-      skipComments: true,
-      IIFEs: true,
-    },
-  ],
-  "max-statements": [
-    "error",
-    { max: 100, ignoreTopLevelFunctions: false },
-  ],
-  "max-lines": [
-    "error",
-    { max: 1000, skipBlankLines: true, skipComments: true },
-  ],
-  "max-params": ["error", { max: 6, countThis: "never" }],
-  "max-nested-callbacks": ["error", { max: 4 }],
-  "max-classes-per-file": ["error", { max: 2 }],
-  "unicorn/max-nested-calls": ["error", { max: 6 }],
-} as const
-```
-
-Budget超過をdisable commentで解決せず、責務分割を行います。
+`fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。root
+`oxlint.config.ts`は`lintIgnorePatterns`、`createBudgetOverrides`、`workspaceBoundaryRule`を
+named exportし、各workspace configがdefault root configと合成します。budgetと共通import ruleは
+root default config内部を正本にし、別moduleやresolverへ複製しません。
 
 ## import規則
 
@@ -187,32 +133,19 @@ Budget超過をdisable commentで解決せず、責務分割を行います。
 - `typescript/no-require-imports`
 - side-effect importはCSS、`server-only`、test setup等のallowlistだけ
 
-workspace/layer別の`no-restricted-imports`は各architecture文書のdependency directionを実装します。
-overrideではpattern配列がmergeされないため、共通config helperでworkspace境界とlayer境界を
-明示的に合成します。test overrideでもこの配列を落としません。
+workspace別の`no-restricted-imports`は公開を許可したpackage entrypointだけをallowlistにします。
+overrideではpattern配列がmergeされないため、共通config helperからworkspace境界を生成し、test
+overrideでもこの規則を落としません。workspace内のlayerとsource配置はarchitecture文書、build、
+package-owned test、code reviewで確認します。
 
-Oxlintがresolved path zoneを完全に表現できない部分は、`bun run check:architecture`で実際の解決先を
-検査します。`check:architecture`は最初から`check:static`へ含め、optionalな後付けにしません。
-同じcheckで次の構造契約も検査します。
+workspace import境界は各Oxlint configの`no-restricted-imports`で強制し、dead file、dead export、
+workspace isolationはKnipへ委ねます。独自のTypeScript AST、module resolver、production import
+graph、architecture checker、ESLintは追加しません。
 
-- `apps/web/features/<feature>/`直下にReact `.tsx`がなく、全componentが`components/**`配下にある
-- browserからimportできるcomponentがnamed Storybook storyで実際に描画されていること、
-  実componentを参照しないstory
-- Storybook coverage例外のexact path、理由、責任者、削除条件
-- client側でSuspense対応APIや`lazy`等を使うcomponentに、Reactの`<Suspense>`、Skeleton、
-  React Error Boundary、Browser Mode testがあること
-- async Server Componentを使うrouteの`loading.tsx` / `error.tsx`がfeatureの同じ
-  Skeleton/error viewを再利用し、Playwright E2があること
-
-componentを別fileへ移動しただけでcoverage対象外にならないよう、production import graphとASTの
-両方から対象を求め、代表fixtureでpackage export、feature export、private cross-file component、
-app配下の非special component、許可例外、欠落story、実componentを描画しないstoryを検証します。
-client側のSuspense/Error Boundary検査は解決可能なfirst-party browser import graph全体を辿り、
-local/shared hook、controller、client lib、provider、re-exportを含めます。Server Component側は
-route segmentと`loading.tsx` / `error.tsx`のimportを別に検査します。直接利用、hook経由、
-re-export経由、async Server Component、Suspenseを必要としないcomponent、必要fileを欠くcomponentの
-fixtureを持ちます。
-componentとstory、componentとSuspense/Error Boundaryの対応IDやmanifestは作りません。
+source配置は各architecture文書とreviewで確認します。storyの実render、interaction、a11yは
+StorybookとBrowser Mode test、Suspense、Error Boundary、route geometryはcomponent testと
+Playwrightを正本にします。新しいasync routeやbrowser componentの追加時は、同じ変更で対応する
+boundary file、story、testをreviewし、対応manifestやrepo専用scannerを追加しません。
 
 ## Oxfmt
 
@@ -306,8 +239,7 @@ production TypeScript/TSXのcopy-pasteを検出します。
 Test codeは別の重複特性を持つためproduction thresholdへ混ぜません。共通test helperへ抽出する価値があるduplicateはKnip/reviewで扱います。
 root、config、script、docsを含むrepository全体を入力にせず、`path`をproduction source rootへ
 固定します。ignoreはそのroot内のtest/story/E2E/code fixture/generatedだけを除外します。
-config testではproduction sourceがscan対象、test/config/root scriptが対象外になる代表fixtureを
-実行し、入力path追加漏れとignoreの過剰化を検出します。
+入力pathとignoreは`.jscpd.json`を正本にし、広い除外をreviewで拒否します。
 
 thresholdを超える場合は全面移行PR内でrefactorします。baseline比較による段階導入はしません。
 
@@ -317,8 +249,7 @@ thresholdを超える場合は全面移行PR内でrefactorします。baseline�
 
 - commit message
 - staged Oxfmt
-- affected workspaceのOxlint
-- docs metadata/link check
+- lint可能なstaged fileがある場合のrootと全workspaceのOxlint
 
 ### pre-push
 
@@ -340,13 +271,13 @@ cloudflare-dry-run
 ```
 
 - `quality`: format、typecheck、`bun run test`、build
-- `static-quality`: Oxlint、architecture check、Knip full/strict、jscpd
+- `static-quality`: Oxlint、Knip full/strict、jscpd
 - `browser`: Storybook/Browser Mode
-- `free-e2e`: selectorに基づくE1/E2
+- `free-e2e`: E1、scripted Agent E2、OAuth E2のfull free suite
 - `cloudflare-dry-run`: Web/API/Agent production bundle
 
-Paid testはfork PRへsecretを渡しません。Agent behaviour fingerprintが変わるPRは、repo-owned
-trusted refへ固定したmaintainer承認runをrequiredにします。nightlyとrelease candidateでも実行します。
+Paid testはfork PRへsecretを渡さず、通常PRのrequired checkにも含めません。maintainerの明示実行、
+nightly、release candidateだけで実行します。
 
 ## 例外
 
@@ -382,8 +313,8 @@ Ruleを目的ではなく責務境界のsignalとして扱い、意味のないh
 - 全sourceが初期budgetではなく最終目標budget内
 - Knip full/strict findingがゼロ
 - jscpd threshold以下
-- browserからimportできるcomponentのstory coverageが100%で、実componentを参照しないstoryがない
-- client側の`<Suspense>`、Skeleton、Error Boundary、Browser Mode testに欠落がない
+- exported browser componentにnamed storyがあり、Storybook/Browser Mode testが成功する
+- client側の`<Suspense>`、Skeleton、Error Boundaryを対象component testで検証する
 - async Server Component routeの`loading.tsx`、`error.tsx`、Playwright E2に欠落がない
 - jscpdがproduction sourceだけをscanする
 - broad ignoreとbaseline fileがない

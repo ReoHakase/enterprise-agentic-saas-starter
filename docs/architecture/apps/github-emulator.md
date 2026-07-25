@@ -1,8 +1,8 @@
 ---
 title: apps/github-emulatorの設計
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - apps/github-emulator/**
 ---

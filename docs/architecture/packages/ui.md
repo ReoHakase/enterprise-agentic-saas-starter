@@ -1,8 +1,8 @@
 ---
 title: packages/uiの設計
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - packages/ui/**
 ---
@@ -62,13 +62,13 @@ provider、
 portal、skeleton、error viewも対象です。type-only file、hook/lib、test-support、generated fileは
 componentではないため対象外です。
 
-Story coverage checkはcomponent exportとCSF metadataを突き合わせ、空storyや別のtest doubleを
-描画するstoryを合格させません。技術的にimport不能なcomponentはbrowser非依存のviewを抽出します。
+空storyや別のtest doubleだけを描画するstoryはreviewで拒否します。技術的にimport不能なcomponentは
+browser非依存のviewを抽出します。
 例外はexact path、理由、責任者、削除条件を持つ場合だけ許可し、directory単位では除外しません。
 一つのsource moduleが複数componentをexportする場合や、関連stateをまとめる場合はstory fileを
-共有できます。checkerは、browserからimportできる各componentが少なくとも一つのnamed storyで
-実際に描画されること、そのstoryが実componentをimportしていること、参照先のないstoryがないことを
-sourceとStorybook storyから直接検証します。componentとstoryの対応を別manifestへ手書きしません。
+共有できます。browserからimportできる各componentは少なくとも一つのnamed storyで実際に描画し、
+Storybook/Browser Modeで登録済みstoryを検証します。repo全体のcoverage checkerやcomponentとstoryの
+対応manifestは持ちません。新しいcomponentとstoryは同じ変更でreviewします。
 同じcomponentの
 複数state storyは許可します。cross-module integration storyだけでは個別componentのcoverageを
 代用しません。

@@ -1,8 +1,8 @@
 ---
 title: Local development
-status: proposed
+status: accepted
 implementation: active
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # ローカル開発
@@ -186,12 +186,17 @@ remote hostのSpotlight URLとproduction環境のSpotlight flagは無効化さ�
 bun run check
 bun run build
 bun run build:storybook
-bun run test:storybook
+bun run test:browser
 bun run test:e2e
 bun run build:cloudflare
 ```
 
 `bun run test` はVitestを実行します。`bun test` はBun自身のtest runnerなので、このrepoの品質ゲートには使いません。
+
+Drizzle Kit、Playwright、Storybookは各package scriptがNode.jsのCLI entrypointを明示して起動します。
+対応するbare executableを直接実行せず、上記の公開commandまたはpackage scriptを使います。これにより、
+対応対象のmacOSとBunの組み合わせで観測したCLI launcherの強制終了を避け、CIとlocalで同じ起動経路を
+使用します。
 
 ## よくある失敗
 

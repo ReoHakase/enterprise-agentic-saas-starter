@@ -1,8 +1,8 @@
 ---
 title: 開発者文書の入口
-status: proposed
+status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # 開発者文書の入口
@@ -26,7 +26,7 @@ last_reviewed: 2026-07-24
 複雑な変更では通常の索引順ではなく、現在の作業状態から読みます。
 
 1. rootまたは対象directoryの`AGENTS.md`
-2. 対象の[active exec plan](exec-plans/active/one-shot-harness-migration.md)
+2. [exec plan一覧](exec-plans/README.md)から対象のactive plan
 3. 発火した[local skill](../.agents/local-skills/README.md)
 4. skillが指定するarchitecture文書と対象app/package文書
 5. skillが指定するtest契約
@@ -51,16 +51,14 @@ last_reviewed: 2026-07-24
 
 同じ規範本文を複数の場所へcopyしません。
 
-## 現行の製品・運用文書
+## 製品・運用文書
 
-全面移行のtarget architectureとは別に、現在の実装・運用を失わないため次も索引へ含めます。
+次の文書はarchitectureとテスト契約を補う製品仕様、security、運用runbookです。
 
-- [現行architecture](architecture.md)
 - [認証・認可・multi-tenant](auth-tenancy-security.md)
 - [API / OpenAPI](api-openapi.md)
 - [file storage R2](file-storage-r2.md)
 - [database lifecycle](database-lifecycle.md)
-- [現行test実装runbook](testing.md)
 - [local development](local-development.md)
 - [observability](observability.md)
 - [deployment operations](deployment-operations.md)

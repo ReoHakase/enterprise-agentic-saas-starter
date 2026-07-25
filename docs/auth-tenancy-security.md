@@ -1,8 +1,8 @@
 ---
 title: 認証・認可・multi-tenant
-status: proposed
+status: accepted
 implementation: active
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # 認証・認可・マルチテナント

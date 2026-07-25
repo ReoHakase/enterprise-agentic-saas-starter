@@ -1,7 +1,7 @@
 ---
 id: ADR-001
 title: docsとskillsの正本
-status: proposed
+status: accepted
 date: 2026-07-24
 owners:
   - repository-maintainers
@@ -34,7 +34,6 @@ acceptedはmaintainerの承認状態を表し、main上にあるときだけ有�
 
 ## 結果
 
-Docs metadata、link check、skill validationが必要になります。
 `docs/agent`は製品Agent、`docs/architecture/codex-harness.md`はcoding agentという区別をindexへ
 明記し、path renameは必要性が増えるまでdeferします。
 
@@ -46,6 +45,4 @@ Docs metadata、link check、skill validationが必要になります。
 
 ## 検証
 
-- docs metadata/link check
-- skill 必読文書 check
-- duplicate heading/isolated docs check
+この判断専用のリポジトリ固有検査は置きません。

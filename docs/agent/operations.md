@@ -1,8 +1,8 @@
 ---
 title: 製品Agentの運用runbook
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # 運用runbook
@@ -15,21 +15,16 @@ Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true
 
 ## Paid test secret
 
-L6/L7共通のpaid-test supervisorだけが`OPENROUTER_API_KEY`を読みます。supervisorはrun専用tmp
-directoryのmode 0600 env fileへkeyを書き、keyを必要とするisolated Agent/eval childだけを
-allowlist envで起動します。parent Vitest/Playwright runner、Browser、Next.js、API Worker、
-GitHub emulatorへkeyを渡しません。
+`OPENROUTER_API_KEY`はgitignore済みの`apps/agent/.env.local`またはGitHub Actionsのprotected
+environmentからだけ供給します。fork PRと通常のfree test jobへsecretを渡しません。
 
-L6 contract profileではisolated eval childがreal modelとfake tool/control planeを所有します。
-L6 stackとL7ではisolated Agent Workerがkeyを所有します。parent test runnerへ返せるのはcase ID、
-pass/fail、tool名、bounded input/output projection、usage、safe error codeだけです。prompt、
-provider request/response、reasoning本文、credentialをIPC、stdout/stderr、reportへ出しません。
+Paid testはmaintainerの明示実行、nightly、releaseだけで動かします。repository内にcost計算、
+pricing snapshot、予算manifest、credential gatewayを実装しません。workflowとtest runnerの
+timeoutでrunawayを止めます。
 
-全paid profileでvideo、trace、screenshot、HTML/DOM report、provider raw responseを保存しません。
-終了時はchildを停止してからsecret file、temporary DB、WAL/SHM、Wrangler state、bounded reportを
-validated run path内だけ削除します。env allowlist、parent/childのkey有無、stdout redaction、
-異常終了時cleanupをintegration testで固定します。console、CLI引数、artifact、`GITHUB_OUTPUT`へ
-keyを出しません。
+全paid profileでvideo、trace、screenshot、HTML/DOM report、provider raw responseを保存せず、
+console、CLI引数、artifact、`GITHUB_OUTPUT`へkeyを出しません。終了時は起動した子processと一時
+resourceだけを停止・削除し、既存のdevelopment processやDBを変更しません。
 
 tmp pathは`$TMPDIR/enterprise-agentic-saas-agent-e2e-<run-id>`のような固定prefixとrun IDを検証してから削除します。既存`bun run dev`、通常のWrangler state、開発DBを停止・resetしません。
 

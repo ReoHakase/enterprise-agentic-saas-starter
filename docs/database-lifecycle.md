@@ -1,8 +1,8 @@
 ---
 title: Database lifecycle
-status: proposed
+status: accepted
 implementation: active
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # Database lifecycle

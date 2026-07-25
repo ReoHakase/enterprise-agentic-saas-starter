@@ -1,8 +1,8 @@
 ---
 title: Codex coding harness
-status: proposed
+status: accepted
 implementation: planned
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 applies_to:
   - AGENTS.md
   - .codex/**
@@ -26,6 +26,7 @@ applies_to:
 - [custom agents](#custom-agents)
 - [workflow](#作業手順)
 - [read-onlyの検証](#read-onlyの検証)
+- [有効化条件](#有効化条件)
 - [レビュー契約](#レビュー契約)
 - [waiver](#waiver)
 - [Rules](#rules)
@@ -105,11 +106,18 @@ Project config:
 
 ```toml
 [agents]
-enabled = true
-max_concurrent_threads_per_session = 5
-default_subagent_reasoning_effort = "medium"
+max_threads = 5
 interrupt_message = true
+
+[agents.test_planner]
+description = "変更前にtest layerを決めるread-only planner。"
+config_file = "agents/test_planner.toml"
 ```
+
+このrepositoryが検証対象とするCodex CLI `0.142.1`では、roleを`[agents.<role>]`として登録し、
+各role fileに`model_reasoning_effort = "medium"`とsandboxを設定します。project configへ
+model名を固定せず、CLIが認識しない互換aliasも先行して書きません。CLI更新時は実際にconfigをloadし、
+custom agentを起動してからsyntaxを更新します。
 
 役割:
 
@@ -167,6 +175,21 @@ Findingは`implementer`へ戻します。変更後は古いreviewを無効とし
 
 read-only probeはtest用temporary pathだけを対象にし、production fileを変更しません。
 
+## 有効化条件
+
+このharnessは設定file、fixture test、static validatorが成功しただけでは`implementation: active`へ
+変更しません。信頼済みprojectの実Codex sessionで次を全て確認した時点で有効化します。
+
+- custom agent 5役がwarningなしでloadされる
+- reviewer 3役のtemporary write probeが拒否され、working treeが変化しない
+- `SessionStart`、`PreToolUse`、`PostToolUse`が実sessionで発火する
+- Rulesがpush、merge、deploy、destructive resetをpromptする
+- deny対象の`drizzle-kit push`とgenerated skill直接編集が実sessionで拒否される
+
+外部processへrepository contextを送る実行承認が得られない場合、probeは未実行として扱い、
+fixture/static validationを成功の代替証拠にしません。その場合は前節の縮退手順を適用し、
+metadataは`implementation: planned`を維持します。
+
 ## レビュー契約
 
 Severity:
@@ -222,17 +245,28 @@ coding styleやdirectory ruleをRulesへ書きません。それらはOxlint、d
 
 Rulesは実験的機能なため、CIやGitHub permissionの代わりにしません。
 
+`git push`、`/usr/bin/git push`、`env git push`、`bunx wrangler deploy`など、生の入力が単一の
+静的なコマンドで、固定した`prefix_rule`と一致する形式だけはRulesが承認を求めます。変数代入、
+引用符やエスケープによるトークン結合、複合コマンド、`eval`、`sh -c`、任意の作業ディレクトリを挟む
+`git -C`や`bun --cwd`など、実行時の解釈後にだけ保護対象と判明する形式は`PreToolUse`が拒否します。
+承認が必要な操作は標準形式へ戻してRulesの承認画面を使います。
+
 ## Hooks
 
 repository単位の`.codex/hooks.json`を使用し、hook scriptは`.codex/hooks/`へ置きます。
+`.codex/config.toml`、custom agent、Rules、Hooksはrepository contractとしてversion管理し、
+`.gitignore`の対象にしません。
 
 採用するhook:
 
 | event | script | 責務 |
 | --- | --- | --- |
 | `SessionStart` | `session-start.ts` | active exec planと正本の場所を追加contextとして渡す |
-| `PreToolUse` | `pre-tool-use-policy.ts` | `drizzle-kit push`とgenerated skill編集をhard denyする |
+| `PreToolUse` | `pre-tool-use-policy.ts` | 禁止操作とRulesで安全に表現できないwrapperをhard denyする |
 | `PostToolUse` | `post-tool-use-review.ts` | protected harness file変更時にADR、exec plan、独立レビューを通知する |
+
+RulesとHooksのdeterministic contract testは`.codex/codex-harness.test.ts`が所有し、root
+`vitest.config.ts`から実行します。
 
 hook scriptはrepositoryのBun/TypeScript toolchainへ統一し、commandはgit rootから絶対位置を
 解決します。Codexをsubdirectoryから開始しても`.codex/hooks/`を見失わないためです。
@@ -240,6 +274,38 @@ hook scriptはrepositoryのBun/TypeScript toolchainへ統一し、commandはgit 
 push、merge、deploy、destructive resetは明示承認を可能にするため`.codex/rules`で`prompt`にし、
 hookで常時denyしません。一方、repository契約上いかなる通常作業でも許可しない`drizzle-kit push`と
 generated skill直接編集だけはhookでもfail-closedにします。
+
+`PreToolUse`はコマンド文字列の単純な部分一致だけに依存しません。シェルのトークン、引用符結合、単純な
+変数代入、`sh -c`と`eval`の固定文字列を解決し、変数経由またはDrizzleの実行ファイルを直接指定した
+`drizzle-kit push`も拒否します。シェルが標準入力からコマンドを読む形式、Node.js、Bun、Python、
+Ruby、Perlの引数なし実行または`-c`、`-e`による動的実行、コマンド置換、subshell、backtick、
+未解決の変数展開、ANSI-C quote、brace展開、glob展開、backslash-newlineなど、安全に解析できない
+構文は失敗時に拒否します。引数なしのインタープリターへ後続の`write_stdin`でコードを渡す経路にも
+依存しません。
+
+`.agents/skills/**`は`cwd`とツール入力の`workdir`、`cd`、パストラバーサルを反映した正規化後のパスで
+判定します。`.agents/skills`自身だけでなく、その親`.agents`の削除や移動も保護します。保護対象の
+パスへ触れるshellコマンドは、狭い読み取り専用コマンド一覧に一致する場合だけ許可し、`dd`、`tar`、
+Gitの復元操作など、書き込み方法の列挙漏れから直接変更できないようにします。
+リポジトリ全体を対象にした`find . -delete`、`-exec`、`-execdir`、`-ok`、`-okdir`も、対象パスを
+後から動的に変更できるため拒否します。
+
+Rulesの接頭辞と一致しないGit pushまたはmerge、PR merge、本番`deploy`、破壊的なデータベースの
+リセット、リモートD1変更も拒否します。Gitの一時alias、`GIT_CONFIG_*`による実行時alias、
+`git config alias.*`によるalias保存、`send-pack`、`gh api`によるPR merge、
+パッケージ内の`db:reset`とリセットスクリプト、D1マイグレーションまたは復元、OpenNextの`deploy`、
+Wranglerの`rollback`も同じ保護対象です。`git -C`、オプション付き`wrangler`、別のパッケージマネージャー
+などのラッパーで承認を迂回できないことをフィクスチャで検証します。`gh api graphql`は外部の
+`--input`や変数からmerge mutationを読み込めるため、クエリ内容をコマンドだけで証明できない
+GraphQLラッパー全体を拒否します。
+
+`hook`の`matcher`は`Bash`、`exec`、`exec_command`、`shell`、`write_stdin`を対象にします。
+`Bash`と`shell`は`command`、`exec`と`exec_command`は`cmd`だけを読み、両方を指定した入力や
+ツール種別と一致しないフィールドは拒否します。`write_stdin`は実行中processの文脈を再構成できない
+ため、空のpollとCtrl-CまたはCtrl-Dによる停止だけを許可し、その他の文字入力を拒否します。静的に
+解決できる`eval`と`sh -c`は内側のコマンドまで再帰的に解析し、未解決変数、コマンド置換、解析深度
+上限を含む動的実行は失敗時に拒否します。解析できない構文を安全だと推測して許可する汎用shell
+実行器にはしません。
 
 Hooksは補助的なguardrailであり、次の代替にはしません。
 
@@ -250,7 +316,8 @@ Hooksは補助的なguardrailであり、次の代替にはしません。
 - application側の認可
 
 現時点では`type: "command"`だけを使用します。`prompt`と`agent` handlerは設定に書きません。
-導入時はsafe/deny/malformed inputのfixtureでhook scriptを直接testし、Codex session上でも発火を
+導入時はsafe/deny/malformed inputの代表payloadをtestへinline化してhook scriptを直接testし、
+Codex session上でも発火を
 確認します。session contextやread-only probeの成功は設定fileの存在だけでなく、実行したclient
 versionと結果をexec planへ記録します。
 

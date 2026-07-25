@@ -1,8 +1,8 @@
 ---
 title: apps/apiの設計
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - apps/api/**
 ---
@@ -83,8 +83,8 @@ apps/api/src/
 `app.ts`だけが各moduleの`module.ts`をimportし、各routeをElysia appへ登録します。module Aから
 module Bを利用するときは`modules/<b>/public.ts`だけをimportし、`module.ts`、routes、service、
 repository、domainのprivate pathへ到達しません。`module.ts`を別moduleへ再exportしません。
-architecture fixtureは`app.ts -> module.ts`を許可し、`module A -> module B/public.ts`以外を
-拒否します。
+`app.ts -> module.ts`だけをcomposition rootの例外とし、module間の変更はpublic entrypoint、
+Oxlint、Knipとcode reviewで確認します。
 
 ```text
 routes -> service -> port <- repository
@@ -209,8 +209,8 @@ apps/agent/**
 
 `platform/**`からdomain moduleへの逆依存も禁止します。
 
-`no-restricted-imports`とarchitecture checkはdomain/application/transport/platformを別々に検査し、
-workspace禁止patternと合成します。test fileも別module private pathへ抜けません。
+`no-restricted-imports`はworkspace禁止patternと合成し、moduleのpublic entrypoint、Knip strict、
+package-owned testと合わせて境界を検査します。test fileも別module private pathへ抜けません。
 
 ## テスト配置
 

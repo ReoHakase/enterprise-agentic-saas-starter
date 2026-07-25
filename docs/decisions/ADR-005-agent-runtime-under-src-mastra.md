@@ -1,7 +1,7 @@
 ---
 id: ADR-005
 title: Agent runtimeのsrc/mastra集約
-status: proposed
+status: accepted
 date: 2026-07-24
 owners:
   - repository-maintainers

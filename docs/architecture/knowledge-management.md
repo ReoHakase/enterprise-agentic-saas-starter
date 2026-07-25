@@ -1,8 +1,8 @@
 ---
 title: 知識管理と正本
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # 知識管理と正本
@@ -91,7 +91,7 @@ local skillへ規範本文を複製しません。skillは関連docsを指し、
 | 型、schema、test、CI gate | code | 規則を機械的に強制できる |
 
 例えば「AgentからDBを直接importしない」はarchitecture文書とADRで理由を説明し、
-`package.json#exports`、Oxlint、architecture checkで強制します。skillにはその本文をcopyせず、
+`package.json#exports`、Oxlint、Knip、実testで強制します。skillにはその本文をcopyせず、
 必読文書と検証commandだけを書きます。
 
 ## metadata
@@ -141,11 +141,10 @@ exec planは`draft | active | completed | abandoned`を使います。仕様の�
 1. 新docs、ADR、exec planを`proposed`または`draft`で追加
 2. source、品質ゲート、テスト、Codex設定を最終形へ変更
 3. 旧docsとskillsの重複規則を削除
-4. metadata、link、skill validationを実行
-5. repository maintainerが最終diffをレビュー
-6. 規範文書とADRを`accepted`へ変更し、exec planを`completed`へ変更して`completed/`へ移す
-7. 上のstatus変更を含む最終headでも必須checkとreviewを確認する
-8. 同じPRをmainへmergeし、その時点でaccepted仕様とcompleted履歴を同時に有効化する
+4. repository maintainerが最終diffをレビュー
+5. 規範文書とADRを`accepted`へ変更し、exec planを`completed`へ変更して`completed/`へ移す
+6. 上のstatus変更を含む最終headでも必須checkとreviewを確認する
+7. 同じPRをmainへmergeし、その時点でaccepted仕様とcompleted履歴を同時に有効化する
 
 移行途中のcommitを別PRとしてmergeしません。未mergeのbranchでは、現在のmainにある規則を通常feature changeの正本とします。
 
@@ -232,8 +231,6 @@ active planは進捗、判断記録、検証証跡を更新します。完了後
 - accepted文書の規範本文を変更するPRはowner reviewを必要とする
 - acceptedは承認状態を表し、mainへmergeされるまで既存mainの仕様を上書きしない
 - superseded文書は置換先を明記する
-- dead linkと孤立文書をCIで失敗させる
-- skillの必読文書が存在しない場合はCIを失敗させる
 - generated `.agents/skills`を直接編集しない
 
 ## 理由と代償
@@ -248,7 +245,6 @@ active planは進捗、判断記録、検証証跡を更新します。完了後
 ### 代償
 
 - docs、ADR、planの更新作業が増える
-- metadata checkとlink checkが必要になる
 - 小さな変更まで形式化すると負担になる
 
 そのため、ADRとexec planは条件を満たす変更だけに限定します。
@@ -260,4 +256,3 @@ active planは進捗、判断記録、検証証跡を更新します。完了後
 - VRTが`implementation: deferred`で表現される
 - ADRとexec planの状態値が仕様文書と分離されている
 - 全skillが必読文書と検証を持つ
-- docs linkとmetadata checkがCIで実行される

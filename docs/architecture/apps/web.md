@@ -1,8 +1,8 @@
 ---
 title: apps/webの設計
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - apps/web/**
 ---
@@ -136,6 +136,13 @@ Web-local schemaはAPI transport typeの代用品ではありません。untrust
 `fetch`、`useChat`、browser APIをimportしません。別featureから利用できるのは`index.ts`が
 明示exportしたcontractだけで、`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
 
+### Browserのserver state
+
+browserで取得するserver stateとmutationはTanStack Queryへ集約します。default retry、error mapping、
+stale time等の共通policyは`QueryClient`生成時に確定し、component mount後のeffectで書き換えません。
+componentごとの差分はquery optionsまたはmutation optionsへ明示し、global defaultの後付け変更による
+mount順依存を作りません。
+
 ## serverとclient
 
 React Server Componentは、browserへJavaScriptを送らずserverで実行されるcomponentです。この文書では
@@ -238,17 +245,16 @@ Client Componentであり、Next.jsがそのroute segmentのError Boundaryを作
 `reset` callbackだけをerror viewへ渡し、受け取ったraw `error` objectをpropsまたはDOMへ渡しません。
 複数routeで同じSkeletonまたはerror viewを共有するのは、外側のshellと予約するlayout spaceが同じ
 場合だけです。各routeのloading、error、retry、ready遷移はPlaywright E2で検証します。
+route固有の証跡はstate surfaceの`data-route-boundary="true"`をassertし、共有
+`data-console-shell`だけのloading/error遷移をそのrouteの証跡には数えません。geometry、focus、
+overflowは代表routeのshared-boundary matrixで重ねて検証します。
 
-`bun run check:architecture`は次をimportとASTから別々に検査します。
+client側のSuspense対応画面は対象componentのBrowser Mode test、async Server Component routeは
+実routeを通るPlaywright E2で検証します。新しい画面やrouteのreviewでは、Skeleton、
+Error Boundary、`loading.tsx`、`error.tsx`と対応testを同じ変更で確認します。
 
-- client側でSuspense対応APIや`lazy`等を使う画面:
-  `<Suspense>`、Skeleton、`error-boundary.client.tsx`、Browser Mode test
-- async Server Componentを使うroute:
-  `loading.tsx`、`error.tsx`、同じSkeleton/error viewのimport、Playwright E2
-
-対応表やIDを別fileへ手書きしません。local/shared hookやre-exportの先まで追跡し、hookへ処理を
-移しただけで検査対象から外れないようにします。検査script自体には、client直接利用、hook経由、
-re-export経由、async Server Component、非対象component、欠落fileのfixtureを用意します。
+対応表、独自source graph、architecture checkerは追加しません。local/shared hookやre-exportへ
+処理を移した場合も、利用する画面の実testを残します。
 
 ## portとadapter
 
@@ -279,7 +285,7 @@ feature-panel.stories.tsx
 
 - `test.tsx`: happy-domでDOM contract
 - `stories.tsx`: state catalogue、interaction、a11y、light/dark
-- `browser.test.tsx`: real QueryClient、MSW、chat transportなどfeature integrationだけ
+- `browser.test.tsx`: real QueryClient、必要な範囲だけのtransport stub、chat transportなどfeature integrationだけ
 - `visual.test.tsx`: 現在は作らない
 
 Storybook projectがbrowserでimport可能なReact componentには、公開/privateを問わずstoryを
@@ -299,10 +305,10 @@ browser componentではなくEmail preview/render testが検証を担当しま�
 import可能ならviewへ抽出し、そのviewにはstoryを作ります。dead/legacy componentはstory免除にせず
 削除します。
 
-Story coverage checkは、browserからimportできるReact componentのexportとnamed storyの
-`component`または`render`を解析します。`.stories.tsx`が存在するだけでは合格せず、各componentが
-少なくとも一つのnamed storyで実際に描画されることを要求します。story専用に作った代替componentを
-描画してもcoverageには数えません。
+各componentは少なくとも一つのnamed storyで実componentを描画します。`.stories.tsx`が存在する
+だけ、またはstory専用の代替componentだけを描画する状態はreviewで拒否します。repo全体を走査する
+story coverage checkerは置かず、Storybookが収集したstoryの実render、interaction、a11yを
+Browser Modeで検証します。
 
 story fileはcomponentの近くに置きますが、file名の機械的な一対一対応は要求しません。
 `issue-table.tsx`を扱う`issue-table.stories.tsx`のような配置でも、同じ画面のReady、Loading、
@@ -313,8 +319,8 @@ integration storyだけでは、個々のcomponentのcoverageを代用できま�
 browser専用環境なしではimportできない処理がある場合は、その処理をhookまたはportの後ろへ置き、
 描画部分を通常のReact componentとしてStorybookからimportできるようにします。例外allowlistには
 exact path、理由、責任者、削除条件が必要で、directory単位の除外は認めません。componentとstoryの
-対応を人が別manifestへ重複記載せず、architecture checkがsource importとStorybook storyを
-直接解析します。UI primitiveのstoryは`packages/ui`、domain/viewのstoryは`apps/web`が管理します。
+対応を人が別manifestへ重複記載しません。UI primitiveのstoryは`packages/ui`、domain/viewのstoryは
+`apps/web`が管理し、新しいbrowser componentとstoryを同じ変更でreviewします。
 UI Storybookから
 apps/webをimportしません。
 
@@ -402,7 +408,7 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 - viewからQuery/router/toast/API importがない
 - browser codeからserver module importがない
 - cross-feature deep importがない
-- browserからimportできるcomponentのStorybook coverageが100%
+- 新規または変更したbrowser componentに実componentを描画するnamed storyがある
 - feature directory直下にReact componentの`.tsx`がない
 - client render中に待機し得るcomponentに`<Suspense>`、Skeleton、React Error Boundary、
   Browser Mode testがある

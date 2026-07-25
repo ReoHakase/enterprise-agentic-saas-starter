@@ -1,8 +1,8 @@
 ---
 title: テスト戦略と実行契約
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # テスト戦略と実行契約
@@ -18,10 +18,9 @@ last_reviewed: 2026-07-24
 - [公開script](#公開script)
 - [bun-run-test](#bun-run-testの範囲)
 - [実行頻度](#実行頻度)
-- [changedとaffected](#changedとaffected)
-- [base-sha](#base-sha)
-- [path-to-suite mapping](#変更pathとsuiteの対応)
-- [free-e2e selector](#無料e2eの選択規則)
+- [changedとCI full](#changedとci-full)
+- [変更pathとsuite](#変更pathとsuiteの確認)
+- [無料E2E](#無料e2eの実行規則)
 - [coverage](#coverage)
 - [受入条件](#受入条件)
 
@@ -79,7 +78,7 @@ privacy、tool orderはdeterministic coreでhard assertionにし、browserは配
 
 | level | 主対象 | browser | real model | 公開script |
 | --- | --- | ---: | ---: | --- |
-| L0 | lint、type、architecture、bundle isolation | no | no | `check` |
+| L0 | lint、型検査、依存境界、バンドル分離 | no | no | `check` |
 | L1 | pure unit、domain、schema、state reducer | no | no | `test` |
 | L2 | tool executor、scripted Agent loop | no | no | `test` |
 | L3 | repository、HTTP、private API、temporary DB | no | no | `test` |
@@ -137,8 +136,8 @@ bun run test:e2e:agent
 | script | runner | browser | real LLM | 通常PR |
 | --- | --- | ---: | ---: | ---: |
 | `test` | Vitest | no | no | yes |
-| `test:browser` | Vitest Browser Mode / Storybook | yes | no | selector |
-| `test:e2e` | Playwright | yes | no | selector |
+| `test:browser` | Vitest Browser Mode / Storybook | yes | no | yes |
+| `test:e2e` | Playwright | yes | no | yes |
 | `test:eval:agent` | Vitest/Mastra eval | no | yes | no |
 | `test:e2e:agent` | Playwright | yes | yes | no |
 
@@ -164,14 +163,14 @@ Root scriptはlevel数ではなくruntimeとcostで5本へ集約します。内�
 | --- | --- |
 | 開発中 | workspace `test --changed`、focused test |
 | pre-push | `bun run check` |
-| PR quality | affected workspaceのfull `test` + path mapping |
-| PR browser | selectorが対象としたworkspace |
-| PR free E2E | selectorがE1/E2を選択 |
+| PR quality | 全workspaceの`test` |
+| PR browser | Storybook/Browser Mode full |
+| PR free E2E | E1、scripted Agent E2、OAuth E2 full |
 | main/nightly | full free suite |
 | Agent behaviour変更 | `test:eval:agent` |
 | release candidate | `test:e2e:agent` |
 
-## changedとaffected
+## changedとCI full
 
 ### local
 
@@ -184,61 +183,24 @@ bun --cwd apps/web run test -- --changed=origin/main --coverage.enabled=false
 ### CI
 
 ```sh
-bun run test -- --affected
+bun run test
 ```
 
-Turboのpackage graphでaffected workspaceを選び、そのworkspaceではfull testを実行します。
-
-## base SHA
-
-PR:
-
-```text
-base SHA = github.event.pull_request.base.sha
-head SHA = github.event.pull_request.head.sha
-merge SHA = github.sha
-checkout fetch-depth = 0
-```
-
-`pull_request` eventの`github.sha`はsynthetic merge commitなのでheadとして扱いません。selectorは
-base/headを比較し、browserless paid evalは実際にmergeされる候補を表すmerge treeを検証します。
-
-main push:
-
-```text
-base SHA = github.event.before
-head SHA = github.sha
-merge SHA = not-applicable
-```
-
-次の場合はfull free suiteへfail-safeします。
-
-- fork PR
-- base SHAが取得不能
-- history不足
-- affected判定失敗
-- path selector失敗
+required CIではaffected判定を行わず、全workspaceのfree unit/integrationを実行します。Turbo cacheは
+利用しますが、path selectorやbase SHA処理でsuiteを省略しません。
 
 Fork PRへpaid secretを渡しません。
 
-Agent behaviour fingerprintが変わるfork PRは、free suite成功だけではmergeできません。maintainerが
-workflow、dependency、eval harnessを含むexact diffを確認し、同じcommitをrepo-owned
-`eval/<head-sha>` refへ明示的に取り込んだ後、default branch上の保護されたworkflowを
-`workflow_dispatch`します。workflowはfull 40文字head SHAがそのrefから到達可能であること、PR head
-treeが一致すること、base SHAがまだcurrentであることを確認します。baseとheadからcandidate mergeを
-再構成し、PRのmerge treeと一致した場合だけL6を実行します。`pull_request_target`でfork codeを直接
-実行せず、fork workflow、fork environment、browser、Web/APIへsecretを渡しません。
+Paid testは通常PRのrequired checkにせず、maintainerの明示実行、nightly、releaseだけで動かします。
+forkのcodeを`pull_request_target`やsecret付きjobで実行しません。必要な確認はfork内容をtrusted
+branchへ取り込んだ後、そのbranchを対象にmaintainerが明示実行します。
 
-required check `agent-eval-gate`はselectorがL6不要なら成功、必要なら
-`base SHA + head SHA + merge tree + protected workflow/harness revision`が完全一致する承認runが
-成功するまでpendingです。base update、head update、merge conflict解消、protected harness変更で
-以前の結果を無効化します。承認されないfork PRはmerge不可とします。
+## 変更pathとsuiteの確認
 
-## 変更pathとsuiteの対応
+次の表は開発中にfocused testから必要なfull gateへ広げるための確認指針です。通常CIの
+`test:browser`と`test:e2e`はpathにかかわらずfullで実行します。
 
-Package graphだけでは逆方向のriskを表せないため、追加mappingを持ちます。
-
-| changed path | 追加実行 |
+| changed path | 開発中に先行する検証 |
 | --- | --- |
 | `apps/api/**/repository*` | `packages/db` full test |
 | `apps/api/**/infrastructure/**` | `packages/db` full test |
@@ -252,27 +214,23 @@ Package graphだけでは逆方向のriskを表せないため、追加mapping�
 | Playwright/Web server config | E2 |
 | `packages/auth/**`のOAuth contract/callback | E2 OAuth profile |
 | `apps/github-emulator/**` | E2 OAuth profile |
-| UI primitive | packages/ui browser + affected Web test |
-| browser-import可能component、story metadata | Story coverage check + affected Storybook/Browser Mode |
+| UI primitive | packages/ui browser + Web test |
+| browser-import可能component、story metadata | Storybook/Browser Mode |
 | client Suspense、Skeleton、React Error Boundary | Web Browser Mode |
 | async Server Component、Next.js `loading.tsx` / `error.tsx` | E2 |
 
-Mappingはversion-controlled scriptにし、判定不能時は追加suiteを実行します。
+この対応を判定するrepo専用scriptは持ちません。
 
-## 無料E2Eの選択規則
+## 無料E2Eの実行規則
 
-PRでは`free-e2e` job自体を常に起動し、selectorがE1/E2を選びます。
+`free-e2e` jobは通常PR、fork PR、mainで常に起動し、次を全件実行します。
 
-- docs-onlyで生成設定に影響しない場合はskip
-- 一般的なWeb Client UI、UI package、API client変更はE1
-- Web server/auth/cookie/Origin/CORS/CSRF、API/Agent/Auth/DB/Service Binding変更はE2
-- OAuth contract/callback、GitHub emulator変更はE2 OAuth profile
-- 両方に該当すればE1+E2
-- 判定失敗はE1+E2
+- E1 core journeyとroute contract
+- scripted modelを使うAgent E2
+- GitHub emulatorを使うOAuth E2
 
-条件がjob定義とdocsで揺れないよう、一つのselector scriptを正本にします。
-selector fixtureは一般UI、server/auth/cookie、OAuth、Agent/DB、docs-only、unknown pathを持ち、
-OAuth profileやE2をE1だけへ縮退できないことを固定します。
+docs-onlyを含めてskipせず、path selectorやbase SHA fallbackを持ちません。CI時間は増えますが、
+判定漏れとselector fixtureの保守をなくし、無料suiteのfail-safeを単純にします。
 
 ## coverage
 
@@ -286,9 +244,8 @@ OAuth profileやE2をE1だけへ縮退できないことを固定します。
 
 - root test scriptが5個に限定される
 - `bun run test`に軽いintegrationが含まれる
-- base SHA不明時にfullへ縮退する
-- API repository変更でDB testが追加実行される
-- free E2E条件がselector script一か所にある
-- browser-import可能なcomponentのstory coverageが100%
+- 通常CIが全workspaceの`test`を実行する
+- free E2EがE1、scripted Agent E2、OAuth E2を常に全件実行する
+- 新規または変更したbrowser componentに実componentを描画するstoryがある
 - client Suspense/Error BoundaryのBrowser Mode layout contractがgreen
 - async Server Component routeのloading/ready/error/retry E2 layout contractがgreen

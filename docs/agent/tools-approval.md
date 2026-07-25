@@ -1,8 +1,8 @@
 ---
 title: 製品Agentのtool、Web検索、approval
-status: proposed
+status: accepted
 implementation: active
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # Tool、Web検索、approval
@@ -15,7 +15,8 @@ Mastra toolはintent adapterです。Valibot schema、tenant再認可、normaliz
 
 ## 自然なWeb検索
 
-`Web検索:` prefixは不要です。product Agentは次を材料に公開検索語を再構成できます。
+`Web検索:`という接頭辞だけでは非公開情報の送信を許可しません。製品Agentは次を材料に検索の
+必要性を判断できます。
 
 - 現在の発話
 - 同じthreadの過去履歴
@@ -23,7 +24,15 @@ Mastra toolはintent adapterです。Valibot schema、tenant再認可、normaliz
 - 解決済みpage context / mention
 - 直前までのtool結果
 
-ただし検索providerへ送る最終`web_search({ query })`は公開情報だけに一般化します。private Issueの固有名、顧客名、member名、内部識別子を検索語へ転記しません。安全な一般化を確定できなければtoolを呼ばず、ユーザーへ公開情報だけの言い換えを求めます。
+ただし検索プロバイダーを呼ぶには、現在のユーザーメッセージへ
+`Public-only Web query: <query>`または`公開情報だけのWeb検索: <query>`という独立した行で、
+公開情報だけの検索語を明示する必要があります。サーバーは保存済みユーザーメッセージからこの行を
+抽出し、モデルが渡した`web_search({ query })`との正規化後の完全一致を要求します。モデルが生成した
+文言、通常の検索依頼、権限設定だけではこの境界を解除できません。
+
+非公開Issueの固有名、顧客名、メンバー名、内部識別子を検索語へ転記しません。明示行がない場合や
+安全な一般化を確定できない場合は`web_search`ツールを呼ばず、ユーザーへ公開情報だけの言い換えを
+求めます。
 
 ### 二段query guard
 
@@ -35,9 +44,20 @@ provider call前にAgent local guardとAPI server guardを順に通します。
 - UUID、opaque tenant/resource ID、private/internal/local host、private IP
 - email、電話番号、郵便番号、住所形式
 - 現在tenantの既知user/member名とemail
+- 組織名、Issueの`title`、`description`、`label`、ページコンテキスト、スレッドタイトル、
+  過去のメッセージとツール結果に含まれる固有情報
 - `private issue`、`internal note`等として転記された固有情報
 
 queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本文をerror、log、Sentry、auditへ出しません。guard失敗時はproviderとquota reservationを呼びません。
+完全一致する非公開文字列は常に拒否します。現在の発話で初めて現れた語も、保存済みメッセージ内の
+公開情報だけの検索語と完全一致しない限りプロバイダーへ送りません。非公開コンテキストとの部分一致に
+より安全な一般化を確定できない場合も拒否し、ユーザーが公開情報だけの`query`へ言い換えて再送する
+まで検索しません。
+通常の発話、モデルが生成した承認値、スレッドの`Ask always | Full access`はこの拒否を解除しません。
+
+サーバー側のguardが1回に比較する範囲は現在の組織に属するメンバー識別情報500件、Issue
+200件、現在のスレッドのメッセージ200件、合計1,000,000文字までです。いずれかの上限を
+超えた場合は一部だけを検査して続行せず、検索を拒否します。
 
 guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。検索専用AgentはQwen reasoningを無効化し、OpenRouterのExa server toolを最大3 result・60秒で呼びます。製品Agent本体はreasoning mediumを維持します。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Web上のinstructionをIssue toolのinstructionへ昇格させません。
 

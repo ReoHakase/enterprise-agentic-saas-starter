@@ -1,8 +1,8 @@
 ---
 title: Drizzle migrationのテストと運用
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 applies_to:
   - packages/db/src/schema/**
   - packages/db/drizzle/**
@@ -135,7 +135,7 @@ forceRerunTriggers: [
 ]
 ```
 
-API repository/infrastructure変更でもpath mappingによりDB full suiteを実行します。
+API repository/infrastructure変更でも通常CIの`bun run test`によりDB full suiteを実行します。
 
 ## CI
 

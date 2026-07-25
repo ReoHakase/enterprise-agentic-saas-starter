@@ -1,8 +1,8 @@
 ---
 title: 命名とlayer
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-24
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
 ---
 
 # 命名とlayer
@@ -264,7 +264,7 @@ components/
   feature-panel.stories.tsx
 ```
 
-`*.test.tsx`はNode/happy-domで実行するunit/DOM testです。`*.browser.test.tsx`はreal QueryClient、MSW、chat transport、複数componentなどStorybook storyでは表しにくいbrowser integrationだけに使います。
+`*.test.tsx`はNode/happy-domで実行するunit/DOM testです。`*.browser.test.tsx`はreal QueryClient、必要な範囲だけのtransport stub、chat transport、複数componentなどStorybook storyでは表しにくいbrowser integrationだけに使います。
 
 VRTは現在実施しないため、`*.visual.test.tsx`を作りません。
 
@@ -302,7 +302,7 @@ barrelを増やすとcycleとdead exportを発見しにくくなるためです�
 
 public entrypointは利用者に必要な最小surfaceだけを明示exportし、`internal/`、`adapters/`、
 `repository.ts`、test supportを再exportしません。packageの`exports`、feature/moduleの
-`index.ts`または`public.ts`、lint/architecture checkは同じ境界を表し、一方を変えるPRでは
+`index.ts`または`public.ts`、Oxlint、Knip、export-surface testは同じ境界を表し、一方を変えるPRでは
 残りも同時に更新します。
 
 ## directoryへ分ける基準

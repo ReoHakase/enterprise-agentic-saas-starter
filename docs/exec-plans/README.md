@@ -1,8 +1,8 @@
 ---
 title: exec plan運用
-status: proposed
+status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-25
 ---
 
 # exec plan運用
@@ -36,6 +36,16 @@ last_reviewed: 2026-07-24
 - 作業中に進捗、判断記録、検証証跡を更新する
 - 完了時に`completed/`へ移す
 - task固有の判断が永続化すべき場合はADRへ昇格する
+
+## plan一覧
+
+### 実行中
+
+現在、実行中のplanはありません。
+
+### 完了
+
+- [文書、source構成、品質ゲート、テスト、Codex harnessの全面移行](completed/one-shot-harness-migration.md)
 
 ## template
 
