@@ -14,11 +14,12 @@ import {
 const meta = preview.meta({
   title: "Components/Avatar",
   component: Avatar,
-  tags: ["autodocs", "theme-sensitive"],
+  tags: ["autodocs"],
   parameters: { layout: "centered" },
 })
 
 export const UserProfileImage = meta.story({
+  tags: ["theme-sensitive"],
   args: {
     shape: "circle",
     children: <AvatarFallback>RH</AvatarFallback>,

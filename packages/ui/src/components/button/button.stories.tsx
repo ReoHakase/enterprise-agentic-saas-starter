@@ -7,7 +7,7 @@ import { Button } from "./button"
 const meta = preview.meta({
   title: "Components/Button",
   component: Button,
-  tags: ["autodocs", "theme-sensitive"],
+  tags: ["autodocs"],
   args: {
     children: "Create organization",
   },
@@ -27,6 +27,7 @@ const meta = preview.meta({
 })
 
 export const Primary = meta.story({
+  tags: ["theme-sensitive"],
   args: {
     onClick: fn(),
   },

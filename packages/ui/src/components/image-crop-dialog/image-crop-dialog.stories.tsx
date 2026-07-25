@@ -19,7 +19,7 @@ const invalidSource = new Blob(["not an image"], { type: "image/png" })
 const meta = preview.meta({
   title: "Components/Image Crop Dialog",
   component: ImageCropDialog,
-  tags: ["autodocs", "theme-sensitive"],
+  tags: ["autodocs"],
   parameters: { layout: "centered" },
   args: {
     onConfirm: fn(),
@@ -36,8 +36,8 @@ const meta = preview.meta({
 
 export const Circular = meta.story({
   args: { shape: "circle" },
-  play: async ({ args }) => {
-    const body = within(document.body)
+  play: async ({ args, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
     const dialog = await body.findByRole("dialog", { name: "Crop image" })
     await expect(dialog).toHaveAttribute("data-motion", "fade")
     await expect(dialog).toHaveClass("max-h-[calc(100dvh-2rem)]")
@@ -69,8 +69,8 @@ export const Circular = meta.story({
 
 export const RoundedSquare = meta.story({
   args: { shape: "rounded" },
-  play: async () => {
-    const body = within(document.body)
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
     const dialog = await body.findByRole("dialog", { name: "Crop image" })
     await waitFor(() => expect(dialog).toBeVisible())
     const cropArea = await body.findByRole("group", {
@@ -86,8 +86,8 @@ export const RoundedSquare = meta.story({
 
 export const DecodeError = meta.story({
   args: { source: invalidSource },
-  play: async ({ args }) => {
-    const body = within(document.body)
+  play: async ({ args, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
     await body.findByRole("dialog", { name: "Crop image" })
 
     await expect(await body.findByRole("alert")).toHaveTextContent(

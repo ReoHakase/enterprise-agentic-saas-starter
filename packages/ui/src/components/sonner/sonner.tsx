@@ -35,6 +35,7 @@ const toasterStyle: ToasterStyle = {
 const toastOptions: NonNullable<ToasterProps["toastOptions"]> = {
   classNames: {
     toast: "cn-toast pointer-events-none",
+    description: "text-muted-foreground!",
     actionButton: "pointer-events-auto",
     cancelButton: "pointer-events-auto",
     closeButton: "pointer-events-auto",
