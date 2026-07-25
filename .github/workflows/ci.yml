@@ -138,9 +138,9 @@ jobs:
 
   free-e2e:
     name: Free E2E
-    # Playwright WebKit 26 intermittently loses its network process on the
-    # ubuntu-24.04 hosted image before the first navigation.
-    runs-on: ubuntu-22.04
+    # Playwright WebKit 26 loses its network process on Linux hosted runners
+    # before the first navigation; run the full cross-browser suite on macOS.
+    runs-on: macos-14
     timeout-minutes: 60
 
     steps:
@@ -156,7 +156,7 @@ jobs:
 
       - name: Install free-suite browsers
         working-directory: apps/web
-        run: bunx playwright install --with-deps chromium webkit
+        run: bunx playwright install chromium webkit
 
       - name: Run the full free E2E suite
         run: >-
