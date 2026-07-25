@@ -350,6 +350,7 @@ const SignInCard = ({
         {emailAndPassword?.forgotPassword ? (
           <Link
             href={`${basePaths.auth}/${viewPaths.auth.forgotPassword}`}
+            prefetch={false}
             className="self-center text-sm underline-offset-4 hover:underline"
           >
             {localization.auth.forgotPasswordLink}
@@ -358,7 +359,11 @@ const SignInCard = ({
         {emailAndPassword?.enabled ? (
           <FieldDescription className="text-center">
             {localization.auth.needToCreateAnAccount}{" "}
-            <Link href={signUpHref} className="underline underline-offset-4">
+            <Link
+              href={signUpHref}
+              prefetch={false}
+              className="underline underline-offset-4"
+            >
               {localization.auth.signUp}
             </Link>
           </FieldDescription>

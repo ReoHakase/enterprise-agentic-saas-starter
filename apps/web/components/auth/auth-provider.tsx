@@ -11,7 +11,12 @@ declare module "@better-auth-ui/core" {
      * Typically TanStack Router's `Link` or Next.js's `Link`.
      */
     Link: ComponentType<
-      PropsWithChildren<{ className?: string; href: string; to?: string }>
+      PropsWithChildren<{
+        className?: string
+        href: string
+        prefetch?: boolean
+        to?: string
+      }>
     >
   }
 

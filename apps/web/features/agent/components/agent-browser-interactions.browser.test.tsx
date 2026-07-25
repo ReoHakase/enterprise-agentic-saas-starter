@@ -176,7 +176,7 @@ afterEach(() => {
 describe("Agent browser interactions", () => {
   it("hands off a real inline mention with the default Ask always policy", async () => {
     const { requests } = installApiTransport()
-    const actor = userEvent.setup()
+    const actor = userEvent.setup({ delay: 1 })
     const onCreate = vi.fn<(input: AgentNewThreadInput) => void>()
     renderAgentUi(
       <AgentNewThreadComposer
@@ -203,7 +203,9 @@ describe("Agent browser interactions", () => {
       name: "Agent message",
     })
     await actor.click(composer)
-    await actor.type(composer, "Compare @review")
+    await actor.type(composer, "Compare ")
+    await waitFor(() => expect(composer.textContent).toBe("Compare "))
+    await actor.type(composer, "@review")
     await actor.click(
       await screen.findByRole("button", {
         name: /Issue #7: Review tenant audit log/u,

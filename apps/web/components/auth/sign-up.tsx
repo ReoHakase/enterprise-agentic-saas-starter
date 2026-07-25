@@ -459,7 +459,11 @@ const SignUpCard = ({
         <div className="mt-4 flex w-full flex-col items-center gap-3">
           <FieldDescription className="text-center">
             {localization.auth.alreadyHaveAnAccount}{" "}
-            <Link href={signInHref} className="underline underline-offset-4">
+            <Link
+              href={signInHref}
+              prefetch={false}
+              className="underline underline-offset-4"
+            >
               {localization.auth.signIn}
             </Link>
           </FieldDescription>

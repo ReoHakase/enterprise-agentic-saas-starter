@@ -269,6 +269,7 @@ export function MagicLink({
                 Already have an account?{" "}
                 <Link
                   href={signInHref}
+                  prefetch={false}
                   className="underline underline-offset-4"
                 >
                   {localization.auth.signIn}
@@ -279,6 +280,7 @@ export function MagicLink({
                 {localization.auth.needToCreateAnAccount}{" "}
                 <Link
                   href={signUpHref}
+                  prefetch={false}
                   className="underline underline-offset-4"
                 >
                   {localization.auth.signUp}

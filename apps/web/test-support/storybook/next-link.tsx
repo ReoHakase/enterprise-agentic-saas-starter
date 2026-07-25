@@ -6,9 +6,15 @@ type StorybookLinkProps = Omit<
 > & {
   children?: ReactNode
   href: string | { pathname?: string }
+  prefetch?: boolean
 }
 
-const StorybookLink = ({ children, href, ...props }: StorybookLinkProps) => (
+const StorybookLink = ({
+  children,
+  href,
+  prefetch: _prefetch,
+  ...props
+}: StorybookLinkProps) => (
   <a href={typeof href === "string" ? href : (href.pathname ?? "/")} {...props}>
     {children}
   </a>

@@ -36,7 +36,9 @@ authorization、tenant policyを再実装しません。それらはunit/integra
 検証します。E1は同じAPI fixture originを埋め込んだproduction buildを1回作成し、parallelな
 core journey、one-shot delay/faultを使うroute contractの順に`next start`で検証します。
 core journeyはChromiumを最大3 workersで並列実行し、代表WebKitは別Playwright processと新しい
-`next start` processで単独実行します。route contractだけを`--workers=1`へ固定し、mock transport内で
+`next start` processで単独実行します。Linux版WebKitが`WebKit encountered an internal error`で
+終了した場合だけ、最大3回まで新しいPlaywright processで代表テストを再実行します。通常のテスト失敗や
+別のブラウザーエラーは再実行しません。route contractだけを`--workers=1`へ固定し、mock transport内で
 共有するruleの消費順を決定的にします。core journeyをserial化せず、`test:e2e` aggregateはE1 core、
 E1 route contract、scripted Agent E2、OAuth E2の順を維持します。
 
