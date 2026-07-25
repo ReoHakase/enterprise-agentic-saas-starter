@@ -1,0 +1,39 @@
+{
+  "threshold": 3,
+  "minLines": 8,
+  "minTokens": 70,
+  "mode": "mild",
+  "format": ["typescript", "tsx"],
+  "output": "test-results/jscpd",
+  "reporters": ["console", "json"],
+  "path": [
+    "apps/agent/src/mastra",
+    "apps/api/src",
+    "apps/github-emulator/src",
+    "apps/web/app",
+    "apps/web/components",
+    "apps/web/features",
+    "apps/web/hooks",
+    "apps/web/lib",
+    "packages/auth/src",
+    "packages/db/src",
+    "packages/email/src",
+    "packages/ui/src"
+  ],
+  "ignore": [
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.stories.*",
+    "**/e2e/**",
+    "**/evals/**",
+    "**/test-support/**",
+    "**/fixtures/**",
+    "**/__fixtures__/**",
+    "**/*.config.*",
+    "**/scripts/**",
+    "**/generated/**",
+    "**/drizzle/**",
+    "**/dist/**",
+    "**/.next/**"
+  ]
+}

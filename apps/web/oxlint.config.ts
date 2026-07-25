@@ -1,9 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -23,34 +28,8 @@ export default defineConfig({
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
     { name: "playwright", specifier: "eslint-plugin-playwright" },
   ],
-  ignorePatterns: [
-    ".next/**",
-    ".open-next/**",
-    ".turbo/**",
-    "coverage/**",
-    "dist/**",
-    "node_modules/**",
-    "playwright-report/**",
-    "test-results/**",
-  ],
   rules: {
-    "import/no-unassigned-import": "off",
-    "no-restricted-imports": [
-      "error",
-      {
-        patterns: [
-          {
-            group: [
-              "@enterprise-agentic-saas/api",
-              "@enterprise-agentic-saas/api/*",
-              "!@enterprise-agentic-saas/api/client",
-            ],
-            message:
-              "apps/web may only import the Eden boundary from @enterprise-agentic-saas/api/client.",
-          },
-        ],
-      },
-    ],
+    ...workspaceBoundaryRule("web"),
     // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
     "jsx-a11y/prefer-tag-over-role": "off",
     "react/react-in-jsx-scope": "off",
@@ -140,6 +119,14 @@ export default defineConfig({
         "typescript/consistent-type-definitions": "off",
       },
     },
+    ...createBudgetOverrides({
+      adapter: [
+        "lib/server/**/*.{ts,tsx}",
+        "**/*.config.{js,mjs,cjs,ts,mts,cts}",
+      ],
+      react: ["{app,components,features,hooks}/**/*.{jsx,tsx}"],
+      testReact: true,
+    }),
   ],
   env: {
     browser: true,

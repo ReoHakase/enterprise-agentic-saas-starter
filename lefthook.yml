@@ -13,7 +13,7 @@ pre-commit:
       run: bun run format -- {staged_files}
       stage_fixed: true
     oxlint:
-      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint
 
 pre-push:

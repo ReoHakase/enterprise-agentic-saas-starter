@@ -1,9 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -13,6 +18,10 @@ export default defineConfig({
     "oxc",
     "vitest",
   ],
+  rules: {
+    ...workspaceBoundaryRule("db"),
+  },
+  overrides: createBudgetOverrides({}),
   env: {
     node: true,
   },

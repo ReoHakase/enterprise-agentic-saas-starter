@@ -38,7 +38,7 @@
     },
     "build:cloudflare": {
       "cache": false,
-      "outputs": [".open-next/**", "dist/worker/**"],
+      "outputs": [".open-next/**", "dist/worker/**", "dist/e2e-worker/**"],
       "env": [
         "NODE_ENV",
         "APP_NAME",
@@ -76,6 +76,7 @@
     },
     "lint": {
       "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts"],
       "outputs": []
     },
     "format": {
@@ -105,19 +106,14 @@
       ],
       "outputs": ["coverage/**"]
     },
-    "test:storybook": {
+    "test:browser": {
       "dependsOn": ["transit"],
-      "outputs": []
+      "outputs": ["test-results/browser/**"]
     },
     "test:e2e": {
       "cache": false,
       "outputs": ["test-results/**", "playwright-report/**"],
       "passThroughEnv": ["CI", "PLAYWRIGHT_BASE_URL"]
-    },
-    "test:e2e:oauth": {
-      "cache": false,
-      "outputs": ["test-results/oauth/**", "playwright-report/oauth/**"],
-      "passThroughEnv": ["CI"]
     },
     "test:e2e:agent": {
       "cache": false,

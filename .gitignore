@@ -44,7 +44,9 @@ storybook-static/
 .next/
 .next-e2e/
 .next-e2e-agent/
+.next-e2e-scripted-agent/
 .next-e2e-oauth/
+.vitest-attachments/
 **/next-env.d.ts
 out/
 build
@@ -63,7 +65,6 @@ npm-debug.log*
 .vscode/mcp.json
 .cursor/
 .claude/
-.codex/
 .github/agents/
 .github/instructions/
 .github/prompts/
