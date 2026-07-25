@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -34,67 +37,46 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - name: Flake check
         run: nix flake check
 
-  static:
-    name: Static checks
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
 
-      - name: Run static checks in parallel
-        shell: bash
-        run: |
-          set -u
+      - name: Check formatting
+        run: bun run format:check
 
-          bun run --cwd packages/db db:check & db_check_pid=$!
-          bun run lint & lint_pid=$!
-          bun run format:check & format_check_pid=$!
+      - name: Typecheck
+        run: bun run typecheck
 
-          failures=0
-          for pid in "$db_check_pid" "$lint_pid" "$format_check_pid"; do
-            if ! wait "$pid"; then
-              failures=1
-            fi
-          done
-
-          exit "$failures"
-
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-bun
-      - run: bun run typecheck
-
-  unit:
-    name: Unit and integration tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-bun
-
-      - name: Run tests
+      - name: Run unit and integration tests
         run: bun run test
+
+      - name: Build applications
+        run: bun run build
+        env:
+          NODE_ENV: production
 
       - name: Upload Vitest coverage
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vitest-coverage
           path: |
@@ -103,112 +85,97 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  build:
-    name: Build · ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Web
-            package: "@enterprise-agentic-saas/web"
-          - name: API
-            package: "@enterprise-agentic-saas/api"
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-bun
-      - name: Build
-        run: bunx turbo run build --filter="${{ matrix.package }}"
-        env:
-          NODE_ENV: production
-
-  storybook-build:
-    name: Storybook build
+  static-quality:
+    name: Static quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
-      - run: bun run build:storybook
+
+      - name: Run lint, dead-code, and duplicate gates
+        run: bun run check:static
+
+      - name: Check migration history and schema drift
+        run: bun run --cwd packages/db db:check
+
+  browser:
+    name: Browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run Storybook and Browser Mode tests
+        run: bun run test:browser
+
+      - name: Build Storybook
+        run: bun run build:storybook
 
       - name: Upload Storybook
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: storybook-static
-          path: packages/ui/storybook-static
+          path: |
+            apps/web/storybook-static
+            packages/ui/storybook-static
           if-no-files-found: warn
           retention-days: 7
 
-  storybook-test:
-    name: Storybook browser tests
+  free-e2e:
+    name: Free E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
       - uses: ./.github/actions/setup-bun
-      - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
-      - name: Test stories in light and dark mode
-        run: bun run test:storybook
 
-  e2e:
-    name: E2E · ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Desktop Chrome
-            id: desktop-chrome
-            browser: chromium
-            command: env -u NO_COLOR bunx playwright test --project=desktop-chrome
-          - name: Pixel 7 Chrome
-            id: pixel-7-chrome
-            browser: chromium
-            command: env -u NO_COLOR bunx playwright test --project=pixel-7-chrome
-          - name: iPhone 13 WebKit
-            id: iphone-13-webkit
-            browser: webkit
-            command: env -u NO_COLOR bunx playwright test --project=iphone-13-webkit
-          - name: GitHub OAuth
-            id: github-oauth
-            browser: chromium
-            command: env -u NO_COLOR bunx playwright test --config=playwright.oauth.config.ts
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-bun
-      - name: Install browser
-        run: bunx playwright install --with-deps "${{ matrix.browser }}"
-      - name: Run E2E
+      - name: Install free-suite browsers
         working-directory: apps/web
-        run: ${{ matrix.command }}
-        env:
-          NODE_ENV: development
+        run: bunx playwright install --with-deps chromium webkit
+
+      - name: Run the full free E2E suite
+        run: >-
+          nix develop --command env -u NO_COLOR
+          bun run test:e2e
 
       - name: Upload Playwright artifacts
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-${{ matrix.id }}
+          name: playwright-free-e2e
           path: |
             apps/web/playwright-report
             apps/web/test-results
           if-no-files-found: warn
           retention-days: 7
 
-  cloudflare:
-    name: Cloudflare · ${{ matrix.name }}
+  cloudflare-dry-run:
+    name: Cloudflare dry-run · ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     strategy:
       fail-fast: false
@@ -222,8 +189,12 @@ jobs:
             package: "@enterprise-agentic-saas/agent"
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
+
       - name: Build Worker without deploying
         run: bunx turbo run build:cloudflare --filter="${{ matrix.package }}"
         env:

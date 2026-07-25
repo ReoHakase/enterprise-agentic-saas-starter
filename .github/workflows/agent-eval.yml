@@ -1,0 +1,58 @@
+name: Agent paid tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Paid test suite
+        required: true
+        default: l6
+        type: choice
+        options:
+          - l6
+          - l7
+          - all
+  schedule:
+    - cron: "23 17 * * *"
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-paid-tests-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  paid-tests:
+    name: Agent paid tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    environment: agent-paid-eval
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Install the pinned development environment
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Run browserless Agent evals
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'release' || inputs.suite == 'l6' || inputs.suite == 'all' }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: nix develop --command bun run test:eval:agent
+
+      - name: Install Chromium
+        if: ${{ github.event_name == 'release' || inputs.suite == 'l7' || inputs.suite == 'all' }}
+        working-directory: apps/web
+        run: bunx playwright@1.61.1 install --with-deps chromium
+
+      - name: Run full-stack Agent canaries
+        if: ${{ github.event_name == 'release' || inputs.suite == 'l7' || inputs.suite == 'all' }}
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: nix develop --command bun run test:e2e:agent
