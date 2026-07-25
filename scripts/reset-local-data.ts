@@ -2,7 +2,7 @@ import { rm } from "node:fs/promises"
 import { createInterface } from "node:readline/promises"
 import { fileURLToPath } from "node:url"
 
-import { assertRepositoryLocalTursoUrl } from "../packages/db/src/local-database"
+import { assertRepositoryLocalTursoUrl } from "../packages/db/src/development/local-database"
 
 const RESET_CONFIRMATION = "reset-local-development"
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url))

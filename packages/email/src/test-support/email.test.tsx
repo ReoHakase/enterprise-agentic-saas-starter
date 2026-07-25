@@ -7,12 +7,13 @@ import {
   resolveEmailFrom,
   resolveEmailProvider,
   resolveMailpitUrl,
-} from "./index"
-import { createCloudflareEmailSender } from "./providers/cloudflare"
-import { createConfiguredEmailSender } from "./providers/configured"
-import { createConsoleSender } from "./providers/console"
-import { createMailpitEmailSender } from "./providers/mailpit"
-import { createNoopSender } from "./providers/noop"
+} from "../index"
+import { createCloudflareEmailSender } from "../providers/cloudflare"
+import { createConfiguredEmailSender } from "../providers/configured"
+import { createConsoleSender } from "../providers/console"
+import { createMailpitEmailSender } from "../providers/mailpit"
+import { createNoopSender } from "../providers/noop"
+import { privateMailCommandFixture } from "./fixtures"
 
 describe("email configuration", () => {
   it("uses a non-deliverable local address when EMAIL_FROM is omitted locally", () => {
@@ -108,14 +109,7 @@ describe("email rendering", () => {
 })
 
 describe("email senders", () => {
-  const input = {
-    to: "user@example.com",
-    template: "magic_link" as const,
-    subject: "Invitation to join Private Organization",
-    text: "Text",
-    html: "<p>Text</p>",
-    renderProps: { appName: "App", url: "https://example.com/token?secret=1" },
-  }
+  const input = privateMailCommandFixture
 
   it("supports a noop sender for tests", async () => {
     await expect(createNoopSender()(input)).resolves.toBeUndefined()

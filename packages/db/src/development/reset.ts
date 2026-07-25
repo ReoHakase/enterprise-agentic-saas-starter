@@ -7,7 +7,7 @@ import { seedDevelopmentDatabase, type DatabaseConnectionOptions } from "./seed"
 
 export const RESET_CONFIRMATION = "reset-local-development"
 
-const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname
 
 export const assertLocalDatabase = (
   databaseUrl: string,
@@ -63,7 +63,7 @@ export const resetLocalDevelopmentDatabase = async (
 }
 
 const main = async () => {
-  const { env } = await import("./env")
+  const { env } = await import("../env")
   await resetLocalDevelopmentDatabase(
     {
       url: env.TURSO_DATABASE_URL,

@@ -1,47 +1,21 @@
-import { createServer } from "node:http"
-
 import type { Emulator } from "emulate"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import type { GitHubEmulatorConfig } from "./config"
+import type { GitHubEmulatorConfig } from "../config/index"
+import { GITHUB_OAUTH_CALLBACK_PATH } from "../protocol/github-oauth"
+import { reserveLoopbackPort } from "../test-support/reserve-port"
 import { startGitHubEmulator } from "./emulator"
-
-const CALLBACK_PATH = "/auth/oauth2/callback/github"
-
-const reservePort = () =>
-  new Promise<number>((resolve, reject) => {
-    const server = createServer()
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-
-      if (!address || typeof address === "string") {
-        server.close()
-        reject(new Error("available portを取得できませんでした"))
-        return
-      }
-
-      server.close((error) => {
-        if (error) {
-          reject(error)
-          return
-        }
-
-        resolve(address.port)
-      })
-    })
-  })
 
 describe("GitHub OAuth emulator", () => {
   let emulator: Emulator | undefined
   let config: GitHubEmulatorConfig | undefined
 
   beforeAll(async () => {
-    const port = await reservePort()
+    const port = await reserveLoopbackPort()
     config = {
       port,
       baseUrl: `http://localhost:${port}`,
-      callbackUrl: `http://localhost:3001${CALLBACK_PATH}`,
+      callbackUrl: `http://localhost:3001${GITHUB_OAUTH_CALLBACK_PATH}`,
       clientId: "integration-client-id",
       clientSecret: "integration-client-secret",
     }

@@ -74,7 +74,7 @@ linked_adrs:
 - [x] Web componentをdirectory化した
 - [x] UI componentをdirectory化した
 - [x] StorybookをCSF Nextへ移行した
-- [ ] package所有testを整備した
+- [x] package所有testを整備した
 - [ ] W1-W6を実装した
 - [ ] E1/E2を分離した
 - [ ] coverageを確定した
@@ -117,6 +117,11 @@ linked_adrs:
 | `bun run --cwd packages/ui lint`      | success | CSF Next移行後、warningなし                             |
 | `bun run --cwd packages/ui typecheck` | success | CSF Next移行後、型errorなし                             |
 | Web、UI Storybook build               | success | Storybook 10.5.3で両方のstatic buildが成功              |
+| `bun run --cwd packages/auth test`    | success | 7 files、54 tests                                       |
+| `bun run --cwd packages/db test`      | success | 11 files、44 tests。file DB concurrencyを含む           |
+| `bun run --cwd packages/email test`   | success | 2 files、34 tests                                       |
+| GitHub emulator test                  | success | 4 files、21 tests                                       |
+| TypeScript config fixture compile     | success | Bun、Worker、React library、Next.jsの4 fixtureが成功    |
 
 ## リスクとrollback
 

@@ -5,8 +5,11 @@ import { join } from "node:path"
 import { createClient } from "@libsql/client"
 import { describe, expect, it } from "vitest"
 
-import { RESET_CONFIRMATION, resetLocalDevelopmentDatabase } from "../reset"
-import { seedDevelopmentDatabase } from "../seed"
+import {
+  RESET_CONFIRMATION,
+  resetLocalDevelopmentDatabase,
+} from "../development/reset"
+import { seedDevelopmentDatabase } from "../development/seed"
 
 describe("database migrations: lifecycle", () => {
   it("refuses development seed against a remote Turso database", async () => {

@@ -4,6 +4,8 @@ import { count, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 import { seed } from "drizzle-seed"
 
+import * as schema from "../schema/index"
+import { assertLocalDatabaseUrl } from "./local-database"
 import {
   DEVELOPMENT_SEED,
   DEVELOPMENT_SEED_REFERENCE_DATE,
@@ -11,9 +13,7 @@ import {
   developmentFileFixtures,
   developmentSeedAnchors,
   getDevelopmentUserProfileImageUrl,
-} from "./development-seed"
-import { assertLocalDatabaseUrl } from "./local-database"
-import * as schema from "./schema/index"
+} from "./seed-fixtures"
 
 export type DatabaseConnectionOptions = {
   url: string
@@ -51,7 +51,7 @@ const resolveConnection = async (
   connection?: DatabaseConnectionOptions
 ): Promise<DatabaseConnectionOptions> =>
   connection ??
-  (await import("./env").then(
+  (await import("../env").then(
     ({ env }) =>
       ({
         url: env.TURSO_DATABASE_URL,

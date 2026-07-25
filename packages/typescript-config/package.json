@@ -12,5 +12,16 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "test": "tsc --noEmit -p test-fixtures/bun/tsconfig.json && tsc --noEmit -p test-fixtures/cloudflare-worker/tsconfig.json && tsc --noEmit -p test-fixtures/react-library/tsconfig.json && tsc --noEmit -p test-fixtures/nextjs/tsconfig.json",
+    "typecheck": "bun run test"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "next": "catalog:",
+    "typescript": "catalog:"
   }
 }

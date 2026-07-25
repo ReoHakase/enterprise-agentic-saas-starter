@@ -86,7 +86,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000001/files/issue/30000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000001",
     filename: "preview-wide.jpg",
-    fixturePath: "../fixtures/files/preview-wide.jpg",
+    fixturePath: "../../fixtures/files/preview-wide.jpg",
     declaredContentType: "image/jpeg",
     sizeBytes: 35_537,
     md5: "c9b33d741b04583c678a99956aee7a29",
@@ -107,7 +107,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000001/files/issue/30000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000002",
     filename: "preview.png",
-    fixturePath: "../fixtures/files/preview.png",
+    fixturePath: "../../fixtures/files/preview.png",
     declaredContentType: "image/png",
     sizeBytes: 4_340,
     md5: "be126e4a3e4d01e9b18b83f918371be9",
@@ -128,7 +128,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000001/files/issue/30000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000003",
     filename: "download-only.avif",
-    fixturePath: "../fixtures/files/download-only.avif",
+    fixturePath: "../../fixtures/files/download-only.avif",
     declaredContentType: "image/avif",
     sizeBytes: 286,
     md5: "131a49cba1b4f4b6cda6665edf506f7b",
@@ -149,7 +149,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000001/files/issue/30000000-0000-4000-8000-000000000001/40000000-0000-4000-8000-000000000004",
     filename: "notes.txt",
-    fixturePath: "../fixtures/files/notes.txt",
+    fixturePath: "../../fixtures/files/notes.txt",
     declaredContentType: "text/plain",
     sizeBytes: 57,
     md5: "f84ce3ad5b9e2d926bb7e70688068cd4",
@@ -170,7 +170,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000002/files/issue/30000000-0000-4000-8000-000000000002/40000000-0000-4000-8000-000000000005",
     filename: "preview.webp",
-    fixturePath: "../fixtures/files/preview.webp",
+    fixturePath: "../../fixtures/files/preview.webp",
     declaredContentType: "image/webp",
     sizeBytes: 234,
     md5: "b48c11f8e7a4833f91b2a47c89d55371",
@@ -191,7 +191,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000002/files/issue/30000000-0000-4000-8000-000000000002/40000000-0000-4000-8000-000000000006",
     filename: "preview.gif",
-    fixturePath: "../fixtures/files/preview.gif",
+    fixturePath: "../../fixtures/files/preview.gif",
     declaredContentType: "image/gif",
     sizeBytes: 313,
     md5: "540427f10aaf51cc7e4697f317aedc2b",
@@ -212,7 +212,7 @@ export const developmentFileFixtures = [
     objectKey:
       "organizations/20000000-0000-4000-8000-000000000002/files/issue/30000000-0000-4000-8000-000000000002/40000000-0000-4000-8000-000000000007",
     filename: "download-only.svg",
-    fixturePath: "../fixtures/files/download-only.svg",
+    fixturePath: "../../fixtures/files/download-only.svg",
     declaredContentType: "image/svg+xml",
     sizeBytes: 258,
     md5: "bb942e385946dc569e910f4334220000",

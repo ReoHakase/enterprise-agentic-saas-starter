@@ -1,0 +1,7 @@
+{
+  "extends": "../../bun.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["index.ts"]
+}

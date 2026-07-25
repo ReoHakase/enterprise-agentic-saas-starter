@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { createGithubOAuthEmulatorProvider } from "./server/plugins/github-oauth-provider"
+import { createGithubOAuthEmulatorProvider } from "./github-oauth-provider"
 
 const environment = {
   mode: "emulator" as const,

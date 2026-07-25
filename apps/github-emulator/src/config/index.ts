@@ -1,7 +1,8 @@
 import * as v from "valibot"
 
+import { GITHUB_OAUTH_CALLBACK_PATH } from "../protocol/github-oauth"
+
 const DEFAULT_PORT = 4001
-const GITHUB_CALLBACK_PATH = "/auth/oauth2/callback/github"
 
 const isLoopbackHostname = (hostname: string) =>
   hostname === "localhost" ||
@@ -42,8 +43,8 @@ const localCallbackSchema = v.pipe(
   v.check(
     (input) =>
       hasSafeLocalUrlParts(input) &&
-      new URL(input).pathname === GITHUB_CALLBACK_PATH,
-    `${GITHUB_CALLBACK_PATH} を持つlocalhost callbackを指定してください`
+      new URL(input).pathname === GITHUB_OAUTH_CALLBACK_PATH,
+    `${GITHUB_OAUTH_CALLBACK_PATH} を持つlocalhost callbackを指定してください`
   ),
   v.transform((input) => new URL(input).toString())
 )

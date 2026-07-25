@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm"
 import * as v from "valibot"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-import type { auth as Auth } from "./index"
+import type { auth as Auth } from "../index"
 
 type AuthInstance = typeof Auth
 
@@ -70,7 +70,7 @@ beforeAll(async () => {
   vi.stubEnv("MAILPIT_URL", "")
 
   const [authModule, databaseModule, schema] = await Promise.all([
-    import("./index"),
+    import("../index"),
     import("@enterprise-agentic-saas/db"),
     import("@enterprise-agentic-saas/db/schema"),
   ])

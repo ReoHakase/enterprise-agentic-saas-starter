@@ -8,15 +8,15 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
+import { seedDevelopmentDatabase } from "./seed"
 import {
   developmentFileFixtures,
   getDevelopmentFileFixtureUrl,
   getDevelopmentUserProfileImageUrl,
   selectDevelopmentFileFixturesForReconciliation,
-} from "./development-seed"
-import { seedDevelopmentDatabase } from "./seed"
+} from "./seed-fixtures"
 
-const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname
 
 const readDevelopmentSeedSnapshot = async (connection: { url: string }) => {
   const client = createClient(connection)

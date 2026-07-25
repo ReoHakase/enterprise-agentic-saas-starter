@@ -55,13 +55,11 @@ import {
 import { showConsoleApiErrorToast } from "@/features/console"
 import { withAgentThreadHref, useIssueSearchState } from "@/features/issues"
 import {
+  consumeOrganizationSwitchFlash,
   prepareOrganizationSwitch,
+  queueOrganizationSwitchFlash,
   resolveOrganizationRouteContext,
 } from "@/features/organizations"
-import {
-  consumeOrganizationSwitchFlash,
-  queueOrganizationSwitchFlash,
-} from "@/features/organizations/organization-switch-flash"
 import { browserConsoleApi } from "@/lib/browser/console-api"
 import { roleLabel, type Me } from "@/lib/console-api"
 

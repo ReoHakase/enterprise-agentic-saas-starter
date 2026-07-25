@@ -1,4 +1,8 @@
 export { prepareOrganizationSwitch } from "./cache"
+export {
+  consumeOrganizationSwitchFlash,
+  queueOrganizationSwitchFlash,
+} from "./organization-switch-flash"
 export { OrganizationActivationGate } from "./components/organization-activation-gate/organization-activation-gate"
 export { OrganizationSettingsForm } from "./components/organization-settings-form/organization-settings-form"
 export { OrganizationsPage } from "./components/organizations-page/organizations-page"

@@ -1,10 +1,10 @@
-import { createEmulator, type Emulator, type EmulatorOptions } from "emulate"
+import type { Emulator, EmulatorOptions } from "emulate"
 
-import type { GitHubEmulatorConfig } from "./config"
-import { createGitHubOAuthSeed } from "./seed"
+import { createGitHubEmulator } from "../adapters/emulate"
+import type { GitHubEmulatorConfig } from "../config/index"
+import { createGitHubOAuthSeed } from "../fixtures/github"
 
 type CreateEmulator = (options: EmulatorOptions) => Promise<Emulator>
-export type ExitProcess = (code: number) => void
 
 type ReadinessOptions = {
   attempts?: number
@@ -69,7 +69,7 @@ export const startGitHubEmulator = (
   config: GitHubEmulatorConfig,
   dependencies: StartDependencies = {}
 ) => {
-  const create = dependencies.create ?? createEmulator
+  const create = dependencies.create ?? createGitHubEmulator
   const waitUntilReady =
     dependencies.waitUntilReady ?? waitForGitHubEmulatorReady
 
@@ -87,20 +87,4 @@ export const startGitHubEmulator = (
       throw error
     }
   })
-}
-
-export const createGracefulShutdown = (
-  emulator: Pick<Emulator, "close">,
-  exitProcess: ExitProcess
-) => {
-  let closing: Promise<void> | undefined
-
-  return () => {
-    closing ??= emulator.close().then(
-      () => exitProcess(0),
-      () => exitProcess(1)
-    )
-
-    return closing
-  }
 }

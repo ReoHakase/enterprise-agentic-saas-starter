@@ -1,4 +1,4 @@
-import { env } from "./env"
+import { env } from "../env"
 
 const TIMEOUT_MS = 120_000
 const RETRY_INTERVAL_MS = 500

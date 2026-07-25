@@ -4,7 +4,7 @@ import {
   GitHubEmulatorEnvironmentError,
   parseGitHubEmulatorConfig,
   type OAuthClientCredentials,
-} from "./config"
+} from "./index"
 
 const DEFAULT_CREDENTIALS: OAuthClientCredentials = {
   clientId: "local-client-id",

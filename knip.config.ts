@@ -78,7 +78,7 @@ const config: KnipConfig = {
       },
     },
     "apps/github-emulator": {
-      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
     },
     "apps/web": {
       entry: [
@@ -102,7 +102,7 @@ const config: KnipConfig = {
       storybook: true,
     },
     "packages/auth": {
-      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
     },
     "packages/db": {
       entry: [
@@ -113,11 +113,12 @@ const config: KnipConfig = {
       project: [
         "src/**/*.ts!",
         "!src/**/*.test.ts!",
-        "!src/assert-local.ts!",
+        "!src/development/assert-local.ts!",
         "!src/migrations/helpers.ts!",
-        "!src/reset.ts!",
-        "!src/seed.ts!",
-        "!src/wait.ts!",
+        "!src/development/reset.ts!",
+        "!src/development/seed.ts!",
+        "!src/development/wait.ts!",
+        "!src/test-support/**!",
       ],
       // Turso CLI is supplied by the Nix development environment, not npm.
       ignoreBinaries: ["turso"],
@@ -129,6 +130,7 @@ const config: KnipConfig = {
         "src/**/*.{ts,tsx}!",
         "!src/**/*.test.{ts,tsx}!",
         "!src/development/mailpit-server.ts!",
+        "!src/test-support/**!",
       ],
       // Mailpit is supplied by the Nix development environment, not npm.
       ignoreBinaries: ["mailpit"],
@@ -144,9 +146,8 @@ const config: KnipConfig = {
       "react-email": false,
     },
     "packages/typescript-config": {
-      // The shared Next.js config names the consumer-provided TypeScript plugin.
-      // It must not make every consumer of base.json depend on Next.js.
-      ignoreUnresolved: ["next"],
+      entry: ["test-fixtures/**/*.{ts,tsx}"],
+      project: ["test-fixtures/**/*.{ts,tsx}"],
     },
     "packages/ui": {
       project: [

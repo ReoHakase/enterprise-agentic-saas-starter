@@ -1,6 +1,6 @@
 import type { SeedConfig } from "emulate"
 
-import type { GitHubEmulatorConfig } from "./config"
+import type { GitHubEmulatorConfig } from "../config/index"
 
 const LOCAL_GITHUB_USER = {
   login: "oauth-alice",

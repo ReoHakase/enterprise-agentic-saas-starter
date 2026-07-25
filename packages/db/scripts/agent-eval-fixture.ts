@@ -2,7 +2,7 @@ import { createClient } from "@libsql/client"
 import { eq, inArray } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 
-import { assertLocalDatabaseUrl } from "../src/local-database"
+import { assertLocalDatabaseUrl } from "../src/development/local-database"
 import {
   agentActions,
   agentMessages,

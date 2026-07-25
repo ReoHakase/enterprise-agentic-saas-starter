@@ -4,19 +4,19 @@ import {
   parseMe,
   parseUserProfile,
   parseUserSessions,
-} from "@/features/account/schema"
+} from "@/features/account"
 import {
   parseBulkInvitationResponse,
   parseInvitations,
   parseMembers,
   parseResendInvitationResponse,
-} from "@/features/members/schema"
+} from "@/features/members"
 import {
   parseOrganizationDeletionReceipt,
   parseOrganization,
   parseOrganizations,
   type OrganizationRole,
-} from "@/features/organizations/schema"
+} from "@/features/organizations"
 
 import { ConsoleApiError, toConsoleApiError } from "./error"
 
@@ -56,11 +56,7 @@ const unwrap = <T>(result: EdenResult<T>): T => {
   return result.data
 }
 
-export {
-  ConsoleApiError,
-  isStepUpRequiredError,
-  toConsoleApiError,
-} from "./error"
+export { ConsoleApiError, toConsoleApiError } from "./error"
 
 export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
   const client = createApiClient(baseUrl, {

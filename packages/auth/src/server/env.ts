@@ -6,7 +6,7 @@ import {
 import { defineEnv } from "envin"
 import * as v from "valibot"
 
-import { resolveGithubOAuthEnvironment } from "./server/github-oauth-environment"
+import { resolveGithubOAuthEnvironment } from "./github-oauth-environment"
 
 const commaSeparatedList = v.pipe(
   v.optional(v.string()),

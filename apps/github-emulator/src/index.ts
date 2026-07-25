@@ -6,8 +6,9 @@ import {
 import {
   GitHubEmulatorEnvironmentError,
   parseGitHubEmulatorConfig,
-} from "./config"
-import { createGracefulShutdown, startGitHubEmulator } from "./emulator"
+} from "./config/index"
+import { startGitHubEmulator } from "./server/emulator"
+import { createGracefulShutdown } from "./state/lifecycle"
 
 const main = async () => {
   const config = parseGitHubEmulatorConfig(process.env, {

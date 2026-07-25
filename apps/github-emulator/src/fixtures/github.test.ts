@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import type { GitHubEmulatorConfig } from "./config"
-import { createGitHubOAuthSeed } from "./seed"
+import type { GitHubEmulatorConfig } from "../config/index"
+import { createGitHubOAuthSeed } from "./github"
 
 const CONFIG: GitHubEmulatorConfig = {
   port: 4001,

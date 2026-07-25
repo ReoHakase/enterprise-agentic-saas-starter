@@ -1,6 +1,6 @@
 import * as v from "valibot"
 
-import { organizationRoleSchema } from "@/features/organizations/schema"
+import { organizationRoleSchema } from "@/features/organizations"
 
 const organizationMemberSchema = v.object({
   id: v.string(),

@@ -5,8 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./development-seed": "./src/development-seed.ts",
-    "./local-development": "./src/local-database.ts",
+    "./development-seed": "./src/development/seed-fixtures.ts",
+    "./local-development": "./src/development/local-database.ts",
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
@@ -14,13 +14,13 @@
     "db:check:drizzle": "node node_modules/drizzle-kit/bin.cjs check",
     "db:check:history": "bun run scripts/check-migration-history.ts",
     "db:check:schema-drift": "bun run scripts/check-schema-drift.ts",
-    "db:assert-local": "bun run src/assert-local.ts",
+    "db:assert-local": "bun run src/development/assert-local.ts",
     "db:generate": "node node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} node node_modules/drizzle-kit/bin.cjs migrate",
     "db:prepare": "bun run db:generate && bun run db:migrate",
-    "db:reset": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/reset.ts",
-    "db:seed": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/seed.ts",
-    "db:wait": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/wait.ts",
+    "db:reset": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/development/reset.ts",
+    "db:seed": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/development/seed.ts",
+    "db:wait": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/development/wait.ts",
     "db:bootstrap": "bun run db:assert-local && bun run db:wait && bun run db:prepare",
     "db:studio": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} node node_modules/drizzle-kit/bin.cjs studio",
     "db:turso": "portless run bun run db:turso:serve",

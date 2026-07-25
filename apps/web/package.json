@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#storybook/preview": "./.storybook/preview.tsx"
+    "#storybook/*": "./.storybook/*.tsx"
   },
   "scripts": {
     "build": "next build",

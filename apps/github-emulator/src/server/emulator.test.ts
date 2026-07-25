@@ -1,8 +1,9 @@
 import type { Emulator, EmulatorOptions } from "emulate"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { GitHubEmulatorConfig } from "./config"
-import { createGracefulShutdown, startGitHubEmulator } from "./emulator"
+import type { GitHubEmulatorConfig } from "../config/index"
+import { createGracefulShutdown } from "../state/lifecycle"
+import { startGitHubEmulator } from "./emulator"
 
 type StartDependencies = NonNullable<Parameters<typeof startGitHubEmulator>[1]>
 type CreateEmulator = NonNullable<StartDependencies["create"]>

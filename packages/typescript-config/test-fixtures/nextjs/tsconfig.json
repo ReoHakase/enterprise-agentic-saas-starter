@@ -1,0 +1,7 @@
+{
+  "extends": "../../nextjs.json",
+  "compilerOptions": {
+    "types": ["react"]
+  },
+  "include": ["page.tsx"]
+}

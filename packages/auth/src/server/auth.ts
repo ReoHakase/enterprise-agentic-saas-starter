@@ -22,8 +22,8 @@ import {
   role,
 } from "better-auth/plugins"
 
-import { env, githubOAuthEnvironment } from "../env"
-import { createSessionOrganizationDatabaseHooks } from "../session-organization"
+import { createSessionOrganizationDatabaseHooks } from "./callbacks/session-organization"
+import { env, githubOAuthEnvironment } from "./env"
 import { createGithubOAuthEmulatorProvider } from "./plugins/github-oauth-provider"
 
 const sendEmail: SendEmail = createRuntimeEmailSender({

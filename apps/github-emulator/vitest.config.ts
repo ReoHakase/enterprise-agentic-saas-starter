@@ -7,7 +7,12 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary"],
       reportsDirectory: "./coverage",
-      include: ["src/config.ts", "src/emulator.ts", "src/seed.ts"],
+      include: [
+        "src/config/index.ts",
+        "src/fixtures/github.ts",
+        "src/server/emulator.ts",
+        "src/state/lifecycle.ts",
+      ],
       thresholds: {
         statements: 90,
         branches: 80,
