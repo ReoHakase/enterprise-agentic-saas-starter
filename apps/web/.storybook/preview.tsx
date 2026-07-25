@@ -1,3 +1,4 @@
+import { Toaster } from "@enterprise-agentic-saas/ui/components/sonner"
 import addonA11y from "@storybook/addon-a11y"
 import addonDocs from "@storybook/addon-docs"
 import addonThemes, { withThemeByClassName } from "@storybook/addon-themes"
@@ -6,24 +7,29 @@ import { definePreview } from "@storybook/nextjs-vite"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import addonMsw from "msw-storybook-addon"
 import { setupWorker } from "msw/browser"
-import type { ReactNode } from "react"
+import { type ReactNode, useState } from "react"
 
 import "@enterprise-agentic-saas/ui/globals.css"
 
 import { storybookApiHandlers } from "../test-support/storybook/api-handlers"
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      staleTime: Number.POSITIVE_INFINITY,
-    },
-  },
-})
+const WithQueryClient = ({ children }: { children: ReactNode }) => {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            staleTime: Number.POSITIVE_INFINITY,
+          },
+        },
+      })
+  )
 
-const WithQueryClient = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-)
+  return (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  )
+}
 
 const isStorybookInternalRequest = (request: Request) => {
   const url = new URL(request.url)
@@ -70,6 +76,7 @@ export default definePreview({
         <div className="min-h-64 bg-background p-6 text-foreground">
           <Story />
         </div>
+        <Toaster />
       </WithQueryClient>
     ),
     withThemeByClassName({
