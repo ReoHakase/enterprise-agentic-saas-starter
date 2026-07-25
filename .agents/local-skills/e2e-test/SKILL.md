@@ -22,18 +22,17 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 4. run/worker/test/organization/user/DB/R2をnamespace化し、共有resetを作らない。
 5. setupは対象がloginそのものでない限りAPI fixtureを使う。
 6. Agent behavior変更はbrowserless L6を先に実行し、release candidateだけL7 canaryを実行する。
-7. paid supervisor、child process、artifact、tmp cleanupを製品Agentのsecret契約へ合わせる。
+7. paid runnerが起動したchild processとtmp resourceだけを終了時にcleanupする。
 
 ## Validation
 
 - 通常のfree E2E: `bun run test:e2e`
 - interaction/a11y変更: `bun run test:browser`
-- Agent fingerprint変更: `bun run test:eval:agent`
+- Agent paid eval: `bun run test:eval:agent`
 - release candidate: `bun run test:e2e:agent`
 - Cloudflare境界変更: `bun run build:cloudflare`
 
-Selector変更時はgeneral UI、server/auth/cookie、OAuth emulator、Agent/DB、unknown pathのfixtureを
-検証し、unknownはE1+E2へfail-safeします。
+通常CIはE1、scripted Agent E2、OAuth E2をpathにかかわらず全件実行します。
 
 ## 禁止事項
 

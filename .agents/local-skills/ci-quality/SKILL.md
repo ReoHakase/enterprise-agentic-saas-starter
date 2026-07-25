@@ -14,10 +14,10 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 
 ## Workflow
 
-1. 変更pathをworkspace graphとtest selectorへ写像する。
-2. Oxlintはroot共通configとworkspace/layer overrideを合成し、warningをerrorとして扱う。
+1. 変更をworkspace graphとtest layerへ写像し、通常CIではfree suiteを全件実行する。
+2. Oxlintはroot共通configとworkspace別overrideを合成し、warningをerrorとして扱う。
 3. test fileはcomplexity/size/nestingだけを緩め、import/security/tenant境界を緩めない。
-4. `check:static`へOxlint、resolved-path architecture check、Knip full/strict、jscpdを集約する。
+4. `check:static`へOxlint、Knip full/strict、jscpdを集約する。
 5. rootの公開test scriptを`test`、`test:browser`、`test:e2e`、`test:eval:agent`、
    `test:e2e:agent`の5本へ限定する。
 6. CIをNix、quality、static-quality、browser、free-e2e、cloudflare-dry-runへ分ける。
@@ -39,7 +39,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 
 - warning-only期間、baseline、広いignore、期限のないwaiverを作らない。
 - package-local Oxlint pluginをroot再帰commandで迂回しない。
-- test codeからworkspace/layer boundaryを迂回しない。
+- test codeからworkspace boundaryやarchitecture文書のlayer contractを迂回しない。
 - Browser/E2E/paid suiteを通常のpre-push hookへ入れない。
 - paid secret、provider response、private contextをartifactやlogへ出さない。
 - generated `.agents/skills`を直接編集しない。
