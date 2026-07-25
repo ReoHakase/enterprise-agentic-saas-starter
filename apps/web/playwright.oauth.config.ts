@@ -4,6 +4,7 @@ import { createOAuthDatabasePath } from "./e2e/fixtures/oauth-database"
 
 const webOrigin = "http://oauth-e2e.enterprise-agentic-saas.localhost:3100"
 const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
+const apiLoopbackOrigin = "http://127.0.0.1:3101"
 const githubOrigin = "http://127.0.0.1:4101"
 const cookieDomain = "oauth-e2e.enterprise-agentic-saas.localhost"
 const databasePath = createOAuthDatabasePath(process.pid)
@@ -125,7 +126,7 @@ export default defineConfig({
       env: {
         ...oauthEnvironment,
         NODE_ENV: "production",
-        API_PUBLIC_URL: apiOrigin,
+        API_PUBLIC_URL: apiLoopbackOrigin,
         NEXT_DIST_DIR: ".next-e2e-oauth",
         NEXT_PUBLIC_API_BASE_URL: apiOrigin,
       },

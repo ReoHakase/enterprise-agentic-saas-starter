@@ -60,7 +60,7 @@ export default defineConfig({
   outputDir: "test-results/scripted-agent",
   metadata: {
     agentE2ERunId: environment.runId,
-    agentE2EApiOrigin: environment.apiOrigin,
+    agentE2EApiOrigin: environment.apiLoopbackOrigin,
     agentE2EMode: "scripted",
   },
   fullyParallel: true,
@@ -116,7 +116,7 @@ export default defineConfig({
       env: {
         ...commonEnvironment,
         NODE_ENV: "production",
-        API_PUBLIC_URL: environment.apiOrigin,
+        API_PUBLIC_URL: environment.apiLoopbackOrigin,
         NEXT_DIST_DIR: ".next-e2e-scripted-agent",
         NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,
       },

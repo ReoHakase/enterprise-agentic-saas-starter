@@ -1,6 +1,7 @@
 import { expect, test } from "../fixtures/test"
 
 const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
+const apiLoopbackOrigin = "http://127.0.0.1:3101"
 const githubOrigin = "http://127.0.0.1:4101"
 
 test("GitHub emulatorで認証しsessionを永続化できる", async ({
@@ -30,9 +31,18 @@ test("GitHub emulatorで認証しsessionを永続化できる", async ({
 
   await expect(page).toHaveURL(/\/settings\/organizations$/)
   await expect(page.getByText("Create your first organization")).toBeVisible()
+  const cookieHeader = (await context.cookies())
+    .map(({ name, value }) => `${name}=${value}`)
+    .join("; ")
 
   const sessionResponse = await context.request.get(
-    `${apiOrigin}/auth/get-session`
+    `${apiLoopbackOrigin}/auth/get-session`,
+    {
+      headers: {
+        cookie: cookieHeader,
+        origin: new URL(page.url()).origin,
+      },
+    }
   )
   expect(sessionResponse.ok()).toBeTruthy()
   expect(await sessionResponse.json()).toEqual(
@@ -47,7 +57,13 @@ test("GitHub emulatorで認証しsessionを永続化できる", async ({
   )
 
   const accountsResponse = await context.request.get(
-    `${apiOrigin}/auth/list-accounts`
+    `${apiLoopbackOrigin}/auth/list-accounts`,
+    {
+      headers: {
+        cookie: cookieHeader,
+        origin: new URL(page.url()).origin,
+      },
+    }
   )
   expect(accountsResponse.ok()).toBeTruthy()
   expect(await accountsResponse.json()).toEqual(

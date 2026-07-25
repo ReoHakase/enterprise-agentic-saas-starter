@@ -22,9 +22,7 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
   const origin = Reflect.get(metadata, "agentE2EApiOrigin")
   if (
     typeof origin !== "string" ||
-    !/^http:\/\/api\.agent-e2e\.enterprise-agentic-saas\.localhost:\d+$/u.test(
-      origin
-    )
+    !/^http:\/\/127\.0\.0\.1:\d+$/u.test(origin)
   ) {
     throw new Error("Scripted Agent E2E API origin metadata is invalid")
   }
@@ -76,12 +74,13 @@ const readCreatedIssue = async (
   request: APIRequestContext,
   input: {
     apiOrigin: string
+    cookie: string
     organizationId: string
     origin: string
   }
 ): Promise<Record<string, unknown>> => {
   const response = await request.get(`${input.apiOrigin}/issues`, {
-    headers: { origin: input.origin },
+    headers: { cookie: input.cookie, origin: input.origin },
     params: {
       organizationId: input.organizationId,
       search: SCRIPTED_ISSUE_TITLE,
@@ -106,6 +105,7 @@ const assertAuditPersistence = async (
   input: {
     apiOrigin: string
     actionId: string
+    cookie: string
     issueId: string
     organizationId: string
     origin: string
@@ -114,7 +114,7 @@ const assertAuditPersistence = async (
   const response = await request.get(
     `${input.apiOrigin}/organizations/${input.organizationId}/audit-logs`,
     {
-      headers: { origin: input.origin },
+      headers: { cookie: input.cookie, origin: input.origin },
       params: { action: "issue.created" },
     }
   )
@@ -140,13 +140,13 @@ const assertAuditPersistence = async (
 
 const assertUsagePersistence = async (
   request: APIRequestContext,
-  input: { apiOrigin: string; origin: string }
+  input: { apiOrigin: string; cookie: string; origin: string }
 ): Promise<void> => {
   await expect
     .poll(async () => {
       const response = await request.get(
         `${input.apiOrigin}/agent/usage/monthly`,
-        { headers: { origin: input.origin } }
+        { headers: { cookie: input.cookie, origin: input.origin } }
       )
       if (!response.ok()) return null
       const usage: unknown = await response.json()
@@ -174,11 +174,15 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   await page.getByRole("button", { name: "GitHub" }).click()
   await page.getByRole("button", { name: /oauth-alice/u }).click()
   await expect(page).toHaveURL(/\/settings\/organizations$/u)
+  const origin = new URL(page.url()).origin
+  const cookieHeader = (await context.cookies())
+    .map(({ name, value }) => `${name}=${value}`)
+    .join("; ")
 
   const organizationResponse = await context.request.post(
     `${apiOrigin}/organizations`,
     {
-      headers: { origin: new URL(page.url()).origin },
+      headers: { cookie: cookieHeader, origin },
       data: {
         name: `Scripted Agent ${runSuffix}`,
         slug: organizationSlug,
@@ -233,16 +237,16 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
 
   const messagesResponse = await context.request.get(
     `${apiOrigin}/agent/threads/${threadId}/messages`,
-    { headers: { origin: new URL(page.url()).origin } }
+    { headers: { cookie: cookieHeader, origin } }
   )
   expect(messagesResponse.status()).toBe(200)
   const canonicalReceipt = assertCanonicalMessages(
     await messagesResponse.json()
   )
 
-  const origin = new URL(page.url()).origin
   const createdIssue = await readCreatedIssue(context.request, {
     apiOrigin,
+    cookie: cookieHeader,
     organizationId: organization.id,
     origin,
   })
@@ -254,11 +258,16 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   await assertAuditPersistence(context.request, {
     actionId: canonicalReceipt.actionId,
     apiOrigin,
+    cookie: cookieHeader,
     issueId,
     organizationId: organization.id,
     origin,
   })
-  await assertUsagePersistence(context.request, { apiOrigin, origin })
+  await assertUsagePersistence(context.request, {
+    apiOrigin,
+    cookie: cookieHeader,
+    origin,
+  })
 
   await page.reload()
   await page.getByRole("button", { name: "Open Agent" }).click()

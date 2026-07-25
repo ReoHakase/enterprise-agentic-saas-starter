@@ -19,6 +19,7 @@ describe("Agent E2E environment", () => {
     expect(environment.apiOrigin).toMatch(
       /^http:\/\/api\.agent-e2e\.enterprise-agentic-saas\.localhost:\d+$/
     )
+    expect(environment.apiLoopbackOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
     expect(environment.databaseOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
     expect(environment.apiPort).toBe(environment.webPort + 1)
     expect(environment.githubPort).toBe(environment.webPort + 2)
