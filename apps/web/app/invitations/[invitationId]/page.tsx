@@ -1,4 +1,4 @@
-import { InvitationRouteFrame } from "@/components/public-route-frame"
+import { InvitationRouteFrame } from "@/components/public-route-frame/public-route-frame"
 import {
   getInvitationContext,
   InvitationDecisionPanel,

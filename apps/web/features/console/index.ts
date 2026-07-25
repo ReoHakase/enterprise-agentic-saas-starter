@@ -4,7 +4,7 @@ export {
   isStepUpRequiredError,
   toConsoleApiError,
 } from "./api"
-export { ConsoleRouteErrorBoundary } from "./components/console-route-error-boundary.client"
+export { ConsoleRouteErrorBoundary } from "./components/console-route-error-boundary.client/console-route-error-boundary.client"
 export {
   AccountSettingsRouteSkeleton,
   ConsoleRouteSkeleton,
@@ -14,7 +14,7 @@ export {
   OnboardingRouteSkeleton,
   OrganizationsRouteSkeleton,
   OrganizationSettingsRouteSkeleton,
-} from "./components/console-route-skeletons"
+} from "./components/console-route-skeletons/console-route-skeletons"
 export { showConsoleApiErrorToast } from "./error-toast"
 export {
   clearConsoleApiFieldError,

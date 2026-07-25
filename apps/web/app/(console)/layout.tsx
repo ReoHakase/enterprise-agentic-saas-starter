@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 import { Suspense } from "react"
 
-import { ConsoleShellSkeleton } from "@/components/console-route-suspense"
-import { ConsoleShell } from "@/components/console-shell"
+import { ConsoleShellSkeleton } from "@/components/console-route-suspense/console-route-suspense"
+import { ConsoleShell } from "@/components/console-shell/console-shell"
 import { getConsoleContext } from "@/lib/server/console-context"
 
 const consoleShellFallback = <ConsoleShellSkeleton />

@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 
-import { RootRouteError } from "@/components/public-route-error-boundary.client"
+import { RootRouteError } from "@/components/public-route-error-boundary.client/public-route-error-boundary.client"
 
 export default function ErrorPage({
   error,

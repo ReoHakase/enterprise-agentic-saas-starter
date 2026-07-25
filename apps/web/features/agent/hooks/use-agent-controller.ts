@@ -29,9 +29,9 @@ import { executeAgentClientTool } from "../client-tools"
 import type {
   AgentComposerHandle,
   AgentComposerSnapshot,
-} from "../components/agent-composer"
-import { useAgentFormRegistry } from "../components/form-registry"
-import { useAgentThreadRuntimeState } from "../components/runtime-state"
+} from "../components/agent-composer/agent-composer"
+import { useAgentFormRegistry } from "../components/form-registry/form-registry"
+import { useAgentThreadRuntimeState } from "../components/runtime-state/runtime-state"
 import { isAgentHotkeyAllowed } from "../hotkey-scope"
 import { extractPendingActionIds } from "../pending-action-ids"
 import { agentKeys, agentThreadContextQueryOptions } from "../queries"

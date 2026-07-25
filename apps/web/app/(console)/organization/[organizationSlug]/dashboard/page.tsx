@@ -20,8 +20,8 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
-import { LinkButton } from "@/components/link-button"
-import { PageShell } from "@/components/page-shell"
+import { LinkButton } from "@/components/link-button/link-button"
+import { PageShell } from "@/components/page-shell/page-shell"
 import {
   listIssues,
   defaultIssueSearchState,

@@ -65,9 +65,9 @@ export default defineConfig({
   overrides: [
     {
       files: [
-        "features/members/components/invitations-section.tsx",
-        "features/members/components/members-table.tsx",
-        "features/organizations/components/organizations-page.tsx",
+        "features/members/components/invitations-section/invitations-section.tsx",
+        "features/members/components/members-table/members-table.tsx",
+        "features/organizations/components/organizations-page/organizations-page.tsx",
       ],
       rules: {
         // TanStack Tableのmemoized column cell/header rendererをnested componentと誤認する。

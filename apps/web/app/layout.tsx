@@ -4,7 +4,7 @@ import "@enterprise-agentic-saas/ui/globals.css"
 import type { Metadata, Viewport } from "next"
 import { Geist_Mono, Inter } from "next/font/google"
 
-import { Providers } from "@/components/providers"
+import { Providers } from "@/components/providers/providers"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 

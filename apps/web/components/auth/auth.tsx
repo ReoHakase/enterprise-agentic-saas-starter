@@ -4,13 +4,13 @@ import type { AuthView } from "@better-auth-ui/core"
 import { useAuth } from "@better-auth-ui/react"
 import { type ComponentType, useEffect } from "react"
 
-import { ForgotPassword } from "./forgot-password"
-import { MagicLink } from "./magic-link"
-import type { SocialLayout } from "./provider-buttons"
-import { ResetPassword } from "./reset-password"
-import { SignIn } from "./sign-in"
-import { SignOut } from "./sign-out"
-import { SignUp } from "./sign-up"
+import { ForgotPassword } from "./forgot-password/forgot-password"
+import { MagicLink } from "./magic-link/magic-link"
+import type { SocialLayout } from "./provider-buttons/provider-buttons"
+import { ResetPassword } from "./reset-password/reset-password"
+import { SignIn } from "./sign-in/sign-in"
+import { SignOut } from "./sign-out/sign-out"
+import { SignUp } from "./sign-up/sign-up"
 
 export type AuthProps = {
   className?: string

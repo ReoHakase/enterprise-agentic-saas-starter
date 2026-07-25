@@ -8,7 +8,7 @@ import { membersQueryOptions } from "@/features/console"
 import { issuesQueryOptions, useIssueSearchState } from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
 
-import type { AgentMentionValue } from "../components/agent-composer"
+import type { AgentMentionValue } from "../components/agent-composer/agent-composer"
 
 export const useAgentMentionCandidates = (organizationId: string) => {
   const pathname = usePathname()

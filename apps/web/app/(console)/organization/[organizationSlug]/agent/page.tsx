@@ -2,7 +2,7 @@ import { BotIcon } from "lucide-react"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
-import { PageShell } from "@/components/page-shell"
+import { PageShell } from "@/components/page-shell/page-shell"
 import { OrganizationActivationGate } from "@/features/organizations"
 import { getConsoleContext } from "@/lib/server/console-context"
 

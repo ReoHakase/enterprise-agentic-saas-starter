@@ -71,7 +71,7 @@ linked_adrs:
 - [x] ADR-007とactive exec planを作成した
 - [x] API platform境界を移動した
 - [x] Web feature公開境界を移動した
-- [ ] Web componentをdirectory化した
+- [x] Web componentをdirectory化した
 - [ ] UI componentをdirectory化した
 - [ ] StorybookをCSF Nextへ移行した
 - [ ] package所有testを整備した
@@ -107,6 +107,7 @@ linked_adrs:
 | `bun run --cwd apps/web lint`      | success | feature公開入口移行後、warningなし                      |
 | `bun run --cwd apps/web typecheck` | success | feature公開入口移行後、型errorなし                      |
 | `bun run --cwd apps/web test`      | success | 70 files、317 tests                                     |
+| Web component directory検査        | success | app-wideとfeature componentの直下fileなし               |
 
 ## リスクとrollback
 

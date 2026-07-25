@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, FileQuestionIcon } from "lucide-react"
 
-import { AppState } from "@/components/app-state"
-import { LinkButton } from "@/components/link-button"
+import { AppState } from "@/components/app-state/app-state"
+import { LinkButton } from "@/components/link-button/link-button"
 
 export default function NotFound() {
   return (

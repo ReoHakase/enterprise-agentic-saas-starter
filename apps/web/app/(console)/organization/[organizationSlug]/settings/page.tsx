@@ -1,9 +1,9 @@
 import { ShieldAlertIcon } from "lucide-react"
 import { notFound } from "next/navigation"
 
-import { AppState } from "@/components/app-state"
-import { LinkButton } from "@/components/link-button"
-import { PageShell } from "@/components/page-shell"
+import { AppState } from "@/components/app-state/app-state"
+import { LinkButton } from "@/components/link-button/link-button"
+import { PageShell } from "@/components/page-shell/page-shell"
 import {
   OrganizationActivationGate,
   OrganizationSettingsForm,

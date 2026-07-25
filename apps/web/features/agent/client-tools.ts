@@ -9,7 +9,7 @@ import {
 import type {
   AgentFormSnapshot,
   AgentIssueFormValues,
-} from "./components/form-registry"
+} from "./components/form-registry/form-registry"
 
 const boundedString = (maximum: number) =>
   v.pipe(v.string(), v.maxLength(maximum))

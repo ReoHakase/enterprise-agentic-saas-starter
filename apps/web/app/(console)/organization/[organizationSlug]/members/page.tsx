@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 
-import { PageShell } from "@/components/page-shell"
+import { PageShell } from "@/components/page-shell/page-shell"
 import { getConsoleApiErrorText } from "@/features/console"
 import { MembersPage as MembersPageContent } from "@/features/members"
 import type { OrganizationInvitation } from "@/features/members"
