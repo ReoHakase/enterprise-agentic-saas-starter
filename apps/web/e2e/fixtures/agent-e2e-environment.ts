@@ -49,7 +49,7 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     databasePort,
     webOrigin: `http://${cookieDomain}:${webPort}`,
     apiOrigin: `http://api.${cookieDomain}:${apiPort}`,
-    githubOrigin: `http://github.${cookieDomain}:${githubPort}`,
+    githubOrigin: `http://127.0.0.1:${githubPort}`,
     databaseOrigin: `http://127.0.0.1:${databasePort}`,
     cookieDomain,
     temporaryRoot,

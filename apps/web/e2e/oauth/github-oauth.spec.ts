@@ -1,8 +1,7 @@
 import { expect, test } from "../fixtures/test"
 
 const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
-const githubOrigin =
-  "http://github.oauth-e2e.enterprise-agentic-saas.localhost:4101"
+const githubOrigin = "http://127.0.0.1:4101"
 
 test("GitHub emulatorで認証しsessionを永続化できる", async ({
   context,

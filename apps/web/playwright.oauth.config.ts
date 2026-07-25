@@ -4,8 +4,7 @@ import { createOAuthDatabasePath } from "./e2e/fixtures/oauth-database"
 
 const webOrigin = "http://oauth-e2e.enterprise-agentic-saas.localhost:3100"
 const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
-const githubOrigin =
-  "http://github.oauth-e2e.enterprise-agentic-saas.localhost:4101"
+const githubOrigin = "http://127.0.0.1:4101"
 const cookieDomain = "oauth-e2e.enterprise-agentic-saas.localhost"
 const databasePath = createOAuthDatabasePath(process.pid)
 const databaseUrl = `file:${databasePath}`
