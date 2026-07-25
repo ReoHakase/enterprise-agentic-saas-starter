@@ -60,6 +60,10 @@ button/
 componentはfile数にかかわらず常にdirectoryへ置きます。既存の公開subpathは
 `package.json#exports`の参照先だけを変更し、consumer APIを維持します。
 
+複数directoryの公開componentを組み合わせるStorybook専用の利用例だけは、
+`src/components/*.stories.tsx`へ置けます。この例外は本番componentへ適用せず、各公開componentが
+所有directory内に持つ同居storyも省略しません。
+
 `packages/ui/src/**`でbrowserからimport可能なpublic componentと主要patternは、実componentを
 `component`または`render`で描画する近接配置のstoryを持ちます。primitive、provider、portal、
 skeleton、error viewもpublic contractを持つ場合は対象です。type-only file、hook/lib、

@@ -125,6 +125,11 @@ component-name/
 
 画面責務を持つWeb componentは`components/<screen>/{client,server,view,...}.tsx`へ分割し、feature rootへ本番`.tsx`を置きません。private subcomponentはpublicな親story内で実物が描画・操作される場合、個別storyを要求しません。
 
+`packages/ui`で複数directoryの公開componentを組み合わせ、form、overlay、data display、
+navigation等の利用例を検証するstoryに限り、`packages/ui/src/components/*.stories.tsx`へ置けます。
+この配置は個別componentの同居storyを置き換えません。component本体、単一componentだけのstory、
+本番でimportする`.tsx`は`components/`直下へ置かず、必ず所有directoryへ置きます。
+
 ## Controls
 
 Controlsは手動探索と状態共有に使います。Controlsが表示されること自体を回帰テストとは見なしません。
