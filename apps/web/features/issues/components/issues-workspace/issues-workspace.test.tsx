@@ -194,6 +194,29 @@ const renderDetail = (mode: "modal" | "page" = "modal") => {
   return callbacks
 }
 
+const selectOption = async (
+  user: ReturnType<typeof userEvent.setup>,
+  trigger: HTMLElement,
+  name: string | RegExp,
+  assertOption?: (option: HTMLElement) => void
+) => {
+  await user.click(trigger)
+  const option = await waitFor(() => {
+    const clickableOption = screen
+      .getAllByRole("option", { name })
+      .find((candidate) => getComputedStyle(candidate).pointerEvents !== "none")
+    expect(clickableOption).toBeDefined()
+    if (!clickableOption) {
+      throw new Error(
+        `Expected a clickable select option named ${name.toString()}`
+      )
+    }
+    return clickableOption
+  })
+  assertOption?.(option)
+  await user.click(option)
+}
+
 describe("organization issues", () => {
   it("renders the full-width table with the requested columns and filters", async () => {
     const user = userEvent.setup()
@@ -316,10 +339,9 @@ describe("organization issues", () => {
     expect(within(statusFilter).getByTestId("status-all")).toHaveTextContent(
       "All issues"
     )
-    await user.click(statusFilter)
-    const inProgress = screen.getByRole("option", { name: "In progress" })
-    expect(within(inProgress).getByTestId("status-in-progress")).toBeVisible()
-    await user.click(inProgress)
+    await selectOption(user, statusFilter, "In progress", (option) => {
+      expect(within(option).getByTestId("status-in-progress")).toBeVisible()
+    })
     expect(callbacks.onViewChange).toHaveBeenCalledWith({
       status: "in_progress",
       page: 1,
@@ -332,10 +354,9 @@ describe("organization issues", () => {
     expect(
       within(priorityFilter).getByTestId("priority-all")
     ).toHaveTextContent("All priorities")
-    await user.click(priorityFilter)
-    const urgent = screen.getByRole("option", { name: "Urgent" })
-    expect(within(urgent).getByTestId("priority-urgent")).toBeVisible()
-    await user.click(urgent)
+    await selectOption(user, priorityFilter, "Urgent", (option) => {
+      expect(within(option).getByTestId("priority-urgent")).toBeVisible()
+    })
     expect(callbacks.onViewChange).toHaveBeenCalledWith({
       priority: "urgent",
       page: 1,
@@ -346,12 +367,14 @@ describe("organization issues", () => {
       name: "Filter issues by assignee",
     })
     expect(assigneeFilter).toHaveTextContent("All assignees")
-    await user.click(assigneeFilter)
-    const jordanOption = screen.getByRole("option", {
-      name: /Jordan.*jordan@example\.test/u,
-    })
-    expect(within(jordanOption).getByText("JO")).toBeVisible()
-    await user.click(jordanOption)
+    await selectOption(
+      user,
+      assigneeFilter,
+      /Jordan.*jordan@example\.test/u,
+      (option) => {
+        expect(within(option).getByText("JO")).toBeVisible()
+      }
+    )
     expect(callbacks.onViewChange).toHaveBeenCalledWith({
       assignee: "user-2",
       page: 1,
@@ -423,7 +446,7 @@ describe("organization issues", () => {
     expect(callbacks.onRetry).toHaveBeenCalledOnce()
   })
 
-  it("edits issue fields and renders activity with comments", async () => {
+  it("renders activity with comments and loads older items", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
 
@@ -442,6 +465,11 @@ describe("organization issues", () => {
     expect(screen.getByText(/edited at/)).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Load older" }))
     expect(callbacks.onLoadOlder).toHaveBeenCalledOnce()
+  })
+
+  it("edits the issue title and description", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
 
     await user.click(screen.getByRole("button", { name: "Edit issue title" }))
     const title = screen.getByLabelText("Issue title")
@@ -481,9 +509,17 @@ describe("organization issues", () => {
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       description: "Retry safely and report failures.",
     })
+  })
 
-    await user.click(screen.getByRole("combobox", { name: "Issue status" }))
-    await user.click(screen.getByRole("option", { name: "In progress" }))
+  it("updates the issue status and labels", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
+
+    await selectOption(
+      user,
+      screen.getByRole("combobox", { name: "Issue status" }),
+      "In progress"
+    )
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       status: "in_progress",
     })
@@ -498,6 +534,11 @@ describe("organization issues", () => {
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       labels: ["billing", "bug", "compliance"],
     })
+  })
+
+  it("updates the due date and creates a comment", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
 
     const currentDueDate = billingIssue.dueDate
     if (!currentDueDate)
@@ -512,8 +553,11 @@ describe("organization issues", () => {
     expect(screen.getByRole("combobox", { name: "Due hour" })).toBeVisible()
     expect(screen.getByRole("combobox", { name: "Due minute" })).toBeVisible()
     callbacks.onUpdate.mockClear()
-    await user.click(screen.getByRole("combobox", { name: "Due hour" }))
-    await user.click(screen.getByRole("option", { name: nextDueHour }))
+    await selectOption(
+      user,
+      screen.getByRole("combobox", { name: "Due hour" }),
+      nextDueHour
+    )
     expect(callbacks.onUpdate).not.toHaveBeenCalled()
     await user.keyboard("{Escape}")
     expect(callbacks.onUpdate).toHaveBeenCalledOnce()
@@ -609,8 +653,7 @@ describe("organization issues", () => {
     )
 
     const status = screen.getByRole("combobox", { name: "Issue status" })
-    await user.click(status)
-    await user.click(screen.getByRole("option", { name: "In progress" }))
+    await selectOption(user, status, "In progress")
 
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       status: "in_progress",
