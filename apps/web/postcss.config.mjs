@@ -1,1 +1,5 @@
-export { default } from "@enterprise-agentic-saas/ui/postcss.config"
+const config = {
+  plugins: { "@tailwindcss/postcss": {} },
+}
+
+export default config

@@ -81,6 +81,7 @@
     "@storybook/addon-themes": "catalog:",
     "@storybook/addon-vitest": "catalog:",
     "@storybook/react-vite": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@testing-library/dom": "catalog:",
     "@testing-library/jest-dom": "catalog:",
