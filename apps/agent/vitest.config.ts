@@ -5,8 +5,8 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: "./coverage/node",
       include: [
         "src/mastra/adapters/telemetry/privacy.ts",
         "src/mastra/core/budget/context.ts",
@@ -26,10 +26,10 @@ export default defineConfig({
         "src/mastra/tools/issues/write/execute.ts",
       ],
       thresholds: {
-        statements: 95,
-        branches: 90,
+        statements: 97,
+        branches: 92,
         functions: 100,
-        lines: 95,
+        lines: 98,
       },
     },
   },

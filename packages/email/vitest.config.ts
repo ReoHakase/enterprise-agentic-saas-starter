@@ -5,8 +5,8 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: "./coverage/node",
       include: [
         "src/components/app-email.tsx",
         "src/config.ts",
@@ -21,10 +21,10 @@ export default defineConfig({
         "src/templates/verification.tsx",
       ],
       thresholds: {
-        statements: 90,
-        branches: 65,
-        functions: 90,
-        lines: 90,
+        statements: 97,
+        branches: 89,
+        functions: 100,
+        lines: 97,
       },
     },
   },

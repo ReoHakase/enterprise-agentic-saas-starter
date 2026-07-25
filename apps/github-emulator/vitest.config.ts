@@ -5,8 +5,8 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: "./coverage/node",
       include: [
         "src/config/index.ts",
         "src/fixtures/github.ts",
@@ -14,10 +14,10 @@ export default defineConfig({
         "src/state/lifecycle.ts",
       ],
       thresholds: {
-        statements: 90,
-        branches: 80,
-        functions: 90,
-        lines: 90,
+        statements: 98,
+        branches: 97,
+        functions: 95,
+        lines: 100,
       },
     },
   },

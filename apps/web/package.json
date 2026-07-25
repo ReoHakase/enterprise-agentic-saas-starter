@@ -30,6 +30,7 @@
     "test:browser:app:chromium": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.app.config.ts --project=w6-chromium",
     "test:browser:app:webkit": "bun run scripts/run-w6-webkit.ts",
     "test:browser:components": "vitest run --project=storybook-light --project=storybook-dark --project=browser",
+    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light --project=storybook-dark --project=browser",
     "test:browser:mock-api": "bun run test/app/fixtures/mock-api.ts",
     "test:e2e": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.deterministic.config.ts",
     "test:e2e:full": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.full.config.ts",

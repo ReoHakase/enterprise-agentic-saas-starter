@@ -8,6 +8,42 @@ import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
+const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
+const nodeCoverageIncludes = [
+  "components/auth/runtime-guards.ts",
+  "features/account/components/**/*.tsx",
+  "features/account/multi-session-client.ts",
+  "features/account/schema.ts",
+  "features/account/security-client.ts",
+  "features/auth/error.ts",
+  "features/auth/schema.ts",
+  "features/console/api.ts",
+  "features/issues/api.ts",
+  "features/issues/components/**/*.{ts,tsx}",
+  "features/issues/schema.ts",
+  "features/members/api.ts",
+  "features/members/components/**/*.tsx",
+  "features/members/schema.ts",
+  "features/organizations/components/**/*.tsx",
+  "features/organizations/schema.ts",
+  "lib/auth/redirect-to.ts",
+  "lib/observability/sentry-runtime.ts",
+  "lib/observability/sentry-scrub.ts",
+  "lib/server/auth-session-response.ts",
+]
+const browserCoverageIncludes = [
+  "components/**/*.{ts,tsx}",
+  "features/**/components/**/*.{ts,tsx}",
+  "features/**/hooks/**/*.{ts,tsx}",
+  "hooks/**/*.{ts,tsx}",
+]
+const coverageExcludes = [
+  "**/*.d.ts",
+  "**/*.stories.tsx",
+  "**/*.test.{ts,tsx}",
+  "**/*.browser.test.{ts,tsx}",
+  "**/test-support/**",
+]
 const browserAliases = {
   "@sentry/nextjs": path.join(
     dirname,
@@ -63,38 +99,26 @@ export default defineConfig({
   },
   test: {
     coverage: {
-      enabled: unitCoverageEnabled,
+      enabled: unitCoverageEnabled || browserCoverageEnabled,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
-      include: [
-        "components/auth/runtime-guards.ts",
-        "features/account/components/*.tsx",
-        "features/account/multi-session-client.ts",
-        "features/account/schema.ts",
-        "features/account/security-client.ts",
-        "features/auth/error.ts",
-        "features/auth/schema.ts",
-        "features/console/api.ts",
-        "features/issues/api.ts",
-        "features/issues/components/*.{ts,tsx}",
-        "features/issues/schema.ts",
-        "features/members/api.ts",
-        "features/members/components/*.tsx",
-        "features/members/schema.ts",
-        "features/organizations/components/*.tsx",
-        "features/organizations/schema.ts",
-        "lib/auth/redirect-to.ts",
-        "lib/observability/sentry-runtime.ts",
-        "lib/observability/sentry-scrub.ts",
-        "lib/server/auth-session-response.ts",
-      ],
-      thresholds: {
-        statements: 75,
-        branches: 55,
-        functions: 65,
-        lines: 75,
-      },
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: browserCoverageEnabled
+        ? "./coverage/browser"
+        : "./coverage/node",
+      include: browserCoverageEnabled
+        ? browserCoverageIncludes
+        : nodeCoverageIncludes,
+      exclude: coverageExcludes,
+      ...(browserCoverageEnabled
+        ? {}
+        : {
+            thresholds: {
+              statements: 85,
+              branches: 71,
+              functions: 81,
+              lines: 86,
+            },
+          }),
     },
     projects: [
       {

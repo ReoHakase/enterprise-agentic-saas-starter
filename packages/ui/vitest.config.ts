@@ -7,6 +7,25 @@ import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
+const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
+const nodeCoverageIncludes = [
+  "src/components/button/button.tsx",
+  "src/components/dialog/dialog.tsx",
+  "src/lib/create-cropped-image.ts",
+  "src/lib/utils.ts",
+]
+const browserCoverageIncludes = [
+  "src/components/**/*.{ts,tsx}",
+  "src/hooks/**/*.{ts,tsx}",
+  "src/lib/**/*.{ts,tsx}",
+]
+const coverageExcludes = [
+  "**/*.d.ts",
+  "**/*.stories.tsx",
+  "**/*.test.{ts,tsx}",
+  "**/*.browser.test.{ts,tsx}",
+  "**/test-support/**",
+]
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -35,22 +54,26 @@ export default defineConfig({
   },
   test: {
     coverage: {
-      enabled: unitCoverageEnabled,
+      enabled: unitCoverageEnabled || browserCoverageEnabled,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
-      include: [
-        "src/components/button.tsx",
-        "src/components/dialog.tsx",
-        "src/lib/create-cropped-image.ts",
-        "src/lib/utils.ts",
-      ],
-      thresholds: {
-        statements: 70,
-        branches: 60,
-        functions: 65,
-        lines: 70,
-      },
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: browserCoverageEnabled
+        ? "./coverage/browser"
+        : "./coverage/node",
+      include: browserCoverageEnabled
+        ? browserCoverageIncludes
+        : nodeCoverageIncludes,
+      exclude: coverageExcludes,
+      ...(browserCoverageEnabled
+        ? {}
+        : {
+            thresholds: {
+              statements: 91,
+              branches: 83,
+              functions: 87,
+              lines: 90,
+            },
+          }),
     },
     projects: [
       {

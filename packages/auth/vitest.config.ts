@@ -5,8 +5,8 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: "v8",
-      reporter: ["text", "json-summary"],
-      reportsDirectory: "./coverage",
+      reporter: ["text", "json-summary", "lcov", "html"],
+      reportsDirectory: "./coverage/node",
       include: [
         "src/client.ts",
         "src/github-oauth.ts",
@@ -17,10 +17,10 @@ export default defineConfig({
         "src/session-organization.ts",
       ],
       thresholds: {
-        statements: 75,
-        branches: 60,
-        functions: 70,
-        lines: 75,
+        statements: 92,
+        branches: 90,
+        functions: 100,
+        lines: 92,
       },
     },
   },

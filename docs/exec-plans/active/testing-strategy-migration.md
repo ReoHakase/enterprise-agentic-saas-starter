@@ -77,7 +77,7 @@ linked_adrs:
 - [x] package所有testを整備した
 - [x] W1-W6を実装した
 - [x] E1/E2を分離した
-- [ ] coverageを確定した
+- [x] coverageを確定した
 - [ ] affected CIを実装した
 - [ ] 文書をcutoverしplanをcompletedへ移した
 
@@ -131,6 +131,10 @@ linked_adrs:
 | E2 config静的検査                     | success | 2 canaryを列挙し、有料実行は未実施                      |
 | E2 approval、secret guard             | success | どちらか一方が欠ける場合はserver起動前に拒否            |
 | root公開test script                   | success | 費用境界別の5 scriptだけを公開                          |
+| `bun run test`                        | success | root 23 tests、9 workspaceの全testが成功                |
+| Node coverage threshold               | success | 8 workspaceで実測値の整数切り下げ以上を強制             |
+| Web browser coverage                  | success | 109 tests、独立reportを`coverage/browser`へ生成         |
+| UI browser coverage                   | success | 30 tests、独立reportを`coverage/browser`へ生成          |
 
 ## リスクとrollback
 

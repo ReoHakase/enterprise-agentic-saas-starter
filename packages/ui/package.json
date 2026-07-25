@@ -55,6 +55,7 @@
     "storybook": "node node_modules/storybook/dist/bin/dispatcher.js dev --port 6006 --no-open",
     "test": "vitest run --project=unit",
     "test:browser": "vitest run --project=storybook-light --project=storybook-dark",
+    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light --project=storybook-dark",
     "test:storybook": "vitest run --project=storybook-light --project=storybook-dark",
     "typecheck": "tsc --noEmit"
   },
