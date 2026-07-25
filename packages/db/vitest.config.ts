@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config"
 
 export default defineConfig({
   test: {
+    forceRerunTriggers: ["drizzle/**", "src/schema/**", "drizzle.config.ts"],
     coverage: {
       enabled: true,
       provider: "v8",

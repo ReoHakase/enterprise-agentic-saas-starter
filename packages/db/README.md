@@ -87,4 +87,4 @@ bun run dev:db:seed
 
 ## Test
 
-`src/migrations.test.ts` と `src/files.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、file owner tenant FK、profile image subject/ready/idempotency制約、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。
+`src/migrations/{fresh,upgrades,invariants,lifecycle}.test.ts` と `src/files.test.ts` はin-memory/fresh DB、legacy data変換、membership/super admin invariant、file owner tenant FK、profile image subject/ready/idempotency制約、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。
