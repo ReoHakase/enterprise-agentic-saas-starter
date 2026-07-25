@@ -114,6 +114,13 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     await page.getByRole("button", { name: "GitHub" }).click()
     await page.getByRole("button", { name: /oauth-alice/ }).click()
     await expect(page).toHaveURL(/\/settings\/account$/u)
+    const cookieHeader = (await context.cookies())
+      .map(({ name, value }) => `${name}=${value}`)
+      .join("; ")
+    const authenticatedHeaders = {
+      cookie: cookieHeader,
+      origin: new URL(page.url()).origin,
+    }
 
     const generateOptions = page.waitForResponse(
       (response) =>
@@ -131,7 +138,8 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     await expect(page.getByText("Passkey added", { exact: true })).toBeVisible()
 
     const listAfterRegistration = await context.request.get(
-      `${apiOrigin}/auth/passkey/list-user-passkeys`
+      `${apiLoopbackOrigin}/auth/passkey/list-user-passkeys`,
+      { headers: authenticatedHeaders }
     )
     expect(listAfterRegistration.status()).toBe(200)
     expect(await listAfterRegistration.json()).toEqual([
@@ -159,7 +167,8 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     ).toBeVisible()
 
     const listAfterDeletion = await context.request.get(
-      `${apiOrigin}/auth/passkey/list-user-passkeys`
+      `${apiLoopbackOrigin}/auth/passkey/list-user-passkeys`,
+      { headers: authenticatedHeaders }
     )
     expect(listAfterDeletion.status()).toBe(200)
     expect(await listAfterDeletion.json()).toEqual([])
