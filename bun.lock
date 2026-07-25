@@ -9,6 +9,7 @@
         "@commitlint/config-conventional": "21.2.0",
         "@commitlint/types": "21.2.0",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
+        "@socketsecurity/bun-security-scanner": "catalog:",
         "@spotlightjs/spotlight": "catalog:",
         "jscpd": "catalog:",
         "knip": "catalog:",
@@ -310,6 +311,7 @@
     "@sentry/cli": "3.6.2",
     "@sentry/cloudflare": "10.67.0",
     "@sentry/nextjs": "10.67.0",
+    "@socketsecurity/bun-security-scanner": "1.1.2",
     "@spotlightjs/spotlight": "4.11.8",
     "@storybook/addon-a11y": "10.5.3",
     "@storybook/addon-docs": "10.5.3",
@@ -1567,6 +1569,8 @@
     "@smithy/util-waiter": ["@smithy/util-waiter@4.5.7", "", { "dependencies": { "@smithy/core": "^3.29.2", "tslib": "^2.6.2" } }, "sha512-9NFs7MyxFBEQenFHrveJK/rirLSnYAgCMfAqKvvA+UlyzJCKFc51TYKbMUv5rGsM4bQ419Fw6KKgHc53QyJ30w=="],
 
     "@socket.io/component-emitter": ["@socket.io/component-emitter@3.1.2", "", {}, "sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA=="],
+
+    "@socketsecurity/bun-security-scanner": ["@socketsecurity/bun-security-scanner@1.1.2", "", {}, "sha512-TdsAg6SMolubyZ6HfIjLWlANfHvhV6i7pdWof4OQ33zPEwXJm2ilA755levHMR618MKq22+06Ag8efiVKowxqA=="],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.17", "", {}, "sha512-Z92FwKpCtfaW1V0jTU/fh3QzYEZN8wDwrzRIBoADCJfn4mJCNcJN/XegifX7BDrQ8/h9Xh/JnbyMchL0FqXrkg=="],
 

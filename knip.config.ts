@@ -20,6 +20,11 @@ const config: KnipConfig = {
         "*.config.{js,mjs,ts}",
         "scripts/**/*.ts",
       ],
+      // Issue: Knip's Bun plugin only parses bunfig.toml `test.preload` and does
+      // not recognize `install.security.scanner`. Owner: CI/quality maintainers.
+      // Reason: Bun dynamically loads this scanner during install. Remove when
+      // Knip recognizes dependencies configured by `install.security.scanner`.
+      ignoreDependencies: ["@socketsecurity/bun-security-scanner"],
     },
     "apps/agent": {
       entry: ["src/mastra/index.ts!", "src/mastra/server.ts"],
