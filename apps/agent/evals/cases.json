@@ -1,0 +1,26 @@
+{
+  "version": "2026-07-25",
+  "cases": [
+    {
+      "id": "agent-stack-read",
+      "kind": "read",
+      "trials": 3,
+      "prompt": "Find the Issue titled \"Synthetic tenant boundary\" with the Issue search tool and report its priority. Do not create or update anything.",
+      "availableTools": ["search_issues", "get_issue"],
+      "requiredTool": "search_issues",
+      "expectedPriority": "high"
+    },
+    {
+      "id": "agent-stack-approved-write",
+      "kind": "write",
+      "trials": 3,
+      "prompt": "Create an Issue titled \"Synthetic approved write\" with priority high.",
+      "availableTools": ["create_issue"],
+      "requiredTool": "create_issue",
+      "expectedIssue": {
+        "priority": "high",
+        "title": "Synthetic approved write"
+      }
+    }
+  ]
+}
