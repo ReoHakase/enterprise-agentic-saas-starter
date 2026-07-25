@@ -99,7 +99,7 @@ export default defineConfig({
     },
     {
       command: "bun --no-env-file e2e/fixtures/agent-stack.ts",
-      url: `${environment.apiOrigin}/ready`,
+      url: `http://127.0.0.1:${environment.apiPort}/ready`,
       reuseExistingServer: false,
       timeout: 240_000,
       env: {
@@ -110,7 +110,7 @@ export default defineConfig({
     },
     {
       command: `next build && next start --hostname 0.0.0.0 --port ${environment.webPort}`,
-      url: `${environment.webOrigin}/auth/sign-in`,
+      url: `http://127.0.0.1:${environment.webPort}/auth/sign-in`,
       reuseExistingServer: false,
       timeout: 180_000,
       env: {

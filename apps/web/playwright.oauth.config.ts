@@ -110,7 +110,7 @@ export default defineConfig({
     },
     {
       command: "bun --no-env-file e2e/fixtures/oauth-api.ts",
-      url: `${apiOrigin}/ready`,
+      url: "http://127.0.0.1:3101/ready",
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
@@ -120,7 +120,7 @@ export default defineConfig({
     },
     {
       command: "next build && next start --hostname 0.0.0.0 --port 3100",
-      url: `${webOrigin}/auth/sign-in`,
+      url: "http://127.0.0.1:3100/auth/sign-in",
       reuseExistingServer: false,
       timeout: 180_000,
       env: {
