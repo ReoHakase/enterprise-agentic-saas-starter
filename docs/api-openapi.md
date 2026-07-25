@@ -78,11 +78,11 @@ private Agent appとdevelopment/test appはpublic API appへ合成しないた�
 routeの異なる性質を一つのavailabilityへ混ぜず、次のvendor extensionへ直交して記録します。
 standard OpenAPI `security`を認証要件の正本にし、extensionはconsumer向け分類に使います。
 
-| extension | allowed value | 意味 |
-| --- | --- | --- |
-| `x-route-status` | `enabled`, `configured-disabled` | product設定上の利用可否 |
-| `x-auth-context` | `none`, `session-cookie`, `bearer`, `oauth-callback` | 呼出context |
-| `x-audience` | `general`, `first-party-web`, `invitation-recipient` | 想定caller |
+| extension        | allowed value                                        | 意味                    |
+| ---------------- | ---------------------------------------------------- | ----------------------- |
+| `x-route-status` | `enabled`, `configured-disabled`                     | product設定上の利用可否 |
+| `x-auth-context` | `none`, `session-cookie`, `bearer`, `oauth-callback` | 呼出context             |
+| `x-audience`     | `general`, `first-party-web`, `invitation-recipient` | 想定caller              |
 
 email/password sign-up、email/password sign-in、password reset等が実生成schemaに存在しても、現在の
 設定で400のdisabled responseを返すrouteは`x-route-status: configured-disabled`と明示します。
@@ -91,12 +91,12 @@ recipient routeがsession cookieを要求する等、各軸を同時に表現で
 
 ## 入口
 
-| Path | 用途 |
-| --- | --- |
-| `/health` | process/Workerのliveness。依存サービスへ接続しない |
-| `/ready` | Turso/libSQLへ`select 1`を行うreadiness。失敗時は安全な503 |
-| `/openapi` | Scalar API Reference |
-| `/openapi/json` | app routeとBetter Auth routeを統合したOpenAPI 3.0.3 JSON |
+| Path            | 用途                                                       |
+| --------------- | ---------------------------------------------------------- |
+| `/health`       | process/Workerのliveness。依存サービスへ接続しない         |
+| `/ready`        | Turso/libSQLへ`select 1`を行うreadiness。失敗時は安全な503 |
+| `/openapi`      | Scalar API Reference                                       |
+| `/openapi/json` | app routeとBetter Auth routeを統合したOpenAPI 3.0.3 JSON   |
 
 API consumer向けreferenceの入口は`/openapi`だけとし、Better Auth既定の`/auth/reference`は404にします。
 authoringの正本はElysia route/schema/pluginのTypeScriptです。Scalarへ本番の認証情報や内部情報を

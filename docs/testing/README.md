@@ -76,16 +76,16 @@ privacy、tool orderはdeterministic coreでhard assertionにし、browserは配
 
 ## L0からL7
 
-| level | 主対象 | browser | real model | 公開script |
-| --- | --- | ---: | ---: | --- |
-| L0 | lint、型検査、依存境界、バンドル分離 | no | no | `check` |
-| L1 | pure unit、domain、schema、state reducer | no | no | `test` |
-| L2 | tool executor、scripted Agent loop | no | no | `test` |
-| L3 | repository、HTTP、private API、temporary DB | no | no | `test` |
-| L4 | Storybook、Browser Mode、a11y、feature integration | yes | no | `test:browser` |
-| L5 | E1 mocked journey / E2 free full-stack journey | yes | no | `test:e2e` |
-| L6 | browserless real-model contract/stack/stability eval | no | yes | `test:eval:agent` |
-| L7 | 固定2本のfull-stack paid canaryを各1回 | yes | yes | `test:e2e:agent` |
+| level | 主対象                                               | browser | real model | 公開script        |
+| ----- | ---------------------------------------------------- | ------: | ---------: | ----------------- |
+| L0    | lint、型検査、依存境界、バンドル分離                 |      no |         no | `check`           |
+| L1    | pure unit、domain、schema、state reducer             |      no |         no | `test`            |
+| L2    | tool executor、scripted Agent loop                   |      no |         no | `test`            |
+| L3    | repository、HTTP、private API、temporary DB          |      no |         no | `test`            |
+| L4    | Storybook、Browser Mode、a11y、feature integration   |     yes |         no | `test:browser`    |
+| L5    | E1 mocked journey / E2 free full-stack journey       |     yes |         no | `test:e2e`        |
+| L6    | browserless real-model contract/stack/stability eval |      no |        yes | `test:eval:agent` |
+| L7    | 固定2本のfull-stack paid canaryを各1回               |     yes |        yes | `test:e2e:agent`  |
 
 VRTは現在導入しません。L4はinteraction、real CSS/browser behavior、a11yまでを担当し、
 screenshot baselineは[将来方針](visual-regression.md)としてdeferします。
@@ -94,15 +94,15 @@ screenshot baselineは[将来方針](visual-regression.md)としてdeferしま�
 
 invariantは、それを観測できる最も低い層へ置きます。
 
-| 検証対象 | 最低layer | 実物のまま通すもの | 差し替えてよい境界 |
-| --- | --- | --- | --- |
-| pure transition、schema、policy | L1 | domain/core | clock、ID等のport |
-| tool order、approval、usage、stream projection | L2 | prompt、tool schema、executor、runtime | model output、control-plane port |
-| tenant query、transaction、HTTP/private API | L3 | repository、migration済みlibSQL、app composition | external provider |
-| focus、portal、CSS、component state | L4 | production view/controller/hook、real browser DOM | network/model transport |
-| Server Component、cookie、middleware、Worker配線 | L5 | routeと対象stack | LLMだけscripted model |
-| prompt/modelによるtool選択 | L6 | real prompt、real model、対象stack | browser |
-| release時のend-to-end配線 | L7 | temporary full stack、browser、real model | production dataとproduction credential |
+| 検証対象                                         | 最低layer | 実物のまま通すもの                                | 差し替えてよい境界                     |
+| ------------------------------------------------ | --------- | ------------------------------------------------- | -------------------------------------- |
+| pure transition、schema、policy                  | L1        | domain/core                                       | clock、ID等のport                      |
+| tool order、approval、usage、stream projection   | L2        | prompt、tool schema、executor、runtime            | model output、control-plane port       |
+| tenant query、transaction、HTTP/private API      | L3        | repository、migration済みlibSQL、app composition  | external provider                      |
+| focus、portal、CSS、component state              | L4        | production view/controller/hook、real browser DOM | network/model transport                |
+| Server Component、cookie、middleware、Worker配線 | L5        | routeと対象stack                                  | LLMだけscripted model                  |
+| prompt/modelによるtool選択                       | L6        | real prompt、real model、対象stack                | browser                                |
+| release時のend-to-end配線                        | L7        | temporary full stack、browser、real model         | production dataとproduction credential |
 
 適用規則:
 
@@ -133,13 +133,13 @@ bun run test:e2e:agent
 
 論理layerごとにroot scriptを増やさず、runtimeとcostで分けます。
 
-| script | runner | browser | real LLM | 通常PR |
-| --- | --- | ---: | ---: | ---: |
-| `test` | Vitest | no | no | yes |
-| `test:browser` | Vitest Browser Mode / Storybook | yes | no | yes |
-| `test:e2e` | Playwright | yes | no | yes |
-| `test:eval:agent` | Vitest/Mastra eval | no | yes | no |
-| `test:e2e:agent` | Playwright | yes | yes | no |
+| script            | runner                          | browser | real LLM | 通常PR |
+| ----------------- | ------------------------------- | ------: | -------: | -----: |
+| `test`            | Vitest                          |      no |       no |    yes |
+| `test:browser`    | Vitest Browser Mode / Storybook |     yes |       no |    yes |
+| `test:e2e`        | Playwright                      |     yes |       no |    yes |
+| `test:eval:agent` | Vitest/Mastra eval              |      no |      yes |     no |
+| `test:e2e:agent`  | Playwright                      |     yes |      yes |     no |
 
 ## bun run testの範囲
 
@@ -159,16 +159,16 @@ Root scriptはlevel数ではなくruntimeとcostで5本へ集約します。内�
 
 ## 実行頻度
 
-| 場面 | 実行 |
-| --- | --- |
-| 開発中 | workspace `test --changed`、focused test |
-| pre-push | `bun run check` |
-| PR quality | 全workspaceの`test` |
-| PR browser | Storybook/Browser Mode full |
-| PR free E2E | E1、scripted Agent E2、OAuth E2 full |
-| main/nightly | full free suite |
-| Agent behaviour変更 | `test:eval:agent` |
-| release candidate | `test:e2e:agent` |
+| 場面                | 実行                                     |
+| ------------------- | ---------------------------------------- |
+| 開発中              | workspace `test --changed`、focused test |
+| pre-push            | `bun run check`                          |
+| PR quality          | 全workspaceの`test`                      |
+| PR browser          | Storybook/Browser Mode full              |
+| PR free E2E         | E1、scripted Agent E2、OAuth E2 full     |
+| main/nightly        | full free suite                          |
+| Agent behaviour変更 | `test:eval:agent`                        |
+| release candidate   | `test:e2e:agent`                         |
 
 ## changedとCI full
 
@@ -200,24 +200,24 @@ branchへ取り込んだ後、そのbranchを対象にmaintainerが明示実行�
 次の表は開発中にfocused testから必要なfull gateへ広げるための確認指針です。通常CIの
 `test:browser`と`test:e2e`はpathにかかわらずfullで実行します。
 
-| changed path | 開発中に先行する検証 |
-| --- | --- |
-| `apps/api/**/repository*` | `packages/db` full test |
-| `apps/api/**/infrastructure/**` | `packages/db` full test |
-| tenant query/transaction helper | `packages/db` full test |
-| `packages/db/src/schema/**` | API full test + E2 free stack |
-| `packages/db/drizzle/**` | DB full migration + API full test + E2 |
-| `apps/agent/src/mastra/**` | Agent full test + E2 |
-| Service Binding/Wrangler config | API/Agent build + E2 |
-| API client export、一般的なClient UI | Web test + E1 |
-| Web server/Server Component、middleware、auth/session、cookie、Origin/CORS/CSRF、credentialed transport | E2 |
-| Playwright/Web server config | E2 |
-| `packages/auth/**`のOAuth contract/callback | E2 OAuth profile |
-| `apps/github-emulator/**` | E2 OAuth profile |
-| UI primitive | packages/ui browser + Web test |
-| browser-import可能component、story metadata | Storybook/Browser Mode |
-| client Suspense、Skeleton、React Error Boundary | Web Browser Mode |
-| async Server Component、Next.js `loading.tsx` / `error.tsx` | E2 |
+| changed path                                                                                            | 開発中に先行する検証                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `apps/api/**/repository*`                                                                               | `packages/db` full test                |
+| `apps/api/**/infrastructure/**`                                                                         | `packages/db` full test                |
+| tenant query/transaction helper                                                                         | `packages/db` full test                |
+| `packages/db/src/schema/**`                                                                             | API full test + E2 free stack          |
+| `packages/db/drizzle/**`                                                                                | DB full migration + API full test + E2 |
+| `apps/agent/src/mastra/**`                                                                              | Agent full test + E2                   |
+| Service Binding/Wrangler config                                                                         | API/Agent build + E2                   |
+| API client export、一般的なClient UI                                                                    | Web test + E1                          |
+| Web server/Server Component、middleware、auth/session、cookie、Origin/CORS/CSRF、credentialed transport | E2                                     |
+| Playwright/Web server config                                                                            | E2                                     |
+| `packages/auth/**`のOAuth contract/callback                                                             | E2 OAuth profile                       |
+| `apps/github-emulator/**`                                                                               | E2 OAuth profile                       |
+| UI primitive                                                                                            | packages/ui browser + Web test         |
+| browser-import可能component、story metadata                                                             | Storybook/Browser Mode                 |
+| client Suspense、Skeleton、React Error Boundary                                                         | Web Browser Mode                       |
+| async Server Component、Next.js `loading.tsx` / `error.tsx`                                             | E2                                     |
 
 この対応を判定するrepo専用scriptは持ちません。
 

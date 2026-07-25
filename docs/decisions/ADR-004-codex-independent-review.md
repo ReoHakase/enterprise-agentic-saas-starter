@@ -8,6 +8,7 @@ owners:
 supersedes:
   - none
 ---
+
 # ADR-004 Codex独立review
 
 ## 背景

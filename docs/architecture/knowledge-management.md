@@ -81,14 +81,14 @@ local skillへ規範本文を複製しません。skillは関連docsを指し、
 
 ## 情報の配置
 
-| 情報 | 置き場所 | 理由 |
-| --- | --- | --- |
-| 要求、invariant、設計理由、代替案 | architecture文書またはADR | 人間とagentが一覧できる |
-| test layer、runner、cost、実行条件 | `docs/testing/` | test実装とcost判断を分離しない |
-| 一回の大規模変更の順序、進捗、証跡 | active exec plan | 永続仕様と途中状態を混ぜない |
-| CLI、障害対応、rollback checklist | runbook | 実行者が順番に追える |
-| 発火条件、必読文書、workflow、検証command | local skill | 必要な作業時だけ短くloadできる |
-| 型、schema、test、CI gate | code | 規則を機械的に強制できる |
+| 情報                                      | 置き場所                  | 理由                           |
+| ----------------------------------------- | ------------------------- | ------------------------------ |
+| 要求、invariant、設計理由、代替案         | architecture文書またはADR | 人間とagentが一覧できる        |
+| test layer、runner、cost、実行条件        | `docs/testing/`           | test実装とcost判断を分離しない |
+| 一回の大規模変更の順序、進捗、証跡        | active exec plan          | 永続仕様と途中状態を混ぜない   |
+| CLI、障害対応、rollback checklist         | runbook                   | 実行者が順番に追える           |
+| 発火条件、必読文書、workflow、検証command | local skill               | 必要な作業時だけ短くloadできる |
+| 型、schema、test、CI gate                 | code                      | 規則を機械的に強制できる       |
 
 例えば「AgentからDBを直接importしない」はarchitecture文書とADRで理由を説明し、
 `package.json#exports`、Oxlint、Knip、実testで強制します。skillにはその本文をcopyせず、
@@ -109,20 +109,20 @@ last_reviewed: 2026-07-24
 
 `status`:
 
-| 値 | 意味 |
-| --- | --- |
-| `proposed` | 提案中であり、既存のaccepted仕様を上書きしない |
-| `accepted` | repository maintainerが最終内容を承認した規範。main上にあるときだけ有効 |
-| `superseded` | 別文書へ置換済み。置換先linkが必須 |
+| 値           | 意味                                                                    |
+| ------------ | ----------------------------------------------------------------------- |
+| `proposed`   | 提案中であり、既存のaccepted仕様を上書きしない                          |
+| `accepted`   | repository maintainerが最終内容を承認した規範。main上にあるときだけ有効 |
+| `superseded` | 別文書へ置換済み。置換先linkが必須                                      |
 
 `implementation`:
 
-| 値 | 意味 |
-| --- | --- |
-| `active` | code、CI、運用へ反映済み |
-| `planned` | 承認と実装を同じ変更で行う予定 |
-| `deferred` | 方針は保持するが現在は実施しない |
-| `not-applicable` | indexなど実装状態を持たない |
+| 値               | 意味                             |
+| ---------------- | -------------------------------- |
+| `active`         | code、CI、運用へ反映済み         |
+| `planned`        | 承認と実装を同じ変更で行う予定   |
+| `deferred`       | 方針は保持するが現在は実施しない |
+| `not-applicable` | indexなど実装状態を持たない      |
 
 VRTは`status`ではなく`implementation: deferred`で表します。
 

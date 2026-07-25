@@ -80,19 +80,19 @@ Knipとjscpdはmonorepo全体を解析するため、Turbo workspace taskへ分�
 
 現在のhard budgetを次に固定します。
 
-| rule | production core | React / adapter / transport | test / story / E2E / fixture |
-| --- | ---: | ---: | ---: |
-| `complexity`（modified） | 25 | 30 | 50 |
-| `max-depth` | 6 | 6 | 12 |
-| `max-lines` | 500 | 500 | 1000 |
-| `max-lines-per-function` | 250 | 250 | 500 |
-| `max-params` | 6 | 6 | 10 |
-| `max-statements` | 100 | 100 | 500 |
-| `max-nested-callbacks` | 4 | 4 | 10 |
-| `max-classes-per-file` | 2 | 2 | 8 |
-| `unicorn/max-nested-calls` | 6 | 6 | 10 |
-| `react/jsx-max-depth` | 対象外 | 9 | 12 |
-| `vitest/max-nested-describe` | 対象外 | 対象外 | 5 |
+| rule                         | production core | React / adapter / transport | test / story / E2E / fixture |
+| ---------------------------- | --------------: | --------------------------: | ---------------------------: |
+| `complexity`（modified）     |              25 |                          30 |                           50 |
+| `max-depth`                  |               6 |                           6 |                           12 |
+| `max-lines`                  |             500 |                         500 |                         1000 |
+| `max-lines-per-function`     |             250 |                         250 |                          500 |
+| `max-params`                 |               6 |                           6 |                           10 |
+| `max-statements`             |             100 |                         100 |                          500 |
+| `max-nested-callbacks`       |               4 |                           4 |                           10 |
+| `max-classes-per-file`       |               2 |                           2 |                            8 |
+| `unicorn/max-nested-calls`   |               6 |                           6 |                           10 |
+| `react/jsx-max-depth`        |          対象外 |                           9 |                           12 |
+| `vitest/max-nested-describe` |          対象外 |                      対象外 |                            5 |
 
 上限へ合わせるためだけの`part-*`分割や責務のないhelper抽出は行わず、責務境界が明確になる場合だけ
 分割します。値を広げる変更、per-file disable、既存file除外、testへのproduction profile誤適用で
@@ -110,13 +110,13 @@ focused/disabled testの規則は緩めません。
 
 Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 
-| 順序 | profile | selector |
-| ---: | --- | --- |
-| 0 | lint対象外 | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/drizzle/**`、`**/{storybook-static,playwright-report,test-results}/**` |
-| 1 | production core（default） | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る |
-| 2 | React | `apps/web/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}` |
-| 2 | adapter / transport | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`lib/server/**`とconfig、GitHub emulator、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする |
-| 3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}` |
+| 順序 | profile                           | selector                                                                                                                                                                                                                                                                   |
+| ---: | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/drizzle/**`、`**/{storybook-static,playwright-report,test-results}/**` |
+|    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                                                |
+|    2 | React                             | `apps/web/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                                           |
+|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`lib/server/**`とconfig、GitHub emulator、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                                           |
+|    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                                        |
 
 `fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。root
 `oxlint.config.ts`は`lintIgnorePatterns`、`createBudgetOverrides`、`workspaceBoundaryRule`を
@@ -149,7 +149,9 @@ boundary file、story、testをreviewし、対応manifestやrepo専用scannerを
 
 ## Oxfmt
 
-line lengthはOxlint `max-len`でhard failせず、Oxfmtの`printWidth: 100`へ統一します。URL、import、generated typeに例外が増えることを避けるためです。
+line lengthはOxlint `max-len`でhard failせず、Oxfmtの`printWidth: 80`へ統一します。root
+formatとpre-commitは全fileをOxfmtへ渡し、対応する形式だけをformatします。Markdown、MDX、
+YAML、TOMLは除外せず、未対応形式だけがstagedされてもhookをfailさせません。
 
 ## a11yとテスト規則
 

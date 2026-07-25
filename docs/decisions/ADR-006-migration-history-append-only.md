@@ -8,6 +8,7 @@ owners:
 supersedes:
   - none
 ---
+
 # ADR-006 migration history append-only
 
 ## 背景

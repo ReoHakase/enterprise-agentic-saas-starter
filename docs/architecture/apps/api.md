@@ -67,16 +67,16 @@ apps/api/src/
 
 ## module構造
 
-| file | 責務 |
-| --- | --- |
-| `domain.ts` | pure invariant、state transition、domain error |
-| `schema.ts` | Valibot request/response contractとOpenAPIへ出す英語schema/property description |
-| `ports.ts` | applicationが必要とするoutbound capability |
-| `service.ts` | use case、authorization、transaction orchestration |
-| `repository.ts` | Drizzle/libSQL adapter |
-| `routes.ts` | Elysia transport adapterとroute `detail`の英語operation description |
-| `module.ts` | concrete repositoryとserviceを接続し、routeをElysia appへ登録する |
-| `public.ts` | 別moduleへ公開する型とuse caseの最小surface |
+| file            | 責務                                                                            |
+| --------------- | ------------------------------------------------------------------------------- |
+| `domain.ts`     | pure invariant、state transition、domain error                                  |
+| `schema.ts`     | Valibot request/response contractとOpenAPIへ出す英語schema/property description |
+| `ports.ts`      | applicationが必要とするoutbound capability                                      |
+| `service.ts`    | use case、authorization、transaction orchestration                              |
+| `repository.ts` | Drizzle/libSQL adapter                                                          |
+| `routes.ts`     | Elysia transport adapterとroute `detail`の英語operation description             |
+| `module.ts`     | concrete repositoryとserviceを接続し、routeをElysia appへ登録する               |
+| `public.ts`     | 別moduleへ公開する型とuse caseの最小surface                                     |
 
 `routes.ts`から`repository.ts`を直接呼びません。
 
@@ -107,12 +107,12 @@ routes -> service -> port <- repository
 module固有portを実装するadapterもowner module内へ置きます。`platform`へ置けるadapterはrequest ID、
 telemetry、clock等のapp-global contractに限り、moduleをimportしません。
 
-| importer layer | 禁止する依存 |
-| --- | --- |
-| domain | application、transport、repository、platform、framework、DB |
-| application/service | Elysia、Drizzle、concrete provider、concrete repository |
-| transport/routes | concrete repository、provider SDK、別module private path |
-| platform | moduleのdomain/service/repository |
+| importer layer      | 禁止する依存                                                |
+| ------------------- | ----------------------------------------------------------- |
+| domain              | application、transport、repository、platform、framework、DB |
+| application/service | Elysia、Drizzle、concrete provider、concrete repository     |
+| transport/routes    | concrete repository、provider SDK、別module private path    |
+| platform            | moduleのdomain/service/repository                           |
 
 `app.ts`と各moduleの`module.ts`だけがservice、repository、provider、transportを同時にimportできます。
 
@@ -134,14 +134,14 @@ telemetry、clock等のapp-global contractに限り、moduleをimportしませ�
 
 Dependency failureはadapterで次の有限taxonomyへmapし、message文字列検索で分類しません。
 
-| failure | HTTP projection | 備考 |
-| --- | ---: | --- |
-| upstream rejected request | 502 | providerのraw本文は非公開 |
-| dependency unavailable | 503 | retry可能な場合だけ`Retry-After` |
-| dependency timeout | 504 | caller abortと区別する |
-| local rate/budget limit | 429 | local policyの有限code |
-| caller cancellation | request中断 | 500としてcaptureしない |
-| programming bug / unknown | 500 | safe messageだけ返す |
+| failure                   | HTTP projection | 備考                             |
+| ------------------------- | --------------: | -------------------------------- |
+| upstream rejected request |             502 | providerのraw本文は非公開        |
+| dependency unavailable    |             503 | retry可能な場合だけ`Retry-After` |
+| dependency timeout        |             504 | caller abortと区別する           |
+| local rate/budget limit   |             429 | local policyの有限code           |
+| caller cancellation       |     request中断 | 500としてcaptureしない           |
+| programming bug / unknown |             500 | safe messageだけ返す             |
 
 domain errorにはHTTP statusを持たせません。adapterがtyped status/codeを受け取り、transportが
 registryからstatus、public message、capture policyを決めます。既存serviceを一律に`Result`型へ

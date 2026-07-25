@@ -12,13 +12,13 @@ applies_to:
 
 ## テストピラミッド
 
-| layer | 対象 | runner | script |
-| --- | --- | --- | --- |
-| W1 | model、schema、error mapping | Vitest Node | `test` |
-| W2 | component/controller DOM | Vitest + Testing Library + happy-dom | `test` |
-| W3 | story interaction、a11y、light/dark | Storybook Vitest addon + Chromium | `test:browser` |
-| W4 | QueryClient、Agent transport integration | Vitest Browser Mode | `test:browser` |
-| W5 | Server Component loaderから分離したpure function | Vitest Node | `test` |
+| layer | 対象                                             | runner                               | script         |
+| ----- | ------------------------------------------------ | ------------------------------------ | -------------- |
+| W1    | model、schema、error mapping                     | Vitest Node                          | `test`         |
+| W2    | component/controller DOM                         | Vitest + Testing Library + happy-dom | `test`         |
+| W3    | story interaction、a11y、light/dark              | Storybook Vitest addon + Chromium    | `test:browser` |
+| W4    | QueryClient、Agent transport integration         | Vitest Browser Mode                  | `test:browser` |
+| W5    | Server Component loaderから分離したpure function | Vitest Node                          | `test`         |
 
 ## ファイル配置
 

@@ -424,55 +424,55 @@ git diff --name-status origin/main -- packages/db/drizzle
 
 ## 判断記録
 
-| 日付 | 判断 | 理由 |
-| --- | --- | --- |
-| 2026-07-24 | 段階mergeを行わず一つのPRでcutover | 新旧規則の並存を避ける |
-| 2026-07-24 | Agent codeを`src/mastra/**`へ集約 | ownershipとgate対象を明確にする |
-| 2026-07-24 | main baselineを作らず、branch内で上限を段階的に狭めて最終目標を全面適用 | 一括移行を保ちつつ、責務分割と同時に無理なくhard gateを縮小するため |
-| 2026-07-24 | VRTはdeferred | flaky運用を先に導入しない |
-| 2026-07-24 | Oxlint初期budgetはmigration-friendlyな3段階 | 一括移行でwaiverと無意味な分割を生まない |
-| 2026-07-24 | testはsize budgetだけ緩め、import/security境界は共通 | test経由のarchitecture迂回を防ぐ |
-| 2026-07-24 | paid evalをbrowserなしのread/write 2 case各3 trial、E4を固定2 canaryへ分離 | model behaviorとfull-stack配線の費用・原因を分離する |
-| 2026-07-24 | `docs/agent/` pathは維持しproduct Agentと明記 | renameのlink churnよりindexでの責務分離を優先する |
-| 2026-07-24 | root `AGENTS.md`だけを使いnested fileを作らない | client差による上書きとdocs/skillsとの三重管理を避ける |
-| 2026-07-24 | exported browser componentをStorybook対象にする | UI stateの発見可能性とa11y/interaction gateを保つため |
-| 2026-07-24 | DOM geometry testを必須にし、pixel VRTはdefer | layout shiftをdeterministicに検出しつつbaseline運用を増やさないため |
-| 2026-07-24 | Scalar向けmetadataは英語、repo規範文書は日本語 | consumer-facing API品質とrepositoryの言語契約を両立するため |
-| 2026-07-24 | OpenAPI説明はElysia route/schema/pluginのTypeScriptだけを正本にする | route実装とのdriftを防ぎ、YAML/JSONや別metadata registryとの二重管理を作らないため |
-| 2026-07-24 | リポジトリ管理者が全面移行仕様を`accepted`として承認 | 規範文書とADRを提案状態から切り替える明示承認を受けたため |
-| 2026-07-24 | 今回の実装はcustom agentの`test_planner` / sole-writer手順を使わず、`gpt-5.6-sol` ultraの並列agentで実行 | リポジトリ管理者がこのrunに限ってproject agent指示を上書きしたため。harness自体の実session検証証跡には数えない |
-| 2026-07-24 | paid evalとpaid full-stack canaryを実行しない | model費用を伴う実行の明示承認は受けておらず、free testだけをこのrunの検証対象にしたため |
-| 2026-07-24 | external `codex exec`によるlive probeを実行せず、Codex harnessを`implementation: planned`に保つ | repository contextを外部processへ送るapprovalが実行前に拒否されたため。fixture/static validatorはlive発火やread-only sandboxを証明しない |
-| 2026-07-24 | push、PR merge、production deployをこのrunでは実行しない | 明示承認のない外部変更を避け、working treeを一つのPRへ載せられる状態までを対象にするため |
-| 2026-07-24 | OpenAPI単独検証ではcoverageを無効化し、coverage thresholdは`bun run check`のfull suiteで強制 | file filter実行のassertion成功をglobal coverage不足で偽陰性にせず、coverage gate自体は弱めないため |
-| 2026-07-25 | paid testの予算検証、credential gateway、独自attestationを実装しない | 管理者が不要と判断し、local test/toolingの保守コストを最小化するよう明示したため |
-| 2026-07-25 | `part-*`によるtest file分割を禁止し、責務を表すfilenameへ再構成 | lint上限回避のための機械的分割を残さないため |
-| 2026-07-25 | quality gateはOxlint、Knip、jscpd、実testへ委譲し、repo固有scriptを最小化 | 独自AST、module graph、mock repositoryの重複実装と保守コストを避けるため |
-| 2026-07-25 | `tooling/quality`を廃止し、Oxlint helperをroot、Codex testを`.codex/`、workflow testを`.github/`へ置き、文書checkerは追加しない | ownerと実行境界をfile配置へ反映し、汎用品質tooling directoryとリポジトリ固有checkerの保守を避けるため |
-| 2026-07-25 | ESLintとrepo専用architecture checkerを追加しない | 配置やsemantic contractのために第二のlint stackと独自scannerを保守しないため |
-| 2026-07-25 | Lefthookがlint可能なstaged fileを検出したとき`bun run lint`を実行する | custom staged selectorを削除し、rootとworkspace configを常に同じ経路で検証するため |
-| 2026-07-25 | free E2Eをpathで選択せず通常PRでも全件実行する | selector、base SHA fallback、fixtureを廃止し、無料suiteの判定漏れをなくすため |
+| 日付       | 判断                                                                                                                            | 理由                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-24 | 段階mergeを行わず一つのPRでcutover                                                                                              | 新旧規則の並存を避ける                                                                                                                   |
+| 2026-07-24 | Agent codeを`src/mastra/**`へ集約                                                                                               | ownershipとgate対象を明確にする                                                                                                          |
+| 2026-07-24 | main baselineを作らず、branch内で上限を段階的に狭めて最終目標を全面適用                                                         | 一括移行を保ちつつ、責務分割と同時に無理なくhard gateを縮小するため                                                                      |
+| 2026-07-24 | VRTはdeferred                                                                                                                   | flaky運用を先に導入しない                                                                                                                |
+| 2026-07-24 | Oxlint初期budgetはmigration-friendlyな3段階                                                                                     | 一括移行でwaiverと無意味な分割を生まない                                                                                                 |
+| 2026-07-24 | testはsize budgetだけ緩め、import/security境界は共通                                                                            | test経由のarchitecture迂回を防ぐ                                                                                                         |
+| 2026-07-24 | paid evalをbrowserなしのread/write 2 case各3 trial、E4を固定2 canaryへ分離                                                      | model behaviorとfull-stack配線の費用・原因を分離する                                                                                     |
+| 2026-07-24 | `docs/agent/` pathは維持しproduct Agentと明記                                                                                   | renameのlink churnよりindexでの責務分離を優先する                                                                                        |
+| 2026-07-24 | root `AGENTS.md`だけを使いnested fileを作らない                                                                                 | client差による上書きとdocs/skillsとの三重管理を避ける                                                                                    |
+| 2026-07-24 | exported browser componentをStorybook対象にする                                                                                 | UI stateの発見可能性とa11y/interaction gateを保つため                                                                                    |
+| 2026-07-24 | DOM geometry testを必須にし、pixel VRTはdefer                                                                                   | layout shiftをdeterministicに検出しつつbaseline運用を増やさないため                                                                      |
+| 2026-07-24 | Scalar向けmetadataは英語、repo規範文書は日本語                                                                                  | consumer-facing API品質とrepositoryの言語契約を両立するため                                                                              |
+| 2026-07-24 | OpenAPI説明はElysia route/schema/pluginのTypeScriptだけを正本にする                                                             | route実装とのdriftを防ぎ、YAML/JSONや別metadata registryとの二重管理を作らないため                                                       |
+| 2026-07-24 | リポジトリ管理者が全面移行仕様を`accepted`として承認                                                                            | 規範文書とADRを提案状態から切り替える明示承認を受けたため                                                                                |
+| 2026-07-24 | 今回の実装はcustom agentの`test_planner` / sole-writer手順を使わず、`gpt-5.6-sol` ultraの並列agentで実行                        | リポジトリ管理者がこのrunに限ってproject agent指示を上書きしたため。harness自体の実session検証証跡には数えない                           |
+| 2026-07-24 | paid evalとpaid full-stack canaryを実行しない                                                                                   | model費用を伴う実行の明示承認は受けておらず、free testだけをこのrunの検証対象にしたため                                                  |
+| 2026-07-24 | external `codex exec`によるlive probeを実行せず、Codex harnessを`implementation: planned`に保つ                                 | repository contextを外部processへ送るapprovalが実行前に拒否されたため。fixture/static validatorはlive発火やread-only sandboxを証明しない |
+| 2026-07-24 | push、PR merge、production deployをこのrunでは実行しない                                                                        | 明示承認のない外部変更を避け、working treeを一つのPRへ載せられる状態までを対象にするため                                                 |
+| 2026-07-24 | OpenAPI単独検証ではcoverageを無効化し、coverage thresholdは`bun run check`のfull suiteで強制                                    | file filter実行のassertion成功をglobal coverage不足で偽陰性にせず、coverage gate自体は弱めないため                                       |
+| 2026-07-25 | paid testの予算検証、credential gateway、独自attestationを実装しない                                                            | 管理者が不要と判断し、local test/toolingの保守コストを最小化するよう明示したため                                                         |
+| 2026-07-25 | `part-*`によるtest file分割を禁止し、責務を表すfilenameへ再構成                                                                 | lint上限回避のための機械的分割を残さないため                                                                                             |
+| 2026-07-25 | quality gateはOxlint、Knip、jscpd、実testへ委譲し、repo固有scriptを最小化                                                       | 独自AST、module graph、mock repositoryの重複実装と保守コストを避けるため                                                                 |
+| 2026-07-25 | `tooling/quality`を廃止し、Oxlint helperをroot、Codex testを`.codex/`、workflow testを`.github/`へ置き、文書checkerは追加しない | ownerと実行境界をfile配置へ反映し、汎用品質tooling directoryとリポジトリ固有checkerの保守を避けるため                                    |
+| 2026-07-25 | ESLintとrepo専用architecture checkerを追加しない                                                                                | 配置やsemantic contractのために第二のlint stackと独自scannerを保守しないため                                                             |
+| 2026-07-25 | Lefthookがlint可能なstaged fileを検出したとき`bun run lint`を実行する                                                           | custom staged selectorを削除し、rootとworkspace configを常に同じ経路で検証するため                                                       |
+| 2026-07-25 | free E2Eをpathで選択せず通常PRでも全件実行する                                                                                  | selector、base SHA fallback、fixtureを廃止し、無料suiteの判定漏れをなくすため                                                            |
 
 ## 検証証跡
 
-| command | 結果 | 証跡 |
-| --- | --- | --- |
-| `bun install --frozen-lockfile` | pass | lockfile変更なし、2026-07-25 |
-| `nix flake check` | pass | `checks.aarch64-darwin.agent-skills`とdevShell |
-| `bun run check` | pass | Oxlint、Knip full/strict、jscpd、format、typecheck、free unit/integration。repository policy testとCodex harness testを含む |
-| `bun run test:browser` | pass | UI 30件、Web 109件 |
-| `bun run test:e2e` | pass | E1 core 8件、route contract 9件、scripted Agent E2 1件、OAuth/WebAuthn E2 2件 |
-| `bun run --cwd apps/api test -- openapi --coverage.enabled=false` | pass | 実app生成OpenAPI contract 1件 |
-| `bun run build` | pass | 全workspace build |
-| `bun run build:storybook` | pass | WebとUIのStorybook static build |
-| `bun run build:cloudflare` | pass | Web OpenNext、API Worker、Agent production/E2 Worker dry-run |
-| `bun run --cwd packages/db db:check` | pass | migration history、schema、behaviour |
-| `git diff --exit-code origin/main -- .agents/skills` | pass | generated skill直接変更なし |
-| `git diff --exit-code origin/main -- packages/db/drizzle` | pass | main migration変更なし |
-| source残存検査 | pass | `part-*`なし、`paid-model-gateway`なし、Agent hand-written sourceは`src/mastra/**`へ集約 |
-| local harness規模 | pass | `tooling/quality`と文書checkerを廃止し、Codex testは`.codex/`、workflow policy testは`.github/`へ所有を分離 |
-| current diffのcorrectness/security/tests独立review | pass | 修正後の再reviewでP0〜P2 findingゼロ、2026-07-25 |
-| paid test / 予算検証 | not run | リポジトリ管理者の明示指示により対象外 |
+| command                                                           | 結果    | 証跡                                                                                                                        |
+| ----------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `bun install --frozen-lockfile`                                   | pass    | lockfile変更なし、2026-07-25                                                                                                |
+| `nix flake check`                                                 | pass    | `checks.aarch64-darwin.agent-skills`とdevShell                                                                              |
+| `bun run check`                                                   | pass    | Oxlint、Knip full/strict、jscpd、format、typecheck、free unit/integration。repository policy testとCodex harness testを含む |
+| `bun run test:browser`                                            | pass    | UI 30件、Web 109件                                                                                                          |
+| `bun run test:e2e`                                                | pass    | E1 core 8件、route contract 9件、scripted Agent E2 1件、OAuth/WebAuthn E2 2件                                               |
+| `bun run --cwd apps/api test -- openapi --coverage.enabled=false` | pass    | 実app生成OpenAPI contract 1件                                                                                               |
+| `bun run build`                                                   | pass    | 全workspace build                                                                                                           |
+| `bun run build:storybook`                                         | pass    | WebとUIのStorybook static build                                                                                             |
+| `bun run build:cloudflare`                                        | pass    | Web OpenNext、API Worker、Agent production/E2 Worker dry-run                                                                |
+| `bun run --cwd packages/db db:check`                              | pass    | migration history、schema、behaviour                                                                                        |
+| `git diff --exit-code origin/main -- .agents/skills`              | pass    | generated skill直接変更なし                                                                                                 |
+| `git diff --exit-code origin/main -- packages/db/drizzle`         | pass    | main migration変更なし                                                                                                      |
+| source残存検査                                                    | pass    | `part-*`なし、`paid-model-gateway`なし、Agent hand-written sourceは`src/mastra/**`へ集約                                    |
+| local harness規模                                                 | pass    | `tooling/quality`と文書checkerを廃止し、Codex testは`.codex/`、workflow policy testは`.github/`へ所有を分離                 |
+| current diffのcorrectness/security/tests独立review                | pass    | 修正後の再reviewでP0〜P2 findingゼロ、2026-07-25                                                                            |
+| paid test / 予算検証                                              | not run | リポジトリ管理者の明示指示により対象外                                                                                      |
 
 ## リスクとrollback
 

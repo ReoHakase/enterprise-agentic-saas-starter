@@ -12,13 +12,13 @@ applies_to:
 
 ## テストピラミッド
 
-| layer | 対象 | model | runner | script |
-| --- | --- | --- | --- | --- |
-| G1 | core、policy、usage、message | none | Vitest | `test` |
-| G2 | tool executor | none | Vitest | `test` |
-| G3 | agent loop、tool call、approval、stream | scripted model | Vitest | `test` |
-| G4 | Agent/API contract、capability、temporary DB | scripted request/model | owner別Vitest | `test` |
-| G5 | prompt/tool behaviour | real paid model | Vitest/Mastra eval | `test:eval:agent` |
+| layer | 対象                                         | model                  | runner             | script            |
+| ----- | -------------------------------------------- | ---------------------- | ------------------ | ----------------- |
+| G1    | core、policy、usage、message                 | none                   | Vitest             | `test`            |
+| G2    | tool executor                                | none                   | Vitest             | `test`            |
+| G3    | agent loop、tool call、approval、stream      | scripted model         | Vitest             | `test`            |
+| G4    | Agent/API contract、capability、temporary DB | scripted request/model | owner別Vitest      | `test`            |
+| G5    | prompt/tool behaviour                        | real paid model        | Vitest/Mastra eval | `test:eval:agent` |
 
 G1からG4がrelease gateの決定論的な正本です。G5はmodel selectionの回帰を検出しますが、
 authorization、privacy、idempotencyの証明には使いません。
@@ -145,11 +145,11 @@ snapshotは持たず、GitHub Actionsの標準event、environment承認、timeou
 
 ### profileとtrial
 
-| trigger | profile / case | trial | browser |
-| --- | --- | ---: | ---: |
-| maintainerの明示実行 | 選択したread/write case | 各3回、3/3必須 | no |
-| nightly | read/write dataset | 各3回、3/3必須 | no |
-| release candidate | 全G5の3/3後、固定L7 canary 2本 | L7は各1回、retryなし | L7のみyes |
+| trigger              | profile / case                 |                trial |   browser |
+| -------------------- | ------------------------------ | -------------------: | --------: |
+| maintainerの明示実行 | 選択したread/write case        |       各3回、3/3必須 |        no |
+| nightly              | read/write dataset             |       各3回、3/3必須 |        no |
+| release candidate    | 全G5の3/3後、固定L7 canary 2本 | L7は各1回、retryなし | L7のみyes |
 
 偶然成功した一回を合格にしないため、L6は独立stateで3回実行します。費用の予算検証をrepositoryへ
 実装しません。workflowとtest runnerのtimeoutはrunaway防止として残します。

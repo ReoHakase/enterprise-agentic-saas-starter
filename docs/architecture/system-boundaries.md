@@ -84,17 +84,17 @@ workspace isolationはruntime dependency、development dependency、source impor
 
 ## 禁止する依存
 
-| importer | 禁止 |
-| --- | --- |
-| `apps/web` | DB、Email、Agent runtime、GitHub emulator、`api/client`以外のAPI、`auth/client`以外のAuth |
-| `apps/api` | Web、Agent runtime、UI、GitHub emulator |
-| `apps/agent` | DB、Auth、Email、Web、UI、GitHub emulator、`api/agent-client`以外のAPI |
-| `apps/github-emulator` | Web、API、Agent、DB、Email、UI |
-| `packages/auth` | app、API、UI |
-| `packages/db` | 他の全workspace |
-| `packages/email` | app、Auth、DB、UI、API |
-| `packages/ui` | app、API、Auth、DB、Email、Agent |
-| `packages/typescript-config` | runtime sourceと全workspace dependency |
+| importer                     | 禁止                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `apps/web`                   | DB、Email、Agent runtime、GitHub emulator、`api/client`以外のAPI、`auth/client`以外のAuth |
+| `apps/api`                   | Web、Agent runtime、UI、GitHub emulator                                                   |
+| `apps/agent`                 | DB、Auth、Email、Web、UI、GitHub emulator、`api/agent-client`以外のAPI                    |
+| `apps/github-emulator`       | Web、API、Agent、DB、Email、UI                                                            |
+| `packages/auth`              | app、API、UI                                                                              |
+| `packages/db`                | 他の全workspace                                                                           |
+| `packages/email`             | app、Auth、DB、UI、API                                                                    |
+| `packages/ui`                | app、API、Auth、DB、Email、Agent                                                          |
+| `packages/typescript-config` | runtime sourceと全workspace dependency                                                    |
 
 ## 公開entrypoint
 
@@ -193,14 +193,14 @@ telemetry、polyfill、provider登録を暗黙のside effectで注入せず、co
 
 ## 強制方法
 
-| 制約 | 手段 |
-| --- | --- |
-| workspace public surface | `package.json#exports` |
-| 文字列としての禁止import | Oxlint `no-restricted-imports` |
-| cycle | Oxlint `import/no-cycle` |
-| undeclared/unused dependency | Knip |
-| package graph / workspace isolation | Turborepo、Knip |
-| source配置 | architecture文書とcode review |
+| 制約                                | 手段                           |
+| ----------------------------------- | ------------------------------ |
+| workspace public surface            | `package.json#exports`         |
+| 文字列としての禁止import            | Oxlint `no-restricted-imports` |
+| cycle                               | Oxlint `import/no-cycle`       |
+| undeclared/unused dependency        | Knip                           |
+| package graph / workspace isolation | Turborepo、Knip                |
+| source配置                          | architecture文書とcode review  |
 
 `no-restricted-imports`のoverride配列は親設定へ追加ではなく置換されます。workspace設定は
 共通helperからworkspace禁止patternを生成します。新workspaceまたはentrypointを追加するPRでは

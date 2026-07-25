@@ -8,6 +8,7 @@ owners:
 supersedes:
   - none
 ---
+
 # ADR-002 layerとimport boundary
 
 ## 背景

@@ -32,16 +32,16 @@ permissionは新規draftでは`Ask always`をlocal既定値とし、thread作成
 
 conversation全体とcomposerを1枚の大きなCardで囲みません。conversationは平面、composerは独立した下部surfaceです。assistantは枠なし全幅、userだけを右寄せbubbleにし、各messageの`You` / `Issue agent`表示は省略してaccessible nameだけを保持します。approvalをabsolute/fixed layerやmessage末尾の別listへ移動せず、part順序を履歴の正本にします。
 
-| part | 表示 |
-| --- | --- |
-| `text` | Markdown対応response |
-| `reasoning` | `Thinking` details、既定で閉じる |
-| transient `data-activity` | 現在turnの「応答を生成中」だけ。履歴へ保存しない |
-| tool part | tool名とstate、input/output details、既定で閉じる |
-| pending action tool output | そのtool位置のinline approval card |
-| `source-url` | 外部link |
-| `data-context-budget` | messageではなくcontext meterへ反映 |
-| `data-thread-title` | title更新通知とselector再取得 |
+| part                       | 表示                                              |
+| -------------------------- | ------------------------------------------------- |
+| `text`                     | Markdown対応response                              |
+| `reasoning`                | `Thinking` details、既定で閉じる                  |
+| transient `data-activity`  | 現在turnの「応答を生成中」だけ。履歴へ保存しない  |
+| tool part                  | tool名とstate、input/output details、既定で閉じる |
+| pending action tool output | そのtool位置のinline approval card                |
+| `source-url`               | 外部link                                          |
+| `data-context-budget`      | messageではなくcontext meterへ反映                |
+| `data-thread-title`        | title更新通知とselector再取得                     |
 
 thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、providerがstreamしたbounded reasoningだけを保存・表示します。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
 
@@ -70,14 +70,14 @@ Tiptap editorだけを内容に応じて最大`40vh`まで拡張し、それ以�
 
 `@tanstack/react-hotkeys` 0.10.0をcatalog固定し、次を提供します。
 
-| shortcut | 動作 |
-| --- | --- |
-| `Mod+K` | Agent pane切替 |
-| `Mod+Enter` | 送信 |
-| `Mod+Shift+N` | 新規thread draft |
-| `Mod+.` | 実行停止 |
+| shortcut           | 動作                     |
+| ------------------ | ------------------------ |
+| `Mod+K`            | Agent pane切替           |
+| `Mod+Enter`        | 送信                     |
+| `Mod+Shift+N`      | 新規thread draft         |
+| `Mod+.`            | 実行停止                 |
 | `Alt+ArrowUp/Down` | 更新順の前後threadへ移動 |
-| `Mod+/` | shortcut一覧 |
+| `Mod+/`            | shortcut一覧             |
 
 IME composition中は発火しません。送信shortcutはinputを無視しない設定でTiptap editor内から使えますが、upload中、modal、frozen context、active responseとの競合時は無効です。既存shortcutと同時利用が必要なscopeだけ`allow`し、dialogは自身のkeyboard scopeを優先します。
 

@@ -3,6 +3,7 @@ import { defineConfig } from "oxfmt"
 export default defineConfig({
   endOfLine: "lf",
   printWidth: 80,
+  proseWrap: "preserve",
   semi: false,
   singleQuote: false,
   sortImports: true,
@@ -28,9 +29,6 @@ export default defineConfig({
     "**/.agents/skills/**",
     ".turbo/**",
     "**/.turbo/**",
-    "**/*.md",
-    "**/*.yml",
-    "**/*.yaml",
     "coverage/**",
     "**/coverage/**",
     "dist/**",

@@ -4,11 +4,11 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 
 ## Entrypoints
 
-| import | 内容 |
-| --- | --- |
-| `@enterprise-agentic-saas/db` | singleton `db`、`Db`型 |
+| import                                         | 内容                                                        |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `@enterprise-agentic-saas/db`                  | singleton `db`、`Db`型                                      |
 | `@enterprise-agentic-saas/db/development-seed` | local R2 reconcile用の固定anchor、file fixture path・digest |
-| `@enterprise-agentic-saas/db/schema` | auth/app table定義 |
+| `@enterprise-agentic-saas/db/schema`           | auth/app table定義                                          |
 
 `packages/auth` と `apps/api` からの依存を許可し、DB packageからauth/app/UIへの逆依存は禁止します。PostgreSQLや `DB_PROVIDER` 分岐は明示要求まで追加しません。
 
@@ -34,10 +34,10 @@ repo固有のindex/defaultがgenerator差分で消えていないことを確認
 
 ## Env
 
-| 変数 | 必須 | 説明 |
-| --- | --- | --- |
-| `TURSO_DATABASE_URL` | Yes | Turso/libSQL URL |
-| `TURSO_AUTH_TOKEN` | Cloudのみ | Turso token |
+| 変数                 | 必須      | 説明             |
+| -------------------- | --------- | ---------------- |
+| `TURSO_DATABASE_URL` | Yes       | Turso/libSQL URL |
+| `TURSO_AUTH_TOKEN`   | Cloudのみ | Turso token      |
 
 APIとDB workspaceで同じURL/tokenを使います。実値はpackage直下のignored `.env*` に置きます。
 

@@ -121,13 +121,13 @@ custom agentを起動してからsyntaxを更新します。
 
 役割:
 
-| agent | sandbox | 責務 |
-| --- | --- | --- |
-| `test_planner` | read-only | test layer、risk、acceptance criteria |
-| `implementer` | workspace-write | 唯一のwriter |
-| `reviewer_correctness` | read-only | logic、contract、architecture |
-| `reviewer_security` | read-only | auth、tenant、secret、destructive flow |
-| `reviewer_tests` | read-only | missing test、false positive、flaky、over-mock |
+| agent                  | sandbox         | 責務                                           |
+| ---------------------- | --------------- | ---------------------------------------------- |
+| `test_planner`         | read-only       | test layer、risk、acceptance criteria          |
+| `implementer`          | workspace-write | 唯一のwriter                                   |
+| `reviewer_correctness` | read-only       | logic、contract、architecture                  |
+| `reviewer_security`    | read-only       | auth、tenant、secret、destructive flow         |
+| `reviewer_tests`       | read-only       | missing test、false positive、flaky、over-mock |
 
 model名はprojectで固定しません。availabilityとcostが変わり得るため、reasoning effortとrole contractを固定します。
 
@@ -194,12 +194,12 @@ metadataは`implementation: planned`を維持します。
 
 Severity:
 
-| 値 | 意味 |
-| --- | --- |
-| `P0` | data loss、重大security、release不能 |
+| 値   | 意味                                      |
+| ---- | ----------------------------------------- |
+| `P0` | data loss、重大security、release不能      |
 | `P1` | correctness/security regression、必須修正 |
 | `P2` | 実害可能性があるmaintainability/test risk |
-| `P3` | 非blockingな改善 |
+| `P3` | 非blockingな改善                          |
 
 Finding format:
 
@@ -259,11 +259,11 @@ repository単位の`.codex/hooks.json`を使用し、hook scriptは`.codex/hooks
 
 採用するhook:
 
-| event | script | 責務 |
-| --- | --- | --- |
-| `SessionStart` | `session-start.ts` | active exec planと正本の場所を追加contextとして渡す |
-| `PreToolUse` | `pre-tool-use-policy.ts` | 禁止操作とRulesで安全に表現できないwrapperをhard denyする |
-| `PostToolUse` | `post-tool-use-review.ts` | protected harness file変更時にADR、exec plan、独立レビューを通知する |
+| event          | script                    | 責務                                                                 |
+| -------------- | ------------------------- | -------------------------------------------------------------------- |
+| `SessionStart` | `session-start.ts`        | active exec planと正本の場所を追加contextとして渡す                  |
+| `PreToolUse`   | `pre-tool-use-policy.ts`  | 禁止操作とRulesで安全に表現できないwrapperをhard denyする            |
+| `PostToolUse`  | `post-tool-use-review.ts` | protected harness file変更時にADR、exec plan、独立レビューを通知する |
 
 RulesとHooksのdeterministic contract testは`.codex/codex-harness.test.ts`が所有し、root
 `vitest.config.ts`から実行します。

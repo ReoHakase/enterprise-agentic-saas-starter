@@ -14,13 +14,13 @@ applies_to:
 
 ## テストlayer
 
-| layer/profile | Browser | Stack | LLM | script | 実行 |
-| --- | ---: | --- | --- | --- | --- |
-| E1 | real | Web real、最小static API fixture | none | `test:e2e` | 通常PR full |
-| E2 stack | real | Web/API/Agent/Auth/DB real | scripted model | `test:e2e` | 通常PR full |
-| E2 OAuth | real | Web/API/Auth/DB + GitHub emulator | none | `test:e2e` | 通常PR full |
-| E3 | none | real Agent/private API/Auth/temporary DB | real paid | `test:eval:agent` | explicit/nightly/release |
-| E4 | real | full real temporary stack | real paid | `test:e2e:agent` | release candidate |
+| layer/profile | Browser | Stack                                    | LLM            | script            | 実行                     |
+| ------------- | ------: | ---------------------------------------- | -------------- | ----------------- | ------------------------ |
+| E1            |    real | Web real、最小static API fixture         | none           | `test:e2e`        | 通常PR full              |
+| E2 stack      |    real | Web/API/Agent/Auth/DB real               | scripted model | `test:e2e`        | 通常PR full              |
+| E2 OAuth      |    real | Web/API/Auth/DB + GitHub emulator        | none           | `test:e2e`        | 通常PR full              |
+| E3            |    none | real Agent/private API/Auth/temporary DB | real paid      | `test:eval:agent` | explicit/nightly/release |
+| E4            |    real | full real temporary stack                | real paid      | `test:e2e:agent`  | release candidate        |
 
 ## E1
 

@@ -38,16 +38,16 @@ last_reviewed: 2026-07-25
 
 ## 文書の責務
 
-| 配置 | 責務 |
-| --- | --- |
-| [`docs/jargon.md`](jargon.md) | 日本語技術文書の用語、表記、例外 |
-| `docs/architecture/` | directory、dependency、runtime、qualityの規範 |
-| `docs/testing/` | test layer、runner、script、実行条件 |
-| `docs/decisions/` | 長期的な設計判断と代償 |
-| `docs/exec-plans/` | 複雑な作業の進捗、判断、検証証跡 |
-| [`docs/agent/`](agent/README.md) | 製品Agentの機能、security、受入仕様 |
-| `.agents/local-skills/` | skill artifactの編集元。発火条件、必読docs、作業手順、command |
-| `AGENTS.md` | 全作業に共通する短いcontract |
+| 配置                             | 責務                                                          |
+| -------------------------------- | ------------------------------------------------------------- |
+| [`docs/jargon.md`](jargon.md)    | 日本語技術文書の用語、表記、例外                              |
+| `docs/architecture/`             | directory、dependency、runtime、qualityの規範                 |
+| `docs/testing/`                  | test layer、runner、script、実行条件                          |
+| `docs/decisions/`                | 長期的な設計判断と代償                                        |
+| `docs/exec-plans/`               | 複雑な作業の進捗、判断、検証証跡                              |
+| [`docs/agent/`](agent/README.md) | 製品Agentの機能、security、受入仕様                           |
+| `.agents/local-skills/`          | skill artifactの編集元。発火条件、必読docs、作業手順、command |
+| `AGENTS.md`                      | 全作業に共通する短いcontract                                  |
 
 同じ規範本文を複数の場所へcopyしません。
 

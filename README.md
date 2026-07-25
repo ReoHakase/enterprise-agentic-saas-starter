@@ -14,18 +14,18 @@ indexed in [`docs/README.md`](docs/README.md).
 
 ## Tech Stack
 
-| Layer     | Stack                                                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Runtime   | Bun `1.3.13`                                                                                                              |
-| Monorepo  | Bun workspaces, Turborepo                                                                                                 |
-| Web       | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/Base UI, TanStack Query/Form/Table, Jotai                               |
+| Layer     | Stack                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Runtime   | Bun `1.3.13`                                                                                                             |
+| Monorepo  | Bun workspaces, Turborepo                                                                                                |
+| Web       | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/Base UI, TanStack Query/Form/Table, Jotai                             |
 | API       | Elysia on Bun/Cloudflare, Eden client, Valibot Standard Schema; [envin](https://github.com/turbostarter/envin) + Valibot |
-| Auth      | Better Auth, magic link, organization plugin                                                                              |
-| Database  | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                                    |
-| Email     | React Email, Cloudflare Email Sending, console dev logger, noop test sender                                               |
-| Telemetry | Sentry for Next.js/Bun/Cloudflare Workers, Spotlight for local development                                                |
+| Auth      | Better Auth, magic link, organization plugin                                                                             |
+| Database  | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                                   |
+| Email     | React Email, Cloudflare Email Sending, console dev logger, noop test sender                                              |
+| Telemetry | Sentry for Next.js/Bun/Cloudflare Workers, Spotlight for local development                                               |
 | Quality   | Oxlint, Oxfmt, Vitest/Testing Library, Storybook a11y/interaction, Playwright, GitHub Actions                            |
-| Agent ops | repo skills under `.agents/local-skills`, runtime skills and MCP config via Nix                                           |
+| Agent ops | repo skills under `.agents/local-skills`, runtime skills and MCP config via Nix                                          |
 
 > [!NOTE]
 > Dependency versions are pinned in the root `workspaces.catalog`. Workspace
@@ -280,5 +280,5 @@ bunx --bun shadcn@latest add button -c apps/web
 Generated shared UI components live in `packages/ui/src/components`.
 
 ```tsx
-import { Button } from "@enterprise-agentic-saas/ui/components/button";
+import { Button } from "@enterprise-agentic-saas/ui/components/button"
 ```

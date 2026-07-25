@@ -119,15 +119,15 @@ route fileを薄く保つと、Next.js file conventionとproduct logicを分離�
 
 feature rootの責務:
 
-| file | 責務 |
-| --- | --- |
-| `model.ts` | pure state、view model、reducer |
-| `schema.ts` | Web-local runtime validation |
-| `api.ts` | Eden client adapter |
-| `queries.ts` | TanStack Query options |
-| `hooks/use-*-controller.ts` | browserで動くAPI呼出、router、toast等と表示用stateの接続 |
-| `components/<screen>/server.tsx` | Server Componentでの初期data取得と画面の組立て |
-| `index.ts` | feature外へ公開する最小surface |
+| file                             | 責務                                                     |
+| -------------------------------- | -------------------------------------------------------- |
+| `model.ts`                       | pure state、view model、reducer                          |
+| `schema.ts`                      | Web-local runtime validation                             |
+| `api.ts`                         | Eden client adapter                                      |
+| `queries.ts`                     | TanStack Query options                                   |
+| `hooks/use-*-controller.ts`      | browserで動くAPI呼出、router、toast等と表示用stateの接続 |
+| `components/<screen>/server.tsx` | Server Componentでの初期data取得と画面の組立て           |
+| `index.ts`                       | feature外へ公開する最小surface                           |
 
 Web-local schemaはAPI transport typeの代用品ではありません。untrusted responseをUIへ表示する
 直前のruntime validationに使います。

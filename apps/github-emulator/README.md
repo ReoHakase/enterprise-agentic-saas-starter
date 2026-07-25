@@ -44,14 +44,14 @@ hostを指定できず全interfaceへbindする可能性があります。local 
 
 ## 環境変数
 
-| 変数 | 必須 | 用途 |
-| --- | --- | --- |
-| `GITHUB_OAUTH_CALLBACK_URL` | `dev:http`のみYes | `/auth/oauth2/callback/github`を持つlocal API URL。`dev`はPortlessから補う |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_ID` | No | 注入されたlocal既定値を上書きするclient ID |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No | 注入されたlocal既定値を上書きするclient secret |
-| `GITHUB_OAUTH_EMULATOR_URL` | No | advertised local origin。`PORTLESS_URL`より優先 |
-| `PORTLESS_URL` | No | `portless run`が注入するadvertised local origin |
-| `PORT` | No | listen port。既定値は`4001` |
+| 変数                                  | 必須              | 用途                                                                       |
+| ------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| `GITHUB_OAUTH_CALLBACK_URL`           | `dev:http`のみYes | `/auth/oauth2/callback/github`を持つlocal API URL。`dev`はPortlessから補う |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_ID`     | No                | 注入されたlocal既定値を上書きするclient ID                                 |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No                | 注入されたlocal既定値を上書きするclient secret                             |
+| `GITHUB_OAUTH_EMULATOR_URL`           | No                | advertised local origin。`PORTLESS_URL`より優先                            |
+| `PORTLESS_URL`                        | No                | `portless run`が注入するadvertised local origin                            |
+| `PORT`                                | No                | listen port。既定値は`4001`                                                |
 
 本番用`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`は読みません。専用credentialを
 上書きする場合はclient IDとclient secretの両方を設定します。実GitHub OAuth

@@ -128,11 +128,7 @@ const prefix = await createMigrationPrefix({
 Migration fileはmodule graph外で`readFile`されるため、Vitest configへ追加します。
 
 ```ts
-forceRerunTriggers: [
-  "drizzle/**",
-  "src/schema/**",
-  "drizzle.config.ts",
-]
+forceRerunTriggers: ["drizzle/**", "src/schema/**", "drizzle.config.ts"]
 ```
 
 API repository/infrastructure変更でも通常CIの`bun run test`によりDB full suiteを実行します。

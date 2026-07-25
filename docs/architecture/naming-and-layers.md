@@ -159,13 +159,13 @@ implementation、failure taxonomy、call order、security invariantのいずれ�
 
 `adapter`はportを具体的なtechnologyへ接続します。
 
-| port | adapter |
-| --- | --- |
-| `ItemRepository` | Drizzle/libSQL implementation |
-| `EmailSender` | Cloudflare Email implementation |
-| `LanguageModel` | OpenRouter implementation |
-| `NotificationPort` | Sonner implementation |
-| `NavigationPort` | Next.js router implementation |
+| port               | adapter                         |
+| ------------------ | ------------------------------- |
+| `ItemRepository`   | Drizzle/libSQL implementation   |
+| `EmailSender`      | Cloudflare Email implementation |
+| `LanguageModel`    | OpenRouter implementation       |
+| `NotificationPort` | Sonner implementation           |
+| `NavigationPort`   | Next.js router implementation   |
 
 adapterは外側のSDK errorを内側のerror taxonomyへ変換します。raw provider errorをapplicationへ漏らしません。
 
@@ -243,13 +243,13 @@ applicationやdomainがconcrete adapterを生成しません。
 
 用語を次に固定します。
 
-| 用語 | 意味 |
-| --- | --- |
-| `mock` | callや引数を観測し、期待値をassertするtest double |
-| `fake` | 簡略化した動作可能なimplementation。例: in-memory repository |
-| `stub` | 固定responseを返す最小test double |
-| `fixture` | test input、保存済みstate、canonical streamなどのdata |
-| `scripted model` | 順序付きmodel outputを返すdeterministic fake |
+| 用語             | 意味                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| `mock`           | callや引数を観測し、期待値をassertするtest double            |
+| `fake`           | 簡略化した動作可能なimplementation。例: in-memory repository |
+| `stub`           | 固定responseを返す最小test double                            |
+| `fixture`        | test input、保存済みstate、canonical streamなどのdata        |
+| `scripted model` | 順序付きmodel outputを返すdeterministic fake                 |
 
 `mock API`、`light`、`dark`、`dialog`などcodeとStorybookで使う語は英語表記へ統一します。
 

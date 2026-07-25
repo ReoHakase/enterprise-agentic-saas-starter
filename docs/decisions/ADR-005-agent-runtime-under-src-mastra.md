@@ -8,6 +8,7 @@ owners:
 supersedes:
   - none
 ---
+
 # ADR-005 Agent runtimeのsrc/mastra集約
 
 ## 背景

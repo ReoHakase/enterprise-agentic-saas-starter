@@ -56,12 +56,12 @@ EMAIL_FROM=noreply@example.test
 
 日常の公開導線は次の4つです。production用seed commandは作りません。
 
-| command | 用途 |
-| --- | --- |
-| `bun run dev` | Web、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
-| `bun run dev:db` | local Turso、migration、Drizzle Studioだけを起動する |
-| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する |
-| `bun run dev:db:seed` | full devの有無にかかわらず任意のDB/R2 fixtureを投入する |
+| command                | 用途                                                       |
+| ---------------------- | ---------------------------------------------------------- |
+| `bun run dev`          | Web、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
+| `bun run dev:db`       | local Turso、migration、Drizzle Studioだけを起動する       |
+| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する   |
+| `bun run dev:db:seed`  | full devの有無にかかわらず任意のDB/R2 fixtureを投入する    |
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 

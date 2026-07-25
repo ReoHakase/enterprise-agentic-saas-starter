@@ -11,14 +11,14 @@ applies_to:
 
 ## テストピラミッド
 
-| layer | 対象 | runner | script |
-| --- | --- | --- | --- |
-| A1 | domain invariant | Vitest Node | `test` |
-| A2 | service + fake port | Vitest Node | `test` |
-| A3 | repository/transaction | Vitest + libSQL memory/temp file | `test` |
-| A4 | Elysia HTTP / OpenAPI contract | Vitest + `app.handle()` | `test` |
-| A5 | narrow real HTTP | Vitest + ephemeral server/Eden | `test` |
-| A6 | Worker adapter | Wrangler dry-run | build gate |
+| layer | 対象                           | runner                           | script     |
+| ----- | ------------------------------ | -------------------------------- | ---------- |
+| A1    | domain invariant               | Vitest Node                      | `test`     |
+| A2    | service + fake port            | Vitest Node                      | `test`     |
+| A3    | repository/transaction         | Vitest + libSQL memory/temp file | `test`     |
+| A4    | Elysia HTTP / OpenAPI contract | Vitest + `app.handle()`          | `test`     |
+| A5    | narrow real HTTP               | Vitest + ephemeral server/Eden   | `test`     |
+| A6    | Worker adapter                 | Wrangler dry-run                 | build gate |
 
 ## repository
 

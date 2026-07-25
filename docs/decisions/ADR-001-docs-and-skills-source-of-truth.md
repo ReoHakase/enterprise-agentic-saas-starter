@@ -8,6 +8,7 @@ owners:
 supersedes:
   - none
 ---
+
 # ADR-001 docsとskillsの正本
 
 ## 背景
