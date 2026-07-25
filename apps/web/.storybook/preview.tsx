@@ -10,6 +10,8 @@ import type { ReactNode } from "react"
 
 import "@enterprise-agentic-saas/ui/globals.css"
 
+import { storybookApiHandlers } from "../test-support/storybook/api-handlers"
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -27,13 +29,14 @@ const isStorybookInternalRequest = (request: Request) => {
   const url = new URL(request.url)
 
   return (
-    request.destination !== "" ||
     url.pathname === "/iframe.html" ||
     url.pathname === "/index.json" ||
     url.pathname === "/project.json" ||
     url.pathname.startsWith("/@") ||
     url.pathname.startsWith("/sb-") ||
-    url.pathname.startsWith("/node_modules/")
+    url.pathname.startsWith("/node_modules/") ||
+    url.pathname.startsWith("/src/") ||
+    url.pathname.startsWith("/_next/static/")
   )
 }
 
@@ -46,15 +49,21 @@ export default definePreview({
     addonMsw(async () => {
       const worker = setupWorker()
       await worker.start({
-        onUnhandledRequest(request, print) {
-          if (!isStorybookInternalRequest(request)) {
-            print.error()
-          }
+        onUnhandledRequest(request) {
+          if (isStorybookInternalRequest(request)) return
+
+          const url = new URL(request.url)
+          throw new Error(
+            `Unhandled Storybook product request: ${request.method} ${url.pathname}`
+          )
         },
       })
       return worker
     }),
   ],
+  beforeEach({ msw }) {
+    msw.use(...storybookApiHandlers)
+  },
   decorators: [
     (Story) => (
       <WithQueryClient>

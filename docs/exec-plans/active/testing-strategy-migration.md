@@ -75,7 +75,7 @@ linked_adrs:
 - [x] UI componentをdirectory化した
 - [x] StorybookをCSF Nextへ移行した
 - [x] package所有testを整備した
-- [ ] W1-W6を実装した
+- [x] W1-W6を実装した
 - [ ] E1/E2を分離した
 - [ ] coverageを確定した
 - [ ] affected CIを実装した
@@ -122,6 +122,11 @@ linked_adrs:
 | `bun run --cwd packages/email test`   | success | 2 files、34 tests                                       |
 | GitHub emulator test                  | success | 4 files、21 tests                                       |
 | TypeScript config fixture compile     | success | Bun、Worker、React library、Next.jsの4 fixtureが成功    |
+| Web W1、W2、W5                        | success | 70 files、317 tests                                     |
+| Web W3、W4                            | success | 24 files、109 tests。10 dark storyを対象外にした        |
+| Web W6 Chromium                       | success | 16 Playwright tests                                     |
+| Web W6 WebKit代表                     | success | 1 Playwright test                                       |
+| Web Storybook build                   | success | CSF Next、MSW global handlerを含むstatic buildが成功    |
 
 ## リスクとrollback
 

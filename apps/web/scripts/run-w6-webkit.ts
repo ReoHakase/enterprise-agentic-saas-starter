@@ -13,7 +13,8 @@ const runPlaywright = () =>
       [
         "node_modules/@playwright/test/cli.js",
         "test",
-        "--project=e1-webkit-representative",
+        "--config=playwright.app.config.ts",
+        "--project=w6-webkit-representative",
         "--retries=0",
       ],
       {

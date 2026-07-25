@@ -88,6 +88,7 @@ const config: KnipConfig = {
         "open-next.config.ts",
         "test-support/storybook/next-link.tsx",
         "test-support/storybook/next-navigation.ts",
+        "test-support/storybook/sentry-nextjs.ts",
         "test-support/storybook/server-only.ts",
       ],
       project: [

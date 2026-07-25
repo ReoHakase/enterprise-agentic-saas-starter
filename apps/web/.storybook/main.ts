@@ -25,11 +25,24 @@ export default defineMain({
   async viteFinal(baseConfig) {
     return mergeConfig(baseConfig, {
       define: {
+        __dirname: JSON.stringify("/"),
         "process.env": "{}",
       },
       resolve: {
         alias: {
           "@": workspace,
+          "@sentry/nextjs": path.join(
+            workspace,
+            "test-support/storybook/sentry-nextjs.ts"
+          ),
+          "next/link": path.join(
+            workspace,
+            "test-support/storybook/next-link.tsx"
+          ),
+          "next/navigation": path.join(
+            workspace,
+            "test-support/storybook/next-navigation.ts"
+          ),
           "nuqs/adapters/next/app": path.join(
             workspace,
             "test-support/storybook/nuqs-next-app.ts"

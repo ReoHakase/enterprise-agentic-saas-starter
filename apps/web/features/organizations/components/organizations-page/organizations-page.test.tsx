@@ -3,7 +3,6 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type * as AgentPublic from "@/features/agent"
 import { ConsoleApiError } from "@/features/console"
 
 import type { OrganizationSummary } from "../../schema"
@@ -18,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   hasOrganizationSwitchRisks: vi.fn<() => boolean>(),
   listOrganizations: vi.fn<() => Promise<unknown>>(),
   navigateAfterOrganizationSwitch: vi.fn<(href: string) => void>(),
+  prepareOrganizationSwitch: vi.fn<() => Promise<void>>(),
   replace: vi.fn<(href: string) => void>(),
   refresh: vi.fn<() => void>(),
   toastError:
@@ -25,18 +25,14 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
-vi.mock("@/features/agent", async (importOriginal) => {
-  const original = await importOriginal<typeof AgentPublic>()
-  return {
-    ...original,
-    hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
-    useAgentRuntimeState: () => ({
-      beginOrganizationSwitch: mocks.beginOrganizationSwitch,
-      cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
-      completeOrganizationSwitch: mocks.completeOrganizationSwitch,
-    }),
-  }
-})
+vi.mock("@/features/agent", () => ({
+  hasOrganizationSwitchRisks: mocks.hasOrganizationSwitchRisks,
+  useAgentRuntimeState: () => ({
+    beginOrganizationSwitch: mocks.beginOrganizationSwitch,
+    cancelOrganizationSwitch: mocks.cancelOrganizationSwitch,
+    completeOrganizationSwitch: mocks.completeOrganizationSwitch,
+  }),
+}))
 
 vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: {
@@ -52,6 +48,10 @@ vi.mock("../../organization-switch-flash", () => ({
     _location: Location,
     href: string
   ) => mocks.navigateAfterOrganizationSwitch(href),
+}))
+
+vi.mock("../../cache", () => ({
+  prepareOrganizationSwitch: mocks.prepareOrganizationSwitch,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -122,6 +122,7 @@ describe("OrganizationsPage", () => {
     mocks.completeOrganizationSwitch.mockResolvedValue()
     mocks.hasOrganizationSwitchRisks.mockReturnValue(false)
     mocks.listOrganizations.mockResolvedValue(organizations)
+    mocks.prepareOrganizationSwitch.mockResolvedValue()
     mocks.activateOrganization.mockResolvedValue({})
     mocks.createOrganization.mockResolvedValue({
       ...organizations[0],
@@ -157,7 +158,9 @@ describe("OrganizationsPage", () => {
       expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
     )
     expect(screen.getByRole("button", { name: "Active" })).toBeDisabled()
-    expect(mocks.replace).toHaveBeenCalledWith("/settings/organizations")
+    await waitFor(() =>
+      expect(mocks.replace).toHaveBeenCalledWith("/settings/organizations")
+    )
     expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization switched")
   })
@@ -212,8 +215,10 @@ describe("OrganizationsPage", () => {
     await waitFor(() => {
       expect(mocks.activateOrganization).toHaveBeenCalledWith("org-beta")
     })
-    expect(mocks.navigateAfterOrganizationSwitch).toHaveBeenCalledWith(
-      "/organization/beta/members"
+    await waitFor(() =>
+      expect(mocks.navigateAfterOrganizationSwitch).toHaveBeenCalledWith(
+        "/organization/beta/members"
+      )
     )
     expect(mocks.replace).not.toHaveBeenCalled()
     expect(mocks.refresh).not.toHaveBeenCalled()

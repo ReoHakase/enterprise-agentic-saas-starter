@@ -6,19 +6,19 @@ import { NuqsAdapter } from "nuqs/adapters/next/app"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { AgentIssueAction } from "../../schema"
-import {
-  agentContextBudgetMessages,
-  agentConversationTurns,
-} from "../../test-support/fixtures"
-import { AgentApprovalCard } from "../agent-approval-card/agent-approval-card"
-import { AgentConversationViewport } from "../agent-conversation-viewport/agent-conversation-viewport"
-import { AgentMeters } from "../agent-meters/agent-meters"
+import { AgentApprovalCard } from "./components/agent-approval-card/agent-approval-card"
+import { AgentConversationViewport } from "./components/agent-conversation-viewport/agent-conversation-viewport"
+import { AgentMeters } from "./components/agent-meters/agent-meters"
 import {
   AgentNewThreadComposer,
   type AgentNewThreadInput,
-} from "../agent-new-thread-composer/agent-new-thread-composer"
-import { AgentSamplePrompts } from "../agent-sample-prompts/agent-sample-prompts"
+} from "./components/agent-new-thread-composer/agent-new-thread-composer"
+import { AgentSamplePrompts } from "./components/agent-sample-prompts/agent-sample-prompts"
+import type { AgentIssueAction } from "./schema"
+import {
+  agentContextBudgetMessages,
+  agentConversationTurns,
+} from "./test-support/fixtures"
 
 const contextBudgetNearLimit = [...agentContextBudgetMessages.nearLimit]
 const conversationTurns = [...agentConversationTurns]
@@ -173,7 +173,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("Agent browser interactions", () => {
+describe("Agent chat browser integration", () => {
   it("hands off a real inline mention with the default Ask always policy", async () => {
     const { requests } = installApiTransport()
     const actor = userEvent.setup()

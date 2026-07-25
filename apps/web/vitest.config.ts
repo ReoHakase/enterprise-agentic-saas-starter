@@ -9,6 +9,10 @@ import { defineConfig } from "vitest/config"
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserAliases = {
+  "@sentry/nextjs": path.join(
+    dirname,
+    "test-support/storybook/sentry-nextjs.ts"
+  ),
   "next/link": path.join(dirname, "test-support/storybook/next-link.tsx"),
   "next/navigation": path.join(
     dirname,
@@ -18,11 +22,16 @@ const browserAliases = {
     dirname,
     "test-support/storybook/nuqs-next-app.ts"
   ),
+  "server-only": path.join(dirname, "test-support/storybook/server-only.ts"),
+}
+const unitAliases = {
+  "next/link": browserAliases["next/link"],
 }
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
   define: {
+    __dirname: JSON.stringify("/"),
     "process.env": "{}",
   },
   plugins: [
@@ -33,6 +42,7 @@ const storybookProject = (theme: "light" | "dark") => ({
       ...(theme === "dark" ? { tags: { include: ["theme-sensitive"] } } : {}),
     }),
   ],
+  resolve: { alias: browserAliases },
   test: {
     name: `storybook-${theme}`,
     browser: {
@@ -89,6 +99,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
+        resolve: { alias: unitAliases },
         test: {
           name: "unit",
           environment: "happy-dom",

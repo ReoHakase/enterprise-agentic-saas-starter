@@ -1,5 +1,6 @@
 import type { AdditionalField as AdditionalFieldConfig } from "@better-auth-ui/core"
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
+import { http, HttpResponse } from "msw"
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { fn } from "storybook/test"
@@ -172,5 +173,13 @@ export const AuthenticationMethods = meta.story({
 })
 
 export const SigningOut = meta.story({
+  beforeEach({ msw }) {
+    msw.use(
+      http.post(
+        "https://api.example.test/auth/sign-out",
+        () => new HttpResponse(null, { status: 204 })
+      )
+    )
+  },
   render: () => <SignOut />,
 })

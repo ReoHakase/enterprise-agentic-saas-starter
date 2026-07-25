@@ -42,6 +42,7 @@ test-results/
 .wrangler/
 storybook-static/
 .next/
+.next-browser/
 .next-e2e/
 .next-e2e-agent/
 .next-e2e-scripted-agent/

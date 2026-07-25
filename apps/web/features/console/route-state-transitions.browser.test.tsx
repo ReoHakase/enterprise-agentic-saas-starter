@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 
 import { ConsoleContentError } from "@/components/console-route-error-boundary.client/console-route-error-boundary.client"
 
-import { DashboardRouteSkeleton } from "../console-route-skeletons/console-route-skeletons"
+import { DashboardRouteSkeleton } from "./components/console-route-skeletons/console-route-skeletons"
 
 type RouteState = "error" | "loading" | "ready"
 
