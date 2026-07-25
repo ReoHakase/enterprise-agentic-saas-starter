@@ -1,9 +1,7 @@
 import type { GenericOAuthConfig } from "better-auth/plugins"
 
-import {
-  fetchGithubOAuthUserInfo,
-  type GithubOAuthEnvironment,
-} from "./github-oauth"
+import { fetchGithubOAuthUserInfo } from "../adapters/github-user-info"
+import type { GithubOAuthEnvironment } from "../github-oauth-environment"
 
 type GithubOAuthEmulatorEnvironment = Extract<
   GithubOAuthEnvironment,

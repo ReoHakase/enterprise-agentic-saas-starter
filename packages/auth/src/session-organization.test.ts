@@ -2,12 +2,9 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-  createSessionOrganizationDatabaseHooks,
-  resolveInitialActiveOrganizationId,
-} from "./session-organization"
+import { createSessionOrganizationDatabaseHooks } from "./session-organization"
 
 const client = createClient({ url: "file::memory:" })
 const database: Db = drizzle(client, { schema })
@@ -16,6 +13,9 @@ const { member, session } = schema
 const now = new Date("2026-07-14T00:00:00.000Z")
 
 beforeEach(async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(now)
+
   await client.executeMultiple(`
     DROP TABLE IF EXISTS session;
     DROP TABLE IF EXISTS member;
@@ -38,6 +38,10 @@ beforeEach(async () => {
       active_organization_id TEXT
     );
   `)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 const insertMembership = async (id: string, userId: string, orgId: string) => {
@@ -68,6 +72,17 @@ const insertSession = async (input: {
   })
 }
 
+const resolveInitialActiveOrganizationId = async (userId: string) => {
+  const hooks = createSessionOrganizationDatabaseHooks(database)
+  const result = await hooks.session.create.before({
+    id: "new-session",
+    userId,
+    token: "new-token",
+  })
+
+  return result.data.activeOrganizationId
+}
+
 describe("new-session organization bootstrap", () => {
   it("preserves the most recent non-expired organization that is still a membership", async () => {
     await insertMembership("member-1", "user-1", "org-1")
@@ -85,9 +100,9 @@ describe("new-session organization bootstrap", () => {
       updatedAt: new Date(now.getTime() - 1000),
     })
 
-    await expect(
-      resolveInitialActiveOrganizationId(database, "user-1", now)
-    ).resolves.toBe("org-2")
+    await expect(resolveInitialActiveOrganizationId("user-1")).resolves.toBe(
+      "org-2"
+    )
   })
 
   it("ignores stale and expired session context", async () => {
@@ -106,9 +121,9 @@ describe("new-session organization bootstrap", () => {
       expiresAt: new Date(now.getTime() - 1),
     })
 
-    await expect(
-      resolveInitialActiveOrganizationId(database, "user-1", now)
-    ).resolves.toBe("org-1")
+    await expect(resolveInitialActiveOrganizationId("user-1")).resolves.toBe(
+      "org-1"
+    )
   })
 
   it("requires an explicit choice when multiple memberships have no prior context", async () => {
@@ -116,7 +131,7 @@ describe("new-session organization bootstrap", () => {
     await insertMembership("member-2", "user-1", "org-2")
 
     await expect(
-      resolveInitialActiveOrganizationId(database, "user-1", now)
+      resolveInitialActiveOrganizationId("user-1")
     ).resolves.toBeNull()
   })
 

@@ -10,7 +10,7 @@ import { and, desc, eq, gt, isNotNull } from "drizzle-orm"
  * membership when there is no prior context, and otherwise require an explicit
  * organization choice.
  */
-export const resolveInitialActiveOrganizationId = async (
+const resolveInitialActiveOrganizationId = async (
   database: Db,
   userId: string,
   now = new Date()

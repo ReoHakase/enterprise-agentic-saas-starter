@@ -10,8 +10,10 @@ export default defineConfig({
       include: [
         "src/client.ts",
         "src/github-oauth.ts",
-        "src/github-oauth-provider.ts",
         "src/index.ts",
+        "src/server/adapters/github-user-info.ts",
+        "src/server/github-oauth-environment.ts",
+        "src/server/plugins/github-oauth-provider.ts",
         "src/session-organization.ts",
       ],
       thresholds: {

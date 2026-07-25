@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
-  fetchGithubOAuthUserInfo,
   LOCAL_GITHUB_OAUTH_CLIENT_ID,
   LOCAL_GITHUB_OAUTH_CLIENT_SECRET,
   mapGithubOAuthUserInfo,
-  resolveGithubOAuthEnvironment,
 } from "./github-oauth"
+import { fetchGithubOAuthUserInfo } from "./server/adapters/github-user-info"
+import { resolveGithubOAuthEnvironment } from "./server/github-oauth-environment"
 
 const profile = {
   id: 123,
@@ -204,9 +204,9 @@ describe("GitHub OAuth user mapping", () => {
         { headers: { "content-type": "application/json" } }
       ),
     ]
-    const fetcher = vi.fn<
-      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-    >(async () => responses.shift() ?? new Response(null, { status: 500 }))
+    const fetcher = vi.fn<typeof fetch>(
+      async () => responses.shift() ?? new Response(null, { status: 500 })
+    )
 
     await expect(
       fetchGithubOAuthUserInfo({
@@ -232,9 +232,7 @@ describe("GitHub OAuth user mapping", () => {
           accessToken,
           userUrl: "http://localhost:4001/user",
           emailsUrl: "http://localhost:4001/user/emails",
-          fetcher: vi.fn<
-            (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-          >(async () => {
+          fetcher: vi.fn<typeof fetch>(async () => {
             throw new Error("raw")
           }),
         })

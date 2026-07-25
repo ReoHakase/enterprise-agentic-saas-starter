@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { createGithubOAuthEmulatorProvider } from "./github-oauth-provider"
+import { createGithubOAuthEmulatorProvider } from "./server/plugins/github-oauth-provider"
 
 const environment = {
   mode: "emulator" as const,
@@ -43,9 +43,9 @@ describe("GitHub OAuth emulator provider", () => {
         },
       ]),
     ]
-    const fetcher = vi.fn<
-      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-    >(async () => responses.shift() ?? new Response(null, { status: 500 }))
+    const fetcher = vi.fn<typeof fetch>(
+      async () => responses.shift() ?? new Response(null, { status: 500 })
+    )
     const provider = createGithubOAuthEmulatorProvider(environment, fetcher)
 
     await expect(
