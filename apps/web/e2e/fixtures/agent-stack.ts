@@ -109,13 +109,13 @@ const stopProcess = async (processHandle: ManagedProcess | undefined) => {
   await exit.catch(() => undefined)
 }
 
-const runMigration = async (databaseOrigin: string) => {
+const runMigration = async (databaseUrl: string) => {
   const migration = Bun.spawn(["bun", "--no-env-file", "run", "db:migrate"], {
     cwd: databaseWorkspace,
     env: {
       ...inheritedEnvironment,
       NODE_ENV: "test",
-      TURSO_DATABASE_URL: databaseOrigin,
+      TURSO_DATABASE_URL: databaseUrl,
       TURSO_AUTH_TOKEN: "agent-e2e-unused-token",
     },
     stdin: "ignore",
@@ -165,6 +165,9 @@ const main = async () => {
     await chmod(environment.temporaryRoot, 0o700)
     if (stopping) return
 
+    await runMigration(`file:${environment.databasePath}`)
+    if (stopping) return
+
     turso = Bun.spawn(
       [
         "turso",
@@ -183,7 +186,6 @@ const main = async () => {
       }
     )
     await waitForDatabase(environment.databaseOrigin)
-    await runMigration(environment.databaseOrigin)
     if (stopping) return
 
     const apiConfig = {
