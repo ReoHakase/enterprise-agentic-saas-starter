@@ -11,7 +11,7 @@ export default defineConfig({
       include: [
         "src/app.ts",
         "src/client.ts",
-        "src/modules/organizations/deletion-access.ts",
+        "src/modules/organizations/routes/deletion-access.ts",
         "src/modules/organizations/deletion-jobs.ts",
         "src/observability/sanitize.ts",
         "src/observability/spotlight.ts",

@@ -2,7 +2,7 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import { profileImageCleanupJobs } from "@enterprise-agentic-saas/db/schema"
 import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm"
 
-import type { FileR2Bucket } from "../files/runtime"
+import type { FileR2Bucket } from "../files/public"
 import type { ProfileImageSubject } from "./constants"
 import { expireStalePendingProfileImages } from "./repository"
 

@@ -2,7 +2,7 @@ import { scrubSentryEvent, scrubSentryLog, scrubSentrySpan } from "./sanitize"
 
 export const SPOTLIGHT_DSN = "https://spotlight@local/0"
 
-export const disabledSentryIntegrations = new Set([
+const disabledSentryIntegrations = new Set([
   "Console",
   "LinkedErrors",
   "RequestData",

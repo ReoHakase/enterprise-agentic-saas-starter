@@ -1,56 +1,24 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-
 import { AppError, publicErrors } from "../../errors/app-error"
-import type { OrganizationRole } from "../authorization/roles"
+import type { OrganizationRole } from "../authorization/public"
 import {
-  FILE_PREVIEW_WIDTHS,
   FILE_MAX_BYTES,
-  FILE_TEXT_PREVIEW_MAX_BYTES,
   fileObjectKey,
   isPreviewableImageFormat,
-  isTextPreviewableFile,
   type FileOwnerType,
-  type FilePreviewWidth,
-  type PreviewableImageFormat,
 } from "./constants"
-import type { FileDto, FileListDto, TextFilePreviewDto } from "./model"
-import { getFileOwnerAdapter } from "./owner-adapters"
 import {
-  deleteReadyFile,
-  finalizePendingFile,
-  findReadyFileById,
-  listReadyFilesByOwner,
-  reservePendingFile,
+  detectImageFormat,
+  type DetectedImageFormat,
   type FileWithOwner,
-} from "./repository"
+} from "./file-domain"
+import type { FileDto } from "./model"
+import type { FileServicePorts } from "./ports"
 import {
-  getFileStorageRuntime,
   type FileR2Object,
   type FileR2ObjectBody,
   type FileStorageRuntime,
 } from "./runtime"
-
-type DetectedImageFormat = PreviewableImageFormat | "avif" | null
-
-const providerUnavailable = (
-  provider: "images" | "r2" | "runtime",
-  operation: string
-) =>
-  new AppError({
-    code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    statusCode: 503,
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "files", operation, provider },
-  })
-
-const getRuntime = (): FileStorageRuntime => {
-  try {
-    return getFileStorageRuntime()
-  } catch {
-    throw providerUnavailable("runtime", "getFileStorageRuntime")
-  }
-}
+import { bodyObject, providerUnavailable } from "./service-runtime"
 
 const normalizeFilename = (value: string) => {
   const filename = value.trim()
@@ -66,29 +34,6 @@ const normalizeDeclaredContentType = (value: string) => {
     throw publicErrors.validation("Invalid content type", { field: "file" })
   }
   return contentType
-}
-
-const startsWith = (bytes: Uint8Array, expected: readonly number[]) =>
-  expected.every((byte, index) => bytes[index] === byte)
-
-export const detectImageFormat = async (
-  file: Blob
-): Promise<DetectedImageFormat> => {
-  const bytes = new Uint8Array(await file.slice(0, 64).arrayBuffer())
-  if (startsWith(bytes, [0xff, 0xd8, 0xff])) return "jpeg"
-  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return "png"
-  }
-  const ascii = new TextDecoder("ascii").decode(bytes)
-  if (ascii.startsWith("GIF87a") || ascii.startsWith("GIF89a")) return "gif"
-  if (ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP") return "webp"
-  if (
-    ascii.slice(4, 8) === "ftyp" &&
-    (ascii.slice(8, 12) === "avif" || ascii.slice(8, 12) === "avis")
-  ) {
-    return "avif"
-  }
-  return null
 }
 
 const sameUpload = (
@@ -132,13 +77,6 @@ const metadataMatches = (object: FileR2Object, file: FileWithOwner) => {
     metadata.expectedSize === String(file.sizeBytes)
   )
 }
-
-const bodyObject = (
-  object: FileR2Object | FileR2ObjectBody | null
-): FileR2ObjectBody | null =>
-  object && "body" in object && object.body instanceof ReadableStream
-    ? object
-    : null
 
 const streamsEqual = async (
   left: ReadableStream<Uint8Array>,
@@ -283,50 +221,46 @@ const imageMetadata = async (
   }
 }
 
-export const reconcilePendingUpload = async (
-  db: Db,
-  input: {
+export const createFileService = (ports: FileServicePorts) => {
+  const reconcilePendingUpload = async (input: {
     actorUserId: string
     file: FileWithOwner
     runtime?: FileStorageRuntime
-  }
-): Promise<void> => {
-  const runtime = input.runtime ?? getRuntime()
-  let object: FileR2Object | null
-  try {
-    object = await runtime.bucket.head(input.file.objectKey)
-  } catch {
-    throw providerUnavailable("r2", "headPendingUpload")
-  }
-  if (!object) {
-    throw providerUnavailable("r2", "headPendingUpload")
-  }
-  if (!metadataMatches(object, input.file)) {
-    // 未知のobjectを削除・上書きせず、予約とobjectを残して運用確認へ倒す。
-    throw providerUnavailable("r2", "verifyPendingUploadMetadata")
-  }
-  if (
-    typeof object.etag !== "string" ||
-    object.etag.length < 1 ||
-    object.etag.length > 128
-  ) {
-    throw providerUnavailable("r2", "verifyPendingUploadEtag")
+  }): Promise<void> => {
+    const runtime = input.runtime ?? ports.getRuntime()
+    let object: FileR2Object | null
+    try {
+      object = await runtime.bucket.head(input.file.objectKey)
+    } catch {
+      throw providerUnavailable("r2", "headPendingUpload")
+    }
+    if (!object) {
+      throw providerUnavailable("r2", "headPendingUpload")
+    }
+    if (!metadataMatches(object, input.file)) {
+      // 未知のobjectを削除・上書きせず、予約とobjectを残して運用確認へ倒す。
+      throw providerUnavailable("r2", "verifyPendingUploadMetadata")
+    }
+    if (
+      typeof object.etag !== "string" ||
+      object.etag.length < 1 ||
+      object.etag.length > 128
+    ) {
+      throw providerUnavailable("r2", "verifyPendingUploadEtag")
+    }
+
+    const { imageHeight, imageWidth } = await imageMetadata(runtime, input.file)
+
+    await ports.finalizePendingFile({
+      actorUserId: input.actorUserId,
+      etag: object.etag,
+      file: input.file,
+      imageHeight,
+      imageWidth,
+    })
   }
 
-  const { imageHeight, imageWidth } = await imageMetadata(runtime, input.file)
-
-  await finalizePendingFile(db, {
-    actorUserId: input.actorUserId,
-    etag: object.etag,
-    file: input.file,
-    imageHeight,
-    imageWidth,
-  })
-}
-
-export const uploadFile = async (
-  db: Db,
-  input: {
+  const uploadFile = async (input: {
     actorRole: OrganizationRole
     actorUserId: string
     file: File
@@ -335,51 +269,38 @@ export const uploadFile = async (
     ownerId: string
     ownerType: FileOwnerType
     uploadId: string
-  }
-): Promise<{ created: boolean; dto: FileDto }> => {
-  if (
-    input.fileSize !== input.file.size ||
-    input.file.size < 1 ||
-    input.file.size > FILE_MAX_BYTES
-  ) {
-    throw publicErrors.validation("File size does not match", {
-      field: "fileSize",
-    })
-  }
+  }): Promise<{ created: boolean; dto: FileDto }> => {
+    if (
+      input.fileSize !== input.file.size ||
+      input.file.size < 1 ||
+      input.file.size > FILE_MAX_BYTES
+    ) {
+      throw publicErrors.validation("File size does not match", {
+        field: "fileSize",
+      })
+    }
 
-  const adapter = getFileOwnerAdapter(input.ownerType)
-  await adapter.assertUploadable(db, {
-    actorUserId: input.actorUserId,
-    organizationId: input.organizationId,
-    ownerId: input.ownerId,
-  })
-  const filename = normalizeFilename(input.file.name)
-  const declaredContentType = normalizeDeclaredContentType(input.file.type)
-  const detectedImageFormat = await detectImageFormat(input.file)
-  const fileId = crypto.randomUUID()
-  const reservation = await reservePendingFile(db, {
-    declaredContentType,
-    detectedImageFormat,
-    fileId,
-    filename,
-    objectKey: fileObjectKey({
-      fileId,
+    await ports.assertOwnerUploadable({
+      actorUserId: input.actorUserId,
       organizationId: input.organizationId,
       ownerId: input.ownerId,
       ownerType: input.ownerType,
-    }),
-    organizationId: input.organizationId,
-    ownerId: input.ownerId,
-    ownerType: input.ownerType,
-    sizeBytes: input.fileSize,
-    uploaderId: input.actorUserId,
-    uploadId: input.uploadId,
-  })
-  if (
-    !sameUpload(reservation.file, {
+    })
+    const filename = normalizeFilename(input.file.name)
+    const declaredContentType = normalizeDeclaredContentType(input.file.type)
+    const detectedImageFormat = await detectImageFormat(input.file)
+    const fileId = crypto.randomUUID()
+    const reservation = await ports.reservePendingFile({
       declaredContentType,
       detectedImageFormat,
+      fileId,
       filename,
+      objectKey: fileObjectKey({
+        fileId,
+        organizationId: input.organizationId,
+        ownerId: input.ownerId,
+        ownerType: input.ownerType,
+      }),
       organizationId: input.organizationId,
       ownerId: input.ownerId,
       ownerType: input.ownerType,
@@ -387,26 +308,90 @@ export const uploadFile = async (
       uploaderId: input.actorUserId,
       uploadId: input.uploadId,
     })
-  ) {
-    throw publicErrors.conflict("Upload id is already in use", {
-      reason: "upload_id_mismatch",
-      resource: "file",
-    })
-  }
+    if (
+      !sameUpload(reservation.file, {
+        declaredContentType,
+        detectedImageFormat,
+        filename,
+        organizationId: input.organizationId,
+        ownerId: input.ownerId,
+        ownerType: input.ownerType,
+        sizeBytes: input.fileSize,
+        uploaderId: input.actorUserId,
+        uploadId: input.uploadId,
+      })
+    ) {
+      throw publicErrors.conflict("Upload id is already in use", {
+        reason: "upload_id_mismatch",
+        resource: "file",
+      })
+    }
 
-  if (reservation.file.status === "ready") {
-    const runtime = getRuntime()
+    if (reservation.file.status === "ready") {
+      const runtime = ports.getRuntime()
+      let object: FileR2Object | null
+      try {
+        object = await runtime.bucket.head(reservation.file.objectKey)
+      } catch {
+        throw providerUnavailable("r2", "headUploadRetry")
+      }
+      if (!object || !metadataMatches(object, reservation.file)) {
+        throw providerUnavailable("r2", "verifyUploadRetry")
+      }
+      await assertUploadContentMatches(runtime, reservation.file, input.file)
+      const ready = await ports.findReadyFileById({
+        actorRole: input.actorRole,
+        actorUserId: input.actorUserId,
+        fileId: reservation.file.id,
+        organizationId: input.organizationId,
+      })
+      if (!ready)
+        throw publicErrors.notFound("File not found", { resource: "file" })
+      return { created: false, dto: ready.dto }
+    }
+
+    const runtime = ports.getRuntime()
     let object: FileR2Object | null
+    let wroteObject = false
     try {
       object = await runtime.bucket.head(reservation.file.objectKey)
+      if (!object) {
+        const onlyIf = new Headers({ "if-none-match": "*" })
+        const putObject = await runtime.bucket.put(
+          reservation.file.objectKey,
+          input.file.stream(),
+          {
+            onlyIf,
+            httpMetadata: { contentType: "application/octet-stream" },
+            customMetadata: {
+              fileId: reservation.file.id,
+              uploadId: reservation.file.uploadId,
+              expectedSize: String(reservation.file.sizeBytes),
+            },
+          }
+        )
+        wroteObject = putObject !== null
+        object =
+          putObject ?? (await runtime.bucket.head(reservation.file.objectKey))
+      }
     } catch {
-      throw providerUnavailable("r2", "headUploadRetry")
+      throw providerUnavailable("r2", "putUpload")
     }
     if (!object || !metadataMatches(object, reservation.file)) {
-      throw providerUnavailable("r2", "verifyUploadRetry")
+      // onlyIf競合や未知metadataは上書きもcleanupもしない。次回retryも
+      // 同じpending rowを検証し、provider/operator側で安全に収束させる。
+      throw providerUnavailable("r2", "verifyUploadedObject")
     }
-    await assertUploadContentMatches(runtime, reservation.file, input.file)
-    const ready = await findReadyFileById(db, {
+    if (!wroteObject) {
+      await assertUploadContentMatches(runtime, reservation.file, input.file)
+    }
+
+    await reconcilePendingUpload({
+      actorUserId: input.actorUserId,
+      file: reservation.file,
+      runtime,
+    })
+    const ready = await ports.findReadyFileById({
       actorRole: input.actorRole,
       actorUserId: input.actorUserId,
       fileId: reservation.file.id,
@@ -414,467 +399,10 @@ export const uploadFile = async (
     })
     if (!ready)
       throw publicErrors.notFound("File not found", { resource: "file" })
-    return { created: false, dto: ready.dto }
+    return { created: reservation.created, dto: ready.dto }
   }
 
-  const runtime = getRuntime()
-  let object: FileR2Object | null
-  let wroteObject = false
-  try {
-    object = await runtime.bucket.head(reservation.file.objectKey)
-    if (!object) {
-      const onlyIf = new Headers({ "if-none-match": "*" })
-      const putObject = await runtime.bucket.put(
-        reservation.file.objectKey,
-        input.file.stream(),
-        {
-          onlyIf,
-          httpMetadata: { contentType: "application/octet-stream" },
-          customMetadata: {
-            fileId: reservation.file.id,
-            uploadId: reservation.file.uploadId,
-            expectedSize: String(reservation.file.sizeBytes),
-          },
-        }
-      )
-      wroteObject = putObject !== null
-      object =
-        putObject ?? (await runtime.bucket.head(reservation.file.objectKey))
-    }
-  } catch {
-    throw providerUnavailable("r2", "putUpload")
-  }
-  if (!object || !metadataMatches(object, reservation.file)) {
-    // onlyIf競合や未知metadataは上書きもcleanupもしない。次回retryも
-    // 同じpending rowを検証し、provider/operator側で安全に収束させる。
-    throw providerUnavailable("r2", "verifyUploadedObject")
-  }
-  if (!wroteObject) {
-    await assertUploadContentMatches(runtime, reservation.file, input.file)
-  }
-
-  await reconcilePendingUpload(db, {
-    actorUserId: input.actorUserId,
-    file: reservation.file,
-    runtime,
-  })
-  const ready = await findReadyFileById(db, {
-    actorRole: input.actorRole,
-    actorUserId: input.actorUserId,
-    fileId: reservation.file.id,
-    organizationId: input.organizationId,
-  })
-  if (!ready)
-    throw publicErrors.notFound("File not found", { resource: "file" })
-  return { created: reservation.created, dto: ready.dto }
+  return { reconcilePendingUpload, uploadFile }
 }
 
-export const listFiles = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    cursor?: string
-    limit: number
-    organizationId: string
-    ownerId: string
-    ownerType: FileOwnerType
-  }
-): Promise<FileListDto> => {
-  const adapter = getFileOwnerAdapter(input.ownerType)
-  await adapter.assertReadable(db, input)
-  return listReadyFilesByOwner(db, input)
-}
-
-const requireReadyFile = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    fileId: string
-    organizationId: string
-  }
-) => {
-  const file = await findReadyFileById(db, input)
-  if (!file) throw publicErrors.notFound("File not found", { resource: "file" })
-  await getFileOwnerAdapter(file.stored.ownerType).assertReadable(db, {
-    actorUserId: input.actorUserId,
-    organizationId: input.organizationId,
-    ownerId: file.stored.ownerId,
-  })
-  return file
-}
-
-const httpEtag = (etag: string) =>
-  etag.startsWith('"') && etag.endsWith('"') ? etag : `"${etag}"`
-
-const matchesIfNoneMatch = (value: string | null, etag: string) =>
-  value
-    ?.split(",")
-    .map((candidate) => candidate.trim().replace(/^W\//u, ""))
-    .some((candidate) => candidate === "*" || candidate === etag) ?? false
-
-const downloadDisposition = (filename: string) => {
-  const encoded = encodeURIComponent(filename).replace(
-    /[!'()*]/gu,
-    (character) => `%${character.codePointAt(0)?.toString(16).toUpperCase()}`
-  )
-  return `attachment; filename="download"; filename*=UTF-8''${encoded}`
-}
-
-type ByteRange = { offset: number; length: number }
-
-const parseRange = (
-  value: string | null,
-  size: number
-): ByteRange | null | false => {
-  if (!value) return null
-  const match = /^bytes=(\d*)-(\d*)$/u.exec(value.trim())
-  if (!match || (!match[1] && !match[2])) return false
-  if (!match[1]) {
-    const suffix = Number(match[2])
-    if (!Number.isSafeInteger(suffix) || suffix < 1) return false
-    const length = Math.min(suffix, size)
-    return { offset: size - length, length }
-  }
-  const start = Number(match[1])
-  const end = match[2] ? Number(match[2]) : size - 1
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(end) ||
-    start < 0 ||
-    end < start ||
-    start >= size
-  ) {
-    return false
-  }
-  return { offset: start, length: Math.min(end, size - 1) - start + 1 }
-}
-
-const privateFileHeaders = () =>
-  new Headers({
-    "Cache-Control": "private, no-cache",
-    "Cross-Origin-Resource-Policy": "same-site",
-    "X-Content-Type-Options": "nosniff",
-  })
-
-const unsupportedTextPreview = () =>
-  new AppError({
-    code: "unsupported_media_type",
-    publicMessage: "File cannot be previewed as text",
-    statusCode: 415,
-    publicContext: { resource: "file_preview" },
-  })
-
-const readBoundedBody = async (
-  body: ReadableStream<Uint8Array>,
-  expectedLength: number
-) => {
-  const reader = body.getReader()
-  const chunks: Uint8Array[] = []
-  let byteLength = 0
-  try {
-    while (byteLength < expectedLength) {
-      // oxlint-disable-next-line no-await-in-loop -- R2 bodyを上限内で逐次読む。
-      const result = await reader.read()
-      if (result.done) break
-      if (byteLength + result.value.byteLength > expectedLength) {
-        throw providerUnavailable("r2", "validateTextPreviewRange")
-      }
-      chunks.push(result.value)
-      byteLength += result.value.byteLength
-    }
-    if (byteLength !== expectedLength) {
-      throw providerUnavailable("r2", "validateTextPreviewRange")
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined)
-    reader.releaseLock()
-  }
-
-  const bytes = new Uint8Array(byteLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return bytes
-}
-
-const isUtf8ContinuationByte = (byte: number) => (byte & 0xc0) === 0x80
-
-const textPreviewByteLength = (bytes: Uint8Array) => {
-  if (bytes.byteLength <= FILE_TEXT_PREVIEW_MAX_BYTES) {
-    return bytes.byteLength
-  }
-  let byteLength = FILE_TEXT_PREVIEW_MAX_BYTES
-  while (
-    byteLength < bytes.byteLength &&
-    isUtf8ContinuationByte(bytes[byteLength] ?? 0)
-  ) {
-    byteLength += 1
-  }
-  return byteLength
-}
-
-export const previewTextFile = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    fileId: string
-    organizationId: string
-  }
-): Promise<TextFilePreviewDto> => {
-  const file = await requireReadyFile(db, input)
-  if (!isTextPreviewableFile(file.stored)) throw unsupportedTextPreview()
-  if (!file.stored.etag) {
-    throw providerUnavailable("r2", "readTextPreviewMetadata")
-  }
-
-  const requestedLength = Math.min(
-    file.stored.sizeBytes,
-    FILE_TEXT_PREVIEW_MAX_BYTES + 3
-  )
-  const runtime = getRuntime()
-  let bytes: Uint8Array
-  try {
-    const source = bodyObject(
-      await runtime.bucket.get(file.stored.objectKey, {
-        onlyIf: new Headers({ "if-match": httpEtag(file.stored.etag) }),
-        range: { offset: 0, length: requestedLength },
-      })
-    )
-    if (!source) throw providerUnavailable("r2", "readTextPreviewObject")
-    bytes = await readBoundedBody(source.body, requestedLength)
-  } catch (error) {
-    if (error instanceof AppError) throw error
-    throw providerUnavailable("r2", "readTextPreviewObject")
-  }
-
-  const previewByteLength = textPreviewByteLength(bytes)
-  let content: string
-  try {
-    content = new TextDecoder("utf-8", { fatal: true }).decode(
-      bytes.subarray(0, previewByteLength)
-    )
-  } catch {
-    throw unsupportedTextPreview()
-  }
-  if (content.includes("\0")) throw unsupportedTextPreview()
-  return {
-    content,
-    truncated: file.stored.sizeBytes > previewByteLength,
-  }
-}
-
-export const downloadFile = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    fileId: string
-    organizationId: string
-    request: Request
-  }
-): Promise<Response> => {
-  const file = await requireReadyFile(db, input)
-  if (!file.stored.etag) {
-    throw providerUnavailable("r2", "readDownloadMetadata")
-  }
-  const etag = httpEtag(file.stored.etag)
-  const headers = privateFileHeaders()
-  headers.set("Accept-Ranges", "bytes")
-  headers.set("Content-Disposition", downloadDisposition(file.stored.filename))
-  headers.set("Content-Type", "application/octet-stream")
-  headers.set("ETag", etag)
-  if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
-    return new Response(null, { status: 304, headers })
-  }
-
-  const range = parseRange(
-    input.request.headers.get("range"),
-    file.stored.sizeBytes
-  )
-  if (range === false) {
-    headers.set("Content-Range", `bytes */${file.stored.sizeBytes}`)
-    return new Response(null, { status: 416, headers })
-  }
-  const runtime = getRuntime()
-  let source: FileR2ObjectBody | null
-  try {
-    const onlyIf = new Headers({ "if-match": etag })
-    source = bodyObject(
-      await runtime.bucket.get(
-        file.stored.objectKey,
-        range ? { onlyIf, range } : { onlyIf }
-      )
-    )
-  } catch {
-    throw providerUnavailable("r2", "downloadObject")
-  }
-  if (!source) throw providerUnavailable("r2", "downloadObject")
-  headers.set("Content-Length", String(range?.length ?? file.stored.sizeBytes))
-  if (range) {
-    headers.set(
-      "Content-Range",
-      `bytes ${range.offset}-${range.offset + range.length - 1}/${file.stored.sizeBytes}`
-    )
-  }
-  return new Response(source.body, { status: range ? 206 : 200, headers })
-}
-
-const previewVariantEtag = async (
-  sourceEtag: string,
-  width: FilePreviewWidth
-) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`${sourceEtag}:${width}:webp:q75:anim0:v1`)
-  )
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("")
-  return `"${hex}"`
-}
-
-const cacheKey = (
-  request: Request,
-  input: {
-    fileId: string
-    organizationId: string
-    sourceEtag: string
-    width: FilePreviewWidth
-  }
-) => {
-  const url = new URL(request.url)
-  url.pathname = `/__file_preview_cache/organizations/${encodeURIComponent(input.organizationId)}/files/${encodeURIComponent(input.fileId)}/${input.width}`
-  url.search = new URLSearchParams({
-    source: input.sourceEtag,
-    variant: "webp:q75:anim0:v1",
-  }).toString()
-  return new Request(url, { method: "GET" })
-}
-
-const browserPreviewResponse = (response: Response, etag: string) => {
-  const headers = privateFileHeaders()
-  headers.set("Content-Type", "image/webp")
-  headers.set("ETag", etag)
-  const contentLength = response.headers.get("content-length")
-  if (contentLength) headers.set("Content-Length", contentLength)
-  return new Response(response.body, { status: 200, headers })
-}
-
-export const previewFile = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    fileId: string
-    organizationId: string
-    request: Request
-    width: string
-  }
-): Promise<Response> => {
-  const width = FILE_PREVIEW_WIDTHS.find(
-    (candidate) => String(candidate) === input.width
-  )
-  if (width === undefined) {
-    throw publicErrors.validation("Unsupported preview width", {
-      field: "width",
-    })
-  }
-  const file = await requireReadyFile(db, input)
-  if (!isPreviewableImageFormat(file.stored.detectedImageFormat)) {
-    throw publicErrors.notFound("File preview not found", {
-      resource: "file_preview",
-    })
-  }
-  if (!file.stored.etag) {
-    throw providerUnavailable("r2", "readPreviewMetadata")
-  }
-  const etag = await previewVariantEtag(file.stored.etag, width)
-  if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
-    const headers = privateFileHeaders()
-    headers.set("ETag", etag)
-    return new Response(null, { status: 304, headers })
-  }
-
-  const runtime = getRuntime()
-  const key = cacheKey(input.request, {
-    fileId: file.stored.id,
-    organizationId: input.organizationId,
-    sourceEtag: file.stored.etag,
-    width,
-  })
-  if (runtime.cache) {
-    try {
-      const cached = await runtime.cache.match(key)
-      if (cached) return browserPreviewResponse(cached, etag)
-    } catch {
-      // Cache API障害時も認証済みrequestはR2 + Imagesへfail-openする。
-    }
-  }
-
-  let transformed: Response
-  try {
-    const source = bodyObject(await runtime.bucket.get(file.stored.objectKey))
-    if (!source) throw providerUnavailable("r2", "readPreviewObject")
-    const result = await runtime.images
-      .input(source.body)
-      .transform({ width, fit: "scale-down" })
-      .output({ format: "image/webp", quality: 75, anim: false })
-    transformed = result.response()
-    if (!transformed.ok) {
-      throw providerUnavailable("images", "transformPreview")
-    }
-  } catch (error) {
-    if (error instanceof AppError) throw error
-    throw providerUnavailable("images", "transformPreview")
-  }
-
-  if (runtime.cache) {
-    const cacheHeaders = new Headers(transformed.headers)
-    cacheHeaders.delete("Set-Cookie")
-    cacheHeaders.set("Cache-Control", "public, max-age=2592000")
-    cacheHeaders.set("Content-Type", "image/webp")
-    cacheHeaders.set("ETag", etag)
-    const cacheResponse = new Response(transformed.clone().body, {
-      status: 200,
-      headers: cacheHeaders,
-    })
-    const write = runtime.cache.put(key, cacheResponse).catch(() => undefined)
-    if (runtime.defer) runtime.defer(write)
-    else await write
-  }
-  return browserPreviewResponse(transformed, etag)
-}
-
-export const removeFile = async (
-  db: Db,
-  input: {
-    actorRole: OrganizationRole
-    actorUserId: string
-    fileId: string
-    organizationId: string
-  }
-): Promise<void> => {
-  const file = await requireReadyFile(db, input)
-  if (
-    file.stored.uploaderId !== input.actorUserId &&
-    input.actorRole === "member"
-  ) {
-    throw publicErrors.forbidden("Only the uploader or an admin can delete", {
-      action: "file.delete",
-    })
-  }
-  const deleted = await deleteReadyFile(db, {
-    actorUserId: input.actorUserId,
-    file: file.stored,
-  })
-  if (!deleted)
-    throw publicErrors.notFound("File not found", { resource: "file" })
-}
-
-export const isRetryableFileError = (error: unknown) =>
-  error instanceof AppError && error.statusCode >= 500
+export type FileService = ReturnType<typeof createFileService>

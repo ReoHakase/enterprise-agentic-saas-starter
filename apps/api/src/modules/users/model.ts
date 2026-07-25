@@ -1,7 +1,7 @@
 import * as v from "valibot"
 
 import { isoTimestampModel, nonEmptyStringModel } from "../../models/common"
-import { organizationSummaryModel } from "../organizations/model"
+import { organizationSummaryModel } from "../organizations/public"
 
 export const userModel = v.object({
   id: v.string(),

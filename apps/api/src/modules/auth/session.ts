@@ -24,13 +24,6 @@ const parseTestSessionCreatedAt = (request: Request) => {
   return Number.isNaN(createdAt.getTime()) ? new Date(0) : createdAt
 }
 
-export const getSessionUser = async (
-  request: Request
-): Promise<SessionUser> => {
-  const { user } = await getSessionContext(request)
-  return user
-}
-
 export const getSessionContext = async (
   request: Request
 ): Promise<{ session: SessionContext; user: SessionUser }> => {
@@ -73,3 +66,5 @@ export const getSessionContext = async (
     user: session.user,
   }
 }
+
+export type GetSessionContext = typeof getSessionContext

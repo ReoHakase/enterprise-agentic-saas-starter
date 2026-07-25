@@ -1,3 +1,5 @@
+import { errorDefinition, type AppErrorCode } from "./error-registry"
+
 export type PublicErrorContext = Partial<{
   action: string
   constraint: string
@@ -60,31 +62,32 @@ export const sanitizePublicErrorContext = (
 }
 
 export type AppErrorOptions = {
-  code: string
-  publicMessage: string
-  statusCode: number
+  code: AppErrorCode
+  publicMessage?: string
   cause?: unknown
   publicContext?: PublicErrorContext
   privateContext?: PrivateErrorContext
 }
 
 export class AppError extends Error {
-  readonly code: string
+  readonly code: AppErrorCode
   readonly publicMessage: string
   readonly statusCode: number
   readonly publicContext: PublicErrorContext
   readonly privateContext: PrivateErrorContext
 
   constructor(options: AppErrorOptions) {
-    super(options.publicMessage, { cause: options.cause })
+    const definition = errorDefinition(options.code)
+    const publicMessage = options.publicMessage ?? definition.publicMessage
+    super(publicMessage, { cause: options.cause })
     this.name = "AppError"
     this.code = options.code
-    this.publicMessage = options.publicMessage
+    this.publicMessage = publicMessage
     Object.defineProperty(this, "publicMessage", {
       configurable: false,
       writable: false,
     })
-    this.statusCode = options.statusCode
+    this.statusCode = definition.statusCode
     this.publicContext = Object.freeze(
       sanitizePublicErrorContext(options.publicContext)
     )
@@ -97,7 +100,6 @@ export const publicErrors = {
     return new AppError({
       code: "unauthorized",
       publicMessage,
-      statusCode: 401,
     })
   },
   forbidden(
@@ -107,15 +109,12 @@ export const publicErrors = {
     return new AppError({
       code: "forbidden",
       publicMessage,
-      statusCode: 403,
       publicContext,
     })
   },
   csrfOriginForbidden(reason: "missing_origin" | "untrusted_origin") {
     return new AppError({
       code: "csrf_origin_forbidden",
-      publicMessage: "Request origin is not allowed",
-      statusCode: 403,
       publicContext: { reason },
     })
   },
@@ -123,15 +122,12 @@ export const publicErrors = {
     return new AppError({
       code: "conflict",
       publicMessage,
-      statusCode: 409,
       publicContext,
     })
   },
   activeOrganizationRequired() {
     return new AppError({
       code: "active_organization_required",
-      publicMessage: "Select an active organization",
-      statusCode: 409,
       publicContext: {
         action: "organization.activate",
         reason: "missing_active_organization",
@@ -141,8 +137,6 @@ export const publicErrors = {
   activeOrganizationMismatch() {
     return new AppError({
       code: "active_organization_mismatch",
-      publicMessage: "Switch to this organization before continuing",
-      statusCode: 409,
       publicContext: {
         action: "organization.activate",
         reason: "active_organization_mismatch",
@@ -152,8 +146,6 @@ export const publicErrors = {
   confirmationRequired(action: string, publicContext: PublicErrorContext = {}) {
     return new AppError({
       code: "confirmation_required",
-      publicMessage: "Confirmation does not match",
-      statusCode: 400,
       publicContext: {
         action,
         field: "confirmation",
@@ -165,8 +157,6 @@ export const publicErrors = {
   stepUpRequired(action: string, maxAgeSeconds: number) {
     return new AppError({
       code: "step_up_required",
-      publicMessage: "Recent authentication required",
-      statusCode: 403,
       publicContext: {
         action,
         maxAgeSeconds,
@@ -177,8 +167,6 @@ export const publicErrors = {
   internal(cause: unknown, privateContext: PrivateErrorContext = {}) {
     return new AppError({
       code: "internal_error",
-      publicMessage: "Internal server error",
-      statusCode: 500,
       cause,
       privateContext,
     })
@@ -186,8 +174,6 @@ export const publicErrors = {
   unavailable(cause: unknown, retryAfter = 30) {
     return new AppError({
       code: "service_unavailable",
-      publicMessage: "Service temporarily unavailable",
-      statusCode: 503,
       cause,
       publicContext: { retryAfter },
       privateContext: { operation: "readiness" },
@@ -197,7 +183,6 @@ export const publicErrors = {
     return new AppError({
       code: "rate_limited",
       publicMessage: "Too many invitations requested. Try again later",
-      statusCode: 429,
       publicContext: {
         reason: "quota_exceeded",
         resource: "invitation",
@@ -212,7 +197,6 @@ export const publicErrors = {
     return new AppError({
       code: "validation_error",
       publicMessage,
-      statusCode: 400,
       publicContext,
     })
   },
@@ -223,7 +207,6 @@ export const publicErrors = {
     return new AppError({
       code: "not_found",
       publicMessage,
-      statusCode: 404,
       publicContext,
     })
   },

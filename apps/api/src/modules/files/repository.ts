@@ -11,7 +11,7 @@ import {
 import { and, desc, eq, lt, lte, or, sql } from "drizzle-orm"
 
 import { AppError, publicErrors } from "../../errors/app-error"
-import type { OrganizationRole } from "../authorization/roles"
+import type { OrganizationRole } from "../authorization/public"
 import {
   ORGANIZATION_FILE_QUOTA_BYTES,
   isPreviewableImageFormat,
@@ -119,6 +119,7 @@ const isDatabaseWriteContention = (cause: unknown) => {
   )
 }
 
+/** @internal */
 export const findFileByUploadId = async (
   db: Db,
   input: { organizationId: string; uploadId: string }

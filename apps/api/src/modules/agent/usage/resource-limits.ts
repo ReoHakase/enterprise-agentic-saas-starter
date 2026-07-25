@@ -15,17 +15,20 @@ export type AgentResourceUsageTransaction = Parameters<
 
 export const AGENT_USAGE_HOUR_MS = 60 * 60 * 1000
 export const AGENT_USAGE_DAY_MS = 24 * AGENT_USAGE_HOUR_MS
-export const AGENT_RESOURCE_USAGE_RETENTION_GRACE_MS = AGENT_USAGE_DAY_MS
-export const AGENT_RESOURCE_USAGE_PURGE_BATCH_SIZE = 100
+const AGENT_RESOURCE_USAGE_RETENTION_GRACE_MS = AGENT_USAGE_DAY_MS
+const AGENT_RESOURCE_USAGE_PURGE_BATCH_SIZE = 100
 
 // 初期運用はcost runawayを避けるため、課金対象をuserの短期窓とorgの
 // 日次窓の両方で予約する。plan別quotaを導入するまではこの保守値を正本にする。
+/** @internal */
 export const AGENT_MODEL_RUN_USER_HOURLY_LIMIT = 20
+/** @internal */
 export const AGENT_MODEL_RUN_ORGANIZATION_DAILY_LIMIT = 500
+/** @internal */
 export const AGENT_WEB_SEARCH_USER_HOURLY_LIMIT = 10
-export const AGENT_WEB_SEARCH_ORGANIZATION_DAILY_LIMIT = 100
-export const AGENT_MODEL_RUN_ACTIVE_USER_LIMIT = 1
-export const AGENT_MODEL_RUN_ACTIVE_ORGANIZATION_LIMIT = 10
+const AGENT_WEB_SEARCH_ORGANIZATION_DAILY_LIMIT = 100
+const AGENT_MODEL_RUN_ACTIVE_USER_LIMIT = 1
+const AGENT_MODEL_RUN_ACTIVE_ORGANIZATION_LIMIT = 10
 
 /**
  * 完了windowはretry/idempotencyの短いgraceだけ保持し、bucket削除のFK cascadeで
@@ -90,7 +93,6 @@ const limitExceeded = (input: { now: Date; windowEnd: Date }) =>
   new AppError({
     code: "rate_limited",
     publicMessage: "Agent resource limit exceeded. Try again later",
-    statusCode: 429,
     publicContext: {
       reason: "rate_limit_exceeded",
       retryAfter: Math.max(
@@ -109,7 +111,6 @@ const concurrencyLimitExceeded = (input: {
   new AppError({
     code: "rate_limited",
     publicMessage: "Too many agent runs are active. Try again later",
-    statusCode: 429,
     publicContext: {
       constraint: input.constraint,
       reason: "concurrency_limit_exceeded",
@@ -272,7 +273,7 @@ type ModelRunReservationInput = ModelRunConcurrencyInput & {
   attempt: number
 }
 
-export const assertAgentModelRunConcurrencyInTransaction = async (
+const assertAgentModelRunConcurrencyInTransaction = async (
   tx: AgentResourceUsageTransaction,
   input: ModelRunConcurrencyInput
 ) => {

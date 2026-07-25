@@ -22,7 +22,7 @@ const truncate = (value: string): string =>
     ? `${value.slice(0, MAX_STRING_LENGTH)}…`
     : value
 
-export const redactTelemetryString = (value: string): string => {
+const redactTelemetryString = (value: string): string => {
   if (
     emailPattern.test(value) ||
     jwtPattern.test(value) ||
@@ -114,6 +114,7 @@ const resourceCollectionSegments = new Set([
   "users",
 ])
 
+/** @internal */
 export const normalizeTelemetryPath = (pathname: string): string => {
   const segments = pathname.split("/")
   const normalized = segments

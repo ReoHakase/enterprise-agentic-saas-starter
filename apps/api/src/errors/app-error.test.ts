@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { AppError, sanitizePublicErrorContext } from "./app-error"
+import { appErrorCodes, errorDefinition, errorRegistry } from "./error-registry"
 
 describe("public API error context", () => {
   it("keeps only bounded recovery identifiers and non-negative integers", () => {
@@ -50,7 +51,6 @@ describe("public API error context", () => {
     const error = new AppError({
       code: "validation_error",
       publicMessage: "Invalid request",
-      statusCode: 400,
       publicContext: {
         field: "email",
         retryAfter: Number.POSITIVE_INFINITY,
@@ -64,4 +64,19 @@ describe("public API error context", () => {
       false
     )
   })
+
+  it.each(appErrorCodes)(
+    "derives the HTTP projection for %s from the finite registry",
+    (code) => {
+      const definition = errorRegistry[code]
+      const error = new AppError({
+        code,
+      })
+
+      expect(error.code).toBe(code)
+      expect(error.statusCode).toBe(definition.statusCode)
+      expect(error.publicMessage).toBe(definition.publicMessage)
+      expect(errorDefinition(error.code)).toBe(definition)
+    }
+  )
 })

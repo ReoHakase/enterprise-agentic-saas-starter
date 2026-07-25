@@ -4,14 +4,7 @@ import type { issueFileOwners } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
 import { AppError, publicErrors } from "../../errors/app-error"
-import { requireMembership } from "../authorization/roles"
 import { fileOwnerPrefix, type FileOwnerType } from "./constants"
-
-type OwnerAccessInput = {
-  actorUserId: string
-  organizationId: string
-  ownerId: string
-}
 
 type FileTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
@@ -25,14 +18,12 @@ type FileOwnerActivityInput = {
   ownerId: string
 }
 
-export type FileOwnerAdapter = {
+type FileOwnerAdapter = {
   type: FileOwnerType
   assertExists(
     db: Db,
     input: { organizationId: string; ownerId: string }
   ): Promise<void>
-  assertReadable(db: Db, input: OwnerAccessInput): Promise<void>
-  assertUploadable(db: Db, input: OwnerAccessInput): Promise<void>
   ownerRow(input: {
     fileId: string
     organizationId: string
@@ -94,20 +85,6 @@ const issueOwnerAdapter: FileOwnerAdapter = {
       toValue: input.kind === "file_added" ? input.filename : null,
       createdAt: input.occurredAt,
     })
-  },
-  async assertReadable(db, input) {
-    await requireMembership(db, {
-      organizationId: input.organizationId,
-      userId: input.actorUserId,
-    })
-    await this.assertExists(db, input)
-  },
-  async assertUploadable(db, input) {
-    await requireMembership(db, {
-      organizationId: input.organizationId,
-      userId: input.actorUserId,
-    })
-    await this.assertExists(db, input)
   },
   cleanupPrefix: ({ organizationId, ownerId }) =>
     fileOwnerPrefix({ organizationId, ownerId, ownerType: "issue" }),

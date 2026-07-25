@@ -6,7 +6,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, asc, eq, isNull, lte, notExists, or, sql } from "drizzle-orm"
 
-import { purgeExpiredAgentResourceUsage } from "../agent/usage/resource-limits"
+import { purgeExpiredAgentResourceUsage } from "../agent/public"
 import { expireDueAgentAssets } from "./agent-assets-repository"
 import { agentAssetObjectKey } from "./constants"
 import type { FileR2Bucket } from "./runtime"
@@ -159,6 +159,7 @@ const completeExactDelete = async (
     return true
   })
 
+/** @internal */
 export const processStorageObjectCleanupJobs = async ({
   bucket,
   database,

@@ -3,14 +3,14 @@ import { files, issueFileOwners } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray } from "drizzle-orm"
 
 import { AppError, publicErrors } from "../../errors/app-error"
-import { hashAgentToken } from "../agent/crypto"
-import { validateGrantInTransaction } from "../agent/threads/repository"
 import {
   AGENT_USAGE_DAY_MS,
   consumeAgentResourceLimitInTransaction,
+  hashAgentToken,
   hashedAgentUsageOperationId,
   utcUsageWindow,
-} from "../agent/usage/resource-limits"
+  validateGrantInTransaction,
+} from "../agent/public"
 import {
   AGENT_ASSET_VISION_ORGANIZATION_DAILY_LIMIT,
   AGENT_ASSET_VISION_USER_DAILY_LIMIT,

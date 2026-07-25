@@ -19,6 +19,7 @@ import {
   FILE_TEXT_PREVIEW_MAX_BYTES,
   isTextPreviewableFile,
 } from "./constants"
+import { detectImageFormat } from "./file-domain"
 import { fileUploadBodyModel } from "./model"
 import { reservePendingFile } from "./repository"
 import {
@@ -32,13 +33,12 @@ import {
   type FileStorageRuntime,
 } from "./runtime"
 import {
-  detectImageFormat,
   downloadFile,
   previewFile,
   previewTextFile,
   removeFile,
   uploadFile,
-} from "./service"
+} from "./service.test-support"
 
 const now = new Date("2026-07-18T00:00:00.000Z")
 
@@ -686,6 +686,21 @@ describe("file service", () => {
     for (const [expected, fixture] of fixtures) {
       expect(isTextPreviewableFile(fixture)).toBe(expected)
     }
+  })
+})
+
+describe("file service", () => {
+  let database: Db
+  let storage: ReturnType<typeof createRuntime>
+
+  beforeEach(async () => {
+    database = await createDatabase()
+    storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+  })
+
+  afterEach(() => {
+    resetFileStorageRuntimeForTest()
   })
 
   it("serves authenticated UTF-8 text preview JSON with private headers", async () => {

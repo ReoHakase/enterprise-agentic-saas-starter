@@ -2,8 +2,10 @@ import { timingSafeEqual as nodeTimingSafeEqual } from "node:crypto"
 
 export const IMAGES_SMOKE_ROUTE = "/transform" as const
 export const IMAGES_SMOKE_HEALTH_ROUTE = "/health" as const
+/** @internal */
 export const IMAGES_SMOKE_WIDTH = 360 as const
 export const IMAGES_SMOKE_MAX_INPUT_BYTES = 20_000_000 as const
+/** @internal */
 export const IMAGES_SMOKE_MAX_OUTPUT_BYTES = 1_000_000 as const
 
 export const IMAGES_SMOKE_TRANSFORM = {
@@ -64,7 +66,7 @@ export const verifySmokeToken = async (
     : nodeTimingSafeEqual(provided, expected)
 }
 
-export type WebpDimensions = {
+type WebpDimensions = {
   width: number
   height: number
 }
@@ -79,6 +81,7 @@ const littleEndian24 = (bytes: Uint8Array, offset: number) =>
   (byteAt(bytes, offset + 1) << 8) |
   (byteAt(bytes, offset + 2) << 16)
 
+/** @internal */
 export const readWebpDimensions = (
   bytes: Uint8Array
 ): WebpDimensions | null => {
@@ -152,6 +155,7 @@ export const readWebpDimensions = (
   return null
 }
 
+/** @internal */
 export const readBoundedResponse = async (
   response: Response,
   maximumBytes: number = IMAGES_SMOKE_MAX_OUTPUT_BYTES
@@ -189,6 +193,7 @@ export const readBoundedResponse = async (
   return output
 }
 
+/** @internal */
 export const isAllowedImagesSmokeUrl = (url: URL): boolean =>
   (url.protocol === "http:" &&
     (url.hostname === "127.0.0.1" || url.hostname === "localhost")) ||

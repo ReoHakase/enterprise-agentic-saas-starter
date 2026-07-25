@@ -56,7 +56,7 @@ type FileCleanupJobOutcome = "completed" | "failed" | "skipped" | "stale"
 const retryDelayMs = (attempt: number) =>
   Math.min(retryBaseMs * 2 ** Math.max(0, attempt - 1), retryMaximumMs)
 
-export const deleteFilePrefix = async (
+const deleteFilePrefix = async (
   bucket: FileCleanupBucket,
   prefix: string
 ): Promise<number> => {

@@ -12,7 +12,7 @@ import {
   type FileR2Object,
   type FileR2PutValue,
   type FileStorageRuntime,
-} from "../files/runtime"
+} from "../files/public"
 
 const streamOf = (bytes: Uint8Array) =>
   new ReadableStream<Uint8Array>({

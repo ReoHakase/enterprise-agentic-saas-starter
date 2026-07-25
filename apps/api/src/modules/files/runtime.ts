@@ -11,6 +11,7 @@ export type FileR2ObjectBody = FileR2Object & {
   range?: { offset: number; length: number }
 }
 
+/** @internal */
 export type FileR2PutValue = Blob | ReadableStream<Uint8Array>
 
 export type FileR2Bucket = {
@@ -86,6 +87,7 @@ export const configureFileStorageRuntime = (next: FileStorageRuntime) => {
   runtime = next
 }
 
+/** @internal */
 export const resetFileStorageRuntimeForTest = () => {
   runtime = undefined
 }

@@ -9,6 +9,7 @@ export const configureAgentRuntime = (next: AgentRuntimeBinding): void => {
   runtime = next
 }
 
+/** @internal */
 export const resetAgentRuntimeForTest = (): void => {
   runtime = undefined
 }

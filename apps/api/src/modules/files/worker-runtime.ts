@@ -19,7 +19,7 @@ const isFileCache = (value: unknown): value is FileCache =>
   typeof Reflect.get(value, "match") === "function" &&
   typeof Reflect.get(value, "put") === "function"
 
-export const cloudflareDefaultFileCache = (): FileCache | undefined => {
+const cloudflareDefaultFileCache = (): FileCache | undefined => {
   const cacheStorage = Reflect.get(globalThis, "caches")
   if (!cacheStorage || typeof cacheStorage !== "object") return undefined
   const defaultCache: unknown = Reflect.get(cacheStorage, "default")

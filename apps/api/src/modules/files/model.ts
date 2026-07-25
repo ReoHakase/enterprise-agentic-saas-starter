@@ -16,7 +16,7 @@ const identifierModel = v.pipe(
   v.maxLength(255)
 )
 
-export const fileOwnerTypeModel = v.picklist(fileOwnerTypes)
+const fileOwnerTypeModel = v.picklist(fileOwnerTypes)
 
 export const fileOwnerParamsModel = v.strictObject({
   organizationId: identifierModel,
@@ -136,9 +136,5 @@ export const textFilePreviewDtoModel = v.object({
 
 export type FileDto = v.InferOutput<typeof fileDtoModel>
 export type FileListDto = v.InferOutput<typeof fileListDtoModel>
-export type FileUploadBody = v.InferOutput<typeof fileUploadBodyModel>
 export type TextFilePreviewDto = v.InferOutput<typeof textFilePreviewDtoModel>
 export type AgentAssetDto = v.InferOutput<typeof agentAssetDtoModel>
-export type AgentAssetUploadBody = v.InferOutput<
-  typeof agentAssetUploadBodyModel
->

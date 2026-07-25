@@ -32,11 +32,6 @@ export type FileOwnerType = (typeof fileOwnerTypes)[number]
 export const previewableImageFormats = ["jpeg", "png", "webp", "gif"] as const
 export type PreviewableImageFormat = (typeof previewableImageFormats)[number]
 
-export const isFilePreviewWidth = (
-  value: string
-): value is `${FilePreviewWidth}` =>
-  FILE_PREVIEW_WIDTHS.some((width) => String(width) === value)
-
 export const isPreviewableImageFormat = (
   value: string | null
 ): value is PreviewableImageFormat =>

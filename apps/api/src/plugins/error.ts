@@ -1,18 +1,33 @@
 import { Elysia, ValidationError } from "elysia"
 
 import { AppError, sanitizePublicErrorContext } from "../errors/app-error"
+import { errorDefinition } from "../errors/error-registry"
 import {
   captureObservedException,
   recordObservedHttpStatus,
 } from "../observability/runtime"
 
+const isAppError = (value: unknown): value is AppError => {
+  try {
+    return value instanceof AppError
+  } catch {
+    return false
+  }
+}
+
+const isValidationError = (value: unknown): value is ValidationError => {
+  try {
+    return value instanceof ValidationError
+  } catch {
+    return false
+  }
+}
+
 const isResponseValidationError = (code: string, error: unknown) =>
-  code === "VALIDATION" &&
-  error instanceof ValidationError &&
-  error.type === "response"
+  code === "VALIDATION" && isValidationError(error) && error.type === "response"
 
 const statusCodeFor = (code: string, error: unknown) => {
-  if (error instanceof AppError) {
+  if (isAppError(error)) {
     return error.statusCode
   }
 
@@ -32,7 +47,7 @@ const statusCodeFor = (code: string, error: unknown) => {
 }
 
 const attributeCodeFor = (elysiaCode: string, error: unknown): string => {
-  if (error instanceof AppError) {
+  if (isAppError(error)) {
     return error.code
   }
 
@@ -119,7 +134,7 @@ const fieldErrorsFor = (
   code: string,
   error: unknown
 ): FieldErrors | undefined => {
-  if (error instanceof AppError) {
+  if (isAppError(error)) {
     const field = error.publicContext.field
     if (typeof field !== "string") {
       return undefined
@@ -130,7 +145,7 @@ const fieldErrorsFor = (
 
   if (
     code !== "VALIDATION" ||
-    !(error instanceof ValidationError) ||
+    !isValidationError(error) ||
     error.type === "response"
   ) {
     return undefined
@@ -161,7 +176,10 @@ const recordError = (
   const appCode = attributeCodeFor(elysiaCode, error)
   recordObservedHttpStatus(httpStatus, appCode)
 
-  if (httpStatus >= 500 && requestId) {
+  const shouldCapture = isAppError(error)
+    ? errorDefinition(error.code).capture
+    : httpStatus >= 500
+  if (shouldCapture && requestId) {
     captureObservedException(error, {
       errorCode: appCode,
       method: request.method,
@@ -185,7 +203,7 @@ const responseBody = (code: string, error: unknown, requestId: string) => {
     }
   }
 
-  if (error instanceof AppError) {
+  if (isAppError(error)) {
     const context = sanitizePublicErrorContext(error.publicContext)
     return {
       error: {
@@ -228,6 +246,45 @@ const responseBody = (code: string, error: unknown, requestId: string) => {
   }
 }
 
+const internalErrorBody = (requestId: string) => ({
+  error: {
+    code: "internal_error",
+    message: "Internal server error",
+    requestId,
+  },
+})
+
+/** @internal */
+export const projectErrorForResponse = (
+  code: string,
+  error: unknown,
+  requestId: string
+) => {
+  let httpStatus = 500
+  let body = internalErrorBody(requestId)
+  let retryAfter: number | undefined
+
+  try {
+    httpStatus = statusCodeFor(code, error)
+    body = responseBody(code, error, requestId)
+
+    if (isAppError(error)) {
+      const definition = errorDefinition(error.code)
+      if (
+        definition.retryable &&
+        typeof error.publicContext.retryAfter === "number"
+      ) {
+        retryAfter = error.publicContext.retryAfter
+      }
+    }
+  } catch {
+    httpStatus = 500
+    body = internalErrorBody(requestId)
+  }
+
+  return { body, httpStatus, retryAfter }
+}
+
 export const errorPlugin = new Elysia({ name: "error" })
   .onError(({ code, error, request, route, set }) => {
     const responseRequestId = set.headers["x-request-id"]
@@ -238,20 +295,33 @@ export const errorPlugin = new Elysia({ name: "error" })
     set.headers["x-request-id"] = requestId
 
     const errorCode = String(code)
-    const httpStatus = statusCodeFor(errorCode, error)
+    const { body, httpStatus, retryAfter } = projectErrorForResponse(
+      errorCode,
+      error,
+      requestId
+    )
 
-    if (
-      error instanceof AppError &&
-      error.code === "rate_limited" &&
-      typeof error.publicContext.retryAfter === "number"
-    ) {
-      set.headers["retry-after"] = String(error.publicContext.retryAfter)
+    set.headers["cache-control"] = "no-store"
+
+    if (retryAfter !== undefined) {
+      set.headers["retry-after"] = String(retryAfter)
     }
 
-    recordError(httpStatus, errorCode, error, request, requestId, route)
+    try {
+      recordError(httpStatus, errorCode, error, request, requestId, route)
+    } catch {
+      recordObservedHttpStatus(500, "internal_error")
+      captureObservedException(error, {
+        errorCode: "internal_error",
+        method: request.method,
+        requestId,
+        route: route || "unmatched",
+        statusCode: 500,
+      })
+    }
 
     set.status = httpStatus
 
-    return responseBody(errorCode, error, requestId)
+    return body
   })
   .as("global")

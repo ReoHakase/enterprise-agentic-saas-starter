@@ -42,6 +42,14 @@ const noopRuntime: ObservabilityRuntime = {
 
 let runtime = noopRuntime
 
+const ignoreTelemetryFailure = (operation: () => void): void => {
+  try {
+    operation()
+  } catch {
+    // Telemetry is never allowed to change the application response.
+  }
+}
+
 export const configureObservability = (
   nextRuntime: ObservabilityRuntime
 ): void => {
@@ -52,27 +60,27 @@ export const captureObservedException = (
   error: unknown,
   context: ErrorTelemetryContext
 ): void => {
-  runtime.captureException(error, context)
+  ignoreTelemetryFailure(() => runtime.captureException(error, context))
 }
 
 export const logObservedResponse = (
   level: "error" | "info" | "warn",
   attributes: TelemetryAttributes
 ): void => {
-  runtime.logResponse(level, attributes)
+  ignoreTelemetryFailure(() => runtime.logResponse(level, attributes))
 }
 
 export const recordObservedHttpStatus = (
   statusCode: number,
   errorCode?: string
 ): void => {
-  runtime.recordHttpStatus(statusCode, errorCode)
+  ignoreTelemetryFailure(() => runtime.recordHttpStatus(statusCode, errorCode))
 }
 
 export const setObservedRequestContext = (
   context: RequestTelemetryContext
 ): void => {
-  runtime.setRequestContext(context)
+  ignoreTelemetryFailure(() => runtime.setRequestContext(context))
 }
 
 export const withObservedSpan = <T>(
@@ -82,4 +90,32 @@ export const withObservedSpan = <T>(
     op: string
   },
   callback: () => T
-): T => runtime.startSpan(options, callback)
+): T => {
+  let outcome:
+    | { kind: "failure"; error: unknown }
+    | { kind: "success"; value: T }
+    | undefined
+
+  const observedCallback = (): T => {
+    try {
+      const value = callback()
+      outcome = { kind: "success", value }
+      return value
+    } catch (error) {
+      outcome = { kind: "failure", error }
+      throw error
+    }
+  }
+
+  try {
+    return runtime.startSpan(options, observedCallback)
+  } catch {
+    if (outcome?.kind === "failure") {
+      throw outcome.error
+    }
+    if (outcome?.kind === "success") {
+      return outcome.value
+    }
+    return observedCallback()
+  }
+}
