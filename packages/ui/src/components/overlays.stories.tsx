@@ -11,6 +11,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
+  AlertDialogOverlay,
+  AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./alert-dialog"
@@ -22,6 +24,9 @@ import {
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
+  DrawerOverlay,
+  DrawerPortal,
+  DrawerSwipeHandle,
   DrawerTitle,
   DrawerTrigger,
 } from "./drawer"
@@ -51,15 +56,19 @@ const DestructiveConfirmation = ({ onConfirm }: { onConfirm: () => void }) => (
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
+    <AlertDialogPortal>
+      <AlertDialogOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
+    </AlertDialogPortal>
   </AlertDialog>
 )
 
 const MobileNavigationDrawer = () => (
-  <Drawer showSwipeHandle>
+  <Drawer>
     <DrawerTrigger render={outlineButtonRender}>
       Open mobile navigation
     </DrawerTrigger>
     <DrawerContent>
+      <DrawerSwipeHandle />
       <DrawerHeader>
         <DrawerTitle>Workspace navigation</DrawerTitle>
         <DrawerDescription>
@@ -76,6 +85,9 @@ const MobileNavigationDrawer = () => (
         <DrawerClose render={outlineButtonRender}>Done</DrawerClose>
       </DrawerFooter>
     </DrawerContent>
+    <DrawerPortal>
+      <DrawerOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
+    </DrawerPortal>
   </Drawer>
 )
 

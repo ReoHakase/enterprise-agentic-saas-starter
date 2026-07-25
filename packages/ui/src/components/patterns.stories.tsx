@@ -11,10 +11,13 @@ import { Badge } from "./badge"
 import { Button } from "./button"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogOverlay,
+  DialogPortal,
   DialogTitle,
   DialogTrigger,
 } from "./dialog"
@@ -22,23 +25,37 @@ import { Field, FieldGroup, FieldLabel } from "./field"
 import { Input } from "./input"
 import {
   Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
   SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarMenuSkeleton,
   SidebarProvider,
+  SidebarRail,
   SidebarTrigger,
 } from "./sidebar"
 import {
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInput,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarSeparator,
+} from "./sidebar-structure"
+import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -50,6 +67,7 @@ const members = [
   { name: "Kai Brooks", email: "kai@example.com", role: "Member" },
 ]
 const dialogTriggerButtonRender = <Button />
+const dialogCloseButtonRender = <Button type="button" variant="outline" />
 
 const SidebarPattern = () => (
   <div className="h-136 w-[min(64rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border">
@@ -60,6 +78,7 @@ const SidebarPattern = () => (
         className="absolute h-136"
       >
         <SidebarHeader>
+          <SidebarInput aria-label="Search navigation" placeholder="Search" />
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" tooltip="Acme Cloud">
@@ -79,6 +98,9 @@ const SidebarPattern = () => (
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupAction aria-label="Add workspace shortcut">
+              +
+            </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -86,12 +108,23 @@ const SidebarPattern = () => (
                     <LayoutDashboardIcon aria-hidden="true" />
                     <span>Overview</span>
                   </SidebarMenuButton>
+                  <SidebarMenuBadge>3</SidebarMenuBadge>
+                  <SidebarMenuAction aria-label="Overview actions">
+                    ···
+                  </SidebarMenuAction>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton tooltip="Issues">
                     <ListChecksIcon aria-hidden="true" />
                     <span>Issues</span>
                   </SidebarMenuButton>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton href="#open">
+                        Open issues
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton tooltip="Members">
@@ -99,9 +132,13 @@ const SidebarPattern = () => (
                     <span>Members</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuSkeleton showIcon />
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          <SidebarSeparator />
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
@@ -115,6 +152,7 @@ const SidebarPattern = () => (
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <SidebarInset className="min-h-full">
         <header className="flex h-14 items-center gap-3 border-b px-4">
@@ -186,13 +224,20 @@ const MembersPattern = ({
                 </Field>
               </FieldGroup>
               <DialogFooter>
+                <DialogClose render={dialogCloseButtonRender}>
+                  Cancel
+                </DialogClose>
                 <Button type="submit">Send invitation</Button>
               </DialogFooter>
             </form>
           </DialogContent>
+          <DialogPortal>
+            <DialogOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
+          </DialogPortal>
         </Dialog>
       </div>
       <Table aria-label="Organization members">
+        <TableCaption>Current organization membership</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Member</TableHead>
@@ -212,6 +257,11 @@ const MembersPattern = ({
             </TableRow>
           ))}
         </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={2}>{members.length} members</TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
     </div>
   )
@@ -255,7 +305,7 @@ export const MemberTableAndDialog: StoryObj<typeof MembersPattern> = {
     await expect(canvas.getByRole("table")).toHaveAccessibleName(
       "Organization members"
     )
-    await expect(canvas.getAllByRole("row")).toHaveLength(members.length + 1)
+    await expect(canvas.getAllByRole("row")).toHaveLength(members.length + 2)
     await userEvent.click(canvas.getByRole("button", { name: "Invite member" }))
     const body = within(document.body)
     await expect(

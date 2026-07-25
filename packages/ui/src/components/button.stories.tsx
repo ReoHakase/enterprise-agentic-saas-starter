@@ -6,7 +6,7 @@ import { Button } from "./button"
 const meta = {
   title: "Components/Button",
   component: Button,
-  tags: ["autodocs"],
+  tags: ["autodocs", "theme-sensitive"],
   args: {
     children: "Create organization",
   },

@@ -18,7 +18,7 @@ const invalidSource = new Blob(["not an image"], { type: "image/png" })
 const meta = {
   title: "Components/Image Crop Dialog",
   component: ImageCropDialog,
-  tags: ["autodocs"],
+  tags: ["autodocs", "theme-sensitive"],
   parameters: { layout: "centered" },
   args: {
     onConfirm: fn(),

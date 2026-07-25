@@ -15,6 +15,7 @@ const storybookProject = (theme: "light" | "dark") => ({
       configDir: path.join(dirname, ".storybook"),
       initialGlobals: { theme },
       storybookScript: "bun run storybook",
+      ...(theme === "dark" ? { tags: { include: ["theme-sensitive"] } } : {}),
     }),
   ],
   test: {

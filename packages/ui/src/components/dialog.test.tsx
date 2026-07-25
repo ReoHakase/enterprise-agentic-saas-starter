@@ -38,6 +38,7 @@ describe("Dialog", () => {
       "Send access to a verified email address."
     )
     expect(dialog).toHaveAttribute("data-motion", "scale")
+    expect(dialog).toHaveClass("data-closed:pointer-events-none")
 
     await user.click(screen.getByRole("button", { name: "Close" }))
     expect(
