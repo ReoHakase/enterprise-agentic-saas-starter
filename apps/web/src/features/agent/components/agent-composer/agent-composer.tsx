@@ -297,6 +297,9 @@ export const AgentComposer = forwardRef<
       if (!editor) return
       const current = editor.getText({ blockSeparator: "\n" })
       if (current === draftText) return
+      // Parent state can lag behind Tiptap transactions during rapid input.
+      // Reapplying that stale value would discard characters already entered.
+      if (editor.isFocused) return
       if (draftText === "" && current !== "") return
       editor.commands.setContent(plainDocument(draftText))
     }, [draftText, editor])
