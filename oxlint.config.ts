@@ -107,6 +107,18 @@ const commonImportRules: Rules = {
     "error",
     { considerQueryString: true, preferInline: false },
   ],
+  "import/no-namespace": [
+    "error",
+    {
+      ignore: [
+        "node:*",
+        "valibot",
+        "@testing-library/jest-dom/vitest",
+        "@enterprise-agentic-saas/db/schema",
+        "../schema/index",
+      ],
+    },
+  ],
   "import/no-self-import": "error",
   "import/no-unassigned-import": [
     "error",

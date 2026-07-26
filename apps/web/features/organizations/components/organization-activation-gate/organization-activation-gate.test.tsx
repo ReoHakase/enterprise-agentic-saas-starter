@@ -4,8 +4,6 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type * as ConsolePublic from "@/features/console"
-
 import { OrganizationActivationGate } from "./organization-activation-gate"
 
 const mocks = vi.hoisted(() => ({
@@ -42,7 +40,7 @@ vi.mock("@/features/agent", () => ({
 }))
 
 vi.mock("@/features/console", async (importOriginal) => {
-  const original = await importOriginal<typeof ConsolePublic>()
+  const original = await importOriginal<typeof import("@/features/console")>()
   return {
     ...original,
     showConsoleApiErrorToast: mocks.showError,

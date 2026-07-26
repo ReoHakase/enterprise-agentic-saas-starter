@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/nextjs"
+import { consoleLoggingIntegration, init } from "@sentry/nextjs"
 
 import { serverEnv } from "@/lib/env.server"
 import {
@@ -24,7 +24,7 @@ const dsn = resolveSentryDsn(
 )
 
 if (spotlight || dsn) {
-  Sentry.init({
+  init({
     beforeBreadcrumb: scrubSentryBreadcrumb,
     beforeSend: beforeSendSentryError,
     beforeSendLog: beforeSendSentryLog,
@@ -42,7 +42,7 @@ if (spotlight || dsn) {
     },
     integrations: spotlight
       ? [
-          Sentry.consoleLoggingIntegration({
+          consoleLoggingIntegration({
             levels: ["log", "warn", "error"],
           }),
         ]

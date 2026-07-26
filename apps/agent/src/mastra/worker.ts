@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/cloudflare"
+import { withSentry } from "@sentry/cloudflare"
 import { WorkerEntrypoint } from "cloudflare:workers"
 
 import {
@@ -32,7 +32,7 @@ class AgentRuntimeBase extends WorkerEntrypoint<AgentRuntimeEnv> {
   }
 }
 
-export const AgentRuntime = Sentry.withSentry(
+export const AgentRuntime = withSentry(
   createAgentSentryOptions,
   AgentRuntimeBase
 )
@@ -48,7 +48,4 @@ const worker = {
     }),
 } satisfies ExportedHandler<AgentRuntimeEnv>
 
-export default Sentry.withSentry<AgentRuntimeEnv>(
-  createAgentSentryOptions,
-  worker
-)
+export default withSentry<AgentRuntimeEnv>(createAgentSentryOptions, worker)

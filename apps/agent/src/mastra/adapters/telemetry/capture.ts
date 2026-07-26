@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/cloudflare"
+import { captureException } from "@sentry/cloudflare"
 
 export type AgentFailureCode =
   | "image_failed"
@@ -20,7 +20,7 @@ const failureMessages: Record<AgentFailureCode, string> = {
 }
 
 export const captureAgentFailure = (code: AgentFailureCode): void => {
-  Sentry.captureException(new Error(failureMessages[code]), {
+  captureException(new Error(failureMessages[code]), {
     tags: { component: "agent-worker", errorCode: code },
   })
 }

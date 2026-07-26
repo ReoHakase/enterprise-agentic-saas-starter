@@ -1,6 +1,6 @@
 "use client"
 
-import * as Sentry from "@sentry/nextjs"
+import { captureException } from "@sentry/nextjs"
 import { useEffect } from "react"
 
 import { InvitationRouteError } from "@/components/public-route-error-boundary.client/public-route-error-boundary.client"
@@ -13,7 +13,7 @@ export default function InvitationError({
   reset: () => void
 }) {
   useEffect(() => {
-    Sentry.captureException(error)
+    captureException(error)
   }, [error])
 
   return <InvitationRouteError reset={reset} />

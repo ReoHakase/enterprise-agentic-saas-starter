@@ -1,4 +1,8 @@
-import * as Sentry from "@sentry/nextjs"
+import {
+  captureRouterTransitionStart,
+  consoleLoggingIntegration,
+  init,
+} from "@sentry/nextjs"
 
 import { clientEnv } from "@/lib/env.client"
 import {
@@ -24,7 +28,7 @@ const dsn = resolveSentryDsn(
 )
 
 if (spotlight || dsn) {
-  Sentry.init({
+  init({
     beforeBreadcrumb: scrubSentryBreadcrumb,
     beforeSend: beforeSendSentryError,
     beforeSendLog: beforeSendSentryLog,
@@ -42,7 +46,7 @@ if (spotlight || dsn) {
     },
     integrations: spotlight
       ? [
-          Sentry.consoleLoggingIntegration({
+          consoleLoggingIntegration({
             levels: ["log", "warn", "error"],
           }),
         ]
@@ -61,5 +65,4 @@ if (spotlight || dsn) {
   })
 }
 
-// oxlint-disable-next-line import/namespace -- This export exists in the browser condition.
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart
+export const onRouterTransitionStart = captureRouterTransitionStart

@@ -1,6 +1,6 @@
 "use client"
 
-import * as Sentry from "@sentry/nextjs"
+import { captureException } from "@sentry/nextjs"
 import { useEffect } from "react"
 
 import { ConsoleContentError } from "./view"
@@ -15,7 +15,7 @@ export const ConsoleRouteErrorBoundary = ({
   reset,
 }: ConsoleRouteErrorBoundaryProps) => {
   useEffect(() => {
-    Sentry.captureException(error)
+    captureException(error)
   }, [error])
 
   return <ConsoleContentError reset={reset} />

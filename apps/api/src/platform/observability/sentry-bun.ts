@@ -1,4 +1,14 @@
-import * as Sentry from "@sentry/bun"
+import {
+  captureException,
+  getActiveSpan,
+  getIsolationScope,
+  init,
+  logger,
+  setHttpStatus,
+  startSpan,
+  updateSpanName,
+  withScope,
+} from "@sentry/bun"
 
 import { env } from "../env"
 import { configureObservability } from "./runtime"
@@ -11,6 +21,17 @@ import {
 import { resolveSpotlightTarget } from "./spotlight"
 import { withStructuredConsole } from "./structured-console"
 
+const sentryRuntimeApi = {
+  captureException,
+  getActiveSpan,
+  getIsolationScope,
+  logger,
+  setHttpStatus,
+  startSpan,
+  updateSpanName,
+  withScope,
+}
+
 export const initializeBunObservability = (): void => {
   const spotlight = resolveSpotlightTarget(env.SENTRY_SPOTLIGHT, env.NODE_ENV)
   const spotlightEnabled = spotlight !== false
@@ -21,7 +42,7 @@ export const initializeBunObservability = (): void => {
       : undefined
 
   if (dsn) {
-    Sentry.init({
+    init({
       ...sentryPrivacyOptions,
       dsn,
       enableLogs: true,
@@ -37,7 +58,7 @@ export const initializeBunObservability = (): void => {
 
   configureObservability(
     withStructuredConsole(
-      createSentryObservabilityRuntime(Sentry, env.APP_NAME),
+      createSentryObservabilityRuntime(sentryRuntimeApi, env.APP_NAME),
       env.APP_NAME
     )
   )

@@ -4,7 +4,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { XIcon } from "lucide-react"
-import * as React from "react"
+import { type ComponentProps } from "react"
 
 const dialogIconCloseButtonRender = (
   <Button
@@ -87,7 +87,7 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+function DialogHeader({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
@@ -102,7 +102,7 @@ function DialogFooter({
   showCloseButton = false,
   children,
   ...props
-}: React.ComponentProps<"div"> & {
+}: ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
   return (

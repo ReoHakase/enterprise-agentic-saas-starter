@@ -10,7 +10,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
 } from "lucide-react"
-import * as React from "react"
+import { type ComponentProps, useEffect, useMemo, useRef } from "react"
 import {
   DayPicker,
   getDefaultClassNames,
@@ -30,11 +30,11 @@ function Calendar({
   formatters,
   components,
   ...props
-}: React.ComponentProps<typeof DayPicker> & {
-  buttonVariant?: React.ComponentProps<typeof Button>["variant"]
+}: ComponentProps<typeof DayPicker> & {
+  buttonVariant?: ComponentProps<typeof Button>["variant"]
 }) {
-  const resolvedFormatters = React.useMemo<
-    NonNullable<React.ComponentProps<typeof DayPicker>["formatters"]>
+  const resolvedFormatters = useMemo<
+    NonNullable<ComponentProps<typeof DayPicker>["formatters"]>
   >(
     () => ({
       formatMonthDropdown: (date) =>
@@ -44,8 +44,8 @@ function Calendar({
     [formatters, locale?.code]
   )
 
-  const resolvedClassNames = React.useMemo<
-    NonNullable<React.ComponentProps<typeof DayPicker>["classNames"]>
+  const resolvedClassNames = useMemo<
+    NonNullable<ComponentProps<typeof DayPicker>["classNames"]>
   >(
     () => ({
       root: cn("w-fit", defaultClassNames.root),
@@ -140,8 +140,8 @@ function Calendar({
     [buttonVariant, captionLayout, classNames, props.showWeekNumber]
   )
 
-  const resolvedComponents = React.useMemo<
-    NonNullable<React.ComponentProps<typeof DayPicker>["components"]>
+  const resolvedComponents = useMemo<
+    NonNullable<ComponentProps<typeof DayPicker>["components"]>
   >(
     () => ({
       Root: ({ className: rootClassName, rootRef, ...rootProps }) => (
@@ -222,9 +222,9 @@ function CalendarDayButton({
   modifiers,
   locale,
   ...props
-}: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
-  const ref = React.useRef<HTMLButtonElement>(null)
-  React.useEffect(() => {
+}: ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
+  const ref = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
     if (modifiers.focused) ref.current?.focus()
   }, [modifiers.focused])
 

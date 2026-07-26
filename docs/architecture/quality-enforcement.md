@@ -129,8 +129,15 @@ root default config内部を正本にし、別moduleやresolverへ複製しま�
 - `import/no-cycle`: all depth、`ignoreExternal: false`、`ignoreTypes: true`
 - `import/no-self-import`
 - `import/no-duplicates`: `considerQueryString: true`、`preferInline: false`
+- `import/no-namespace`: 原則禁止し、`node:*`、Valibot、Vitestのmatcher登録、
+  Drizzleへ渡すDB schemaだけを許可
 - `typescript/no-require-imports`
 - side-effect importはCSS、`server-only`、test setup等のallowlistだけ
+
+`import/no-namespace`の例外は、namespaceとして公開される外部APIと、Drizzleがtableとrelationの
+集合をobjectとして受け取る境界に限定します。設定値は`node:*`、`valibot`、
+`@testing-library/jest-dom/vitest`、`@enterprise-agentic-saas/db/schema`、
+`../schema/index`の完全一致とし、package family全体を許可するwildcardは使いません。
 
 workspace別の`no-restricted-imports`は公開を許可したpackage entrypointだけをallowlistにします。
 overrideではpattern配列がmergeされないため、共通config helperからworkspace境界を生成し、test

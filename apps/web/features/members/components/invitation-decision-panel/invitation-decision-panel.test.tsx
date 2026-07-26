@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type * as AccountPublic from "@/features/account"
 import { clientEnv } from "@/lib/env.client"
 
 import {
@@ -39,7 +38,7 @@ vi.mock("../../api", () => ({
 }))
 
 vi.mock("@/features/account", async (importOriginal) => {
-  const original = await importOriginal<typeof AccountPublic>()
+  const original = await importOriginal<typeof import("@/features/account")>()
   return {
     ...original,
     AccountSwitcherDialog: ({ open }: { open: boolean }) =>

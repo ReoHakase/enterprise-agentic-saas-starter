@@ -9,8 +9,6 @@ import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type * as IssueQueriesPublic from "@/features/issues"
-
 import { fileKeys } from "../../queries"
 
 type IssueThumbnail = {
@@ -51,7 +49,7 @@ vi.mock("../../api", () => ({
 }))
 
 vi.mock("@/features/issues", async (importOriginal) => {
-  const original = await importOriginal<typeof IssueQueriesPublic>()
+  const original = await importOriginal<typeof import("@/features/issues")>()
   return {
     ...original,
     updateIssueThumbnail: mocks.updateIssueThumbnail,

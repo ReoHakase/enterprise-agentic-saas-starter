@@ -98,6 +98,25 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "features/files/components/file-attachments/file-attachments.test.tsx",
+        "features/issues/components/issues-workspace/issues-workspace.test.tsx",
+        "features/members/components/invitation-decision-panel/invitation-decision-panel.test.tsx",
+        "features/organizations/components/organization-activation-gate/organization-activation-gate.test.tsx",
+      ],
+      rules: {
+        // VitestのimportOriginalへmodule全体の型を渡し、namespace import宣言を避ける。
+        "typescript/consistent-type-imports": [
+          "error",
+          {
+            prefer: "type-imports",
+            fixStyle: "inline-type-imports",
+            disallowTypeAnnotations: false,
+          },
+        ],
+      },
+    },
+    {
       files: ["e2e/**/*.ts"],
       rules: {
         "playwright/missing-playwright-await": "error",

@@ -10,7 +10,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/input-group"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { ChevronDownIcon, XIcon, CheckIcon } from "lucide-react"
-import * as React from "react"
+import { type ComponentPropsWithRef, useRef } from "react"
 
 const Combobox = ComboboxPrimitive.Root
 const comboboxClearButtonRender = (
@@ -224,7 +224,7 @@ function ComboboxSeparator({
 function ComboboxChips({
   className,
   ...props
-}: React.ComponentPropsWithRef<typeof ComboboxPrimitive.Chips> &
+}: ComponentPropsWithRef<typeof ComboboxPrimitive.Chips> &
   ComboboxPrimitive.Chips.Props) {
   return (
     <ComboboxPrimitive.Chips
@@ -286,7 +286,7 @@ function ComboboxChipsInput({
 }
 
 function useComboboxAnchor() {
-  return React.useRef<HTMLDivElement | null>(null)
+  return useRef<HTMLDivElement | null>(null)
 }
 
 export {

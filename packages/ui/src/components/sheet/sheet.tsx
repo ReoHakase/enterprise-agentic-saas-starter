@@ -4,7 +4,7 @@ import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { XIcon } from "lucide-react"
-import * as React from "react"
+import { type ComponentProps } from "react"
 
 const sheetIconCloseButtonRender = (
   <Button
@@ -80,7 +80,7 @@ function SheetContent({
   )
 }
 
-function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
+function SheetHeader({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-header"
@@ -90,7 +90,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
+function SheetFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="sheet-footer"
