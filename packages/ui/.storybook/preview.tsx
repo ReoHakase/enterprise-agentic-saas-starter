@@ -4,15 +4,18 @@ import addonThemes, { withThemeByClassName } from "@storybook/addon-themes"
 import addonVitest from "@storybook/addon-vitest"
 import { definePreview } from "@storybook/react-vite"
 
+import "@fontsource-variable/geist-mono/wght.css"
+import "@fontsource-variable/inter/wght.css"
 import "../src/styles/globals.css"
+import "./preview.css"
 
 export default definePreview({
   addons: [addonA11y(), addonDocs(), addonThemes(), addonVitest()],
   decorators: [
     withThemeByClassName({
       themes: {
-        light: "light",
-        dark: "dark",
+        light: "light font-sans antialiased",
+        dark: "dark font-sans antialiased",
       },
       defaultTheme: "light",
     }),

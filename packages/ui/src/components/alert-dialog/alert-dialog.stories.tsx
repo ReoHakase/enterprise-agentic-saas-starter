@@ -14,8 +14,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogMedia,
-  AlertDialogOverlay,
-  AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./alert-dialog"
@@ -64,11 +62,45 @@ const DeleteOrganizationDialog = ({
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
-      <AlertDialogPortal>
-        <AlertDialogOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
-      </AlertDialogPortal>
     </AlertDialog>
   )
+}
+
+const expectAlertDialogOverlayContract = async (content: HTMLElement) => {
+  const document = content.ownerDocument
+  const overlays = document.querySelectorAll<HTMLElement>(
+    '[data-slot="alert-dialog-overlay"]'
+  )
+  await expect(overlays).toHaveLength(1)
+
+  const overlay = overlays.item(0)
+  if (!overlay) {
+    throw new Error("Expected the alert dialog overlay to be rendered.")
+  }
+
+  const view = document.defaultView
+  if (!view) throw new Error("Expected the Storybook iframe window.")
+
+  const portal = overlay.closest<HTMLElement>(
+    '[data-slot="alert-dialog-portal"]'
+  )
+  if (!portal) {
+    throw new Error("Expected the alert dialog portal to be rendered.")
+  }
+
+  await expect(content.closest('[data-slot="alert-dialog-portal"]')).toBe(
+    portal
+  )
+  await expect(
+    overlay.compareDocumentPosition(content) &
+      view.Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBe(view.Node.DOCUMENT_POSITION_FOLLOWING)
+
+  await waitFor(() => {
+    const styles = view.getComputedStyle(content)
+    expect(styles.filter).toBe("none")
+    expect(styles.backdropFilter).toBe("none")
+  })
 }
 
 const meta = preview.meta({
@@ -88,9 +120,11 @@ export const DeleteOrganization = meta.story({
 
     await step("Cancel and restore focus", async () => {
       await userEvent.click(trigger)
-      await expect(
-        body.getByRole("alertdialog", { name: "Delete Acme Cloud?" })
-      ).toHaveAccessibleDescription(
+      const content = body.getByRole("alertdialog", {
+        name: "Delete Acme Cloud?",
+      })
+      await expectAlertDialogOverlayContract(content)
+      await expect(content).toHaveAccessibleDescription(
         "This permanently deletes organization data and cannot be undone."
       )
       await userEvent.click(body.getByRole("button", { name: "Cancel" }))
@@ -99,6 +133,9 @@ export const DeleteOrganization = meta.story({
 
     await step("Confirm the destructive action", async () => {
       await userEvent.click(trigger)
+      await expectAlertDialogOverlayContract(
+        body.getByRole("alertdialog", { name: "Delete Acme Cloud?" })
+      )
       await userEvent.click(
         body.getByRole("button", { name: "Permanently delete" })
       )

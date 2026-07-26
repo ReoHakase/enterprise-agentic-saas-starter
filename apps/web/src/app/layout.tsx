@@ -2,16 +2,10 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 
 import "@enterprise-agentic-saas/ui/globals.css"
 import type { Metadata, Viewport } from "next"
-import { Geist_Mono, Inter } from "next/font/google"
 
 import { Providers } from "@/components/providers/providers"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
-
-const fontMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-})
+import { fontMono, inter } from "./fonts"
 
 export const metadata: Metadata = {
   title: {

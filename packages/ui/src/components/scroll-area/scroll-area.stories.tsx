@@ -18,6 +18,21 @@ const meta = preview.meta({
   tags: ["autodocs"],
 })
 
+const expectLoadedFont = async (element: HTMLElement, family: string) => {
+  const document = element.ownerDocument
+  const view = document.defaultView
+  if (!view) throw new Error("Expected the Storybook iframe window.")
+
+  await expect(view.getComputedStyle(element).fontFamily).toContain(family)
+
+  const loadedFonts = await document.fonts.load(`400 16px "${family}"`)
+  await expect(
+    loadedFonts.some(
+      (font) => font.family === family && font.status === "loaded"
+    )
+  ).toBe(true)
+}
+
 export const ActivityFeed = meta.story({
   render: () => (
     <ScrollArea className="h-36 w-80 rounded-md border p-4">
@@ -36,9 +51,9 @@ export const ActivityFeed = meta.story({
     </ScrollArea>
   ),
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("list", { name: "Recent activity" })
-    ).toBeVisible()
+    const list = canvas.getByRole("list", { name: "Recent activity" })
+    await expect(list).toBeVisible()
+    await expectLoadedFont(list, "Inter Variable")
   },
 })
 
@@ -51,4 +66,10 @@ export const HorizontalOverflow = meta.story({
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
   ),
+  play: async ({ canvas }) => {
+    await expectLoadedFont(
+      canvas.getByText(/request_01K1ACME000000000000000000/),
+      "Geist Mono Variable"
+    )
+  },
 })

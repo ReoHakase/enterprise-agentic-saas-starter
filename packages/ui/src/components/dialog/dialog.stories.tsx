@@ -13,8 +13,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 } from "./dialog"
@@ -58,11 +56,37 @@ const InviteDialog = ({ onInvite }: { onInvite: (email: string) => void }) => {
           </DialogFooter>
         </form>
       </DialogContent>
-      <DialogPortal>
-        <DialogOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
-      </DialogPortal>
     </Dialog>
   )
+}
+
+const expectDialogOverlayContract = async (content: HTMLElement) => {
+  const document = content.ownerDocument
+  const overlays = document.querySelectorAll<HTMLElement>(
+    '[data-slot="dialog-overlay"]'
+  )
+  await expect(overlays).toHaveLength(1)
+
+  const overlay = overlays.item(0)
+  if (!overlay) throw new Error("Expected the dialog overlay to be rendered.")
+
+  const view = document.defaultView
+  if (!view) throw new Error("Expected the Storybook iframe window.")
+
+  const portal = overlay.closest<HTMLElement>('[data-slot="dialog-portal"]')
+  if (!portal) throw new Error("Expected the dialog portal to be rendered.")
+
+  await expect(content.closest('[data-slot="dialog-portal"]')).toBe(portal)
+  await expect(
+    overlay.compareDocumentPosition(content) &
+      view.Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBe(view.Node.DOCUMENT_POSITION_FOLLOWING)
+
+  await waitFor(() => {
+    const styles = view.getComputedStyle(content)
+    expect(styles.filter).toBe("none")
+    expect(styles.backdropFilter).toBe("none")
+  })
 }
 
 const meta = preview
@@ -82,6 +106,9 @@ export const InviteMember = meta.story({
 
     await step("Validate the required email field", async () => {
       await userEvent.click(trigger)
+      await expectDialogOverlayContract(
+        body.getByRole("dialog", { name: "Invite member" })
+      )
       await userEvent.click(
         body.getByRole("button", { name: "Send invitation" })
       )
@@ -108,6 +135,9 @@ export const Cancelled = meta.story({
     const trigger = canvas.getByRole("button", { name: "Invite member" })
     await userEvent.click(trigger)
     const body = within(canvasElement.ownerDocument.body)
+    await expectDialogOverlayContract(
+      body.getByRole("dialog", { name: "Invite member" })
+    )
     await userEvent.click(body.getByRole("button", { name: "Cancel" }))
     await waitFor(() => expect(trigger).toHaveFocus())
   },

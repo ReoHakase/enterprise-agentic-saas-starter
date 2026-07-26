@@ -35,6 +35,7 @@ export default defineConfig({
     "**/dist/**",
     "node_modules/**",
     "**/node_modules/**",
+    "apps/web/.storybook/public/mockServiceWorker.js",
     "storybook-static/**",
     "**/storybook-static/**",
     "test-results/**",

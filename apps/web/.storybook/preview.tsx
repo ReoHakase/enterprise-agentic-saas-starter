@@ -11,7 +11,10 @@ import { type ReactNode, useState } from "react"
 
 import "@enterprise-agentic-saas/ui/globals.css"
 
+import { fontMono, inter } from "../src/app/fonts"
 import { storybookApiHandlers } from "../test-support/storybook/api-handlers"
+
+const fontClassNames = `${fontMono.variable} font-sans ${inter.variable} antialiased`
 
 const WithQueryClient = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
@@ -35,6 +38,7 @@ const isStorybookInternalRequest = (request: Request) => {
   const url = new URL(request.url)
 
   return (
+    url.origin === "https://fonts.gstatic.com" ||
     url.pathname === "/iframe.html" ||
     url.pathname === "/index.json" ||
     url.pathname === "/project.json" ||
@@ -81,8 +85,8 @@ export default definePreview({
     ),
     withThemeByClassName({
       themes: {
-        light: "light",
-        dark: "dark",
+        light: `light ${fontClassNames}`,
+        dark: `dark ${fontClassNames}`,
       },
       defaultTheme: "light",
     }),
@@ -98,5 +102,8 @@ export default definePreview({
       },
     },
     layout: "fullscreen",
+    nextjs: {
+      appDirectory: true,
+    },
   },
 })

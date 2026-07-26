@@ -48,11 +48,11 @@
     "./lib/utils": "./src/lib/utils.ts"
   },
   "scripts": {
-    "build:storybook": "node node_modules/storybook/dist/bin/dispatcher.js build --output-dir storybook-static",
+    "build:storybook": "storybook build",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "storybook": "node node_modules/storybook/dist/bin/dispatcher.js dev --port 6006 --no-open",
+    "storybook": "portless run --name storybook.ui.enterprise-agentic-saas storybook dev --no-open --exact-port",
     "test": "vitest run --project=unit",
     "test:browser": "vitest run --project=storybook-light --project=storybook-dark",
     "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light --project=storybook-dark",
@@ -79,6 +79,8 @@
   },
   "devDependencies": {
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
     "@storybook/addon-a11y": "catalog:",
     "@storybook/addon-docs": "catalog:",
     "@storybook/addon-themes": "catalog:",

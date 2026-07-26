@@ -10,8 +10,6 @@ import {
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
-  DrawerOverlay,
-  DrawerPortal,
   DrawerSwipeHandle,
   DrawerTitle,
   DrawerTrigger,
@@ -37,11 +35,40 @@ const MobileNavigationDrawer = () => (
         <DrawerClose render={outlineButton}>Done</DrawerClose>
       </DrawerFooter>
     </DrawerContent>
-    <DrawerPortal>
-      <DrawerOverlay className="pointer-events-none bg-transparent backdrop-blur-none" />
-    </DrawerPortal>
   </Drawer>
 )
+
+const expectDrawerOverlayContract = async (content: HTMLElement) => {
+  const document = content.ownerDocument
+  const overlays = document.querySelectorAll<HTMLElement>(
+    '[data-slot="drawer-overlay"]'
+  )
+  await expect(overlays).toHaveLength(1)
+
+  const overlay = overlays.item(0)
+  if (!overlay) throw new Error("Expected the drawer overlay to be rendered.")
+
+  const view = document.defaultView
+  if (!view) throw new Error("Expected the Storybook iframe window.")
+
+  const viewport = content.closest<HTMLElement>('[data-slot="drawer-viewport"]')
+  if (!viewport) throw new Error("Expected the drawer viewport to be rendered.")
+
+  const portal = overlay.closest<HTMLElement>('[data-slot="drawer-portal"]')
+  if (!portal) throw new Error("Expected the drawer portal to be rendered.")
+
+  await expect(viewport.closest('[data-slot="drawer-portal"]')).toBe(portal)
+  await expect(
+    overlay.compareDocumentPosition(viewport) &
+      view.Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBe(view.Node.DOCUMENT_POSITION_FOLLOWING)
+
+  await waitFor(() => {
+    const styles = view.getComputedStyle(content)
+    expect(styles.filter).toBe("none")
+    expect(styles.backdropFilter).toBe("none")
+  })
+}
 
 const meta = preview.meta({
   title: "Components/Drawer",
@@ -58,9 +85,11 @@ export const MobileNavigation = meta.story({
 
     await step("Open the mobile destination list", async () => {
       await userEvent.click(trigger)
-      await expect(
-        body.getByRole("dialog", { name: "Workspace navigation" })
-      ).toBeVisible()
+      const content = body.getByRole("dialog", {
+        name: "Workspace navigation",
+      })
+      await expectDrawerOverlayContract(content)
+      await expect(content).toBeVisible()
       await expect(
         body.getByRole("navigation", { name: "Workspace navigation" })
       ).toBeVisible()

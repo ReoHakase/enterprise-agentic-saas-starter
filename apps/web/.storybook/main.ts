@@ -7,8 +7,19 @@ import { mergeConfig } from "vite"
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const workspace = path.resolve(dirname, "..")
 
+const getPortlessClientPort = () => {
+  const portlessUrl = process.env.PORTLESS_URL
+  if (!portlessUrl) return undefined
+
+  const url = new URL(portlessUrl)
+  if (url.port) return Number(url.port)
+
+  return url.protocol === "https:" ? 443 : 80
+}
+
 export default defineMain({
   stories: ["../src/{app,components,features}/**/*.stories.@(ts|tsx)"],
+  staticDirs: ["./public"],
   addons: [
     "@storybook/addon-a11y",
     "@storybook/addon-docs",
@@ -23,7 +34,18 @@ export default defineMain({
     defaultName: "Documentation",
   },
   async viteFinal(baseConfig) {
+    const clientPort = getPortlessClientPort()
+
     return mergeConfig(baseConfig, {
+      ...(clientPort === undefined
+        ? {}
+        : {
+            server: {
+              ws: {
+                clientPort,
+              },
+            },
+          }),
       define: {
         __dirname: JSON.stringify("/"),
         "process.env": "{}",

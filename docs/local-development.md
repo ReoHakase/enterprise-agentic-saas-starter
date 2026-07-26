@@ -33,6 +33,8 @@ cp packages/db/.env.example packages/db/.env.development
 APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次の通りです。
 
 - Web: `https://enterprise-agentic-saas.localhost`
+- Web Storybook: `https://storybook.enterprise-agentic-saas.localhost`
+- UI Storybook: `https://storybook.ui.enterprise-agentic-saas.localhost`
 - API: `https://api.enterprise-agentic-saas.localhost`
 - DB: `https://db.enterprise-agentic-saas.localhost`
 - Mailpit inbox: `https://mailpit.enterprise-agentic-saas.localhost`
@@ -56,12 +58,12 @@ EMAIL_FROM=noreply@example.test
 
 日常の公開導線は次の4つです。production用seed commandは作りません。
 
-| command                | 用途                                                       |
-| ---------------------- | ---------------------------------------------------------- |
-| `bun run dev`          | Web、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
-| `bun run dev:db`       | local Turso、migration、Drizzle Studioだけを起動する       |
-| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する   |
-| `bun run dev:db:seed`  | full devの有無にかかわらず任意のDB/R2 fixtureを投入する    |
+| command                | 用途                                                                    |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `bun run dev`          | Web、両Storybook、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
+| `bun run dev:db`       | local Turso、migration、Drizzle Studioだけを起動する                    |
+| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する                |
+| `bun run dev:db:seed`  | full devの有無にかかわらず任意のDB/R2 fixtureを投入する                 |
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 
@@ -91,7 +93,15 @@ DB-only taskとroot `bun run dev`は同時に起動しません。同じportとl
 bun run dev
 ```
 
-この1commandでWeb、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、EmulateのGitHub serviceを起動します。DB seed、R2 fixture reconcile、testは実行しません。
+この1commandでWeb、Web Storybook、UI Storybook、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、EmulateのGitHub serviceを起動します。DB seed、R2 fixture reconcile、testは実行しません。
+
+Storybookだけを起動する場合は、次の公開commandを使います。
+
+```sh
+bun run dev:storybook
+```
+
+`bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、linked worktreeではPortlessが付けるworktree prefixを含む`portless get storybook.enterprise-agentic-saas`と`portless get storybook.ui.enterprise-agentic-saas`の出力を正本にします。
 
 Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
@@ -201,10 +211,12 @@ bun run build:cloudflare
 
 `bun run test` はVitestを実行します。`bun test` はBun自身のtest runnerなので、このrepoの品質ゲートには使いません。
 
-Drizzle Kit、Playwright、Storybookは各package scriptがNode.jsのCLI entrypointを明示して起動します。
+Drizzle KitとPlaywrightは各package scriptがNode.jsのCLI entrypointを明示して起動します。
 対応するbare executableを直接実行せず、上記の公開commandまたはpackage scriptを使います。これにより、
 対応対象のmacOSとBunの組み合わせで観測したCLI launcherの強制終了を避け、CIとlocalで同じ起動経路を
 使用します。
+
+Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当てたportで起動します。
 
 ## よくある失敗
 
