@@ -1,8 +1,9 @@
 ---
 id: PLAN-2026-008
 title: Storybookカバレッジ全面拡充
-status: active
+status: completed
 created: 2026-07-26
+completed: 2026-07-26
 owners:
   - repository-maintainers
 linked_specs:
@@ -57,32 +58,62 @@ loading、empty、error、ready、pending、権限不足、再試行、承認、
 ## 進捗
 
 - [x] 開始時のstory数、`play`数、公開コンポーネント数を記録した
-- [ ] StorybookとUI architectureへ複数コンポーネントstoryの配置規則を反映する
-- [ ] Webのドメイン固有コンポーネントを対応する`features/`へ移す
-- [ ] UIの34公開コンポーネントへ同居storyを追加する
-- [ ] UIの複数コンポーネント利用例を4件追加する
-- [ ] WebのAuthとAgent storyを拡充する
-- [ ] Webの残りの主要`View`と共有コンポーネントstoryを拡充する
-- [ ] Storybookの`QueryClient`をstoryごとに分離する
-- [ ] 全検証とBrowser Modeカバレッジ比較を記録する
+- [x] StorybookとUI architectureへ複数コンポーネントstoryの配置規則を反映した
+- [x] Webのドメイン固有コンポーネントを対応する`features/`へ移した
+- [x] UIの34公開コンポーネントへ同居storyを追加した
+- [x] UIの複数コンポーネント利用例を4件追加した
+- [x] WebのAuthとAgent storyを拡充した
+- [x] Webの残りの主要`View`と共有コンポーネントstoryを拡充した
+- [x] Storybookの`QueryClient`をstoryごとに分離した
+- [x] 全検証とBrowser Modeカバレッジ比較を記録した
+
+## 完了時点
+
+| 対象          | story file | named story | `play`を持つfile | 補足                                     |
+| ------------- | ---------- | ----------- | ---------------- | ---------------------------------------- |
+| `packages/ui` | 38         | 86          | 35               | 公開subpath 34/34に同居storyあり         |
+| `apps/web`    | 60         | 164         | 57               | 公開コンポーネントと主要`View`を機能所有 |
+
+UI直下の4件は`form-workflow`、`overlay-workflow`、`data-display-workflow`、
+`navigation-workflow`だけとし、いずれも複数コンポーネントの実利用例に限定した。旧catalog storyは
+0件になった。両StorybookはCSF Nextを使い、a11y違反を`error`として扱う。
+
+## Browser Modeカバレッジ
+
+カバレッジは`BROWSER_COVERAGE=1`による診断値であり、CI閾値にはしていない。
+
+| 対象 | 指標       | 開始時 | 完了時 |   差分 |
+| ---- | ---------- | -----: | -----: | -----: |
+| UI   | statements | 84.68% | 87.63% |  +2.95 |
+| UI   | branches   | 74.17% | 74.93% |  +0.76 |
+| UI   | functions  | 81.71% | 87.68% |  +5.97 |
+| UI   | lines      | 85.85% | 88.56% |  +2.71 |
+| Web  | statements | 56.61% | 63.90% |  +7.29 |
+| Web  | branches   | 35.20% | 47.82% | +12.62 |
+| Web  | functions  | 41.88% | 59.33% | +17.45 |
+| Web  | lines      | 58.05% | 65.83% |  +7.78 |
 
 ## 検証
 
-- `bun run --cwd packages/ui lint`
-- `bun run --cwd packages/ui typecheck`
-- `bun run --cwd packages/ui test`
-- `bun run --cwd packages/ui test:browser`
-- `bun run --cwd packages/ui build:storybook`
-- `bun run --cwd apps/web lint`
-- `bun run --cwd apps/web typecheck`
-- `bun run --cwd apps/web test`
-- `bun run --cwd apps/web test:browser`
-- `bun run --cwd apps/web build:storybook`
-- `bun run check`
-- `bun run test`
-- `bun run test:browser`
-- `bun run build:storybook`
-- `BROWSER_COVERAGE=1 bun run test:browser`
+- [x] `bun run --cwd packages/ui lint`
+- [x] `bun run --cwd packages/ui typecheck`
+- [x] `bun run --cwd packages/ui test`
+- [x] `bun run --cwd packages/ui test:browser`
+- [x] `bun run --cwd packages/ui build:storybook`
+- [x] `bun run --cwd apps/web lint`
+- [x] `bun run --cwd apps/web typecheck`
+- [x] `bun run --cwd apps/web test`
+- [x] `bun run --cwd apps/web test:browser`
+- [x] `bun run --cwd apps/web build:storybook`
+- [x] `bun run check`
+- [x] `bun run test`
+- [x] `bun run test:browser`
+- [x] `bun run build:storybook`
+- [x] `BROWSER_COVERAGE=1 bun run test:browser`
+
+最終の`bun run test:browser`では、UI 47 files / 95 tests、Web Storybook 120 files /
+231 tests、Web component browser 2 files / 7 tests、W6 Chromium 16 tests、WebKit代表
+1 testが成功した。`bun run build:storybook`はUIとWebの両方を生成した。
 
 ## 完了条件
 
