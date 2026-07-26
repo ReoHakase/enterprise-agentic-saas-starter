@@ -57,10 +57,8 @@ export const PermissionLimited = meta.story({
       name: "Invitation role",
     })
     await userEvent.click(role)
-    await expect(body.getByRole("option", { name: "Admin" })).toHaveAttribute(
-      "aria-disabled",
-      "true"
-    )
+    const adminOption = await body.findByRole("option", { name: "Admin" })
+    await expect(adminOption).toHaveAttribute("aria-disabled", "true")
     await userEvent.keyboard("{Escape}")
     await waitFor(() =>
       expect(body.queryByRole("listbox")).not.toBeInTheDocument()
