@@ -33,6 +33,34 @@ if (process.env.NODE_ENV !== "test") {
 assertLocalDatabaseUrl(requiredEnvironment("TURSO_DATABASE_URL"))
 
 const namespace = requiredEnvironment("AGENT_EVAL_NAMESPACE")
+const scopeProbeFailureStages = [
+  "baseline",
+  "connection_replay",
+  "expired_grant",
+  "setup",
+  "side_effect_snapshot",
+  "stale_epoch",
+  "wrong_organization",
+  "wrong_thread",
+] as const
+type ScopeProbeFailureStage = (typeof scopeProbeFailureStages)[number]
+
+class ScopeProbeFailure extends Error {
+  constructor(readonly stage: ScopeProbeFailureStage) {
+    super("Agent eval scope probe failed")
+  }
+}
+
+const runProbe = async <Result>(
+  stage: ScopeProbeFailureStage,
+  operation: () => Promise<Result>
+): Promise<Result> => {
+  try {
+    return await operation()
+  } catch {
+    throw new ScopeProbeFailure(stage)
+  }
+}
 
 const hashNamespace = async (value: string) => {
   const digest = await crypto.subtle.digest(
@@ -127,11 +155,33 @@ const rejectsGrant = async (
   }
 }
 
+class RollbackProbeResult extends Error {
+  constructor(readonly rejected: boolean) {
+    super("Agent eval rollback probe completed")
+  }
+}
+
+const runRollbackProbe = async (
+  operation: (tx: AgentTransaction) => Promise<boolean>
+): Promise<boolean> => {
+  try {
+    await db.transaction(async (tx) => {
+      throw new RollbackProbeResult(await operation(tx))
+    })
+    throw new Error("Agent eval rollback probe committed")
+  } catch (cause) {
+    if (cause instanceof RollbackProbeResult) return cause.rejected
+    throw cause
+  }
+}
+
 const mainScope = async (organizationId: string) => {
   const runs = await db
     .select({
       contextEpoch: agentRuns.contextEpoch,
+      expiresAt: agentRuns.expiresAt,
       id: agentRuns.id,
+      organizationId: agentRuns.organizationId,
       sessionId: agentRuns.sessionId,
       threadId: agentRuns.threadId,
       userId: agentRuns.userId,
@@ -146,37 +196,42 @@ const mainScope = async (organizationId: string) => {
     .limit(1)
   const run = runs[0]
   if (!run) throw new Error("Agent eval scope probe could not find the run")
-  const grants = await db
-    .select({
-      expiresAt: agentGrants.expiresAt,
-      id: agentGrants.id,
-      tokenHash: agentGrants.tokenHash,
-    })
-    .from(agentGrants)
-    .where(and(eq(agentGrants.kind, "run"), eq(agentGrants.runId, run.id)))
-    .limit(1)
-  const grant = grants[0]
-  if (!grant) throw new Error("Agent eval scope probe could not find the grant")
+  const issuedAt = new Date()
+  const expiresAt = new Date(
+    Math.min(run.expiresAt.getTime(), issuedAt.getTime() + 60_000)
+  )
+  const grant = {
+    expiresAt,
+    id: `eval_probe_grant_${namespace.slice(-48)}`.slice(0, 128),
+    tokenHash: await hashAgentToken(
+      `agent-eval-scope-${await hashNamespace(namespace)}`
+    ),
+  }
+  await db.insert(agentGrants).values({
+    ...grant,
+    contextEpoch: run.contextEpoch,
+    issuedAt,
+    kind: "run",
+    organizationId: run.organizationId,
+    runId: run.id,
+    sessionId: run.sessionId,
+    threadId: run.threadId,
+    userId: run.userId,
+  })
   return { grant, run }
 }
 
 const wrongOrganizationProbe = async (
   scope: Awaited<ReturnType<typeof mainScope>>,
   decoyOrganizationId: string,
-  organizationId: string,
   now: Date
 ) =>
-  db.transaction(async (tx) => {
+  runRollbackProbe(async (tx) => {
     await tx
       .update(session)
       .set({ activeOrganizationId: decoyOrganizationId })
       .where(eq(session.id, scope.run.sessionId))
-    const rejected = await rejectsGrant(tx, scope.grant.tokenHash, now)
-    await tx
-      .update(session)
-      .set({ activeOrganizationId: organizationId })
-      .where(eq(session.id, scope.run.sessionId))
-    return rejected
+    return rejectsGrant(tx, scope.grant.tokenHash, now)
   })
 
 const wrongThreadProbe = async (
@@ -184,7 +239,7 @@ const wrongThreadProbe = async (
   organizationId: string,
   now: Date
 ) =>
-  db.transaction(async (tx) => {
+  runRollbackProbe(async (tx) => {
     const threadId = `eval_probe_thread_${namespace.slice(-48)}`.slice(0, 128)
     await tx.insert(agentThreads).values({
       id: threadId,
@@ -196,30 +251,19 @@ const wrongThreadProbe = async (
       .update(agentGrants)
       .set({ threadId })
       .where(eq(agentGrants.id, scope.grant.id))
-    const rejected = await rejectsGrant(tx, scope.grant.tokenHash, now)
-    await tx
-      .update(agentGrants)
-      .set({ threadId: scope.run.threadId })
-      .where(eq(agentGrants.id, scope.grant.id))
-    await tx.delete(agentThreads).where(eq(agentThreads.id, threadId))
-    return rejected
+    return rejectsGrant(tx, scope.grant.tokenHash, now)
   })
 
 const staleEpochProbe = async (
   scope: Awaited<ReturnType<typeof mainScope>>,
   now: Date
 ) =>
-  db.transaction(async (tx) => {
+  runRollbackProbe(async (tx) => {
     await tx
       .update(agentSessionContexts)
       .set({ contextEpoch: scope.run.contextEpoch + 1 })
       .where(eq(agentSessionContexts.sessionId, scope.run.sessionId))
-    const rejected = await rejectsGrant(tx, scope.grant.tokenHash, now)
-    await tx
-      .update(agentSessionContexts)
-      .set({ contextEpoch: scope.run.contextEpoch })
-      .where(eq(agentSessionContexts.sessionId, scope.run.sessionId))
-    return rejected
+    return rejectsGrant(tx, scope.grant.tokenHash, now)
   })
 
 const connectionReplayProbe = async (
@@ -285,44 +329,55 @@ const run = async () => {
   const suffix = hash.slice(0, 24)
   const organizationId = `eval_org_${suffix}`
   const decoyOrganizationId = `eval_decoy_org_${suffix}`
-  const scope = await mainScope(organizationId)
-  const probeNow = new Date()
-  const before = await sideEffectSnapshot()
-  const probes = {
-    baselineGrantAccepted: await db.transaction(
-      async (tx) => !(await rejectsGrant(tx, scope.grant.tokenHash, probeNow))
-    ),
-    connectionReplayRejected: await connectionReplayProbe(
-      scope,
-      organizationId
-    ),
-    expiredGrantRejected: await db.transaction((tx) =>
-      rejectsGrant(
-        tx,
-        scope.grant.tokenHash,
-        new Date(scope.grant.expiresAt.getTime() + 1)
-      )
-    ),
-    staleEpochRejected: await staleEpochProbe(scope, probeNow),
-    wrongOrganizationRejected: await wrongOrganizationProbe(
-      scope,
-      decoyOrganizationId,
-      organizationId,
-      probeNow
-    ),
-    wrongThreadRejected: await wrongThreadProbe(
-      scope,
-      organizationId,
-      probeNow
-    ),
+  const scope = await runProbe("setup", () => mainScope(organizationId))
+  try {
+    const probeNow = new Date()
+    const before = await runProbe("side_effect_snapshot", sideEffectSnapshot)
+    const probes = {
+      baselineGrantAccepted: await runProbe("baseline", () =>
+        db.transaction(
+          async (tx) =>
+            !(await rejectsGrant(tx, scope.grant.tokenHash, probeNow))
+        )
+      ),
+      connectionReplayRejected: await runProbe("connection_replay", () =>
+        connectionReplayProbe(scope, organizationId)
+      ),
+      expiredGrantRejected: await runProbe("expired_grant", () =>
+        db.transaction((tx) =>
+          rejectsGrant(
+            tx,
+            scope.grant.tokenHash,
+            new Date(scope.grant.expiresAt.getTime() + 1)
+          )
+        )
+      ),
+      staleEpochRejected: await runProbe("stale_epoch", () =>
+        staleEpochProbe(scope, probeNow)
+      ),
+      wrongOrganizationRejected: await runProbe("wrong_organization", () =>
+        wrongOrganizationProbe(scope, decoyOrganizationId, probeNow)
+      ),
+      wrongThreadRejected: await runProbe("wrong_thread", () =>
+        wrongThreadProbe(scope, organizationId, probeNow)
+      ),
+    }
+    const after = await runProbe("side_effect_snapshot", sideEffectSnapshot)
+    console.log(
+      JSON.stringify({
+        ...probes,
+        sideEffectsUnchanged: JSON.stringify(after) === JSON.stringify(before),
+      })
+    )
+  } finally {
+    await db.delete(agentGrants).where(eq(agentGrants.id, scope.grant.id))
   }
-  const after = await sideEffectSnapshot()
-  console.log(
-    JSON.stringify({
-      ...probes,
-      sideEffectsUnchanged: JSON.stringify(after) === JSON.stringify(before),
-    })
-  )
 }
 
-await run()
+try {
+  await run()
+} catch (cause) {
+  const failureStage =
+    cause instanceof ScopeProbeFailure ? cause.stage : "setup"
+  console.log(JSON.stringify({ failureStage }))
+}

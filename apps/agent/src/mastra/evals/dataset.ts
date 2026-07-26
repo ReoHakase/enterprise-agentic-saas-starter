@@ -2,7 +2,12 @@ import { z } from "zod"
 
 import { parseAgentEvalToolAllowlist } from "../core/policy/eval-tool-allowlist"
 
-const toolNameSchema = z.enum(["create_issue", "get_issue", "search_issues"])
+const toolNameSchema = z.enum([
+  "create_issue",
+  "get_issue",
+  "search_issues",
+  "web_search",
+])
 const baseCase = {
   availableTools: z.array(toolNameSchema).min(1),
   id: z.string().min(1),
@@ -14,8 +19,21 @@ const caseSchema = z.discriminatedUnion("kind", [
   z
     .object({
       ...baseCase,
-      expectedPriority: z.enum(["high"]),
+      expectedPriority: z.enum([
+        "no_priority",
+        "low",
+        "medium",
+        "high",
+        "urgent",
+      ]),
       kind: z.literal("read"),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseCase,
+      expectedQuery: z.string().min(1),
+      kind: z.literal("web_search"),
     })
     .strict(),
   z

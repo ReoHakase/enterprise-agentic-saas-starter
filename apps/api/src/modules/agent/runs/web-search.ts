@@ -137,6 +137,24 @@ const contextReferenceStrings = (content: unknown): string[] => {
   return values
 }
 
+const privateThreadTitles = (
+  threads: readonly {
+    title: string
+    titleState: string
+    updatedAt: Date
+  }[],
+  threadRuns: readonly { id: string }[],
+  currentRun: { id: string; startedAt: Date }
+) =>
+  threads.flatMap(({ title, titleState, updatedAt }) =>
+    titleState === "agent" &&
+    threadRuns.length === 1 &&
+    threadRuns[0]?.id === currentRun.id &&
+    updatedAt.getTime() > currentRun.startedAt.getTime()
+      ? []
+      : [title]
+  )
+
 const publicOnlyRestatement = (content: unknown): string | null => {
   if (!isRecord(content) || !Array.isArray(content.parts)) return null
   const candidates: string[] = []
@@ -199,6 +217,8 @@ export const guardAgentWebSearchQuery = async (
       const runRows = await tx
         .select({
           clientMessageId: agentRuns.clientMessageId,
+          id: agentRuns.id,
+          startedAt: agentRuns.startedAt,
           userId: agentRuns.userId,
         })
         .from(agentRuns)
@@ -233,7 +253,11 @@ export const guardAgentWebSearchQuery = async (
         .where(eq(organization.id, context.organizationId))
         .limit(1)
       const threadRows = await tx
-        .select({ title: agentThreads.title })
+        .select({
+          title: agentThreads.title,
+          titleState: agentThreads.titleState,
+          updatedAt: agentThreads.updatedAt,
+        })
         .from(agentThreads)
         .where(
           and(
@@ -242,6 +266,17 @@ export const guardAgentWebSearchQuery = async (
           )
         )
         .limit(1)
+      const threadRunRows = await tx
+        .select({ id: agentRuns.id })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.organizationId, context.organizationId),
+            eq(agentRuns.threadId, context.threadId),
+            eq(agentRuns.scope, "chat")
+          )
+        )
+        .limit(2)
       const issueRows = await tx
         .select({
           description: issues.description,
@@ -304,7 +339,13 @@ export const guardAgentWebSearchQuery = async (
         appendPrivateSource(name)
         appendPrivateSource(slug)
       }
-      for (const { title } of threadRows) appendPrivateSource(title)
+      for (const title of privateThreadTitles(
+        threadRows,
+        threadRunRows,
+        currentRun
+      )) {
+        appendPrivateSource(title)
+      }
       for (const { description, labels, title } of issueRows) {
         appendPrivateSource(title)
         appendPrivateSource(description)

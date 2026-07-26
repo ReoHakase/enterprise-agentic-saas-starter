@@ -18,6 +18,8 @@ process.env.FULL_E2E_GATE_ERROR = !paidE2EApproved
     : ""
 delete process.env.OPENROUTER_API_KEY
 delete process.env.PAID_E2E_APPROVED
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1"
+process.env.PLAYWRIGHT_LAST_RUN_OUTPUT_FILE = "/dev/null"
 
 const runId = parseAgentE2ERunId(process.env.AGENT_E2E_RUN_ID ?? process.pid)
 process.env.AGENT_E2E_RUN_ID = String(runId)
@@ -73,10 +75,12 @@ export default defineConfig({
   testMatch: "real-agent.spec.ts",
   outputDir: `${environment.temporaryRoot}/playwright-results/full`,
   globalSetup: "./e2e/fixtures/full-e2e-global-setup.ts",
+  globalTeardown: "./e2e/fixtures/full-e2e-global-teardown.ts",
   metadata: {
     agentE2ERunId: environment.runId,
     agentE2EApiOrigin: environment.apiOrigin,
     agentE2EMode: "full",
+    agentE2EWebWorkspace: process.cwd(),
   },
   fullyParallel: false,
   failOnFlakyTests: true,
@@ -84,6 +88,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: [["list"]],
+  preserveOutput: "never",
   timeout: 600_000,
   expect: { timeout: 30_000 },
   use: {
@@ -135,7 +140,7 @@ export default defineConfig({
               ...commonEnvironment,
               NODE_ENV: "production",
               API_PUBLIC_URL: environment.apiLoopbackOrigin,
-              NEXT_DIST_DIR: `${environment.temporaryRoot}/next`,
+              NEXT_DIST_DIR: environment.nextDistDirectory,
               NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,
             },
           },

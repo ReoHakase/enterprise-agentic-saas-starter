@@ -2,7 +2,7 @@
 title: 製品Agentのtestとrelease gate
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 ---
 
 # Testとrelease gate
@@ -35,7 +35,9 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 ### Agent
 
 - 現在のメッセージ、履歴、Issue、ページコンテキスト、ツール結果からWeb検索の必要性だけを判断する
+- 現在の発話がWeb検索を明示的に依頼し、公開情報だけの検索語が独立した1行にある場合だけ、最初のmodel stepで`web_search`を必須選択する
 - 保存済みユーザーメッセージの公開情報だけの検索語と、ツールへ渡す`query`の完全一致
+- thread最初のrunが自動生成したtitleは同じrunの公開queryを自己拒否せず、手動title、過去runのtitle、生成元を一意に確定できないtitleはprivate比較へ残す
 - 明示行がない場合にモデルが検索を自己承認せず、公開情報だけの言い換えを求める
 - credential、email、電話、住所、メンバー識別情報、opaque IDの拒否
 - 組織、Issue、ページコンテキスト、スレッド履歴との完全一致を拒否し、曖昧な部分一致も
@@ -54,6 +56,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - 新規draftのAsk always既定値とFull access切替、共有mention候補、Tiptap snapshotの初回request引き継ぎ、thread作成失敗時のdraft/permission保持
 - inline approval、過去approval reload、expired preview
 - thinking/transient status/tool/source、trace重複なし、Issue個別link
+- Web検索tool outputの公開source link表示とprivate URL拒否
 - Tiptap inline mentionの順序、削除、送信、失敗復元、reload
 - editor最大40vh、observed主表示とestimated fallbackを分離したcontext ring tooltip、360px pane/mobileでのoverflow、一行footer
 - 全shortcut、IME、upload、modal、既存shortcut競合
@@ -68,7 +71,7 @@ network/transport boundaryに置き、production hook、parser、controller、co
 
 contract profile:
 
-1. ユーザーが明示した公開情報だけの検索語によるWeb検索と`source part`
+1. 複数tool候補がある状態で、ユーザーが明示した公開情報だけの検索語によるWeb検索と`source part`
 2. 過去履歴、Issue read、ツール結果を材料に検索の必要性を判断し、明示行がなければ言い換えを求める
 3. Issue readとorganization slug付き個別link
 4. Ask alwaysのapproval前write禁止と、Full accessの許可された即時write

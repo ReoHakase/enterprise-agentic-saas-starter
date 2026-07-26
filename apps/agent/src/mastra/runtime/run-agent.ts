@@ -39,6 +39,7 @@ import { stopOnPendingIssueAction } from "../core/stop-conditions"
 import { normalizeAgentUsage } from "../core/usage/normalize"
 import { createAgentClientTools } from "../tools/client/tool"
 import type { AgentControlFailure, AgentControlPlanePort } from "./ports"
+import { productGenerationWebSearchOptions } from "./product-generation"
 import { startAgentProvidersSerially } from "./provider-sequencing"
 import {
   parseAgentRuntimeChatInput,
@@ -56,6 +57,15 @@ import { createRunSettlement } from "./settlement"
 // be settled and the composer can recover while its original grant is live.
 const RUN_TIMEOUT_MS = 2 * 60 * 1000
 const ignoreObservedUsage = async () => undefined
+const stepProviderMetadata = (
+  steps: readonly { providerMetadata?: unknown }[]
+) => steps.map((step) => step.providerMetadata)
+const createContextBudget = (input: AgentRuntimeChatInput) =>
+  estimateAgentContextBudget({
+    messages: input.messages,
+    attachmentCount: input.assetIds.length,
+    pageContext: input.contextReferences,
+  })
 
 const readEvalToolAllowlist = (
   environment: AgentRuntimeEnv
@@ -174,6 +184,7 @@ const generateThreadTitle = async ({
       grant,
       ...normalizeAgentUsage({
         usage: titleOutput.totalUsage,
+        stepProviderMetadata: stepProviderMetadata(titleOutput.steps),
         imageInputCount: 0,
         durationMs: Date.now() - titleStartedAt,
         runEventId: `title_${attempt}`,
@@ -229,11 +240,7 @@ const handleChat = async (
   const input = parseAgentRuntimeChatInput(rawInput)
   if (!input) return invalidRequest()
   if (input.assetIds.length > 0 && !features.vision) return unavailable()
-  const contextBudget = estimateAgentContextBudget({
-    messages: input.messages,
-    attachmentCount: input.assetIds.length,
-    pageContext: input.contextReferences,
-  })
+  const contextBudget = createContextBudget(input)
   const api = dependencies.createControlPlane(environment.AGENT_INTERNAL_API)
 
   let connectionGrant: string
@@ -352,11 +359,7 @@ const handleChat = async (
           ),
           maxSteps: 8,
           modelSettings: { maxOutputTokens: 4_096, temperature: 0.2 },
-          providerOptions: {
-            openrouter: {
-              reasoning: { effort: "medium", exclude: false },
-            },
-          },
+          ...productGenerationWebSearchOptions(input.messages, toolAllowlist),
           onAbort: async () => {
             await settlement.cancel()
             await recordObservedUsage()
@@ -369,9 +372,7 @@ const handleChat = async (
           },
           requestContext,
           stopWhen: stopOnPendingIssueAction,
-          // Tool reservations and Issue writes remain serial so usage, audit,
-          // and attachment claims keep deterministic ordering within one root
-          // run.
+          // Keep tool reservations and writes serial for deterministic ordering.
           toolCallConcurrency: 1,
         })
       },
@@ -385,6 +386,7 @@ const handleChat = async (
           grant: run.grant,
           ...normalizeAgentUsage({
             usage,
+            stepProviderMetadata: stepProviderMetadata(await output.steps),
             imageInputCount: visionBudget.includedCount(),
             durationMs: Date.now() - runStartedAt,
             runEventId: `attempt_${run.attempt}`,

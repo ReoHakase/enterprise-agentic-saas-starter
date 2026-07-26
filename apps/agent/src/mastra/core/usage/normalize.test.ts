@@ -46,4 +46,50 @@ describe("Agent usage normalization", () => {
       }).providerCostMicros
     ).toBe(1_234)
   })
+
+  it("sums observed OpenRouter cost across every model step", () => {
+    expect(
+      normalizeAgentUsage({
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+        },
+        stepProviderMetadata: [
+          { openrouter: { usage: { cost: 0.000_000_4 } } },
+          { openrouter: { usage: { cost: 0.000_000_4 } } },
+        ],
+        imageInputCount: 0,
+        durationMs: 1,
+        runEventId: "attempt_1",
+      }).providerCostMicros
+    ).toBe(1)
+  })
+
+  it.each([
+    [
+      "missing",
+      [
+        { openrouter: { usage: { cost: 0.001 } } },
+        { openrouter: { usage: {} } },
+      ],
+    ],
+    ["negative", [{ openrouter: { usage: { cost: -0.001 } } }]],
+    ["non-finite", [{ openrouter: { usage: { cost: Number.NaN } } }]],
+  ])(
+    "falls back to estimated cost when a step cost is %s",
+    (_, stepProviderMetadata) => {
+      expect(
+        normalizeAgentUsage({
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+          },
+          stepProviderMetadata,
+          imageInputCount: 0,
+          durationMs: 1,
+          runEventId: "attempt_1",
+        }).providerCostMicros
+      ).toBeUndefined()
+    }
+  )
 })

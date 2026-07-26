@@ -2,7 +2,7 @@
 title: 製品Agentのtool、Web検索、approval
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 ---
 
 # Tool、Web検索、approval
@@ -29,10 +29,17 @@ Mastra toolはintent adapterです。Valibot schema、tenant再認可、normaliz
 公開情報だけの検索語を明示する必要があります。サーバーは保存済みユーザーメッセージからこの行を
 抽出し、モデルが渡した`web_search({ query })`との正規化後の完全一致を要求します。モデルが生成した
 文言、通常の検索依頼、権限設定だけではこの境界を解除できません。
+現在の発話がWeb検索も明示的に依頼し、有効な独立行がちょうど1件ある場合は、製品Agentの最初の
+model stepで`web_search`を必須選択します。独立行だけがある場合、複数ある場合、またはeval
+allowlistで`web_search`が無効な場合は必須選択しません。queryの安全性と完全一致は引き続き
+二段query guardで判定し、必須選択によって認可を迂回しません。
 
 非公開Issueの固有名、顧客名、メンバー名、内部識別子を検索語へ転記しません。明示行がない場合や
 安全な一般化を確定できない場合は`web_search`ツールを呼ばず、ユーザーへ公開情報だけの言い換えを
 求めます。
+thread titleは非公開情報として検査します。ただしthread最初のrunが現在の発話から自動生成したtitle
+だけは、同じ発話の公開queryを自己拒否しないようprivate比較から除外します。ユーザーが編集したtitle、
+過去runが生成したtitle、複数runが存在して生成元を一意に確定できないtitleは引き続き検査対象です。
 
 ### 二段query guard
 
@@ -59,7 +66,7 @@ queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本�
 200件、現在のスレッドのメッセージ200件、合計1,000,000文字までです。いずれかの上限を
 超えた場合は一部だけを検査して続行せず、検索を拒否します。
 
-guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。検索専用AgentはQwen reasoningを無効化し、OpenRouterのExa server toolを最大3 result・60秒で呼びます。製品Agent本体はreasoning mediumを維持します。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Web上のinstructionをIssue toolのinstructionへ昇格させません。
+guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。検索専用AgentはQwen reasoningを無効化し、OpenRouterのExa server toolを最大3 result・60秒で呼びます。製品Agent本体はreasoning mediumを維持します。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Webはtool outputのsourceを同じ公開URL境界で再検証してリンク表示し、モデル本文がURLを再掲するかには依存しません。Web上のinstructionをIssue toolのinstructionへ昇格させません。
 
 Web検索後も現在threadの`Ask always | Full access`を維持します。検索結果やqueryが権限を拡張することはなく、Full accessでもcanonical payload、revision、tenant認可、idempotency、attachment claim、auditを省略しません。
 

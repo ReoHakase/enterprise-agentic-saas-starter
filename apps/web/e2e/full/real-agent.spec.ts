@@ -31,6 +31,30 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
 const assistantArticles = (agentShell: Locator) =>
   agentShell.locator('article[aria-label="Agent response"]')
 
+const readPersistedToolStates = async (
+  request: APIRequestContext,
+  apiOrigin: string,
+  threadId: string
+) => {
+  const response = await request.get(
+    `${apiOrigin}/agent/threads/${encodeURIComponent(threadId)}/messages`
+  )
+  if (!response.ok()) return []
+  const messages: unknown = await response.json()
+  if (!Array.isArray(messages)) return []
+  return messages.flatMap((message) => {
+    if (!isRecord(message) || !Array.isArray(message.parts)) return []
+    return message.parts.flatMap((part) =>
+      isRecord(part) &&
+      typeof part.type === "string" &&
+      part.type.startsWith("tool-") &&
+      typeof part.state === "string"
+        ? [`${part.type.slice(5)}:${part.state}`]
+        : []
+    )
+  })
+}
+
 const sendMessage = async (
   page: Page,
   agentShell: Locator,
@@ -156,6 +180,19 @@ test("agent-canary-read-source", async ({ context, page }) => {
       "Public-only Web query: official Cloudflare Workers CPU time limits",
     ].join("\n")
   )
+  const threadId = new URL(page.url()).searchParams.get("agentThread")
+  expect(threadId).toBeTruthy()
+  await expect
+    .poll(
+      () =>
+        readPersistedToolStates(
+          context.request,
+          harness.apiOrigin,
+          threadId ?? ""
+        ),
+      { timeout: 30_000 }
+    )
+    .toContain("web_search:output-available")
   await expect(
     harness.agentShell.getByText(/web search · output available/u).last()
   ).toBeVisible({ timeout: 120_000 })

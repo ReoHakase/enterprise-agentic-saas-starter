@@ -3,6 +3,7 @@ import { resolve } from "node:path"
 
 import { createAgentModel } from "../adapters/model/openrouter"
 import { parseAgentEvalDataset, type AgentEvalCase } from "./dataset"
+import { classifyAgentEvalFailure } from "./failure"
 import { runAgentEvalStackCase } from "./stack-driver"
 
 const evalDirectory = resolve(import.meta.dirname, "../../../evals")
@@ -86,9 +87,10 @@ process.once("SIGTERM", requestShutdown)
 
 try {
   await main(shutdown.signal)
-} catch {
+} catch (cause) {
   console.error(
     JSON.stringify({
+      failureCode: classifyAgentEvalFailure(cause),
       message: "Agent eval failed",
       status: "failed",
     })

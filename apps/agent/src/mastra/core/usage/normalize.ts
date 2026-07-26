@@ -23,16 +23,45 @@ const count = (value: unknown) =>
     ? Math.floor(value)
     : 0
 
-const providerCostMicros = (raw: unknown): number | undefined => {
-  if (!raw || typeof raw !== "object" || !("cost" in raw)) return undefined
-  const cost = Reflect.get(raw, "cost")
-  return typeof cost === "number" && Number.isFinite(cost) && cost >= 0
-    ? Math.round(cost * 1_000_000)
+const nonNegativeFiniteNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
     : undefined
+
+const objectProperty = (value: unknown, property: string): unknown =>
+  value && typeof value === "object" ? Reflect.get(value, property) : undefined
+
+const providerCost = (raw: unknown): number | undefined =>
+  nonNegativeFiniteNumber(objectProperty(raw, "cost"))
+
+const openRouterStepCost = (providerMetadata: unknown): number | undefined =>
+  providerCost(
+    objectProperty(objectProperty(providerMetadata, "openrouter"), "usage")
+  )
+
+const providerCostMicros = ({
+  raw,
+  stepProviderMetadata,
+}: {
+  raw: unknown
+  stepProviderMetadata: readonly unknown[]
+}): number | undefined => {
+  const aggregateCost = providerCost(raw)
+  if (aggregateCost !== undefined) return Math.round(aggregateCost * 1_000_000)
+  if (stepProviderMetadata.length === 0) return undefined
+
+  let cost = 0
+  for (const providerMetadata of stepProviderMetadata) {
+    const stepCost = openRouterStepCost(providerMetadata)
+    if (stepCost === undefined) return undefined
+    cost += stepCost
+  }
+  return Number.isFinite(cost) ? Math.round(cost * 1_000_000) : undefined
 }
 
 export const normalizeAgentUsage = (input: {
   usage: UsageLike
+  stepProviderMetadata?: readonly unknown[]
   imageInputCount: number
   durationMs: number
   runEventId: string
@@ -71,7 +100,10 @@ export const normalizeAgentUsage = (input: {
       ? outputTokenCount - reasoningTokenCount
       : count(input.usage.outputTokenDetails.textTokens)
   )
-  const costMicros = providerCostMicros(input.usage.raw)
+  const costMicros = providerCostMicros({
+    raw: input.usage.raw,
+    stepProviderMetadata: input.stepProviderMetadata ?? [],
+  })
   return {
     provider: "openrouter",
     model: "qwen/qwen3.6-flash",

@@ -8,7 +8,16 @@
       "prompt": "Find the Issue titled \"Synthetic tenant boundary\" with the Issue search tool and report its priority. Do not create or update anything.",
       "availableTools": ["search_issues", "get_issue"],
       "requiredTool": "search_issues",
-      "expectedPriority": "high"
+      "expectedPriority": "urgent"
+    },
+    {
+      "id": "agent-stack-web-search",
+      "kind": "web_search",
+      "trials": 3,
+      "prompt": "Use public Web search and cite the latest official source.\nPublic-only Web query: official Cloudflare Workers CPU time limits",
+      "availableTools": ["web_search", "search_issues", "get_issue"],
+      "requiredTool": "web_search",
+      "expectedQuery": "official Cloudflare Workers CPU time limits"
     },
     {
       "id": "agent-stack-approved-write",

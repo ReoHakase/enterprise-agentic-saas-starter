@@ -98,6 +98,20 @@ const scopeProbeSchema = z
     wrongThreadRejected: z.boolean(),
   })
   .strict()
+const scopeProbeFailureStageSchema = z.enum([
+  "baseline",
+  "connection_replay",
+  "expired_grant",
+  "setup",
+  "side_effect_snapshot",
+  "stale_epoch",
+  "wrong_organization",
+  "wrong_thread",
+])
+const scopeProbeResultSchema = z.union([
+  scopeProbeSchema,
+  z.object({ failureStage: scopeProbeFailureStageSchema }).strict(),
+])
 
 export type AgentEvalStack = {
   apiOrigin: string
@@ -140,12 +154,13 @@ const stopProcess = async (child: ManagedProcess | undefined) => {
 const waitForHttp = async (
   url: string,
   timeoutMs: number,
+  service: "database" | "worker",
   processHandle?: ManagedProcess
 ) => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (processHandle?.exitCode !== null) {
-      throw new Error("Agent eval service exited during startup")
+      throw new Error(`Agent eval ${service} exited during startup`)
     }
     try {
       // oxlint-disable-next-line no-await-in-loop -- bounded readiness polling is serial.
@@ -161,13 +176,14 @@ const waitForHttp = async (
     // oxlint-disable-next-line no-await-in-loop -- readiness probes need spacing.
     await Bun.sleep(200)
   }
-  throw new Error("Agent eval service readiness timed out")
+  throw new Error(`Agent eval ${service} readiness timed out`)
 }
 
 const runCommand = async (
   command: string[],
   cwd: string,
   environment: Record<string, string>,
+  failureMessage: string,
   captureOutput = false
 ) => {
   const child = Bun.spawn(command, {
@@ -182,7 +198,7 @@ const runCommand = async (
     : Promise.resolve("")
   const exitCode = await child.exited
   if (exitCode !== 0) {
-    throw new Error("Agent eval setup command failed")
+    throw new Error(failureMessage)
   }
   return output
 }
@@ -339,16 +355,23 @@ export const startAgentEvalStack = async ({
         stderr: "ignore",
       }
     )
-    await waitForHttp(`${databaseOrigin}/health`, 30_000, databaseProcess)
+    await waitForHttp(
+      `${databaseOrigin}/health`,
+      30_000,
+      "database",
+      databaseProcess
+    )
     await runCommand(
       ["bun", "--no-env-file", "run", "db:migrate"],
       databaseWorkspace,
-      databaseEnvironment
+      databaseEnvironment,
+      "Agent eval database migration failed"
     )
     const identityOutput = await runCommand(
       ["bun", "--no-env-file", "run", fixtureScript, "seed"],
       repositoryRoot,
       databaseEnvironment,
+      "Agent eval fixture seed failed",
       true
     )
     const identity = fixtureIdentitySchema.parse(
@@ -413,7 +436,7 @@ export const startAgentEvalStack = async ({
         stderr: "ignore",
       }
     )
-    await waitForHttp(`${apiOrigin}/ready`, 180_000, wranglerProcess)
+    await waitForHttp(`${apiOrigin}/ready`, 180_000, "worker", wranglerProcess)
     return { apiOrigin, close, databaseEnvironment, identity }
   } catch (cause) {
     await close()
@@ -428,6 +451,7 @@ export const readAgentEvalStackUsage = async (
     ["bun", "--no-env-file", "run", fixtureScript, "usage"],
     repositoryRoot,
     stack.databaseEnvironment,
+    "Agent eval usage snapshot failed",
     true
   )
   return usageSnapshotSchema.parse(JSON.parse(await output))
@@ -440,7 +464,12 @@ export const runAgentEvalStackScopeProbes = async (
     ["bun", "--no-env-file", "run", scopeProbeScript],
     repositoryRoot,
     stack.databaseEnvironment,
+    "Agent eval scope probe failed",
     true
   )
-  return scopeProbeSchema.parse(JSON.parse(await output))
+  const result = scopeProbeResultSchema.parse(JSON.parse(await output))
+  if ("failureStage" in result) {
+    throw new Error(`Agent eval scope probe ${result.failureStage} failed`)
+  }
+  return result
 }

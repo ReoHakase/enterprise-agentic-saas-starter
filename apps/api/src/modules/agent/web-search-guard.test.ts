@@ -7,6 +7,7 @@ import {
   createAgentThreadForSession,
   issueAgentConnectionTicket,
 } from "./threads/repository"
+import { renameAgentThreadForRun } from "./threads/search-repository"
 
 const createGuardFixture = async ({
   currentMessageText = [
@@ -175,6 +176,24 @@ describe("Agent Web search server guard", () => {
       })
     ).resolves.toEqual({
       query: "Cloudflare R2 current limits",
+    })
+  })
+
+  it("does not let the current run's automatic title poison its authorized query", async () => {
+    const { db, grant, guard } = await createGuardFixture()
+    await renameAgentThreadForRun(db, {
+      grant,
+      now: new Date(Date.now() + 1_000),
+      title: "Current approaches to prioritizing software defects",
+    })
+
+    await expect(
+      guard({
+        grant,
+        query: "current approaches to prioritizing software defects",
+      })
+    ).resolves.toEqual({
+      query: "current approaches to prioritizing software defects",
     })
   })
 

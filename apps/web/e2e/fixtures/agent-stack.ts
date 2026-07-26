@@ -4,7 +4,7 @@ import { resolve } from "node:path"
 import {
   agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
-  removeAgentE2EArtifacts,
+  removeAgentE2EStackArtifacts,
 } from "./agent-e2e-environment"
 
 const repositoryRoot = resolve(import.meta.dir, "../../../..")
@@ -120,13 +120,13 @@ const main = async () => {
   process.once("SIGTERM", stop)
 
   try {
-    await removeAgentE2EArtifacts(environment.runId)
+    await removeAgentE2EStackArtifacts(environment.runId)
     await Promise.all([
-      mkdir(resolve(environment.temporaryRoot, "api"), {
+      mkdir(resolve(environment.stackRoot, "api"), {
         mode: 0o700,
         recursive: true,
       }),
-      mkdir(resolve(environment.temporaryRoot, "agent"), {
+      mkdir(resolve(environment.stackRoot, "agent"), {
         mode: 0o700,
         recursive: true,
       }),
@@ -147,7 +147,7 @@ const main = async () => {
         String(environment.databasePort),
       ],
       {
-        cwd: environment.temporaryRoot,
+        cwd: environment.stackRoot,
         env: inheritedEnvironment,
         stdin: "ignore",
         stdout: "inherit",
@@ -301,7 +301,7 @@ const main = async () => {
     process.off("SIGINT", stop)
     process.off("SIGTERM", stop)
     await Promise.allSettled([stopProcess(wrangler), stopProcess(turso)])
-    await removeAgentE2EArtifacts(environment.runId)
+    await removeAgentE2EStackArtifacts(environment.runId)
   }
 }
 

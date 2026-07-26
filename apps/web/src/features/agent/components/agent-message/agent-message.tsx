@@ -17,6 +17,7 @@ import {
 import { AgentApprovalCard } from "../agent-approval-card/agent-approval-card"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
 import { MessageResponse } from "../message-response/message-response"
+import { webSearchLinksFromToolOutput } from "../web-search-links/web-search-links"
 
 export const AgentMessage = ({
   message,
@@ -124,6 +125,10 @@ export const AgentMessage = ({
             part.state === "output-available"
               ? issueLinksFromToolOutput(toolName, part.output)
               : []
+          const webSearchLinks =
+            part.state === "output-available"
+              ? webSearchLinksFromToolOutput(toolName, part.output)
+              : []
           return (
             <div key={key} className="space-y-2 text-xs">
               <details className="rounded-lg border bg-muted/30 px-3 py-2">
@@ -151,6 +156,21 @@ export const AgentMessage = ({
                     >
                       #{issue.number} {issue.title}
                     </Link>
+                  ))}
+                </div>
+              ) : null}
+              {webSearchLinks.length > 0 ? (
+                <div className="space-y-1">
+                  {webSearchLinks.map((source) => (
+                    <a
+                      key={source.url}
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate text-blue-600 underline underline-offset-2"
+                    >
+                      {source.title}
+                    </a>
                   ))}
                 </div>
               ) : null}

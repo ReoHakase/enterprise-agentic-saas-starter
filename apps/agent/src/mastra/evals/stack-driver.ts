@@ -50,6 +50,14 @@ const toolNames = (events: readonly unknown[]) =>
       : []
   )
 
+const toolInput = (events: readonly unknown[], toolName: string) =>
+  events.find(
+    (event) =>
+      isRecord(event) &&
+      event.type === "tool-input-available" &&
+      event.toolName === toolName
+  )
+
 const assistantText = (events: readonly unknown[]) =>
   events
     .flatMap((event) => {
@@ -90,7 +98,7 @@ const assertCommonResult = async ({
   const calls = toolNames(events)
   if (
     !calls.includes(caseDefinition.requiredTool) ||
-    (caseDefinition.kind === "read" &&
+    (caseDefinition.kind !== "write" &&
       calls.some((name) => writeTools.has(name)))
   ) {
     throw new Error(`Agent eval ${caseDefinition.id} used unexpected tools`)
@@ -101,15 +109,19 @@ const assertCommonResult = async ({
       row.organizationId === stack.identity.organizationId &&
       row.threadId === threadId
   )
-  if (
-    scopedUsage.length === 0 ||
-    scopedUsage.some((row) => row.model !== modelId || row.isEstimate)
-  ) {
-    throw new Error(`Agent eval ${caseDefinition.id} usage was incomplete`)
+  if (scopedUsage.length === 0) {
+    throw new Error(`Agent eval ${caseDefinition.id} usage scope was missing`)
+  }
+  if (scopedUsage.some((row) => row.model !== modelId)) {
+    throw new Error(`Agent eval ${caseDefinition.id} usage model mismatched`)
+  }
+  if (scopedUsage.some((row) => row.isEstimate)) {
+    throw new Error(`Agent eval ${caseDefinition.id} usage was estimated`)
   }
   const probes = await runAgentEvalStackScopeProbes(stack)
-  if (Object.values(probes).some((passed) => !passed)) {
-    throw new Error(`Agent eval ${caseDefinition.id} crossed its scope`)
+  const failedProbe = Object.entries(probes).find(([, passed]) => !passed)
+  if (failedProbe) {
+    throw new Error(`Agent eval scope assertion ${failedProbe[0]} failed`)
   }
   return { calls, snapshot }
 }
@@ -134,6 +146,20 @@ const assertCaseResult = ({
         .includes(caseDefinition.expectedPriority)
     ) {
       throw new Error("Agent eval read result omitted the Issue priority")
+    }
+    return
+  }
+  if (caseDefinition.kind === "web_search") {
+    const input = toolInput(events, "web_search")
+    if (
+      !isRecord(input) ||
+      !isRecord(input.input) ||
+      input.input.query !== caseDefinition.expectedQuery
+    ) {
+      throw new Error("Agent eval Web search query mismatched")
+    }
+    if (!/https?:\/\//u.test(assistantText(events))) {
+      throw new Error("Agent eval Web search source was omitted")
     }
     return
   }

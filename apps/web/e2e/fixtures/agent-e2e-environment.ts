@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises"
+import { rm, rmdir } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 
@@ -40,6 +40,7 @@ export const createAgentE2EEnvironment = (input: string | number) => {
   const temporaryRoot = validateTemporaryRoot(
     join(TEMPORARY_DIRECTORY, `enterprise-agentic-saas-agent-e2e-${runId}`)
   )
+  const stackRoot = join(temporaryRoot, "stack")
 
   return {
     runId,
@@ -54,11 +55,13 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     databaseOrigin: `http://127.0.0.1:${databasePort}`,
     cookieDomain,
     temporaryRoot,
-    databasePath: join(temporaryRoot, "agent-e2e.db"),
-    wranglerStatePath: join(temporaryRoot, "wrangler-state"),
-    apiConfigPath: join(temporaryRoot, "api", "wrangler.json"),
-    agentConfigPath: join(temporaryRoot, "agent", "wrangler.json"),
-    agentDevVarsPath: join(temporaryRoot, "agent", ".dev.vars"),
+    stackRoot,
+    nextDistDirectory: `.next-e2e-full-${runId}`,
+    databasePath: join(stackRoot, "agent-e2e.db"),
+    wranglerStatePath: join(stackRoot, "wrangler-state"),
+    apiConfigPath: join(stackRoot, "api", "wrangler.json"),
+    agentConfigPath: join(stackRoot, "agent", "wrangler.json"),
+    agentDevVarsPath: join(stackRoot, "agent", ".dev.vars"),
     apiWorkerName: `enterprise-agentic-saas-api-agent-e2e-${runId}`,
     agentWorkerName: `enterprise-agentic-saas-agent-e2e-${runId}`,
   }
@@ -69,4 +72,23 @@ export const removeAgentE2EArtifacts = async (
 ): Promise<void> => {
   const { temporaryRoot } = createAgentE2EEnvironment(input)
   await rm(temporaryRoot, { force: true, recursive: true })
+}
+
+export const removeAgentE2EStackArtifacts = async (
+  input: string | number
+): Promise<void> => {
+  const { stackRoot, temporaryRoot } = createAgentE2EEnvironment(input)
+  await rm(stackRoot, { force: true, recursive: true })
+  try {
+    await rmdir(temporaryRoot)
+  } catch (cause) {
+    if (
+      cause instanceof Error &&
+      "code" in cause &&
+      (cause.code === "ENOENT" || cause.code === "ENOTEMPTY")
+    ) {
+      return
+    }
+    throw cause
+  }
 }
