@@ -60,7 +60,7 @@ WebからAPI schemaやrepositoryをdeep importしません。Agentからpublic A
 - `apps/agent/src/mastra/e2e/worker.ts`: free E2E専用entrypoint
 - `apps/agent/src/mastra/legacy/issue-assistant.ts`: 到達不能な旧class retention
 - `apps/api/src/modules/agent/`: public route、private route、thread/run/action/context/usage repository
-- `apps/web/features/agent/`: shell、transport、query、runtime state、UI components
+- `apps/web/src/features/agent/`: shell、transport、query、runtime state、UI components
 
 大きな処理をentrypointへ戻さず、認可とtransactionはAPI、model/tool orchestrationはAgent、表示と一時draftはWebへ閉じます。
 generated `apps/agent/src/cloudflare-env.d.ts`以外のhand-written runtimeを`src/mastra/**`外へ

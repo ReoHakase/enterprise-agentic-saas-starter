@@ -113,8 +113,8 @@ Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 | ---: | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/drizzle/**`、`**/{storybook-static,playwright-report,test-results}/**` |
 |    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                                                |
-|    2 | React                             | `apps/web/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                                           |
-|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                                                   |
+|    2 | React                             | `apps/web/src/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                                       |
+|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`src/lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                                               |
 |    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                                        |
 
 `fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。root
@@ -212,15 +212,7 @@ production TypeScript/TSXのcopy-pasteを検出します。
 
 ```json
 {
-  "path": [
-    "apps/*/src",
-    "apps/web/app",
-    "apps/web/components",
-    "apps/web/features",
-    "apps/web/hooks",
-    "apps/web/lib",
-    "packages/*/src"
-  ],
+  "path": ["apps/*/src", "apps/web/src", "packages/*/src"],
   "threshold": 3,
   "minTokens": 70,
   "minLines": 8,

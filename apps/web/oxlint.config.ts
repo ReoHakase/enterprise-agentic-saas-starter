@@ -65,9 +65,9 @@ export default defineConfig({
   overrides: [
     {
       files: [
-        "features/members/components/invitations-section/invitations-section.tsx",
-        "features/members/components/members-table/members-table.tsx",
-        "features/organizations/components/organizations-page/organizations-page.tsx",
+        "src/features/members/components/invitations-section/invitations-section.tsx",
+        "src/features/members/components/members-table/members-table.tsx",
+        "src/features/organizations/components/organizations-page/organizations-page.tsx",
       ],
       rules: {
         // TanStack Tableのmemoized column cell/header rendererをnested componentと誤認する。
@@ -99,10 +99,10 @@ export default defineConfig({
     },
     {
       files: [
-        "features/files/components/file-attachments/file-attachments.test.tsx",
-        "features/issues/components/issues-workspace/issues-workspace.test.tsx",
-        "features/members/components/invitation-decision-panel/invitation-decision-panel.test.tsx",
-        "features/organizations/components/organization-activation-gate/organization-activation-gate.test.tsx",
+        "src/features/files/components/file-attachments/file-attachments.test.tsx",
+        "src/features/issues/components/issues-workspace/issues-workspace.test.tsx",
+        "src/features/members/components/invitation-decision-panel/invitation-decision-panel.test.tsx",
+        "src/features/organizations/components/organization-activation-gate/organization-activation-gate.test.tsx",
       ],
       rules: {
         // VitestのimportOriginalへmodule全体の型を渡し、namespace import宣言を避ける。
@@ -130,7 +130,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["features/auth/components/**/*.tsx"],
+      files: ["src/features/auth/components/**/*.tsx"],
       rules: {
         // Better Auth UI互換componentは公式surfaceと同じfunction declarationを保つ。
         "func-style": "off",
@@ -139,17 +139,17 @@ export default defineConfig({
       },
     },
     {
-      files: ["features/auth/auth-plugin.ts"],
+      files: ["src/features/auth/auth-plugin.ts"],
       rules: {
         "typescript/consistent-type-definitions": "off",
       },
     },
     ...createBudgetOverrides({
       adapter: [
-        "lib/server/**/*.{ts,tsx}",
+        "src/lib/server/**/*.{ts,tsx}",
         "**/*.config.{js,mjs,cjs,ts,mts,cts}",
       ],
-      react: ["{app,components,features,hooks}/**/*.{jsx,tsx}"],
+      react: ["src/{app,components,features,hooks}/**/*.{jsx,tsx}"],
       testReact: true,
     }),
   ],

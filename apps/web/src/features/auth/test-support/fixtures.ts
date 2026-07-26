@@ -3,8 +3,7 @@ import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client
 import { createElement, type ReactNode } from "react"
 import { fn } from "storybook/test"
 
-import Link from "@/test-support/storybook/next-link"
-
+import Link from "../../../../test-support/storybook/next-link"
 import { AuthProvider } from "../components/auth-provider/auth-provider"
 import { AuthRouteScope } from "../components/auth-route-scope/auth-route-scope"
 import { magicLinkPlugin } from "../magic-link-plugin"

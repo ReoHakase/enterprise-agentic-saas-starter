@@ -167,6 +167,9 @@ workspace外へ公開しません。
 - 別workspaceはpackage name
 - app routeからfeature private fileをdeep importしない
 
+`apps/web`の`@/*`はapplication sourceである`apps/web/src/*`だけへ解決します。workspace
+rootに残すtest、E2E、Storybook、設定fileはこのaliasの対象へ含めません。
+
 absolute aliasを同じfeature内部で多用すると、cross-feature deep importとの区別がつかなくなるためです。
 
 `import/no-relative-parent-imports`は全体へ有効化しません。同じfeature/module内の

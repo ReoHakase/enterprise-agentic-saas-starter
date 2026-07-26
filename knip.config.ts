@@ -84,7 +84,7 @@ const config: KnipConfig = {
       entry: [
         "e2e/fixtures/agent-stack.ts",
         "e2e/fixtures/oauth-api.ts",
-        "features/auth/auth-plugin.ts!",
+        "src/features/auth/auth-plugin.ts!",
         "open-next.config.ts",
         "test-support/storybook/next-link.tsx",
         "test-support/storybook/next-navigation.ts",
@@ -92,10 +92,10 @@ const config: KnipConfig = {
         "test-support/storybook/server-only.ts",
       ],
       project: [
-        "{app,components,features,hooks,lib}/**/*.{ts,tsx}!",
+        "src/{app,components,features,hooks,lib}/**/*.{ts,tsx}!",
         "!**/*.test.{ts,tsx}!",
         "!**/*.stories.{ts,tsx}!",
-        "!features/**/test-support/**!",
+        "!src/features/**/test-support/**!",
       ],
       playwright: {
         config: ["playwright*.config.ts"],

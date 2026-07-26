@@ -10,32 +10,32 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
 const nodeCoverageIncludes = [
-  "features/auth/runtime-guards.ts",
-  "features/account/components/**/*.tsx",
-  "features/account/multi-session-client.ts",
-  "features/account/schema.ts",
-  "features/account/security-client.ts",
-  "features/auth/error.ts",
-  "features/auth/schema.ts",
-  "features/console/api.ts",
-  "features/issues/api.ts",
-  "features/issues/components/**/*.{ts,tsx}",
-  "features/issues/schema.ts",
-  "features/members/api.ts",
-  "features/members/components/**/*.tsx",
-  "features/members/schema.ts",
-  "features/organizations/components/**/*.tsx",
-  "features/organizations/schema.ts",
-  "features/auth/redirect-to.ts",
-  "lib/observability/sentry-runtime.ts",
-  "lib/observability/sentry-scrub.ts",
-  "lib/server/auth-session-response.ts",
+  "src/features/auth/runtime-guards.ts",
+  "src/features/account/components/**/*.tsx",
+  "src/features/account/multi-session-client.ts",
+  "src/features/account/schema.ts",
+  "src/features/account/security-client.ts",
+  "src/features/auth/error.ts",
+  "src/features/auth/schema.ts",
+  "src/features/console/api.ts",
+  "src/features/issues/api.ts",
+  "src/features/issues/components/**/*.{ts,tsx}",
+  "src/features/issues/schema.ts",
+  "src/features/members/api.ts",
+  "src/features/members/components/**/*.tsx",
+  "src/features/members/schema.ts",
+  "src/features/organizations/components/**/*.tsx",
+  "src/features/organizations/schema.ts",
+  "src/features/auth/redirect-to.ts",
+  "src/lib/observability/sentry-runtime.ts",
+  "src/lib/observability/sentry-scrub.ts",
+  "src/lib/server/auth-session-response.ts",
 ]
 const browserCoverageIncludes = [
-  "components/**/*.{ts,tsx}",
-  "features/**/components/**/*.{ts,tsx}",
-  "features/**/hooks/**/*.{ts,tsx}",
-  "hooks/**/*.{ts,tsx}",
+  "src/components/**/*.{ts,tsx}",
+  "src/features/**/components/**/*.{ts,tsx}",
+  "src/features/**/hooks/**/*.{ts,tsx}",
+  "src/hooks/**/*.{ts,tsx}",
 ]
 const coverageExcludes = [
   "**/*.d.ts",
@@ -94,7 +94,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": dirname,
+      "@": path.join(dirname, "src"),
     },
   },
   test: {
@@ -129,7 +129,8 @@ export default defineConfig({
           environment: "happy-dom",
           include: [
             "*.test.{ts,tsx}",
-            "{components,features,hooks,lib,testing}/**/*.test.{ts,tsx}",
+            "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
+            "testing/**/*.test.{ts,tsx}",
           ],
           exclude: ["**/*.browser.test.{ts,tsx}"],
           setupFiles: ["./vitest.setup.ts"],
@@ -146,7 +147,8 @@ export default defineConfig({
         test: {
           name: "browser",
           include: [
-            "{components,features,hooks,lib,testing}/**/*.browser.test.{ts,tsx}",
+            "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
+            "testing/**/*.browser.test.{ts,tsx}",
           ],
           setupFiles: ["./vitest.browser.setup.ts"],
           browser: {

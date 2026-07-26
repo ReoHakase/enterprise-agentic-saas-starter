@@ -17,7 +17,7 @@ related:
 
 `packages/ui`は、domain非依存のReact DOM primitive、domain非依存pattern、generic hook、style、token、Storybookを所有します。
 
-Issue、Organization、Product Agentなどのdomain concept、API client、React Query、Next.js route、auth session、tenant logicを持ち込みません。これらを必要とするcomponentは`apps/web/features`が所有します。
+Issue、Organization、Product Agentなどのdomain concept、API client、React Query、Next.js route、auth session、tenant logicを持ち込みません。これらを必要とするcomponentは`apps/web/src/features`が所有します。
 
 ## コード構造との対応
 

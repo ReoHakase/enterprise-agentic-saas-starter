@@ -34,55 +34,61 @@ client、Agent stream UIを所有します。DB、Email、Agent model runtimeは
 
 ```text
 apps/web/
-  app/
-    (public)/
-    (console)/
-    api/
-    layout.tsx
+  src/
+    app/
+      (public)/
+      (console)/
+      api/
+      layout.tsx
 
-  components/
-    providers/
-      providers.tsx
-    console-shell/
-      console-shell.tsx
-    route-error/
-      route-error.tsx
+    components/
+      providers/
+        providers.tsx
+      console-shell/
+        console-shell.tsx
+      route-error/
+        route-error.tsx
 
-  features/
-    <feature>/
-      index.ts
-      model.ts
-      schema.ts
-      api.ts
-      queries.ts
+    features/
+      <feature>/
+        index.ts
+        model.ts
+        schema.ts
+        api.ts
+        queries.ts
 
-      hooks/
-        use-<feature>-controller.ts
+        hooks/
+          use-<feature>-controller.ts
 
-      components/
-        <component-name>/
-          <component-name>.tsx
-          <component-name>.test.tsx
-          <component-name>.stories.tsx
+        components/
+          <component-name>/
+            <component-name>.tsx
+            <component-name>.test.tsx
+            <component-name>.stories.tsx
 
-        <screen-name>/
-          server.tsx
-          client.tsx
-          view.tsx
-          suspense.tsx
-          skeleton.tsx
-          error-boundary.client.tsx
-          error-view.tsx
-          async-states.stories.tsx
-          async-states.browser.test.tsx
+          <screen-name>/
+            server.tsx
+            client.tsx
+            view.tsx
+            suspense.tsx
+            skeleton.tsx
+            error-boundary.client.tsx
+            error-view.tsx
+            async-states.stories.tsx
+            async-states.browser.test.tsx
 
-      test-support/
-        fixtures.ts
+        test-support/
+          fixtures.ts
 
-  lib/
-    client/
-    server/
-    shared/
+    lib/
+      client/
+      server/
+      shared/
+
+    instrumentation.ts
+    instrumentation-client.ts
+    sentry.server.config.ts
+    sentry.edge.config.ts
 
   e2e/
   test/
@@ -99,7 +105,7 @@ componentは`components/<screen-name>/`へまとめます。全featureへ同じ�
 
 ## app directory
 
-`app/`はNext.js routeとfeatureの公開componentを組み合わせる場所です。
+`src/app/`はNext.js routeとfeatureの公開componentを組み合わせる場所です。
 
 許可:
 
@@ -154,9 +160,10 @@ mount順依存を作りません。
 React Server Componentは、browserへJavaScriptを送らずserverで実行されるcomponentです。この文書では
 以後Server Componentと表記します。
 
-- Server Componentは`features/<feature>/components/<screen>/server.tsx`へ置く
-- その他のserver codeは`lib/server/**`、`*.server.ts`へ置く
-- browserで動くcomponentは`components/**`の`*.client.tsx`、controllerは`hooks/**`へ置く
+- Server Componentは`src/features/<feature>/components/<screen>/server.tsx`へ置く
+- その他のserver codeは`src/lib/server/**`、`*.server.ts`へ置く
+- browserで動くcomponentは`src/components/**`または`src/features/**/components/**`の
+  `*.client.tsx`、controllerは`src/hooks/**`またはfeature内の`hooks/**`へ置く
 - browserから`next/headers`、server env、server-only moduleをimportしない
 - Server Componentはinitial dataとauthorizationを担当し、interactive stateはClient Componentへ渡す
 
@@ -302,7 +309,7 @@ Storybook projectがbrowserでimport可能なpublic componentと主要Viewには
 componentを含みます。
 
 - `packages/ui/src/**`のbrowser component
-- `apps/web/**/*.tsx`から後述の構造上の除外を引いたbrowser component/view
+- `apps/web/src/**/*.tsx`から後述の構造上の除外を引いたbrowser component/view
 - provider、portal、error、skeletonもbrowser import可能なら対象
 
 構造上の除外はasync Server Component、`server.tsx`/`*.server.tsx`/`server-only` graph、Next.jsの
@@ -412,7 +419,7 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 
 ## 受入条件
 
-- `app/`に大規模なClient Componentがない
+- `src/app/`に大規模なClient Componentがない
 - viewからQuery/router/toast/API importがない
 - browser codeからserver module importがない
 - cross-feature deep importがない

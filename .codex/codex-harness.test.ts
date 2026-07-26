@@ -185,7 +185,7 @@ describe("Codex harness", () => {
     )
     const unrelatedResult = runHook(
       "post-tool-use-review.ts",
-      postToolInput("*** Update File: apps/web/app/page.tsx")
+      postToolInput("*** Update File: apps/web/src/app/page.tsx")
     )
     expect(JSON.parse(protectedResult.stdout)).toMatchObject({
       hookSpecificOutput: {

@@ -5,7 +5,7 @@ implementation: deferred
 last_reviewed: 2026-07-26
 applies_to:
   - packages/ui/**
-  - apps/web/features/**
+  - apps/web/src/features/**
 related:
   - ./storybook.md
   - ../packages/ui.md

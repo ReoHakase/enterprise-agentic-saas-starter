@@ -8,7 +8,7 @@ const dirname = path.dirname(fileURLToPath(import.meta.url))
 const workspace = path.resolve(dirname, "..")
 
 export default defineMain({
-  stories: ["../{app,components,features}/**/*.stories.@(ts|tsx)"],
+  stories: ["../src/{app,components,features}/**/*.stories.@(ts|tsx)"],
   addons: [
     "@storybook/addon-a11y",
     "@storybook/addon-docs",
@@ -30,7 +30,7 @@ export default defineMain({
       },
       resolve: {
         alias: {
-          "@": workspace,
+          "@": path.join(workspace, "src"),
           "@sentry/nextjs": path.join(
             workspace,
             "test-support/storybook/sentry-nextjs.ts"

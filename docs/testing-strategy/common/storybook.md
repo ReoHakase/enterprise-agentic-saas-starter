@@ -54,15 +54,15 @@ CSF Nextの`defineMain`、`definePreview`、`preview.meta`、`meta.story`を採�
 
 ## コンポーネント粒度と分類
 
-| コンポーネント粒度           | 主な配置                                                             | 分類                  | Storybookで扱う内容                                                 | Storybook外へ残す内容                 |
-| ---------------------------- | -------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- | ------------------------------------- |
-| UI primitive                 | `packages/ui/src/components/**`                                      | UI2、UI3              | props、variant、disabled、destructive、ARIA、keyboard、focus、theme | app domain、API、route                |
-| UI複合pattern                | `packages/ui/src/patterns/**`                                        | UI2、UI3、必要ならUI4 | 複数primitiveの協調、dialog、menu、form、focus return               | API、QueryClient、tenant              |
-| Web表示専用component         | `apps/web/features/**/components/**`                                 | W2、W3                | loading、empty、error、ready、callback、代表操作                    | query cache、route lifecycle          |
-| Web接続済みfeature           | `features/**/components/<screen>/client.tsx`、controller composition | W4                    | QueryClient、mutation、MSW、stream、retry、複数component            | 実Next.js route、middleware           |
-| routeから切り出したPage View | `features/**/components/**`                                          | W3またはW4            | page相当の表示、代表操作、responsive state                          | RSC、cookie、browser history          |
-| 実page、layout、middleware   | `apps/web/app/**`、`middleware.ts`                                   | W5、W6                | 原則storyへ直接入れない                                             | server判断はW5、実route lifecycleはW6 |
-| 全構成journey                | `apps/web/e2e/**`                                                    | E1、E2                | Storybook対象外                                                     | Web、API、Agent、DB/Authの全配線      |
+| コンポーネント粒度           | 主な配置                                                                 | 分類                  | Storybookで扱う内容                                                 | Storybook外へ残す内容                 |
+| ---------------------------- | ------------------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------- | ------------------------------------- |
+| UI primitive                 | `packages/ui/src/components/**`                                          | UI2、UI3              | props、variant、disabled、destructive、ARIA、keyboard、focus、theme | app domain、API、route                |
+| UI複合pattern                | `packages/ui/src/patterns/**`                                            | UI2、UI3、必要ならUI4 | 複数primitiveの協調、dialog、menu、form、focus return               | API、QueryClient、tenant              |
+| Web表示専用component         | `apps/web/src/features/**/components/**`                                 | W2、W3                | loading、empty、error、ready、callback、代表操作                    | query cache、route lifecycle          |
+| Web接続済みfeature           | `src/features/**/components/<screen>/client.tsx`、controller composition | W4                    | QueryClient、mutation、MSW、stream、retry、複数component            | 実Next.js route、middleware           |
+| routeから切り出したPage View | `src/features/**/components/**`                                          | W3またはW4            | page相当の表示、代表操作、responsive state                          | RSC、cookie、browser history          |
+| 実page、layout、middleware   | `apps/web/src/app/**`、`middleware.ts`                                   | W5、W6                | 原則storyへ直接入れない                                             | server判断はW5、実route lifecycleはW6 |
+| 全構成journey                | `apps/web/e2e/**`                                                        | E1、E2                | Storybook対象外                                                     | Web、API、Agent、DB/Authの全配線      |
 
 ### 同じcomponentでも接続範囲で分類が変わる例
 
