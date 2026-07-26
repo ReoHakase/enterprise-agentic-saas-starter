@@ -44,7 +44,6 @@ import { AuthenticatedFileImage } from "../authenticated-file-image/authenticate
 
 const fullscreenImageSizes = "100vw"
 const fullViewportDialogStyle = {
-  animation: "none",
   height: "100dvh",
   inset: 0,
   maxHeight: "none",

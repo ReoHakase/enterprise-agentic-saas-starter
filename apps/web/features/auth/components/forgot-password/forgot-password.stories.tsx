@@ -50,9 +50,8 @@ export const Sent = meta.story({
       await userEvent.click(
         canvas.getByRole("button", { name: /send reset link/i })
       )
-      await expect(await canvas.findByRole("status")).toHaveTextContent(
-        fictionalAuthUser.email
-      )
+      await expect(await canvas.findByText("Check your email")).toBeVisible()
+      await expect(canvas.getByText(fictionalAuthUser.email)).toBeVisible()
       await userEvent.click(
         canvas.getByRole("button", { name: /try another email/i })
       )

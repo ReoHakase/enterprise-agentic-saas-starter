@@ -41,8 +41,10 @@ export const AskAlways = meta.story({
         name: "Agent permission",
       })
       await userEvent.click(trigger)
-      await body.findByRole("listbox")
-      await userEvent.keyboard("{End}{Enter}")
+      await userEvent.keyboard("{End}")
+      await userEvent.click(
+        await body.findByRole("option", { name: /Full access/ })
+      )
       await expect(modeChanged).toHaveBeenCalledWith("full_access")
       await waitFor(() =>
         expect(body.queryByRole("listbox")).not.toBeInTheDocument()
@@ -106,8 +108,13 @@ export const SavedPolicy = meta.story({
         name: "Agent permission",
       })
       await userEvent.click(trigger)
-      await userEvent.keyboard("{ArrowDown}{Enter}")
-      await expect(await canvas.findByText("Full access")).toBeVisible()
+      await userEvent.keyboard("{End}")
+      await userEvent.click(
+        await within(document.body).findByRole("option", {
+          name: /Full access/,
+        })
+      )
+      await waitFor(() => expect(trigger).toHaveTextContent("Full access"))
       await waitFor(() =>
         expect(
           within(document.body).queryByRole("listbox")

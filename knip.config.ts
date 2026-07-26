@@ -84,7 +84,7 @@ const config: KnipConfig = {
       entry: [
         "e2e/fixtures/agent-stack.ts",
         "e2e/fixtures/oauth-api.ts",
-        "lib/auth/auth-plugin.ts!",
+        "features/auth/auth-plugin.ts!",
         "open-next.config.ts",
         "test-support/storybook/next-link.tsx",
         "test-support/storybook/next-navigation.ts",

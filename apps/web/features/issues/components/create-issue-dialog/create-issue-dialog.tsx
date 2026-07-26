@@ -167,7 +167,7 @@ export const CreateIssueDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={createIssueTrigger}>
+      <DialogTrigger render={createIssueTrigger} disabled={pending}>
         <PlusIcon data-icon="inline-start" aria-hidden="true" />
         New issue
       </DialogTrigger>

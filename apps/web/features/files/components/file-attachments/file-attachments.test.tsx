@@ -225,7 +225,6 @@ describe("file attachments", () => {
     })
     expect(dialog).toHaveClass("h-dvh", "w-screen", "max-w-none")
     expect(dialog).toHaveStyle({
-      animation: "none",
       maxHeight: "none",
       maxWidth: "none",
       transform: "none",

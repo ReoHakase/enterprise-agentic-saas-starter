@@ -71,12 +71,12 @@ export default definePreview({
     msw.use(...storybookApiHandlers)
   },
   decorators: [
-    (Story) => (
+    (Story, context) => (
       <WithQueryClient>
         <div className="min-h-64 bg-background p-6 text-foreground">
           <Story />
         </div>
-        <Toaster />
+        {context.parameters.disableGlobalToaster ? null : <Toaster />}
       </WithQueryClient>
     ),
     withThemeByClassName({

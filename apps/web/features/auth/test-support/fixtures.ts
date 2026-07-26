@@ -10,16 +10,16 @@ import { AuthRouteScope } from "../components/auth-route-scope/auth-route-scope"
 import { magicLinkPlugin } from "../magic-link-plugin"
 
 export const authApiBaseUrl = "https://api.example.test"
-export const authRedirectTo = "/organization/acme/dashboard"
+const authRedirectTo = "/organization/acme/dashboard"
 export const authNavigate = fn()
 
-export const authBasePaths = {
+const authBasePaths = {
   auth: "/auth",
   settings: "/settings",
   organization: "/organization",
 }
 
-export const emailAndPasswordConfig = {
+const emailAndPasswordConfig = {
   enabled: true,
   confirmPassword: true,
   forgotPassword: true,
@@ -41,7 +41,7 @@ export const departmentField = {
   ],
 } satisfies AdditionalField
 
-export const storyAuthClient: ReturnType<typeof createAuthClientForBaseUrl> =
+const storyAuthClient: ReturnType<typeof createAuthClientForBaseUrl> =
   createAuthClientForBaseUrl(authApiBaseUrl)
 
 export const fictionalAuthUser = {
