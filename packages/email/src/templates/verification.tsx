@@ -1,13 +1,13 @@
 import { AppEmail, EmailParagraph } from "../components/app-email"
-import { renderEmail } from "../render"
-import type { RenderedEmail } from "../types"
+import type { RenderedEmail } from "../contracts/email"
+import { renderEmail } from "../render/index"
 
 export type VerificationEmailProps = {
   appName: string
   url: string
 }
 
-export const VerificationEmail = ({ appName, url }: VerificationEmailProps) => (
+const VerificationEmail = ({ appName, url }: VerificationEmailProps) => (
   <AppEmail
     appName={appName}
     preview={`Verify your email for ${appName}`}

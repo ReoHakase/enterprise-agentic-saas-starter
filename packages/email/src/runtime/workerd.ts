@@ -4,8 +4,8 @@ import {
   createCloudflareEmailSender,
   type CloudflareEmailBinding,
   type CloudflareEmailEvent,
-} from "../senders/cloudflare"
-import { createConfiguredEmailSender } from "../senders/configured"
+} from "../providers/cloudflare"
+import { createConfiguredEmailSender } from "../providers/configured"
 import type { RuntimeEmailSenderOptions } from "./types"
 
 const isEmailBinding = (value: unknown): value is CloudflareEmailBinding =>

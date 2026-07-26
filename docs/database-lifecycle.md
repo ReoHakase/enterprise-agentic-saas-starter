@@ -1,3 +1,10 @@
+---
+title: Database lifecycle
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
+---
+
 # Database lifecycle
 
 ## 原則

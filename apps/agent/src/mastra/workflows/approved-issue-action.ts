@@ -1,11 +1,11 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows"
 import { z } from "zod"
 
-import type { AgentInternalGateway } from "../../control-plane/client"
-import { isActiveOpaqueGrant } from "../../control-plane/grant"
-import type { AgentFeatureSwitches } from "../../feature-flags"
-import { createRunSettlement } from "../../runtime/settlement"
-import { toSafeActionReceipt } from "../../tools/write"
+import type { AgentFeatureSwitches } from "../core/policy/feature-flags"
+import { isActiveOpaqueGrant } from "../core/policy/grant"
+import type { AgentControlPlanePort } from "../runtime/ports"
+import { createRunSettlement } from "../runtime/settlement"
+import { toSafeActionReceipt } from "../tools/issues/write/execute"
 
 const identifierSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 
@@ -28,7 +28,7 @@ const outputSchema = z
 
 export type ApprovedIssueActionRuntime = {
   api: Pick<
-    AgentInternalGateway,
+    AgentControlPlanePort,
     "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
   >
   features: AgentFeatureSwitches

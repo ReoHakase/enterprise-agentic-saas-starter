@@ -1,5 +1,5 @@
 {
-  "extends": "@enterprise-agentic-saas/typescript-config/base.json",
+  "extends": "@enterprise-agentic-saas/typescript-config/cloudflare-worker.json",
   "compilerOptions": {
     "declaration": false,
     "declarationMap": false,

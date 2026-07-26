@@ -1,51 +1,51 @@
 # Agent Instructions
 
-このリポジトリでは、skills、references、agent向けドキュメントは原則日本語で書く。commit messageだけは既存運用に合わせる。
+このrepositoryのagent向け文書とlocal skillは原則日本語で書く。日本語技術文書を更新する前に
+[`docs/jargon.md`](docs/jargon.md)を読む。commit messageは既存運用に合わせる。
 
-## Skillsを優先する
+## 正本とrouting
 
-設計判断、実装規約、失敗から得た知見、環境依存の注意点は、通常の長い `docs/` より先に `.agents/local-skills/` へ反映する。
+- 文書の入口は[`docs/README.md`](docs/README.md)。
+- 設計は`docs/architecture/`、test契約は`docs/testing-strategy/`、永続的判断は`docs/decisions/`、
+  作業状態は`docs/exec-plans/active/`を正本にする。
+- `.agents/local-skills/`はrepo-local skill artifactの編集元であり、`.agents/skills/`はNix生成先。
+- 仕様や理由をskillへ複製しない。変更領域のskillが指定するdocs、ADR、active planを先に読む。
+- 次回も必要な判断は先にdocsまたはADRへ反映し、手順や検証が変わる場合だけskillも更新する。
+- root以外に`AGENTS.md`を追加しない。
 
-`.agents/local-skills` はrepo-local skillの正本、`.agents/skills` はNixが生成するagent実行用ディレクトリ。`.agents/skills` は直接編集しない。
+## 作業手順
 
-次に該当する情報を得たら、作業の一部として自発的に関連skillを更新する:
+1. active exec planと変更領域のskillを読む。
+2. `test_planner`でinvariant、必要なtest layer、paid testの要否を決める。
+3. production/test codeをwriteするagentは`implementer`一体に限定する。
+4. 最小のdeterministic checkから実装し、planのrequired commandまで広げる。
+5. current diffをread-onlyのcorrectness、security、tests reviewerへ渡す。
+6. findingを修正して検証とreviewを繰り返し、P0/P1または必須check失敗を残さない。
 
-- 次回のagentも同じ判断をする必要がある。
-- 一般的なモデル知識だけでは、このrepoの方針を誤りやすい。
-- Nix、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、Turso、Better Auth、Cloudflare、CIなど環境差分で失敗しやすい。
-- テンプレート利用者に再利用される可能性がある。
+## source境界
 
-既存skillに入らない関心ごとは、`description` で自然に発火できる単位の新しいskillとして追加する。巨大なumbrella skillにまとめない。
+- WebはNext.js compositionとdomain UI、APIはHTTP・authorization・transaction・DB adapterを所有する。
+- Agentの手書きruntimeは`apps/agent/src/mastra/**`へ置く。
+- UI packageはdomain-independent UI、DB packageはschema・migration・client・development toolingだけを所有する。
+- workspace間importは`package.json#exports`で公開したentrypointだけを使う。
+- API route schemaは`apps/api`へ閉じ、Webは`@enterprise-agentic-saas/api/client`だけをimportする。
+- tenant dataはrepository queryとDB制約の両方で`organization_id`を境界にする。
 
-## Repo前提
+## 品質とtest
 
-このrepoは、機能としてはtodoアプリを題材にする。ただし設計対象は、グループ、権限、認証、監査、堅牢なCIを持つマルチテナントSaaS webアプリのテンプレートである。
+- `bun run test`: external cloud、real browser、paid model不要のunit/integration。
+- `bun run test:browser`: UI interactionとa11y。
+- `bun run test:e2e`: free E2E。
+- `bun run test:eval:agent`: paid model eval。
+- `bun run test:e2e:full`: paid full-stack canary。
+- Oxlint warning、Knip full/strict、jscpd findingをignoreやbaselineで隠さない。
+- Cloudflare構成変更は`bun run build:cloudflare`、DB変更は`generate + migrate`と`db:check`を通す。
 
-## 運用上の不変条件
+## 禁止事項
 
-- DB schema変更は `packages/db/drizzle/` にmigrationを保存し、開発環境も `generate + migrate` を使う。通常起動で `push` やresetをしない。
-- tenant dataはrepository queryとDB制約の両方で `organization_id` を境界にする。
-- Web/APIのCloudflare構成を変えたら `bun run build:cloudflare` を通す。Elysia Cloudflare adapterはexperimentalなのでBun buildだけで完了扱いにしない。
-- application error/log/traceはSentry SDKを正本にし、localはSpotlightを使う。CloudflareのSentry OTLP exportを同時に有効化して二重送信しない。
-- production emailはCloudflare `EMAIL` bindingを使い、本文、URL/token、recipient全文、provider raw errorをlog/telemetryへ出さない。
-- API route schemaは`apps/api`のValibot Standard Schemaへ閉じる。WebがAPI packageからimportしてよいのは`@enterprise-agentic-saas/api/client`だけで、`packages/validators`やAPI schema/typeのdeep importを作らない。
-- browserのserver dataはTanStack Query、formはTanStack Form + Web-local Valibot、再取得不要な一時UI状態だけをJotaiで扱う。
-- packageのOxlintは`--deny-warnings`で実行し、plugin warningをCIへ残さない。
-- 人向けrunbookは `/docs` に置き、入口は `docs/README.md` へ追加する。
-
-## Skill一覧
-
-- `package-management`: workspace layout、依存方向、package exports、API client配置。
-- `developer-environment`: `nix develop`、Bun、agent-skills-nix、mcp-servers-nix、direnv、dotenvx、MCP、secret読込、agent向け記録。
-- `frontend`: Next.js、Cloudflare/OpenNext、web env、`packages/ui`、Storybook配置。
-- `backend-api`: Elysia、`apps/api`、feature modules、Valibot、Eden、OpenAPI、Sentry observability。
-- `database`: Turso/libSQL、Drizzle、SQLite schema、migration、DB plugin。
-- `auth-email`: Better Auth、organization/role、auth client、auth callback、認証と認可境界。
-- `email`: `packages/email`、React Email、Cloudflare Email Sending、console/noop sender、メールtemplate。
-- `error-handling`: `AppError`、`Error.cause`、safe response、redaction、logging、telemetry error。
-- `ci-quality`: GitHub Actions、oxlint、oxfmt、Vitest、Storybook test runner、Next build、CI品質ゲート。
-- `e2e-test`: Playwright、auth/org/permission導線、tenant境界、E2E data、Playwright MCP。
-- `file-storage-r2`: 認証付き`/files/*`、Cloudflare R2/Images、Turso metadata/quota、Issue attachment、local seed/reconcile。
-- `agent-runtime`: Cloudflare Agents SDK、3 Worker境界、tool、承認、自動許可、Issue CRUD、chat画像、client state、active organization切り替え。
-
-該当するskillの `SKILL.md` を先に読み、必要なときだけ同じskill内の `references/` を読む。
+- 明示承認なしにproduction deploy、Git push、PR merge、remote DB変更を実行しない。
+- `drizzle-kit push`を使わず、`main`に存在するmigrationを変更しない。
+- `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
+- AgentからDB、Auth、Email、Webを直接importしない。
+- reviewerからfileをwriteしない。
+- secret、token、email本文、private URL、provider raw errorをlogやtelemetryへ出さない。

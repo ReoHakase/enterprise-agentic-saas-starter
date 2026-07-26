@@ -6,11 +6,11 @@ interface __BaseEnv_CloudflareEnv {
   ASSETS: Fetcher
   NEXTJS_ENV: "production"
   NEXT_INC_CACHE_R2_PREFIX: "incremental-cache"
-  WORKER_SELF_REFERENCE: Service<typeof import("./.open-next/worker").default>
+  WORKER_SELF_REFERENCE: Service<typeof import(".open-next/worker").default>
 }
 declare namespace Cloudflare {
   interface GlobalProps {
-    mainModule: typeof import("./.open-next/worker")
+    mainModule: typeof import(".open-next/worker")
   }
   interface Env extends __BaseEnv_CloudflareEnv {}
 }

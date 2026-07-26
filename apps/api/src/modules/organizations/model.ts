@@ -7,7 +7,7 @@ import {
   organizationRoleModel,
 } from "../../models/common"
 
-export const permissionsModel = v.object({
+const permissionsModel = v.object({
   canEditOrganization: v.boolean(),
   canInviteMembers: v.boolean(),
   canManageMembers: v.boolean(),
@@ -42,7 +42,7 @@ export const organizationDetailModel = v.object({
   invitationCount: v.number(),
 })
 
-export const memberModel = v.object({
+const memberModel = v.object({
   id: v.string(),
   userId: v.string(),
   name: v.string(),
@@ -54,7 +54,7 @@ export const memberModel = v.object({
 
 export const memberListModel = v.array(memberModel)
 
-export const invitationModel = v.object({
+const invitationModel = v.object({
   id: v.string(),
   email: v.string(),
   role: organizationRoleModel,
@@ -91,7 +91,7 @@ const destructiveConfirmationModel = v.pipe(
   nonEmptyStringModel,
   v.metadata({
     description:
-      "誤操作防止の確認文字列。ownership transferとmember削除は対象member emailを完全一致で送る。",
+      "Confirmation value that must exactly match the target member email for ownership transfers and member removal.",
     examples: ["new-owner@example.com"],
   })
 )
@@ -118,7 +118,7 @@ export const organizationDeletionIdempotencyKeyModel = v.pipe(
   v.regex(/^[A-Za-z0-9._:-]+$/),
   v.metadata({
     description:
-      "16〜128文字のopaqueな冪等性key。同じuserの別organizationには再利用しない。",
+      "Opaque idempotency key of 16 to 128 characters that must not be reused by the same user for another organization.",
     examples: ["delete_org_01JQ8YF2J7Q0J2X8R8S3Q9M6P4"],
   })
 )
@@ -127,14 +127,16 @@ export const deleteOrganizationBodyModel = v.object({
   slug: v.pipe(
     nonEmptyStringModel,
     v.metadata({
-      description: "削除対象organizationのslugを完全一致で入力する。",
+      description:
+        "Exact slug of the organization being deleted, supplied as a destructive-action confirmation.",
       examples: ["acme"],
     })
   ),
   confirmation: v.pipe(
     v.literal("DELETE"),
     v.metadata({
-      description: "破壊的操作の確認文字列。必ずDELETEを指定する。",
+      description:
+        "Destructive-action confirmation that must contain the exact value DELETE.",
       examples: ["DELETE"],
     })
   ),

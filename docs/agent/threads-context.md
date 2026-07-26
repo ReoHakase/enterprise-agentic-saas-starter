@@ -1,3 +1,10 @@
+---
+title: 製品Agentのthreadとcontext
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
+---
+
 # Threadとcontext
 
 ## Thread契約
@@ -25,6 +32,9 @@ canonical message、reasoning、tool、source、context/title data partはAPI/Tu
 threadは`title_state_v2 = untitled | agent | user`と`title_revision`を持ちます。既定`New conversation`は`untitled`、専用title Agentは`agent`、手動変更は`user`です。
 
 最初の有意なuser messageでmain Agentとは独立した専用title Agentを起動し、`rename_thread`だけをforced tool callします。title処理の失敗は本回答を失敗させず、`untitled`なら次turnで再試行します。すでに`agent | user`ならtitle Agent自体を起動しません。
+
+provider requestはtitle Agentを完了してからmain Agentを開始し、同時に1本だけ実行します。
+`data-thread-title`はmain streamをmergeした後に書くため、Webが受け取るdata part contractは変えません。
 
 Qwen/Alibabaはthinking mode中のforced `tool_choice`を拒否するため、専用title Agentだけreasoningを無効化します。製品Agent本体のreasoning mediumとtrace契約は変更しません。
 

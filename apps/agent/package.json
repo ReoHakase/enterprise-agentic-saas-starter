@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker",
+    "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker && bun run scripts/assert-production-bundle.ts && bun run build:cloudflare:e2e",
+    "build:cloudflare:e2e": "wrangler deploy --dry-run --config wrangler.e2e.jsonc --outdir ./dist/e2e-worker",
     "cf:typegen": "wrangler types --env-file .dev.vars.example --strict-vars=false --include-runtime=false --env-interface CloudflareEnv src/cloudflare-env.d.ts && oxfmt src/cloudflare-env.d.ts",
     "deploy": "wrangler deploy",
     "dev": "portless run sh ../../scripts/wrangler-dev-portless.sh",
@@ -19,6 +20,7 @@
     "studio:health": "sh -c 'set -eu; STUDIO_URL=\"${MASTRA_STUDIO_URL:-$(portless get mastra-studio.enterprise-agentic-saas)}\"; STUDIO_CA_CERT=\"${PORTLESS_CA_CERT:-$HOME/.portless/ca.pem}\"; curl --cacert \"$STUDIO_CA_CERT\" -fsS \"$STUDIO_URL/api/system/api-schema\" >/dev/null'",
     "studio:smoke": "sh -c 'set -eu; STUDIO_URL=\"${MASTRA_STUDIO_URL:-$(portless get mastra-studio.enterprise-agentic-saas)}\"; RESULT=$(NODE_EXTRA_CA_CERTS=\"${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem}\" mastra api --url \"$STUDIO_URL\" agent run product-agent \"{\\\"messages\\\":\\\"Return exactly MASTRA_STUDIO_OK and no other text.\\\"}\"); printf %s \"$RESULT\" | rg -q MASTRA_STUDIO_OK; echo MASTRA_STUDIO_OK'",
     "test": "vitest run",
+    "test:eval:agent": "bun run src/mastra/evals/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

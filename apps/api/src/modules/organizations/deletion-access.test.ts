@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { AppError } from "../../errors/app-error"
-import { parseOrganizationDeletionIdempotencyKey } from "./deletion-access"
+import { parseOrganizationDeletionIdempotencyKey } from "./routes/deletion-access"
 
 describe("organization deletion access", () => {
   it("accepts a bounded opaque idempotency key", () => {

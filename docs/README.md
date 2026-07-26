@@ -1,29 +1,65 @@
-# 開発者ドキュメント
+---
+title: 開発者文書の入口
+status: accepted
+implementation: not-applicable
+last_reviewed: 2026-07-25
+---
 
-このディレクトリは、テンプレートを製品へ育てる開発者向けの正本です。agentが次回も使う実装判断は先に `.agents/local-skills/` へ記録し、ここでは人が実行するセットアップ、設計、運用手順をまとめます。
+# 開発者文書の入口
 
-## 読む順序
+## 通常の読む順序
 
-1. [アーキテクチャ](./architecture.md) — workspace境界とruntime構成
-2. [ローカル開発](./local-development.md) — 初回セットアップと日々の起動
-3. [Database lifecycle](./database-lifecycle.md) — migration、seed、手動reset
-4. [認証・認可・マルチテナント](./auth-tenancy-security.md) — session、role、tenant境界、step-up
-5. [Agent仕様](./agent/README.md) — 3 Worker、chat UI、thread/context、tool/承認、usage、paid eval
-6. [API / OpenAPI](./api-openapi.md) — Elysia APIの入口、schema、エラー契約
-7. [テスト戦略](./testing.md) — Vitest、Testing Library、Storybook、Playwright
-8. [Observability](./observability.md) — Sentry、Spotlight、structured log、trace、monitor、privacy
-9. [認証付きfile storage](./file-storage-r2.md) — private R2、Images、quota、local seed、障害復旧
-10. [10 MB upload memory smoke](./upload-memory-smoke.md) — local workerd、並列multipart、RSSの読み方
-11. [Cloudflareデプロイと運用](./deployment-operations.md) — Workers、R2、Email Sending、Turso、rollback
+1. [知識管理](architecture/knowledge-management.md)
+2. [日本語技術文書の用語・表記基準](jargon.md)
+3. [命名とlayer](architecture/naming-and-layers.md)
+4. [システム境界](architecture/system-boundaries.md)
+5. [対象app/packageのarchitecture](architecture/README.md)
+6. [品質強制](architecture/quality-enforcement.md)
+7. [テスト戦略](testing-strategy/README.md)
+8. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
+9. [Codex harness](architecture/codex-harness.md)
+10. [ADR](decisions/README.md)
+11. 必要な[active exec plan](exec-plans/README.md)
 
-## 最短の確認
+## 変更作業の開始順序
 
-```sh
-bun install --frozen-lockfile
-bun run check
-bun run build
-```
+複雑な変更では通常の索引順ではなく、現在の作業状態から読みます。
 
-local applicationは `bun run dev` 1つで起動します。Webは`next dev --turbopack`のFast Refresh、APIは`src/worker.ts`をmainにした`wrangler dev`のsource再bundleとWorker isolate再起動を使い、build済みartifactは実行しません。このcommandにはlocal Turso、migration、Drizzle Studio、永続R2、Mailpit、React Email preview、GitHub OAuth emulatorを含めますが、DB seed、R2 fixture reconcile、testは含めません。fixtureが必要なときだけ`bun run dev:db:seed`を明示実行します。このseed commandはfull devが停止中でも必要なlocal processだけを一時起動でき、起動中ならhealthyなAPI dev sessionを再利用します。main checkoutの送信メールは `https://mailpit.enterprise-agentic-saas.localhost`、GitHub user pickerは`https://github.emulate.enterprise-agentic-saas.localhost`で確認できます。linked worktreeでは各`portless get`の出力を使います。DBだけが必要な場合は`bun run dev:db`を使います。初回起動、reset、seedの関係は[ローカル開発](./local-development.md)を参照してください。
+1. rootまたは対象directoryの`AGENTS.md`
+2. [exec plan一覧](exec-plans/README.md)から対象のactive plan
+3. 発火した[local skill](../.agents/local-skills/README.md)
+4. skillが指定するarchitecture文書と対象app/package文書
+5. skillが指定するtest契約
+6. 関連ADR
 
-破壊的なDB resetと本番deployは通常の開発コマンドへ混ぜていません。各runbookの確認条件を満たしてから明示実行してください。
+`docs/agent/`は製品として提供するAgentの機能・security・release受入仕様です。coding agentの
+作業harnessは[`docs/architecture/codex-harness.md`](architecture/codex-harness.md)が正本です。
+同名の「Agent」を混同しないため、この区別をindexで固定します。
+
+## 文書の責務
+
+| 配置                             | 責務                                                          |
+| -------------------------------- | ------------------------------------------------------------- |
+| [`docs/jargon.md`](jargon.md)    | 日本語技術文書の用語、表記、例外                              |
+| `docs/architecture/`             | directory、dependency、runtime、qualityの規範                 |
+| `docs/testing-strategy/`         | test layer、runner、script、実行条件                          |
+| `docs/decisions/`                | 長期的な設計判断と代償                                        |
+| `docs/exec-plans/`               | 複雑な作業の進捗、判断、検証証跡                              |
+| [`docs/agent/`](agent/README.md) | 製品Agentの機能、security、受入仕様                           |
+| `.agents/local-skills/`          | skill artifactの編集元。発火条件、必読docs、作業手順、command |
+| `AGENTS.md`                      | 全作業に共通する短いcontract                                  |
+
+同じ規範本文を複数の場所へcopyしません。
+
+## 製品・運用文書
+
+次の文書はarchitectureとテスト契約を補う製品仕様、security、運用runbookです。
+
+- [認証・認可・multi-tenant](auth-tenancy-security.md)
+- [API / OpenAPI](api-openapi.md)
+- [file storage R2](file-storage-r2.md)
+- [database lifecycle](database-lifecycle.md)
+- [local development](local-development.md)
+- [observability](observability.md)
+- [deployment operations](deployment-operations.md)
+- [upload memory smoke](upload-memory-smoke.md)

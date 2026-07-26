@@ -2,7 +2,7 @@
   "extends": "@enterprise-agentic-saas/typescript-config/nextjs.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./*"],
+      "@/*": ["./src/*"],
       "@enterprise-agentic-saas/ui/*": ["../../packages/ui/src/*"]
     },
     "plugins": [

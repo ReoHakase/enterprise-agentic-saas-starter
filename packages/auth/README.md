@@ -4,12 +4,12 @@ Better Auth による認証・認可パッケージ。
 
 ## Entrypoints
 
-| import | 内容 |
-|---|---|
-| `@enterprise-agentic-saas/auth` | singleton `auth` インスタンス（server-only） |
-| `@enterprise-agentic-saas/auth/client` | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
-| `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential |
-| `@enterprise-agentic-saas/auth/openapi` | 実plugin構成からauth OpenAPIを生成するserver-only境界 |
+| import                                       | 内容                                                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@enterprise-agentic-saas/auth`              | singleton `auth` インスタンス（server-only）                                                 |
+| `@enterprise-agentic-saas/auth/client`       | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
+| `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
+| `@enterprise-agentic-saas/auth/openapi`      | 実plugin構成からauth OpenAPIを生成するserver-only境界                                        |
 
 ## Plugin 構成
 
@@ -56,20 +56,20 @@ magic linkとemail verificationは共有React Email templateをrenderし、`@ent
 
 Better Auth が `process.env` から自動読み込みする。`apps/api/.env` に設定する。
 
-| 変数 | 必須 | 説明 |
-|---|---|---|
-| `BETTER_AUTH_SECRET` | Yes | セッション署名用シークレット |
-| `BETTER_AUTH_URL` | Yes | Better Auth のベース URL |
-| `AUTH_COOKIE_DOMAIN` | Production | web/APIでsessionを共有する親domain |
-| `GITHUB_CLIENT_ID` | Emulator未使用時 | GitHub OAuth App の Client ID |
-| `GITHUB_CLIENT_SECRET` | Emulator未使用時 | GitHub OAuth App の Client Secret |
-| `GITHUB_OAUTH_EMULATOR_URL` | No | development/testだけで許可するemulatorのroot URL。`localhost`、`*.localhost`、IPv4/IPv6 loopback以外、userinfo/path/query/hash付きURLを拒否 |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_ID` | No | emulator専用Client ID override。Secretと必ず同時指定 |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No | emulator専用Client Secret override。Client IDと必ず同時指定 |
-| `TRUSTED_ORIGINS` | Yes | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う |
-| `EMAIL_PROVIDER` | No | 未指定時はdevelopment=`mailpit`、test=`noop`、production=`cloudflare` |
-| `EMAIL_FROM` | Production | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address |
-| `MAILPIT_URL` | No | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可 |
+| 変数                                  | 必須             | 説明                                                                                                                                        |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                  | Yes              | セッション署名用シークレット                                                                                                                |
+| `BETTER_AUTH_URL`                     | Yes              | Better Auth のベース URL                                                                                                                    |
+| `AUTH_COOKIE_DOMAIN`                  | Production       | web/APIでsessionを共有する親domain                                                                                                          |
+| `GITHUB_CLIENT_ID`                    | Emulator未使用時 | GitHub OAuth App の Client ID                                                                                                               |
+| `GITHUB_CLIENT_SECRET`                | Emulator未使用時 | GitHub OAuth App の Client Secret                                                                                                           |
+| `GITHUB_OAUTH_EMULATOR_URL`           | No               | development/testだけで許可するemulatorのroot URL。`localhost`、`*.localhost`、IPv4/IPv6 loopback以外、userinfo/path/query/hash付きURLを拒否 |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_ID`     | No               | emulator専用Client ID override。Secretと必ず同時指定                                                                                        |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No               | emulator専用Client Secret override。Client IDと必ず同時指定                                                                                 |
+| `TRUSTED_ORIGINS`                     | Yes              | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う                                                   |
+| `EMAIL_PROVIDER`                      | No               | 未指定時はdevelopment=`mailpit`、test=`noop`、production=`cloudflare`                                                                       |
+| `EMAIL_FROM`                          | Production       | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address                                          |
+| `MAILPIT_URL`                         | No               | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可   |
 
 emulator URL指定時は通常の `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` を意図的に無視し、本番credentialをseedやlocal requestへ流さない。emulator専用overrideがなければ `@enterprise-agentic-saas/auth/github-oauth` の公開固定値を使う。この値はlocal emulator識別用でありsecretではない。productionではemulator URLをfail-closedで拒否する。
 

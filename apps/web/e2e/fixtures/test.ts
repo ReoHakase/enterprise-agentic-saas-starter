@@ -14,6 +14,9 @@ type ClientDiagnosticsFixtures = {
   }
 }
 
+export const productionServerComponentRenderError =
+  /An error occurred in the Server Components render\. The specific message is omitted in production builds/
+
 const formatConsoleError = (message: ConsoleMessage) => {
   const location = message.location()
   const source = location.url

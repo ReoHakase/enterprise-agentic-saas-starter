@@ -1,9 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -23,33 +28,13 @@ export default defineConfig({
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
     { name: "playwright", specifier: "eslint-plugin-playwright" },
   ],
-  ignorePatterns: [
-    ".next/**",
-    ".open-next/**",
-    ".turbo/**",
-    "coverage/**",
-    "dist/**",
-    "node_modules/**",
-    "playwright-report/**",
-    "test-results/**",
-  ],
   rules: {
-    "import/no-unassigned-import": "off",
-    "no-restricted-imports": [
+    ...workspaceBoundaryRule("web"),
+    // Feature public barrels make every exported surface visible to the import graph.
+    // Keep direct-cycle detection while component composition is routed through index.ts.
+    "import/no-cycle": [
       "error",
-      {
-        patterns: [
-          {
-            group: [
-              "@enterprise-agentic-saas/api",
-              "@enterprise-agentic-saas/api/*",
-              "!@enterprise-agentic-saas/api/client",
-            ],
-            message:
-              "apps/web may only import the Eden boundary from @enterprise-agentic-saas/api/client.",
-          },
-        ],
-      },
+      { ignoreExternal: false, ignoreTypes: true, maxDepth: 1 },
     ],
     // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
     "jsx-a11y/prefer-tag-over-role": "off",
@@ -80,9 +65,9 @@ export default defineConfig({
   overrides: [
     {
       files: [
-        "features/members/components/invitations-section.tsx",
-        "features/members/components/members-table.tsx",
-        "features/organizations/components/organizations-page.tsx",
+        "src/features/members/components/invitations-section/invitations-section.tsx",
+        "src/features/members/components/members-table/members-table.tsx",
+        "src/features/organizations/components/organizations-page/organizations-page.tsx",
       ],
       rules: {
         // TanStack Tableのmemoized column cell/header rendererをnested componentと誤認する。
@@ -113,6 +98,25 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "src/features/files/components/file-attachments/file-attachments.test.tsx",
+        "src/features/issues/components/issues-workspace/issues-workspace.test.tsx",
+        "src/features/members/components/invitation-decision-panel/invitation-decision-panel.test.tsx",
+        "src/features/organizations/components/organization-activation-gate/organization-activation-gate.test.tsx",
+      ],
+      rules: {
+        // VitestのimportOriginalへmodule全体の型を渡し、namespace import宣言を避ける。
+        "typescript/consistent-type-imports": [
+          "error",
+          {
+            prefer: "type-imports",
+            fixStyle: "inline-type-imports",
+            disallowTypeAnnotations: false,
+          },
+        ],
+      },
+    },
+    {
       files: ["e2e/**/*.ts"],
       rules: {
         "playwright/missing-playwright-await": "error",
@@ -126,7 +130,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["components/auth/**/*.tsx"],
+      files: ["src/features/auth/components/**/*.tsx"],
       rules: {
         // Better Auth UI互換componentは公式surfaceと同じfunction declarationを保つ。
         "func-style": "off",
@@ -135,11 +139,19 @@ export default defineConfig({
       },
     },
     {
-      files: ["lib/auth/auth-plugin.ts"],
+      files: ["src/features/auth/auth-plugin.ts"],
       rules: {
         "typescript/consistent-type-definitions": "off",
       },
     },
+    ...createBudgetOverrides({
+      adapter: [
+        "src/lib/server/**/*.{ts,tsx}",
+        "**/*.config.{js,mjs,cjs,ts,mts,cts}",
+      ],
+      react: ["src/{app,components,features,hooks}/**/*.{jsx,tsx}"],
+      testReact: true,
+    }),
   ],
   env: {
     browser: true,

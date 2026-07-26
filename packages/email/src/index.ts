@@ -3,12 +3,18 @@ export {
   resolveEmailProvider,
   resolveMailpitUrl,
 } from "./config"
-export { renderEmail } from "./render"
-export * from "./senders/index"
-export * from "./templates/index"
 export type {
+  EmailProvider,
+  EmailRuntime,
   EmailTemplate,
   RenderedEmail,
   SendEmail,
   SendEmailInput,
-} from "./types"
+} from "./contracts/email"
+export {
+  createCloudflareEmailSender,
+  EmailDeliveryError,
+} from "./providers/cloudflare"
+export { MailpitDeliveryError } from "./providers/mailpit"
+export { renderEmail } from "./render/index"
+export * from "./templates/index"

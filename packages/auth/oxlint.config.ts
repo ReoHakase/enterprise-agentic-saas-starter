@@ -1,9 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -16,6 +21,9 @@ export default defineConfig({
   env: {
     node: true,
   },
+  rules: {
+    ...workspaceBoundaryRule("auth"),
+  },
   overrides: [
     {
       files: ["src/index.test.ts"],
@@ -24,5 +32,6 @@ export default defineConfig({
         "jest/require-to-throw-message": "off",
       },
     },
+    ...createBudgetOverrides({ adapter: ["src/**/*.{ts,tsx}"] }),
   ],
 })

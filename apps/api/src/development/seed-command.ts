@@ -344,7 +344,7 @@ const findActiveDevelopmentSession = async (
   } while (Date.now() <= deadline)
 }
 
-export const createDevelopmentSeedCommandServices =
+const createDevelopmentSeedCommandServices =
   (): DevelopmentSeedCommandServices => {
     const databaseUrl = process.env.TURSO_DATABASE_URL ?? ""
 

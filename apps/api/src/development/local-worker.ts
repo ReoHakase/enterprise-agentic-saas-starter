@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url"
 
-export const apiRoot = fileURLToPath(new URL("../../", import.meta.url))
+const apiRoot = fileURLToPath(new URL("../../", import.meta.url))
 
 const forwardedEnvironmentKeys = [
   "NODE_ENV",

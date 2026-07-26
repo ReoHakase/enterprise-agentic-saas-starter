@@ -31,6 +31,11 @@ bun run dev:agent:studio
 
 Portless経由のURLは `https://mastra-studio.enterprise-agentic-saas.localhost` です。`MASTRA_AUTO_DETECT_URL=true`によりbrowserのsame-origin `/api`へ接続し、ephemeralなdirect HTTP portやmixed contentへ依存しません。Studioもproduction Workerと同じ`src/mastra/index.ts`を読み込みます。`bun run studio:health`と`bun run studio:agents`は課金なし、`bun run studio:smoke`はOpenRouterを実際に呼ぶ明示的な課金testです。
 
+free full-stack E2Eはproductionとは別の`wrangler.e2e.jsonc`と
+`src/mastra/e2e/worker.ts`を使い、standard scripted modelをcompile-timeで注入します。
+production環境変数からmodelを切り替える経路はありません。production dry-runは
+scripted modelのsentinelがbundleへ混入していないことまで検査します。
+
 ## 検証
 
 ```bash

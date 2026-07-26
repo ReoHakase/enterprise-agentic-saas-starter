@@ -1,0 +1,432 @@
+---
+title: apps/webの設計
+status: accepted
+implementation: active
+last_reviewed: 2026-07-26
+applies_to:
+  - apps/web/**
+---
+
+# apps/webの設計
+
+## 目次
+
+- [責務](#責務)
+- [目標構造](#目標構造)
+- [app directory](#app-directory)
+- [feature](#feature)
+- [serverとclient](#serverとclient)
+- [controllerとview](#controllerとview)
+- [SuspenseとError Boundary](#suspenseとerror-boundary)
+- [portとadapter](#portとadapter)
+- [componentとstory](#componentとstory)
+- [import境界](#import-boundary)
+- [テスト配置](#テスト配置)
+- [理由と代償](#理由と代償)
+- [受入条件](#受入条件)
+
+## 責務
+
+`apps/web`はNext.js routing、React Server Component、domain-specific UI、browser state、Eden
+client、Agent stream UIを所有します。DB、Email、Agent model runtimeは所有しません。
+
+## 目標構造
+
+```text
+apps/web/
+  src/
+    app/
+      (public)/
+      (console)/
+      api/
+      layout.tsx
+
+    components/
+      providers/
+        providers.tsx
+      console-shell/
+        console-shell.tsx
+      route-error/
+        route-error.tsx
+
+    features/
+      <feature>/
+        index.ts
+        model.ts
+        schema.ts
+        api.ts
+        queries.ts
+
+        hooks/
+          use-<feature>-controller.ts
+
+        components/
+          <component-name>/
+            <component-name>.tsx
+            <component-name>.test.tsx
+            <component-name>.stories.tsx
+
+          <screen-name>/
+            server.tsx
+            client.tsx
+            view.tsx
+            suspense.tsx
+            skeleton.tsx
+            error-boundary.client.tsx
+            error-view.tsx
+            async-states.stories.tsx
+            async-states.browser.test.tsx
+
+        test-support/
+          fixtures.ts
+
+    lib/
+      client/
+      server/
+      shared/
+
+    instrumentation.ts
+    instrumentation-client.ts
+    sentry.server.config.ts
+    sentry.edge.config.ts
+
+  e2e/
+  test/
+```
+
+上のfileは全て必須ではありません。`model.ts`、`schema.ts`、`api.ts`、`queries.ts`、`hooks/`、
+非同期画面用のfileは、その責務が存在するときだけ作ります。React componentはServer Component、
+Client Component、Skeleton、error表示を含め、必ず`components/`配下へ置きます。feature directory
+直下へ`.tsx`を置きません。
+
+単純なcomponentも`components/<component-name>/<component-name>.tsx`へ置きます。同じ画面に関連する
+componentは`components/<screen-name>/`へまとめます。全featureへ同じ空directoryや雛形fileを
+生成しません。
+
+## app directory
+
+`src/app/`はNext.js routeとfeatureの公開componentを組み合わせる場所です。
+
+許可:
+
+- route param
+- Server Componentでのdata loading
+- session check
+- metadata
+- redirect、not found
+- feature public entrypointから公開されたcomponentの組立て
+
+禁止:
+
+- domain rule
+- reusable mutation implementation
+- feature private componentのdeep import
+- 大規模なClient Component
+
+route fileを薄く保つと、Next.js file conventionとproduct logicを分離できます。
+
+## feature
+
+feature rootの責務:
+
+| file                             | 責務                                                     |
+| -------------------------------- | -------------------------------------------------------- |
+| `model.ts`                       | pure state、view model、reducer                          |
+| `schema.ts`                      | Web-local runtime validation                             |
+| `api.ts`                         | Eden client adapter                                      |
+| `queries.ts`                     | TanStack Query options                                   |
+| `hooks/use-*-controller.ts`      | browserで動くAPI呼出、router、toast等と表示用stateの接続 |
+| `components/<screen>/server.tsx` | Server Componentでの初期data取得と画面の組立て           |
+| `index.ts`                       | browser-safeなfeature公開surface                         |
+| `server.ts`                      | `server-only`なfeature公開surface                        |
+
+Web-local schemaはAPI transport typeの代用品ではありません。untrusted responseをUIへ表示する
+直前のruntime validationに使います。
+
+`model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
+`fetch`、`useChat`、browser APIをimportしません。別featureから利用できるのは`index.ts`が
+明示exportしたbrowser-safe contractと`server.ts`が公開したserver-only contractだけで、
+`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
+
+### Browserのserver state
+
+browserで取得するserver stateとmutationはTanStack Queryへ集約します。default retry、error mapping、
+stale time等の共通policyは`QueryClient`生成時に確定し、component mount後のeffectで書き換えません。
+componentごとの差分はquery optionsまたはmutation optionsへ明示し、global defaultの後付け変更による
+mount順依存を作りません。
+
+## serverとclient
+
+React Server Componentは、browserへJavaScriptを送らずserverで実行されるcomponentです。この文書では
+以後Server Componentと表記します。
+
+- Server Componentは`src/features/<feature>/components/<screen>/server.tsx`へ置く
+- その他のserver codeは`src/lib/server/**`、`*.server.ts`へ置く
+- browserで動くcomponentは`src/components/**`または`src/features/**/components/**`の
+  `*.client.tsx`、controllerは`src/hooks/**`またはfeature内の`hooks/**`へ置く
+- browserから`next/headers`、server env、server-only moduleをimportしない
+- Server Componentはinitial dataとauthorizationを担当し、interactive stateはClient Componentへ渡す
+
+初期dataをServer Componentで取得できる画面では、全data fetchingをClient Componentへ集めません。
+
+## controllerとview
+
+単純なcomponentは一fileでよいです。次の条件を満たす場合だけ分割します。
+
+```text
+components/<screen>/client.tsx
+hooks/use-<screen>-controller.ts
+components/<screen>/view.tsx
+```
+
+分割条件:
+
+- Query/mutation/router/toast/streamが複数ある
+- function size budgetを超える
+- Storybookでview stateを独立させたい
+- side effectのraceやcancelをunit testしたい
+
+`view`は`apiClient`、Query、mutation、router、toast、`fetch`、`useChat`、chat transportを
+直接importせず、stateとactionをpropsで受けます。
+
+`client.tsx`はcontroller hookを呼び、その戻り値を`view.tsx`へpropsとして渡す薄いClient Component
+です。`view.tsx`はpropsからDOMを描画します。この分割が不要な小さいcomponentは一fileに保ちます。
+
+複数のasync state、cancel、approval、stream resumeが絡むflowはbooleanを増やさず、
+discriminated unionまたはreducer/state machineへ移します。これにより不可能なstateを型で消し、
+raceと復元をpure testで再現できます。
+
+## SuspenseとError Boundary
+
+Client ComponentがSuspense対応Query、`use()`、`lazy`/dynamic import等によりrender中にdata待ちに
+なり得る場合は、Reactの`<Suspense>`とReact Error Boundaryを用意します。Error Boundaryとは、
+browserで子componentがrender中にthrowした予期しないerrorを捕捉し、安全なerror表示とretry/resetを
+出すReact componentを指します。
+
+async Server Componentのerrorはclient用React Error Boundaryでは捕捉できません。Next.js route
+segmentの`loading.tsx`と`error.tsx`で扱い、後述のPlaywright W6で検証します。
+
+一つの非同期画面は、必要に応じて次のfileを`components/<screen>/`へ置きます。
+
+```text
+server.tsx
+client.tsx
+view.tsx
+suspense.tsx
+skeleton.tsx
+error-boundary.client.tsx
+error-view.tsx
+async-states.stories.tsx
+async-states.browser.test.tsx
+```
+
+client側でdata待ちになる画面の`suspense.tsx`は、少なくとも次の順序で子componentを囲みます。
+
+```tsx
+<ScreenErrorBoundary>
+  <Suspense fallback={<ScreenSkeleton />}>{children}</Suspense>
+</ScreenErrorBoundary>
+```
+
+- `skeleton.tsx`はloading中に必要な幅、高さ、grid、scroll領域を予約する
+- `error-boundary.client.tsx`はclient render errorを捕捉し、`error-view.tsx`を表示する
+- `error-view.tsx`は固定の利用者向けmessage、見出しへのfocus、retry/resetを提供する
+- client-side QueryがSuspenseを使わない場合も、初回loadingでは同じSkeletonを表示する
+- validation errorやmutation失敗等、通常起こり得る失敗はError Boundaryへthrowせずview stateで表示する
+- 予期しないclient render/data load失敗は`error-boundary.client.tsx`で扱う
+- Server ComponentからClient Componentへはserializableなpropsだけを渡す
+
+click後にだけ動くmutation、router、toast、focus変更等は、それだけを理由に`<Suspense>`で囲みません。
+buttonをdisabledにする、pending textを出す、安全なerrorを表示する等、そのcomponentの通常stateとして
+実装し、storyとBrowser Modeで検証します。
+
+Ready、loading、errorは同じ外側のshell、grid column、header/body領域、content padding、
+`min-height`、`scrollbar-gutter`を共有します。Skeletonは装飾ではなく、loading中のlayout spaceを
+確保するcomponentです。`aria-busy`と安全なstatus labelを持ち、`aria-hidden`配下へbutton/linkを
+残しません。Error表示は見出しへfocusし、`role="alert"`、安全なmessage、明示的なretry/resetを
+提供します。
+
+Error表示は`Error.message`、Next.jsの`digest`、stack、cause、現在URL/query、API/providerのraw応答、
+email、tenant/resource IDをDOM、accessible name、`aria-live`へ出しません。表示するのは固定の
+利用者向け文言と、公開可と検証済みのrequest IDだけです。raw errorは既存のredactionを通して
+Sentryへ送り、UIのpropsへ展開しません。
+
+async Server Componentを使うNext.js route segmentには`loading.tsx`と`error.tsx`を置きます。
+`loading.tsx`はfeatureの`components/<screen>/skeleton.tsx`、`error.tsx`は
+`components/<screen>/error-view.tsx`をimportする薄いfileにします。`error.tsx`はNext.jsの規則に従う
+Client Componentであり、Next.jsがそのroute segmentのError Boundaryを作ります。`error.tsx`は
+`reset` callbackだけをerror viewへ渡し、受け取ったraw `error` objectをpropsまたはDOMへ渡しません。
+複数routeで同じSkeletonまたはerror viewを共有するのは、外側のshellと予約するlayout spaceが同じ
+場合だけです。各routeのloading、error、retry、ready遷移はPlaywright W6で検証します。
+route固有の証跡はstate surfaceの`data-route-boundary="true"`をassertし、共有
+`data-console-shell`だけのloading/error遷移をそのrouteの証跡には数えません。geometry、focus、
+overflowは代表routeのshared-boundary matrixで重ねて検証します。
+
+client側のSuspense対応画面は対象componentのBrowser Mode test、async Server Component routeは
+実routeを通るPlaywright W6で検証します。新しい画面やrouteのreviewでは、Skeleton、
+Error Boundary、`loading.tsx`、`error.tsx`と対応testを同じ変更で確認します。
+
+対応表、独自source graph、architecture checkerは追加しません。local/shared hookやre-exportへ
+処理を移した場合も、利用する画面の実testを残します。
+
+## portとadapter
+
+Webでportを作るのは、複雑なfeatureがtest時に明確な差し替えを必要とする場合だけです。
+
+例:
+
+```ts
+export type NotificationPort = {
+  error(message: string): void
+}
+```
+
+単純なAPI wrapperを全てinterface化しません。`api.ts`や`queries.ts`で十分な場合はportを作りません。
+Sonner、router、Agent transportの具体実装はcontroller、またはcontroller hookを呼ぶClient Component
+で注入し、
+pure model/viewから暗黙のsingletonとして参照しません。
+
+## componentとstory
+
+基本形:
+
+```text
+feature-panel/
+  feature-panel.tsx
+  feature-panel.test.tsx
+  feature-panel.stories.tsx
+```
+
+- `test.tsx`: happy-domでDOM contract
+- `stories.tsx`: state catalogue、interaction、a11y、light/dark
+- `browser.test.tsx`: real QueryClient、必要な範囲だけのtransport stub、chat transportなどfeature integrationだけ
+- `visual.test.tsx`: 現在は作らない
+
+Storybook projectがbrowserでimport可能なpublic componentと主要Viewにはnamed storyを必須にします。
+対象はfirst-party `.tsx` moduleのdefault component export、uppercase named function/class、
+`memo`/`forwardRef`/component HOC等へ解決されるexportで、`"use client"` graphからserver-only edge
+なしに到達できるものです。module自身に`"use client"`がなくてもclient graphへ合法に入るpure
+componentを含みます。
+
+- `packages/ui/src/**`のbrowser component
+- `apps/web/src/**/*.tsx`から後述の構造上の除外を引いたbrowser component/view
+- provider、portal、error、skeletonもbrowser import可能なら対象
+
+構造上の除外はasync Server Component、`server.tsx`/`*.server.tsx`/`server-only` graph、Next.jsの
+`page/layout/template/loading/error/global-error/not-found/default` special file、test/story/fixture、
+generated、non-component JSX factory、module非exportの局所helperだけです。React Email templateは
+browser componentではなくEmail preview/render testが検証を担当します。special fileの表示本体がbrowser
+import可能ならviewへ抽出し、そのviewにはstoryを作ります。dead/legacy componentはstory免除にせず
+削除します。
+
+public componentと主要Viewは少なくとも一つのnamed storyで実componentを描画します。
+親からしか使わないprivate subcomponentは、publicな親story内で実物が描画・操作される場合に
+個別storyを要求しません。`.stories.tsx`が存在するだけ、またはstory専用の代替componentだけを
+描画する状態はreviewで拒否します。repo全体を走査するstory coverage checkerは置かず、
+Storybookが収集したstoryの実render、interaction、a11yをBrowser Modeで検証します。
+
+story fileはcomponentの近くに置きますが、file名の機械的な一対一対応は要求しません。
+`issue-table.tsx`を扱う`issue-table.stories.tsx`のような配置でも、同じ画面のReady、Loading、
+Errorをまとめた`components/issue-screen/async-states.stories.tsx`でも構いません。一つのstory fileで
+複数componentを扱え、一つのcomponentを複数stateのstoryで描画できます。private subcomponentは
+親storyの操作とassertionから到達できることを確認します。
+
+browser専用環境なしではimportできない処理がある場合は、その処理をhookまたはportの後ろへ置き、
+描画部分を通常のReact componentとしてStorybookからimportできるようにします。例外allowlistには
+exact path、理由、責任者、削除条件が必要で、directory単位の除外は認めません。componentとstoryの
+対応を人が別manifestへ重複記載しません。UI primitiveのstoryは`packages/ui`、domain/viewのstoryは
+`apps/web`が管理し、新しいbrowser componentとstoryを同じ変更でreviewします。
+UI Storybookから
+apps/webをimportしません。
+
+非同期画面のstoryは少なくともLoading、Error、Readyを持ち、意味のあるEmpty、Pending、
+Permission、responsive stateもcanonical fixtureで追加します。story専用の簡略componentや
+production hookのmockは作らず、network/transport/portだけをfakeにします。
+
+`dialog`、`light`、`dark`などStorybookのargと識別子は英語へ統一します。
+
+## import boundary
+
+許可:
+
+```text
+@enterprise-agentic-saas/api/client
+@enterprise-agentic-saas/auth/client
+@enterprise-agentic-saas/ui/*
+```
+
+禁止:
+
+```text
+@enterprise-agentic-saas/db/**
+@enterprise-agentic-saas/email/**
+@enterprise-agentic-saas/api/* ただし client を除く
+@/features/<other-feature>/* private path
+@/app/**
+```
+
+同じfeature内部はrelative importを使い、別featureは`@/features/<feature>`からimportします。
+
+追加のlayer規則:
+
+- `model.ts`からcomponent/controller/adapterをimportしない
+- `view`から`api.ts`、`queries.ts`、router、toast、Agent transportをimportしない
+- `lib/shared`から`lib/client`または`lib/server`へ依存しない
+- app-wide `components/**`からdomain featureへ逆依存しない
+- client pathからNode builtin、`next/headers`、`next/server`、`server-only`をimportしない
+- `app/**`を再利用layerとしてfeatureからimportしない
+
+```ts
+// same feature: allowed
+import { reduceDraft } from "../model"
+
+// cross feature: allowed
+import { IssueLink } from "@/features/issues"
+
+// cross feature private path: forbidden
+import { IssueLink } from "@/features/issues/components/issue-link"
+```
+
+## テスト配置
+
+- pure model/schema/error mapping: `bun run test`
+- component DOM/controller: `bun run test`
+- story interaction/a11y: `bun run test:browser`
+- feature browser integration: `bun run test:browser`
+- loading/error/readyのlayout stability: `bun run test:browser`
+- Server Component、routing、cookie、cross-origin: `bun run test:e2e`
+
+## 理由と代償
+
+### 理由
+
+- Server ComponentとClient Componentの責務が明確になる
+- side effectをviewから分離し、Storybookとunit testを使いやすくする
+- loading/errorを付随的なroute fallbackではなく同じlayout contractのstateとして扱い、
+  navigation時のlayout shift、focus loss、retry不能を防ぐ
+- public componentと主要ViewをStorybook catalogueへ置き、未到達stateとa11y regressionを実装時に発見する
+- cross-feature couplingをpublic entrypointへ限定する
+
+### 代償
+
+- controller/view分割にpropsが増える
+- Story、Skeleton、Error Boundary componentの保守対象が増える
+- Web-local schemaが追加される
+- feature public surfaceの設計が必要になる
+
+分割は条件付きにし、単純componentのceremonyを避けます。同じ外側のshellと予約領域を持つroute群は、
+各routeの状態遷移testがある場合だけSkeleton/Error表示を共有できます。
+
+## 受入条件
+
+- `src/app/`に大規模なClient Componentがない
+- viewからQuery/router/toast/API importがない
+- browser codeからserver module importがない
+- cross-feature deep importがない
+- 新規または変更したpublic componentと主要Viewに実componentを描画するnamed storyがある
+- feature directory直下にReact componentの`.tsx`がない
+- client render中に待機し得るcomponentに`<Suspense>`、Skeleton、React Error Boundary、
+  Browser Mode testがある
+- async Server Componentのrouteに`loading.tsx`、`error.tsx`、Playwright W6がある
+- Error Boundaryがraw error、URL/query、private identifierをDOMまたは読み上げ領域へ出さない
+- ready/loading/error transitionでlayout shiftとhorizontal overflowがない

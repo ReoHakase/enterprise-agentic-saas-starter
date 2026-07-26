@@ -9,11 +9,11 @@ pre-commit:
       glob: "{flake.nix,flake.lock}"
       run: nix flake check
     oxfmt:
-      glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
-      run: bun run format -- {staged_files}
+      glob: "*"
+      run: bun run format -- --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     oxlint:
-      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint
 
 pre-push:

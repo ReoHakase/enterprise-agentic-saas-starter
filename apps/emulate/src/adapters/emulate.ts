@@ -1,0 +1,1 @@
+export { createEmulator } from "emulate"

@@ -1,11 +1,11 @@
 {
-  "extends": "@enterprise-agentic-saas/typescript-config/base.json",
+  "extends": "@enterprise-agentic-saas/typescript-config/bun.json",
   "compilerOptions": {
     "declaration": false,
     "declarationMap": false,
     "outDir": "dist",
     "types": ["node"]
   },
-  "include": ["src", "drizzle.config.ts"],
+  "include": ["src", "scripts", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

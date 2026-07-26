@@ -1,10 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
-  ignorePatterns: [".agents/skills/**"],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -14,6 +18,9 @@ export default defineConfig({
     "oxc",
     "vitest",
   ],
+  rules: {
+    ...workspaceBoundaryRule("api"),
+  },
   overrides: [
     {
       files: ["src/app.test.ts"],
@@ -39,6 +46,14 @@ export default defineConfig({
         "vitest/require-mock-type-parameters": "off",
       },
     },
+    ...createBudgetOverrides({
+      adapter: [
+        "src/modules/**/{routes,repository,module}.ts",
+        "src/modules/**/adapters/{http,persistence}/**/*.{ts,tsx}",
+        "src/platform/**/*.ts",
+        "src/{app,index,worker}.ts",
+      ],
+    }),
   ],
   env: {
     node: true,

@@ -1,4 +1,4 @@
-import { createConfiguredEmailSender } from "../senders/configured"
+import { createConfiguredEmailSender } from "../providers/configured"
 import type { RuntimeEmailSenderOptions } from "./types"
 
 export const createRuntimeEmailSender = (options: RuntimeEmailSenderOptions) =>

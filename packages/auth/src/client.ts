@@ -17,7 +17,3 @@ export const createAuthClientForBaseUrl = (baseURL: string) =>
       organizationClient(),
     ],
   })
-
-export const authClient = createAuthClientForBaseUrl(
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
-)

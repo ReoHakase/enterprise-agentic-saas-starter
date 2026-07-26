@@ -1,6 +1,6 @@
 export const UPLOAD_MEMORY_SMOKE_FILE_BYTES = 10_000_000
-export const UPLOAD_MEMORY_SMOKE_DEFAULT_CONCURRENCY = 4
-export const UPLOAD_MEMORY_SMOKE_MAX_CONCURRENCY = 32
+const UPLOAD_MEMORY_SMOKE_DEFAULT_CONCURRENCY = 4
+const UPLOAD_MEMORY_SMOKE_MAX_CONCURRENCY = 32
 
 export const LOCAL_WORKERD_RSS_LIMITATION =
   "local workerdのprocess RSSはnative runtime、allocator、local binding simulationを含み、productionのisolate memoryと同じ指標ではない。128 MB上限への適合を証明せず、同一環境での回帰検出にだけ使う。"

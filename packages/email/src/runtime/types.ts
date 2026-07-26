@@ -1,5 +1,4 @@
-import type { EmailProvider, EmailRuntime } from "../senders/configured"
-import type { SendEmail } from "../types"
+import type { EmailProvider, EmailRuntime, SendEmail } from "../contracts/email"
 
 export type RuntimeEmailSenderOptions = {
   provider: EmailProvider

@@ -1,3 +1,10 @@
+---
+title: 認証・認可・multi-tenant
+status: accepted
+implementation: active
+last_reviewed: 2026-07-26
+---
+
 # 認証・認可・マルチテナント
 
 ## 認証と認可を分離する
@@ -107,7 +114,7 @@ Better Auth 1.6.9ではcallback pathが異なります。
 - production built-in GitHub: `/auth/callback/github`
 - local/test Generic OAuth: `/auth/oauth2/callback/github`
 
-`apps/github-emulator`は後者をstrict OAuth Appとしてseedします。この差はOAuth E2Eで固定し、Better Authをupgradeするときにclient methodと一緒に再確認します。
+`apps/emulate`のGitHub serviceは後者をstrict OAuth Appとしてseedします。この差はOAuth E2Eで固定し、Better Authをupgradeするときにclient methodと一緒に再確認します。
 
 ## Cookieとorigin
 

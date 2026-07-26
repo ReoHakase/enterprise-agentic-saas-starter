@@ -4,15 +4,6 @@ export const nonEmptyStringModel = v.pipe(v.string(), v.minLength(1))
 
 export const isoTimestampModel = v.pipe(v.string(), v.isoTimestamp())
 
-export const dateOnlyModel = v.pipe(
-  v.string(),
-  v.isoDate(),
-  v.metadata({
-    description: "UTC calendar date in YYYY-MM-DD format",
-    examples: ["2026-07-14"],
-  })
-)
-
 export const organizationRoleModel = v.picklist([
   "super_admin",
   "admin",

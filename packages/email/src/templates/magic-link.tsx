@@ -1,13 +1,13 @@
 import { AppEmail, EmailParagraph } from "../components/app-email"
-import { renderEmail } from "../render"
-import type { RenderedEmail } from "../types"
+import type { RenderedEmail } from "../contracts/email"
+import { renderEmail } from "../render/index"
 
 export type MagicLinkEmailProps = {
   appName: string
   url: string
 }
 
-export const MagicLinkEmail = ({ appName, url }: MagicLinkEmailProps) => (
+const MagicLinkEmail = ({ appName, url }: MagicLinkEmailProps) => (
   <AppEmail
     appName={appName}
     preview={`Your secure sign-in link for ${appName}`}

@@ -41,9 +41,10 @@ export type DeletionJobFailure = {
 
 type DeletionJobOutcome = "completed" | "failed" | "skipped" | "stale"
 
-export const organizationFilesPrefix = (organizationId: string) =>
+const organizationFilesPrefix = (organizationId: string) =>
   `organizations/${encodeURIComponent(organizationId)}/`
 
+/** @internal */
 export const deleteOrganizationFiles = async (
   bucket: OrganizationFilesBucket,
   organizationId: string

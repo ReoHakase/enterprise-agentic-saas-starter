@@ -20,20 +20,37 @@ import {
   type FileR2Object,
   type FileR2PutValue,
   type FileStorageRuntime,
-} from "../files/runtime"
+} from "../files/public"
 import {
   PROFILE_IMAGE_OUTPUT_MAX_BYTES,
   profileImageObjectKey,
 } from "./constants"
+import { createProfileImagesApplication } from "./module"
 import {
   finalizePendingProfileImage,
   reservePendingProfileImage,
 } from "./repository"
-import {
-  readProfileImage,
-  removeProfileImage,
-  uploadProfileImage,
-} from "./service"
+
+type ProfileImagesTestApplication = ReturnType<
+  typeof createProfileImagesApplication
+>
+
+const profileImagesApplication = (db: Db) => createProfileImagesApplication(db)
+
+const readProfileImage = (
+  db: Db,
+  input: Parameters<ProfileImagesTestApplication["readProfileImage"]>[0]
+) => profileImagesApplication(db).readProfileImage(input)
+
+const removeProfileImage = (
+  db: Db,
+  input: Parameters<ProfileImagesTestApplication["removeProfileImage"]>[0]
+) => profileImagesApplication(db).removeProfileImage(input)
+
+const uploadProfileImage = (
+  db: Db,
+  input: Parameters<ProfileImagesTestApplication["uploadProfileImage"]>[0]
+) => profileImagesApplication(db).uploadProfileImage(input)
 
 const pngHeader = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
@@ -675,6 +692,18 @@ describe("profile image service", () => {
     await expect(
       database.select({ logo: organization.logo }).from(organization)
     ).resolves.toEqual([{ logo: uploaded.dto.profileImage }])
+  })
+})
+
+describe("profile image service", () => {
+  let database: Db
+
+  beforeEach(async () => {
+    database = await createDatabase()
+  })
+
+  afterEach(() => {
+    resetFileStorageRuntimeForTest()
   })
 
   it("serves the private canonical WebP with ETag and 304", async () => {

@@ -1,5 +1,5 @@
-import { env } from "../../env"
 import { publicErrors } from "../../errors/app-error"
+import { env } from "../../platform/env"
 
 export type SessionUser = {
   id: string
@@ -22,13 +22,6 @@ const parseTestSessionCreatedAt = (request: Request) => {
 
   const createdAt = new Date(value)
   return Number.isNaN(createdAt.getTime()) ? new Date(0) : createdAt
-}
-
-export const getSessionUser = async (
-  request: Request
-): Promise<SessionUser> => {
-  const { user } = await getSessionContext(request)
-  return user
 }
 
 export const getSessionContext = async (
@@ -73,3 +66,5 @@ export const getSessionContext = async (
     user: session.user,
   }
 }
+
+export type GetSessionContext = typeof getSessionContext

@@ -1,17 +1,24 @@
+---
+title: Observability
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
+---
+
 # Observability
 
 このrepoではSentryをapplication observabilityの正本、Cloudflare Workers Observabilityをplatform runtimeの補助、Spotlightをlocal Sentry envelopeの確認先にする。productionで同じWorkerのlogs/tracesをSentry SDKとCloudflare OTLP destinationの両方から送ると重複するため、初期構成ではapplication codeからSentry SDKへ送る経路だけを有効にする。
 
 ## Runtime構成
 
-| Runtime | Integration | 主な対象 |
-|---|---|---|
-| Next.js browser | `@sentry/nextjs` client instrumentation | render/navigation error、Web Vitalsに連なるtrace、frontend log |
-| Next.js server/edge | `@sentry/nextjs` instrumentation | Server Component、route、request error、server trace |
-| Elysia on Cloudflare | `@sentry/cloudflare` Worker wrapper | request error、Worker trace、structured log |
-| Elysia on Bun | `@sentry/bun` preload | local/test entrypointのerror、trace、structured log |
-| Cloudflare platform | Workers Observability | invocation、CPU/wall time、platform log、deployment単位の運用確認 |
-| Local | Spotlight sidecar | Sentryへ外送しないerror、trace、logの確認 |
+| Runtime              | Integration                             | 主な対象                                                          |
+| -------------------- | --------------------------------------- | ----------------------------------------------------------------- |
+| Next.js browser      | `@sentry/nextjs` client instrumentation | render/navigation error、Web Vitalsに連なるtrace、frontend log    |
+| Next.js server/edge  | `@sentry/nextjs` instrumentation        | Server Component、route、request error、server trace              |
+| Elysia on Cloudflare | `@sentry/cloudflare` Worker wrapper     | request error、Worker trace、structured log                       |
+| Elysia on Bun        | `@sentry/bun` preload                   | local/test entrypointのerror、trace、structured log               |
+| Cloudflare platform  | Workers Observability                   | invocation、CPU/wall time、platform log、deployment単位の運用確認 |
+| Local                | Spotlight sidecar                       | Sentryへ外送しないerror、trace、logの確認                         |
 
 WebとAPIはSentry projectを分け、同じ`SENTRY_RELEASE`とenvironmentを付ける。browserからAPI originへのtrace propagationを許可し、1 requestを両projectで追跡できるようにする。
 

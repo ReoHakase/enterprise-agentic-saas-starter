@@ -18,6 +18,7 @@ const digest = async (value: string) => {
   )
 }
 
+/** @internal */
 export const invitationQuotaKey = async (
   scope: "actor_organization" | "organization",
   identifiers: readonly string[]

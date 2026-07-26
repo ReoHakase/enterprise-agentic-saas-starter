@@ -6,9 +6,9 @@ import {
 import { files } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
+import { createFileReconciliationApplication } from "../modules/files/module"
 import { findFileByUploadId } from "../modules/files/repository"
 import { getFileStorageRuntime } from "../modules/files/runtime"
-import { reconcilePendingUpload } from "../modules/files/service"
 
 export const DEVELOPMENT_FILE_SEED_PATH =
   "/__development/files/reconcile" as const
@@ -117,6 +117,60 @@ const findFixture = (request: Request) => {
 const isReadinessRequest = (request: Request) =>
   new URL(request.url).pathname === DEVELOPMENT_FILE_SEED_PATH
 
+type SeedFile = NonNullable<Awaited<ReturnType<typeof findFileByUploadId>>>
+
+const seedFileIdentityMatches = (
+  stored: SeedFile,
+  fixture: DevelopmentFileFixture
+) =>
+  [
+    stored.id === fixture.id,
+    stored.uploadId === fixture.uploadId,
+    stored.objectKey === fixture.objectKey,
+    stored.ownerType === fixture.ownerType,
+    stored.ownerId === fixture.ownerId,
+    stored.uploaderId === fixture.uploaderId,
+    stored.filename === fixture.filename,
+    stored.sizeBytes === fixture.sizeBytes,
+    stored.declaredContentType === fixture.declaredContentType,
+  ].every(Boolean)
+
+const pendingSeedMetadataMatches = (
+  stored: SeedFile,
+  fixture: DevelopmentFileFixture
+) =>
+  stored.status !== "pending" ||
+  [
+    stored.etag === null,
+    stored.imageWidth === null,
+    stored.imageHeight === null,
+    stored.detectedImageFormat === null ||
+      stored.detectedImageFormat === fixture.expectedImageFormat,
+  ].every(Boolean)
+
+const readySeedFileMatches = (
+  stored: SeedFile,
+  fixture: DevelopmentFileFixture
+) =>
+  [
+    stored.status === "ready",
+    normalizeEtag(stored.etag ?? "") === fixture.md5,
+    stored.detectedImageFormat === fixture.expectedImageFormat,
+    stored.imageWidth === fixture.expectedImageWidth,
+    stored.imageHeight === fixture.expectedImageHeight,
+  ].every(Boolean)
+
+const readSeedBytes = async (
+  request: Request,
+  fixture: DevelopmentFileFixture
+) => {
+  const contentLength = Number(request.headers.get("content-length"))
+  if (contentLength !== fixture.sizeBytes) return null
+  const bytes = new Uint8Array(await request.arrayBuffer())
+  if (bytes.byteLength !== fixture.sizeBytes) return null
+  return (await sha256(bytes)) === fixture.sha256 ? bytes : null
+}
+
 const reconcileFixture = async (
   db: Db,
   request: Request,
@@ -128,28 +182,11 @@ const reconcileFixture = async (
   })
   // 通常のseed再実行で利用者が削除したmanifest rowを復活させない。
   if (!stored) return response(204)
-  if (
-    stored.id !== fixture.id ||
-    stored.uploadId !== fixture.uploadId ||
-    stored.objectKey !== fixture.objectKey ||
-    stored.ownerType !== fixture.ownerType ||
-    stored.ownerId !== fixture.ownerId ||
-    stored.uploaderId !== fixture.uploaderId ||
-    stored.filename !== fixture.filename ||
-    stored.sizeBytes !== fixture.sizeBytes ||
-    stored.declaredContentType !== fixture.declaredContentType
-  ) {
+  if (!seedFileIdentityMatches(stored, fixture)) {
     return response(409)
   }
 
-  if (
-    stored.status === "pending" &&
-    (stored.etag !== null ||
-      stored.imageWidth !== null ||
-      stored.imageHeight !== null ||
-      (stored.detectedImageFormat !== null &&
-        stored.detectedImageFormat !== fixture.expectedImageFormat))
-  ) {
+  if (!pendingSeedMetadataMatches(stored, fixture)) {
     return response(409)
   }
 
@@ -161,27 +198,15 @@ const reconcileFixture = async (
   }
 
   if (stored.status === "ready") {
-    if (
-      normalizeEtag(stored.etag ?? "") !== fixture.md5 ||
-      stored.detectedImageFormat !== fixture.expectedImageFormat ||
-      stored.imageWidth !== fixture.expectedImageWidth ||
-      stored.imageHeight !== fixture.expectedImageHeight
-    ) {
+    if (!readySeedFileMatches(stored, fixture)) {
       return response(409)
     }
     if (object) return response(204)
   }
 
   if (!object) {
-    const contentLength = Number(request.headers.get("content-length"))
-    if (contentLength !== fixture.sizeBytes) return response(400)
-    const bytes = new Uint8Array(await request.arrayBuffer())
-    if (
-      bytes.byteLength !== fixture.sizeBytes ||
-      (await sha256(bytes)) !== fixture.sha256
-    ) {
-      return response(400)
-    }
+    const bytes = await readSeedBytes(request, fixture)
+    if (!bytes) return response(400)
 
     await runtime.bucket.put(fixture.objectKey, new Blob([bytes]).stream(), {
       onlyIf: new Headers({ "if-none-match": "*" }),
@@ -222,7 +247,7 @@ const reconcileFixture = async (
   })
   if (!pending || pending.status !== "pending") return response(409)
 
-  await reconcilePendingUpload(db, {
+  await createFileReconciliationApplication(db).reconcilePendingUpload({
     actorUserId: fixture.uploaderId,
     file: pending,
     runtime,
@@ -232,14 +257,7 @@ const reconcileFixture = async (
     organizationId: fixture.organizationId,
     uploadId: fixture.uploadId,
   })
-  if (
-    !ready ||
-    ready.status !== "ready" ||
-    normalizeEtag(ready.etag ?? "") !== fixture.md5 ||
-    ready.detectedImageFormat !== fixture.expectedImageFormat ||
-    ready.imageWidth !== fixture.expectedImageWidth ||
-    ready.imageHeight !== fixture.expectedImageHeight
-  ) {
+  if (!ready || !readySeedFileMatches(ready, fixture)) {
     return response(409)
   }
   return response(204)

@@ -1,53 +1,28 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-
 import { AppError, publicErrors } from "../../errors/app-error"
+import type { AgentAssetWithStorage } from "./agent-assets-domain"
 import {
-  deleteReadyAgentAsset,
-  discardPendingAgentAsset,
-  finalizePendingAgentAsset,
-  findAgentRunAssetForModel,
-  findPreviewableAgentAssetForSession,
-  findReadyAgentAssetForSession,
-  reservePendingAgentAsset,
-  toAgentAssetDto,
-  type AgentAssetWithStorage,
-} from "./agent-assets-repository"
+  agentAssetBodyObject as bodyObject,
+  agentAssetProviderUnavailable as providerUnavailable,
+} from "./agent-assets-runtime"
 import {
   AGENT_ASSET_MAX_BYTES,
   AGENT_ASSET_MAX_DIMENSION,
   AGENT_ASSET_MAX_PIXELS,
-  FILE_PREVIEW_WIDTHS,
   agentAssetObjectKey,
-  type FilePreviewWidth,
   type PreviewableImageFormat,
 } from "./constants"
 import type { AgentAssetDto } from "./model"
-import { createModelImageResponse } from "./model-image-service"
-import {
-  getFileStorageRuntime,
-  type FileR2Object,
-  type FileR2ObjectBody,
-  type FileStorageRuntime,
+import type { AgentAssetServicePorts } from "./ports"
+import type {
+  FileR2Object,
+  FileR2ObjectBody,
+  FileStorageRuntime,
 } from "./runtime"
-import { detectImageFormat } from "./service"
-
-const providerUnavailable = (
-  provider: "images" | "r2" | "runtime",
-  operation: string
-) =>
-  new AppError({
-    code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    statusCode: 503,
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "agent-assets", operation, provider },
-  })
 
 const agentAssetUploadDisabled = () =>
   new AppError({
     code: "service_unavailable",
     publicMessage: "Service temporarily unavailable",
-    statusCode: 503,
     publicContext: {
       reason: "feature_disabled",
       resource: "agent_asset",
@@ -59,21 +34,6 @@ const agentAssetUploadDisabled = () =>
       operation: "uploadAgentAsset",
     },
   })
-
-const getRuntime = (): FileStorageRuntime => {
-  try {
-    return getFileStorageRuntime()
-  } catch {
-    throw providerUnavailable("runtime", "getFileStorageRuntime")
-  }
-}
-
-const bodyObject = (
-  object: FileR2Object | FileR2ObjectBody | null
-): FileR2ObjectBody | null =>
-  object && "body" in object && object.body instanceof ReadableStream
-    ? object
-    : null
 
 const normalizeFilename = (value: string) => {
   const filename = value.trim()
@@ -90,8 +50,11 @@ const imageContentTypes: Record<PreviewableImageFormat, string> = {
   gif: "image/gif",
 }
 
-const requireSupportedAgentImage = async (file: File) => {
-  const detected = await detectImageFormat(file)
+const requireSupportedAgentImage = async (
+  ports: AgentAssetServicePorts,
+  file: File
+) => {
+  const detected = await ports.detectImageFormat(file)
   if (
     detected !== "jpeg" &&
     detected !== "png" &&
@@ -325,12 +288,12 @@ const readImageMetadata = async (
 }
 
 const cleanupRejectedUpload = async (
-  db: Db,
+  ports: AgentAssetServicePorts,
   value: AgentAssetWithStorage,
   cause: unknown
 ): Promise<never> => {
   try {
-    await discardPendingAgentAsset(db, {
+    await ports.discardPendingAgentAsset({
       assetId: value.asset.id,
       expectedClaimRevision: value.claim?.revision ?? -1,
       expectedStorageCleanupRevision: value.storage.cleanupRevision,
@@ -342,62 +305,58 @@ const cleanupRejectedUpload = async (
   throw cause
 }
 
-export const reconcilePendingAgentAsset = async (
-  db: Db,
-  input: {
+export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
+  const reconcilePendingAgentAsset = async (input: {
     value: AgentAssetWithStorage
     runtime?: FileStorageRuntime
-  }
-) => {
-  const runtime = input.runtime ?? getRuntime()
-  if (!input.value.storage.objectKey) {
-    throw providerUnavailable("r2", "headPendingAgentAsset")
-  }
-  let object: FileR2Object | null
-  try {
-    object = await runtime.bucket.head(input.value.storage.objectKey)
-  } catch {
-    throw providerUnavailable("r2", "headPendingAgentAsset")
-  }
-  if (!object || !metadataMatches(object, input.value)) {
-    throw providerUnavailable("r2", "verifyPendingAgentAsset")
-  }
-  if (
-    typeof object.etag !== "string" ||
-    object.etag.length < 1 ||
-    object.etag.length > 128
-  ) {
-    throw providerUnavailable("r2", "verifyPendingAgentAssetEtag")
+  }) => {
+    const runtime = input.runtime ?? ports.getRuntime()
+    if (!input.value.storage.objectKey) {
+      throw providerUnavailable("r2", "headPendingAgentAsset")
+    }
+    let object: FileR2Object | null
+    try {
+      object = await runtime.bucket.head(input.value.storage.objectKey)
+    } catch {
+      throw providerUnavailable("r2", "headPendingAgentAsset")
+    }
+    if (!object || !metadataMatches(object, input.value)) {
+      throw providerUnavailable("r2", "verifyPendingAgentAsset")
+    }
+    if (
+      typeof object.etag !== "string" ||
+      object.etag.length < 1 ||
+      object.etag.length > 128
+    ) {
+      throw providerUnavailable("r2", "verifyPendingAgentAssetEtag")
+    }
+
+    let dimensions: { imageHeight: number; imageWidth: number }
+    try {
+      dimensions = await readImageMetadata(runtime, input.value)
+    } catch (cause) {
+      if (cause instanceof AppError && cause.statusCode < 500) {
+        return cleanupRejectedUpload(ports, input.value, cause)
+      }
+      throw cause
+    }
+    try {
+      return await ports.finalizePendingAgentAsset({
+        assetId: input.value.asset.id,
+        etag: object.etag,
+        imageHeight: dimensions.imageHeight,
+        imageWidth: dimensions.imageWidth,
+        organizationId: input.value.asset.organizationId,
+      })
+    } catch (cause) {
+      if (cause instanceof AppError && cause.statusCode < 500) {
+        return cleanupRejectedUpload(ports, input.value, cause)
+      }
+      throw cause
+    }
   }
 
-  let dimensions: { imageHeight: number; imageWidth: number }
-  try {
-    dimensions = await readImageMetadata(runtime, input.value)
-  } catch (cause) {
-    if (cause instanceof AppError && cause.statusCode < 500) {
-      return cleanupRejectedUpload(db, input.value, cause)
-    }
-    throw cause
-  }
-  try {
-    return await finalizePendingAgentAsset(db, {
-      assetId: input.value.asset.id,
-      etag: object.etag,
-      imageHeight: dimensions.imageHeight,
-      imageWidth: dimensions.imageWidth,
-      organizationId: input.value.asset.organizationId,
-    })
-  } catch (cause) {
-    if (cause instanceof AppError && cause.statusCode < 500) {
-      return cleanupRejectedUpload(db, input.value, cause)
-    }
-    throw cause
-  }
-}
-
-export const uploadAgentAsset = async (
-  db: Db,
-  input: {
+  const uploadAgentAsset = async (input: {
     actorUserId: string
     file: File
     fileSize: number
@@ -405,335 +364,134 @@ export const uploadAgentAsset = async (
     sessionId: string
     threadId: string
     uploadId: string
-  }
-): Promise<{ created: boolean; dto: AgentAssetDto }> => {
-  const runtime = getRuntime()
-  if (runtime.agentAssetUploadEnabled !== true) {
-    throw agentAssetUploadDisabled()
-  }
-  if (
-    input.fileSize !== input.file.size ||
-    input.file.size < 1 ||
-    input.file.size > AGENT_ASSET_MAX_BYTES
-  ) {
-    throw publicErrors.validation("File size does not match", {
-      field: "fileSize",
-    })
-  }
-  const filename = normalizeFilename(input.file.name)
-  const image = await requireSupportedAgentImage(input.file)
-  const assetId = crypto.randomUUID()
-  const storageObjectId = crypto.randomUUID()
-  const reservation = await reservePendingAgentAsset(db, {
-    assetId,
-    declaredContentType: image.declaredContentType,
-    detectedImageFormat: image.detectedImageFormat,
-    filename,
-    objectKey: agentAssetObjectKey({
-      organizationId: input.organizationId,
-      storageObjectId,
-    }),
-    organizationId: input.organizationId,
-    sessionId: input.sessionId,
-    sizeBytes: input.fileSize,
-    storageObjectId,
-    threadId: input.threadId,
-    uploadId: input.uploadId,
-    uploaderId: input.actorUserId,
-  })
-  if (
-    !sameUpload(reservation.value, {
-      ...image,
+  }): Promise<{ created: boolean; dto: AgentAssetDto }> => {
+    const runtime = ports.getRuntime()
+    if (runtime.agentAssetUploadEnabled !== true) {
+      throw agentAssetUploadDisabled()
+    }
+    if (
+      input.fileSize !== input.file.size ||
+      input.file.size < 1 ||
+      input.file.size > AGENT_ASSET_MAX_BYTES
+    ) {
+      throw publicErrors.validation("File size does not match", {
+        field: "fileSize",
+      })
+    }
+    const filename = normalizeFilename(input.file.name)
+    const image = await requireSupportedAgentImage(ports, input.file)
+    const assetId = crypto.randomUUID()
+    const storageObjectId = crypto.randomUUID()
+    const reservation = await ports.reservePendingAgentAsset({
+      assetId,
+      declaredContentType: image.declaredContentType,
+      detectedImageFormat: image.detectedImageFormat,
       filename,
+      objectKey: agentAssetObjectKey({
+        organizationId: input.organizationId,
+        storageObjectId,
+      }),
       organizationId: input.organizationId,
       sessionId: input.sessionId,
       sizeBytes: input.fileSize,
+      storageObjectId,
       threadId: input.threadId,
       uploadId: input.uploadId,
       uploaderId: input.actorUserId,
     })
-  ) {
-    throw publicErrors.conflict("Upload id is already in use", {
-      reason: "upload_id_mismatch",
-      resource: "agent_asset",
-    })
-  }
-
-  if (reservation.value.asset.status === "ready") {
-    if (!reservation.value.storage.objectKey) {
-      throw providerUnavailable("r2", "headAgentAssetRetry")
+    if (
+      !sameUpload(reservation.value, {
+        ...image,
+        filename,
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        sizeBytes: input.fileSize,
+        threadId: input.threadId,
+        uploadId: input.uploadId,
+        uploaderId: input.actorUserId,
+      })
+    ) {
+      throw publicErrors.conflict("Upload id is already in use", {
+        reason: "upload_id_mismatch",
+        resource: "agent_asset",
+      })
     }
+
+    if (reservation.value.asset.status === "ready") {
+      if (!reservation.value.storage.objectKey) {
+        throw providerUnavailable("r2", "headAgentAssetRetry")
+      }
+      let object: FileR2Object | null
+      try {
+        object = await runtime.bucket.head(reservation.value.storage.objectKey)
+      } catch {
+        throw providerUnavailable("r2", "headAgentAssetRetry")
+      }
+      if (!object || !metadataMatches(object, reservation.value)) {
+        throw providerUnavailable("r2", "verifyAgentAssetRetry")
+      }
+      await assertUploadContentMatches(runtime, reservation.value, input.file)
+      const ready = await ports.findReadyAgentAssetForSession({
+        assetId: reservation.value.asset.id,
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        userId: input.actorUserId,
+      })
+      return { created: false, dto: ports.toAgentAssetDto(ready) }
+    }
+    if (reservation.value.asset.status !== "pending") {
+      throw publicErrors.conflict("Upload id is no longer reusable", {
+        reason: "upload_expired",
+        resource: "agent_asset",
+      })
+    }
+    if (!reservation.value.storage.objectKey) {
+      throw providerUnavailable("r2", "putAgentAsset")
+    }
+
     let object: FileR2Object | null
+    let wroteObject = false
     try {
       object = await runtime.bucket.head(reservation.value.storage.objectKey)
+      if (!object) {
+        const putObject = await runtime.bucket.put(
+          reservation.value.storage.objectKey,
+          input.file.stream(),
+          {
+            onlyIf: new Headers({ "if-none-match": "*" }),
+            httpMetadata: { contentType: "application/octet-stream" },
+            customMetadata: {
+              agentAssetId: reservation.value.asset.id,
+              expectedSize: String(reservation.value.storage.sizeBytes),
+              storageObjectId: reservation.value.storage.id,
+              uploadId: reservation.value.storage.uploadId,
+            },
+            storageClass: "Standard",
+          }
+        )
+        wroteObject = putObject !== null
+        object =
+          putObject ??
+          (await runtime.bucket.head(reservation.value.storage.objectKey))
+      }
     } catch {
-      throw providerUnavailable("r2", "headAgentAssetRetry")
+      throw providerUnavailable("r2", "putAgentAsset")
     }
     if (!object || !metadataMatches(object, reservation.value)) {
-      throw providerUnavailable("r2", "verifyAgentAssetRetry")
+      throw providerUnavailable("r2", "verifyAgentAssetObject")
     }
-    await assertUploadContentMatches(runtime, reservation.value, input.file)
-    const ready = await findReadyAgentAssetForSession(db, {
-      assetId: reservation.value.asset.id,
-      organizationId: input.organizationId,
-      sessionId: input.sessionId,
-      userId: input.actorUserId,
-    })
-    return { created: false, dto: toAgentAssetDto(ready) }
-  }
-  if (reservation.value.asset.status !== "pending") {
-    throw publicErrors.conflict("Upload id is no longer reusable", {
-      reason: "upload_expired",
-      resource: "agent_asset",
-    })
-  }
-  if (!reservation.value.storage.objectKey) {
-    throw providerUnavailable("r2", "putAgentAsset")
-  }
-
-  let object: FileR2Object | null
-  let wroteObject = false
-  try {
-    object = await runtime.bucket.head(reservation.value.storage.objectKey)
-    if (!object) {
-      const putObject = await runtime.bucket.put(
-        reservation.value.storage.objectKey,
-        input.file.stream(),
-        {
-          onlyIf: new Headers({ "if-none-match": "*" }),
-          httpMetadata: { contentType: "application/octet-stream" },
-          customMetadata: {
-            agentAssetId: reservation.value.asset.id,
-            expectedSize: String(reservation.value.storage.sizeBytes),
-            storageObjectId: reservation.value.storage.id,
-            uploadId: reservation.value.storage.uploadId,
-          },
-          storageClass: "Standard",
-        }
-      )
-      wroteObject = putObject !== null
-      object =
-        putObject ??
-        (await runtime.bucket.head(reservation.value.storage.objectKey))
+    if (!wroteObject) {
+      await assertUploadContentMatches(runtime, reservation.value, input.file)
     }
-  } catch {
-    throw providerUnavailable("r2", "putAgentAsset")
-  }
-  if (!object || !metadataMatches(object, reservation.value)) {
-    throw providerUnavailable("r2", "verifyAgentAssetObject")
-  }
-  if (!wroteObject) {
-    await assertUploadContentMatches(runtime, reservation.value, input.file)
-  }
 
-  const ready = await reconcilePendingAgentAsset(db, {
-    value: reservation.value,
-    runtime,
-  })
-  return { created: reservation.created, dto: toAgentAssetDto(ready) }
-}
-
-const privateImageHeaders = () =>
-  new Headers({
-    "Cache-Control": "private, no-cache",
-    "Content-Type": "image/webp",
-    "Cross-Origin-Resource-Policy": "same-site",
-    "X-Content-Type-Options": "nosniff",
-  })
-
-const httpEtag = (etag: string) =>
-  etag.startsWith('"') && etag.endsWith('"') ? etag : `"${etag}"`
-
-const matchesIfNoneMatch = (value: string | null, etag: string) =>
-  value
-    ?.split(",")
-    .map((candidate) => candidate.trim().replace(/^W\//u, ""))
-    .some((candidate) => candidate === "*" || candidate === etag) ?? false
-
-const previewVariantEtag = async (
-  sourceEtag: string,
-  width: FilePreviewWidth
-) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(
-      `${sourceEtag}:${width}:webp:q75:anim0:agent-preview-v1`
-    )
-  )
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("")
-  return `"${hex}"`
-}
-
-const previewCacheKey = (
-  request: Request,
-  input: {
-    assetId: string
-    organizationId: string
-    sourceEtag: string
-    width: FilePreviewWidth
-  }
-) => {
-  const url = new URL(request.url)
-  url.pathname = `/__agent_asset_preview_cache/organizations/${encodeURIComponent(input.organizationId)}/assets/${encodeURIComponent(input.assetId)}/${input.width}`
-  url.search = new URLSearchParams({
-    source: input.sourceEtag,
-    variant: "webp:q75:anim0:agent-preview-v1",
-  }).toString()
-  return new Request(url, { method: "GET" })
-}
-
-const browserPreviewResponse = (response: Response, etag: string) => {
-  const headers = privateImageHeaders()
-  headers.set("ETag", etag)
-  const contentLength = response.headers.get("content-length")
-  if (contentLength) headers.set("Content-Length", contentLength)
-  return new Response(response.body, { status: 200, headers })
-}
-
-const transformAgentImage = async (
-  runtime: FileStorageRuntime,
-  value: AgentAssetWithStorage,
-  width: number
-) => {
-  if (!value.storage.objectKey || !value.storage.etag) {
-    throw providerUnavailable("r2", "readAgentAssetImage")
-  }
-  try {
-    const source = bodyObject(
-      await runtime.bucket.get(value.storage.objectKey, {
-        onlyIf: new Headers({ "if-match": httpEtag(value.storage.etag) }),
-      })
-    )
-    if (!source) throw providerUnavailable("r2", "readAgentAssetImage")
-    const result = await runtime.images
-      .input(source.body)
-      .transform({ width, fit: "scale-down" })
-      .output({ format: "image/webp", quality: 75, anim: false })
-    const response = result.response()
-    if (!response.ok || !response.body) {
-      throw providerUnavailable("images", "transformAgentAsset")
-    }
-    return response
-  } catch (cause) {
-    if (cause instanceof AppError) throw cause
-    throw providerUnavailable("images", "transformAgentAsset")
-  }
-}
-
-export const previewAgentAsset = async (
-  db: Db,
-  input: {
-    actorUserId: string
-    assetId: string
-    organizationId: string
-    request: Request
-    sessionId: string
-    width: string
-  }
-) => {
-  const width = FILE_PREVIEW_WIDTHS.find(
-    (candidate) => String(candidate) === input.width
-  )
-  if (width === undefined) {
-    throw publicErrors.validation("Unsupported preview width", {
-      field: "width",
+    const ready = await reconcilePendingAgentAsset({
+      value: reservation.value,
+      runtime,
     })
-  }
-  const value = await findPreviewableAgentAssetForSession(db, {
-    assetId: input.assetId,
-    organizationId: input.organizationId,
-    sessionId: input.sessionId,
-    userId: input.actorUserId,
-  })
-  if (!value.storage.etag) {
-    throw providerUnavailable("r2", "readAgentAssetPreviewMetadata")
-  }
-  const etag = await previewVariantEtag(value.storage.etag, width)
-  if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
-    const headers = privateImageHeaders()
-    headers.set("ETag", etag)
-    return new Response(null, { status: 304, headers })
+    return { created: reservation.created, dto: ports.toAgentAssetDto(ready) }
   }
 
-  const runtime = getRuntime()
-  const key = previewCacheKey(input.request, {
-    assetId: value.asset.id,
-    organizationId: input.organizationId,
-    sourceEtag: value.storage.etag,
-    width,
-  })
-  if (runtime.cache) {
-    try {
-      const cached = await runtime.cache.match(key)
-      if (cached) return browserPreviewResponse(cached, etag)
-    } catch {
-      // Cache障害でも認可済みrequestはR2 + Imagesへfail-openする。
-    }
-  }
-
-  const transformed = await transformAgentImage(runtime, value, width)
-  if (runtime.cache) {
-    const cacheTtlSeconds =
-      value.asset.status === "promoted"
-        ? 3 * 24 * 60 * 60
-        : Math.max(
-            1,
-            Math.min(
-              3 * 24 * 60 * 60,
-              Math.floor((value.asset.expiresAt.getTime() - Date.now()) / 1000)
-            )
-          )
-    const cacheHeaders = new Headers(transformed.headers)
-    cacheHeaders.delete("Set-Cookie")
-    cacheHeaders.set("Cache-Control", `public, max-age=${cacheTtlSeconds}`)
-    cacheHeaders.set("Content-Type", "image/webp")
-    cacheHeaders.set("ETag", etag)
-    const cacheResponse = new Response(transformed.clone().body, {
-      status: 200,
-      headers: cacheHeaders,
-    })
-    const write = runtime.cache.put(key, cacheResponse).catch(() => undefined)
-    if (runtime.defer) runtime.defer(write)
-    else await write
-  }
-  return browserPreviewResponse(transformed, etag)
+  return { reconcilePendingAgentAsset, uploadAgentAsset }
 }
 
-export const getAgentImageForModel = async (
-  db: Db,
-  input: { grant: string; assetId: string }
-): Promise<Response> => {
-  const access = await findAgentRunAssetForModel(db, input)
-  if (!access.storage.objectKey || !access.storage.etag) {
-    throw providerUnavailable("r2", "readAgentAssetImage")
-  }
-  return createModelImageResponse(getRuntime(), {
-    etag: access.storage.etag,
-    objectKey: access.storage.objectKey,
-    resource: "agent_asset",
-  })
-}
-
-export const removeAgentAsset = async (
-  db: Db,
-  input: {
-    actorUserId: string
-    assetId: string
-    organizationId: string
-    sessionId: string
-  }
-) => {
-  const deleted = await deleteReadyAgentAsset(db, {
-    assetId: input.assetId,
-    organizationId: input.organizationId,
-    sessionId: input.sessionId,
-    userId: input.actorUserId,
-  })
-  if (!deleted) {
-    throw publicErrors.notFound("Agent asset not found", {
-      resource: "agent_asset",
-    })
-  }
-}
+export type AgentAssetService = ReturnType<typeof createAgentAssetService>

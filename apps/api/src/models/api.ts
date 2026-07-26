@@ -1,10 +1,12 @@
 import * as v from "valibot"
 
+import { appErrorCodes } from "../errors/error-registry"
+
 const errorCodeModel = v.pipe(
-  v.string(),
-  v.regex(/^[A-Za-z0-9_-]{1,64}$/),
+  v.picklist(appErrorCodes),
   v.metadata({
-    description: "機械判定に使う安定したエラーコード",
+    description:
+      "Stable machine-readable error code used to select a documented recovery path.",
     examples: ["unauthorized", "step_up_required", "csrf_origin_forbidden"],
   })
 )
@@ -14,7 +16,8 @@ const errorMessageModel = v.pipe(
   v.minLength(1),
   v.maxLength(500),
   v.metadata({
-    description: "利用者へ表示できる安全なメッセージ",
+    description:
+      "Bounded public message that is safe to present without exposing provider or tenant details.",
     examples: ["Authentication required"],
   })
 )
@@ -45,7 +48,7 @@ const publicContextModel = v.pipe(
   }),
   v.metadata({
     description:
-      "secretやtenant IDを含まない、allowlist済みのUI復旧導線用context",
+      "Allowlisted recovery context that never contains credentials, tenant identifiers, or provider payloads.",
   })
 )
 
@@ -56,7 +59,7 @@ const fieldErrorsModel = v.pipe(
   ),
   v.metadata({
     description:
-      "入力fieldごとの安全なエラー。入力値やproviderのraw errorは含めない。",
+      "Safe validation messages keyed by input field without echoing submitted values or provider errors.",
     examples: [{ dueDate: ["Invalid value"] }],
   })
 )
@@ -65,7 +68,8 @@ const requestIdModel = v.pipe(
   v.string(),
   v.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
   v.metadata({
-    description: "問い合わせとtraceの突合に使うrequest id",
+    description:
+      "Request identifier used to correlate a support report with sanitized server telemetry.",
     examples: ["req_01JQ8YF2J7Q0J2X8R8S3Q9M6P4"],
   })
 )
@@ -83,7 +87,7 @@ export const apiErrorModel = v.pipe(
   v.metadata({
     title: "ApiError",
     description:
-      "API共通エラー。stack、cause、token、cookie、DB接続情報は含めない。",
+      "Common API error response that excludes stack traces, causes, credentials, cookies, and database connection details.",
     examples: [
       {
         error: {

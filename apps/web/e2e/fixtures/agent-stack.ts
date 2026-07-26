@@ -1,9 +1,10 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import { chmod, mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import {
+  agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
-  removeAgentE2EArtifacts,
+  removeAgentE2EStackArtifacts,
 } from "./agent-e2e-environment"
 
 const repositoryRoot = resolve(import.meta.dir, "../../../..")
@@ -26,49 +27,14 @@ const sleep = (milliseconds: number) =>
     setTimeout(resolvePromise, milliseconds)
   )
 
-const requireOpenRouterKey = (value: string | undefined): string => {
+const requireOpenRouterKey = (value: string | undefined) => {
   const key = value?.trim()
-  if (!key || key.length < 24 || /[\r\n]/u.test(key)) {
+  if (!key || /[\r\n]/u.test(key)) {
     throw new Error(
-      "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
+      "Full E2E requires OPENROUTER_API_KEY from the approved environment"
     )
   }
   return key
-}
-
-const unquoteDotenvValue = (value: string): string => {
-  const trimmed = value.trim()
-  if (
-    trimmed.length >= 2 &&
-    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'")))
-  ) {
-    return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-const readOpenRouterKey = async (): Promise<string> => {
-  if (process.env.OPENROUTER_API_KEY) {
-    return requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
-  }
-
-  let contents: string
-  try {
-    contents = await readFile(resolve(agentWorkspace, ".env.local"), "utf8")
-  } catch {
-    throw new Error(
-      "Agent E2E requires OPENROUTER_API_KEY or apps/agent/.env.local"
-    )
-  }
-
-  const entry = contents
-    .split(/\r?\n/u)
-    .find((line) => /^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=/u.test(line))
-  const separator = entry?.indexOf("=") ?? -1
-  return requireOpenRouterKey(
-    separator >= 0 ? unquoteDotenvValue(entry?.slice(separator + 1) ?? "") : ""
-  )
 }
 
 const writePrivateFile = async (path: string, contents: string) => {
@@ -110,13 +76,13 @@ const stopProcess = async (processHandle: ManagedProcess | undefined) => {
   await exit.catch(() => undefined)
 }
 
-const runMigration = async (databaseOrigin: string) => {
+const runMigration = async (databaseUrl: string) => {
   const migration = Bun.spawn(["bun", "--no-env-file", "run", "db:migrate"], {
     cwd: databaseWorkspace,
     env: {
       ...inheritedEnvironment,
       NODE_ENV: "test",
-      TURSO_DATABASE_URL: databaseOrigin,
+      TURSO_DATABASE_URL: databaseUrl,
       TURSO_AUTH_TOKEN: "agent-e2e-unused-token",
     },
     stdin: "ignore",
@@ -133,11 +99,13 @@ const main = async () => {
   if (process.env.NODE_ENV === "production") {
     throw new Error("Agent E2E stack cannot run in production")
   }
-
+  const scriptedAgent = process.env.AGENT_E2E_SCRIPTED === "1"
   const environment = createAgentE2EEnvironment(
     process.env.AGENT_E2E_RUN_ID ?? ""
   )
-  const openRouterApiKey = await readOpenRouterKey()
+  const openRouterApiKey = scriptedAgent
+    ? null
+    : requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
   let turso: ManagedProcess | undefined
   let wrangler: ManagedProcess | undefined
   let stopping = false
@@ -152,18 +120,21 @@ const main = async () => {
   process.once("SIGTERM", stop)
 
   try {
-    await removeAgentE2EArtifacts(environment.runId)
+    await removeAgentE2EStackArtifacts(environment.runId)
     await Promise.all([
-      mkdir(resolve(environment.temporaryRoot, "api"), {
+      mkdir(resolve(environment.stackRoot, "api"), {
         mode: 0o700,
         recursive: true,
       }),
-      mkdir(resolve(environment.temporaryRoot, "agent"), {
+      mkdir(resolve(environment.stackRoot, "agent"), {
         mode: 0o700,
         recursive: true,
       }),
     ])
     await chmod(environment.temporaryRoot, 0o700)
+    if (stopping) return
+
+    await runMigration(`file:${environment.databasePath}`)
     if (stopping) return
 
     turso = Bun.spawn(
@@ -176,7 +147,7 @@ const main = async () => {
         String(environment.databasePort),
       ],
       {
-        cwd: environment.temporaryRoot,
+        cwd: environment.stackRoot,
         env: inheritedEnvironment,
         stdin: "ignore",
         stdout: "inherit",
@@ -184,7 +155,6 @@ const main = async () => {
       }
     )
     await waitForDatabase(environment.databaseOrigin)
-    await runMigration(environment.databaseOrigin)
     if (stopping) return
 
     const apiConfig = {
@@ -241,7 +211,7 @@ const main = async () => {
     }
     const agentConfig = {
       name: environment.agentWorkerName,
-      main: resolve(agentWorkspace, "src/worker.ts"),
+      main: resolve(agentWorkspace, agentE2EWorkerEntrypoint(scriptedAgent)),
       compatibility_date: "2026-07-22",
       compatibility_flags: ["nodejs_compat"],
       workers_dev: false,
@@ -253,7 +223,9 @@ const main = async () => {
           entrypoint: "AgentInternalApi",
         },
       ],
-      secrets: { required: ["OPENROUTER_API_KEY"] },
+      ...(scriptedAgent
+        ? {}
+        : { secrets: { required: ["OPENROUTER_API_KEY"] } }),
       observability: { enabled: false },
       vars: {
         NODE_ENV: "development",
@@ -276,10 +248,12 @@ const main = async () => {
         environment.agentConfigPath,
         `${JSON.stringify(agentConfig, null, 2)}\n`
       ),
-      writePrivateFile(
-        environment.agentDevVarsPath,
-        `OPENROUTER_API_KEY=${JSON.stringify(openRouterApiKey)}\n`
-      ),
+      openRouterApiKey
+        ? writePrivateFile(
+            environment.agentDevVarsPath,
+            `OPENROUTER_API_KEY=${JSON.stringify(openRouterApiKey)}\n`
+          )
+        : writePrivateFile(environment.agentDevVarsPath, "\n"),
     ])
 
     wrangler = Bun.spawn(
@@ -327,7 +301,7 @@ const main = async () => {
     process.off("SIGINT", stop)
     process.off("SIGTERM", stop)
     await Promise.allSettled([stopProcess(wrangler), stopProcess(turso)])
-    await removeAgentE2EArtifacts(environment.runId)
+    await removeAgentE2EStackArtifacts(environment.runId)
   }
 }
 

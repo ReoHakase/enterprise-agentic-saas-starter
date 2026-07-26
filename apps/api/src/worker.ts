@@ -1,5 +1,15 @@
 import { db } from "@enterprise-agentic-saas/db"
-import * as Sentry from "@sentry/cloudflare"
+import {
+  captureException,
+  getActiveSpan,
+  getIsolationScope,
+  logger,
+  setHttpStatus,
+  startSpan,
+  updateSpanName,
+  withScope,
+  withSentry,
+} from "@sentry/cloudflare"
 import { WorkerEntrypoint } from "cloudflare:workers"
 import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
@@ -25,18 +35,18 @@ import {
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
-import { configureObservability } from "./observability/runtime"
-import { createSentryObservabilityRuntime } from "./observability/sentry-adapter"
+import { configureObservability } from "./platform/observability/runtime"
+import { createSentryObservabilityRuntime } from "./platform/observability/sentry-adapter"
 import {
   filterSentryIntegrations,
   sentryPrivacyOptions,
   SPOTLIGHT_DSN,
-} from "./observability/sentry-options"
-import { resolveSpotlightTarget } from "./observability/spotlight"
-import { withStructuredConsole } from "./observability/structured-console"
-import { authPlugin } from "./plugins/auth"
-import { corsPlugin } from "./plugins/cors"
-import { serverTimingPlugin } from "./plugins/server-timing"
+} from "./platform/observability/sentry-options"
+import { resolveSpotlightTarget } from "./platform/observability/spotlight"
+import { withStructuredConsole } from "./platform/observability/structured-console"
+import { authPlugin } from "./platform/plugins/auth"
+import { corsPlugin } from "./platform/plugins/cors"
+import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
 type WorkerSentryEnv = {
   AGENT_RUNTIME: AgentRuntimeBinding
@@ -96,9 +106,23 @@ const createWorkerSentryOptions = (workerEnv: WorkerSentryEnv) => {
   }
 }
 
+const sentryRuntimeApi = {
+  captureException,
+  getActiveSpan,
+  getIsolationScope,
+  logger,
+  setHttpStatus,
+  startSpan,
+  updateSpanName,
+  withScope,
+}
+
 configureObservability(
   withStructuredConsole(
-    createSentryObservabilityRuntime(Sentry, "enterprise-agentic-saas-api"),
+    createSentryObservabilityRuntime(
+      sentryRuntimeApi,
+      "enterprise-agentic-saas-api"
+    ),
     "enterprise-agentic-saas-api"
   )
 )
@@ -127,7 +151,7 @@ class AgentInternalApiBase extends WorkerEntrypoint<WorkerSentryEnv> {
   }
 }
 
-export const AgentInternalApi = Sentry.withSentry(
+export const AgentInternalApi = withSentry(
   createWorkerSentryOptions,
   AgentInternalApiBase
 )
@@ -157,7 +181,7 @@ const workerWithScheduled = {
       database: db,
       onFailure: ({ attempts }) => {
         const error = new Error("Organization file cleanup failed")
-        Sentry.captureException(error, {
+        captureException(error, {
           tags: {
             component: "organization-deletion",
             errorCode: "r2_cleanup_failed",
@@ -186,7 +210,7 @@ const workerWithScheduled = {
       database: db,
       onFailure: ({ attempts }) => {
         const error = new Error("File cleanup failed")
-        Sentry.captureException(error, {
+        captureException(error, {
           tags: {
             component: "file-cleanup",
             errorCode: "r2_cleanup_failed",
@@ -215,7 +239,7 @@ const workerWithScheduled = {
       database: db,
       onFailure: ({ attempts }) => {
         const error = new Error("Profile image cleanup failed")
-        Sentry.captureException(error, {
+        captureException(error, {
           tags: {
             component: "profile-image-cleanup",
             errorCode: "r2_cleanup_failed",
@@ -244,7 +268,7 @@ const workerWithScheduled = {
       database: db,
       onFailure: ({ attempts, errorCode }) => {
         const error = new Error("Agent asset cleanup failed")
-        Sentry.captureException(error, {
+        captureException(error, {
           tags: {
             component: "agent-asset-cleanup",
             errorCode,
@@ -279,7 +303,7 @@ const workerWithScheduled = {
       database: db,
       onFailure: ({ attempts, errorCode, retryable }) => {
         const error = new Error("Organization invitation delivery failed")
-        Sentry.captureException(error, {
+        captureException(error, {
           tags: {
             component: "invitation-email",
             errorCode,
@@ -328,7 +352,7 @@ const workerWithScheduled = {
   },
 }
 
-export default Sentry.withSentry<WorkerSentryEnv>(
+export default withSentry<WorkerSentryEnv>(
   createWorkerSentryOptions,
   workerWithScheduled
 )

@@ -1,12 +1,9 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-
 import { AppError, publicErrors } from "../../errors/app-error"
 import {
-  getFileStorageRuntime,
   type FileR2Object,
   type FileR2ObjectBody,
   type FileStorageRuntime,
-} from "../files/runtime"
+} from "../files/public"
 import {
   PROFILE_IMAGE_OUTPUT_CONTENT_TYPE,
   PROFILE_IMAGE_OUTPUT_MAX_BYTES,
@@ -19,14 +16,7 @@ import {
   type ProfileImageSubject,
 } from "./constants"
 import type { ProfileImageDto } from "./model"
-import {
-  deleteProfileImage,
-  finalizePendingProfileImage,
-  findReadyProfileImage,
-  reservePendingProfileImage,
-  supersedePendingProfileImage,
-  type StoredProfileImage,
-} from "./repository"
+import type { ProfileImagePorts, StoredProfileImage } from "./ports"
 
 const providerUnavailable = (
   provider: "images" | "r2" | "runtime",
@@ -35,18 +25,9 @@ const providerUnavailable = (
   new AppError({
     code: "service_unavailable",
     publicMessage: "Service temporarily unavailable",
-    statusCode: 503,
     publicContext: { retryAfter: 30 },
     privateContext: { module: "profile-images", operation, provider },
   })
-
-const getRuntime = (): FileStorageRuntime => {
-  try {
-    return getFileStorageRuntime()
-  } catch {
-    throw providerUnavailable("runtime", "getFileStorageRuntime")
-  }
-}
 
 const bodyObject = (
   object: FileR2Object | FileR2ObjectBody | null
@@ -268,133 +249,147 @@ const transformAndStore = async (
   return object
 }
 
-export const uploadProfileImage = async (
-  db: Db,
-  input: {
+export const createProfileImageService = (ports: ProfileImagePorts) => {
+  const getRuntime = () => {
+    try {
+      return ports.getRuntime()
+    } catch {
+      throw providerUnavailable("runtime", "getFileStorageRuntime")
+    }
+  }
+
+  const uploadProfileImage = async (input: {
     actorUserId: string
     file: File
     fileSize: number
     sessionId?: string
     subject: ProfileImageSubject
     uploadId: string
-  }
-): Promise<{ created: boolean; dto: ProfileImageDto }> => {
-  const runtime = getRuntime()
-  await validateSource(runtime, input.file, input.fileSize)
-  const hash = await sourceHash(input.file)
-  const id = crypto.randomUUID()
-  const reservation = await reservePendingProfileImage(db, {
-    id,
-    objectKey: profileImageObjectKey({ id, subject: input.subject }),
-    sourceHash: hash,
-    subject: input.subject,
-    uploadId: input.uploadId,
-  })
-  if (reservation.image.sourceHash !== hash) {
-    throw publicErrors.conflict("Upload id is already in use", {
-      reason: "upload_id_mismatch",
-      resource: "profile_image",
+  }): Promise<{ created: boolean; dto: ProfileImageDto }> => {
+    const runtime = getRuntime()
+    await validateSource(runtime, input.file, input.fileSize)
+    const hash = await sourceHash(input.file)
+    const id = crypto.randomUUID()
+    const reservation = await ports.reservePendingProfileImage({
+      id,
+      objectKey: profileImageObjectKey({ id, subject: input.subject }),
+      sourceHash: hash,
+      subject: input.subject,
+      uploadId: input.uploadId,
     })
-  }
-
-  if (reservation.image.status === "superseded") {
-    throw publicErrors.conflict("Profile image upload was superseded", {
-      reason: "upload_superseded",
-      resource: "profile_image",
-    })
-  }
-
-  if (reservation.image.status === "ready") {
-    let object: FileR2Object | null
-    try {
-      object = await runtime.bucket.head(reservation.image.objectKey)
-    } catch {
-      throw providerUnavailable("r2", "headProfileImageRetry")
+    if (reservation.image.sourceHash !== hash) {
+      throw publicErrors.conflict("Upload id is already in use", {
+        reason: "upload_id_mismatch",
+        resource: "profile_image",
+      })
     }
-    if (!object || !metadataMatches(object, reservation.image)) {
-      throw providerUnavailable("r2", "verifyProfileImageRetry")
+
+    if (reservation.image.status === "superseded") {
+      throw publicErrors.conflict("Profile image upload was superseded", {
+        reason: "upload_superseded",
+        resource: "profile_image",
+      })
+    }
+
+    if (reservation.image.status === "ready") {
+      let object: FileR2Object | null
+      try {
+        object = await runtime.bucket.head(reservation.image.objectKey)
+      } catch {
+        throw providerUnavailable("r2", "headProfileImageRetry")
+      }
+      if (!object || !metadataMatches(object, reservation.image)) {
+        throw providerUnavailable("r2", "verifyProfileImageRetry")
+      }
+      return {
+        created: false,
+        dto: toDto(reservation.image, input.subject),
+      }
+    }
+
+    const object = await transformAndStore(
+      runtime,
+      reservation.image,
+      input.file
+    )
+    let finalized: Awaited<
+      ReturnType<ProfileImagePorts["finalizePendingProfileImage"]>
+    >
+    try {
+      finalized = await ports.finalizePendingProfileImage({
+        actorUserId: input.actorUserId,
+        etag: object.etag,
+        id: reservation.image.id,
+        profileImagePath: profileImagePath(input.subject, reservation.image.id),
+        sessionId: input.sessionId,
+        subject: input.subject,
+      })
+    } catch (cause) {
+      await ports.supersedePendingProfileImage(reservation.image)
+      throw cause
+    }
+    if (finalized.kind !== "ready") {
+      await ports.supersedePendingProfileImage(reservation.image)
+      throw publicErrors.conflict("Profile image upload was superseded", {
+        reason: "upload_superseded",
+        resource: "profile_image",
+      })
     }
     return {
-      created: false,
-      dto: toDto(reservation.image, input.subject),
+      created: reservation.created,
+      dto: toDto(finalized.image, input.subject),
     }
   }
 
-  const object = await transformAndStore(runtime, reservation.image, input.file)
-  let finalized: Awaited<ReturnType<typeof finalizePendingProfileImage>>
-  try {
-    finalized = await finalizePendingProfileImage(db, {
-      actorUserId: input.actorUserId,
-      etag: object.etag,
-      id: reservation.image.id,
-      profileImagePath: profileImagePath(input.subject, reservation.image.id),
-      sessionId: input.sessionId,
-      subject: input.subject,
-    })
-  } catch (cause) {
-    await supersedePendingProfileImage(db, reservation.image)
-    throw cause
-  }
-  if (finalized.kind !== "ready") {
-    await supersedePendingProfileImage(db, reservation.image)
-    throw publicErrors.conflict("Profile image upload was superseded", {
-      reason: "upload_superseded",
-      resource: "profile_image",
-    })
-  }
-  return {
-    created: reservation.created,
-    dto: toDto(finalized.image, input.subject),
-  }
-}
-
-export const readProfileImage = async (
-  db: Db,
-  input: { request: Request; subject: ProfileImageSubject }
-): Promise<Response> => {
-  const image = await findReadyProfileImage(db, input.subject)
-  if (!image || !image.etag) {
-    throw publicErrors.notFound("Profile image not found", {
-      resource: "profile_image",
-    })
-  }
-  const etag = httpEtag(image.etag)
-  const headers = privateProfileImageHeaders()
-  headers.set("ETag", etag)
-  if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
-    return new Response(null, { status: 304, headers })
-  }
-
-  const runtime = getRuntime()
-  let source: FileR2ObjectBody | null
-  try {
-    source = bodyObject(
-      await runtime.bucket.get(image.objectKey, {
-        onlyIf: new Headers({ "if-match": etag }),
+  const readProfileImage = async (input: {
+    request: Request
+    subject: ProfileImageSubject
+  }): Promise<Response> => {
+    const image = await ports.findReadyProfileImage(input.subject)
+    if (!image || !image.etag) {
+      throw publicErrors.notFound("Profile image not found", {
+        resource: "profile_image",
       })
-    )
-  } catch {
-    throw providerUnavailable("r2", "readProfileImage")
-  }
-  if (!source || !metadataMatches(source, image)) {
-    throw providerUnavailable("r2", "readProfileImage")
-  }
-  headers.set("Content-Length", String(source.size))
-  return new Response(source.body, { status: 200, headers })
-}
+    }
+    const etag = httpEtag(image.etag)
+    const headers = privateProfileImageHeaders()
+    headers.set("ETag", etag)
+    if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
+      return new Response(null, { status: 304, headers })
+    }
 
-export const removeProfileImage = async (
-  db: Db,
-  input: {
+    const runtime = getRuntime()
+    let source: FileR2ObjectBody | null
+    try {
+      source = bodyObject(
+        await runtime.bucket.get(image.objectKey, {
+          onlyIf: new Headers({ "if-match": etag }),
+        })
+      )
+    } catch {
+      throw providerUnavailable("r2", "readProfileImage")
+    }
+    if (!source || !metadataMatches(source, image)) {
+      throw providerUnavailable("r2", "readProfileImage")
+    }
+    headers.set("Content-Length", String(source.size))
+    return new Response(source.body, { status: 200, headers })
+  }
+
+  const removeProfileImage = async (input: {
     actorUserId: string
     sessionId?: string
     subject: ProfileImageSubject
+  }) => {
+    const removed = await ports.deleteProfileImage(input)
+    if (!removed) {
+      throw publicErrors.notFound("Profile image not found", {
+        resource: "profile_image",
+      })
+    }
   }
-) => {
-  const removed = await deleteProfileImage(db, input)
-  if (!removed) {
-    throw publicErrors.notFound("Profile image not found", {
-      resource: "profile_image",
-    })
-  }
+
+  return { readProfileImage, removeProfileImage, uploadProfileImage }
 }
+
+export type ProfileImageService = ReturnType<typeof createProfileImageService>

@@ -1,3 +1,10 @@
+---
+title: 製品Agentの運用runbook
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
+---
+
 # 運用runbook
 
 ## Local development
@@ -8,7 +15,16 @@ Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true
 
 ## Paid test secret
 
-paid supervisorは`OPENROUTER_API_KEY`をrun専用tmp directoryのAgent専用`.dev.vars`へmode 0600で書き、test process自身、Browser、Next.js、API Worker、GitHub emulatorへ渡しません。console、CLI引数、artifact、`GITHUB_OUTPUT`へ値を出しません。
+`OPENROUTER_API_KEY`はgitignore済みの`apps/agent/.env.local`またはGitHub Actionsのprotected
+environmentからだけ供給します。fork PRと通常のfree test jobへsecretを渡しません。
+
+Paid testはmaintainerの明示実行、nightly、releaseだけで動かします。repository内にcost計算、
+pricing snapshot、予算manifest、credential gatewayを実装しません。workflowとtest runnerの
+timeoutでrunawayを止めます。
+
+全paid profileでvideo、trace、screenshot、HTML/DOM report、provider raw responseを保存せず、
+console、CLI引数、artifact、`GITHUB_OUTPUT`へkeyを出しません。終了時は起動した子processと一時
+resourceだけを停止・削除し、既存のdevelopment processやDBを変更しません。
 
 tmp pathは`$TMPDIR/enterprise-agentic-saas-agent-e2e-<run-id>`のような固定prefixとrun IDを検証してから削除します。既存`bun run dev`、通常のWrangler state、開発DBを停止・resetしません。
 

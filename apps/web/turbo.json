@@ -1,6 +1,12 @@
 {
   "extends": ["//"],
   "tasks": {
+    "dev": {
+      "with": [
+        "@enterprise-agentic-saas/web#storybook",
+        "@enterprise-agentic-saas/ui#storybook"
+      ]
+    },
     "build": {
       "outputs": [".next/**", "!.next/cache/**"]
     },

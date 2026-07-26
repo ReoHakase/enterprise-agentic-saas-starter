@@ -40,6 +40,3 @@ export const profileImageDtoModel = v.object({
 })
 
 export type ProfileImageDto = v.InferOutput<typeof profileImageDtoModel>
-export type ProfileImageUploadBody = v.InferOutput<
-  typeof profileImageUploadBodyModel
->

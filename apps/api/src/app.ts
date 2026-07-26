@@ -8,22 +8,25 @@ import {
   healthResponseModel,
   readinessResponseModel,
 } from "./models/api"
-import { createAgentModule } from "./modules/agent"
-import { createAuditModule } from "./modules/audit"
-import { createFilesModule } from "./modules/files"
-import { createIssuesModule } from "./modules/issues"
-import { createOrganizationsModule } from "./modules/organizations"
-import { createProfileImagesModule } from "./modules/profile-images"
-import { createUsersModule } from "./modules/users"
-import { withObservedSpan } from "./observability/runtime"
-import { csrfPlugin } from "./plugins/csrf"
-import { errorPlugin } from "./plugins/error"
-import { observabilityPlugin } from "./plugins/observability"
-import { openApiPlugin } from "./plugins/openapi"
-import { requestIdPlugin } from "./plugins/request-id"
+import { createAgentModule } from "./modules/agent/module"
+import { createAuditModule } from "./modules/audit/module"
+import { createAuthorizationModule } from "./modules/authorization/module"
+import { createFilesModule } from "./modules/files/module"
+import { createIssuesModule } from "./modules/issues/module"
+import { createOrganizationsModule } from "./modules/organizations/module"
+import { createProfileImagesModule } from "./modules/profile-images/module"
+import { createUsersModule } from "./modules/users/module"
+import { withObservedSpan } from "./platform/observability/runtime"
+import { csrfPlugin } from "./platform/plugins/csrf"
+import { errorPlugin } from "./platform/plugins/error"
+import { observabilityPlugin } from "./platform/plugins/observability"
+import { openApiPlugin } from "./platform/plugins/openapi"
+import { requestIdPlugin } from "./platform/plugins/request-id"
 
-export const createApp = (db: Db) =>
-  new Elysia()
+export const createApp = (db: Db) => {
+  const authorization = createAuthorizationModule(db)
+
+  return new Elysia()
     .use(requestIdPlugin)
     .use(observabilityPlugin)
     .use(errorPlugin)
@@ -48,9 +51,14 @@ export const createApp = (db: Db) =>
         },
         detail: {
           operationId: "healthCheck",
+          security: [],
           summary: "API health check",
-          description: "processがHTTP requestを処理できることを確認する。",
+          description:
+            "Confirms that the public API process can accept and complete an HTTP request without contacting external dependencies.",
           tags: ["System"],
+          "x-route-status": "enabled",
+          "x-auth-context": "none",
+          "x-audience": "general",
         },
       }
     )
@@ -79,20 +87,43 @@ export const createApp = (db: Db) =>
         },
         detail: {
           operationId: "readinessCheck",
+          security: [],
           summary: "API readiness check",
           description:
-            "processがrequestを処理でき、Turso/libSQLへqueryできることを確認する。失敗時は依存先詳細を公開しない。",
+            "Confirms that the API can query its Turso/libSQL dependency; failures return a bounded response without provider details.",
           tags: ["System"],
+          "x-route-status": "enabled",
+          "x-auth-context": "none",
+          "x-audience": "general",
         },
       }
     )
-    .use(createUsersModule(db))
-    .use(createOrganizationsModule(db))
-    .use(createAgentModule(db))
-    .use(createIssuesModule(db))
-    .use(createFilesModule(db))
-    .use(createProfileImagesModule(db))
-    .use(createAuditModule(db))
+    .use(createUsersModule(db, authorization.createAccessControl))
+    .use(
+      createOrganizationsModule(
+        db,
+        authorization.authorization,
+        authorization.createAccessControl
+      )
+    )
+    .use(createAgentModule(db, authorization.createAccessControl))
+    .use(
+      createIssuesModule(
+        db,
+        authorization.authorization,
+        authorization.createAccessControl
+      )
+    )
+    .use(
+      createFilesModule(
+        db,
+        authorization.authorization,
+        authorization.createAccessControl
+      )
+    )
+    .use(createProfileImagesModule(db, authorization.createAccessControl))
+    .use(createAuditModule(db, authorization.createAccessControl))
     .use(openApiPlugin)
+}
 
 export type App = ReturnType<typeof createApp>

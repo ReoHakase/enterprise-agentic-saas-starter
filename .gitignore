@@ -42,9 +42,12 @@ test-results/
 .wrangler/
 storybook-static/
 .next/
+.next-browser/
 .next-e2e/
-.next-e2e-agent/
-.next-e2e-oauth/
+.next-e2e-deterministic-agent/
+.next-e2e-deterministic-oauth/
+.next-e2e-full-*/
+.vitest-attachments/
 **/next-env.d.ts
 out/
 build
@@ -63,7 +66,6 @@ npm-debug.log*
 .vscode/mcp.json
 .cursor/
 .claude/
-.codex/
 .github/agents/
 .github/instructions/
 .github/prompts/

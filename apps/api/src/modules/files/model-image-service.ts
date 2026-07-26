@@ -13,7 +13,6 @@ const providerUnavailable = (provider: "images" | "r2", operation: string) =>
   new AppError({
     code: "service_unavailable",
     publicMessage: "Service temporarily unavailable",
-    statusCode: 503,
     publicContext: { retryAfter: 30 },
     privateContext: { module: "model-image", operation, provider },
   })

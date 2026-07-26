@@ -1,3 +1,10 @@
+---
+title: 認証付きfile storage運用
+status: accepted
+implementation: active
+last_reviewed: 2026-07-25
+---
+
 # 認証付きfile storage運用
 
 ## 構成

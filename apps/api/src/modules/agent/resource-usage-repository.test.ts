@@ -10,7 +10,7 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { createApp } from "../../app"
-import { env } from "../../env"
+import { env } from "../../platform/env"
 import { reserveAgentWebSearch } from "./runs/web-search"
 import { configureAgentRuntime, resetAgentRuntimeForTest } from "./runtime"
 import {

@@ -6,9 +6,9 @@ import {
   positiveIntegerQueryModel,
 } from "../../models/common"
 
-export const issueStatusModel = v.picklist(["open", "in_progress", "closed"])
+const issueStatusModel = v.picklist(["open", "in_progress", "closed"])
 
-export const issuePriorityModel = v.picklist([
+const issuePriorityModel = v.picklist([
   "no_priority",
   "low",
   "medium",
@@ -48,11 +48,12 @@ export const issueModel = v.pipe(
   }),
   v.metadata({
     title: "Issue",
-    description: "organization内で連番を持つissue",
+    description:
+      "Issue identified by a sequence number that is unique within one organization.",
   })
 )
 
-export const issueThumbnailFileModel = v.object({
+const issueThumbnailFileModel = v.object({
   id: v.string(),
   filename: v.string(),
   imageWidth: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
@@ -64,7 +65,7 @@ export const issueThumbnailModel = v.object({
   file: v.nullable(issueThumbnailFileModel),
 })
 
-export const issueListItemModel = v.object({
+const issueListItemModel = v.object({
   ...issueModel.entries,
   attachmentCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   commentCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -136,7 +137,6 @@ export const updateIssueBodyModel = v.object({
   dueDate: v.optional(v.nullable(isoTimestampModel)),
 })
 
-export const deleteIssueParamsModel = updateIssueParamsModel
 export const deleteIssueBodyModel = v.object({
   organizationId: organizationIdModel,
 })
@@ -171,7 +171,6 @@ export const createIssueCommentBodyModel = v.object({
   body: v.pipe(v.string(), v.minLength(1), v.maxLength(20_000)),
 })
 
-export const updateIssueCommentBodyModel = createIssueCommentBodyModel
 export const deleteIssueCommentBodyModel = v.object({
   organizationId: organizationIdModel,
 })
@@ -188,7 +187,7 @@ const issueActivityValueModel = v.union([
   v.null(),
 ])
 
-export const issueActivityModel = v.object({
+const issueActivityModel = v.object({
   type: v.literal("activity"),
   id: v.string(),
   kind: v.picklist([
@@ -215,7 +214,7 @@ export const issueActivityModel = v.object({
   createdAt: isoTimestampModel,
 })
 
-export const issueTimelineCommentModel = v.object({
+const issueTimelineCommentModel = v.object({
   type: v.literal("comment"),
   ...issueCommentModel.entries,
 })

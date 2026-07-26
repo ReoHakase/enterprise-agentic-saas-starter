@@ -14,7 +14,7 @@ import {
 import { createRuntimeEmailSender } from "@enterprise-agentic-saas/email/runtime"
 import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm"
 
-import { env } from "../../env"
+import { env } from "../../platform/env"
 
 const deliveryBatchSize = 25
 const deliveryLeaseMs = 5 * 60 * 1000

@@ -10,7 +10,7 @@ import {
 import { fileURLToPath } from "node:url"
 
 const apiRoot = fileURLToPath(new URL("../../", import.meta.url))
-export const developmentRuntimeDirectory = `${apiRoot}.wrangler/development`
+const developmentRuntimeDirectory = `${apiRoot}.wrangler/development`
 export const developmentSeedSessionPath = `${developmentRuntimeDirectory}/file-seed-session.json`
 export const developmentLeaseDatabasePath = `${developmentRuntimeDirectory}/leases.db`
 

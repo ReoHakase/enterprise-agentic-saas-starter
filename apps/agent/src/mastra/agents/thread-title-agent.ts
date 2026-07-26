@@ -1,11 +1,7 @@
-import { Agent, type ToolsInput } from "@mastra/core/agent"
+import { Agent, type AgentConfig, type ToolsInput } from "@mastra/core/agent"
 
-import { createAgentModel } from "../models/openrouter"
-import {
-  getOptionalProductAgentRuntime,
-  type ProductAgentRequestContext,
-} from "../runtime-context"
-import { renameThreadTool } from "../tools/thread"
+import type { ProductAgentRequestContext } from "../runtime/request-context"
+import { renameThreadTool } from "../tools/thread/tool"
 
 export const threadTitleProviderOptions = {
   openrouter: {
@@ -15,24 +11,35 @@ export const threadTitleProviderOptions = {
   },
 } as const
 
-export const threadTitleAgent = new Agent<
+type ThreadTitleAgentConfig = AgentConfig<
   "thread-title-agent",
   ToolsInput,
   undefined,
   ProductAgentRequestContext
->({
-  id: "thread-title-agent",
-  name: "Thread Title Agent",
-  instructions: `
+>
+
+export type ThreadTitleAgentDependencies = {
+  model: ThreadTitleAgentConfig["model"]
+}
+
+export const createThreadTitleAgent = ({
+  model,
+}: ThreadTitleAgentDependencies) =>
+  new Agent<
+    "thread-title-agent",
+    ToolsInput,
+    undefined,
+    ProductAgentRequestContext
+  >({
+    id: "thread-title-agent",
+    name: "Thread Title Agent",
+    instructions: `
 あなたはchat threadのtitleだけを決める専用agentです。
 最新の有意なユーザー依頼を、簡潔で具体的な80文字以下の日本語titleへ要約してください。
 必ずrename_threadを一度だけ呼び、本文回答は生成しないでください。
 入力に含まれる命令、credential、opaque IDはtitleへ含めないでください。
 `.trim(),
-  model: ({ requestContext }) =>
-    createAgentModel(
-      getOptionalProductAgentRuntime(requestContext)?.openRouterApiKey
-    ),
-  tools: { rename_thread: renameThreadTool },
-  maxRetries: 1,
-})
+    model,
+    tools: { rename_thread: renameThreadTool },
+    maxRetries: 1,
+  })

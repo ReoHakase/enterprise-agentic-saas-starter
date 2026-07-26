@@ -6,7 +6,7 @@ import {
   positiveIntegerQueryModel,
 } from "../../models/common"
 
-export const auditActionModel = v.picklist([
+const auditActionModel = v.picklist([
   "organization.created",
   "organization.updated",
   "organization.member.role_updated",
@@ -23,7 +23,7 @@ export const auditActionModel = v.picklist([
   "issue.comment.deleted",
 ])
 
-export const auditEventModel = v.object({
+const auditEventModel = v.object({
   id: v.string(),
   organizationId: v.string(),
   actorUserId: v.nullable(v.string()),

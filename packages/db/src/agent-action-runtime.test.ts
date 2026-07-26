@@ -327,7 +327,9 @@ describe("Agent action runtime schema", () => {
       client.close()
     }
   })
+})
 
+describe("Agent action runtime resource and asset invariants", () => {
   it("applies resource usage exactly once per bucket and rejects overflow", async () => {
     const client = createClient({ url: "file::memory:" })
 

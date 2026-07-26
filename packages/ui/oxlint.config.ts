@@ -1,9 +1,14 @@
 import { defineConfig } from "oxlint"
 
-import rootConfig from "../../oxlint.config.ts"
+import rootConfig, {
+  createBudgetOverrides,
+  lintIgnorePatterns,
+  workspaceBoundaryRule,
+} from "../../oxlint.config.ts"
 
 export default defineConfig({
   extends: [rootConfig],
+  ignorePatterns: [...lintIgnorePatterns],
   plugins: [
     "import",
     "node",
@@ -21,17 +26,9 @@ export default defineConfig({
     { name: "storybook", specifier: "eslint-plugin-storybook" },
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
   ],
-  ignorePatterns: [
-    ".turbo/**",
-    "coverage/**",
-    "dist/**",
-    "node_modules/**",
-    "storybook-static/**",
-    "test-results/**",
-  ],
   rules: {
+    ...workspaceBoundaryRule("ui"),
     "func-style": "off",
-    "import/no-unassigned-import": "off",
     // role=status/group等を用途を見ずにoutput/fieldsetへ置換するため、ARIA設計は個別ruleで検証する。
     "jsx-a11y/prefer-tag-over-role": "off",
     "react/react-in-jsx-scope": "off",
@@ -53,7 +50,7 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["src/components/calendar.tsx"],
+      files: ["src/components/calendar/calendar.tsx"],
       rules: {
         // React DayPickerのcomponents slotへ渡すmemoized rendererをnested componentと誤認する。
         "react/no-unstable-nested-components": "off",
@@ -92,12 +89,16 @@ export default defineConfig({
       },
     },
     {
-      files: ["src/components/label.tsx"],
+      files: ["src/components/label/label.tsx"],
       rules: {
         // このprimitiveはhtmlForまたはchildrenによる関連付けを呼び出し側へ委譲する。
         "jsx-a11y/label-has-associated-control": "off",
       },
     },
+    ...createBudgetOverrides({
+      react: ["src/**/*.{jsx,tsx}"],
+      testReact: true,
+    }),
   ],
   env: {
     browser: true,
