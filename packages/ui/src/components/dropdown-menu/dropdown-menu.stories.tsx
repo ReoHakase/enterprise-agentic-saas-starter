@@ -58,13 +58,17 @@ export const WorkspaceActions = meta.story({
       trigger.focus()
       await userEvent.keyboard("{Enter}")
       const body = within(canvasElement.ownerDocument.body)
-      await expect(
-        body.getByRole("menuitem", { name: "Open settings" })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          body.getByRole("menuitem", { name: "Open settings" })
+        ).toHaveFocus()
+      )
       await userEvent.keyboard("{ArrowDown}{ArrowDown}")
-      await expect(
-        body.getByRole("menuitemcheckbox", { name: "Show archived issues" })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          body.getByRole("menuitemcheckbox", { name: "Show archived issues" })
+        ).toHaveFocus()
+      )
       await userEvent.keyboard("{Escape}")
       await waitFor(() => expect(trigger).toHaveFocus())
     })

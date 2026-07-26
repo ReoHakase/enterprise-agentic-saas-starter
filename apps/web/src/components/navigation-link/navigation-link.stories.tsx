@@ -49,14 +49,17 @@ const meta = preview.meta({
 
 export const MenuAndSidebar = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, step }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     await step("Open the menu with the keyboard", async () => {
       const trigger = canvas.getByRole("button", { name: "Open navigation" })
       trigger.focus()
       await userEvent.keyboard("{Enter}")
-      const account = within(document.body).getByRole("menuitem", {
-        name: "Account",
-      })
+      const account = await within(canvasElement.ownerDocument.body).findByRole(
+        "menuitem",
+        {
+          name: "Account",
+        }
+      )
       await expect(account).toHaveAttribute("href", "/settings/account")
       await userEvent.keyboard("{Escape}")
       await waitFor(() => expect(trigger).toHaveFocus())

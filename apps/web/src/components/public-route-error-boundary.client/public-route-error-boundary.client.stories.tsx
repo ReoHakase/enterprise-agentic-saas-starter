@@ -1,4 +1,4 @@
-import { expect, fn, userEvent } from "storybook/test"
+import { expect, fn, userEvent, waitFor } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -24,11 +24,13 @@ export const Standalone = meta.story({
   },
   play: async ({ canvas, step }) => {
     await step("Move focus from the error heading to recovery", async () => {
-      await expect(
-        canvas.getByRole("heading", {
-          name: "The application could not be loaded",
-        })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("heading", {
+            name: "The application could not be loaded",
+          })
+        ).toHaveFocus()
+      )
       await userEvent.tab()
       await expect(
         canvas.getByRole("button", { name: "Reload application" })
@@ -41,21 +43,25 @@ export const Standalone = meta.story({
 export const Authentication = meta.story({
   render: () => <AuthRouteError reset={reset} />,
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("heading", {
-        name: "Authentication could not be loaded",
-      })
-    ).toHaveFocus()
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("heading", {
+          name: "Authentication could not be loaded",
+        })
+      ).toHaveFocus()
+    )
   },
 })
 
 export const Invitation = meta.story({
   render: () => <InvitationRouteError reset={reset} />,
   play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("heading", {
-        name: "Invitation could not be loaded",
-      })
-    ).toHaveFocus()
+    await waitFor(() =>
+      expect(
+        canvas.getByRole("heading", {
+          name: "Invitation could not be loaded",
+        })
+      ).toHaveFocus()
+    )
   },
 })

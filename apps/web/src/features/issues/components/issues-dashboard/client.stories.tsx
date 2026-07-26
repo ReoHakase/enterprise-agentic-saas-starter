@@ -164,9 +164,11 @@ export const Ready = meta.story({
         )
         await waitFor(() => expect(menu).toHaveFocus())
         await userEvent.keyboard("{ArrowDown}{ArrowDown}")
-        await expect(
-          body.getByRole("menuitem", { name: "Close issue" })
-        ).toHaveFocus()
+        await waitFor(() =>
+          expect(
+            body.getByRole("menuitem", { name: "Close issue" })
+          ).toHaveFocus()
+        )
         await userEvent.keyboard("{Enter}")
         await expect(await body.findByText("Issue updated")).toBeInTheDocument()
         await waitFor(() =>
@@ -190,23 +192,23 @@ export const Ready = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(actions)
-      await waitFor(
-        () => expect(actions).toHaveAttribute("aria-expanded", "true"),
-        { timeout: 15_000 }
+      actions.focus()
+      await waitFor(() => expect(actions).toHaveFocus())
+      await userEvent.keyboard("{Enter}")
+      const menu = await body.findByRole("menu", {
+        name: `Actions for ${issueTitle}`,
+      })
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "View details" })
+        ).toHaveFocus()
       )
-      const menu = await body.findByRole(
-        "menu",
-        {
-          name: `Actions for ${issueTitle}`,
-        },
-        { timeout: 15_000 }
-      )
-      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.keyboard("{End}")
-      await expect(
-        body.getByRole("menuitem", { name: "Delete issue" })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          body.getByRole("menuitem", { name: "Delete issue" })
+        ).toHaveFocus()
+      )
       await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",
@@ -341,18 +343,19 @@ export const UpdateFailure = meta.story({
 
     await step("Report an update failure without losing the row", async () => {
       await canvas.findByText(issueTitle)
-      const status = canvas.getByRole("combobox", {
-        name: `Status for ${issueTitle}`,
+      const actions = canvas.getByRole("button", {
+        name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(status)
-      await waitFor(() =>
-        expect(status).toHaveAttribute("aria-expanded", "true")
-      )
-      await userEvent.keyboard("{End}{Enter}")
+      await userEvent.click(actions)
+      const closeIssue = await body.findByRole("menuitem", {
+        name: "Close issue",
+      })
+      await userEvent.click(closeIssue)
       await expect(
         await body.findByText(/Issue update failed/)
       ).toBeInTheDocument()
       await expect(canvas.getByText(issueTitle)).toBeVisible()
+      await waitFor(() => expect(actions).toHaveAttribute("aria-busy", "false"))
     })
   },
 })
@@ -383,23 +386,23 @@ export const DeleteFailure = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(actions)
-      await waitFor(
-        () => expect(actions).toHaveAttribute("aria-expanded", "true"),
-        { timeout: 15_000 }
+      actions.focus()
+      await waitFor(() => expect(actions).toHaveFocus())
+      await userEvent.keyboard("{Enter}")
+      const menu = await body.findByRole("menu", {
+        name: `Actions for ${issueTitle}`,
+      })
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "View details" })
+        ).toHaveFocus()
       )
-      const menu = await body.findByRole(
-        "menu",
-        {
-          name: `Actions for ${issueTitle}`,
-        },
-        { timeout: 15_000 }
-      )
-      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.keyboard("{End}")
-      await expect(
-        body.getByRole("menuitem", { name: "Delete issue" })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          body.getByRole("menuitem", { name: "Delete issue" })
+        ).toHaveFocus()
+      )
       await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",

@@ -1,4 +1,4 @@
-import { expect, userEvent, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -36,11 +36,12 @@ export const KeyboardFocus = meta.story({
       const trigger = canvas.getByRole("button", { name: "Context" })
       await userEvent.tab()
       await expect(trigger).toHaveFocus()
-      await expect(
-        await within(canvasElement.ownerDocument.body).findByText(
-          "12% of the context window is used."
-        )
-      ).toBeVisible()
+      const body = within(canvasElement.ownerDocument.body)
+      await waitFor(() =>
+        expect(
+          body.getByText("12% of the context window is used.")
+        ).toBeVisible()
+      )
       await userEvent.tab()
       await expect(trigger).not.toHaveFocus()
     })

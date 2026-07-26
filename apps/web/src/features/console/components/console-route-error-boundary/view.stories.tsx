@@ -1,4 +1,4 @@
-import { expect, fn, userEvent } from "storybook/test"
+import { expect, fn, userEvent, waitFor } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -24,11 +24,13 @@ export const Content = meta.story({
       canvas.getByText("The workspace is temporarily unavailable")
     ).toBeVisible()
     await step("Move focus from the error heading to recovery", async () => {
-      await expect(
-        canvas.getByRole("heading", {
-          name: "Overview",
-        })
-      ).toHaveFocus()
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("heading", {
+            name: "Overview",
+          })
+        ).toHaveFocus()
+      )
       await userEvent.tab()
       await expect(
         canvas.getByRole("button", { name: "Try again" })
