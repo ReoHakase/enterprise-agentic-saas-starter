@@ -105,7 +105,7 @@ export default defineConfig({
     process.env.FULL_E2E_GATE_ERROR === ""
       ? [
           {
-            command: "bun --no-env-file run e2e:github-emulator",
+            command: "bun --no-env-file run e2e:emulate:github",
             url: `http://127.0.0.1:${environment.githubPort}/meta`,
             reuseExistingServer: false,
             timeout: 60_000,

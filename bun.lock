@@ -77,8 +77,8 @@
         "wrangler": "catalog:",
       },
     },
-    "apps/github-emulator": {
-      "name": "@enterprise-agentic-saas/github-emulator",
+    "apps/emulate": {
+      "name": "@enterprise-agentic-saas/emulate",
       "version": "0.0.0",
       "dependencies": {
         "@enterprise-agentic-saas/auth": "workspace:*",
@@ -753,7 +753,7 @@
 
     "@enterprise-agentic-saas/email": ["@enterprise-agentic-saas/email@workspace:packages/email"],
 
-    "@enterprise-agentic-saas/github-emulator": ["@enterprise-agentic-saas/github-emulator@workspace:apps/github-emulator"],
+    "@enterprise-agentic-saas/emulate": ["@enterprise-agentic-saas/emulate@workspace:apps/emulate"],
 
     "@enterprise-agentic-saas/typescript-config": ["@enterprise-agentic-saas/typescript-config@workspace:packages/typescript-config"],
 

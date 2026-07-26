@@ -11,14 +11,14 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 - [Webテスト](../../../docs/testing-strategy/apps/web.md)
 - [統合E2E](../../../docs/testing-strategy/e2e.md)
 - [製品Agentのrelease gate](../../../docs/agent/testing.md)
-- [GitHub OAuth emulator](../../../docs/architecture/apps/github-emulator.md)
+- [Emulate](../../../docs/architecture/apps/emulate.md)
 
 ## Workflow
 
 1. `test_planner`で最も低いdeterministic layerとbrowserが必要な境界を決める。
 2. 一般UIとmock transportはW3、W4、W6へ置き、auth/session/cookie/Origin/CORS/CSRF、OAuth、
    実Worker/API/DBの最終配線はE1へ置く。
-3. OAuth emulator suiteは`test:e2e`内のE1 profileに集約し、独立root scriptを追加しない。
+3. Emulateのprovider suiteは`test:e2e`内のE1 profileに集約し、独立root scriptを追加しない。
 4. run/worker/test/organization/user/DB/R2をnamespace化し、共有resetを作らない。
 5. setupは対象がloginそのものでない限りAPI fixtureを使う。
 6. free E2EのWebはprofile固有のproduction buildを`next start`で起動する。E1はbuildを共有し、

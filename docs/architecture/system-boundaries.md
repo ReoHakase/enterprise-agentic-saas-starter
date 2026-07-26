@@ -2,7 +2,7 @@
 title: システム境界とworkspace依存
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 ---
 
 # システム境界とworkspace依存
@@ -46,7 +46,7 @@ apps/api
 apps/agent
   -> @enterprise-agentic-saas/api/agent-client
 
-apps/github-emulator
+apps/emulate
   -> @enterprise-agentic-saas/auth/github-oauth
 
 packages/auth
@@ -84,17 +84,17 @@ workspace isolationはruntime dependency、development dependency、source impor
 
 ## 禁止する依存
 
-| importer                     | 禁止                                                                                      |
-| ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `apps/web`                   | DB、Email、Agent runtime、GitHub emulator、`api/client`以外のAPI、`auth/client`以外のAuth |
-| `apps/api`                   | Web、Agent runtime、UI、GitHub emulator                                                   |
-| `apps/agent`                 | DB、Auth、Email、Web、UI、GitHub emulator、`api/agent-client`以外のAPI                    |
-| `apps/github-emulator`       | Web、API、Agent、DB、Email、UI                                                            |
-| `packages/auth`              | app、API、UI                                                                              |
-| `packages/db`                | 他の全workspace                                                                           |
-| `packages/email`             | app、Auth、DB、UI、API                                                                    |
-| `packages/ui`                | app、API、Auth、DB、Email、Agent                                                          |
-| `packages/typescript-config` | runtime sourceと全workspace dependency                                                    |
+| importer                     | 禁止                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `apps/web`                   | DB、Email、Agent runtime、Emulate、`api/client`以外のAPI、`auth/client`以外のAuth |
+| `apps/api`                   | Web、Agent runtime、UI、Emulate                                                   |
+| `apps/agent`                 | DB、Auth、Email、Web、UI、Emulate、`api/agent-client`以外のAPI                    |
+| `apps/emulate`               | Web、API、Agent、DB、Email、UI                                                    |
+| `packages/auth`              | app、API、UI                                                                      |
+| `packages/db`                | 他の全workspace                                                                   |
+| `packages/email`             | app、Auth、DB、UI、API                                                            |
+| `packages/ui`                | app、API、Auth、DB、Email、Agent                                                  |
+| `packages/typescript-config` | runtime sourceと全workspace dependency                                            |
 
 ## 公開entrypoint
 

@@ -1,8 +1,9 @@
 import type { Emulator, EmulatorOptions } from "emulate"
 
-import { createGitHubEmulator } from "../adapters/emulate"
-import type { GitHubEmulatorConfig } from "../config/index"
+import { createEmulator } from "../adapters/emulate"
+import type { EmulateConfig } from "../config/index"
 import { createGitHubOAuthSeed } from "../fixtures/github"
+import { getEmulateServiceDefinition } from "../services/registry"
 
 type CreateEmulator = (options: EmulatorOptions) => Promise<Emulator>
 
@@ -17,13 +18,13 @@ type ReadinessOptions = {
 
 type StartDependencies = {
   create?: CreateEmulator
-  waitUntilReady?: (port: number) => Promise<void>
+  waitUntilReady?: (config: EmulateConfig) => Promise<void>
 }
 
-class GitHubEmulatorReadinessError extends Error {
-  constructor() {
-    super("GitHub OAuth emulatorのreadiness確認がtimeoutしました。")
-    this.name = "GitHubEmulatorReadinessError"
+class EmulateReadinessError extends Error {
+  constructor(service: EmulateConfig["service"]) {
+    super(`${service} emulatorのreadiness確認がtimeoutしました。`)
+    this.name = "EmulateReadinessError"
   }
 }
 
@@ -32,14 +33,15 @@ const delay = (milliseconds: number) =>
     setTimeout(resolve, milliseconds)
   })
 
-const waitForGitHubEmulatorReady = async (
-  port: number,
+const waitForEmulatorReady = async (
+  config: EmulateConfig,
   options: ReadinessOptions = {}
 ) => {
   const attempts = options.attempts ?? 40
   const fetchReadiness = options.fetch ?? fetch
   const intervalMs = options.intervalMs ?? 25
-  const readinessUrl = `http://127.0.0.1:${port}/meta`
+  const { readinessPath } = getEmulateServiceDefinition(config.service)
+  const readinessUrl = `http://127.0.0.1:${config.port}${readinessPath}`
 
   const poll = async (attempt: number): Promise<void> => {
     try {
@@ -55,7 +57,7 @@ const waitForGitHubEmulatorReady = async (
     }
 
     if (attempt >= attempts) {
-      throw new GitHubEmulatorReadinessError()
+      throw new EmulateReadinessError(config.service)
     }
 
     await delay(intervalMs)
@@ -65,22 +67,33 @@ const waitForGitHubEmulatorReady = async (
   return poll(1)
 }
 
-export const startGitHubEmulator = (
-  config: GitHubEmulatorConfig,
-  dependencies: StartDependencies = {}
-) => {
-  const create = dependencies.create ?? createGitHubEmulator
-  const waitUntilReady =
-    dependencies.waitUntilReady ?? waitForGitHubEmulatorReady
+const createEmulatorOptions = (config: EmulateConfig): EmulatorOptions => {
+  if (config.service === "github") {
+    return {
+      service: config.service,
+      port: config.port,
+      baseUrl: config.baseUrl,
+      seed: createGitHubOAuthSeed(config),
+    }
+  }
 
-  return create({
-    service: "github",
+  return {
+    service: config.service,
     port: config.port,
     baseUrl: config.baseUrl,
-    seed: createGitHubOAuthSeed(config),
-  }).then(async (emulator) => {
+  }
+}
+
+export const startEmulator = (
+  config: EmulateConfig,
+  dependencies: StartDependencies = {}
+) => {
+  const create = dependencies.create ?? createEmulator
+  const waitUntilReady = dependencies.waitUntilReady ?? waitForEmulatorReady
+
+  return create(createEmulatorOptions(config)).then(async (emulator) => {
     try {
-      await waitUntilReady(config.port)
+      await waitUntilReady(config)
       return emulator
     } catch (error) {
       await emulator.close().catch(() => undefined)

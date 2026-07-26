@@ -2,7 +2,7 @@
 title: packages/authの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 applies_to:
   - packages/auth/**
 ---
@@ -57,7 +57,7 @@ Knip、Web buildとpackage testで検査します。
 
 ## 理由
 
-Auth serverとbrowser clientを同一packageで提供しながら、entrypoint単位でruntimeを分離します。GitHub emulatorにはOAuth contractだけを公開します。
+Auth serverとbrowser clientを同一packageで提供しながら、entrypoint単位でruntimeを分離します。EmulateのGitHub serviceにはOAuth contractだけを公開します。
 
 ## 受入条件
 

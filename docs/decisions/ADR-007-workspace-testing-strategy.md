@@ -27,7 +27,7 @@ workspaceごとに次の分類を持ちます。
 - UI: UI1-UI5
 - Email: MAIL1-MAIL4
 - TypeScript config: TS1-TS2
-- GitHub OAuth emulator: GE1-GE3
+- Emulate: EMU1-EMU3
 - E2E: E1-E2
 
 Rootの公開test scriptは`test`、`test:browser`、`test:e2e`、`test:eval:agent`、`test:e2e:full`の5本だけにします。E1は実Web、API、Agent、DB/Authと台本付きモデルを使う決定的E2E、E2は実モデルを含むrelease用の最小full-stack canaryです。

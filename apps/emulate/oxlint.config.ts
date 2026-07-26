@@ -19,7 +19,7 @@ export default defineConfig({
     "vitest",
   ],
   rules: {
-    ...workspaceBoundaryRule("github-emulator"),
+    ...workspaceBoundaryRule("emulate"),
   },
   overrides: createBudgetOverrides({ adapter: ["src/**/*.{ts,tsx}"] }),
   env: {

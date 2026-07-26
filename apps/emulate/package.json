@@ -1,10 +1,11 @@
 {
-  "name": "@enterprise-agentic-saas/github-emulator",
+  "name": "@enterprise-agentic-saas/emulate",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'set -eu; if [ -z \"${GITHUB_OAUTH_CALLBACK_URL:-}\" ]; then API_ORIGIN=$(portless get api.enterprise-agentic-saas); GITHUB_OAUTH_CALLBACK_URL=\"${API_ORIGIN%/}/auth/oauth2/callback/github\"; export GITHUB_OAUTH_CALLBACK_URL; fi; exec portless run bun run src/index.ts'",
+    "dev": "bun run dev:service github",
+    "dev:service": "bun run src/index.ts --portless",
     "dev:http": "bun run src/index.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -23,8 +24,5 @@
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "portless": {
-    "name": "github.emulate.enterprise-agentic-saas"
   }
 }

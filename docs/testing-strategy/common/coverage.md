@@ -30,7 +30,7 @@ applies_to:
 - AUTH1からAUTH4のうちVitestで実行する部分
 - UI1、UI2
 - MAIL1からMAIL4のうちVitestで実行する部分
-- GE1からGE3のうちVitestで実行する部分
+- EMU1からEMU3のうちVitestで実行する部分
 
 ### 別レポートにするブラウザーカバレッジ
 
@@ -127,16 +127,16 @@ coverage: {
 
 現在の全体threshold:
 
-| workspace       | statements | branches | functions | lines |
-| --------------- | ---------: | -------: | --------: | ----: |
-| Agent           |         97 |       92 |       100 |    98 |
-| API             |         87 |       68 |        91 |    88 |
-| GitHub emulator |         98 |       97 |        95 |   100 |
-| Web             |         85 |       71 |        81 |    86 |
-| Auth            |         92 |       90 |       100 |    92 |
-| DB              |         94 |       75 |        93 |    95 |
-| Email           |         97 |       89 |       100 |    97 |
-| UI              |         91 |       83 |        87 |    90 |
+| workspace | statements | branches | functions | lines |
+| --------- | ---------: | -------: | --------: | ----: |
+| Agent     |         97 |       92 |       100 |    98 |
+| API       |         87 |       68 |        91 |    88 |
+| Emulate   |         98 |       97 |        95 |   100 |
+| Web       |         85 |       71 |        81 |    86 |
+| Auth      |         92 |       90 |       100 |    92 |
+| DB        |         94 |       75 |        93 |    95 |
+| Email     |         97 |       89 |       100 |    97 |
+| UI        |         91 |       83 |        87 |    90 |
 
 ## coverage例外
 

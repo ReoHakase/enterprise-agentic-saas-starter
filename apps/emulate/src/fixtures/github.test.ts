@@ -4,6 +4,7 @@ import type { GitHubEmulatorConfig } from "../config/index"
 import { createGitHubOAuthSeed } from "./github"
 
 const CONFIG: GitHubEmulatorConfig = {
+  service: "github",
   port: 4001,
   baseUrl: "http://localhost:4001",
   callbackUrl: "http://localhost:3001/auth/oauth2/callback/github",

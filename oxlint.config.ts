@@ -8,7 +8,7 @@ type WorkspaceName =
   | "auth"
   | "db"
   | "email"
-  | "github-emulator"
+  | "emulate"
   | "ui"
   | "web"
 
@@ -166,7 +166,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   ],
   db: [],
   email: [],
-  "github-emulator": ["@enterprise-agentic-saas/auth/github-oauth"],
+  emulate: ["@enterprise-agentic-saas/auth/github-oauth"],
   ui: ["@enterprise-agentic-saas/ui/*"],
   web: [
     "@enterprise-agentic-saas/api/client",

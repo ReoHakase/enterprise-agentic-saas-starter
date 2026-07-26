@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 ---
 
 # ローカル開発
@@ -37,7 +37,7 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - DB: `https://db.enterprise-agentic-saas.localhost`
 - Mailpit inbox: `https://mailpit.enterprise-agentic-saas.localhost`
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
-- GitHub OAuth emulator: `https://github.emulate.enterprise-agentic-saas.localhost`
+- Emulate（GitHub）: `https://github.emulate.enterprise-agentic-saas.localhost`
 
 上記はmain checkoutのbrowser URLです。linked worktreeではPortlessがworktree prefixを付けます。API supervisorは同じworktreeで起動したMailpit wrapperのprivate sessionを読み、workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別worktreeの固定URLをlocal envへ複製しません。
 
@@ -91,7 +91,7 @@ DB-only taskとroot `bun run dev`は同時に起動しません。同じportとl
 bun run dev
 ```
 
-この1commandでWeb、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。DB seed、R2 fixture reconcile、testは実行しません。
+この1commandでWeb、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、EmulateのGitHub serviceを起動します。DB seed、R2 fixture reconcile、testは実行しません。
 
 Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
@@ -134,7 +134,7 @@ bun run --cwd apps/web dev
 bun run --cwd packages/ui storybook
 ```
 
-filtered Turbo commandはAPIに加えてlocal DB、migration、Mailpit、React Email preview、GitHub OAuth emulatorを起動します。seedとlocal R2 reconcileは行いません。`bun run --cwd apps/api dev`はWrangler/API processだけを起動するため、DB、Mailpit、GitHub OAuth emulatorがすでに動作している場合に限って使います。
+filtered Turbo commandはAPIに加えてlocal DB、migration、Mailpit、React Email preview、EmulateのGitHub serviceを起動します。seedとlocal R2 reconcileは行いません。`bun run --cwd apps/api dev`はWrangler/API processだけを起動するため、DB、Mailpit、EmulateのGitHub serviceがすでに動作している場合に限って使います。
 
 ## ローカルGitHub OAuth
 
@@ -153,10 +153,18 @@ Better Auth 1.6.9でemulatorへ登録するcallbackは`/auth/oauth2/callback/git
 emulatorだけを調査するときは、callbackを解決できるAPI Portless aliasを先に用意してから次を実行します。
 
 ```sh
-bun run --cwd apps/github-emulator dev
+bun run --cwd apps/emulate dev
 ```
 
 upstreamの`emulate --portless`は固定aliasをforce登録するため使いません。このrepoでは外側のPortlessがmain checkoutとlinked worktreeを分離します。
+
+Google、Slack、Apple、Microsoft、Okta、Stripeを調査するときは、対象を明示して
+GitHubとは別processで起動します。rootの`bun run dev`はこれらを自動起動しません。
+
+```sh
+bun run --cwd apps/emulate dev:service google
+bun run --cwd apps/emulate dev:service slack
+```
 
 ## Sentry Spotlight
 

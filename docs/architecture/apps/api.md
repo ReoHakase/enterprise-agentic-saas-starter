@@ -2,7 +2,7 @@
 title: apps/apiの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 applies_to:
   - apps/api/**
 ---
@@ -203,7 +203,7 @@ Scalarはauth永続化、telemetry、Agent/uploadを無効にし、credentialや
 apps/web/**
 apps/agent/**
 @enterprise-agentic-saas/ui/**
-@enterprise-agentic-saas/github-emulator/**
+@enterprise-agentic-saas/emulate/**
 別moduleのrepository/service private path
 ```
 

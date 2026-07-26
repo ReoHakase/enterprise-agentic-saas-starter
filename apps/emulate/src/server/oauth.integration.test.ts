@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { GitHubEmulatorConfig } from "../config/index"
 import { GITHUB_OAUTH_CALLBACK_PATH } from "../protocol/github-oauth"
 import { reserveLoopbackPort } from "../test-support/reserve-port"
-import { startGitHubEmulator } from "./emulator"
+import { startEmulator } from "./emulator"
 
 describe("GitHub OAuth emulator", () => {
   let emulator: Emulator | undefined
@@ -13,13 +13,14 @@ describe("GitHub OAuth emulator", () => {
   beforeAll(async () => {
     const port = await reserveLoopbackPort()
     config = {
+      service: "github",
       port,
       baseUrl: `http://localhost:${port}`,
       callbackUrl: `http://localhost:3001${GITHUB_OAUTH_CALLBACK_PATH}`,
       clientId: "integration-client-id",
       clientSecret: "integration-client-secret",
     }
-    emulator = await startGitHubEmulator(config)
+    emulator = await startEmulator(config)
   })
 
   afterAll(async () => {

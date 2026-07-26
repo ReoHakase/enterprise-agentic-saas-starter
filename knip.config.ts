@@ -77,7 +77,7 @@ const config: KnipConfig = {
         config: ["wrangler*.jsonc", "src/**/wrangler*.jsonc"],
       },
     },
-    "apps/github-emulator": {
+    "apps/emulate": {
       project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
     },
     "apps/web": {

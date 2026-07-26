@@ -74,7 +74,7 @@ apps/
   web/                 Next.js, ドメインUI, Agent UI
   api/                 公開API, 非公開Agent制御面, 認可, 業務トランザクション
   agent/               Mastra Agent, モデル, ツール, ストリーム
-  github-emulator/     ローカルとE2E用のGitHub OAuth emulator
+  emulate/             ローカルとE2E用の外部サービスemulator
 
 packages/
   auth/                Better Authのサーバー, ブラウザークライアント
@@ -146,7 +146,7 @@ APIとDBの`TURSO_DATABASE_URL`は同じ値にします。Bunはコマンドを�
 | Agent Worker（内部接続用） | `https://agent.enterprise-agentic-saas.localhost`          |
 | Mailpit                    | `https://mailpit.enterprise-agentic-saas.localhost`        |
 | React Email                | `https://email.enterprise-agentic-saas.localhost`          |
-| GitHub OAuth emulator      | `https://github.emulate.enterprise-agentic-saas.localhost` |
+| Emulate（GitHub）          | `https://github.emulate.enterprise-agentic-saas.localhost` |
 
 リンクした`worktree`ではPortlessがURLへ接頭辞を付けます。
 
@@ -157,7 +157,7 @@ bun run dev
 ```
 
 このコマンドはWeb, API Worker, Agent Worker, Turso, マイグレーション, Drizzle Studio,
-永続化したローカルR2, Mailpit, React Email, GitHub OAuth emulatorを起動します。
+永続化したローカルR2, Mailpit, React Email, EmulateのGitHub serviceを起動します。
 開発用初期データの投入, R2フィクスチャの同期, テストは実行しません。初回はDBタスクが
 マイグレーションを完了してからWebを開いてください。
 

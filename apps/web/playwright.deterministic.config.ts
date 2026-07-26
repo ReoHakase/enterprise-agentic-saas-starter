@@ -156,7 +156,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "bun --no-env-file run e2e:github-emulator",
+      command: "bun --no-env-file run e2e:emulate:github",
       url: `http://127.0.0.1:${agentEnvironment.githubPort}/meta`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -191,7 +191,7 @@ export default defineConfig({
       },
     },
     {
-      command: "bun --no-env-file run e2e:github-emulator",
+      command: "bun --no-env-file run e2e:emulate:github",
       url: `${oauthGithubOrigin}/meta`,
       reuseExistingServer: false,
       timeout: 60_000,

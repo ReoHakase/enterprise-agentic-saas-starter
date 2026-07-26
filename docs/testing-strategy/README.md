@@ -36,7 +36,7 @@ API、Web、Agent、DB、認証、UI、メールでは、適切な実行環境�
 - UI: `UI1`から`UI5`
 - Email: `MAIL1`から`MAIL4`
 - TypeScript config: `TS1`から`TS2`
-- GitHub OAuth emulator: `GE1`から`GE3`
+- Emulate: `EMU1`から`EMU3`
 - E2E: `E1`と`E2`
 
 Testing Trophy分類は、静的、単体、統合、E2Eという横断的な補助分類として併記します。
@@ -160,7 +160,7 @@ E2E
 - [Web](./apps/web.md)
 - [API](./apps/api.md)
 - [Product Agent](./apps/agent.md)
-- [GitHub OAuth emulator](./apps/github-emulator.md)
+- [Emulate](./apps/emulate.md)
 
 ### パッケージ
 

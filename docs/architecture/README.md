@@ -2,7 +2,7 @@
 title: 設計仕様の目次
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-26
 ---
 
 # 設計仕様の目次
@@ -21,7 +21,7 @@ last_reviewed: 2026-07-25
 - [`apps/web`](apps/web.md)
 - [`apps/api`](apps/api.md)
 - [`apps/agent`](apps/agent.md)
-- [`apps/github-emulator`](apps/github-emulator.md)
+- [`apps/emulate`](apps/emulate.md)
 
 ## packages
 

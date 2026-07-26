@@ -11,6 +11,7 @@ export default defineConfig({
         "src/config/index.ts",
         "src/fixtures/github.ts",
         "src/server/emulator.ts",
+        "src/services/registry.ts",
         "src/state/lifecycle.ts",
       ],
       thresholds: {
