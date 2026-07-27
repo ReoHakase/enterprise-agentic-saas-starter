@@ -24,16 +24,34 @@ describe("Agent E2E environment", () => {
       /^http:\/\/api\.agent-e2e\.enterprise-agentic-saas\.localhost:\d+$/
     )
     expect(environment.apiLoopbackOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
-    expect(environment.databaseOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+    expect(environment.applicationDatabaseOrigin).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+$/
+    )
+    expect(environment.agentStorageOrigin).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+$/
+    )
     expect(environment.apiPort).toBe(environment.webPort + 1)
     expect(environment.githubPort).toBe(environment.webPort + 2)
-    expect(environment.databasePort).toBe(environment.webPort + 3)
+    expect(environment.applicationDatabasePort).toBe(environment.webPort + 3)
+    expect(environment.agentStoragePort).toBe(environment.webPort + 4)
     expect(environment.temporaryRoot).toBe(
       join(tmpdir(), "enterprise-agentic-saas-agent-e2e-321")
     )
     expect(environment.stackRoot).toBe(join(environment.temporaryRoot, "stack"))
-    expect(environment.databasePath).toBe(
-      join(environment.stackRoot, "agent-e2e.db")
+    expect(environment.applicationDatabasePath).toBe(
+      join(environment.stackRoot, "application.db")
+    )
+    expect(environment.agentStoragePath).toBe(
+      join(environment.stackRoot, "agent-storage.db")
+    )
+    expect(environment.applicationDatabasePath).not.toBe(
+      environment.agentStoragePath
+    )
+    expect(environment.applicationDatabaseOrigin).not.toBe(
+      environment.agentStorageOrigin
+    )
+    expect(environment.applicationDatabaseAuthToken).not.toBe(
+      environment.agentStorageAuthToken
     )
     expect(environment.nextDistDirectory).toBe(".next-e2e-full-321")
     expect(environment.apiWorkerName).not.toBe(environment.agentWorkerName)

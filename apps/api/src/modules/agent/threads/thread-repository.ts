@@ -5,14 +5,13 @@ import {
   agentApprovalPolicies,
   agentConnectionTickets,
   agentGrants,
-  agentMessages,
   agentResumeTickets,
   agentRuns,
   agentThreadPermissions,
   agentThreads,
   type AgentThreadPermissionMode,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 
 import { publicErrors } from "../../../errors/app-error"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
@@ -43,18 +42,8 @@ export const listAgentThreadsForSession = async (
       })
       await requireActiveMembership(tx, current)
       const rows = await tx
-        .select({
-          thread: agentThreads,
-          messageCount: sql<number>`count(${agentMessages.id})`,
-        })
+        .select()
         .from(agentThreads)
-        .leftJoin(
-          agentMessages,
-          and(
-            eq(agentMessages.organizationId, agentThreads.organizationId),
-            eq(agentMessages.threadId, agentThreads.id)
-          )
-        )
         .where(
           and(
             eq(agentThreads.organizationId, current.activeOrganizationId),
@@ -62,11 +51,8 @@ export const listAgentThreadsForSession = async (
             eq(agentThreads.status, "active")
           )
         )
-        .groupBy(agentThreads.id)
-        .orderBy(desc(agentThreads.updatedAt), desc(agentThreads.id))
-      return rows.map(({ messageCount, thread }) =>
-        toThreadDto(thread, Number(messageCount))
-      )
+        .orderBy(desc(agentThreads.createdAt), desc(agentThreads.id))
+      return rows.map(toThreadDto)
     })
   } catch (cause) {
     return preserveAgentError(cause, "listAgentThreadsForSession")
@@ -99,10 +85,7 @@ export const createAgentThreadForSession = async (
           id: crypto.randomUUID(),
           organizationId: current.activeOrganizationId,
           ownerUserId: input.userId,
-          title: input.title,
-          titleState: input.title === "New conversation" ? "untitled" : "agent",
           createdAt: now,
-          updatedAt: now,
         })
         .returning()
       const thread = rows[0]
@@ -118,7 +101,7 @@ export const createAgentThreadForSession = async (
         createdAt: now,
         updatedAt: now,
       })
-      return toThreadDto(thread, 0)
+      return toThreadDto(thread)
     })
   } catch (cause) {
     return preserveAgentError(cause, "createAgentThreadForSession")
@@ -140,21 +123,11 @@ export const archiveAgentThreadForSession = async (
         activeOrganizationId: current.activeOrganizationId,
         requireActive: false,
       })
-      const messageCountRows = await tx
-        .select({ value: sql<number>`count(*)` })
-        .from(agentMessages)
-        .where(
-          and(
-            eq(agentMessages.organizationId, thread.organizationId),
-            eq(agentMessages.threadId, thread.id)
-          )
-        )
-      const messageCount = Number(messageCountRows[0]?.value ?? 0)
-      if (thread.status === "archived") return toThreadDto(thread, messageCount)
+      if (thread.status === "archived") return toThreadDto(thread)
 
       const rows = await tx
         .update(agentThreads)
-        .set({ status: "archived", updatedAt: now })
+        .set({ archivedAt: now, status: "archived" })
         .where(
           and(
             eq(agentThreads.id, thread.id),
@@ -258,7 +231,7 @@ export const archiveAgentThreadForSession = async (
             isNull(agentActionAssets.releasedAt)
           )
         )
-      return toThreadDto(archived, messageCount)
+      return toThreadDto(archived)
     })
   } catch (cause) {
     return preserveAgentError(cause, "archiveAgentThreadForSession")
@@ -274,6 +247,7 @@ export const issueConnectionTicketInTransaction = async (
     sessionId: string
     threadId: string
     userId: string
+    webSearchQueryHash?: string
   }
 ) => {
   const context = await ensureAgentSessionContextInTransaction(tx, {
@@ -290,6 +264,7 @@ export const issueConnectionTicketInTransaction = async (
     sessionId: input.sessionId,
     userId: input.userId,
     contextEpoch: context.contextEpoch,
+    webSearchQueryHash: input.webSearchQueryHash,
     issuedAt: input.now,
     expiresAt,
   })

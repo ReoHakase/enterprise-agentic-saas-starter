@@ -1,7 +1,6 @@
 import type {
   AgentAccountContext,
   AgentActionExecutionResult,
-  AgentCanonicalMessage,
   AgentConnection,
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
@@ -16,7 +15,6 @@ import type {
   AgentRunGrant,
   AgentRunResult,
   AgentSearchIssuesInput,
-  AgentThreadRenameResult,
   AgentUpdateIssueActionInput,
   AgentUsageRecordInput,
   AgentUsageRecordResult,
@@ -48,12 +46,6 @@ export type AgentControlPlanePort = {
   finishRun(
     input: BearerInput & { outcome: "completed" | "failed" }
   ): Promise<AgentRunResult>
-  appendRunMessages(
-    input: BearerInput & { messages: AgentCanonicalMessage[] }
-  ): Promise<{ appended: number }>
-  renameThread(
-    input: BearerInput & { title: string }
-  ): Promise<AgentThreadRenameResult>
   recordUsage(
     input: BearerInput & AgentUsageRecordInput
   ): Promise<AgentUsageRecordResult>

@@ -1,22 +1,13 @@
-import {
-  productAgent,
-  productWebSearchTool,
-  publicWebResearchAgent,
-  threadTitleAgent,
-} from "./composition/create-product-agent"
-import { createProductRuntime } from "./composition/create-runtime"
-import { approvedIssueActionWorkflow } from "./workflows/approved-issue-action"
+import { createAgentRuntimeComposition } from "./composition/runtime-composition"
 
-export {
+const composition = createAgentRuntimeComposition(process.env)
+
+export const {
+  approvedIssueActionExecutionRegistry,
   approvedIssueActionWorkflow,
+  mastra,
   productAgent,
   productWebSearchTool,
   publicWebResearchAgent,
   threadTitleAgent,
-}
-
-export const mastra = createProductRuntime({
-  productAgent,
-  publicWebResearchAgent,
-  threadTitleAgent,
-})
+} = composition

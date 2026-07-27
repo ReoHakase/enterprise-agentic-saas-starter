@@ -1,17 +1,17 @@
 import { Elysia } from "elysia"
 
+import { publicErrors } from "../../../errors/app-error"
 import { tenantErrorResponses } from "../../../models/api"
 import type { AccessControlFactory } from "../../authorization/public"
 import { agentStreamResponseModel } from "../action-schema"
 import {
-  agentCanonicalMessageListModel,
+  agentMessagePageModel,
+  agentMessagePageQueryModel,
   agentChatBodyModel,
-  agentThreadContextModel,
   agentThreadListModel,
   agentThreadModel,
   agentThreadParamsModel,
   createAgentThreadBodyModel,
-  updateAgentThreadTitleBodyModel,
 } from "../model"
 import type { AgentService } from "../service"
 
@@ -54,7 +54,6 @@ export const createAgentConversationRoutes = (
           await service.createAgentThread({
             sessionId: session.id,
             userId: user.id,
-            title: body.title,
             permissionMode: body.permissionMode,
           })
         ),
@@ -104,33 +103,6 @@ export const createAgentConversationRoutes = (
         },
       }
     )
-    .patch(
-      "/agent/threads/:threadId/title",
-      ({ authContext: { session, user }, body, params }) =>
-        service.updateAgentThreadTitle({
-          expectedRevision: body.expectedRevision,
-          sessionId: session.id,
-          threadId: params.threadId,
-          title: body.title,
-          userId: user.id,
-        }),
-      {
-        authenticated: true,
-        params: agentThreadParamsModel,
-        body: updateAgentThreadTitleBodyModel,
-        response: { 200: agentThreadModel, ...tenantErrorResponses },
-        detail: {
-          operationId: "updateAgentThreadTitle",
-          summary: "Update an Agent thread title",
-          description:
-            "Revalidates the owner and tenant before updating a user-selected title with revision compare-and-swap. Automatic title generation never overwrites a user title.",
-          tags: ["Agent"],
-          "x-route-status": "enabled",
-          "x-auth-context": "session-cookie",
-          "x-audience": "first-party-web",
-        },
-      }
-    )
     .post(
       "/agent/chat",
       async ({ authContext: { session, user }, body, request }) => {
@@ -154,12 +126,18 @@ export const createAgentConversationRoutes = (
                 threadId: body.threadId,
                 timezone,
               })
+        const message = prepared.messages.at(-1)
+        if (!message) {
+          throw publicErrors.unavailable(
+            new Error("Prepared Agent message is unavailable")
+          )
+        }
         return service.forwardAgentChat(
           {
             assetIds: prepared.assetIds,
             contextReferences: prepared.contextReferences,
             clientMessageId: prepared.clientMessageId,
-            messages: prepared.messages,
+            message,
             threadId: prepared.threadId,
             ticket: prepared.ticket,
             timezone: prepared.timezone,
@@ -195,52 +173,29 @@ export const createAgentConversationRoutes = (
     )
     .get(
       "/agent/threads/:threadId/messages",
-      ({ authContext: { session, user }, params, set }) => {
+      ({ authContext: { session, user }, params, query, set }) => {
         set.headers["cache-control"] = "private, no-store"
         return service.listAgentMessages({
           sessionId: session.id,
           threadId: params.threadId,
           userId: user.id,
+          page: query.page,
+          perPage: query.perPage,
         })
       },
       {
         authenticated: true,
         params: agentThreadParamsModel,
+        query: agentMessagePageQueryModel,
         response: {
-          200: agentCanonicalMessageListModel,
+          200: agentMessagePageModel,
           ...tenantErrorResponses,
         },
         detail: {
           operationId: "listAgentThreadMessages",
-          summary: "List canonical Agent messages",
+          summary: "List Agent Memory messages",
           description:
             "Returns only the bounded UI projection persisted by the API after revalidating the live session, active organization, membership, and private thread owner.",
-          tags: ["Agent"],
-          "x-route-status": "enabled",
-          "x-auth-context": "session-cookie",
-          "x-audience": "first-party-web",
-        },
-      }
-    )
-    .get(
-      "/agent/threads/:threadId/context",
-      ({ authContext: { session, user }, params, set }) => {
-        set.headers["cache-control"] = "private, no-store"
-        return service.getAgentThreadContext({
-          sessionId: session.id,
-          threadId: params.threadId,
-          userId: user.id,
-        })
-      },
-      {
-        authenticated: true,
-        params: agentThreadParamsModel,
-        response: { 200: agentThreadContextModel, ...tenantErrorResponses },
-        detail: {
-          operationId: "getAgentThreadContext",
-          summary: "Retrieve Agent thread context usage",
-          description:
-            "Revalidates thread ownership and returns the preflight estimate derived from stored messages plus the latest compaction summary. Provider-reported usage remains a separate measurement.",
           tags: ["Agent"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",

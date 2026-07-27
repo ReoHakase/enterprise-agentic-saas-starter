@@ -29,4 +29,9 @@ export const createAgentOpenRouter = (apiKey?: string, baseURL?: string) =>
 export const createAgentModel = (apiKey?: string, baseURL?: string) =>
   createAgentOpenRouter(apiKey, baseURL).chat(OPENROUTER_MODEL_ID, {
     parallelToolCalls: false,
+    reasoning: {
+      effort: "none",
+      enabled: false,
+      exclude: true,
+    },
   })

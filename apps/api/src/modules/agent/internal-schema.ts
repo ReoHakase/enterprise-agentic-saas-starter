@@ -8,11 +8,9 @@ import {
   resumeApprovedActionInputModel,
 } from "./action-schema"
 import {
-  appendAgentRunMessagesInputModel,
   finishAgentRunInputModel,
   guardAgentWebSearchInputModel,
   recordAgentUsageObjectModel,
-  renameAgentThreadInputModel,
   reserveAgentWebSearchInputModel,
   startAgentRunInputModel,
 } from "./runtime-schema"
@@ -47,16 +45,9 @@ export const guardWebSearchBodyModel = v.omit(guardAgentWebSearchInputModel, [
   "grant",
 ])
 export const finishRunBodyModel = v.omit(finishAgentRunInputModel, ["grant"])
-export const renameThreadBodyModel = v.omit(renameAgentThreadInputModel, [
-  "grant",
-])
 export const recordUsageBodyModel = v.omit(recordAgentUsageObjectModel, [
   "grant",
 ])
-export const appendRunMessagesBodyModel = v.omit(
-  appendAgentRunMessagesInputModel,
-  ["grant"]
-)
 export const resumeApprovedActionBodyModel = v.omit(
   resumeApprovedActionInputModel,
   ["actionId"]

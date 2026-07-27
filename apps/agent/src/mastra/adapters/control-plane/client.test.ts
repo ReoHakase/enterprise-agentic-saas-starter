@@ -19,6 +19,7 @@ const responseFor = (request: Request): Response => {
     return Response.json({
       expiresAt: "2999-07-22T00:00:00.000Z",
       grant: CONNECTION_GRANT,
+      memoryResourceId: "resource_1",
       organization: {
         name: "Organization",
         permissions: {
@@ -253,16 +254,6 @@ describe("Agent internal response contracts", () => {
         gateway.finishRun({ grant: RUN_GRANT, outcome: "completed" }),
     ],
     [
-      "appended messages",
-      (gateway: AgentInternalGateway) =>
-        gateway.appendRunMessages({ grant: RUN_GRANT, messages: [] }),
-    ],
-    [
-      "thread rename",
-      (gateway: AgentInternalGateway) =>
-        gateway.renameThread({ grant: RUN_GRANT, title: "Thread" }),
-    ],
-    [
       "Issue labels",
       (gateway: AgentInternalGateway) =>
         gateway.searchIssueLabels({ grant: RUN_GRANT, limit: 20 }),
@@ -416,6 +407,7 @@ describe("Agent internal response contracts", () => {
       {
         expiresAt: "2999-07-22T00:00:00.000Z",
         grant: CONNECTION_GRANT,
+        memoryResourceId: "resource_1",
         organization: {
           name: "Organization",
           permissions: {
@@ -474,18 +466,6 @@ describe("Agent internal response contracts", () => {
       (gateway: AgentInternalGateway) =>
         gateway.finishRun({ grant: RUN_GRANT, outcome: "completed" }),
       { runId: "run_1", status: "completed" },
-    ],
-    [
-      "appended messages",
-      (gateway: AgentInternalGateway) =>
-        gateway.appendRunMessages({ grant: RUN_GRANT, messages: [] }),
-      { appended: 0 },
-    ],
-    [
-      "thread rename",
-      (gateway: AgentInternalGateway) =>
-        gateway.renameThread({ grant: RUN_GRANT, title: "Thread" }),
-      { threadId: "thread_1", title: "Thread", renamed: true },
     ],
     [
       "Issue labels",

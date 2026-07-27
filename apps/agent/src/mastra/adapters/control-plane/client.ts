@@ -2,7 +2,6 @@ import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-c
 import {
   agentAccountContextSchema,
   agentActionExecutionResultSchema,
-  agentAppendedMessagesResultSchema,
   agentConnectionSchema,
   agentGuardedWebSearchQuerySchema,
   agentIssueActionSchema,
@@ -13,7 +12,6 @@ import {
   agentOrganizationContextSchema,
   agentRunGrantSchema,
   agentRunResultSchema,
-  agentThreadRenameResultSchema,
   agentUsageRecordResultSchema,
   agentWebSearchReservationSchema,
 } from "@enterprise-agentic-saas/agent-contracts"
@@ -327,28 +325,6 @@ export const createAgentInternalGateway = (
         path: "/internal/agent/runs/finish",
       },
       agentRunResultSchema
-    ),
-  appendRunMessages: ({ grant, ...body }) =>
-    internalRequest(
-      binding,
-      {
-        body,
-        grant,
-        method: "POST",
-        path: "/internal/agent/runs/messages",
-      },
-      agentAppendedMessagesResultSchema
-    ),
-  renameThread: ({ grant, ...body }) =>
-    internalRequest(
-      binding,
-      {
-        body,
-        grant,
-        method: "POST",
-        path: "/internal/agent/runs/thread-title",
-      },
-      agentThreadRenameResultSchema
     ),
   recordUsage: ({ grant, ...body }) =>
     internalRequest(

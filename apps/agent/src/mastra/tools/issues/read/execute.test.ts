@@ -5,7 +5,6 @@ import type {
 import { RequestContext } from "@mastra/core/request-context"
 import { noopObserve } from "@mastra/core/tools"
 import { describe, expect, it, vi } from "vitest"
-import { z } from "zod"
 
 import { createAgentToolBudget } from "../../../core/budget/tool"
 import { createAgentVisionBudget } from "../../../core/budget/vision"
@@ -15,8 +14,7 @@ import {
   createAgentReadHandlers,
   issueAttachmentImageToModelOutput,
 } from "./execute"
-import { agentReadToolSchemas } from "./schema"
-import { issueReadTools } from "./tool"
+import { createIssueReadTools } from "./tool"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -99,44 +97,11 @@ const apiHarness = (
   return { api, grants }
 }
 
-describe("Agent read tool schemas", () => {
-  it("keeps every provider schema JSON-serializable", () => {
-    for (const schema of Object.values(agentReadToolSchemas)) {
-      expect(() => z.toJSONSchema(schema)).not.toThrow()
-    }
-  })
-
-  it("rejects unknown fields and values beyond the bounded contracts", () => {
-    expect(
-      agentReadToolSchemas.empty.safeParse({ grant: RUN_GRANT }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.memberSearch.safeParse({ limit: 51 }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.labelSearch.safeParse({ query: "x".repeat(41) })
-        .success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.issueSearch.safeParse({ status: "unknown" }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.issueSearch.safeParse({ label: "   " }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.getIssue.safeParse({ lookup: "number", number: 0 })
-        .success
-    ).toBe(false)
-  })
-
-  it("applies bounded defaults to list reads", () => {
-    expect(agentReadToolSchemas.memberSearch.parse({})).toEqual({ limit: 20 })
-    expect(agentReadToolSchemas.issueSearch.parse({})).toEqual({ limit: 20 })
-  })
-})
-
 describe("createAgentReadHandlers", () => {
   it("exposes only the six bounded read tools", () => {
+    const issueReadTools = createIssueReadTools(() => {
+      throw new Error("unused")
+    })
     expect(Object.keys(issueReadTools).toSorted()).toEqual([
       "get_issue",
       "read_account_context",
@@ -167,12 +132,15 @@ describe("createAgentReadHandlers", () => {
   it("connects the production get_issue registry to runtime capability injection", async () => {
     const description = "x".repeat(50_000)
     const test = apiHarness({ issueDescription: description })
-    const requestContext = new RequestContext<Record<string, unknown>>()
-    requestContext.set("runtime", {
-      api: test.api,
+    const issueReadTools = createIssueReadTools(() => ({
+      api: Object.assign(JSON.parse("{}"), test.api),
       budget: createAgentToolBudget(),
+      rootRunId: "root_test",
       runGrant: RUN_GRANT,
-    })
+      settlement: JSON.parse("{}"),
+      suspendAction: async () => undefined,
+      visionBudget: createAgentVisionBudget(),
+    }))
     const execute = issueReadTools.get_issue.execute
 
     const result = await Reflect.apply(
@@ -180,7 +148,7 @@ describe("createAgentReadHandlers", () => {
       undefined,
       [
         { lookup: "id", id: "issue_1" },
-        { observe: noopObserve, requestContext },
+        { observe: noopObserve, requestContext: new RequestContext() },
       ]
     )
 
@@ -190,6 +158,9 @@ describe("createAgentReadHandlers", () => {
   })
 
   it("fails closed when production get_issue has no runtime context", async () => {
+    const issueReadTools = createIssueReadTools(() => {
+      throw new Error("Agent runtime capability is unavailable")
+    })
     const execute = issueReadTools.get_issue.execute
     let caught: unknown
     try {

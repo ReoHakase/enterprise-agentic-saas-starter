@@ -10,6 +10,8 @@ export type AgentRuntimeEnv = CloudflareEnv & {
   AGENT_WRITES_ENABLED?: string
   NODE_ENV?: string
   AGENT_INTERNAL_API: TypedAgentInternalApi
+  MASTRA_STORAGE_AUTH_TOKEN?: string
+  MASTRA_STORAGE_URL?: string
   OPENROUTER_API_KEY?: string
   OPENROUTER_BASE_URL?: string
   SENTRY_DSN?: string

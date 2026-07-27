@@ -7,7 +7,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary", "lcov", "html"],
       reportsDirectory: "./coverage/node",
-      include: ["src/executor.ts", "src/issues/get-issue.ts"],
+      include: [
+        "src/account/**/*.ts",
+        "src/executor.ts",
+        "src/issues/**/*.ts",
+        "src/organization/**/*.ts",
+        "src/validation.ts",
+      ],
       thresholds: {
         statements: 100,
         branches: 100,

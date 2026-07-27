@@ -36,6 +36,7 @@ export type ScriptedModelStep = {
 }
 
 export type ScriptedModelOptions = {
+  metadataSentinel?: string
   modelId?: string
   provider?: string
   repeat?: boolean
@@ -100,14 +101,24 @@ const generateContent = (parts: readonly ScriptedModelPart[]) =>
     return part
   })
 
-const defaultStreamChunks = (step: ScriptedModelStep): unknown[] => {
+const defaultStreamChunks = (
+  step: ScriptedModelStep,
+  metadataSentinel?: string
+): unknown[] => {
   const chunks: unknown[] = [{ type: "stream-start", warnings: [] }]
   for (const [index, part] of step.parts.entries()) {
     const id = `scripted-${index}`
     if (part.type === "text" || part.type === "reasoning") {
       chunks.push(
         { type: `${part.type}-start`, id },
-        { type: `${part.type}-delta`, id, delta: part.text },
+        {
+          type: `${part.type}-delta`,
+          id,
+          delta: part.text,
+          ...(metadataSentinel
+            ? { providerMetadata: { sentinel: metadataSentinel } }
+            : {}),
+        },
         { type: `${part.type}-end`, id }
       )
       continue
@@ -118,6 +129,14 @@ const defaultStreamChunks = (step: ScriptedModelStep): unknown[] => {
         input: JSON.stringify(part.input),
         toolCallId: part.toolCallId,
         toolName: part.toolName,
+        ...(metadataSentinel
+          ? {
+              callProviderMetadata: {
+                sentinel: `${metadataSentinel}:call`,
+              },
+              toolMetadata: { sentinel: `${metadataSentinel}:tool` },
+            }
+          : {}),
       })
       continue
     }
@@ -130,6 +149,13 @@ const defaultStreamChunks = (step: ScriptedModelStep): unknown[] => {
       raw: step.finishReason ?? "stop",
     },
     usage: usageFor(step.usage),
+    ...(metadataSentinel
+      ? {
+          resultProviderMetadata: {
+            sentinel: `${metadataSentinel}:result`,
+          },
+        }
+      : {}),
   })
   return chunks
 }
@@ -196,7 +222,7 @@ export const createScriptedModel = (
       if (step.error) throw step.error
       const chunks =
         step.stream ??
-        defaultStreamChunks(step).map((value) => ({
+        defaultStreamChunks(step, options.metadataSentinel).map((value) => ({
           value,
         }))
       const result: StreamResult = {

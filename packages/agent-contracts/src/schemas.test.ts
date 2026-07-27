@@ -216,6 +216,7 @@ describe("agent contract runtime schemas", () => {
     const connection = {
       expiresAt: "2026-07-28T00:00:00.000Z",
       grant: VALID_GRANT,
+      memoryResourceId: "resource_1",
       organization: {
         name: "Organization",
         permissions: {

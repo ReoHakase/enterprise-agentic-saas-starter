@@ -22,7 +22,6 @@ import {
   buildAgentConversationGroups,
 } from "../agent-conversation-viewport/agent-conversation-viewport"
 import { AgentMessage } from "../agent-message/agent-message"
-import { AgentMeters } from "../agent-meters/agent-meters"
 import { AgentPolicyControl } from "../agent-policy-control/agent-policy-control"
 import { AgentSamplePrompts } from "../agent-sample-prompts/agent-sample-prompts"
 import { AgentStagedAsset } from "../agent-staged-asset/agent-staged-asset"
@@ -268,10 +267,6 @@ const AgentChatSession = ({
               organizationId={organizationId}
               threadId={thread.id}
               disabled={disabled || runtime.frozen}
-            />
-            <AgentMeters
-              context={session.context}
-              streamedMessages={chat.messages}
             />
             <div className="ml-auto flex shrink-0 gap-2">
               {session.busy ? (

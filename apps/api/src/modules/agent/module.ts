@@ -25,22 +25,18 @@ import {
 import { getAgentRuntime } from "./runtime"
 import { createAgentService } from "./service"
 import {
-  appendAgentRunMessages,
   archiveAgentThreadForSession,
   cancelAgentRun,
   consumeAgentConnectionTicket,
   createAgentThreadForSession,
   finishAgentRun,
   getAgentIssue,
-  getAgentThreadContextForSession,
-  listAgentMessagesForSession,
   listAgentThreadsForSession,
+  issueAgentConnectionTicket,
   prepareAgentChatForSession,
   prepareAgentClientToolContinuationForSession,
   readAgentAccountContext,
   readAgentActiveOrganization,
-  renameAgentThreadForRun,
-  renameAgentThreadForSession,
   revokeCurrentAgentContext,
   searchAgentIssueLabels,
   searchAgentIssues,
@@ -72,10 +68,8 @@ export const createAgentModule = (
       getAgentMonthlyUsageForSession(db, input),
     getAgentOrganizationUsageForSession: (input) =>
       getAgentOrganizationUsageForSession(db, input),
-    getAgentThreadContextForSession: (input) =>
-      getAgentThreadContextForSession(db, input),
-    listAgentMessagesForSession: (input) =>
-      listAgentMessagesForSession(db, input),
+    issueAgentConnectionTicket: (input) =>
+      issueAgentConnectionTicket(db, input),
     listAgentThreadsForSession: (input) =>
       listAgentThreadsForSession(db, input),
     prepareAgentActionResumeForSession: (input) =>
@@ -86,8 +80,6 @@ export const createAgentModule = (
       prepareAgentClientToolContinuationForSession(db, input),
     putAgentApprovalPolicyForSession: (input) =>
       putAgentApprovalPolicyForSession(db, input),
-    renameAgentThreadForSession: (input) =>
-      renameAgentThreadForSession(db, input),
     revokeCurrentAgentContext: (input) => revokeCurrentAgentContext(db, input),
   })
 
@@ -102,7 +94,6 @@ export const createAgentInternalApi = (db: Db) => {
   const files = createFilesInternalApplication(db)
 
   return createAgentInternalService({
-    appendRunMessages: (input) => appendAgentRunMessages(db, input),
     cancelRun: (input) => cancelAgentRun(db, input),
     consumeConnectionTicket: (input) => consumeAgentConnectionTicket(db, input),
     executeApprovedAction: (input) => executeAgentApprovedAction(db, input),
@@ -119,7 +110,6 @@ export const createAgentInternalApi = (db: Db) => {
     readAccountContext: (input) => readAgentAccountContext(db, input),
     readActiveOrganization: (input) => readAgentActiveOrganization(db, input),
     recordUsage: (input) => recordAgentUsage(db, input),
-    renameThread: (input) => renameAgentThreadForRun(db, input),
     reserveWebSearch: (input) => reserveAgentWebSearch(db, input),
     resumeApprovedAction: (input) => resumeAgentApprovedAction(db, input),
     searchIssueLabels: (input) => searchAgentIssueLabels(db, input),

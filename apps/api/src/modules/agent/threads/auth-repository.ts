@@ -219,6 +219,7 @@ export const validateGrantInTransaction = async (
     sessionId: grant.sessionId,
     userId: grant.userId,
     contextEpoch: grant.contextEpoch,
+    webSearchQueryHash: grant.webSearchQueryHash,
     role,
     runStatus,
     runScope,
@@ -238,6 +239,7 @@ export const createGrantInTransaction = async (
     sessionId: string
     userId: string
     contextEpoch: number
+    webSearchQueryHash?: string | null
     now: Date
     expiresAt?: Date
   }
@@ -254,6 +256,7 @@ export const createGrantInTransaction = async (
     sessionId: input.sessionId,
     userId: input.userId,
     contextEpoch: input.contextEpoch,
+    webSearchQueryHash: input.webSearchQueryHash,
     issuedAt: input.now,
     expiresAt,
   })

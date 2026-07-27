@@ -5,7 +5,6 @@ import { drizzle } from "drizzle-orm/libsql"
 import { assertLocalDatabaseUrl } from "../src/development/local-database"
 import {
   agentActions,
-  agentMessages,
   agentRuns,
   agentUsageEvents,
   auditLogs,
@@ -189,7 +188,7 @@ const readL6Usage = async () => {
   ]
   const { client, database } = connect()
   try {
-    const [actionRows, auditRows, issueRows, messageRows, runRows, usageRows] =
+    const [actionRows, auditRows, issueRows, runRows, usageRows] =
       await Promise.all([
         database
           .select({
@@ -236,13 +235,6 @@ const readL6Usage = async () => {
           })
           .from(issues)
           .where(inArray(issues.organizationId, organizationIds)),
-        database
-          .select({
-            organizationId: agentMessages.organizationId,
-            threadId: agentMessages.threadId,
-          })
-          .from(agentMessages)
-          .where(inArray(agentMessages.organizationId, organizationIds)),
         database
           .select({
             attempt: agentRuns.attempt,
@@ -319,7 +311,6 @@ const readL6Usage = async () => {
           title: row.title,
         })),
         issueTitles: issueRows.map((row) => row.title),
-        messages: messageRows,
         runs: runRows,
         usage: usageRows,
       })
@@ -329,29 +320,6 @@ const readL6Usage = async () => {
   }
 }
 
-const messageCounters = (messages: Array<Record<string, unknown>>) => {
-  let stepStarts = 0
-  const toolCallIds = new Set<string>()
-  for (const content of messages) {
-    const parts = Reflect.get(content, "parts")
-    if (!Array.isArray(parts)) continue
-    for (const part of parts) {
-      if (!part || typeof part !== "object" || Array.isArray(part)) continue
-      const type = Reflect.get(part, "type")
-      if (type === "step-start") stepStarts += 1
-      const toolCallId = Reflect.get(part, "toolCallId")
-      if (
-        typeof type === "string" &&
-        type.startsWith("tool-") &&
-        typeof toolCallId === "string"
-      ) {
-        toolCallIds.add(toolCallId)
-      }
-    }
-  }
-  return { stepStarts, toolCalls: toolCallIds.size }
-}
-
 const sum = (values: readonly number[]) =>
   values.reduce((total, value) => total + value, 0)
 
@@ -359,7 +327,7 @@ const readL7Observation = async () => {
   const organizationId = requiredIdentifier(process.argv[3], "organization id")
   const { client, database } = connect()
   try {
-    const [usageRows, messageRows, runRows] = await Promise.all([
+    const [usageRows, runRows] = await Promise.all([
       database
         .select({
           inputTokenCount: agentUsageEvents.inputTokenCount,
@@ -372,15 +340,13 @@ const readL7Observation = async () => {
         .from(agentUsageEvents)
         .where(eq(agentUsageEvents.organizationId, organizationId)),
       database
-        .select({ content: agentMessages.content })
-        .from(agentMessages)
-        .where(eq(agentMessages.organizationId, organizationId)),
-      database
-        .select({ status: agentRuns.status })
+        .select({
+          status: agentRuns.status,
+          toolCount: agentRuns.toolCount,
+        })
         .from(agentRuns)
         .where(eq(agentRuns.organizationId, organizationId)),
     ])
-    const counters = messageCounters(messageRows.map((row) => row.content))
     const titleUsageEvents = usageRows.filter((row) =>
       row.runEventId?.startsWith("title_")
     ).length
@@ -395,13 +361,12 @@ const readL7Observation = async () => {
         estimatedUsageEvents: usageRows.filter((row) => row.isEstimate).length,
         inputTokens: sum(usageRows.map((row) => row.inputTokenCount)),
         modelIds: [...new Set(usageRows.map((row) => row.model))].toSorted(),
-        modelSteps:
-          Math.max(counters.stepStarts, mainUsageEvents) + titleUsageEvents,
+        modelSteps: mainUsageEvents + titleUsageEvents,
         outputTokens: sum(usageRows.map((row) => row.outputTokenCount)),
         providerCostMicros:
           observedCosts.length === usageRows.length ? sum(observedCosts) : null,
         runCount: runRows.length,
-        toolCalls: counters.toolCalls,
+        toolCalls: sum(runRows.map((row) => row.toolCount)),
         usageEvents: usageRows.length,
       })
     )

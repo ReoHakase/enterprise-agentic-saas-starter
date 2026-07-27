@@ -18,6 +18,8 @@ const scopeProbeScript = resolve(
   "scripts/agent-eval-scope-probes.ts"
 )
 const wranglerBinary = resolve(apiWorkspace, "node_modules/.bin/wrangler")
+const APPLICATION_DATABASE_AUTH_TOKEN: string = "agent-eval-application-token"
+const AGENT_STORAGE_AUTH_TOKEN: string = "agent-eval-storage-token"
 
 const inheritedEnvironment = Object.fromEntries(
   ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "LC_ALL"].flatMap(
@@ -213,6 +215,7 @@ const createConfigs = (input: {
   availableTools: readonly string[]
   apiName: string
   apiOrigin: string
+  agentDatabaseOrigin: string
   databaseOrigin: string
   namespace: string
 }) => ({
@@ -258,7 +261,7 @@ const createConfigs = (input: {
       SENTRY_SPOTLIGHT: "",
       SENTRY_TRACES_SAMPLE_RATE: "0",
       TRUSTED_ORIGINS: input.apiOrigin,
-      TURSO_AUTH_TOKEN: "agent-eval-unused-token",
+      TURSO_AUTH_TOKEN: APPLICATION_DATABASE_AUTH_TOKEN,
       TURSO_DATABASE_URL: input.databaseOrigin,
     },
   },
@@ -282,6 +285,8 @@ const createConfigs = (input: {
       AGENT_RUNS_ENABLED: "1",
       AGENT_VISION_ENABLED: "1",
       AGENT_WRITES_ENABLED: "1",
+      MASTRA_STORAGE_AUTH_TOKEN: AGENT_STORAGE_AUTH_TOKEN,
+      MASTRA_STORAGE_URL: input.agentDatabaseOrigin,
       NODE_ENV: "test",
       SENTRY_DSN: "",
       SENTRY_ENVIRONMENT: "agent-eval",
@@ -305,32 +310,49 @@ export const startAgentEvalStack = async ({
 }): Promise<AgentEvalStack> => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "enterprise-agent-eval-"))
   await chmod(temporaryRoot, 0o700)
-  const [apiPort, databasePort] = await Promise.all([
+  const [apiPort, databasePort, agentDatabasePort] = await Promise.all([
+    reservePort(),
     reservePort(),
     reservePort(),
   ])
   const apiOrigin = `http://127.0.0.1:${apiPort}`
   const databaseOrigin = `http://127.0.0.1:${databasePort}`
+  const agentDatabaseOrigin = `http://127.0.0.1:${agentDatabasePort}`
   const databasePath = resolve(temporaryRoot, "eval.db")
+  const agentDatabasePath = resolve(temporaryRoot, "agent.db")
+  if (
+    databaseOrigin === agentDatabaseOrigin ||
+    databasePath === agentDatabasePath ||
+    APPLICATION_DATABASE_AUTH_TOKEN === AGENT_STORAGE_AUTH_TOKEN
+  ) {
+    throw new Error(
+      "Agent eval requires isolated Application and Agent storage"
+    )
+  }
   const databaseEnvironment = {
     ...inheritedEnvironment,
     AGENT_EVAL_NAMESPACE: namespace,
     NODE_ENV: "test",
-    TURSO_AUTH_TOKEN: "agent-eval-unused-token",
+    TURSO_AUTH_TOKEN: APPLICATION_DATABASE_AUTH_TOKEN,
     TURSO_DATABASE_URL: databaseOrigin,
   }
   let databaseProcess: ManagedProcess | undefined
+  let agentDatabaseProcess: ManagedProcess | undefined
   let wranglerProcess: ManagedProcess | undefined
 
   const onAbort = () => {
     if (wranglerProcess?.exitCode === null) wranglerProcess.kill("SIGTERM")
     if (databaseProcess?.exitCode === null) databaseProcess.kill("SIGTERM")
+    if (agentDatabaseProcess?.exitCode === null) {
+      agentDatabaseProcess.kill("SIGTERM")
+    }
   }
   const close = async () => {
     signal.removeEventListener("abort", onAbort)
     await Promise.allSettled([
       stopProcess(wranglerProcess),
       stopProcess(databaseProcess),
+      stopProcess(agentDatabaseProcess),
     ])
     await rm(temporaryRoot, { force: true, recursive: true })
   }
@@ -355,12 +377,37 @@ export const startAgentEvalStack = async ({
         stderr: "ignore",
       }
     )
-    await waitForHttp(
-      `${databaseOrigin}/health`,
-      30_000,
-      "database",
-      databaseProcess
+    agentDatabaseProcess = Bun.spawn(
+      [
+        "turso",
+        "dev",
+        "--db-file",
+        agentDatabasePath,
+        "--port",
+        String(agentDatabasePort),
+      ],
+      {
+        cwd: temporaryRoot,
+        env: inheritedEnvironment,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      }
     )
+    await Promise.all([
+      waitForHttp(
+        `${databaseOrigin}/health`,
+        30_000,
+        "database",
+        databaseProcess
+      ),
+      waitForHttp(
+        `${agentDatabaseOrigin}/health`,
+        30_000,
+        "database",
+        agentDatabaseProcess
+      ),
+    ])
     await runCommand(
       ["bun", "--no-env-file", "run", "db:migrate"],
       databaseWorkspace,
@@ -385,6 +432,7 @@ export const startAgentEvalStack = async ({
       ...names,
       availableTools,
       apiOrigin,
+      agentDatabaseOrigin,
       databaseOrigin,
       namespace,
     })

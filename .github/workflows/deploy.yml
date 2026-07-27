@@ -68,6 +68,8 @@ jobs:
           GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MASTRA_STORAGE_AUTH_TOKEN: ${{ secrets.MASTRA_STORAGE_AUTH_TOKEN }}
+          MASTRA_STORAGE_URL: ${{ secrets.MASTRA_STORAGE_URL }}
           SENTRY_AGENT_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
           SENTRY_API_DSN: ${{ secrets.SENTRY_API_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -150,6 +152,8 @@ jobs:
             "GITHUB_CLIENT_ID",
             "GITHUB_CLIENT_SECRET",
             "OPENROUTER_API_KEY",
+            "MASTRA_STORAGE_AUTH_TOKEN",
+            "MASTRA_STORAGE_URL",
             "SENTRY_AGENT_DSN",
             "SENTRY_API_DSN",
             "SENTRY_AUTH_TOKEN",
@@ -162,6 +166,27 @@ jobs:
             "TURSO_DATABASE_URL",
           ]) {
             requireValue(name)
+          }
+          const applicationDatabaseUrl = requireValue("TURSO_DATABASE_URL")
+            .trim()
+            .replace(/\/+$/, "")
+          const agentDatabaseUrl = requireValue("MASTRA_STORAGE_URL")
+            .trim()
+            .replace(/\/+$/, "")
+          if (
+            applicationDatabaseUrl === agentDatabaseUrl ||
+            requireValue("TURSO_AUTH_TOKEN") ===
+              requireValue("MASTRA_STORAGE_AUTH_TOKEN")
+          ) {
+            throw new Error(
+              "Application and Agent databases must use distinct URLs and credentials"
+            )
+          }
+          if (
+            !agentDatabaseUrl.startsWith("libsql://") &&
+            !agentDatabaseUrl.startsWith("https://")
+          ) {
+            throw new Error("MASTRA_STORAGE_URL must be a remote libSQL URL")
           }
           if (requireValue("EMAIL_PROVIDER") !== "cloudflare") {
             throw new Error("EMAIL_PROVIDER must be cloudflare")
@@ -221,12 +246,65 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_PROJECT: ${{ env.SENTRY_API_PROJECT }}
 
-      - name: Inspect file activity rollout state
+      - name: Inspect migration rollout state
         id: file-activity-rollout
         run: bun run packages/db/src/file-activity-rollout.ts >> "$GITHUB_OUTPUT"
         env:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+
+      - name: Remove bootstrap cross-database Worker secrets and verify inventory
+        run: |
+          cleanup_allowed="${{ steps.worker-state.outputs.bootstrap_required }}"
+          if [ "${{ steps.file-activity-rollout.outputs.compatibility_deploy }}" = "true" ]; then
+            cleanup_allowed=true
+          fi
+          for worker_kind in api agent; do
+            if [ "$worker_kind" = "api" ]; then
+              worker_name="$API_WORKER_NAME"
+            else
+              worker_name="$AGENT_WORKER_NAME"
+            fi
+            inventory="$(mktemp)"
+            trap 'rm -f "$inventory"' EXIT
+            inventory_status="$(curl --silent --show-error --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
+              --output "$inventory")"
+            if [ "$inventory_status" = "404" ] && [ "$cleanup_allowed" = "true" ]; then
+              rm -f "$inventory"
+              trap - EXIT
+              continue
+            fi
+            if [ "$inventory_status" != "200" ]; then
+              printf '%s Worker secret inventory failed with HTTP %s\n' \
+                "$worker_kind" "$inventory_status" >&2
+              exit 1
+            fi
+            if [ "$cleanup_allowed" = "true" ]; then
+              while IFS= read -r secret_name; do
+                [ -z "$secret_name" ] && continue
+                curl --fail --silent --show-error --max-time 30 \
+                  --request DELETE \
+                  --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets/$secret_name" \
+                  --output /dev/null
+              done < <(bun run .github/worker-secret-policy.ts stale "$worker_kind" "$inventory")
+              curl --fail --silent --show-error --max-time 30 \
+                --retry 3 --retry-delay 2 --retry-all-errors \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
+                --output "$inventory"
+            fi
+            bun run .github/worker-secret-policy.ts assert "$worker_kind" "$inventory"
+            rm -f "$inventory"
+            trap - EXIT
+          done
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Keep Agent disabled during compatibility bootstrap
         if: >-
@@ -245,7 +323,7 @@ jobs:
             fi
           done
 
-      - name: Deploy API Worker for file activity compatibility
+      - name: Deploy compatible API Worker before migration
         if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
         run: |
           umask 077
@@ -289,7 +367,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
-      - name: Smoke API Worker before file activity migration
+      - name: Smoke compatible API Worker before migration
         if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
         run: |
           assert_status() {
@@ -381,7 +459,12 @@ jobs:
           agent_secrets="$(mktemp)"
           trap 'rm -f "$agent_secrets"' EXIT
           SECRETS_FILE="$agent_secrets" bun -e '
-            const keys = ["OPENROUTER_API_KEY", "SENTRY_DSN"]
+            const keys = [
+              "MASTRA_STORAGE_AUTH_TOKEN",
+              "MASTRA_STORAGE_URL",
+              "OPENROUTER_API_KEY",
+              "SENTRY_DSN",
+            ]
             await Bun.write(
               process.env.SECRETS_FILE,
               JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
@@ -402,6 +485,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MASTRA_STORAGE_AUTH_TOKEN: ${{ secrets.MASTRA_STORAGE_AUTH_TOKEN }}
+          MASTRA_STORAGE_URL: ${{ secrets.MASTRA_STORAGE_URL }}
           SENTRY_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
 
       - name: Deploy final API Worker

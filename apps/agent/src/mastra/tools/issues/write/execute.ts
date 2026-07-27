@@ -1,17 +1,17 @@
 import type {
   AgentActionExecutionResult,
   AgentCreateIssueActionInput,
+  AgentDeleteIssueActionInput,
   AgentIssueAction,
   AgentIssueActionKind,
   AgentIssueActionPreview,
   AgentUpdateIssueActionInput,
+  IssueWriteToolOutput,
 } from "@enterprise-agentic-saas/agent-contracts"
-import type { z } from "zod"
 
 import type { AgentToolBudget } from "../../../core/budget/tool"
 import type { AgentControlPlanePort } from "../../../runtime/ports"
 import { IDENTIFIER_PATTERN } from "./schema"
-import type { deleteIssueSchema } from "./schema"
 
 type AgentWriteApi = Pick<
   AgentControlPlanePort,
@@ -23,6 +23,7 @@ type AgentWriteApi = Pick<
 
 export type AgentWriteControl = {
   holdForApproval: () => void
+  suspendAction: (actionId: string) => Promise<void>
 }
 
 const normalizeLabels = (labels: string[] | undefined): string[] | undefined =>
@@ -201,7 +202,7 @@ const prepareResult = async (
   actionPromise: Promise<AgentIssueAction>,
   budget: AgentToolBudget,
   control: AgentWriteControl
-): Promise<unknown> => {
+): Promise<IssueWriteToolOutput> => {
   const action = await actionPromise
   const actionId = safeActionId(action.id)
   if (action.kind !== kind || !actionStatuses.has(action.status)) {
@@ -218,6 +219,7 @@ const prepareResult = async (
     }
     const preview = safePreview(action.preview)
     const expiresAt = bounded(action.expiresAt, 64)
+    await control.suspendAction(actionId)
     control.holdForApproval()
     budget.suspendForApproval()
     return {
@@ -258,7 +260,7 @@ export const createAgentWriteHandlers = (
       idempotencyKey: string
       toolCallId: string
     }) => Promise<AgentIssueAction>
-  ): Promise<unknown> => {
+  ): Promise<IssueWriteToolOutput> => {
     budget.consume("write")
     try {
       const identity = await createActionIdentity(
@@ -291,10 +293,7 @@ export const createAgentWriteHandlers = (
         })
       )
     },
-    deleteIssue: (
-      issue: z.output<typeof deleteIssueSchema>,
-      toolCallId: string
-    ) => {
+    deleteIssue: (issue: AgentDeleteIssueActionInput, toolCallId: string) => {
       const normalizedIssue = { ...issue, issueId: issue.issueId.trim() }
       return invoke("delete_issue", toolCallId, normalizedIssue, (identity) =>
         api.prepareDeleteIssue({

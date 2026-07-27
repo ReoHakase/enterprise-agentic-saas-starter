@@ -46,27 +46,25 @@ const insertControlPlaneFixture = async (
       args: ["agent-session", "agent-user", 1, now],
     },
     {
-      sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
       args: [
         "agent-thread-a",
         "agent-org-a",
         "agent-user",
-        "Thread A",
         "active",
         now,
-        now,
+        null,
       ],
     },
     {
-      sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
       args: [
         "agent-thread-b",
         "agent-org-b",
         "agent-user",
-        "Thread B",
         "active",
         now,
-        now,
+        null,
       ],
     },
   ])
@@ -151,7 +149,7 @@ describe("Agent control-plane schema", () => {
       ).rejects.toThrow(/check constraint/i)
       await expect(
         client.execute(
-          "insert into agent_threads(id,organization_id,owner_user_id,title,status) values('invalid-thread','agent-org-a','agent-user','','active')"
+          "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values('invalid-thread','agent-org-a','agent-user','active',1,1)"
         )
       ).rejects.toThrow(/check constraint/i)
     } finally {

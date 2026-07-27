@@ -30,11 +30,18 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
 }
 
 const assertCanonicalMessages = (
-  messages: unknown
+  page: unknown
 ): { actionId: string; issueId: string } => {
-  if (!Array.isArray(messages) || !messages.every(isRecord)) {
-    throw new Error("Scripted Agent E2E messages are invalid")
+  if (!isRecord(page)) {
+    throw new Error("Scripted Agent E2E message page is invalid")
   }
+  const messages = recordArray(page, "messages")
+  expect(page).toMatchObject({
+    hasMore: false,
+    page: 0,
+    perPage: 40,
+    total: messages.length,
+  })
   const assistant = messages.find(
     (message) => Reflect.get(message, "role") === "assistant"
   )
@@ -49,10 +56,6 @@ const assertCanonicalMessages = (
           kind: "create_issue",
           status: "succeeded",
         }),
-      }),
-      expect.objectContaining({
-        type: "data-context-budget",
-        data: expect.objectContaining({ observedInputTokens: 28 }),
       }),
       expect.objectContaining({ type: "text", text: "SCRIPTED_AGENT_OK" }),
     ])
@@ -154,11 +157,11 @@ const assertUsagePersistence = async (
       return Reflect.get(usage, "totals")
     })
     .toMatchObject({
-      inputTokenCount: 36,
-      outputTokenCount: 11,
+      inputTokenCount: 29,
+      outputTokenCount: 8,
       reasoningTokenCount: 0,
       runCount: 2,
-      totalTokenCount: 47,
+      totalTokenCount: 37,
     })
 }
 

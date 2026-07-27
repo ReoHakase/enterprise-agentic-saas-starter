@@ -1,10 +1,13 @@
-import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/agent-contracts"
+import {
+  agentIdentifierSchema,
+  type AgentActionExecutionResult,
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { Mastra } from "@mastra/core/mastra"
-import { RequestContext } from "@mastra/core/request-context"
-import { z } from "zod"
+import { createWorkflowStateReader } from "@mastra/core/workflows"
+import * as v from "valibot"
 
 import type { AgentFeatureSwitches } from "../core/policy/feature-flags"
-import type { ApprovedIssueActionRuntime } from "../workflows/approved-issue-action"
+import type { ApprovedIssueActionExecutionRegistry } from "../workflows/approved-issue-action"
 import type { AgentControlPlanePort } from "./ports"
 
 type ResumeIssueActionApi = Pick<
@@ -12,26 +15,26 @@ type ResumeIssueActionApi = Pick<
   "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
 >
 
-const resumeIssueActionSchema = z
-  .object({
-    actionId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
-    resumeTicket: z
-      .string()
-      .min(32)
-      .max(512)
-      .regex(/^[A-Za-z0-9._~-]+$/),
-  })
-  .strict()
+const resumeIssueActionSchema = v.strictObject({
+  actionId: agentIdentifierSchema,
+  resumeTicket: v.pipe(
+    v.string(),
+    v.minLength(32),
+    v.maxLength(512),
+    v.regex(/^[A-Za-z0-9._~-]+$/)
+  ),
+})
 
 export const resumeIssueAction = async (
   input: unknown,
   dependencies: {
     api: ResumeIssueActionApi
+    executionRegistry: ApprovedIssueActionExecutionRegistry
     features: AgentFeatureSwitches
     mastra: Mastra
   }
 ): Promise<AgentActionExecutionResult> => {
-  const parsed = resumeIssueActionSchema.safeParse(input)
+  const parsed = v.safeParse(resumeIssueActionSchema, input)
   if (
     !parsed.success ||
     !dependencies.features.runs ||
@@ -40,26 +43,42 @@ export const resumeIssueAction = async (
     throw new Error("Issue action resume is unavailable")
   }
 
+  const workflow = dependencies.mastra.getWorkflow(
+    "approvedIssueActionWorkflow"
+  )
+  const state = await workflow.getWorkflowRunById(parsed.output.actionId)
+  const suspended = state
+    ? createWorkflowStateReader(state).getSuspendedStep()
+    : undefined
+  if (
+    state?.status !== "suspended" ||
+    suspended?.stepId !== "await-issue-action-approval"
+  ) {
+    throw new Error("Issue action resume is unavailable")
+  }
+
+  const execution = dependencies.executionRegistry.register({
+    api: dependencies.api,
+    features: dependencies.features,
+    resumeTicket: parsed.output.resumeTicket,
+  })
   try {
-    const requestContext = new RequestContext()
-    requestContext.set("approvedIssueActionRuntime", {
-      api: dependencies.api,
-      features: dependencies.features,
-      resumeTicket: parsed.data.resumeTicket,
-    } satisfies ApprovedIssueActionRuntime)
-    const workflow = dependencies.mastra.getWorkflow(
-      "approvedIssueActionWorkflow"
-    )
-    const run = await workflow.createRun()
-    const result = await run.start({
-      inputData: { actionId: parsed.data.actionId },
-      requestContext,
+    const run = await workflow.createRun({ runId: parsed.output.actionId })
+    const result = await run.resume({
+      label: "approval",
+      step: suspended.stepId,
+      resumeData: {
+        actionId: parsed.output.actionId,
+        executionId: execution.executionId,
+      },
+      tracingOptions: { hideInput: true, hideOutput: true },
     })
     if (result.status !== "success") {
       throw new Error("Issue action resume is unavailable")
     }
     return result.result
   } catch {
+    execution.release()
     throw new Error("Issue action resume is unavailable")
   }
 }

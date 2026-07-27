@@ -1,8 +1,9 @@
 "use client"
 
 import { useChat, type UseChatHelpers } from "@ai-sdk/react"
+import { agentClientToolNames } from "@enterprise-agentic-saas/api/client"
 import { useHotkeys } from "@tanstack/react-hotkeys"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   lastAssistantMessageIsCompleteWithToolCalls,
   type ChatOnFinishCallback,
@@ -21,7 +22,6 @@ import {
 import { toast } from "sonner"
 
 import { issueKeys, useIssueSearchState } from "@/features/issues"
-import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 
 import { createAgentChatTransport } from "../chat-transport"
@@ -34,7 +34,7 @@ import { useAgentFormRegistry } from "../components/form-registry/form-registry"
 import { useAgentThreadRuntimeState } from "../components/runtime-state/runtime-state"
 import { isAgentHotkeyAllowed } from "../hotkey-scope"
 import { extractPendingActionIds } from "../pending-action-ids"
-import { agentKeys, agentThreadContextQueryOptions } from "../queries"
+import { agentKeys } from "../queries"
 import { type AgentChatMessage, type AgentThread } from "../schema"
 import {
   resolveAgentSubmissionIdentity,
@@ -51,6 +51,10 @@ const hasComposerContent = (snapshot: AgentComposerSnapshot) =>
   )
 
 type AgentThreadRuntime = ReturnType<typeof useAgentThreadRuntimeState>
+type AgentClientToolName = (typeof agentClientToolNames)[number]
+
+const isAgentClientToolName = (value: string): value is AgentClientToolName =>
+  agentClientToolNames.some((name) => name === value)
 
 const useAgentToolCall = ({
   disabled,
@@ -76,22 +80,20 @@ const useAgentToolCall = ({
     async ({ toolCall }) => {
       const addToolOutput = addToolOutputRef.current
       if (!addToolOutput) return
+      if (!isAgentClientToolName(toolCall.toolName)) return
+      const toolName = toolCall.toolName
       try {
-        const output = await executeAgentClientTool(
-          toolCall.toolName,
-          toolCall.input,
-          {
-            organizationId,
-            organizationSlug,
-            frozen: runtime.frozen || disabled,
-            navigate,
-            issueSearchState,
-            readForm: formRegistry.read,
-            patchForm: formRegistry.patch,
-          }
-        )
+        const output = await executeAgentClientTool(toolName, toolCall.input, {
+          organizationId,
+          organizationSlug,
+          frozen: runtime.frozen || disabled,
+          navigate,
+          issueSearchState,
+          readForm: formRegistry.read,
+          patchForm: formRegistry.patch,
+        })
         void addToolOutput({
-          tool: toolCall.toolName,
+          tool: toolName,
           toolCallId: toolCall.toolCallId,
           output,
         })
@@ -101,7 +103,7 @@ const useAgentToolCall = ({
             ? error.message
             : "Client tool failed."
         void addToolOutput({
-          tool: toolCall.toolName,
+          tool: toolName,
           toolCallId: toolCall.toolCallId,
           state: "output-error",
           errorText: errorText.slice(0, 500),
@@ -182,9 +184,6 @@ const useAgentChatFinish = ({
           queryKey: agentKeys.threads(organizationId),
         }),
         queryClient.invalidateQueries({
-          queryKey: agentKeys.context(organizationId, threadId),
-        }),
-        queryClient.invalidateQueries({
           queryKey: issueKeys.all,
         }),
       ])
@@ -247,9 +246,6 @@ export const useAgentController = ({
   const [sendingAssetIds, setSendingAssetIds] = useState<string[]>([])
   const [transientStatus, setTransientStatus] = useState<string>()
   const mentionCandidates = useAgentMentionCandidates(organizationId)
-  const contextQuery = useQuery(
-    agentThreadContextQueryOptions(apiClient, organizationId, thread.id)
-  )
   const transport = useMemo(
     () =>
       createAgentChatTransport({
@@ -456,7 +452,6 @@ export const useAgentController = ({
     chat,
     composerFormRef,
     composerRef,
-    context: contextQuery.data,
     mentionCandidates,
     reportApprovalState,
     runtime,

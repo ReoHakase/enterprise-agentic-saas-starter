@@ -113,92 +113,98 @@ apps/api/src/
 ### 1.1 Package境界
 
 - [x] `packages/agent-contracts`を作成する
-- [ ] Agent request、response、tool schemaをValibotへ移す
-- [ ] 手書き型をValibot推論型へ置き換える
-- [ ] 残っているZod schemaを削除する
+- [x] productionのserialized request、response、tool schemaをValibotへ移す
+- [x] productionのserialized contractにある手書き型をValibot推論型へ置き換える
+- [x] production runtimeのZod schemaを削除する
 - [x] `packages/agent-tools`を作成する
-- [ ] shared business toolsをMastra `createTool` factoryとして移す
+- [x] shared business toolsをMastra `createTool` factoryとして移す
 - [x] 薄い`AgentToolExecutor`だけを定義する
 - [x] custom Capability DSL、registry、generic dispatcherを作らない
 - [x] `apps/agent -> apps/api/agent-client`のcompile dependencyを削除する
 - [x] restricted import、exports、knipを更新する
 
+Zodは外部AI SDKとのtest doubleおよびeval runnerの入力契約にだけ残し、production runtimeの
+serialized contractには使用しません。
+
 ### 1.2 Agent directory
 
-- [ ] 1 Agent 1 directoryへ移動する
-- [ ] `instructions.ts`、`memory.ts`、`tools.ts`、`skills/`をAgent directoryへ置く
-- [ ] `src/mastra/index.ts`でcode registrationを維持する
-- [ ] file discoveryをproductionとStudioの正本にしない
-- [ ] productionとStudioが同じMastra compositionを使う
+- [x] 1 Agent 1 directoryへ移動する
+- [x] `instructions.ts`、`memory.ts`、`tools.ts`、`skills/`をAgent directoryへ置く
+- [x] `src/mastra/index.ts`でcode registrationを維持する
+- [x] file discoveryをproductionとStudioの正本にしない
+- [x] productionとStudioが同じMastra compositionを使う
 
 ### 1.3 Agent専用Turso
 
-- [ ] `@mastra/libsql`を追加する
-- [ ] `MASTRA_STORAGE_URL`と`MASTRA_STORAGE_AUTH_TOKEN`を追加する
-- [ ] Application Tursoとはdatabaseとcredentialを分ける
-- [ ] `InMemoryStore`を削除する
-- [ ] `LibSQLStore`をproduction、Studio、test factoryへ接続する
-- [ ] `storage:dev`、`storage:reset`、`storage:smoke`を`apps/agent`へ追加する
-- [ ] Agent DBへDrizzle schemaを作らない
-- [ ] local developmentでApplication DBとAgent DBを同時起動する
+- [x] `@mastra/libsql`を追加する
+- [x] `MASTRA_STORAGE_URL`と`MASTRA_STORAGE_AUTH_TOKEN`を追加する
+- [x] Application Tursoとはdatabaseとcredentialを分ける
+- [x] `InMemoryStore`を削除する
+- [x] `LibSQLStore`をproduction、Studio、test factoryへ接続する
+- [x] `storage:dev`、`storage:reset`、`storage:smoke`を`apps/agent`へ追加する
+- [x] Agent DBへDrizzle schemaを作らない
+- [x] local developmentでApplication DBとAgent DBを同時起動する
 
 ### 1.4 Memoryとthread
 
-- [ ] Product AgentへMastra Memoryを設定する
-- [ ] Mastra Storageを完全なthread/message履歴の正本、Memoryを同じthread内のモデル入力文脈として分離する
-- [ ] Memoryの`resourceId`とthread取得を認証済みuser、organization、threadへ固定する
-- [ ] Application DBの`agent_threads`を認可台帳へ縮小する
-- [ ] Application DBとAgent DBで同じthread IDを使う
-- [ ] API認可後にAgent Memoryからthread listとhistoryを取得するService Binding entrypointを追加する
-- [ ] API側`agent_messages`を削除する
-- [ ] API側context summary tableとrepositoryを削除する
-- [ ] API側history reconstructionを削除する
-- [ ] 初期thread contractからmessage countを外す
-- [ ] 読み取り用projectionを作らない
-- [ ] archiveでApplication registryを先に失効し、Agent deleteをretry可能にする
+- [x] Product AgentへMastra Memoryを設定する
+- [x] Mastra Storageを完全なthread/message履歴の正本、Memoryを同じthread内のモデル入力文脈として分離する
+- [x] Memoryの`resourceId`とthread取得を認証済みuser、organization、threadへ固定する
+- [x] Application DBの`agent_threads`を認可台帳へ縮小する
+- [x] Application DBとAgent DBで同じthread IDを使う
+- [x] API認可後にAgent Memoryからthread listとhistoryを取得するService Binding entrypointを追加する
+- [x] API側`agent_messages`を削除する
+- [x] API側context summary tableとrepositoryを削除する
+- [x] API側history reconstructionを削除する
+- [x] 初期thread contractからmessage countを外す
+- [x] 読み取り用projectionを作らない
+- [x] archiveはApplication registryだけを先に失効し、以後のAgent Memory公開を拒否する
 
 ### 1.5 Native stream
 
-- [ ] Mastra native AI SDK UIMessage streamを返す
-- [ ] `toAISdkStream`後の再包装を削除する
-- [ ] 独自canonical message codecを削除する
-- [ ] API側`appendRunMessages`を削除する
-- [ ] raw reasoningのstream、保存、表示を停止する
-- [ ] context meterとtitle更新をstream data partへ依存させない
-- [ ] server toolとclient toolのrouteを分離する
-- [ ] `ui_*`だけをbrowser client toolとして登録する
+- [x] Mastra native AI SDK UIMessage streamを返す
+- [x] `toAISdkStream`後の再包装を削除する
+- [x] 独自canonical message codecを削除する
+- [x] API側`appendRunMessages`を削除する
+- [x] raw reasoningのstream、保存、表示を停止する
+- [x] context meterとtitle更新をstream data partへ依存させない
+- [x] server toolとclient toolのrouteを分離する
+- [x] `ui_*`だけをbrowser client toolとして登録する
 
 ### 1.6 ApprovalとWorkflowの基盤
 
-- [ ] APIのthread approval policyを維持する
-- [ ] business prepared actionとpreviewをAPIへ維持する
-- [ ] suspensionとresumeをMastra WorkflowまたはAgent Approvalへ移す
-- [ ] snapshotへcredentialを保存しない
-- [ ] `RequestContext`へ関数、API client、grant、token、provider key、resume ticketを置かない
-- [ ] Workflow factory closureでexecutorを注入し、resume時はAPI再認可後のcapabilityを即時consumeする
-- [ ] Phase 1ではJSON-safeなsuspend/resume基盤とsnapshot secret scanまでを必須にし、再起動resumeはPhase 3で完成させる
+- [x] APIのthread approval policyを維持する
+- [x] business prepared actionとpreviewをAPIへ維持する
+- [x] suspensionとresumeをMastra WorkflowまたはAgent Approvalへ移す
+- [x] snapshotへcredentialを保存しない
+- [x] file-backed snapshotを再openし、closureから参照可能なcredential、private URL、capabilityがraw rowへ残らないことを検査する
+- [x] `RequestContext`へ関数、API client、grant、token、provider key、resume ticketを置かない
+- [x] Workflow factory closureでexecutorを注入し、resume時はAPI再認可後のcapabilityを即時consumeする
+- [x] Phase 1ではJSON-safeなsuspend/resume基盤とsnapshot secret scanまでを必須にし、再起動resumeはPhase 3で完成させる
 - [ ] reload後にsuspended runを再発見できる
 - [ ] custom resume endpointとsnapshot wrapperのうち不要になるものを削除する
 
 ### 1.7 Destructive migration
 
-- [ ] 新しいappend-only migrationを生成する
-- [ ] 旧message、summary、不要columnを削除する
-- [ ] 旧migration historyを編集しない
-- [ ] dual read、dual write、backfillを作らない
-- [ ] development seedとfixtureを新schemaへ更新する
-- [ ] `agent_threads`は6列の認可台帳へappend-only migrationで再構築し、archive済み行だけ旧`updated_at`を`archived_at`へ移す
-- [ ] `agent_runs`と子FKを維持し、upgrade fixtureで`foreign_key_check`を確認する
+- [x] 新しいappend-only migrationを生成する
+- [x] 旧message、summary、不要columnを削除する
+- [x] 旧migration historyを編集しない
+- [x] dual read、dual write、backfillを作らない
+- [x] development seedとfixtureを新schemaへ更新する
+- [x] `agent_threads`は6列の認可台帳へappend-only migrationで再構築し、archive済み行だけ旧`updated_at`を`archived_at`へ移す
+- [x] `agent_runs`と子FKを維持し、upgrade fixtureで`foreign_key_check`を確認する
+- [x] destructive migration適用前にAgent flagを無効化した互換APIをdeployし、healthとOpenAPI smokeを通すrollout順序をCIで固定する
+- [x] Web検索queryのserver-owned hashをticket、grant、runへ伝播するappend-only migrationを生成し、public suffixによるattestation偽装を拒否する
 
 ### Phase 1 exit criteria
 
-- [ ] production Agentが`LibSQLStore`を使う
-- [ ] Memoryからhistoryをreloadできる
-- [ ] API側message tableとcanonical codecがない
-- [ ] native tool stateがWebへ届く
-- [ ] application/agent DB credentialが分離される
-- [ ] G1からG4、A1からA5、W1からW4の対象testが通る
-- [ ] Studio smokeとCloudflare buildが通る
+- [x] production Agentが`LibSQLStore`を使う
+- [x] Memoryからhistoryをreloadできる
+- [x] API側message tableとcanonical codecがない
+- [x] native tool stateがWebへ届く
+- [x] application/agent DB credentialが分離される
+- [x] G1からG4、A1からA5、W1からW4の対象testが通る
+- [x] Studio smokeとCloudflare buildが通る
 
 # Phase 2 既知不具合の再検証と修正
 
@@ -408,21 +414,22 @@ PATはこのphaseへ含めません。
 
 ## 検証証跡
 
-| command                                       | 結果   | 証跡                      |
-| --------------------------------------------- | ------ | ------------------------- |
-| `bun run check`                               | 成功   | Phase 1A、2026-07-28      |
-| `bun run typecheck`                           | 成功   | `bun run check`内         |
-| `bun run lint`                                | 成功   | `bun run check`内         |
-| `bun run test`                                | 成功   | `bun run check`内         |
-| `bun run --cwd packages/agent-contracts test` | 成功   | 31 tests、coverage 100%   |
-| `bun run --cwd packages/agent-tools test`     | 成功   | 6 tests、coverage 100%    |
-| `bun run --cwd apps/agent test`               | 成功   | 208 tests                 |
-| `bun run --cwd apps/api test`                 | 成功   | 321 tests、localhost許可  |
-| `bun run test:browser`                        | 未実行 | Phase 2以降               |
-| `bun run test:e2e`                            | 未実行 | Phase 2、4、5             |
-| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                |
-| `bun run build:cloudflare`                    | 成功   | Phase 1A、3 Workers build |
-| `bun run dev:agent:studio` smoke              | 未実行 | Phase 1、3                |
+| command                                       | 結果   | 証跡                                    |
+| --------------------------------------------- | ------ | --------------------------------------- |
+| `bun run check`                               | 成功   | Phase 1、2026-07-28                     |
+| `bun run typecheck`                           | 成功   | `bun run check`内                       |
+| `bun run lint`                                | 成功   | `bun run check`内                       |
+| `bun run test`                                | 成功   | `bun run check`内                       |
+| `bun run --cwd packages/agent-contracts test` | 成功   | 49 tests、coverage 100%                 |
+| `bun run --cwd packages/agent-tools test`     | 成功   | 13 tests、coverage 100%                 |
+| `bun run --cwd apps/agent test`               | 成功   | 198 tests、coverage閾値内               |
+| `bun run --cwd apps/api test`                 | 成功   | 314 tests、localhost許可                |
+| `bun run --cwd packages/db db:check`          | 成功   | schema、migration、snapshot整合         |
+| `bun run test:browser`                        | 成功   | 248 Storybook、6 browser、W6 17+1 tests |
+| `bun run test:e2e`                            | 成功   | E1 3 tests                              |
+| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                              |
+| `bun run build:cloudflare`                    | 成功   | Phase 1、3 Workers build                |
+| `bun run dev:studio`、`studio:*`              | 成功   | health、3 Agents、paid smoke            |
 
 ## リスクとrollback
 

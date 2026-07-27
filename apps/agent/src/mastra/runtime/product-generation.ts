@@ -1,4 +1,4 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/agent-contracts"
+import type { AgentUiMessage } from "@enterprise-agentic-saas/agent-contracts"
 
 import { requiresWebSearchFirstStep } from "../core/policy/web-search-request"
 
@@ -10,7 +10,7 @@ const forceWebSearchOnFirstStep = ({ stepNumber }: { stepNumber: number }) =>
     : undefined
 const defaultProviderOptions = {
   openrouter: {
-    reasoning: { effort: "medium", exclude: false },
+    reasoning: { effort: "low", exclude: true },
   },
 } as const
 const forcedToolProviderOptions = {
@@ -21,7 +21,7 @@ const forcedToolProviderOptions = {
 } as const
 
 export const productGenerationWebSearchOptions = (
-  messages: readonly AgentCanonicalMessage[],
+  messages: readonly AgentUiMessage[],
   toolAllowlist?: readonly string[]
 ) =>
   requiresWebSearchFirstStep(messages, toolAllowlist)

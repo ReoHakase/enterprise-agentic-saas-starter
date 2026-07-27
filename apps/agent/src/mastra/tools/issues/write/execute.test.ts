@@ -1,12 +1,10 @@
 import type { AgentIssueAction } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it, vi } from "vitest"
-import { z } from "zod"
 
 import { createAgentToolBudget } from "../../../core/budget/tool"
 import type { AgentControlPlanePort as AgentInternalGateway } from "../../../runtime/ports"
 import { createAgentWriteHandlers, toSafeActionReceipt } from "./execute"
-import { agentWriteToolSchemas } from "./schema"
-import { issueWriteTools } from "./tool"
+import { createIssueWriteTools } from "./tool"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 const ROOT_RUN_ID = "root_run_1"
@@ -80,7 +78,7 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
     api,
     RUN_GRANT,
     { consume, suspendForApproval },
-    { holdForApproval },
+    { holdForApproval, suspendAction: async () => undefined },
     ROOT_RUN_ID
   )
   return {
@@ -93,59 +91,6 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
     suspendForApproval,
   }
 }
-
-describe("agent write schemas", () => {
-  it("keeps provider schemas representable as strict JSON Schema", () => {
-    for (const schema of Object.values(agentWriteToolSchemas)) {
-      expect(z.toJSONSchema(schema)).toMatchObject({
-        additionalProperties: false,
-        type: "object",
-      })
-    }
-  })
-
-  it("validates bounded create input and rejects unknown fields", () => {
-    expect(
-      agentWriteToolSchemas.createIssue.parse({
-        attachmentAssetIds: ["asset_1", "asset_1"],
-        labels: [" bug ", "bug"],
-        title: " Issue ",
-      })
-    ).toEqual({
-      attachmentAssetIds: ["asset_1", "asset_1"],
-      labels: ["bug", "bug"],
-      title: "Issue",
-    })
-    expect(
-      agentWriteToolSchemas.createIssue.safeParse({
-        organizationId: "org_1",
-        title: "Issue",
-      }).success
-    ).toBe(false)
-  })
-
-  it("requires an expected revision and at least one update field", () => {
-    expect(
-      agentWriteToolSchemas.updateIssue.safeParse({
-        expectedRevision: 1,
-        issueId: "issue_1",
-      }).success
-    ).toBe(false)
-    expect(
-      agentWriteToolSchemas.updateIssue.safeParse({
-        expectedRevision: 1,
-        issueId: "issue_1",
-        status: "closed",
-      }).success
-    ).toBe(true)
-    expect(
-      agentWriteToolSchemas.deleteIssue.safeParse({
-        expectedRevision: 0,
-        issueId: "issue_1",
-      }).success
-    ).toBe(false)
-  })
-})
 
 describe("action identity", () => {
   it("is stable across provider calls in one root run and changes across logical writes", async () => {
@@ -162,7 +107,10 @@ describe("action identity", () => {
           consume: vi.fn<(kind: "client" | "read" | "write") => void>(),
           suspendForApproval: vi.fn<() => void>(),
         },
-        { holdForApproval: vi.fn<() => void>() },
+        {
+          holdForApproval: vi.fn<() => void>(),
+          suspendAction: async () => undefined,
+        },
         rootRunId
       )
       await handlers.createIssue(issue, toolCallId)
@@ -210,7 +158,10 @@ describe("action identity", () => {
         consume: vi.fn<(kind: "client" | "read" | "write") => void>(),
         suspendForApproval: vi.fn<() => void>(),
       },
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
     await handlers.createIssue({ title: "Issue" }, "provider/call with secrets")
@@ -253,7 +204,10 @@ describe("createAgentWriteHandlers", () => {
       test.api,
       RUN_GRANT,
       budget,
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
 
@@ -288,10 +242,10 @@ describe("createAgentWriteHandlers", () => {
   })
 
   it("normalizes an empty model assignee to an unassigned Issue", async () => {
-    const parsed = agentWriteToolSchemas.createIssue.parse({
+    const parsed = {
       assigneeId: "",
       title: "Issue",
-    })
+    }
     const test = harness("pending")
 
     await test.handlers.createIssue(parsed, "call_1")
@@ -484,7 +438,10 @@ describe("createAgentWriteHandlers", () => {
         consume,
         suspendForApproval: vi.fn<() => void>(),
       },
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
 
@@ -531,6 +488,9 @@ describe("createAgentWriteHandlers", () => {
 
 describe("Issue write tool registry", () => {
   it("defines only the three server-side Issue mutation tools", () => {
+    const issueWriteTools = createIssueWriteTools(() => {
+      throw new Error("unused")
+    })
     expect(Object.keys(issueWriteTools).toSorted()).toEqual([
       "create_issue",
       "delete_issue",

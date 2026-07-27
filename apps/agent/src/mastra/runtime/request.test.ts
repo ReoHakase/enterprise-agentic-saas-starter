@@ -12,20 +12,29 @@ const validInput = (): AgentRuntimeChatInput => ({
   assetIds: ["asset_1"],
   contextReferences: [],
   clientMessageId: "message_1",
-  messages: [
-    {
-      id: "message_1",
-      role: "user",
-      parts: [
-        { type: "text", text: "Create an issue from this image" },
-        { type: "data-agent-assets", data: { assetIds: ["asset_1"] } },
-      ],
-    },
-  ],
+  message: {
+    id: "message_1",
+    role: "user",
+    parts: [
+      { type: "text", text: "Create an issue from this image" },
+      { type: "data-agent-assets", data: { assetIds: ["asset_1"] } },
+    ],
+  },
   threadId: "thread_1",
   ticket: TICKET,
   timezone: "Asia/Tokyo",
   trigger: "user_message",
+})
+const clientToolContinuation = (): AgentRuntimeChatInput => ({
+  ...validInput(),
+  assetIds: [],
+  clientMessageId: "continuation_0123456789abcdefghijklmnopqrstuvwxyz",
+  message: {
+    id: "assistant_1",
+    role: "assistant",
+    parts: [],
+  },
+  trigger: "client_tool_result",
 })
 
 describe("private Agent runtime request", () => {
@@ -42,7 +51,7 @@ describe("private Agent runtime request", () => {
   it("binds canonical mention order to the API-resolved context", () => {
     const input = validInput()
     input.assetIds = []
-    input.messages[0] = {
+    input.message = {
       id: "message_1",
       role: "user",
       parts: [
@@ -107,65 +116,57 @@ describe("private Agent runtime request", () => {
     duplicateAssets.assetIds = ["asset_1", "asset_1"]
     expect(parseAgentRuntimeChatInput(duplicateAssets)).toBeUndefined()
 
-    const assistantHistory = validInput()
-    assistantHistory.messages.unshift({
+    const assistantHistory = {
+      ...validInput(),
+      messages: [{ id: "assistant_1", role: "assistant", parts: [] }],
+    }
+    expect(parseAgentRuntimeChatInput(assistantHistory)).toBeUndefined()
+
+    const hugeToolInput = clientToolContinuation()
+    hugeToolInput.message = {
       id: "assistant_1",
       role: "assistant",
       parts: [
         {
-          type: "source-url",
-          sourceId: "source_1",
-          url: "file:///private/result",
-        },
-      ],
-    })
-    expect(parseAgentRuntimeChatInput(assistantHistory)).toBeUndefined()
-
-    const hugeToolInput = validInput()
-    hugeToolInput.messages.unshift({
-      id: "assistant_2",
-      role: "assistant",
-      parts: [
-        {
-          type: "tool-search_issues",
+          type: "tool-ui_read_form_draft",
           toolCallId: "call_1",
           state: "input-available",
           input: { query: "x".repeat(10_001) },
         },
       ],
-    })
+    }
     expect(parseAgentRuntimeChatInput(hugeToolInput)).toBeUndefined()
 
-    const boundedArrayInput = validInput()
-    boundedArrayInput.messages.unshift({
-      id: "assistant_3",
+    const boundedArrayInput = clientToolContinuation()
+    boundedArrayInput.message = {
+      id: "assistant_1",
       role: "assistant",
       parts: [
         {
-          type: "tool-search_issues",
+          type: "tool-ui_read_form_draft",
           toolCallId: "call_2",
           state: "output-available",
           input: [null, true, 1, "query", { nested: false }],
           output: [],
         },
       ],
-    })
+    }
     expect(parseAgentRuntimeChatInput(boundedArrayInput)).toBeDefined()
 
-    const tooManyItems = validInput()
-    tooManyItems.messages.unshift({
-      id: "assistant_4",
+    const tooManyItems = clientToolContinuation()
+    tooManyItems.message = {
+      id: "assistant_1",
       role: "assistant",
       parts: [
         {
-          type: "tool-search_issues",
+          type: "tool-ui_read_form_draft",
           toolCallId: "call_3",
           state: "output-available",
           input: Array.from({ length: 101 }, () => true),
           output: [],
         },
       ],
-    })
+    }
     expect(parseAgentRuntimeChatInput(tooManyItems)).toBeUndefined()
   })
 
@@ -191,21 +192,19 @@ describe("private Agent runtime request", () => {
     continuation.clientMessageId =
       "continuation_0123456789abcdefghijklmnopqrstuvwxyz"
     continuation.trigger = "client_tool_result"
-    continuation.messages = [
-      {
-        id: "assistant_1",
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-ui_read_form_draft",
-            toolCallId: "call_1",
-            state: "output-available",
-            input: {},
-            output: { formId: "form_1" },
-          },
-        ],
-      },
-    ]
+    continuation.message = {
+      id: "assistant_1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-ui_read_form_draft",
+          toolCallId: "call_1",
+          state: "output-available",
+          input: {},
+          output: { formId: "form_1" },
+        },
+      ],
+    }
     expect(parseAgentRuntimeChatInput(continuation)).toMatchObject({
       clientMessageId: continuation.clientMessageId,
       trigger: "client_tool_result",

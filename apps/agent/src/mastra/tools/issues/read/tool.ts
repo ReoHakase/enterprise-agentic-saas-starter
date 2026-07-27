@@ -1,8 +1,15 @@
-import { createGetIssueTool } from "@enterprise-agentic-saas/agent-tools"
+import {
+  createGetIssueTool,
+  createReadAccountContextTool,
+  createReadActiveOrganizationTool,
+  createSearchIssueLabelsTool,
+  createSearchIssuesTool,
+  createSearchOrganizationMembersTool,
+} from "@enterprise-agentic-saas/agent-tools"
 import { createTool } from "@mastra/core/tools"
 
 import {
-  getProductAgentRuntime,
+  type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../../runtime/request-context"
 import {
@@ -10,7 +17,7 @@ import {
   createAgentReadHandlers,
   issueAttachmentImageToModelOutput,
 } from "./execute"
-import { agentReadToolSchemas } from "./schema"
+import { issueAttachmentImageInputSchema } from "./schema"
 
 const readToolMetadata = {
   annotations: {
@@ -21,10 +28,12 @@ const readToolMetadata = {
   },
 }
 
-export const issueReadTools = {
+export const createIssueReadTools = (
+  resolveExecution: ProductAgentExecutionResolver
+) => ({
   get_issue: createGetIssueTool<ProductAgentRequestContext>(
     (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
+      const runtime = resolveExecution(context.requestContext)
       return createAgentReadHandlers(
         runtime.api,
         runtime.runGrant,
@@ -32,127 +41,67 @@ export const issueReadTools = {
       ).getIssue(input)
     }
   ),
-  read_account_context: createTool<
-    "read_account_context",
-    typeof agentReadToolSchemas.empty,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "read_account_context",
-    description:
-      "Read the current user's allowlisted display profile. This never returns credentials or account settings.",
-    inputSchema: agentReadToolSchemas.empty,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (_input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
-      return createAgentReadHandlers(
-        runtime.api,
-        runtime.runGrant,
-        runtime.budget
-      ).readAccountContext()
-    },
-  }),
-  read_active_organization: createTool<
-    "read_active_organization",
-    typeof agentReadToolSchemas.empty,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "read_active_organization",
-    description:
-      "Read the active organization's allowlisted name, role, and Issue permissions without changing it.",
-    inputSchema: agentReadToolSchemas.empty,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (_input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
-      return createAgentReadHandlers(
-        runtime.api,
-        runtime.runGrant,
-        runtime.budget
-      ).readActiveOrganization()
-    },
-  }),
-  search_issue_labels: createTool<
-    "search_issue_labels",
-    typeof agentReadToolSchemas.labelSearch,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "search_issue_labels",
-    description:
-      "Search bounded label candidates from Issues in the active organization.",
-    inputSchema: agentReadToolSchemas.labelSearch,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
+  read_account_context:
+    createReadAccountContextTool<ProductAgentRequestContext>(
+      (_input, context) => {
+        const runtime = resolveExecution(context.requestContext)
+        return createAgentReadHandlers(
+          runtime.api,
+          runtime.runGrant,
+          runtime.budget
+        ).readAccountContext()
+      }
+    ),
+  read_active_organization:
+    createReadActiveOrganizationTool<ProductAgentRequestContext>(
+      (_input, context) => {
+        const runtime = resolveExecution(context.requestContext)
+        return createAgentReadHandlers(
+          runtime.api,
+          runtime.runGrant,
+          runtime.budget
+        ).readActiveOrganization()
+      }
+    ),
+  search_issue_labels: createSearchIssueLabelsTool<ProductAgentRequestContext>(
+    (input, context) => {
+      const runtime = resolveExecution(context.requestContext)
       return createAgentReadHandlers(
         runtime.api,
         runtime.runGrant,
         runtime.budget
       ).searchIssueLabels(input)
-    },
-  }),
-  search_issues: createTool<
-    "search_issues",
-    typeof agentReadToolSchemas.issueSearch,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "search_issues",
-    description:
-      "Search a bounded, stable first page of Issues in the active organization using typed filters.",
-    inputSchema: agentReadToolSchemas.issueSearch,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
+    }
+  ),
+  search_issues: createSearchIssuesTool<ProductAgentRequestContext>(
+    (input, context) => {
+      const runtime = resolveExecution(context.requestContext)
       return createAgentReadHandlers(
         runtime.api,
         runtime.runGrant,
         runtime.budget
       ).searchIssues(input)
-    },
-  }),
-  search_organization_members: createTool<
-    "search_organization_members",
-    typeof agentReadToolSchemas.memberSearch,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "search_organization_members",
-    description:
-      "Search a bounded list of members in the active organization. Email and credentials are never returned.",
-    inputSchema: agentReadToolSchemas.memberSearch,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
-      return createAgentReadHandlers(
-        runtime.api,
-        runtime.runGrant,
-        runtime.budget
-      ).searchOrganizationMembers(input)
-    },
-  }),
-}
+    }
+  ),
+  search_organization_members:
+    createSearchOrganizationMembersTool<ProductAgentRequestContext>(
+      (input, context) => {
+        const runtime = resolveExecution(context.requestContext)
+        return createAgentReadHandlers(
+          runtime.api,
+          runtime.runGrant,
+          runtime.budget
+        ).searchOrganizationMembers(input)
+      }
+    ),
+})
 
-export const issueVisionTools = {
+export const createIssueVisionTools = (
+  resolveExecution: ProductAgentExecutionResolver
+) => ({
   read_issue_attachment_image: createTool<
     "read_issue_attachment_image",
-    typeof agentReadToolSchemas.issueAttachmentImage,
+    typeof issueAttachmentImageInputSchema,
     undefined,
     undefined,
     undefined,
@@ -161,14 +110,11 @@ export const issueVisionTools = {
     id: "read_issue_attachment_image",
     description:
       "Read one supported JPEG, PNG, WebP, or GIF attachment from an Issue when its visual contents are needed. Call get_issue first and use only an attachment marked imageReadable.",
-    inputSchema: agentReadToolSchemas.issueAttachmentImage,
+    inputSchema: issueAttachmentImageInputSchema,
     strict: true,
     mcp: readToolMetadata,
     execute: (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
-      if (!runtime.visionEnabled) {
-        throw new Error("Issue image capability is unavailable")
-      }
+      const runtime = resolveExecution(context.requestContext)
       return createAgentIssueImageHandler(
         runtime.api,
         runtime.runGrant,
@@ -180,4 +126,4 @@ export const issueVisionTools = {
     // 維持するこのtoolではhandler内のclosed result constructionを正本にする。
     toModelOutput: issueAttachmentImageToModelOutput,
   }),
-}
+})

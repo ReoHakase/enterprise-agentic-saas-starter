@@ -51,4 +51,24 @@ describe("repository quality configuration", () => {
     }
     expect(findings).toEqual([])
   })
+
+  test("deploys and smokes a compatible API before destructive migrations", async () => {
+    const workflow = await readFile(".github/workflows/deploy.yml", "utf8")
+    const inspectAt = workflow.indexOf("Inspect migration rollout state")
+    const deployAt = workflow.indexOf(
+      "Deploy compatible API Worker before migration"
+    )
+    const smokeAt = workflow.indexOf(
+      "Smoke compatible API Worker before migration"
+    )
+    const migrateAt = workflow.indexOf("Apply Turso migrations")
+
+    expect(inspectAt).toBeGreaterThan(-1)
+    expect(deployAt).toBeGreaterThan(inspectAt)
+    expect(smokeAt).toBeGreaterThan(deployAt)
+    expect(migrateAt).toBeGreaterThan(smokeAt)
+    expect(workflow).toContain(
+      "steps.file-activity-rollout.outputs.compatibility_deploy == 'true'"
+    )
+  })
 })

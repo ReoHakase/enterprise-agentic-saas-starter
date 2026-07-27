@@ -1,9 +1,9 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/agent-contracts"
+import type { AgentUiMessage } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it } from "vitest"
 
 import { requiresWebSearchFirstStep } from "./web-search-request"
 
-const userMessage = (text: string): AgentCanonicalMessage => ({
+const userMessage = (text: string): AgentUiMessage => ({
   id: crypto.randomUUID(),
   parts: [{ text, type: "text" }],
   role: "user",

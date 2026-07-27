@@ -31,11 +31,12 @@ const validateTemporaryRoot = (path: string): string => {
 
 export const createAgentE2EEnvironment = (input: string | number) => {
   const runId = parseAgentE2ERunId(input)
-  const portBase = 24_000 + (runId % 2_000) * 4
+  const portBase = 24_000 + (runId % 1_600) * 5
   const webPort = portBase
   const apiPort = portBase + 1
   const githubPort = portBase + 2
-  const databasePort = portBase + 3
+  const applicationDatabasePort = portBase + 3
+  const agentStoragePort = portBase + 4
   const cookieDomain = "agent-e2e.enterprise-agentic-saas.localhost"
   const temporaryRoot = validateTemporaryRoot(
     join(TEMPORARY_DIRECTORY, `enterprise-agentic-saas-agent-e2e-${runId}`)
@@ -47,17 +48,22 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     webPort,
     apiPort,
     githubPort,
-    databasePort,
+    applicationDatabasePort,
+    agentStoragePort,
     webOrigin: `http://${cookieDomain}:${webPort}`,
     apiOrigin: `http://api.${cookieDomain}:${apiPort}`,
     apiLoopbackOrigin: `http://127.0.0.1:${apiPort}`,
     githubOrigin: `http://127.0.0.1:${githubPort}`,
-    databaseOrigin: `http://127.0.0.1:${databasePort}`,
+    applicationDatabaseOrigin: `http://127.0.0.1:${applicationDatabasePort}`,
+    agentStorageOrigin: `http://127.0.0.1:${agentStoragePort}`,
+    applicationDatabaseAuthToken: "application-e2e-unused-token",
+    agentStorageAuthToken: "agent-storage-e2e-unused-token",
     cookieDomain,
     temporaryRoot,
     stackRoot,
     nextDistDirectory: `.next-e2e-full-${runId}`,
-    databasePath: join(stackRoot, "agent-e2e.db"),
+    applicationDatabasePath: join(stackRoot, "application.db"),
+    agentStoragePath: join(stackRoot, "agent-storage.db"),
     wranglerStatePath: join(stackRoot, "wrangler-state"),
     apiConfigPath: join(stackRoot, "api", "wrangler.json"),
     agentConfigPath: join(stackRoot, "agent", "wrangler.json"),

@@ -1,4 +1,3 @@
-import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-contracts"
 import { RequestContext } from "@mastra/core/request-context"
 import { describe, expect, it } from "vitest"
 
@@ -7,37 +6,25 @@ import {
   mastra,
   productAgent,
   publicWebResearchAgent,
-  threadTitleAgent,
 } from "."
-import { createAgentInternalGateway } from "./adapters/control-plane/client"
 import { publicWebResearchProviderOptions } from "./agents/public-web-research-agent"
-import { threadTitleProviderOptions } from "./agents/thread-title-agent"
-import { createAgentToolBudget } from "./core/budget/tool"
-import { createAgentVisionBudget } from "./core/budget/vision"
-import { createRunSettlement } from "./runtime/settlement"
 
 const productAgentRequestContext = (
   visionEnabled: boolean,
   toolAllowlist?: readonly string[]
 ) => {
   const requestContext = new RequestContext()
-  const binding: AgentInternalFetchBinding = {
-    fetch: async () => new Response(null, { status: 503 }),
-  }
-  const api = createAgentInternalGateway(binding)
-  const runGrant = "grant_mastra_registry"
   requestContext.set("runtime", {
-    api,
-    budget: createAgentToolBudget(),
-    openRouterApiKey: "",
-    rootRunId: "run_mastra_registry",
-    runGrant,
-    settlement: createRunSettlement(api, runGrant),
-    timezone: "Asia/Tokyo",
-    toolAllowlist,
-    visionBudget: createAgentVisionBudget(),
-    visionEnabled,
-    writesEnabled: false,
+    executionId: "execution_unavailable",
+    modelRoute: "product",
+    policy: {
+      timezone: "Asia/Tokyo",
+      toolAllowlist,
+      visionEnabled,
+      writesEnabled: false,
+    },
+    resourceId: "resource_mastra_registry",
+    threadId: "thread_mastra_registry",
   })
   return requestContext
 }
@@ -56,7 +43,7 @@ describe("Mastra product agent registry", () => {
     const model = await productAgent.getModel()
     expect(model.modelId).toBe("qwen/qwen3.6-flash")
     expect(model.provider).toBe("openrouter")
-    expect(productAgent.hasOwnMemory()).toBe(false)
+    expect(productAgent.hasOwnMemory()).toBe(true)
   })
 
   it("pins inline skill names", async () => {
@@ -112,14 +99,6 @@ describe("Mastra product agent registry", () => {
       type: "provider",
     })
     expect(publicWebResearchProviderOptions.openrouter.reasoning).toEqual({
-      enabled: false,
-      effort: "none",
-      exclude: true,
-    })
-    expect(mastra.getAgentById("thread-title-agent")).toBe(threadTitleAgent)
-    const titleTools = await threadTitleAgent.listTools()
-    expect(Object.keys(titleTools)).toEqual(["rename_thread"])
-    expect(threadTitleProviderOptions.openrouter.reasoning).toEqual({
       enabled: false,
       effort: "none",
       exclude: true,

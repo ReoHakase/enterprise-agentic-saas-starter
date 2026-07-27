@@ -16,9 +16,7 @@ export const fictionalAgentIdentity = {
 export const fictionalPrimaryAgentThread = {
   id: "thread_01K1TENANTREVIEW00000000",
   title: "Review tenant access",
-  titleRevision: 3,
   status: "active",
-  messageCount: 8,
   createdAt: "2026-07-24T09:00:00.000Z",
   updatedAt: "2026-07-26T09:30:00.000Z",
 } satisfies AgentThread
@@ -28,9 +26,7 @@ export const fictionalAgentThreads = [
   {
     id: "thread_01K1INCIDENTPLAN00000000",
     title: "Plan incident follow-up",
-    titleRevision: 1,
     status: "active",
-    messageCount: 3,
     createdAt: "2026-07-25T10:00:00.000Z",
     updatedAt: "2026-07-26T08:15:00.000Z",
   },
@@ -106,10 +102,6 @@ export const fictionalAgentMessages = {
     id: "message_01K1REASONINGSOURCE00000",
     role: "assistant",
     parts: [
-      {
-        type: "reasoning",
-        text: "Check membership, organization scope, then the repository filter.",
-      },
       {
         type: "text",
         text: "The requested read is scoped to Acme Cloud.",
@@ -234,61 +226,6 @@ export const AgentStoryScope = ({
       )
     )
   )
-
-export const agentContextBudgetMessages = {
-  estimated: [
-    {
-      id: "message-budget-estimated",
-      role: "assistant",
-      parts: [
-        {
-          type: "data-context-budget",
-          data: {
-            contextWindowTokens: 1_000_000,
-            reservedOutputTokens: 4_096,
-            estimated: {
-              system: 2_000,
-              skills: 3_000,
-              tools: 6_000,
-              history: 1_000,
-              pageContext: 500,
-              attachments: 2,
-              total: 12_502,
-            },
-            observedInputTokens: null,
-            level: "normal",
-          },
-        },
-      ],
-    } satisfies AgentChatMessage,
-  ],
-  nearLimit: [
-    {
-      id: "message-budget-near-limit",
-      role: "assistant",
-      parts: [
-        {
-          type: "data-context-budget",
-          data: {
-            contextWindowTokens: 100_000,
-            reservedOutputTokens: 4_096,
-            estimated: {
-              system: 12_000,
-              skills: 8_000,
-              tools: 20_000,
-              history: 48_000,
-              pageContext: 6_000,
-              attachments: 1_000,
-              total: 95_000,
-            },
-            observedInputTokens: 95_000,
-            level: "critical",
-          },
-        },
-      ],
-    } satisfies AgentChatMessage,
-  ],
-} as const
 
 export const agentConversationTurns = [
   {

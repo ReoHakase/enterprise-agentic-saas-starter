@@ -1,4 +1,11 @@
 import { treaty, type Treaty } from "@elysia/eden"
+import {
+  agentClientToolNames,
+  agentUiMessageListSchema,
+  agentUiMessageSchema,
+  agentUiToolNames,
+  type AgentUiMessage,
+} from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import type { App } from "./app"
@@ -27,12 +34,17 @@ import {
 
 export {
   FILE_PREVIEW_WIDTHS,
+  agentClientToolNames,
+  agentUiMessageListSchema,
+  agentUiMessageSchema,
+  agentUiToolNames,
   PROFILE_IMAGE_SIZE,
   PROFILE_IMAGE_SOURCE_CONTENT_TYPE,
   PROFILE_IMAGE_SOURCE_MAX_BYTES,
 }
 export type {
   AgentAssetDto,
+  AgentUiMessage,
   FileDto,
   FileListDto,
   FileOwnerType,

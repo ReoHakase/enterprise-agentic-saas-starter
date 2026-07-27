@@ -1,4 +1,6 @@
-import { publicWebSearchInputSchema } from "./schema"
+import * as v from "valibot"
+
+import { publicWebSearchInputValueSchema } from "./schema"
 
 const MAXIMUM_RESULT_CHARACTERS = 6_000
 const MAXIMUM_SOURCE_TITLE_CHARACTERS = 200
@@ -149,13 +151,14 @@ export const executePublicWebSearch = async (
   input: unknown,
   dependencies: PublicWebSearchDependencies
 ): Promise<BoundedPublicWebSearchResult> => {
-  const parsed = publicWebSearchInputSchema.safeParse(input)
+  const parsed = v.safeParse(publicWebSearchInputValueSchema, input)
   if (!parsed.success) {
     throw new Error("Web search accepts public information only")
   }
   dependencies.consumeBudget()
-  const guarded = publicWebSearchInputSchema.safeParse(
-    await dependencies.guard(parsed.data.query)
+  const guarded = v.safeParse(
+    publicWebSearchInputValueSchema,
+    await dependencies.guard(parsed.output.query)
   )
   if (!guarded.success) {
     throw new Error("Web search accepts public information only")
@@ -163,7 +166,7 @@ export const executePublicWebSearch = async (
   const operationId = await normalizeOperationId(dependencies.operationId)
   await dependencies.reserve(operationId)
   const result = await dependencies.search(
-    guarded.data.query,
+    guarded.output.query,
     dependencies.abortSignal
   )
   return toBoundedPublicWebSearchResult(result)

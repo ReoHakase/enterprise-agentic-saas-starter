@@ -3,13 +3,13 @@ import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 import { ConsoleApiError, toConsoleApiError } from "@/features/console"
 
 import {
+  type AgentChatMessage,
   parseAgentActionExecutionResult,
   parseAgentApprovalPolicy,
   parseAgentContextRevocation,
   parseAgentIssueAction,
-  parseAgentMessages,
+  parseAgentMessagePage,
   parseAgentThread,
-  parseAgentThreadContext,
   parseAgentThreads,
 } from "./schema"
 
@@ -36,56 +36,41 @@ export const listAgentThreads = async (
 
 export const createAgentThread = async (
   client: ApiClient,
-  permissionMode: "ask_always" | "full_access",
-  title?: string
+  permissionMode: "ask_always" | "full_access"
 ) =>
-  parseAgentThread(
-    unwrap(await client.agent.threads.post({ title, permissionMode }))
-  )
+  parseAgentThread(unwrap(await client.agent.threads.post({ permissionMode })))
 
 export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
   parseAgentThread(
     unwrap(await client.agent.threads({ threadId }).archive.post())
   )
 
-export const updateAgentThreadTitle = async (
-  client: ApiClient,
-  input: { threadId: string; title: string; expectedRevision: number }
-) =>
-  parseAgentThread(
-    unwrap(
-      await client.agent.threads({ threadId: input.threadId }).title.patch({
-        title: input.title,
-        expectedRevision: input.expectedRevision,
-      })
-    )
-  )
-
 export const listAgentMessages = async (
   client: ApiClient,
   threadId: string,
   signal?: AbortSignal
-) =>
-  parseAgentMessages(
-    unwrap(
-      await client.agent
-        .threads({ threadId })
-        .messages.get({ fetch: { signal } })
+) => {
+  const messages: AgentChatMessage[] = []
+  for (let page = 0; page < 10_000; page += 1) {
+    // History pagination is ordered and bounded, so requests stay sequential.
+    const result = parseAgentMessagePage(
+      unwrap(
+        // eslint-disable-next-line no-await-in-loop
+        await client.agent.threads({ threadId }).messages.get({
+          query: { page, perPage: 100 },
+          fetch: { signal },
+        })
+      )
     )
-  )
-
-export const getAgentThreadContext = async (
-  client: ApiClient,
-  threadId: string,
-  signal?: AbortSignal
-) =>
-  parseAgentThreadContext(
-    unwrap(
-      await client.agent
-        .threads({ threadId })
-        .context.get({ fetch: { signal } })
-    )
-  )
+    messages.unshift(...result.messages)
+    if (!result.hasMore) return messages
+  }
+  throw new ConsoleApiError({
+    code: "invalid_response",
+    message: "Agent history exceeded the pagination limit",
+    status: 503,
+  })
+}
 
 export const getAgentAction = async (
   client: ApiClient,

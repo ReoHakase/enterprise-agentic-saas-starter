@@ -1,4 +1,3 @@
-import type { AgentThreadRenameResult } from "@enterprise-agentic-saas/agent-contracts"
 import type { RequestContext } from "@mastra/core/request-context"
 
 import type { AgentToolBudget } from "../core/budget/tool"
@@ -6,34 +5,72 @@ import type { AgentVisionBudget } from "../core/budget/vision"
 import type { AgentControlPlanePort } from "./ports"
 import type { RunSettlement } from "./settlement"
 
-export type ProductAgentRuntime = {
-  api: AgentControlPlanePort
-  budget: AgentToolBudget
-  openRouterApiKey: string
-  openRouterBaseURL?: string
-  onThreadTitle?: (result: AgentThreadRenameResult) => void
-  rootRunId: string
-  runGrant: string
-  settlement: RunSettlement
+export type ProductAgentPolicy = {
   timezone: string
   toolAllowlist?: readonly string[]
-  visionBudget: AgentVisionBudget
   visionEnabled: boolean
   writesEnabled: boolean
 }
 
-export type ProductAgentRequestContext = {
-  runtime?: ProductAgentRuntime
+export type ProductAgentRequestState = {
+  executionId: string
+  modelRoute: "product"
+  policy: ProductAgentPolicy
+  resourceId: string
+  threadId: string
 }
 
-export const getProductAgentRuntime = (
+export type ProductAgentRequestContext = {
+  runtime?: ProductAgentRequestState
+}
+
+export type ProductAgentExecution = {
+  api: AgentControlPlanePort
+  budget: AgentToolBudget
+  rootRunId: string
+  runGrant: string
+  settlement: RunSettlement
+  suspendAction: (actionId: string) => Promise<void>
+  visionBudget: AgentVisionBudget
+}
+
+export type ProductAgentExecutionResolver = (
   requestContext?: RequestContext<ProductAgentRequestContext>
-): ProductAgentRuntime => {
+) => ProductAgentExecution
+
+const getProductAgentRequestState = (
+  requestContext?: RequestContext<ProductAgentRequestContext>
+): ProductAgentRequestState => {
   const runtime = requestContext?.get("runtime")
   if (!runtime) throw new Error("Agent runtime capability is unavailable")
   return runtime
 }
 
-export const getOptionalProductAgentRuntime = (
+export const getOptionalProductAgentRequestState = (
   requestContext?: RequestContext<ProductAgentRequestContext>
-): ProductAgentRuntime | undefined => requestContext?.get("runtime")
+): ProductAgentRequestState | undefined => requestContext?.get("runtime")
+
+export class ProductAgentExecutionRegistry {
+  readonly #executions = new Map<string, ProductAgentExecution>()
+
+  register(execution: ProductAgentExecution): {
+    executionId: string
+    release: () => void
+  } {
+    const executionId = `execution_${crypto.randomUUID()}`
+    this.#executions.set(executionId, execution)
+    return {
+      executionId,
+      release: () => {
+        this.#executions.delete(executionId)
+      },
+    }
+  }
+
+  resolve: ProductAgentExecutionResolver = (requestContext) => {
+    const { executionId } = getProductAgentRequestState(requestContext)
+    const execution = this.#executions.get(executionId)
+    if (!execution) throw new Error("Agent runtime capability is unavailable")
+    return execution
+  }
+}

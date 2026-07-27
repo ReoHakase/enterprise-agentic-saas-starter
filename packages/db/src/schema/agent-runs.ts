@@ -32,6 +32,7 @@ export const agentRuns = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     contextEpoch: integer("context_epoch").notNull(),
     clientMessageId: text("client_message_id"),
+    webSearchQueryHash: text("web_search_query_hash"),
     status: text("status").$type<AgentRunStatus>().notNull().default("running"),
     scope: text("scope").$type<AgentRunScope>().notNull().default("chat"),
     stepCount: integer("step_count").notNull().default(0),
@@ -195,6 +196,7 @@ export const agentConnectionTickets = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     contextEpoch: integer("context_epoch").notNull(),
+    webSearchQueryHash: text("web_search_query_hash"),
     issuedAt: integer("issued_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -262,6 +264,7 @@ export const agentGrants = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     contextEpoch: integer("context_epoch").notNull(),
+    webSearchQueryHash: text("web_search_query_hash"),
     issuedAt: integer("issued_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

@@ -53,14 +53,10 @@ export const RichAssistantMessage = meta.story({
   },
 })
 
-export const ReasoningAndSource = meta.story({
+export const Source = meta.story({
   args: { message: fictionalAgentMessages.reasoningAndSources },
   play: async ({ canvas, step }) => {
-    await step("Expand reasoning and expose the source", async () => {
-      await userEvent.click(canvas.getByText("Thinking"))
-      await expect(
-        canvas.getByText(/Check membership, organization scope/)
-      ).toBeVisible()
+    await step("Expose the source", async () => {
       await expect(
         canvas.getByRole("link", {
           name: "Tenant authorization architecture",

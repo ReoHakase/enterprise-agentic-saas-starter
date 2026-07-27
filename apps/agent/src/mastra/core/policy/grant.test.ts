@@ -9,6 +9,7 @@ const GRANT = "grant_0123456789abcdefghijklmnopqrstuvwxyz"
 const connection = (): AgentConnection => ({
   grant: GRANT,
   expiresAt: "2026-07-22T00:01:00.000Z",
+  memoryResourceId: "resource_test",
   user: { name: "User", profileImage: null },
   organization: {
     name: "Organization",

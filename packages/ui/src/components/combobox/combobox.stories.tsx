@@ -16,7 +16,7 @@ import {
 
 const organizations = ["Acme Cloud", "Northstar Labs", "Orbit Works"]
 
-const meta = preview.meta({
+const meta: ReturnType<typeof preview.meta> = preview.meta({
   title: "Components/Combobox",
   component: Combobox,
   tags: ["autodocs"],
@@ -48,7 +48,7 @@ const OrganizationCombobox = ({ disabled = false }: { disabled?: boolean }) => (
   </Combobox>
 )
 
-export const Organization = meta.story({
+export const Organization: ReturnType<typeof meta.story> = meta.story({
   render: () => <OrganizationCombobox />,
   play: async ({ canvas, canvasElement, step }) => {
     await step("Filter and select an organization", async () => {
@@ -65,7 +65,7 @@ export const Organization = meta.story({
   },
 })
 
-export const NoMatches = meta.story({
+export const NoMatches: ReturnType<typeof meta.story> = meta.story({
   render: () => (
     <div className="grid gap-2">
       <Combobox items={organizations}>
@@ -88,6 +88,6 @@ export const NoMatches = meta.story({
   },
 })
 
-export const Disabled = meta.story({
+export const Disabled: ReturnType<typeof meta.story> = meta.story({
   render: () => <OrganizationCombobox disabled />,
 })

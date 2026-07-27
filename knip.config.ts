@@ -42,6 +42,8 @@ const config: KnipConfig = {
         // Remove when the command no longer needs child-process `$PORT` expansion.
         "mastra",
       ],
+      // Turso CLI is supplied by the Nix development environment, not npm.
+      ignoreBinaries: ["turso"],
       wrangler: {
         config: ["wrangler*.jsonc"],
       },

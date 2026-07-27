@@ -1,5 +1,6 @@
 import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-contracts"
 import { RequestContext } from "@mastra/core/request-context"
+import { Memory } from "@mastra/memory"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -11,25 +12,36 @@ import { createPublicWebResearchAgent } from "../agents/public-web-research-agen
 import { createAgentToolBudget } from "../core/budget/tool"
 import { createAgentVisionBudget } from "../core/budget/vision"
 import type { ProductAgentRequestContext } from "../runtime/request-context"
+import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import { createRunSettlement } from "../runtime/settlement"
+import { createAgentStorage } from "../storage"
 import { createWebSearchTool } from "../tools/web-search/tool"
 import { createScriptedModel, SCRIPTED_MODEL_SENTINEL } from "./scripted-model"
 
 const createRuntimeContext = (
-  api: AgentInternalGateway
+  api: AgentInternalGateway,
+  executionRegistry: ProductAgentExecutionRegistry
 ): RequestContext<ProductAgentRequestContext> => {
   const requestContext = new RequestContext<ProductAgentRequestContext>()
-  requestContext.set("runtime", {
+  const execution = executionRegistry.register({
     api,
     budget: createAgentToolBudget(),
-    openRouterApiKey: "",
     rootRunId: "run_scripted",
     runGrant: "grant_scripted",
     settlement: createRunSettlement(api, "grant_scripted"),
-    timezone: "Asia/Tokyo",
+    suspendAction: async () => undefined,
     visionBudget: createAgentVisionBudget(),
-    visionEnabled: false,
-    writesEnabled: false,
+  })
+  requestContext.set("runtime", {
+    executionId: execution.executionId,
+    modelRoute: "product",
+    policy: {
+      timezone: "Asia/Tokyo",
+      visionEnabled: false,
+      writesEnabled: false,
+    },
+    resourceId: "resource_scripted",
+    threadId: "thread_scripted",
   })
   return requestContext
 }
@@ -72,14 +84,25 @@ describe("standard scripted model", () => {
       ),
       tools: {},
     })
+    const executionRegistry = new ProductAgentExecutionRegistry()
     const agent = createProductAgent({
+      memory: new Memory({
+        storage: createAgentStorage(
+          { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
+          "scripted-model-test"
+        ),
+      }),
       model: productModel,
-      webSearchTool: createWebSearchTool(researchAgent),
+      resolveExecution: executionRegistry.resolve,
+      webSearchTool: createWebSearchTool(
+        researchAgent,
+        executionRegistry.resolve
+      ),
     })
 
     const result = await agent.generate("Read my account context.", {
       maxSteps: 2,
-      requestContext: createRuntimeContext(api),
+      requestContext: createRuntimeContext(api, executionRegistry),
     })
 
     expect(result.text).toBe("Account context was read.")

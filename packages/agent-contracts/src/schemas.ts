@@ -187,6 +187,7 @@ const boundedStringArraySchema = v.pipe(
 export const agentConnectionSchema = v.strictObject({
   grant: capabilitySchema,
   expiresAt: agentIsoTimestampSchema,
+  memoryResourceId: agentIdentifierSchema,
   user: agentAccountContextSchema,
   organization: agentOrganizationContextSchema,
   thread: v.strictObject({
@@ -214,12 +215,6 @@ export const agentRunResultSchema = v.strictObject({
     "canceled",
     "expired",
   ]),
-})
-
-export const agentThreadRenameResultSchema = v.strictObject({
-  threadId: agentIdentifierSchema,
-  title: agentThreadTitleSchema,
-  renamed: v.boolean(),
 })
 
 export const agentWebSearchReservationSchema = v.strictObject({
@@ -416,10 +411,6 @@ export const agentGetIssueInputSchema = v.variant("lookup", [
   }),
 ])
 
-export const agentAppendedMessagesResultSchema = v.strictObject({
-  appended: agentNonNegativeIntegerSchema,
-})
-
 export const agentMemberListSchema = v.pipe(
   v.array(agentMemberSchema),
   v.maxLength(50)
@@ -453,9 +444,6 @@ export type AgentAttachmentMutationReceipt = v.InferOutput<
 export type AgentConnection = v.InferOutput<typeof agentConnectionSchema>
 export type AgentRunGrant = v.InferOutput<typeof agentRunGrantSchema>
 export type AgentRunResult = v.InferOutput<typeof agentRunResultSchema>
-export type AgentThreadRenameResult = v.InferOutput<
-  typeof agentThreadRenameResultSchema
->
 export type AgentWebSearchReservation = v.InferOutput<
   typeof agentWebSearchReservationSchema
 >

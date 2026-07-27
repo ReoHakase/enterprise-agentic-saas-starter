@@ -1,7 +1,20 @@
-import type {
-  AgentCanonicalMessage,
-  AgentContextBudget,
-} from "@enterprise-agentic-saas/agent-contracts"
+import type { AgentUiMessage } from "@enterprise-agentic-saas/agent-contracts"
+
+export type AgentContextBudgetEstimate = {
+  contextWindowTokens: number
+  reservedOutputTokens: number
+  estimated: {
+    system: number
+    skills: number
+    tools: number
+    history: number
+    pageContext: number
+    attachments: number
+    total: number
+  }
+  observedInputTokens: number | null
+  level: "normal" | "notice" | "warning" | "critical"
+}
 
 const AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 const AGENT_RESERVED_OUTPUT_TOKENS = 4_096
@@ -9,7 +22,9 @@ const AGENT_RESERVED_OUTPUT_TOKENS = 4_096
 const estimatedTokens = (value: unknown) =>
   Math.ceil(JSON.stringify(value).length / 4)
 
-const budgetLevel = (usedTokens: number): AgentContextBudget["level"] => {
+const budgetLevel = (
+  usedTokens: number
+): AgentContextBudgetEstimate["level"] => {
   const ratio = usedTokens / AGENT_CONTEXT_WINDOW_TOKENS
   if (ratio >= 0.95) return "critical"
   if (ratio >= 0.85) return "warning"
@@ -18,10 +33,10 @@ const budgetLevel = (usedTokens: number): AgentContextBudget["level"] => {
 }
 
 export const estimateAgentContextBudget = (input: {
-  messages: readonly AgentCanonicalMessage[]
+  messages: readonly AgentUiMessage[]
   attachmentCount: number
   pageContext?: unknown
-}): AgentContextBudget => {
+}): AgentContextBudgetEstimate => {
   // system/skills/toolsはmodel profileに固定されたpromptとschemaの保守的な概算。
   const system = 2_000
   const skills = 3_000

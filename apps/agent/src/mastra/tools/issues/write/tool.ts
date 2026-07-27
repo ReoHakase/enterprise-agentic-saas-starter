@@ -1,110 +1,73 @@
-import { createTool } from "@mastra/core/tools"
+import {
+  createCreateIssueTool,
+  createDeleteIssueTool,
+  createUpdateIssueTool,
+} from "@enterprise-agentic-saas/agent-tools"
 
 import {
-  getProductAgentRuntime,
+  type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../../runtime/request-context"
 import { createAgentWriteHandlers } from "./execute"
-import { agentWriteToolSchemas } from "./schema"
 
-const writeToolMetadata = {
-  annotations: {
-    destructiveHint: true,
-    idempotentHint: true,
-    openWorldHint: false,
-    readOnlyHint: false,
-  },
-}
-
-const createIssueTool = createTool<
-  "create_issue",
-  typeof agentWriteToolSchemas.createIssue,
-  undefined,
-  undefined,
-  undefined,
-  ProductAgentRequestContext
->({
-  id: "create_issue",
-  description:
-    "Prepare an Issue creation in the active organization. It may return a canonical preview that requires human approval before execution.",
-  inputSchema: agentWriteToolSchemas.createIssue,
-  strict: true,
-  mcp: writeToolMetadata,
-  execute: (input, context) => {
-    const runtime = getProductAgentRuntime(context.requestContext)
-    if (!runtime.writesEnabled || !context.agent?.toolCallId) {
+const createIssueTool = (resolveExecution: ProductAgentExecutionResolver) =>
+  createCreateIssueTool<ProductAgentRequestContext>((input, context) => {
+    const runtime = resolveExecution(context.requestContext)
+    if (!context.toolCallId) {
       throw new Error("Issue write capability is unavailable")
     }
     return createAgentWriteHandlers(
       runtime.api,
       runtime.runGrant,
       runtime.budget,
-      runtime.settlement,
+      {
+        holdForApproval: runtime.settlement.holdForApproval,
+        suspendAction: runtime.suspendAction,
+      },
       runtime.rootRunId
-    ).createIssue(input, context.agent.toolCallId)
-  },
-})
+    ).createIssue(input, context.toolCallId)
+  })
 
-const updateIssueTool = createTool<
-  "update_issue",
-  typeof agentWriteToolSchemas.updateIssue,
-  undefined,
-  undefined,
-  undefined,
-  ProductAgentRequestContext
->({
-  id: "update_issue",
-  description:
-    "Prepare an allowlisted Issue field update at its expected revision. It may require human approval.",
-  inputSchema: agentWriteToolSchemas.updateIssue,
-  strict: true,
-  mcp: writeToolMetadata,
-  execute: (input, context) => {
-    const runtime = getProductAgentRuntime(context.requestContext)
-    if (!runtime.writesEnabled || !context.agent?.toolCallId) {
+const updateIssueTool = (resolveExecution: ProductAgentExecutionResolver) =>
+  createUpdateIssueTool<ProductAgentRequestContext>((input, context) => {
+    const runtime = resolveExecution(context.requestContext)
+    if (!context.toolCallId) {
       throw new Error("Issue write capability is unavailable")
     }
     return createAgentWriteHandlers(
       runtime.api,
       runtime.runGrant,
       runtime.budget,
-      runtime.settlement,
+      {
+        holdForApproval: runtime.settlement.holdForApproval,
+        suspendAction: runtime.suspendAction,
+      },
       runtime.rootRunId
-    ).updateIssue(input, context.agent.toolCallId)
-  },
-})
+    ).updateIssue(input, context.toolCallId)
+  })
 
-const deleteIssueTool = createTool<
-  "delete_issue",
-  typeof agentWriteToolSchemas.deleteIssue,
-  undefined,
-  undefined,
-  undefined,
-  ProductAgentRequestContext
->({
-  id: "delete_issue",
-  description:
-    "Prepare deletion of one Issue at its expected revision. Deletion requires approval unless an explicit auto-all policy is active.",
-  inputSchema: agentWriteToolSchemas.deleteIssue,
-  strict: true,
-  mcp: writeToolMetadata,
-  execute: (input, context) => {
-    const runtime = getProductAgentRuntime(context.requestContext)
-    if (!runtime.writesEnabled || !context.agent?.toolCallId) {
+const deleteIssueTool = (resolveExecution: ProductAgentExecutionResolver) =>
+  createDeleteIssueTool<ProductAgentRequestContext>((input, context) => {
+    const runtime = resolveExecution(context.requestContext)
+    if (!context.toolCallId) {
       throw new Error("Issue write capability is unavailable")
     }
     return createAgentWriteHandlers(
       runtime.api,
       runtime.runGrant,
       runtime.budget,
-      runtime.settlement,
+      {
+        holdForApproval: runtime.settlement.holdForApproval,
+        suspendAction: runtime.suspendAction,
+      },
       runtime.rootRunId
-    ).deleteIssue(input, context.agent.toolCallId)
-  },
-})
+    ).deleteIssue(input, context.toolCallId)
+  })
 
-export const issueWriteTools = {
-  create_issue: createIssueTool,
-  delete_issue: deleteIssueTool,
-  update_issue: updateIssueTool,
-}
+export const createIssueWriteTools = (
+  resolveExecution: ProductAgentExecutionResolver
+) => ({
+  create_issue: createIssueTool(resolveExecution),
+  delete_issue: deleteIssueTool(resolveExecution),
+  update_issue: updateIssueTool(resolveExecution),
+})

@@ -53,19 +53,6 @@ export const AgentMessage = ({
               {part.text}
             </p>
           )
-        if (part.type === "reasoning") {
-          return (
-            <details
-              key={key}
-              className="rounded-lg border bg-muted/30 px-3 py-2 text-xs"
-            >
-              <summary className="cursor-pointer font-medium">Thinking</summary>
-              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
-                {part.text}
-              </p>
-            </details>
-          )
-        }
         if (part.type === "data-activity") {
           return null
         }
@@ -78,13 +65,6 @@ export const AgentMessage = ({
               @{part.data.label}
             </span>
           )
-        }
-        if (part.type === "data-thread-title") {
-          return part.data.renamed ? (
-            <p key={key} className="text-xs text-muted-foreground">
-              Thread renamed to {part.data.title}
-            </p>
-          ) : null
         }
         if (part.type === "source-url") {
           return (
@@ -99,8 +79,7 @@ export const AgentMessage = ({
             </a>
           )
         }
-        if (part.type === "step-start" || part.type === "data-context-budget")
-          return null
+        if (part.type === "step-start") return null
         if (isToolUIPart(part)) {
           const toolName = getToolName(part)
           if (part.state === "output-available") {

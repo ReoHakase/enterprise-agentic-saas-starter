@@ -6,10 +6,7 @@ import {
   request,
 } from "./agent.test-support"
 import { createAgentInternalApi } from "./internal-api"
-import {
-  createAgentThreadForSession,
-  issueAgentConnectionTicket,
-} from "./threads/repository"
+import { createAgentThreadForSession } from "./threads/repository"
 
 describe("Agent client tool continuation", () => {
   it("continues only the last persisted allowlisted client tool call", async () => {
@@ -21,38 +18,6 @@ describe("Agent client tool continuation", () => {
       title: "Client continuation",
     })
     const internal = createAgentInternalApi(db)
-    const initialTicket = await issueAgentConnectionTicket(db, {
-      sessionId: "agent-session-a",
-      userId: "agent-user-a",
-      threadId: thread.id,
-    })
-    const connection = await internal.consumeConnectionTicket({
-      ticket: initialTicket.ticket,
-      threadId: thread.id,
-    })
-    const initialRun = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "message_client_tool_1",
-    })
-    await internal.appendRunMessages({
-      grant: initialRun.grant,
-      messages: [
-        {
-          id: "assistant_client_tool_1",
-          role: "assistant",
-          parts: [
-            {
-              type: "tool-ui_read_form_draft",
-              toolCallId: "call_client_1",
-              state: "input-available",
-              input: {},
-            },
-          ],
-        },
-      ],
-    })
-    await internal.finishRun({ grant: initialRun.grant, outcome: "completed" })
-
     const continuationBody = {
       threadId: thread.id,
       assistantMessageId: "assistant_client_tool_1",
@@ -86,21 +51,18 @@ describe("Agent client tool continuation", () => {
       trigger: "client_tool_result",
     })
     expect(inputs[0]?.clientMessageId).toMatch(/^continuation_[0-9a-f]{64}$/)
-    expect(inputs[0]?.messages).toEqual([
-      {
-        id: "assistant_client_tool_1",
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-ui_read_form_draft",
-            toolCallId: "call_client_1",
-            state: "output-available",
-            input: {},
-            output: continuationBody.clientToolResults[0]?.output,
-          },
-        ],
-      },
-    ])
+    expect(inputs[0]?.message).toEqual({
+      id: "assistant_client_tool_1",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-ui_read_form_draft",
+          toolCallId: "call_client_1",
+          state: "output-available",
+          output: continuationBody.clientToolResults[0]?.output,
+        },
+      ],
+    })
 
     const repeated = await app.handle(
       request("/agent/chat", { method: "POST", body: continuationBody })
@@ -143,7 +105,24 @@ describe("Agent client tool continuation", () => {
     const conflict = await app.handle(
       request("/agent/chat", { method: "POST", body: changed })
     )
-    expect(conflict.status).toBe(409)
-    expect(inputs).toHaveLength(2)
+    expect(conflict.status).toBe(200)
+    await conflict.body?.cancel()
+    expect(inputs).toHaveLength(3)
+    expect(inputs[2]?.clientMessageId).toBe(syntheticMessageId)
+    const changedTicket = inputs[2]?.ticket
+    if (typeof changedTicket !== "string") {
+      throw new Error("Missing changed continuation capability")
+    }
+    const changedConnection = await internal.consumeConnectionTicket({
+      ticket: changedTicket,
+      threadId: thread.id,
+    })
+    await expect(
+      internal.startRun({
+        grant: changedConnection.grant,
+        clientMessageId: syntheticMessageId,
+        trigger: "client_tool_result",
+      })
+    ).rejects.toMatchObject({ code: "conflict" })
   })
 })

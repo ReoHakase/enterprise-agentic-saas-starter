@@ -1,7 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
-  agentMessages,
-  agentThreads,
   files,
   member,
   organization,
@@ -10,8 +8,8 @@ import {
 import { and, eq } from "drizzle-orm"
 
 import type {
-  AgentCanonicalContextReference,
-  AgentCanonicalMessage,
+  AgentUiContextReference,
+  AgentUiMessage,
   AgentContentSegment,
   AgentContextReferenceInput,
   AgentResolvedContextReference,
@@ -19,18 +17,13 @@ import type {
 import { publicErrors } from "../../../errors/app-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
 import { findIssueById, findIssueByNumber } from "../../issues/public"
-import { createAgentToken } from "../crypto"
+import { createAgentToken, hashAgentToken } from "../crypto"
 import {
   requireActiveMembership,
   requireLiveSession,
   requireOwnedThread,
 } from "./auth-repository"
-import {
-  listModelContextInTransaction,
-  parseCanonicalMessage,
-  preserveAgentError,
-  type AgentTransaction,
-} from "./repository-support"
+import { preserveAgentError, type AgentTransaction } from "./repository-support"
 import { issueConnectionTicketInTransaction } from "./thread-repository"
 
 const resolveAgentContextReferencesInTransaction = async (
@@ -157,7 +150,7 @@ const resolveAgentContextReferencesInTransaction = async (
 
 const toCanonicalContextReference = (
   reference: AgentResolvedContextReference
-): AgentCanonicalContextReference => {
+): AgentUiContextReference => {
   if (reference.kind === "issue") {
     return {
       kind: "issue",
@@ -182,9 +175,9 @@ const canonicalUserParts = (input: {
   assetIds: string[]
   contentSegments: AgentContentSegment[]
   resolvedReferences: AgentResolvedContextReference[]
-}): AgentCanonicalMessage["parts"] => {
+}): AgentUiMessage["parts"] => {
   let referenceIndex = 0
-  const parts: AgentCanonicalMessage["parts"] = input.contentSegments.map(
+  const parts: AgentUiMessage["parts"] = input.contentSegments.map(
     (segment) => {
       if (segment.type === "text") return segment
       const resolved = input.resolvedReferences[referenceIndex]
@@ -246,65 +239,24 @@ export const prepareAgentChatForSession = async (
           organizationId: current.activeOrganizationId,
           references: inputReferences,
         })
-      const parsedMessage = parseCanonicalMessage(
-        {
-          id: input.messageId,
-          role: "user",
-          parts: canonicalUserParts({
-            assetIds: input.assetIds,
-            contentSegments: input.contentSegments,
-            resolvedReferences: contextReferences,
-          }),
-        },
-        "user"
-      )
-      const content = { parts: parsedMessage.parts }
-      const inserted = await tx
-        .insert(agentMessages)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: current.activeOrganizationId,
-          threadId: thread.id,
-          clientMessageId: parsedMessage.id,
-          role: "user",
-          content,
-          createdAt: now,
+      const publicQueries = input.contentSegments.flatMap((segment) => {
+        if (segment.type !== "text") return []
+        return segment.text.split(/\r?\n/u).flatMap((line) => {
+          const match =
+            /^public-only web query\s*:\s*(.{2,200})$/iu.exec(line.trim()) ??
+            /^公開情報だけのweb検索\s*[:：]\s*(.{2,200})$/iu.exec(line.trim())
+          return match?.[1] ? [match[1]] : []
         })
-        .onConflictDoNothing()
-        .returning({ id: agentMessages.id })
-      if (!inserted[0]) {
-        const existingRows = await tx
-          .select({ content: agentMessages.content, role: agentMessages.role })
-          .from(agentMessages)
-          .where(
-            and(
-              eq(agentMessages.organizationId, current.activeOrganizationId),
-              eq(agentMessages.threadId, thread.id),
-              eq(agentMessages.clientMessageId, parsedMessage.id)
-            )
-          )
-          .limit(1)
-        const existing = existingRows[0]
-        if (
-          !existing ||
-          existing.role !== "user" ||
-          JSON.stringify(existing.content) !== JSON.stringify(content)
-        ) {
-          throw publicErrors.conflict("Agent message id is already in use", {
-            reason: "idempotency_conflict",
-            resource: "agent_message",
-          })
-        }
+      })
+      const message: AgentUiMessage = {
+        id: input.messageId,
+        role: "user",
+        parts: canonicalUserParts({
+          assetIds: input.assetIds,
+          contentSegments: input.contentSegments,
+          resolvedReferences: contextReferences,
+        }),
       }
-      await tx
-        .update(agentThreads)
-        .set({ updatedAt: now })
-        .where(
-          and(
-            eq(agentThreads.organizationId, current.activeOrganizationId),
-            eq(agentThreads.id, thread.id)
-          )
-        )
       const connection = await issueConnectionTicketInTransaction(tx, {
         credential,
         current,
@@ -312,17 +264,17 @@ export const prepareAgentChatForSession = async (
         sessionId: input.sessionId,
         threadId: thread.id,
         userId: input.userId,
-      })
-      const messages = await listModelContextInTransaction(tx, {
-        organizationId: current.activeOrganizationId,
-        threadId: thread.id,
+        webSearchQueryHash:
+          publicQueries.length === 1
+            ? await hashAgentToken(`web-query\u0000${publicQueries[0]}`)
+            : undefined,
       })
       return {
         ...connection,
         assetIds: input.assetIds,
         contextReferences,
-        clientMessageId: parsedMessage.id,
-        messages,
+        clientMessageId: message.id,
+        messages: [message],
         threadId: thread.id,
         timezone: input.timezone,
         trigger: "user_message" as const,

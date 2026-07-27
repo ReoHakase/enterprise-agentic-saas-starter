@@ -12,7 +12,6 @@ import {
 import type { AgentInternalPorts } from "./internal-ports"
 import {
   agentGrantInputModel,
-  appendAgentRunMessagesInputModel,
   consumeConnectionTicketInputModel,
   finishAgentRunInputModel,
   getAgentImageInputModel,
@@ -20,7 +19,6 @@ import {
   getAgentIssueInputModel,
   guardAgentWebSearchInputModel,
   recordAgentUsageInputModel,
-  renameAgentThreadInputModel,
   reserveAgentWebSearchInputModel,
   searchAgentIssuesInputModel,
   searchAgentLabelsInputModel,
@@ -43,13 +41,6 @@ const parseInternalInput = <
 }
 
 export const createAgentInternalService = (ports: AgentInternalPorts) => ({
-  appendRunMessages(
-    input: v.InferInput<typeof appendAgentRunMessagesInputModel>
-  ) {
-    return ports.appendRunMessages(
-      parseInternalInput(appendAgentRunMessagesInputModel, input)
-    )
-  },
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
     return ports.cancelRun(parseInternalInput(agentGrantInputModel, input))
   },
@@ -125,11 +116,6 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
   recordUsage(input: v.InferInput<typeof recordAgentUsageInputModel>) {
     return ports.recordUsage(
       parseInternalInput(recordAgentUsageInputModel, input)
-    )
-  },
-  renameThread(input: v.InferInput<typeof renameAgentThreadInputModel>) {
-    return ports.renameThread(
-      parseInternalInput(renameAgentThreadInputModel, input)
     )
   },
   reserveWebSearch(

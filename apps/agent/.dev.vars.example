@@ -1,5 +1,6 @@
 AGENT_RUNS_ENABLED="1"
 AGENT_VISION_ENABLED="1"
 AGENT_WRITES_ENABLED="1"
+MASTRA_STORAGE_URL="https://agent-storage.enterprise-agentic-saas.localhost"
 NODE_ENV="development"
 SENTRY_ENVIRONMENT="agent-development"

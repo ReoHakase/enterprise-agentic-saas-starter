@@ -1,7 +1,8 @@
+import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 
 import { executePublicWebSearch } from "./execute"
-import { publicWebSearchInputSchema } from "./schema"
+import { publicWebSearchInputValueSchema } from "./schema"
 
 const publicResult = {
   finishReason: "stop",
@@ -91,14 +92,14 @@ describe("public Web search boundary", () => {
 
   it("uses a strict public-query shape", () => {
     expect(
-      publicWebSearchInputSchema.safeParse({
+      v.safeParse(publicWebSearchInputValueSchema, {
         query: "Cloudflare R2 object limits 2026",
         organizationId: "org_private",
       }).success
     ).toBe(false)
     expect(
-      publicWebSearchInputSchema.parse({
-        query: "  Cloudflare R2 object limits 2026  ",
+      v.parse(publicWebSearchInputValueSchema, {
+        query: "Cloudflare R2 object limits 2026",
       })
     ).toEqual({ query: "Cloudflare R2 object limits 2026" })
   })

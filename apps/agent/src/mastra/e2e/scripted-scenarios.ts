@@ -1,75 +1,45 @@
-import { createProductAgent } from "../agents/product-agent"
-import { createPublicWebResearchAgent } from "../agents/public-web-research-agent"
-import { createThreadTitleAgent } from "../agents/thread-title-agent"
+import {
+  createProductAgent,
+  createProductAgentMemory,
+} from "../agents/product-agent"
 import { createProductRuntime } from "../composition/create-runtime"
+import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import { createScriptedModel } from "../test-support/scripted-model"
 import { createWebSearchTool } from "../tools/web-search/tool"
+import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
-const publicWebResearchAgent = createPublicWebResearchAgent({
-  model: createScriptedModel(
-    [{ parts: [{ type: "text", text: "No public search was scripted." }] }],
-    { modelId: "scripted-public-research", repeat: true }
-  ),
-  tools: {},
+const scriptedComposition = createScriptedAgentRuntimeComposition({
+  MASTRA_STORAGE_URL: ":memory:",
+  NODE_ENV: "test",
 })
+export const {
+  approvedIssueActionExecutionRegistry:
+    scriptedApprovedIssueActionExecutionRegistry,
+  threadTitleAgent: scriptedThreadTitleAgent,
+} = scriptedComposition
 
-const productAgent = createProductAgent({
+const { publicWebResearchAgent, storage } = scriptedComposition
+export const scriptedSseExecutionRegistry = new ProductAgentExecutionRegistry()
+const scriptedSseProductAgent = createProductAgent({
+  memory: createProductAgentMemory(storage),
   model: createScriptedModel(
-    [
-      {
-        finishReason: "tool-calls",
-        parts: [
-          {
-            type: "tool-call",
-            input: {
-              description:
-                "Created by the deterministic cross-Worker Agent E2E.",
-              priority: "high",
-              title: "Scripted Agent cross-worker issue",
-            },
-            toolCallId: "scripted-create-issue-call",
-            toolName: "create_issue",
-          },
-        ],
-        usage: { inputTokens: 12, outputTokens: 3 },
-      },
-      {
-        parts: [
-          {
-            type: "text",
-            text: "SCRIPTED_AGENT_OK",
-          },
-        ],
-        usage: { inputTokens: 16, outputTokens: 4 },
-      },
-    ],
-    { modelId: "scripted-product-agent", repeat: true }
+    [{ parts: [{ type: "text", text: "SCRIPTED_NATIVE_SSE_OK" }] }],
+    {
+      metadataSentinel: "PRIVATE_PROVIDER_METADATA_SENTINEL",
+      modelId: "scripted-native-sse-agent",
+      repeat: true,
+    }
   ),
-  webSearchTool: createWebSearchTool(publicWebResearchAgent),
-})
-
-const threadTitleAgent = createThreadTitleAgent({
-  model: createScriptedModel(
-    [
-      {
-        finishReason: "tool-calls",
-        parts: [
-          {
-            type: "tool-call",
-            input: { title: "Scripted agent conversation" },
-            toolCallId: "scripted-title-call",
-            toolName: "rename_thread",
-          },
-        ],
-        usage: { inputTokens: 8, outputTokens: 4 },
-      },
-    ],
-    { modelId: "scripted-thread-title", repeat: true }
+  resolveExecution: scriptedSseExecutionRegistry.resolve,
+  webSearchTool: createWebSearchTool(
+    publicWebResearchAgent,
+    scriptedSseExecutionRegistry.resolve
   ),
 })
-
-export const scriptedMastra = createProductRuntime({
-  productAgent,
+export const scriptedSseMastra = createProductRuntime({
+  approvedIssueActionWorkflow: scriptedComposition.approvedIssueActionWorkflow,
+  productAgent: scriptedSseProductAgent,
   publicWebResearchAgent,
-  threadTitleAgent,
+  storage,
+  threadTitleAgent: scriptedThreadTitleAgent,
 })

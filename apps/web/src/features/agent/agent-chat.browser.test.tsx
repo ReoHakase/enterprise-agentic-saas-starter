@@ -1,4 +1,3 @@
-import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -8,19 +7,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AgentApprovalCard } from "./components/agent-approval-card/agent-approval-card"
 import { AgentConversationViewport } from "./components/agent-conversation-viewport/agent-conversation-viewport"
-import { AgentMeters } from "./components/agent-meters/agent-meters"
 import {
   AgentNewThreadComposer,
   type AgentNewThreadInput,
 } from "./components/agent-new-thread-composer/agent-new-thread-composer"
 import { AgentSamplePrompts } from "./components/agent-sample-prompts/agent-sample-prompts"
 import type { AgentIssueAction } from "./schema"
-import {
-  agentContextBudgetMessages,
-  agentConversationTurns,
-} from "./test-support/fixtures"
+import { agentConversationTurns } from "./test-support/fixtures"
 
-const contextBudgetNearLimit = [...agentContextBudgetMessages.nearLimit]
 const conversationTurns = [...agentConversationTurns]
 const organizationId = "organization-1"
 const timestamp = "2026-07-25T09:00:00.000Z"
@@ -329,26 +323,6 @@ describe("Agent chat browser integration", () => {
 
     expect(onSelect).toHaveBeenCalledWith(
       "Summarize the current page and suggest the next action."
-    )
-  })
-
-  it("opens the context budget tooltip without horizontal overflow", async () => {
-    const actor = userEvent.setup()
-    render(
-      <TooltipProvider>
-        <AgentMeters streamedMessages={contextBudgetNearLimit} />
-      </TooltipProvider>
-    )
-
-    const trigger = screen.getByRole("button", {
-      name: "Last request context 95% used",
-    })
-    await actor.hover(trigger)
-    await expect
-      .element(await screen.findByText("Last request actual"))
-      .toBeVisible()
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      window.innerWidth
     )
   })
 

@@ -2,17 +2,12 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentActions,
   agentGrants,
-  agentMessages,
   agentRuns,
   agentThreads,
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
 
-import type {
-  AgentCanonicalMessage,
-  AgentRunGrant,
-  AgentRunResult,
-} from "../../../agent-client"
+import type { AgentRunGrant, AgentRunResult } from "../../../agent-client"
 import { AppError, publicErrors } from "../../../errors/app-error"
 import { bindAgentAssetsToRunInTransaction } from "../../files/public"
 import { createAgentToken, hashAgentToken } from "../crypto"
@@ -24,7 +19,6 @@ import {
 import {
   AGENT_RUN_TTL_MS,
   isRetryableDatabaseRace,
-  parseCanonicalMessage,
   preserveAgentError,
   type AgentTransaction,
   type ValidGrant,
@@ -50,7 +44,8 @@ const isCompatibleExistingRun = (
   run.sessionId === context.sessionId &&
   run.userId === context.userId &&
   run.contextEpoch === context.contextEpoch &&
-  run.scope === "chat"
+  run.scope === "chat" &&
+  run.webSearchQueryHash === context.webSearchQueryHash
 
 const startAgentRunWithRetry = async (
   db: Db,
@@ -82,6 +77,7 @@ const startAgentRunWithRetry = async (
           userId: context.userId,
           contextEpoch: context.contextEpoch,
           clientMessageId: input.clientMessageId,
+          webSearchQueryHash: context.webSearchQueryHash,
           estimatedInputTokenCount: input.estimatedInputTokenCount ?? 0,
           status: "running",
           scope: "chat",
@@ -224,6 +220,7 @@ const startAgentRunWithRetry = async (
         sessionId: run.sessionId,
         userId: run.userId,
         contextEpoch: run.contextEpoch,
+        webSearchQueryHash: run.webSearchQueryHash,
         now,
         expiresAt: run.expiresAt,
       })
@@ -245,7 +242,7 @@ const startAgentRunWithRetry = async (
         })
       }
       const threadRows = await tx
-        .select({ titleState: agentThreads.titleState })
+        .select({ id: agentThreads.id })
         .from(agentThreads)
         .where(
           and(
@@ -268,7 +265,7 @@ const startAgentRunWithRetry = async (
         attempt: run.attempt,
         grant: runCredential.token,
         expiresAt: grantExpiresAt.toISOString(),
-        shouldGenerateTitle: thread.titleState === "untitled",
+        shouldGenerateTitle: input.trigger !== "client_tool_result",
       }
     })
   } catch (cause) {
@@ -370,79 +367,6 @@ export const finishAgentRun = (
   db: Db,
   input: { grant: string; outcome: "completed" | "failed"; now?: Date }
 ) => transitionAgentRun(db, { ...input, status: input.outcome })
-
-export const appendAgentRunMessages = async (
-  db: Db,
-  input: {
-    grant: string
-    messages: AgentCanonicalMessage[]
-    now?: Date
-  }
-): Promise<{ appended: number }> => {
-  try {
-    return await withRunGrant(db, input, async (tx, context) => {
-      let appended = 0
-      const now = input.now ?? new Date()
-      for (const unparsedMessage of input.messages) {
-        const message = parseCanonicalMessage(unparsedMessage, "assistant")
-        const content = { parts: message.parts }
-        // oxlint-disable-next-line no-await-in-loop -- ordered idempotency checks keep each bounded assistant projection atomic.
-        const inserted = await tx
-          .insert(agentMessages)
-          .values({
-            id: message.id,
-            organizationId: context.organizationId,
-            threadId: context.threadId,
-            role: "assistant",
-            content,
-            createdAt: now,
-          })
-          .onConflictDoNothing()
-          .returning({ id: agentMessages.id })
-        if (inserted[0]) {
-          appended += 1
-          continue
-        }
-        // oxlint-disable-next-line no-await-in-loop -- conflict verification must follow this message's insert result.
-        const existingRows = await tx
-          .select({
-            content: agentMessages.content,
-            organizationId: agentMessages.organizationId,
-            role: agentMessages.role,
-            threadId: agentMessages.threadId,
-          })
-          .from(agentMessages)
-          .where(eq(agentMessages.id, message.id))
-          .limit(1)
-        const existing = existingRows[0]
-        if (
-          !existing ||
-          existing.organizationId !== context.organizationId ||
-          existing.threadId !== context.threadId ||
-          existing.role !== "assistant" ||
-          JSON.stringify(existing.content) !== JSON.stringify(content)
-        ) {
-          throw publicErrors.conflict("Agent message id is already in use", {
-            reason: "idempotency_conflict",
-            resource: "agent_message",
-          })
-        }
-      }
-      await tx
-        .update(agentThreads)
-        .set({ updatedAt: now })
-        .where(
-          and(
-            eq(agentThreads.organizationId, context.organizationId),
-            eq(agentThreads.id, context.threadId)
-          )
-        )
-      return { appended }
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "appendAgentRunMessages")
-  }
-}
 
 export const withRunGrant = async <T>(
   db: Db,

@@ -4,7 +4,6 @@ import { queryOptions, type QueryFunctionContext } from "@tanstack/react-query"
 import {
   getAgentAction,
   getAgentApprovalPolicy,
-  getAgentThreadContext,
   listAgentMessages,
   listAgentThreads,
 } from "./api"
@@ -19,8 +18,6 @@ export const agentKeys = {
     [...agentKeys.all, "action", organizationId, actionId] as const,
   policy: (organizationId: string, threadId: string) =>
     [...agentKeys.all, "policy", organizationId, threadId] as const,
-  context: (organizationId: string, threadId: string) =>
-    [...agentKeys.all, "context", organizationId, threadId] as const,
 }
 
 const createAgentThreadsQueryFn =
@@ -39,10 +36,6 @@ const createAgentPolicyQueryFn =
   (client: ApiClient, threadId: string) =>
   ({ signal }: QueryFunctionContext) =>
     getAgentApprovalPolicy(client, threadId, signal)
-const createAgentThreadContextQueryFn =
-  (client: ApiClient, threadId: string) =>
-  ({ signal }: QueryFunctionContext) =>
-    getAgentThreadContext(client, threadId, signal)
 
 export const agentThreadsQueryOptions = (
   client: ApiClient,
@@ -88,15 +81,4 @@ export const agentApprovalPolicyQueryOptions = (
     queryFn: createAgentPolicyQueryFn(client, threadId),
     enabled: organizationId.length > 0 && threadId.length > 0,
     staleTime: 0,
-  })
-
-export const agentThreadContextQueryOptions = (
-  client: ApiClient,
-  organizationId: string,
-  threadId: string
-) =>
-  queryOptions({
-    queryKey: agentKeys.context(organizationId, threadId),
-    queryFn: createAgentThreadContextQueryFn(client, threadId),
-    enabled: organizationId.length > 0 && threadId.length > 0,
   })
