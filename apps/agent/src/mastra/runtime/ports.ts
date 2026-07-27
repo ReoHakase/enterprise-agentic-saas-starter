@@ -21,7 +21,7 @@ import type {
   AgentUsageRecordInput,
   AgentUsageRecordResult,
   AgentWebSearchReservation,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 
 type BearerInput = { grant: string }
 

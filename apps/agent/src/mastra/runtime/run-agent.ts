@@ -3,7 +3,7 @@ import type {
   AgentCanonicalMessage,
   AgentRuntimeChatInput,
   AgentThreadRenameResult,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 import { toAISdkStream } from "@mastra/ai-sdk"
 import type { Mastra } from "@mastra/core/mastra"
 import { RequestContext } from "@mastra/core/request-context"

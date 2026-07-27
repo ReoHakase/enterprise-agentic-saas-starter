@@ -1,7 +1,7 @@
 import type {
   AgentCanonicalMessage,
   AgentContextBudget,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 
 const AGENT_CONTEXT_WINDOW_TOKENS = 1_000_000
 const AGENT_RESERVED_OUTPUT_TOKENS = 4_096

@@ -1,4 +1,4 @@
-import type { AgentConnection } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentConnection } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it } from "vitest"
 
 import { isActiveOpaqueGrant, toLiveConnectionGrant } from "./grant"

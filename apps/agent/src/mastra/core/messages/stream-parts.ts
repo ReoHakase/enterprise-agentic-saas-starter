@@ -1,4 +1,4 @@
-import type { AgentContextBudget } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentContextBudget } from "@enterprise-agentic-saas/agent-contracts"
 import type { UIMessageChunk } from "ai"
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/

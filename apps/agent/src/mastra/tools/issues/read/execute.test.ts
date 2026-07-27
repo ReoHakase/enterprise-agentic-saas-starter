@@ -1,7 +1,9 @@
 import type {
   AgentIssue,
   AgentIssueDetail,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
+import { RequestContext } from "@mastra/core/request-context"
+import { noopObserve } from "@mastra/core/tools"
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 
@@ -48,12 +50,14 @@ const issueDetail = (description = "description"): AgentIssueDetail => ({
   attachments: { items: [], nextCursor: null },
 })
 
-const apiHarness = (options: { failAccount?: boolean } = {}) => {
+const apiHarness = (
+  options: { failAccount?: boolean; issueDescription?: string } = {}
+) => {
   const grants: string[] = []
   const api: AgentReadApi = {
     getIssue: (input) => {
       grants.push(input.grant)
-      return Promise.resolve(issueDetail())
+      return Promise.resolve(issueDetail(options.issueDescription))
     },
     readAccountContext: (input) => {
       grants.push(input.grant)
@@ -117,6 +121,9 @@ describe("Agent read tool schemas", () => {
       agentReadToolSchemas.issueSearch.safeParse({ status: "unknown" }).success
     ).toBe(false)
     expect(
+      agentReadToolSchemas.issueSearch.safeParse({ label: "   " }).success
+    ).toBe(false)
+    expect(
       agentReadToolSchemas.getIssue.safeParse({ lookup: "number", number: 0 })
         .success
     ).toBe(false)
@@ -157,13 +164,54 @@ describe("createAgentReadHandlers", () => {
     expect(JSON.stringify(results)).not.toContain(RUN_GRANT)
   })
 
+  it("connects the production get_issue registry to runtime capability injection", async () => {
+    const description = "x".repeat(50_000)
+    const test = apiHarness({ issueDescription: description })
+    const requestContext = new RequestContext<Record<string, unknown>>()
+    requestContext.set("runtime", {
+      api: test.api,
+      budget: createAgentToolBudget(),
+      runGrant: RUN_GRANT,
+    })
+    const execute = issueReadTools.get_issue.execute
+
+    const result = await Reflect.apply(
+      execute ?? (() => undefined),
+      undefined,
+      [
+        { lookup: "id", id: "issue_1" },
+        { observe: noopObserve, requestContext },
+      ]
+    )
+
+    expect(test.grants).toEqual([RUN_GRANT])
+    expect(result.description).toHaveLength(20_000)
+    expect(result.description.endsWith("…")).toBe(true)
+  })
+
+  it("fails closed when production get_issue has no runtime context", async () => {
+    const execute = issueReadTools.get_issue.execute
+    let caught: unknown
+    try {
+      await Reflect.apply(execute ?? (() => undefined), undefined, [
+        { lookup: "id", id: "issue_1" },
+        { observe: noopObserve, requestContext: new RequestContext() },
+      ])
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    expect(String(caught)).toContain("Agent tool execution failed")
+  })
+
   it("bounds Issue descriptions returned by list search", async () => {
     const test = apiHarness()
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 
     const results = await handlers.searchIssues({ limit: 10 })
 
-    expect(results[0]?.description).toHaveLength(2_001)
+    expect(results[0]?.description).toHaveLength(2_000)
     expect(results[0]?.description.endsWith("…")).toBe(true)
   })
 

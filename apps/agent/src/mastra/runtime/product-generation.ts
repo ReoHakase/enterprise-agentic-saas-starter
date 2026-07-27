@@ -1,4 +1,4 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/agent-contracts"
 
 import { requiresWebSearchFirstStep } from "../core/policy/web-search-request"
 

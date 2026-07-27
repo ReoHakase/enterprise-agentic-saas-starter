@@ -1,4 +1,4 @@
-import type { AgentConnection } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentConnection } from "@enterprise-agentic-saas/agent-contracts"
 
 const OPAQUE_TOKEN_PATTERN = /^[A-Za-z0-9._~-]{32,512}$/
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/

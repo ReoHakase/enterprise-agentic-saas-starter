@@ -80,6 +80,8 @@ ui_patch_form_draft
 - partial assistant messageは停止済みとして残すか、安全に除去する
 - `clearError()`を呼ぶ
 - cancel完了中だけSendを無効化する
+- stream先頭の一時的な`data-run`からopaque run IDを保持し、Memoryへ永続化しない
+- cancel完了後は新しいsubmission IDで次turnを開始する
 
 ### API
 
@@ -92,6 +94,11 @@ POST /agent/threads/:threadId/runs/:runId/cancel
 - grantとquota reservationを解放する
 - Agent側abortと同時実行されても同じterminal stateへ収束する
 - completed runをcanceledへ戻さない
+- terminal runへの再cancelはgrant lookupより前にsession、membership、owner、run ownershipで認可し、
+  現在のterminal stateをそのまま返す
+
+browserのclient tool自動継続は、最終stepに完了済みの`ui_*`だけがある場合に限定します。
+server tool、approval待ち、denied、failedはbrowser continuationを開始しません。
 
 ### Agent
 

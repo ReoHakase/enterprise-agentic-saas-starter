@@ -102,6 +102,12 @@ const config: KnipConfig = {
       },
       storybook: true,
     },
+    "packages/agent-contracts": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+    },
+    "packages/agent-tools": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+    },
     "packages/auth": {
       project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
     },

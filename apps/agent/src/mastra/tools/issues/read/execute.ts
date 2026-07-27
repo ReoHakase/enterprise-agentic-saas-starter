@@ -1,7 +1,7 @@
 import type {
   AgentIssue,
   AgentSearchIssuesInput,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { z } from "zod"
 
 import {
@@ -38,7 +38,9 @@ type AgentIssueImageApi = Pick<
 >
 
 const boundedText = (value: string, maximumLength: number): string =>
-  value.length <= maximumLength ? value : `${value.slice(0, maximumLength)}…`
+  value.length <= maximumLength
+    ? value
+    : `${value.slice(0, maximumLength - 1)}…`
 
 const boundedIssue = <TIssue extends AgentIssue>(
   issue: TIssue,

@@ -35,7 +35,7 @@ export const issueSearchInputSchema = z
       .string()
       .regex(/^[A-Za-z0-9_-]{1,128}$/)
       .optional(),
-    label: z.string().trim().max(40).optional(),
+    label: z.string().trim().min(1).max(40).optional(),
     limit: z
       .number()
       .int()

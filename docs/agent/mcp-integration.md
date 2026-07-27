@@ -219,7 +219,9 @@ clientのconfirmation UIは補助であり、server authorizationの代わりで
 
 ## Idempotency
 
-MCP JSON-RPC request ID、client ID、principal、organization、tool名からidempotency identityを作ります。
+MCP JSON-RPC request IDはtransport相関専用であり、業務冪等キーへ流用しません。write tool schemaで
+clientが明示した業務冪等キーを必須にし、client ID、principal、organization、tool名、正規化payload
+digestへ束縛します。同じJSON-RPC request IDで異なるpayloadが来ても同じ業務操作とみなしません。
 
 ```text
 clientId

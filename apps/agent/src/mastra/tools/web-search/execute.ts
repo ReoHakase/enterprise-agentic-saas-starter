@@ -154,11 +154,16 @@ export const executePublicWebSearch = async (
     throw new Error("Web search accepts public information only")
   }
   dependencies.consumeBudget()
-  const guarded = await dependencies.guard(parsed.data.query)
+  const guarded = publicWebSearchInputSchema.safeParse(
+    await dependencies.guard(parsed.data.query)
+  )
+  if (!guarded.success) {
+    throw new Error("Web search accepts public information only")
+  }
   const operationId = await normalizeOperationId(dependencies.operationId)
   await dependencies.reserve(operationId)
   const result = await dependencies.search(
-    guarded.query,
+    guarded.data.query,
     dependencies.abortSignal
   )
   return toBoundedPublicWebSearchResult(result)

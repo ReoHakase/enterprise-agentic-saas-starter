@@ -1,4 +1,4 @@
-import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-contracts"
 
 type TypedAgentInternalApi = CloudflareEnv["AGENT_INTERNAL_API"] &
   AgentInternalFetchBinding

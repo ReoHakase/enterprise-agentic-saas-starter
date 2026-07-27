@@ -1,4 +1,4 @@
-import type { AgentRuntimeChatInput } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentRuntimeChatInput } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it } from "vitest"
 
 import {

@@ -44,6 +44,10 @@ Agent Turso
 
 同じTurso organization内でよいですが、database URLとtokenを共有しません。
 
+Mastra Storageは完全なthread metadata、message履歴、Workflow snapshotの正本です。Mastra Memoryは
+同じStorage上のthreadからモデルへ渡す文脈を構成し、thread-scopedを既定にします。Memoryを別の履歴
+正本、認可台帳、別threadからの暗黙共有に使いません。
+
 ## Thread ID
 
 Application DBとAgent DBで同じUUIDを使います。
@@ -68,6 +72,11 @@ agent_threads
   created_at
   archived_at
 ```
+
+Phase 1では`agent_runs`を縮小しません。approval、grant、quotaと子FKが現役のためです。
+削除対象は`agent_threads`のtitle系列、`updated_at`、API側message/summary tableに限定します。
+新しいappend-only migrationで6列tableへ再構築し、既存`status = archived`行だけ旧`updated_at`を
+`archived_at`へ移します。旧migration、snapshot、journalは変更しません。
 
 保持理由:
 
@@ -200,11 +209,11 @@ agent_thread_search_projection
 1. Application DBでstatus = archived
 2. ticket、grant、active runを失効
 3. 新しいhistory readを拒否
-4. Agent thread削除を要求
-5. 失敗時は削除jobをretry
+4. retention期間中はAgent threadと履歴を保持する
 ```
 
-手順1から3がsecurity boundaryです。Agent DBの物理削除が遅れてもアクセスは復活しません。
+手順1から3がsecurity boundaryです。archiveは将来のreopen方針を許す論理状態であり、物理削除jobを
+開始しません。
 
 ## Deleteとretention
 
@@ -213,6 +222,8 @@ agent_thread_search_projection
 - hard deleteはApplication registryとAgent Storageの両方を削除する
 - cross-database deleteはoutboxで追跡する
 - delete jobはthread IDだけを持ち、credentialやmessage本文をjob payloadへ入れない
+- outboxを追加する場合はorganization/thread ownership、unique event、lease expiry、fencing tokenを
+  schemaで固定する。Phase 1で追加しない場合は既存hard-delete use caseの境界へ閉じる
 
 ## Orphan処理
 
@@ -226,7 +237,7 @@ agent_thread_search_projection
 
 ### archived registryとAgent thread
 
-公開しません。物理削除retry対象です。
+公開しません。retention期間中は保持し、hard delete時だけ物理削除対象です。
 
 ## Run quota
 
@@ -290,6 +301,9 @@ Mastra traceを課金の正本にしません。
 - Agent tool callとUI state
 
 Mastra snapshotへaccess token、grant、session cookie、presigned URLを保存しません。
+Mastra 1.52.1では`RequestContext.toJSON()`もsnapshotへ保存されるため、関数、API client、settlement
+callback、resume ticket、provider keyも置きません。resume capabilityはAPI再認可後に再発行し、
+永続化せず即時consumeします。
 
 ## Failure behavior
 
@@ -299,7 +313,7 @@ Mastra snapshotへaccess token、grant、session cookie、presigned URLを保存
 | Application DB unavailable     | 認可不能のためfail closed                                  |
 | registry作成後にAgent作成失敗  | 空registryを削除または同ID retry                           |
 | Memory保存後にusage settle失敗 | messageは保持し、usage settlementを冪等retry               |
-| archive後にAgent delete失敗    | 認可は失効済み。delete jobをretry                          |
+| hard delete時にAgent削除失敗   | 認可は失効済み。delete jobをretry                          |
 | Workflow snapshot復元失敗      | business actionを実行せず、明示的なrecoverable error       |
 
 ## 検証
@@ -307,4 +321,8 @@ Mastra snapshotへaccess token、grant、session cookie、presigned URLを保存
 - G3でMemory、list、recall、process再生成
 - G4でregistryとMemoryの積、archive、orphan、quota、usage
 - A3でregistry、run、usage、outboxのDB constraint
-- E1で送信、reload、archive、削除retry
+- E1で送信、reload、archive、hard delete retry
+
+Application migrationのupgrade testでは子FKを保持したままtable rebuildできることと
+`foreign_key_check`が空であることを確認します。適用前にclone/dumpを作り、適用後のrollbackは
+new run停止、backup connectionへの切替、token rotateで行います。単純なmigration revertはしません。

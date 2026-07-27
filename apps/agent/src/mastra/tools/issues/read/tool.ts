@@ -1,3 +1,4 @@
+import { createGetIssueTool } from "@enterprise-agentic-saas/agent-tools"
 import { createTool } from "@mastra/core/tools"
 
 import {
@@ -21,29 +22,16 @@ const readToolMetadata = {
 }
 
 export const issueReadTools = {
-  get_issue: createTool<
-    "get_issue",
-    typeof agentReadToolSchemas.getIssue,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "get_issue",
-    description:
-      "Read one Issue in the active organization by opaque ID or Issue number.",
-    inputSchema: agentReadToolSchemas.getIssue,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (input, context) => {
+  get_issue: createGetIssueTool<ProductAgentRequestContext>(
+    (input, context) => {
       const runtime = getProductAgentRuntime(context.requestContext)
       return createAgentReadHandlers(
         runtime.api,
         runtime.runGrant,
         runtime.budget
       ).getIssue(input)
-    },
-  }),
+    }
+  ),
   read_account_context: createTool<
     "read_account_context",
     typeof agentReadToolSchemas.empty,

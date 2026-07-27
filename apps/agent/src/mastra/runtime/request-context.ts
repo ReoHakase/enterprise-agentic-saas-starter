@@ -1,4 +1,4 @@
-import type { AgentThreadRenameResult } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentThreadRenameResult } from "@enterprise-agentic-saas/agent-contracts"
 import type { RequestContext } from "@mastra/core/request-context"
 
 import type { AgentToolBudget } from "../core/budget/tool"

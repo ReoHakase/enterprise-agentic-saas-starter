@@ -1,4 +1,4 @@
-import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-contracts"
 import { RequestContext } from "@mastra/core/request-context"
 import { describe, expect, it } from "vitest"
 

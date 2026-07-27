@@ -4,7 +4,7 @@ import type {
   AgentCanonicalMessagePart,
   AgentCanonicalToolName,
   AgentCanonicalToolPart,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { UIMessage } from "ai"
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/

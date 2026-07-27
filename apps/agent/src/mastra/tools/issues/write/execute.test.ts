@@ -1,4 +1,4 @@
-import type { AgentIssueAction } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentIssueAction } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it, vi } from "vitest"
 import { z } from "zod"
 

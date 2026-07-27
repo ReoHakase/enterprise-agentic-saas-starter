@@ -6,17 +6,17 @@ created: 2026-07-28
 owners:
   - repository-maintainers
 linked_specs:
-  - ../architecture/agent-runtime-and-mcp.md
-  - ../agent/runtime-reliability.md
-  - ../agent/storage-memory.md
-  - ../agent/mcp-integration.md
-  - ../testing-strategy/agent-refactor-mcp.md
+  - ../../architecture/agent-runtime-and-mcp.md
+  - ../../agent/runtime-reliability.md
+  - ../../agent/storage-memory.md
+  - ../../agent/mcp-integration.md
+  - ../../testing-strategy/agent-refactor-mcp.md
 linked_adrs:
-  - ../decisions/ADR-005-agent-runtime-under-src-mastra.md
-  - ../decisions/ADR-006-migration-history-append-only.md
-  - ../decisions/ADR-007-workspace-testing-strategy.md
-  - ../decisions/ADR-008-mastra-native-agent-runtime.md
-  - ../decisions/ADR-009-mcp-authentication-and-direct-tools.md
+  - ../../decisions/ADR-005-agent-runtime-under-src-mastra.md
+  - ../../decisions/ADR-006-migration-history-append-only.md
+  - ../../decisions/ADR-007-workspace-testing-strategy.md
+  - ../../decisions/ADR-008-mastra-native-agent-runtime.md
+  - ../../decisions/ADR-009-mcp-authentication-and-direct-tools.md
 ---
 
 # Mastra-native Agentリファクタとremote MCP導入
@@ -46,7 +46,8 @@ linked_adrs:
 - release前のため破壊的なAgent contract変更を許容する
 - schemaはValibotへ統一する
 - file-based風directoryを採用するが、registrationはcode-based
-- `packages/agent-contracts`と`packages/agent-tools`は静的検査だけを直接所有する
+- `packages/agent-contracts`と`packages/agent-tools`は、静的検査に加えて公開schemaと薄い
+  `createTool` factoryの実行時契約テストを同じpackageに配置する
 - Agent WorkerはApplication DBとR2へ直接接続しない
 - API WorkerはAgent DBへ直接接続しない
 - MCP writeはOAuth scopeとcurrent permissionで直接実行する
@@ -111,16 +112,16 @@ apps/api/src/
 
 ### 1.1 Package境界
 
-- [ ] `packages/agent-contracts`を作成する
+- [x] `packages/agent-contracts`を作成する
 - [ ] Agent request、response、tool schemaをValibotへ移す
 - [ ] 手書き型をValibot推論型へ置き換える
 - [ ] 残っているZod schemaを削除する
-- [ ] `packages/agent-tools`を作成する
+- [x] `packages/agent-tools`を作成する
 - [ ] shared business toolsをMastra `createTool` factoryとして移す
-- [ ] 薄い`AgentToolExecutor`だけを定義する
-- [ ] custom Capability DSL、registry、generic dispatcherを作らない
-- [ ] `apps/agent -> apps/api/agent-client`のcompile dependencyを削除する
-- [ ] restricted import、exports、knipを更新する
+- [x] 薄い`AgentToolExecutor`だけを定義する
+- [x] custom Capability DSL、registry、generic dispatcherを作らない
+- [x] `apps/agent -> apps/api/agent-client`のcompile dependencyを削除する
+- [x] restricted import、exports、knipを更新する
 
 ### 1.2 Agent directory
 
@@ -144,6 +145,8 @@ apps/api/src/
 ### 1.4 Memoryとthread
 
 - [ ] Product AgentへMastra Memoryを設定する
+- [ ] Mastra Storageを完全なthread/message履歴の正本、Memoryを同じthread内のモデル入力文脈として分離する
+- [ ] Memoryの`resourceId`とthread取得を認証済みuser、organization、threadへ固定する
 - [ ] Application DBの`agent_threads`を認可台帳へ縮小する
 - [ ] Application DBとAgent DBで同じthread IDを使う
 - [ ] API認可後にAgent Memoryからthread listとhistoryを取得するService Binding entrypointを追加する
@@ -171,6 +174,9 @@ apps/api/src/
 - [ ] business prepared actionとpreviewをAPIへ維持する
 - [ ] suspensionとresumeをMastra WorkflowまたはAgent Approvalへ移す
 - [ ] snapshotへcredentialを保存しない
+- [ ] `RequestContext`へ関数、API client、grant、token、provider key、resume ticketを置かない
+- [ ] Workflow factory closureでexecutorを注入し、resume時はAPI再認可後のcapabilityを即時consumeする
+- [ ] Phase 1ではJSON-safeなsuspend/resume基盤とsnapshot secret scanまでを必須にし、再起動resumeはPhase 3で完成させる
 - [ ] reload後にsuspended runを再発見できる
 - [ ] custom resume endpointとsnapshot wrapperのうち不要になるものを削除する
 
@@ -181,6 +187,8 @@ apps/api/src/
 - [ ] 旧migration historyを編集しない
 - [ ] dual read、dual write、backfillを作らない
 - [ ] development seedとfixtureを新schemaへ更新する
+- [ ] `agent_threads`は6列の認可台帳へappend-only migrationで再構築し、archive済み行だけ旧`updated_at`を`archived_at`へ移す
+- [ ] `agent_runs`と子FKを維持し、upgrade fixtureで`foreign_key_check`を確認する
 
 ### Phase 1 exit criteria
 
@@ -207,6 +215,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 ### 2.2 Stop
 
 - [ ] Stopを正常cancelとして扱う
+- [ ] stream先頭の一時的な`data-run` partでopaque run IDをWebへ渡す
 - [ ] abort時にpending submission IDを破棄する
 - [ ] draftだけを復元する
 - [ ] `clearError()`を呼ぶ
@@ -214,6 +223,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [ ] cancel、Agent abort、expiryを冪等にする
 - [ ] cancel完了後に次turnを開始できる
 - [ ] quota reservationとgrantが残らない
+- [ ] 最終stepが完了済み`ui_*`だけの場合に限りclient tool結果を自動送信する
 
 ### 2.3 Reasoning
 
@@ -370,6 +380,7 @@ PATはこのphaseへ含めません。
 - [x] 現行実装、既知不具合、文書体系を確認した
 - [x] 目標architectureと責務分担を決定した
 - [x] Phase 1から開始し、PATを最後に分離する方針を決定した
+- [x] Phase 1Aとしてpackage境界、`get_issue` factory、Service Binding response検証を実装した
 - [ ] Phase 1を実装した
 - [ ] Phase 2を実装した
 - [ ] Phase 3を実装した
@@ -379,30 +390,39 @@ PATはこのphaseへ含めません。
 
 ## 判断記録
 
-| 日付       | 判断                                                         | 理由                                                                         |
-| ---------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 2026-07-28 | bug hotfixよりPhase 1の構造切替を先に行う                    | 多重wrapperが共通原因の可能性が高く、旧構造へのpatchが捨て実装になり得る     |
-| 2026-07-28 | Valibotへ統一する                                            | MastraがStandard JSON Schema経由で利用でき、APIと既存stackに合う             |
-| 2026-07-28 | file-based風directoryだけ採用する                            | 動的tool compositionとprivate Worker entrypointをcode registrationで維持する |
-| 2026-07-28 | Agent専用Tursoを使う                                         | Mastra observabilityを使いながらApplication DB credentialをAgentへ渡さない   |
-| 2026-07-28 | 読み取り用projectionを初期実装しない                         | cross-database同期と二重正本を避ける                                         |
-| 2026-07-28 | MCP serverをAPIへ置く                                        | business authorizationとtransactionを追加hopなしで実行する                   |
-| 2026-07-28 | MCP writeをscopeとpermissionで直接実行する                   | MCP client自身がagent loopを持ち、Web approvalへ依存させない                 |
-| 2026-07-28 | PATは最後のphaseにする                                       | OAuth、scope、principal、tool authorizationを先に安定させる                  |
-| 2026-07-28 | `agent-contracts`と`agent-tools`は静的検査だけを直接所有する | business logicを持たせず、runtime behaviorをA/Gで検査する                    |
+| 日付       | 判断                                                           | 理由                                                                            |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 2026-07-28 | bug hotfixよりPhase 1の構造切替を先に行う                      | 多重wrapperが共通原因の可能性が高く、旧構造へのpatchが捨て実装になり得る        |
+| 2026-07-28 | Valibotへ統一する                                              | MastraがStandard JSON Schema経由で利用でき、APIと既存stackに合う                |
+| 2026-07-28 | file-based風directoryだけ採用する                              | 動的tool compositionとprivate Worker entrypointをcode registrationで維持する    |
+| 2026-07-28 | Agent専用Tursoを使う                                           | Mastra observabilityを使いながらApplication DB credentialをAgentへ渡さない      |
+| 2026-07-28 | 読み取り用projectionを初期実装しない                           | cross-database同期と二重正本を避ける                                            |
+| 2026-07-28 | MCP serverをAPIへ置く                                          | business authorizationとtransactionを追加hopなしで実行する                      |
+| 2026-07-28 | MCP writeをscopeとpermissionで直接実行する                     | MCP client自身がagent loopを持ち、Web approvalへ依存させない                    |
+| 2026-07-28 | PATは最後のphaseにする                                         | OAuth、scope、principal、tool authorizationを先に安定させる                     |
+| 2026-07-28 | `agent-contracts`と`agent-tools`は静的検査と契約testを所有する | business logicを持たず、最小runtime contractをcolocatedしてconsumerでも検査する |
+| 2026-07-28 | package公開契約の実行時テストを同じpackageへ配置する           | schema/factory破損をconsumer testだけに依存せず最短で検出する                   |
+| 2026-07-28 | AgentはService BindingのJSON responseをendpoint別に検証する    | private field、未知field、型不一致、過大bodyをAgent runtimeへ入れない           |
+| 2026-07-28 | JSON-RPC request IDを業務冪等キーへ使用しない                  | transport retryと同じIDの別業務操作を混同せず、明示的なclient keyを要求する     |
+| 2026-07-28 | Approval永続化をPhase 1とPhase 3へ分ける                       | Phase 1で秘密を含まないsnapshot基盤を作り、Phase 3で再起動resumeを完成させる    |
 
 ## 検証証跡
 
-| command                          | 結果   | 証跡          |
-| -------------------------------- | ------ | ------------- |
-| `bun run typecheck`              | 未実行 | Phase 1       |
-| `bun run lint`                   | 未実行 | Phase 1       |
-| `bun run test`                   | 未実行 | 各phase       |
-| `bun run test:browser`           | 未実行 | Phase 2以降   |
-| `bun run test:e2e`               | 未実行 | Phase 2、4、5 |
-| `bun run test:eval:agent`        | 未実行 | Phase 2、3    |
-| `bun run build:cloudflare`       | 未実行 | Phase 1、4、5 |
-| `bun run dev:agent:studio` smoke | 未実行 | Phase 1、3    |
+| command                                       | 結果   | 証跡                      |
+| --------------------------------------------- | ------ | ------------------------- |
+| `bun run check`                               | 成功   | Phase 1A、2026-07-28      |
+| `bun run typecheck`                           | 成功   | `bun run check`内         |
+| `bun run lint`                                | 成功   | `bun run check`内         |
+| `bun run test`                                | 成功   | `bun run check`内         |
+| `bun run --cwd packages/agent-contracts test` | 成功   | 31 tests、coverage 100%   |
+| `bun run --cwd packages/agent-tools test`     | 成功   | 6 tests、coverage 100%    |
+| `bun run --cwd apps/agent test`               | 成功   | 208 tests                 |
+| `bun run --cwd apps/api test`                 | 成功   | 321 tests、localhost許可  |
+| `bun run test:browser`                        | 未実行 | Phase 2以降               |
+| `bun run test:e2e`                            | 未実行 | Phase 2、4、5             |
+| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                |
+| `bun run build:cloudflare`                    | 成功   | Phase 1A、3 Workers build |
+| `bun run dev:agent:studio` smoke              | 未実行 | Phase 1、3                |
 
 ## リスクとrollback
 
@@ -420,13 +440,23 @@ PATはこのphaseへ含めません。
 
 後方互換layerは作りません。phaseごとにbranchまたはcommit boundaryを明確にし、phase未完了の変更全体をrevertします。
 
-- Phase 1 rollback: schema migration適用前のcommitへ戻す。development DBはresetする
+- Phase 1 rollback: migration適用前はcommitへ戻し、固定local Agent DBだけを`storage:reset`する。
+  migration適用後は単純revertせず、new runを停止し、事前clone/dumpへ接続を戻してtokenをrotateする
 - Phase 2 rollback: native runtimeは維持し、個別reliability変更だけrevertする
 - Phase 3 rollback: observability、provider adapter、Workflow変更を個別に無効化する
 - Phase 4 rollback: `/mcp` routeとOAuth Providerを無効化し、Web Agentを維持する
 - Phase 5 rollback: PAT発行を無効化し、既存PATを一括revokeしてOAuthを維持する
 
-production dataが存在する場合、destructive migration前にbackupと件数確認を行います。migration fileはappend-onlyのままです。
+本番dataが存在する場合、destructive migration前にApplication DBとAgent DBを別々にcloneまたはdumpし、
+件数と復元手順を確認します。remote DB変更は別途明示承認を必要とし、migration fileはappend-onlyのままです。
+
+## Phase別の必須検査
+
+- 各phaseで`bun run check`、`bun run test:browser`、`bun run test:e2e`、
+  `bun run build:cloudflare`を実行する
+- Phase 1のE1はApplication libSQLと別のAgent libSQLを使い、Browser Modeを省略しない
+- Phase 2とPhase 3はG5の各caseを3回中3回成功させる
+- `test:e2e:full`のE2はrelease候補だけで実行し、Phase 1からPhase 3の日常必須検査にはしない
 
 ## 完了条件
 

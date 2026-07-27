@@ -181,11 +181,14 @@ Agent専用として`apps/agent`へ残すもの:
 - Agent instructions
 - internal skills
 
-### 静的検査だけをpackage自身が所有する理由
+### package自身が所有する検査
 
-`agent-contracts`と`agent-tools`はbusiness logicを持たせません。package自身はtypecheck、lint、exports、import boundary、cycle、Zod禁止を保証します。
+`agent-contracts`と`agent-tools`はbusiness logicを持たせません。package自身はtypecheck、lint、exports、
+import boundary、cycle、Zod禁止に加え、公開Valibot schemaのstrict/bounded validationと薄い
+`createTool` factoryが`AgentToolExecutor`を1回だけ呼ぶ実行時契約テストを所有します。
 
-Valibotのruntime validationはA1とG2、Mastra tool compositionはG2、MCP登録はA4で検査します。package固有の公開テスト層や`AC1`、`AT1`は作りません。
+consumer固有のValibot境界はA1とG2、Agent compositionはG2、MCP登録はA4でも検査します。
+package固有の公開テスト層や`AC1`、`AT1`は作りません。
 
 ## file-based風directoryとcode registration
 
@@ -277,6 +280,14 @@ Mastraだけが所有します。
 
 Agent Tursoは`apps/agent`の`LibSQLStore`で管理し、Drizzle schemaとmigrationを作りません。Application Tursoと同じTurso organizationを使ってもよいですが、database URLとtokenを分けます。
 
+Mastra Storageは完全なthread metadataとmessage履歴の正本です。Mastra MemoryはStorage上の同じthreadを
+利用して、直近履歴、working memory、semantic recallなどモデルへ渡す文脈を構成します。Memoryを
+認可台帳、全履歴の別正本、thread横断の共有状態として扱いません。
+
+production、Studio、testは同じstorage factoryを利用し、process内では1つのinstanceを再利用します。
+requestごとに`LibSQLStore`を生成しません。productionではAgent DB URLがApplication DB URLと同一なら
+起動を拒否します。
+
 ### 将来のComposite Storage
 
 初期実装は単一`LibSQLStore`です。trace量が増えた場合だけ次へ変更します。
@@ -318,6 +329,10 @@ Mastra thread
 ```
 
 認可台帳はprojectionではありません。title、message count、last message previewを初期実装ではApplication DBへ複製しません。
+
+Memory queryは認証済み`organizationId`、`userId`から導出した`resourceId`と、Application registryで
+認可済みのthread IDの両方へ固定します。別threadの内容を現在threadへ暗黙注入せず、
+thread-scoped設定を既定にします。
 
 ## Thread listと履歴取得
 
@@ -404,6 +419,7 @@ server toolとclient toolを分離します。
 ```text
 Stop
   → browser stream abort
+  → stream先頭のtransient data-runで受け取ったopaque run IDを使う
   → explicit cancel command
   → runを冪等にcanceledへ遷移
   → quota reservationとgrantを解放
@@ -414,6 +430,9 @@ Stop
 ```
 
 network disconnectとprovider errorだけを同一submission IDでretry可能にします。
+
+`data-run`は表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
+最終stepに完了済みの`ui_*` toolだけが存在する場合に限定し、server tool完了では開始しません。
 
 ## Reasoning
 
@@ -504,6 +523,16 @@ Mastra observabilityはdebug、API usage ledgerは課金の正本です。
 
 Mastra Approvalだけをbusiness authorizationとして信用しません。
 
+Mastra 1.52.1はWorkflowとAgent Approvalのsnapshotへ`RequestContext.toJSON()`を保存します。そのため
+`RequestContext`はJSON-safeなopaque ID、expected revision、表示用policyだけに限定し、API client関数、
+executor、settlement callback、grant、resume ticket、provider key、cookie、private URLを置きません。
+executorとmodel adapterはcomposition closureから解決します。
+
+Phase 1は秘密を含まないsuspend/resume schema、snapshot secret scan、同一processのapprove/declineを
+完成させます。Worker再起動後のresumeはPhase 3で、APIがmembership、permission、revisionを再検証して
+fresh capabilityを発行し、その場でconsumeする経路を完成させます。process-local registryだけを
+再起動復元の根拠にしません。
+
 ## Workers AIとAI Gateway
 
 Cloudflare bindingは`apps/agent`のcompositionとmodel adapterに閉じます。`packages/ai`は作りません。
@@ -579,6 +608,10 @@ MCP tools/call
 
 client側の確認UIへsecurityを依存させません。
 
+JSON-RPC request IDはtransport上の相関値であり、業務冪等キーに使いません。write toolはclientが
+明示した業務冪等キーをschemaで受け取り、principal、organization、tool、正規化payload digestと
+組み合わせてreservationします。同じJSON-RPC IDで別操作が来ても同一業務とみなしません。
+
 ## OAuthとPAT
 
 ### OAuth
@@ -635,6 +668,9 @@ DB migration historyはappend-onlyを維持し、新しいdestructive migration�
 - destructive writeはexpected revisionとidempotencyを必須にする
 - credential、prompt全文、private payload、raw reasoningをlogへ出さない
 - archived threadはAgent DBへ残っていても読めない
+- session失効、membership変更、organization切替、archive、hard delete、credential rotateの各時点で
+  capabilityを再検証し、失効済み主体へMemoryやbusiness toolを公開しない
+- snapshot、trace、Memory、stream、Sentryへgrant、resume ticket、provider key、private payloadを残さない
 
 ## 受入条件
 

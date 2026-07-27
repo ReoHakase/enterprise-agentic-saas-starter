@@ -24,17 +24,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@enterprise-agentic-saas/api": "workspace:*",
+    "@enterprise-agentic-saas/agent-contracts": "workspace:*",
+    "@enterprise-agentic-saas/agent-tools": "workspace:*",
     "@mastra/ai-sdk": "catalog:",
     "@mastra/core": "catalog:",
     "@openrouter/ai-sdk-provider": "catalog:",
     "@sentry/cloudflare": "catalog:",
     "ai": "catalog:",
+    "valibot": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "mastra": "catalog:",

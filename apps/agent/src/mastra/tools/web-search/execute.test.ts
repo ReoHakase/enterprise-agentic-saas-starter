@@ -157,6 +157,35 @@ describe("public Web search boundary", () => {
     expect(search).toHaveBeenCalledWith("Cloudflare R2 limits", undefined)
   })
 
+  it.each(["   ", "x", "x".repeat(201)])(
+    "rejects an invalid guarded query before reservation or provider forwarding",
+    async (guardedQuery) => {
+      const reserve = vi.fn<(operationId: string) => Promise<void>>()
+      const search =
+        vi.fn<
+          (
+            query: string,
+            abortSignal?: AbortSignal
+          ) => Promise<typeof publicResult>
+        >()
+
+      await expect(
+        executePublicWebSearch(
+          { query: "Cloudflare R2 limits" },
+          {
+            consumeBudget: vi.fn<() => void>(),
+            guard: async () => ({ query: guardedQuery }),
+            operationId: "call_invalid_guarded_query",
+            reserve,
+            search,
+          }
+        )
+      ).rejects.toThrow("Web search accepts public information only")
+      expect(reserve).not.toHaveBeenCalled()
+      expect(search).not.toHaveBeenCalled()
+    }
+  )
+
   it.each([
     "Web search query is not public",
     "Web search query requires a public-only restatement",

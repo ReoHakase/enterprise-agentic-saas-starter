@@ -1,4 +1,4 @@
-import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/agent-contracts"
 import type { Mastra } from "@mastra/core/mastra"
 import { RequestContext } from "@mastra/core/request-context"
 import { z } from "zod"

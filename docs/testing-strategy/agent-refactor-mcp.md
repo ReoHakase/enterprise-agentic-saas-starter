@@ -17,7 +17,7 @@ related:
   - ../architecture/agent-runtime-and-mcp.md
   - ../agent/runtime-reliability.md
   - ../agent/mcp-integration.md
-  - ../exec-plans/agent-refactor-and-mcp.md
+  - ../exec-plans/active/agent-refactor-and-mcp.md
 ---
 
 # AgentリファクタとMCP導入テスト戦略
@@ -32,9 +32,11 @@ related:
 - Authは`AUTH1`から`AUTH4`
 - E2Eは`E1`と`E2`
 
-`packages/agent-contracts`と`packages/agent-tools`に独自のテスト層番号は追加しません。package自身は静的検査だけを直接所有し、runtime validationとcompositionはconsumer側の既存層で検査します。
+`packages/agent-contracts`と`packages/agent-tools`に独自のテスト層番号は追加しません。package自身は
+静的検査とcolocatedな実行時契約テストを所有し、consumer固有のvalidationとcompositionは既存層でも
+検査します。
 
-## Package静的検査
+## Package検査
 
 対象:
 
@@ -55,8 +57,11 @@ packages/agent-tools/**
 - Zod import禁止
 - 公開tool inputにorganization、user、session、grant、tokenがない
 - tool ID重複がない
+- Valibot schemaが未知field、上限超過、tenant/capability fieldを拒否する
+- Mastra `createTool` factoryがfake `AgentToolExecutor`へ検証済みinputを1回だけ渡す
 
-Valibot schemaの境界値はA1とG2、Mastra `createTool`接続はG2、MCP登録はA4で検査します。
+package testは新しい公開番号を持たず`bun run test`へ含めます。Valibot schemaのconsumer境界値はA1と
+G2、Agent compositionはG2、MCP登録はA4でも検査します。
 
 ## Agent G1からG5
 
@@ -77,6 +82,7 @@ Valibot schemaの境界値はA1とG2、Mastra `createTool`接続はG2、MCP登�
 - reasoning deltaだけではuseful-output timerを延長しない
 - tool side effect後はprovider retryしない
 - cancelとsettlementが二重計上しない
+- snapshotへAPI client、関数、grant、resume ticket、provider key、private URLが入らない
 
 ## G2必須case
 
@@ -88,6 +94,7 @@ Valibot schemaの境界値はA1とG2、Mastra `createTool`接続はG2、MCP登�
 - private hostname除外
 - attachment add/removeのrevisionと件数上限
 - tool outputにcredential、R2 key、private URLがない
+- attachment receiptはshared schemaのboundedなfile ID、Issue number、revisionだけを返す
 
 ## G3必須scenario
 
@@ -139,7 +146,7 @@ A6以降を追加しません。MCP、OAuth principal、PAT principalも既存A1
 
 | 名前                                         | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                           | 実物として使うもの                                                            | 差し替えるもの                     | 対象コード/ファイル                                              | Test Runner                    | 実行速度           | CI時間課金以外の費用 | 量         |
 | -------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ | ------------------ | -------------------- | ---------- |
-| **APIドメイン単体テスト A1**                 | 単体                | <ul><li>scopeとcurrent permissionの積を確認する</li><li>MCP tool exposure policy、principal、audience、tenant一致を確認する</li><li>JSON-RPC request IDからidempotency identityを作る</li><li>run cancel、attachment add/remove、prepared actionの状態遷移を確認する</li><li>Valibot schemaとsafe MCP error mappingを境界値で確認する</li></ul>                                                                                      | pure policy、Valibot schema、value object                                     | clock、ID、random                  | `apps/api/src/mcp/domain/**`、agent domain、error mapper         | Vitest Node                    | 極めて速い         | なし                 | 非常に多い |
+| **APIドメイン単体テスト A1**                 | 単体                | <ul><li>scopeとcurrent permissionの積を確認する</li><li>MCP tool exposure policy、principal、audience、tenant一致を確認する</li><li>明示的な業務冪等キーをprincipal、organization、tool、payload digestへ束縛し、JSON-RPC request IDを使わない</li><li>run cancel、attachment add/remove、prepared actionの状態遷移を確認する</li><li>Valibot schemaとsafe MCP error mappingを境界値で確認する</li></ul>                             | pure policy、Valibot schema、value object                                     | clock、ID、random                  | `apps/api/src/mcp/domain/**`、agent domain、error mapper         | Vitest Node                    | 極めて速い         | なし                 | 非常に多い |
 | **APIアプリケーションサービス単体テスト A2** | 単体                | <ul><li>OAuthまたはPAT principalからlocal executorを作る</li><li>scope確認後にcurrent membershipとpermissionを再確認する</li><li>MCP writeを直接実行し、expected revision、idempotency、audit順序を確認する</li><li>run cancelがgrantとquotaを解放する</li><li>attachment promotion、claim transfer、delete、thumbnail整合を確認する</li><li>拒否時にrepository、R2、providerを呼ばない</li></ul>                                    | service、domain、port                                                         | repository、Auth、R2、clock        | `apps/api/src/mcp/**/service.ts`、agent/file application service | Vitest Node + fake ports       | 極めて速いから速い | なし                 | 多い       |
 | **APIリポジトリ統合テスト A3**               | 統合                | <ul><li>thread registry、run、quota、usage、prepared actionのFKとtransactionを確認する</li><li>OAuth grant、PAT hash、scope、expiry、revocation、last usedを確認する</li><li>MCP idempotencyとJSON-RPC retryを確認する</li><li>attachment add/removeとIssue revisionを同じtransactionで確認する</li><li>archive outbox、orphan cleanup、rollbackを確認する</li><li>tenant predicateとcross-tenant non-disclosureを確認する</li></ul> | 実Drizzle query、実libSQL、実schema                                           | remote Turso、R2                   | `apps/api/src/**/repository.ts`、`packages/db` schema            | Vitest + temporary libSQL      | 速いから中         | なし                 | 厚くする   |
 | **API HTTP契約統合テスト A4**                | 統合                | <ul><li>Agent chat、history、cancel routeのschema、status、errorを確認する</li><li>Mastra MCPServerのinitialize、tools/list、tools/call、prompts、resourcesを確認する</li><li>scope別tool filteringとtools/call時の再認可を確認する</li><li>read/write/attachment/upload toolを確認する</li><li>Agent、Workflow、`ui_*`、internal skillがMCPへ公開されない</li><li>Bearer auth、OAuth challenge、invalid PATを確認する</li></ul>     | Elysia app、Mastra MCPServer、実schema、`app.handle()`、実application service | external OAuth、ChatGPT、remote DB | `apps/api/src/modules/agent/routes/**`、`apps/api/src/mcp/**`    | Vitest + Elysia + MCP client   | 速いから中         | なし                 | 厚くする   |
@@ -221,6 +228,14 @@ AUTH5を追加しません。
 | `AUTH4` | MCP OAuth client emulatorとのauthorize、callback、token exchange、refresh、revoke。OAuthとPATのcredential優先順位                 |
 
 PAT関連caseはPhase 5までskipせず未実装として対象外にします。Phase 5開始時に同じAUTH1からAUTH4へ追加します。
+
+## Phase別の費用境界
+
+- Phase 1からPhase 3の各phaseで`bun run check`、`bun run test:browser`、`bun run test:e2e`、
+  `bun run build:cloudflare`を実行する
+- Phase 1のE1は別Application libSQLとAgent libSQLを接続し、Browser Modeも必須とする
+- Phase 2とPhase 3のG5は各caseを3回実行し、3回とも成功した場合だけ合格とする
+- E2はrelease候補だけの有料カナリアとし、通常phase完了判定へ含めない
 
 ## E2E E1とE2
 
@@ -338,7 +353,8 @@ MCP専用root scriptを増やしません。
 - 公開layer番号が増えていない
 - A1からA5が対象範囲と速度の順序を維持する
 - G1からG5が決定的安全性と実model評価を分離する
-- `agent-contracts`と`agent-tools`に独自layer文書がない
-- package runtime挙動がconsumer側で検査される
+- `agent-contracts`と`agent-tools`に独自の公開layer番号がない
+- packageの実行時契約テストがcolocatedされ、root `test`から実行される
+- consumer固有のpackage実行時挙動がG2、A1、A4でも検査される
 - 既知不具合の回帰caseがW、G、A、E1へ配置される
 - MCP read/write、OAuth、最終phaseのPATが既存層に統合される

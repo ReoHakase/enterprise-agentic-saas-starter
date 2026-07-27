@@ -5,7 +5,7 @@ import type {
   AgentIssueActionKind,
   AgentIssueActionPreview,
   AgentUpdateIssueActionInput,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { z } from "zod"
 
 import type { AgentToolBudget } from "../../../core/budget/tool"

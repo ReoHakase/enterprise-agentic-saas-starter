@@ -1,4 +1,4 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/agent-contracts"
 
 const publicQueryLinePatterns = [
   /^public-only web query\s*:\s*.{2,200}$/iu,
