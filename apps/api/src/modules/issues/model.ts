@@ -29,6 +29,28 @@ const labelsModel = v.pipe(
   v.maxLength(20)
 )
 
+const assigneeIdQueryModel = v.pipe(v.string(), v.maxLength(128))
+const labelQueryModel = v.pipe(v.string(), v.minLength(1), v.maxLength(40))
+const calendarDateOnlyModel = v.pipe(
+  v.string(),
+  v.isoDate(),
+  v.check((value) => {
+    const [yearText, monthText, dayText] = value.split("-")
+    if (!(yearText && monthText && dayText)) return false
+    const year = Number(yearText)
+    const month = Number(monthText)
+    const day = Number(dayText)
+    const date = new Date(0)
+    date.setUTCHours(0, 0, 0, 0)
+    date.setUTCFullYear(year, month - 1, day)
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    )
+  }, "Invalid calendar date")
+)
+
 export const issueModel = v.pipe(
   v.object({
     id: v.string(),
@@ -75,17 +97,66 @@ const issueListItemModel = v.object({
 export const listIssuesResponseModel = v.object({
   items: v.array(issueListItemModel),
   page: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  pageSize: v.literal(10),
+  pageSize: v.union([v.literal(20), v.literal(50), v.literal(100)]),
   total: v.pipe(v.number(), v.integer(), v.minValue(0)),
 })
 
-export const listIssuesQueryModel = v.object({
+export const listIssuesQueryModel = v.strictObject({
   organizationId: organizationIdModel,
   search: v.optional(v.pipe(v.string(), v.maxLength(200))),
-  status: v.optional(issueStatusModel),
-  priority: v.optional(issuePriorityModel),
-  assigneeId: v.optional(v.string()),
-  label: v.optional(v.pipe(v.string(), v.maxLength(40))),
+  statuses: v.optional(
+    v.union([
+      issueStatusModel,
+      v.pipe(v.array(issueStatusModel), v.maxLength(3)),
+    ])
+  ),
+  priorityFrom: v.optional(issuePriorityModel),
+  priorityTo: v.optional(issuePriorityModel),
+  assigneeIds: v.optional(
+    v.union([
+      assigneeIdQueryModel,
+      v.pipe(v.array(assigneeIdQueryModel), v.maxLength(50)),
+    ])
+  ),
+  labels: v.optional(
+    v.union([
+      labelQueryModel,
+      v.pipe(v.array(labelQueryModel), v.maxLength(20)),
+    ])
+  ),
+  labelMode: v.optional(v.picklist(["any", "all"])),
+  dueDateFrom: v.optional(calendarDateOnlyModel),
+  dueDateTo: v.optional(calendarDateOnlyModel),
+  dueDateFromOffsetMinutes: v.optional(
+    v.pipe(
+      v.union([v.number(), v.string()]),
+      v.toNumber(),
+      v.number(),
+      v.integer(),
+      v.minValue(-840),
+      v.maxValue(840)
+    )
+  ),
+  dueDateToExclusiveOffsetMinutes: v.optional(
+    v.pipe(
+      v.union([v.number(), v.string()]),
+      v.toNumber(),
+      v.number(),
+      v.integer(),
+      v.minValue(-840),
+      v.maxValue(840)
+    )
+  ),
+  dueDateOffsetMinutes: v.optional(
+    v.pipe(
+      v.union([v.number(), v.string()]),
+      v.toNumber(),
+      v.number(),
+      v.integer(),
+      v.minValue(-840),
+      v.maxValue(840)
+    )
+  ),
   sortBy: v.optional(
     v.picklist([
       "number",
@@ -98,6 +169,19 @@ export const listIssuesQueryModel = v.object({
   ),
   sortDirection: v.optional(v.picklist(["asc", "desc"])),
   page: v.optional(positiveIntegerQueryModel(100_000), 1),
+  pageSize: v.optional(
+    v.pipe(positiveIntegerQueryModel(100), v.picklist([20, 50, 100])),
+    20
+  ),
+})
+
+export const listIssueLabelsQueryModel = v.object({
+  organizationId: organizationIdModel,
+  search: v.optional(v.pipe(v.string(), v.maxLength(40))),
+})
+
+export const listIssueLabelsResponseModel = v.object({
+  items: v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.maxLength(50)),
 })
 
 export const getIssueQueryModel = v.object({

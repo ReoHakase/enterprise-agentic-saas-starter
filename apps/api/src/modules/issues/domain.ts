@@ -93,10 +93,21 @@ export type IssueTimelinePageDto = {
 
 export type ListIssuesInput = {
   assigneeId?: string
+  assigneeIds?: string[]
+  dueDateFrom?: string
+  dueDateFromOffsetMinutes?: number
+  dueDateOffsetMinutes?: number
+  dueDateTo?: string
+  dueDateToExclusiveOffsetMinutes?: number
   label?: string
+  labelMode?: "all" | "any"
+  labels?: string[]
   limit?: number
   organizationId: string
+  pageSize?: 20 | 50 | 100
   priority?: IssuePriority
+  priorityFrom?: IssuePriority
+  priorityTo?: IssuePriority
   search?: string
   sortBy?:
     | "createdAt"
@@ -107,4 +118,5 @@ export type ListIssuesInput = {
     | "updatedAt"
   sortDirection?: "asc" | "desc"
   status?: IssueStatus
+  statuses?: IssueStatus[]
 }

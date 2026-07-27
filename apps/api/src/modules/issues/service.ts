@@ -57,6 +57,20 @@ const createIssueReadService = (ports: IssuesPorts) => {
     return ports.listIssues(input)
   }
 
+  const listLabels = async (input: {
+    organizationId: string
+    search?: string
+    userId: string
+  }) => {
+    await ports.requireMembership(input)
+    return {
+      items: await ports.listLabels({
+        organizationId: input.organizationId,
+        search: input.search?.trim(),
+      }),
+    }
+  }
+
   const getIssue = async (input: {
     id: string
     organizationId: string
@@ -134,6 +148,7 @@ const createIssueReadService = (ports: IssuesPorts) => {
     getIssueByNumber,
     getIssueThumbnail,
     getIssueTimeline,
+    listLabels,
     listIssues,
   }
 }
