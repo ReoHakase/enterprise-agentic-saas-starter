@@ -65,6 +65,7 @@ import {
 import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import { showConsoleApiErrorToast } from "../../error-toast"
+import { rewriteOrganizationSwitchPathname } from "../../organization-switch-route"
 import {
   ConsoleFrame,
   ConsoleFrameContent,
@@ -134,16 +135,12 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
     onSuccess: async (_, organizationId) => {
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)
-      const organizationRoute = pathname.match(
-        /^\/organization\/[^/]+\/(dashboard|issues|agent|members|settings)(?:\/|$)/
-      )
       const nextOrganization = me.organizations.find(
         (organization) => organization.id === organizationId
       )
-      let nextPathname = pathname
-      if (organizationRoute?.[1] && nextOrganization) {
-        nextPathname = `/organization/${nextOrganization.slug}/${organizationRoute[1]}`
-      }
+      const nextPathname = nextOrganization
+        ? rewriteOrganizationSwitchPathname(pathname, nextOrganization.slug)
+        : pathname
       // usePathname excludes the search string, so this also clears every
       // tenant query parameter, including agentThread. A client navigation
       // preserves shared layouts and can retain the previous tenant's `me`

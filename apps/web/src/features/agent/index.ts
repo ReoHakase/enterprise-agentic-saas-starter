@@ -3,7 +3,6 @@ export {
   AgentFormRegistryProvider,
   useRegisterAgentForm,
 } from "./components/form-registry/form-registry"
-export { AgentRouteSkeleton } from "./components/agent-route-skeleton/agent-route-skeleton"
 export {
   AgentShell,
   AgentShellTrigger,

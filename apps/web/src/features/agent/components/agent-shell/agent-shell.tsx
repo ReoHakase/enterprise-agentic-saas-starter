@@ -11,7 +11,6 @@ import { useIsMobile } from "@enterprise-agentic-saas/ui/hooks/use-mobile"
 import { useHotkey } from "@tanstack/react-hotkeys"
 import { useAtom } from "jotai"
 import { BotIcon, GripVerticalIcon, XIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
 import {
   useCallback,
   useEffect,
@@ -102,7 +101,6 @@ export const AgentShell = ({
   organization,
   contextMismatch,
 }: AgentShellProps) => {
-  const pathname = usePathname()
   const isMobile = useIsMobile()
   const [open, setOpen] = useAtom(agentShellOpenAtom)
   const [paneWidth, setPaneWidth] = useAtom(agentPaneWidthAtom)
@@ -110,19 +108,12 @@ export const AgentShell = ({
   const resizeRef = useRef<ResizeState | undefined>(undefined)
   const scopeKey = `${userId}:${organization?.id ?? ""}`
   const previousScopeRef = useRef(scopeKey)
-  const dedicatedAgentPath = organization
-    ? `/organization/${organization.slug}/agent`
-    : undefined
 
   useEffect(() => {
     if (previousScopeRef.current === scopeKey) return
     previousScopeRef.current = scopeKey
     setOpen(false)
   }, [scopeKey, setOpen])
-
-  useEffect(() => {
-    if (dedicatedAgentPath && pathname === dedicatedAgentPath) setOpen(true)
-  }, [dedicatedAgentPath, pathname, setOpen])
 
   useEffect(() => {
     if (organization) return

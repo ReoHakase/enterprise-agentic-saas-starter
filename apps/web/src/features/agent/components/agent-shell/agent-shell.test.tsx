@@ -11,15 +11,10 @@ import { AgentShell, AgentShellTrigger } from "./agent-shell"
 
 const mockState = vi.hoisted(() => ({
   isMobile: false,
-  pathname: "/organization/acme/issues",
 }))
 
 vi.mock("@enterprise-agentic-saas/ui/hooks/use-mobile", () => ({
   useIsMobile: () => mockState.isMobile,
-}))
-
-vi.mock("next/navigation", () => ({
-  usePathname: () => mockState.pathname,
 }))
 
 vi.mock("../agent-dashboard/agent-dashboard", () => ({
@@ -76,7 +71,6 @@ const renderAgentShell = (
 describe("AgentShell", () => {
   beforeEach(() => {
     mockState.isMobile = false
-    mockState.pathname = "/organization/acme/issues"
     window.localStorage.clear()
   })
 
@@ -106,7 +100,6 @@ describe("AgentShell", () => {
       "480"
     )
 
-    mockState.pathname = "/organization/acme/members"
     rerender(
       <Provider store={store}>
         <AgentShellTrigger />
@@ -122,21 +115,57 @@ describe("AgentShell", () => {
     })
   })
 
-  it("opens from the focused Agent route and closes when the tenant changes", async () => {
-    mockState.pathname = "/organization/acme/agent"
+  it("keeps a manually opened pane across rerenders and closes when the organization changes", async () => {
+    const user = userEvent.setup()
     const { rerender, store } = renderAgentShell()
 
-    expect(
-      await screen.findByRole("complementary", { name: "Agent" })
-    ).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Open Agent" }))
+    expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
 
-    mockState.pathname = "/organization/beta/issues"
+    rerender(
+      <Provider store={store}>
+        <AgentShellTrigger />
+        <AgentShell
+          userId="user-1"
+          organization={acmeOrganization}
+          contextMismatch={false}
+        />
+      </Provider>
+    )
+    expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
+
     rerender(
       <Provider store={store}>
         <AgentShellTrigger />
         <AgentShell
           userId="user-1"
           organization={betaOrganization}
+          contextMismatch={false}
+        />
+      </Provider>
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Agent" })
+      ).not.toBeInTheDocument()
+    )
+    expect(store.get(agentShellOpenAtom)).toBe(false)
+  })
+
+  it("closes the pane when the user scope changes", async () => {
+    const user = userEvent.setup()
+    const { rerender, store } = renderAgentShell()
+
+    await user.click(screen.getByRole("button", { name: "Open Agent" }))
+    expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
+
+    rerender(
+      <Provider store={store}>
+        <AgentShellTrigger />
+        <AgentShell
+          userId="user-2"
+          organization={acmeOrganization}
           contextMismatch={false}
         />
       </Provider>

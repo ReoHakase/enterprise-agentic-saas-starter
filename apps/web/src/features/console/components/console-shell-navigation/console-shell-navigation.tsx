@@ -11,7 +11,6 @@ import {
 } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
 import {
-  BotIcon,
   Building2Icon,
   LayoutDashboardIcon,
   ListChecksIcon,
@@ -143,11 +142,6 @@ const ConsoleNavigation = ({
               href: `/organization/${activeOrganization.slug}/issues`,
               label: "Issues",
               icon: ListChecksIcon,
-            },
-            {
-              href: `/organization/${activeOrganization.slug}/agent`,
-              label: "Agent",
-              icon: BotIcon,
             },
           ]
         : [],

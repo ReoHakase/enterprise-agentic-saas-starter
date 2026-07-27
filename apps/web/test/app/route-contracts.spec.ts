@@ -243,26 +243,6 @@ const verifyInvitationRouteContract = async ({
   ).toBeVisible()
 }
 
-test("@route-contract /organization/[organizationSlug]/agent は全boundary stateから復帰する", async ({
-  allowClientErrors,
-  context,
-  page,
-}) => {
-  await verifyConsoleRouteContract({
-    allowClientErrors,
-    context,
-    page,
-    contract: {
-      heading: "Agent",
-      headingLevel: 1,
-      navigationLabel: "Agent",
-      requestPath: "/me",
-      route: "/organization/alpha-operations/agent",
-      sourceRoute: "/organization/alpha-operations/members",
-    },
-  })
-})
-
 test("@route-contract /organization/[organizationSlug]/dashboard は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
@@ -299,6 +279,25 @@ test("@route-contract /organization/[organizationSlug]/issues は全boundary sta
       sourceRoute: "/organization/alpha-operations/members",
     },
   })
+})
+
+test("@route-contract Agent paneは同一organizationのclient navigation後も開いた状態を維持する", async ({
+  context,
+  page,
+}) => {
+  await useSession(context, "admin")
+  await page.goto("/organization/alpha-operations/dashboard")
+  await expectReadyConsoleRoute(page, "Overview")
+
+  await page.getByRole("button", { name: "Open Agent" }).click()
+  const agentPane = page.getByRole("complementary", { name: "Agent" })
+  await expect(agentPane).toBeVisible()
+
+  await page.getByRole("link", { name: "Issues", exact: true }).click()
+
+  await expect(page).toHaveURL("/organization/alpha-operations/issues")
+  await expectReadyConsoleRoute(page, "Issues")
+  await expect(agentPane).toBeVisible()
 })
 
 test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は全boundary stateから復帰する", async ({
