@@ -48,6 +48,8 @@ const memberModel = v.object({
   name: v.string(),
   email: v.string(),
   profileImage: v.nullable(v.string()),
+  githubLinked: v.boolean(),
+  passkeyLinked: v.boolean(),
   role: organizationRoleModel,
   createdAt: isoTimestampModel,
 })

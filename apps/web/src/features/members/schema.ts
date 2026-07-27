@@ -8,6 +8,8 @@ const organizationMemberSchema = v.object({
   name: v.string(),
   email: v.pipe(v.string(), v.email()),
   profileImage: v.nullable(v.string()),
+  githubLinked: v.boolean(),
+  passkeyLinked: v.boolean(),
   role: organizationRoleSchema,
   createdAt: v.string(),
 })

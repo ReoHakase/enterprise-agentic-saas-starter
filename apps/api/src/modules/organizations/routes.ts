@@ -254,7 +254,7 @@ const createOrganizationMemberRoutes = (
           operationId: "listOrganizationMembers",
           summary: "List organization members",
           description:
-            "Lists members and effective roles only within the validated active organization. The authenticated caller must remain a member, and user data from another tenant is excluded.",
+            "Lists members, effective roles, and boolean GitHub and passkey linkage indicators only within the validated active organization. The authenticated caller must remain a member, user data from another tenant is excluded, and provider credentials are never returned.",
           tags: ["Organization members"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",

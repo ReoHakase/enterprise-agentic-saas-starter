@@ -6,6 +6,7 @@ import {
   normalizeInvitationEmails,
   parseBulkInvitationResponse,
   parseInvitations,
+  parseMembers,
   parseResendInvitationResponse,
 } from "./schema"
 
@@ -27,6 +28,46 @@ const invitation = {
 } as const
 
 describe("bulk invitation schema", () => {
+  it.each([
+    {
+      expectedMessage: "githubLinked",
+      field: "githubLinked",
+      value: undefined,
+    },
+    { expectedMessage: "Invalid type", field: "githubLinked", value: "true" },
+    { expectedMessage: "Invalid type", field: "githubLinked", value: null },
+    {
+      expectedMessage: "passkeyLinked",
+      field: "passkeyLinked",
+      value: undefined,
+    },
+    { expectedMessage: "Invalid type", field: "passkeyLinked", value: 1 },
+    { expectedMessage: "Invalid type", field: "passkeyLinked", value: null },
+  ] as const)(
+    "rejects $field when its value is $value",
+    ({ expectedMessage, field, value }) => {
+      const member: Record<string, unknown> = {
+        id: "member-1",
+        userId: "user-1",
+        name: "Member",
+        email: "member@example.com",
+        profileImage: null,
+        githubLinked: true,
+        passkeyLinked: false,
+        role: "member",
+        createdAt: "2026-07-16T00:00:00.000Z",
+      }
+
+      if (value === undefined) {
+        delete member[field]
+      } else {
+        member[field] = value
+      }
+
+      expect(() => parseMembers([member])).toThrow(expectedMessage)
+    }
+  )
+
   it("normalizes case, whitespace, commas, new lines, and duplicates", () => {
     expect(
       normalizeInvitationEmails(

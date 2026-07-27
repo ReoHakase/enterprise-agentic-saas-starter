@@ -2,6 +2,14 @@
 
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@enterprise-agentic-saas/ui/components/dropdown-menu"
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -13,13 +21,6 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@enterprise-agentic-saas/ui/components/input-group"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "@enterprise-agentic-saas/ui/components/select"
 import {
   Table,
   TableBody,
@@ -44,12 +45,13 @@ import {
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
+  EllipsisIcon,
+  KeyRoundIcon,
   SearchIcon,
   Trash2Icon,
   UsersRoundIcon,
 } from "lucide-react"
 import {
-  createContext,
   useCallback,
   useContext,
   useMemo,
@@ -59,25 +61,15 @@ import {
 
 import { LocalDate } from "@/components/local-date/local-date"
 import { UserIdentity } from "@/components/user-identity/user-identity"
-import { roleLabel, type OrganizationRole } from "@/features/organizations"
+import { type OrganizationRole } from "@/features/organizations"
 
 import type { OrganizationMember } from "../../schema"
+import { MemberRoleSelect } from "./member-role-select"
+import { MemberMutationContext } from "./members-table-context"
 
-const invitationRoleOptions = [
-  { label: "Member", value: "member" },
-  { label: "Admin", value: "admin" },
-]
-
-const organizationRoleOptions = [
-  ...invitationRoleOptions,
-  { label: "Super Admin", value: "super_admin" },
-]
-
-const isOrganizationRole = (value: string | null): value is OrganizationRole =>
-  value === "super_admin" || value === "admin" || value === "member"
+const memberActionsTrigger = <Button variant="ghost" size="icon-sm" />
 
 const getMemberRowId = (member: OrganizationMember) => member.id
-const MemberMutationContext = createContext(false)
 const memberRoleOrder: Record<OrganizationRole, number> = {
   super_admin: 0,
   admin: 1,
@@ -193,9 +185,39 @@ export const MembersTable = ({
         accessorFn: (member) => member.name,
         filterFn: memberSearchFilter,
         header: ({ column }) => (
-          <SortableMemberHeader column={column} label="User" />
+          <SortableMemberHeader column={column} label="Member" />
         ),
         cell: ({ row }) => <UserIdentity user={row.original} />,
+      },
+      {
+        id: "github",
+        header: "GitHub",
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.githubLinked ? (
+            <LinkedLoginMethod memberName={row.original.name} method="github" />
+          ) : null,
+      },
+      {
+        id: "passkey",
+        header: "Passkey",
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.passkeyLinked ? (
+            <LinkedLoginMethod
+              memberName={row.original.name}
+              method="passkey"
+            />
+          ) : null,
+      },
+      {
+        id: "joined",
+        accessorFn: (member) => member.createdAt,
+        sortingFn: memberJoinedSorting,
+        header: ({ column }) => (
+          <SortableMemberHeader column={column} label="Joined" />
+        ),
+        cell: ({ row }) => <LocalDate value={row.original.createdAt} />,
       },
       {
         accessorKey: "role",
@@ -212,15 +234,6 @@ export const MembersTable = ({
             onChange={onChangeRole}
           />
         ),
-      },
-      {
-        id: "joined",
-        accessorFn: (member) => member.createdAt,
-        sortingFn: memberJoinedSorting,
-        header: ({ column }) => (
-          <SortableMemberHeader column={column} label="Joined" />
-        ),
-        cell: ({ row }) => <LocalDate value={row.original.createdAt} />,
       },
       {
         id: "actions",
@@ -376,6 +389,9 @@ const memberColumnClass = (columnId: string) => {
   if (columnId === "role") {
     return "w-44 min-w-44"
   }
+  if (columnId === "github" || columnId === "passkey") {
+    return "w-24 min-w-24 text-center"
+  }
   if (columnId === "joined") {
     return "w-40 min-w-40"
   }
@@ -385,86 +401,39 @@ const memberColumnClass = (columnId: string) => {
   return undefined
 }
 
-const MemberRoleSelect = ({
-  member,
-  canManageRoles,
-  isOnlySuperAdmin,
-  canSelectRole,
-  onChange,
+const LinkedLoginMethod = ({
+  memberName,
+  method,
 }: {
-  member: OrganizationMember
-  canManageRoles: boolean
-  isOnlySuperAdmin: boolean
-  canSelectRole: (member: OrganizationMember, role: OrganizationRole) => boolean
-  onChange: (member: OrganizationMember, role: OrganizationRole) => void
+  memberName: string
+  method: "github" | "passkey"
 }) => {
-  const pending = useContext(MemberMutationContext)
-  const descriptionId = `member-role-description-${member.id}`
-  const disabledReason = !canManageRoles
-    ? "Only the Super Admin can change roles."
-    : isOnlySuperAdmin
-      ? "Transfer Super Admin before changing this role."
-      : undefined
-  const handleValueChange = useCallback(
-    (value: string | null) => {
-      if (isOrganizationRole(value)) {
-        onChange(member, value)
-      }
-    },
-    [member, onChange]
-  )
+  const label =
+    method === "github"
+      ? `${memberName} has GitHub linked`
+      : `${memberName} has a passkey linked`
 
   return (
-    <div>
-      <Select
-        items={organizationRoleOptions}
-        value={member.role}
-        disabled={!canManageRoles}
-        readOnly={pending}
-        onValueChange={handleValueChange}
-      >
-        <SelectTrigger
-          className="w-36"
-          aria-label={`Role for ${member.name}`}
-          aria-describedby={disabledReason ? descriptionId : undefined}
-          aria-busy={pending}
-          title={disabledReason}
-        >
-          <span className="min-w-0 flex-1 truncate text-left">
-            {roleLabel(member.role)}
-          </span>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectItem
-              value="member"
-              disabled={!canSelectRole(member, "member")}
-            >
-              Member
-            </SelectItem>
-            <SelectItem
-              value="admin"
-              disabled={!canSelectRole(member, "admin")}
-            >
-              Admin
-            </SelectItem>
-            <SelectItem
-              value="super_admin"
-              disabled={!canSelectRole(member, "super_admin")}
-            >
-              Super Admin
-            </SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-      {disabledReason ? (
-        <span id={descriptionId} className="sr-only">
-          {disabledReason}
-        </span>
-      ) : null}
-    </div>
+    <span
+      className="inline-flex size-8 items-center justify-center rounded-full bg-muted text-foreground [&_svg]:size-4"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      {method === "github" ? (
+        <GitHubMark />
+      ) : (
+        <KeyRoundIcon aria-hidden="true" />
+      )}
+    </span>
   )
 }
+
+const GitHubMark = () => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.82a9.6 9.6 0 0 1 2.5.34c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+  </svg>
+)
 
 const MemberActions = ({
   member,
@@ -485,22 +454,34 @@ const MemberActions = ({
 
   return (
     <div className="flex justify-end">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={permanentlyDisabled}
-        aria-disabled={pending || undefined}
-        aria-busy={pending}
-        title={
-          member.role === "super_admin"
-            ? "Transfer Super Admin before removing this member."
-            : `Remove ${member.name}`
-        }
-        onClick={requestRemoval}
-      >
-        <Trash2Icon aria-hidden="true" />
-        <span className="sr-only">Remove {member.name}</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={memberActionsTrigger}
+          aria-disabled={pending || undefined}
+          aria-label={`More actions for ${member.name}`}
+          aria-busy={pending}
+        >
+          <EllipsisIcon aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Member actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={permanentlyDisabled || pending}
+              title={
+                member.role === "super_admin"
+                  ? "Transfer Super Admin before removing this member."
+                  : undefined
+              }
+              onClick={requestRemoval}
+            >
+              <Trash2Icon aria-hidden="true" />
+              Remove member
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

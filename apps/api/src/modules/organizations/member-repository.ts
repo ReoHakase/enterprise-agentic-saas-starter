@@ -1,7 +1,9 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
+  account,
   auditLogs,
   member,
+  passkey,
   session,
   user,
 } from "@enterprise-agentic-saas/db/schema"
@@ -23,6 +25,17 @@ export const listMembersByOrganization = async (
   organizationId: string
 ): Promise<OrganizationMember[]> => {
   try {
+    const githubAccounts = db
+      .select({ userId: account.userId })
+      .from(account)
+      .where(eq(account.providerId, "github"))
+      .groupBy(account.userId)
+      .as("github_accounts")
+    const passkeyUsers = db
+      .select({ userId: passkey.userId })
+      .from(passkey)
+      .groupBy(passkey.userId)
+      .as("passkey_users")
     const rows = await db
       .select({
         id: member.id,
@@ -30,11 +43,15 @@ export const listMembersByOrganization = async (
         name: user.name,
         email: user.email,
         profileImage: user.image,
+        githubLinkedUserId: githubAccounts.userId,
+        passkeyLinkedUserId: passkeyUsers.userId,
         role: member.role,
         createdAt: member.createdAt,
       })
       .from(member)
       .innerJoin(user, eq(member.userId, user.id))
+      .leftJoin(githubAccounts, eq(githubAccounts.userId, member.userId))
+      .leftJoin(passkeyUsers, eq(passkeyUsers.userId, member.userId))
       .where(eq(member.organizationId, organizationId))
       .orderBy(user.name)
 
@@ -44,6 +61,8 @@ export const listMembersByOrganization = async (
       name: row.name,
       email: row.email,
       profileImage: row.profileImage,
+      githubLinked: row.githubLinkedUserId !== null,
+      passkeyLinked: row.passkeyLinkedUserId !== null,
       role: normalizeOrganizationRole(row.role),
       createdAt: row.createdAt.toISOString(),
     }))

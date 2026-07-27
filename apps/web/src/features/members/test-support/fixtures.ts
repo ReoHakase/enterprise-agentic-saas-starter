@@ -28,6 +28,8 @@ const fictionalOwner = {
   name: "Avery Stone",
   email: "avery@example.test",
   profileImage: null,
+  githubLinked: true,
+  passkeyLinked: true,
   role: "super_admin",
   createdAt: "2026-07-01T00:00:00.000Z",
 } satisfies OrganizationMember
@@ -40,6 +42,8 @@ export const fictionalMembers = [
     name: "Jordan Lee",
     email: "jordan@example.test",
     profileImage: null,
+    githubLinked: true,
+    passkeyLinked: false,
     role: "admin",
     createdAt: "2026-07-02T00:00:00.000Z",
   },

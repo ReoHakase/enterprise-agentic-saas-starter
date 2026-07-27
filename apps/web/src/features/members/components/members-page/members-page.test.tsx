@@ -61,6 +61,8 @@ const member = {
   name: "Owner",
   email: "owner@example.com",
   profileImage: null,
+  githubLinked: true,
+  passkeyLinked: true,
   role: "super_admin" as const,
   createdAt: "2026-07-01T00:00:00.000Z",
 }

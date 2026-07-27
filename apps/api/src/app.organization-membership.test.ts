@@ -284,6 +284,122 @@ describe("organization deletion and membership transitions", () => {
     })
   })
 
+  it("projects linked login methods as booleans without multiplying or leaking member rows", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
+    await db.insert(schema.account).values([
+      {
+        id: "github-account-1",
+        accountId: "private-github-account-1",
+        providerId: "github",
+        userId: "user_4",
+        accessToken: "private-github-token-1",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "github-account-2",
+        accountId: "private-github-account-2",
+        providerId: "github",
+        userId: "user_4",
+        accessToken: "private-github-token-2",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "other-tenant-github-account",
+        accountId: "private-other-tenant-account",
+        providerId: "github",
+        userId: "user_2",
+        accessToken: "private-other-tenant-token",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "same-tenant-non-github-account",
+        accountId: "private-credential-account",
+        providerId: "credential",
+        userId: "user_3",
+        password: "private-password-hash",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
+    await db.insert(schema.passkey).values([
+      {
+        id: "passkey-1",
+        name: "First key",
+        publicKey: "private-public-key-1",
+        userId: "user_4",
+        credentialID: "private-credential-1",
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+        createdAt: now,
+      },
+      {
+        id: "passkey-2",
+        name: "Second key",
+        publicKey: "private-public-key-2",
+        userId: "user_4",
+        credentialID: "private-credential-2",
+        counter: 0,
+        deviceType: "multiDevice",
+        backedUp: true,
+        createdAt: now,
+      },
+    ])
+    const app = createApp(db)
+
+    const response = await app.handle(
+      jsonRequest("/organizations/org_1/members", {
+        userId: "user_4",
+      })
+    )
+
+    expect(response.status).toBe(200)
+    const members = await response.json()
+    expect(members).toHaveLength(4)
+    expect(
+      members.filter((item: { id: string }) => item.id === "member_4")
+    ).toHaveLength(1)
+    const linkedMember = members.find(
+      (item: { id: string }) => item.id === "member_4"
+    )
+    expect(linkedMember).toMatchObject({
+      githubLinked: true,
+      passkeyLinked: true,
+    })
+    for (const privateField of [
+      "accountId",
+      "accessToken",
+      "credentialID",
+      "publicKey",
+    ]) {
+      expect(linkedMember).not.toHaveProperty(privateField)
+    }
+    expect(
+      members.find((item: { id: string }) => item.id === "member_3")
+    ).toMatchObject({
+      githubLinked: false,
+      passkeyLinked: false,
+    })
+    expect(
+      members.some((item: { userId: string }) => item.userId === "user_2")
+    ).toBe(false)
+    const body = JSON.stringify(members)
+    for (const privateValue of [
+      "private-github-account",
+      "private-github-token",
+      "private-public-key",
+      "private-credential",
+      "private-password",
+      "private-other-tenant",
+    ]) {
+      expect(body).not.toContain(privateValue)
+    }
+  })
+
   it("transfers ownership atomically and keeps one super admin", async () => {
     const db = await createSeededDb()
     const app = createApp(db)

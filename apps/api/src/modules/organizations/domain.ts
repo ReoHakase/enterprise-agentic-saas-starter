@@ -37,6 +37,8 @@ export type OrganizationMember = {
   name: string
   email: string
   profileImage: string | null
+  githubLinked: boolean
+  passkeyLinked: boolean
   role: OrganizationRole
   createdAt: string
 }

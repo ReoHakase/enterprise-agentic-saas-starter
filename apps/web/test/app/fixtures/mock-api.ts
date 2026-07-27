@@ -48,6 +48,8 @@ const member = {
   name: user.name,
   email: user.email,
   profileImage: null,
+  githubLinked: true,
+  passkeyLinked: true,
   role: "super_admin",
   createdAt: "2026-07-01T09:00:00.000Z",
 }

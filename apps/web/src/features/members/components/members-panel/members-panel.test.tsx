@@ -115,6 +115,8 @@ const members: OrganizationMember[] = [
     name: "Current Owner",
     email: "owner@example.com",
     profileImage: null,
+    githubLinked: true,
+    passkeyLinked: true,
     role: "super_admin",
     createdAt: "2026-07-01T00:00:00.000Z",
   },
@@ -124,6 +126,8 @@ const members: OrganizationMember[] = [
     name: "Target Admin",
     email: "admin@example.com",
     profileImage: null,
+    githubLinked: true,
+    passkeyLinked: false,
     role: "admin",
     createdAt: "2026-07-02T00:00:00.000Z",
   },
@@ -133,6 +137,8 @@ const members: OrganizationMember[] = [
     name: "Basic Member",
     email: "member@example.com",
     profileImage: null,
+    githubLinked: false,
+    passkeyLinked: true,
     role: "member",
     createdAt: "2026-07-03T00:00:00.000Z",
   },
@@ -267,6 +273,29 @@ describe("MembersPanel", () => {
     renderMembers()
     const table = screen.getByRole("table", { name: "Members of Acme" })
 
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent?.trim())
+    ).toEqual(["Member", "GitHub", "Passkey", "Joined", "Role", "Actions"])
+    expect(
+      within(table).getByRole("img", {
+        name: "Current Owner has GitHub linked",
+      })
+    ).toBeVisible()
+    expect(
+      within(table).getByRole("img", {
+        name: "Basic Member has a passkey linked",
+      })
+    ).toBeVisible()
+    expect(
+      within(table).queryByRole("img", {
+        name: "Basic Member has GitHub linked",
+      })
+    ).not.toBeInTheDocument()
+    expect(within(table).getAllByTestId(/^member-role-/u)).toHaveLength(
+      members.length
+    )
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
       "Basic Member"
     )
@@ -342,6 +371,71 @@ describe("MembersPanel", () => {
       screen.queryByRole("heading", { name: "Invitations" })
     ).not.toBeInTheDocument()
     expect(screen.queryByText("No invitations")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /More actions for/u })
+    ).not.toBeInTheDocument()
+  })
+
+  it("keeps pending action triggers focusable without allowing removal", async () => {
+    const user = userEvent.setup()
+    mocks.updateMemberRole.mockImplementationOnce(
+      () => new Promise(() => undefined)
+    )
+    renderMembers()
+
+    await chooseRole(user, "Basic Member", "Admin")
+    const actionTrigger = screen.getByRole("button", {
+      name: "More actions for Basic Member",
+    })
+    expect(actionTrigger).not.toBeDisabled()
+    expect(actionTrigger).toHaveAttribute("aria-disabled", "true")
+    expect(actionTrigger).toHaveAttribute("aria-busy", "true")
+
+    actionTrigger.focus()
+    expect(actionTrigger).toHaveFocus()
+    await user.click(actionTrigger)
+    const removeItem = await screen.findByRole("menuitem", {
+      name: "Remove member",
+    })
+    expect(removeItem).toHaveAttribute("data-disabled")
+    await user.click(removeItem)
+
+    expect(mocks.removeMember).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole("textbox", { name: "Member email" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("prevents admins from removing admins or the Super Admin", async () => {
+    const user = userEvent.setup()
+    renderMembers({
+      ...organization,
+      role: "admin",
+      permissions: {
+        ...organization.permissions,
+        canEditOrganization: false,
+        canManageAdmins: false,
+        canTransferSuperAdmin: false,
+      },
+    })
+
+    const expectRemovalDisabled = async (memberName: string) => {
+      const trigger = screen.getByRole("button", {
+        name: `More actions for ${memberName}`,
+      })
+      await user.click(trigger)
+      const removeItem = await screen.findByRole("menuitem", {
+        name: "Remove member",
+      })
+      expect(removeItem).toHaveAttribute("data-disabled")
+      await user.click(removeItem)
+      expect(mocks.removeMember).not.toHaveBeenCalled()
+      await user.keyboard("{Escape}")
+      await waitFor(() => expect(trigger).toHaveFocus())
+    }
+
+    await expectRemovalDisabled("Target Admin")
+    await expectRemovalDisabled("Current Owner")
   })
 
   it("resends pending invitations and renews expired invitations", async () => {
@@ -613,8 +707,9 @@ describe("MembersPanel", () => {
     renderMembers()
 
     await user.click(
-      screen.getByRole("button", { name: "Remove Basic Member" })
+      screen.getByRole("button", { name: "More actions for Basic Member" })
     )
+    await user.click(screen.getByRole("menuitem", { name: "Remove member" }))
     const confirmation = screen.getByRole("textbox", {
       name: "Member email",
     })

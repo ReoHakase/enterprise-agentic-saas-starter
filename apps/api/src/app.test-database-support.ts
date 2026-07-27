@@ -29,6 +29,8 @@ const resetTestDb = async (db: TestDb) => {
       "issues",
       "invitation",
       "rate_limit",
+      "passkey",
+      "account",
       "session",
       "member",
       "organization",
@@ -61,6 +63,46 @@ const createIdentityAndIssueTables = async (db: TestDb) => {
       user_id text not null,
       active_organization_id text
     )
+  `)
+  await db.run(sql`
+    create table account (
+      id text primary key,
+      account_id text not null,
+      provider_id text not null,
+      user_id text not null,
+      access_token text,
+      refresh_token text,
+      id_token text,
+      access_token_expires_at integer,
+      refresh_token_expires_at integer,
+      scope text,
+      password text,
+      created_at integer not null,
+      updated_at integer not null,
+      foreign key (user_id) references user(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create index account_userId_idx on account (user_id)
+  `)
+  await db.run(sql`
+    create table passkey (
+      id text primary key,
+      name text,
+      public_key text not null,
+      user_id text not null,
+      credential_id text not null,
+      counter integer not null,
+      device_type text not null,
+      backed_up integer not null,
+      transports text,
+      created_at integer,
+      aaguid text,
+      foreign key (user_id) references user(id) on delete cascade
+    )
+  `)
+  await db.run(sql`
+    create index passkey_userId_idx on passkey (user_id)
   `)
   await db.run(sql`
     create table organization (
