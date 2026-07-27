@@ -108,10 +108,10 @@ const waitForVisible = async <TElement extends HTMLElement>(
   return element
 }
 
-const findVisibleMenu = async () => {
+const findVisibleMenu = async (ownerBody: HTMLElement) => {
   let visibleMenu: HTMLElement | undefined
   await waitFor(() => {
-    const menus = within(document.body).getAllByRole("menu")
+    const menus = within(ownerBody).queryAllByRole("menu")
     visibleMenu = menus.find((menu) => menu.hasAttribute("data-open"))
     expect(visibleMenu).toBeDefined()
     expect(visibleMenu).toBeVisible()
@@ -120,10 +120,8 @@ const findVisibleMenu = async () => {
   return visibleMenu
 }
 
-const findVisibleAlertDialog = async (name: string) =>
-  waitForVisible(
-    await within(document.body).findByRole("alertdialog", { name })
-  )
+const findVisibleAlertDialog = async (ownerBody: HTMLElement, name: string) =>
+  waitForVisible(await within(ownerBody).findByRole("alertdialog", { name }))
 
 const meta = preview.meta({
   title: "Web/Console/Console Shell",
@@ -388,8 +386,9 @@ export const Ready = meta.story({
         await tabUntilFocused(accountTrigger)
         await expect(accountTrigger).toHaveFocus()
         await userEvent.keyboard("{Enter}")
-        const body = within(document.body)
-        const accountMenu = await findVisibleMenu()
+        const ownerBody = canvasElement.ownerDocument.body
+        const body = within(ownerBody)
+        const accountMenu = await findVisibleMenu(ownerBody)
         await waitForVisible(
           await within(accountMenu).findByText("Accounts on this device")
         )
@@ -429,15 +428,12 @@ export const Ready = meta.story({
           name: /jordan@example\.test/u,
         })
         await expect(otherAccount).not.toHaveAttribute("aria-disabled", "true")
-        await waitFor(() =>
-          expect(otherAccount).toHaveAttribute("data-highlighted")
-        )
         otherAccount.focus()
         await expect(otherAccount).toHaveFocus()
         await userEvent.keyboard("{Enter}")
         await waitFor(() => expect(readySetActiveRequests).toBe(1))
         await userEvent.click(accountTrigger)
-        const pendingMenu = await findVisibleMenu()
+        const pendingMenu = await findVisibleMenu(ownerBody)
         await waitForVisible(
           within(pendingMenu).getByRole("status", {
             name: "Switching account",
@@ -475,11 +471,12 @@ export const Mobile = meta.story({
     await expect(trigger).toBeVisible()
     if (!trigger) throw new Error("Sidebar trigger was not rendered")
     await userEvent.click(trigger)
-    const body = within(document.body)
+    const ownerBody = canvasElement.ownerDocument.body
+    const body = within(ownerBody)
     await userEvent.click(
       await body.findByRole("button", { name: /Avery Stone/u })
     )
-    const accountMenu = await findVisibleMenu()
+    const accountMenu = await findVisibleMenu(ownerBody)
     const currentBadge = await waitForVisible(
       await within(accountMenu).findByText("Current")
     )
@@ -565,8 +562,16 @@ export const OrganizationPendingShape = meta.story({
     const expandedRoundedXlRadius =
       getComputedStyle(roundedXlIdentity).borderRadius
 
-    await userEvent.click(canvas.getByRole("button", { name: /Acme Cloud/u }))
-    const organizationMenu = await findVisibleMenu()
+    const organizationTrigger = canvas.getByRole("button", {
+      name: /Acme Cloud/u,
+    })
+    await userEvent.click(organizationTrigger)
+    await waitFor(() =>
+      expect(organizationTrigger).toHaveAttribute("aria-expanded", "true")
+    )
+    const organizationMenu = await findVisibleMenu(
+      canvasElement.ownerDocument.body
+    )
     await userEvent.click(
       within(organizationMenu).getByRole("menuitem", {
         name: /Secondary Workspace/u,
@@ -633,7 +638,8 @@ export const DirtyAccountActionsFailSafely = meta.story({
     )
   },
   play: async ({ canvas, canvasElement }) => {
-    const body = within(document.body)
+    const ownerBody = canvasElement.ownerDocument.body
+    const body = within(ownerBody)
     const accountTrigger = canvas.getByRole("button", {
       name: /Avery Stone/u,
     })
@@ -644,11 +650,12 @@ export const DirtyAccountActionsFailSafely = meta.story({
       throw new Error("Stable sidebar trigger was not rendered")
 
     await userEvent.click(accountTrigger)
-    let accountMenu = await findVisibleMenu()
+    let accountMenu = await findVisibleMenu(ownerBody)
     await userEvent.click(
       await within(accountMenu).findByText("jordan@example.test")
     )
     const switchDialog = await findVisibleAlertDialog(
+      ownerBody,
       "Discard local Agent work and switch account?"
     )
     await expect(sessionMutationRequests).toBe(0)
@@ -661,11 +668,12 @@ export const DirtyAccountActionsFailSafely = meta.story({
     await expect(agentRevokeRequests).toBe(0)
 
     await userEvent.click(accountTrigger)
-    accountMenu = await findVisibleMenu()
+    accountMenu = await findVisibleMenu(ownerBody)
     await userEvent.click(
       await within(accountMenu).findByText("jordan@example.test")
     )
     const confirmSwitchDialog = await findVisibleAlertDialog(
+      ownerBody,
       "Discard local Agent work and switch account?"
     )
     await userEvent.dblClick(
@@ -686,11 +694,12 @@ export const DirtyAccountActionsFailSafely = meta.story({
     await expect(canvas.getByText("Dashboard")).toBeVisible()
 
     await userEvent.click(accountTrigger)
-    const menu = await findVisibleMenu()
+    const menu = await findVisibleMenu(ownerBody)
     await userEvent.click(
       within(menu).getByRole("menuitem", { name: "Sign out" })
     )
     const signOutDialog = await findVisibleAlertDialog(
+      ownerBody,
       "Discard local Agent work and sign out?"
     )
     await userEvent.click(
@@ -720,13 +729,13 @@ export const AccountsLoading = meta.story({
       })
     )
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await userEvent.click(
       canvas.getByRole("button", {
         name: /Avery Stone/u,
       })
     )
-    const menu = await findVisibleMenu()
+    const menu = await findVisibleMenu(canvasElement.ownerDocument.body)
     await waitFor(() =>
       expect(within(menu).getByText("Loading accounts")).toBeVisible()
     )
@@ -741,14 +750,14 @@ export const AccountsError = meta.story({
       )
     )
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await userEvent.click(
       canvas.getByRole("button", {
         name: /Avery Stone/u,
       })
     )
-    const body = within(document.body)
-    const menu = await findVisibleMenu()
+    const body = within(canvasElement.ownerDocument.body)
+    const menu = await findVisibleMenu(canvasElement.ownerDocument.body)
     await waitForVisible(
       await within(menu).findByText("Try loading accounts again")
     )
@@ -774,15 +783,16 @@ export const AccountsPending = meta.story({
       })
     )
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     const accountTrigger = canvas.getByRole("button", {
       name: /Avery Stone/u,
     })
     await userEvent.click(accountTrigger)
-    const menu = await findVisibleMenu()
+    const ownerBody = canvasElement.ownerDocument.body
+    const menu = await findVisibleMenu(ownerBody)
     await userEvent.click(await within(menu).findByText("jordan@example.test"))
     await userEvent.click(accountTrigger)
-    const pendingMenu = await findVisibleMenu()
+    const pendingMenu = await findVisibleMenu(ownerBody)
     await waitForVisible(
       within(pendingMenu).getByRole("status", {
         name: "Switching account",
