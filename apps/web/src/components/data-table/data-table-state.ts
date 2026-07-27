@@ -2,6 +2,17 @@ import type { RowSelectionState, VisibilityState } from "@tanstack/react-table"
 
 type StorageReader = Pick<Storage, "getItem">
 
+export type DataTablePageSize = "20" | "50" | "100"
+
+export const toDataTablePageSize = (
+  value: number
+): DataTablePageSize | undefined => {
+  if (value === 20) return "20"
+  if (value === 50) return "50"
+  if (value === 100) return "100"
+  return undefined
+}
+
 export const getDataTableStorageKey = (
   userId: string,
   tableId: string,

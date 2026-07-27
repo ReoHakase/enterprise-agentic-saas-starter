@@ -74,7 +74,11 @@ const DataTableProbe = ({
   })
 
   return (
-    <DataTableRoot scrollLabel="Items">
+    <DataTableRoot
+      className="rounded-2xl"
+      tableClassName="min-w-200"
+      scrollLabel="Items"
+    >
       <TableCaption className="sr-only">Items</TableCaption>
       <DataTableHeader table={table} />
       <DataTableBody table={table}>No items</DataTableBody>
@@ -88,6 +92,9 @@ describe("DataTable", () => {
     const onAction = vi.fn<(id: string) => void>()
     render(<DataTableProbe selectable onAction={onAction} />)
 
+    const table = screen.getByRole("table", { name: "Items" })
+    expect(table).toHaveClass("min-w-200")
+    expect(screen.getByTestId("data-table-root")).toHaveClass("rounded-2xl")
     await user.click(screen.getByRole("button", { name: "Edit One" }))
     expect(onAction).toHaveBeenCalledWith("one")
     expect(

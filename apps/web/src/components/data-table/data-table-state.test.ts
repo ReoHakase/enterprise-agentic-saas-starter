@@ -5,6 +5,7 @@ import {
   getPaginationWindow,
   pruneRowSelection,
   readColumnVisibility,
+  toDataTablePageSize,
 } from "./data-table-state"
 
 describe("DataTable state", () => {
@@ -23,6 +24,13 @@ describe("DataTable state", () => {
     expect(getPaginationWindow(0, 10)).toEqual([0, 1, 2, 3, 4])
     expect(getPaginationWindow(5, 10)).toEqual([3, 4, 5, 6, 7])
     expect(getPaginationWindow(9, 10)).toEqual([5, 6, 7, 8, 9])
+  })
+
+  it("accepts only supported page sizes", () => {
+    expect(toDataTablePageSize(20)).toBe("20")
+    expect(toDataTablePageSize(50)).toBe("50")
+    expect(toDataTablePageSize(100)).toBe("100")
+    expect(toDataTablePageSize(10)).toBeUndefined()
   })
 
   it("uses a versioned per-user table key and restores safe columns only", () => {

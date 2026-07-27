@@ -67,7 +67,9 @@ describe("DataTableFacetedFilter", () => {
     )
 
     await user.click(screen.getByRole("button", { name: "Assignee" }))
-    const filter = screen.getByRole("dialog", { name: "Assignee filter" })
+    const filter = await screen.findByRole("dialog", {
+      name: "Assignee filter",
+    })
     expect(within(filter).getByLabelText("Avery You")).toHaveTextContent(
       "AveryYou"
     )
@@ -94,7 +96,9 @@ describe("DataTableFacetedFilter", () => {
     )
 
     await user.click(screen.getByRole("button", { name: "Labels" }))
-    const filter = screen.getByRole("dialog", { name: "Labels filter" })
+    const filter = await screen.findByRole("dialog", {
+      name: "Labels filter",
+    })
     await user.type(
       within(filter).getByRole("combobox", { name: "Search labels" }),
       "missing"

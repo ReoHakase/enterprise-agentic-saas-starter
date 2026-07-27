@@ -40,12 +40,22 @@ const pinnedColumnClassName = <TData extends RowData>(
 export const DataTableRoot = ({
   scrollLabel,
   children,
-}: {
+  className,
+  tableClassName,
+  ...props
+}: ComponentProps<"div"> & {
   scrollLabel: string
-  children: ReactNode
+  tableClassName?: string
 }) => (
-  <div className="min-w-0 overflow-hidden rounded-xl border">
-    <TablePrimitive scrollLabel={scrollLabel}>{children}</TablePrimitive>
+  <div
+    data-slot="data-table-root"
+    data-testid="data-table-root"
+    className={cn("min-w-0 overflow-hidden rounded-xl border", className)}
+    {...props}
+  >
+    <TablePrimitive className={tableClassName} scrollLabel={scrollLabel}>
+      {children}
+    </TablePrimitive>
   </div>
 )
 
