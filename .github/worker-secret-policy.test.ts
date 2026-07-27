@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  assertNoNewStaleWorkerSecrets,
   assertNoStaleWorkerSecrets,
   findStaleWorkerSecrets,
   parseWorkerSecretInventory,
@@ -36,5 +37,22 @@ describe("Worker secret inventory policy", () => {
     expect(() =>
       parseWorkerSecretInventory({ success: true, result: [{}] })
     ).toThrow("entry is invalid")
+  })
+
+  it("rejects forbidden secrets that appear after the initial inventory", () => {
+    expect(() =>
+      assertNoNewStaleWorkerSecrets(
+        "api",
+        ["MASTRA_STORAGE_URL"],
+        ["MASTRA_STORAGE_URL", "MASTRA_STORAGE_AUTH_TOKEN"]
+      )
+    ).toThrow("gained forbidden cross-database secrets")
+    expect(() =>
+      assertNoNewStaleWorkerSecrets(
+        "api",
+        ["MASTRA_STORAGE_URL", "MASTRA_STORAGE_AUTH_TOKEN"],
+        ["MASTRA_STORAGE_URL"]
+      )
+    ).not.toThrow()
   })
 })

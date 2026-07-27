@@ -387,7 +387,7 @@ PATはこのphaseへ含めません。
 - [x] 目標architectureと責務分担を決定した
 - [x] Phase 1から開始し、PATを最後に分離する方針を決定した
 - [x] Phase 1Aとしてpackage境界、`get_issue` factory、Service Binding response検証を実装した
-- [ ] Phase 1を実装した
+- [x] Phase 1を実装した
 - [ ] Phase 2を実装した
 - [ ] Phase 3を実装した
 - [ ] Phase 4を実装した
@@ -414,22 +414,22 @@ PATはこのphaseへ含めません。
 
 ## 検証証跡
 
-| command                                       | 結果   | 証跡                                    |
-| --------------------------------------------- | ------ | --------------------------------------- |
-| `bun run check`                               | 成功   | Phase 1、2026-07-28                     |
-| `bun run typecheck`                           | 成功   | `bun run check`内                       |
-| `bun run lint`                                | 成功   | `bun run check`内                       |
-| `bun run test`                                | 成功   | `bun run check`内                       |
-| `bun run --cwd packages/agent-contracts test` | 成功   | 49 tests、coverage 100%                 |
-| `bun run --cwd packages/agent-tools test`     | 成功   | 13 tests、coverage 100%                 |
-| `bun run --cwd apps/agent test`               | 成功   | 198 tests、coverage閾値内               |
-| `bun run --cwd apps/api test`                 | 成功   | 314 tests、localhost許可                |
-| `bun run --cwd packages/db db:check`          | 成功   | schema、migration、snapshot整合         |
-| `bun run test:browser`                        | 成功   | 248 Storybook、6 browser、W6 17+1 tests |
-| `bun run test:e2e`                            | 成功   | E1 3 tests                              |
-| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                              |
-| `bun run build:cloudflare`                    | 成功   | Phase 1、3 Workers build                |
-| `bun run dev:studio`、`studio:*`              | 成功   | health、3 Agents、paid smoke            |
+| command                                       | 結果   | 証跡                                     |
+| --------------------------------------------- | ------ | ---------------------------------------- |
+| `bun run check`                               | 成功   | Phase 1、2026-07-28                      |
+| `bun run typecheck`                           | 成功   | `bun run check`内                        |
+| `bun run lint`                                | 成功   | `bun run check`内                        |
+| `bun run test`                                | 成功   | `bun run check`内                        |
+| `bun run --cwd packages/agent-contracts test` | 成功   | 49 tests、coverage 100%                  |
+| `bun run --cwd packages/agent-tools test`     | 成功   | 13 tests、coverage 100%                  |
+| `bun run --cwd apps/agent test`               | 成功   | 198 tests、coverage閾値内                |
+| `bun run --cwd apps/api test`                 | 成功   | 317 tests、localhost許可                 |
+| `bun run --cwd packages/db db:check`          | 成功   | schema、migration、snapshot整合          |
+| `bun run test:browser`                        | 成功   | UI 95、Web 248、browser 6、W6 17+1 tests |
+| `bun run test:e2e`                            | 成功   | E1 3 tests                               |
+| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                               |
+| `bun run build:cloudflare`                    | 成功   | Phase 1、3 Workers build                 |
+| `bun run dev:studio`、`studio:*`              | 成功   | health、3 Agents、paid smoke             |
 
 ## リスクとrollback
 

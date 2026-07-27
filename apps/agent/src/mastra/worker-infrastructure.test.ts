@@ -247,8 +247,8 @@ describe("mutual Worker Service Binding deployment", () => {
       join(repositoryRoot, ".github/workflows/deploy.yml"),
       "utf8"
     )
-    const bootstrapDeploy = workflow.indexOf(
-      "- name: Bootstrap API Worker for mutual Service Bindings"
+    const compatibilityDeploy = workflow.indexOf(
+      "- name: Deploy compatible API Worker before migration"
     )
     const agentDeploy = workflow.indexOf("- name: Deploy Agent Worker")
     const finalApiDeploy = workflow.indexOf("- name: Deploy final API Worker")
@@ -264,12 +264,15 @@ describe("mutual Worker Service Binding deployment", () => {
     )
     expect(workflow).toContain("apps/api/wrangler.bootstrap.jsonc")
     expect(workflow).toContain(
-      "steps.worker-state.outputs.bootstrap_required == 'true'"
+      '"${{ steps.worker-state.outputs.bootstrap_required }}"'
     )
-    expect(workflow).toContain("404) bootstrap_required=true")
+    expect(workflow).toContain("404)")
+    expect(workflow).toContain("worker_exists=false")
+    expect(workflow).toContain("bootstrap_required=true")
     expect(workflow).toContain("Cloudflare Worker state lookup failed")
-    expect(bootstrapDeploy).toBeGreaterThan(-1)
-    expect(agentDeploy).toBeGreaterThan(bootstrapDeploy)
+    expect(compatibilityDeploy).toBeGreaterThan(-1)
+    expect(workflow).toContain("--config apps/api/wrangler.bootstrap.jsonc")
+    expect(agentDeploy).toBeGreaterThan(compatibilityDeploy)
     expect(finalApiDeploy).toBeGreaterThan(agentDeploy)
   })
 })

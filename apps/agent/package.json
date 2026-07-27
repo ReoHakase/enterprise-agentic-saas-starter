@@ -24,6 +24,7 @@
     "studio:health": "sh -c 'set -eu; STUDIO_URL=\"${MASTRA_STUDIO_URL:-$(portless get mastra-studio.enterprise-agentic-saas)}\"; STUDIO_CA_CERT=\"${PORTLESS_CA_CERT:-$HOME/.portless/ca.pem}\"; curl --cacert \"$STUDIO_CA_CERT\" -fsS \"$STUDIO_URL/api/system/api-schema\" >/dev/null'",
     "studio:smoke": "sh -c 'set -eu; STUDIO_URL=\"${MASTRA_STUDIO_URL:-$(portless get mastra-studio.enterprise-agentic-saas)}\"; RESULT=$(NODE_EXTRA_CA_CERTS=\"${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem}\" mastra api --url \"$STUDIO_URL\" agent run product-agent \"{\\\"messages\\\":\\\"Return exactly MASTRA_STUDIO_OK and no other text.\\\"}\"); printf %s \"$RESULT\" | rg -q MASTRA_STUDIO_OK; echo MASTRA_STUDIO_OK'",
     "test": "vitest run",
+    "test:g4-memory-host": "bun --no-env-file run scripts/g4-memory-host.ts",
     "test:eval:agent": "bun run src/mastra/evals/run.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -5,10 +5,10 @@ import {
 } from "../workflows/approved-issue-action"
 import { createProductAgentComposition } from "./create-product-agent"
 import { createProductRuntime } from "./create-runtime"
-import type { AgentRuntimeEnv } from "./environment"
+import type { PortableAgentRuntimeEnv } from "./environment"
 
 export const createAgentRuntimeComposition = (
-  environment: AgentRuntimeEnv | NodeJS.ProcessEnv
+  environment: PortableAgentRuntimeEnv | NodeJS.ProcessEnv
 ) => {
   const storage = createAgentStorage(environment)
   const agents = createProductAgentComposition(environment, storage)

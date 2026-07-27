@@ -217,21 +217,31 @@ jobs:
         id: worker-state
         run: |
           bootstrap_required="${{ inputs.force_agent_protocol_bootstrap }}"
-          for worker_name in "$API_WORKER_NAME" "$AGENT_WORKER_NAME"; do
+          for worker_kind in api agent; do
+            if [ "$worker_kind" = "api" ]; then
+              worker_name="$API_WORKER_NAME"
+            else
+              worker_name="$AGENT_WORKER_NAME"
+            fi
             status="$(curl --silent --show-error --output /dev/null \
               --write-out '%{http_code}' --max-time 30 \
               --retry 3 --retry-delay 2 --retry-all-errors \
               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name")"
             case "$status" in
-              200) ;;
-              404) bootstrap_required=true ;;
+              200) worker_exists=true ;;
+              404)
+                worker_exists=false
+                bootstrap_required=true
+                ;;
               *)
                 printf 'Cloudflare Worker state lookup failed with HTTP %s\n' \
                   "$status" >&2
                 exit 1
                 ;;
             esac
+            printf '%s_exists=%s\n' "$worker_kind" "$worker_exists" \
+              >> "$GITHUB_OUTPUT"
           done
           printf 'bootstrap_required=%s\n' "$bootstrap_required" >> "$GITHUB_OUTPUT"
         env:
@@ -253,29 +263,31 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
-      - name: Remove bootstrap cross-database Worker secrets and verify inventory
+      - name: Inspect cross-database Worker secret inventory
+        id: worker-secrets
         run: |
-          cleanup_allowed="${{ steps.worker-state.outputs.bootstrap_required }}"
-          if [ "${{ steps.file-activity-rollout.outputs.compatibility_deploy }}" = "true" ]; then
-            cleanup_allowed=true
-          fi
+          stale_found=false
           for worker_kind in api agent; do
             if [ "$worker_kind" = "api" ]; then
               worker_name="$API_WORKER_NAME"
+              worker_exists="${{ steps.worker-state.outputs.api_exists }}"
             else
               worker_name="$AGENT_WORKER_NAME"
+              worker_exists="${{ steps.worker-state.outputs.agent_exists }}"
             fi
-            inventory="$(mktemp)"
-            trap 'rm -f "$inventory"' EXIT
+            inventory="$RUNNER_TEMP/initial-$worker_kind-worker-secrets.json"
             inventory_status="$(curl --silent --show-error --max-time 30 \
               --retry 3 --retry-delay 2 --retry-all-errors \
               --write-out '%{http_code}' \
               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
               --output "$inventory")"
-            if [ "$inventory_status" = "404" ] && [ "$cleanup_allowed" = "true" ]; then
-              rm -f "$inventory"
-              trap - EXIT
+            missing_allowed="$(
+              bun run .github/compatibility-rollout-policy.ts \
+                inventory-missing-allowed "$worker_exists" "$inventory_status"
+            )"
+            if [ "$missing_allowed" = "true" ]; then
+              printf '{"success":true,"result":[]}\n' > "$inventory"
               continue
             fi
             if [ "$inventory_status" != "200" ]; then
@@ -283,33 +295,28 @@ jobs:
                 "$worker_kind" "$inventory_status" >&2
               exit 1
             fi
-            if [ "$cleanup_allowed" = "true" ]; then
-              while IFS= read -r secret_name; do
-                [ -z "$secret_name" ] && continue
-                curl --fail --silent --show-error --max-time 30 \
-                  --request DELETE \
-                  --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets/$secret_name" \
-                  --output /dev/null
-              done < <(bun run .github/worker-secret-policy.ts stale "$worker_kind" "$inventory")
-              curl --fail --silent --show-error --max-time 30 \
-                --retry 3 --retry-delay 2 --retry-all-errors \
-                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
-                --output "$inventory"
+            if [ -n "$(bun run .github/worker-secret-policy.ts stale "$worker_kind" "$inventory")" ]; then
+              stale_found=true
             fi
-            bun run .github/worker-secret-policy.ts assert "$worker_kind" "$inventory"
-            rm -f "$inventory"
-            trap - EXIT
           done
+          printf 'stale_found=%s\n' "$stale_found" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Keep Agent disabled during compatibility bootstrap
-        if: >-
-          inputs.force_agent_protocol_bootstrap == true ||
-          steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
+      - name: Determine compatibility rollout requirement
+        id: compatibility-state
+        run: |
+          compatibility_required="$(
+            bun run .github/compatibility-rollout-policy.ts \
+              "${{ steps.worker-state.outputs.bootstrap_required }}" \
+              "${{ steps.file-activity-rollout.outputs.compatibility_deploy }}" \
+              "${{ steps.worker-secrets.outputs.stale_found }}"
+          )"
+          printf 'compatibility_required=%s\n' "$compatibility_required" >> "$GITHUB_OUTPUT"
+
+      - name: Engage Agent kill switch before compatibility drain
+        if: steps.compatibility-state.outputs.compatibility_required == 'true'
         run: |
           for name in \
             AGENT_ASSET_UPLOAD_ENABLED \
@@ -317,90 +324,14 @@ jobs:
             AGENT_VISION_ENABLED \
             AGENT_WRITES_ENABLED; do
             if [ "${!name}" != "0" ]; then
-              printf '%s must be 0 during a compatibility bootstrap\n' \
+              printf '%s must be 0 during a compatibility rollout\n' \
                 "$name" >&2
               exit 1
             fi
           done
 
       - name: Deploy compatible API Worker before migration
-        if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
-        run: |
-          umask 077
-          api_secrets="$(mktemp)"
-          trap 'rm -f "$api_secrets"' EXIT
-          SECRETS_FILE="$api_secrets" bun -e '
-            const keys = [
-              "BETTER_AUTH_SECRET",
-              "GITHUB_CLIENT_ID",
-              "GITHUB_CLIENT_SECRET",
-              "SENTRY_DSN",
-              "TURSO_AUTH_TOKEN",
-              "TURSO_DATABASE_URL",
-            ]
-            await Bun.write(
-              process.env.SECRETS_FILE,
-              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
-            )
-          '
-          api_config="apps/api/wrangler.jsonc"
-          if [ "${{ steps.worker-state.outputs.bootstrap_required }}" = "true" ]; then
-            api_config="apps/api/wrangler.bootstrap.jsonc"
-          fi
-          apps/api/node_modules/.bin/wrangler deploy \
-            apps/api/dist/worker/worker.js \
-            --config "$api_config" \
-            --no-bundle \
-            --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
-            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
-            --domain "$API_HOST" \
-            --strict \
-            --secrets-file "$api_secrets"
-        env:
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-          SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-
-      - name: Smoke compatible API Worker before migration
-        if: steps.file-activity-rollout.outputs.compatibility_deploy == 'true'
-        run: |
-          assert_status() {
-            label="$1"
-            expected="$2"
-            url="$3"
-            status=""
-            for delay in 0 2 4 8 12; do
-              sleep "$delay"
-              status="$(curl --silent --show-error --output /dev/null \
-                --write-out '%{http_code}' --max-time 20 "$url" || true)"
-              if [ "$status" = "$expected" ]; then
-                printf '%s smoke passed\n' "$label"
-                return 0
-              fi
-            done
-            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
-            return 1
-          }
-          assert_status API-compat-health 200 "$API_PUBLIC_URL/health"
-          assert_status API-compat-ready 200 "$API_PUBLIC_URL/ready"
-          assert_status API-compat-OpenAPI 200 "$API_PUBLIC_URL/openapi/json"
-
-      - name: Apply Turso migrations
-        run: bun run --cwd packages/db db:migrate
-        env:
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-
-      - name: Bootstrap API Worker for mutual Service Bindings
-        if: >-
-          steps.file-activity-rollout.outputs.compatibility_deploy != 'true' &&
-          steps.worker-state.outputs.bootstrap_required == 'true'
+        if: steps.compatibility-state.outputs.compatibility_required == 'true'
         run: |
           umask 077
           api_secrets="$(mktemp)"
@@ -424,6 +355,7 @@ jobs:
             --config apps/api/wrangler.bootstrap.jsonc \
             --no-bundle \
             --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
+            --var "AGENT_MAINTENANCE_MODE:1" \
             --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
             --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
             --domain "$API_HOST" \
@@ -436,6 +368,167 @@ jobs:
           GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+
+      - name: Smoke compatible API Worker before migration
+        if: steps.compatibility-state.outputs.compatibility_required == 'true'
+        run: |
+          assert_status() {
+            label="$1"
+            expected="$2"
+            url="$3"
+            status=""
+            for delay in 0 2 4 8 12; do
+              sleep "$delay"
+              status="$(curl --silent --show-error --output /dev/null \
+                --write-out '%{http_code}' --max-time 20 "$url" || true)"
+              if [ "$status" = "$expected" ]; then
+                printf '%s smoke passed\n' "$label"
+                return 0
+              fi
+            done
+            printf '%s smoke failed with HTTP %s\n' "$label" "$status" >&2
+            return 1
+          }
+          assert_status API-compat-health 200 "$API_PUBLIC_URL/health"
+          assert_status API-compat-ready 200 "$API_PUBLIC_URL/ready"
+          assert_status API-compat-OpenAPI 200 "$API_PUBLIC_URL/openapi/json"
+          assert_status API-compat-Agent-maintenance 503 "$API_PUBLIC_URL/agent/threads"
+          assert_status API-compat-Agent-assets-maintenance 503 \
+            "$API_PUBLIC_URL/files/organizations/maintenance/agent-assets/maintenance"
+
+      - name: Verify compatibility API has no Agent runtime binding
+        if: steps.compatibility-state.outputs.compatibility_required == 'true'
+        run: |
+          settings="$(mktemp)"
+          trap 'rm -f "$settings"' EXIT
+          curl --fail --silent --show-error --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$API_WORKER_NAME/settings" \
+            --output "$settings"
+          bun run .github/worker-binding-policy.ts compatibility "$settings"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Drain live Agent capabilities before migration
+        if: steps.compatibility-state.outputs.compatibility_required == 'true'
+        run: bun run packages/db/src/agent-rollout-drain.ts
+        env:
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+
+      - name: Delete forbidden cross-database Worker secrets and verify inventory
+        run: |
+          for worker_kind in api agent; do
+            if [ "$worker_kind" = "api" ]; then
+              worker_name="$API_WORKER_NAME"
+              worker_exists=true
+            else
+              worker_name="$AGENT_WORKER_NAME"
+              worker_exists="${{ steps.worker-state.outputs.agent_exists }}"
+            fi
+            inventory="$(mktemp)"
+            trap 'rm -f "$inventory"' EXIT
+            inventory_status="$(curl --silent --show-error --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
+              --output "$inventory")"
+            missing_allowed="$(
+              bun run .github/compatibility-rollout-policy.ts \
+                inventory-missing-allowed "$worker_exists" "$inventory_status"
+            )"
+            if [ "$missing_allowed" = "true" ]; then
+              rm -f "$inventory"
+              trap - EXIT
+              continue
+            fi
+            if [ "$inventory_status" != "200" ]; then
+              printf '%s Worker secret inventory failed with HTTP %s\n' \
+                "$worker_kind" "$inventory_status" >&2
+              exit 1
+            fi
+            bun run .github/worker-secret-policy.ts assert-no-new \
+              "$worker_kind" \
+              "$RUNNER_TEMP/initial-$worker_kind-worker-secrets.json" \
+              "$inventory"
+            stale_secrets="$(
+              bun run .github/worker-secret-policy.ts stale \
+                "$worker_kind" "$inventory"
+            )"
+            while IFS= read -r secret_name; do
+              [ -z "$secret_name" ] && continue
+              curl --fail --silent --show-error --max-time 30 \
+                --request DELETE \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets/$secret_name" \
+                --output /dev/null
+            done <<< "$stale_secrets"
+            curl --fail --silent --show-error --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
+              --output "$inventory"
+            bun run .github/worker-secret-policy.ts assert "$worker_kind" "$inventory"
+            rm -f "$inventory"
+            trap - EXIT
+          done
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Reverify all Worker secret inventories before migration
+        run: |
+          for worker_kind in api agent; do
+            if [ "$worker_kind" = "api" ]; then
+              worker_name="$API_WORKER_NAME"
+              worker_exists=true
+            else
+              worker_name="$AGENT_WORKER_NAME"
+              worker_exists="${{ steps.worker-state.outputs.agent_exists }}"
+            fi
+            inventory="$(mktemp)"
+            trap 'rm -f "$inventory"' EXIT
+            inventory_status="$(curl --silent --show-error --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker_name/secrets" \
+              --output "$inventory")"
+            missing_allowed="$(
+              bun run .github/compatibility-rollout-policy.ts \
+                inventory-missing-allowed "$worker_exists" "$inventory_status"
+            )"
+            if [ "$missing_allowed" = "true" ]; then
+              rm -f "$inventory"
+              trap - EXIT
+              continue
+            fi
+            if [ "$inventory_status" != "200" ]; then
+              printf '%s Worker final secret inventory failed with HTTP %s\n' \
+                "$worker_kind" "$inventory_status" >&2
+              exit 1
+            fi
+            bun run .github/worker-secret-policy.ts assert-no-new \
+              "$worker_kind" \
+              "$RUNNER_TEMP/initial-$worker_kind-worker-secrets.json" \
+              "$inventory"
+            bun run .github/worker-secret-policy.ts assert \
+              "$worker_kind" "$inventory"
+            rm -f "$inventory"
+            trap - EXIT
+          done
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Apply Turso migrations
+        run: bun run --cwd packages/db db:migrate
+        env:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
@@ -513,6 +606,7 @@ jobs:
             --config apps/api/wrangler.jsonc \
             --no-bundle \
             --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
+            --var "AGENT_MAINTENANCE_MODE:0" \
             --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
             --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
             --domain "$API_HOST" \
@@ -550,6 +644,20 @@ jobs:
           assert_status API-health 200 "$API_PUBLIC_URL/health"
           assert_status API-ready 200 "$API_PUBLIC_URL/ready"
           assert_status API-OpenAPI 200 "$API_PUBLIC_URL/openapi/json"
+
+      - name: Verify final API Agent bindings
+        run: |
+          settings="$(mktemp)"
+          trap 'rm -f "$settings"' EXIT
+          curl --fail --silent --show-error --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$API_WORKER_NAME/settings" \
+            --output "$settings"
+          bun run .github/worker-binding-policy.ts final "$settings"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Build Web Worker and upload source maps
         run: |

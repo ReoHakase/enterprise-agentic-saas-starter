@@ -49,15 +49,35 @@ export const assertNoStaleWorkerSecrets = (
   }
 }
 
+export const assertNoNewStaleWorkerSecrets = (
+  worker: WorkerKind,
+  initialInventory: readonly string[],
+  currentInventory: readonly string[]
+) => {
+  const initial = new Set(findStaleWorkerSecrets(worker, initialInventory))
+  const newlyStale = findStaleWorkerSecrets(worker, currentInventory).filter(
+    (name) => !initial.has(name)
+  )
+  if (newlyStale.length > 0) {
+    throw new Error(
+      `${worker} Worker gained forbidden cross-database secrets after initial inventory: ${newlyStale.join(", ")}`
+    )
+  }
+}
+
 if (import.meta.main) {
-  const [command, worker, inventoryPath] = process.argv.slice(2)
+  const [command, worker, inventoryPath, currentInventoryPath] =
+    process.argv.slice(2)
   if (
-    (command !== "stale" && command !== "assert") ||
+    (command !== "stale" &&
+      command !== "assert" &&
+      command !== "assert-no-new") ||
     (worker !== "agent" && worker !== "api") ||
-    !inventoryPath
+    !inventoryPath ||
+    (command === "assert-no-new" && !currentInventoryPath)
   ) {
     throw new Error(
-      "Usage: worker-secret-policy.ts <stale|assert> <agent|api> <inventory.json>"
+      "Usage: worker-secret-policy.ts <stale|assert|assert-no-new> <agent|api> <inventory.json> [current-inventory.json]"
     )
   }
   const inventory = parseWorkerSecretInventory(
@@ -67,7 +87,15 @@ if (import.meta.main) {
     process.stdout.write(
       `${findStaleWorkerSecrets(worker, inventory).join("\n")}\n`
     )
-  } else {
+  } else if (command === "assert") {
     assertNoStaleWorkerSecrets(worker, inventory)
+  } else {
+    if (!currentInventoryPath) {
+      throw new Error("Current Worker secret inventory path is required")
+    }
+    const currentInventory = parseWorkerSecretInventory(
+      JSON.parse(await readFile(currentInventoryPath, "utf8"))
+    )
+    assertNoNewStaleWorkerSecrets(worker, inventory, currentInventory)
   }
 }
