@@ -312,6 +312,13 @@ project名は導入順に合わせます。存在しないprojectを先にscript
   current year内の省略形と非current/cross-yearの年表示を固定する。
   toolbar controlの寸法、sortのfocus return、検索可能filterのinsetと全幅mode、期日popoverの
   viewport margin・短い画面での内部scrollも同じW3で検査する
+- Organizations、Members、Invitations、Sessionsは同じrendererを使うことをW2で確認し、既存のsort、
+  search、Select、Menu、mutation actionを回帰させない。各W3のmobile storyは全列を維持したtable内横scrollと
+  document全体の横overflowなしを確認する
+- Members画面はW1で主表のprefixなしkeyとInvitationsの`inv_*` keyを固定し、同一nuqs adapter上で一方の
+  filter、page、page size更新が他方の検索・filter・paginationを維持することを確認する。W3では両表の
+  検索clear、filter、sort、group別reset、page size、ページ移動を操作し、既存のmember/invitation actionと
+  同居できることを確認する
 - W4: Issuesの実QueryClient、nuqs、MSW接続で複合filterのclose時一括反映、selection、pagination、
   column visibility、remote label更新中のdraft維持を検査する。絞り込みの編集中はGETを送らず、閉じた時に
   1回だけ送ること、遅い旧label検索が新しい結果を上書きしないこと、query key変更中は直前行とspinnerを

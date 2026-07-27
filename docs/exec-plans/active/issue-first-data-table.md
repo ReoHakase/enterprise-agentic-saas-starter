@@ -18,7 +18,8 @@ linked_adrs: []
 ## 目的
 
 Issues一覧を最初の利用者として、TanStack Tableの柔軟性を保つ共通DataTable、共有可能なURL状態、
-テナント境界を持つAPI絞り込み、選択・列表示・ページ移動の一貫した操作を実装する。
+テナント境界を持つAPI絞り込み、選択・列表示・ページ移動の一貫した操作を実装する。共通rendererを
+Organizations、Members、Invitations、Sessionsへ展開し、feature固有の列と操作を維持する。
 
 ## 対象外
 
@@ -39,6 +40,9 @@ Issues一覧を最初の利用者として、TanStack Tableの柔軟性を保つ
 
 - `apps/web/src/components/data-table/**`
 - `apps/web/src/features/issues/**`
+- `apps/web/src/features/organizations/components/organizations-page/**`
+- `apps/web/src/features/members/components/{members-table,invitations-section,members-page}/**`
+- `apps/web/src/features/account/components/sessions-panel/**`
 - `apps/api/src/modules/issues/**`
 - `apps/api/src/app.issue-operations.test.ts`
 - `apps/web/src/features/issues/**/*.stories.tsx`
@@ -52,6 +56,8 @@ Issues一覧を最初の利用者として、TanStack Tableの柔軟性を保つ
 3. Issues固有column、複合filter、選択、列表示、paginationを接続する。
 4. Issues APIへ複数値、範囲、期日、label候補、動的page sizeを追加する。
 5. W1からW4、API実libSQL、Storybook storyを追加し、正本文書を更新する。
+6. Organizations、Members、Invitations、Sessionsの手書きheader/body rendererを共通DataTableへ移行する。
+7. MembersとInvitationsへ検索、絞り込み、sort、共通paginationを追加し、同一画面のURL namespaceを分離する。
 
 ## 進捗
 
@@ -61,6 +67,8 @@ Issues一覧を最初の利用者として、TanStack Tableの柔軟性を保つ
 - [x] API絞り込みとlabel候補を実装した
 - [x] storyと統合testを実装した
 - [x] toolbar、sort、検索可能filter、期日popoverのresponsive UXを実装した
+- [x] Organizations、Members、Invitations、Sessionsを共通rendererへ移行した
+- [x] MembersとInvitationsへ検索、絞り込み、sort、共通paginationと独立したURL namespaceを追加した
 - [ ] 必須検査を全て通した
 
 ## 判断記録
@@ -83,20 +91,23 @@ Issues一覧を最初の利用者として、TanStack Tableの柔軟性を保つ
 | 2026-07-27 | Calendarは順序付き範囲を返し、外部URLの逆転範囲は破棄する            | 日付とDST境界offsetの対応を入れ替えずに保つため                 |
 | 2026-07-27 | clear/reset/列表示/summary/選択barを操作scopeへ分離する              | URL状態を過剰に消去せず、狭い画面でも主要操作を保つため         |
 | 2026-07-28 | Storybook light/darkを各1 workerで順次実行する                       | full runのproject/file並列時に発生した`No Preview`を防ぐため    |
+| 2026-07-28 | 既存4表はrendererだけを移行し、状態と列定義はfeatureへ残す           | 共通化でdomain固有のsort、search、mutationを制限しないため      |
+| 2026-07-28 | Membersはprefixなし、Invitationsは`inv_*`のURL keyを使う             | 同一画面の主表を簡潔にし、2表の検索・絞り込みを干渉させないため |
+| 2026-07-28 | MembersとInvitationsは取得済みデータをclient-sideでpage分割する      | API契約を変えず共通footerへpage sizeとページ移動を統一するため  |
 
 ## 検証証跡
 
-| command                    | 結果   | 証跡                                                                                                                                       |
-| -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web unit全体               | 成功   | 89 files、410 tests。toolbar・filter・列表示・選択barのfocused runは5 files、36 tests、a11y・年表示follow-upは3 files、13 tests            |
-| API unit・実libSQL全体     | 成功   | 55 files、331 tests                                                                                                                        |
-| Web/API/UI lint・typecheck | 成功   | warningなし                                                                                                                                |
-| `bun run check`            | 成功   | final current diffで再実行。static、format、typecheck、全workspace unit・integrationが成功                                                 |
-| `bun run test:browser`     | 成功   | Storybook直列化後のexact commandがexit 0。UI Storybook 96、Web light 194・dark 77、Web browser 7、Chromium app 17、WebKit representative 1 |
-| `bun run test:e2e`         | 成功   | 3 tests                                                                                                                                    |
-| `bun run build:storybook`  | 成功   | UI/Web static build成功                                                                                                                    |
-| Web `next build`           | 成功   | `test:browser`のproduction app buildで全routeを生成                                                                                        |
-| `bun run build:cloudflare` | 未完了 | API・Agent primary・Agent E2Eのdry-runとWeb OpenNext bundleは生成成功。Wranglerが終了表示後も停滞し、再実行は明示承認待ち                  |
+| command                    | 結果   | 証跡                                                                                                                      |
+| -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Web unit全体               | 成功   | 91 files、416 tests。Members/InvitationsのURL namespace分離、検索、filter、sort、paginationと既存action回帰を含む         |
+| API unit・実libSQL全体     | 成功   | 55 files、331 tests                                                                                                       |
+| Web/API/UI lint・typecheck | 成功   | warningなし                                                                                                               |
+| `bun run check`            | 成功   | final current diffで再実行。static、format、typecheck、全workspace unit・integrationが成功                                |
+| `bun run test:browser`     | 成功   | exact commandがexit 0。UI Storybook 99、Web light 197・dark 78、Web browser 7、Chromium app 17、WebKit representative 1   |
+| `bun run test:e2e`         | 成功   | 3 tests                                                                                                                   |
+| `bun run build:storybook`  | 成功   | UI/Web static build成功                                                                                                   |
+| Web `next build`           | 成功   | `test:browser`のproduction app buildで全routeを生成                                                                       |
+| `bun run build:cloudflare` | 未完了 | API・Agent primary・Agent E2Eのdry-runとWeb OpenNext bundleは生成成功。Wranglerが終了表示後も停滞し、再実行は明示承認待ち |
 
 ## リスクとrollback
 

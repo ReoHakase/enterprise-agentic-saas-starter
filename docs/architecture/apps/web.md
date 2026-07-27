@@ -434,6 +434,10 @@ TanStack Tableの`Table<TData>`を受け、bodyのchildはempty stateです。�
 `useReactTable`を所有せず、headerとcellを`flexRender`で描画します。row全体のclick handlerや
 interactive cellの複製は追加しません。列pinはTanStackのcolumn stateを正本にし、選択列は共通factoryと
 feature固有の`getRowId`、controlled stateで現在の結果だけへ限定します。
+Issuesを先行利用者とし、Organizations、Members、Invitations、Sessionsも同じroot、header、bodyへ
+移行します。各featureはsort、filter、列定義、空状態、mutation用Contextを引き続き所有します。列幅と
+配置はcolumn metaへ置き、table全体の最小幅と外枠の角丸はrootの任意classとして渡します。共通rendererは
+列IDやdomain固有のcellを判定しません。
 
 表のURL keyはgeneric factoryから作り、logical keyを変えず、prefixなしを既定とします。同じ画面に複数の
 表を置く場合だけcallerが`org_q`のようなprefixを指定します。Issuesは共有済みURLとの互換のため
@@ -443,6 +447,13 @@ filter、sort、priority範囲の変更時は旧`priority`を削除し、表が�
 assigneeは50件、labelは20件を上限とし、重複除去と決定的sortの後に切り詰めてAPI modelと一致させます。
 文字検索はreplace history、filter、sort、page、
 page sizeの離散操作はpush historyを使います。
+
+Members画面ではMembers tableを主表としてprefixなしの`q`、`roles`、`methods`、`sort`、`dir`、`page`、
+`pageSize`を使い、同居するInvitations tableは`inv_q`、`inv_roles`、`inv_statuses`、`inv_sort`、
+`inv_dir`、`inv_page`、`inv_pageSize`へ分離します。
+両表は取得済みの組織データをclient-sideで検索、絞り込み、sortし、一方の操作で他方のURL状態を消去しません。
+検索欄は入力中のdraftを即座に表へ反映してURLだけをdebounceし、clearは保留中の更新を破棄して即時反映します。
+独自の件数表示は持たず、共通footerが20、50、100件のpage sizeとページ移動を所有します。
 
 列表示は利用者ID、table ID、versionを含むlocalStorage keyへ保存します。保存値は既知でhide可能な列だけを
 復元し、select、主要title、actions列は非表示にできません。
