@@ -49,7 +49,12 @@ const storybookProject = (theme: "light" | "dark") => ({
 
 export default defineConfig({
   optimizeDeps: {
-    include: ["@base-ui/react/alert-dialog", "@base-ui/react/drawer"],
+    include: [
+      "@base-ui/react/alert-dialog",
+      "@base-ui/react/drawer",
+      "@base-ui/react/toggle",
+      "@base-ui/react/toggle-group",
+    ],
   },
   test: {
     coverage: {
