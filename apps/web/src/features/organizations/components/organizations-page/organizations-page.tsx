@@ -19,18 +19,9 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@enterprise-agentic-saas/ui/components/table"
+import { TableCaption } from "@enterprise-agentic-saas/ui/components/table"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  flexRender,
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
@@ -45,6 +36,11 @@ import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
+import {
+  DataTableBody,
+  DataTableHeader,
+  DataTableRoot,
+} from "@/components/data-table/data-table"
 import { LinkButton } from "@/components/link-button/link-button"
 import { PageShell } from "@/components/page-shell/page-shell"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
@@ -159,6 +155,10 @@ export const OrganizationsPage = ({
       {
         accessorKey: "slug",
         header: "Slug",
+        meta: {
+          headerClassName: "min-w-44",
+          cellClassName: "min-w-44",
+        },
         cell: ({ row }) => (
           <span className="font-mono text-xs text-muted-foreground">
             {row.original.slug}
@@ -168,11 +168,19 @@ export const OrganizationsPage = ({
       {
         accessorKey: "memberCount",
         header: "Members",
+        meta: {
+          headerClassName: "min-w-24",
+          cellClassName: "min-w-24",
+        },
         cell: ({ row }) => `${row.original.memberCount}`,
       },
       {
         accessorKey: "role",
         header: "Your role",
+        meta: {
+          headerClassName: "min-w-32",
+          cellClassName: "min-w-32",
+        },
         cell: ({ row }) => <OrganizationRoleBadge role={row.original.role} />,
       },
       {
@@ -231,52 +239,17 @@ export const OrganizationsPage = ({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="overflow-hidden rounded-2xl border">
-            <Table
-              className="min-w-208"
-              scrollLabel="Organizations attached to your account"
-            >
-              <TableCaption className="sr-only">
-                Organizations attached to your account
-              </TableCaption>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        className={organizationColumnClass(header.column.id)}
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        className={organizationColumnClass(cell.column.id)}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTableRoot
+            className="rounded-2xl"
+            tableClassName="min-w-208"
+            scrollLabel="Organizations attached to your account"
+          >
+            <TableCaption className="sr-only">
+              Organizations attached to your account
+            </TableCaption>
+            <DataTableHeader table={table} />
+            <DataTableBody table={table} />
+          </DataTableRoot>
         )}
       </PageShell>
       <AlertDialog
@@ -305,13 +278,6 @@ export const OrganizationsPage = ({
       </AlertDialog>
     </>
   )
-}
-
-const organizationColumnClass = (columnId: string) => {
-  if (columnId === "slug") return "min-w-44"
-  if (columnId === "memberCount") return "min-w-24"
-  if (columnId === "role") return "min-w-32"
-  return undefined
 }
 
 const OrganizationIdentity = ({
