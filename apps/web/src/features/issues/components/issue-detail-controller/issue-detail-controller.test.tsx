@@ -2,20 +2,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { PropsWithChildren } from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { issueKeys } from "../../queries"
 import type { Issue, IssueTimelinePage } from "../../schema"
 import type { IssueAssigneeOption } from "../types/types"
 
 const mocks = vi.hoisted(() => ({
+  back: vi.fn<() => void>(),
   getIssueTimeline: vi.fn<() => Promise<IssueTimelinePage>>(),
+  push: vi.fn<(href: string) => void>(),
 }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    back: vi.fn<() => void>(),
-    push: vi.fn<() => void>(),
+    back: mocks.back,
+    push: mocks.push,
   }),
 }))
 
@@ -27,18 +29,23 @@ vi.mock("../../api", () => ({
   updateIssueComment: vi.fn<() => void>(),
 }))
 
-vi.mock("../issue-detail-dialog/issue-detail-dialog", () => ({
-  IssueDetailDialog: ({
+vi.mock("../issue-detail-page/issue-detail-page", () => ({
+  IssueDetailPage: ({
     timeline,
     onFilesChanged,
+    onRequestClose,
   }: {
     timeline: IssueTimelinePage["items"]
     onFilesChanged?: () => Promise<void> | void
+    onRequestClose: () => void
   }) => (
     <div>
       <span>{timeline.map((item) => item.id).join(",")}</span>
       <button type="button" onClick={onFilesChanged}>
         Notify file changes
+      </button>
+      <button type="button" onClick={onRequestClose}>
+        Back to issues
       </button>
     </div>
   ),
@@ -79,14 +86,30 @@ const initialTimeline: IssueTimelinePage = {
   nextCursor: null,
 }
 const noAssignees: IssueAssigneeOption[] = []
+const navigationEntry = (name: string): PerformanceEntry => ({
+  duration: 0,
+  entryType: "navigation",
+  name,
+  startTime: 0,
+  toJSON: () => ({}),
+})
 
 describe("issue detail controller", () => {
   beforeEach(() => {
+    mocks.back.mockReset()
     mocks.getIssueTimeline.mockReset()
+    mocks.push.mockReset()
   })
+
+  afterEach(() => vi.restoreAllMocks())
 
   it("refreshes the issue timeline after file state converges", async () => {
     const user = userEvent.setup()
+    const navigationEntries = vi
+      .spyOn(globalThis.performance, "getEntriesByType")
+      .mockReturnValue([
+        navigationEntry("http://localhost/organization/acme/issues"),
+      ])
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -106,7 +129,6 @@ describe("issue detail controller", () => {
         assignees={noAssignees}
         organizationId="org-1"
         canonicalHref="/organization/acme/issues/1"
-        mode="page"
       />,
       { wrapper: Wrapper }
     )
@@ -126,5 +148,14 @@ describe("issue detail controller", () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: issueKeys.timeline("org-1", "issue-1"),
     })
+
+    await user.click(screen.getByRole("button", { name: "Back to issues" }))
+    expect(mocks.back).toHaveBeenCalledOnce()
+
+    navigationEntries.mockReturnValue([
+      navigationEntry("http://localhost/organization/acme/issues/1"),
+    ])
+    await user.click(screen.getByRole("button", { name: "Back to issues" }))
+    expect(mocks.push).toHaveBeenCalledWith("/organization/acme/issues")
   })
 })

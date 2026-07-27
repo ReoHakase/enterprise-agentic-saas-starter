@@ -58,7 +58,6 @@ const ConsoleRouteEffects = ({
       setOpenMobile(false)
     }
     previousPathnameRef.current = pathname
-    contentRef.current?.scrollTo({ top: 0 })
 
     const frame = requestAnimationFrame(() => {
       const heading =

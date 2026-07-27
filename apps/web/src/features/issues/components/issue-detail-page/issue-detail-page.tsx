@@ -1,11 +1,9 @@
 "use client"
 
-import type { ReactNode } from "react"
-
 import { issueDetailContent as IssueDetailContent } from "../issue-detail-content/issue-detail-content"
 import {
   emptyPendingFields,
-  type IssueDetailDialogProps,
+  type IssueDetailProps,
 } from "../issue-detail-types/issue-detail-types"
 import { issueDiscardDialog as IssueDiscardDialog } from "../issue-discard-dialog/issue-discard-dialog"
 import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
@@ -17,20 +15,7 @@ import { useIssueDetailNavigation } from "../use-issue-detail-navigation/use-iss
 import { useIssueImmediateFields } from "../use-issue-immediate-fields/use-issue-immediate-fields"
 import { useIssueTitleForm } from "../use-issue-title-form/use-issue-title-form"
 
-const IssueDetailSurface = ({
-  mode,
-  children,
-}: {
-  mode: "modal" | "page"
-  children: ReactNode
-}) =>
-  mode === "modal" ? (
-    children
-  ) : (
-    <article className="mx-auto w-full max-w-6xl">{children}</article>
-  )
-
-export const IssueDetailDialog = (props: IssueDetailDialogProps) => {
+export const IssueDetailPage = (props: IssueDetailProps) => {
   const assignees = props.assignees ?? emptyAssigneeOptions
   const labelSuggestions = props.labelSuggestions ?? props.issue.labels
   const title = useIssueTitleForm({
@@ -63,7 +48,6 @@ export const IssueDetailDialog = (props: IssueDetailDialogProps) => {
   const navigation = useIssueDetailNavigation({
     canonicalHref: props.canonicalHref,
     issueId: props.issue.id,
-    mode: props.mode,
     pending: props.pending,
     immediateFieldSaving: fields.saving,
     dirtyCommentIds: commentDirty.dirtyIds,
@@ -75,7 +59,7 @@ export const IssueDetailDialog = (props: IssueDetailDialogProps) => {
 
   return (
     <>
-      <IssueDetailSurface mode={props.mode}>
+      <article className="mx-auto w-full max-w-6xl">
         <IssueDetailContent
           props={props}
           assignees={assignees}
@@ -87,7 +71,7 @@ export const IssueDetailDialog = (props: IssueDetailDialogProps) => {
           fields={fields}
           getCommentDirtyHandler={commentDirty.getDirtyHandler}
         />
-      </IssueDetailSurface>
+      </article>
       <IssueDiscardDialog navigation={navigation} />
     </>
   )

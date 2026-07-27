@@ -9,7 +9,7 @@ import {
   issueDetailHeader as IssueDetailHeader,
 } from "../issue-detail-header/issue-detail-header"
 import { issueDetailMetadata as IssueDetailMetadata } from "../issue-detail-metadata/issue-detail-metadata"
-import type { IssueDetailDialogProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import type { IssueAssigneeOption } from "../types/types"
 import type { IssueCommentFormState } from "../use-issue-comment-form/use-issue-comment-form"
 import type { IssueDescriptionFormState } from "../use-issue-description-form/use-issue-description-form"
@@ -25,7 +25,7 @@ const IssuePrimaryColumn = ({
   navigation,
   getCommentDirtyHandler,
 }: {
-  props: IssueDetailDialogProps
+  props: IssueDetailProps
   assignees: IssueAssigneeOption[]
   description: IssueDescriptionFormState
   comment: IssueCommentFormState
@@ -84,7 +84,7 @@ export const issueDetailContent = ({
   fields,
   getCommentDirtyHandler,
 }: {
-  props: IssueDetailDialogProps
+  props: IssueDetailProps
   assignees: IssueAssigneeOption[]
   labelSuggestions: string[]
   title: IssueTitleFormState
@@ -99,21 +99,14 @@ export const issueDetailContent = ({
     data-route-boundary="true"
     data-boundary-state="ready"
     data-testid="issue-detail"
-    className={
-      props.mode === "modal"
-        ? "flex min-h-full flex-col gap-6 [--issue-timeline-surface:var(--popover)]"
-        : "flex min-h-full flex-col gap-6 [--issue-timeline-surface:var(--background)]"
-    }
+    className="flex min-h-full flex-col gap-6 [--issue-timeline-surface:var(--background)]"
   >
-    {props.mode === "page" ? (
-      <IssueDetailBackNavigation
-        blocked={navigation.blocked}
-        onBack={navigation.backToIssues}
-      />
-    ) : null}
+    <IssueDetailBackNavigation
+      blocked={navigation.blocked}
+      onBack={navigation.backToIssues}
+    />
     <IssueDetailHeader
       issue={props.issue}
-      mode={props.mode}
       pending={props.pending}
       canUpdate={Boolean(props.onUpdate)}
       title={title}

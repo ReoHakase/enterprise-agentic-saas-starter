@@ -14,7 +14,7 @@ export type ImmediateField =
   | "labels"
   | "dueDate"
 
-export type IssueDetailDialogProps = {
+export type IssueDetailProps = {
   issue: IssueUiItem
   assignees?: IssueAssigneeOption[]
   labelSuggestions?: string[]
@@ -22,7 +22,6 @@ export type IssueDetailDialogProps = {
   nextCursor: string | null
   canonicalHref: string
   organizationId?: string
-  mode: "modal" | "page"
   pending?: boolean
   pendingFields?: ReadonlySet<IssueUpdateField>
   loadingOlder?: boolean

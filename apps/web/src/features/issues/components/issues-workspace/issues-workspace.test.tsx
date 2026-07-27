@@ -4,8 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { IssueTimelineItem } from "../../schema"
 import { defaultIssueSearchState } from "../../search-params"
-import { IssueDetailDialog } from "../issue-detail-dialog/issue-detail-dialog"
-import { IssueModalRouteShell } from "../issue-modal-route-shell/issue-modal-route-shell"
+import { IssueDetailPage } from "../issue-detail-page/issue-detail-page"
 import type { IssueUiItem } from "../types/types"
 import { IssuesWorkspace } from "./issues-workspace"
 
@@ -156,7 +155,7 @@ const renderWorkspace = (issueValues = issues) => {
   return callbacks
 }
 
-const renderDetail = (mode: "modal" | "page" = "modal") => {
+const renderDetail = () => {
   const callbacks = {
     onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
     onCreateComment:
@@ -170,24 +169,16 @@ const renderDetail = (mode: "modal" | "page" = "modal") => {
     onRequestClose: vi.fn<() => void>(),
     onLoadOlder: vi.fn<() => void>(),
   }
-  const detail = (
-    <IssueDetailDialog
+  render(
+    <IssueDetailPage
       issue={billingIssue}
       timeline={timeline}
       nextCursor="2026-07-09T00:00:00.000Z"
       canonicalHref="/organization/acme/issues/12"
       organizationId="org-1"
-      mode={mode}
       assignees={assignees}
       {...callbacks}
     />
-  )
-  render(
-    mode === "modal" ? (
-      <IssueModalRouteShell>{detail}</IssueModalRouteShell>
-    ) : (
-      detail
-    )
   )
   return callbacks
 }
@@ -379,7 +370,7 @@ describe("organization issues", () => {
     })
   })
 
-  it("creates, opens, closes, and deletes from the table", async () => {
+  it("creates, opens the canonical detail page, and deletes from the table", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
@@ -391,11 +382,11 @@ describe("organization issues", () => {
     expect(
       screen.getByRole("link", { name: billingIssue.title })
     ).toHaveAttribute("href", "/organization/acme/issues/12")
-    const fullPageLink = screen.getByRole("link", {
-      name: `Open ${billingIssue.title} as full page`,
-    })
-    expect(fullPageLink).toHaveAttribute("href", "/organization/acme/issues/12")
-    expect(fullPageLink).toHaveTextContent("Full page")
+    expect(
+      screen.queryByRole("link", {
+        name: `Open ${billingIssue.title} as full page`,
+      })
+    ).not.toBeInTheDocument()
 
     await user.click(
       screen.getByRole("button", { name: `Actions for ${billingIssue.title}` })
@@ -479,10 +470,9 @@ describe("organization issues", () => {
       "sm:w-auto",
       "sm:flex-1"
     )
-    expect(screen.getByRole("button", { name: "Open full page" })).toHaveClass(
-      "order-1",
-      "sm:order-2"
-    )
+    expect(
+      screen.queryByRole("button", { name: "Open full page" })
+    ).not.toBeInTheDocument()
     expect(saveTitle).toBeDisabled()
     await user.clear(title)
     await user.type(title, "Fix payment retries")
@@ -584,7 +574,7 @@ describe("organization issues", () => {
     renderDetail()
 
     expect(screen.getByTestId("issue-detail")).toHaveClass(
-      "[--issue-timeline-surface:var(--popover)]"
+      "[--issue-timeline-surface:var(--background)]"
     )
     const metadata = screen.getByRole("complementary", {
       name: "Issue metadata",
@@ -624,17 +614,15 @@ describe("organization issues", () => {
     )
     expect(primaryColumn).toHaveClass("lg:col-start-1", "lg:row-start-1")
     expect(
-      screen.getByRole("heading", { name: billingIssue.title })
+      screen.getByRole("heading", { name: billingIssue.title, level: 1 })
     ).toBeInTheDocument()
     expect(screen.getByText("#12")).toBeInTheDocument()
     expect(
-      screen.getByRole("button", {
-        name: "Open full page",
-      })
-    ).toBeInTheDocument()
+      screen.queryByRole("button", { name: "Open full page" })
+    ).not.toBeInTheDocument()
     expect(
-      screen.getByRole("button", { name: "Open full page" })
-    ).toHaveTextContent("Full page")
+      screen.getByRole("button", { name: "Back to issues" })
+    ).toBeInTheDocument()
     expect(
       screen.getByRole("button", { name: "Edit issue title" })
     ).toBeInTheDocument()
@@ -659,11 +647,11 @@ describe("organization issues", () => {
     await waitFor(() => expect(status).toHaveAttribute("aria-busy", "false"))
   })
 
-  it("confirms before discarding an issue edit or comment draft", async () => {
+  it("confirms before leaving the full page with an unsaved draft", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
     await user.type(screen.getByLabelText("Add comment"), "Keep this draft")
-    await user.click(screen.getByRole("button", { name: "Close" }))
+    await user.click(screen.getByRole("button", { name: "Back to issues" }))
 
     expect(
       screen.getByRole("alertdialog", { name: "Discard unsaved changes?" })
@@ -672,45 +660,7 @@ describe("organization issues", () => {
     expect(screen.getByLabelText("Add comment")).toHaveValue("Keep this draft")
     expect(callbacks.onRequestClose).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole("button", { name: "Close" }))
-    await user.click(screen.getByRole("button", { name: "Discard changes" }))
-    expect(callbacks.onRequestClose).toHaveBeenCalledOnce()
-  })
-
-  it("keeps an edited comment until full-page navigation is confirmed", async () => {
-    const user = userEvent.setup()
-    renderDetail()
-    const commentCard = screen.getByTestId("issue-comment-card")
-
-    await user.click(within(commentCard).getByRole("button", { name: "Edit" }))
-    const commentDraft = within(commentCard).getByRole("textbox", {
-      name: "Edit comment",
-    })
-    await user.clear(commentDraft)
-    await user.type(commentDraft, "Keep this edited comment")
-    await user.click(screen.getByRole("button", { name: "Open full page" }))
-
-    expect(
-      screen.getByRole("alertdialog", { name: "Discard unsaved changes?" })
-    ).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Keep editing" }))
-    expect(commentDraft).toHaveValue("Keep this edited comment")
-  })
-
-  it("guards the full-page back action and returns to issues after discard", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderDetail("page")
-
-    expect(screen.getByTestId("issue-detail")).toHaveClass(
-      "[--issue-timeline-surface:var(--background)]"
-    )
-    await user.type(screen.getByLabelText("Add comment"), "Keep this draft")
     await user.click(screen.getByRole("button", { name: "Back to issues" }))
-    expect(callbacks.onRequestClose).not.toHaveBeenCalled()
-    expect(
-      screen.getByRole("alertdialog", { name: "Discard unsaved changes?" })
-    ).toBeInTheDocument()
-
     await user.click(screen.getByRole("button", { name: "Discard changes" }))
     expect(callbacks.onRequestClose).toHaveBeenCalledOnce()
   })
@@ -720,7 +670,7 @@ describe("organization issues", () => {
     const historyBack = vi
       .spyOn(window.history, "back")
       .mockImplementation(() => undefined)
-    renderDetail("page")
+    renderDetail()
 
     await user.type(screen.getByLabelText("Add comment"), "Keep this draft")
     act(() => window.dispatchEvent(new PopStateEvent("popstate")))

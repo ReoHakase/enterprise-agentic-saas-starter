@@ -1,13 +1,12 @@
 "use client"
 
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
-import { FieldError } from "@enterprise-agentic-saas/ui/components/field"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@enterprise-agentic-saas/ui/components/tooltip"
-import { ArrowLeftIcon, Maximize2Icon, PencilIcon, XIcon } from "lucide-react"
+import { ArrowLeftIcon, PencilIcon, XIcon } from "lucide-react"
 import { useMemo } from "react"
 
 import { selectSubmitState } from "../form-types/form-types"
@@ -78,13 +77,11 @@ const IssueTitleEditor = ({
 
 const IssueTitleDisplay = ({
   issue,
-  mode,
   navigationBlocked,
   canUpdate,
   onEdit,
 }: {
   issue: IssueUiItem
-  mode: "modal" | "page"
   navigationBlocked: boolean
   canUpdate: boolean
   onEdit: () => void
@@ -102,17 +99,15 @@ const IssueTitleDisplay = ({
     ),
     [canUpdate, navigationBlocked, onEdit]
   )
-  const TitleHeading = mode === "page" ? "h1" : "h2"
-
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <TitleHeading
-        tabIndex={mode === "page" ? -1 : undefined}
+      <h1
+        tabIndex={-1}
         className="min-w-0 truncate font-heading text-xl leading-tight font-medium sm:text-2xl"
         title={issue.title}
       >
         {issue.title}
-      </TitleHeading>
+      </h1>
       <span className="shrink-0 font-mono text-sm text-muted-foreground">
         {issueNumber(issue)}
       </span>
@@ -128,23 +123,18 @@ const IssueTitleDisplay = ({
 
 export const issueDetailHeader = ({
   issue,
-  mode,
   pending,
   canUpdate,
   title,
   navigation,
 }: {
   issue: IssueUiItem
-  mode: "modal" | "page"
   pending?: boolean
   canUpdate: boolean
   title: IssueTitleFormState
   navigation: IssueDetailNavigationState
 }) => (
-  <header
-    data-slot="issue-detail-header"
-    className={mode === "modal" ? "min-w-0 pr-12" : "min-w-0"}
-  >
+  <header data-slot="issue-detail-header" className="min-w-0">
     <div
       className={
         title.editing
@@ -157,31 +147,11 @@ export const issueDetailHeader = ({
       ) : (
         <IssueTitleDisplay
           issue={issue}
-          mode={mode}
           navigationBlocked={navigation.blocked}
           canUpdate={canUpdate}
           onEdit={title.beginEdit}
         />
       )}
-      {mode === "modal" ? (
-        <Button
-          className={title.editing ? "order-1 ml-auto sm:order-2" : "ml-auto"}
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="Open full page"
-          disabled={navigation.blocked}
-          onClick={navigation.openFullPage}
-        >
-          <Maximize2Icon data-icon="inline-start" aria-hidden="true" />
-          Full page
-        </Button>
-      ) : null}
     </div>
-    {navigation.error ? (
-      <FieldError className="mt-2" role="alert">
-        {navigation.error}
-      </FieldError>
-    ) : null}
   </header>
 )

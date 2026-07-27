@@ -18,7 +18,7 @@ import {
   type SubmitSelection,
 } from "../form-types/form-types"
 import { titleEditorField as TitleEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
-import type { IssueDetailDialogProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import { getActionErrorMessage } from "../issue-utils/issue-utils"
 import type { IssueUiItem } from "../types/types"
 
@@ -29,7 +29,7 @@ export const useIssueTitleForm = ({
 }: {
   issue: IssueUiItem
   pending?: boolean
-  onUpdate: IssueDetailDialogProps["onUpdate"]
+  onUpdate: IssueDetailProps["onUpdate"]
 }) => {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string>()

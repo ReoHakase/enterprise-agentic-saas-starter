@@ -240,7 +240,7 @@ export const AgentShell = ({
     <aside
       id={agentPaneId}
       data-slot="agent-shell"
-      className="relative my-2 mr-2 hidden h-[calc(100svh-1rem)] min-w-0 shrink-0 flex-col overflow-hidden rounded-2xl border bg-background shadow-sm md:flex"
+      className="sticky top-2 my-2 mr-2 hidden h-[calc(100svh-1rem)] min-w-0 shrink-0 flex-col self-start overflow-hidden rounded-2xl border bg-background shadow-sm md:flex"
       style={paneStyle}
       aria-label="Agent"
     >

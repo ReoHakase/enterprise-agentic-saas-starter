@@ -1,10 +1,7 @@
 "use client"
 
 import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
-import {
-  Button,
-  buttonVariants,
-} from "@enterprise-agentic-saas/ui/components/button"
+import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@enterprise-agentic-saas/ui/components/dropdown-menu"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import type { Column } from "@tanstack/react-table"
 import {
   ArrowDownIcon,
@@ -24,7 +20,6 @@ import {
   CircleDotIcon,
   CircleIcon,
   EllipsisIcon,
-  Maximize2Icon,
   Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
@@ -87,35 +82,22 @@ export const IssueTitleCell = ({
   issue: IssueUiItem
   href: string
 }) => (
-  <div className="flex max-w-xl min-w-72 items-start justify-between gap-3">
-    <div className="flex min-w-0 flex-col items-start gap-1">
-      <Link
-        href={href}
-        className="h-auto min-w-0 text-left text-sm font-medium whitespace-normal text-primary underline-offset-4 hover:underline"
-      >
-        {issue.title}
-      </Link>
-      {issue.labels.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {issue.labels.slice(0, 3).map((label) => (
-            <Badge key={label} variant="outline">
-              {label}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </div>
-    <a
+  <div className="flex max-w-xl min-w-72 flex-col items-start gap-1">
+    <Link
       href={href}
-      className={cn(
-        buttonVariants({ variant: "outline", size: "xs" }),
-        "opacity-100 transition-opacity sm:pointer-events-none sm:opacity-0 sm:group-focus-within/issue-row:pointer-events-auto sm:group-focus-within/issue-row:opacity-100 sm:group-hover/issue-row:pointer-events-auto sm:group-hover/issue-row:opacity-100"
-      )}
-      aria-label={`Open ${issue.title} as full page`}
+      className="h-auto min-w-0 text-left text-sm font-medium whitespace-normal text-primary underline-offset-4 hover:underline"
     >
-      <Maximize2Icon data-icon="inline-start" aria-hidden="true" />
-      Full page
-    </a>
+      {issue.title}
+    </Link>
+    {issue.labels.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {issue.labels.slice(0, 3).map((label) => (
+          <Badge key={label} variant="outline">
+            {label}
+          </Badge>
+        ))}
+      </div>
+    ) : null}
   </div>
 )
 

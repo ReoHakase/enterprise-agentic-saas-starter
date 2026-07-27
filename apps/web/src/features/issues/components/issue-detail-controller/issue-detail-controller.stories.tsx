@@ -19,7 +19,6 @@ const issueDetailArgs = {
   labelSuggestions: ["billing", "bug", "security"],
   organizationId: fictionalIssue.organizationId,
   canonicalHref: "/organization/acme/issues/12",
-  mode: "page",
 } satisfies ComponentProps<typeof IssueDetailController>
 
 const meta = preview.meta({

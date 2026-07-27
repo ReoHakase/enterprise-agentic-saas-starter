@@ -7,7 +7,7 @@ import type { IssueTimelineItem } from "../../schema"
 import { selectSubmitState } from "../form-types/form-types"
 import { IssueActivityItem } from "../issue-activity/issue-activity"
 import { IssueComment } from "../issue-comment/issue-comment"
-import type { IssueDetailDialogProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import { CommentBodyFormField } from "../text-form-fields/text-form-fields"
 import type { IssueAssigneeOption, IssueUiItem } from "../types/types"
 import type { IssueCommentFormState } from "../use-issue-comment-form/use-issue-comment-form"
@@ -26,8 +26,8 @@ const IssueTimeline = ({
   assignees: IssueAssigneeOption[]
   pending?: boolean
   getCommentDirtyHandler: (commentId: string) => (dirty: boolean) => void
-  onUpdateComment: IssueDetailDialogProps["onUpdateComment"]
-  onDeleteComment: IssueDetailDialogProps["onDeleteComment"]
+  onUpdateComment: IssueDetailProps["onUpdateComment"]
+  onDeleteComment: IssueDetailProps["onDeleteComment"]
 }) =>
   timeline.length > 0 ? (
     <ol className="relative flex min-w-0 flex-col gap-1">
@@ -110,8 +110,8 @@ export const issueDetailDiscussion = ({
   comment: IssueCommentFormState
   getCommentDirtyHandler: (commentId: string) => (dirty: boolean) => void
   onLoadOlder: () => void
-  onUpdateComment: IssueDetailDialogProps["onUpdateComment"]
-  onDeleteComment: IssueDetailDialogProps["onDeleteComment"]
+  onUpdateComment: IssueDetailProps["onUpdateComment"]
+  onDeleteComment: IssueDetailProps["onDeleteComment"]
 }) => (
   <section
     data-slot="issue-discussion"

@@ -43,4 +43,17 @@ test("WebKit representative journey preserves public and tenant semantics", asyn
     .toBeLessThanOrEqual(
       await page.evaluate(() => document.documentElement.clientWidth)
     )
+
+  await page.addStyleTag({
+    content: 'section[aria-label="Issues"] { min-height: 1800px; }',
+  })
+  await page.evaluate(() => window.scrollTo({ top: 400 }))
+  const mobileHeader = await page
+    .locator('[data-slot="console-header"]')
+    .evaluate((header) => ({
+      extensionContent: getComputedStyle(header, "::before").content,
+      top: header.getBoundingClientRect().top,
+    }))
+  expect(mobileHeader.top).toBe(0)
+  expect(mobileHeader.extensionContent).toBe("none")
 })

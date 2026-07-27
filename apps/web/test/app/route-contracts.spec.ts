@@ -11,6 +11,7 @@ const mockApiUrl = "http://127.0.0.1:3001"
 type AllowClientErrors = (...patterns: RegExp[]) => void
 
 type ConsoleRouteContract = {
+  assertReady?: (page: Page) => Promise<void>
   heading: string
   headingLevel?: number
   navigationLabel?: string
@@ -166,6 +167,7 @@ const verifyConsoleRouteContract = async ({
   ).toBeVisible()
   await loadingNavigation
   await expectReadyConsoleRoute(page, contract.heading, contract.headingLevel)
+  await contract.assertReady?.(page)
   await expect(page).toHaveURL(new RegExp(`${contract.route}$`, "u"))
 
   await openReadySourceRoute(page, contract)
@@ -180,6 +182,7 @@ const verifyConsoleRouteContract = async ({
   await errorNavigation
   await page.getByRole("button", { name: "Try again" }).click()
   await expectReadyConsoleRoute(page, contract.heading, contract.headingLevel)
+  await contract.assertReady?.(page)
   await expect(page).toHaveURL(new RegExp(`${contract.route}$`, "u"))
 }
 
@@ -308,7 +311,17 @@ test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は�
     context,
     page,
     contract: {
+      assertReady: async (currentPage) => {
+        await expect(currentPage.getByRole("dialog")).toHaveCount(0)
+        await expect(
+          currentPage.getByRole("button", {
+            name: "Back to issues",
+            exact: true,
+          })
+        ).toBeVisible()
+      },
       heading: "Review tenant audit log",
+      headingLevel: 1,
       navigate: async (currentPage) => {
         await currentPage
           .getByRole("link", {
@@ -323,6 +336,88 @@ test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は�
       sourceRoute: "/organization/alpha-operations/issues",
     },
   })
+})
+
+test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元する", async ({
+  context,
+  page,
+}) => {
+  await useSession(context, "admin")
+  const listRoute =
+    "/organization/alpha-operations/issues?status=open&page=2&agentThread=scroll-state"
+
+  await page.goto(listRoute)
+  await expectReadyConsoleRoute(page, "Issues")
+  await page.addStyleTag({
+    content: `
+      section[aria-label="Issues"] {
+        min-height: 1800px;
+        padding-top: 600px;
+      }
+    `,
+  })
+
+  await page.evaluate(() => window.scrollTo({ top: 520 }))
+  const headerExtension = await page
+    .locator('[data-slot="console-header"]')
+    .evaluate((header) => {
+      const headerStyle = getComputedStyle(header)
+      const extensionStyle = getComputedStyle(header, "::before")
+
+      return {
+        backdropFilter: extensionStyle.backdropFilter,
+        backgroundColor: extensionStyle.backgroundColor,
+        headerBackdropFilter: headerStyle.backdropFilter,
+        headerBackgroundColor: headerStyle.backgroundColor,
+        headerTop: header.getBoundingClientRect().top,
+        height: extensionStyle.height,
+        top: extensionStyle.top,
+      }
+    })
+  expect(headerExtension.headerTop).toBe(8)
+  expect(headerExtension.top).toBe("-8px")
+  expect(headerExtension.height).toBe("8px")
+  expect(headerExtension.backgroundColor).toBe(
+    headerExtension.headerBackgroundColor
+  )
+  expect(headerExtension.backdropFilter).toBe(
+    headerExtension.headerBackdropFilter
+  )
+
+  const issueLink = page
+    .getByRole("link", {
+      name: "Review tenant audit log",
+      exact: true,
+    })
+    .first()
+  await expect(issueLink).toBeVisible()
+  const listScrollY = await page.evaluate(() => window.scrollY)
+  expect(listScrollY).toBeGreaterThan(0)
+
+  await issueLink.click()
+  await expect(page).toHaveURL(
+    "/organization/alpha-operations/issues/1?agentThread=scroll-state"
+  )
+  await expectReadyConsoleRoute(page, "Review tenant audit log", 1)
+  await page.getByLabel("Add comment").fill("Unsaved navigation probe")
+
+  await page
+    .getByRole("button", { name: "Back to issues", exact: true })
+    .click()
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard unsaved changes?" })
+  ).toBeVisible()
+  await page.getByRole("button", { name: "Discard changes" }).click()
+  await expect(page).toHaveURL(listRoute)
+  await expectReadyConsoleRoute(page, "Issues")
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(listScrollY)
+
+  await page.goto("/organization/alpha-operations/issues/1")
+  await expectReadyConsoleRoute(page, "Review tenant audit log", 1)
+  await page
+    .getByRole("button", { name: "Back to issues", exact: true })
+    .click()
+  await expect(page).toHaveURL("/organization/alpha-operations/issues")
 })
 
 test("@route-contract /organization/[organizationSlug]/members は全boundary stateから復帰する", async ({

@@ -31,7 +31,6 @@ export default async function IssuePage({
       labelSuggestions={detail.labelSuggestions}
       organizationId={detail.organization.id}
       canonicalHref={canonicalHref}
-      mode="page"
     />
   )
 }

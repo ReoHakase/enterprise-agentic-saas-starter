@@ -18,7 +18,7 @@ type ConsoleFrameContentProps = {
  * padding of their own.
  */
 export const ConsoleFrame = ({ children }: ConsoleFrameProps) => (
-  <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-1rem)] md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0!">
+  <SidebarInset className="min-h-svh min-w-0 md:min-h-[calc(100svh-1rem)] md:self-start md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0!">
     {children}
   </SidebarInset>
 )
@@ -26,7 +26,7 @@ export const ConsoleFrame = ({ children }: ConsoleFrameProps) => (
 export const ConsoleFrameHeader = ({ children }: { children: ReactNode }) => (
   <header
     data-slot="console-header"
-    className="flex h-14 shrink-0 items-center gap-2 border-b px-4"
+    className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur-sm md:top-2 md:rounded-t-2xl md:before:pointer-events-none md:before:absolute md:before:inset-x-0 md:before:-top-2 md:before:h-2 md:before:bg-background/95 md:before:backdrop-blur-sm md:before:content-['']"
   >
     {children}
   </header>
@@ -39,8 +39,9 @@ export const ConsoleFrameContent = ({
 }: ConsoleFrameContentProps) => (
   <div
     ref={contentRef}
-    data-slot="console-scroll-region"
-    className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain"
+    data-slot="console-content-region"
+    data-scroll-owner="document"
+    className="min-h-0 min-w-0 flex-1 overflow-x-hidden"
   >
     <div
       data-slot="console-content"

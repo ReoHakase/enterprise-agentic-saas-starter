@@ -5,7 +5,7 @@ import { useCallback, useState } from "react"
 import type { IssueUpdateField } from "../../issue-update-state"
 import type {
   ImmediateField,
-  IssueDetailDialogProps,
+  IssueDetailProps,
 } from "../issue-detail-types/issue-detail-types"
 import type { IssueUiItem, IssueUpdate } from "../types/types"
 
@@ -16,7 +16,7 @@ export const useIssueImmediateFields = ({
 }: {
   issue: IssueUiItem
   pendingFields: ReadonlySet<IssueUpdateField>
-  onUpdate: IssueDetailDialogProps["onUpdate"]
+  onUpdate: IssueDetailProps["onUpdate"]
 }) => {
   const [savingFields, setSavingFields] = useState<Set<ImmediateField>>(
     () => new Set()

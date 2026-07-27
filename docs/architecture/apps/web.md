@@ -125,6 +125,15 @@ componentは`components/<screen-name>/`へまとめます。全featureへ同じ�
 
 route fileを薄く保つと、Next.js file conventionとproduct logicを分離できます。
 
+Organization内のIssue詳細は
+`/organization/[organizationSlug]/issues/[issueNumber]`を正規ルートとし、一覧のIssue名と
+「View details」はこの全画面ページへ遷移します。Issue詳細ではNext.jsのParallel Routesと
+Intercepting Routesを使わず、クライアント遷移、直アクセス、再読み込みで同じページ構成を表示します。
+Consoleの縦スクロールは共有レイアウト内の独自コンテナではなくdocumentが所有します。これにより、
+一覧から詳細へ進んでbrowser historyで戻る場合は、App Routerが一覧URLとdocumentのスクロール位置を
+標準の履歴として復元します。共有レイアウトでルート変更を監視して`scrollTo`を実行したり、
+`sessionStorage`へルート別スクロール位置を複製したりしません。
+
 ## feature
 
 feature rootの責務:

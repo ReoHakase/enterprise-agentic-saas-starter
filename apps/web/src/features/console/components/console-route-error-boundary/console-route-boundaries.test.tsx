@@ -35,7 +35,8 @@ describe("console route boundaries", () => {
     const frame = screen.getByRole("main")
 
     expect(frame).toHaveAttribute("data-slot", "sidebar-inset")
-    expect(frame).toHaveClass("h-svh", "min-w-0", "overflow-hidden")
+    expect(frame).toHaveClass("min-h-svh", "min-w-0")
+    expect(frame).not.toHaveClass("overflow-hidden")
     expect(header).toHaveClass("h-14", "px-4")
     expect(status).toHaveAttribute("aria-busy", "true")
     expect(status).toHaveAttribute("data-slot", "page-shell")

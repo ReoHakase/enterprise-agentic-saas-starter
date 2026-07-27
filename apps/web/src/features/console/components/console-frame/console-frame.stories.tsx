@@ -33,7 +33,20 @@ export const Ready = meta.story({
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText("Acme Cloud · 8 members")).toBeVisible()
     await expect(
-      canvasElement.querySelector('[data-slot="console-scroll-region"]')
-    ).toHaveClass("overflow-y-auto")
+      canvasElement.querySelector('[data-slot="console-content-region"]')
+    ).toHaveAttribute("data-scroll-owner", "document")
+
+    const header = canvasElement.querySelector<HTMLElement>(
+      '[data-slot="console-header"]'
+    )
+    expect(header).not.toBeNull()
+    if (!header) return
+
+    const headerStyle = getComputedStyle(header)
+    const extensionStyle = getComputedStyle(header, "::before")
+    expect(extensionStyle.top).toBe("-8px")
+    expect(extensionStyle.height).toBe("8px")
+    expect(extensionStyle.backgroundColor).toBe(headerStyle.backgroundColor)
+    expect(extensionStyle.backdropFilter).toBe(headerStyle.backdropFilter)
   },
 })

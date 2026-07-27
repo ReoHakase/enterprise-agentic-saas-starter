@@ -21,7 +21,7 @@ type ConsoleShellGeometry = {
   inset: ElementGeometry
   pageBody: ElementGeometry
   pageHeader: ElementGeometry
-  scrollRegion: ElementGeometry
+  contentRegion: ElementGeometry
   sidebarContainer: ElementGeometry | null
 }
 
@@ -116,9 +116,9 @@ const readConsoleShellGeometry = async (
       shell.locator('[data-slot="page-header"]'),
       "page shell header"
     ),
-    scrollRegion: await requireGeometry(
-      shell.locator('[data-slot="console-scroll-region"]'),
-      "console scroll region"
+    contentRegion: await requireGeometry(
+      shell.locator('[data-slot="console-content-region"]'),
+      "console content region"
     ),
     sidebarContainer: desktop
       ? await requireGeometry(sidebarContainer, "sidebar container")
@@ -149,7 +149,7 @@ const expectConsoleFrameGeometryToMatch = (
     actual.inset,
     expected.inset,
     `${state} inset`,
-    allDimensions
+    frameDimensions
   )
   expectDimensionsToMatch(
     actual.header,
@@ -158,10 +158,10 @@ const expectConsoleFrameGeometryToMatch = (
     allDimensions
   )
   expectDimensionsToMatch(
-    actual.scrollRegion,
-    expected.scrollRegion,
-    `${state} scroll region`,
-    allDimensions
+    actual.contentRegion,
+    expected.contentRegion,
+    `${state} content region`,
+    frameDimensions
   )
   expectDimensionsToMatch(
     actual.content,
@@ -234,11 +234,17 @@ const expectShellContract = async (
     geometry.inset,
     expectedInset,
     "shell inset contract",
-    ["x", "y", "width", "height"]
+    frameDimensions
   )
+  expect(geometry.inset.height).toBeGreaterThanOrEqual(expectedInset.height)
   expect(geometry.header.height).toBe(56)
-  expect(geometry.scrollRegion.y).toBe(geometry.inset.y + 56)
-  expect(geometry.scrollRegion.height).toBe(geometry.inset.height - 56)
+  expect(geometry.contentRegion.y).toBe(geometry.inset.y + 56)
+  expect(geometry.contentRegion.height).toBe(geometry.inset.height - 56)
+  await expect(
+    page.locator(
+      '[data-slot="console-content-region"][data-scroll-owner="document"]'
+    )
+  ).toBeVisible()
   expect(
     geometry.pageBody.y - geometry.pageHeader.y - geometry.pageHeader.height
   ).toBe(24)

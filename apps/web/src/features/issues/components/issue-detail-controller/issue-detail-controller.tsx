@@ -23,7 +23,7 @@ import {
 } from "../../issue-update-state"
 import { issueKeys } from "../../queries"
 import type { Issue, IssueTimelinePage, IssueTimelineItem } from "../../schema"
-import { IssueDetailDialog } from "../issue-detail-dialog/issue-detail-dialog"
+import { IssueDetailPage } from "../issue-detail-page/issue-detail-page"
 import type {
   IssueAssigneeOption,
   IssueUiItem,
@@ -31,6 +31,21 @@ import type {
 } from "../types/types"
 
 const emptyLabelSuggestions: string[] = []
+
+const canReturnThroughBrowserHistory = (canonicalHref: string) => {
+  const navigationEntry = globalThis.performance
+    .getEntriesByType("navigation")
+    .at(0)
+  if (!navigationEntry?.name) return false
+
+  try {
+    const canonicalUrl = new URL(canonicalHref, globalThis.location.origin)
+    const initialUrl = new URL(navigationEntry.name, globalThis.location.origin)
+    return initialUrl.pathname !== canonicalUrl.pathname
+  } catch {
+    return false
+  }
+}
 
 const getPendingIssueFields = (
   pendingUpdateCounts: Partial<Record<IssueUpdateField, number>>
@@ -98,7 +113,6 @@ export const IssueDetailController = ({
   labelSuggestions = emptyLabelSuggestions,
   organizationId,
   canonicalHref,
-  mode,
 }: {
   initialIssue: Issue
   initialTimeline: IssueTimelinePage
@@ -106,7 +120,6 @@ export const IssueDetailController = ({
   labelSuggestions?: string[]
   organizationId: string
   canonicalHref: string
-  mode: "modal" | "page"
 }) => {
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -306,18 +319,18 @@ export const IssueDetailController = ({
     updateIssue: updateIssueAsync,
   })
   const close = useCallback(() => {
-    if (mode === "page") {
-      router.push(canonicalHref.slice(0, canonicalHref.lastIndexOf("/")))
-    } else {
+    if (canReturnThroughBrowserHistory(canonicalHref)) {
       router.back()
+      return
     }
-  }, [canonicalHref, mode, router])
+    router.push(canonicalHref.slice(0, canonicalHref.lastIndexOf("/")))
+  }, [canonicalHref, router])
   const loadOlder = useCallback(() => {
     if (nextCursor) loadOlderPage(nextCursor)
   }, [loadOlderPage, nextCursor])
 
   return (
-    <IssueDetailDialog
+    <IssueDetailPage
       issue={issue}
       timeline={sortedTimeline}
       nextCursor={nextCursor}
@@ -325,7 +338,6 @@ export const IssueDetailController = ({
       labelSuggestions={labelSuggestions}
       canonicalHref={canonicalHref}
       organizationId={organizationId}
-      mode={mode}
       pending={
         pendingFields.size > 0 ||
         createCommentPending ||

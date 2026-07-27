@@ -8,7 +8,7 @@ import { useCallback, useState, type FormEvent } from "react"
 
 import { commentFormSchema } from "../../schema"
 import type { SubmitSelection } from "../form-types/form-types"
-import type { IssueDetailDialogProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import {
   getActionErrorMessage,
   getActionFieldError,
@@ -22,7 +22,7 @@ export const useIssueCommentForm = ({
 }: {
   issue: IssueUiItem
   pending?: boolean
-  onCreateComment: IssueDetailDialogProps["onCreateComment"]
+  onCreateComment: IssueDetailProps["onCreateComment"]
 }) => {
   const [error, setError] = useState<string>()
   const [fieldError, setFieldError] = useState<string>()
