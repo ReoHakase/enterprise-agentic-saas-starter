@@ -426,6 +426,64 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 分割は条件付きにし、単純componentのceremonyを避けます。同じ外側のshellと予約領域を持つroute群は、
 各routeの状態遷移testがある場合だけSkeleton/Error表示を共有できます。
 
+## DataTable compositionとURL状態
+
+domain非依存の表compositionは`apps/web/src/components/data-table`が所有します。rootは
+`scrollLabel`と任意のtable childを受け、captionもchildとして渡します。headerとbodyはfeatureが構築した
+TanStack Tableの`Table<TData>`を受け、bodyのchildはempty stateです。共通層は`ColumnDef`や
+`useReactTable`を所有せず、headerとcellを`flexRender`で描画します。row全体のclick handlerや
+interactive cellの複製は追加しません。列pinはTanStackのcolumn stateを正本にし、選択列は共通factoryと
+feature固有の`getRowId`、controlled stateで現在の結果だけへ限定します。
+
+表のURL keyはgeneric factoryから作り、logical keyを変えず、prefixなしを既定とします。同じ画面に複数の
+表を置く場合だけcallerが`org_q`のようなprefixを指定します。Issuesは共有済みURLとの互換のため
+`statuses`、`assignees`、`labels`を単数URL keyへ明示的にaliasします。旧`priority`は新しいrange keyが
+両方ない場合だけ同値の下限・上限へ変換します。表が所有しない`agentThread`はprefix対象にせず、
+filter、sort、priority範囲の変更時は旧`priority`を削除し、表が所有しない`agentThread`などは維持します。
+assigneeは50件、labelは20件を上限とし、重複除去と決定的sortの後に切り詰めてAPI modelと一致させます。
+文字検索はreplace history、filter、sort、page、
+page sizeの離散操作はpush historyを使います。
+
+列表示は利用者ID、table ID、versionを含むlocalStorage keyへ保存します。保存値は既知でhide可能な列だけを
+復元し、select、主要title、actions列は非表示にできません。
+
+検索可能な選択肢はlabelと追加keywordを検索対象にし、呼び出し元が指定した固定選択肢だけを常に先頭へ
+残します。Issuesのassigneeでは現在利用者だけを`You`としてAvatarと名前の隣へ描画し、label filterには
+固定領域を作りません。検索可能な複数選択は共通Comboboxのキーボード操作とフォーカス契約を使い、検索欄、
+選択肢一覧、区切り、下端の一致方法を同じ余白で区切ります。検索不要なStatusの複数選択はBase UI Selectの
+標準typeaheadと選択後も開いたままの操作を使います。Priorityの単一値shortcutとlabelの
+`Match any` / `Match all`はBase UI ToggleGroupの単一必須選択とroving focusを使い、選択肢内には
+装飾iconを置きません。
+
+Issues toolbarでは検索を単独controlとし、FiltersとSortをoutline groupにまとめます。検索のclearはpending
+debounceを破棄して`q`の消去を1回だけ即時反映し、入力へfocusを戻します。FiltersのResetはfilter draftだけ、
+SortのResetは`updatedAt`降順だけをpage 1へ反映し、`q`、page size、`agentThread`と相互の状態を維持します。
+列表示menuは48px幅のpinned Actions headerへ置き、行の32px action buttonと列幅を変えません。sortは
+内部IDを表示せず、fieldとdirectionのtrigger・optionで明示labelと代表iconを組にします。active filterは
+共通countの代わりにfeature所有のstatus/priority dot、assignee avatar、label/mode、実日付範囲を要約し、
+triggerのaccessible descriptionから同じ値を通知します。期日の表示はcurrent year内だけ年を省略し、
+非current yearまたは年をまたぐ範囲では各境界へ年を表示します。
+期日popoverは1か月のrange Calendarだけを表示し、presetやdate inputを持ちません。最初の日の選択は
+同日を両境界とする範囲になり、別の日を選ぶとその日までの範囲を完成させます。外部URLの`dueFrom`だけの
+部分範囲もCalendarへ復元して続きの日を選択できます。Calendarの選択を解除した場合は両境界とoffsetを
+消去します。popoverはviewport margin内の最大幅・高さと内部scrollを持ち、close時にdraftを1回だけ適用して
+triggerへfocusを戻します。
+APIへは`dueFrom`当日開始と`dueTo`翌日開始の各local boundaryで別々に計算したoffsetを送り、DSTをまたぐ範囲や
+現在と異なる季節を選んでも表示日界とUTC instantを一致させます。旧`dueOffset`は両境界のfallbackとして読み、
+次のcanonical URL更新で2つのoffsetへ移行して削除します。Calendarは日付順の範囲を返し、外部URLの逆転範囲は
+offsetと日付の対応を復元できないため、日付・offsetを消去して空範囲へ戻します。
+
+query key変更中はTanStack Queryの`keepPreviousData`で直前の行と件数を維持し、table region右上の
+accessible spinnerで更新中を示します。選択行はsemantic primary色を使い、pin列のcell背景を不透明に
+しません。選択summaryとclearはcontentとfooterを囲むresults scope内で、結果と同じgrid領域のsticky anchorへ
+置きます。anchor自身の高さを維持して配置をずらさず、viewport下端のsafe areaより上へ追従し、
+scope終端で解放します。footer自体はstickyにせず、matching件数を
+左、page sizeとpaginationを右へ置きます。
+直前行が`isPlaceholderData`である間は、選択とstatus、priority、assignee、期日、行menu、削除を無効化し、
+同じquery keyの通常再取得では操作可能な状態を維持します。
+`useSearchParams`と`useQueryStates`はclient専用moduleへ閉じ、server-safe parser・serializerのbarrelから
+再exportしません。
+
 ## 受入条件
 
 - `src/app/`に大規模なClient Componentがない
