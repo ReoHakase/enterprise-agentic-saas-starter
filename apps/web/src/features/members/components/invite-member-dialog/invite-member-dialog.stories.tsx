@@ -31,9 +31,11 @@ export const Ready = meta.story({
       const roleTrigger = body.getByRole("combobox", {
         name: "Invitation role",
       })
-      await expect(
-        within(roleTrigger).getByTestId("organization-role-member")
-      ).toBeVisible()
+      await waitFor(() =>
+        expect(
+          within(roleTrigger).getByTestId("organization-role-member")
+        ).toBeVisible()
+      )
       await userEvent.click(roleTrigger)
       await Promise.all(
         (
