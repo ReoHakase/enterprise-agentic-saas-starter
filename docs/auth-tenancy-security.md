@@ -2,7 +2,7 @@
 title: 認証・認可・multi-tenant
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-27
 ---
 
 # 認証・認可・マルチテナント
@@ -89,9 +89,19 @@ APIはjobをqueueした時点で201を返します。local Bunではprocessorを
 
 ## 複数アカウント
 
-Better Authのmulti-session pluginをserver/client双方に設定します。account menuから現在のsessionを維持したまま別アカウントを追加し、保存済みsessionを切り替えられます。切り替え後はServer Componentをrefreshし、active organizationとpermissionを新sessionから再取得します。
+Better Authのmulti-session pluginをサーバーとクライアントの双方に設定します。consoleのaccount menuは保存済みアカウントをメニュー内へ直接表示し、別の切替ダイアログを開かずに切り替えます。現在のアカウント、読み込み中、安全な再試行、処理中、アカウント追加、アカウント設定を同じメニューで扱いますが、端末からアカウントを外す操作は公開しません。招待画面はaccount menuを持たないため`AccountSwitcherDialog`を維持し、一覧取得、切替、削除とセキュリティ上の処理順序にはconsoleと同じ`controller`を使います。
 
-console、招待landingを含む全account切替で、Agent Shellのmount有無にかかわらず旧session cookieがactiveな間に`POST /agent/context/revoke`を完了させます。revokeが失敗したらBetter Auth `setActive`を呼ばず、旧accountとlocal draftを維持します。shell callbackは未保存draftの確認とlocal cleanup専用で、security revokeの条件にはしません。revoke成功後は旧identityのqueryをcancelしてから`setActive`を呼び、新cookieへ切り替わった後で認証済みcache、Agent stream、upload、thread、composer、form registry、Blob URLを破棄します。最後は通常`/dashboard`、招待中は検証済みの同一origin招待pathへfull-document navigationします。旧accountのactive organizationや`agentThread`を新accountへ引き継ぎません。
+console、招待画面を含む全アカウント切替で、Agent Shellのmount有無にかかわらず旧セッションcookieが有効な間に`POST /agent/context/revoke`を完了させます。失敗した場合はBetter Auth `setActive`を呼ばず、旧アカウントとローカルの下書きを維持します。shellのコールバックは未保存下書きの確認とローカルの後処理専用であり、セキュリティ上の失効条件にはしません。失効成功後は旧identityの`query`を中止してから`setActive`を呼び、新しいcookieへ切り替わった後で認証済みキャッシュ、Agentのストリーム、アップロード、スレッド、入力欄、form registry、Blob URLを破棄します。最後は通常`/dashboard`、招待中は検証済みの同一origin招待pathへ文書全体を遷移します。旧アカウントのactive organizationや`agentThread`を新アカウントへ引き継ぎません。
+
+account menuのSign outはBetter Auth coreの`signOut`や`/auth/sign-out`を使いません。端末上の一覧から現在のユーザーIDに一致するセッショントークンが1件だけであることを確認し、Agentコンテキスト失効、旧ローカルランタイムの中止と世代分離、全`query`の中止、`multiSession.revoke`による現在のトークンだけの失効、認証済みキャッシュとローカル状態の破棄、`/dashboard`への文書全体の遷移の順で実行します。Better Authが残るアカウントを選択し、残りがなければ認証guardがログイン画面へ誘導します。現在のトークンを一意に決定できない場合は失敗時に拒否し、Agent失効やセッション変更を始めません。既存の`/auth/sign-out`は全アカウントを明示的に終了する別経路として維持します。
+
+切替、Sign out、端末から外す操作は、実行直前にBetter Authの`getSession`と`listDeviceSessions`を再取得します。描画時のユーザーIDと現在のトークンが再取得結果と一致し、対象トークンも端末一覧に一意に存在する場合だけ処理を開始します。別タブでactive sessionが変わった場合、Agentコンテキスト失効やセッション変更より前に失敗時に拒否します。端末から外した直後にも`getSession`を再取得し、検証済みの現在のトークンから変化した場合または再確認できない場合は、一覧だけを更新せず、ローカルのidentity状態とキャッシュを破棄して文書全体を遷移します。これにより、古い画面からSign outして現在でないトークンを失効したり、端末から外す対象が新しいactive sessionになった後で古いidentity状態を維持したりしません。
+
+本変更では新しい公開APIを追加しない制約を維持するため、削除前確認、Better Authの失効、削除後確認は別々のrequestです。この間にactive sessionが変化して元へ戻るABA raceを完全には排除できません。完全な排除には、将来、期待する現在のトークンと削除対象を同じserver transactionで検証して失効する条件付きendpointが必要です。
+
+Agent作業または未保存のIssueフォームがある切替とSign outは、サーバー側の失効前に既存の確認ダイアログを表示します。Cancelは凍結を解除するだけで、セッション、下書き、キャッシュを変更しません。確認後の処理が失敗した場合は旧アカウントを有効なまま残し、文書全体を遷移せず、安全な固定文言だけを表示します。
+
+保存済みの別アカウントを端末から外す操作は、招待画面の`AccountSwitcherDialog`だけが公開し、確認ダイアログも同componentが所有します。consoleのaccount menuは削除項目、削除サブメニュー、削除確認ダイアログを持ちません。削除時は対象が現在のセッションでないことを一意に確認して`multiSession.revoke`を呼び、端末アカウント一覧だけを無効化して再取得します。現在のidentityに属するキャッシュ、Agentランタイム、下書きは破棄しません。
 
 Better Auth UIが返すclientはfunction/proxyの場合があるため、multi-session capabilityの判定はobjectだけに限定しません。`listDeviceSessions`のresponseはWebローカルValibot schemaで検証し、不正なaccount/session modelやprovider内部errorをUIへ流さずfail closedします。
 

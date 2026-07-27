@@ -19,6 +19,7 @@ description: enterprise-agentic-saas-starterのNext.js App Router、feature UI�
 3. browser componentへnamed Storyを追加し、待機経路にはSuspense、Skeleton、Error Boundaryを揃える。
 4. async routeには同じfeature viewを使う`loading.tsx`と`error.tsx`を追加する。
 5. component test、Browser Mode、必要なE2 route testの順で検証する。
+6. consoleのaccount menu変更では、保存済みアカウントをメニュー内へ表示する一方で端末から外す操作を公開しない。削除は招待画面の`AccountSwitcherDialog`だけが共有`controller`経由で扱い、未保存作業があるSign outの確認ダイアログはmobile drawer外の`ConsoleShell`が保持していることを確認する。
 
 ## Validation
 

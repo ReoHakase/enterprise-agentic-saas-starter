@@ -18,7 +18,7 @@ type ConsoleFrameContentProps = {
  * padding of their own.
  */
 export const ConsoleFrame = ({ children }: ConsoleFrameProps) => (
-  <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-1rem)]">
+  <SidebarInset className="h-svh min-w-0 overflow-hidden md:h-[calc(100svh-1rem)] md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0!">
     {children}
   </SidebarInset>
 )

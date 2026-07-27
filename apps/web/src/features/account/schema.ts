@@ -70,6 +70,11 @@ const deviceAccountSchema = v.pipe(
 
 const deviceAccountListSchema = v.array(deviceAccountSchema)
 
+const currentDeviceSessionSchema = v.object({
+  session: v.object({ token: v.string() }),
+  user: v.object({ id: v.string() }),
+})
+
 export const profileFormSchema = v.object({
   name: v.pipe(
     v.string(),
@@ -96,3 +101,5 @@ export const parseSecurityMethods = (value: unknown) =>
   v.parse(securityMethodsSchema, value)
 export const parseDeviceAccounts = (value: unknown) =>
   v.parse(deviceAccountListSchema, value)
+export const parseCurrentDeviceSession = (value: unknown) =>
+  v.parse(currentDeviceSessionSchema, value)

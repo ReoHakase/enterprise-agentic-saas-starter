@@ -8,6 +8,7 @@ import type { OrganizationSwitchRisks } from "@/features/agent"
 import { AccountSwitcherDialog } from "./account-switcher-dialog"
 
 const mocks = vi.hoisted(() => ({
+  getSession: vi.fn<() => Promise<unknown>>(),
   listDeviceSessions: vi.fn<() => Promise<unknown>>(),
   navigateAfterAccountSwitch: vi.fn<(returnTo?: string) => void>(),
   onOpenChange: vi.fn<(open: boolean) => void>(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const authClient = {
+  getSession: mocks.getSession,
   multiSession: {
     listDeviceSessions: mocks.listDeviceSessions,
     revoke: mocks.revoke,
@@ -131,6 +133,12 @@ describe("AccountSwitcherDialog", () => {
     mocks.fetchAgent.mockResolvedValue(Response.json({ contextEpoch: 2 }))
     vi.stubGlobal("fetch", mocks.fetchAgent)
     mocks.listDeviceSessions.mockResolvedValue({ data: deviceAccounts })
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: { token: "session-current" },
+        user: { id: "user-current" },
+      },
+    })
     mocks.revoke.mockResolvedValue({ data: {} })
     mocks.setActive.mockResolvedValue({ data: {} })
     mocks.completeAgentSwitch.mockResolvedValue()
@@ -276,7 +284,7 @@ describe("AccountSwitcherDialog", () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Could not switch account. Try again."
     )
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.refresh).not.toHaveBeenCalled()
     expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
   })
 
@@ -293,9 +301,58 @@ describe("AccountSwitcherDialog", () => {
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(mocks.setActive).not.toHaveBeenCalled()
     expect(mocks.navigateAfterAccountSwitch).not.toHaveBeenCalled()
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.refresh).not.toHaveBeenCalled()
     expect(
       screen.queryByText(/private-provider-detail/u)
     ).not.toBeInTheDocument()
+  })
+
+  it("preserves dirty work when account switching is cancelled", async () => {
+    const actor = userEvent.setup()
+    mocks.prepareAgentSwitch.mockReturnValueOnce({
+      composer: true,
+      uploads: false,
+      stagedAssets: false,
+      activeTurn: false,
+      pendingApprovals: false,
+      dirtyIssueForms: true,
+    })
+    renderDialogWithAgentBarrier()
+
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Switch" }))
+    expect(
+      screen.getByRole("alertdialog", {
+        name: "Discard local Agent work and switch account?",
+      })
+    ).toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Stay here" }))
+
+    expect(mocks.cancelAgentSwitch).toHaveBeenCalledOnce()
+    expect(mocks.fetchAgent).not.toHaveBeenCalled()
+    expect(mocks.abortAgentSwitch).not.toHaveBeenCalled()
+    expect(mocks.setActive).not.toHaveBeenCalled()
+  })
+
+  it("fences a double submit to one account activation", async () => {
+    const actor = userEvent.setup()
+    let finishActivation: (() => void) | undefined
+    mocks.setActive.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishActivation = () => resolve({ data: {} })
+        })
+    )
+    renderDialog()
+
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
+    const switchButton = screen.getByRole("button", { name: "Switch" })
+    await actor.dblClick(switchButton)
+
+    await waitFor(() => expect(mocks.setActive).toHaveBeenCalledOnce())
+    finishActivation?.()
+    await waitFor(() =>
+      expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledOnce()
+    )
   })
 })

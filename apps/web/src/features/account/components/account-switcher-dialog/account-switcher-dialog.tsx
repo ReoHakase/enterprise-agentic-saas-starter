@@ -1,6 +1,5 @@
 "use client"
 
-import { useAuth } from "@better-auth-ui/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,29 +28,14 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { CircleUserRoundIcon, LogOutIcon, PlusIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useCallback, useMemo, useState } from "react"
-import { toast } from "sonner"
+import { useCallback } from "react"
 
 import { LinkButton } from "@/components/link-button/link-button"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
-import {
-  revokeAgentContext,
-  hasOrganizationSwitchRisks,
-  type OrganizationSwitchRisks,
-} from "@/features/agent"
-import { clearAuthenticatedQueryCache } from "@/features/auth"
-import { apiClient } from "@/lib/api-client"
+import type { OrganizationSwitchRisks } from "@/features/agent"
 
-import { navigateAfterAccountSwitch } from "../../account-switch-navigation"
-import {
-  completeMultiSessionAction,
-  createDeviceAccountsQueryFn,
-  createMultiSessionCapabilities,
-} from "../../multi-session-client"
-import { accountKeys } from "../../queries"
+import { useDeviceAccountsController } from "../../hooks/use-device-accounts-controller"
 import type { DeviceAccount, Me } from "../../schema"
 
 type AccountSwitcherDialogProps = {
@@ -77,133 +61,35 @@ export const AccountSwitcherDialog = ({
   onCompleteAgentSwitch,
   returnTo = "/dashboard",
 }: AccountSwitcherDialogProps) => {
-  const { authClient: authClientValue } = useAuth()
-  const multiSession = useMemo(
-    () => createMultiSessionCapabilities(authClientValue),
-    [authClientValue]
-  )
-  const router = useRouter()
-  const queryClient = useQueryClient()
-  const [revokeTarget, setRevokeTarget] = useState<DeviceAccount>()
-  const [switchTarget, setSwitchTarget] = useState<DeviceAccount>()
-  const accountsQuery = useQuery({
-    queryKey: accountKeys.deviceAccountsFor(currentUser.id),
-    queryFn: createDeviceAccountsQueryFn(authClientValue),
+  const controller = useDeviceAccountsController({
+    currentUser,
     enabled: open,
-    retry: false,
-  })
-  const switchMutation = useMutation({
-    mutationFn: async (account: DeviceAccount) => {
-      if (!multiSession.setActive) {
-        throw new Error("Account switching is not available")
-      }
-      // Revoke while the old session cookie is still active. This belongs to
-      // the account boundary itself, not to the optional Agent shell, because
-      // invitation and other public workflows can switch the same sessions.
-      await revokeAgentContext(apiClient)
-      onAbortAgentSwitch?.()
-      await queryClient.cancelQueries()
-      await completeMultiSessionAction(
-        multiSession.setActive({
-          sessionToken: account.session.token,
-        }),
-        "Could not switch account. Try again."
-      )
-      // Clear only after the session cookie changes. Clearing while the old
-      // account is still active lets mounted queries immediately repopulate
-      // the cache with old-account tenant data.
-      await clearAuthenticatedQueryCache(queryClient)
-      return account
-    },
-    onSuccess: async (account) => {
+    onPrepareIdentityChange: onPrepareAgentSwitch,
+    onAbortIdentityChange: onAbortAgentSwitch,
+    onCancelIdentityChange: onCancelAgentSwitch,
+    onCompleteIdentityChange: async () => {
       await onCompleteAgentSwitch?.()
       onOpenChange(false)
-      toast.success(`Switched to ${account.user.email}`)
-      // Account identity is a hard cache boundary. A client-router refresh can
-      // reuse old Server Component props when /dashboard redirects back to the
-      // same settings URL, so discard the full Next/React tree here.
-      navigateAfterAccountSwitch(returnTo)
     },
-    onError: () => {
-      onCancelAgentSwitch?.()
-      router.refresh()
-      toast.error("Could not switch account. Try again.")
-    },
+    returnTo,
   })
-  const revokeMutation = useMutation({
-    mutationFn: async (account: DeviceAccount) => {
-      if (!multiSession.revoke) {
-        throw new Error("Account switching is not available")
-      }
-      await completeMultiSessionAction(
-        multiSession.revoke({ sessionToken: account.session.token }),
-        "Could not remove account. Try again."
-      )
-      return account
-    },
-    onSuccess: async (account) => {
-      toast.success(`${account.user.email} was removed`)
-      setRevokeTarget(undefined)
-      await queryClient.invalidateQueries({
-        queryKey: accountKeys.deviceAccountsFor(currentUser.id),
-      })
-    },
-    onError: () => {
-      toast.error("Could not remove account. Try again.")
-    },
-  })
-  const accounts = accountsQuery.data ?? []
-  const pendingToken =
-    switchMutation.variables?.session.token ??
-    revokeMutation.variables?.session.token
-  const { mutate: revokeDeviceAccount } = revokeMutation
-  const { mutate: switchDeviceAccount } = switchMutation
-  const { refetch: refetchAccounts } = accountsQuery
-  const retryAccounts = useCallback(() => {
-    void refetchAccounts()
-  }, [refetchAccounts])
-  const revokeAccount = useCallback(() => {
-    if (!revokeTarget) {
-      return
-    }
-    revokeDeviceAccount(revokeTarget)
-  }, [revokeDeviceAccount, revokeTarget])
-  const handleRevokeDialogOpenChange = useCallback((nextOpen: boolean) => {
-    if (!nextOpen) {
-      setRevokeTarget(undefined)
-    }
-  }, [])
-  const requestAccountSwitch = useCallback(
-    (account: DeviceAccount) => {
-      if (!onPrepareAgentSwitch) {
-        switchDeviceAccount(account)
-        return
-      }
-      const risks = onPrepareAgentSwitch()
-      if (hasOrganizationSwitchRisks(risks)) {
-        setSwitchTarget(account)
-        return
-      }
-      switchDeviceAccount(account)
-    },
-    [onPrepareAgentSwitch, switchDeviceAccount]
-  )
-  const cancelAccountSwitch = useCallback(() => {
-    setSwitchTarget(undefined)
-    onCancelAgentSwitch?.()
-  }, [onCancelAgentSwitch])
-  const confirmAccountSwitch = useCallback(() => {
-    if (!switchTarget) return
-    const account = switchTarget
-    setSwitchTarget(undefined)
-    switchDeviceAccount(account)
-  }, [switchDeviceAccount, switchTarget])
-  const handleSwitchDialogOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) cancelAccountSwitch()
-    },
-    [cancelAccountSwitch]
-  )
+  const {
+    accounts,
+    accountsQuery,
+    actionMutation,
+    confirmRemove,
+    confirmRiskAction,
+    handleRemoveDialogOpenChange,
+    handleRiskDialogOpenChange,
+    pendingToken,
+    removeTarget,
+    requestRemove,
+    requestSwitch,
+    retryAccounts,
+    riskAction,
+  } = controller
+  const switchTarget =
+    riskAction?.kind === "switch" ? riskAction.account : undefined
 
   return (
     <>
@@ -266,11 +152,9 @@ export const AccountSwitcherDialog = ({
                     account={account}
                     current={account.user.id === currentUser.id}
                     pending={pendingToken === account.session.token}
-                    mutationsPending={
-                      switchMutation.isPending || revokeMutation.isPending
-                    }
-                    onSwitch={requestAccountSwitch}
-                    onRequestRevoke={setRevokeTarget}
+                    mutationsPending={actionMutation.isPending}
+                    onSwitch={requestSwitch}
+                    onRequestRevoke={requestRemove}
                   />
                 ))
               : null}
@@ -286,13 +170,12 @@ export const AccountSwitcherDialog = ({
       </Dialog>
 
       <AccountSwitchDialogs
-        cancelAccountSwitch={cancelAccountSwitch}
-        confirmAccountSwitch={confirmAccountSwitch}
-        handleRevokeDialogOpenChange={handleRevokeDialogOpenChange}
-        handleSwitchDialogOpenChange={handleSwitchDialogOpenChange}
-        revokeAccount={revokeAccount}
-        revokePending={revokeMutation.isPending}
-        revokeTarget={revokeTarget}
+        confirmAccountSwitch={confirmRiskAction}
+        handleRevokeDialogOpenChange={handleRemoveDialogOpenChange}
+        handleSwitchDialogOpenChange={handleRiskDialogOpenChange}
+        revokeAccount={confirmRemove}
+        revokePending={actionMutation.isPending}
+        revokeTarget={removeTarget}
         switchTarget={switchTarget}
       />
     </>
@@ -300,7 +183,6 @@ export const AccountSwitcherDialog = ({
 }
 
 const AccountSwitchDialogs = ({
-  cancelAccountSwitch,
   confirmAccountSwitch,
   handleRevokeDialogOpenChange,
   handleSwitchDialogOpenChange,
@@ -309,7 +191,6 @@ const AccountSwitchDialogs = ({
   revokeTarget,
   switchTarget,
 }: {
-  cancelAccountSwitch: () => void
   confirmAccountSwitch: () => void
   handleRevokeDialogOpenChange: (open: boolean) => void
   handleSwitchDialogOpenChange: (open: boolean) => void
@@ -362,9 +243,7 @@ const AccountSwitchDialogs = ({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={cancelAccountSwitch}>
-            Stay here
-          </AlertDialogCancel>
+          <AlertDialogCancel>Stay here</AlertDialogCancel>
           <Button onClick={confirmAccountSwitch}>
             Discard local draft and switch
           </Button>

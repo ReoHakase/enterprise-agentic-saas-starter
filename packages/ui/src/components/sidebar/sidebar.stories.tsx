@@ -3,7 +3,7 @@ import {
   ListChecksIcon,
   UsersRoundIcon,
 } from "lucide-react"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -39,7 +39,10 @@ const WorkspaceSidebar = () => (
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" tooltip="Acme Cloud">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+                <span
+                  data-testid="sidebar-lg-identity"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"
+                >
                   A
                 </span>
                 <span>Acme Cloud</span>
@@ -103,14 +106,52 @@ export const ExpandedAndCollapsed = meta.story({
       '[data-slot="sidebar"][data-state]'
     )
     if (!sidebar) throw new Error("Sidebar state container was not rendered")
+    const canvas = within(canvasElement)
+    const identity = canvas.getByTestId("sidebar-lg-identity")
+    const identityExpandedRect = identity.getBoundingClientRect()
+    const expandedBorderRadius = getComputedStyle(identity).borderRadius
 
     await step("Collapse and expand with Control+B", async () => {
       await expect(sidebar).toHaveAttribute("data-state", "expanded")
       await expect(
-        within(canvasElement).getByRole("button", { name: "Overview" })
+        canvas.getByRole("button", { name: "Overview" })
       ).toBeVisible()
+      expect(Math.abs(identityExpandedRect.width - 32)).toBeLessThanOrEqual(1)
+      expect(Math.abs(identityExpandedRect.height - 32)).toBeLessThanOrEqual(1)
       await userEvent.keyboard("{Control>}b{/Control}")
       await expect(sidebar).toHaveAttribute("data-state", "collapsed")
+      const identityButton = identity.closest<HTMLElement>(
+        '[data-sidebar="menu-button"]'
+      )
+      if (!identityButton)
+        throw new Error("Large sidebar identity button was not rendered")
+      await waitFor(() => {
+        const identityCollapsedRect = identity.getBoundingClientRect()
+        const identityButtonRect = identityButton.getBoundingClientRect()
+        expect(Math.abs(identityButtonRect.width - 32)).toBeLessThanOrEqual(1)
+        expect(Math.abs(identityButtonRect.height - 32)).toBeLessThanOrEqual(1)
+        expect(Math.abs(identityCollapsedRect.width - 32)).toBeLessThanOrEqual(
+          1
+        )
+        expect(Math.abs(identityCollapsedRect.height - 32)).toBeLessThanOrEqual(
+          1
+        )
+        expect(
+          Math.abs(identityCollapsedRect.width - identityExpandedRect.width)
+        ).toBeLessThanOrEqual(1)
+        expect(
+          Math.abs(identityCollapsedRect.height - identityExpandedRect.height)
+        ).toBeLessThanOrEqual(1)
+        expect(
+          Math.abs(identityCollapsedRect.left - identityButtonRect.left)
+        ).toBeLessThanOrEqual(1)
+        expect(
+          Math.abs(identityCollapsedRect.top - identityButtonRect.top)
+        ).toBeLessThanOrEqual(1)
+        expect(getComputedStyle(identity).borderRadius).toBe(
+          expandedBorderRadius
+        )
+      })
       await userEvent.keyboard("{Control>}b{/Control}")
       await expect(sidebar).toHaveAttribute("data-state", "expanded")
     })

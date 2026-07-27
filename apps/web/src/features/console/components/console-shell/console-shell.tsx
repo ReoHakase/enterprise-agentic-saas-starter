@@ -2,6 +2,7 @@
 
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -23,11 +24,13 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@enterprise-agentic-saas/ui/components/sidebar"
+import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { BlocksIcon } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Suspense,
+  type RefObject,
   type ReactNode,
   useCallback,
   useEffect,
@@ -37,7 +40,11 @@ import {
 import { toast } from "sonner"
 
 import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
-import { AccountSwitcherDialog, type Me } from "@/features/account"
+import {
+  type DeviceAccountsController,
+  type Me,
+  useDeviceAccountsController,
+} from "@/features/account"
 import {
   AgentFormRegistryProvider,
   AgentRuntimeProvider,
@@ -104,7 +111,8 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
   const { state: issueSearchState } = useIssueSearchState()
   const pathname = usePathname()
   const contentRef = useRef<HTMLDivElement>(null)
-  const [accountDialogOpen, setAccountDialogOpen] = useState(false)
+  const accountActionReturnFocusRef = useRef<HTMLButtonElement>(null)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [pendingOrganizationSwitch, setPendingOrganizationSwitch] = useState<{
     organizationId: string
     risks: OrganizationSwitchRisks
@@ -114,7 +122,6 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
       toast.success("Organization switched")
     }
   }, [])
-  const openAccountSwitcher = useCallback(() => setAccountDialogOpen(true), [])
   const {
     activeOrganization,
     contextOrganization,
@@ -195,6 +202,14 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
     await agentRuntime.completeOrganizationSwitch()
     agentRuntime.cancelOrganizationSwitch()
   }, [agentRuntime])
+  const accountController = useDeviceAccountsController({
+    currentUser: me.user,
+    enabled: accountMenuOpen,
+    onPrepareIdentityChange: agentRuntime.beginOrganizationSwitch,
+    onAbortIdentityChange: agentRuntime.abortOrganizationSwitch,
+    onCancelIdentityChange: agentRuntime.cancelOrganizationSwitch,
+    onCompleteIdentityChange: completeAccountSwitch,
+  })
 
   return (
     <SidebarProvider data-console-shell="true" data-boundary-state="ready">
@@ -202,7 +217,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
       <Sidebar collapsible="icon" variant="inset">
         <SidebarHeader>
           <MobileSidebarClose />
-          <SidebarMenu>
+          <SidebarMenu className="group-data-[collapsible=icon]:gap-2">
             <SidebarMenuItem>
               <SidebarMenuLinkButton
                 size="lg"
@@ -214,7 +229,10 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
                   issueSearchState.agentThread
                 )}
               >
-                <span className="flex aspect-square size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+                <span
+                  data-console-identity="brand"
+                  className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"
+                >
                   <BlocksIcon aria-hidden="true" />
                 </span>
                 <span className="grid min-w-0 flex-1 text-left">
@@ -252,18 +270,24 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
 
         <SidebarSeparator />
         <SidebarFooter>
-          <UserMenu
-            user={me.user}
-            agentThread={issueSearchState.agentThread}
-            onOpenAccountSwitcher={openAccountSwitcher}
-          />
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <UserMenu
+                user={me.user}
+                agentThread={issueSearchState.agentThread}
+                accountController={accountController}
+                open={accountMenuOpen}
+                onOpenChange={setAccountMenuOpen}
+              />
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
       <ConsoleFrame>
         <ConsoleFrameHeader>
-          <SidebarTrigger className="-ml-1" />
+          <SidebarTrigger ref={accountActionReturnFocusRef} className="-ml-1" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
               {contextOrganization?.name ?? "Choose an organization"}
@@ -298,14 +322,9 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
         contextMismatch={hasOrganizationContextMismatch}
       />
 
-      <AccountSwitcherDialog
-        currentUser={me.user}
-        open={accountDialogOpen}
-        onOpenChange={setAccountDialogOpen}
-        onPrepareAgentSwitch={agentRuntime.beginOrganizationSwitch}
-        onAbortAgentSwitch={agentRuntime.abortOrganizationSwitch}
-        onCancelAgentSwitch={agentRuntime.cancelOrganizationSwitch}
-        onCompleteAgentSwitch={completeAccountSwitch}
+      <AccountMenuRiskDialog
+        controller={accountController}
+        returnFocusRef={accountActionReturnFocusRef}
       />
       <AlertDialog
         open={pendingOrganizationSwitch !== undefined}
@@ -333,5 +352,70 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
         </AlertDialogContent>
       </AlertDialog>
     </SidebarProvider>
+  )
+}
+
+const AccountMenuRiskDialog = ({
+  controller,
+  returnFocusRef,
+}: {
+  controller: DeviceAccountsController
+  returnFocusRef: RefObject<HTMLButtonElement | null>
+}) => {
+  const {
+    actionMutation,
+    confirmRiskAction,
+    handleRiskDialogOpenChange,
+    riskAction,
+  } = controller
+  const signOut = riskAction?.kind === "sign-out"
+  const restoreStableFocus = useCallback(() => {
+    queueMicrotask(() => returnFocusRef.current?.focus())
+  }, [returnFocusRef])
+  const onRiskDialogOpenChange = useCallback(
+    (open: boolean) => {
+      handleRiskDialogOpenChange(open)
+      if (!open) restoreStableFocus()
+    },
+    [handleRiskDialogOpenChange, restoreStableFocus]
+  )
+
+  return (
+    <AlertDialog
+      open={riskAction !== undefined}
+      onOpenChange={onRiskDialogOpenChange}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {signOut
+              ? "Discard local Agent work and sign out?"
+              : "Discard local Agent work and switch account?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            The old session Agent context will be revoked first. Unsent
+            messages, uploads, approvals, and Issue form drafts are cleared only
+            after the account operation succeeds.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={actionMutation.isPending}>
+            Stay here
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant={signOut ? "destructive" : "default"}
+            disabled={actionMutation.isPending}
+            onClick={confirmRiskAction}
+          >
+            {actionMutation.isPending ? (
+              <Spinner data-icon="inline-start" />
+            ) : null}
+            {signOut
+              ? "Discard local draft and sign out"
+              : "Discard local draft and switch"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

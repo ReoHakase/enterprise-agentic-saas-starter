@@ -19,6 +19,7 @@ description: enterprise-agentic-saas-starterのBetter Auth、session、organizat
 3. organization境界をrepository queryとDB制約の両方で検証する。
 4. callback、account linking、role変更にはnegative caseとcross-tenant testを追加する。
 5. email本文やsenderを変更する場合は`email` skillの手順も実行する。
+6. account menuのSign outは現在のmulti-sessionトークンだけを`multiSession.revoke`で失効し、Agent失効とローカル後処理の順序を共有`controller`へ集約する。実行直前に`getSession`と`listDeviceSessions`を再取得し、描画時のidentityまたは対象が古い場合は拒否する。
 
 ## Validation
 

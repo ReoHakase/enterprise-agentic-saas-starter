@@ -1,6 +1,7 @@
-import { parseDeviceAccounts } from "./schema"
+import { parseCurrentDeviceSession, parseDeviceAccounts } from "./schema"
 
 export type MultiSessionCapabilities = {
+  getSession?: () => Promise<unknown>
   listDeviceSessions?: () => Promise<unknown>
   setActive?: (input: { sessionToken: string }) => Promise<unknown>
   revoke?: (input: { sessionToken: string }) => Promise<unknown>
@@ -36,6 +37,7 @@ export const createMultiSessionCapabilities = (
   if (!isPropertyContainer(multiSession)) return {}
 
   return {
+    getSession: bindCapability<[]>(authClientValue, "getSession"),
     listDeviceSessions: bindCapability<[]>(multiSession, "listDeviceSessions"),
     setActive: bindCapability<[{ sessionToken: string }]>(
       multiSession,
@@ -84,4 +86,58 @@ export const completeMultiSessionAction = async (
   fallback: string
 ) => {
   unwrapAuthResult(await settleAuthRequest(result, fallback), fallback)
+}
+
+export const readFreshCurrentDeviceSession = async (
+  multiSession: MultiSessionCapabilities
+) => {
+  if (!multiSession.getSession) {
+    throw new Error(
+      "Account state could not be verified. Reload and try again."
+    )
+  }
+
+  const result = unwrapAuthResult(
+    await settleAuthRequest(
+      multiSession.getSession(),
+      "Account state could not be verified. Reload and try again."
+    ),
+    "Account state could not be verified. Reload and try again."
+  )
+  return result === null || result === undefined
+    ? undefined
+    : parseCurrentDeviceSession(result)
+}
+
+export const readFreshDeviceAccountState = async (
+  multiSession: MultiSessionCapabilities
+) => {
+  if (!multiSession.getSession || !multiSession.listDeviceSessions) {
+    throw new Error(
+      "Account state could not be verified. Reload and try again."
+    )
+  }
+
+  const [currentSession, accountsResult] = await Promise.all([
+    readFreshCurrentDeviceSession(multiSession),
+    settleAuthRequest(
+      multiSession.listDeviceSessions(),
+      "Account state could not be verified. Reload and try again."
+    ),
+  ])
+  if (!currentSession) {
+    throw new Error(
+      "Account state could not be verified. Reload and try again."
+    )
+  }
+
+  return {
+    accounts: parseDeviceAccounts(
+      unwrapAuthResult(
+        accountsResult,
+        "Account state could not be verified. Reload and try again."
+      ) ?? []
+    ),
+    currentSession,
+  }
 }
