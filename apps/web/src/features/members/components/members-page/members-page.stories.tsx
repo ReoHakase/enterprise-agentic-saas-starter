@@ -74,14 +74,14 @@ export const Ready = meta.story({
         }
       })
       await expect(
-        within(roleTrigger).getByTestId("member-role-super_admin")
+        within(roleTrigger).getByTestId("organization-role-super_admin")
       ).toBeVisible()
       await Promise.all(
         (
           [
-            ["Member", "member-role-member"],
-            ["Admin", "member-role-admin"],
-            ["Super Admin", "member-role-super_admin"],
+            ["Member", "organization-role-member"],
+            ["Admin", "organization-role-admin"],
+            ["Super Admin", "organization-role-super_admin"],
           ] as const
         ).map(async ([roleName, testId]) => {
           const visibleOption = body
@@ -114,6 +114,24 @@ export const Ready = meta.story({
           })
         ).toHaveFocus()
       )
+    })
+
+    await step("Inspect invitation role and lifecycle badges", async () => {
+      const table = canvas.getByRole("table", {
+        name: "Invitations for Acme Cloud",
+      })
+      await Promise.all(
+        (
+          ["pending", "accepted", "rejected", "expired", "canceled"] as const
+        ).map(async (status) => {
+          await expect(
+            within(table).getByTestId(`invitation-status-${status}`)
+          ).toBeVisible()
+        })
+      )
+      await expect(
+        within(table).getAllByTestId(/^organization-role-/u)
+      ).toHaveLength(fictionalInvitations.length)
     })
 
     await step("Open the invitation workflow and validate input", async () => {
@@ -210,37 +228,72 @@ export const PermissionLimited = meta.story({
 export const MobileTableOverflow = meta.story({
   globals: { viewport: { value: "mobile1", isRotated: false } },
   args: {
-    organization: {
-      ...fictionalMemberOrganization,
-      permissions: {
-        ...fictionalMemberOrganization.permissions,
-        canInviteMembers: false,
-      },
-    },
-    initialInvitations: [],
+    initialInvitations: fictionalInvitations,
   },
   play: async ({ canvas, canvasElement }) => {
-    const table = canvas.getByRole("table", { name: "Members of Acme Cloud" })
+    const membersTable = canvas.getByRole("table", {
+      name: "Members of Acme Cloud",
+    })
     await expect(
-      within(table)
+      within(membersTable)
         .getAllByRole("columnheader")
         .map((header) => header.textContent?.trim())
     ).toEqual(["Member", "GitHub", "Passkey", "Joined", "Role", "Actions"])
 
-    const scrollRegion = await canvas.findByRole("region", {
+    const membersScrollRegion = await canvas.findByRole("region", {
       name: "Members of Acme Cloud",
     })
-    await expect(scrollRegion).toHaveAttribute(
+    await expect(membersScrollRegion).toHaveAttribute(
       "data-horizontal-overflow",
       "true"
     )
-    expect(scrollRegion.scrollWidth).toBeGreaterThan(scrollRegion.clientWidth)
-    scrollRegion.scrollLeft = 40
-    expect(scrollRegion.scrollLeft).toBeGreaterThan(0)
+    expect(membersScrollRegion.scrollWidth).toBeGreaterThan(
+      membersScrollRegion.clientWidth
+    )
+    membersScrollRegion.scrollLeft = 40
+    expect(membersScrollRegion.scrollLeft).toBeGreaterThan(0)
+    const membersTableFrame = membersScrollRegion.parentElement
+    if (!membersTableFrame) throw new Error("Expected members table frame")
+    expect(membersTableFrame.scrollWidth).toBeLessThanOrEqual(
+      membersTableFrame.clientWidth
+    )
 
-    const tableFrame = scrollRegion.parentElement
-    if (!tableFrame) throw new Error("Expected members table frame")
-    expect(tableFrame.scrollWidth).toBeLessThanOrEqual(tableFrame.clientWidth)
+    const invitationsTable = canvas.getByRole("table", {
+      name: "Invitations for Acme Cloud",
+    })
+    await expect(
+      within(invitationsTable)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent?.trim())
+    ).toEqual([
+      "Recipient",
+      "Role",
+      "Status",
+      "Created",
+      "Expires",
+      "Inviter",
+      "Actions",
+    ])
+
+    const invitationsScrollRegion = await canvas.findByRole("region", {
+      name: "Invitations for Acme Cloud",
+    })
+    await expect(invitationsScrollRegion).toHaveAttribute(
+      "data-horizontal-overflow",
+      "true"
+    )
+    expect(invitationsScrollRegion.scrollWidth).toBeGreaterThan(
+      invitationsScrollRegion.clientWidth
+    )
+    invitationsScrollRegion.scrollLeft = 40
+    expect(invitationsScrollRegion.scrollLeft).toBeGreaterThan(0)
+    const invitationsTableFrame = invitationsScrollRegion.parentElement
+    if (!invitationsTableFrame)
+      throw new Error("Expected invitations table frame")
+    expect(invitationsTableFrame.scrollWidth).toBeLessThanOrEqual(
+      invitationsTableFrame.clientWidth
+    )
+
     expect(canvasElement.scrollWidth).toBeLessThanOrEqual(
       canvasElement.clientWidth
     )

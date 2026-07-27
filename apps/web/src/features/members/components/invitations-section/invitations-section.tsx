@@ -12,7 +12,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@enterprise-agentic-saas/ui/components/alert-dialog"
-import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Empty,
@@ -59,12 +58,13 @@ import {
 
 import { LocalDate } from "@/components/local-date/local-date"
 import { UserIdentity } from "@/components/user-identity/user-identity"
-import { roleLabel } from "@/features/organizations"
+import { OrganizationRoleBadge } from "@/features/organizations"
 
 import type {
   OrganizationInvitation,
   OrganizationInvitationStatus,
 } from "../../schema"
+import { InvitationStatusBadge } from "../invitation-status-badge/invitation-status-badge"
 
 const cancelInvitationTrigger = (
   <Button variant="ghost" size="xs">
@@ -112,16 +112,6 @@ const invitationDateSorting =
 const invitationCreatedSorting = invitationDateSorting("createdAt")
 const invitationExpiresSorting = invitationDateSorting("expiresAt")
 const getInvitationRowId = (invitation: OrganizationInvitation) => invitation.id
-
-const invitationStatusLabel = (status: OrganizationInvitationStatus) =>
-  status.charAt(0).toUpperCase() + status.slice(1)
-
-const invitationStatusVariant = (
-  status: OrganizationInvitationStatus
-): "outline" | "secondary" => {
-  if (status === "pending") return "secondary"
-  return "outline"
-}
 
 const SortableInvitationHeader = ({
   column,
@@ -218,9 +208,7 @@ export const InvitationsSection = ({
         header: ({ column }) => (
           <SortableInvitationHeader column={column} label="Role" />
         ),
-        cell: ({ row }) => (
-          <Badge variant="outline">{roleLabel(row.original.role)}</Badge>
-        ),
+        cell: ({ row }) => <OrganizationRoleBadge role={row.original.role} />,
       },
       {
         accessorKey: "status",
@@ -229,9 +217,7 @@ export const InvitationsSection = ({
           <SortableInvitationHeader column={column} label="Status" />
         ),
         cell: ({ row }) => (
-          <Badge variant={invitationStatusVariant(row.original.status)}>
-            {invitationStatusLabel(row.original.status)}
-          </Badge>
+          <InvitationStatusBadge status={row.original.status} />
         ),
       },
       {

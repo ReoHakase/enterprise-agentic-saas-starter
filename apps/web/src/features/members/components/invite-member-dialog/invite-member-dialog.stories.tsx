@@ -28,6 +28,25 @@ export const Ready = meta.story({
     await step("Invite normalized fictional recipients", async () => {
       const trigger = canvas.getByRole("button", { name: "Invite members" })
       await userEvent.click(trigger)
+      const roleTrigger = body.getByRole("combobox", {
+        name: "Invitation role",
+      })
+      await expect(
+        within(roleTrigger).getByTestId("organization-role-member")
+      ).toBeVisible()
+      await userEvent.click(roleTrigger)
+      await Promise.all(
+        (
+          [
+            ["Member", "organization-role-member"],
+            ["Admin", "organization-role-admin"],
+          ] as const
+        ).map(async ([roleName, testId]) => {
+          const roleOption = await body.findByRole("option", { name: roleName })
+          await expect(within(roleOption).getByTestId(testId)).toBeVisible()
+        })
+      )
+      await userEvent.keyboard("{Escape}")
       await userEvent.type(
         body.getByRole("textbox", { name: "Email addresses" }),
         "One@Example.test, two@example.test"

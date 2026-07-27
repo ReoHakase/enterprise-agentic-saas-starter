@@ -35,7 +35,7 @@ import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
 } from "@/features/console"
-import { roleLabel } from "@/features/organizations"
+import { OrganizationRoleBadge } from "@/features/organizations"
 
 import {
   invitationFormSchema,
@@ -47,7 +47,10 @@ import {
 const invitationRoleOptions = [
   { label: "Member", value: "member" },
   { label: "Admin", value: "admin" },
-]
+] satisfies ReadonlyArray<{
+  label: string
+  value: InvitationFormValues["role"]
+}>
 
 const invitationDefaultValues: InvitationFormValues = {
   emails: "",
@@ -303,16 +306,19 @@ const InvitationRoleField = ({
           aria-label="Invitation role"
           aria-describedby={descriptionId}
         >
-          <span className="min-w-0 flex-1 truncate text-left">
-            {roleLabel(value)}
-          </span>
+          <OrganizationRoleBadge role={value} />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value="member">Member</SelectItem>
-            <SelectItem value="admin" disabled={!canInviteAdmins}>
-              Admin
-            </SelectItem>
+            {invitationRoleOptions.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                disabled={option.value === "admin" && !canInviteAdmins}
+              >
+                <OrganizationRoleBadge role={option.value} />
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>

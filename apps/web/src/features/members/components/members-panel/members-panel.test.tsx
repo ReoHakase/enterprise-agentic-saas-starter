@@ -178,10 +178,96 @@ const expiredInvitation: OrganizationInvitation = {
   createdAt: "2026-07-10T00:00:00.000Z",
 }
 
+const acceptedInvitation: OrganizationInvitation = {
+  ...pendingInvitation,
+  id: "invitation-accepted",
+  email: "accepted@example.com",
+  role: "admin",
+  status: "accepted",
+  createdAt: "2026-07-09T00:00:00.000Z",
+}
+
+const rejectedInvitation: OrganizationInvitation = {
+  ...pendingInvitation,
+  id: "invitation-rejected",
+  email: "rejected@example.com",
+  status: "rejected",
+  createdAt: "2026-07-08T00:00:00.000Z",
+}
+
+const canceledInvitation: OrganizationInvitation = {
+  ...pendingInvitation,
+  id: "invitation-canceled",
+  email: "canceled@example.com",
+  role: "admin",
+  status: "canceled",
+  createdAt: "2026-07-07T00:00:00.000Z",
+}
+
 const invitations: OrganizationInvitation[] = [
   pendingInvitation,
   expiredInvitation,
+  acceptedInvitation,
+  rejectedInvitation,
+  canceledInvitation,
 ]
+
+const invitationStatuses = [
+  "pending",
+  "accepted",
+  "rejected",
+  "expired",
+  "canceled",
+] as const
+
+const invitationEmailOrders = {
+  createdDescending: [
+    "pending@example.com",
+    "expired@example.com",
+    "accepted@example.com",
+    "rejected@example.com",
+    "canceled@example.com",
+  ],
+  createdAscending: [
+    "canceled@example.com",
+    "rejected@example.com",
+    "accepted@example.com",
+    "expired@example.com",
+    "pending@example.com",
+  ],
+  statusAscending: [
+    "pending@example.com",
+    "expired@example.com",
+    "accepted@example.com",
+    "rejected@example.com",
+    "canceled@example.com",
+  ],
+  statusDescending: [
+    "canceled@example.com",
+    "rejected@example.com",
+    "accepted@example.com",
+    "expired@example.com",
+    "pending@example.com",
+  ],
+  roleAscending: [
+    "accepted@example.com",
+    "canceled@example.com",
+    "pending@example.com",
+    "expired@example.com",
+    "rejected@example.com",
+  ],
+} as const
+
+const getInvitationEmailOrder = (table: HTMLElement) =>
+  within(table)
+    .getAllByRole("row")
+    .slice(1)
+    .map(
+      (row) =>
+        invitations.find((invitation) =>
+          within(row).queryByText(invitation.email)
+        )?.email
+    )
 
 const bulkInvitationResult = (
   emails: string[],
@@ -293,7 +379,7 @@ describe("MembersPanel", () => {
         name: "Basic Member has GitHub linked",
       })
     ).not.toBeInTheDocument()
-    expect(within(table).getAllByTestId(/^member-role-/u)).toHaveLength(
+    expect(within(table).getAllByTestId(/^organization-role-/u)).toHaveLength(
       members.length
     )
     expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
@@ -337,11 +423,24 @@ describe("MembersPanel", () => {
 
     expect(within(table).getByText("pending@example.com")).toBeInTheDocument()
     expect(within(table).getByText("expired@example.com")).toBeInTheDocument()
-    expect(within(table).getByText("Current Owner")).toBeInTheDocument()
-    expect(within(table).getByText("owner@example.com")).toBeInTheDocument()
-    expect(within(table).getByText("Jul 21, 2026")).toBeInTheDocument()
-    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
-      "pending@example.com"
+    expect(within(table).getAllByText("Current Owner")).toHaveLength(4)
+    expect(within(table).getAllByText("owner@example.com")).toHaveLength(4)
+    const pendingRow = within(table)
+      .getAllByRole("row")
+      .find((row) => within(row).queryByText("pending@example.com"))
+    expect(pendingRow).toBeDefined()
+    if (!pendingRow) throw new Error("Expected pending invitation row")
+    expect(within(pendingRow).getByText("Jul 21, 2026")).toBeInTheDocument()
+    for (const status of invitationStatuses) {
+      expect(
+        within(table).getByTestId(`invitation-status-${status}`)
+      ).toBeVisible()
+    }
+    expect(within(table).getAllByTestId(/^organization-role-/u)).toHaveLength(
+      invitations.length
+    )
+    expect(getInvitationEmailOrder(table)).toEqual(
+      invitationEmailOrders.createdDescending
     )
 
     await user.click(
@@ -349,8 +448,30 @@ describe("MembersPanel", () => {
         name: "Sort by created, currently descending",
       })
     )
-    expect(within(table).getAllByRole("row")[1]).toHaveTextContent(
-      "expired@example.com"
+    expect(getInvitationEmailOrder(table)).toEqual(
+      invitationEmailOrders.createdAscending
+    )
+
+    await user.click(
+      within(table).getByRole("button", { name: "Sort by status" })
+    )
+    expect(getInvitationEmailOrder(table)).toEqual(
+      invitationEmailOrders.statusAscending
+    )
+    await user.click(
+      within(table).getByRole("button", {
+        name: "Sort by status, currently ascending",
+      })
+    )
+    expect(getInvitationEmailOrder(table)).toEqual(
+      invitationEmailOrders.statusDescending
+    )
+
+    await user.click(
+      within(table).getByRole("button", { name: "Sort by role" })
+    )
+    expect(getInvitationEmailOrder(table)).toEqual(
+      invitationEmailOrders.roleAscending
     )
   })
 

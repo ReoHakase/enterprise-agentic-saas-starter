@@ -62,9 +62,10 @@ import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import { prepareOrganizationSwitch } from "../../cache"
 import { navigateAfterOrganizationSwitch } from "../../organization-switch-flash"
-import { roleLabel, type OrganizationSummary } from "../../schema"
+import type { OrganizationSummary } from "../../schema"
 import { organizationCreateAction as OrganizationCreateAction } from "../organization-create-action/organization-create-action"
 import { OrganizationProfileImage } from "../organization-identity/organization-identity"
+import { OrganizationRoleBadge } from "../organization-role-badge/organization-role-badge"
 
 const getOrganizationRowId = (organization: OrganizationSummary) =>
   organization.id
@@ -172,9 +173,7 @@ export const OrganizationsPage = ({
       {
         accessorKey: "role",
         header: "Your role",
-        cell: ({ row }) => (
-          <Badge variant="secondary">{roleLabel(row.original.role)}</Badge>
-        ),
+        cell: ({ row }) => <OrganizationRoleBadge role={row.original.role} />,
       },
       {
         id: "actions",
@@ -233,7 +232,10 @@ export const OrganizationsPage = ({
           </Empty>
         ) : (
           <div className="overflow-hidden rounded-2xl border">
-            <Table scrollLabel="Organizations attached to your account">
+            <Table
+              className="min-w-208"
+              scrollLabel="Organizations attached to your account"
+            >
               <TableCaption className="sr-only">
                 Organizations attached to your account
               </TableCaption>

@@ -135,6 +135,38 @@ describe("OrganizationsPage", () => {
     })
   })
 
+  it("renders the shared role badge for every organization role", () => {
+    renderOrganizations([
+      ...organizations,
+      {
+        id: "org-gamma",
+        name: "Gamma",
+        slug: "gamma",
+        role: "member",
+        active: false,
+        profileImage: null,
+        memberCount: 1,
+        memberProfileImages: [],
+        permissions,
+      },
+    ])
+
+    expect(
+      screen.getByTestId("organization-role-super_admin")
+    ).toHaveTextContent("Super Admin")
+    expect(screen.getByTestId("organization-role-admin")).toHaveTextContent(
+      "Admin"
+    )
+    expect(screen.getByTestId("organization-role-member")).toHaveTextContent(
+      "Member"
+    )
+    expect(
+      screen
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent?.trim())
+    ).toEqual(["Organization", "Slug", "Members", "Your role", "Actions"])
+  })
+
   it("switches the active tenant from the organization table", async () => {
     const actor = userEvent.setup()
     let finishActivation: ((value: unknown) => void) | undefined

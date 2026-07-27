@@ -111,6 +111,8 @@ describe("MembersPage", () => {
       screen.getByRole("table", { name: "Invitations for Acme" })
     ).toBeVisible()
     expect(screen.getByText("member@example.com")).toBeVisible()
+    expect(screen.getByTestId("organization-role-member")).toBeVisible()
+    expect(screen.getByTestId("invitation-status-pending")).toBeVisible()
     expect(mocks.listInvitations).not.toHaveBeenCalled()
   })
 
