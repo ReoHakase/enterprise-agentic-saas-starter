@@ -31,11 +31,14 @@ export type AsyncAction<T extends unknown[]> = (
 
 export type IssuesWorkspaceProps = {
   organizationId: string
+  currentUserId?: string
   issues: IssueUiItem[]
   searchState: IssueSearchState
   total: number
-  pageSize: number
+  pageSize: 20 | 50 | 100
   pending?: boolean
+  fetching?: boolean
+  placeholder?: boolean
   busyIssueId?: string
   error?: string
   onCreate: AsyncAction<[title: string]>
@@ -43,6 +46,8 @@ export type IssuesWorkspaceProps = {
   onDelete: AsyncAction<[issue: IssueUiItem]>
   onUpdate?: AsyncAction<[issue: IssueUiItem, update: IssueUpdate]>
   assignees?: IssueAssigneeOption[]
+  labelOptions?: string[]
+  onLabelSearchChange?: (search: string) => void
   getIssueHref: (issue: IssueUiItem) => string
   onSelectIssue: (issue: IssueUiItem) => void
   onRetry?: () => void

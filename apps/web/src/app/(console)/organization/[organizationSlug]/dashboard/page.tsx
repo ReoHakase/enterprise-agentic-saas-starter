@@ -79,7 +79,7 @@ export default async function DashboardPage({
       apiClient,
       toIssueListRequest(activeOrganization.id, {
         ...defaultIssueSearchState,
-        status: "closed",
+        statuses: ["closed"],
       })
     ),
   ])

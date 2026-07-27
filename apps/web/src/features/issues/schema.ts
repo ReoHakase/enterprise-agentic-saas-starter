@@ -74,8 +74,11 @@ const issueCommentSchema = v.object({
 const issueListPageSchema = v.object({
   items: v.array(issueListItemSchema),
   page: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  pageSize: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  pageSize: v.picklist([20, 50, 100]),
   total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+})
+const issueLabelListSchema = v.object({
+  items: v.pipe(v.array(v.string()), v.maxLength(50)),
 })
 const issueActivityValueSchema = v.union([
   v.string(),
@@ -194,6 +197,8 @@ export const parseIssueThumbnail = (value: unknown) =>
   v.parse(issueThumbnailSchema, value)
 export const parseIssueListPage = (value: unknown) =>
   v.parse(issueListPageSchema, value)
+export const parseIssueLabelList = (value: unknown) =>
+  v.parse(issueLabelListSchema, value)
 export const parseIssueComment = (value: unknown) =>
   v.parse(issueCommentSchema, value)
 export const parseIssueTimelinePage = (value: unknown) =>

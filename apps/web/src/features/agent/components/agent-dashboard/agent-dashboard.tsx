@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { useIssueSearchState } from "@/features/issues"
+import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { apiClient } from "@/lib/api-client"
 
 import {

@@ -4,13 +4,19 @@ import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
 import { IssuesTable } from "../issues-table/issues-table"
 import type { IssuesWorkspaceProps } from "../types/types"
 
+const emptyLabelOptions: string[] = []
+const ignoreLabelSearch = () => undefined
+
 export const IssuesWorkspace = ({
   issues,
   organizationId,
+  currentUserId = "anonymous",
   searchState,
   total,
   pageSize,
   pending,
+  fetching,
+  placeholder,
   busyIssueId,
   error,
   onCreate,
@@ -18,6 +24,8 @@ export const IssuesWorkspace = ({
   onDelete,
   onUpdate,
   assignees = emptyAssigneeOptions,
+  labelOptions = emptyLabelOptions,
+  onLabelSearchChange = ignoreLabelSearch,
   getIssueHref,
   onSelectIssue,
   onRetry,
@@ -28,13 +36,19 @@ export const IssuesWorkspace = ({
     <IssuesTable
       issues={issues}
       organizationId={organizationId}
+      currentUserId={currentUserId}
       searchState={searchState}
       total={total}
       pageSize={pageSize}
       pending={pending}
+      fetching={fetching}
+      placeholder={placeholder}
       busyIssueId={busyIssueId}
       error={error}
       assignees={assignees}
+      labelOptions={labelOptions}
+      onLabelSearchChange={onLabelSearchChange}
+      enableRowSelection
       getIssueHref={getIssueHref}
       onCreate={onCreate}
       onToggle={onToggle}

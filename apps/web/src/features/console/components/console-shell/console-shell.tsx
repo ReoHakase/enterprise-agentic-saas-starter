@@ -54,7 +54,8 @@ import {
   AgentShell,
   AgentShellTrigger,
 } from "@/features/agent"
-import { withAgentThreadHref, useIssueSearchState } from "@/features/issues"
+import { withAgentThreadHref } from "@/features/issues"
+import { useIssueSearchState } from "@/features/issues/search-params.client"
 import {
   consumeOrganizationSwitchFlash,
   prepareOrganizationSwitch,

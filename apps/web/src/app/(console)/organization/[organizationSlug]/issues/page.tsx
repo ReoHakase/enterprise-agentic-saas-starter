@@ -76,6 +76,7 @@ export default async function IssuesPage({
         <IssuesDashboard
           organizationId={activeOrganization.id}
           organizationSlug={activeOrganization.slug}
+          currentUserId={me.user.id}
         />
       </QueryHydrationBoundary>
     </PageShell>

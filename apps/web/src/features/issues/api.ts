@@ -5,6 +5,7 @@ import { ConsoleApiError, toConsoleApiError } from "@/features/console"
 import {
   parseIssue,
   parseIssueComment,
+  parseIssueLabelList,
   parseIssueTimelinePage,
   parseIssueThumbnail,
   parseIssueListPage,
@@ -70,6 +71,20 @@ export async function listIssues(
   )
   return typeof input === "string" ? page.items : page
 }
+
+export const listIssueLabels = async (
+  client: ApiClient,
+  input: { organizationId: string; search?: string },
+  signal?: AbortSignal
+) =>
+  parseIssueLabelList(
+    unwrap(
+      await client.issues.labels.get({
+        query: input,
+        fetch: { signal },
+      })
+    )
+  ).items
 
 export const getIssueThumbnail = async (
   client: ApiClient,
