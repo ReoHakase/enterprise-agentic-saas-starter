@@ -20,7 +20,8 @@ import {
 } from "react"
 import { toast } from "sonner"
 
-import { issueKeys, useIssueSearchState } from "@/features/issues"
+import { issueKeys } from "@/features/issues"
+import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 

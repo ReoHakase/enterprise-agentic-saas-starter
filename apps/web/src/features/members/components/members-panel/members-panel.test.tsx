@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ConsoleApiError } from "@/features/console"
@@ -318,13 +319,15 @@ const renderMembers = (
     },
   })
   render(
-    <QueryClientProvider client={queryClient}>
-      <MembersPanel
-        organization={value}
-        members={memberValues}
-        invitations={invitationValues}
-      />
-    </QueryClientProvider>
+    <NuqsTestingAdapter hasMemory>
+      <QueryClientProvider client={queryClient}>
+        <MembersPanel
+          organization={value}
+          members={memberValues}
+          invitations={invitationValues}
+        />
+      </QueryClientProvider>
+    </NuqsTestingAdapter>
   )
 }
 

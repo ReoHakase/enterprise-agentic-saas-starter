@@ -1,17 +1,5 @@
 "use client"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@enterprise-agentic-saas/ui/components/alert-dialog"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Empty,
@@ -21,134 +9,47 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
+import { TableCaption } from "@enterprise-agentic-saas/ui/components/table"
 import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@enterprise-agentic-saas/ui/components/table"
-import {
-  flexRender,
+  functionalUpdate,
   getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-  type Column,
-  type ColumnDef,
-  type SortingFn,
+  type ColumnFiltersState,
+  type PaginationState,
   type SortingState,
   type Table as TableInstance,
 } from "@tanstack/react-table"
+import { MailPlusIcon, RefreshCwIcon } from "lucide-react"
+import { useCallback, useMemo } from "react"
+
 import {
-  ArrowDownIcon,
-  ArrowUpDownIcon,
-  MailPlusIcon,
-  RefreshCwIcon,
-} from "lucide-react"
+  DataTableBody,
+  DataTableHeader,
+  DataTableRoot,
+} from "@/components/data-table/data-table"
+import { DataTablePagination } from "@/components/data-table/data-table-pagination"
+import { toDataTablePageSize } from "@/components/data-table/data-table-state"
+
+import type { OrganizationInvitation } from "../../schema"
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type MouseEvent,
-} from "react"
+  useInvitationTableSearchState,
+  useTableSearchDraft,
+  type InvitationTableSearchState,
+} from "../../table-search-params"
+import {
+  InvitationMutationContext,
+  type InvitationMutationState,
+} from "./invitation-actions"
+import {
+  countMatchingInvitations,
+  useInvitationTableColumns,
+} from "./invitation-table-columns"
+import { InvitationsTableToolbar } from "./invitations-table-toolbar"
 
-import { LocalDate } from "@/components/local-date/local-date"
-import { UserIdentity } from "@/components/user-identity/user-identity"
-import { OrganizationRoleBadge } from "@/features/organizations"
-
-import type {
-  OrganizationInvitation,
-  OrganizationInvitationStatus,
-} from "../../schema"
-import { InvitationStatusBadge } from "../invitation-status-badge/invitation-status-badge"
-
-const cancelInvitationTrigger = (
-  <Button variant="ghost" size="xs">
-    Cancel
-  </Button>
-)
-const invitationRoleOrder = { admin: 0, member: 1 } as const
-const invitationStatusOrder: Record<OrganizationInvitationStatus, number> = {
-  pending: 0,
-  expired: 1,
-  accepted: 2,
-  rejected: 3,
-  canceled: 4,
-}
-const invitationInitialSorting: SortingState = [{ id: "created", desc: true }]
-
-type InvitationMutationState = {
-  busyInvitationId?: string
-  pending: boolean
-}
-
-const InvitationMutationContext = createContext<InvitationMutationState>({
-  pending: false,
-})
-
-const invitationRoleSorting: SortingFn<OrganizationInvitation> = (
-  first,
-  second
-) =>
-  invitationRoleOrder[first.original.role] -
-  invitationRoleOrder[second.original.role]
-
-const invitationStatusSorting: SortingFn<OrganizationInvitation> = (
-  first,
-  second
-) =>
-  invitationStatusOrder[first.original.status] -
-  invitationStatusOrder[second.original.status]
-
-const invitationDateSorting =
-  (field: "createdAt" | "expiresAt"): SortingFn<OrganizationInvitation> =>
-  (first, second) =>
-    Date.parse(first.original[field]) - Date.parse(second.original[field])
-
-const invitationCreatedSorting = invitationDateSorting("createdAt")
-const invitationExpiresSorting = invitationDateSorting("expiresAt")
 const getInvitationRowId = (invitation: OrganizationInvitation) => invitation.id
-
-const SortableInvitationHeader = ({
-  column,
-  label,
-}: {
-  column: Column<OrganizationInvitation, unknown>
-  label: string
-}) => {
-  const sorting = column.getIsSorted()
-  const sort = useCallback(
-    () => column.toggleSorting(sorting === "asc"),
-    [column, sorting]
-  )
-  const currentSort =
-    sorting === "asc"
-      ? ", currently ascending"
-      : sorting === "desc"
-        ? ", currently descending"
-        : ""
-
-  return (
-    <Button
-      className="-ml-3"
-      variant="ghost"
-      size="sm"
-      aria-label={`Sort by ${label.toLocaleLowerCase()}${currentSort}`}
-      onClick={sort}
-    >
-      {label}
-      {sorting === "desc" ? (
-        <ArrowDownIcon data-icon="inline-end" aria-hidden="true" />
-      ) : (
-        <ArrowUpDownIcon data-icon="inline-end" aria-hidden="true" />
-      )}
-    </Button>
-  )
-}
 
 export const InvitationsSection = ({
   organizationName,
@@ -177,7 +78,53 @@ export const InvitationsSection = ({
   onResend: (invitation: OrganizationInvitation) => void
   onRetry?: () => void
 }) => {
-  const [sorting, setSorting] = useState<SortingState>(invitationInitialSorting)
+  const { state, setSearch, setDiscrete } = useInvitationTableSearchState()
+  const {
+    clearDraft: clearSearch,
+    draft: searchDraft,
+    updateDraft: updateSearch,
+  } = useTableSearchDraft(state.q, setSearch)
+  const toolbarState = useMemo(
+    () => ({ ...state, q: searchDraft }),
+    [searchDraft, state]
+  )
+  const sorting = useMemo<SortingState>(
+    () => [{ id: state.sort, desc: state.dir === "desc" }],
+    [state.dir, state.sort]
+  )
+  const pagination = useMemo<PaginationState>(() => {
+    const pageSize = Number(state.pageSize)
+    const matchingCount = countMatchingInvitations(invitations, {
+      query: searchDraft,
+      roles: state.roles,
+      statuses: state.statuses,
+    })
+    const lastPageIndex = Math.max(Math.ceil(matchingCount / pageSize) - 1, 0)
+
+    return {
+      pageIndex:
+        searchDraft === state.q ? Math.min(state.page - 1, lastPageIndex) : 0,
+      pageSize,
+    }
+  }, [
+    invitations,
+    searchDraft,
+    state.page,
+    state.pageSize,
+    state.q,
+    state.roles,
+    state.statuses,
+  ])
+  const columnFilters = useMemo<ColumnFiltersState>(
+    () => [
+      ...(searchDraft ? [{ id: "email", value: searchDraft }] : []),
+      ...(state.roles.length > 0 ? [{ id: "role", value: state.roles }] : []),
+      ...(state.statuses.length > 0
+        ? [{ id: "status", value: state.statuses }]
+        : []),
+    ],
+    [searchDraft, state.roles, state.statuses]
+  )
   const mutationState = useMemo<InvitationMutationState>(
     () => ({ busyInvitationId, pending: mutationPending }),
     [busyInvitationId, mutationPending]
@@ -191,99 +138,78 @@ export const InvitationsSection = ({
       ),
     [invitations]
   )
-  const columns = useMemo<ColumnDef<OrganizationInvitation>[]>(
-    () => [
-      {
-        accessorKey: "email",
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Recipient" />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.email}</span>
-        ),
-      },
-      {
-        accessorKey: "role",
-        sortingFn: invitationRoleSorting,
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Role" />
-        ),
-        cell: ({ row }) => <OrganizationRoleBadge role={row.original.role} />,
-      },
-      {
-        accessorKey: "status",
-        sortingFn: invitationStatusSorting,
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Status" />
-        ),
-        cell: ({ row }) => (
-          <InvitationStatusBadge status={row.original.status} />
-        ),
-      },
-      {
-        id: "created",
-        accessorFn: (invitation) => invitation.createdAt,
-        sortingFn: invitationCreatedSorting,
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Created" />
-        ),
-        cell: ({ row }) => <LocalDate value={row.original.createdAt} />,
-      },
-      {
-        id: "expires",
-        accessorFn: (invitation) => invitation.expiresAt,
-        sortingFn: invitationExpiresSorting,
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Expires" />
-        ),
-        cell: ({ row }) => <LocalDate value={row.original.expiresAt} />,
-      },
-      {
-        id: "inviter",
-        accessorFn: (invitation) => invitation.inviter.name,
-        header: ({ column }) => (
-          <SortableInvitationHeader column={column} label="Inviter" />
-        ),
-        cell: ({ row }) => <UserIdentity user={row.original.inviter} />,
-      },
-      {
-        id: "actions",
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => (
-          <InvitationActions
-            invitation={row.original}
-            activeInvitationExists={
-              row.original.status === "expired" &&
-              activeRecipientEmails.has(row.original.email.toLowerCase())
-            }
-            canCancel={canCancel}
-            canResend={canResend}
-            canResendAdmins={canResendAdmins}
-            onCancel={onCancel}
-            onResend={onResend}
-          />
-        ),
-      },
-    ],
-    [
-      activeRecipientEmails,
-      canCancel,
-      canResend,
-      canResendAdmins,
-      onCancel,
-      onResend,
-    ]
+  const columns = useInvitationTableColumns({
+    activeRecipientEmails,
+    canCancel,
+    canResend,
+    canResendAdmins,
+    onCancel,
+    onResend,
+  })
+  const handleSortingChange = useCallback(
+    (updater: Parameters<typeof functionalUpdate<SortingState>>[0]) => {
+      const next = functionalUpdate(updater, sorting)[0]
+      if (!next) {
+        void setDiscrete({ sort: "created", dir: "desc", page: 1 })
+        return
+      }
+      if (
+        next.id === "email" ||
+        next.id === "role" ||
+        next.id === "status" ||
+        next.id === "created" ||
+        next.id === "expires" ||
+        next.id === "inviter"
+      ) {
+        void setDiscrete({
+          sort: next.id,
+          dir: next.desc ? "desc" : "asc",
+          page: 1,
+        })
+      }
+    },
+    [setDiscrete, sorting]
+  )
+  const handlePaginationChange = useCallback(
+    (updater: Parameters<typeof functionalUpdate<PaginationState>>[0]) => {
+      const next = functionalUpdate(updater, pagination)
+      const pageSize = toDataTablePageSize(next.pageSize)
+      if (!pageSize) return
+      void setDiscrete({
+        page: next.pageIndex + 1,
+        pageSize,
+      })
+    },
+    [pagination, setDiscrete]
   )
   const table = useReactTable({
     data: invitations,
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
+    state: { columnFilters, pagination, sorting },
+    onPaginationChange: handlePaginationChange,
+    onSortingChange: handleSortingChange,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: getInvitationRowId,
+    autoResetPageIndex: false,
+    enableSortingRemoval: false,
   })
-
+  const filtersActive = state.roles.length > 0 || state.statuses.length > 0
+  const sortActive = state.sort !== "created" || state.dir !== "desc"
+  const changeView = useCallback(
+    (patch: Partial<InvitationTableSearchState>) => {
+      void setDiscrete({ ...patch, page: 1 })
+    },
+    [setDiscrete]
+  )
+  const resetFilters = useCallback(() => {
+    void setDiscrete({ roles: [], statuses: [], page: 1 })
+  }, [setDiscrete])
+  const resetSort = useCallback(() => {
+    void setDiscrete({ sort: "created", dir: "desc", page: 1 })
+  }, [setDiscrete])
   return (
     <section
       className="flex min-w-0 flex-col gap-3"
@@ -334,11 +260,25 @@ export const InvitationsSection = ({
           </EmptyHeader>
         </Empty>
       ) : (
-        <InvitationTable
-          organizationName={organizationName}
-          mutationState={mutationState}
-          table={table}
-        />
+        <>
+          <InvitationsTableToolbar
+            state={toolbarState}
+            filtersActive={filtersActive}
+            sortActive={sortActive}
+            onSearchChange={updateSearch}
+            onClearSearch={clearSearch}
+            onFilterChange={changeView}
+            onResetFilters={resetFilters}
+            onResetSort={resetSort}
+          />
+          <InvitationTable
+            organizationName={organizationName}
+            mutationState={mutationState}
+            table={table}
+            filtered={Boolean(searchDraft || filtersActive)}
+          />
+          <DataTablePagination table={table} label="Invitations" />
+        </>
       )}
     </section>
   )
@@ -348,161 +288,44 @@ const InvitationTable = ({
   organizationName,
   mutationState,
   table,
+  filtered,
 }: {
   organizationName: string
   mutationState: InvitationMutationState
   table: TableInstance<OrganizationInvitation>
+  filtered: boolean
 }) => (
-  <div className="max-w-full min-w-0 rounded-2xl border">
-    <InvitationMutationContext.Provider value={mutationState}>
-      <Table
-        className="min-w-272"
-        scrollLabel={`Invitations for ${organizationName}`}
-      >
-        <TableCaption className="sr-only">
-          Invitations for {organizationName}
-        </TableCaption>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={invitationColumnClass(header.column.id)}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  className={invitationColumnClass(cell.column.id)}
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </InvitationMutationContext.Provider>
-  </div>
+  <InvitationMutationContext.Provider value={mutationState}>
+    <DataTableRoot
+      className="max-w-full rounded-2xl"
+      tableClassName="min-w-272"
+      scrollLabel={`Invitations for ${organizationName}`}
+    >
+      <TableCaption className="sr-only">
+        Invitations for {organizationName}
+      </TableCaption>
+      <DataTableHeader table={table} />
+      <DataTableBody table={table}>
+        <EmptyInvitationsState filtered={filtered} />
+      </DataTableBody>
+    </DataTableRoot>
+  </InvitationMutationContext.Provider>
 )
 
-const invitationColumnClass = (columnId: string) => {
-  if (columnId === "email") return "min-w-56"
-  if (columnId === "role" || columnId === "status") return "min-w-28"
-  if (columnId === "created" || columnId === "expires") return "min-w-36"
-  if (columnId === "inviter") return "min-w-56"
-  if (columnId === "actions") return "min-w-52 text-right"
-  return undefined
-}
-
-const InvitationActions = ({
-  invitation,
-  activeInvitationExists,
-  canCancel,
-  canResend,
-  canResendAdmins,
-  onCancel,
-  onResend,
-}: {
-  invitation: OrganizationInvitation
-  activeInvitationExists: boolean
-  canCancel: boolean
-  canResend: boolean
-  canResendAdmins: boolean
-  onCancel: (invitationId: string) => void
-  onResend: (invitation: OrganizationInvitation) => void
-}) => {
-  const mutation = useContext(InvitationMutationContext)
-  const blocked = mutation.pending
-  const busy = mutation.busyInvitationId === invitation.id
-  const resendable =
-    (invitation.status === "pending" || invitation.status === "expired") &&
-    !activeInvitationExists &&
-    canResend &&
-    (invitation.role !== "admin" || canResendAdmins)
-  const cancelable = canCancel && invitation.status === "pending"
-  const resend = useCallback(() => {
-    if (!blocked && resendable) onResend(invitation)
-  }, [blocked, invitation, onResend, resendable])
-  const cancel = useCallback(() => {
-    if (!blocked && cancelable) onCancel(invitation.id)
-  }, [blocked, cancelable, invitation.id, onCancel])
-  const preventBlockedTrigger = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      if (!blocked) return
-      event.preventDefault()
-      event.stopPropagation()
-    },
-    [blocked]
-  )
-
-  if (!resendable && !cancelable) {
-    return activeInvitationExists && canResend ? (
-      <span className="text-xs text-muted-foreground">
-        Active invitation exists
-      </span>
-    ) : null
-  }
-
-  return (
-    <div className="flex items-center justify-end gap-1">
-      {resendable ? (
-        <Button
-          variant="outline"
-          size="xs"
-          aria-disabled={blocked || undefined}
-          aria-busy={busy}
-          onClick={resend}
-        >
-          {busy ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
-          )}
-          {invitation.status === "expired" ? "Renew & resend" : "Resend"}
-        </Button>
-      ) : null}
-      {cancelable ? (
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={cancelInvitationTrigger}
-            aria-disabled={blocked || undefined}
-            onClick={preventBlockedTrigger}
-          />
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogMedia>
-                <MailPlusIcon aria-hidden="true" />
-              </AlertDialogMedia>
-              <AlertDialogTitle>Cancel this invitation?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {invitation.email} will no longer be able to join with this
-                invitation.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep invitation</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={cancel}>
-                Cancel invitation
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      ) : null}
-    </div>
-  )
-}
+const EmptyInvitationsState = ({ filtered }: { filtered: boolean }) => (
+  <Empty>
+    <EmptyHeader>
+      <EmptyMedia variant="icon">
+        <MailPlusIcon aria-hidden="true" />
+      </EmptyMedia>
+      <EmptyTitle>
+        {filtered ? "No matching invitations" : "No invitations"}
+      </EmptyTitle>
+      <EmptyDescription>
+        {filtered
+          ? "Try a different recipient, inviter, role, or status."
+          : "New invitations and their delivery status will appear here."}
+      </EmptyDescription>
+    </EmptyHeader>
+  </Empty>
+)

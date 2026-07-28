@@ -12,7 +12,6 @@ import { AppError, publicErrors } from "../../errors/app-error"
 import { isPreviewableImageFormat } from "../files/public"
 import {
   findEffectiveIssueThumbnail,
-  ISSUE_LIST_PAGE_SIZE,
   issueAuditMetadata,
   issueListConditions,
   issueListOrder,
@@ -53,10 +52,11 @@ export const listIssuePageByOrganization = async (
 ): Promise<{
   items: IssueListItemDto[]
   page: number
-  pageSize: typeof ISSUE_LIST_PAGE_SIZE
+  pageSize: 20 | 50 | 100
   total: number
 }> => {
   try {
+    const pageSize = input.pageSize ?? 20
     return await db.transaction(async (tx) => {
       const conditions = issueListConditions(input)
       const [countRows, rows] = await Promise.all([
@@ -69,8 +69,8 @@ export const listIssuePageByOrganization = async (
           .from(issues)
           .where(and(...conditions))
           .orderBy(...issueListOrder(input))
-          .limit(ISSUE_LIST_PAGE_SIZE)
-          .offset((input.page - 1) * ISSUE_LIST_PAGE_SIZE),
+          .limit(pageSize)
+          .offset((input.page - 1) * pageSize),
       ])
       const summaries =
         rows.length === 0
@@ -92,7 +92,7 @@ export const listIssuePageByOrganization = async (
           })
         ),
         page: input.page,
-        pageSize: ISSUE_LIST_PAGE_SIZE,
+        pageSize,
         total: Number(countRows[0]?.total ?? 0),
       }
     })
@@ -100,6 +100,45 @@ export const listIssuePageByOrganization = async (
     throw publicErrors.internal(cause, {
       module: "issues",
       operation: "listIssuePageByOrganization",
+    })
+  }
+}
+
+export const listIssueLabelsByOrganization = async (
+  db: Db,
+  input: { organizationId: string; search?: string }
+): Promise<string[]> => {
+  try {
+    const search = input.search?.trim().toLocaleLowerCase("en-US") ?? ""
+    const escapedSearch = search
+      .replaceAll("!", "!!")
+      .replaceAll("%", "!%")
+      .replaceAll("_", "!_")
+    const rows = await db.all<{ label: string }>(sql`
+      select min(trim(cast(json_each.value as text))) as label
+      from ${issues}, json_each(${issues.labels})
+      where ${issues.organizationId} = ${input.organizationId}
+        and trim(cast(json_each.value as text)) != ''
+        and (
+          ${search} = ''
+          or lower(trim(cast(json_each.value as text)))
+            like ${`%${escapedSearch}%`} escape '!'
+        )
+      group by lower(trim(cast(json_each.value as text)))
+      order by
+        case
+          when lower(label) like ${`${escapedSearch}%`} escape '!' then 0
+          else 1
+        end,
+        lower(label),
+        label
+      limit 50
+    `)
+    return rows.map((row) => row.label)
+  } catch (cause) {
+    throw publicErrors.internal(cause, {
+      module: "issues",
+      operation: "listIssueLabelsByOrganization",
     })
   }
 }

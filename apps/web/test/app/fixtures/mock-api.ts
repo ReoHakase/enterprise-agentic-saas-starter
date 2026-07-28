@@ -317,6 +317,9 @@ const handleConsoleRequest = (url: URL) => {
 }
 
 const handleIssueRequest = (url: URL) => {
+  if (url.pathname === "/issues/labels") {
+    return json({ items: ["audit", "security"] })
+  }
   if (url.pathname === "/issues") {
     return json({
       items: [
@@ -328,7 +331,7 @@ const handleIssueRequest = (url: URL) => {
         },
       ],
       page: 1,
-      pageSize: 10,
+      pageSize: 20,
       total: 1,
     })
   }

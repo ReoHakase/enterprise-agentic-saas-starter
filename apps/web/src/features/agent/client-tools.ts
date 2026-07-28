@@ -2,6 +2,7 @@ import * as v from "valibot"
 
 import {
   buildIssueListHref,
+  type IssueSearchPatch,
   type IssueSearchState,
   withAgentThreadHref,
 } from "@/features/issues"
@@ -104,6 +105,59 @@ const parseToolInput = <Name extends AgentClientToolName>(
   return result.output
 }
 
+type LegacyIssueQuery = v.InferOutput<typeof issueQuerySchema>
+
+const toIssueSearchPatch = (query: LegacyIssueQuery): IssueSearchPatch => ({
+  ...(query.q === undefined ? {} : { q: query.q }),
+  ...(query.status === undefined
+    ? {}
+    : { statuses: query.status === "all" ? [] : [query.status] }),
+  ...(query.priority === undefined
+    ? {}
+    : query.priority === "all"
+      ? { priorityFrom: "no_priority", priorityTo: "urgent" }
+      : { priorityFrom: query.priority, priorityTo: query.priority }),
+  ...(query.assignee === undefined
+    ? {}
+    : { assignees: query.assignee ? [query.assignee] : [] }),
+  ...(query.label === undefined
+    ? {}
+    : { labels: query.label ? [query.label] : [] }),
+  ...(query.sort === undefined ? {} : { sort: query.sort }),
+  ...(query.dir === undefined ? {} : { dir: query.dir }),
+  ...(query.page === undefined ? {} : { page: query.page }),
+})
+
+const toLegacyCompatibleIssueSearchPatch = (
+  state: IssueSearchState
+): IssueSearchPatch => ({
+  statuses: state.statuses.length <= 1 ? state.statuses : [],
+  priorityFrom:
+    state.priorityFrom === state.priorityTo
+      ? state.priorityFrom
+      : "no_priority",
+  priorityTo:
+    state.priorityFrom === state.priorityTo ? state.priorityTo : "urgent",
+  assignees: state.assignees.length <= 1 ? state.assignees : [],
+  labels: state.labels.length <= 1 ? state.labels : [],
+  labelMode: "any",
+  dueFrom: "",
+  dueTo: "",
+  pageSize: "20",
+})
+
+const toLegacyIssueQuery = (state: IssueSearchState) => ({
+  q: state.q,
+  status: state.statuses.length === 1 ? state.statuses[0] : "all",
+  priority:
+    state.priorityFrom === state.priorityTo ? state.priorityFrom : "all",
+  assignee: state.assignees.length === 1 ? state.assignees[0] : "",
+  label: state.labels.length === 1 ? state.labels[0] : "",
+  sort: state.sort,
+  dir: state.dir,
+  page: state.page,
+})
+
 export const executeAgentClientTool = async (
   toolName: string,
   input: unknown,
@@ -130,11 +184,13 @@ export const executeAgentClientTool = async (
     const target = buildIssueListHref(
       dependencies.organizationSlug,
       dependencies.issueSearchState,
-      parsed.query
+      {
+        ...toLegacyCompatibleIssueSearchPatch(dependencies.issueSearchState),
+        ...toIssueSearchPatch(parsed.query),
+      }
     )
-    const { agentThread: _agentThread, ...publicQuery } = target.state
     deferNavigation(dependencies.navigate, target.href)
-    return { ok: true, query: publicQuery }
+    return { ok: true, query: toLegacyIssueQuery(target.state) }
   }
   if (toolName === "ui_open_issue") {
     const parsed = parseToolInput(toolName, input)

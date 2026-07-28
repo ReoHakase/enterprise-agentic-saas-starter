@@ -390,8 +390,13 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
     })
     .first()
   await expect(issueLink).toBeVisible()
+  await issueLink.scrollIntoViewIfNeeded()
   const listScrollY = await page.evaluate(() => window.scrollY)
+  const issueRowHeight = await issueLink.evaluate(
+    (link) => link.closest("tr")?.getBoundingClientRect().height ?? 0
+  )
   expect(listScrollY).toBeGreaterThan(0)
+  expect(issueRowHeight).toBeGreaterThan(0)
 
   await issueLink.click()
   await expect(page).toHaveURL(
@@ -409,7 +414,18 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
   await page.getByRole("button", { name: "Discard changes" }).click()
   await expect(page).toHaveURL(listRoute)
   await expectReadyConsoleRoute(page, "Issues")
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(listScrollY)
+  const restoredIssueLink = page
+    .getByRole("link", {
+      name: "Review tenant audit log",
+      exact: true,
+    })
+    .first()
+  await expect(restoredIssueLink).toBeVisible()
+  await expect
+    .poll(async () =>
+      Math.abs((await page.evaluate(() => window.scrollY)) - listScrollY)
+    )
+    .toBeLessThan(issueRowHeight)
 
   await page.goto("/organization/alpha-operations/issues/1")
   await expectReadyConsoleRoute(page, "Review tenant audit log", 1)

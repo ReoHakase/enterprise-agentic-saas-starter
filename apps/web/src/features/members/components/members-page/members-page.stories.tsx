@@ -37,6 +37,110 @@ export const Ready = meta.story({
   play: async ({ canvas, step }) => {
     const body = within(document.body)
 
+    await step("Search, filter, and sort both tables", async () => {
+      const membersTable = canvas.getByRole("table", {
+        name: "Members of Acme Cloud",
+      })
+      const memberSearch = canvas.getByRole("searchbox", {
+        name: "Search members by name or email",
+      })
+      await userEvent.type(memberSearch, "Jordan")
+      await waitFor(() =>
+        expect(
+          within(membersTable).queryByText("Avery Stone")
+        ).not.toBeInTheDocument()
+      )
+      await expect(within(membersTable).getByText("Jordan Lee")).toBeVisible()
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Clear member search" })
+      )
+      await waitFor(() =>
+        expect(within(membersTable).getByText("Avery Stone")).toBeVisible()
+      )
+
+      const memberSort = canvas.getByRole("combobox", {
+        name: "Sort members by",
+      })
+      await userEvent.click(memberSort)
+      await userEvent.click(await body.findByRole("option", { name: "Joined" }))
+      const memberDirection = canvas.getByRole("combobox", {
+        name: "Member sort direction",
+      })
+      await userEvent.click(memberDirection)
+      await userEvent.click(
+        await body.findByRole("option", { name: "Descending" })
+      )
+      await expect(
+        canvas.getByRole("button", { name: "Reset member sort" })
+      ).toBeEnabled()
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Reset member sort" })
+      )
+
+      const invitationsTable = canvas.getByRole("table", {
+        name: "Invitations for Acme Cloud",
+      })
+      const invitationSearch = canvas.getByRole("searchbox", {
+        name: "Search invitations by recipient or inviter",
+      })
+      await userEvent.type(invitationSearch, "accepted")
+      await waitFor(() =>
+        expect(
+          within(invitationsTable).queryByText("pending@example.test")
+        ).not.toBeInTheDocument()
+      )
+      await expect(
+        within(invitationsTable).getByText("accepted@example.test")
+      ).toBeVisible()
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Clear invitation search" })
+      )
+
+      const statusFilter = canvas.getByRole("combobox", {
+        name: "Invitation status",
+      })
+      await userEvent.click(statusFilter)
+      await userEvent.click(
+        await body.findByRole("option", { name: "Pending" })
+      )
+      await userEvent.keyboard("{Escape}")
+      await waitFor(() =>
+        expect(
+          within(invitationsTable).queryByText("accepted@example.test")
+        ).not.toBeInTheDocument()
+      )
+      await expect(
+        within(invitationsTable).getByText("pending@example.test")
+      ).toBeVisible()
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Reset invitation filters" })
+      )
+      await waitFor(() =>
+        expect(
+          within(invitationsTable).getByText("accepted@example.test")
+        ).toBeVisible()
+      )
+
+      const memberFooter = canvas.getByLabelText("Members table footer")
+      const invitationFooter = canvas.getByLabelText("Invitations table footer")
+      await expect(
+        within(memberFooter).getByRole("combobox", {
+          name: "Members per page",
+        })
+      ).toBeVisible()
+      await expect(
+        within(invitationFooter).getByRole("combobox", {
+          name: "Invitations per page",
+        })
+      ).toBeVisible()
+      await expect(
+        within(memberFooter).getByRole("button", { name: "Next" })
+      ).toBeDisabled()
+      await expect(
+        within(invitationFooter).getByRole("button", { name: "Next" })
+      ).toBeDisabled()
+    })
+
     await step("Inspect linked login methods and role badges", async () => {
       const table = canvas.getByRole("table", { name: "Members of Acme Cloud" })
       await expect(

@@ -222,3 +222,12 @@ A1からA5は、外部cloudと有料providerを使わない範囲で`bun run tes
 - 実HTTP caseがtransport固有の少数へ限定される
 - unknown errorでもserializerがthrowしない
 - package側の責務とAPI consumer integrationが区別される
+
+Issues一覧のfilter contractはA3/A4で実libSQLを使い、複数status、priority範囲、assigneeの
+`unassigned`、label Any/All、解決済み期日範囲、動的page size、semantic sort、literal `%`/`_`検索を
+検査します。label候補はmembership、tenant分離、大文字小文字を区別しないdistinct、prefix-first/name順、
+50件上限、他tenant・不存在の404、active organization不一致の409を同じ境界で検査します。Webのrange
+Calendarが送る日付範囲をlocal calendar境界で固定し、範囲開始と終了日翌日のoffsetが異なるDST遷移でも
+表示したFrom/Toが実際のリクエストとSQL条件へ使われることを確認します。旧`dueDatePreset` queryは400を返し、
+期日範囲ではNULL行を除外することも検査します。
+DB schema変更がない場合はmigration testを追加しません。

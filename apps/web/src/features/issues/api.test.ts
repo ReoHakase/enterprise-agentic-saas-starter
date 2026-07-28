@@ -10,6 +10,7 @@ import {
   deleteIssueComment,
   getIssueThumbnail,
   getIssueTimeline,
+  listIssueLabels,
   listIssues,
   updateIssue,
   updateIssueComment,
@@ -62,7 +63,7 @@ describe("issues Eden API", () => {
   it("parses issue and comment CRUD while preserving due date-times", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        Response.json({ items: [issue], page: 1, pageSize: 10, total: 1 })
+        Response.json({ items: [issue], page: 1, pageSize: 20, total: 1 })
       )
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
@@ -137,6 +138,27 @@ describe("issues Eden API", () => {
     await expect(listIssues(client, "org-1")).rejects.toThrow(
       "API response did not include data"
     )
+  })
+
+  it("forwards AbortSignal to stale Issue label requests", async () => {
+    let requestSignal: AbortSignal | undefined
+    fetchMock.mockImplementationOnce(async (input, init) => {
+      requestSignal = requestFrom(input, init).signal
+      return Response.json({ items: ["bug"] })
+    })
+    const controller = new AbortController()
+    const client = createApiClient("https://api.example.test")
+
+    await expect(
+      listIssueLabels(
+        client,
+        { organizationId: "org-1", search: "bu" },
+        controller.signal
+      )
+    ).resolves.toEqual(["bug"])
+    expect(requestSignal?.aborted).toBe(false)
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
   })
 
   it("gets, selects, and resets an Issue thumbnail", async () => {
@@ -236,7 +258,7 @@ describe("issues Eden API", () => {
 
   it("passes query cancellation through Eden to fetch", async () => {
     fetchMock.mockResolvedValueOnce(
-      Response.json({ items: [issue], page: 1, pageSize: 10, total: 1 })
+      Response.json({ items: [issue], page: 1, pageSize: 20, total: 1 })
     )
     const client = createApiClient("https://api.example.test")
     const controller = new AbortController()

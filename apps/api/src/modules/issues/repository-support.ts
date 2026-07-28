@@ -13,8 +13,10 @@ import {
   asc,
   desc,
   eq,
+  gte,
   inArray,
-  like,
+  lt,
+  lte,
   or,
   sql,
   type SQL,
@@ -173,35 +175,130 @@ export const tenantSafeAuthorJoin = and(
   )`
 )
 
-export const ISSUE_LIST_PAGE_SIZE = 10
-
 export type IssueReadDatabase = Pick<Db, "select">
 
-export const issueListConditions = (input: ListIssuesInput): SQL[] => {
-  const conditions: SQL[] = [eq(issues.organizationId, input.organizationId)]
+const priorityRank = sql<number>`case ${issues.priority}
+  when 'no_priority' then 0
+  when 'low' then 1
+  when 'medium' then 2
+  when 'high' then 3
+  when 'urgent' then 4
+  else 5 end`
 
+const statusRank = sql<number>`case ${issues.status}
+  when 'open' then 0
+  when 'in_progress' then 1
+  when 'closed' then 2
+  else 3 end`
+
+const priorityRanks = {
+  no_priority: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  urgent: 4,
+} as const
+
+const escapeLikeLiteral = (value: string) =>
+  value.replaceAll("!", "!!").replaceAll("%", "!%").replaceAll("_", "!_")
+
+const issueSearchCondition = (input: ListIssuesInput) => {
   const search = input.search?.trim()
-  if (search) {
-    const searchCondition = or(
-      like(issues.title, `%${search}%`),
-      like(issues.description, `%${search}%`)
-    )
-    if (searchCondition) conditions.push(searchCondition)
-  }
-  if (input.status) conditions.push(eq(issues.status, input.status))
-  if (input.priority) conditions.push(eq(issues.priority, input.priority))
-  if (input.assigneeId === "unassigned") {
-    conditions.push(sql`${issues.assigneeId} is null`)
-  } else if (input.assigneeId) {
-    conditions.push(eq(issues.assigneeId, input.assigneeId))
-  }
-  if (input.label) {
-    conditions.push(
-      sql`exists (select 1 from json_each(${issues.labels}) where json_each.value = ${input.label})`
-    )
-  }
-  return conditions
+  if (!search) return undefined
+  const pattern = `%${escapeLikeLiteral(search.toLocaleLowerCase("en-US"))}%`
+  return or(
+    sql`lower(${issues.title}) like ${pattern} escape '!'`,
+    sql`lower(${issues.description}) like ${pattern} escape '!'`
+  )
 }
+
+const issueStatusCondition = (input: ListIssuesInput) => {
+  const statuses = input.statuses ?? (input.status ? [input.status] : undefined)
+  return statuses?.length ? inArray(issues.status, statuses) : undefined
+}
+
+const issuePriorityConditions = (input: ListIssuesInput) => {
+  const priorityFrom = input.priorityFrom ?? input.priority
+  const priorityTo = input.priorityTo ?? input.priority
+  return [
+    priorityFrom ? gte(priorityRank, priorityRanks[priorityFrom]) : undefined,
+    priorityTo ? lte(priorityRank, priorityRanks[priorityTo]) : undefined,
+  ].filter((condition): condition is SQL => condition !== undefined)
+}
+
+const issueAssigneeCondition = (input: ListIssuesInput) => {
+  const assigneeIds =
+    input.assigneeIds ??
+    (input.assigneeId === undefined ? undefined : [input.assigneeId])
+  if (!assigneeIds?.length) return undefined
+  const assignedIds = assigneeIds.filter(
+    (assigneeId) => assigneeId !== "unassigned"
+  )
+  const assigneeConditions = [
+    assigneeIds.includes("unassigned")
+      ? sql`${issues.assigneeId} is null`
+      : undefined,
+    assignedIds.length > 0
+      ? inArray(issues.assigneeId, assignedIds)
+      : undefined,
+  ].filter((condition): condition is SQL => condition !== undefined)
+  return or(...assigneeConditions)
+}
+
+const issueLabelCondition = (input: ListIssuesInput) => {
+  const labels = input.labels ?? (input.label ? [input.label] : undefined)
+  if (!labels?.length) return undefined
+  const labelConditions = labels.map(
+    (label) =>
+      sql`exists (
+          select 1 from json_each(${issues.labels})
+          where lower(trim(cast(json_each.value as text))) =
+            ${label.toLocaleLowerCase("en-US")}
+        )`
+  )
+  return input.labelMode === "all"
+    ? and(...labelConditions)
+    : or(...labelConditions)
+}
+
+const localDateBoundary = (date: string, offset: number) => {
+  const boundary = new Date(`${date}T00:00:00.000Z`)
+  boundary.setUTCMinutes(boundary.getUTCMinutes() + offset)
+  return boundary
+}
+
+const addIsoDateDays = (date: string, days: number) => {
+  const result = new Date(`${date}T00:00:00.000Z`)
+  result.setUTCDate(result.getUTCDate() + days)
+  return result.toISOString().slice(0, 10)
+}
+
+const issueDueDateConditions = (input: ListIssuesInput): SQL[] => {
+  const legacyOffset = input.dueDateOffsetMinutes ?? 0
+  const fromOffset = input.dueDateFromOffsetMinutes ?? legacyOffset
+  const toExclusiveOffset =
+    input.dueDateToExclusiveOffsetMinutes ?? legacyOffset
+  const exclusiveEnd = input.dueDateTo
+    ? localDateBoundary(addIsoDateDays(input.dueDateTo, 1), toExclusiveOffset)
+    : undefined
+  return [
+    input.dueDateFrom
+      ? gte(issues.dueDate, localDateBoundary(input.dueDateFrom, fromOffset))
+      : undefined,
+    exclusiveEnd ? lt(issues.dueDate, exclusiveEnd) : undefined,
+  ].filter((condition): condition is SQL => condition !== undefined)
+}
+
+export const issueListConditions = (input: ListIssuesInput): SQL[] =>
+  [
+    eq(issues.organizationId, input.organizationId),
+    issueSearchCondition(input),
+    issueStatusCondition(input),
+    ...issuePriorityConditions(input),
+    issueAssigneeCondition(input),
+    issueLabelCondition(input),
+    ...issueDueDateConditions(input),
+  ].filter((condition): condition is SQL => condition !== undefined)
 
 export const issueListOrder = (input: ListIssuesInput): SQL[] => {
   const sortColumns = {
@@ -209,8 +306,8 @@ export const issueListOrder = (input: ListIssuesInput): SQL[] => {
     createdAt: issues.createdAt,
     updatedAt: issues.updatedAt,
     dueDate: issues.dueDate,
-    priority: issues.priority,
-    status: issues.status,
+    priority: priorityRank,
+    status: statusRank,
   }
   const direction = input.sortDirection === "asc" ? asc : desc
   const primary = direction(sortColumns[input.sortBy ?? "updatedAt"])

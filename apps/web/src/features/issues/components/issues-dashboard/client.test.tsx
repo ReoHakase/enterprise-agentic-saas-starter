@@ -121,7 +121,7 @@ vi.mock("@tanstack/react-query", () => {
   return {
     useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
     useQuery: () => {
-      const call = queryCall++ % 2
+      const call = queryCall++ % 3
 
       if (call === 0) {
         return {
@@ -133,16 +133,18 @@ vi.mock("@tanstack/react-query", () => {
         }
       }
 
-      return {
-        data: [
-          {
-            userId: "user-2",
-            name: "Jordan Lee",
-            email: "jordan@example.test",
-            profileImage: null,
-          },
-        ],
-      }
+      if (call === 1)
+        return {
+          data: [
+            {
+              userId: "user-2",
+              name: "Jordan Lee",
+              email: "jordan@example.test",
+              profileImage: null,
+            },
+          ],
+        }
+      return { data: ["billing", "incident"] }
     },
     useMutation: (options: MutationOptions) => {
       const call = mutationCall++ % 3
@@ -173,18 +175,27 @@ vi.mock("../../api", () => ({
 
 vi.mock("../../queries", () => ({
   issueKeys: { lists: (organizationId: string) => ["issues", organizationId] },
+  issueLabelQueryOptions: () => ({ queryKey: ["issue-labels"] }),
   issuesQueryOptions: () => ({ queryKey: ["issues"] }),
 }))
 
-vi.mock("../../search-params", () => ({
+vi.mock("../../search-params.client", () => ({
   useIssueSearchState: () => ({
     state: {
       agentThread: "thread-7",
-      assignee: "all",
+      assignees: [],
+      labels: [],
+      labelMode: "any",
+      dueFrom: "",
+      dueTo: "",
       page: 1,
-      priority: "all",
+      pageSize: "20",
+      priorityFrom: "no_priority",
+      priorityTo: "urgent",
       q: "",
-      status: "all",
+      statuses: [],
+      sort: "updatedAt",
+      dir: "desc",
     },
     setDiscrete: mocks.setDiscrete,
     setSearch: mocks.setSearch,

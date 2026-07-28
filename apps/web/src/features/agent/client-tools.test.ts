@@ -10,7 +10,7 @@ import { executeAgentClientTool } from "./client-tools"
 const dependencies = () => {
   const issueSearchState: IssueSearchState = {
     ...defaultIssueSearchState,
-    status: "open",
+    statuses: ["open"],
     page: 8,
     agentThread: "thread-1",
   }
@@ -91,12 +91,16 @@ describe("agent client tools", () => {
   it("merges a partial query, resets page, and navigates to canonical Issues", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
-    const { agentThread, ...expectedQuery } = {
-      ...deps.issueSearchState,
+    const expectedQuery = {
+      q: "",
+      status: "open",
       priority: "high" as const,
+      assignee: "",
+      label: "",
+      sort: "updatedAt",
+      dir: "desc",
       page: 1,
     }
-    expect(agentThread).toBe("thread-1")
     await expect(
       executeAgentClientTool(
         "ui_set_issue_query",
@@ -111,7 +115,7 @@ describe("agent client tools", () => {
 
     await vi.runAllTimersAsync()
     expect(deps.navigate).toHaveBeenCalledWith(
-      "/organization/acme/issues?status=open&priority=high&agentThread=thread-1"
+      "/organization/acme/issues?status=open&priorityFrom=high&priorityTo=high&agentThread=thread-1"
     )
   })
 
@@ -139,6 +143,44 @@ describe("agent client tools", () => {
       },
       deps
     )
+    await vi.runAllTimersAsync()
+
+    expect(deps.navigate).toHaveBeenCalledWith(
+      "/organization/acme/issues?agentThread=thread-1"
+    )
+  })
+
+  it("clears advanced query state that the legacy tool cannot represent", async () => {
+    vi.useFakeTimers()
+    const deps = dependencies()
+    deps.issueSearchState = {
+      ...defaultIssueSearchState,
+      statuses: ["open", "closed"],
+      priorityFrom: "low",
+      priorityTo: "high",
+      assignees: ["user-1", "user-2"],
+      labels: ["bug", "security"],
+      labelMode: "all",
+      pageSize: "100",
+      page: 4,
+      agentThread: "thread-1",
+    }
+
+    await expect(
+      executeAgentClientTool("ui_set_issue_query", { query: {} }, deps)
+    ).resolves.toEqual({
+      ok: true,
+      query: {
+        q: "",
+        status: "all",
+        priority: "all",
+        assignee: "",
+        label: "",
+        sort: "updatedAt",
+        dir: "desc",
+        page: 1,
+      },
+    })
     await vi.runAllTimersAsync()
 
     expect(deps.navigate).toHaveBeenCalledWith(

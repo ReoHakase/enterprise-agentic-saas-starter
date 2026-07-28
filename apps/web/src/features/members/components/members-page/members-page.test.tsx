@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
+import { NuqsTestingAdapter, type UrlUpdateEvent } from "nuqs/adapters/testing"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { MembersPage } from "./members-page"
@@ -97,19 +98,23 @@ describe("MembersPage", () => {
     })
 
     render(
-      <QueryClientProvider client={queryClient}>
-        <MembersPage
-          organization={organization}
-          initialMembers={members}
-          initialInvitations={invitations}
-        />
-      </QueryClientProvider>
+      <NuqsTestingAdapter hasMemory>
+        <QueryClientProvider client={queryClient}>
+          <MembersPage
+            organization={organization}
+            initialMembers={members}
+            initialInvitations={invitations}
+          />
+        </QueryClientProvider>
+      </NuqsTestingAdapter>
     )
 
     expect(screen.queryByText("Loading invitations")).not.toBeInTheDocument()
-    expect(
-      screen.getByRole("table", { name: "Invitations for Acme" })
-    ).toBeVisible()
+    const invitationsTable = screen.getByRole("table", {
+      name: "Invitations for Acme",
+    })
+    expect(invitationsTable).toBeVisible()
+    expect(screen.getAllByTestId("data-table-root")).toHaveLength(2)
     expect(screen.getByText("member@example.com")).toBeVisible()
     expect(screen.getByTestId("organization-role-member")).toBeVisible()
     expect(screen.getByTestId("invitation-status-pending")).toBeVisible()
@@ -125,19 +130,81 @@ describe("MembersPage", () => {
     })
 
     render(
-      <QueryClientProvider client={queryClient}>
-        <MembersPage
-          organization={organization}
-          initialMembers={members}
-          initialInvitationsError="Invitations are temporarily unavailable."
-        />
-      </QueryClientProvider>
+      <NuqsTestingAdapter hasMemory>
+        <QueryClientProvider client={queryClient}>
+          <MembersPage
+            organization={organization}
+            initialMembers={members}
+            initialInvitationsError="Invitations are temporarily unavailable."
+          />
+        </QueryClientProvider>
+      </NuqsTestingAdapter>
     )
 
-    expect(screen.getByRole("table", { name: "Members of Acme" })).toBeVisible()
+    const membersTable = screen.getByRole("table", {
+      name: "Members of Acme",
+    })
+    expect(membersTable).toBeVisible()
+    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
     expect(
       screen.getByText("Invitations are temporarily unavailable.")
     ).toBeVisible()
     expect(screen.queryByText("Loading invitations")).not.toBeInTheDocument()
+  })
+
+  it("clamps out-of-range member and invitation pages without updating URL state during mount", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+    const onUrlUpdate = vi.fn<(event: UrlUpdateEvent) => void>()
+    const manyMembers = Array.from({ length: 21 }, (_, index) => {
+      const number = String(index + 1).padStart(2, "0")
+      return {
+        ...member,
+        id: `member-${number}`,
+        userId: `user-${number}`,
+        name: `Member ${number}`,
+        email: `member-${number}@example.com`,
+        role: index === 0 ? ("super_admin" as const) : ("member" as const),
+      }
+    })
+    const manyInvitations = Array.from({ length: 21 }, (_, index) => {
+      const number = String(index + 1).padStart(2, "0")
+      return {
+        ...invitation,
+        id: `invitation-${number}`,
+        email: `invite-${number}@example.com`,
+        createdAt: new Date(Date.UTC(2026, 6, index + 1)).toISOString(),
+      }
+    })
+
+    render(
+      <NuqsTestingAdapter
+        searchParams="page=9&inv_page=9"
+        hasMemory
+        onUrlUpdate={onUrlUpdate}
+      >
+        <QueryClientProvider client={queryClient}>
+          <MembersPage
+            organization={organization}
+            initialMembers={manyMembers}
+            initialInvitations={manyInvitations}
+          />
+        </QueryClientProvider>
+      </NuqsTestingAdapter>
+    )
+
+    const membersTable = screen.getByRole("table", {
+      name: "Members of Acme",
+    })
+    const invitationsTable = screen.getByRole("table", {
+      name: "Invitations for Acme",
+    })
+    expect(within(membersTable).getByText("Member 21")).toBeVisible()
+    expect(
+      await within(invitationsTable).findByText("invite-01@example.com")
+    ).toBeVisible()
+
+    expect(onUrlUpdate).not.toHaveBeenCalled()
   })
 })

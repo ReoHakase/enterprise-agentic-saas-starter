@@ -195,6 +195,20 @@ Scalarはauth永続化、telemetry、Agent/uploadを無効にし、credentialや
 - Drizzle query builderをmockせず、integration testで実libSQLを使う
 - business repositoryを`packages/db`へ移さない
 
+Issues一覧の複数status、priority範囲、複数assignee、labelのAny/All、期日範囲、page sizeは
+route modelからservice inputへ明示してrepositoryで組み立てます。titleとdescriptionの部分一致では
+`%`と`_`をliteralとしてescapeします。statusとpriorityのsortは表示上のdomain順をSQLで固定し、
+同順位は既存の安定tie-breakerを使います。Webが期日の表示範囲と検証済みの
+`dueDateFromOffsetMinutes`と`dueDateToExclusiveOffsetMinutes`を送った場合、リポジトリは範囲開始と
+終了日翌日のlocal calendar境界をそれぞれUTC instantへ変換します。旧`dueDateOffsetMinutes`は両境界の
+fallbackとして受理します。Webは1か月のrange Calendarで選択した日付境界を送り、APIはpreset名を
+受理しません。query modelは未知keyを拒否するため、旧`dueDatePreset`を含むrequestは400を返します。
+日時範囲は`due_date IS NOT NULL`の行だけを対象にします。
+
+label候補はIssue一覧とは別のtenant-scoped endpointで返します。organization membershipをserviceで確認し、
+repositoryは`organization_id`境界内のJSON labelを大文字小文字を区別せずdistinct化します。検索時は
+prefix一致を先、次にname順とし、件数は50へ制限します。利用件数や人気順はcontractに含めません。
+
 ## import boundary
 
 禁止:

@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation"
 import { useMemo } from "react"
 
 import { membersQueryOptions } from "@/features/console"
-import { issuesQueryOptions, useIssueSearchState } from "@/features/issues"
+import { issuesQueryOptions } from "@/features/issues"
+import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { apiClient } from "@/lib/api-client"
 
 import type { AgentMentionValue } from "../components/agent-composer/agent-composer"

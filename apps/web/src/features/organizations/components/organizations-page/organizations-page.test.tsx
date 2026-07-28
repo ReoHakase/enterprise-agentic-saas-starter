@@ -165,6 +165,7 @@ describe("OrganizationsPage", () => {
         .getAllByRole("columnheader")
         .map((header) => header.textContent?.trim())
     ).toEqual(["Organization", "Slug", "Members", "Your role", "Actions"])
+    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
   })
 
   it("switches the active tenant from the organization table", async () => {
