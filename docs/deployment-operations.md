@@ -2,7 +2,7 @@
 title: Cloudflare deploymentと運用
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-28
 ---
 
 # Cloudflareデプロイと運用
@@ -123,28 +123,23 @@ API WorkerはElysia Cloudflare adapter、WebはOpenNext、AgentはMastraとCloud
 ## Deploy順序
 
 1. Turso backup/restore pointを確認する。
-2. production migrationを1回だけ適用する。
-3. workflowがCloudflare Worker Script APIでAPI/Agent両Workerを確認する。どちらかが404なら`AGENT_RUNTIME`を含まないbootstrap API configでAPI named `AgentInternalApi`を先に作り、200/404以外なら停止する。両方が存在しても旧Agents SDK protocolから切り替える初回だけはdispatch input `force_agent_protocol_bootstrap=true`を選ぶ。
-4. Agent Workerをdeployし、API named entrypointへのService Binding解決を確認する。
-5. final API Workerを`AGENT_RUNTIME` binding付きでdeployし、health/readiness/OpenAPIを自動smokeする。既存環境の通常releaseは互換な旧APIがあるためAgent→APIの順に更新する。
-6. Web Workerをbuildしてからdeployし、custom domainのsign-in pageを自動smokeする。
-7. sign-in/org/Issue/API→Mastra stream/Agent→private `/internal/*` journeyを認証付きE2Eで確認する。
+2. workflowがAPI/Agent Worker、migration ledger、API/Agentのcross-database secret inventoryをread-only確認する。destructive migration、stale secret、片側Worker欠損、または明示した旧protocol切替が1つでもあればcompatibility rolloutを必須にする。
+3. 4つのAgent flagが全て`0`であることを確認し、`apps/api/wrangler.bootstrap.jsonc`で`AGENT_RUNTIME`を持たないAPIを`AGENT_MAINTENANCE_MODE=1`としてdeployする。maintenance中はpublic `/agent`、Agent thread/asset file route、named `AgentInternalApi`、scheduled jobを503または停止状態へ閉じる。
+4. API health/readiness/OpenAPIとmaintenance smokeを通し、Cloudflare Worker settingsのremote inventoryで`AGENT_RUNTIME`が存在せず、`AGENT_MAINTENANCE_MODE`がplain textの`1`であることを確認する。
+5. Application DBの1つのaggregate queryでDB clock、live connection/resume ticket、unrevoked grant、`running` / `waiting_approval` runを同時に取得する。最大capability lifetimeを含むbounded deadline内で全件0がgrace window中継続するまでpollingし、途中で1件でも再発したらzero windowを最初から数え直す。partial schema、timeout、query errorでは停止する。
+6. 初回inventoryで検出した禁止secretだけをAPI/Agent Workerからexact nameで削除する。削除直前に再inventoryし、初回がcleanだったWorkerへ新たな禁止secretが現れた場合は削除せず停止する。Workerごとの削除と確認を終えた後、migration直前にAPI/Agentのfresh inventoryを全件取り直し、初回後の新規禁止secretと禁止secret残存がどちらもないことを再検査する。
+7. production migrationを1回だけ適用し、Agent WorkerをdeployしてAPI named entrypointへのService Binding解決を確認する。
+8. final API Workerを`AGENT_RUNTIME` binding付き、`AGENT_MAINTENANCE_MODE=0`でdeployし、health/readiness/OpenAPIを自動smokeする。Cloudflare Worker settingsのremote inventoryでもbindingの存在とmaintenance解除を確認する。
+9. Web Workerをbuildしてからdeployし、custom domainのsign-in pageを自動smokeする。
+10. sign-in/org/Issue/API→Mastra stream/Agent→private `/internal/*` journeyを認証付きE2Eで確認する。
 
-```sh
-bun run --cwd packages/db db:migrate
-# fresh accountまたは片側Worker欠損時だけ。実運用はworkflowが自動判定する。
-bun run --cwd apps/api deploy -- --config wrangler.bootstrap.jsonc
-bun run --cwd apps/agent deploy
-bun run --cwd apps/api deploy
-bun run --cwd apps/web build:cloudflare
-bun run --cwd apps/web deploy
-```
+compatibility rolloutはremote inventory、maintenance smoke、drainを伴うため、上記を手動commandへ分解せず`Deploy production` workflowを使います。destructive migrationもstale secretもないcompatible releaseだけがmigration-first順序を取れます。
 
-これは順序の概要です。相互Service Bindingはtarget Workerが先に存在する必要があるため、workflowはAPI/Agentのどちらかが存在しない場合にbootstrapを自動実行し、両方が存在して同じMastra protocolへ移行済みの通常releaseでは互換な旧APIを残したままAgent→API→Webの順に更新します。Workerの存在だけではprotocol互換性を証明できません。旧Agents SDKからの初回切替は4 Agent flagを全て`0`にし、既存chat導線のmaintenance windowを確保して`force_agent_protocol_bootstrap=true`を選びます。workflowはこのinput時にflagが1つでも`0`以外なら停止します。`apps/api/wrangler.bootstrap.jsonc`はfinal configと同じWorker名・binding・trigger・observabilityを持ち、outbound `services`だけを除きます。この差分はunit contract testで固定します。Cloudflareのauth failure、network error、429、5xxをWorker不存在と推測せず停止します。runtime secretをCLI引数へ渡さず、flagは検証済みのGitHub Environment varsから渡し、実際のproduction deployは`Deploy production` workflowだけから実行します。workflowは`production` Environmentのapprovalとconcurrency lock付きで進め、どのdeployまたは自動smokeで失敗しても後続Workerを変更しません。
+これは順序の概要です。相互Service Bindingはtarget Workerが先に存在する必要があるため、compatibility rolloutでは常にbindingなしAPIを先に置きます。Workerの存在だけではprotocol互換性やtraffic停止を証明できません。remote settings inventory、実API maintenance smoke、Application DBの連続zero windowを全て通してからsecret削除とdestructive migrationへ進みます。旧Agents SDKからの初回切替は4 Agent flagを全て`0`にし、`force_agent_protocol_bootstrap=true`を選びます。workflowはこのinput時にflagが1つでも`0`以外なら停止します。`apps/api/wrangler.bootstrap.jsonc`はfinal configと同じWorker名・binding・trigger・observabilityを持ち、outbound `services`だけを除きます。この差分はunit contract testで固定します。Cloudflareのauth failure、network error、429、5xxをWorker不存在と推測せず停止します。runtime secretをCLI引数へ渡さず、flagは検証済みのGitHub Environment varsから渡し、実際のproduction deployは`Deploy production` workflowだけから実行します。workflowは`production` Environmentのapprovalとconcurrency lock付きで進め、どのdeploy、inventory、drain、または自動smokeで失敗しても後続の破壊的操作へ進みません。
 
 旧Agentの`IssueAssistant` SQLite Durable Object namespaceはこのprotocol切替では削除しません。Agent configに既存`v1 new_sqlite_classes` migrationを残し、worker bundleにも410を返すretention classをexportしますが、Durable Object bindingとpublic routeは外します。これにより新規trafficをMastra `AgentRuntime`へ限定しつつ、旧message dataを保持します。旧dataのexport/backfill、件数照合、retention期間の承認を完了した後だけ、別releaseでunique migration tagの`deleted_classes`とclass export削除を同時に行います。delete migrationはnamespaceと全dataを永久削除し、rollbackやTrashで復元できないため、今回のdeployへ含めません。
 
-`0011_file_activity_backfill`だけは、migration適用とAPI切替の間に旧Workerがfileを確定・削除するとactivityを復元できないdata migrationです。workflowはmigration ledgerが`0010`適用済みかつ`0011`未適用の環境だけを検出し、既存schemaと互換な新APIを先にdeployします。このpredeployでは4つのAgent flagを全て`0`に固定し、旧schemaのままAPI smokeを通してからbackfillへ進みます。migration後のAPI smokeが完了するまでAgent/Webを変更しません。fresh環境、`0011`適用済み環境、今後の通常migrationではmigration-first順序を維持します。この互換deployを手動運用で省略せず、file writeを止めないままone-shot SQLだけを先行適用しないでください。
+`0011_file_activity_backfill`は、migration適用とAPI切替の間に旧Workerがfileを確定・削除するとactivityを復元できないため、compatibility rolloutを要求する既存triggerの1つです。workflowはmigration ledgerが`0010`適用済みかつ`0011`未適用なら、4つのAgent flagを全て`0`に固定し、旧schemaと互換なmaintenance API、remote binding確認、drain、secret inventory barrierを通してからbackfillへ進みます。この節は上記general compatibility rolloutを上書きしません。fresh/片側Worker欠損、旧protocol切替、将来のdestructive migrationも、それぞれの検出条件に該当すれば同じcompatibility順序を優先します。全triggerがないcompatible releaseだけがmigration-first順序を取れます。
 
 ## Smoke checklist
 

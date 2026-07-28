@@ -8,7 +8,6 @@ import { requestIdPlugin } from "../../platform/plugins/request-id"
 import { agentInternalAuthorizationModel } from "./action-schema"
 import {
   actionIdParamsModel,
-  appendRunMessagesBodyModel,
   assetIdParamsModel,
   emptyBodyModel,
   finishRunBodyModel,
@@ -20,9 +19,9 @@ import {
   issueSearchQueryModel,
   labelSearchQueryModel,
   memberSearchQueryModel,
+  memoryCommitSettlementBodyModel,
   prepareIssueActionBodyModel,
   recordUsageBodyModel,
-  renameThreadBodyModel,
   reserveWebSearchBodyModel,
   resumeApprovedActionBodyModel,
   startRunBodyModel,
@@ -47,11 +46,31 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
     .use(requestIdPlugin)
     .use(observabilityPlugin)
     .use(errorPlugin)
-    .onRequest(({ set }) => {
+    .onRequest(({ request, set }) => {
       set.headers["cache-control"] = "private, no-store"
+      const url = new URL(request.url)
+      const isTicketConsume =
+        request.method === "POST" &&
+        url.pathname === "/internal/agent/connections/consume"
+      const isActionResume =
+        request.method === "POST" &&
+        /^\/internal\/agent\/actions\/[A-Za-z0-9_-]{1,128}\/resume$/u.test(
+          url.pathname
+        )
+      const isMemoryCommitSettlement =
+        request.method === "POST" &&
+        url.pathname === "/internal/agent/memory/commit-settlement"
+      if (!isTicketConsume && !isActionResume && !isMemoryCommitSettlement) {
+        bearerGrant(request)
+      }
     })
     .group("/internal/agent", (app) =>
       app
+        .post(
+          "/memory/commit-settlement",
+          ({ body }) => service.settleMemoryCommit(body),
+          { body: memoryCommitSettlementBodyModel }
+        )
         .post(
           "/connections/consume",
           ({ body }) => service.consumeConnectionTicket(body),
@@ -91,21 +110,6 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
           ({ body, request }) =>
             service.finishRun({ ...body, grant: bearerGrant(request) }),
           { body: finishRunBodyModel }
-        )
-        .post(
-          "/runs/messages",
-          ({ body, request }) =>
-            service.appendRunMessages({
-              ...body,
-              grant: bearerGrant(request),
-            }),
-          { body: appendRunMessagesBodyModel }
-        )
-        .post(
-          "/runs/thread-title",
-          ({ body, request }) =>
-            service.renameThread({ ...body, grant: bearerGrant(request) }),
-          { body: renameThreadBodyModel }
         )
         .post(
           "/runs/usage",

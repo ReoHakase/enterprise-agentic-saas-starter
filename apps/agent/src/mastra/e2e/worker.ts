@@ -5,28 +5,30 @@ import {
   toAgentControlFailure,
 } from "../adapters/control-plane/client"
 import type { AgentRuntimeEnv } from "../composition/environment"
+import { createAgentIsolateCompositionCache } from "../composition/isolate-composition"
 import { handleAgentRuntimeRequest } from "../runtime/run-agent"
 import { SCRIPTED_MODEL_SENTINEL } from "../test-support/scripted-model"
-import { scriptedMastra } from "./scripted-scenarios"
+import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
 export { IssueAssistant } from "../legacy/issue-assistant"
 
-const e2eDependencies = {
-  captureFailure: () => undefined,
-  createControlPlane: createAgentInternalGateway,
-  mastra: scriptedMastra,
-  requireModelCredential: false,
-  toControlFailure: toAgentControlFailure,
-} as const
+const getScriptedAgentIsolateComposition = createAgentIsolateCompositionCache(
+  createScriptedAgentRuntimeComposition
+)
 
 class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
   fetch(request: Request): Promise<Response> | Response {
-    return handleAgentRuntimeRequest(
-      request,
-      this.env,
-      this.ctx,
-      e2eDependencies
-    )
+    const composition = getScriptedAgentIsolateComposition(this.env)
+    return handleAgentRuntimeRequest(request, this.env, this.ctx, {
+      captureFailure: () => undefined,
+      createControlPlane: createAgentInternalGateway,
+      executionRegistry: composition.executionRegistry,
+      createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
+      mastra: composition.mastra,
+      requireModelCredential: false,
+      threadTitleAgent: composition.threadTitleAgent,
+      toControlFailure: toAgentControlFailure,
+    })
   }
 }
 

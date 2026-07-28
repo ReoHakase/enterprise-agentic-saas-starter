@@ -1,17 +1,19 @@
 import type {
   AgentActionExecutionResult,
   AgentCreateIssueActionInput,
+  AgentDeleteIssueActionInput,
   AgentIssueAction,
   AgentIssueActionKind,
   AgentIssueActionPreview,
   AgentUpdateIssueActionInput,
-} from "@enterprise-agentic-saas/api/agent-client"
-import type { z } from "zod"
+  AddIssueAttachmentsToolInput,
+  IssueWriteToolOutput,
+  RemoveIssueAttachmentsToolInput,
+} from "@enterprise-agentic-saas/agent-contracts"
 
 import type { AgentToolBudget } from "../../../core/budget/tool"
 import type { AgentControlPlanePort } from "../../../runtime/ports"
 import { IDENTIFIER_PATTERN } from "./schema"
-import type { deleteIssueSchema } from "./schema"
 
 type AgentWriteApi = Pick<
   AgentControlPlanePort,
@@ -23,6 +25,7 @@ type AgentWriteApi = Pick<
 
 export type AgentWriteControl = {
   holdForApproval: () => void
+  suspendAction: (actionId: string) => Promise<void>
 }
 
 const normalizeLabels = (labels: string[] | undefined): string[] | undefined =>
@@ -44,7 +47,7 @@ const normalizeCreateIssue = (
 })
 
 const normalizeUpdateIssue = (
-  issue: AgentUpdateIssueActionInput
+  issue: Extract<AgentUpdateIssueActionInput, { operation?: "fields" }>
 ): AgentUpdateIssueActionInput => ({
   ...issue,
   assigneeId:
@@ -108,16 +111,36 @@ const safePreviewValue = (
 const safePreview = (
   preview: AgentIssueActionPreview
 ): AgentIssueActionPreview => ({
-  attachments: preview.attachments.slice(0, 4).map((attachment) => ({
-    assetId: IDENTIFIER_PATTERN.test(attachment.assetId)
-      ? attachment.assetId
-      : "invalid",
-    filename: bounded(attachment.filename, 200),
-    sizeBytes:
-      Number.isSafeInteger(attachment.sizeBytes) && attachment.sizeBytes >= 0
-        ? attachment.sizeBytes
-        : 0,
-  })),
+  attachmentOperation: preview.attachmentOperation,
+  attachments: preview.attachments
+    .slice(0, preview.attachmentOperation === "remove" ? 20 : 4)
+    .map((attachment) => {
+      const shared = {
+        filename: bounded(attachment.filename, 200),
+        sizeBytes:
+          Number.isSafeInteger(attachment.sizeBytes) &&
+          attachment.sizeBytes >= 0
+            ? attachment.sizeBytes
+            : 0,
+      }
+      return attachment.source === "asset"
+        ? {
+            assetId: IDENTIFIER_PATTERN.test(attachment.assetId)
+              ? attachment.assetId
+              : "invalid",
+            filename: shared.filename,
+            sizeBytes: shared.sizeBytes,
+            source: "asset" as const,
+          }
+        : {
+            fileId: IDENTIFIER_PATTERN.test(attachment.fileId)
+              ? attachment.fileId
+              : "invalid",
+            filename: shared.filename,
+            sizeBytes: shared.sizeBytes,
+            source: "file" as const,
+          }
+    }),
   destructive: preview.destructive,
   fields: preview.fields.slice(0, 20).map((field) => ({
     after: safePreviewValue(field.after),
@@ -151,6 +174,15 @@ export const toSafeActionReceipt = (
 ): AgentActionExecutionResult => {
   const expectedActionId = expected.actionId ?? result.actionId
   const expectedKind = expected.kind ?? result.kind
+  const mutation = result.issue.attachmentMutation
+  const mutationValid =
+    mutation === undefined ||
+    (result.kind === "update_issue" &&
+      result.issue.deleted === false &&
+      mutation.fileIds.length >= 1 &&
+      mutation.fileIds.length <= (mutation.operation === "added" ? 4 : 20) &&
+      new Set(mutation.fileIds).size === mutation.fileIds.length &&
+      mutation.fileIds.every((fileId) => IDENTIFIER_PATTERN.test(fileId)))
   if (
     result.status !== "succeeded" ||
     !actionKinds.has(result.kind) ||
@@ -162,7 +194,8 @@ export const toSafeActionReceipt = (
     result.issue.number < 1 ||
     !Number.isSafeInteger(result.issue.revision) ||
     result.issue.revision < 1 ||
-    typeof result.issue.deleted !== "boolean"
+    typeof result.issue.deleted !== "boolean" ||
+    !mutationValid
   ) {
     throw new Error("Issue write capability is unavailable")
   }
@@ -173,6 +206,7 @@ export const toSafeActionReceipt = (
       id: result.issue.id,
       number: result.issue.number,
       revision: result.issue.revision,
+      ...(mutation ? { attachmentMutation: mutation } : {}),
     },
     kind: result.kind,
     status: "succeeded",
@@ -201,7 +235,7 @@ const prepareResult = async (
   actionPromise: Promise<AgentIssueAction>,
   budget: AgentToolBudget,
   control: AgentWriteControl
-): Promise<unknown> => {
+): Promise<IssueWriteToolOutput> => {
   const action = await actionPromise
   const actionId = safeActionId(action.id)
   if (action.kind !== kind || !actionStatuses.has(action.status)) {
@@ -218,6 +252,7 @@ const prepareResult = async (
     }
     const preview = safePreview(action.preview)
     const expiresAt = bounded(action.expiresAt, 64)
+    await control.suspendAction(actionId)
     control.holdForApproval()
     budget.suspendForApproval()
     return {
@@ -258,7 +293,7 @@ export const createAgentWriteHandlers = (
       idempotencyKey: string
       toolCallId: string
     }) => Promise<AgentIssueAction>
-  ): Promise<unknown> => {
+  ): Promise<IssueWriteToolOutput> => {
     budget.consume("write")
     try {
       const identity = await createActionIdentity(
@@ -281,6 +316,24 @@ export const createAgentWriteHandlers = (
   }
 
   return {
+    addIssueAttachments: (
+      input: AddIssueAttachmentsToolInput,
+      toolCallId: string
+    ) => {
+      const normalizedIssue: AgentUpdateIssueActionInput = {
+        operation: "add_attachments",
+        issueId: input.issueId.trim(),
+        expectedRevision: input.expectedRevision,
+        attachmentAssetIds: [...new Set(input.assetIds)],
+      }
+      return invoke("update_issue", toolCallId, normalizedIssue, (identity) =>
+        api.prepareUpdateIssue({
+          grant: runGrant,
+          issue: normalizedIssue,
+          ...identity,
+        })
+      )
+    },
     createIssue: (issue: AgentCreateIssueActionInput, toolCallId: string) => {
       const normalizedIssue = normalizeCreateIssue(issue)
       return invoke("create_issue", toolCallId, normalizedIssue, (identity) =>
@@ -291,10 +344,7 @@ export const createAgentWriteHandlers = (
         })
       )
     },
-    deleteIssue: (
-      issue: z.output<typeof deleteIssueSchema>,
-      toolCallId: string
-    ) => {
+    deleteIssue: (issue: AgentDeleteIssueActionInput, toolCallId: string) => {
       const normalizedIssue = { ...issue, issueId: issue.issueId.trim() }
       return invoke("delete_issue", toolCallId, normalizedIssue, (identity) =>
         api.prepareDeleteIssue({
@@ -304,7 +354,28 @@ export const createAgentWriteHandlers = (
         })
       )
     },
-    updateIssue: (issue: AgentUpdateIssueActionInput, toolCallId: string) => {
+    removeIssueAttachments: (
+      input: RemoveIssueAttachmentsToolInput,
+      toolCallId: string
+    ) => {
+      const normalizedIssue: AgentUpdateIssueActionInput = {
+        operation: "remove_attachments",
+        issueId: input.issueId.trim(),
+        expectedRevision: input.expectedRevision,
+        attachmentFileIds: [...new Set(input.fileIds)],
+      }
+      return invoke("update_issue", toolCallId, normalizedIssue, (identity) =>
+        api.prepareUpdateIssue({
+          grant: runGrant,
+          issue: normalizedIssue,
+          ...identity,
+        })
+      )
+    },
+    updateIssue: (
+      issue: Extract<AgentUpdateIssueActionInput, { operation?: "fields" }>,
+      toolCallId: string
+    ) => {
       const normalizedIssue = normalizeUpdateIssue(issue)
       return invoke("update_issue", toolCallId, normalizedIssue, (identity) =>
         api.prepareUpdateIssue({

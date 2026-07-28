@@ -16,6 +16,7 @@ const publicServices = [
   ["storybook.ui.enterprise-agentic-saas", "storybook.ui."],
   ["api.enterprise-agentic-saas", "api."],
   ["agent.enterprise-agentic-saas", "agent."],
+  ["agent-storage.enterprise-agentic-saas", "agent-storage."],
   ["mastra-studio.enterprise-agentic-saas", "mastra-studio."],
   ["db.enterprise-agentic-saas", "db."],
   ["mailpit.enterprise-agentic-saas", "mailpit."],
@@ -168,6 +169,9 @@ describe("Portless topology resolver", () => {
       EMULATE_BASE_URL: "https://stale-emulator.localhost",
       GITHUB_OAUTH_CALLBACK_URL:
         "https://api.stale.localhost/auth/oauth2/callback/github",
+      HOME: "/Users/example",
+      MASTRA_STORAGE_AUTH_TOKEN: "remote-agent-token",
+      MASTRA_STORAGE_URL: "libsql://remote-agent.example.test",
       TURSO_AUTH_TOKEN: "must-not-reach-local-turso",
     }
     const environment = createLocalTopologyEnvironment(
@@ -190,8 +194,12 @@ describe("Portless topology resolver", () => {
         "https://github.emulate.feature-auth.enterprise-agentic-saas.localhost:7443",
       GITHUB_OAUTH_CALLBACK_URL:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/oauth2/callback/github",
+      MASTRA_STORAGE_AUTH_TOKEN: "local-agent-storage",
+      MASTRA_STORAGE_URL:
+        "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
       NEXT_PUBLIC_API_BASE_URL:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443",
+      NODE_EXTRA_CA_CERTS: "/Users/example/.portless/ca.pem",
       TRUSTED_ORIGINS:
         "https://feature-auth.enterprise-agentic-saas.localhost:7443",
       TURSO_DATABASE_URL:
@@ -200,7 +208,22 @@ describe("Portless topology resolver", () => {
     expect(environment).not.toHaveProperty("EMULATE_BASE_URL")
     expect(environment).not.toHaveProperty("TURSO_AUTH_TOKEN")
     expect(source.EMULATE_BASE_URL).toBe("https://stale-emulator.localhost")
+    expect(source.MASTRA_STORAGE_AUTH_TOKEN).toBe("remote-agent-token")
+    expect(source.MASTRA_STORAGE_URL).toBe("libsql://remote-agent.example.test")
+    expect(source).not.toHaveProperty("NODE_EXTRA_CA_CERTS")
     expect(source.TURSO_AUTH_TOKEN).toBe("must-not-reach-local-turso")
+  })
+
+  it("preserves an explicit Node certificate bundle", () => {
+    expect(
+      createLocalTopologyEnvironment(
+        "https://enterprise-agentic-saas.localhost",
+        {
+          HOME: "/Users/example",
+          NODE_EXTRA_CA_CERTS: "/tmp/custom-ca.pem",
+        }
+      )
+    ).toMatchObject({ NODE_EXTRA_CA_CERTS: "/tmp/custom-ca.pem" })
   })
 })
 
@@ -254,6 +277,9 @@ describe("Portless topology CLI", () => {
         "  arguments: process.argv.slice(2),",
         "  callbackUrl: process.env.GITHUB_OAUTH_CALLBACK_URL,",
         "  emulateBaseUrl: process.env.EMULATE_BASE_URL ?? null,",
+        "  nodeExtraCaCerts: process.env.NODE_EXTRA_CA_CERTS,",
+        "  storageToken: process.env.MASTRA_STORAGE_AUTH_TOKEN,",
+        "  storageUrl: process.env.MASTRA_STORAGE_URL,",
         "  tursoToken: process.env.TURSO_AUTH_TOKEN ?? null,",
         "}))",
         "process.exit(17)",
@@ -269,6 +295,11 @@ describe("Portless topology CLI", () => {
         EMULATE_BASE_URL: "https://stale-emulator.localhost",
         GITHUB_OAUTH_CALLBACK_URL:
           "https://api.stale.localhost/auth/oauth2/callback/github",
+        HOME: stubDirectory,
+        MASTRA_STORAGE_AUTH_TOKEN: "remote-agent-token",
+        MASTRA_STORAGE_URL: "libsql://remote-agent.example.test",
+        NODE_EXTRA_CA_CERTS: undefined,
+        PORTLESS_CA_CERT: undefined,
         TURSO_AUTH_TOKEN: "must-not-reach-local-turso",
       }
     )
@@ -281,6 +312,10 @@ describe("Portless topology CLI", () => {
       callbackUrl:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/oauth2/callback/github",
       emulateBaseUrl: null,
+      nodeExtraCaCerts: `${stubDirectory}/.portless/ca.pem`,
+      storageToken: "local-agent-storage",
+      storageUrl:
+        "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
       tursoToken: null,
     })
   })

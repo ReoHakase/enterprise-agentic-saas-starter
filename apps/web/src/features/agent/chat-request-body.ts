@@ -152,42 +152,38 @@ const prepareClientToolContinuationBody = (
       part.type === "step-start" ? index : lastIndex,
     -1
   )
-  const clientToolParts = message.parts
+  const finalToolParts = message.parts
     .slice(lastStepStart + 1)
     .filter(isToolUIPart)
     .map((part) => ({ part, toolName: getToolName(part) }))
-    .filter((entry): entry is typeof entry & { toolName: ClientToolName } =>
-      isClientToolName(entry.toolName)
-    )
 
+  if (finalToolParts.some(({ part }) => part.state !== "output-available")) {
+    throw new Error("Agent client tool output is incomplete.")
+  }
   if (
-    clientToolParts.length === 0 ||
-    clientToolParts.length > 4 ||
-    new Set(clientToolParts.map(({ part }) => part.toolCallId)).size !==
-      clientToolParts.length
+    finalToolParts.length === 0 ||
+    finalToolParts.length > 4 ||
+    finalToolParts.some(
+      ({ part }) => Reflect.get(part, "providerExecuted") === true
+    ) ||
+    finalToolParts.some(({ toolName }) => !isClientToolName(toolName)) ||
+    new Set(finalToolParts.map(({ part }) => part.toolCallId)).size !==
+      finalToolParts.length
   ) {
     throw new Error("Invalid Agent client tool continuation.")
   }
 
-  const clientToolResults = clientToolParts.map(({ part, toolName }) => {
+  const clientToolResults = finalToolParts.map(({ part, toolName }) => {
+    if (!isClientToolName(toolName)) {
+      throw new Error("Invalid Agent client tool continuation.")
+    }
     if (part.state === "output-available") {
       return {
         toolCallId: v.parse(identifier, part.toolCallId),
         toolName,
         state: "output-available" as const,
+        input: part.input,
         output: parseClientToolOutput(toolName, part.output),
-      }
-    }
-    if (part.state === "output-error") {
-      const errorText = v.parse(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
-        part.errorText
-      )
-      return {
-        toolCallId: v.parse(identifier, part.toolCallId),
-        toolName,
-        state: "output-error" as const,
-        errorText,
       }
     }
     throw new Error("Agent client tool output is incomplete.")

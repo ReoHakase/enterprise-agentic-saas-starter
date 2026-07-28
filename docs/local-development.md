@@ -36,6 +36,9 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - Web Storybook: `https://storybook.enterprise-agentic-saas.localhost`
 - UI Storybook: `https://storybook.ui.enterprise-agentic-saas.localhost`
 - API: `https://api.enterprise-agentic-saas.localhost`
+- Agent Worker: `https://agent.enterprise-agentic-saas.localhost`
+- Agent storage: `https://agent-storage.enterprise-agentic-saas.localhost`
+- Mastra Studio: `https://mastra-studio.enterprise-agentic-saas.localhost`
 - DB: `https://db.enterprise-agentic-saas.localhost`
 - Mailpit inbox: `https://mailpit.enterprise-agentic-saas.localhost`
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
@@ -55,8 +58,9 @@ bun run portless-topology resolve api.enterprise-agentic-saas
 bun run portless-topology resolve storybook.ui.enterprise-agentic-saas
 ```
 
-CLIはWeb、API、DB、GitHub Emulateのoriginと認証Cookieのdomainを同じnamespaceから各processへ
-注入します。linked worktreeのCookie domainは`<branch>.enterprise-agentic-saas.localhost`です。
+CLIはWeb、API、DB、Agent storage、GitHub Emulateのoriginと認証Cookieのdomainを同じnamespaceから
+各processへ注入します。Agent WorkerとMastra Studioは同じworktreeのAgent storage URLとlocal tokenを
+受け取ります。linked worktreeのCookie domainは`<branch>.enterprise-agentic-saas.localhost`です。
 このdomainのCookieは同じnamespaceのStorybookやMailpit等にも送られるため、ローカル開発専用として
 扱います。API supervisorは同じworktreeで起動したMailpit wrapperのprivate sessionを読み、
 workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別worktreeの固定URLをlocal envへ
@@ -67,11 +71,13 @@ workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別workt
 `resolve`と`run`をnative Portlessへ置換し、`exec`が組み立てる`APP_BASE_URL`、
 `API_PUBLIC_URL`、`NEXT_PUBLIC_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、
 `TRUSTED_ORIGINS`、`CORS_ORIGIN`、`TURSO_DATABASE_URL`、`GITHUB_OAUTH_EMULATOR_URL`、
-`GITHUB_OAUTH_CALLBACK_URL`とstaleな`EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去を、
-Portlessに依存しない永続的なlocal environment経路へ移すか不要化します。main checkoutとlinked
-worktreeの実Portless smokeで全hostname、Cookie、callback、token除去、child argv、終了コード、
-`SIGINT`/`SIGTERM`転送のparityを確認した後に限り、package、全consumerのdevelopment dependency、
-品質設定、文書、lockfile entryを同じ変更から削除します。
+`GITHUB_OAUTH_CALLBACK_URL`、`MASTRA_STORAGE_URL`、`MASTRA_STORAGE_AUTH_TOKEN`とstaleな
+`EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去を、Portlessに依存しない永続的なlocal environment経路へ
+移すか不要化します。非proxy commandが使う`NODE_EXTRA_CA_CERTS`も同じ経路へ移します。main
+checkoutとlinked worktreeの実Portless smokeで全hostname、Cookie、callback、Agent storage、
+Portless CA、token除去、child argv、終了コード、`SIGINT`/`SIGTERM`転送のparityを確認した後に限り、
+package、全consumerのdevelopment dependency、品質設定、文書、lockfile entryを同じ変更から
+削除します。
 
 `.env*` と `.dev.vars` の実値はcommitしません。共有するkeyだけを `.env.example` / `.dev.vars.example` に置きます。
 
@@ -138,7 +144,13 @@ Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast R
 
 Wranglerを既定経路にすることで、Elysia routeを編集しながら`FILES` R2、`IMAGES`、Workers Cache、`EMAIL` bindingを同じWorker runtimeで利用できます。通常のapplication emailはdevelopment providerのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdはPortlessの開発CAを信頼しないため、browserはPortless HTTPS、WorkerからMailpitへの送信だけはprivate sessionで渡すdirect loopback HTTPに分けます。API supervisorはsessionを読み、Mailpit `/api/v1/info` のreadinessを確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけlocal `EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
 
-APIはMailpitとDBのreadinessを扱う`src/dev.ts` supervisor、Agentは共有wrapperから`wrangler dev`を起動します。どちらもPortlessの`PORT`をHTTP listenerへ使い、inspectorは`--inspector-port 0`でOSに空きportを割り当てさせるため、複数Workerやlinked worktreeを同時起動してもWrangler既定の`9229`を奪い合いません。固定したDevTools endpointが必要な単独起動だけ、`WRANGLER_INSPECTOR_PORT=9234 bun run --cwd apps/agent dev`のように上書きできます。
+APIはMailpitとDBのreadinessを扱う`src/dev.ts` supervisor、Agentは
+`apps/agent/scripts/wrangler-portless.ts`から`wrangler dev`を起動します。Agentのlauncherは
+worktree別の`MASTRA_STORAGE_URL`とlocal tokenだけをWranglerへ明示注入し、shell全体の環境変数を
+Workerへ渡しません。どちらもPortlessの`PORT`をHTTP listenerへ使い、inspectorは
+`--inspector-port 0`でOSに空きportを割り当てさせるため、複数Workerやlinked worktreeを同時起動しても
+Wrangler既定の`9229`を奪い合いません。固定したDevTools endpointが必要な単独起動だけ、
+`WRANGLER_INSPECTOR_PORT=9234 bun run --cwd apps/agent dev`のように上書きできます。
 
 既存DBへmigrationだけを適用する場合はreset不要です。local dataとR2 stateを作り直す場合だけ、全dev serverを停止して次を実行します。
 
@@ -252,7 +264,7 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 ## よくある失敗
 
 - `turso dev` が起動しない: Turso CLIだけでなく `sqld` が `PATH` にあるか確認する。
-- Wranglerがinspector port競合で起動しない: APIが`src/dev.ts` supervisor、Agentが`../../scripts/wrangler-dev-portless.sh`を使っていることを確認する。通常は`WRANGLER_INSPECTOR_PORT`を設定せずOS割り当てにし、固定値を複数processで共有しない。
+- Wranglerがinspector port競合で起動しない: APIが`src/dev.ts` supervisor、Agentが`apps/agent/scripts/wrangler-portless.ts`を使っていることを確認する。通常は`WRANGLER_INSPECTOR_PORT`を設定せずOS割り当てにし、固定値を複数processで共有しない。
 - `.localhost` HTTPSで証明書エラー: `~/.portless/ca.pem` と `NODE_EXTRA_CA_CERTS` を確認する。
 - envが読まれない: Bunはcommandのcwdにある `.env*` を読む。rootへsecretを集約しない。
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。

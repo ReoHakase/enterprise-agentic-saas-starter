@@ -1,6 +1,5 @@
 import type {
   AgentActionExecutionResult,
-  AgentCanonicalMessage,
   AgentConnection,
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
@@ -10,11 +9,12 @@ import type {
   AgentIssueDetail,
   AgentIssueLabel,
   AgentMember,
+  AgentMemoryCommitSettlement,
+  AgentMemoryCommitSettlementInput,
   AgentOrganizationContext,
   AgentRunGrant,
   AgentRunResult,
   AgentSearchIssuesInput,
-  AgentThreadRenameResult,
   AgentUpdateIssueActionInput,
   AgentUsageRecordInput,
   AgentUsageRecordResult,
@@ -25,10 +25,9 @@ import type {
 type AgentGrantInput = { grant: string }
 
 export type AgentInternalPorts = {
-  appendRunMessages(input: {
-    grant: string
-    messages: AgentCanonicalMessage[]
-  }): Promise<{ appended: number }>
+  settleMemoryCommit(
+    input: AgentMemoryCommitSettlementInput
+  ): Promise<AgentMemoryCommitSettlement>
   cancelRun(input: AgentGrantInput): Promise<AgentRunResult>
   consumeConnectionTicket(input: {
     threadId: string
@@ -76,10 +75,6 @@ export type AgentInternalPorts = {
   recordUsage(
     input: AgentUsageRecordInput & AgentGrantInput
   ): Promise<AgentUsageRecordResult>
-  renameThread(input: {
-    grant: string
-    title: string
-  }): Promise<AgentThreadRenameResult>
   reserveWebSearch(input: {
     grant: string
     operationId: string

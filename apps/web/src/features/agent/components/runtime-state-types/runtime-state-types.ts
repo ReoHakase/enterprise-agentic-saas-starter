@@ -32,8 +32,9 @@ export const draftScopeKey = (userId: string, organizationId: string) =>
   JSON.stringify([userId, organizationId])
 
 export type AgentSessionLifecycle = {
+  abortTransport: () => void
   close: () => void
-  stop: () => void
+  stop: () => Promise<boolean>
   isBusy: () => boolean
   hasPendingApprovals: () => boolean
 }

@@ -2,7 +2,7 @@
 title: 製品Agentのtool、Web検索、approval
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-28
 ---
 
 # Tool、Web検索、approval
@@ -66,9 +66,26 @@ queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本�
 200件、現在のスレッドのメッセージ200件、合計1,000,000文字までです。いずれかの上限を
 超えた場合は一部だけを検査して続行せず、検索を拒否します。
 
-guard成功後、operation IDでWeb検索quotaを冪等予約してから、tenant contextやrun grantを持たない検索専用Agentを呼びます。検索専用AgentはQwen reasoningを無効化し、OpenRouterのExa server toolを最大3 result・60秒で呼びます。製品Agent本体はreasoning mediumを維持します。結果は本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。Webはtool outputのsourceを同じ公開URL境界で再検証してリンク表示し、モデル本文がURLを再掲するかには依存しません。Web上のinstructionをIssue toolのinstructionへ昇格させません。
+guard成功後、operation IDでWeb検索quotaを冪等予約し、`web_search`のprovider adapterから
+OpenRouterを直接呼びます。別の検索Agentは作りません。外側の空白だけを除いた検証済みqueryを
+2〜200文字のままJSON promptへ渡し、provider内の検索engineが使う内部query文字列は保証対象外と
+します。reasoningは無効、`maxRetries: 0`、timeoutは25秒です。OpenRouterへは
+`qwen/qwen3.6-flash`と`web` pluginを持つ1 requestだけを送り、engineはExa、`max_results`は3です。結果は
+本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。
+Webはtool outputのsourceを同じ公開URL境界で再検証してリンク表示し、モデル本文がURLを再掲するか
+には依存しません。Web上のinstructionをIssue toolのinstructionへ昇格させません。
 
-Web検索後も現在threadの`Ask always | Full access`を維持します。検索結果やqueryが権限を拡張することはなく、Full accessでもcanonical payload、revision、tenant認可、idempotency、attachment claim、auditを省略しません。
+Phase 2のlive compatibility確認では、同じmodelに対するOpenRouter beta server tool requestが
+HTTP 500で完了しなかったため、非推奨予定の`web` pluginを一時的な互換経路として使います。
+provider SDKまたはroute更新時はserver toolを再検証し、同じexact query、source projection、
+timeout、G5 3/3を満たした時点で置き換えます。
+
+Web検索後もthread設定の`Ask always | Full access`自体は維持します。ただしopen-world検索を使った現在runは単調にtaintされ、そのrun内の後続Issue writeは`Full access`でも必ずmanual pendingへ落とします。taintはAPIの`agent_runs.web_search_used_at`が正本で、model出力やtool inputでは解除できません。次のclean runはthread設定を再評価できます。どちらの場合もcanonical payload、revision、tenant認可、idempotency、attachment claim、auditを省略しません。
+
+`add_issue_attachments`は1回4件まで、`remove_issue_attachments`は1回20件までです。どちらも
+current Issue update permissionと`expectedRevision`を必須にし、removeはtyped owner/file rowを
+hard deleteしてphysical objectを`deleting`へ遷移します。existing Issueのwriteは先に
+`get_issue`でcurrent revisionを取得し、推測値を渡しません。
 
 ## Thread permission
 
@@ -79,6 +96,9 @@ DB triggerと既存action provenanceの整合用に短命なlegacy policy rowを
 ## Approval lifecycle
 
 Issue create/update/deleteは実行前に`agent_actions`へcanonical payload、API生成preview、session/user/org/thread/run、target revision、expiry、idempotency identityを保存します。model文面をpreviewに使いません。
+
+ユーザーがwriteを依頼した時点でAgentはprepare用write toolまで呼びます。Ask alwaysでもtool呼出し前に
+会話上の確認を挟まず、toolがbusiness mutationを実行せずpending previewを返して初めてYes/Noを待ちます。
 
 UIはtool outputの`actionId`からcookie認証済みpublic APIでpreviewを取得し、tool part位置にYes/No cardを表示します。
 

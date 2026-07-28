@@ -22,10 +22,10 @@ import {
   buildAgentConversationGroups,
 } from "../agent-conversation-viewport/agent-conversation-viewport"
 import { AgentMessage } from "../agent-message/agent-message"
-import { AgentMeters } from "../agent-meters/agent-meters"
 import { AgentPolicyControl } from "../agent-policy-control/agent-policy-control"
 import { AgentSamplePrompts } from "../agent-sample-prompts/agent-sample-prompts"
 import { AgentStagedAsset } from "../agent-staged-asset/agent-staged-asset"
+import { AgentTurnStatus } from "../agent-turn-status/agent-turn-status"
 
 const attachmentButtonRender = <span />
 
@@ -163,11 +163,13 @@ const AgentChatSession = ({
           presentation === "shell" ? "px-3 pb-3" : "pb-4"
         )}
       >
-        {chat.error ? (
-          <p role="alert" className="text-sm text-destructive">
-            Agent response failed. You can retry the same draft safely.
-          </p>
-        ) : null}
+        <AgentTurnStatus
+          busy={session.busy}
+          cancelState={session.cancelState}
+          error={chat.error}
+          transientStatus={session.transientStatus}
+          turnStopped={session.turnStopped}
+        />
         <AgentConversationViewport
           enabled={presentation === "shell"}
           turns={turnPreviews}
@@ -193,14 +195,6 @@ const AgentChatSession = ({
               ))}
             </div>
           ))}
-          {session.transientStatus && session.busy ? (
-            <div
-              className="flex w-full items-center gap-2 py-2 text-sm text-muted-foreground"
-              role="status"
-            >
-              <Spinner /> {session.transientStatus}
-            </div>
-          ) : null}
         </AgentConversationViewport>
 
         <form
@@ -269,18 +263,20 @@ const AgentChatSession = ({
               threadId={thread.id}
               disabled={disabled || runtime.frozen}
             />
-            <AgentMeters
-              context={session.context}
-              streamedMessages={chat.messages}
-            />
             <div className="ml-auto flex shrink-0 gap-2">
               {session.busy ? (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={session.stopCurrentTurn}
+                  disabled={session.cancelState === "canceling"}
                 >
-                  <StopCircleIcon data-icon="inline-start" /> Stop
+                  <StopCircleIcon data-icon="inline-start" />{" "}
+                  {session.cancelState === "canceling"
+                    ? "Stopping…"
+                    : session.cancelState === "failed"
+                      ? "Retry stop"
+                      : "Stop"}
                 </Button>
               ) : null}
               <Button

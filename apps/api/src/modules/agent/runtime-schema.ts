@@ -5,12 +5,7 @@ import {
 import * as v from "valibot"
 
 import { FILE_LIST_DEFAULT_LIMIT, FILE_LIST_MAX_LIMIT } from "../files/public"
-import {
-  agentCanonicalMessageModel,
-  boundedSearchModel,
-  identifierModel,
-  limitModel,
-} from "./model"
+import { boundedSearchModel, identifierModel, limitModel } from "./model"
 
 export const agentContextRevocationModel = v.object({
   contextEpoch: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -51,11 +46,6 @@ export const startAgentRunInputModel = v.strictObject({
 
 export const agentGrantInputModel = v.strictObject({
   grant: agentTokenModel,
-})
-
-export const renameAgentThreadInputModel = v.strictObject({
-  grant: agentTokenModel,
-  title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
 })
 
 export const reserveAgentWebSearchInputModel = v.strictObject({
@@ -132,16 +122,6 @@ export const getAgentIssueAttachmentImageInputModel = v.strictObject({
 export const finishAgentRunInputModel = v.strictObject({
   grant: agentTokenModel,
   outcome: v.picklist(["completed", "failed"]),
-})
-
-export const appendAgentRunMessagesInputModel = v.strictObject({
-  grant: agentTokenModel,
-  messages: v.pipe(
-    v.array(agentCanonicalMessageModel),
-    v.minLength(1),
-    v.maxLength(4),
-    v.everyItem((message) => message.role === "assistant")
-  ),
 })
 
 export const searchAgentMembersInputModel = v.strictObject({

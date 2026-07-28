@@ -26,15 +26,17 @@ CLIは`portless get enterprise-agentic-saas`だけからnamespaceを取得し、
 1. `resolve`と`run`をnative Portless commandへ置換し、main checkout、linked worktree、
    複数labelのservice prefixでhostname parityを確認する。
 2. `exec`が担うrepository固有のlocal environment組み立てを、Portlessに依存しない永続的な経路へ
-   移すか、各値が不要になったことを示す。対象はWeb/API/Auth/CORS/DB/GitHub Emulateのorigin、
-   Cookie domain、GitHub callback、およびstaleな`EMULATE_BASE_URL`と`TURSO_AUTH_TOKEN`の除去を含む。
+   移すか、各値が不要になったことを示す。対象はWeb/API/Auth/CORS/DB/GitHub Emulate/Agent storageの
+   origin、Cookie domain、GitHub callback、local Agent storage token、およびstaleな
+   `EMULATE_BASE_URL`と`TURSO_AUTH_TOKEN`の除去、Portless CAの読込を含む。
 3. native経路でchildのargv、終了コード、`SIGINT`、`SIGTERM`の転送が同等であることを確認する。
 
 削除時の実Portless smokeは全hostnameだけでなく、`APP_BASE_URL`、`API_PUBLIC_URL`、
 `NEXT_PUBLIC_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、
 `CORS_ORIGIN`、`TURSO_DATABASE_URL`、`GITHUB_OAUTH_EMULATOR_URL`、
-`GITHUB_OAUTH_CALLBACK_URL`、stale token/environment除去、child exit/signal parityをmain checkoutと
-linked worktreeの両方で検証します。すべて通った時点で次を同じ変更から削除します。
+`GITHUB_OAUTH_CALLBACK_URL`、`MASTRA_STORAGE_URL`、`MASTRA_STORAGE_AUTH_TOKEN`、stale
+token/environment除去、`NODE_EXTRA_CA_CERTS`、child exit/signal parityをmain checkoutとlinked
+worktreeの両方で検証します。すべて通った時点で次を同じ変更から削除します。
 
 - このworkspace
 - rootと全consumerの`@enterprise-agentic-saas/portless-topology` development dependency

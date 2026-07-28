@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   parseAgentApprovalPolicy,
-  parseAgentMessages,
+  parseAgentMessagePage,
   pendingActionToolOutputSchema,
 } from "./schema"
 
@@ -42,30 +42,35 @@ describe("agent public schemas", () => {
   })
 
   it("restores metadata-only Issue image tool traces after reload", () => {
-    const messages = parseAgentMessages([
-      {
-        id: "assistant_1",
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-read_issue_attachment_image",
-            toolCallId: "call_1",
-            state: "output-available",
-            input: { issueId: "issue_1", fileId: "file_1" },
-            output: {
-              issueId: "issue_1",
-              fileId: "file_1",
-              contentType: "image/webp",
-              sizeBytes: 3,
+    const { messages } = parseAgentMessagePage({
+      messages: [
+        {
+          id: "assistant_1",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-read_issue_attachment_image",
+              toolCallId: "call_1",
+              state: "output-available",
+              input: { issueId: "issue_1", fileId: "file_1" },
+              output: {
+                issueId: "issue_1",
+                fileId: "file_1",
+                contentType: "image/webp",
+                sizeBytes: 3,
+              },
             },
-          },
-        ],
-      },
-    ])
+          ],
+        },
+      ],
+      total: 1,
+      page: 0,
+      perPage: 40,
+      hasMore: false,
+    })
 
     expect(messages[0]?.parts[0]).toMatchObject({
-      type: "dynamic-tool",
-      toolName: "read_issue_attachment_image",
+      type: "tool-read_issue_attachment_image",
       state: "output-available",
       output: { contentType: "image/webp", sizeBytes: 3 },
     })

@@ -53,7 +53,15 @@ export const storybookApiHandlers = [
       latestSummaryEstimatedTokens: null,
     })
   ),
-  http.get("*/agent/threads/:threadId/messages", () => HttpResponse.json([])),
+  http.get("*/agent/threads/:threadId/messages", () =>
+    HttpResponse.json({
+      messages: [],
+      total: 0,
+      page: 0,
+      perPage: 100,
+      hasMore: false,
+    })
+  ),
   http.get("*/agent/threads/:threadId/permission", () =>
     HttpResponse.json({
       mode: "ask_always",

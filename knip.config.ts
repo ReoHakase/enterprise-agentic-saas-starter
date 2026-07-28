@@ -42,6 +42,8 @@ const config: KnipConfig = {
         // Remove when the command no longer needs child-process `$PORT` expansion.
         "mastra",
       ],
+      // Turso CLI is supplied by the Nix development environment, not npm.
+      ignoreBinaries: ["turso"],
       wrangler: {
         config: ["wrangler*.jsonc"],
       },
@@ -106,6 +108,12 @@ const config: KnipConfig = {
       },
       storybook: true,
     },
+    "packages/agent-contracts": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+    },
+    "packages/agent-tools": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+    },
     "packages/auth": {
       project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
     },
@@ -113,6 +121,7 @@ const config: KnipConfig = {
       entry: [
         "drizzle.config.ts",
         "scripts/*.ts",
+        "src/agent-rollout-drain.ts!",
         "src/file-activity-rollout.ts!",
       ],
       project: [

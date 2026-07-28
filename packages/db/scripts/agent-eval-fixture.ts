@@ -5,10 +5,11 @@ import { drizzle } from "drizzle-orm/libsql"
 import { assertLocalDatabaseUrl } from "../src/development/local-database"
 import {
   agentActions,
-  agentMessages,
   agentRuns,
+  agentThreads,
   agentUsageEvents,
   auditLogs,
+  files,
   issues,
   member,
   organization,
@@ -54,6 +55,8 @@ const createFixtureIdentity = async () => {
   const namespace = requiredEnvironment("AGENT_EVAL_NAMESPACE")
   const hash = await hashNamespace(namespace)
   const suffix = hash.slice(0, 24)
+  const organizationId = `eval_org_${suffix}`
+  const userId = `eval_user_${suffix}`
   return {
     decoyIssueId: `eval_decoy_issue_${suffix}`,
     decoyOrganizationId: `eval_decoy_org_${suffix}`,
@@ -61,10 +64,15 @@ const createFixtureIdentity = async () => {
     decoyUserId: `eval_decoy_user_${suffix}`,
     issueId: `eval_issue_${suffix}`,
     memberId: `eval_member_${suffix}`,
-    organizationId: `eval_org_${suffix}`,
+    memoryResourceId: `resource_${await hashNamespace(
+      `${organizationId}\u0000${userId}`
+    )}`,
+    organizationId,
     sessionId: `eval_session_${suffix}`,
+    sentinel: `PRIVATE_OTHER_THREAD_SENTINEL_${suffix}`,
+    sentinelThreadId: `eval_sentinel_thread_${suffix}`,
     slug: `eval-${hash.slice(0, 16)}`,
-    userId: `eval_user_${suffix}`,
+    userId,
   }
 }
 
@@ -174,6 +182,28 @@ const seed = async () => {
           updatedAt: now,
         },
       ])
+      await tx.insert(agentThreads).values({
+        id: identity.sentinelThreadId,
+        organizationId: identity.organizationId,
+        ownerUserId: identity.userId,
+        status: "active",
+        createdAt: now,
+      })
+      const sentinelRunId = `eval_sentinel_run_${identity.sentinelThreadId.slice(-24)}`
+      await tx.insert(agentRuns).values({
+        id: sentinelRunId,
+        organizationId: identity.organizationId,
+        threadId: identity.sentinelThreadId,
+        rootRunId: sentinelRunId,
+        sessionId: identity.sessionId,
+        userId: identity.userId,
+        contextEpoch: 1,
+        clientMessageId: identity.sentinel,
+        status: "completed",
+        startedAt: now,
+        expiresAt: new Date(now.getTime() + 4 * 60_000),
+        finishedAt: now,
+      })
     })
     console.log(JSON.stringify(identity))
   } finally {
@@ -189,7 +219,7 @@ const readL6Usage = async () => {
   ]
   const { client, database } = connect()
   try {
-    const [actionRows, auditRows, issueRows, messageRows, runRows, usageRows] =
+    const [actionRows, auditRows, fileRows, issueRows, runRows, usageRows] =
       await Promise.all([
         database
           .select({
@@ -226,6 +256,14 @@ const readL6Usage = async () => {
           .where(inArray(auditLogs.organizationId, organizationIds)),
         database
           .select({
+            id: files.id,
+            organizationId: files.organizationId,
+            status: files.status,
+          })
+          .from(files)
+          .where(inArray(files.organizationId, organizationIds)),
+        database
+          .select({
             createdAt: issues.createdAt,
             id: issues.id,
             number: issues.number,
@@ -238,13 +276,6 @@ const readL6Usage = async () => {
           .where(inArray(issues.organizationId, organizationIds)),
         database
           .select({
-            organizationId: agentMessages.organizationId,
-            threadId: agentMessages.threadId,
-          })
-          .from(agentMessages)
-          .where(inArray(agentMessages.organizationId, organizationIds)),
-        database
-          .select({
             attempt: agentRuns.attempt,
             contextEpoch: agentRuns.contextEpoch,
             id: agentRuns.id,
@@ -255,6 +286,7 @@ const readL6Usage = async () => {
             status: agentRuns.status,
             threadId: agentRuns.threadId,
             toolCount: agentRuns.toolCount,
+            webSearchUsedAt: agentRuns.webSearchUsedAt,
             writeCount: agentRuns.writeCount,
           })
           .from(agentRuns)
@@ -265,6 +297,7 @@ const readL6Usage = async () => {
             cacheWriteTokenCount: agentUsageEvents.cacheWriteTokenCount,
             inputNoCacheTokenCount: agentUsageEvents.inputNoCacheTokenCount,
             inputTokenCount: agentUsageEvents.inputTokenCount,
+            imageInputCount: agentUsageEvents.imageInputCount,
             isEstimate: agentUsageEvents.isEstimate,
             model: agentUsageEvents.model,
             organizationId: agentUsageEvents.organizationId,
@@ -309,6 +342,7 @@ const readL6Usage = async () => {
           organizationId: row.organizationId,
           targetId: row.targetId,
         })),
+        files: fileRows,
         issues: issueRows.map((row) => ({
           createdAt: row.createdAt.getTime(),
           id: row.id,
@@ -319,37 +353,26 @@ const readL6Usage = async () => {
           title: row.title,
         })),
         issueTitles: issueRows.map((row) => row.title),
-        messages: messageRows,
-        runs: runRows,
+        runs: runRows.map((row) => ({
+          attempt: row.attempt,
+          contextEpoch: row.contextEpoch,
+          id: row.id,
+          modelProfileId: row.modelProfileId,
+          organizationId: row.organizationId,
+          rootRunId: row.rootRunId,
+          scope: row.scope,
+          status: row.status,
+          threadId: row.threadId,
+          toolCount: row.toolCount,
+          webSearchUsedAt: row.webSearchUsedAt?.getTime() ?? null,
+          writeCount: row.writeCount,
+        })),
         usage: usageRows,
       })
     )
   } finally {
     client.close()
   }
-}
-
-const messageCounters = (messages: Array<Record<string, unknown>>) => {
-  let stepStarts = 0
-  const toolCallIds = new Set<string>()
-  for (const content of messages) {
-    const parts = Reflect.get(content, "parts")
-    if (!Array.isArray(parts)) continue
-    for (const part of parts) {
-      if (!part || typeof part !== "object" || Array.isArray(part)) continue
-      const type = Reflect.get(part, "type")
-      if (type === "step-start") stepStarts += 1
-      const toolCallId = Reflect.get(part, "toolCallId")
-      if (
-        typeof type === "string" &&
-        type.startsWith("tool-") &&
-        typeof toolCallId === "string"
-      ) {
-        toolCallIds.add(toolCallId)
-      }
-    }
-  }
-  return { stepStarts, toolCalls: toolCallIds.size }
 }
 
 const sum = (values: readonly number[]) =>
@@ -359,7 +382,7 @@ const readL7Observation = async () => {
   const organizationId = requiredIdentifier(process.argv[3], "organization id")
   const { client, database } = connect()
   try {
-    const [usageRows, messageRows, runRows] = await Promise.all([
+    const [usageRows, runRows] = await Promise.all([
       database
         .select({
           inputTokenCount: agentUsageEvents.inputTokenCount,
@@ -372,15 +395,13 @@ const readL7Observation = async () => {
         .from(agentUsageEvents)
         .where(eq(agentUsageEvents.organizationId, organizationId)),
       database
-        .select({ content: agentMessages.content })
-        .from(agentMessages)
-        .where(eq(agentMessages.organizationId, organizationId)),
-      database
-        .select({ status: agentRuns.status })
+        .select({
+          status: agentRuns.status,
+          toolCount: agentRuns.toolCount,
+        })
         .from(agentRuns)
         .where(eq(agentRuns.organizationId, organizationId)),
     ])
-    const counters = messageCounters(messageRows.map((row) => row.content))
     const titleUsageEvents = usageRows.filter((row) =>
       row.runEventId?.startsWith("title_")
     ).length
@@ -395,13 +416,12 @@ const readL7Observation = async () => {
         estimatedUsageEvents: usageRows.filter((row) => row.isEstimate).length,
         inputTokens: sum(usageRows.map((row) => row.inputTokenCount)),
         modelIds: [...new Set(usageRows.map((row) => row.model))].toSorted(),
-        modelSteps:
-          Math.max(counters.stepStarts, mainUsageEvents) + titleUsageEvents,
+        modelSteps: mainUsageEvents + titleUsageEvents,
         outputTokens: sum(usageRows.map((row) => row.outputTokenCount)),
         providerCostMicros:
           observedCosts.length === usageRows.length ? sum(observedCosts) : null,
         runCount: runRows.length,
-        toolCalls: counters.toolCalls,
+        toolCalls: sum(runRows.map((row) => row.toolCount)),
         usageEvents: usageRows.length,
       })
     )

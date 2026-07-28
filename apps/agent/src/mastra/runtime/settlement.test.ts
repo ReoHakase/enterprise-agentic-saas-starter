@@ -36,10 +36,11 @@ describe("createRunSettlement", () => {
     const test = harness()
     const settlement = createRunSettlement(test.api, RUN_GRANT)
 
-    await settlement[method]()
+    const first = await settlement[method]()
     await settlement[method]()
 
     expect(test.calls).toEqual([`${expected}:${RUN_GRANT}`])
+    expect(first).toBe(method === "complete" ? "completed" : undefined)
   })
 
   it("swallows internal API details so grant and provider errors cannot escape", async () => {
@@ -56,7 +57,7 @@ describe("createRunSettlement", () => {
     const settlement = createRunSettlement(test.api, RUN_GRANT)
 
     settlement.holdForApproval()
-    await settlement.complete()
+    await expect(settlement.complete()).resolves.toBeNull()
     await settlement.fail()
     await settlement.cancel()
 

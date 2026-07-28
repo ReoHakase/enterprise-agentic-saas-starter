@@ -1,19 +1,14 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentConnectionTickets,
-  agentMessages,
   agentSessionContexts,
-  agentThreadContextSummaries,
   organization,
   session,
   user,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, desc, eq, gt, isNull } from "drizzle-orm"
+import { and, eq, gt, isNull } from "drizzle-orm"
 
-import type {
-  AgentCanonicalMessage,
-  AgentConnection,
-} from "../../../agent-client"
+import type { AgentConnection } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
 import { revokeAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken, hashAgentToken } from "../crypto"
@@ -23,106 +18,7 @@ import {
   requireLiveSession,
   requireOwnedThread,
 } from "./auth-repository"
-import {
-  listCanonicalMessagesInTransaction,
-  preserveAgentError,
-  toOrganizationContext,
-  UI_HISTORY_CHARACTER_LIMIT,
-  UI_HISTORY_MESSAGE_LIMIT,
-} from "./repository-support"
-
-export const listAgentMessagesForSession = async (
-  db: Db,
-  input: { sessionId: string; threadId: string; userId: string; now?: Date }
-): Promise<AgentCanonicalMessage[]> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const thread = await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-      })
-      return listCanonicalMessagesInTransaction(tx, {
-        organizationId: current.activeOrganizationId,
-        threadId: thread.id,
-        messageLimit: UI_HISTORY_MESSAGE_LIMIT,
-        characterLimit: UI_HISTORY_CHARACTER_LIMIT,
-      })
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "listAgentMessagesForSession")
-  }
-}
-
-export const getAgentThreadContextForSession = async (
-  db: Db,
-  input: { sessionId: string; threadId: string; userId: string; now?: Date }
-) => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const thread = await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-        requireActive: false,
-      })
-      const [messageRows, summaryRows] = await Promise.all([
-        tx
-          .select({ content: agentMessages.content })
-          .from(agentMessages)
-          .where(
-            and(
-              eq(agentMessages.organizationId, thread.organizationId),
-              eq(agentMessages.threadId, thread.id)
-            )
-          ),
-        tx
-          .select({
-            throughSequence: agentThreadContextSummaries.throughSequence,
-            estimatedTokenCount:
-              agentThreadContextSummaries.estimatedTokenCount,
-          })
-          .from(agentThreadContextSummaries)
-          .where(
-            and(
-              eq(
-                agentThreadContextSummaries.organizationId,
-                thread.organizationId
-              ),
-              eq(agentThreadContextSummaries.threadId, thread.id)
-            )
-          )
-          .orderBy(
-            desc(agentThreadContextSummaries.throughSequence),
-            desc(agentThreadContextSummaries.createdAt)
-          )
-          .limit(1),
-      ])
-      const summary = summaryRows[0]
-      return {
-        threadId: thread.id,
-        messageCount: messageRows.length,
-        estimatedHistoryTokens: Math.ceil(
-          messageRows.reduce(
-            (characters, message) =>
-              characters + JSON.stringify(message.content).length,
-            0
-          ) / 4
-        ),
-        latestSummaryThroughSequence: summary?.throughSequence ?? null,
-        latestSummaryEstimatedTokens: summary?.estimatedTokenCount ?? null,
-      }
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "getAgentThreadContextForSession")
-  }
-}
+import { preserveAgentError, toOrganizationContext } from "./repository-support"
 
 export const revokeCurrentAgentContext = async (
   db: Db,
@@ -217,6 +113,7 @@ export const consumeAgentConnectionTicket = async (
         sessionId: ticket.sessionId,
         userId: ticket.userId,
         contextEpoch: ticket.contextEpoch,
+        webSearchQueryHash: ticket.webSearchQueryHash,
         now,
       })
       const userRows = await tx
@@ -240,9 +137,12 @@ export const consumeAgentConnectionTicket = async (
       return {
         grant: grantCredential.token,
         expiresAt: grantExpiresAt.toISOString(),
+        memoryResourceId: `resource_${(
+          await hashAgentToken(`${ticket.organizationId}\u0000${ticket.userId}`)
+        ).slice(0, 96)}`,
         user: account,
         organization: toOrganizationContext({ ...activeOrganization, role }),
-        thread: { id: thread.id, title: thread.title },
+        thread: { id: thread.id, title: "New conversation" },
       }
     })
   } catch (cause) {

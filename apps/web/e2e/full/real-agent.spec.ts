@@ -40,8 +40,12 @@ const readPersistedToolStates = async (
     `${apiOrigin}/agent/threads/${encodeURIComponent(threadId)}/messages`
   )
   if (!response.ok()) return []
-  const messages: unknown = await response.json()
-  if (!Array.isArray(messages)) return []
+  const body: unknown = await response.json()
+  const messages = Array.isArray(body)
+    ? body
+    : isRecord(body) && Array.isArray(body.messages)
+      ? body.messages
+      : []
   return messages.flatMap((message) => {
     if (!isRecord(message) || !Array.isArray(message.parts)) return []
     return message.parts.flatMap((part) =>
@@ -112,6 +116,15 @@ const createSeedIssue = async (
     },
   })
   expect(response.status()).toBe(201)
+  const issue: unknown = await response.json()
+  if (
+    !isRecord(issue) ||
+    typeof issue.id !== "string" ||
+    typeof issue.number !== "number"
+  ) {
+    throw new Error("Agent canary seed Issue is invalid")
+  }
+  return { id: issue.id, number: issue.number }
 }
 
 const openCanaryHarness = async (
@@ -194,7 +207,7 @@ test("agent-canary-read-source", async ({ context, page }) => {
     )
     .toContain("web_search:output-available")
   await expect(
-    harness.agentShell.getByText(/web search · output available/u).last()
+    harness.agentShell.getByText(/web search · completed/u).last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
     assistantArticles(harness.agentShell)
@@ -210,7 +223,7 @@ test("agent-canary-read-source", async ({ context, page }) => {
   )
   await expect(
     harness.agentShell
-      .getByText(/(?:get issue|search issues) · output available/u)
+      .getByText(/(?:get issue|search issues) · completed/u)
       .last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
@@ -250,7 +263,7 @@ test("agent-canary-approved-image-write", async ({ context, page }) => {
     ].join("\n")
   )
   await expect(
-    harness.agentShell.getByText(/web search · output available/u).last()
+    harness.agentShell.getByText(/web search · completed/u).last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
     harness.agentShell.getByText("Approve Issue change?").last()
@@ -311,6 +324,106 @@ test("agent-canary-approved-image-write", async ({ context, page }) => {
   const serializedHistory = JSON.stringify(await historyResponse.json())
   expect(serializedHistory).toContain("data-agent-assets")
   expect(serializedHistory).toContain("attachmentAssetIds")
+  expect(serializedHistory).not.toContain("data:image")
+  expect(serializedHistory).not.toContain('"objectKey"')
+})
+
+test("agent-canary-existing-issue-image-followup @diagnostic-qwen", async ({
+  context,
+  page,
+}) => {
+  const harness = await openCanaryHarness(page, context.request)
+  const issueTitle = `Existing image target ${harness.runSuffix}`
+  const issue = await createSeedIssue(context.request, {
+    apiOrigin: harness.apiOrigin,
+    organizationId: harness.organizationId,
+    origin: new URL(page.url()).origin,
+    title: issueTitle,
+  })
+  const image = {
+    name: "followup.png",
+    mimeType: "image/png",
+    buffer: await readFile(
+      new URL(
+        "../../../../packages/db/fixtures/files/preview.png",
+        import.meta.url
+      )
+    ),
+  }
+  const stageImage = async () => {
+    await harness.agentShell.locator('input[type="file"]').setInputFiles(image)
+    await expect(
+      harness.agentShell.getByLabel("Images ready to send")
+    ).toBeVisible({ timeout: 30_000 })
+  }
+
+  await stageImage()
+  await sendMessage(
+    page,
+    harness.agentShell,
+    "Describe this image in one sentence. Do not create or update an Issue."
+  )
+  const threadId = new URL(page.url()).searchParams.get("agentThread")
+  expect(threadId).toBeTruthy()
+
+  await sendMessage(
+    page,
+    harness.agentShell,
+    `Attach the image from my previous message to Issue #${issue.number} titled "${issueTitle}". Call get_issue with the Issue number, then call add_issue_attachments in the same response using the server-authorized reusable asset ID and the returned exact Issue id and revision. Do not stop after the read.`
+  )
+  await expect(
+    harness.agentShell
+      .getByText(/(?:get issue|search issues) · completed/u)
+      .last()
+  ).toBeVisible({ timeout: 120_000 })
+  await expect(
+    harness.agentShell.getByText("Approve Issue change?").last()
+  ).toBeVisible({ timeout: 120_000 })
+  await expect(harness.agentShell).toContainText("followup.png")
+  await harness.agentShell.getByRole("button", { name: "Yes" }).last().click()
+
+  await expect
+    .poll(
+      async () => {
+        const response = await context.request.get(
+          `${harness.apiOrigin}/files/organizations/${harness.organizationId}/owners/issue/${issue.id}`
+        )
+        return response.ok() ? await response.text() : ""
+      },
+      { timeout: 60_000 }
+    )
+    .toContain("followup.png")
+
+  await expect
+    .poll(
+      () =>
+        readPersistedToolStates(
+          context.request,
+          harness.apiOrigin,
+          threadId ?? ""
+        ),
+      { timeout: 30_000 }
+    )
+    .toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^(?:get_issue|search_issues):output-available$/u
+        ),
+        expect.stringMatching(
+          /^add_issue_attachments:(?:approval-requested|output-available)$/u
+        ),
+      ])
+    )
+
+  const historyResponse = await context.request.get(
+    `${harness.apiOrigin}/agent/threads/${encodeURIComponent(threadId ?? "")}/messages`
+  )
+  expect(historyResponse.status()).toBe(200)
+  const serializedHistory = JSON.stringify(await historyResponse.json())
+  expect(serializedHistory).toContain("data-agent-assets")
+  expect(serializedHistory).toContain("tool-add_issue_attachments")
+  expect(serializedHistory).not.toContain("Structured content unavailable")
+  expect(serializedHistory).not.toContain("Tool state unavailable")
   expect(serializedHistory).not.toContain("data:image")
   expect(serializedHistory).not.toContain('"objectKey"')
 })

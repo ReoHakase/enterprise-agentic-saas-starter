@@ -44,16 +44,8 @@ const insertActionFixture = async (client: ReturnType<typeof createClient>) => {
       args: ["action-session", "action-user", 1, now],
     },
     {
-      sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at) values(?,?,?,?,?,?,?)",
-      args: [
-        "action-thread",
-        "action-org",
-        "action-user",
-        "Action thread",
-        "active",
-        now,
-        now,
-      ],
+      sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
+      args: ["action-thread", "action-org", "action-user", "active", now, null],
     },
     {
       sql: "insert into agent_runs(id,organization_id,thread_id,root_run_id,session_id,user_id,context_epoch,client_message_id,status,scope,started_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",

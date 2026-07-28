@@ -101,7 +101,9 @@ export const useAgentRuntimeSwitches = ({
   const completeThreadSwitch = useCallback(
     async (threadId: string, options: CompleteThreadSwitchOptions) => {
       const session = sessionsRef.current.get(threadId)
-      session?.stop()
+      if (session?.isBusy() && !(await session.stop())) {
+        throw new Error("Agent run cancellation did not settle")
+      }
       session?.close()
       sessionsRef.current.delete(threadId)
       stopThreadUploads(threadId)
@@ -157,12 +159,12 @@ export const useAgentRuntimeSwitches = ({
     formRegistry.setFrozen(false)
   }, [formRegistry, frozenRef, setFrozen])
   const abortOrganizationSwitch = useCallback(() => {
-    // Server-side context revocation must complete before this phase starts.
-    // Fence late old-context upload responses before aborting them so they
-    // cannot issue DELETE with a subsequently active session context.
+    // Server-side context revocation must complete before this phase starts
+    // and is authoritative for active runs. Fence late old-context upload
+    // responses without reissuing cancel under the newly active context.
     contextFenceRef.current += 1
     for (const session of sessionsRef.current.values()) {
-      session.stop()
+      session.abortTransport()
       session.close()
     }
     sessionsRef.current.clear()
@@ -203,7 +205,8 @@ export const useAgentRuntimeSwitches = ({
       contextFenceRef.current += 1
       for (const controller of uploadsRef.current.keys()) controller.abort()
       for (const session of sessionsRef.current.values()) {
-        session.stop()
+        // Pane close/unmount is not Stop. The run continues server-side and
+        // canonical history is recovered when the thread is opened again.
         session.close()
       }
       sessionsRef.current.clear()

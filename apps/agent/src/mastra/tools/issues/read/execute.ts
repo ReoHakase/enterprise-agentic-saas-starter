@@ -1,8 +1,13 @@
 import type {
+  ReadIssueAttachmentImageToolInput as AgentIssueAttachmentImageInput,
+  ReadIssueAttachmentImageToolResult as AgentIssueAttachmentImageResult,
   AgentIssue,
   AgentSearchIssuesInput,
-} from "@enterprise-agentic-saas/api/agent-client"
-import type { z } from "zod"
+  GetIssueToolInput,
+  IssueSearchToolInput,
+  LabelSearchToolInput,
+  MemberSearchToolInput,
+} from "@enterprise-agentic-saas/agent-contracts"
 
 import {
   createAgentToolBudget,
@@ -11,16 +16,7 @@ import {
 import type { AgentVisionBudget } from "../../../core/budget/vision"
 import { readBoundedPrivateImage } from "../../../core/messages/chat-input"
 import type { AgentControlPlanePort } from "../../../runtime/ports"
-import type {
-  AgentIssueAttachmentImageResult,
-  getIssueInputSchema,
-  issueAttachmentImageInputSchema,
-  issueSearchInputSchema,
-  labelSearchInputSchema,
-  searchInputSchema,
-} from "./schema"
-
-export type { AgentIssueAttachmentImageResult } from "./schema"
+export type { ReadIssueAttachmentImageToolResult as AgentIssueAttachmentImageResult } from "@enterprise-agentic-saas/agent-contracts"
 
 type AgentReadApi = Pick<
   AgentControlPlanePort,
@@ -38,7 +34,9 @@ type AgentIssueImageApi = Pick<
 >
 
 const boundedText = (value: string, maximumLength: number): string =>
-  value.length <= maximumLength ? value : `${value.slice(0, maximumLength)}…`
+  value.length <= maximumLength
+    ? value
+    : `${value.slice(0, maximumLength - 1)}…`
 
 const boundedIssue = <TIssue extends AgentIssue>(
   issue: TIssue,
@@ -121,7 +119,7 @@ export const createAgentIssueImageHandler =
     visionBudget: AgentVisionBudget
   ) =>
   async (
-    input: z.infer<typeof issueAttachmentImageInputSchema>
+    input: AgentIssueAttachmentImageInput
   ): Promise<AgentIssueAttachmentImageResult> => {
     budget.consume("read")
     visionBudget.reserve()
@@ -156,7 +154,7 @@ export const createAgentReadHandlers = (
   }
 
   return {
-    getIssue: (input: z.infer<typeof getIssueInputSchema>) =>
+    getIssue: (input: GetIssueToolInput) =>
       invoke(async () =>
         boundedIssue(await api.getIssue({ grant: runGrant, ...input }), 20_000)
       ),
@@ -164,7 +162,7 @@ export const createAgentReadHandlers = (
       invoke(() => api.readAccountContext({ grant: runGrant })),
     readActiveOrganization: () =>
       invoke(() => api.readActiveOrganization({ grant: runGrant })),
-    searchIssueLabels: (input: z.infer<typeof labelSearchInputSchema>) =>
+    searchIssueLabels: (input: LabelSearchToolInput) =>
       invoke(() =>
         api.searchIssueLabels({
           grant: runGrant,
@@ -172,7 +170,7 @@ export const createAgentReadHandlers = (
           query: input.query,
         })
       ),
-    searchIssues: (input: z.infer<typeof issueSearchInputSchema>) =>
+    searchIssues: (input: IssueSearchToolInput) =>
       invoke(async () => {
         const searchInput: AgentSearchIssuesInput = {
           ...input,
@@ -181,7 +179,7 @@ export const createAgentReadHandlers = (
         const issues = await api.searchIssues(searchInput)
         return issues.map((issue) => boundedIssue(issue, 2_000))
       }),
-    searchOrganizationMembers: (input: z.infer<typeof searchInputSchema>) =>
+    searchOrganizationMembers: (input: MemberSearchToolInput) =>
       invoke(() =>
         api.searchOrganizationMembers({
           grant: runGrant,

@@ -1,9 +1,9 @@
-import type { ModelMessage } from "ai"
 import { describe, expect, it, vi } from "vitest"
 
 import type { AgentControlPlanePort as AgentInternalGateway } from "../../runtime/ports"
 import {
-  appendCurrentMessageImages,
+  createCurrentMessageImageContext,
+  createReusableAgentAssetContext,
   loadCurrentMessageImages,
 } from "./chat-input"
 
@@ -117,51 +117,38 @@ describe("current-message model images", () => {
     ).rejects.toThrow("Agent image is unavailable")
   })
 
-  it("adds byte parts only to an ephemeral copy of the latest user message", () => {
-    const messages: ModelMessage[] = [
-      { role: "user", content: "old" },
-      { role: "assistant", content: "answer" },
-      { role: "user", content: "describe this" },
-      { role: "assistant", content: "client tool call" },
-    ]
-    const original = structuredClone(messages)
+  it("creates a run-local image context without duplicating user text", () => {
     const bytes = new Uint8Array([1, 2, 3])
 
-    const result = appendCurrentMessageImages(
-      messages,
+    const result = createCurrentMessageImageContext(
       ["asset_1"],
       [{ image: bytes, mediaType: "image/webp", type: "image" }]
     )
 
-    expect(messages).toEqual(original)
-    expect(result[0]).toEqual(messages[0])
-    expect(result[2]?.role).toBe("user")
-    expect(result[2]?.content).toEqual([
-      { text: "describe this", type: "text" },
+    expect(result).toEqual([
       {
-        text: expect.stringContaining("asset_1"),
-        type: "text",
+        role: "user",
+        content: [
+          {
+            text: expect.stringContaining("asset_1"),
+            type: "text",
+          },
+          { image: bytes, mediaType: "image/webp", type: "image" },
+        ],
       },
-      { image: bytes, mediaType: "image/webp", type: "image" },
     ])
+    expect(JSON.stringify(result)).not.toContain("describe this")
     expect(JSON.stringify(result)).not.toContain("base64")
   })
 
   it("handles empty input and rejects inconsistent ephemeral image data", () => {
-    const messages: ModelMessage[] = [
-      {
-        content: [{ text: "describe this", type: "text" }],
-        role: "user",
-      },
-    ]
-    expect(appendCurrentMessageImages(messages, [], [])).toEqual(messages)
-    expect(() => appendCurrentMessageImages(messages, ["asset_1"], [])).toThrow(
+    expect(createCurrentMessageImageContext([], [])).toEqual([])
+    expect(() => createCurrentMessageImageContext(["asset_1"], [])).toThrow(
       "Agent image is unavailable"
     )
     expect(() =>
-      appendCurrentMessageImages(
-        [{ content: "answer", role: "assistant" }],
-        ["asset_1"],
+      createCurrentMessageImageContext(
+        [],
         [
           {
             image: new Uint8Array([1]),
@@ -170,21 +157,22 @@ describe("current-message model images", () => {
           },
         ]
       )
-    ).toThrow("Agent message is unavailable")
+    ).toThrow("Agent image is unavailable")
+  })
 
-    const result = appendCurrentMessageImages(
-      messages,
-      ["asset_1"],
-      [
-        {
-          image: new Uint8Array([1]),
-          mediaType: "image/webp",
-          type: "image",
-        },
-      ]
-    )
-    expect(result[0]?.content).toEqual(
-      expect.arrayContaining([{ text: "describe this", type: "text" }])
-    )
+  it("exposes only server-selected reusable asset metadata without bytes", () => {
+    expect(
+      createReusableAgentAssetContext([
+        { id: "asset_previous", filename: "previous-image.webp" },
+      ])
+    ).toEqual([
+      {
+        role: "system",
+        content: expect.stringContaining(
+          '"id":"asset_previous","filename":"previous-image.webp"'
+        ),
+      },
+    ])
+    expect(createReusableAgentAssetContext([])).toEqual([])
   })
 })

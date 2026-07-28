@@ -36,19 +36,14 @@ export const AgentApprovalCard = ({
   onPendingChange: (actionId: string, pending: boolean) => void
 }) => {
   const queryClient = useQueryClient()
-  const [executionIssue, setExecutionIssue] = useState<{
-    number: number
-    deleted: boolean
-  }>()
+  const [executionIssue, setExecutionIssue] =
+    useState<Awaited<ReturnType<typeof resumeAgentAction>>["issue"]>()
   const actionQuery = useQuery(
     agentActionQueryOptions(apiClient, organizationId, actionId)
   )
   const resume = useCallback(async () => {
     const result = await resumeAgentAction(apiClient, actionId)
-    setExecutionIssue({
-      number: result.issue.number,
-      deleted: result.issue.deleted,
-    })
+    setExecutionIssue(result.issue)
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: issueKeys.lists(organizationId),
@@ -172,6 +167,18 @@ export const AgentApprovalCard = ({
           >
             Open Issue #{executionIssue.number}
           </Link>
+        ) : null}
+        {executionIssue?.attachmentMutation ? (
+          <p className="text-sm" role="status">
+            {executionIssue.attachmentMutation.operation === "added"
+              ? "Added"
+              : "Removed"}{" "}
+            {executionIssue.attachmentMutation.fileIds.length} attachment
+            {executionIssue.attachmentMutation.fileIds.length === 1
+              ? ""
+              : "s"}{" "}
+            at revision {executionIssue.revision}.
+          </p>
         ) : null}
         {pending ? (
           <div className="flex gap-2">

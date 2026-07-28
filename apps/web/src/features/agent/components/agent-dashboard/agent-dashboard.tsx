@@ -8,11 +8,7 @@ import { toast } from "sonner"
 import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { apiClient } from "@/lib/api-client"
 
-import {
-  archiveAgentThread,
-  createAgentThread,
-  updateAgentThreadTitle,
-} from "../../api"
+import { archiveAgentThread, createAgentThread } from "../../api"
 import { isAgentHotkeyAllowed } from "../../hotkey-scope"
 import { agentKeys, agentThreadsQueryOptions } from "../../queries"
 import type { AgentThread } from "../../schema"
@@ -313,28 +309,6 @@ const useAgentDashboardController = ({
     createThreadMutation
   const { mutate: runArchiveThread, isPending: archivingThread } =
     archiveThreadMutation
-  const renameThreadMutation = useMutation({
-    mutationFn: (input: { thread: AgentThread; title: string }) =>
-      updateAgentThreadTitle(apiClient, {
-        threadId: input.thread.id,
-        title: input.title,
-        expectedRevision: input.thread.titleRevision,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: agentKeys.threads(organizationId),
-      })
-    },
-    onError: () =>
-      toast.error("The thread title changed elsewhere. Reload and try again."),
-  })
-  const { mutate: runRenameThread, isPending: renamingThread } =
-    renameThreadMutation
-  const renameThread = useCallback(
-    (thread: AgentThread, title: string) => runRenameThread({ thread, title }),
-    [runRenameThread]
-  )
-
   useMissingAgentThreadCleanup({
     disabled,
     runtime,
@@ -430,8 +404,6 @@ const useAgentDashboardController = ({
     organizationSlug,
     pendingTransition,
     presentation,
-    renameThread,
-    renamingThread,
     selectedThread,
     selectThread,
     setShortcutHelpOpen,

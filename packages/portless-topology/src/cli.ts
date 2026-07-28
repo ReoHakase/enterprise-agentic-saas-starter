@@ -2,6 +2,7 @@
 
 const REPOSITORY_LOGICAL_NAME = "enterprise-agentic-saas"
 const LOCALHOST_SUFFIX = ".localhost"
+const LOCAL_AGENT_STORAGE_TOKEN = "local-agent-storage"
 
 type Environment = Record<string, string | undefined>
 
@@ -87,6 +88,10 @@ export const createLocalTopologyEnvironment = (
   const environment = { ...source }
   delete environment.EMULATE_BASE_URL
   delete environment.TURSO_AUTH_TOKEN
+  const homeDirectory = source.HOME?.trim()
+  const portlessCaCertificate =
+    source.PORTLESS_CA_CERT?.trim() ||
+    (homeDirectory ? `${homeDirectory}/.portless/ca.pem` : undefined)
 
   const web = resolvePortlessService(baseOrigin, REPOSITORY_LOGICAL_NAME)
   const api = resolvePortlessService(
@@ -96,6 +101,10 @@ export const createLocalTopologyEnvironment = (
   const database = resolvePortlessService(
     baseOrigin,
     `db.${REPOSITORY_LOGICAL_NAME}`
+  )
+  const agentStorage = resolvePortlessService(
+    baseOrigin,
+    `agent-storage.${REPOSITORY_LOGICAL_NAME}`
   )
   const githubEmulator = resolvePortlessService(
     baseOrigin,
@@ -111,7 +120,12 @@ export const createLocalTopologyEnvironment = (
     CORS_ORIGIN: web.origin,
     GITHUB_OAUTH_CALLBACK_URL: `${api.origin}/auth/oauth2/callback/github`,
     GITHUB_OAUTH_EMULATOR_URL: githubEmulator.origin,
+    MASTRA_STORAGE_AUTH_TOKEN: LOCAL_AGENT_STORAGE_TOKEN,
+    MASTRA_STORAGE_URL: agentStorage.origin,
     NEXT_PUBLIC_API_BASE_URL: api.origin,
+    ...(environment.NODE_EXTRA_CA_CERTS?.trim() || !portlessCaCertificate
+      ? {}
+      : { NODE_EXTRA_CA_CERTS: portlessCaCertificate }),
     TRUSTED_ORIGINS: web.origin,
     TURSO_DATABASE_URL: database.origin,
   }
@@ -142,8 +156,8 @@ const runChild = async (argv: string[], environment: Environment) => {
   const forwardSignal = (signal: NodeJS.Signals) => child.kill(signal)
   const forwardSigint = () => forwardSignal("SIGINT")
   const forwardSigterm = () => forwardSignal("SIGTERM")
-  process.once("SIGINT", forwardSigint)
-  process.once("SIGTERM", forwardSigterm)
+  process.on("SIGINT", forwardSigint)
+  process.on("SIGTERM", forwardSigterm)
 
   try {
     return await child.exited

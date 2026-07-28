@@ -144,6 +144,8 @@ APIとDBの`TURSO_DATABASE_URL`は同じ値にします。Bunはコマンドを�
 | Web                        | `https://enterprise-agentic-saas.localhost`                |
 | API                        | `https://api.enterprise-agentic-saas.localhost`            |
 | Agent Worker（内部接続用） | `https://agent.enterprise-agentic-saas.localhost`          |
+| Agent storage              | `https://agent-storage.enterprise-agentic-saas.localhost`  |
+| Mastra Studio              | `https://mastra-studio.enterprise-agentic-saas.localhost`  |
 | Mailpit                    | `https://mailpit.enterprise-agentic-saas.localhost`        |
 | React Email                | `https://email.enterprise-agentic-saas.localhost`          |
 | Emulate（GitHub）          | `https://github.emulate.enterprise-agentic-saas.localhost` |
@@ -161,12 +163,13 @@ bun run portless-topology resolve api.enterprise-agentic-saas
 
 このCLIは[Portless issue #372](https://github.com/vercel-labs/portless/issues/372)が解決するまでの
 リポジトリ固有の暫定措置です。削除する変更では、`resolve`と`run`をnative Portlessへ置換し、
-repository固有のWeb/API/Auth/CORS/DB/GitHub環境変数組み立てとstaleな
+repository固有のWeb/API/Auth/CORS/DB/GitHub/Agent storage環境変数組み立てとstaleな
 `EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去をPortless非依存の永続的なlocal経路へ移すか
-不要化します。main checkoutとlinked worktreeの実Portless smokeで全hostname、Cookie domain、
-GitHub callback、token除去、childの終了コードとsignal転送まで同等と確認してから、CLI package、
-consumer dependency、品質設定、文書、lockfile entryを同じ変更から削除します。generic shared
-packageへ拡張しません。
+不要化します。非proxy commandが使うPortless CAも同じ対象です。main checkoutとlinked
+worktreeの実Portless smokeで全hostname、Cookie domain、GitHub callback、Agent storage、CA、
+token除去、childの終了コードとsignal転送まで同等と確認してから、CLI package、consumer
+dependency、品質設定、文書、lockfile entryを同じ変更から削除します。generic shared packageへ
+拡張しません。
 
 ### 3. ▶️ 開発サーバーを起動する
 

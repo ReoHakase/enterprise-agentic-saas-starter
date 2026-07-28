@@ -130,25 +130,19 @@ export const createFixture = async () => {
       id: "asset-thread-a",
       organizationId: "asset-org-a",
       ownerUserId: "asset-user-a",
-      title: "Asset thread A",
       createdAt: now,
-      updatedAt: now,
     },
     {
       id: "asset-thread-other-owner",
       organizationId: "asset-org-a",
       ownerUserId: "asset-user-b",
-      title: "Other owner thread",
       createdAt: now,
-      updatedAt: now,
     },
     {
       id: "asset-thread-b",
       organizationId: "asset-org-b",
       ownerUserId: "asset-user-a",
-      title: "Asset thread B",
       createdAt: now,
-      updatedAt: now,
     },
   ])
 

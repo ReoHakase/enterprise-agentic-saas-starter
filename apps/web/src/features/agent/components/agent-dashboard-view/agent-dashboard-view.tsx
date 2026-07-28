@@ -52,8 +52,6 @@ export type AgentDashboardViewProps = {
   organizationSlug: string
   pendingTransition?: { kind: "archive" | "switch" }
   presentation: "page" | "shell"
-  renameThread: (thread: AgentThread, title: string) => void
-  renamingThread: boolean
   selectedThread?: AgentThread
   selectThread: (threadId: string) => void
   setShortcutHelpOpen: (open: boolean) => void
@@ -82,8 +80,6 @@ export const renderAgentDashboardView = ({
   organizationSlug,
   pendingTransition,
   presentation,
-  renameThread,
-  renamingThread,
   selectedThread,
   selectThread,
   setShortcutHelpOpen,
@@ -110,12 +106,10 @@ export const renderAgentDashboardView = ({
           error={threadsError}
           creating={creatingThread}
           archiving={archivingThread}
-          renaming={renamingThread}
           disabled={interactionDisabled}
           onSelect={selectThread}
           onCreate={startThread}
           onArchive={archiveThread}
-          onRename={renameThread}
         />
       ) : (
         <Card className="min-w-0">

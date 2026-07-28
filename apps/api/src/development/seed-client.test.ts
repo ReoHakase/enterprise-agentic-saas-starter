@@ -12,7 +12,10 @@ type FetchCall = (
 ) => Promise<Response>
 
 describe("development file seed client", () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   it("checks readiness through the authenticated development boundary", async () => {
     const fetcher = vi.fn<FetchCall>(
@@ -82,11 +85,16 @@ describe("development file seed client", () => {
   })
 
   it("aborts a hung request at the configured deadline", async () => {
+    vi.useFakeTimers()
     vi.stubGlobal(
       "fetch",
       vi.fn<FetchCall>(
         (_url: Request | URL | string, init?: RequestInit) =>
           new Promise<Response>((_resolve, reject) => {
+            if (init?.signal?.aborted) {
+              reject(init.signal.reason)
+              return
+            }
             init?.signal?.addEventListener(
               "abort",
               () => reject(init.signal?.reason),
@@ -96,13 +104,15 @@ describe("development file seed client", () => {
       )
     )
 
-    await expect(
-      reconcileDevelopmentFiles({
-        endpoint: "http://127.0.0.1:8787",
-        token: "x".repeat(64),
-        timeoutMs: 20,
-      })
-    ).rejects.toThrow(/did not become ready \(unreachable\)/i)
+    const reconciliation = reconcileDevelopmentFiles({
+      endpoint: "http://127.0.0.1:8787",
+      token: "x".repeat(64),
+      timeoutMs: 20,
+    })
+    await vi.advanceTimersByTimeAsync(20)
+    await expect(reconciliation).rejects.toThrow(
+      /did not become ready \(unreachable\)/i
+    )
   })
 
   it("retries only the failing fixture and stops persistent 503s", async () => {

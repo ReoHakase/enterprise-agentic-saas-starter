@@ -9,8 +9,127 @@ import {
   request,
 } from "./action-repository.test-support"
 import { issueAgentActionResumeTicket } from "./actions/repository"
+import { issueAgentConnectionTicket } from "./threads/repository"
 
 describe("Agent Issue manual approval execution", () => {
+  it("cancels a pending approval action through the internal run grant", async () => {
+    const { db } = await createFixture()
+    const { internal, run } = await createRun(db, {
+      clientMessageId: "internal-cancel-waiting-approval",
+    })
+    const prepared = await internal.prepareUpdateIssue({
+      grant: run.grant,
+      toolCallId: "tool-internal-cancel",
+      idempotencyKey: "prepare-internal-cancel",
+      issue: {
+        issueId: "action-issue-a",
+        expectedRevision: 1,
+        title: "Must not execute",
+      },
+    })
+
+    await expect(internal.cancelRun({ grant: run.grant })).resolves.toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+    const [storedAction] = await db
+      .select({
+        completedAt: schema.agentActions.completedAt,
+        status: schema.agentActions.status,
+      })
+      .from(schema.agentActions)
+      .where(eq(schema.agentActions.id, prepared.id))
+    expect(storedAction).toMatchObject({
+      completedAt: expect.any(Date),
+      status: "canceled",
+    })
+    const liveGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, run.runId),
+          isNull(schema.agentGrants.revokedAt)
+        )
+      )
+    expect(liveGrants).toEqual([])
+  })
+
+  it("cancels a waiting approval action and revokes its unconsumed resume ticket", async () => {
+    const { app, db } = await createFixture()
+    const { internal, run, thread } = await createRun(db, {
+      clientMessageId: "cancel-waiting-approval",
+    })
+    const prepared = await internal.prepareUpdateIssue({
+      grant: run.grant,
+      toolCallId: "tool-cancel-waiting-approval",
+      idempotencyKey: "prepare-cancel-waiting-approval",
+      issue: {
+        issueId: "action-issue-a",
+        expectedRevision: 1,
+        title: "Must never execute",
+      },
+    })
+    const decided = await app.handle(
+      request(`/agent/actions/${prepared.id}/decision`, {
+        method: "POST",
+        body: {
+          decision: "yes",
+          idempotencyKey: "decision-cancel-waiting-approval",
+        },
+      })
+    )
+    expect(decided.status).toBe(200)
+    const resumeTicket = await issueAgentActionResumeTicket(db, {
+      actionId: prepared.id,
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+    })
+
+    const canceled = await app.handle(
+      request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
+        method: "POST",
+      })
+    )
+    expect(canceled.status).toBe(200)
+    expect(await canceled.json()).toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+
+    const [storedAction] = await db
+      .select({
+        completedAt: schema.agentActions.completedAt,
+        status: schema.agentActions.status,
+      })
+      .from(schema.agentActions)
+      .where(eq(schema.agentActions.id, prepared.id))
+    expect(storedAction?.status).toBe("canceled")
+    expect(storedAction?.completedAt).toBeInstanceOf(Date)
+    const [storedTicket] = await db
+      .select({
+        consumedAt: schema.agentResumeTickets.consumedAt,
+        revokedAt: schema.agentResumeTickets.revokedAt,
+      })
+      .from(schema.agentResumeTickets)
+      .where(eq(schema.agentResumeTickets.actionId, prepared.id))
+    expect(storedTicket).toMatchObject({
+      consumedAt: null,
+      revokedAt: expect.any(Date),
+    })
+    await expect(
+      internal.resumeApprovedAction({
+        actionId: prepared.id,
+        resumeTicket: resumeTicket.ticket,
+      })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+    const [issue] = await db
+      .select({ revision: schema.issues.revision, title: schema.issues.title })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "action-issue-a"))
+    expect(issue).toEqual({ revision: 1, title: "Original title" })
+  })
+
   it("executes a manual update only through a one-use continuation and keeps audit metadata minimal", async () => {
     const { app, db } = await createFixture()
     const { internal, run } = await createRun(db, {
@@ -252,7 +371,9 @@ describe("Agent Issue manual approval execution", () => {
       status: "succeeded",
     })
   })
+})
 
+describe("Agent Issue manual approval conflicts and access scope", () => {
   it("commits a stale revision as conflicted without applying the approved payload", async () => {
     const { app, db } = await createFixture()
     const { internal, run } = await createRun(db, {
@@ -366,6 +487,64 @@ describe("Agent Issue manual approval execution", () => {
       })
     )
     expect(repeated.status).toBe(200)
+    const liveRejectedRunGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, first.run.runId),
+          isNull(schema.agentGrants.revokedAt)
+        )
+      )
+    expect(liveRejectedRunGrants).toEqual([])
+    await expect(
+      first.internal.executeApprovedAction({
+        grant: first.run.grant,
+        actionId: rejected.id,
+      })
+    ).rejects.toMatchObject({ code: "unauthorized" })
+    const retryTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "action-session-a",
+      threadId: first.thread.id,
+      userId: "action-user-a",
+    })
+    const retryConnection = await first.internal.consumeConnectionTicket({
+      threadId: first.thread.id,
+      ticket: retryTicket.ticket,
+    })
+    const retryRun = await first.internal.startRun({
+      clientMessageId: "reject-first",
+      grant: retryConnection.grant,
+    })
+    expect(retryRun).toMatchObject({
+      attempt: 2,
+      runId: first.run.runId,
+    })
+    const oldDecisionReplay = await app.handle(
+      request(`/agent/actions/${rejected.id}/decision`, {
+        method: "POST",
+        body: decision,
+      })
+    )
+    expect(oldDecisionReplay.status).toBe(200)
+    await expect(
+      first.internal.getIssue({
+        grant: retryRun.grant,
+        lookup: "id",
+        id: "action-issue-a",
+      })
+    ).resolves.toMatchObject({ id: "action-issue-a" })
+    const liveRetryGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, retryRun.runId),
+          isNull(schema.agentGrants.revokedAt)
+        )
+      )
+    expect(liveRetryGrants).toHaveLength(1)
+    await first.internal.cancelRun({ grant: retryRun.grant })
     await expect(
       issueAgentActionResumeTicket(db, {
         actionId: rejected.id,

@@ -1,5 +1,9 @@
-import { issues } from "@enterprise-agentic-saas/db/schema"
-import { and, eq } from "drizzle-orm"
+import {
+  files,
+  issueFileOwners,
+  issues,
+} from "@enterprise-agentic-saas/db/schema"
+import { and, eq, inArray } from "drizzle-orm"
 
 import type {
   AgentCreateIssueActionInput,
@@ -97,6 +101,7 @@ const buildCreateIssueAction = async (
     preview: {
       kind: input.kind,
       destructive: false,
+      attachmentOperation: snapshots.length > 0 ? "add" : null,
       title: stored.title,
       issueNumber: null,
       issueRevision: null,
@@ -110,6 +115,7 @@ const buildCreateIssueAction = async (
         { field: "due_date", before: null, after: stored.dueDate },
       ],
       attachments: snapshots.map(({ assetId, filename, sizeBytes }) => ({
+        source: "asset" as const,
         assetId,
         filename,
         sizeBytes,
@@ -170,6 +176,7 @@ const buildDeleteIssueAction = (
     preview: {
       kind: input.kind,
       destructive: true,
+      attachmentOperation: null,
       title: current.title,
       issueNumber: current.number,
       issueRevision: current.revision,
@@ -181,11 +188,16 @@ const buildDeleteIssueAction = (
 }
 
 const buildIssueChanges = (
-  issue: ReturnType<
-    typeof safeStoredParse<typeof updateIssueActionPayloadModel>
-  >,
+  issue: {
+    title?: string
+    description?: string
+    status?: "open" | "in_progress" | "closed"
+    priority?: "no_priority" | "urgent" | "high" | "medium" | "low"
+    assigneeId?: string | null
+    dueDate?: string | null
+  },
   labels: string[] | undefined
-): StoredUpdateIssuePayload["changes"] => ({
+): Extract<StoredUpdateIssuePayload, { operation: "fields" }>["changes"] => ({
   ...(issue.title === undefined ? {} : { title: issue.title }),
   ...(issue.description === undefined
     ? {}
@@ -201,7 +213,10 @@ const buildIssueChanges = (
 
 const buildUpdatePreviewFields = (
   current: IssueRow,
-  changes: StoredUpdateIssuePayload["changes"],
+  changes: Extract<
+    StoredUpdateIssuePayload,
+    { operation: "fields" }
+  >["changes"],
   beforeAssignee: string | null,
   afterAssignee: string | null | undefined
 ): AgentIssueActionPreview["fields"] => {
@@ -259,9 +274,112 @@ const buildUpdateIssueAction = async (
   input: Extract<PreparedIssueActionInput, { kind: "update_issue" }>,
   context: ValidGrant,
   current: IssueRow,
+  now: Date,
   requestFingerprint: string
 ): Promise<PreparedIssueAction> => {
   const issue = safeStoredParse(updateIssueActionPayloadModel, input.issue)
+  if (issue.operation === "add_attachments") {
+    const snapshots = await getActionAssetSnapshots(tx, {
+      assetIds: issue.attachmentAssetIds,
+      context,
+      now,
+    })
+    const stored = {
+      operation: "add_attachments",
+      requestFingerprint,
+      issueId: current.id,
+      expectedRevision: current.revision,
+      attachments: snapshots.map(({ assetId }) => ({
+        assetId,
+        fileId: crypto.randomUUID(),
+      })),
+    } satisfies StoredUpdateIssuePayload
+    return {
+      targetId: current.id,
+      targetRevision: current.revision,
+      normalizedPayload: stored,
+      preview: {
+        kind: input.kind,
+        destructive: false,
+        attachmentOperation: "add",
+        title: current.title,
+        issueNumber: current.number,
+        issueRevision: current.revision,
+        fields: [],
+        attachments: snapshots.map(({ assetId, filename, sizeBytes }) => ({
+          source: "asset" as const,
+          assetId,
+          filename,
+          sizeBytes,
+        })),
+      },
+      snapshots,
+    }
+  }
+  if (issue.operation === "remove_attachments") {
+    const rows = await tx
+      .select({
+        fileId: files.id,
+        filename: files.filename,
+        sizeBytes: files.sizeBytes,
+      })
+      .from(files)
+      .innerJoin(
+        issueFileOwners,
+        and(
+          eq(issueFileOwners.organizationId, files.organizationId),
+          eq(issueFileOwners.fileId, files.id),
+          eq(issueFileOwners.ownerType, "issue"),
+          eq(issueFileOwners.issueId, current.id)
+        )
+      )
+      .where(
+        and(
+          eq(files.organizationId, context.organizationId),
+          eq(files.status, "ready"),
+          inArray(files.id, issue.attachmentFileIds)
+        )
+      )
+    if (rows.length !== issue.attachmentFileIds.length) {
+      throw publicErrors.notFound("Issue attachment not found", {
+        resource: "file",
+      })
+    }
+    const byId = new Map(rows.map((row) => [row.fileId, row]))
+    const ordered = issue.attachmentFileIds.map((fileId) => {
+      const row = byId.get(fileId)
+      if (!row) throw new Error("Attachment snapshot ordering failed")
+      return row
+    })
+    const stored = {
+      operation: "remove_attachments",
+      requestFingerprint,
+      issueId: current.id,
+      expectedRevision: current.revision,
+      fileIds: issue.attachmentFileIds,
+    } satisfies StoredUpdateIssuePayload
+    return {
+      targetId: current.id,
+      targetRevision: current.revision,
+      normalizedPayload: stored,
+      preview: {
+        kind: input.kind,
+        destructive: true,
+        attachmentOperation: "remove",
+        title: current.title,
+        issueNumber: current.number,
+        issueRevision: current.revision,
+        fields: [],
+        attachments: ordered.map(({ fileId, filename, sizeBytes }) => ({
+          source: "file" as const,
+          fileId,
+          filename,
+          sizeBytes,
+        })),
+      },
+      snapshots: [],
+    }
+  }
   const changeKeys = [
     "title",
     "description",
@@ -288,6 +406,7 @@ const buildUpdateIssueAction = async (
   })
   const changes = buildIssueChanges(issue, labels)
   const stored = {
+    operation: "fields",
     requestFingerprint,
     issueId: current.id,
     expectedRevision: current.revision,
@@ -300,6 +419,7 @@ const buildUpdateIssueAction = async (
     preview: {
       kind: input.kind,
       destructive: false,
+      attachmentOperation: null,
       title: current.title,
       issueNumber: current.number,
       issueRevision: current.revision,
@@ -334,5 +454,12 @@ export const buildPreparedIssueAction = async (
   if (input.kind === "delete_issue") {
     return buildDeleteIssueAction(input, context, current, requestFingerprint)
   }
-  return buildUpdateIssueAction(tx, input, context, current, requestFingerprint)
+  return buildUpdateIssueAction(
+    tx,
+    input,
+    context,
+    current,
+    now,
+    requestFingerprint
+  )
 }

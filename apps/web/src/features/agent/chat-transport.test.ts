@@ -78,9 +78,9 @@ const continuationMessages: AgentChatMessage[] = [
         type: "dynamic-tool",
         toolName: "ui_open_issue",
         toolCallId: "tool-call-2",
-        state: "output-error",
+        state: "output-available",
         input: { issueNumber: 42 },
-        errorText: "The Issue is no longer available.",
+        output: { ok: true },
       },
     ],
   },
@@ -132,6 +132,7 @@ describe("Agent chat transport", () => {
           toolCallId: "tool-call-1",
           toolName: "ui_set_issue_query",
           state: "output-available",
+          input: { query: { priority: "high" } },
           output: {
             ok: true,
             query: {
@@ -149,8 +150,9 @@ describe("Agent chat transport", () => {
         {
           toolCallId: "tool-call-2",
           toolName: "ui_open_issue",
-          state: "output-error",
-          errorText: "The Issue is no longer available.",
+          state: "output-available",
+          input: { issueNumber: 42 },
+          output: { ok: true },
         },
       ],
       timezone: "Asia/Tokyo",

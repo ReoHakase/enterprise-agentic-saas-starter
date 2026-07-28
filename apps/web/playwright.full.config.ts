@@ -75,7 +75,6 @@ export default defineConfig({
   testMatch: "real-agent.spec.ts",
   outputDir: `${environment.temporaryRoot}/playwright-results/full`,
   globalSetup: "./e2e/fixtures/full-e2e-global-setup.ts",
-  globalTeardown: "./e2e/fixtures/full-e2e-global-teardown.ts",
   metadata: {
     agentE2ERunId: environment.runId,
     agentE2EApiOrigin: environment.apiOrigin,

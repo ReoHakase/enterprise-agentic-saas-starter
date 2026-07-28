@@ -21,11 +21,18 @@ const meta = preview.meta({
 
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole("heading", { name: "Issues" })).toBeVisible()
     await expect(
       canvas.getByRole("link", { name: "New issue" })
     ).toHaveAttribute("href", "/organization/acme/issues/new")
+
+    const contentRoot = canvasElement.querySelector<HTMLElement>(
+      "[data-storybook-content-root]"
+    )
+    await expect(contentRoot).not.toBeNull()
+    if (!contentRoot) throw new Error("Storybook content root is missing")
+    await expect(getComputedStyle(contentRoot).minHeight).toBe("256px")
   },
 })
 

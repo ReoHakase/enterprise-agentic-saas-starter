@@ -148,6 +148,33 @@ describe("Agent public control plane", () => {
     expect(inputs).toEqual([])
   })
 
+  it("rejects the legacy Web-search digest suffix at the public boundary", async () => {
+    const { app } = await createFixture()
+    const inputs = configureAgentStreamCapture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const response = await app.handle(
+      request("/agent/chat", {
+        method: "POST",
+        body: {
+          threadId: thread.id,
+          messageId:
+            "forged_q_269294520791217599232f5d56c3e8ee7f5c79b50134cf82",
+          contentSegments: [
+            { type: "text", text: "Cloudflare R2 current limits" },
+          ],
+          assetIds: [],
+          timezone: "Asia/Tokyo",
+        },
+      })
+    )
+
+    expect(response.status).toBe(400)
+    expect(inputs).toEqual([])
+  })
+
   it("forwards only bounded run control status and retry timing", async () => {
     const { app } = await createFixture()
     const createdResponse = await app.handle(
@@ -234,7 +261,6 @@ describe("Agent public control plane", () => {
       id: "agent-thread-other-org",
       organizationId: "agent-org-b",
       ownerUserId: "agent-user-a",
-      title: "Other organization",
     })
     const inactiveTenantResponse = await app.handle(
       request("/agent/threads/agent-thread-other-org/archive", {
@@ -328,35 +354,41 @@ describe("Agent public control plane", () => {
       request(`/agent/threads/${thread.id}/messages`)
     )
     expect(history.status).toBe(200)
-    expect(await history.json()).toEqual([
-      {
-        id: "message_public_1",
-        role: "user",
-        parts: [
-          { type: "text", text: "Create an Issue for " },
-          {
-            type: "data-context-reference",
-            data: {
-              kind: "issue",
-              id: "agent-issue-a",
-              label: "Issue #1: Fix API boundary",
+    expect(await history.json()).toEqual({
+      hasMore: false,
+      messages: [
+        {
+          id: "message_public_1",
+          role: "user",
+          parts: [
+            { type: "text", text: "Create an Issue for " },
+            {
+              type: "data-context-reference",
+              data: {
+                kind: "issue",
+                id: "agent-issue-a",
+                label: "Issue #1: Fix API boundary",
+              },
             },
-          },
-          { type: "text", text: " from " },
-          {
-            type: "data-context-reference",
-            data: {
-              kind: "current_page",
-              path: "/organization/agent-org-a/issues/1",
-              label: "Issue #1: Fix API boundary",
+            { type: "text", text: " from " },
+            {
+              type: "data-context-reference",
+              data: {
+                kind: "current_page",
+                path: "/organization/agent-org-a/issues/1",
+                label: "Issue #1: Fix API boundary",
+              },
             },
-          },
-        ],
-      },
-    ])
+          ],
+        },
+      ],
+      page: 0,
+      perPage: 40,
+      total: 1,
+    })
     const threads = await app.handle(request("/agent/threads"))
     expect(await threads.json()).toEqual([
-      expect.objectContaining({ id: thread.id, messageCount: 1 }),
+      expect.objectContaining({ id: thread.id, title: "New conversation" }),
     ])
 
     const overposted = await app.handle(

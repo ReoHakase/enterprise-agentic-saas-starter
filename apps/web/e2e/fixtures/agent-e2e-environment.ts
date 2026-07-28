@@ -4,6 +4,12 @@ import { basename, dirname, join, resolve } from "node:path"
 
 const TEMPORARY_DIRECTORY = resolve(tmpdir())
 const RUN_DIRECTORY_PATTERN = /^enterprise-agentic-saas-agent-e2e-[1-9][0-9]*$/
+const REMOVE_OPTIONS = {
+  force: true,
+  maxRetries: 5,
+  recursive: true,
+  retryDelay: 50,
+} as const
 
 export type AgentE2EEnvironment = ReturnType<typeof createAgentE2EEnvironment>
 
@@ -31,11 +37,12 @@ const validateTemporaryRoot = (path: string): string => {
 
 export const createAgentE2EEnvironment = (input: string | number) => {
   const runId = parseAgentE2ERunId(input)
-  const portBase = 24_000 + (runId % 2_000) * 4
+  const portBase = 24_000 + (runId % 1_600) * 5
   const webPort = portBase
   const apiPort = portBase + 1
   const githubPort = portBase + 2
-  const databasePort = portBase + 3
+  const applicationDatabasePort = portBase + 3
+  const agentStoragePort = portBase + 4
   const cookieDomain = "agent-e2e.enterprise-agentic-saas.localhost"
   const temporaryRoot = validateTemporaryRoot(
     join(TEMPORARY_DIRECTORY, `enterprise-agentic-saas-agent-e2e-${runId}`)
@@ -47,17 +54,22 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     webPort,
     apiPort,
     githubPort,
-    databasePort,
+    applicationDatabasePort,
+    agentStoragePort,
     webOrigin: `http://${cookieDomain}:${webPort}`,
     apiOrigin: `http://api.${cookieDomain}:${apiPort}`,
     apiLoopbackOrigin: `http://127.0.0.1:${apiPort}`,
     githubOrigin: `http://127.0.0.1:${githubPort}`,
-    databaseOrigin: `http://127.0.0.1:${databasePort}`,
+    applicationDatabaseOrigin: `http://127.0.0.1:${applicationDatabasePort}`,
+    agentStorageOrigin: `http://127.0.0.1:${agentStoragePort}`,
+    applicationDatabaseAuthToken: "application-e2e-unused-token",
+    agentStorageAuthToken: "agent-storage-e2e-unused-token",
     cookieDomain,
     temporaryRoot,
     stackRoot,
     nextDistDirectory: `.next-e2e-full-${runId}`,
-    databasePath: join(stackRoot, "agent-e2e.db"),
+    applicationDatabasePath: join(stackRoot, "application.db"),
+    agentStoragePath: join(stackRoot, "agent-storage.db"),
     wranglerStatePath: join(stackRoot, "wrangler-state"),
     apiConfigPath: join(stackRoot, "api", "wrangler.json"),
     agentConfigPath: join(stackRoot, "agent", "wrangler.json"),
@@ -71,14 +83,14 @@ export const removeAgentE2EArtifacts = async (
   input: string | number
 ): Promise<void> => {
   const { temporaryRoot } = createAgentE2EEnvironment(input)
-  await rm(temporaryRoot, { force: true, recursive: true })
+  await rm(temporaryRoot, REMOVE_OPTIONS)
 }
 
 export const removeAgentE2EStackArtifacts = async (
   input: string | number
 ): Promise<void> => {
   const { stackRoot, temporaryRoot } = createAgentE2EEnvironment(input)
-  await rm(stackRoot, { force: true, recursive: true })
+  await rm(stackRoot, REMOVE_OPTIONS)
   try {
     await rmdir(temporaryRoot)
   } catch (cause) {

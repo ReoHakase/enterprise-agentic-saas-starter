@@ -1,9 +1,10 @@
 import type {
   AgentIssue,
   AgentIssueDetail,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
+import { RequestContext } from "@mastra/core/request-context"
+import { noopObserve } from "@mastra/core/tools"
 import { describe, expect, it, vi } from "vitest"
-import { z } from "zod"
 
 import { createAgentToolBudget } from "../../../core/budget/tool"
 import { createAgentVisionBudget } from "../../../core/budget/vision"
@@ -13,8 +14,7 @@ import {
   createAgentReadHandlers,
   issueAttachmentImageToModelOutput,
 } from "./execute"
-import { agentReadToolSchemas } from "./schema"
-import { issueReadTools } from "./tool"
+import { createIssueReadTools } from "./tool"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -48,12 +48,14 @@ const issueDetail = (description = "description"): AgentIssueDetail => ({
   attachments: { items: [], nextCursor: null },
 })
 
-const apiHarness = (options: { failAccount?: boolean } = {}) => {
+const apiHarness = (
+  options: { failAccount?: boolean; issueDescription?: string } = {}
+) => {
   const grants: string[] = []
   const api: AgentReadApi = {
     getIssue: (input) => {
       grants.push(input.grant)
-      return Promise.resolve(issueDetail())
+      return Promise.resolve(issueDetail(options.issueDescription))
     },
     readAccountContext: (input) => {
       grants.push(input.grant)
@@ -95,41 +97,11 @@ const apiHarness = (options: { failAccount?: boolean } = {}) => {
   return { api, grants }
 }
 
-describe("Agent read tool schemas", () => {
-  it("keeps every provider schema JSON-serializable", () => {
-    for (const schema of Object.values(agentReadToolSchemas)) {
-      expect(() => z.toJSONSchema(schema)).not.toThrow()
-    }
-  })
-
-  it("rejects unknown fields and values beyond the bounded contracts", () => {
-    expect(
-      agentReadToolSchemas.empty.safeParse({ grant: RUN_GRANT }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.memberSearch.safeParse({ limit: 51 }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.labelSearch.safeParse({ query: "x".repeat(41) })
-        .success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.issueSearch.safeParse({ status: "unknown" }).success
-    ).toBe(false)
-    expect(
-      agentReadToolSchemas.getIssue.safeParse({ lookup: "number", number: 0 })
-        .success
-    ).toBe(false)
-  })
-
-  it("applies bounded defaults to list reads", () => {
-    expect(agentReadToolSchemas.memberSearch.parse({})).toEqual({ limit: 20 })
-    expect(agentReadToolSchemas.issueSearch.parse({})).toEqual({ limit: 20 })
-  })
-})
-
 describe("createAgentReadHandlers", () => {
   it("exposes only the six bounded read tools", () => {
+    const issueReadTools = createIssueReadTools(() => {
+      throw new Error("unused")
+    })
     expect(Object.keys(issueReadTools).toSorted()).toEqual([
       "get_issue",
       "read_account_context",
@@ -157,13 +129,60 @@ describe("createAgentReadHandlers", () => {
     expect(JSON.stringify(results)).not.toContain(RUN_GRANT)
   })
 
+  it("connects the production get_issue registry to runtime capability injection", async () => {
+    const description = "x".repeat(50_000)
+    const test = apiHarness({ issueDescription: description })
+    const issueReadTools = createIssueReadTools(() => ({
+      api: Object.assign(JSON.parse("{}"), test.api),
+      budget: createAgentToolBudget(),
+      rootRunId: "root_test",
+      runGrant: RUN_GRANT,
+      settlement: JSON.parse("{}"),
+      suspendAction: async () => undefined,
+      visionBudget: createAgentVisionBudget(),
+    }))
+    const execute = issueReadTools.get_issue.execute
+
+    const result = await Reflect.apply(
+      execute ?? (() => undefined),
+      undefined,
+      [
+        { lookup: "id", id: "issue_1" },
+        { observe: noopObserve, requestContext: new RequestContext() },
+      ]
+    )
+
+    expect(test.grants).toEqual([RUN_GRANT])
+    expect(result.description).toHaveLength(20_000)
+    expect(result.description.endsWith("…")).toBe(true)
+  })
+
+  it("fails closed when production get_issue has no runtime context", async () => {
+    const issueReadTools = createIssueReadTools(() => {
+      throw new Error("Agent runtime capability is unavailable")
+    })
+    const execute = issueReadTools.get_issue.execute
+    let caught: unknown
+    try {
+      await Reflect.apply(execute ?? (() => undefined), undefined, [
+        { lookup: "id", id: "issue_1" },
+        { observe: noopObserve, requestContext: new RequestContext() },
+      ])
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    expect(String(caught)).toContain("Agent tool execution failed")
+  })
+
   it("bounds Issue descriptions returned by list search", async () => {
     const test = apiHarness()
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 
     const results = await handlers.searchIssues({ limit: 10 })
 
-    expect(results[0]?.description).toHaveLength(2_001)
+    expect(results[0]?.description).toHaveLength(2_000)
     expect(results[0]?.description.endsWith("…")).toBe(true)
   })
 
@@ -192,6 +211,12 @@ describe("createAgentReadHandlers", () => {
 })
 
 describe("Issue attachment image sidecar", () => {
+  it("rejects malformed image metadata before reading a sidecar", () => {
+    expect(() => issueAttachmentImageToModelOutput({})).toThrow(
+      "Issue attachment image is unavailable"
+    )
+  })
+
   it("keeps canonical output metadata-only and consumes the WeakMap sidecar once", async () => {
     const getIssueAttachmentImageForModel = vi.fn<
       AgentInternalGateway["getIssueAttachmentImageForModel"]

@@ -1,4 +1,5 @@
-import { z } from "zod"
+import { toStandardJsonSchema } from "@valibot/to-json-schema"
+import * as v from "valibot"
 
 const MAXIMUM_QUERY_CHARACTERS = 200
 
@@ -31,15 +32,22 @@ const isPublicWebSearchQuery = (query: string) =>
   !containsControlCharacter(query) &&
   forbiddenPublicQueryPatterns.every((pattern) => !pattern.test(query))
 
-const publicQuerySchema = z
-  .string()
-  .trim()
-  .min(2)
-  .max(MAXIMUM_QUERY_CHARACTERS)
-  .refine(isPublicWebSearchQuery, {
-    message: "Web search accepts public information only",
-  })
+const publicWebSearchQueryTransportSchema = v.pipe(
+  v.string(),
+  v.minLength(2),
+  v.maxLength(MAXIMUM_QUERY_CHARACTERS)
+)
 
-export const publicWebSearchInputSchema = z
-  .object({ query: publicQuerySchema })
-  .strict()
+export const publicWebSearchInputValueSchema = v.strictObject({
+  query: v.pipe(
+    publicWebSearchQueryTransportSchema,
+    v.check(
+      (query) => query === query.trim() && isPublicWebSearchQuery(query),
+      "Web search accepts public information only"
+    )
+  ),
+})
+
+export const publicWebSearchInputSchema = toStandardJsonSchema(
+  v.strictObject({ query: publicWebSearchQueryTransportSchema })
+)

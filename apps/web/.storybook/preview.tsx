@@ -77,7 +77,10 @@ export default definePreview({
   decorators: [
     (Story, context) => (
       <WithQueryClient>
-        <div className="min-h-64 bg-background p-6 text-foreground">
+        <div
+          className="min-h-64 bg-background p-6 text-foreground"
+          data-storybook-content-root
+        >
           <Story />
         </div>
         {context.parameters.disableGlobalToaster ? null : <Toaster />}

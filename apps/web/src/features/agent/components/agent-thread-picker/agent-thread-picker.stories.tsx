@@ -1,4 +1,4 @@
-import { expect, fn, userEvent, waitFor } from "storybook/test"
+import { expect, fn, userEvent } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -10,7 +10,6 @@ import { AgentThreadItem, AgentThreadToolbar } from "./agent-thread-picker"
 
 const onArchive = fn()
 const onCreate = fn()
-const onRename = fn()
 const onSelect = fn()
 
 const meta = preview.meta({
@@ -25,9 +24,7 @@ const meta = preview.meta({
     loading: false,
     onArchive,
     onCreate,
-    onRename,
     onSelect,
-    renaming: false,
     selectedThread: fictionalPrimaryAgentThread,
     threads: fictionalAgentThreads,
   },
@@ -36,21 +33,6 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Rename the selected thread", async () => {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Rename thread" })
-      )
-      const input = canvas.getByRole("textbox", { name: "Thread title" })
-      await waitFor(() => expect(input).toHaveFocus())
-      await userEvent.clear(input)
-      await userEvent.type(input, "Review organization boundary")
-      await userEvent.keyboard("{Enter}")
-      await expect(onRename).toHaveBeenCalledWith(
-        fictionalPrimaryAgentThread,
-        "Review organization boundary"
-      )
-    })
-
     await step("Create a new private thread", async () => {
       await userEvent.click(
         canvas.getByRole("button", { name: "New agent thread" })

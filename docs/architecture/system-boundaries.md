@@ -39,12 +39,15 @@ apps/web
   -> @enterprise-agentic-saas/ui/*
 
 apps/api
+  -> @enterprise-agentic-saas/agent-contracts
+  -> @enterprise-agentic-saas/agent-tools
   -> @enterprise-agentic-saas/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email
 
 apps/agent
-  -> @enterprise-agentic-saas/api/agent-client
+  -> @enterprise-agentic-saas/agent-contracts
+  -> @enterprise-agentic-saas/agent-tools
 
 apps/emulate
   -> @enterprise-agentic-saas/auth/github-oauth
@@ -53,6 +56,10 @@ packages/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email
 
+packages/agent-tools
+  -> @enterprise-agentic-saas/agent-contracts
+
+packages/agent-contracts
 packages/db
 packages/email
 packages/portless-topology
@@ -93,7 +100,7 @@ manifestのdevelopment dependencyとbare executableだけを利用し、source�
 | ---------------------------- | --------------------------------------------------------------------------------- |
 | `apps/web`                   | DB、Email、Agent runtime、Emulate、`api/client`以外のAPI、`auth/client`以外のAuth |
 | `apps/api`                   | Web、Agent runtime、UI、Emulate                                                   |
-| `apps/agent`                 | DB、Auth、Email、Web、UI、Emulate、`api/agent-client`以外のAPI                    |
+| `apps/agent`                 | API、DB、Auth、Email、Web、UI、Emulate                                            |
 | `apps/emulate`               | Web、API、Agent、DB、Email、UI                                                    |
 | `packages/auth`              | app、API、UI                                                                      |
 | `packages/db`                | 他の全workspace                                                                   |
@@ -101,6 +108,8 @@ manifestのdevelopment dependencyとbare executableだけを利用し、source�
 | `packages/portless-topology` | 全workspaceのruntime/test source                                                  |
 | `packages/ui`                | app、API、Auth、DB、Email、Agent                                                  |
 | `packages/typescript-config` | runtime sourceと全workspace dependency                                            |
+| `packages/agent-contracts`   | app、DB、Auth、Email、UI                                                          |
+| `packages/agent-tools`       | app、DB、Auth、Email、UI                                                          |
 
 ## 公開entrypoint
 

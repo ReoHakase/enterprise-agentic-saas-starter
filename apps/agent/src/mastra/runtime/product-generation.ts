@@ -1,4 +1,4 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentUiMessage } from "@enterprise-agentic-saas/agent-contracts"
 
 import { requiresWebSearchFirstStep } from "../core/policy/web-search-request"
 
@@ -8,25 +8,21 @@ const forceWebSearchOnFirstStep = ({ stepNumber }: { stepNumber: number }) =>
         toolChoice: { type: "tool" as const, toolName: "web_search" },
       }
     : undefined
-const defaultProviderOptions = {
+const reasoningDisabledProviderOptions = {
   openrouter: {
-    reasoning: { effort: "medium", exclude: false },
-  },
-} as const
-const forcedToolProviderOptions = {
-  openrouter: {
-    // Alibaba rejects a forced tool choice while reasoning is enabled.
+    // Keep Product Agent output useful and bounded; Alibaba also rejects a
+    // forced tool choice while reasoning is enabled.
     reasoning: { enabled: false, effort: "none", exclude: true },
   },
 } as const
 
 export const productGenerationWebSearchOptions = (
-  messages: readonly AgentCanonicalMessage[],
+  messages: readonly AgentUiMessage[],
   toolAllowlist?: readonly string[]
 ) =>
   requiresWebSearchFirstStep(messages, toolAllowlist)
     ? {
         prepareStep: forceWebSearchOnFirstStep,
-        providerOptions: forcedToolProviderOptions,
+        providerOptions: reasoningDisabledProviderOptions,
       }
-    : { providerOptions: defaultProviderOptions }
+    : { providerOptions: reasoningDisabledProviderOptions }

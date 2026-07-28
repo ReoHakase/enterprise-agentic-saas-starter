@@ -1,7 +1,5 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
-  agentMessages,
-  agentThreads,
   issues,
   member,
   organization,
@@ -31,127 +29,12 @@ import {
   listIssuesByOrganization,
 } from "../../issues/public"
 import {
-  requireActiveMembership,
-  requireLiveSession,
-  requireOwnedThread,
-} from "./auth-repository"
-import {
   preserveAgentError,
   toAgentIssue,
   toAgentIssueAttachment,
   toOrganizationContext,
-  toThreadDto,
-  type AgentThreadDto,
 } from "./repository-support"
 import { withRunGrant } from "./run-repository"
-
-export const renameAgentThreadForRun = async (
-  db: Db,
-  input: { grant: string; title: string; now?: Date }
-): Promise<{ threadId: string; title: string; renamed: boolean }> => {
-  try {
-    return await withRunGrant(db, input, async (tx, context) => {
-      if (context.runScope !== "chat") {
-        throw publicErrors.conflict("Only a chat run can rename its thread", {
-          resource: "agent_thread",
-        })
-      }
-      const now = input.now ?? new Date()
-      const rows = await tx
-        .update(agentThreads)
-        .set({
-          title: input.title,
-          titleState: "agent",
-          titleRevision: sql`${agentThreads.titleRevision} + 1`,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(agentThreads.organizationId, context.organizationId),
-            eq(agentThreads.id, context.threadId),
-            eq(agentThreads.ownerUserId, context.userId),
-            eq(agentThreads.status, "active"),
-            eq(agentThreads.titleState, "untitled")
-          )
-        )
-        .returning({ id: agentThreads.id, title: agentThreads.title })
-      const renamed = rows[0]
-      if (renamed) {
-        return { threadId: renamed.id, title: renamed.title, renamed: true }
-      }
-      const current = await requireOwnedThread(tx, {
-        threadId: context.threadId,
-        userId: context.userId,
-        activeOrganizationId: context.organizationId,
-      })
-      return { threadId: current.id, title: current.title, renamed: false }
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "renameAgentThreadForRun")
-  }
-}
-
-export const renameAgentThreadForSession = async (
-  db: Db,
-  input: {
-    expectedRevision: number
-    sessionId: string
-    threadId: string
-    title: string
-    userId: string
-    now?: Date
-  }
-): Promise<AgentThreadDto> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-      })
-      const rows = await tx
-        .update(agentThreads)
-        .set({
-          title: input.title,
-          titleState: "user",
-          titleRevision: input.expectedRevision + 1,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(agentThreads.organizationId, current.activeOrganizationId),
-            eq(agentThreads.id, input.threadId),
-            eq(agentThreads.ownerUserId, input.userId),
-            eq(agentThreads.status, "active"),
-            eq(agentThreads.titleRevision, input.expectedRevision)
-          )
-        )
-        .returning()
-      const renamed = rows[0]
-      if (!renamed) {
-        throw publicErrors.conflict("Agent thread title changed", {
-          reason: "revision_conflict",
-          resource: "agent_thread",
-        })
-      }
-      const countRows = await tx
-        .select({ value: sql<number>`count(*)` })
-        .from(agentMessages)
-        .where(
-          and(
-            eq(agentMessages.organizationId, current.activeOrganizationId),
-            eq(agentMessages.threadId, input.threadId)
-          )
-        )
-      return toThreadDto(renamed, Number(countRows[0]?.value ?? 0))
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "renameAgentThreadForSession")
-  }
-}
 
 export const readAgentAccountContext = async (
   db: Db,

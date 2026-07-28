@@ -1,58 +1,64 @@
-import type { RequestContext } from "@mastra/core/request-context"
+import type { MastraCompositeStore } from "@mastra/core/storage"
 
 import { createAgentModel } from "../adapters/model/openrouter"
-import { createOpenRouterWebSearchTool } from "../adapters/model/openrouter-web-search"
-import { createProductAgent } from "../agents/product-agent"
+import { createDirectOpenRouterWebSearch } from "../adapters/model/openrouter-web-search"
+import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import {
-  createPublicWebResearchAgent,
-  type PublicWebResearchRequestContext,
-} from "../agents/public-web-research-agent"
+  createProductAgent,
+  createProductAgentMemory,
+} from "../agents/product-agent"
 import { createThreadTitleAgent } from "../agents/thread-title-agent"
-import {
-  getOptionalProductAgentRuntime,
-  type ProductAgentRequestContext,
-} from "../runtime/request-context"
+import { ProductAgentExecutionRegistry } from "../runtime/request-context"
+import type { AgentStorageEnvironment } from "../storage"
 import { createWebSearchTool } from "../tools/web-search/tool"
 
-const readPublicWebApiKey = (
-  requestContext?: RequestContext<PublicWebResearchRequestContext>
-) => requestContext?.get("apiKey")
+type ProductAgentCompositionEnvironment = AgentStorageEnvironment & {
+  OPENROUTER_API_KEY?: string
+  OPENROUTER_BASE_URL?: string
+}
 
-const readPublicWebBaseURL = (
-  requestContext?: RequestContext<PublicWebResearchRequestContext>
-) => requestContext?.get("baseURL")
+type ProductAgentCompositionOptions = {
+  allowUnscopedModel?: boolean
+}
 
-export const publicWebResearchAgent = createPublicWebResearchAgent({
-  model: ({ requestContext }) =>
+export const createProductAgentComposition = (
+  environment: ProductAgentCompositionEnvironment,
+  storage: MastraCompositeStore,
+  { allowUnscopedModel = false }: ProductAgentCompositionOptions = {}
+) => {
+  const unscopedModelEnabled =
+    allowUnscopedModel && environment.NODE_ENV === "development"
+  const model = () =>
     createAgentModel(
-      readPublicWebApiKey(requestContext),
-      readPublicWebBaseURL(requestContext)
+      environment.OPENROUTER_API_KEY,
+      environment.OPENROUTER_BASE_URL
+    )
+  const threadTitleAgent = createThreadTitleAgent(model)
+  const executionRegistry = new ProductAgentExecutionRegistry()
+  const productWebSearchTool = createWebSearchTool(
+    createDirectOpenRouterWebSearch(
+      environment.OPENROUTER_API_KEY,
+      environment.OPENROUTER_BASE_URL
     ),
-  tools: ({ requestContext }) => ({
-    openrouter_web_search: createOpenRouterWebSearchTool(
-      readPublicWebApiKey(requestContext),
-      readPublicWebBaseURL(requestContext)
-    ),
-  }),
-})
-
-export const productWebSearchTool = createWebSearchTool(publicWebResearchAgent)
-
-const productModel = ({
-  requestContext,
-}: {
-  requestContext?: RequestContext<ProductAgentRequestContext>
-}) =>
-  createAgentModel(
-    getOptionalProductAgentRuntime(requestContext)?.openRouterApiKey,
-    getOptionalProductAgentRuntime(requestContext)?.openRouterBaseURL
+    executionRegistry.resolve,
+    {
+      onProviderError: (cause) =>
+        reportDevelopmentCauseChain(environment, "web-search-provider", cause),
+    }
   )
-
-export const productAgent = createProductAgent({
-  model: productModel,
-  webSearchTool: productWebSearchTool,
-})
-
-export const threadTitleAgent = createThreadTitleAgent({
-  model: productModel,
-})
+  const memory = createProductAgentMemory(storage)
+  const productAgent = createProductAgent({
+    allowUnscopedModel: unscopedModelEnabled,
+    memory: unscopedModelEnabled ? undefined : memory,
+    model,
+    resolveExecution: executionRegistry.resolve,
+    webSearchTool: productWebSearchTool,
+  })
+  return {
+    executionRegistry,
+    memory,
+    productAgent,
+    productWebSearchTool,
+    threadTitleAgent,
+  }
+}

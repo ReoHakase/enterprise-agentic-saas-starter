@@ -7,6 +7,7 @@ import type {
   AgentUpdateIssueActionInput,
 } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
+import { bindReusableAgentAssetsToRunInTransaction } from "../../files/public"
 import { type AgentTransaction } from "../threads/repository"
 import {
   buildPreparedIssueAction,
@@ -59,6 +60,19 @@ const prepareInTransaction = async (
       resource: "agent_run",
     })
   }
+
+  const attachmentAssetIds =
+    input.kind === "create_issue"
+      ? (input.issue.attachmentAssetIds ?? [])
+      : input.kind === "update_issue" &&
+          input.issue.operation === "add_attachments"
+        ? input.issue.attachmentAssetIds
+        : []
+  await bindReusableAgentAssetsToRunInTransaction(tx, {
+    assetIds: attachmentAssetIds,
+    context,
+    now,
+  })
 
   const prepared = await buildPreparedIssueAction(
     tx,

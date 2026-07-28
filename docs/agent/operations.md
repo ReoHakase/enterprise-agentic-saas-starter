@@ -2,7 +2,7 @@
 title: 製品Agentの運用runbook
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-28
 ---
 
 # 運用runbook
@@ -12,6 +12,10 @@ last_reviewed: 2026-07-25
 `bun run dev`はWeb、API、Agent Worker、local Turso等を起動します。Mastra Studioだけを確認する場合はrepo scriptを使い、production Agent定義と別forkを作りません。OpenRouter keyはgitignore済み`apps/agent/.env.local`または明示的なprocess environmentから読みます。
 
 Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true`、未知値をfail closedにします。local API supervisorは`bun run dev`時だけ`AGENT_ASSET_UPLOAD_ENABLED`未設定を`1`へ補い、明示値は尊重します。disabledとprovider/API障害は別のsafe toastにし、raw responseを表示しません。DB schema変更はDrizzle migrationを生成して適用し、通常起動でpush/resetしません。
+
+`NODE_ENV=development`のAgent processだけは、modelとWeb検索providerのraw `Error`および最大8段の
+cause chainをlocal consoleへ出します。公開HTTP response、Mastra Memory、workflow snapshot、
+Sentry、trace、paid test artifactへは転送しません。productionとtestではこの出力を無効にします。
 
 ## Paid test secret
 
@@ -30,11 +34,12 @@ tmp pathは`$TMPDIR/enterprise-agentic-saas-agent-e2e-<run-id>`のような固�
 
 ## Deploy順序
 
-productionはAPI/Agent Workerの存在とprotocol互換をread-only確認して分岐します。
+productionはAPI/Agent Worker、migration ledger、cross-database secret inventoryをread-only確認して分岐します。
 
-- fresh/片側欠損: migration → bindingなしbootstrap API → Agent → final API → Web → smoke
-- compatible: migration → Agent → API → Web → smoke
-- 旧protocol: maintenance windowとone-time bootstrap flagを要求
+- destructive migration、stale secret、fresh/片側欠損、旧protocol: Agent flag全停止 → bindingなしmaintenance API → remote settings確認 → live capability/runの連続zero drain → exact secret削除・再inventory → migration → Agent → final API → remote settings確認 → Web → smoke
+- destructive migrationもstale secretもないcompatible release: migration → Agent → final API → remote settings確認 → Web → smoke
+
+maintenance APIはpublic `/agent`、Agent thread/asset file route、named `AgentInternalApi`、scheduled jobを同時に閉じます。health/readiness/OpenAPIは維持し、実routeの503とCloudflare settings上の`AGENT_RUNTIME`欠如、`AGENT_MAINTENANCE_MODE=1`を確認します。drainはApplication DB clockを使う単一aggregate snapshotでticket、resume ticket、grant、runを数え、全件0がgrace window中継続しなければmigrationへ進みません。初回inventoryがcleanだった後にstale secretが現れた場合はraceとして削除せず停止します。final API後は`AGENT_RUNTIME`の存在と`AGENT_MAINTENANCE_MODE=0`をremote settingsで再確認します。
 
 API/Agent/Webのtypegen、dry-run/build、Sentry source map uploadを先に完了します。Sentry upload失敗後にdeployを続行しません。3 Workerは同じcommit SHAをrelease IDに使います。
 

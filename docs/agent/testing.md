@@ -97,6 +97,14 @@ release modelを使い、標準free E2Eへ混ぜません。E2は次の固定2�
 1. `agent-canary-read-source`: 明示した公開検索語からread/Web検索tool、source、Issue linkを表示する
 2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を完了する
 
+`agent-canary-existing-issue-image-followup @diagnostic-qwen`は低価格modelのtool選択がflakyなため、
+固定2本には含めません。次のように明示した時だけ実行し、終了codeをrelease gateへ混ぜません。
+
+```sh
+PAID_E2E_APPROVED=1 PAID_E2E_DIAGNOSTIC=1 bun run test:e2e:full \
+  --grep agent-canary-existing-issue-image-followup
+```
+
 上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、
 browserless G5 eval、E2 canaryへ責務を配分します。
 
