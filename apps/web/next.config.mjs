@@ -13,6 +13,10 @@ const safeOrigin = (value) => {
 const apiOrigin =
   safeOrigin(process.env.NEXT_PUBLIC_API_BASE_URL) ??
   "https://api.enterprise-agentic-saas.localhost"
+const configuredWebOrigin = safeOrigin(process.env.APP_BASE_URL)
+const webHostname = configuredWebOrigin
+  ? new URL(configuredWebOrigin).hostname
+  : "enterprise-agentic-saas.localhost"
 const sentryOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_DSN)
 const spotlightOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_SPOTLIGHT)
 const connectSources = [
@@ -25,10 +29,7 @@ const connectSources = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
-  allowedDevOrigins: [
-    "enterprise-agentic-saas.localhost",
-    "*.enterprise-agentic-saas.localhost",
-  ],
+  allowedDevOrigins: [webHostname],
   transpilePackages: [
     "@enterprise-agentic-saas/ui",
     "@enterprise-agentic-saas/api",

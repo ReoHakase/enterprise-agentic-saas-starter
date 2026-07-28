@@ -4,7 +4,8 @@ const LOCAL_DATABASE_HOSTNAMES = new Set([
   "::1",
   "[::1]",
 ])
-const REPOSITORY_LOCAL_TURSO_HOSTNAME = "db.enterprise-agentic-saas.localhost"
+const REPOSITORY_LOCAL_TURSO_HOSTNAME_SUFFIX =
+  ".enterprise-agentic-saas.localhost"
 
 export const assertLocalDatabaseUrl = (databaseUrl: string) => {
   try {
@@ -41,8 +42,10 @@ export const assertRepositoryLocalTursoUrl = (databaseUrl: string) => {
     const url = new URL(databaseUrl)
     if (
       url.protocol === "https:" &&
-      url.hostname.toLowerCase() === REPOSITORY_LOCAL_TURSO_HOSTNAME &&
-      url.port === "" &&
+      url.hostname.toLowerCase().startsWith("db.") &&
+      url.hostname
+        .toLowerCase()
+        .endsWith(REPOSITORY_LOCAL_TURSO_HOSTNAME_SUFFIX) &&
       url.pathname === "/" &&
       url.username === "" &&
       url.password === "" &&

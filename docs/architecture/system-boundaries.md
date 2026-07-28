@@ -55,6 +55,7 @@ packages/auth
 
 packages/db
 packages/email
+packages/portless-topology
 packages/ui
 packages/typescript-config
   -> 他workspaceへ依存しない
@@ -66,6 +67,10 @@ packages/typescript-config
 workspace isolationはruntime dependency、development dependency、source importを区別して
 検査します。Oxlint、Vitest、Storybook等のtooling dependencyも同様に、実行するworkspaceの
 `devDependency`として宣言します。
+
+`packages/portless-topology`はローカル開発command専用のtooling packageです。各consumerは
+manifestのdevelopment dependencyとbare executableだけを利用し、sourceからpackageをimportしません。
+同packageは`package.json#bin`だけを公開し、`exports`と`main`を持ちません。
 
 ## 許可する依存
 
@@ -93,12 +98,15 @@ workspace isolationはruntime dependency、development dependency、source impor
 | `packages/auth`              | app、API、UI                                                                      |
 | `packages/db`                | 他の全workspace                                                                   |
 | `packages/email`             | app、Auth、DB、UI、API                                                            |
+| `packages/portless-topology` | 全workspaceのruntime/test source                                                  |
 | `packages/ui`                | app、API、Auth、DB、Email、Agent                                                  |
 | `packages/typescript-config` | runtime sourceと全workspace dependency                                            |
 
 ## 公開entrypoint
 
-workspaceを越えるimportは`package.json#exports`に限定します。
+workspaceを越えるimportは`package.json#exports`に限定します。CLI専用の
+`packages/portless-topology`は例外的に`package.json#bin`だけを公開し、workspaceを越えるsource
+importを全面的に禁止します。
 
 ```ts
 import { createApiClient } from "@enterprise-agentic-saas/api/client"
@@ -254,3 +262,4 @@ repo専用module graph、architecture checker、ESLintは追加しません。
 - Knip strict modeでworkspace isolation findingがゼロ
 - runtime/source graph外のworkspace edgeがfixtureを含めて全て拒否される
 - TypeScript config等のtooling dependencyがruntime graphへ混入しない
+- Portless topologyがbare executable以外から参照されない

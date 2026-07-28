@@ -41,7 +41,37 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
 - Emulate（GitHub）: `https://github.emulate.enterprise-agentic-saas.localhost`
 
-上記はmain checkoutのbrowser URLです。linked worktreeではPortlessがworktree prefixを付けます。API supervisorは同じworktreeで起動したMailpit wrapperのprivate sessionを読み、workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別worktreeの固定URLをlocal envへ複製しません。
+上記はmain checkoutのbrowser URLです。linked worktreeのWebは
+`https://<branch>.enterprise-agentic-saas.localhost`、APIは
+`https://api.<branch>.enterprise-agentic-saas.localhost`、その他は
+`https://<service-prefix>.<branch>.enterprise-agentic-saas.localhost`です。
+`storybook.ui`や`github.emulate`の複数labelもservice prefixとして維持します。
+`packages/portless-topology`のCLIは`portless get enterprise-agentic-saas`だけからこのnamespaceを取得し、
+branch名を独自加工しません。実効URLは次のcommandで確認します。
+
+```sh
+bun run portless-topology resolve enterprise-agentic-saas
+bun run portless-topology resolve api.enterprise-agentic-saas
+bun run portless-topology resolve storybook.ui.enterprise-agentic-saas
+```
+
+CLIはWeb、API、DB、GitHub Emulateのoriginと認証Cookieのdomainを同じnamespaceから各processへ
+注入します。linked worktreeのCookie domainは`<branch>.enterprise-agentic-saas.localhost`です。
+このdomainのCookieは同じnamespaceのStorybookやMailpit等にも送られるため、ローカル開発専用として
+扱います。API supervisorは同じworktreeで起動したMailpit wrapperのprivate sessionを読み、
+workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別worktreeの固定URLをlocal envへ
+複製しません。
+
+このCLI packageは[Portless issue #372](https://github.com/vercel-labs/portless/issues/372)が解決する
+までのリポジトリ固有の暫定措置であり、generic shared packageへ拡張しません。削除する変更では
+`resolve`と`run`をnative Portlessへ置換し、`exec`が組み立てる`APP_BASE_URL`、
+`API_PUBLIC_URL`、`NEXT_PUBLIC_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、
+`TRUSTED_ORIGINS`、`CORS_ORIGIN`、`TURSO_DATABASE_URL`、`GITHUB_OAUTH_EMULATOR_URL`、
+`GITHUB_OAUTH_CALLBACK_URL`とstaleな`EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去を、
+Portlessに依存しない永続的なlocal environment経路へ移すか不要化します。main checkoutとlinked
+worktreeの実Portless smokeで全hostname、Cookie、callback、token除去、child argv、終了コード、
+`SIGINT`/`SIGTERM`転送のparityを確認した後に限り、package、全consumerのdevelopment dependency、
+品質設定、文書、lockfile entryを同じ変更から削除します。
 
 `.env*` と `.dev.vars` の実値はcommitしません。共有するkeyだけを `.env.example` / `.dev.vars.example` に置きます。
 
@@ -101,7 +131,8 @@ Storybookだけを起動する場合は、次の公開commandを使います。
 bun run dev:storybook
 ```
 
-`bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、linked worktreeではPortlessが付けるworktree prefixを含む`portless get storybook.enterprise-agentic-saas`と`portless get storybook.ui.enterprise-agentic-saas`の出力を正本にします。
+`bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、
+linked worktreeでは`bun run portless-topology resolve`の出力を正本にします。
 
 Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
@@ -225,9 +256,9 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 - `.localhost` HTTPSで証明書エラー: `~/.portless/ca.pem` と `NODE_EXTRA_CA_CERTS` を確認する。
 - envが読まれない: Bunはcommandのcwdにある `.env*` を読む。rootへsecretを集約しない。
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。
-- Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `portless get mailpit.enterprise-agentic-saas` の出力を開く。APIだけをpackage単体で起動するときは、Mailpit dependencyを先に起動するか明示的なlocal `MAILPIT_URL`を渡す。
+- Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `bun run portless-topology resolve mailpit.enterprise-agentic-saas` の出力を開く。APIだけをpackage単体で起動するときは、Mailpit dependencyを先に起動するか明示的なlocal `MAILPIT_URL`を渡す。
 - Mailpitにメールが届かない: `NODE_ENV=development`であること、APIのlocal envが既定値を`console`等で上書きしていないことを確認する。通常のroot/filtered Turbo起動では `packages/email/.local/mailpit-session.json` が存在し、API起動時にdirect loopback endpointのreadinessが通る。React Email previewにはapplicationから送ったメールは保存されない。
-- GitHub OAuth user pickerが開かない: `portless get github.emulate.enterprise-agentic-saas`と`portless get api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
+- GitHub OAuth user pickerが開かない: `bun run portless-topology resolve`で`github.emulate.enterprise-agentic-saas`と`api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。callbackは`/auth/oauth2/callback/github`でなければならない。
 - emulatorが起動を拒否する: `NODE_ENV=production`、remote URL、`DEBUG=1`、`EMULATE_DEBUG=1`をlocal shellへ残していないか確認する。実credentialをdebug logへ出す設定で回避しない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。
 - file fixtureが見えない: `bun run dev`はfixtureを作らない。`bun run dev:db:seed`を実行する。完全に作り直す必要がある場合だけ、dev停止後に`bun run dev:db:reset` → 任意の`bun run dev:db:seed` → `bun run dev`の順にする。

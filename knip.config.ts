@@ -79,6 +79,10 @@ const config: KnipConfig = {
     },
     "apps/emulate": {
       project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
+      // Issue: Portless #372. Owner: developer-environment maintainers.
+      // Bun.spawn invokes this package's bin by name. Remove with the temporary
+      // topology package after upstream Portless preserves linked-worktree aliases.
+      ignoreDependencies: ["@enterprise-agentic-saas/portless-topology"],
     },
     "apps/web": {
       entry: [
@@ -145,6 +149,13 @@ const config: KnipConfig = {
       // The plugin marks template entries as development-only. The explicit
       // workspace entry above keeps the same templates in both full and strict graphs.
       "react-email": false,
+    },
+    "packages/portless-topology": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+      // Issue: Portless #372. Owner: developer-environment maintainers.
+      // Bun.spawn invokes the Portless bin by name. Remove this entire workspace
+      // after an upstream release passes main and linked-worktree smoke/parity.
+      ignoreDependencies: ["portless"],
     },
     "packages/typescript-config": {
       entry: ["test-fixtures/**/*.{ts,tsx}"],

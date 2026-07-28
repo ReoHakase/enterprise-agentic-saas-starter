@@ -27,8 +27,8 @@
     }
   },
   "scripts": {
-    "dev": "portless run sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
-    "dev:mailpit": "portless run --name mailpit.enterprise-agentic-saas bun run src/development/mailpit-server.ts",
+    "dev": "portless-topology run email.enterprise-agentic-saas -- sh -c 'exec bun email dev --dir src/templates --port \"$PORT\"'",
+    "dev:mailpit": "portless-topology run mailpit.enterprise-agentic-saas -- bun run src/development/mailpit-server.ts",
     "mailpit:reset": "rm -f .local/mailpit.db .local/mailpit.db-shm .local/mailpit.db-wal .local/mailpit.db-journal",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -42,6 +42,7 @@
     "react": "catalog:"
   },
   "devDependencies": {
+    "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@react-email/ui": "catalog:",
     "@types/node": "catalog:",

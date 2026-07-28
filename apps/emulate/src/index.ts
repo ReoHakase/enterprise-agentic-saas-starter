@@ -11,16 +11,16 @@ import { createGracefulShutdown } from "./state/lifecycle"
 
 const PORTLESS_FLAG = "--portless"
 
-const resolveApiOrigin = async () => {
-  const portless = Bun.spawn(
-    ["portless", "get", "api.enterprise-agentic-saas"],
+export const resolveApiOrigin = async () => {
+  const resolver = Bun.spawn(
+    ["portless-topology", "resolve", "api.enterprise-agentic-saas"],
     {
       stdout: "pipe",
       stderr: "inherit",
     }
   )
-  const output = await new Response(portless.stdout).text()
-  const exitCode = await portless.exited
+  const output = await new Response(resolver.stdout).text()
+  const exitCode = await resolver.exited
 
   if (exitCode !== 0 || output.trim().length === 0) {
     throw new Error("APIのPortless URLを解決できませんでした。")
@@ -29,26 +29,19 @@ const resolveApiOrigin = async () => {
   return output.trim()
 }
 
-const runPortless = async (serviceInput: string | undefined) => {
-  const service = parseEmulateService(serviceInput)
-  const environment = { ...process.env }
+type RunTopology = (input: {
+  command: string[]
+  environment: NodeJS.ProcessEnv
+  logicalName: string
+}) => Promise<number>
 
-  if (service === "github" && !environment.GITHUB_OAUTH_CALLBACK_URL?.trim()) {
-    const apiOrigin = await resolveApiOrigin()
-    environment.GITHUB_OAUTH_CALLBACK_URL = `${apiOrigin.replace(/\/$/u, "")}${GITHUB_OAUTH_CALLBACK_PATH}`
-  }
-
+const runTopology: RunTopology = async ({
+  command,
+  environment,
+  logicalName,
+}) => {
   const child = Bun.spawn(
-    [
-      "portless",
-      "run",
-      "--name",
-      `${service}.emulate.enterprise-agentic-saas`,
-      "bun",
-      "run",
-      "src/index.ts",
-      service,
-    ],
+    ["portless-topology", "run", logicalName, "--", ...command],
     {
       env: environment,
       stdin: "inherit",
@@ -57,9 +50,41 @@ const runPortless = async (serviceInput: string | undefined) => {
     }
   )
 
-  process.once("SIGINT", () => child.kill("SIGINT"))
-  process.once("SIGTERM", () => child.kill("SIGTERM"))
-  process.exitCode = await child.exited
+  const forwardSigint = () => child.kill("SIGINT")
+  const forwardSigterm = () => child.kill("SIGTERM")
+  process.once("SIGINT", forwardSigint)
+  process.once("SIGTERM", forwardSigterm)
+  try {
+    return await child.exited
+  } finally {
+    process.off("SIGINT", forwardSigint)
+    process.off("SIGTERM", forwardSigterm)
+  }
+}
+
+export const runPortless = async (
+  serviceInput: string | undefined,
+  dependencies: {
+    environment?: NodeJS.ProcessEnv
+    resolveApiOrigin?: () => Promise<string>
+    runTopology?: RunTopology
+  } = {}
+) => {
+  const service = parseEmulateService(serviceInput)
+  const environment = { ...(dependencies.environment ?? process.env) }
+
+  if (service === "github" && !environment.GITHUB_OAUTH_CALLBACK_URL?.trim()) {
+    const apiOrigin = await (
+      dependencies.resolveApiOrigin ?? resolveApiOrigin
+    )()
+    environment.GITHUB_OAUTH_CALLBACK_URL = `${apiOrigin.replace(/\/$/u, "")}${GITHUB_OAUTH_CALLBACK_PATH}`
+  }
+
+  return await (dependencies.runTopology ?? runTopology)({
+    command: ["bun", "run", "src/index.ts", service],
+    environment,
+    logicalName: `${service}.emulate.enterprise-agentic-saas`,
+  })
 }
 
 const runHttp = async (serviceInput: string | undefined) => {
@@ -78,20 +103,25 @@ const runHttp = async (serviceInput: string | undefined) => {
   console.info(`${config.service} emulator: ${emulator.url}`)
 }
 
-const main = () =>
-  process.argv[2] === PORTLESS_FLAG
-    ? runPortless(process.argv[3])
-    : runHttp(process.argv[2])
-
-main().catch((error: unknown) => {
-  if (
-    error instanceof EmulateEnvironmentError ||
-    error instanceof EmulateServiceError
-  ) {
-    console.error(error.message)
-  } else {
-    console.error("emulatorを起動できませんでした。")
+const main = async () => {
+  if (process.argv[2] === PORTLESS_FLAG) {
+    process.exitCode = await runPortless(process.argv[3])
+    return
   }
+  await runHttp(process.argv[2])
+}
 
-  process.exitCode = 1
-})
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    if (
+      error instanceof EmulateEnvironmentError ||
+      error instanceof EmulateServiceError
+    ) {
+      console.error(error.message)
+    } else {
+      console.error("emulatorを起動できませんでした。")
+    }
+
+    process.exitCode = 1
+  })
+}

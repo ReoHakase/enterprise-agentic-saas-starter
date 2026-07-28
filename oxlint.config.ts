@@ -9,6 +9,7 @@ type WorkspaceName =
   | "db"
   | "email"
   | "emulate"
+  | "portless-topology"
   | "ui"
   | "web"
 
@@ -179,6 +180,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   db: [],
   email: [],
   emulate: ["@enterprise-agentic-saas/auth/github-oauth"],
+  "portless-topology": [],
   ui: ["@enterprise-agentic-saas/ui/*"],
   web: [
     "@enterprise-agentic-saas/api/client",

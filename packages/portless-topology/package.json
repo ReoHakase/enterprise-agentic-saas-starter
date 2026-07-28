@@ -1,12 +1,12 @@
 {
-  "name": "@enterprise-agentic-saas/emulate",
+  "name": "@enterprise-agentic-saas/portless-topology",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "portless-topology": "src/cli.ts"
+  },
   "type": "module",
   "scripts": {
-    "dev": "bun run dev:service github",
-    "dev:service": "bun run src/index.ts --portless",
-    "dev:http": "bun run src/index.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
@@ -14,15 +14,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@enterprise-agentic-saas/auth": "workspace:*",
-    "emulate": "catalog:",
-    "valibot": "catalog:"
+    "portless": "catalog:"
   },
   "devDependencies": {
-    "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -37,7 +37,7 @@ console senderはlocal dev専用で、templateとrecipient domainだけをlogへ
 
 ## ローカルinbox
 
-rootの `bun run dev` でMailpitも起動し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost` から送信結果を確認できる。linked worktreeの実効URLは `portless get mailpit.enterprise-agentic-saas` で確認する。workerdはPortlessの開発CAを信頼しないため、application送信には起動ごとの `packages/email/.local/mailpit-session.json` が示すdirect loopback HTTPを使う。このsessionはmodeと十分長いtokenを持ち、directory/file permissionを制限し、終了時cleanupはtoken一致時だけ行う。保存先は `packages/email/.local/mailpit.db` で、Mailpit UIの削除操作またはpackageの `bun run mailpit:reset` で手動resetする。React Email template previewもlinked worktreeではPortless prefixを使う。
+rootの `bun run dev` でMailpitも起動し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost` から送信結果を確認できる。linked worktreeの実効URLは `bun run portless-topology resolve mailpit.enterprise-agentic-saas` で確認する。workerdはPortlessの開発CAを信頼しないため、application送信には起動ごとの `packages/email/.local/mailpit-session.json` が示すdirect loopback HTTPを使う。このsessionはmodeと十分長いtokenを持ち、directory/file permissionを制限し、終了時cleanupはtoken一致時だけ行う。保存先は `packages/email/.local/mailpit.db` で、Mailpit UIの削除操作またはpackageの `bun run mailpit:reset` で手動resetする。React Email template previewもlinked worktreeでは同じnamespaceを使う。
 
 ## テスト
 

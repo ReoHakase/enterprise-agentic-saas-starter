@@ -22,7 +22,7 @@ describe("local Worker development configuration", () => {
     }
 
     expect(Reflect.get(scripts, "dev")).toContain(
-      "portless run bun run src/dev.ts"
+      "portless-topology run api.enterprise-agentic-saas -- bun run src/dev.ts"
     )
   })
 

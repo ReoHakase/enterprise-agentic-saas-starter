@@ -9,7 +9,7 @@
 ## 境界
 
 - `emulate --portless` は使いません。aliasの所有とworktree分離は外側の
-  `portless run`へ任せます。
+  `portless-topology run`へ任せます。
 - 公開用URLとGitHub OAuth callbackは、`localhost`、`*.localhost`、
   `127.0.0.1`、`::1`だけを許可します。remote URLは起動前に拒否します。
 - `NODE_ENV=production`では起動しません。`DEBUG=1|true`または
@@ -45,8 +45,9 @@ bun run --cwd apps/emulate dev:http stripe
 ```
 
 GitHubの`dev`と`dev:service`は、callbackが未指定なら同じworktreeのAPI originを
-`portless get`で解決します。Portless URLは
-`https://<service>.emulate.enterprise-agentic-saas.localhost`です。
+`portless-topology resolve`で解決します。main checkoutのPortless URLは
+`https://<service>.emulate.enterprise-agentic-saas.localhost`、linked worktreeでは
+`https://<service>.emulate.<branch>.enterprise-agentic-saas.localhost`です。
 
 `emulate@0.9.0`のプログラム用APIはlisten完了を待たずに返るため、launcherは
 サービス固有のendpointをloopbackからbounded pollしてから起動完了を表示します。
@@ -61,7 +62,7 @@ local machine以外から到達できないnetwork境界でだけ利用してく
 | `GITHUB_OAUTH_EMULATOR_CLIENT_ID`     | No            | 注入されたlocal既定値を上書きするclient ID                                 |
 | `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No            | 注入されたlocal既定値を上書きするclient secret                             |
 | `EMULATE_BASE_URL`                    | No            | 公開用local origin。`PORTLESS_URL`より優先                                 |
-| `PORTLESS_URL`                        | No            | `portless run`が注入する公開用local origin                                 |
+| `PORTLESS_URL`                        | No            | `portless-topology run`が注入する公開用local origin                        |
 | `PORT`                                | No            | listen port。未指定時はサービス固有の既定port                              |
 
 本番用`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`は読みません。専用credentialを

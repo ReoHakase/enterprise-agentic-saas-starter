@@ -22,6 +22,11 @@ describe("local database safety boundaries", () => {
         "https://db.enterprise-agentic-saas.localhost"
       )
     ).not.toThrow()
+    expect(() =>
+      assertRepositoryLocalTursoUrl(
+        "https://db.feature-auth.enterprise-agentic-saas.localhost:7443"
+      )
+    ).not.toThrow()
 
     for (const databaseUrl of [
       "file:/tmp/custom.db",

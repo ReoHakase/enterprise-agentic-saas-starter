@@ -148,7 +148,25 @@ APIとDBの`TURSO_DATABASE_URL`は同じ値にします。Bunはコマンドを�
 | React Email                | `https://email.enterprise-agentic-saas.localhost`          |
 | Emulate（GitHub）          | `https://github.emulate.enterprise-agentic-saas.localhost` |
 
-リンクした`worktree`ではPortlessがURLへ接頭辞を付けます。
+リンクした`worktree`では、Webを
+`https://<branch>.enterprise-agentic-saas.localhost`、APIを
+`https://api.<branch>.enterprise-agentic-saas.localhost`として分離します。その他の公開serviceも
+`<service-prefix>.<branch>.enterprise-agentic-saas.localhost`となり、
+`storybook.ui`や`github.emulate`の複数labelを維持します。実効URLは次のcommandで確認できます。
+
+```sh
+bun run portless-topology resolve enterprise-agentic-saas
+bun run portless-topology resolve api.enterprise-agentic-saas
+```
+
+このCLIは[Portless issue #372](https://github.com/vercel-labs/portless/issues/372)が解決するまでの
+リポジトリ固有の暫定措置です。削除する変更では、`resolve`と`run`をnative Portlessへ置換し、
+repository固有のWeb/API/Auth/CORS/DB/GitHub環境変数組み立てとstaleな
+`EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去をPortless非依存の永続的なlocal経路へ移すか
+不要化します。main checkoutとlinked worktreeの実Portless smokeで全hostname、Cookie domain、
+GitHub callback、token除去、childの終了コードとsignal転送まで同等と確認してから、CLI package、
+consumer dependency、品質設定、文書、lockfile entryを同じ変更から削除します。generic shared
+packageへ拡張しません。
 
 ### 3. ▶️ 開発サーバーを起動する
 
