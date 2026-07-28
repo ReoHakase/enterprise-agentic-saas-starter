@@ -95,6 +95,8 @@ vi.mock("../components/form-registry/form-registry", () => ({
 }))
 vi.mock("@/features/issues", () => ({
   issueKeys: { all: ["issues"] },
+}))
+vi.mock("@/features/issues/search-params.client", () => ({
   useIssueSearchState: () => ({ state: {} }),
 }))
 

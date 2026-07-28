@@ -42,6 +42,7 @@
     "./components/switch": "./src/components/switch/switch.tsx",
     "./components/table": "./src/components/table/table.tsx",
     "./components/textarea": "./src/components/textarea/textarea.tsx",
+    "./components/toggle-group": "./src/components/toggle-group/toggle-group.tsx",
     "./components/tooltip": "./src/components/tooltip/tooltip.tsx",
     "./hooks/use-mobile": "./src/hooks/use-mobile.ts",
     "./lib/create-cropped-image": "./src/lib/create-cropped-image.ts",

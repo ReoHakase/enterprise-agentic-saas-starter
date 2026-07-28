@@ -75,9 +75,13 @@ export type IssuesPorts = {
   ): Promise<{
     items: IssueListItemDto[]
     page: number
-    pageSize: 10
+    pageSize: 20 | 50 | 100
     total: number
   }>
+  listLabels(input: {
+    organizationId: string
+    search?: string
+  }): Promise<string[]>
   listTimeline(input: {
     cursor?: IssueTimelineCursorPosition
     issueId: string

@@ -13,6 +13,8 @@ import {
   issueTimelinePageModel,
   issueTimelineQueryModel,
   listIssueCommentsResponseModel,
+  listIssueLabelsQueryModel,
+  listIssueLabelsResponseModel,
   listIssuesQueryModel,
   listIssuesResponseModel,
   issueCommentModel,
@@ -23,6 +25,9 @@ import {
   updateIssueThumbnailBodyModel,
 } from "./model"
 import type { IssuesService } from "./service"
+
+const queryValues = <Value>(value: Value | Value[] | undefined) =>
+  value === undefined ? undefined : Array.isArray(value) ? value : [value]
 
 const createIssueReadRoutes = (
   service: IssuesService,
@@ -37,13 +42,22 @@ const createIssueReadRoutes = (
           userId: authContext.user.id,
           organizationId: organizationAccess.id,
           search: query.search,
-          status: query.status,
-          priority: query.priority,
-          assigneeId: query.assigneeId,
-          label: query.label,
+          statuses: queryValues(query.statuses),
+          priorityFrom: query.priorityFrom,
+          priorityTo: query.priorityTo,
+          assigneeIds: queryValues(query.assigneeIds),
+          labels: queryValues(query.labels),
+          labelMode: query.labelMode,
+          dueDateFrom: query.dueDateFrom,
+          dueDateTo: query.dueDateTo,
+          dueDateFromOffsetMinutes: query.dueDateFromOffsetMinutes,
+          dueDateToExclusiveOffsetMinutes:
+            query.dueDateToExclusiveOffsetMinutes,
+          dueDateOffsetMinutes: query.dueDateOffsetMinutes,
           sortBy: query.sortBy,
           sortDirection: query.sortDirection,
           page: query.page,
+          pageSize: query.pageSize,
         }),
       {
         organizationAccess: {
@@ -56,7 +70,37 @@ const createIssueReadRoutes = (
           operationId: "listIssues",
           summary: "List and filter organization issues",
           description:
-            "Returns a ten-item page from the active organization after applying search, status, priority, assignee, and label filters with deterministic sorting. Resources in another tenant are never considered.",
+            "Returns a caller-sized page from the active organization after applying search, multi-value status, priority range, assignee, label, and due-date filters with deterministic semantic sorting. Resources in another tenant are never considered.",
+          tags: ["Issues"],
+          "x-route-status": "enabled",
+          "x-auth-context": "session-cookie",
+          "x-audience": "first-party-web",
+        },
+      }
+    )
+    .get(
+      "/issues/labels",
+      ({ authContext, organizationAccess, query }) =>
+        service.listLabels({
+          userId: authContext.user.id,
+          organizationId: organizationAccess.id,
+          search: query.search,
+        }),
+      {
+        organizationAccess: {
+          action: "issue.list",
+          source: "query",
+        },
+        query: listIssueLabelsQueryModel,
+        response: {
+          200: listIssueLabelsResponseModel,
+          ...tenantErrorResponses,
+        },
+        detail: {
+          operationId: "listIssueLabels",
+          summary: "Search organization issue labels",
+          description:
+            "Returns at most fifty distinct issue label names from the active organization. Case-insensitive prefix matches are ordered before other substring matches, followed by label name.",
           tags: ["Issues"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",

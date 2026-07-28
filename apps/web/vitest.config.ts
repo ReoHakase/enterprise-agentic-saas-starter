@@ -81,6 +81,8 @@ const storybookProject = (theme: "light" | "dark") => ({
   resolve: { alias: browserAliases },
   test: {
     name: `storybook-${theme}`,
+    fileParallelism: false,
+    maxWorkers: 1,
     browser: {
       enabled: true,
       provider: playwright({}),

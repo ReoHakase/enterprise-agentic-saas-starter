@@ -4,10 +4,19 @@ import {
   getCoreRowModel,
   useReactTable,
   type PaginationState,
+  type RowSelectionState,
 } from "@tanstack/react-table"
-import { useCallback, useEffect, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { IssueSearchState } from "../../search-params"
+import { pruneRowSelection } from "@/components/data-table/data-table-state"
+import { useDataTableColumnVisibility } from "@/components/data-table/use-data-table-column-visibility"
+
+import {
+  defaultIssueSearchState,
+  issueListQueryKeyState,
+  type IssueSearchPatch,
+  type IssueSearchState,
+} from "../../search-params"
 import { useIssueColumns } from "../issue-table-columns/issue-table-columns"
 import type { IssuesTableProps } from "../issues-table-types/issues-table-types"
 import {
@@ -17,6 +26,43 @@ import {
 import type { IssueUiItem } from "../types/types"
 
 const ISSUE_FILTER_DEBOUNCE_MS = 300
+const issueColumnIds = [
+  "select",
+  "number",
+  "thumbnail",
+  "title",
+  "status",
+  "priority",
+  "assignee",
+  "dueDate",
+  "comments",
+  "files",
+  "updatedAt",
+  "actions",
+] as const
+const issueNonHideableColumnIds = ["select", "title", "actions"] as const
+const defaultIssueColumnVisibility = {}
+const toIssuePageSize = (value: number): IssueSearchState["pageSize"] => {
+  if (value === 50) return "50"
+  if (value === 100) return "100"
+  return "20"
+}
+
+const filterState = (state: IssueSearchState): IssueSearchPatch => ({
+  statuses: state.statuses,
+  priorityFrom: state.priorityFrom,
+  priorityTo: state.priorityTo,
+  assignees: state.assignees,
+  labels: state.labels,
+  labelMode: state.labelMode,
+  dueFrom: state.dueFrom,
+  dueTo: state.dueTo,
+  dueFromOffset: state.dueFromOffset,
+  dueToOffset: state.dueToOffset,
+  dueOffset: 0,
+})
+const defaultFilterState = filterState(defaultIssueSearchState)
+const defaultFilterStateKey = JSON.stringify(defaultFilterState)
 
 export const useIssuesTableFilters = ({
   searchState,
@@ -27,85 +73,101 @@ export const useIssuesTableFilters = ({
   "searchState" | "onSearchChange" | "onViewChange"
 >) => {
   const [searchDraft, setSearchDraft] = useState(searchState.q)
-  const [labelDraft, setLabelDraft] = useState(searchState.label)
-  const handleStatusChange = useCallback(
-    (value: IssueSearchState["status"]) => {
-      void onViewChange({ status: value, page: 1 })
-    },
-    [onViewChange]
+  const [draft, setDraft] = useState<IssueSearchPatch>(() =>
+    filterState(searchState)
   )
-  const handleSearchChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setSearchDraft(event.target.value)
-    },
-    []
-  )
-  const handlePriorityChange = useCallback(
-    (value: IssueSearchState["priority"]) => {
-      void onViewChange({ priority: value, page: 1 })
-    },
-    [onViewChange]
-  )
-  const handleAssigneeChange = useCallback(
-    (value: string | null) =>
-      void onViewChange({ assignee: value ?? "", page: 1 }),
-    [onViewChange]
-  )
-  const handleLabelChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setLabelDraft(event.target.value)
-    },
-    []
-  )
-  const handleSortChange = useCallback(
-    (value: string | null) => {
-      if (!isTableSort(value)) return
-      void onViewChange({ sort: value, page: 1 })
-    },
-    [onViewChange]
-  )
-  const handleDirectionChange = useCallback(
-    (value: string | null) => {
-      if (value !== "asc" && value !== "desc") return
-      void onViewChange({ dir: value, page: 1 })
-    },
-    [onViewChange]
-  )
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchTimeoutRef = useRef<number | undefined>(undefined)
+  const skipSearchDebounceRef = useRef(false)
+  const synchronizedFilterState = filterState(searchState)
+  const synchronizedFilterStateKey = JSON.stringify(synchronizedFilterState)
+  const synchronizedFilterStateRef = useRef(synchronizedFilterState)
+  synchronizedFilterStateRef.current = synchronizedFilterState
+  const draftKey = JSON.stringify(draft)
 
   useEffect(() => setSearchDraft(searchState.q), [searchState.q])
-  useEffect(() => setLabelDraft(searchState.label), [searchState.label])
+  useEffect(
+    () => setDraft(synchronizedFilterStateRef.current),
+    [synchronizedFilterStateKey]
+  )
   useEffect(() => {
+    if (searchTimeoutRef.current !== undefined) {
+      window.clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = undefined
+    }
+    if (skipSearchDebounceRef.current && searchDraft === "") {
+      skipSearchDebounceRef.current = false
+      return
+    }
     if (searchDraft === searchState.q) return
-    const timeout = window.setTimeout(
-      () => onSearchChange(searchDraft),
-      ISSUE_FILTER_DEBOUNCE_MS
-    )
-    return () => window.clearTimeout(timeout)
-  }, [onSearchChange, searchDraft, searchState.q])
-  useEffect(() => {
-    if (labelDraft === searchState.label) return
-    const timeout = window.setTimeout(() => {
-      void onViewChange({ label: labelDraft, page: 1 }, { history: "replace" })
+    searchTimeoutRef.current = window.setTimeout(() => {
+      searchTimeoutRef.current = undefined
+      onSearchChange(searchDraft)
     }, ISSUE_FILTER_DEBOUNCE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [labelDraft, onViewChange, searchState.label])
+    return () => {
+      if (searchTimeoutRef.current !== undefined) {
+        window.clearTimeout(searchTimeoutRef.current)
+        searchTimeoutRef.current = undefined
+      }
+    }
+  }, [onSearchChange, searchDraft, searchState.q])
+
+  const updateDraft = useCallback(
+    <Key extends keyof IssueSearchPatch>(
+      key: Key,
+      value: IssueSearchPatch[Key]
+    ) => setDraft((current) => ({ ...current, [key]: value })),
+    []
+  )
+  const applyDraft = useCallback(() => {
+    void onViewChange({ ...draft, page: 1 })
+  }, [draft, onViewChange])
+  const handleSearchChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) =>
+      setSearchDraft(event.target.value),
+    []
+  )
+  const clearSearch = useCallback(() => {
+    if (searchTimeoutRef.current !== undefined) {
+      window.clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = undefined
+    }
+    skipSearchDebounceRef.current = true
+    setSearchDraft("")
+    onSearchChange("")
+    searchInputRef.current?.focus()
+  }, [onSearchChange])
+  const resetFilters = useCallback(() => {
+    setDraft(defaultFilterState)
+    void onViewChange({ ...defaultFilterState, page: 1 })
+  }, [onViewChange])
+  const resetSort = useCallback(() => {
+    void onViewChange({ sort: "updatedAt", dir: "desc", page: 1 })
+  }, [onViewChange])
+  const canResetFilters = draftKey !== defaultFilterStateKey
+  const canResetSort =
+    searchState.sort !== defaultIssueSearchState.sort ||
+    searchState.dir !== defaultIssueSearchState.dir
 
   return {
-    handleAssigneeChange,
-    handleDirectionChange,
-    handleLabelChange,
-    handlePriorityChange,
+    applyDraft,
+    canResetFilters,
+    canResetSort,
+    clearSearch,
+    draft,
     handleSearchChange,
-    handleSortChange,
-    handleStatusChange,
-    labelDraft,
+    resetFilters,
+    resetSort,
     searchDraft,
+    searchInputRef,
+    updateDraft,
   }
 }
 
 export const useIssuesTableModel = ({
   issues,
   organizationId,
+  currentUserId,
   searchState,
   total,
   pageSize,
@@ -116,10 +178,13 @@ export const useIssuesTableModel = ({
   onSelect,
   onViewChange,
   onRequestDelete,
+  enableRowSelection = false,
+  placeholder = false,
 }: Pick<
   IssuesTableProps,
   | "issues"
   | "organizationId"
+  | "currentUserId"
   | "searchState"
   | "total"
   | "pageSize"
@@ -129,9 +194,27 @@ export const useIssuesTableModel = ({
   | "onUpdate"
   | "onSelect"
   | "onViewChange"
+  | "enableRowSelection"
+  | "placeholder"
 > & {
   onRequestDelete: (issue: IssueUiItem) => void
 }) => {
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const selectionScope = useMemo(
+    () => JSON.stringify([organizationId, issueListQueryKeyState(searchState)]),
+    [organizationId, searchState]
+  )
+  const previousSelectionScope = useRef(selectionScope)
+  const visibleRowIds = useMemo(() => issues.map(getIssueRowId), [issues])
+  const { columnVisibility, onColumnVisibilityChange, resetColumnVisibility } =
+    useDataTableColumnVisibility({
+      userId: currentUserId,
+      tableId: "organization-issues",
+      columnIds: issueColumnIds,
+      nonHideableColumnIds: issueNonHideableColumnIds,
+      defaultVisibility: defaultIssueColumnVisibility,
+      storageVersion: 2,
+    })
   const columns = useIssueColumns({
     organizationId,
     assignees,
@@ -140,7 +223,22 @@ export const useIssuesTableModel = ({
     onUpdate,
     onSelect,
     onRequestDelete,
+    enableRowSelection,
+    disabled: placeholder,
+    resetColumnVisibility,
   })
+
+  useEffect(() => {
+    setRowSelection((current) => {
+      const next =
+        previousSelectionScope.current === selectionScope
+          ? pruneRowSelection(current, visibleRowIds)
+          : {}
+      previousSelectionScope.current = selectionScope
+      return JSON.stringify(current) === JSON.stringify(next) ? current : next
+    })
+  }, [selectionScope, visibleRowIds])
+
   const handleSortingChange = useCallback(
     (
       updater:
@@ -169,20 +267,35 @@ export const useIssuesTableModel = ({
     ) => {
       const current = { pageIndex: searchState.page - 1, pageSize }
       const next = typeof updater === "function" ? updater(current) : updater
-      void onViewChange({ page: next.pageIndex + 1 })
+      void onViewChange(
+        next.pageSize === current.pageSize
+          ? { page: next.pageIndex + 1 }
+          : {
+              page: next.pageIndex + 1,
+              pageSize: toIssuePageSize(next.pageSize),
+            }
+      )
     },
     [onViewChange, pageSize, searchState.page]
   )
-
-  return useReactTable({
+  const table = useReactTable({
     data: issues,
     columns,
     state: {
       sorting: [{ id: searchState.sort, desc: searchState.dir === "desc" }],
       pagination: { pageIndex: searchState.page - 1, pageSize },
+      rowSelection,
+      columnVisibility,
+      columnPinning: {
+        left: enableRowSelection ? ["select"] : [],
+        right: ["actions"],
+      },
     },
     onSortingChange: handleSortingChange,
     onPaginationChange: handlePaginationChange,
+    onRowSelectionChange: setRowSelection,
+    onColumnVisibilityChange,
+    enableRowSelection: enableRowSelection && !placeholder,
     getCoreRowModel: getCoreRowModel(),
     manualFiltering: true,
     manualSorting: true,
@@ -190,4 +303,6 @@ export const useIssuesTableModel = ({
     rowCount: total,
     getRowId: getIssueRowId,
   })
+
+  return { resetColumnVisibility, table }
 }

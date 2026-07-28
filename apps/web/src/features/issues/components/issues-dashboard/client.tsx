@@ -13,9 +13,13 @@ import {
 import { apiClient } from "@/lib/api-client"
 
 import { createIssue, deleteIssue, updateIssue } from "../../api"
-import { issueKeys, issuesQueryOptions } from "../../queries"
+import {
+  issueKeys,
+  issueLabelQueryOptions,
+  issuesQueryOptions,
+} from "../../queries"
 import type { IssueListItem } from "../../schema"
-import { useIssueSearchState } from "../../search-params"
+import { useIssueSearchState } from "../../search-params.client"
 import { withAgentThreadHref } from "../../search-params.shared"
 import { IssuesWorkspace } from "../issues-workspace/issues-workspace"
 import {
@@ -27,20 +31,27 @@ import {
 type IssuesDashboardProps = {
   organizationId: string
   organizationSlug: string
+  currentUserId?: string
 }
+const emptyLabelOptions: string[] = []
 
 export const IssuesDashboard = ({
   organizationId,
   organizationSlug,
+  currentUserId = "anonymous",
 }: IssuesDashboardProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { state: searchState, setSearch, setDiscrete } = useIssueSearchState()
   const [busyIssueId, setBusyIssueId] = useState<string>()
+  const [labelSearch, setLabelSearch] = useState("")
   const issuesQuery = useQuery(
     issuesQueryOptions(apiClient, organizationId, searchState)
   )
   const membersQuery = useQuery(membersQueryOptions(organizationId))
+  const labelsQuery = useQuery(
+    issueLabelQueryOptions(apiClient, organizationId, labelSearch)
+  )
 
   const invalidateIssues = useCallback(
     () =>
@@ -180,16 +191,21 @@ export const IssuesDashboard = ({
     <IssuesWorkspace
       issues={issues}
       organizationId={organizationId}
+      currentUserId={currentUserId}
       searchState={searchState}
       total={issuesQuery.data?.total ?? 0}
-      pageSize={issuesQuery.data?.pageSize ?? 10}
+      pageSize={issuesQuery.data?.pageSize ?? 20}
       pending={createPending || updatePending}
+      fetching={issuesQuery.isFetching}
+      placeholder={issuesQuery.isPlaceholderData}
       busyIssueId={busyIssueId}
       error={errorMessage}
       onCreate={handleCreate}
       onToggle={handleToggle}
       onUpdate={handleUpdate}
       assignees={assignees}
+      labelOptions={labelsQuery.data ?? emptyLabelOptions}
+      onLabelSearchChange={setLabelSearch}
       getIssueHref={getIssueHref}
       onDelete={handleDelete}
       onSelectIssue={handleSelect}

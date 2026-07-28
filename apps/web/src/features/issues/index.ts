@@ -19,6 +19,6 @@ export {
   defaultIssueSearchState,
   toIssueListRequest,
   withAgentThreadHref,
+  type IssueSearchPatch,
   type IssueSearchState,
 } from "./search-params.shared"
-export { useIssueSearchState } from "./search-params"

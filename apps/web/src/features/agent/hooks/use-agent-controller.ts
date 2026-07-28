@@ -9,7 +9,8 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { issueKeys, useIssueSearchState } from "@/features/issues"
+import { issueKeys } from "@/features/issues"
+import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { clientEnv } from "@/lib/env.client"
 
 import { createAgentChatTransport } from "../chat-transport"

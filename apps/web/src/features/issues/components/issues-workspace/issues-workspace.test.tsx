@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import type { IssueTimelineItem } from "../../schema"
-import { defaultIssueSearchState } from "../../search-params"
+import {
+  defaultIssueSearchState,
+  type IssueSearchState,
+} from "../../search-params"
 import { IssueDetailPage } from "../issue-detail-page/issue-detail-page"
 import type { IssueUiItem } from "../types/types"
 import { IssuesWorkspace } from "./issues-workspace"
@@ -60,11 +63,32 @@ const issues: IssueUiItem[] = [
   },
 ]
 const noIssues: IssueUiItem[] = []
+const rerenderDefaultSearchState = { ...defaultIssueSearchState }
+const refreshedIssues = [...issues]
+const openIssueSearchState: IssueSearchState = {
+  ...defaultIssueSearchState,
+  statuses: ["open"],
+}
+const secondIssuePageSearchState: IssueSearchState = {
+  ...defaultIssueSearchState,
+  page: 2,
+}
+const fiftyIssuePageSizeSearchState: IssueSearchState = {
+  ...defaultIssueSearchState,
+  pageSize: "50",
+}
+const rerenderLabelOptions = ["incident", "security"]
 const assignees = [
   {
     id: "user-2",
     name: "Jordan",
     email: "jordan@example.test",
+    profileImage: null,
+  },
+  {
+    id: "user-3",
+    name: "Avery",
+    email: "avery@example.test",
     profileImage: null,
   },
 ]
@@ -73,7 +97,7 @@ const createViewProps = (total: number) => ({
   organizationId: "org-1",
   searchState: defaultIssueSearchState,
   total,
-  pageSize: 10,
+  pageSize: 20 as const,
   onSearchChange: vi.fn<(query: string) => void>(),
   onViewChange: vi.fn<(...input: unknown[]) => Promise<URLSearchParams>>(
     async () => Promise.resolve(new URLSearchParams())
@@ -139,21 +163,28 @@ const timeline: IssueTimelineItem[] = [
   },
 ]
 
+const createWorkspaceProps = (issueValues = issues) => ({
+  onCreate: vi.fn<(title: string) => Promise<void>>(),
+  onToggle: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+  onDelete: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+  onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
+  assignees,
+  currentUserId: "user-2",
+  labelOptions: ["incident", "billing"],
+  onLabelSearchChange: vi.fn<(search: string) => void>(),
+  getIssueHref: (issue: IssueUiItem) =>
+    `/organization/acme/issues/${issue.number.toString()}`,
+  onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+  ...createViewProps(issueValues.length),
+})
+
 const renderWorkspace = (issueValues = issues) => {
-  const callbacks = {
-    onCreate: vi.fn<(title: string) => Promise<void>>(),
-    onToggle: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
-    onDelete: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
-    onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
-    assignees,
-    getIssueHref: (issue: IssueUiItem) =>
-      `/organization/acme/issues/${issue.number.toString()}`,
-    onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
-    ...createViewProps(issueValues.length),
-  }
+  const callbacks = createWorkspaceProps(issueValues)
   render(<IssuesWorkspace issues={issueValues} {...callbacks} />)
   return callbacks
 }
+const getIssue12Selection = () =>
+  screen.getByRole("checkbox", { name: "Select issue 12" })
 
 const renderDetail = () => {
   const callbacks = {
@@ -215,6 +246,7 @@ describe("organization issues", () => {
       .getAllByRole("columnheader")
       .map((header) => header.textContent?.trim())
     expect(headers.slice(0, 10)).toEqual([
+      "",
       "#",
       "Thumbnail",
       "Name",
@@ -224,56 +256,110 @@ describe("organization issues", () => {
       "Due date and time",
       "Comments",
       "Files",
-      "Updated",
     ])
     expect(screen.getByRole("button", { name: "Number" })).toHaveTextContent(
       "#"
     )
     expect(screen.getByText("#12")).toBeInTheDocument()
-    expect(screen.getByAltText("issue-thumbnail.png")).toHaveAttribute(
-      "sizes",
-      "64px"
-    )
-    expect(screen.getByAltText("issue-thumbnail.png")).toHaveClass("size-16")
+    expect(screen.getByAltText("issue-thumbnail.png")).toBeInTheDocument()
     expect(screen.getByLabelText("2 comments")).toHaveTextContent("2")
     expect(screen.getByLabelText("3 files")).toHaveTextContent("3")
     const emptyCountRow = screen.getByRole("row", {
       name: /Document role permissions/u,
     })
     const emptyCells = within(emptyCountRow).getAllByRole("cell")
-    expect(emptyCells[7]).toBeEmptyDOMElement()
     expect(emptyCells[8]).toBeEmptyDOMElement()
+    expect(emptyCells[9]).toBeEmptyDOMElement()
     expect(screen.getByTestId("status-open")).toHaveClass("bg-white")
     expect(screen.getByTestId("status-in-progress")).toHaveClass(
       "bg-violet-200"
     )
     expect(screen.getByTestId("status-closed")).toHaveClass("bg-purple-600")
     expect(screen.getByTestId("priority-urgent")).toHaveClass("text-red-800")
-
-    await user.type(
-      screen.getByRole("searchbox", { name: "Search issues" }),
-      "billing"
+    expect(screen.getByText("Showing 1–3 of 3 matching issues")).toBeVisible()
+    expect(screen.queryByText("Primary")).not.toBeInTheDocument()
+    expect(screen.queryByText("View")).not.toBeInTheDocument()
+    const search = screen.getByRole("searchbox", { name: "Search issues" })
+    const columns = screen.getByRole("button", {
+      name: "Choose visible columns",
+    })
+    expect(columns).toBeVisible()
+    expect(
+      screen.getByRole("columnheader", {
+        name: "Actions",
+      })
+    ).toContainElement(columns)
+    expect(search).toHaveAttribute("data-toolbar-placement", "standalone")
+    const toolbar = screen.getByRole("toolbar", {
+      name: "Issue table controls",
+    })
+    const groups = within(toolbar).getAllByRole("group", {
+      name: /^Issue (filters|sorting)$/u,
+    })
+    expect(groups).toHaveLength(2)
+    for (const group of groups) {
+      expect(group).toHaveAttribute("data-slot", "data-table-toolbar-group")
+    }
+    const filterGroup = within(toolbar).getByRole("group", {
+      name: "Issue filters",
+    })
+    const sortGroup = within(toolbar).getByRole("group", {
+      name: "Issue sorting",
+    })
+    expect(within(filterGroup).getByText("Filters")).toHaveAttribute(
+      "data-slot",
+      "data-table-toolbar-label"
     )
+    expect(
+      within(filterGroup).getByRole("combobox", { name: "Status" })
+    ).toBeVisible()
+    expect(within(sortGroup).getByText("Sort")).toHaveAttribute(
+      "data-slot",
+      "data-table-toolbar-label"
+    )
+    expect(
+      within(sortGroup).getByRole("combobox", { name: "Sort issues" })
+    ).toBeVisible()
+    expect(within(filterGroup).queryByRole("searchbox")).not.toBeInTheDocument()
+    expect(within(sortGroup).queryByRole("searchbox")).not.toBeInTheDocument()
+    expect(
+      within(filterGroup).queryByRole("button", {
+        name: "Choose visible columns",
+      })
+    ).not.toBeInTheDocument()
+    expect(
+      within(sortGroup).queryByRole("button", {
+        name: "Choose visible columns",
+      })
+    ).not.toBeInTheDocument()
+
+    await user.type(search, "billing")
     expect(screen.getByText(billingIssue.title)).toBeInTheDocument()
     expect(callbacks.onSearchChange).not.toHaveBeenCalled()
     await waitFor(() => expect(callbacks.onSearchChange).toHaveBeenCalledOnce())
     expect(callbacks.onSearchChange).toHaveBeenCalledWith("billing")
   })
 
-  it("debounces label URL state with replace history", async () => {
+  it("searches labels remotely and applies one URL diff when the filter closes", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
+    await user.click(screen.getByRole("button", { name: "Labels" }))
     await user.type(
-      screen.getByRole("textbox", { name: "Filter issues by label" }),
+      await screen.findByRole("combobox", { name: "Search labels" }),
       "incident"
     )
+    expect(callbacks.onLabelSearchChange).toHaveBeenLastCalledWith("incident")
     expect(callbacks.onViewChange).not.toHaveBeenCalled()
+    await user.click(screen.getByRole("button", { name: "Match all" }))
+    await user.click(screen.getByRole("option", { name: /incident/u }))
+    await user.keyboard("{Escape}")
     await waitFor(() => expect(callbacks.onViewChange).toHaveBeenCalledOnce())
-    expect(callbacks.onViewChange).toHaveBeenCalledWith(
-      { label: "incident", page: 1 },
-      { history: "replace" }
-    )
+    expect(callbacks.onViewChange.mock.calls[0]?.[0]).toMatchObject({
+      labels: ["incident"],
+      labelMode: "all",
+      page: 1,
+    })
   })
 
   it("keeps a real pagination href before hydration and uses URL state after hydration", async () => {
@@ -287,11 +373,11 @@ describe("organization issues", () => {
       getIssueHref: (issue: IssueUiItem) =>
         `/organization/acme/issues/${issue.number.toString()}`,
       onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
-      ...createViewProps(12),
+      ...createViewProps(42),
       searchState: {
         ...defaultIssueSearchState,
         q: "tenant audit",
-        status: "open" as const,
+        statuses: ["open"],
         agentThread: "agent-thread-1",
       },
     }
@@ -318,56 +404,349 @@ describe("organization issues", () => {
     expect(callbacks.onViewChange).toHaveBeenCalledWith({ page: 2 })
   })
 
-  it("reuses the status, priority, and assignee domain controls for filters", async () => {
+  it("uses faceted filters and pins only the current assignee as You", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
-    const statusFilter = screen.getByRole("combobox", {
-      name: "Filter issues by status",
-    })
-    expect(within(statusFilter).getByTestId("status-all")).toHaveTextContent(
-      "All issues"
-    )
-    await selectOption(user, statusFilter, "In progress", (option) => {
-      expect(within(option).getByTestId("status-in-progress")).toBeVisible()
-    })
-    expect(callbacks.onViewChange).toHaveBeenCalledWith({
-      status: "in_progress",
+    await user.click(screen.getByRole("combobox", { name: "Status" }))
+    await user.click(await screen.findByRole("option", { name: "In progress" }))
+    await user.keyboard("{Escape}")
+    expect(callbacks.onViewChange.mock.calls[0]?.[0]).toMatchObject({
+      statuses: ["in_progress"],
       page: 1,
     })
 
     callbacks.onViewChange.mockClear()
-    const priorityFilter = screen.getByRole("combobox", {
-      name: "Filter issues by priority",
+    await user.click(screen.getByRole("button", { name: "Assignee" }))
+    expect(await screen.findByText("You")).toBeVisible()
+    expect(screen.getAllByText("You")).toHaveLength(1)
+    const assigneeFilter = screen.getByRole("dialog", {
+      name: "Assignee filter",
     })
+    const currentAssignee = within(assigneeFilter).getByLabelText("Jordan You")
+    expect(currentAssignee).toHaveTextContent("Jordan")
+    expect(currentAssignee).toHaveTextContent("You")
     expect(
-      within(priorityFilter).getByTestId("priority-all")
-    ).toHaveTextContent("All priorities")
-    await selectOption(user, priorityFilter, "Urgent", (option) => {
-      expect(within(option).getByTestId("priority-urgent")).toBeVisible()
+      within(assigneeFilter)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual([
+      "Unassigned",
+      expect.stringContaining("Jordan"),
+      expect.stringContaining("Avery"),
+    ])
+    const search = within(assigneeFilter).getByRole("combobox", {
+      name: "Search assignee",
     })
-    expect(callbacks.onViewChange).toHaveBeenCalledWith({
-      priority: "urgent",
-      page: 1,
+    search.focus()
+    await user.keyboard("{ArrowDown}{Enter}{Escape}")
+    expect(callbacks.onViewChange).toHaveBeenCalledWith(
+      expect.objectContaining({ assignees: ["unassigned"], page: 1 })
+    )
+  })
+})
+
+describe("organization issue table state", () => {
+  it("does not overwrite an open label draft when remote options rerender", async () => {
+    const user = userEvent.setup()
+    const callbacks = {
+      onCreate: vi.fn<(title: string) => Promise<void>>(),
+      onToggle: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onDelete: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
+      assignees,
+      currentUserId: "user-2",
+      labelOptions: ["incident"],
+      onLabelSearchChange: vi.fn<(search: string) => void>(),
+      getIssueHref: (issue: IssueUiItem) =>
+        `/organization/acme/issues/${issue.number.toString()}`,
+      onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+      ...createViewProps(issues.length),
+    }
+    const view = render(<IssuesWorkspace issues={issues} {...callbacks} />)
+
+    await user.click(screen.getByRole("button", { name: "Labels" }))
+    await screen.findByText("incident")
+    await user.click(screen.getByRole("option", { name: /incident/u }))
+    view.rerender(
+      <IssuesWorkspace
+        issues={issues}
+        {...callbacks}
+        searchState={rerenderDefaultSearchState}
+        labelOptions={rerenderLabelOptions}
+      />
+    )
+    await user.keyboard("{Escape}")
+
+    await waitFor(() => expect(callbacks.onViewChange).toHaveBeenCalledOnce())
+    expect(callbacks.onViewChange).toHaveBeenCalledWith(
+      expect.objectContaining({ labels: ["incident"], page: 1 })
+    )
+  })
+
+  it("clears production row selection when the organization scope changes", async () => {
+    const user = userEvent.setup()
+    const callbacks = {
+      onCreate: vi.fn<(title: string) => Promise<void>>(),
+      onToggle: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onDelete: vi.fn<(issue: IssueUiItem) => Promise<void>>(),
+      onUpdate: vi.fn<(issue: IssueUiItem, update: object) => Promise<void>>(),
+      assignees,
+      currentUserId: "user-2",
+      labelOptions: ["incident"],
+      onLabelSearchChange: vi.fn<(search: string) => void>(),
+      getIssueHref: (issue: IssueUiItem) =>
+        `/organization/acme/issues/${issue.number.toString()}`,
+      onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+      ...createViewProps(issues.length),
+    }
+    const view = render(<IssuesWorkspace issues={issues} {...callbacks} />)
+    const firstIssue = screen.getByRole("checkbox", {
+      name: "Select issue 12",
     })
+    await user.click(firstIssue)
+    expect(firstIssue).toBeChecked()
+    const selectedRow = screen.getByRole("row", {
+      name: /Fix billing webhook retries/u,
+    })
+    expect(selectedRow).toHaveAttribute("data-state", "selected")
+    expect(selectedRow).toHaveClass(
+      "data-[state=selected]:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]"
+    )
+    expect(screen.getByText("1 selected")).toBeVisible()
+
+    view.rerender(
+      <IssuesWorkspace issues={issues} {...callbacks} organizationId="org-2" />
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: "Select issue 12" })
+      ).not.toBeChecked()
+    )
+    expect(screen.queryByText("1 selected")).not.toBeInTheDocument()
+  })
+
+  it("clears selection for each query scope change and retains it for a same-scope refetch", async () => {
+    const user = userEvent.setup()
+    const callbacks = createWorkspaceProps()
+    const view = render(<IssuesWorkspace issues={issues} {...callbacks} />)
+
+    await user.click(getIssue12Selection())
+    view.rerender(
+      <IssuesWorkspace
+        issues={refreshedIssues}
+        {...callbacks}
+        searchState={rerenderDefaultSearchState}
+      />
+    )
+    await waitFor(() => expect(getIssue12Selection()).toBeChecked())
+
+    view.rerender(
+      <IssuesWorkspace
+        issues={issues}
+        {...callbacks}
+        searchState={openIssueSearchState}
+      />
+    )
+    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
+    await user.click(getIssue12Selection())
+
+    view.rerender(
+      <IssuesWorkspace
+        issues={issues}
+        {...callbacks}
+        searchState={secondIssuePageSearchState}
+      />
+    )
+    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
+    await user.click(getIssue12Selection())
+
+    view.rerender(
+      <IssuesWorkspace
+        issues={issues}
+        {...callbacks}
+        searchState={fiftyIssuePageSizeSearchState}
+      />
+    )
+    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
+  })
+})
+
+describe("organization issues continued", () => {
+  it("commits range, due-date, sort, and page-size controls to URL state", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+
+    await user.click(screen.getByRole("button", { name: "Priority" }))
+    await user.click(await screen.findByRole("button", { name: "Only High" }))
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(callbacks.onViewChange).toHaveBeenCalledOnce())
+    expect(callbacks.onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        priorityFrom: "high",
+        priorityTo: "high",
+        page: 1,
+      })
+    )
 
     callbacks.onViewChange.mockClear()
-    const assigneeFilter = screen.getByRole("combobox", {
-      name: "Filter issues by assignee",
-    })
-    expect(assigneeFilter).toHaveTextContent("All assignees")
+    await user.click(screen.getByRole("button", { name: "Due date" }))
+    const month = new Date().toLocaleDateString("en-US", { month: "long" })
+    await user.click(
+      await screen.findByRole("button", {
+        name: new RegExp(`${month} 10`, "u"),
+      })
+    )
+    await user.click(
+      screen.getByRole("button", {
+        name: new RegExp(`${month} 11`, "u"),
+      })
+    )
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(callbacks.onViewChange).toHaveBeenCalledOnce())
+    expect(callbacks.onViewChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        dueFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u),
+        dueTo: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u),
+        page: 1,
+      })
+    )
+
+    callbacks.onViewChange.mockClear()
     await selectOption(
       user,
-      assigneeFilter,
-      /Jordan.*jordan@example\.test/u,
-      (option) => {
-        expect(within(option).getByText("JO")).toBeVisible()
-      }
+      screen.getByRole("combobox", { name: "Sort issues" }),
+      "Priority"
     )
-    expect(callbacks.onViewChange).toHaveBeenCalledWith({
-      assignee: "user-2",
+    expect(callbacks.onViewChange).toHaveBeenLastCalledWith({
+      sort: "priority",
       page: 1,
     })
+
+    callbacks.onViewChange.mockClear()
+    await selectOption(
+      user,
+      screen.getByRole("combobox", { name: "Issues per page" }),
+      "50 / page"
+    )
+    expect(callbacks.onViewChange).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: "50",
+    })
+  })
+
+  it("keeps previous rows visible and overlays an accessible fetching spinner", () => {
+    render(
+      <IssuesWorkspace issues={issues} {...createWorkspaceProps()} fetching />
+    )
+
+    expect(screen.getByText(billingIssue.title)).toBeVisible()
+    expect(
+      screen.getByRole("status", { name: "Updating issues" })
+    ).toBeVisible()
+    expect(screen.getByLabelText("Issue table")).toHaveAttribute(
+      "aria-busy",
+      "true"
+    )
+  })
+
+  it("makes placeholder rows read-only until the new query result arrives", async () => {
+    const callbacks = createWorkspaceProps()
+    const view = render(
+      <IssuesWorkspace issues={issues} {...callbacks} fetching placeholder />
+    )
+
+    expect(screen.getByText(billingIssue.title)).toBeVisible()
+    expect(
+      screen.getByRole("status", { name: "Updating issues" })
+    ).toBeVisible()
+    expect(
+      screen.getByRole("checkbox", { name: "Select issue 12" })
+    ).toHaveAttribute("aria-disabled", "true")
+    expect(
+      screen.getByRole("combobox", {
+        name: `Status for ${billingIssue.title}`,
+      })
+    ).toBeDisabled()
+    expect(
+      screen.getByRole("button", {
+        name: `Actions for ${billingIssue.title}`,
+      })
+    ).toBeDisabled()
+
+    view.rerender(<IssuesWorkspace issues={issues} {...callbacks} />)
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: "Select issue 12" })
+      ).not.toHaveAttribute("aria-disabled", "true")
+    )
+    expect(
+      screen.getByRole("button", {
+        name: `Actions for ${billingIssue.title}`,
+      })
+    ).toBeEnabled()
+  })
+
+  it("renders one sticky selection bar outside the non-sticky footer", async () => {
+    const user = userEvent.setup()
+    renderWorkspace()
+
+    await user.click(screen.getByRole("checkbox", { name: "Select issue 12" }))
+    const clear = screen.getByRole("button", { name: "Clear" })
+    const pageSize = screen.getByRole("combobox", { name: "Issues per page" })
+    const footer = screen.getByLabelText("Issue table footer")
+    const selectionBar = screen.getByTestId("data-table-selection-bar")
+    const anchor = screen.getByTestId("data-table-selection-anchor")
+
+    expect(footer).not.toHaveClass("sticky")
+    expect(anchor).toHaveAttribute("data-slot", "data-table-selection-anchor")
+    expect(anchor).toHaveClass("h-fit", "sticky", "self-end", "justify-center")
+    expect(anchor).toHaveClass(
+      "bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+    )
+    expect(selectionBar).toHaveAttribute(
+      "data-slot",
+      "data-table-selection-bar"
+    )
+    expect(within(footer).queryByText("1 selected")).not.toBeInTheDocument()
+    expect(screen.getAllByText("1 selected")).toHaveLength(1)
+    expect(
+      within(footer).getByRole("combobox", { name: "Issues per page" })
+    ).toBe(pageSize)
+    await user.click(clear)
+    expect(
+      screen.queryByRole("status", { name: "1 selected" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("shows Eye and EyeClosed states only for hideable columns", async () => {
+    const user = userEvent.setup()
+    renderWorkspace()
+
+    const trigger = screen.getByRole("button", {
+      name: "Choose visible columns",
+    })
+    expect(trigger).not.toHaveTextContent("Columns")
+    const header = screen.getByRole("columnheader", {
+      name: "Actions",
+    })
+    expect(header).toHaveClass("w-12", "min-w-12", "max-w-12", "p-0")
+    expect(
+      within(header).getByTestId("issue-actions-header-island")
+    ).toContainElement(trigger)
+    await user.click(trigger)
+    const thumbnail = screen.getByRole("menuitemcheckbox", {
+      name: "Thumbnail",
+    })
+    const number = screen.getByRole("menuitemcheckbox", { name: "Number" })
+    expect(thumbnail).toHaveAttribute("data-visibility-icon", "eye")
+    expect(number).toHaveAttribute("data-visibility-icon", "eye")
+    expect(
+      screen.queryByRole("menuitemcheckbox", { name: "Name" })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("menuitemcheckbox", { name: "Actions" })
+    ).not.toBeInTheDocument()
   })
 
   it("creates, opens the canonical detail page, and deletes from the table", async () => {

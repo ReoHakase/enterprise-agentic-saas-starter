@@ -82,6 +82,7 @@ describe("SessionsPanel", () => {
     expect(screen.getByText("Chrome 140.0.0.0")).toBeInTheDocument()
     expect(screen.getByText("Updated at")).toBeInTheDocument()
     expect(screen.getByText("Expires at")).toBeInTheDocument()
+    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
     expect(screen.getByText(macUserAgent)).toBeInTheDocument()
     expect(screen.queryByText("127.0.0.2")).not.toBeInTheDocument()
     expect(

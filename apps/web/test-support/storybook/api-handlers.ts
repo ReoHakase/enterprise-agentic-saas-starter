@@ -16,6 +16,7 @@ export const storybookApiHandlers = [
       total: 0,
     })
   ),
+  http.get("*/issues/labels", () => HttpResponse.json({ items: [] })),
   http.get("*/issues/:issueId/thumbnail", () =>
     HttpResponse.json({ mode: "automatic", file: null })
   ),

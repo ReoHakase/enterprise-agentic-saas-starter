@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react"
 
+import { DataTableSelectionBar } from "@/components/data-table/data-table"
+
 import { issueDeleteDialog as IssueDeleteDialog } from "../issue-delete-dialog/issue-delete-dialog"
 import { IssueMetrics } from "../issue-metrics/issue-metrics"
 import { safelyRunAction } from "../issue-utils/issue-utils"
@@ -33,13 +35,19 @@ const useIssueCounts = (issues: IssueUiItem[]) =>
 export const IssuesTable = ({
   issues,
   organizationId,
+  currentUserId,
   searchState,
   total,
   pageSize,
   pending,
+  fetching,
+  placeholder = false,
   busyIssueId,
   error,
   assignees,
+  labelOptions,
+  onLabelSearchChange,
+  enableRowSelection = false,
   getIssueHref,
   onCreate,
   onToggle,
@@ -64,14 +72,21 @@ export const IssuesTable = ({
     setDeleteTarget(undefined)
   }, [deleteTarget, onDelete])
   const counts = useIssueCounts(issues)
+  const handleViewChange = useCallback(
+    (patch: Parameters<typeof onViewChange>[0]) => {
+      void onViewChange(patch)
+    },
+    [onViewChange]
+  )
   const filters = useIssuesTableFilters({
     searchState,
     onSearchChange,
     onViewChange,
   })
-  const table = useIssuesTableModel({
+  const { table } = useIssuesTableModel({
     issues,
     organizationId,
+    currentUserId,
     searchState,
     total,
     pageSize,
@@ -82,7 +97,11 @@ export const IssuesTable = ({
     onSelect,
     onViewChange,
     onRequestDelete: requestDelete,
+    enableRowSelection,
+    placeholder,
   })
+  const selectedCount = table.getSelectedRowModel().rows.length
+  const clearSelection = useCallback(() => table.resetRowSelection(), [table])
 
   return (
     <>
@@ -95,37 +114,59 @@ export const IssuesTable = ({
       <div className="flex min-w-0 flex-col gap-4">
         <IssuesTableToolbar
           organizationId={organizationId}
+          currentUserId={currentUserId}
           pending={pending}
           searchState={searchState}
           searchDraft={filters.searchDraft}
-          labelDraft={filters.labelDraft}
+          draft={filters.draft}
           assignees={assignees}
+          labelOptions={labelOptions}
           onCreate={onCreate}
           onSearchChange={filters.handleSearchChange}
-          onLabelChange={filters.handleLabelChange}
-          onStatusChange={filters.handleStatusChange}
-          onPriorityChange={filters.handlePriorityChange}
-          onAssigneeChange={filters.handleAssigneeChange}
-          onSortChange={filters.handleSortChange}
-          onDirectionChange={filters.handleDirectionChange}
+          onClearSearch={filters.clearSearch}
+          onLabelSearchChange={onLabelSearchChange}
+          onDraftChange={filters.updateDraft}
+          onApplyDraft={filters.applyDraft}
+          onResetFilters={filters.resetFilters}
+          canResetFilters={filters.canResetFilters}
+          onResetSort={filters.resetSort}
+          canResetSort={filters.canResetSort}
+          searchInputRef={filters.searchInputRef}
+          onViewChange={handleViewChange}
         />
-        <IssuesTableContent
-          table={table}
-          busyIssueId={busyIssueId}
-          error={error}
-          onRetry={onRetry}
-        />
-        {!error ? (
-          <IssuesTablePagination
-            table={table}
-            searchState={searchState}
-            total={total}
-          />
-        ) : null}
+        <div
+          data-slot="issues-table-results-scope"
+          className="relative grid min-w-0 gap-4"
+        >
+          <div className="col-start-1 row-start-1 min-w-0">
+            <IssuesTableContent
+              table={table}
+              busyIssueId={busyIssueId}
+              fetching={fetching}
+              error={error}
+              onRetry={onRetry}
+            />
+          </div>
+          {!error ? (
+            <div className="col-start-1 row-start-2 min-w-0">
+              <IssuesTablePagination
+                table={table}
+                searchState={searchState}
+                total={total}
+              />
+            </div>
+          ) : null}
+          <div className="pointer-events-none col-start-1 row-start-1 grid">
+            <DataTableSelectionBar
+              selectedCount={selectedCount}
+              onClear={clearSelection}
+            />
+          </div>
+        </div>
       </div>
 
       <IssueDeleteDialog
-        target={deleteTarget}
+        target={placeholder ? undefined : deleteTarget}
         onOpenChange={handleDeleteOpenChange}
         onConfirm={confirmDelete}
       />

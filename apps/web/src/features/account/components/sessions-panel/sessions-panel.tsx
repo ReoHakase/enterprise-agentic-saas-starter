@@ -21,18 +21,9 @@ import {
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@enterprise-agentic-saas/ui/components/table"
+import { TableCaption } from "@enterprise-agentic-saas/ui/components/table"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  flexRender,
   getCoreRowModel,
   useReactTable,
   type CellContext,
@@ -48,6 +39,11 @@ import {
 } from "react"
 import { toast } from "sonner"
 
+import {
+  DataTableBody,
+  DataTableHeader,
+  DataTableRoot,
+} from "@/components/data-table/data-table"
 import { LocalDate } from "@/components/local-date/local-date"
 import {
   showConsoleApiErrorToast,
@@ -231,46 +227,17 @@ const SessionsTable = ({
 
   return (
     <SessionTableContext.Provider value={contextValue}>
-      <div className="max-w-full min-w-0 overflow-hidden rounded-xl border">
-        <Table className="min-w-264" scrollLabel="Signed-in device sessions">
-          <TableCaption className="sr-only">
-            Signed-in device sessions
-          </TableCaption>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={sessionColumnClass(header.column.id)}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={sessionColumnClass(cell.column.id)}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTableRoot
+        className="max-w-full"
+        tableClassName="min-w-264"
+        scrollLabel="Signed-in device sessions"
+      >
+        <TableCaption className="sr-only">
+          Signed-in device sessions
+        </TableCaption>
+        <DataTableHeader table={table} />
+        <DataTableBody table={table} />
+      </DataTableRoot>
     </SessionTableContext.Provider>
   )
 }
@@ -352,32 +319,61 @@ const SessionActionsCell = ({ row }: SessionCell) => {
 }
 
 const sessionColumns: ColumnDef<UserSession>[] = [
-  { id: "device", header: "Device", cell: SessionDeviceCell },
-  { id: "browser", header: "Browser", cell: SessionBrowserCell },
-  { id: "userAgent", header: "User-Agent", cell: SessionUserAgentCell },
+  {
+    id: "device",
+    header: "Device",
+    meta: {
+      headerClassName: "w-56 min-w-56",
+      cellClassName: "w-56 min-w-56",
+    },
+    cell: SessionDeviceCell,
+  },
+  {
+    id: "browser",
+    header: "Browser",
+    meta: {
+      headerClassName: "w-52 min-w-52",
+      cellClassName: "w-52 min-w-52",
+    },
+    cell: SessionBrowserCell,
+  },
+  {
+    id: "userAgent",
+    header: "User-Agent",
+    meta: {
+      headerClassName: "w-80 min-w-80",
+      cellClassName: "w-80 min-w-80",
+    },
+    cell: SessionUserAgentCell,
+  },
   {
     accessorKey: "updatedAt",
     header: "Updated at",
+    meta: {
+      headerClassName: "w-44 min-w-44",
+      cellClassName: "w-44 min-w-44",
+    },
     cell: SessionUpdatedAtCell,
   },
   {
     accessorKey: "expiresAt",
     header: "Expires at",
+    meta: {
+      headerClassName: "w-44 min-w-44",
+      cellClassName: "w-44 min-w-44",
+    },
     cell: SessionExpiresAtCell,
   },
-  { id: "actions", header: SessionActionsHeader, cell: SessionActionsCell },
+  {
+    id: "actions",
+    header: SessionActionsHeader,
+    meta: {
+      headerClassName: "w-24 min-w-24 text-right",
+      cellClassName: "w-24 min-w-24 text-right",
+    },
+    cell: SessionActionsCell,
+  },
 ]
-
-const sessionColumnClass = (columnId: string) => {
-  if (columnId === "device") return "w-56 min-w-56"
-  if (columnId === "browser") return "w-52 min-w-52"
-  if (columnId === "userAgent") return "w-80 min-w-80"
-  if (columnId === "updatedAt" || columnId === "expiresAt") {
-    return "w-44 min-w-44"
-  }
-  if (columnId === "actions") return "w-24 min-w-24 text-right"
-  return undefined
-}
 
 const SessionsSkeleton = () => (
   <div

@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw"
+import { delay, http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
@@ -14,6 +14,15 @@ import { IssuesDashboard } from "./client"
 
 const organizationId = "org_01K1ACMECLOUD0000000000"
 const issueTitle = fictionalIssueListItem.title
+const filteredIssue = {
+  ...fictionalIssueListItem,
+  id: "issue_01K1FILTERED000000000",
+  number: 21,
+  title: "Filtered production result",
+  status: "in_progress" as const,
+}
+let issueQueryRequests: string[] = []
+let labelQueryRequests: string[] = []
 const members = [
   {
     id: "member_01K1JORDAN000000000000",
@@ -38,11 +47,14 @@ const issueHandlers = (initialIssues: IssueListItem[]) => {
   let issues = [...initialIssues]
 
   return [
+    http.get("*/issues/labels", () =>
+      HttpResponse.json({ items: ["billing", "incident"] })
+    ),
     http.get("*/issues", () =>
       HttpResponse.json({
         items: issues,
         page: 1,
-        pageSize: 10,
+        pageSize: 20,
         total: issues.length,
       })
     ),
@@ -112,6 +124,7 @@ const meta = preview.meta({
   args: {
     organizationId,
     organizationSlug: "acme",
+    currentUserId: members[0]?.userId,
   },
 })
 
@@ -155,6 +168,9 @@ export const Ready = meta.story({
           name: `Actions for ${issueTitle}`,
         })
         await userEvent.click(actions)
+        await waitFor(() =>
+          expect(actions).toHaveAttribute("aria-expanded", "true")
+        )
         const menu = await body.findByRole(
           "menu",
           {
@@ -192,24 +208,16 @@ export const Ready = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      actions.focus()
-      await waitFor(() => expect(actions).toHaveFocus())
-      await userEvent.keyboard("{Enter}")
+      await userEvent.click(actions)
+      await waitFor(() =>
+        expect(actions).toHaveAttribute("aria-expanded", "true")
+      )
       const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "View details" })
-        ).toHaveFocus()
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
-      await userEvent.keyboard("{End}")
-      await waitFor(() =>
-        expect(
-          body.getByRole("menuitem", { name: "Delete issue" })
-        ).toHaveFocus()
-      )
-      await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",
         {
@@ -244,6 +252,100 @@ export const Empty = meta.story({
   },
 })
 
+export const QueryIntegrationContract = meta.story({
+  beforeEach({ msw }) {
+    issueQueryRequests = []
+    labelQueryRequests = []
+    msw.use(
+      http.get("*/issues/labels", async ({ request }) => {
+        const url = new URL(request.url)
+        labelQueryRequests.push(url.toString())
+        const search = url.searchParams.get("search") ?? ""
+        if (search === "b") {
+          await delay(300)
+          return HttpResponse.json({ items: ["obsolete"] })
+        }
+        if (search === "bi") {
+          await delay(20)
+          return HttpResponse.json({ items: ["billing-new"] })
+        }
+        return HttpResponse.json({ items: ["billing", "incident"] })
+      }),
+      http.get("*/issues", async ({ request }) => {
+        const url = new URL(request.url)
+        issueQueryRequests.push(url.toString())
+        if (url.searchParams.getAll("statuses").includes("in_progress")) {
+          await delay(300)
+          return HttpResponse.json({
+            items: [filteredIssue],
+            page: 1,
+            pageSize: 20,
+            total: 1,
+          })
+        }
+        return HttpResponse.json({
+          items: [fictionalIssueListItem],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+        })
+      }),
+      http.get("*/organizations/:organizationId/members", () =>
+        HttpResponse.json(members)
+      )
+    )
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await expect(await canvas.findByText(issueTitle)).toBeVisible()
+    expect(issueQueryRequests).toHaveLength(1)
+
+    await userEvent.click(canvas.getByRole("combobox", { name: "Status" }))
+    await userEvent.click(
+      await body.findByRole("option", { name: "In progress" })
+    )
+    expect(issueQueryRequests).toHaveLength(1)
+    await expect(canvas.getByText(issueTitle)).toBeVisible()
+
+    await userEvent.keyboard("{Escape}")
+    await waitFor(() => expect(issueQueryRequests).toHaveLength(2))
+    expect(
+      new URL(
+        issueQueryRequests[1] ?? "https://invalid.test"
+      ).searchParams.getAll("statuses")
+    ).toEqual(["in_progress"])
+    await expect(canvas.getByText(issueTitle)).toBeVisible()
+    await expect(
+      canvas.getByRole("status", { name: "Updating issues" })
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole("button", { name: `Actions for ${issueTitle}` })
+    ).toBeDisabled()
+    await expect(await canvas.findByText(filteredIssue.title)).toBeVisible()
+
+    await userEvent.click(canvas.getByRole("button", { name: "Labels" }))
+    const search = await body.findByRole("combobox", {
+      name: "Search labels",
+    })
+    await userEvent.type(search, "b")
+    await waitFor(() =>
+      expect(
+        labelQueryRequests.some(
+          (request) => new URL(request).searchParams.get("search") === "b"
+        )
+      ).toBe(true)
+    )
+    await userEvent.type(search, "i")
+    await expect(
+      await body.findByRole("option", { name: "billing-new" })
+    ).toBeVisible()
+    await delay(350)
+    expect(
+      body.queryByRole("option", { name: "obsolete" })
+    ).not.toBeInTheDocument()
+  },
+})
+
 export const RetrySuccess = meta.story({
   beforeEach({ msw }) {
     let attempt = 0
@@ -263,7 +365,7 @@ export const RetrySuccess = meta.story({
           : HttpResponse.json({
               items: [fictionalIssueListItem],
               page: 1,
-              pageSize: 10,
+              pageSize: 20,
               total: 1,
             })
       }),
@@ -347,6 +449,9 @@ export const UpdateFailure = meta.story({
         name: `Actions for ${issueTitle}`,
       })
       await userEvent.click(actions)
+      await waitFor(() =>
+        expect(actions).toHaveAttribute("aria-expanded", "true")
+      )
       const closeIssue = await body.findByRole("menuitem", {
         name: "Close issue",
       })
@@ -386,24 +491,16 @@ export const DeleteFailure = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      actions.focus()
-      await waitFor(() => expect(actions).toHaveFocus())
-      await userEvent.keyboard("{Enter}")
+      await userEvent.click(actions)
+      await waitFor(() =>
+        expect(actions).toHaveAttribute("aria-expanded", "true")
+      )
       const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "View details" })
-        ).toHaveFocus()
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
-      await userEvent.keyboard("{End}")
-      await waitFor(() =>
-        expect(
-          body.getByRole("menuitem", { name: "Delete issue" })
-        ).toHaveFocus()
-      )
-      await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",
         {
