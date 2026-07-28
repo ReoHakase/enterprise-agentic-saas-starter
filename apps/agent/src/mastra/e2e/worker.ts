@@ -22,9 +22,8 @@ class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
     return handleAgentRuntimeRequest(request, this.env, this.ctx, {
       captureFailure: () => undefined,
       createControlPlane: createAgentInternalGateway,
-      approvedIssueActionExecutionRegistry:
-        composition.approvedIssueActionExecutionRegistry,
       executionRegistry: composition.executionRegistry,
+      createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
       mastra: composition.mastra,
       requireModelCredential: false,
       threadTitleAgent: composition.threadTitleAgent,

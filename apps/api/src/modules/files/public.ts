@@ -2,7 +2,11 @@
 export { findPreviewableAgentAssetForSession } from "./agent-assets-repository"
 export { promoteAgentAssetToIssueFileInTransaction } from "./agent-assets-repository"
 export { createFilesInternalApplication } from "./module"
-export { bindAgentAssetsToRunInTransaction } from "./agent-run-assets-repository"
+export {
+  bindAgentAssetsToRunInTransaction,
+  bindReusableAgentAssetsToRunInTransaction,
+  listReusableAgentAssetsInTransaction,
+} from "./agent-run-assets-repository"
 /** @internal */
 export { agentAssetObjectKey } from "./constants"
 export {

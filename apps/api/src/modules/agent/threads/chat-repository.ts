@@ -16,7 +16,9 @@ import type {
 } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
+import { listReusableAgentAssetsInTransaction } from "../../files/public"
 import { findIssueById, findIssueByNumber } from "../../issues/public"
+import { ensureAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken, hashAgentToken } from "../crypto"
 import {
   requireActiveMembership,
@@ -239,6 +241,22 @@ export const prepareAgentChatForSession = async (
           organizationId: current.activeOrganizationId,
           references: inputReferences,
         })
+      const context = await ensureAgentSessionContextInTransaction(tx, {
+        sessionId: input.sessionId,
+        userId: input.userId,
+        now,
+      })
+      const reusableAssets = await listReusableAgentAssetsInTransaction(tx, {
+        currentAssetIds: input.assetIds,
+        now,
+        scope: {
+          contextEpoch: context.contextEpoch,
+          organizationId: current.activeOrganizationId,
+          sessionId: input.sessionId,
+          threadId: thread.id,
+          userId: input.userId,
+        },
+      })
       const publicQueries = input.contentSegments.flatMap((segment) => {
         if (segment.type !== "text") return []
         return segment.text.split(/\r?\n/u).flatMap((line) => {
@@ -275,6 +293,7 @@ export const prepareAgentChatForSession = async (
         contextReferences,
         clientMessageId: message.id,
         messages: [message],
+        reusableAssets,
         threadId: thread.id,
         timezone: input.timezone,
         trigger: "user_message" as const,

@@ -28,13 +28,15 @@ type ProductAgentConfig = AgentConfig<
 >
 
 export type ProductAgentDependencies = {
-  memory: MastraMemory
+  allowUnscopedModel?: boolean
+  memory?: MastraMemory
   model: ProductAgentConfig["model"]
   resolveExecution: ProductAgentExecutionResolver
   webSearchTool: ReturnType<typeof createWebSearchTool>
 }
 
 export const createProductAgent = ({
+  allowUnscopedModel = false,
   memory,
   model,
   resolveExecution,
@@ -54,6 +56,12 @@ export const createProductAgent = ({
         if (!isLivenessLanguageModel(resolved)) {
           throw new Error("Agent model liveness boundary is unavailable")
         }
+        if (
+          allowUnscopedModel &&
+          !getOptionalProductAgentRequestState(requestContext)
+        ) {
+          return resolved
+        }
         const execution = resolveExecution(requestContext)
         return withRunLiveness(resolved, () =>
           execution.api.readActiveOrganization({
@@ -70,6 +78,9 @@ export const createProductAgent = ({
       ],
       tools: ({ requestContext }) => {
         const state = getOptionalProductAgentRequestState(requestContext)
+        if (allowUnscopedModel && !state) {
+          return {}
+        }
         return productAgentToolsForFeatures(
           state?.policy,
           resolveExecution,

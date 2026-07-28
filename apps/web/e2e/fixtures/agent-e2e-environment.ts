@@ -4,6 +4,12 @@ import { basename, dirname, join, resolve } from "node:path"
 
 const TEMPORARY_DIRECTORY = resolve(tmpdir())
 const RUN_DIRECTORY_PATTERN = /^enterprise-agentic-saas-agent-e2e-[1-9][0-9]*$/
+const REMOVE_OPTIONS = {
+  force: true,
+  maxRetries: 5,
+  recursive: true,
+  retryDelay: 50,
+} as const
 
 export type AgentE2EEnvironment = ReturnType<typeof createAgentE2EEnvironment>
 
@@ -77,14 +83,14 @@ export const removeAgentE2EArtifacts = async (
   input: string | number
 ): Promise<void> => {
   const { temporaryRoot } = createAgentE2EEnvironment(input)
-  await rm(temporaryRoot, { force: true, recursive: true })
+  await rm(temporaryRoot, REMOVE_OPTIONS)
 }
 
 export const removeAgentE2EStackArtifacts = async (
   input: string | number
 ): Promise<void> => {
   const { stackRoot, temporaryRoot } = createAgentE2EEnvironment(input)
-  await rm(stackRoot, { force: true, recursive: true })
+  await rm(stackRoot, REMOVE_OPTIONS)
   try {
     await rmdir(temporaryRoot)
   } catch (cause) {

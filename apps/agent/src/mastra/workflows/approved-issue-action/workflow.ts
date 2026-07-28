@@ -3,7 +3,8 @@ import {
   agentIdentifierSchema,
   type AgentActionExecutionResult,
 } from "@enterprise-agentic-saas/agent-contracts"
-import type { Mastra } from "@mastra/core/mastra"
+import { Mastra } from "@mastra/core/mastra"
+import type { MastraCompositeStore } from "@mastra/core/storage"
 import {
   createStep,
   createWorkflow,
@@ -102,8 +103,25 @@ export type ApprovedIssueActionRuntime = {
     "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
   >
   features: AgentFeatureSwitches
+  reportFailure?: (cause: unknown) => void
   resumeTicket: string
 }
+
+const reportRuntimeFailure = (
+  runtime: ApprovedIssueActionRuntime,
+  cause: unknown
+): void => {
+  try {
+    runtime.reportFailure?.(cause)
+  } catch {
+    return
+  }
+}
+
+// Workflow snapshots are durable. Keep the reported local cause out of the
+// thrown value so provider details cannot be serialized into storage.
+const workflowUnavailable = () =>
+  new Error("Issue action resume is unavailable")
 
 export class ApprovedIssueActionExecutionRegistry {
   readonly #executions = new Map<string, ApprovedIssueActionRuntime>()
@@ -166,8 +184,9 @@ export const createApprovedIssueActionWorkflow = (
           actionId: inputData.actionId,
           resumeTicket: runtime.resumeTicket,
         })
-      } catch {
-        throw new Error("Issue action resume is unavailable")
+      } catch (cause) {
+        reportRuntimeFailure(runtime, cause)
+        throw workflowUnavailable()
       }
       if (!isActiveOpaqueGrant(run.grant, run.expiresAt)) {
         throw new Error("Issue action resume is unavailable")
@@ -184,9 +203,14 @@ export const createApprovedIssueActionWorkflow = (
         )
         await settlement.complete()
         return receipt
-      } catch {
-        await settlement.fail()
-        throw new Error("Issue action resume is unavailable")
+      } catch (cause) {
+        reportRuntimeFailure(runtime, cause)
+        try {
+          await settlement.fail()
+        } catch (settlementCause) {
+          reportRuntimeFailure(runtime, settlementCause)
+        }
+        throw workflowUnavailable()
       }
     },
   })
@@ -206,6 +230,22 @@ export const createApprovedIssueActionWorkflow = (
 export type ApprovedIssueActionWorkflow = ReturnType<
   typeof createApprovedIssueActionWorkflow
 >
+
+export const createApprovedIssueActionResumeRuntime = (
+  storage: MastraCompositeStore
+) => {
+  const executionRegistry = new ApprovedIssueActionExecutionRegistry()
+  const approvedIssueActionWorkflow =
+    createApprovedIssueActionWorkflow(executionRegistry)
+  return {
+    executionRegistry,
+    mastra: new Mastra({
+      logger: false,
+      storage,
+      workflows: { approvedIssueActionWorkflow },
+    }),
+  }
+}
 
 export const suspendApprovedIssueAction = async (
   mastra: Mastra,

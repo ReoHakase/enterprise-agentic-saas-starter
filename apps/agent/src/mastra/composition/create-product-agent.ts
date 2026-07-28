@@ -17,10 +17,17 @@ type ProductAgentCompositionEnvironment = AgentStorageEnvironment & {
   OPENROUTER_BASE_URL?: string
 }
 
+type ProductAgentCompositionOptions = {
+  allowUnscopedModel?: boolean
+}
+
 export const createProductAgentComposition = (
   environment: ProductAgentCompositionEnvironment,
-  storage: MastraCompositeStore
+  storage: MastraCompositeStore,
+  { allowUnscopedModel = false }: ProductAgentCompositionOptions = {}
 ) => {
+  const unscopedModelEnabled =
+    allowUnscopedModel && environment.NODE_ENV === "development"
   const model = () =>
     createAgentModel(
       environment.OPENROUTER_API_KEY,
@@ -41,7 +48,8 @@ export const createProductAgentComposition = (
   )
   const memory = createProductAgentMemory(storage)
   const productAgent = createProductAgent({
-    memory,
+    allowUnscopedModel: unscopedModelEnabled,
+    memory: unscopedModelEnabled ? undefined : memory,
     model,
     resolveExecution: executionRegistry.resolve,
     webSearchTool: productWebSearchTool,

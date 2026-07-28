@@ -165,6 +165,7 @@ export const createAgentConversationRoutes = (
             contextReferences: prepared.contextReferences,
             clientMessageId: prepared.clientMessageId,
             message,
+            reusableAssets: prepared.reusableAssets,
             threadId: prepared.threadId,
             ticket: prepared.ticket,
             timezone: prepared.timezone,

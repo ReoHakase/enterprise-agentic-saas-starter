@@ -278,6 +278,9 @@ describe("serialized Agent transport schemas", () => {
         clientMessageId: "client_1",
         contextReferences: [],
         message,
+        reusableAssets: [
+          { id: "asset_previous", filename: "previous-image.webp" },
+        ],
         threadId: "thread_1",
         ticket,
         timezone: "Asia/Tokyo",
@@ -290,6 +293,19 @@ describe("serialized Agent transport schemas", () => {
         clientMessageId: "client_1",
         contextReferences: [],
         message,
+        threadId: "thread_1",
+        ticket,
+        timezone: "Asia/Tokyo",
+        trigger: "user_message",
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentRuntimeChatInputSchema, {
+        assetIds: ["asset_1"],
+        clientMessageId: "client_1",
+        contextReferences: [],
+        message,
+        reusableAssets: [{ id: "asset_1", filename: "current-image.webp" }],
         threadId: "thread_1",
         ticket,
         timezone: "Asia/Tokyo",

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { AgentFailureCode } from "../adapters/telemetry/capture"
 import {
-  scriptedApprovedIssueActionExecutionRegistry,
+  scriptedCreateApprovalResumeRuntime,
   scriptedSseExecutionRegistry,
   scriptedSseMastra,
   scriptedThreadTitleAgent,
@@ -79,9 +79,8 @@ describe("native runtime SSE privacy", () => {
     )
     const pending: Promise<unknown>[] = []
     const dependencies = {
-      approvedIssueActionExecutionRegistry:
-        scriptedApprovedIssueActionExecutionRegistry,
       captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+      createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
       createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
       executionRegistry,
       mastra,
@@ -169,9 +168,8 @@ describe("native runtime SSE privacy", () => {
       runtimeEnvironment,
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          composition.approvedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
         createControlPlane: () =>
           createControlPlane({
             cancelRun: async () => {
@@ -221,9 +219,8 @@ describe("native runtime SSE privacy", () => {
       { ...runtimeEnvironment, AGENT_VISION_ENABLED: "1" },
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          scriptedApprovedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
         createControlPlane: () =>
           createControlPlane({
             cancelRun,
@@ -272,9 +269,8 @@ describe("native runtime SSE privacy", () => {
       runtimeEnvironment,
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          scriptedApprovedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
         createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
         executionRegistry,
         mastra,
@@ -331,9 +327,8 @@ describe("native runtime SSE privacy", () => {
       runtimeEnvironment,
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          composition.approvedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
         createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
         executionRegistry,
         mastra,
@@ -387,9 +382,8 @@ describe("native runtime SSE privacy", () => {
         runtimeEnvironment,
         { waitUntil: (promise) => pending.push(promise) },
         {
-          approvedIssueActionExecutionRegistry:
-            composition.approvedIssueActionExecutionRegistry,
           captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           createControlPlane: () =>
             createControlPlane({ cancelRun, finishRun }),
           executionRegistry,
@@ -445,9 +439,8 @@ describe("native runtime SSE privacy", () => {
       runtimeEnvironment,
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          composition.approvedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
         createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
         executionRegistry,
         mastra,
@@ -490,9 +483,8 @@ describe("native runtime SSE privacy", () => {
         runtimeEnvironment,
         { waitUntil: (promise) => pending.push(promise) },
         {
-          approvedIssueActionExecutionRegistry:
-            composition.approvedIssueActionExecutionRegistry,
           captureFailure,
+          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           createControlPlane: () =>
             createControlPlane({ finishRun, settleMemoryCommit }),
           executionRegistry,
@@ -527,9 +519,8 @@ describe("native runtime SSE privacy", () => {
       runtimeEnvironment,
       { waitUntil: (promise) => pending.push(promise) },
       {
-        approvedIssueActionExecutionRegistry:
-          scriptedApprovedIssueActionExecutionRegistry,
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
         createControlPlane: () => createControlPlane(),
         executionRegistry: scriptedSseExecutionRegistry,
         mastra: scriptedSseMastra,

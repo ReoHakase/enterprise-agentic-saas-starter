@@ -379,8 +379,8 @@ describe("Agent Issue attachment action transactions", () => {
         },
       })
     ).rejects.toMatchObject({
-      code: "conflict",
-      publicContext: { reason: "asset_snapshot_changed" },
+      code: "not_found",
+      publicContext: { resource: "agent_asset" },
     })
     const [issue] = await db
       .select({ revision: schema.issues.revision })

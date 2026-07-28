@@ -153,9 +153,8 @@ const trackedControlPlane: typeof createAgentInternalGateway = (binding) => {
 }
 
 const runtimeDependencies = () => ({
-  approvedIssueActionExecutionRegistry:
-    composition.approvedIssueActionExecutionRegistry,
   captureFailure: () => undefined,
+  createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
   createControlPlane: trackedControlPlane,
   executionRegistry: composition.executionRegistry,
   mastra: composition.mastra,

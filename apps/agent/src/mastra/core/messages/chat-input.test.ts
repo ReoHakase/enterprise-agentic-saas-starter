@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { AgentControlPlanePort as AgentInternalGateway } from "../../runtime/ports"
 import {
   createCurrentMessageImageContext,
+  createReusableAgentAssetContext,
   loadCurrentMessageImages,
 } from "./chat-input"
 
@@ -157,5 +158,21 @@ describe("current-message model images", () => {
         ]
       )
     ).toThrow("Agent image is unavailable")
+  })
+
+  it("exposes only server-selected reusable asset metadata without bytes", () => {
+    expect(
+      createReusableAgentAssetContext([
+        { id: "asset_previous", filename: "previous-image.webp" },
+      ])
+    ).toEqual([
+      {
+        role: "system",
+        content: expect.stringContaining(
+          '"id":"asset_previous","filename":"previous-image.webp"'
+        ),
+      },
+    ])
+    expect(createReusableAgentAssetContext([])).toEqual([])
   })
 })

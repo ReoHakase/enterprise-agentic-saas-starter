@@ -20,6 +20,7 @@ const validInput = (): AgentRuntimeChatInput => ({
       { type: "data-agent-assets", data: { assetIds: ["asset_1"] } },
     ],
   },
+  reusableAssets: [],
   threadId: "thread_1",
   ticket: TICKET,
   timezone: "Asia/Tokyo",
@@ -46,6 +47,29 @@ describe("private Agent runtime request", () => {
       timezone: "Asia/Tokyo",
       trigger: "user_message",
     })
+  })
+
+  it("accepts only bounded, disjoint server-selected reusable assets", () => {
+    const reusable = validInput()
+    reusable.reusableAssets = [
+      { id: "asset_previous", filename: "previous-image.webp" },
+    ]
+    expect(parseAgentRuntimeChatInput(reusable)).toMatchObject({
+      reusableAssets: [
+        { id: "asset_previous", filename: "previous-image.webp" },
+      ],
+    })
+
+    reusable.reusableAssets = [
+      { id: "asset_1", filename: "current-image.webp" },
+    ]
+    expect(parseAgentRuntimeChatInput(reusable)).toBeUndefined()
+
+    const continuation = clientToolContinuation()
+    continuation.reusableAssets = [
+      { id: "asset_previous", filename: "previous-image.webp" },
+    ]
+    expect(parseAgentRuntimeChatInput(continuation)).toBeUndefined()
   })
 
   it("binds canonical mention order to the API-resolved context", () => {

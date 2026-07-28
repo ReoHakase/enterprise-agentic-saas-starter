@@ -32,10 +32,16 @@ export const productAgentToolsForFeatures = (
     ...(policy?.visionEnabled ? createIssueVisionTools(resolveExecution) : {}),
     ...(webSearchTool ? { web_search: webSearchTool } : {}),
   }
+  const writeTools = Object.fromEntries(
+    Object.entries(createIssueWriteTools(resolveExecution)).filter(
+      ([name]) =>
+        policy?.currentMessageHasAssets ||
+        policy?.reusableThreadAssetsAvailable ||
+        name !== "add_issue_attachments"
+    )
+  )
   return filterAgentTools(
-    policy?.writesEnabled
-      ? { ...tools, ...createIssueWriteTools(resolveExecution) }
-      : tools,
+    policy?.writesEnabled ? { ...tools, ...writeTools } : tools,
     policy?.toolAllowlist
   )
 }

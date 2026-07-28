@@ -153,6 +153,33 @@ describe("memory commit workflow", () => {
 })
 
 describe("memory snapshot tool projection", () => {
+  it("preserves validated custom data after removing Mastra's part timestamp", () => {
+    const userMessage = message()
+    userMessage.role = "user"
+    userMessage.content.parts = JSON.parse(
+      JSON.stringify([
+        {
+          type: "data-agent-assets",
+          data: { assetIds: ["asset_opaque_1"] },
+          createdAt: 1_785_212_800_000,
+        },
+      ])
+    )
+
+    expect(projectMemorySnapshotMessages([userMessage])).toMatchObject([
+      {
+        content: {
+          parts: [
+            {
+              type: "data-agent-assets",
+              data: { assetIds: ["asset_opaque_1"] },
+            },
+          ],
+        },
+      },
+    ])
+  })
+
   it("preserves validated native tool receipts and states while failing closed", () => {
     const toolMessage = message()
     toolMessage.content.parts = JSON.parse(
@@ -456,6 +483,9 @@ describe("memory snapshot tool projection", () => {
     expect(serialized).not.toContain("PRIVATE_SIGNATURE")
     expect(serialized).not.toContain("PRIVATE_AUTH_CODE")
     expect(serialized).not.toContain("PRIVATE_CAPABILITY")
+    expect(serialized).not.toContain("Structured content unavailable")
+    expect(serialized).not.toContain("Tool state unavailable")
+    expect(serialized).not.toContain("Source unavailable")
     expect(serialized).toContain("Agent tool execution failed.")
     expect(serialized).toContain('"step":0')
     expect(serialized).toContain('"step":5')

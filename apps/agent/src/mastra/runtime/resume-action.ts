@@ -32,6 +32,7 @@ export const resumeIssueAction = async (
     executionRegistry: ApprovedIssueActionExecutionRegistry
     features: AgentFeatureSwitches
     mastra: Mastra
+    reportFailure?: (cause: unknown) => void
   }
 ): Promise<AgentActionExecutionResult> => {
   const parsed = v.safeParse(resumeIssueActionSchema, input)
@@ -60,6 +61,7 @@ export const resumeIssueAction = async (
   const execution = dependencies.executionRegistry.register({
     api: dependencies.api,
     features: dependencies.features,
+    reportFailure: dependencies.reportFailure,
     resumeTicket: parsed.output.resumeTicket,
   })
   try {
@@ -77,8 +79,8 @@ export const resumeIssueAction = async (
       throw new Error("Issue action resume is unavailable")
     }
     return result.result
-  } catch {
+  } catch (cause) {
     execution.release()
-    throw new Error("Issue action resume is unavailable")
+    throw new Error("Issue action resume is unavailable", { cause })
   }
 }

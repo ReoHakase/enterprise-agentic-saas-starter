@@ -262,13 +262,21 @@ PAT関連caseはPhase 5までskipせず未実装として対象外にします�
 thread作成
 → message送信
 → server tool running/completed
+→ Ask alwaysでpreviewを承認
+→ 別HTTP requestからsuspended Workflowをresume
+→ Issue作成とmanual approval auditを確認
 → Memory保存
 → reload
 → Stop
 → explicit cancel
 → 同じthreadで3回連続送信し、毎回別submission ID
 → Web検索
-→ attachment追加/読取/削除
+→ 2発話に分けて6画像を送信し内容を説明
+→ 画像を再送しない次の発話で最古の過去画像を明示
+→ server allowlistのexact assetを現在runへ遅延bind
+→ Ask alwaysで過去画像のattachment previewを承認
+→ 別HTTP requestからsuspended Workflowをresume
+→ existing Issueへattachment追加/読取/削除
 → reloadでsearch/add/read/remove stateと秘密非露出を確認
 → archive後に履歴拒否
 ```
@@ -290,6 +298,27 @@ compatibility flagは構成test、Agentの直接`Request.signal` abortはG3/G4�
 - scripted model
 - fake search provider
 - local R2
+
+#### E1のmock境界
+
+E1でmodelを差し替える境界はLLM provider adapterだけです。`createScriptedModel`はAI SDKの
+`MockLanguageModelV3`で実際の`doGenerate`と`doStream` contractを実装し、modelへ渡された
+promptとtool schemaを読んでV3のtext、tool call、usage、stream chunkを返します。
+固定responseをWeb、API、tool repositoryへ直接注入しません。
+
+外部非決定性は次の2点だけを置き換えます。
+
+- public Web検索のprovider responseを`createWebSearchTool`のadapter callbackで返す
+- GitHub OAuth providerをlocal emulatorで置き換える。ただしbrowser redirect、cookie、Better Auth、
+  organization境界は実経路を通す
+
+Mastra Agent、dynamic tool resolver、Memory、Storage、Workflow、approval suspension/resume、stream
+projection、API authorization、transaction、Application/Agent DB、Service Binding、local R2/Images、
+SSE、production Next.js build、Chromiumはmockしません。このためE1はtool選択を決定的にしつつ、
+approval後の別request resumeやasset claim/promotionまでの統合を回帰検査できます。自然言語からの
+通常のtool選択品質はE1の責務にせず、G5とdefault E2で測ります。同じthreadの複数の過去画像から
+指定画像を選ぶ品質だけは、現在の低価格modelでは安定したgateにできないため、E1のsystem contractと
+明示opt-inのdiagnostic E2へ分けます。
 
 #### MCP OAuth journey
 
@@ -323,12 +352,23 @@ PAT発行
 ### E2 完全E2E
 
 - 実modelで通常回答が終了する
-- 実modelでread/write toolを選ぶ
+- 実modelでread/write toolを選び、manual approval後にwriteを完了する
 - 実Web search providerからsourceを返す
 - 実画像入力を読む
 - OAuth MCPの本番相当transportを1件確認する
 
 Stop、全permission matrix、PAT全caseはE1と下位層で保証し、E2へ重複させません。
+
+現在の`qwen/qwen3.6-flash`は低価格な開発用canaryであり、tool選択が揺れる既知のflaky要因を
+通常phaseの合否へ持ち込みません。同じthreadの過去画像を次発話から選び、再uploadなしで既存Issueへ
+添付するcaseは`@diagnostic-qwen`を付け、default `test:e2e:full`から除外します。
+`PAID_E2E_DIAGNOSTIC=1`を明示した時だけ診断用に実行します。
+
+これは自然言語による複数の過去画像からの選択品質に一時的なblocking coverage gapを受け入れる判断です。
+system側のallowlist、exact asset選択、遅延bind、approval前の非mutation、resume後のpromotionは
+決定的なE1で必須化します。予算を確保できた時点で、E2は安価な専用modelではなく、productionで
+選択したprovider、model、versionと一致させます。候補がGPT-5.6 LunaまたはTerraなら、
+productionとE2の双方を同じ候補へ同時に切り替え、このdiagnosticをrelease gateへ戻します。
 
 ## 実行script
 

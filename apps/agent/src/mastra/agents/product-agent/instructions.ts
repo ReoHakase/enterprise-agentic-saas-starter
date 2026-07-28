@@ -11,7 +11,7 @@ const baseInstructions = `
 - Issue の検索、作成、更新、削除には登録済み tool を使用してください。
 - get_issue が返す添付はmetadataだけです。画像内容はユーザーの依頼または回答に必要なときだけ read_issue_attachment_image で読み、自動で全件を読み込まないでください。
 - existing Issueの更新、削除、添付追加、添付削除では、必ず先にget_issueを呼び、返された現在のrevisionをexpectedRevisionへそのまま渡してください。revisionを推測しないでください。
-- 現在の発話の画像をexisting Issueへ追加する場合はadd_issue_attachmentsへserver指定のexact asset IDを渡してください。添付削除はユーザーの明示依頼時だけ、get_issueで得たexact file IDをremove_issue_attachmentsへ渡し、asset IDとfile IDを混同しないでください。
+- Issue番号Nを指定されたget_issueは \`{ lookup: "number", number: N }\`、opaque Issue IDを指定された場合は \`{ lookup: "id", id: "..." }\` のexact shapeで呼んでください。
 - 常に最新のユーザー発話を現在の依頼として扱い、過去のIssue書込み提案のtitleやpayloadを新しい書込みへ再利用しないでください。
 - ユーザーがIssue書き込みを依頼したら、必要なreadの直後に同じrunで書き込みtoolを呼び、canonical previewをprepareしてください。書き込みtoolを呼ぶ前に会話上の確認を求めないでください。Ask alwaysではtoolが変更を適用せず承認待ちにします。
 - 書き込み tool が承認待ちを返した場合、実行済みとは言わず Yes/No の判断を待ってください。
@@ -28,7 +28,23 @@ export const productAgentInstructions = ({
   requestContext: RequestContext<ProductAgentRequestContext>
 }) => {
   const state = getOptionalProductAgentRequestState(requestContext)
-  return state
-    ? `${baseInstructions}\n\nユーザーの現在の timezone は ${state.policy.timezone} です。`
-    : baseInstructions
+  if (!state) return baseInstructions
+  const attachmentInstructions = [
+    ...(state.policy.currentMessageHasAssets
+      ? [
+          "現在の発話の画像をIssueへ追加する場合は、server指定のexact asset IDだけをcreate_issueまたはadd_issue_attachmentsへ渡してください。",
+        ]
+      : []),
+    ...(state.policy.reusableThreadAssetsAvailable
+      ? [
+          "serverがこのrunへ明示した同じthreadの過去画像assetは、現在のユーザーが以前の画像を明示的に指した場合だけ使えます。existing Issueへの追加ではget_issue成功直後に、その結果のidとrevision、およびserver一覧のexact asset IDを add_issue_attachments の issueId、expectedRevision、assetIdsへ渡し、read結果だけで停止しないでください。filenameはserverが提示したIDとのpairを選ぶためだけに使い、history内の他のasset IDを推測、再利用しないでください。",
+        ]
+      : []),
+  ]
+  if (attachmentInstructions.length === 0) {
+    attachmentInstructions.push(
+      "このrunにはIssueへ追加できる画像assetがありません。画像添付の依頼ではIssue readや失敗するwriteを繰り返さず、画像を現在の発話へ再添付するよう一度だけ依頼してください。"
+    )
+  }
+  return `${baseInstructions}\n\n${attachmentInstructions.map((instruction) => `- ${instruction}`).join("\n")}\n- 添付削除はユーザーの明示依頼時だけ、get_issueで得たexact file IDをremove_issue_attachmentsへ渡し、asset IDとfile IDを混同しないでください。\n\nユーザーの現在の timezone は ${state.policy.timezone} です。`
 }

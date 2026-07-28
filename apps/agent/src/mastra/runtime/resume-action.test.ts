@@ -143,6 +143,7 @@ describe("resumeIssueAction", () => {
     const id = actionId()
     const privateClient = () =>
       `${secrets.privateUrl}:${secrets.clientMarker}:${secrets.functionMarker}`
+    const reportFailure = vi.fn<(cause: unknown) => void>()
     const api = {
       cancelRun: async () => ({
         runId: secrets.functionMarker,
@@ -171,12 +172,23 @@ describe("resumeIssueAction", () => {
         grant: secrets.grant,
         rootRunId: secrets.clientMarker,
       })
-      composition.approvedIssueActionExecutionRegistry.register({
-        api,
-        features: enabled,
-        resumeTicket: secrets.ticket,
-      })
       await suspendApprovedIssueAction(composition.mastra, id)
+      const resumeRuntime = composition.createApprovalResumeRuntime()
+      await expect(
+        resumeIssueAction(
+          { actionId: id, resumeTicket: secrets.ticket },
+          {
+            api,
+            executionRegistry: resumeRuntime.executionRegistry,
+            features: enabled,
+            mastra: resumeRuntime.mastra,
+            reportFailure,
+          }
+        )
+      ).rejects.toThrow("Issue action resume is unavailable")
+      expect(reportFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ message: privateClient() })
+      )
       await composition.storage.close()
 
       const reopened = new DatabaseSync(databasePath, { readOnly: true })
@@ -204,6 +216,49 @@ describe("resumeIssueAction", () => {
       }
     } finally {
       await composition.storage.close().catch(() => undefined)
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
+  it("reopens and resumes a persisted approval from a request-local workflow runtime", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mastra-resume-"))
+    const databasePath = join(directory, "workflow.db")
+    const environment = {
+      ...process.env,
+      MASTRA_STORAGE_URL: `file:${databasePath}`,
+      NODE_ENV: "test",
+    }
+    const id = actionId()
+    const composition = createAgentRuntimeComposition(environment)
+    let reopenedComposition:
+      | ReturnType<typeof createAgentRuntimeComposition>
+      | undefined
+
+    try {
+      await suspendApprovedIssueAction(composition.mastra, id)
+      await composition.storage.close()
+
+      reopenedComposition = createAgentRuntimeComposition(environment)
+      const resumeRuntime = reopenedComposition.createApprovalResumeRuntime()
+      expect(resumeRuntime.mastra).not.toBe(reopenedComposition.mastra)
+      const test = harness(id)
+      const receipt = await resumeIssueAction(
+        { actionId: id, resumeTicket: RESUME_TICKET },
+        {
+          api: test.api,
+          executionRegistry: resumeRuntime.executionRegistry,
+          features: enabled,
+          mastra: resumeRuntime.mastra,
+        }
+      )
+
+      expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
+      expect(test.executeApprovedAction).toHaveBeenCalledOnce()
+      expect(test.finishRun).toHaveBeenCalledOnce()
+      expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
+    } finally {
+      await composition.storage.close().catch(() => undefined)
+      await reopenedComposition?.storage.close().catch(() => undefined)
       await rm(directory, { force: true, recursive: true })
     }
   })

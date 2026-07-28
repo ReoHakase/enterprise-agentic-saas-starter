@@ -14,8 +14,7 @@ const scriptedComposition = createScriptedAgentRuntimeComposition({
   NODE_ENV: "test",
 })
 export const {
-  approvedIssueActionExecutionRegistry:
-    scriptedApprovedIssueActionExecutionRegistry,
+  createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
   threadTitleAgent: scriptedThreadTitleAgent,
 } = scriptedComposition
 

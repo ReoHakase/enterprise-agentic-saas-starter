@@ -320,19 +320,15 @@ const projectToolInvocation = (part: Record<string, unknown>) => {
 const projectSource = (part: Record<string, unknown>) => {
   const source = isRecord(part.source) ? part.source : part
   const url = canonicalPublicUrl(source.url)
-  if (!url) return { type: "text", text: "Source unavailable" }
+  if (!url) return
   const title = optionalBoundedString(source.title ?? part.title, 500)
   if (part.type === "source-url") {
     const sourceId = optionalBoundedString(part.sourceId, 128)
-    if (!sourceId || !IDENTIFIER_PATTERN.test(sourceId)) {
-      return { type: "text", text: "Source unavailable" }
-    }
+    if (!sourceId || !IDENTIFIER_PATTERN.test(sourceId)) return
     return { type: "source-url", sourceId, title, url }
   }
   const id = optionalBoundedString(source.id, 128)
-  if (!id || !IDENTIFIER_PATTERN.test(id)) {
-    return { type: "text", text: "Source unavailable" }
-  }
+  if (!id || !IDENTIFIER_PATTERN.test(id)) return
   return {
     type: "source",
     source: { sourceType: "url", id, title, url },
@@ -340,9 +336,7 @@ const projectSource = (part: Record<string, unknown>) => {
 }
 
 const projectPart = (value: unknown) => {
-  if (!isRecord(value) || typeof value.type !== "string") {
-    return { type: "text", text: "Structured content unavailable" }
-  }
+  if (!isRecord(value) || typeof value.type !== "string") return
   if (value.type === "text") {
     return {
       type: "text",
@@ -353,25 +347,23 @@ const projectPart = (value: unknown) => {
     return projectSource(value)
   }
   if (value.type === "tool-invocation") {
-    return (
-      projectToolInvocation(value) ?? {
-        type: "text",
-        text: "Tool state unavailable",
-      }
-    )
+    return projectToolInvocation(value)
   }
   if (
     value.type === "data-agent-assets" ||
     value.type === "data-context-reference" ||
     value.type === "data-activity"
   ) {
-    const parsed = v.safeParse(agentUiMessagePartSchema, value)
-    return parsed.success
-      ? parsed.output
-      : { type: "text", text: "Structured content unavailable" }
+    const parsed = v.safeParse(
+      agentUiMessagePartSchema,
+      Object.fromEntries(
+        Object.entries(value).filter(([key]) => key !== "createdAt")
+      )
+    )
+    return parsed.success ? parsed.output : undefined
   }
   if (value.type === "step-start") return { type: "step-start" }
-  return { type: "text", text: "Structured content unavailable" }
+  return
 }
 
 const stableSourceId = (toolCallId: string, index: number, url: string) => {
@@ -418,6 +410,7 @@ const projectToolSources = (part: ReturnType<typeof projectPart>) => {
 const projectMessageParts = (parts: readonly unknown[]) => {
   const projected = parts.flatMap((value) => {
     const part = projectPart(value)
+    if (!part) return []
     return [part, ...projectToolSources(part)]
   })
   const sourceUrls = new Set<string>()

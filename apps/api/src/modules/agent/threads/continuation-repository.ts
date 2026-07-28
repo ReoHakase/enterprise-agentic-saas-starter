@@ -79,6 +79,7 @@ export const prepareAgentClientToolContinuationForSession = async (
         contextReferences: [],
         clientMessageId,
         messages: [message],
+        reusableAssets: [],
         threadId: thread.id,
         timezone: input.timezone,
         trigger: "client_tool_result" as const,

@@ -1,6 +1,7 @@
+import type { Buffer } from "node:buffer"
 import { readFile } from "node:fs/promises"
 
-import type { APIRequestContext } from "@playwright/test"
+import type { APIRequestContext, Locator, Page } from "@playwright/test"
 
 import { expect, test } from "../fixtures/test"
 
@@ -31,12 +32,68 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
   return origin
 }
 
+const createAgentImageUploader =
+  (page: Page, imageInput: Locator, imageBuffer: Buffer) =>
+  async (filename: string): Promise<string> => {
+    await expect(imageInput).toBeEnabled()
+    const assetUploadPromise = page.waitForResponse(
+      (uploadResponse) =>
+        /\/files\/organizations\/[^/]+\/agent-threads\/[^/]+\/assets$/u.test(
+          new URL(uploadResponse.url()).pathname
+        ) && uploadResponse.request().method() === "POST"
+    )
+    await imageInput.setInputFiles({
+      name: filename,
+      mimeType: "image/png",
+      buffer: imageBuffer,
+    })
+    const assetUploadResponse = await assetUploadPromise
+    expect(assetUploadResponse.status()).toBe(201)
+    const uploadedAsset: unknown = await assetUploadResponse.json()
+    if (!isRecord(uploadedAsset) || typeof uploadedAsset.id !== "string") {
+      throw new Error("Scripted Agent staged asset id is missing")
+    }
+    await expect(imageInput).toBeEnabled()
+    return uploadedAsset.id
+  }
+
+const sendAndApproveNextAction = async (
+  page: Page,
+  agentShell: Locator,
+  send: () => Promise<void>
+): Promise<unknown> => {
+  const approvalPromptCount = await agentShell
+    .getByText("Approve Issue change?")
+    .count()
+  const succeededActionCount = await agentShell
+    .getByText("succeeded", { exact: true })
+    .count()
+  await send()
+  await expect(agentShell.getByText("Approve Issue change?")).toHaveCount(
+    approvalPromptCount + 1
+  )
+  const resumeResponsePromise = page.waitForResponse(
+    (response) =>
+      /\/agent\/actions\/[^/]+\/resume$/u.test(
+        new URL(response.url()).pathname
+      ) && response.request().method() === "POST"
+  )
+  await agentShell.getByRole("button", { name: "Yes" }).last().click()
+  const resumeResponse = await resumeResponsePromise
+  expect(resumeResponse.status()).toBe(200)
+  const result: unknown = await resumeResponse.json()
+  await expect(agentShell.getByText("succeeded", { exact: true })).toHaveCount(
+    succeededActionCount + 1
+  )
+  return result
+}
+
 const assertCanonicalMessages = (
-  page: unknown
+  page: unknown,
+  expectedAssetId: string
 ): {
   actionId: string
-  addedFileId: string
-  addedRevision: number
+  addActionId: string
   issueId: string
   readFileId: string
   removedActionId: string
@@ -53,6 +110,22 @@ const assertCanonicalMessages = (
     perPage: 40,
     total: messages.length,
   })
+  const serializedMessages = JSON.stringify(messages)
+  expect(serializedMessages).not.toContain("Structured content unavailable")
+  expect(serializedMessages).not.toContain("Tool state unavailable")
+  const userParts = messages
+    .filter((message) => Reflect.get(message, "role") === "user")
+    .flatMap((message) => recordArray(message, "parts"))
+  expect(userParts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        type: "data-agent-assets",
+        data: expect.objectContaining({
+          assetIds: expect.arrayContaining([expectedAssetId]),
+        }),
+      }),
+    ])
+  )
   const parts = messages
     .filter((message) => Reflect.get(message, "role") === "assistant")
     .flatMap((message) => recordArray(message, "parts"))
@@ -62,8 +135,8 @@ const assertCanonicalMessages = (
         type: "tool-create_issue",
         state: "output-available",
         output: expect.objectContaining({
-          kind: "create_issue",
-          status: "succeeded",
+          requiresApproval: true,
+          status: "pending",
         }),
       }),
       expect.objectContaining({ type: "text", text: "SCRIPTED_AGENT_OK" }),
@@ -73,11 +146,9 @@ const assertCanonicalMessages = (
     (part) => Reflect.get(part, "type") === "tool-create_issue"
   )
   const output = toolPart && Reflect.get(toolPart, "output")
-  const issue = isRecord(output) && Reflect.get(output, "issue")
   const actionId = isRecord(output) && Reflect.get(output, "actionId")
-  const issueId = isRecord(issue) && Reflect.get(issue, "id")
-  if (typeof actionId !== "string" || typeof issueId !== "string") {
-    throw new Error("Scripted Agent canonical action receipt is invalid")
+  if (typeof actionId !== "string") {
+    throw new Error("Scripted Agent canonical pending action is invalid")
   }
   const readAttachmentReceipt = (toolType: string) => {
     const receiptPart = parts.find(
@@ -108,7 +179,41 @@ const assertCanonicalMessages = (
       revision,
     }
   }
-  const added = readAttachmentReceipt("tool-add_issue_attachments")
+  const addPart = parts.find(
+    (part) => Reflect.get(part, "type") === "tool-add_issue_attachments"
+  )
+  const addInput = addPart && Reflect.get(addPart, "input")
+  const addOutput = addPart && Reflect.get(addPart, "output")
+  const addActionId = isRecord(addOutput)
+    ? Reflect.get(addOutput, "actionId")
+    : undefined
+  if (
+    !isRecord(addInput) ||
+    !isRecord(addOutput) ||
+    typeof addActionId !== "string"
+  ) {
+    throw new Error(
+      "Scripted Agent tool-add_issue_attachments approval is invalid"
+    )
+  }
+  expect(addInput).toMatchObject({ assetIds: [expectedAssetId] })
+  expect(addOutput).toMatchObject({
+    actionId: addActionId,
+    requiresApproval: true,
+    status: "pending",
+    preview: {
+      attachmentOperation: "add",
+      attachments: [
+        {
+          assetId: expectedAssetId,
+          filename: "oldest-e1.png",
+          source: "asset",
+        },
+      ],
+      issueNumber: 1,
+      kind: "update_issue",
+    },
+  })
   const removed = readAttachmentReceipt("tool-remove_issue_attachments")
   const source = parts.find(
     (part) => Reflect.get(part, "type") === "source-url"
@@ -142,16 +247,13 @@ const assertCanonicalMessages = (
   }
   expect(imageReadOutput).toMatchObject({
     contentType: "image/webp",
-    issueId,
+    issueId: removed.issueId,
     sizeBytes: expect.any(Number),
   })
-  expect(added.issueId).toBe(issueId)
-  expect(removed.issueId).toBe(issueId)
   return {
     actionId,
-    addedFileId: added.fileId,
-    addedRevision: added.revision,
-    issueId,
+    addActionId,
+    issueId: removed.issueId,
     readFileId: imageReadOutput.fileId,
     removedActionId: removed.actionId,
     removedFileId: removed.fileId,
@@ -219,7 +321,7 @@ const assertAuditPersistence = async (
         targetId: input.issueId,
         metadata: expect.objectContaining({
           actionId: input.actionId,
-          approvalMode: "auto_policy",
+          approvalMode: "manual",
           source: "agent",
         }),
       }),
@@ -243,11 +345,11 @@ const assertUsagePersistence = async (
       return Reflect.get(usage, "totals")
     })
     .toMatchObject({
-      inputTokenCount: 87,
-      outputTokenCount: 26,
+      inputTokenCount: 95,
+      outputTokenCount: 28,
       reasoningTokenCount: 0,
-      runCount: 8,
-      totalTokenCount: 113,
+      runCount: 10,
+      totalTokenCount: 123,
     })
 }
 
@@ -315,9 +417,7 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   const permission = agentShell
     .getByRole("combobox")
     .filter({ hasText: /Ask always|Full access/u })
-  await permission.click()
-  await page.getByRole("option", { name: /Full access/u }).click()
-  await expect(permission).toContainText("Full access")
+  await expect(permission).toContainText("Ask always")
 
   const composer = agentShell.getByPlaceholder(
     "Describe the issue, or attach screenshots for analysis."
@@ -403,11 +503,24 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   expect(
     response.headers()["content-type"]?.startsWith("text/event-stream")
   ).toBe(true)
-  await expect(agentShell.getByText(/create issue · completed/u)).toBeVisible()
+  await expect(agentShell.getByText("Approve Issue change?")).toBeVisible()
+  const resumeResponsePromise = page.waitForResponse(
+    (resumeResponse) =>
+      /\/agent\/actions\/[^/]+\/resume$/u.test(
+        new URL(resumeResponse.url()).pathname
+      ) && resumeResponse.request().method() === "POST"
+  )
+  await agentShell.getByRole("button", { name: "Yes" }).click()
+  const resumeResponse = await resumeResponsePromise
+  expect(resumeResponse.status()).toBe(200)
+  await expect(agentShell.getByText("succeeded", { exact: true })).toBeVisible()
   await expect(agentShell.getByText("SCRIPTED_AGENT_OK")).toBeVisible()
   await expect(
     agentShell.getByRole("button", { name: "Send", exact: true })
   ).toBeEnabled()
+  await permission.click()
+  await page.getByRole("option", { name: /Full access/u }).click()
+  await expect(permission).toContainText("Full access")
   const replayCancel = await context.request.post(
     `${apiOrigin}/agent/threads/${threadId}/runs/${canceledRunId}/cancel`,
     { headers: { cookie: cookieHeader, origin } }
@@ -464,42 +577,92 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   )
   await expect(agentShell.getByText(/E1_SEARCH_OK/u)).toBeVisible()
 
-  const assetUploadPromise = page.waitForResponse(
-    (uploadResponse) =>
-      /\/files\/organizations\/[^/]+\/agent-threads\/[^/]+\/assets$/u.test(
-        new URL(uploadResponse.url()).pathname
-      ) && uploadResponse.request().method() === "POST"
+  const imageInput = agentShell.locator('input[type="file"]')
+  const imageBuffer = await readFile(
+    new URL(
+      "../../../../packages/db/fixtures/files/preview.png",
+      import.meta.url
+    )
   )
-  await agentShell.locator('input[type="file"]').setInputFiles({
-    name: "preview.png",
-    mimeType: "image/png",
-    buffer: await readFile(
-      new URL(
-        "../../../../packages/db/fixtures/files/preview.png",
-        import.meta.url
-      )
-    ),
-  })
-  const assetUploadResponse = await assetUploadPromise
-  expect(assetUploadResponse.status()).toBe(201)
-  const uploadedAsset: unknown = await assetUploadResponse.json()
-  if (!isRecord(uploadedAsset) || typeof uploadedAsset.id !== "string") {
-    throw new Error("Scripted Agent staged asset id is missing")
+  const uploadImage = createAgentImageUploader(page, imageInput, imageBuffer)
+
+  const firstBatchAssetIds: string[] = []
+  for (const filename of [
+    "oldest-e1.png",
+    "filler-e1-1.png",
+    "filler-e1-2.png",
+    "filler-e1-3.png",
+  ]) {
+    // oxlint-disable-next-line no-await-in-loop -- staged browser uploads must finish in selection order.
+    firstBatchAssetIds.push(await uploadImage(filename))
   }
-  const uploadedAssetId = uploadedAsset.id
+  const uploadedAssetId = firstBatchAssetIds[0]
+  if (!uploadedAssetId) {
+    throw new Error("Scripted Agent oldest staged asset id is missing")
+  }
   await expect(agentShell.getByLabel("Images ready to send")).toBeVisible()
   await composer.fill(
-    "[E1:ATTACHMENT_ADD] Add the attached image to Issue number 1."
+    "[E1:ATTACHMENT_DESCRIBE] Describe these four images without changing an Issue."
   )
   await agentShell.getByRole("button", { name: "Send", exact: true }).click()
   await expect(
-    agentShell.getByText(/add issue attachments · completed/u).last()
+    agentShell.getByText("E1_ATTACHMENT_DESCRIBE_OK blue gradient")
   ).toBeVisible()
-  await expect(agentShell.getByText("E1_ATTACHMENT_ADD_OK")).toBeVisible()
-  const addChatBody = submittedChatBodies.find((body) =>
-    JSON.stringify(body).includes("[E1:ATTACHMENT_ADD]")
+  const describeChatBody = submittedChatBodies.find((body) =>
+    JSON.stringify(body).includes("[E1:ATTACHMENT_DESCRIBE]")
   )
-  expect(addChatBody).toMatchObject({ assetIds: [uploadedAssetId] })
+  expect(describeChatBody).toMatchObject({ assetIds: firstBatchAssetIds })
+
+  const secondBatchAssetIds: string[] = []
+  for (const filename of ["filler-e1-4.png", "newest-e1.png"]) {
+    // oxlint-disable-next-line no-await-in-loop -- staged browser uploads must finish in selection order.
+    secondBatchAssetIds.push(await uploadImage(filename))
+  }
+  await composer.fill(
+    "[E1:ATTACHMENT_DESCRIBE_MORE] Describe these two more images without changing an Issue."
+  )
+  await agentShell.getByRole("button", { name: "Send", exact: true }).click()
+  await expect(
+    agentShell.getByText("E1_ATTACHMENT_DESCRIBE_MORE_OK blue gradient")
+  ).toBeVisible()
+  const describeMoreChatBody = submittedChatBodies.find((body) =>
+    JSON.stringify(body).includes("[E1:ATTACHMENT_DESCRIBE_MORE]")
+  )
+  expect(describeMoreChatBody).toMatchObject({
+    assetIds: secondBatchAssetIds,
+  })
+
+  expect(
+    await readIssueFiles(context.request, {
+      apiOrigin,
+      cookie: cookieHeader,
+      issueId,
+      organizationId,
+      origin,
+    })
+  ).toHaveLength(0)
+
+  await permission.click()
+  await page.getByRole("option", { name: /Ask always/u }).click()
+  await expect(permission).toContainText("Ask always")
+
+  const pastAttachmentResumeResult = await sendAndApproveNextAction(
+    page,
+    agentShell,
+    async () => {
+      await composer.fill(
+        "[E1:PAST_ATTACHMENT_REUSE] Add oldest-e1.png from the six earlier images to Issue number 1."
+      )
+      await agentShell
+        .getByRole("button", { name: "Send", exact: true })
+        .click()
+    }
+  )
+  await expect(agentShell.getByText("E1_PAST_ATTACHMENT_ADD_OK")).toBeVisible()
+  const pastAssetChatBody = submittedChatBodies.find((body) =>
+    JSON.stringify(body).includes("[E1:PAST_ATTACHMENT_REUSE]")
+  )
+  expect(pastAssetChatBody).toMatchObject({ assetIds: [] })
 
   await expect
     .poll(
@@ -526,7 +689,7 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   if (typeof addedFileId !== "string") {
     throw new Error("Scripted Agent promoted file id is missing")
   }
-  expect(addedFile).toMatchObject({ filename: "preview.png" })
+  expect(addedFile).toMatchObject({ filename: "oldest-e1.png" })
   const issueAfterAdd = await readCreatedIssue(context.request, {
     apiOrigin,
     cookie: cookieHeader,
@@ -538,11 +701,30 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
     throw new Error("Scripted Agent add receipt revision is missing")
   }
   expect(issueRevisionAfterAdd).toBe(issueRevisionBeforeAttachmentAdd + 1)
+  expect(pastAttachmentResumeResult).toMatchObject({
+    actionId: expect.any(String),
+    kind: "update_issue",
+    status: "succeeded",
+    issue: {
+      attachmentMutation: {
+        fileIds: [addedFileId],
+        operation: "added",
+      },
+      deleted: false,
+      id: issueId,
+      number: 1,
+      revision: issueRevisionAfterAdd,
+    },
+  })
   await expect(
     agentShell.getByText(
-      `Added 1 attachment on Issue #1 at revision ${issueRevisionAfterAdd}.`
+      `Added 1 attachment at revision ${issueRevisionAfterAdd}.`
     )
   ).toBeVisible()
+
+  await permission.click()
+  await page.getByRole("option", { name: /Full access/u }).click()
+  await expect(permission).toContainText("Full access")
 
   await composer.fill(
     "[E1:ATTACHMENT_READ] Read the image attached to Issue number 1."
@@ -596,8 +778,8 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
     )
   ).toBeVisible()
 
-  await expect.poll(() => submittedMessageIds.length).toBe(8)
-  expect(new Set(submittedMessageIds).size).toBe(8)
+  await expect.poll(() => submittedMessageIds.length).toBe(10)
+  expect(new Set(submittedMessageIds).size).toBe(10)
 
   const messagesResponse = await context.request.get(
     `${apiOrigin}/agent/threads/${threadId}/messages`,
@@ -605,12 +787,14 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
   )
   expect(messagesResponse.status()).toBe(200)
   const canonicalReceipt = assertCanonicalMessages(
-    await messagesResponse.json()
+    await messagesResponse.json(),
+    uploadedAssetId
   )
 
   expect(issueId).toBe(canonicalReceipt.issueId)
-  expect(canonicalReceipt.addedFileId).toBe(addedFileId)
-  expect(canonicalReceipt.addedRevision).toBe(issueRevisionAfterAdd)
+  expect(pastAttachmentResumeResult).toMatchObject({
+    actionId: canonicalReceipt.addActionId,
+  })
   expect(canonicalReceipt.removedActionId).not.toBe("")
   expect(canonicalReceipt.removedFileId).toBe(addedFileId)
   expect(canonicalReceipt.readFileId).toBe(addedFileId)
@@ -637,6 +821,9 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
     reloadedAgentShell.getByText("E1_ATTACHMENT_REMOVE_OK")
   ).toBeVisible()
   await expect(
+    reloadedAgentShell.getByText("E1_PAST_ATTACHMENT_ADD_OK")
+  ).toBeVisible()
+  await expect(
     reloadedAgentShell.getByText(/web search · completed/u).last()
   ).toBeVisible()
   await expect(
@@ -648,8 +835,16 @@ test("scripted Agent Worker traverses the real Web/API/Auth/DB stack", async ({
     "https://developers.cloudflare.com/workers/configuration/compatibility-flags/"
   )
   await expect(
-    reloadedAgentShell.getByText(/add issue attachments · completed/u).last()
+    reloadedAgentShell.getByRole("region", {
+      name: "Issue attachments awaiting approval",
+    })
   ).toBeVisible()
+  await expect(
+    reloadedAgentShell.getByText("oldest-e1.png", { exact: true })
+  ).toBeVisible()
+  await expect(
+    reloadedAgentShell.getByText("succeeded", { exact: true })
+  ).toHaveCount(2)
   await expect(
     reloadedAgentShell.getByText(/remove issue attachments · completed/u).last()
   ).toBeVisible()

@@ -32,7 +32,7 @@ export const createGetIssueTool = <RequestContextData = unknown>(
   >({
     id: "get_issue",
     description:
-      "Read one Issue in the active organization by opaque ID or Issue number.",
+      'Read one Issue in the active organization. For Issue #N use {"lookup":"number","number":N}; for an opaque ID use {"lookup":"id","id":"..."}.',
     inputSchema: getIssueInputJsonSchema,
     outputSchema: agentIssueDetailJsonSchema,
     strict: true,

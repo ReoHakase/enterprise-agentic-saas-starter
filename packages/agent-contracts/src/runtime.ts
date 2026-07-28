@@ -43,23 +43,48 @@ export const agentResolvedContextReferenceSchema = v.variant("kind", [
   }),
 ])
 
-export const agentRuntimeChatInputSchema = v.strictObject({
-  ticket: capabilitySchema,
-  threadId: agentIdentifierSchema,
-  clientMessageId: agentIdentifierSchema,
-  message: agentUiMessageSchema,
-  assetIds: v.pipe(
-    v.array(agentIdentifierSchema),
-    v.maxLength(4),
-    v.checkItems((item, index, array) => array.indexOf(item) === index)
-  ),
-  contextReferences: v.pipe(
-    v.array(agentResolvedContextReferenceSchema),
-    v.maxLength(12)
-  ),
-  timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-  trigger: v.picklist(["user_message", "client_tool_result"]),
+export const agentReusableAssetSchema = v.strictObject({
+  id: agentIdentifierSchema,
+  filename: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
 })
+
+export const AGENT_RUNTIME_REUSABLE_ASSET_MAX_COUNT = 200
+
+export const agentRuntimeChatInputSchema = v.pipe(
+  v.strictObject({
+    ticket: capabilitySchema,
+    threadId: agentIdentifierSchema,
+    clientMessageId: agentIdentifierSchema,
+    message: agentUiMessageSchema,
+    assetIds: v.pipe(
+      v.array(agentIdentifierSchema),
+      v.maxLength(4),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+    reusableAssets: v.optional(
+      v.pipe(
+        v.array(agentReusableAssetSchema),
+        v.maxLength(AGENT_RUNTIME_REUSABLE_ASSET_MAX_COUNT),
+        v.checkItems(
+          (item, index, array) =>
+            array.findIndex(({ id }) => id === item.id) === index
+        )
+      ),
+      []
+    ),
+    contextReferences: v.pipe(
+      v.array(agentResolvedContextReferenceSchema),
+      v.maxLength(12)
+    ),
+    timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+    trigger: v.picklist(["user_message", "client_tool_result"]),
+  }),
+  v.check(
+    (input) =>
+      input.reusableAssets.every(({ id }) => !input.assetIds.includes(id)),
+    "Invalid reusable agent asset selection"
+  )
+)
 
 export const agentRuntimeResumeInputSchema = v.strictObject({
   actionId: agentIdentifierSchema,
@@ -142,6 +167,7 @@ export type AgentRuntimeChatInput = v.InferOutput<
 export type AgentResolvedContextReference = v.InferOutput<
   typeof agentResolvedContextReferenceSchema
 >
+export type AgentReusableAsset = v.InferOutput<typeof agentReusableAssetSchema>
 export type AgentRuntimeResumeInput = v.InferOutput<
   typeof agentRuntimeResumeInputSchema
 >

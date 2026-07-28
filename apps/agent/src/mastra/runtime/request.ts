@@ -23,6 +23,7 @@ const hasConsistentChatState = (input: AgentRuntimeChatInput): boolean => {
   if (input.trigger === "client_tool_result") {
     return (
       input.assetIds.length === 0 &&
+      input.reusableAssets.length === 0 &&
       input.contextReferences.length === 0 &&
       input.clientMessageId.startsWith("continuation_") &&
       current.role === "assistant" &&

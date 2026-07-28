@@ -35,6 +35,8 @@ const createRuntimeContext = (
     executionId: execution.executionId,
     modelRoute: "product",
     policy: {
+      currentMessageHasAssets: false,
+      reusableThreadAssetsAvailable: false,
       timezone: "Asia/Tokyo",
       visionEnabled: false,
       writesEnabled: false,
@@ -46,6 +48,40 @@ const createRuntimeContext = (
 }
 
 describe("standard scripted model", () => {
+  it("only resolves an unscoped model when Studio access is explicitly enabled", async () => {
+    const executionRegistry = new ProductAgentExecutionRegistry()
+    const createAgent = (allowUnscopedModel: boolean) =>
+      createProductAgent({
+        allowUnscopedModel,
+        memory: new Memory({
+          storage: createAgentStorage(
+            { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
+            `studio-model-${allowUnscopedModel}`
+          ),
+        }),
+        model: createScriptedModel([
+          { parts: [{ type: "text", text: "STUDIO_OK" }] },
+        ]),
+        resolveExecution: executionRegistry.resolve,
+        webSearchTool: createWebSearchTool(
+          async () => ({ finishReason: "stop", sources: [], text: "unused" }),
+          executionRegistry.resolve
+        ),
+      })
+
+    const productionAgent = createAgent(false)
+    const studioAgent = createAgent(true)
+
+    await expect(productionAgent.getModel()).rejects.toThrow(
+      "Agent runtime capability is unavailable"
+    )
+    await expect(studioAgent.getModel()).resolves.toMatchObject({
+      modelId: expect.stringContaining(SCRIPTED_MODEL_SENTINEL),
+      provider: "scripted",
+    })
+    expect(studioAgent.listTools()).toEqual({})
+  })
+
   it("drives the real Agent factory, schema, and read executor in order", async () => {
     const calls: unknown[] = []
     const binding: AgentInternalFetchBinding = {

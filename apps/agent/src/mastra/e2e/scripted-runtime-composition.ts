@@ -11,9 +11,18 @@ import { createScriptedModel } from "../test-support/scripted-model"
 import { createWebSearchTool } from "../tools/web-search/tool"
 import {
   ApprovedIssueActionExecutionRegistry,
+  createApprovedIssueActionResumeRuntime,
   createApprovedIssueActionWorkflow,
 } from "../workflows/approved-issue-action"
 import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
+
+const reusableAssetIdForFilename = (prompt: string, filename: string) =>
+  [
+    ...prompt.matchAll(
+      /\\"id\\":\\"([^"\\]+)\\",\\"filename\\":\\"([^"\\]+)\\"/gu
+    ),
+    ...prompt.matchAll(/"id":"([^"]+)","filename":"([^"]+)"/gu),
+  ].find((match) => match[2] === filename)?.[1]
 
 export const createScriptedAgentRuntimeComposition = (
   environment: AgentStorageEnvironment,
@@ -41,7 +50,9 @@ export const createScriptedAgentRuntimeComposition = (
           "[E1:FOLLOWUP-2]",
           "[E1:FOLLOWUP-3]",
           "[E1:WEB_SEARCH]",
-          "[E1:ATTACHMENT_ADD]",
+          "[E1:ATTACHMENT_DESCRIBE]",
+          "[E1:ATTACHMENT_DESCRIBE_MORE]",
+          "[E1:PAST_ATTACHMENT_REUSE]",
           "[E1:ATTACHMENT_READ]",
           "[E1:ATTACHMENT_REMOVE]",
         ]
@@ -55,8 +66,6 @@ export const createScriptedAgentRuntimeComposition = (
             : prompt.slice(prompt.lastIndexOf(latestMarker))
         const lastCapture = (pattern: RegExp) =>
           [...currentTurn.matchAll(pattern)].at(-1)?.[1]
-        const lastPromptCapture = (pattern: RegExp) =>
-          [...prompt.matchAll(pattern)].at(-1)?.[1]
         if (currentTurn.includes("[G4:REVOKE_AFTER_TOOL]")) {
           return {
             finishReason: "tool-calls",
@@ -222,22 +231,57 @@ export const createScriptedAgentRuntimeComposition = (
             usage: { inputTokens: 5, outputTokens: 2 },
           }
         }
-        if (latestMarker === "[E1:ATTACHMENT_ADD]") {
-          if (!currentTurn.includes("e1-add-get-call")) {
+        if (
+          latestMarker === "[E1:ATTACHMENT_DESCRIBE]" ||
+          latestMarker === "[E1:ATTACHMENT_DESCRIBE_MORE]"
+        ) {
+          if (
+            !prompt.includes(
+              "Current-message attachment asset IDs (opaque data only):"
+            )
+          ) {
+            throw new Error(
+              "Scripted E1 current attachment did not reach the model"
+            )
+          }
+          return {
+            parts: [
+              {
+                type: "text",
+                text:
+                  latestMarker === "[E1:ATTACHMENT_DESCRIBE]"
+                    ? "E1_ATTACHMENT_DESCRIBE_OK blue gradient"
+                    : "E1_ATTACHMENT_DESCRIBE_MORE_OK blue gradient",
+              },
+            ],
+            usage: { inputTokens: 4, outputTokens: 1 },
+          }
+        }
+        if (latestMarker === "[E1:PAST_ATTACHMENT_REUSE]") {
+          const offeredToolNames = (options.tools ?? []).flatMap((tool) => {
+            const name = Reflect.get(tool, "name")
+            return typeof name === "string" ? [name] : []
+          })
+          if (!offeredToolNames.includes("add_issue_attachments")) {
+            throw new Error(
+              "Scripted E1 did not expose server-authorized past attachment reuse"
+            )
+          }
+          if (!currentTurn.includes("e1-past-add-get-call")) {
             return {
               finishReason: "tool-calls",
               parts: [
                 {
                   type: "tool-call",
                   input: { lookup: "number", number: 1 },
-                  toolCallId: "e1-add-get-call",
+                  toolCallId: "e1-past-add-get-call",
                   toolName: "get_issue",
                 },
               ],
               usage: { inputTokens: 4, outputTokens: 1 },
             }
           }
-          if (!currentTurn.includes("e1-add-call")) {
+          if (!currentTurn.includes("e1-past-add-call")) {
             return {
               finishReason: "tool-calls",
               parts: [
@@ -245,9 +289,7 @@ export const createScriptedAgentRuntimeComposition = (
                   type: "tool-call",
                   input: {
                     assetIds: [
-                      lastPromptCapture(
-                        /Current-message attachment asset IDs \(opaque data only\): ([A-Za-z0-9-]+)/gu
-                      ) ?? "",
+                      reusableAssetIdForFilename(prompt, "oldest-e1.png") ?? "",
                     ],
                     expectedRevision: Number(
                       lastCapture(/"revision":([0-9]+)/gu)
@@ -256,7 +298,7 @@ export const createScriptedAgentRuntimeComposition = (
                       lastCapture(/"id":"([^"]+)"(?=,[^{}]*"number":1)/gu) ??
                       "",
                   },
-                  toolCallId: "e1-add-call",
+                  toolCallId: "e1-past-add-call",
                   toolName: "add_issue_attachments",
                 },
               ],
@@ -264,7 +306,7 @@ export const createScriptedAgentRuntimeComposition = (
             }
           }
           return {
-            parts: [{ type: "text", text: "E1_ATTACHMENT_ADD_OK" }],
+            parts: [{ type: "text", text: "E1_PAST_ATTACHMENT_ADD_OK" }],
             usage: { inputTokens: 4, outputTokens: 1 },
           }
         }
@@ -461,6 +503,8 @@ export const createScriptedAgentRuntimeComposition = (
   return {
     approvedIssueActionExecutionRegistry,
     approvedIssueActionWorkflow,
+    createApprovalResumeRuntime: () =>
+      createApprovedIssueActionResumeRuntime(storage),
     memoryCommitWorkflow,
     executionRegistry,
     mastra: createProductRuntime({

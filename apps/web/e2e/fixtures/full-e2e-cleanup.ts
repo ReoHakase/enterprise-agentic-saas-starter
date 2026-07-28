@@ -1,8 +1,6 @@
 import { rm } from "node:fs/promises"
 import { basename, dirname, resolve } from "node:path"
 
-import type { FullConfig } from "@playwright/test"
-
 import {
   createAgentE2EEnvironment,
   removeAgentE2EArtifacts,
@@ -24,18 +22,11 @@ export const removeFullE2EArtifacts = async (
   }
   await Promise.all([
     removeAgentE2EArtifacts(runId),
-    rm(nextDistPath, { force: true, recursive: true }),
+    rm(nextDistPath, {
+      force: true,
+      maxRetries: 5,
+      recursive: true,
+      retryDelay: 50,
+    }),
   ])
-}
-
-export default async function teardown(config: FullConfig) {
-  const runId = config.metadata.agentE2ERunId
-  const webWorkspace = config.metadata.agentE2EWebWorkspace
-  if (typeof runId !== "number") {
-    throw new Error("Full E2E run metadata is missing")
-  }
-  if (typeof webWorkspace !== "string") {
-    throw new Error("Full E2E Web workspace metadata is missing")
-  }
-  await removeFullE2EArtifacts(runId, webWorkspace)
 }

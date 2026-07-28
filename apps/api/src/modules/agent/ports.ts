@@ -5,6 +5,7 @@ import type {
   AgentClientToolResult,
   AgentContentSegment,
   AgentIssueAction,
+  AgentReusableAsset,
   AgentResolvedContextReference,
   AgentResumeTicket,
 } from "../../agent-client"
@@ -24,6 +25,7 @@ type AgentPreparedChat = {
   clientMessageId: string
   contextReferences: AgentResolvedContextReference[]
   messages: AgentUiMessage[]
+  reusableAssets: AgentReusableAsset[]
   threadId: string
   ticket: string
   timezone: string

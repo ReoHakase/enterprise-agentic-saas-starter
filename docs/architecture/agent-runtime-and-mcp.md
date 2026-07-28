@@ -598,10 +598,10 @@ Mastra 1.53.0はWorkflowとAgent Approvalのsnapshotへ`RequestContext.toJSON()`
 executor、settlement callback、grant、resume ticket、provider key、cookie、private URLを置きません。
 executorとmodel adapterはcomposition closureから解決します。
 
-Phase 1は秘密を含まないsuspend/resume schema、snapshot secret scan、同一processのapprove/declineを
-完成させます。Worker再起動後のresumeはPhase 3で、APIがmembership、permission、revisionを再検証して
-fresh capabilityを発行し、その場でconsumeする経路を完成させます。process-local registryだけを
-再起動復元の根拠にしません。
+継続requestでは、永続化済みsnapshotを共有する一方、Workflow、`Run`、実行registryをrequestごとに
+新しく組み立てます。Cloudflare Workersの別requestへ、以前のrequestで作成した`Run`や中断制御を
+持ち越しません。再開時はAPIがmembership、permission、revisionを再検証してfresh `capability`を
+発行し、その場でconsumeします。process-local registryだけを再開または再起動復元の根拠にしません。
 
 ## Workers AIとAI Gateway
 

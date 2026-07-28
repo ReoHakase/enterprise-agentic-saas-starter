@@ -55,9 +55,8 @@ const createDependencies = (
   lifecycle: Partial<AgentControlPlanePort>,
   captureFailure: (code: AgentFailureCode) => void
 ): AgentRuntimeDependencies => ({
-  approvedIssueActionExecutionRegistry:
-    runtime.composition.approvedIssueActionExecutionRegistry,
   captureFailure,
+  createApprovalResumeRuntime: runtime.composition.createApprovalResumeRuntime,
   createControlPlane: () => createNativeControlPlane(lifecycle),
   executionRegistry: runtime.executionRegistry,
   mastra: runtime.mastra,

@@ -17,7 +17,10 @@ import {
 
 const productAgentRequestContext = (
   visionEnabled: boolean,
-  toolAllowlist?: readonly string[]
+  toolAllowlist?: readonly string[],
+  writesEnabled = false,
+  currentMessageHasAssets = false,
+  reusableThreadAssetsAvailable = false
 ) => {
   const requestContext = new RequestContext()
   const api = createNativeControlPlane()
@@ -34,10 +37,12 @@ const productAgentRequestContext = (
     executionId: execution.executionId,
     modelRoute: "product",
     policy: {
+      currentMessageHasAssets,
+      reusableThreadAssetsAvailable,
       timezone: "Asia/Tokyo",
       toolAllowlist,
       visionEnabled,
-      writesEnabled: false,
+      writesEnabled,
     },
     resourceId: "resource_mastra_registry",
     threadId: "thread_mastra_registry",
@@ -64,6 +69,9 @@ describe("Mastra product agent registry", () => {
       expect(model.modelId).toBe("qwen/qwen3.6-flash")
       expect(model.provider).toBe("openrouter")
       expect(productAgent.hasOwnMemory()).toBe(true)
+      await expect(productAgent.getModel()).rejects.toThrow(
+        "Agent runtime capability is unavailable"
+      )
     } finally {
       runtime.release()
     }
@@ -86,13 +94,43 @@ describe("Mastra product agent registry", () => {
       "search_organization_members",
       "web_search",
     ])
-    expect(productTools.web_search).not.toMatchObject({ type: "provider" })
     const visionRuntime = productAgentRequestContext(true)
     const standardRuntime = productAgentRequestContext(false)
     const allowlistRuntime = productAgentRequestContext(false, [
       "search_issues",
     ])
+    const noAssetWriteRuntime = productAgentRequestContext(
+      false,
+      undefined,
+      true
+    )
+    const assetWriteRuntime = productAgentRequestContext(
+      false,
+      undefined,
+      true,
+      true
+    )
+    const reusableAssetWriteRuntime = productAgentRequestContext(
+      false,
+      undefined,
+      true,
+      false,
+      true
+    )
     try {
+      const standardTools = await productAgent.listTools({
+        requestContext: standardRuntime.requestContext,
+      })
+      expect(Object.keys(standardTools)).toEqual([
+        "get_issue",
+        "read_account_context",
+        "read_active_organization",
+        "search_issue_labels",
+        "search_issues",
+        "search_organization_members",
+        "web_search",
+      ])
+      expect(standardTools.web_search).not.toMatchObject({ type: "provider" })
       const visionTools = await productAgent.listTools({
         requestContext: visionRuntime.requestContext,
       })
@@ -103,13 +141,9 @@ describe("Mastra product agent registry", () => {
           "outputSchema"
         )
       ).toBeUndefined()
-      expect(
-        Object.keys(
-          await productAgent.listTools({
-            requestContext: standardRuntime.requestContext,
-          })
-        )
-      ).not.toContain("read_issue_attachment_image")
+      expect(Object.keys(standardTools)).not.toContain(
+        "read_issue_attachment_image"
+      )
       expect(
         Object.keys(
           await productAgent.listTools({
@@ -117,6 +151,27 @@ describe("Mastra product agent registry", () => {
           })
         )
       ).toEqual(["search_issues"])
+      expect(
+        Object.keys(
+          await productAgent.listTools({
+            requestContext: noAssetWriteRuntime.requestContext,
+          })
+        )
+      ).not.toContain("add_issue_attachments")
+      expect(
+        Object.keys(
+          await productAgent.listTools({
+            requestContext: assetWriteRuntime.requestContext,
+          })
+        )
+      ).toContain("add_issue_attachments")
+      expect(
+        Object.keys(
+          await productAgent.listTools({
+            requestContext: reusableAssetWriteRuntime.requestContext,
+          })
+        )
+      ).toContain("add_issue_attachments")
 
       expect(() => mastra.getAgentById("public-web-research-agent")).toThrow(
         "Agent with id public-web-research-agent not found"
@@ -125,6 +180,9 @@ describe("Mastra product agent registry", () => {
       visionRuntime.release()
       standardRuntime.release()
       allowlistRuntime.release()
+      noAssetWriteRuntime.release()
+      assetWriteRuntime.release()
+      reusableAssetWriteRuntime.release()
     }
   })
 })

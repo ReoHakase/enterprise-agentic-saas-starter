@@ -6,6 +6,8 @@ import type { AgentControlPlanePort } from "./ports"
 import type { RunSettlement } from "./settlement"
 
 export type ProductAgentPolicy = {
+  currentMessageHasAssets: boolean
+  reusableThreadAssetsAvailable: boolean
   timezone: string
   toolAllowlist?: readonly string[]
   visionEnabled: boolean

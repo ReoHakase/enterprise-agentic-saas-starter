@@ -6,6 +6,7 @@ import {
   type AIV5Type,
   type MessageListInput,
 } from "@mastra/core/agent/message-list"
+import type { Mastra } from "@mastra/core/mastra"
 import { RequestContext } from "@mastra/core/request-context"
 import {
   createUIMessageStream,
@@ -21,6 +22,7 @@ import type { PortableAgentRuntimeEnv as AgentRuntimeEnv } from "../composition/
 import { estimateAgentContextBudget } from "../core/budget/context"
 import { createAgentToolBudget } from "../core/budget/tool"
 import { createAgentVisionBudget } from "../core/budget/vision"
+import { createReusableAgentAssetContext } from "../core/messages/chat-input"
 import { parseAgentEvalToolAllowlist } from "../core/policy/eval-tool-allowlist"
 import { readAgentFeatureSwitches } from "../core/policy/feature-flags"
 import {
@@ -65,7 +67,13 @@ const createContextBudget = (input: AgentRuntimeChatInput) =>
   estimateAgentContextBudget({
     messages: [input.message],
     attachmentCount: input.assetIds.length,
-    pageContext: input.contextReferences,
+    pageContext:
+      input.contextReferences.length > 0 || input.reusableAssets.length > 0
+        ? {
+            contextReferences: input.contextReferences,
+            reusableAssets: input.reusableAssets,
+          }
+        : undefined,
   })
 const isChatAvailable = (
   environment: AgentRuntimeEnv,
@@ -93,13 +101,16 @@ export type AgentExecutionContext = {
 
 export type AgentRuntimeDependencies = {
   captureFailure: (code: AgentFailureCode) => void
+  createApprovalResumeRuntime: () => {
+    executionRegistry: ApprovedIssueActionExecutionRegistry
+    mastra: Mastra
+  }
   createControlPlane: (
     binding: AgentRuntimeEnv["AGENT_INTERNAL_API"]
   ) => AgentControlPlanePort
   mastra: ReturnType<typeof createProductRuntime>
   threadTitleAgent: ReturnType<typeof createThreadTitleAgent>
   executionRegistry: ProductAgentExecutionRegistry
-  approvedIssueActionExecutionRegistry: ApprovedIssueActionExecutionRegistry
   requireModelCredential: boolean
   toControlFailure: (error: unknown) => AgentControlFailure | null
 }
@@ -246,6 +257,8 @@ const handleChat = async (
     executionId: execution.executionId,
     modelRoute: "product",
     policy: {
+      currentMessageHasAssets: input.assetIds.length > 0,
+      reusableThreadAssetsAvailable: input.reusableAssets.length > 0,
       timezone: input.timezone,
       toolAllowlist,
       visionEnabled: features.vision,
@@ -259,7 +272,10 @@ const handleChat = async (
     const modelMessages: MessageListInput = JSON.parse(
       JSON.stringify([input.message])
     )
-    const transientContext = createResolvedPageContext(input)
+    const transientContext = [
+      ...createResolvedPageContext(input),
+      ...createReusableAgentAssetContext(input.reusableAssets),
+    ]
 
     const abortSignal = abortLifecycle.signal
     const productAgent = dependencies.mastra.getAgentById("product-agent")
@@ -435,13 +451,17 @@ const handleResume = async (
 
   let result: AgentActionExecutionResult
   try {
+    const approvalRuntime = dependencies.createApprovalResumeRuntime()
     result = await resumeIssueAction(input, {
       api,
-      executionRegistry: dependencies.approvedIssueActionExecutionRegistry,
+      executionRegistry: approvalRuntime.executionRegistry,
       features: readAgentFeatureSwitches(environment),
-      mastra: dependencies.mastra,
+      mastra: approvalRuntime.mastra,
+      reportFailure: (cause) =>
+        reportDevelopmentCauseChain(environment, "action-resume", cause),
     })
-  } catch {
+  } catch (cause) {
+    reportDevelopmentCauseChain(environment, "action-resume", cause)
     dependencies.captureFailure("resume_failed")
     return unavailable()
   }

@@ -11,7 +11,11 @@ import {
   removeAgentE2EArtifacts,
   removeAgentE2EStackArtifacts,
 } from "./e2e/fixtures/agent-e2e-environment"
-import { removeFullE2EArtifacts } from "./e2e/fixtures/full-e2e-global-teardown"
+import { removeFullE2EArtifacts } from "./e2e/fixtures/full-e2e-cleanup"
+import {
+  runFullE2ECommand,
+  selectFullE2EPlaywrightArguments,
+} from "./e2e/fixtures/run-full-e2e"
 
 describe("Agent E2E environment", () => {
   it("derives an isolated loopback topology from the run identifier", () => {
@@ -108,6 +112,112 @@ describe("Agent E2E environment", () => {
         rm(nextDistPath, { force: true, recursive: true }),
       ])
     }
+  })
+
+  it("waits for Playwright to stop its servers before full cleanup", async () => {
+    const runId = process.pid * 10_000 + 323
+    const environment = createAgentE2EEnvironment(runId)
+    const nextDistPath = resolve(process.cwd(), environment.nextDistDirectory)
+    let finishPlaywright: (() => void) | undefined
+    let markPlaywrightStarted: (() => void) | undefined
+    const playwrightStarted = new Promise<void>((resolveStarted) => {
+      markPlaywrightStarted = resolveStarted
+    })
+    const playwrightFinished = new Promise<void>((resolveFinished) => {
+      finishPlaywright = resolveFinished
+    })
+
+    await Promise.all([
+      mkdir(environment.stackRoot, { recursive: true }),
+      mkdir(nextDistPath, { recursive: true }),
+    ])
+    try {
+      const command = runFullE2ECommand({
+        runId,
+        webWorkspace: process.cwd(),
+        runPlaywright: async () => {
+          markPlaywrightStarted?.()
+          await playwrightFinished
+          return 0
+        },
+      })
+      await playwrightStarted
+
+      await expect(access(environment.temporaryRoot)).resolves.toBeUndefined()
+      await expect(access(nextDistPath)).resolves.toBeUndefined()
+
+      finishPlaywright?.()
+      await expect(command).resolves.toBe(0)
+      await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
+        code: "ENOENT",
+      })
+      await expect(access(nextDistPath)).rejects.toMatchObject({
+        code: "ENOENT",
+      })
+    } finally {
+      finishPlaywright?.()
+      await Promise.all([
+        removeAgentE2EArtifacts(runId),
+        rm(nextDistPath, { force: true, recursive: true }),
+      ])
+    }
+  })
+
+  it("keeps the Qwen diagnostic out of the blocking full E2E arguments", () => {
+    const requested = ["--grep", "agent-canary"]
+
+    expect(selectFullE2EPlaywrightArguments(requested, {})).toEqual([
+      "--grep-invert",
+      "(?:@diagnostic-qwen)",
+      ...requested,
+    ])
+    expect(
+      selectFullE2EPlaywrightArguments(requested, {
+        PAID_E2E_DIAGNOSTIC: "1",
+      })
+    ).toEqual(requested)
+  })
+
+  it("keeps the diagnostic exclusion when callers also invert a pattern", () => {
+    expect(
+      selectFullE2EPlaywrightArguments(
+        [
+          "--grep-invert",
+          "agent-canary-read-source",
+          "--grep-invert=agent-canary-approved-image-write",
+          "--list",
+        ],
+        {}
+      )
+    ).toEqual([
+      "--grep-invert",
+      "(?:@diagnostic-qwen)|(?:agent-canary-read-source)|(?:agent-canary-approved-image-write)",
+      "--list",
+    ])
+  })
+
+  it("propagates a blocking Playwright failure after full cleanup", async () => {
+    const runId = process.pid * 10_000 + 324
+    const environment = createAgentE2EEnvironment(runId)
+    const nextDistPath = resolve(process.cwd(), environment.nextDistDirectory)
+
+    await Promise.all([
+      mkdir(environment.stackRoot, { recursive: true }),
+      mkdir(nextDistPath, { recursive: true }),
+    ])
+    const command = runFullE2ECommand({
+      runId,
+      webWorkspace: process.cwd(),
+      runPlaywright: async () => 7,
+    })
+
+    await expect(command).resolves.toBe(7)
+    await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
+      code: "ENOENT",
+    })
+    await expect(access(nextDistPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    })
   })
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])(
