@@ -36,20 +36,37 @@ export type StoredCreateIssuePayload = {
   attachments: StoredAttachment[]
 }
 
-export type StoredUpdateIssuePayload = {
-  requestFingerprint: string
-  issueId: string
-  expectedRevision: number
-  changes: {
-    title?: string
-    description?: string
-    status?: IssueStatus
-    priority?: IssuePriority
-    assigneeId?: string | null
-    labels?: string[]
-    dueDate?: string | null
-  }
+type StoredIssueFieldChanges = {
+  title?: string
+  description?: string
+  status?: IssueStatus
+  priority?: IssuePriority
+  assigneeId?: string | null
+  labels?: string[]
+  dueDate?: string | null
 }
+export type StoredUpdateIssuePayload =
+  | {
+      operation: "fields"
+      requestFingerprint: string
+      issueId: string
+      expectedRevision: number
+      changes: StoredIssueFieldChanges
+    }
+  | {
+      operation: "add_attachments"
+      requestFingerprint: string
+      issueId: string
+      expectedRevision: number
+      attachments: StoredAttachment[]
+    }
+  | {
+      operation: "remove_attachments"
+      requestFingerprint: string
+      issueId: string
+      expectedRevision: number
+      fileIds: string[]
+    }
 
 export type StoredDeleteIssuePayload = {
   requestFingerprint: string
@@ -88,22 +105,51 @@ export const storedCreateIssuePayloadModel = v.strictObject({
   attachments: v.array(storedAttachmentModel),
 })
 
-export const storedUpdateIssuePayloadModel = v.strictObject({
-  requestFingerprint: requestFingerprintModel,
-  issueId: v.string(),
-  expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  changes: v.strictObject({
-    title: v.optional(v.string()),
-    description: v.optional(v.string()),
-    status: v.optional(v.picklist(["open", "in_progress", "closed"])),
-    priority: v.optional(
-      v.picklist(["no_priority", "low", "medium", "high", "urgent"])
-    ),
-    assigneeId: v.optional(v.nullable(v.string())),
-    labels: v.optional(v.array(v.string())),
-    dueDate: v.optional(v.nullable(v.string())),
+export const storedUpdateIssuePayloadModel = v.variant("operation", [
+  v.strictObject({
+    operation: v.literal("fields"),
+    requestFingerprint: requestFingerprintModel,
+    issueId: v.string(),
+    expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    changes: v.strictObject({
+      title: v.optional(v.string()),
+      description: v.optional(v.string()),
+      status: v.optional(v.picklist(["open", "in_progress", "closed"])),
+      priority: v.optional(
+        v.picklist(["no_priority", "low", "medium", "high", "urgent"])
+      ),
+      assigneeId: v.optional(v.nullable(v.string())),
+      labels: v.optional(v.array(v.string())),
+      dueDate: v.optional(v.nullable(v.string())),
+    }),
   }),
-})
+  v.strictObject({
+    operation: v.literal("add_attachments"),
+    requestFingerprint: requestFingerprintModel,
+    issueId: v.string(),
+    expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    attachments: v.pipe(
+      v.array(storedAttachmentModel),
+      v.minLength(1),
+      v.maxLength(4)
+    ),
+  }),
+  v.strictObject({
+    operation: v.literal("remove_attachments"),
+    requestFingerprint: requestFingerprintModel,
+    issueId: v.string(),
+    expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    fileIds: v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(20)),
+  }),
+])
+
+export const normalizeStoredUpdateIssuePayload = (input: unknown) =>
+  input &&
+  typeof input === "object" &&
+  !Array.isArray(input) &&
+  !Object.hasOwn(input, "operation")
+    ? { operation: "fields", ...input }
+    : input
 
 export const storedDeleteIssuePayloadModel = v.strictObject({
   requestFingerprint: requestFingerprintModel,
@@ -111,11 +157,35 @@ export const storedDeleteIssuePayloadModel = v.strictObject({
   expectedRevision: v.pipe(v.number(), v.integer(), v.minValue(1)),
 })
 
+const addedReceiptFileIdsModel = v.pipe(
+  v.array(v.string()),
+  v.minLength(1),
+  v.maxLength(4),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const removedReceiptFileIdsModel = v.pipe(
+  v.array(v.string()),
+  v.minLength(1),
+  v.maxLength(20),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const storedAttachmentMutationModel = v.variant("operation", [
+  v.strictObject({
+    operation: v.literal("added"),
+    fileIds: addedReceiptFileIdsModel,
+  }),
+  v.strictObject({
+    operation: v.literal("removed"),
+    fileIds: removedReceiptFileIdsModel,
+  }),
+])
+
 const storedReceiptModel = v.strictObject({
   issueId: v.string(),
   number: v.pipe(v.number(), v.integer(), v.minValue(1)),
   revision: v.pipe(v.number(), v.integer(), v.minValue(1)),
   deleted: v.boolean(),
+  attachmentMutation: v.optional(storedAttachmentMutationModel),
 })
 
 export const preserveAgentActionError = (
@@ -259,11 +329,42 @@ export const safeStoredParse = <
   return result.output
 }
 
+const normalizeLegacyPreview = (input: unknown) => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input
+  const attachments = Reflect.get(input, "attachments")
+  return {
+    ...input,
+    attachmentOperation: Reflect.get(input, "attachmentOperation") ?? null,
+    attachments: Array.isArray(attachments)
+      ? attachments.map((attachment) => {
+          if (
+            !attachment ||
+            typeof attachment !== "object" ||
+            Array.isArray(attachment) ||
+            Object.hasOwn(attachment, "source")
+          ) {
+            return attachment
+          }
+          if (typeof Reflect.get(attachment, "assetId") === "string") {
+            return { source: "asset", ...attachment }
+          }
+          if (typeof Reflect.get(attachment, "fileId") === "string") {
+            return { source: "file", ...attachment }
+          }
+          return attachment
+        })
+      : attachments,
+  }
+}
+
 export const toActionDto = (action: ActionRow): AgentIssueAction => {
   const preview =
     action.canonicalPreview === null
       ? null
-      : safeStoredParse(agentIssueActionPreviewModel, action.canonicalPreview)
+      : safeStoredParse(
+          agentIssueActionPreviewModel,
+          normalizeLegacyPreview(action.canonicalPreview)
+        )
   return {
     id: action.id,
     kind: action.kind,
@@ -294,6 +395,9 @@ export const executionResult = (
       number: receipt.number,
       revision: receipt.revision,
       deleted: receipt.deleted,
+      ...(receipt.attachmentMutation
+        ? { attachmentMutation: receipt.attachmentMutation }
+        : {}),
     },
   }
 }

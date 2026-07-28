@@ -13,6 +13,7 @@ export type ValidGrant = {
   sessionId: string
   userId: string
   contextEpoch: number
+  webSearchQueryHash: string | null
   role: OrganizationRole
   runStatus:
     | "running"

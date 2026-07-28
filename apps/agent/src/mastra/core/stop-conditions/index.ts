@@ -1,7 +1,9 @@
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 const issueActionKindByTool = new Map([
+  ["add_issue_attachments", "update_issue"],
   ["create_issue", "create_issue"],
   ["delete_issue", "delete_issue"],
+  ["remove_issue_attachments", "update_issue"],
   ["update_issue", "update_issue"],
 ])
 

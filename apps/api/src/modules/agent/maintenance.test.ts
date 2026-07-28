@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest"
+
+import {
+  agentMaintenanceResponse,
+  isAgentMaintenanceMode,
+  publicAgentRuntimeGateResponse,
+} from "./maintenance"
+
+describe("Agent maintenance boundary", () => {
+  it("returns a stable unavailable response for every public Agent route", async () => {
+    await Promise.all(
+      [
+        "/agent",
+        "/agent/threads",
+        "/agent/chat",
+        "/files/organizations/org_1/agent-threads/thread_1/assets",
+        "/files/organizations/org_1/agent-assets/asset_1",
+        "/files/organizations/org_1/agent-assets/asset_1/preview/720",
+      ].map(async (pathname) => {
+        const response = publicAgentRuntimeGateResponse(
+          new Request(`https://api.example.test${pathname}`),
+          { maintenanceMode: "1", runtimeAvailable: false }
+        )
+        expect(response?.status).toBe(503)
+        expect(response?.headers.get("retry-after")).toBe("300")
+        expect(await response?.text()).toBe("Agent maintenance in progress")
+      })
+    )
+    expect(
+      publicAgentRuntimeGateResponse(
+        new Request("https://api.example.test/health"),
+        { maintenanceMode: "1", runtimeAvailable: false }
+      )
+    ).toBeNull()
+    for (const pathname of [
+      "/files/organizations/org_1/threads/thread_1/assets",
+      "/files/organizations/org_1/agent-assets",
+      "/files/organizations/org_1/agent-assets/asset_1/other/720",
+      "/files/agent-assets/asset_1",
+    ]) {
+      expect(
+        publicAgentRuntimeGateResponse(
+          new Request(`https://api.example.test${pathname}`),
+          { maintenanceMode: "1", runtimeAvailable: false }
+        )
+      ).toBeNull()
+    }
+  })
+
+  it("requires the exact enabled value and protects named entrypoints", async () => {
+    expect(isAgentMaintenanceMode("1")).toBe(true)
+    expect(isAgentMaintenanceMode("0")).toBe(false)
+    expect(isAgentMaintenanceMode(undefined)).toBe(false)
+    const response = agentMaintenanceResponse()
+    expect(response.status).toBe(503)
+    expect(await response.text()).toBe("Agent maintenance in progress")
+    const unavailable = publicAgentRuntimeGateResponse(
+      new Request("https://api.example.test/agent/threads"),
+      { maintenanceMode: "0", runtimeAvailable: false }
+    )
+    expect(unavailable?.status).toBe(503)
+    expect(await unavailable?.text()).toBe("Agent unavailable")
+    expect(
+      publicAgentRuntimeGateResponse(
+        new Request("https://api.example.test/agent/threads"),
+        { maintenanceMode: "0", runtimeAvailable: true }
+      )
+    ).toBeNull()
+  })
+})

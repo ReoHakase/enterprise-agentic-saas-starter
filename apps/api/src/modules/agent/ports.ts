@@ -1,10 +1,11 @@
 import type {
   AgentActionExecutionResult,
   AgentApprovalPolicy,
-  AgentCanonicalMessage,
+  AgentUiMessage,
   AgentClientToolResult,
   AgentContentSegment,
   AgentIssueAction,
+  AgentReusableAsset,
   AgentResolvedContextReference,
   AgentResumeTicket,
 } from "../../agent-client"
@@ -14,26 +15,17 @@ export type AgentThreadPermissionMode = "ask_always" | "full_access"
 type AgentThreadDto = {
   createdAt: string
   id: string
-  messageCount: number
   status: "active" | "archived"
   title: string
-  titleRevision: number
   updatedAt: string
-}
-
-type AgentThreadContext = {
-  estimatedHistoryTokens: number
-  latestSummaryEstimatedTokens: number | null
-  latestSummaryThroughSequence: number | null
-  messageCount: number
-  threadId: string
 }
 
 type AgentPreparedChat = {
   assetIds: string[]
   clientMessageId: string
   contextReferences: AgentResolvedContextReference[]
-  messages: AgentCanonicalMessage[]
+  messages: AgentUiMessage[]
+  reusableAssets: AgentReusableAsset[]
   threadId: string
   ticket: string
   timezone: string
@@ -72,6 +64,21 @@ type AgentOrganizationUsage = {
 }
 
 export type AgentServicePorts = {
+  cancelAgentRunForSession(input: {
+    runId: string
+    sessionId: string
+    threadId: string
+    userId: string
+  }): Promise<{
+    runId: string
+    status:
+      | "running"
+      | "waiting_approval"
+      | "completed"
+      | "failed"
+      | "canceled"
+      | "expired"
+  }>
   archiveAgentThreadForSession(input: {
     sessionId: string
     threadId: string
@@ -111,16 +118,11 @@ export type AgentServicePorts = {
     sessionId: string
     userId: string
   }): Promise<AgentOrganizationUsage>
-  getAgentThreadContextForSession(input: {
+  issueAgentConnectionTicket(input: {
     sessionId: string
     threadId: string
     userId: string
-  }): Promise<AgentThreadContext>
-  listAgentMessagesForSession(input: {
-    sessionId: string
-    threadId: string
-    userId: string
-  }): Promise<AgentCanonicalMessage[]>
+  }): Promise<{ ticket: string; expiresAt: string }>
   listAgentThreadsForSession(input: {
     sessionId: string
     userId: string
@@ -156,13 +158,6 @@ export type AgentServicePorts = {
     threadId: string
     userId: string
   }): Promise<AgentApprovalPolicy>
-  renameAgentThreadForSession(input: {
-    expectedRevision: number
-    sessionId: string
-    threadId: string
-    title: string
-    userId: string
-  }): Promise<AgentThreadDto>
   revokeCurrentAgentContext(input: {
     sessionId: string
     userId: string

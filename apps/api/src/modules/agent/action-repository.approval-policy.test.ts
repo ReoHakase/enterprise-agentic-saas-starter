@@ -7,14 +7,16 @@ import {
   createRun,
   request,
 } from "./action-repository.test-support"
+import { findApplicablePolicy } from "./actions/prepare-read-support"
 import {
   deleteAgentApprovalPolicyForSession,
   getAgentApprovalPolicyForSession,
   putAgentApprovalPolicyForSession,
 } from "./actions/repository"
+import { issueAgentConnectionTicket } from "./threads/repository"
 
 describe("Agent Issue approval policies and full access", () => {
-  it("preserves full access after Web search", async () => {
+  it("taints the run after Web search and forces subsequent writes to manual approval", async () => {
     const { app, db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-approval-fence",
@@ -55,6 +57,21 @@ describe("Agent Issue approval policies and full access", () => {
         operationId: "tool-public-web-search",
       })
     ).resolves.toEqual({ reserved: true, reused: false })
+    const [firstTaint] = await db
+      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, actionRun.run.runId))
+    await expect(
+      actionRun.internal.reserveWebSearch({
+        grant: actionRun.run.grant,
+        operationId: "tool-public-web-search-retry",
+      })
+    ).resolves.toEqual({ reserved: true, reused: false })
+    const [retriedTaint] = await db
+      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, actionRun.run.runId))
+    expect(retriedTaint?.webSearchUsedAt).toEqual(firstTaint?.webSearchUsedAt)
 
     const afterSearch = await actionRun.internal.prepareUpdateIssue({
       grant: actionRun.run.grant,
@@ -67,10 +84,18 @@ describe("Agent Issue approval policies and full access", () => {
       },
     })
     expect(afterSearch).toMatchObject({
-      approvalMode: "full_access",
-      requiresApproval: false,
-      status: "approved",
+      approvalMode: null,
+      requiresApproval: true,
+      status: "pending",
     })
+    const [issue] = await db
+      .select({
+        revision: schema.issues.revision,
+        status: schema.issues.status,
+      })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "action-issue-a"))
+    expect(issue).toEqual({ revision: 2, status: "open" })
     await expect(
       getAgentApprovalPolicyForSession(db, {
         sessionId: "action-session-a",
@@ -78,6 +103,135 @@ describe("Agent Issue approval policies and full access", () => {
         threadId: actionRun.thread.id,
       })
     ).resolves.toMatchObject({ mode: "full_access" })
+
+    await actionRun.internal.cancelRun({ grant: actionRun.run.grant })
+    const cleanTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: actionRun.thread.id,
+    })
+    const cleanConnection = await actionRun.internal.consumeConnectionTicket({
+      ticket: cleanTicket.ticket,
+      threadId: actionRun.thread.id,
+    })
+    const cleanRun = await actionRun.internal.startRun({
+      grant: cleanConnection.grant,
+      clientMessageId: "clean-run-after-web-search",
+      assetIds: [],
+    })
+    await expect(
+      actionRun.internal.prepareUpdateIssue({
+        grant: cleanRun.grant,
+        toolCallId: "tool-clean-run-write",
+        idempotencyKey: "prepare-clean-run-write",
+        issue: {
+          issueId: "action-issue-a",
+          expectedRevision: 2,
+          status: "closed",
+        },
+      })
+    ).resolves.toMatchObject({
+      approvalMode: "full_access",
+      requiresApproval: false,
+      status: "approved",
+    })
+  })
+
+  it("fails closed when the run row used by the policy lookup is missing", async () => {
+    const { db } = await createFixture()
+    await expect(
+      db.transaction((tx) =>
+        findApplicablePolicy(
+          tx,
+          {
+            organizationId: "action-org-a",
+            threadId: "missing-thread",
+            runId: "missing-run",
+            sessionId: "action-session-a",
+            userId: "action-user-a",
+            contextEpoch: 1,
+            webSearchQueryHash: null,
+            role: "super_admin",
+            runStatus: "running",
+            runScope: "chat",
+            rootRunId: "missing-run",
+            resumedActionId: null,
+          },
+          new Date()
+        )
+      )
+    ).resolves.toBeNull()
+  })
+
+  it("forces a delete selected after Web search to manual approval", async () => {
+    const { db } = await createFixture()
+    const actionRun = await createRun(db, {
+      clientMessageId: "web-search-delete-fence",
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: actionRun.thread.id,
+      mode: "full_access",
+    })
+    await actionRun.internal.reserveWebSearch({
+      grant: actionRun.run.grant,
+      operationId: "tool-public-web-search-delete",
+    })
+
+    await expect(
+      actionRun.internal.prepareDeleteIssue({
+        grant: actionRun.run.grant,
+        toolCallId: "tool-delete-after-web-search",
+        idempotencyKey: "prepare-delete-after-web-search",
+        issue: { issueId: "action-issue-a", expectedRevision: 1 },
+      })
+    ).resolves.toMatchObject({
+      approvalMode: null,
+      requiresApproval: true,
+      status: "pending",
+    })
+    const [issue] = await db
+      .select({ id: schema.issues.id, revision: schema.issues.revision })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "action-issue-a"))
+    expect(issue).toEqual({ id: "action-issue-a", revision: 1 })
+  })
+
+  it("forces a create selected after Web search to manual approval", async () => {
+    const { db } = await createFixture()
+    const actionRun = await createRun(db, {
+      clientMessageId: "web-search-create-fence",
+    })
+    await putAgentApprovalPolicyForSession(db, {
+      sessionId: "action-session-a",
+      userId: "action-user-a",
+      threadId: actionRun.thread.id,
+      mode: "full_access",
+    })
+    await actionRun.internal.reserveWebSearch({
+      grant: actionRun.run.grant,
+      operationId: "tool-public-web-search-create",
+    })
+
+    await expect(
+      actionRun.internal.prepareCreateIssue({
+        grant: actionRun.run.grant,
+        toolCallId: "tool-create-after-web-search",
+        idempotencyKey: "prepare-create-after-web-search",
+        issue: { title: "FORBIDDEN_SEARCH_INJECTED_WRITE" },
+      })
+    ).resolves.toMatchObject({
+      approvalMode: null,
+      requiresApproval: true,
+      status: "pending",
+    })
+    expect(
+      await db
+        .select({ id: schema.issues.id })
+        .from(schema.issues)
+        .where(eq(schema.issues.title, "FORBIDDEN_SEARCH_INJECTED_WRITE"))
+    ).toEqual([])
   })
 
   it("returns the current permission to ask always through the public route", async () => {

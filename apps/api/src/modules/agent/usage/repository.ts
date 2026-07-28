@@ -34,6 +34,8 @@ export const recordAgentUsage = async (
         tokenHash,
         kind: "run",
         now,
+        allowTerminalRun: true,
+        allowRevokedTerminalRun: true,
       })
       if (!context.runId) throw publicErrors.unauthorized()
 

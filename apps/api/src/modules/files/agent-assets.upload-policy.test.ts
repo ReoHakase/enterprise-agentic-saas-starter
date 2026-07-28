@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
+import { decideAgentActionForSession } from "../agent/actions/repository"
 import {
   AGENT_USAGE_DAY_MS,
   AGENT_USAGE_HOUR_MS,
@@ -22,13 +23,139 @@ import {
   uploadDirect,
   uploadRequest,
 } from "./agent-assets.test-support"
+import { listReusableAgentAssetsInTransaction } from "./agent-run-assets-repository"
 import {
   AGENT_ASSET_MAX_DIMENSION,
   AGENT_ASSET_MODEL_MAX_BYTES,
   AGENT_ASSET_UPLOAD_USER_HOURLY_LIMIT,
+  AGENT_RUN_ASSET_MAX_BYTES,
 } from "./constants"
 import { agentAssetDtoModel } from "./model"
 import { configureFileStorageRuntime } from "./runtime"
+
+type CombinedImageScenario = {
+  currentSizes: readonly number[]
+  name: string
+  reusableSizes: readonly number[]
+}
+
+const successfulCombinedImageScenarios: readonly CombinedImageScenario[] = [
+  {
+    currentSizes: [1, 1],
+    name: "count below the limit",
+    reusableSizes: [1],
+  },
+  {
+    currentSizes: [1, 1, 1],
+    name: "count at the limit",
+    reusableSizes: [1],
+  },
+  {
+    currentSizes: [10_000_000],
+    name: "bytes below the limit",
+    reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_001],
+  },
+  {
+    currentSizes: [10_000_000],
+    name: "bytes at the limit",
+    reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_000],
+  },
+]
+
+const rejectedCombinedImageScenarios: readonly CombinedImageScenario[] = [
+  {
+    currentSizes: [1, 1, 1],
+    name: "count above the limit",
+    reusableSizes: [1, 1],
+  },
+  {
+    currentSizes: [10_000_000, 1],
+    name: "bytes above the limit",
+    reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_000],
+  },
+]
+
+const seedSizedAssets = (
+  db: Parameters<typeof seedReadyAsset>[0],
+  input: {
+    prefix: string
+    sizes: readonly number[]
+  }
+) =>
+  input.sizes.reduce<Promise<string[]>>(
+    async (pendingAssetIds, sizeBytes, index) => [
+      ...(await pendingAssetIds),
+      await seedReadyAsset(db, {
+        id: `${input.prefix}-${index}`,
+        sizeBytes,
+      }),
+    ],
+    Promise.resolve([])
+  )
+
+const createCombinedImageScenario = async ({
+  currentSizes,
+  name,
+  reusableSizes,
+}: CombinedImageScenario) => {
+  const { db } = await createFixture()
+  const internal = await createAgentInternalApi(db)
+  const slug = name.replaceAll(" ", "-")
+  const reusableAssetIds = await seedSizedAssets(db, {
+    prefix: `combined-${slug}-past`,
+    sizes: reusableSizes,
+  })
+  const priorConnection = await openConnection(db)
+  const priorRun = await internal.startRun({
+    assetIds: reusableAssetIds,
+    clientMessageId: `combined-${slug}-prior`,
+    grant: priorConnection.grant,
+  })
+  await internal.finishRun({ grant: priorRun.grant, outcome: "completed" })
+  const currentAssetIds = await seedSizedAssets(db, {
+    prefix: `combined-${slug}-current`,
+    sizes: currentSizes,
+  })
+  const now = new Date()
+  const issueId = `combined-${slug}-issue`
+  await db.insert(schema.issues).values({
+    id: issueId,
+    organizationId: "asset-org-a",
+    number: 1,
+    title: "Combined image boundary",
+    description: "",
+    status: "open",
+    priority: "no_priority",
+    creatorId: "asset-user-a",
+    labels: [],
+    createdAt: now,
+    updatedAt: now,
+  })
+  const connection = await openConnection(db)
+  const run = await internal.startRun({
+    assetIds: currentAssetIds,
+    clientMessageId: `combined-${slug}-current`,
+    grant: connection.grant,
+  })
+  return {
+    currentAssetIds,
+    db,
+    prepare: () =>
+      internal.prepareUpdateIssue({
+        grant: run.grant,
+        idempotencyKey: `combined-${slug}-key`,
+        issue: {
+          operation: "add_attachments",
+          attachmentAssetIds: reusableAssetIds,
+          expectedRevision: 1,
+          issueId,
+        },
+        toolCallId: `combined-${slug}-call`,
+      }),
+    reusableAssetIds,
+    runId: run.runId,
+  }
+}
 
 describe("Agent asset upload policy and scope", () => {
   it("atomically rate-limits a new upload without consuming storage quota", async () => {
@@ -355,5 +482,181 @@ describe("Agent asset upload policy and scope", () => {
         sql`${schema.agentRuns.clientMessageId} in ('too-many-assets', 'too-many-bytes')`
       )
     expect(failedRuns).toEqual([])
+  })
+})
+
+describe("Agent reusable asset boundaries", () => {
+  it.each(successfulCombinedImageScenarios)(
+    "accepts the combined current and reusable image $name",
+    async (scenario) => {
+      const { currentAssetIds, db, prepare, reusableAssetIds, runId } =
+        await createCombinedImageScenario(scenario)
+      const action = await prepare()
+
+      expect(action.status).toBe("pending")
+      expect(
+        await db
+          .select()
+          .from(schema.agentActionAssets)
+          .where(eq(schema.agentActionAssets.actionId, action.id))
+      ).toHaveLength(reusableAssetIds.length)
+      const runAssetIds = await db
+        .select({ assetId: schema.agentRunAssets.assetId })
+        .from(schema.agentRunAssets)
+        .where(eq(schema.agentRunAssets.runId, runId))
+      expect(runAssetIds.map(({ assetId }) => assetId).toSorted()).toEqual(
+        [...currentAssetIds, ...reusableAssetIds].toSorted()
+      )
+    }
+  )
+
+  it.each(rejectedCombinedImageScenarios)(
+    "rejects the combined current and reusable image $name before action mutation",
+    async (scenario) => {
+      const { currentAssetIds, db, prepare, runId } =
+        await createCombinedImageScenario(scenario)
+
+      await expect(prepare()).rejects.toMatchObject({
+        code: "validation_error",
+        statusCode: 400,
+      })
+      expect(await db.select().from(schema.agentActions)).toEqual([])
+      expect(await db.select().from(schema.agentActionAssets)).toEqual([])
+      const runAssetIds = await db
+        .select({ assetId: schema.agentRunAssets.assetId })
+        .from(schema.agentRunAssets)
+        .where(eq(schema.agentRunAssets.runId, runId))
+      expect(runAssetIds.map(({ assetId }) => assetId).toSorted()).toEqual(
+        currentAssetIds.toSorted()
+      )
+    }
+  )
+
+  it("lists every retained image from the same conversation and binds only the selected past image", async () => {
+    const { db } = await createFixture()
+    const internal = await createAgentInternalApi(db)
+    const assetIds = await Array.from({ length: 6 }).reduce<Promise<string[]>>(
+      async (pendingAssetIds, _, index) => {
+        const seededAssetIds = await pendingAssetIds
+        return [
+          ...seededAssetIds,
+          await seedReadyAsset(db, {
+            id: `conversation-asset-${index}`,
+            sizeBytes: 1,
+          }),
+        ]
+      },
+      Promise.resolve([])
+    )
+    for (const [index, assetId] of assetIds.entries()) {
+      // oxlint-disable-next-line no-await-in-loop -- each completed run establishes one ordered conversation reference.
+      const connection = await openConnection(db)
+      // oxlint-disable-next-line no-await-in-loop -- the fixture intentionally serializes runs for one private thread.
+      const run = await internal.startRun({
+        assetIds: [assetId],
+        clientMessageId: `conversation-message-${index}`,
+        grant: connection.grant,
+      })
+      // oxlint-disable-next-line no-await-in-loop -- the next message cannot start until this run is terminal.
+      await internal.finishRun({ grant: run.grant, outcome: "completed" })
+    }
+
+    const reusable = await db.transaction((tx) =>
+      listReusableAgentAssetsInTransaction(tx, {
+        currentAssetIds: [],
+        now: new Date(),
+        scope: {
+          contextEpoch: 1,
+          organizationId: "asset-org-a",
+          sessionId: "asset-session-a",
+          threadId: "asset-thread-a",
+          userId: "asset-user-a",
+        },
+      })
+    )
+    expect(reusable).toHaveLength(6)
+    expect(reusable.map(({ id }) => id)).toEqual(
+      expect.arrayContaining(assetIds)
+    )
+
+    const now = new Date()
+    await db.insert(schema.issues).values({
+      id: "conversation-target-issue",
+      organizationId: "asset-org-a",
+      number: 1,
+      title: "Conversation image target",
+      description: "",
+      status: "open",
+      priority: "no_priority",
+      creatorId: "asset-user-a",
+      labels: [],
+      createdAt: now,
+      updatedAt: now,
+    })
+    const connection = await openConnection(db)
+    const run = await internal.startRun({
+      assetIds: [],
+      clientMessageId: "conversation-reuse-message",
+      grant: connection.grant,
+    })
+    const action = await internal.prepareUpdateIssue({
+      grant: run.grant,
+      idempotencyKey: "conversation-reuse-idempotency-key",
+      issue: {
+        operation: "add_attachments",
+        attachmentAssetIds: [assetIds[0] ?? ""],
+        expectedRevision: 1,
+        issueId: "conversation-target-issue",
+      },
+      toolCallId: "conversation-reuse-tool-call",
+    })
+    expect(action.preview?.attachments).toEqual([
+      expect.objectContaining({
+        assetId: assetIds[0],
+        filename: `${assetIds[0]}.png`,
+      }),
+    ])
+    expect(
+      await db
+        .select({ assetId: schema.agentRunAssets.assetId })
+        .from(schema.agentRunAssets)
+        .where(eq(schema.agentRunAssets.runId, run.runId))
+    ).toEqual([{ assetId: assetIds[0] }])
+
+    expect(action.status).toBe("pending")
+    await expect(
+      decideAgentActionForSession(db, {
+        actionId: action.id,
+        decision: "no",
+        idempotencyKey: "conversation-reject-decision-key",
+        sessionId: "asset-session-a",
+        userId: "asset-user-a",
+      })
+    ).resolves.toMatchObject({ status: "rejected" })
+
+    const retryConnection = await openConnection(db)
+    const retryRun = await internal.startRun({
+      assetIds: [],
+      clientMessageId: "conversation-reuse-after-reject",
+      grant: retryConnection.grant,
+    })
+    await expect(
+      internal.prepareUpdateIssue({
+        grant: retryRun.grant,
+        idempotencyKey: "conversation-reuse-after-reject-key",
+        issue: {
+          operation: "add_attachments",
+          attachmentAssetIds: [assetIds[0] ?? ""],
+          expectedRevision: 1,
+          issueId: "conversation-target-issue",
+        },
+        toolCallId: "conversation-reuse-after-reject-call",
+      })
+    ).resolves.toMatchObject({
+      preview: {
+        attachments: [expect.objectContaining({ assetId: assetIds[0] })],
+      },
+      status: "pending",
+    })
   })
 })

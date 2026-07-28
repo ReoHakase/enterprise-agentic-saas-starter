@@ -2,7 +2,7 @@
 
 Mastra の `product-agent` を実行するprivate Cloudflare Workerです。BrowserはこのWorkerへ直接接続せず、cookie認証済みAPIの`POST /agent/chat`がnamed `AGENT_RUNTIME` Service Bindingを通してstreamをproxyします。default fetchは常に404を返し、`workers.dev`、preview URL、custom domainを公開しません。
 
-APIはsession、active organization、membership、thread ownerを検証し、canonical messageをTursoへ保存してからone-time run ticketを発行します。Agentは`AGENT_INTERNAL_API` Service Bindingだけでticket消費、bounded read tool、承認付きIssue CRUD、canonical assistant message保存を行います。Turso/R2/Auth credentialやMastra Memoryを持ちません。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けmemory上のpartへだけ追加します。
+APIはsession、active organization、membership、thread ownerを検証し、Application Tursoの6列のthread認可台帳からone-time run ticketを発行します。Agentは`AGENT_INTERNAL_API` Service Bindingだけでticket消費、bounded read tool、承認付きIssue CRUDを行い、native UIMessage履歴とWorkflow snapshotをAgent専用TursoのMastra Storageへ保存します。API認可後のthread listとhistoryもService Binding経由で取得し、archive済みregistryはAgent DBに履歴が残っていても公開しません。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けの一時contextへだけ追加します。
 
 旧Agents SDKの`IssueAssistant` SQLite Durable Objectはdata retentionのため`v1` migrationとclass exportだけを残し、runtime bindingとpublic routeを持ちません。旧messageのexport/backfillとretention判断が終わるまで`deleted_classes`を追加しないでください。
 
@@ -13,7 +13,7 @@ bun run cf:typegen
 bun run dev
 ```
 
-Worker用の`OPENROUTER_API_KEY`と`SENTRY_DSN`は追跡対象外の`.env.local`にのみ設定します。`bun run dev`は公開可能な既定値を`.dev.vars.example`、秘密値を`.env.local`から読み込みます。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED`は明示値`1`でだけ有効になるfail-closed switchです。
+Worker用の`OPENROUTER_API_KEY`、`SENTRY_DSN`、remote利用時の`MASTRA_STORAGE_AUTH_TOKEN`は追跡対象外の`.env.local`にのみ設定します。`bun run dev`は公開可能な既定値を`.dev.vars.example`、秘密値を`.env.local`から読み込み、Application DBとは別のlocal Agent DBを`storage:dev`で同時起動します。`MASTRA_STORAGE_URL`とcredentialはApplication Tursoと共有できず、production deployも同一URLまたはtokenを拒否します。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED`は明示値`1`でだけ有効になるfail-closed switchです。
 
 SentryはAgent Worker専用の `SENTRY_ENVIRONMENT` と `SENTRY_RELEASE` を使います。event、log、spanからrequest data、ticket、grant、resume ticket、prompt、tool payloadを除去し、固定error codeだけを記録します。
 
@@ -30,6 +30,8 @@ bun run dev:agent:studio
 ```
 
 Portless経由のURLは `https://mastra-studio.enterprise-agentic-saas.localhost` です。`MASTRA_AUTO_DETECT_URL=true`によりbrowserのsame-origin `/api`へ接続し、ephemeralなdirect HTTP portやmixed contentへ依存しません。Studioもproduction Workerと同じ`src/mastra/index.ts`を読み込みます。`bun run studio:health`と`bun run studio:agents`は課金なし、`bun run studio:smoke`はOpenRouterを実際に呼ぶ明示的な課金testです。
+
+Agent DBだけを操作する場合は`bun run storage:dev`、`bun run storage:smoke`、`bun run storage:reset`を使います。`storage:reset`は固定local Agent DB以外を拒否します。
 
 free full-stack E2Eはproductionとは別の`wrangler.e2e.jsonc`と
 `src/mastra/e2e/worker.ts`を使い、standard scripted modelをcompile-timeで注入します。

@@ -2,9 +2,13 @@ import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import { createAgentModel } from "../adapters/model/openrouter"
+import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import { parseAgentEvalDataset, type AgentEvalCase } from "./dataset"
 import { classifyAgentEvalFailure } from "./failure"
-import { runAgentEvalStackCase } from "./stack-driver"
+import {
+  readAgentEvalFailureStage,
+  runAgentEvalStackCase,
+} from "./stack-driver"
 
 const evalDirectory = resolve(import.meta.dirname, "../../../evals")
 
@@ -88,9 +92,11 @@ process.once("SIGTERM", requestShutdown)
 try {
   await main(shutdown.signal)
 } catch (cause) {
+  reportDevelopmentCauseChain(process.env, "Agent eval", cause)
   console.error(
     JSON.stringify({
       failureCode: classifyAgentEvalFailure(cause),
+      failureStage: readAgentEvalFailureStage(cause),
       message: "Agent eval failed",
       status: "failed",
     })

@@ -2,7 +2,7 @@
 title: 製品Agentのusageとbilling
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-28
 ---
 
 # Usageとbilling
@@ -39,6 +39,10 @@ type AgentUsageEvent = {
 `total = input + output`です。providerのoutput totalにreasoningが含まれる場合、reasoningを再加算しません。cache read/writeもinput totalと別の課金分類であり、総tokenへ二重加算しません。失敗、cancel、client disconnectでもproviderから観測できたusageは記録します。
 
 `runEventId`は同じ観測eventのretryを一意にし、usage event insertと日次projectionをexactly-onceへ収束させます。
+main responseは`attempt_<attempt>`、background titleは`title_<attempt>`を使います。successful runは
+main usage、Mastra Memory保存、Application run settlementを完了してからtitleを生成するため、usage専用
+private APIは同じrunの失効済みgrantをterminal runの認可にだけ使えます。business toolやMemory commitへ
+この例外を広げず、同じ`runEventId`の再送は`recorded: false`へ収束します。
 
 ## Pricing
 

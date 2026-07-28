@@ -1,3 +1,4 @@
+import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import { publicErrors } from "../../errors/app-error"
@@ -12,7 +13,6 @@ import {
 import type { AgentInternalPorts } from "./internal-ports"
 import {
   agentGrantInputModel,
-  appendAgentRunMessagesInputModel,
   consumeConnectionTicketInputModel,
   finishAgentRunInputModel,
   getAgentImageInputModel,
@@ -20,7 +20,6 @@ import {
   getAgentIssueInputModel,
   guardAgentWebSearchInputModel,
   recordAgentUsageInputModel,
-  renameAgentThreadInputModel,
   reserveAgentWebSearchInputModel,
   searchAgentIssuesInputModel,
   searchAgentLabelsInputModel,
@@ -43,11 +42,11 @@ const parseInternalInput = <
 }
 
 export const createAgentInternalService = (ports: AgentInternalPorts) => ({
-  appendRunMessages(
-    input: v.InferInput<typeof appendAgentRunMessagesInputModel>
+  settleMemoryCommit(
+    input: v.InferInput<typeof agentMemoryCommitSettlementInputSchema>
   ) {
-    return ports.appendRunMessages(
-      parseInternalInput(appendAgentRunMessagesInputModel, input)
+    return ports.settleMemoryCommit(
+      parseInternalInput(agentMemoryCommitSettlementInputSchema, input)
     )
   },
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
@@ -125,11 +124,6 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
   recordUsage(input: v.InferInput<typeof recordAgentUsageInputModel>) {
     return ports.recordUsage(
       parseInternalInput(recordAgentUsageInputModel, input)
-    )
-  },
-  renameThread(input: v.InferInput<typeof renameAgentThreadInputModel>) {
-    return ports.renameThread(
-      parseInternalInput(renameAgentThreadInputModel, input)
     )
   },
   reserveWebSearch(

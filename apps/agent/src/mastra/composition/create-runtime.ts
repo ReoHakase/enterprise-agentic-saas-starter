@@ -1,29 +1,33 @@
 import { Mastra } from "@mastra/core/mastra"
-import { InMemoryStore } from "@mastra/core/storage"
+import type { MastraCompositeStore } from "@mastra/core/storage"
 
 import type { createProductAgent } from "../agents/product-agent"
-import type { createPublicWebResearchAgent } from "../agents/public-web-research-agent"
 import type { createThreadTitleAgent } from "../agents/thread-title-agent"
-import { approvedIssueActionWorkflow } from "../workflows/approved-issue-action"
+import type { ApprovedIssueActionWorkflow } from "../workflows/approved-issue-action"
+import type { MemoryCommitWorkflow } from "../workflows/memory-commit"
 
 export type ProductRuntimeAgents = {
   productAgent: ReturnType<typeof createProductAgent>
-  publicWebResearchAgent: ReturnType<typeof createPublicWebResearchAgent>
   threadTitleAgent: ReturnType<typeof createThreadTitleAgent>
 }
 
 export const createProductRuntime = ({
   productAgent,
-  publicWebResearchAgent,
   threadTitleAgent,
-}: ProductRuntimeAgents) =>
+  storage,
+  approvedIssueActionWorkflow,
+  memoryCommitWorkflow,
+}: ProductRuntimeAgents & {
+  storage: MastraCompositeStore
+  approvedIssueActionWorkflow: ApprovedIssueActionWorkflow
+  memoryCommitWorkflow: MemoryCommitWorkflow
+  executionRegistry?: unknown
+}) =>
   new Mastra({
-    agents: { productAgent, publicWebResearchAgent, threadTitleAgent },
+    agents: { productAgent, threadTitleAgent },
     // Provider errors can contain request bodies and response headers. Product
     // failures are reported through the scrubbed Sentry boundary instead.
     logger: false,
-    // Workflow execution snapshots are intentionally ephemeral. API/Turso
-    // remains canonical for threads, actions, approvals, and usage.
-    storage: new InMemoryStore({ id: "agent-ephemeral-execution" }),
-    workflows: { approvedIssueActionWorkflow },
+    storage,
+    workflows: { approvedIssueActionWorkflow, memoryCommitWorkflow },
   })

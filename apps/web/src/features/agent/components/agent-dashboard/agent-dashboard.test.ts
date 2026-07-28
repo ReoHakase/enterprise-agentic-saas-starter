@@ -4,7 +4,7 @@ import { createElement } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import { extractPendingActionIds } from "../../pending-action-ids"
-import { parseAgentMessages } from "../../schema"
+import { parseAgentMessagePage } from "../../schema"
 import { AgentApprovalAttachments } from "../agent-approval-attachments/agent-approval-attachments"
 import { AgentMessage } from "../agent-message/agent-message"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
@@ -47,26 +47,31 @@ describe("agent action projection", () => {
     expect(extractPendingActionIds(messages)).toEqual(["action-1"])
   })
 
-  it("projects persisted named tools into AI SDK dynamic tool parts", () => {
-    const messages = parseAgentMessages([
-      {
-        id: "message-2",
-        role: "assistant",
-        parts: [
-          {
-            type: "tool-create_issue",
-            toolCallId: "call-4",
-            state: "output-available",
-            input: { title: "Investigate screenshot" },
-            output: { status: "pending", actionId: "action-2" },
-          },
-        ],
-      },
-    ])
+  it("preserves persisted named tool parts", () => {
+    const { messages } = parseAgentMessagePage({
+      messages: [
+        {
+          id: "message-2",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-create_issue",
+              toolCallId: "call-4",
+              state: "output-available",
+              input: { title: "Investigate screenshot" },
+              output: { status: "pending", actionId: "action-2" },
+            },
+          ],
+        },
+      ],
+      total: 1,
+      page: 0,
+      perPage: 40,
+      hasMore: false,
+    })
 
     expect(messages[0]?.parts[0]).toMatchObject({
-      type: "dynamic-tool",
-      toolName: "create_issue",
+      type: "tool-create_issue",
       state: "output-available",
     })
     expect(extractPendingActionIds(messages)).toEqual(["action-2"])
@@ -78,6 +83,7 @@ describe("agent action projection", () => {
         organizationId: "org/acme",
         attachments: [
           {
+            source: "asset",
             assetId: "asset one",
             filename: "incident.png",
             sizeBytes: 2048,
@@ -102,14 +108,13 @@ describe("agent action projection", () => {
     )
   })
 
-  it("renders reasoning and tool trace collapsed with only confirmed Issue links", () => {
+  it("renders tool trace collapsed with only confirmed Issue links", () => {
     render(
       createElement(AgentMessage, {
         message: {
           id: "message-trace",
           role: "assistant",
           parts: [
-            { type: "reasoning", text: "I should inspect the urgent Issues." },
             {
               type: "data-activity",
               data: {
@@ -136,14 +141,11 @@ describe("agent action projection", () => {
       })
     )
 
-    expect(
-      screen.getByText("I should inspect the urgent Issues.")
-    ).not.toBeVisible()
     expect(screen.queryByText("Searched Issues")).not.toBeInTheDocument()
     expect(
       screen.getByRole("group", { name: "Agent answer" })
     ).toHaveTextContent("The urgent Issue was confirmed.")
-    expect(screen.getByText(/"number": 7/u)).not.toBeVisible()
+    expect(screen.queryByText(/"number": 7/u)).not.toBeInTheDocument()
     expect(
       screen.getByRole("link", { name: "#7 Restore production access" })
     ).toBeVisible()

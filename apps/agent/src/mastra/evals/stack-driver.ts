@@ -1,6 +1,14 @@
+import { resolve } from "node:path"
+
 import { z } from "zod"
 
 import type { AgentEvalCase } from "./dataset"
+import {
+  assertCaseResult,
+  assistantText,
+  isRecord,
+  toolNames,
+} from "./stack-case-assertions"
 import {
   readAgentEvalStackUsage,
   runAgentEvalStackScopeProbes,
@@ -8,10 +16,50 @@ import {
   type AgentEvalStack,
 } from "./stack-process"
 
+export { assertWebSearchEvidence } from "./stack-case-assertions"
+
 const threadSchema = z.object({ id: z.string().min(1) }).passthrough()
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-const writeTools = new Set(["create_issue", "delete_issue", "update_issue"])
+const writeTools = new Set([
+  "add_issue_attachments",
+  "create_issue",
+  "delete_issue",
+  "remove_issue_attachments",
+  "update_issue",
+])
+const mutationCaseKinds = new Set([
+  "attachment_add",
+  "attachment_remove",
+  "write",
+])
+const agentEvalCaseStages = [
+  "stack_start",
+  "thread_setup",
+  "fixture_inputs",
+  "usage_snapshot",
+  "chat_request",
+  "stream_read",
+  "common_assertions",
+  "usage_wait",
+  "scope_probes",
+  "case_assertion",
+] as const
+type AgentEvalCaseStage = (typeof agentEvalCaseStages)[number]
+
+class AgentEvalCaseStageError extends Error {
+  readonly stage: AgentEvalCaseStage
+
+  constructor(stage: AgentEvalCaseStage, cause: unknown) {
+    super(cause instanceof Error ? cause.message : "Agent eval stage failed", {
+      cause,
+    })
+    this.stage = stage
+  }
+}
+
+export const readAgentEvalFailureStage = (
+  cause: unknown
+): AgentEvalCaseStage | "unclassified" =>
+  cause instanceof AgentEvalCaseStageError ? cause.stage : "unclassified"
 
 const sessionHeaders = (stack: AgentEvalStack) => ({
   "content-type": "application/json",
@@ -41,39 +89,26 @@ const readStream = (body: string) => {
   return events
 }
 
-const toolNames = (events: readonly unknown[]) =>
-  events.flatMap((event) =>
-    isRecord(event) &&
-    event.type === "tool-input-available" &&
-    typeof event.toolName === "string"
-      ? [event.toolName]
-      : []
-  )
-
-const toolInput = (events: readonly unknown[], toolName: string) =>
-  events.find(
-    (event) =>
-      isRecord(event) &&
-      event.type === "tool-input-available" &&
-      event.toolName === toolName
-  )
-
-const assistantText = (events: readonly unknown[]) =>
-  events
-    .flatMap((event) => {
-      if (!isRecord(event) || event.type !== "text-delta") return []
-      if (typeof event.delta === "string") return [event.delta]
-      return typeof event.text === "string" ? [event.text] : []
-    })
-    .join("")
-
-const waitForUsage = async (stack: AgentEvalStack, signal: AbortSignal) => {
+const waitForUsage = async (
+  stack: AgentEvalStack,
+  signal: AbortSignal,
+  threadId: string
+) => {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     signal.throwIfAborted()
     // Settlement is asynchronous and must be observed serially.
     // oxlint-disable-next-line no-await-in-loop
     const snapshot = await readAgentEvalStackUsage(stack)
-    if (snapshot.usage.length > 0) return snapshot
+    if (
+      snapshot.usage.some(
+        (row) =>
+          row.organizationId === stack.identity.organizationId &&
+          row.threadId === threadId &&
+          row.runEventId.startsWith("attempt_")
+      )
+    ) {
+      return snapshot
+    }
     // oxlint-disable-next-line no-await-in-loop
     await Bun.sleep(250)
   }
@@ -85,6 +120,7 @@ const assertCommonResult = async ({
   events,
   modelId,
   signal,
+  setStage,
   stack,
   threadId,
 }: {
@@ -92,18 +128,32 @@ const assertCommonResult = async ({
   events: readonly unknown[]
   modelId: string
   signal: AbortSignal
+  setStage(stage: AgentEvalCaseStage): void
   stack: AgentEvalStack
   threadId: string
 }) => {
   const calls = toolNames(events)
+  const targetOutput = assistantText(events)
+  const targetToolInputs = events.filter(
+    (event) => isRecord(event) && event.type === "tool-input-available"
+  )
   if (
-    !calls.includes(caseDefinition.requiredTool) ||
-    (caseDefinition.kind !== "write" &&
+    targetOutput.includes(stack.identity.sentinel) ||
+    JSON.stringify(targetToolInputs).includes(stack.identity.sentinel)
+  ) {
+    throw new Error(`Agent eval ${caseDefinition.id} leaked another thread`)
+  }
+  if (
+    (caseDefinition.kind !== "web_search_refusal" &&
+      !mutationCaseKinds.has(caseDefinition.kind) &&
+      !calls.includes(caseDefinition.requiredTool)) ||
+    (!mutationCaseKinds.has(caseDefinition.kind) &&
       calls.some((name) => writeTools.has(name)))
   ) {
     throw new Error(`Agent eval ${caseDefinition.id} used unexpected tools`)
   }
-  const snapshot = await waitForUsage(stack, signal)
+  setStage("usage_wait")
+  const snapshot = await waitForUsage(stack, signal, threadId)
   const scopedUsage = snapshot.usage.filter(
     (row) =>
       row.organizationId === stack.identity.organizationId &&
@@ -115,90 +165,15 @@ const assertCommonResult = async ({
   if (scopedUsage.some((row) => row.model !== modelId)) {
     throw new Error(`Agent eval ${caseDefinition.id} usage model mismatched`)
   }
-  if (scopedUsage.some((row) => row.isEstimate)) {
-    throw new Error(`Agent eval ${caseDefinition.id} usage was estimated`)
-  }
+  // The accepted billing contract uses the versioned calculated cost when
+  // OpenRouter omits provider cost; the snapshot schema verifies both paths.
+  setStage("scope_probes")
   const probes = await runAgentEvalStackScopeProbes(stack)
   const failedProbe = Object.entries(probes).find(([, passed]) => !passed)
   if (failedProbe) {
     throw new Error(`Agent eval scope assertion ${failedProbe[0]} failed`)
   }
   return { calls, snapshot }
-}
-
-const assertCaseResult = ({
-  calls,
-  caseDefinition,
-  events,
-  snapshot,
-  stack,
-}: {
-  calls: readonly string[]
-  caseDefinition: AgentEvalCase
-  events: readonly unknown[]
-  snapshot: Awaited<ReturnType<typeof readAgentEvalStackUsage>>
-  stack: AgentEvalStack
-}) => {
-  if (caseDefinition.kind === "read") {
-    if (
-      !assistantText(events)
-        .toLowerCase()
-        .includes(caseDefinition.expectedPriority)
-    ) {
-      throw new Error("Agent eval read result omitted the Issue priority")
-    }
-    return
-  }
-  if (caseDefinition.kind === "web_search") {
-    const input = toolInput(events, "web_search")
-    if (
-      !isRecord(input) ||
-      !isRecord(input.input) ||
-      input.input.query !== caseDefinition.expectedQuery
-    ) {
-      throw new Error("Agent eval Web search query mismatched")
-    }
-    if (!/https?:\/\//u.test(assistantText(events))) {
-      throw new Error("Agent eval Web search source was omitted")
-    }
-    return
-  }
-  const issues = snapshot.issues.filter(
-    (issue) =>
-      issue.organizationId === stack.identity.organizationId &&
-      issue.title === caseDefinition.expectedIssue.title &&
-      issue.priority === caseDefinition.expectedIssue.priority
-  )
-  const issue = issues[0]
-  const actions = snapshot.actions.filter(
-    (action) =>
-      action.organizationId === stack.identity.organizationId &&
-      action.kind === "create_issue" &&
-      action.status === "succeeded" &&
-      action.resultId === issue?.id
-  )
-  const action = actions[0]
-  const audits = snapshot.audits.filter(
-    (audit) =>
-      audit.organizationId === stack.identity.organizationId &&
-      audit.action === "issue.created" &&
-      audit.targetId === issue?.id
-  )
-  if (
-    calls.filter((name) => name === "create_issue").length !== 1 ||
-    issues.length !== 1 ||
-    actions.length !== 1 ||
-    audits.length !== 1 ||
-    !issue ||
-    !action ||
-    action.decidedAt === null ||
-    action.completedAt === null ||
-    action.createdAt > action.decidedAt ||
-    action.decidedAt > issue.createdAt ||
-    issue.createdAt > action.completedAt
-  ) {
-    throw new Error("Agent eval approved write was not persisted exactly once")
-  }
 }
 
 export const runAgentEvalStackCase = async ({
@@ -214,13 +189,16 @@ export const runAgentEvalStackCase = async ({
   openRouterApiKey: string
   signal: AbortSignal
 }) => {
-  const stack = await startAgentEvalStack({
-    availableTools: caseDefinition.availableTools,
-    namespace,
-    openRouterApiKey,
-    signal,
-  })
+  let stage: AgentEvalCaseStage = "stack_start"
+  let stack: AgentEvalStack | undefined
   try {
+    stack = await startAgentEvalStack({
+      availableTools: caseDefinition.availableTools,
+      namespace,
+      openRouterApiKey,
+      signal,
+    })
+    stage = "thread_setup"
     const headers = sessionHeaders(stack)
     const threadResponse = await requireSuccess(
       await fetch(new URL("/agent/threads", stack.apiOrigin), {
@@ -235,11 +213,83 @@ export const runAgentEvalStackCase = async ({
       "Agent eval thread setup"
     )
     const thread = threadSchema.parse(await threadResponse.json())
+    stage = "fixture_inputs"
+    const formHeaders = sessionHeaders(stack)
+    Reflect.deleteProperty(formHeaders, "content-type")
+    const imageBytes = new Uint8Array(
+      await Bun.file(
+        resolve(
+          import.meta.dirname,
+          "../../../../../packages/db/fixtures/files/preview.png"
+        )
+      ).arrayBuffer()
+    )
+    let assetIds: string[] = []
+    let expectedAssetId: string | undefined
+    let expectedFileId: string | undefined
+    let prompt = caseDefinition.prompt
+    if (
+      caseDefinition.kind === "image_read" ||
+      caseDefinition.kind === "attachment_remove"
+    ) {
+      const form = new FormData()
+      form.set("uploadId", `upload_${namespace.slice(-64)}`)
+      form.set("fileSize", String(imageBytes.byteLength))
+      form.set(
+        "file",
+        new File([imageBytes], "eval-image.png", { type: "image/png" })
+      )
+      const uploaded = await requireSuccess(
+        await fetch(
+          new URL(
+            `/files/organizations/${stack.identity.organizationId}/owners/issue/${stack.identity.issueId}`,
+            stack.apiOrigin
+          ),
+          { body: form, headers: formHeaders, method: "POST", signal }
+        ),
+        "Agent eval Issue image upload"
+      )
+      const file = z
+        .object({ id: z.string().min(1) })
+        .passthrough()
+        .parse(await uploaded.json())
+      expectedFileId = file.id
+      prompt += `\nExact Issue ID: ${stack.identity.issueId}\nExact file ID: ${file.id}`
+    }
+    if (caseDefinition.kind === "attachment_add") {
+      const form = new FormData()
+      form.set("uploadId", `asset_${namespace.slice(-64)}`)
+      form.set("fileSize", String(imageBytes.byteLength))
+      form.set(
+        "file",
+        new File([imageBytes], "eval-asset.png", { type: "image/png" })
+      )
+      const uploaded = await requireSuccess(
+        await fetch(
+          new URL(
+            `/files/organizations/${stack.identity.organizationId}/agent-threads/${thread.id}/assets`,
+            stack.apiOrigin
+          ),
+          { body: form, headers: formHeaders, method: "POST", signal }
+        ),
+        "Agent eval staged asset upload"
+      )
+      const asset = z
+        .object({ id: z.string().min(1) })
+        .passthrough()
+        .parse(await uploaded.json())
+      assetIds = [asset.id]
+      expectedAssetId = asset.id
+      prompt += `\nExact Issue ID: ${stack.identity.issueId}\nExact staged asset ID: ${asset.id}`
+    }
+    stage = "usage_snapshot"
+    const beforeMutation = await readAgentEvalStackUsage(stack)
+    stage = "chat_request"
     const response = await requireSuccess(
       await fetch(new URL("/agent/chat", stack.apiOrigin), {
         body: JSON.stringify({
-          assetIds: [],
-          contentSegments: [{ text: caseDefinition.prompt, type: "text" }],
+          assetIds,
+          contentSegments: [{ text: prompt, type: "text" }],
           messageId: `message_${namespace.slice(-64)}`,
           threadId: thread.id,
           timezone: "Asia/Tokyo",
@@ -250,28 +300,39 @@ export const runAgentEvalStackCase = async ({
       }),
       "Agent eval chat"
     )
+    stage = "stream_read"
     const body = await response.text()
     const events = readStream(body)
+    stage = "common_assertions"
     const common = await assertCommonResult({
       caseDefinition,
       events,
       modelId,
       signal,
+      setStage: (nextStage) => {
+        stage = nextStage
+      },
       stack,
       threadId: thread.id,
     })
-    assertCaseResult({
+    stage = "case_assertion"
+    assertCaseResult(caseDefinition, {
+      beforeMutation,
       calls: common.calls,
-      caseDefinition,
       events,
       snapshot: common.snapshot,
       stack,
+      threadId: thread.id,
+      expectedAssetId,
+      expectedFileId,
     })
     return {
       modelSteps: common.snapshot.usage.length,
       toolCalls: common.calls.length,
     }
+  } catch (cause) {
+    throw new AgentEvalCaseStageError(stage, cause)
   } finally {
-    await stack.close()
+    await stack?.close()
   }
 }

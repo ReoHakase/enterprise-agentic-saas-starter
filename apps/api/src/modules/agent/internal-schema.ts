@@ -1,3 +1,4 @@
+import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import { FILE_LIST_MAX_LIMIT } from "../files/public"
@@ -8,11 +9,9 @@ import {
   resumeApprovedActionInputModel,
 } from "./action-schema"
 import {
-  appendAgentRunMessagesInputModel,
   finishAgentRunInputModel,
   guardAgentWebSearchInputModel,
   recordAgentUsageObjectModel,
-  renameAgentThreadInputModel,
   reserveAgentWebSearchInputModel,
   startAgentRunInputModel,
 } from "./runtime-schema"
@@ -38,6 +37,8 @@ const limitQueryModel = v.optional(
 )
 
 export const emptyBodyModel = v.strictObject({})
+export const memoryCommitSettlementBodyModel =
+  agentMemoryCommitSettlementInputSchema
 export const startRunBodyModel = v.omit(startAgentRunInputModel, ["grant"])
 export const reserveWebSearchBodyModel = v.omit(
   reserveAgentWebSearchInputModel,
@@ -47,16 +48,9 @@ export const guardWebSearchBodyModel = v.omit(guardAgentWebSearchInputModel, [
   "grant",
 ])
 export const finishRunBodyModel = v.omit(finishAgentRunInputModel, ["grant"])
-export const renameThreadBodyModel = v.omit(renameAgentThreadInputModel, [
-  "grant",
-])
 export const recordUsageBodyModel = v.omit(recordAgentUsageObjectModel, [
   "grant",
 ])
-export const appendRunMessagesBodyModel = v.omit(
-  appendAgentRunMessagesInputModel,
-  ["grant"]
-)
 export const resumeApprovedActionBodyModel = v.omit(
   resumeApprovedActionInputModel,
   ["actionId"]
@@ -104,7 +98,9 @@ export const issueAttachmentParamsModel = v.strictObject({
 export const issueNumberParamsModel = v.strictObject({
   number: positiveIntegerQueryModel,
 })
-export const actionIdParamsModel = v.strictObject({ actionId: identifierModel })
+export const actionIdParamsModel = v.strictObject({
+  actionId: identifierModel,
+})
 export const assetIdParamsModel = v.strictObject({ assetId: identifierModel })
 
 export const issueAttachmentQueryModel = v.strictObject({

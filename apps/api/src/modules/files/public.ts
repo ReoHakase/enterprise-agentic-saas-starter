@@ -2,7 +2,11 @@
 export { findPreviewableAgentAssetForSession } from "./agent-assets-repository"
 export { promoteAgentAssetToIssueFileInTransaction } from "./agent-assets-repository"
 export { createFilesInternalApplication } from "./module"
-export { bindAgentAssetsToRunInTransaction } from "./agent-run-assets-repository"
+export {
+  bindAgentAssetsToRunInTransaction,
+  bindReusableAgentAssetsToRunInTransaction,
+  listReusableAgentAssetsInTransaction,
+} from "./agent-run-assets-repository"
 /** @internal */
 export { agentAssetObjectKey } from "./constants"
 export {
@@ -14,6 +18,8 @@ export {
 export type { FileDto } from "./model"
 export { getFileOwnerAdapter } from "./owner-adapters"
 export { listReadyFilesByOwner } from "./repository"
+export { deleteReadyFilesInTransaction } from "./repository"
+export type { FileWithOwner } from "./repository"
 /** @internal */
 export {
   configureFileStorageRuntime,

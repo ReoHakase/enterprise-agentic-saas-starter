@@ -9,7 +9,7 @@ import {
   storageObjectClaims,
   storageObjects,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, eq, gt, isNull, sql } from "drizzle-orm"
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm"
 
 import { assetConflict } from "./agent-assets-domain"
 import type { AgentAssetTransaction } from "./agent-assets-repository-support"
@@ -98,7 +98,13 @@ const selectPromotionSource = async (
       and(
         eq(agentActions.id, input.actionId),
         eq(agentActions.organizationId, input.organizationId),
-        eq(agentActions.kind, "create_issue"),
+        or(
+          eq(agentActions.kind, "create_issue"),
+          and(
+            eq(agentActions.kind, "update_issue"),
+            sql`json_extract(${agentActions.normalizedPayload}, '$.operation') = 'add_attachments'`
+          )
+        ),
         eq(agentActions.status, "approved"),
         eq(agentActions.targetId, input.issueId),
         eq(agentActions.userId, input.actorUserId),

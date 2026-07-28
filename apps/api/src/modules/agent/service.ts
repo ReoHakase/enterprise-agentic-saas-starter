@@ -7,6 +7,7 @@ import type {
 } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
 import { agentActionExecutionResultModel } from "./action-schema"
+import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
 import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
@@ -29,19 +30,115 @@ const normalizeAgentTimezone = (value: string): string => {
   }
 }
 
+type AgentSessionIdentity = { sessionId: string; userId: string }
+
+const listAgentThreadsWithMemory = async (
+  ports: AgentServicePorts,
+  input: AgentSessionIdentity
+) => {
+  const registryThreads = await ports.listAgentThreadsForSession(input)
+  const first = registryThreads[0]
+  if (!first) return []
+  if (registryThreads.length > 1_000) {
+    throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
+  }
+  const capability = await ports.issueAgentConnectionTicket({
+    ...input,
+    threadId: first.id,
+  })
+  let response: Response
+  try {
+    response = await ports.fetchAgentRuntime(
+      new Request("https://agent.internal/memory/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          registryThreadIds: registryThreads.map((thread) => thread.id),
+          threadId: first.id,
+          ticket: capability.ticket,
+        }),
+      })
+    )
+  } catch (cause) {
+    throw publicErrors.unavailable(cause)
+  }
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => undefined)
+    throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
+  }
+  let memoryThreads: v.InferOutput<typeof agentMemoryThreadListModel>
+  try {
+    memoryThreads = v.parse(agentMemoryThreadListModel, await response.json())
+  } catch (cause) {
+    throw publicErrors.unavailable(cause)
+  }
+  const byId = new Map(memoryThreads.map((thread) => [thread.id, thread]))
+  return registryThreads
+    .map((thread) => {
+      const memoryThread = byId.get(thread.id)
+      return memoryThread
+        ? Object.assign({}, thread, {
+            title: memoryThread.title,
+            updatedAt: memoryThread.updatedAt,
+          })
+        : thread
+    })
+    .toSorted(
+      (left, right) =>
+        right.updatedAt.localeCompare(left.updatedAt) ||
+        right.id.localeCompare(left.id)
+    )
+}
+
+const listAgentMessagesFromMemory = async (
+  ports: AgentServicePorts,
+  input: AgentSessionIdentity & {
+    page: number
+    perPage: number
+    threadId: string
+  }
+) => {
+  const capability = await ports.issueAgentConnectionTicket(input)
+  let response: Response
+  try {
+    response = await ports.fetchAgentRuntime(
+      new Request("https://agent.internal/memory/history", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId: input.threadId,
+          ticket: capability.ticket,
+          page: input.page,
+          perPage: input.perPage,
+        }),
+      })
+    )
+  } catch (cause) {
+    throw publicErrors.unavailable(cause)
+  }
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => undefined)
+    throw publicErrors.unavailable(new Error("Agent history unavailable"))
+  }
+  try {
+    return v.parse(agentMessagePageModel, await response.json())
+  } catch (cause) {
+    throw publicErrors.unavailable(cause)
+  }
+}
+
 export const createAgentService = (ports: AgentServicePorts) => {
-  const listAgentThreads = (input: { sessionId: string; userId: string }) =>
-    ports.listAgentThreadsForSession(input)
+  const listAgentThreads = (input: AgentSessionIdentity) =>
+    listAgentThreadsWithMemory(ports, input)
 
   const createAgentThread = (input: {
     sessionId: string
     userId: string
-    title?: string
     permissionMode: "ask_always" | "full_access"
   }) =>
     ports.createAgentThreadForSession({
       ...input,
-      title: input.title?.trim() || DEFAULT_THREAD_TITLE,
+      title: DEFAULT_THREAD_TITLE,
     })
 
   const archiveAgentThread = (input: {
@@ -50,9 +147,42 @@ export const createAgentService = (ports: AgentServicePorts) => {
     threadId: string
   }) => ports.archiveAgentThreadForSession(input)
 
-  const updateAgentThreadTitle = (
-    input: Parameters<AgentServicePorts["renameAgentThreadForSession"]>[0]
-  ) => ports.renameAgentThreadForSession(input)
+  const cancelAgentRun = async (
+    input: Parameters<AgentServicePorts["cancelAgentRunForSession"]>[0]
+  ) => {
+    const result = await ports.cancelAgentRunForSession(input)
+    const abortController = new AbortController()
+    const abortDeadline = setTimeout(
+      () =>
+        abortController.abort(
+          new DOMException("Agent abort timed out", "TimeoutError")
+        ),
+      1_000
+    )
+    try {
+      const response = await Promise.race([
+        ports.fetchAgentRuntime(
+          new Request(
+            `https://agent.internal/runs/${encodeURIComponent(input.runId)}/cancel`,
+            { method: "POST", signal: abortController.signal }
+          )
+        ),
+        new Promise<never>((_resolve, reject) => {
+          abortController.signal.addEventListener(
+            "abort",
+            () => reject(abortController.signal.reason),
+            { once: true }
+          )
+        }),
+      ])
+      await response.body?.cancel().catch(() => undefined)
+    } catch {
+      // The database cancellation remains authoritative and idempotent.
+    } finally {
+      clearTimeout(abortDeadline)
+    }
+    return result
+  }
 
   const prepareAgentChat = (
     input: Parameters<AgentServicePorts["prepareAgentChatForSession"]>[0]
@@ -65,12 +195,12 @@ export const createAgentService = (ports: AgentServicePorts) => {
   ) => ports.prepareAgentClientToolContinuationForSession(input)
 
   const listAgentMessages = (
-    input: Parameters<AgentServicePorts["listAgentMessagesForSession"]>[0]
-  ) => ports.listAgentMessagesForSession(input)
-
-  const getAgentThreadContext = (
-    input: Parameters<AgentServicePorts["getAgentThreadContextForSession"]>[0]
-  ) => ports.getAgentThreadContextForSession(input)
+    input: AgentSessionIdentity & {
+      page: number
+      perPage: number
+      threadId: string
+    }
+  ) => listAgentMessagesFromMemory(ports, input)
 
   const getAgentMonthlyUsage = (
     input: Parameters<AgentServicePorts["getAgentMonthlyUsageForSession"]>[0]
@@ -223,6 +353,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
   }) => ports.putAgentApprovalPolicyForSession(input)
 
   return {
+    cancelAgentRun,
     archiveAgentThread,
     createAgentThread,
     decideAgentAction,
@@ -231,7 +362,6 @@ export const createAgentService = (ports: AgentServicePorts) => {
     getAgentApprovalPolicy,
     getAgentMonthlyUsage,
     getAgentOrganizationUsage,
-    getAgentThreadContext,
     listAgentMessages,
     listAgentThreads,
     normalizeAgentTimezone,
@@ -240,7 +370,6 @@ export const createAgentService = (ports: AgentServicePorts) => {
     putAgentApprovalPolicy,
     resumeAgentAction,
     revokeAgentContext,
-    updateAgentThreadTitle,
   }
 }
 

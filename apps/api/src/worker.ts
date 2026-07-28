@@ -19,6 +19,11 @@ import { handleDevelopmentFileSeedRequest } from "./development/file-seed-handle
 import { sweepAgentActions } from "./modules/agent/actions/repository"
 import { createAgentInternalApp } from "./modules/agent/internal-api"
 import {
+  agentMaintenanceResponse,
+  isAgentMaintenanceMode,
+  publicAgentRuntimeGateResponse,
+} from "./modules/agent/maintenance"
+import {
   configureAgentRuntime,
   type AgentRuntimeBinding,
 } from "./modules/agent/runtime"
@@ -49,8 +54,9 @@ import { corsPlugin } from "./platform/plugins/cors"
 import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
 type WorkerSentryEnv = {
-  AGENT_RUNTIME: AgentRuntimeBinding
+  AGENT_RUNTIME?: AgentRuntimeBinding
   AGENT_ASSET_UPLOAD_ENABLED?: string
+  AGENT_MAINTENANCE_MODE?: string
   DEV_FILE_SEED_TOKEN?: string
   FILES: FileR2Bucket & OrganizationFilesBucket
   IMAGES: FileImagesBinding
@@ -144,6 +150,9 @@ const agentInternalFetch = agentInternalWorker.fetch.bind(agentInternalWorker)
 
 class AgentInternalApiBase extends WorkerEntrypoint<WorkerSentryEnv> {
   fetch(request: Request): Promise<Response> | Response {
+    if (isAgentMaintenanceMode(this.env.AGENT_MAINTENANCE_MODE)) {
+      return agentMaintenanceResponse()
+    }
     // named entrypointはdefault/public Workerとは別isolateになり得るため、
     // asset prepare/execute/model imageの全経路でbindingを初期化する。
     configureFileStorageRuntimeFromWorkerEnvironment(this.env)
@@ -162,7 +171,12 @@ const workerWithScheduled = {
     workerEnv: WorkerSentryEnv,
     _context: WorkerExecutionContext
   ) {
-    configureAgentRuntime(workerEnv.AGENT_RUNTIME)
+    const agentGateResponse = publicAgentRuntimeGateResponse(request, {
+      maintenanceMode: workerEnv.AGENT_MAINTENANCE_MODE,
+      runtimeAvailable: workerEnv.AGENT_RUNTIME !== undefined,
+    })
+    if (agentGateResponse) return agentGateResponse
+    if (workerEnv.AGENT_RUNTIME) configureAgentRuntime(workerEnv.AGENT_RUNTIME)
     configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
     const seedResponse = await handleDevelopmentFileSeedRequest(
       db,
@@ -176,6 +190,7 @@ const workerWithScheduled = {
     workerEnv: WorkerSentryEnv,
     context: WorkerExecutionContext
   ) {
+    if (isAgentMaintenanceMode(workerEnv.AGENT_MAINTENANCE_MODE)) return
     const deletionJobs = processOrganizationDeletionJobs({
       bucket: workerEnv.FILES,
       database: db,

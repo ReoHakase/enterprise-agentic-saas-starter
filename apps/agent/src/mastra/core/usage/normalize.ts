@@ -1,4 +1,4 @@
-import type { AgentUsageRecordInput } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentUsageRecordInput } from "@enterprise-agentic-saas/agent-contracts"
 
 type UsageLike = {
   inputTokens?: number

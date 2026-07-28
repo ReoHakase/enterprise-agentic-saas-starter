@@ -127,7 +127,12 @@ describe("Agent Issue action execution lifecycle", () => {
       },
     })
     expect(createAction.preview?.attachments).toEqual([
-      { assetId, filename: "screenshot.png", sizeBytes: 128 },
+      {
+        source: "asset",
+        assetId,
+        filename: "screenshot.png",
+        sizeBytes: 128,
+      },
     ])
     await expect(
       internal.prepareCreateIssue({

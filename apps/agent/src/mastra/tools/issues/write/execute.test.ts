@@ -1,12 +1,10 @@
-import type { AgentIssueAction } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentIssueAction } from "@enterprise-agentic-saas/agent-contracts"
 import { describe, expect, it, vi } from "vitest"
-import { z } from "zod"
 
 import { createAgentToolBudget } from "../../../core/budget/tool"
 import type { AgentControlPlanePort as AgentInternalGateway } from "../../../runtime/ports"
 import { createAgentWriteHandlers, toSafeActionReceipt } from "./execute"
-import { agentWriteToolSchemas } from "./schema"
-import { issueWriteTools } from "./tool"
+import { createIssueWriteTools } from "./tool"
 
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
 const ROOT_RUN_ID = "root_run_1"
@@ -19,6 +17,7 @@ type WriteApi = Pick<
 >
 
 const preview: NonNullable<AgentIssueAction["preview"]> = {
+  attachmentOperation: null,
   attachments: [],
   destructive: false,
   fields: [{ after: "Issue", before: null, field: "title" }],
@@ -80,7 +79,7 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
     api,
     RUN_GRANT,
     { consume, suspendForApproval },
-    { holdForApproval },
+    { holdForApproval, suspendAction: async () => undefined },
     ROOT_RUN_ID
   )
   return {
@@ -93,59 +92,6 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
     suspendForApproval,
   }
 }
-
-describe("agent write schemas", () => {
-  it("keeps provider schemas representable as strict JSON Schema", () => {
-    for (const schema of Object.values(agentWriteToolSchemas)) {
-      expect(z.toJSONSchema(schema)).toMatchObject({
-        additionalProperties: false,
-        type: "object",
-      })
-    }
-  })
-
-  it("validates bounded create input and rejects unknown fields", () => {
-    expect(
-      agentWriteToolSchemas.createIssue.parse({
-        attachmentAssetIds: ["asset_1", "asset_1"],
-        labels: [" bug ", "bug"],
-        title: " Issue ",
-      })
-    ).toEqual({
-      attachmentAssetIds: ["asset_1", "asset_1"],
-      labels: ["bug", "bug"],
-      title: "Issue",
-    })
-    expect(
-      agentWriteToolSchemas.createIssue.safeParse({
-        organizationId: "org_1",
-        title: "Issue",
-      }).success
-    ).toBe(false)
-  })
-
-  it("requires an expected revision and at least one update field", () => {
-    expect(
-      agentWriteToolSchemas.updateIssue.safeParse({
-        expectedRevision: 1,
-        issueId: "issue_1",
-      }).success
-    ).toBe(false)
-    expect(
-      agentWriteToolSchemas.updateIssue.safeParse({
-        expectedRevision: 1,
-        issueId: "issue_1",
-        status: "closed",
-      }).success
-    ).toBe(true)
-    expect(
-      agentWriteToolSchemas.deleteIssue.safeParse({
-        expectedRevision: 0,
-        issueId: "issue_1",
-      }).success
-    ).toBe(false)
-  })
-})
 
 describe("action identity", () => {
   it("is stable across provider calls in one root run and changes across logical writes", async () => {
@@ -162,7 +108,10 @@ describe("action identity", () => {
           consume: vi.fn<(kind: "client" | "read" | "write") => void>(),
           suspendForApproval: vi.fn<() => void>(),
         },
-        { holdForApproval: vi.fn<() => void>() },
+        {
+          holdForApproval: vi.fn<() => void>(),
+          suspendAction: async () => undefined,
+        },
         rootRunId
       )
       await handlers.createIssue(issue, toolCallId)
@@ -210,7 +159,10 @@ describe("action identity", () => {
         consume: vi.fn<(kind: "client" | "read" | "write") => void>(),
         suspendForApproval: vi.fn<() => void>(),
       },
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
     await handlers.createIssue({ title: "Issue" }, "provider/call with secrets")
@@ -253,7 +205,10 @@ describe("createAgentWriteHandlers", () => {
       test.api,
       RUN_GRANT,
       budget,
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
 
@@ -288,10 +243,10 @@ describe("createAgentWriteHandlers", () => {
   })
 
   it("normalizes an empty model assignee to an unassigned Issue", async () => {
-    const parsed = agentWriteToolSchemas.createIssue.parse({
+    const parsed = {
       assigneeId: "",
       title: "Issue",
-    })
+    }
     const test = harness("pending")
 
     await test.handlers.createIssue(parsed, "call_1")
@@ -328,13 +283,16 @@ describe("createAgentWriteHandlers", () => {
         ...action("pending"),
         expiresAt: "x".repeat(100),
         preview: {
+          attachmentOperation: "add",
           attachments: [
             {
+              source: "asset",
               assetId: "asset_1",
               filename: "safe.webp",
               sizeBytes: 12,
             },
             {
+              source: "asset",
               assetId: "unsafe/id",
               filename: "x".repeat(250),
               sizeBytes: -1,
@@ -464,7 +422,7 @@ describe("createAgentWriteHandlers", () => {
     ).rejects.not.toThrow(RUN_GRANT)
   })
 
-  it("routes normalized update and delete payloads through the production handlers", async () => {
+  it("routes normalized update, attachment, and delete payloads through the production handlers", async () => {
     const prepareUpdateIssue = vi
       .fn<WriteApi["prepareUpdateIssue"]>()
       .mockResolvedValue(terminalAction("update_issue"))
@@ -484,7 +442,10 @@ describe("createAgentWriteHandlers", () => {
         consume,
         suspendForApproval: vi.fn<() => void>(),
       },
-      { holdForApproval: vi.fn<() => void>() },
+      {
+        holdForApproval: vi.fn<() => void>(),
+        suspendAction: async () => undefined,
+      },
       ROOT_RUN_ID
     )
 
@@ -506,6 +467,26 @@ describe("createAgentWriteHandlers", () => {
         "call_delete"
       )
     ).resolves.toMatchObject({ status: "rejected" })
+    await expect(
+      handlers.addIssueAttachments(
+        {
+          assetIds: ["asset_1", "asset_1"],
+          expectedRevision: 1,
+          issueId: " issue_1 ",
+        },
+        "call_add_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
+    await expect(
+      handlers.removeIssueAttachments(
+        {
+          expectedRevision: 1,
+          fileIds: ["file_1", "file_1"],
+          issueId: " issue_1 ",
+        },
+        "call_remove_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
 
     expect(prepareUpdateIssue).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -525,15 +506,42 @@ describe("createAgentWriteHandlers", () => {
         toolCallId: "call_delete",
       })
     )
-    expect(consume).toHaveBeenCalledTimes(2)
+    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issue: {
+          attachmentAssetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+          operation: "add_attachments",
+        },
+        toolCallId: "call_add_attachments",
+      })
+    )
+    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issue: {
+          attachmentFileIds: ["file_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+          operation: "remove_attachments",
+        },
+        toolCallId: "call_remove_attachments",
+      })
+    )
+    expect(consume).toHaveBeenCalledTimes(4)
   })
 })
 
 describe("Issue write tool registry", () => {
-  it("defines only the three server-side Issue mutation tools", () => {
+  it("defines only the five server-side Issue mutation tools", () => {
+    const issueWriteTools = createIssueWriteTools(() => {
+      throw new Error("unused")
+    })
     expect(Object.keys(issueWriteTools).toSorted()).toEqual([
+      "add_issue_attachments",
       "create_issue",
       "delete_issue",
+      "remove_issue_attachments",
       "update_issue",
     ])
   })

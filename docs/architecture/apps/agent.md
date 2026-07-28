@@ -164,10 +164,16 @@ export type ProductAgentDependencies = {
 production compositionだけがOpenRouter adapterを渡します。environment variableでproduction modelとscripted modelを切り替えません。
 Agent定義自身はOpenRouter等のconcrete model providerを選びません。
 
-Mastra Studioとproduction Workerは同じproduct compositionをloadし、request contextからAPI keyを
-解決する既存境界を維持します。Studio専用のagent、mock tool、固定credentialを作りません。
-Vitestはagent factoryへscripted modelを直接注入できます。Workerとして実行するときだけ別E2E
-entrypointへ注入し、production Workerやenvironment variableから選べるswitchは作りません。
+Mastra Studioとproduction Workerは同じproduct compositionをloadします。Studio専用entrypointの
+`src/mastra/index.ts`だけが、tenantに紐づかないProduct Agentのmodel解決をcomposition引数で
+明示的に許可します。この許可は`NODE_ENV=development`とのAND条件で、productionでは同じ
+entrypointを読み込んでもfail closedにします。この経路ではbusiness toolを1件も公開せず、
+Application DBとAuthへ到達できないようにし、tenant会話を保持するMemoryもAgentへ接続しません。production Workerの
+entrypointはこの引数を渡さず、`RequestContext`の実行`capability`を常に必須にします。
+
+Studio専用のagent、mock tool、固定credentialは作りません。Vitestはagent factoryへ
+`scripted model`を直接注入できます。Workerとして実行するときだけ別E2E entrypointへ注入し、
+production Workerや環境変数から選べるmodel切替は作りません。
 
 ## テスト専用Worker
 

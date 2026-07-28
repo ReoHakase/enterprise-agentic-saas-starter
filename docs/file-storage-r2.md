@@ -65,7 +65,7 @@ AVIFはmagic bytesで形式だけを検出し、Cloudflare Imagesの`info()`へ�
 
 UTF-8 textは認証付き`/files/organizations/:organizationId/:fileId/text-preview`からJSONとして取得し、Webの全画面viewerがescaped textとして表示します。`text/*`（HTMLを除く）、JSON系、閉じたsource-text拡張子だけを対象とし、HTML/SVG拡張子、invalid UTF-8、NULを含む内容はpreviewしません。R2から読むのは先頭`1,000,000` bytesとUTF-8境界確認分だけで、超過時はviewerからoriginal downloadを案内します。text responseはbrowser/Workers Cacheへ保存しません。
 
-Issue detailのpageとintercepted modalは同じviewport viewerを共有します。画像は既存の認証付き`srcset`、textはEdenとtenant-scoped TanStack Queryを使い、browser Fullscreen APIや公開URLは使いません。
+Issue詳細の全画面ページにviewport viewerを表示します。画像は既存の認証付き`srcset`、textはEdenとテナント単位のTanStack Queryを使い、ブラウザーのFullscreen APIや公開URLは使いません。
 
 ## ローカル起動とseed
 

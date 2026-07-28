@@ -1,7 +1,6 @@
 import type {
   AgentAccountContext,
   AgentActionExecutionResult,
-  AgentCanonicalMessage,
   AgentConnection,
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
@@ -11,21 +10,25 @@ import type {
   AgentIssueAction,
   AgentIssueDetail,
   AgentIssueLabel,
+  AgentMemoryCommitSettlement,
+  AgentMemoryCommitSettlementInput,
   AgentMember,
   AgentOrganizationContext,
   AgentRunGrant,
   AgentRunResult,
   AgentSearchIssuesInput,
-  AgentThreadRenameResult,
   AgentUpdateIssueActionInput,
   AgentUsageRecordInput,
   AgentUsageRecordResult,
   AgentWebSearchReservation,
-} from "@enterprise-agentic-saas/api/agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 
 type BearerInput = { grant: string }
 
 export type AgentControlPlanePort = {
+  settleMemoryCommit(
+    input: AgentMemoryCommitSettlementInput
+  ): Promise<AgentMemoryCommitSettlement>
   consumeConnectionTicket(input: {
     ticket: string
     threadId: string
@@ -48,12 +51,6 @@ export type AgentControlPlanePort = {
   finishRun(
     input: BearerInput & { outcome: "completed" | "failed" }
   ): Promise<AgentRunResult>
-  appendRunMessages(
-    input: BearerInput & { messages: AgentCanonicalMessage[] }
-  ): Promise<{ appended: number }>
-  renameThread(
-    input: BearerInput & { title: string }
-  ): Promise<AgentThreadRenameResult>
   recordUsage(
     input: BearerInput & AgentUsageRecordInput
   ): Promise<AgentUsageRecordResult>

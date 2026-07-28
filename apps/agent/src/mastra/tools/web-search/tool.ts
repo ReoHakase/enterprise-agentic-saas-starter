@@ -1,54 +1,20 @@
-import { RequestContext } from "@mastra/core/request-context"
 import { createTool } from "@mastra/core/tools"
 
 import {
-  type createPublicWebResearchAgent,
-  publicWebResearchProviderOptions,
-  type PublicWebResearchRequestContext,
-} from "../../agents/public-web-research-agent"
-import {
-  getProductAgentRuntime,
+  type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../runtime/request-context"
-import {
-  executePublicWebSearch,
-  type RawPublicWebResearchResult,
-} from "./execute"
+import { executePublicWebSearch } from "./execute"
 import { publicWebSearchInputSchema } from "./schema"
-
-const PUBLIC_WEB_RESEARCH_TIMEOUT_MS = 60_000
-
-const searchWithIsolatedAgent = async (
-  researchAgent: ReturnType<typeof createPublicWebResearchAgent>,
-  query: string,
-  apiKey: string,
-  baseURL: string | undefined,
-  abortSignal?: AbortSignal
-): Promise<RawPublicWebResearchResult> => {
-  const requestContext = new RequestContext<PublicWebResearchRequestContext>()
-  requestContext.set("apiKey", apiKey)
-  if (baseURL) requestContext.set("baseURL", baseURL)
-  const timeoutSignal = AbortSignal.timeout(PUBLIC_WEB_RESEARCH_TIMEOUT_MS)
-  const searchSignal = abortSignal
-    ? AbortSignal.any([abortSignal, timeoutSignal])
-    : timeoutSignal
-  const result = await researchAgent.generate(query, {
-    abortSignal: searchSignal,
-    maxSteps: 1,
-    modelSettings: { maxOutputTokens: 768, temperature: 0 },
-    providerOptions: publicWebResearchProviderOptions,
-    requestContext,
-  })
-  return {
-    error: result.error,
-    finishReason: result.finishReason,
-    sources: result.sources,
-    text: result.text,
-  }
-}
+import {
+  searchWithTimeout,
+  type PublicWebSearchProvider,
+} from "./search-timeout"
 
 export const createWebSearchTool = (
-  researchAgent: ReturnType<typeof createPublicWebResearchAgent>
+  search: PublicWebSearchProvider,
+  resolveExecution: ProductAgentExecutionResolver,
+  options: { onProviderError?: (cause: unknown) => void } = {}
 ) =>
   createTool<
     "web_search",
@@ -72,7 +38,7 @@ export const createWebSearchTool = (
       },
     },
     execute: (input, context) => {
-      const runtime = getProductAgentRuntime(context.requestContext)
+      const runtime = resolveExecution(context.requestContext)
       if (!context.agent?.toolCallId) {
         throw new Error("Public Web search is unavailable")
       }
@@ -88,12 +54,11 @@ export const createWebSearchTool = (
             operationId,
           }),
         search: (query, abortSignal) =>
-          searchWithIsolatedAgent(
-            researchAgent,
+          searchWithTimeout(
+            search,
             query,
-            runtime.openRouterApiKey,
-            runtime.openRouterBaseURL,
-            abortSignal
+            abortSignal,
+            options.onProviderError
           ),
       })
     },

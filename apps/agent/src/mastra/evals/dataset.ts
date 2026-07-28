@@ -3,8 +3,11 @@ import { z } from "zod"
 import { parseAgentEvalToolAllowlist } from "../core/policy/eval-tool-allowlist"
 
 const toolNameSchema = z.enum([
+  "add_issue_attachments",
   "create_issue",
   "get_issue",
+  "read_issue_attachment_image",
+  "remove_issue_attachments",
   "search_issues",
   "web_search",
 ])
@@ -46,6 +49,30 @@ const caseSchema = z.discriminatedUnion("kind", [
         })
         .strict(),
       kind: z.literal("write"),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseCase,
+      kind: z.literal("web_search_refusal"),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseCase,
+      kind: z.literal("image_read"),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseCase,
+      kind: z.literal("attachment_add"),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseCase,
+      kind: z.literal("attachment_remove"),
     })
     .strict(),
 ])

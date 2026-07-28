@@ -47,17 +47,43 @@ export const createIssueActionPayloadModel = v.strictObject({
   ),
 })
 
-export const updateIssueActionPayloadModel = v.strictObject({
+const updateIssueActionBaseEntries = {
   issueId: identifierModel,
   expectedRevision: expectedRevisionModel,
-  title: v.optional(issueTitleModel),
-  description: v.optional(issueDescriptionModel),
-  status: v.optional(v.picklist(issueStatuses)),
-  priority: v.optional(v.picklist(issuePriorities)),
-  assigneeId: v.optional(v.nullable(identifierModel)),
-  labels: v.optional(issueLabelsModel),
-  dueDate: v.optional(v.nullable(isoTimestampModel)),
-})
+}
+export const updateIssueActionPayloadModel = v.union([
+  v.strictObject({
+    ...updateIssueActionBaseEntries,
+    operation: v.optional(v.literal("fields")),
+    title: v.optional(issueTitleModel),
+    description: v.optional(issueDescriptionModel),
+    status: v.optional(v.picklist(issueStatuses)),
+    priority: v.optional(v.picklist(issuePriorities)),
+    assigneeId: v.optional(v.nullable(identifierModel)),
+    labels: v.optional(issueLabelsModel),
+    dueDate: v.optional(v.nullable(isoTimestampModel)),
+  }),
+  v.strictObject({
+    ...updateIssueActionBaseEntries,
+    operation: v.literal("add_attachments"),
+    attachmentAssetIds: v.pipe(
+      v.array(identifierModel),
+      v.minLength(1),
+      v.maxLength(4),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+  v.strictObject({
+    ...updateIssueActionBaseEntries,
+    operation: v.literal("remove_attachments"),
+    attachmentFileIds: v.pipe(
+      v.array(identifierModel),
+      v.minLength(1),
+      v.maxLength(20),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+])
 
 export const deleteIssueActionPayloadModel = v.strictObject({
   issueId: identifierModel,
@@ -120,6 +146,7 @@ const actionPreviewValueModel = v.union([
 export const agentIssueActionPreviewModel = v.object({
   kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
   destructive: v.boolean(),
+  attachmentOperation: v.nullable(v.picklist(["add", "remove"])),
   title: v.string(),
   issueNumber: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
   issueRevision: v.nullable(expectedRevisionModel),
@@ -139,11 +166,20 @@ export const agentIssueActionPreviewModel = v.object({
     })
   ),
   attachments: v.array(
-    v.object({
-      assetId: identifierModel,
-      filename: v.string(),
-      sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    })
+    v.variant("source", [
+      v.object({
+        source: v.literal("asset"),
+        assetId: identifierModel,
+        filename: v.string(),
+        sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      }),
+      v.object({
+        source: v.literal("file"),
+        fileId: identifierModel,
+        filename: v.string(),
+        sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      }),
+    ])
   ),
 })
 
@@ -178,6 +214,29 @@ export const decideAgentActionBodyModel = v.strictObject({
 
 export const resumeAgentActionBodyModel = v.strictObject({})
 
+const addedAttachmentFileIdsModel = v.pipe(
+  v.array(identifierModel),
+  v.minLength(1),
+  v.maxLength(4),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const removedAttachmentFileIdsModel = v.pipe(
+  v.array(identifierModel),
+  v.minLength(1),
+  v.maxLength(20),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const attachmentMutationModel = v.variant("operation", [
+  v.strictObject({
+    operation: v.literal("added"),
+    fileIds: addedAttachmentFileIdsModel,
+  }),
+  v.strictObject({
+    operation: v.literal("removed"),
+    fileIds: removedAttachmentFileIdsModel,
+  }),
+])
+
 export const agentActionExecutionResultModel = v.strictObject({
   actionId: identifierModel,
   kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
@@ -187,6 +246,7 @@ export const agentActionExecutionResultModel = v.strictObject({
     number: v.pipe(v.number(), v.integer(), v.minValue(1)),
     revision: expectedRevisionModel,
     deleted: v.boolean(),
+    attachmentMutation: v.optional(attachmentMutationModel),
   }),
 })
 

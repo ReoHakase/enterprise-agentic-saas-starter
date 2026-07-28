@@ -41,28 +41,34 @@ export const Ready = meta.story({
   beforeEach({ msw }) {
     msw.use(
       http.get("*/agent/threads/:threadId/messages", () =>
-        HttpResponse.json([
-          {
-            id: "message_01K1USERREQUEST000000000",
-            role: "user",
-            parts: [
-              {
-                type: "text",
-                text: "Review Issue #184 and verify the tenant boundary.",
-              },
-            ],
-          },
-          {
-            id: "message_01K1ASSISTANT0000000000",
-            role: "assistant",
-            parts: [
-              {
-                type: "text",
-                text: "Membership is checked before every repository read.",
-              },
-            ],
-          },
-        ])
+        HttpResponse.json({
+          messages: [
+            {
+              id: "message_01K1USERREQUEST000000000",
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: "Review Issue #184 and verify the tenant boundary.",
+                },
+              ],
+            },
+            {
+              id: "message_01K1ASSISTANT0000000000",
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: "Membership is checked before every repository read.",
+                },
+              ],
+            },
+          ],
+          total: 2,
+          page: 0,
+          perPage: 100,
+          hasMore: false,
+        })
       )
     )
   },

@@ -1,0 +1,451 @@
+import {
+  addAttachmentWriteToolProviderOutputSchema,
+  addIssueAttachmentsToolInputSchema,
+  agentGetIssueToolOutputSchema,
+  agentUiMessagePartSchema,
+  agentUiToolNames,
+  canonicalizePublicHttpUrl,
+  createIssueToolInputSchema,
+  deleteIssueToolInputSchema,
+  emptyToolInputSchema,
+  getIssueToolInputSchema,
+  issueSearchToolInputSchema,
+  issueSearchToolOutputSchema,
+  issueWriteToolProviderOutputSchema,
+  labelSearchToolInputSchema,
+  labelSearchToolOutputSchema,
+  memberSearchToolInputSchema,
+  memberSearchToolOutputSchema,
+  readAccountContextToolOutputSchema,
+  readActiveOrganizationToolOutputSchema,
+  readIssueAttachmentImageToolInputSchema,
+  readIssueAttachmentImageToolResultSchema,
+  removeAttachmentWriteToolProviderOutputSchema,
+  removeIssueAttachmentsToolInputSchema,
+  updateIssueToolInputSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { MastraDBMessage } from "@mastra/core/agent"
+import * as v from "valibot"
+
+import {
+  agentClientToolOutputValueSchemas,
+  agentClientToolValueSchemas,
+} from "../../tools/client/schema"
+import { publicWebSearchInputValueSchema } from "../../tools/web-search/schema"
+
+const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u
+const TOOL_STATES = new Set([
+  "partial-call",
+  "call",
+  "result",
+  "approval-requested",
+  "approval-responded",
+  "output-error",
+  "output-denied",
+])
+const TOOL_NAMES = new Set<string>(agentUiToolNames)
+const webSearchOutputSchema = v.strictObject({
+  content: v.pipe(v.string(), v.maxLength(6_000)),
+  sources: v.pipe(
+    v.array(
+      v.strictObject({
+        title: v.pipe(v.string(), v.maxLength(200)),
+        url: v.pipe(v.string(), v.url(), v.maxLength(2_048)),
+      })
+    ),
+    v.maxLength(5)
+  ),
+  trust: v.literal("untrusted_public_web_content"),
+})
+
+type ToolContract = {
+  input: v.GenericSchema
+  output?: v.GenericSchema
+  publicOutputUrls?: boolean
+}
+
+const TOOL_CONTRACTS: Record<string, ToolContract> = {
+  add_issue_attachments: {
+    input: addIssueAttachmentsToolInputSchema,
+    output: addAttachmentWriteToolProviderOutputSchema,
+  },
+  create_issue: {
+    input: createIssueToolInputSchema,
+    output: issueWriteToolProviderOutputSchema,
+  },
+  delete_issue: {
+    input: deleteIssueToolInputSchema,
+    output: issueWriteToolProviderOutputSchema,
+  },
+  get_issue: {
+    input: getIssueToolInputSchema,
+    output: agentGetIssueToolOutputSchema,
+  },
+  read_account_context: {
+    input: emptyToolInputSchema,
+    output: readAccountContextToolOutputSchema,
+  },
+  read_active_organization: {
+    input: emptyToolInputSchema,
+    output: readActiveOrganizationToolOutputSchema,
+  },
+  read_issue_attachment_image: {
+    input: readIssueAttachmentImageToolInputSchema,
+    output: readIssueAttachmentImageToolResultSchema,
+  },
+  remove_issue_attachments: {
+    input: removeIssueAttachmentsToolInputSchema,
+    output: removeAttachmentWriteToolProviderOutputSchema,
+  },
+  search_issue_labels: {
+    input: labelSearchToolInputSchema,
+    output: labelSearchToolOutputSchema,
+  },
+  search_issues: {
+    input: issueSearchToolInputSchema,
+    output: issueSearchToolOutputSchema,
+  },
+  search_organization_members: {
+    input: memberSearchToolInputSchema,
+    output: memberSearchToolOutputSchema,
+  },
+  ui_navigate: {
+    input: agentClientToolValueSchemas.navigate,
+    output: agentClientToolOutputValueSchemas.navigate,
+  },
+  ui_open_issue: {
+    input: agentClientToolValueSchemas.openIssue,
+    output: agentClientToolOutputValueSchemas.openIssue,
+  },
+  ui_patch_form_draft: {
+    input: agentClientToolValueSchemas.patchFormDraft,
+    output: agentClientToolOutputValueSchemas.patchFormDraft,
+  },
+  ui_read_form_draft: {
+    input: agentClientToolValueSchemas.readFormDraft,
+    output: agentClientToolOutputValueSchemas.readFormDraft,
+  },
+  ui_set_issue_query: {
+    input: agentClientToolValueSchemas.setIssueQuery,
+    output: agentClientToolOutputValueSchemas.setIssueQuery,
+  },
+  update_issue: {
+    input: updateIssueToolInputSchema,
+    output: issueWriteToolProviderOutputSchema,
+  },
+  web_search: {
+    input: publicWebSearchInputValueSchema,
+    output: webSearchOutputSchema,
+    publicOutputUrls: true,
+  },
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value)
+
+const optionalBoundedString = (value: unknown, maximum: number) =>
+  typeof value === "string" && value.length <= maximum ? value : undefined
+
+const canonicalPublicUrl = (value: unknown) => {
+  const canonical = canonicalizePublicHttpUrl(value)
+  return canonical ?? undefined
+}
+
+const projectParsedValue = (
+  value: unknown,
+  allowPublicUrls: boolean
+): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => projectParsedValue(item, allowPublicUrls))
+  }
+  if (!isRecord(value)) return value
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, nested]) => {
+      const normalized = key.toLowerCase()
+      if (
+        normalized === "profileimage" ||
+        normalized.includes("metadata") ||
+        normalized === "rawinput"
+      ) {
+        return []
+      }
+      if (
+        normalized === "href" ||
+        normalized === "endpoint" ||
+        normalized === "origin" ||
+        normalized.endsWith("url")
+      ) {
+        const url = allowPublicUrls ? canonicalPublicUrl(nested) : undefined
+        return url ? [[key, url]] : []
+      }
+      return [[key, projectParsedValue(nested, allowPublicUrls)]]
+    })
+  )
+}
+
+const parseToolValue = (
+  schema: v.GenericSchema | undefined,
+  value: unknown,
+  allowPublicUrls = false
+) => {
+  if (!schema) return
+  const parsed = v.safeParse(schema, value)
+  if (!parsed.success) return
+  const projected = projectParsedValue(parsed.output, allowPublicUrls)
+  const validated = v.safeParse(schema, projected)
+  return validated.success ? validated.output : undefined
+}
+
+const projectApproval = (value: unknown) => {
+  if (!isRecord(value) || !IDENTIFIER_PATTERN.test(String(value.id))) return
+  if (value.approved !== undefined && typeof value.approved !== "boolean")
+    return
+  const reason = optionalBoundedString(value.reason, 500)
+  const safeReason =
+    reason &&
+    !/(?:https?:\/\/|authorization|bearer|password|secret|token|api[_ -]?key)/iu.test(
+      reason
+    )
+      ? reason
+      : undefined
+  return {
+    id: String(value.id),
+    approved: value.approved,
+    reason: safeReason,
+  }
+}
+
+const hasValidToolStatePayload = (input: {
+  approval: ReturnType<typeof projectApproval>
+  args: unknown
+  result: unknown
+  state: string
+}) => {
+  const hasInput = input.args !== undefined
+  const hasResult = input.result !== undefined
+  const terminalApprovalIsValid =
+    input.approval === undefined || input.approval.approved === true
+  switch (input.state) {
+    case "partial-call":
+    case "call":
+      return hasInput && !hasResult && input.approval === undefined
+    case "result":
+      return hasInput && hasResult && terminalApprovalIsValid
+    case "approval-requested":
+      return (
+        hasInput &&
+        !hasResult &&
+        input.approval !== undefined &&
+        input.approval.approved === undefined &&
+        input.approval.reason === undefined
+      )
+    case "approval-responded":
+      return (
+        hasInput && !hasResult && typeof input.approval?.approved === "boolean"
+      )
+    case "output-denied":
+      return hasInput && !hasResult && input.approval?.approved === false
+    case "output-error":
+      return hasInput && !hasResult && terminalApprovalIsValid
+    default:
+      return false
+  }
+}
+
+const projectToolPartFields = (part: Record<string, unknown>) => ({
+  title: optionalBoundedString(part.title, 200),
+  preliminary:
+    typeof part.preliminary === "boolean" ? part.preliminary : undefined,
+  providerExecuted:
+    typeof part.providerExecuted === "boolean"
+      ? part.providerExecuted
+      : undefined,
+  createdAt:
+    typeof part.createdAt === "number" &&
+    Number.isFinite(part.createdAt) &&
+    part.createdAt >= 0
+      ? part.createdAt
+      : undefined,
+})
+
+const projectToolInvocation = (part: Record<string, unknown>) => {
+  if (!isRecord(part.toolInvocation)) return
+  const invocation = part.toolInvocation
+  const toolName = optionalBoundedString(invocation.toolName, 128)
+  const toolCallId = optionalBoundedString(invocation.toolCallId, 128)
+  const state = optionalBoundedString(invocation.state, 64)
+  if (
+    !toolName ||
+    !TOOL_NAMES.has(toolName) ||
+    !toolCallId ||
+    !IDENTIFIER_PATTERN.test(toolCallId) ||
+    !state ||
+    !TOOL_STATES.has(state)
+  ) {
+    return
+  }
+  const contract = TOOL_CONTRACTS[toolName]
+  if (!contract) return
+  const args = parseToolValue(contract.input, invocation.args)
+  const result = parseToolValue(
+    contract.output,
+    invocation.result,
+    contract.publicOutputUrls
+  )
+  const approval = projectApproval(invocation.approval)
+  const step =
+    typeof invocation.step === "number" &&
+    Number.isInteger(invocation.step) &&
+    invocation.step >= 0
+      ? invocation.step
+      : undefined
+  if (!hasValidToolStatePayload({ approval, args, result, state })) return
+  return {
+    type: "tool-invocation",
+    toolInvocation: {
+      state,
+      toolCallId,
+      toolName,
+      args,
+      result,
+      approval,
+      step,
+      errorText:
+        state === "output-error" ? "Agent tool execution failed." : undefined,
+    },
+    ...projectToolPartFields(part),
+  }
+}
+
+const projectSource = (part: Record<string, unknown>) => {
+  const source = isRecord(part.source) ? part.source : part
+  const url = canonicalPublicUrl(source.url)
+  if (!url) return
+  const title = optionalBoundedString(source.title ?? part.title, 500)
+  if (part.type === "source-url") {
+    const sourceId = optionalBoundedString(part.sourceId, 128)
+    if (!sourceId || !IDENTIFIER_PATTERN.test(sourceId)) return
+    return { type: "source-url", sourceId, title, url }
+  }
+  const id = optionalBoundedString(source.id, 128)
+  if (!id || !IDENTIFIER_PATTERN.test(id)) return
+  return {
+    type: "source",
+    source: { sourceType: "url", id, title, url },
+  }
+}
+
+const projectPart = (value: unknown) => {
+  if (!isRecord(value) || typeof value.type !== "string") return
+  if (value.type === "text") {
+    return {
+      type: "text",
+      text: optionalBoundedString(value.text, 50_000) ?? "",
+    }
+  }
+  if (value.type === "source" || value.type === "source-url") {
+    return projectSource(value)
+  }
+  if (value.type === "tool-invocation") {
+    return projectToolInvocation(value)
+  }
+  if (
+    value.type === "data-agent-assets" ||
+    value.type === "data-context-reference" ||
+    value.type === "data-activity"
+  ) {
+    const parsed = v.safeParse(
+      agentUiMessagePartSchema,
+      Object.fromEntries(
+        Object.entries(value).filter(([key]) => key !== "createdAt")
+      )
+    )
+    return parsed.success ? parsed.output : undefined
+  }
+  if (value.type === "step-start") return { type: "step-start" }
+  return
+}
+
+const stableSourceId = (toolCallId: string, index: number, url: string) => {
+  let hash = 2_166_136_261
+  for (const character of `${toolCallId}\0${url}`) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return `source_${index}_${toolCallId.slice(0, 96)}_${(hash >>> 0)
+    .toString(16)
+    .padStart(8, "0")}`
+}
+
+const projectToolSources = (part: ReturnType<typeof projectPart>) => {
+  if (!isRecord(part) || part.type !== "tool-invocation") return []
+  const invocation = Reflect.get(part, "toolInvocation")
+  if (
+    !isRecord(invocation) ||
+    invocation.toolName !== "web_search" ||
+    invocation.state !== "result" ||
+    typeof invocation.toolCallId !== "string" ||
+    !isRecord(invocation.result) ||
+    !Array.isArray(invocation.result.sources)
+  ) {
+    return []
+  }
+  const toolCallId = invocation.toolCallId
+  return invocation.result.sources.flatMap((value, index) => {
+    if (!isRecord(value)) return []
+    const title = optionalBoundedString(value.title, 200)
+    const url = canonicalPublicUrl(value.url)
+    if (!title || !url) return []
+    return [
+      {
+        type: "source-url",
+        sourceId: stableSourceId(toolCallId, index, url),
+        title,
+        url,
+      },
+    ]
+  })
+}
+
+const projectMessageParts = (parts: readonly unknown[]) => {
+  const projected = parts.flatMap((value) => {
+    const part = projectPart(value)
+    if (!part) return []
+    return [part, ...projectToolSources(part)]
+  })
+  const sourceUrls = new Set<string>()
+  return projected.filter((part) => {
+    if (!isRecord(part)) return true
+    const nestedSource = Reflect.get(part, "source")
+    const source = isRecord(nestedSource) ? nestedSource : part
+    const sourceType = Reflect.get(source, "sourceType")
+    const sourceUrl = Reflect.get(source, "url")
+    if (
+      part.type !== "source" &&
+      part.type !== "source-url" &&
+      sourceType !== "url"
+    ) {
+      return true
+    }
+    if (typeof sourceUrl !== "string" || sourceUrls.has(sourceUrl)) {
+      return false
+    }
+    sourceUrls.add(sourceUrl)
+    return true
+  })
+}
+
+export const projectMemorySnapshotMessages = (
+  messages: readonly MastraDBMessage[]
+) =>
+  messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    createdAt: message.createdAt,
+    threadId: message.threadId,
+    resourceId: message.resourceId,
+    content: {
+      format: 2,
+      parts: projectMessageParts(message.content.parts),
+    },
+  }))

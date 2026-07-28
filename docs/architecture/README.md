@@ -25,6 +25,7 @@ last_reviewed: 2026-07-26
 
 ## packages
 
+- [`packages/agent-contracts`と`packages/agent-tools`](packages/agent-contracts-and-tools.md)
 - [`packages/auth`](packages/auth.md)
 - [`packages/db`](packages/db.md)
 - [`packages/email`](packages/email.md)

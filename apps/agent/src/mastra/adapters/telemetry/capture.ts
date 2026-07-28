@@ -2,6 +2,7 @@ import { captureException } from "@sentry/cloudflare"
 
 export type AgentFailureCode =
   | "image_failed"
+  | "memory_commit_deferred"
   | "model_failed"
   | "resume_failed"
   | "run_grant_invalid"
@@ -11,6 +12,7 @@ export type AgentFailureCode =
 
 const failureMessages: Record<AgentFailureCode, string> = {
   image_failed: "Agent image preparation failed",
+  memory_commit_deferred: "Agent memory commit deferred",
   model_failed: "Agent model response failed",
   resume_failed: "Agent action resume failed",
   run_grant_invalid: "Agent run grant validation failed",

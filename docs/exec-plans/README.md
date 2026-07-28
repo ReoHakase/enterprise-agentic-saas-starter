@@ -41,7 +41,7 @@ last_reviewed: 2026-07-26
 
 ### 実行中
 
-現在、実行中のplanはありません。
+- [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
 
 ### 完了
 

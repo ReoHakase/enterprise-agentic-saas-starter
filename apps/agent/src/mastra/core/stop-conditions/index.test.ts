@@ -22,6 +22,30 @@ describe("stopOnPendingIssueAction", () => {
     ).toBe(true)
   })
 
+  it.each(["add_issue_attachments", "remove_issue_attachments"])(
+    "stops after a pending %s action before another model step",
+    (toolName) => {
+      expect(
+        stopOnPendingIssueAction({
+          steps: [
+            {
+              toolResults: [
+                {
+                  ...pendingResult,
+                  toolName,
+                  output: {
+                    ...pendingResult.output,
+                    preview: { kind: "update_issue" },
+                  },
+                },
+              ],
+            },
+          ],
+        })
+      ).toBe(true)
+    }
+  )
+
   it.each([
     { steps: [] },
     { steps: [{ toolResults: [] }] },

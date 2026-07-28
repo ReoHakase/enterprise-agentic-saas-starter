@@ -6,12 +6,85 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
 import {
-  applyBaselineSchema,
-  createMigrationPrefix,
-  migrationsFolder,
-} from "./helpers"
+  assertLegacyUpdateActionCompatibility,
+  seedLegacyUpdateActionScope,
+} from "../test-support/agent-action-compatibility-fixture"
+import {
+  removedAgentHistoryTables,
+  retainedAgentRegistryTables,
+  retainedAgentRegistryTriggers,
+} from "../test-support/agent-registry-upgrade-fixtures"
+import { createMigrationPrefix, migrationsFolder } from "./helpers"
 
 describe("database migrations: upgrades", () => {
+  it("keeps legacy update action documents compatible through 0024", async () => {
+    expect.assertions(7)
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0023_gorgeous_titanium_man",
+    })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      const legacy = await seedLegacyUpdateActionScope(client, now)
+
+      await migrate(drizzle(client), { migrationsFolder })
+      await assertLegacyUpdateActionCompatibility(client, legacy, now)
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
+  it("upgrades attachment promotion guards for exact update operations", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0023_gorgeous_titanium_man",
+    })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const objects = await client.execute(
+        "select name, type, sql from sqlite_master where name in ('agent_action_assets_scope_insert','agent_action_assets_quota_classify_before','agent_assets_state_machine_update','storage_object_claims_promotion_update','agent_update_attachment_success_integrity') order by name"
+      )
+      expect(objects.rows.map(({ name }) => name)).toEqual([
+        "agent_action_assets_quota_classify_before",
+        "agent_action_assets_scope_insert",
+        "agent_assets_state_machine_update",
+        "agent_update_attachment_success_integrity",
+        "storage_object_claims_promotion_update",
+      ])
+      const scope = objects.rows.find(
+        ({ name }) => name === "agent_action_assets_scope_insert"
+      )
+      expect(scope?.sql).toContain("ac.`kind` = 'create_issue'")
+      expect(scope?.sql).toContain(
+        "json_extract(ac.`normalized_payload`, '$.operation') = 'add_attachments'"
+      )
+      const integrity = objects.rows.find(
+        ({ name }) => name === "agent_update_attachment_success_integrity"
+      )
+      expect(integrity?.sql).toContain(
+        "json_array_length(NEW.`normalized_payload`, '$.attachments')"
+      )
+      expect(integrity?.sql).toContain(
+        "coalesce(\n    json_extract(NEW.`normalized_payload`, '$.operation'),\n    'fields'"
+      )
+      expect(integrity?.sql).toContain(
+        "agent_action_attachment_promotion_incomplete"
+      )
+      expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
+        []
+      )
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
   it("upgrades the Agent message schema without losing run guards", async () => {
     const client = createClient({ url: "file::memory:" })
     const migrationPrefix = await createMigrationPrefix({
@@ -58,6 +131,9 @@ describe("database migrations: upgrades", () => {
     const client = createClient({ url: "file::memory:" })
     const migrationPrefix = await createMigrationPrefix({
       through: "0018_mysterious_sage",
+    })
+    const migrationTarget = await createMigrationPrefix({
+      through: "0021_slippery_sabra",
     })
 
     try {
@@ -123,7 +199,7 @@ describe("database migrations: upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle(client), { migrationsFolder: migrationTarget })
 
       const [thread, policy, permissionTable, actionTrigger] =
         await Promise.all([
@@ -149,9 +225,374 @@ describe("database migrations: upgrades", () => {
     } finally {
       client.close()
       await rm(migrationPrefix, { recursive: true, force: true })
+      await rm(migrationTarget, { recursive: true, force: true })
     }
   })
+})
 
+describe("database migrations: Agent registry", () => {
+  it("rebuilds the six-column Agent thread registry without losing descendants", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0021_slippery_sabra",
+    })
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: [
+            "upgrade-user",
+            "Upgrade User",
+            "upgrade@example.test",
+            1,
+            now,
+            now,
+          ],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["upgrade-org", "Upgrade Org", "upgrade-org", now],
+        },
+        {
+          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
+          args: [
+            "upgrade-member",
+            "upgrade-org",
+            "upgrade-user",
+            "super_admin",
+            now,
+          ],
+        },
+        {
+          sql: "insert into session(id,expires_at,token,created_at,updated_at,user_id,active_organization_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-session",
+            now + 3_600_000,
+            "upgrade-token",
+            now,
+            now,
+            "upgrade-user",
+            "upgrade-org",
+          ],
+        },
+        {
+          sql: "insert into agent_session_contexts(session_id,user_id,context_epoch,updated_at) values(?,?,?,?)",
+          args: ["upgrade-session", "upgrade-user", 1, now],
+        },
+        {
+          sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at,title_state,title_state_v2,title_revision) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "active-thread",
+            "upgrade-org",
+            "upgrade-user",
+            "Active legacy title",
+            "active",
+            now + 1,
+            now + 2,
+            "agent",
+            "agent",
+            4,
+          ],
+        },
+        {
+          sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at,title_state,title_state_v2,title_revision) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "archived-thread",
+            "upgrade-org",
+            "upgrade-user",
+            "Archived legacy title",
+            "archived",
+            now + 3,
+            now + 4,
+            "agent",
+            "agent",
+            5,
+          ],
+        },
+        {
+          sql: "insert into agent_messages(id,organization_id,thread_id,client_message_id,role,content,created_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "legacy-message",
+            "upgrade-org",
+            "active-thread",
+            "legacy-client-message",
+            "user",
+            "{}",
+            now + 5,
+          ],
+        },
+        {
+          sql: "insert into agent_thread_context_summaries(id,organization_id,thread_id,through_sequence,summary,estimated_token_count,model,created_at) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "legacy-summary",
+            "upgrade-org",
+            "active-thread",
+            1,
+            "Legacy summary",
+            1,
+            "legacy-model",
+            now + 6,
+          ],
+        },
+        {
+          sql: "insert into agent_runs(id,organization_id,thread_id,root_run_id,session_id,user_id,context_epoch,client_message_id,status,scope,started_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-run",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-run",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            "upgrade-run-message",
+            "running",
+            "chat",
+            now + 10,
+            now + 300_010,
+          ],
+        },
+        {
+          sql: "insert into agent_connection_tickets(id,token_hash,organization_id,thread_id,session_id,user_id,context_epoch,issued_at,expires_at) values(?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-ticket",
+            "a".repeat(64),
+            "upgrade-org",
+            "active-thread",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            now + 10,
+            now + 60_010,
+          ],
+        },
+        {
+          sql: "insert into agent_grants(id,token_hash,kind,organization_id,thread_id,run_id,session_id,user_id,context_epoch,issued_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-grant",
+            "b".repeat(64),
+            "run",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-run",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            now + 10,
+            now + 300_010,
+          ],
+        },
+        {
+          sql: "insert into agent_approval_policies(id,organization_id,thread_id,session_id,user_id,context_epoch,mode,created_at,expires_at,updated_at) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-policy",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            "auto_write",
+            now + 10,
+            now + 600_010,
+            now + 10,
+          ],
+        },
+        {
+          sql: "insert into agent_thread_permissions(id,organization_id,thread_id,session_id,user_id,context_epoch,mode,created_at,updated_at) values(?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-permission",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            "ask_always",
+            now + 10,
+            now + 10,
+          ],
+        },
+        {
+          sql: "insert into agent_usage_events(id,organization_id,thread_id,run_id,user_id,provider,model,duration_ms,run_event_id,created_at) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-usage",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-run",
+            "upgrade-user",
+            "test-provider",
+            "test-model",
+            1,
+            "upgrade-run-event",
+            now + 20,
+          ],
+        },
+        {
+          sql: "insert into storage_objects(id,organization_id,uploader_id,upload_id,object_key,size_bytes,declared_content_type,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-object",
+            "upgrade-org",
+            "upgrade-user",
+            "upgrade-upload",
+            "organizations/upgrade-org/storage-objects/upgrade-object",
+            1,
+            "application/octet-stream",
+            "fixture-etag",
+            "ready",
+            now + 20,
+            now + 20,
+          ],
+        },
+        {
+          sql: "insert into agent_assets(id,organization_id,thread_id,session_id,context_epoch,uploader_id,storage_object_id,filename,status,expires_at,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-asset",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-session",
+            1,
+            "upgrade-user",
+            "upgrade-object",
+            "fixture.bin",
+            "pending",
+            now + 600_020,
+            now + 20,
+            now + 20,
+          ],
+        },
+        {
+          sql: "insert into storage_object_claims(storage_object_id,organization_id,holder_type,holder_id,revision,created_at,updated_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-object",
+            "upgrade-org",
+            "agent_asset",
+            "upgrade-asset",
+            1,
+            now + 20,
+            now + 20,
+          ],
+        },
+        {
+          sql: "update agent_assets set status = ?, updated_at = ? where id = ?",
+          args: ["ready", now + 21, "upgrade-asset"],
+        },
+        {
+          sql: "insert into agent_run_assets(organization_id,run_id,asset_id,storage_object_id,source_etag,size_bytes,created_at) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-org",
+            "upgrade-run",
+            "upgrade-asset",
+            "upgrade-object",
+            "fixture-etag",
+            1,
+            now + 21,
+          ],
+        },
+        {
+          sql: "insert into agent_actions(id,organization_id,thread_id,run_id,session_id,user_id,context_epoch,tool_call_id,kind,normalized_payload,canonical_preview,target_id,status,decision_provenance,decision_policy_id,decided_at,idempotency_key,created_at,updated_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-action",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-run",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            "upgrade-tool",
+            "create_issue",
+            "{}",
+            "{}",
+            "future-issue",
+            "approved",
+            "auto_policy",
+            "upgrade-policy",
+            now + 22,
+            "upgrade-action-key",
+            now + 22,
+            now + 22,
+            now + 600_022,
+          ],
+        },
+        {
+          sql: "insert into agent_action_assets(organization_id,action_id,asset_id,storage_object_id,source_etag,size_bytes,lease_expires_at,created_at) values(?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-org",
+            "upgrade-action",
+            "upgrade-asset",
+            "upgrade-object",
+            "fixture-etag",
+            1,
+            now + 60_010,
+            now + 23,
+          ],
+        },
+        {
+          sql: "insert into agent_resume_tickets(id,token_hash,action_id,organization_id,thread_id,session_id,user_id,context_epoch,issued_at,expires_at) values(?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-resume-ticket",
+            "c".repeat(64),
+            "upgrade-action",
+            "upgrade-org",
+            "active-thread",
+            "upgrade-session",
+            "upgrade-user",
+            1,
+            now + 23,
+            now + 60_023,
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const columns = await client.execute("pragma table_info(agent_threads)")
+      expect(columns.rows.map(({ name }) => name)).toEqual([
+        "id",
+        "organization_id",
+        "owner_user_id",
+        "status",
+        "created_at",
+        "archived_at",
+      ])
+      const threads = await client.execute(
+        "select id,created_at as createdAt,archived_at as archivedAt from agent_threads order by id"
+      )
+      expect(threads.rows).toMatchObject([
+        { archivedAt: null, createdAt: now + 1, id: "active-thread" },
+        { archivedAt: now + 4, createdAt: now + 3, id: "archived-thread" },
+      ])
+      for (const table of retainedAgentRegistryTables) {
+        // oxlint-disable-next-line no-await-in-loop -- each retained table is checked after one migration.
+        const count = await client.execute(
+          `select count(*) as count from ${table}`
+        )
+        expect(count.rows[0]?.count).toBe(1)
+      }
+      for (const table of removedAgentHistoryTables) {
+        // oxlint-disable-next-line no-await-in-loop -- each removed table is checked by sqlite metadata.
+        const row = await client.execute({
+          sql: "select name from sqlite_master where type = 'table' and name = ?",
+          args: [table],
+        })
+        expect(row.rows).toEqual([])
+      }
+      const triggers = await client.execute(
+        "select name from sqlite_master where type = 'trigger' and name in ('agent_actions_scope_insert','agent_approval_policies_scope_insert') order by name"
+      )
+      expect(triggers.rows.map(({ name }) => name)).toEqual(
+        retainedAgentRegistryTriggers
+      )
+      expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
+        []
+      )
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("database migrations: retained control plane", () => {
   it("backfills an initial Agent context epoch for existing sessions", async () => {
     const client = createClient({ url: "file::memory:" })
     const migrationPrefix = await createMigrationPrefix({
@@ -487,400 +928,6 @@ describe("database migrations: upgrades", () => {
         ])
       )
       expect(foreignKeys.rows).toHaveLength(0)
-    } finally {
-      client.close()
-      await rm(migrationPrefix, { recursive: true, force: true })
-    }
-  })
-})
-
-describe("database migrations: legacy issue upgrades", () => {
-  it("preserves legacy todos while converting completed to status", async () => {
-    const client = createClient({ url: "file::memory:" })
-
-    try {
-      await applyBaselineSchema(client)
-
-      const now = Date.now()
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: ["user-1", "Owner", "owner@example.com", 1, now, now],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["org-1", "Org", "org", now],
-        },
-        {
-          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: ["member-1", "org-1", "user-1", "owner", now],
-        },
-        {
-          sql: "insert into todos(id,organization_id,title,completed,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: ["todo-open", "org-1", "Open", 0, now, now],
-        },
-        {
-          sql: "insert into todos(id,organization_id,title,completed,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: ["todo-closed", "org-1", "Closed", 1, now + 1, now + 1],
-        },
-      ])
-
-      await migrate(drizzle(client), { migrationsFolder })
-
-      const issues = await client.execute(
-        "select id, number, status, creator_id as creatorId, labels from issues order by number"
-      )
-      const members = await client.execute(
-        "select role from member where id = 'member-1'"
-      )
-      expect(issues.rows).toMatchObject([
-        {
-          id: "todo-open",
-          number: 1,
-          status: "open",
-          creatorId: "user-1",
-          labels: "[]",
-        },
-        {
-          id: "todo-closed",
-          number: 2,
-          status: "closed",
-          creatorId: "user-1",
-          labels: "[]",
-        },
-      ])
-      expect(members.rows).toMatchObject([{ role: "super_admin" }])
-    } finally {
-      client.close()
-    }
-  })
-
-  it("renames legacy issue data and backfills audit activity safely", async () => {
-    const client = createClient({ url: "file::memory:" })
-    const migrationPrefix = await createMigrationPrefix({
-      through: "0008_optimal_gideon",
-    })
-
-    try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
-      const now = Date.now()
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: ["issue-owner", "Owner", "owner@issue.test", 1, now, now],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["issue-org", "Issue Org", "issue-org", now],
-        },
-        {
-          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "issue-member",
-            "issue-org",
-            "issue-owner",
-            "super_admin",
-            now,
-          ],
-        },
-        {
-          sql: "insert into todos(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "legacy-issue",
-            "issue-org",
-            7,
-            "Legacy issue",
-            "issue-owner",
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into todo_comments(id,todo_id,organization_id,author_id,body,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "legacy-comment",
-            "legacy-issue",
-            "issue-org",
-            "issue-owner",
-            "Preserved",
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into audit_logs(id,organization_id,actor_user_id,action,target_type,target_id,metadata,created_at) values(?,?,?,?,?,?,?,?)",
-          args: [
-            "legacy-created",
-            "issue-org",
-            "issue-owner",
-            "todo.created",
-            "todo",
-            "legacy-issue",
-            '{"todoId":"legacy-issue"}',
-            now,
-          ],
-        },
-        {
-          sql: "insert into audit_logs(id,organization_id,actor_user_id,action,target_type,target_id,metadata,created_at) values(?,?,?,?,?,?,?,?)",
-          args: [
-            "legacy-updated",
-            "issue-org",
-            "issue-owner",
-            "todo.updated",
-            "todo",
-            "legacy-issue",
-            '{"todoId":"legacy-issue"}',
-            now + 1,
-          ],
-        },
-      ])
-
-      await migrate(drizzle(client), { migrationsFolder })
-
-      const comments = await client.execute(
-        "select issue_id as issueId, body from issue_comments where id = 'legacy-comment'"
-      )
-      const activities = await client.execute(
-        "select kind, field, from_value as fromValue, to_value as toValue from issue_activity_events where issue_id = 'legacy-issue' order by created_at"
-      )
-      const audit = await client.execute(
-        "select action, target_type as targetType, metadata from audit_logs where id = 'legacy-updated'"
-      )
-      expect(comments.rows).toMatchObject([
-        { issueId: "legacy-issue", body: "Preserved" },
-      ])
-      expect(activities.rows).toMatchObject([
-        { kind: "created", field: null, fromValue: null, toValue: null },
-        {
-          kind: "legacy_updated",
-          field: null,
-          fromValue: null,
-          toValue: null,
-        },
-      ])
-      expect(audit.rows).toMatchObject([
-        {
-          action: "issue.updated",
-          targetType: "issue",
-          metadata: '{"issueId":"legacy-issue"}',
-        },
-      ])
-    } finally {
-      client.close()
-      await rm(migrationPrefix, { recursive: true, force: true })
-    }
-  })
-
-  it("backfills deterministic activity only for current ready issue files", async () => {
-    const client = createClient({ url: "file::memory:" })
-    const migrationPrefix = await createMigrationPrefix({
-      through: "0010_secret_jimmy_woo",
-    })
-
-    try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
-      const now = Date.now()
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: [
-            "file-user-a",
-            "File User A",
-            "file-a@test.example",
-            1,
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: [
-            "file-user-b",
-            "File User B",
-            "file-b@test.example",
-            1,
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["file-org-a", "File Org A", "file-org-a", now],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["file-org-b", "File Org B", "file-org-b", now],
-        },
-        {
-          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "file-issue-a",
-            "file-org-a",
-            1,
-            "Issue A",
-            "file-user-a",
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "file-issue-b",
-            "file-org-b",
-            1,
-            "Issue B",
-            "file-user-b",
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "ready-file",
-            "file-org-a",
-            "file-user-a",
-            "ready-upload",
-            "issue",
-            "organizations/file-org-a/files/issue/file-issue-a/ready-file",
-            'roadmap "final".txt',
-            128,
-            "text/plain",
-            "ready-etag",
-            "ready",
-            now - 2_000,
-            now + 1_000,
-          ],
-        },
-        {
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: ["ready-file", "file-org-a", "issue", "file-issue-a"],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "pending-file",
-            "file-org-a",
-            "file-user-a",
-            "pending-upload",
-            "issue",
-            "organizations/file-org-a/files/issue/file-issue-a/pending-file",
-            "pending.txt",
-            64,
-            "text/plain",
-            "pending",
-            now - 1_000,
-            now + 2_000,
-          ],
-        },
-        {
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: ["pending-file", "file-org-a", "issue", "file-issue-a"],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "unowned-ready-file",
-            "file-org-a",
-            "file-user-a",
-            "unowned-ready-upload",
-            "issue",
-            "organizations/file-org-a/files/issue/file-issue-a/unowned-ready-file",
-            "unowned.txt",
-            32,
-            "text/plain",
-            "unowned-etag",
-            "ready",
-            now,
-            now + 3_000,
-          ],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "existing-file",
-            "file-org-b",
-            "file-user-b",
-            "existing-upload",
-            "issue",
-            "organizations/file-org-b/files/issue/file-issue-b/existing-file",
-            "already-added.txt",
-            16,
-            "text/plain",
-            "existing-etag",
-            "ready",
-            now,
-            now + 4_000,
-          ],
-        },
-        {
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: ["existing-file", "file-org-b", "issue", "file-issue-b"],
-        },
-        {
-          sql: "insert into issue_activity_events(id,organization_id,issue_id,actor_user_id,batch_id,position,kind,field,from_value,to_value,created_at) values(?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "file:existing-file:added",
-            "file-org-b",
-            "file-issue-b",
-            "file-user-b",
-            "file:existing-file:added",
-            0,
-            "file_added",
-            null,
-            null,
-            JSON.stringify("already-added.txt"),
-            now + 4_000,
-          ],
-        },
-      ])
-
-      await migrate(drizzle(client), { migrationsFolder })
-      await migrate(drizzle(client), { migrationsFolder })
-
-      const activities = await client.execute(
-        `select id,
-          organization_id as organizationId,
-          issue_id as issueId,
-          actor_user_id as actorUserId,
-          batch_id as batchId,
-          kind,
-          field,
-          from_value as fromValue,
-          to_value as toValue,
-          created_at as createdAt
-        from issue_activity_events
-        where kind = 'file_added'
-        order by id`
-      )
-
-      expect(activities.rows).toMatchObject([
-        {
-          id: "file:existing-file:added",
-          organizationId: "file-org-b",
-          issueId: "file-issue-b",
-          actorUserId: "file-user-b",
-          batchId: "file:existing-file:added",
-          kind: "file_added",
-          field: null,
-          fromValue: null,
-          toValue: JSON.stringify("already-added.txt"),
-          createdAt: now + 4_000,
-        },
-        {
-          id: "file:ready-file:added",
-          organizationId: "file-org-a",
-          issueId: "file-issue-a",
-          actorUserId: "file-user-a",
-          batchId: "file:ready-file:added",
-          kind: "file_added",
-          field: null,
-          fromValue: null,
-          toValue: JSON.stringify('roadmap "final".txt'),
-          createdAt: now + 1_000,
-        },
-      ])
     } finally {
       client.close()
       await rm(migrationPrefix, { recursive: true, force: true })

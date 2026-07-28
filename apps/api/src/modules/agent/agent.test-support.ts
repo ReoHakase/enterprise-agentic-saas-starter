@@ -150,7 +150,7 @@ export const createFixture = async () => {
     },
   ])
 
-  return { app: createApp(db), db }
+  return { app: createApp(db), databasePath, db }
 }
 
 export const headers = (
@@ -191,6 +191,39 @@ export const configureAgentStreamCapture = () => {
       const payload: unknown = await privateRequest.json()
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
         throw new Error("Invalid private Agent test request")
+      }
+      const path = new URL(privateRequest.url).pathname
+      if (path === "/memory/history") {
+        const record = Object.fromEntries(Object.entries(payload))
+        const messages = inputs.flatMap((captured) =>
+          captured.message === undefined ? [] : [captured.message]
+        )
+        return Response.json({
+          hasMore: false,
+          messages,
+          page: record.page,
+          perPage: record.perPage,
+          total: messages.length,
+        })
+      }
+      if (path === "/memory/threads") {
+        const record = Object.fromEntries(Object.entries(payload))
+        const registryThreadIds = Array.isArray(record.registryThreadIds)
+          ? record.registryThreadIds
+          : []
+        return Response.json(
+          registryThreadIds.flatMap((id) =>
+            typeof id === "string"
+              ? [
+                  {
+                    id,
+                    title: "New conversation",
+                    updatedAt: new Date().toISOString(),
+                  },
+                ]
+              : []
+          )
+        )
       }
       inputs.push(Object.fromEntries(Object.entries(payload)))
       return new Response("data: [DONE]\n\n", {

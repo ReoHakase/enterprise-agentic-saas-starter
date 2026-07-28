@@ -20,6 +20,27 @@ Browserは画像を一度だけAPIへmultipart uploadし、messageにはopaque a
 Agent WorkerにR2 bindingを渡しません。APIがACLとrun bindingを検証し、max edge 2,048px、WebP quality 75、4 MiB + 1 byte bounded readのmodel inputだけを返します。画像内のtextもuntrusted contentです。
 
 Issue attachmentへの昇格はphysical storage objectとlogical claim/fileを分け、action previewとapprovalへ含めます。promotion、Issue mutation、claim transferは同じtransactionへ閉じます。一般的なowner変更APIは作りません。
+既存Issueへの追加は`expectedRevision`、current Issue update permission、staged asset IDを必須にし、
+1 action最大4件です。削除は同じrevision/permission境界で1 action最大20件とし、typed owner/file rowを
+hard deleteしてphysical objectを`deleting`へ遷移し、storage cleanupへ引き渡します。
+
+同じprivate threadで一度送信したchat画像は、ready retention内なら再uploadせず後続発話から
+再利用できます。APIはlive session、active organization、thread owner、uploader、context epoch、
+storage claim、expiryを再検証し、過去runで実際にbindingされた全assetのopaque IDとfilenameだけを
+Agentへ渡します。別thread、別session、別tenant、未送信upload、expired/deleted/promoted assetは
+一覧へ含めません。rejectまたはexpireしたactionがasset leaseを解放した後も、chat asset自体の
+retentionが残っていれば再利用できます。直近かどうか、過去runで使用済みかどうかは選択条件に
+しません。
+
+過去assetを毎runへ先回りしてbindingしません。Agentが現在の依頼に必要なexact IDを選んだとき、
+APIのtool prepare transactionが同じconversation scopeを再検証し、現在runへ最大4件、合計20 MB
+まで遅延bindingしてからaction snapshotとleaseを作ります。modelがhistoryから推測したIDや、
+serverの再利用可能一覧にないIDはnot-foundへ丸めます。これにより会話が4画像を超えても古い
+retained画像を選べ、再uploadによるtemporary R2 objectの増加を避けます。
+
+成功したpromotionはphysical objectのclaimをIssue fileへ移し、staged assetを`promoted`にします。
+同じ成功済みattachmentの別Issueへの複製はこのchat asset再利用契約に含めず、Issue file側の
+deduplication/reference設計を伴わない暗黙copyは行いません。
 
 ## Issue添付の読取
 

@@ -22,6 +22,11 @@ describe("Agent eval dataset", () => {
       ["agent-stack-read", 3],
       ["agent-stack-web-search", 3],
       ["agent-stack-approved-write", 3],
+      ["phase2-web-search-explicit", 3],
+      ["phase2-web-search-missing-attestation", 3],
+      ["phase2-existing-issue-image-read", 3],
+      ["phase2-existing-issue-attachment-add", 3],
+      ["phase2-existing-issue-attachment-remove", 3],
     ])
   })
 
@@ -32,5 +37,21 @@ describe("Agent eval dataset", () => {
     if (!Array.isArray(cases) || !cases[0]) throw new Error("Missing cases")
     cases.push(structuredClone(cases[0]))
     expect(() => parseAgentEvalDataset(raw)).toThrow("duplicate")
+  })
+
+  it("passes selected paid eval case IDs through the root task", async () => {
+    const turbo: unknown = JSON.parse(
+      await readFile(
+        resolve(import.meta.dirname, "../../../../../turbo.json"),
+        "utf8"
+      )
+    )
+    expect(turbo).toMatchObject({
+      tasks: {
+        "test:eval:agent": {
+          passThroughEnv: expect.arrayContaining(["AGENT_EVAL_CASES"]),
+        },
+      },
+    })
   })
 })

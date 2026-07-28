@@ -2,7 +2,7 @@
 title: 製品Agentのthreadとcontext
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-28
 ---
 
 # Threadとcontext
@@ -15,42 +15,32 @@ last_reviewed: 2026-07-25
 type AgentThread = {
   id: string
   title: string
-  titleRevision: number
   status: "active" | "archived"
-  messageCount: number
   createdAt: string
   updatedAt: string
 }
 ```
 
-listはlive session、active organization、membership、ownerをtransaction内で再検証し、`updatedAt DESC, id DESC`で返します。`messageCount`は保存済みcanonical messageの件数です。archive rowは通常listから除外しますが、過去approvalのread authorizationではowner確認対象として保持します。
+listはlive session、active organization、membership、ownerを再検証し、Application DBのactive registryと
+Mastra Storageのthread metadataの積集合を`updatedAt DESC, id DESC`で返します。`messageCount`は
+初期contractに含めません。archive rowは通常listから除外しますが、過去approvalのread authorizationではowner確認対象として保持します。
 
-canonical message、reasoning、tool、source、context/title data partはAPI/Tursoが正本です。transient `data-activity`は保存しません。Mastra Memoryはauthorizationや履歴の正本ではありません。UI向け履歴はbounded projectionだけを返し、provider metadata、credential、raw imageを保存しません。
+Mastra Storageがthread metadataとmessage履歴の正本です。Mastra Memoryは同じStorage上のthreadから
+model文脈を構成し、Application DBのregistryがauthorizationの正本です。API側へmessage副本を
+作りません。transient `data-activity`、`data-run`、raw reasoning、provider metadata、credential、
+raw imageは保存しません。
 
 ## 自動title
 
-threadは`title_state_v2 = untitled | agent | user`と`title_revision`を持ちます。既定`New conversation`は`untitled`、専用title Agentは`agent`、手動変更は`user`です。
+最初の有意なuser messageではmain responseと独立したbest-effort title taskを開始します。main streamは
+title完了を待ちません。専用title Agentはtoolを持たず、reasoning `none`、temperature 0、10秒timeout、
+最大96 output tokenで1〜80文字のtitleを生成します。Mastra Storageの現在titleが既定値のときだけ
+更新し、失敗時は`New conversation`を維持して通常応答を継続します。titleは低優先度の補助modelで、
+raw input/outputをtraceへ残しません。
 
-最初の有意なuser messageでmain Agentとは独立した専用title Agentを起動し、`rename_thread`だけをforced tool callします。title処理の失敗は本回答を失敗させず、`untitled`なら次turnで再試行します。すでに`agent | user`ならtitle Agent自体を起動しません。
-
-provider requestはtitle Agentを完了してからmain Agentを開始し、同時に1本だけ実行します。
-`data-thread-title`はmain streamをmergeした後に書くため、Webが受け取るdata part contractは変えません。
-
-Qwen/Alibabaはthinking mode中のforced `tool_choice`を拒否するため、専用title Agentだけreasoningを無効化します。製品Agent本体のreasoning mediumとtrace契約は変更しません。
-
-`rename_thread({ title })`は次のcontractです。
-
-- 現在のchat runとthreadだけを対象にする
-- 最初の有意な発話後に呼ぶ
-- trim後1〜80文字
-- `title_state = untitled`を条件にしたcompare-and-swap
-- 最大1回。二回目は現在titleと`renamed: false`を返す
-- approval不要、Issue write budgetを消費しない
-- modelへthread IDやtenant IDを選ばせない
-
-streamは`data-thread-title`を返し、Webはthread listを再取得します。
-
-手動変更は`PATCH /agent/threads/:threadId/title`へ1〜80文字と`expectedRevision`を送り、owner/tenant/revision CAS成功時に`title_state_v2=user`へ更新します。user titleは自動処理で上書きしません。
+main usage、Mastra workflow stage、Memory保存、Application run settlementを先に終え、title taskは
+解放後のbackground処理として待ちます。title model usageは`title_<attempt>`の独立eventで、terminal
+runに対するusage専用の冪等記録契約を使います。title失敗やusage重複でmain responseを失わせません。
 
 ## Model profile snapshot
 
@@ -58,7 +48,7 @@ streamは`data-thread-title`を返し、Webはthread listを再取得します�
 
 - provider model: `qwen/qwen3.6-flash`
 - context window: 1,000,000 token
-- reasoning effort: medium
+- reasoning effort: none
 - max output: 4,096 token
 
 modelの将来設定変更で過去runの解釈を変えないため、run rowへprofile、context window、事前推定input、reserved outputを保持します。

@@ -46,27 +46,25 @@ const insertStorageFixture = async (
       args: ["storage-session", "storage-user", 1, now],
     },
     {
-      sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
       args: [
         "storage-thread-a",
         "storage-org-a",
         "storage-user",
-        "Storage thread A",
         "active",
         now,
-        now,
+        null,
       ],
     },
     {
-      sql: "insert into agent_threads(id,organization_id,owner_user_id,title,status,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
       args: [
         "storage-thread-b",
         "storage-org-b",
         "storage-user",
-        "Storage thread B",
         "active",
         now,
-        now,
+        null,
       ],
     },
     {

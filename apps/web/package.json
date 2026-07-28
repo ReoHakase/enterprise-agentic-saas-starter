@@ -33,7 +33,7 @@
     "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light && env BROWSER_COVERAGE=1 vitest run --project=storybook-dark && env BROWSER_COVERAGE=1 vitest run --project=browser",
     "test:browser:mock-api": "bun run test/app/fixtures/mock-api.ts",
     "test:e2e": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.deterministic.config.ts",
-    "test:e2e:full": "env -u NO_COLOR node node_modules/@playwright/test/cli.js test --config playwright.full.config.ts",
+    "test:e2e:full": "bun --no-env-file e2e/fixtures/run-full-e2e.ts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

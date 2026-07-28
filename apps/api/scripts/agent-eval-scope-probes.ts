@@ -4,7 +4,6 @@ import {
   agentActions,
   agentConnectionTickets,
   agentGrants,
-  agentMessages,
   agentRuns,
   agentSessionContexts,
   agentThreads,
@@ -75,7 +74,6 @@ const hashNamespace = async (value: string) => {
 const countRows = async (
   table:
     | typeof agentActions
-    | typeof agentMessages
     | typeof agentRuns
     | typeof auditLogs
     | typeof issues
@@ -108,7 +106,6 @@ const sideEffectSnapshot = async () => ({
     .from(agentGrants)
     .orderBy(agentGrants.id),
   issues: await countRows(issues),
-  messages: await countRows(agentMessages),
   runs: await countRows(agentRuns),
   sessionContexts: await db
     .select({

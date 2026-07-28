@@ -1,9 +1,17 @@
-import { agentActions, issues } from "@enterprise-agentic-saas/db/schema"
-import { and, eq, sql } from "drizzle-orm"
+import {
+  files,
+  issueFileOwners,
+  issues,
+} from "@enterprise-agentic-saas/db/schema"
+import { and, eq, inArray } from "drizzle-orm"
 
 import type { AgentActionExecutionResult } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
-import { promoteAgentAssetToIssueFileInTransaction } from "../../files/public"
+import {
+  deleteReadyFilesInTransaction,
+  promoteAgentAssetToIssueFileInTransaction,
+  type FileWithOwner,
+} from "../../files/public"
 import {
   deleteIssueInTransaction,
   insertIssueInTransaction,
@@ -17,13 +25,18 @@ import {
 } from "../threads/repository"
 import { requireActionForGrant } from "./decision-repository"
 import {
+  claimActionExecution,
+  expireActionIfNeeded,
+  persistExecutionSuccess,
+  type ExecutionReceipt,
+} from "./execution-state"
+import {
   markActionConflict,
   parseStoredPayload,
   validateExecutionAssets,
 } from "./execution-support"
 import { canonicalizeLabels, isAssigneeMember } from "./prepare-read-support"
 import {
-  AgentActionWriteRaceError,
   executionResult,
   parseDueDate,
   type ActionRow,
@@ -33,13 +46,6 @@ import {
 type IssueRow = typeof issues.$inferSelect
 type ApprovedAction = ActionRow & {
   decisionProvenance: "manual" | "auto_policy"
-}
-
-type ExecutionReceipt = {
-  issueId: string
-  number: number
-  revision: number
-  deleted: boolean
 }
 
 type MutationOutcome =
@@ -84,52 +90,6 @@ const validateExecutionScope: (
       : context.runScope === "chat" && context.runId === action.runId
   if (!correctRun) {
     throw publicErrors.unauthorized("Agent capability is invalid")
-  }
-}
-
-const expireActionIfNeeded = async (
-  tx: AgentTransaction,
-  action: ApprovedAction,
-  now: Date
-) => {
-  if (action.expiresAt.getTime() > now.getTime()) return false
-  await tx
-    .update(agentActions)
-    .set({ status: "expired", completedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(agentActions.organizationId, action.organizationId),
-        eq(agentActions.id, action.id),
-        eq(agentActions.status, "approved")
-      )
-    )
-  return true
-}
-
-const claimActionExecution = async (
-  tx: AgentTransaction,
-  action: ApprovedAction,
-  now: Date
-) => {
-  const claimed = await tx
-    .update(agentActions)
-    .set({
-      attempt: sql`${agentActions.attempt} + 1`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(agentActions.organizationId, action.organizationId),
-        eq(agentActions.id, action.id),
-        eq(agentActions.status, "approved"),
-        eq(agentActions.attempt, action.attempt)
-      )
-    )
-    .returning({ id: agentActions.id })
-  if (!claimed[0]) {
-    throw new AgentActionWriteRaceError(
-      "Agent action execution changed concurrently"
-    )
   }
 }
 
@@ -235,6 +195,119 @@ const updateIssueFromAction = async (
   stored: Extract<StoredPayload, { kind: "update_issue" }>,
   now: Date
 ): Promise<MutationOutcome> => {
+  if (stored.value.operation === "add_attachments") {
+    const assetsValid = await validateExecutionAssets(
+      tx,
+      action,
+      now,
+      stored.value.attachments.map(({ assetId }) => assetId)
+    )
+    if (!assetsValid) {
+      return conflictOutcome(tx, action, now, "asset_snapshot_changed")
+    }
+    const updated = await updateIssueInTransaction(tx, {
+      id: stored.value.issueId,
+      actorUserId: action.userId,
+      organizationId: action.organizationId,
+      expectedRevision: stored.value.expectedRevision,
+      now,
+      auditContext: {
+        source: "agent",
+        approvalMode: action.decisionProvenance,
+        actionId: action.id,
+      },
+    })
+    if (!updated) return conflictOutcome(tx, action, now, "stale_revision")
+    for (const attachment of stored.value.attachments) {
+      // oxlint-disable-next-line no-await-in-loop -- promotion and Issue revision must remain in one deterministic transaction.
+      await promoteAgentAssetToIssueFileInTransaction(tx, {
+        actionId: action.id,
+        actorUserId: action.userId,
+        assetId: attachment.assetId,
+        issueId: updated.id,
+        now,
+        organizationId: action.organizationId,
+        plannedFileId: attachment.fileId,
+      })
+    }
+    return {
+      receipt: {
+        issueId: updated.id,
+        number: updated.number,
+        revision: updated.revision,
+        deleted: false,
+        attachmentMutation: {
+          operation: "added",
+          fileIds: stored.value.attachments.map(({ fileId }) => fileId),
+        },
+      },
+      conflict: null,
+    }
+  }
+  if (stored.value.operation === "remove_attachments") {
+    const rows = await tx
+      .select({ stored: files, ownerId: issueFileOwners.issueId })
+      .from(files)
+      .innerJoin(
+        issueFileOwners,
+        and(
+          eq(issueFileOwners.organizationId, files.organizationId),
+          eq(issueFileOwners.fileId, files.id),
+          eq(issueFileOwners.ownerType, "issue"),
+          eq(issueFileOwners.issueId, stored.value.issueId)
+        )
+      )
+      .where(
+        and(
+          eq(files.organizationId, action.organizationId),
+          eq(files.status, "ready"),
+          inArray(files.id, stored.value.fileIds)
+        )
+      )
+    if (rows.length !== stored.value.fileIds.length) {
+      return conflictOutcome(tx, action, now, "attachment_snapshot_changed")
+    }
+    const byId = new Map(rows.map((row) => [row.stored.id, row]))
+    const ordered: FileWithOwner[] = stored.value.fileIds.map((fileId) => {
+      const row = byId.get(fileId)
+      if (!row) throw new Error("Attachment execution ordering failed")
+      return { ...row.stored, ownerId: row.ownerId }
+    })
+    const updated = await updateIssueInTransaction(tx, {
+      id: stored.value.issueId,
+      actorUserId: action.userId,
+      organizationId: action.organizationId,
+      expectedRevision: stored.value.expectedRevision,
+      now,
+      auditContext: {
+        source: "agent",
+        approvalMode: action.decisionProvenance,
+        actionId: action.id,
+      },
+    })
+    if (!updated) return conflictOutcome(tx, action, now, "stale_revision")
+    const deleted = await deleteReadyFilesInTransaction(tx, {
+      actorUserId: action.userId,
+      files: ordered,
+      now,
+    })
+    if (!deleted) {
+      throw new Error("Attachment delete changed during execution")
+    }
+    return {
+      receipt: {
+        issueId: updated.id,
+        number: updated.number,
+        revision: updated.revision,
+        deleted: false,
+        attachmentMutation: {
+          operation: "removed",
+          fileIds: stored.value.fileIds,
+        },
+      },
+      conflict: null,
+    }
+  }
   if (Object.hasOwn(stored.value.changes, "assigneeId")) {
     const assigneeValid = await isAssigneeMember(tx, {
       assigneeId: stored.value.changes.assigneeId,
@@ -346,34 +419,6 @@ const executeStoredAction = (
     input.context,
     input.now
   )
-}
-
-const persistExecutionSuccess = async (
-  tx: AgentTransaction,
-  action: ActionRow,
-  receipt: ExecutionReceipt,
-  now: Date
-) => {
-  const succeededRows = await tx
-    .update(agentActions)
-    .set({
-      status: "succeeded",
-      receipt,
-      resultId: action.targetId,
-      completedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(agentActions.organizationId, action.organizationId),
-        eq(agentActions.id, action.id),
-        eq(agentActions.status, "approved")
-      )
-    )
-    .returning()
-  const succeeded = succeededRows[0]
-  if (!succeeded) throw new Error("Agent action success transition lost")
-  return executionResult(succeeded, receipt)
 }
 
 export const executeAgentApprovedActionInTransaction = async (

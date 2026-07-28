@@ -106,14 +106,18 @@ const main = async () => {
   const openRouterApiKey = scriptedAgent
     ? null
     : requireOpenRouterKey(process.env.OPENROUTER_API_KEY)
-  let turso: ManagedProcess | undefined
+  let applicationTurso: ManagedProcess | undefined
+  let agentTurso: ManagedProcess | undefined
   let wrangler: ManagedProcess | undefined
   let stopping = false
 
   const stop = () => {
     stopping = true
     if (wrangler && !wrangler.killed) wrangler.kill("SIGTERM")
-    if (turso && !turso.killed) turso.kill("SIGTERM")
+    if (applicationTurso && !applicationTurso.killed) {
+      applicationTurso.kill("SIGTERM")
+    }
+    if (agentTurso && !agentTurso.killed) agentTurso.kill("SIGTERM")
   }
 
   process.once("SIGINT", stop)
@@ -134,17 +138,17 @@ const main = async () => {
     await chmod(environment.temporaryRoot, 0o700)
     if (stopping) return
 
-    await runMigration(`file:${environment.databasePath}`)
+    await runMigration(`file:${environment.applicationDatabasePath}`)
     if (stopping) return
 
-    turso = Bun.spawn(
+    applicationTurso = Bun.spawn(
       [
         "turso",
         "dev",
         "--db-file",
-        environment.databasePath,
+        environment.applicationDatabasePath,
         "--port",
-        String(environment.databasePort),
+        String(environment.applicationDatabasePort),
       ],
       {
         cwd: environment.stackRoot,
@@ -154,14 +158,38 @@ const main = async () => {
         stderr: "inherit",
       }
     )
-    await waitForDatabase(environment.databaseOrigin)
+    agentTurso = Bun.spawn(
+      [
+        "turso",
+        "dev",
+        "--db-file",
+        environment.agentStoragePath,
+        "--port",
+        String(environment.agentStoragePort),
+      ],
+      {
+        cwd: environment.stackRoot,
+        env: inheritedEnvironment,
+        stdin: "ignore",
+        stdout: "inherit",
+        stderr: "inherit",
+      }
+    )
+    await Promise.all([
+      waitForDatabase(environment.applicationDatabaseOrigin),
+      waitForDatabase(environment.agentStorageOrigin),
+    ])
     if (stopping) return
 
     const apiConfig = {
       name: environment.apiWorkerName,
       main: resolve(apiWorkspace, "src/worker.ts"),
       compatibility_date: "2026-07-22",
-      compatibility_flags: ["nodejs_compat"],
+      compatibility_flags: [
+        "nodejs_compat",
+        "enable_request_signal",
+        "request_signal_passthrough",
+      ],
       services: [
         {
           binding: "AGENT_RUNTIME",
@@ -190,8 +218,8 @@ const main = async () => {
         AUTH_COOKIE_DOMAIN: environment.cookieDomain,
         TRUSTED_ORIGINS: environment.webOrigin,
         CORS_ORIGIN: environment.webOrigin,
-        TURSO_DATABASE_URL: environment.databaseOrigin,
-        TURSO_AUTH_TOKEN: "agent-e2e-unused-token",
+        TURSO_DATABASE_URL: environment.applicationDatabaseOrigin,
+        TURSO_AUTH_TOKEN: environment.applicationDatabaseAuthToken,
         EMAIL_PROVIDER: "noop",
         EMAIL_FROM: "noreply@example.test",
         MAILPIT_URL: "",
@@ -213,7 +241,7 @@ const main = async () => {
       name: environment.agentWorkerName,
       main: resolve(agentWorkspace, agentE2EWorkerEntrypoint(scriptedAgent)),
       compatibility_date: "2026-07-22",
-      compatibility_flags: ["nodejs_compat"],
+      compatibility_flags: ["nodejs_compat", "enable_request_signal"],
       workers_dev: false,
       preview_urls: false,
       services: [
@@ -232,6 +260,8 @@ const main = async () => {
         AGENT_RUNS_ENABLED: "1",
         AGENT_VISION_ENABLED: "1",
         AGENT_WRITES_ENABLED: "1",
+        MASTRA_STORAGE_URL: environment.agentStorageOrigin,
+        MASTRA_STORAGE_AUTH_TOKEN: environment.agentStorageAuthToken,
         SENTRY_DSN: "",
         SENTRY_ENVIRONMENT: "agent-e2e",
         SENTRY_RELEASE: "",
@@ -290,7 +320,11 @@ const main = async () => {
 
     const outcome = await Promise.race([
       wrangler.exited.then((code) => ({ source: "Wrangler", code })),
-      turso.exited.then((code) => ({ source: "Turso", code })),
+      applicationTurso.exited.then((code) => ({
+        source: "Application Turso",
+        code,
+      })),
+      agentTurso.exited.then((code) => ({ source: "Agent Turso", code })),
     ])
     if (!stopping) {
       throw new Error(
@@ -300,7 +334,11 @@ const main = async () => {
   } finally {
     process.off("SIGINT", stop)
     process.off("SIGTERM", stop)
-    await Promise.allSettled([stopProcess(wrangler), stopProcess(turso)])
+    await Promise.allSettled([
+      stopProcess(wrangler),
+      stopProcess(applicationTurso),
+      stopProcess(agentTurso),
+    ])
     await removeAgentE2EStackArtifacts(environment.runId)
   }
 }

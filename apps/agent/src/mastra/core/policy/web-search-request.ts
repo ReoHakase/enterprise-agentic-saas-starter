@@ -1,4 +1,4 @@
-import type { AgentCanonicalMessage } from "@enterprise-agentic-saas/api/agent-client"
+import type { AgentUiMessage } from "@enterprise-agentic-saas/agent-contracts"
 
 const publicQueryLinePatterns = [
   /^public-only web query\s*:\s*.{2,200}$/iu,
@@ -6,13 +6,13 @@ const publicQueryLinePatterns = [
 ] as const
 const explicitSearchPattern = /\bweb search\b|Web検索/iu
 
-const textLines = (message: AgentCanonicalMessage) =>
+const textLines = (message: AgentUiMessage) =>
   message.parts.flatMap((part) =>
     part.type === "text" ? part.text.split(/\r?\n/u) : []
   )
 
 export const requiresWebSearchFirstStep = (
-  messages: readonly AgentCanonicalMessage[],
+  messages: readonly AgentUiMessage[],
   toolAllowlist?: readonly string[]
 ): boolean => {
   if (toolAllowlist && !toolAllowlist.includes("web_search")) return false
