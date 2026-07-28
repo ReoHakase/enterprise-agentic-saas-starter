@@ -3,19 +3,35 @@ import { describe, expect, it } from "vitest"
 
 import {
   approvedIssueActionWorkflow,
+  executionRegistry,
   mastra,
   productAgent,
-  publicWebResearchAgent,
 } from "."
-import { publicWebResearchProviderOptions } from "./agents/public-web-research-agent"
+import { createAgentToolBudget } from "./core/budget/tool"
+import { createAgentVisionBudget } from "./core/budget/vision"
+import { createRunSettlement } from "./runtime/settlement"
+import {
+  createNativeControlPlane,
+  TEST_RUN_GRANT,
+} from "./test-support/native-runtime"
 
 const productAgentRequestContext = (
   visionEnabled: boolean,
   toolAllowlist?: readonly string[]
 ) => {
   const requestContext = new RequestContext()
+  const api = createNativeControlPlane()
+  const execution = executionRegistry.register({
+    api,
+    budget: createAgentToolBudget(),
+    rootRunId: "run_mastra_registry",
+    runGrant: TEST_RUN_GRANT,
+    settlement: createRunSettlement(api, TEST_RUN_GRANT),
+    suspendAction: async () => undefined,
+    visionBudget: createAgentVisionBudget(),
+  })
   requestContext.set("runtime", {
-    executionId: "execution_unavailable",
+    executionId: execution.executionId,
     modelRoute: "product",
     policy: {
       timezone: "Asia/Tokyo",
@@ -26,7 +42,7 @@ const productAgentRequestContext = (
     resourceId: "resource_mastra_registry",
     threadId: "thread_mastra_registry",
   })
-  return requestContext
+  return { release: execution.release, requestContext }
 }
 
 describe("Mastra product agent registry", () => {
@@ -40,10 +56,17 @@ describe("Mastra product agent registry", () => {
   it("registers the canonical agent and Qwen model", async () => {
     expect(mastra.getAgentById("product-agent")).toBe(productAgent)
     expect(productAgent.id).toBe("product-agent")
-    const model = await productAgent.getModel()
-    expect(model.modelId).toBe("qwen/qwen3.6-flash")
-    expect(model.provider).toBe("openrouter")
-    expect(productAgent.hasOwnMemory()).toBe(true)
+    const runtime = productAgentRequestContext(false)
+    try {
+      const model = await productAgent.getModel({
+        requestContext: runtime.requestContext,
+      })
+      expect(model.modelId).toBe("qwen/qwen3.6-flash")
+      expect(model.provider).toBe("openrouter")
+      expect(productAgent.hasOwnMemory()).toBe(true)
+    } finally {
+      runtime.release()
+    }
   })
 
   it("pins inline skill names", async () => {
@@ -52,7 +75,7 @@ describe("Mastra product agent registry", () => {
     ).toEqual(["core", "issue-triage", "issue-writing", "web-assistance"])
   })
 
-  it("keeps provider Web search on the isolated research agent", async () => {
+  it("keeps provider Web search behind the guarded product tool", async () => {
     const productTools = await productAgent.listTools()
     expect(Object.keys(productTools)).toEqual([
       "get_issue",
@@ -64,44 +87,44 @@ describe("Mastra product agent registry", () => {
       "web_search",
     ])
     expect(productTools.web_search).not.toMatchObject({ type: "provider" })
-    const visionTools = await productAgent.listTools({
-      requestContext: productAgentRequestContext(true),
-    })
-    expect(Object.keys(visionTools)).toContain("read_issue_attachment_image")
-    expect(
-      Reflect.get(visionTools.read_issue_attachment_image ?? {}, "outputSchema")
-    ).toBeUndefined()
-    expect(
-      Object.keys(
-        await productAgent.listTools({
-          requestContext: productAgentRequestContext(false),
-        })
-      )
-    ).not.toContain("read_issue_attachment_image")
-    expect(
-      Object.keys(
-        await productAgent.listTools({
-          requestContext: productAgentRequestContext(false, ["search_issues"]),
-        })
-      )
-    ).toEqual(["search_issues"])
+    const visionRuntime = productAgentRequestContext(true)
+    const standardRuntime = productAgentRequestContext(false)
+    const allowlistRuntime = productAgentRequestContext(false, [
+      "search_issues",
+    ])
+    try {
+      const visionTools = await productAgent.listTools({
+        requestContext: visionRuntime.requestContext,
+      })
+      expect(Object.keys(visionTools)).toContain("read_issue_attachment_image")
+      expect(
+        Reflect.get(
+          visionTools.read_issue_attachment_image ?? {},
+          "outputSchema"
+        )
+      ).toBeUndefined()
+      expect(
+        Object.keys(
+          await productAgent.listTools({
+            requestContext: standardRuntime.requestContext,
+          })
+        )
+      ).not.toContain("read_issue_attachment_image")
+      expect(
+        Object.keys(
+          await productAgent.listTools({
+            requestContext: allowlistRuntime.requestContext,
+          })
+        )
+      ).toEqual(["search_issues"])
 
-    expect(mastra.getAgentById("public-web-research-agent")).toBe(
-      publicWebResearchAgent
-    )
-    const researchTools = await publicWebResearchAgent.listTools()
-    expect(Object.keys(researchTools)).toEqual(["openrouter_web_search"])
-    expect(researchTools.openrouter_web_search).toMatchObject({
-      args: {
-        engine: "exa",
-        maxResults: 3,
-      },
-      type: "provider",
-    })
-    expect(publicWebResearchProviderOptions.openrouter.reasoning).toEqual({
-      enabled: false,
-      effort: "none",
-      exclude: true,
-    })
+      expect(() => mastra.getAgentById("public-web-research-agent")).toThrow(
+        "Agent with id public-web-research-agent not found"
+      )
+    } finally {
+      visionRuntime.release()
+      standardRuntime.release()
+      allowlistRuntime.release()
+    }
   })
 })

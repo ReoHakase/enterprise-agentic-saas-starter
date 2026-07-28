@@ -11,6 +11,7 @@ import * as v from "valibot"
 import { clientEnv } from "@/lib/env.client"
 
 import {
+  attachmentMutationToolReceiptSchema,
   pendingActionToolOutputSchema,
   type AgentChatMessage,
 } from "../../schema"
@@ -18,6 +19,7 @@ import { AgentApprovalCard } from "../agent-approval-card/agent-approval-card"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
 import { MessageResponse } from "../message-response/message-response"
 import { webSearchLinksFromToolOutput } from "../web-search-links/web-search-links"
+import { toolStateLabel } from "./tool-state-label"
 
 export const AgentMessage = ({
   message,
@@ -31,163 +33,199 @@ export const AgentMessage = ({
   organizationSlug: string
   frozen: boolean
   onPendingChange: (actionId: string, pending: boolean) => void
-}) => (
-  <article
-    aria-label={message.role === "user" ? "Your message" : "Agent response"}
-    className={`text-sm ${
-      message.role === "user"
-        ? "ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-3"
-        : "w-full py-2"
-    }`}
-  >
-    <div className="space-y-2">
-      {message.parts.map((part, index) => {
-        const key = `${part.type}:${index}`
-        if (part.type === "text")
-          return message.role === "assistant" ? (
-            <div key={key} role="group" aria-label="Agent answer">
-              <MessageResponse className="text-sm">{part.text}</MessageResponse>
-            </div>
-          ) : (
-            <p key={key} className="text-sm whitespace-pre-wrap">
-              {part.text}
-            </p>
-          )
-        if (part.type === "data-activity") {
-          return null
-        }
-        if (part.type === "data-context-reference") {
-          return (
-            <span
-              key={key}
-              className="inline-flex max-w-full rounded-md bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:text-blue-300"
-            >
-              @{part.data.label}
-            </span>
-          )
-        }
-        if (part.type === "source-url") {
-          return (
-            <a
-              key={key}
-              href={part.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block truncate text-xs text-blue-600 underline underline-offset-2"
-            >
-              {part.title ?? part.url}
-            </a>
-          )
-        }
-        if (part.type === "step-start") return null
-        if (isToolUIPart(part)) {
-          const toolName = getToolName(part)
-          if (part.state === "output-available") {
-            const pendingAction = v.safeParse(
-              pendingActionToolOutputSchema,
-              part.output
+}) => {
+  const canonicalSourceUrls = new Set(
+    message.parts.flatMap((part) =>
+      part.type === "source-url" ? [part.url] : []
+    )
+  )
+  return (
+    <article
+      aria-label={message.role === "user" ? "Your message" : "Agent response"}
+      className={`text-sm ${
+        message.role === "user"
+          ? "ml-auto max-w-[85%] rounded-2xl bg-muted px-4 py-3"
+          : "w-full py-2"
+      }`}
+    >
+      <div className="space-y-2">
+        {message.parts.map((part, index) => {
+          const key = `${part.type}:${index}`
+          if (part.type === "text")
+            return message.role === "assistant" ? (
+              <div key={key} role="group" aria-label="Agent answer">
+                <MessageResponse className="text-sm">
+                  {part.text}
+                </MessageResponse>
+              </div>
+            ) : (
+              <p key={key} className="text-sm whitespace-pre-wrap">
+                {part.text}
+              </p>
             )
-            if (pendingAction.success) {
-              return (
-                <AgentApprovalCard
-                  key={key}
-                  actionId={pendingAction.output.actionId}
-                  organizationId={organizationId}
-                  organizationSlug={organizationSlug}
-                  frozen={frozen}
-                  onPendingChange={onPendingChange}
-                />
-              )
-            }
+          if (part.type === "data-activity") {
+            return null
           }
-          const issueLinks =
-            part.state === "output-available"
-              ? issueLinksFromToolOutput(toolName, part.output)
-              : []
-          const webSearchLinks =
-            part.state === "output-available"
-              ? webSearchLinksFromToolOutput(toolName, part.output)
-              : []
-          return (
-            <div key={key} className="space-y-2 text-xs">
-              <details className="rounded-lg border bg-muted/30 px-3 py-2">
-                <summary className="cursor-pointer font-medium">
-                  {toolName.replaceAll("_", " ")} ·{" "}
-                  {part.state.replaceAll("-", " ")}
-                </summary>
-                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-muted-foreground">
-                  {JSON.stringify(
-                    part.state === "output-available"
-                      ? part.output
-                      : part.input,
-                    null,
-                    2
-                  )}
-                </pre>
-              </details>
-              {issueLinks.length > 0 ? (
-                <div className="space-y-1">
-                  {issueLinks.map((issue) => (
-                    <Link
-                      key={issue.number}
-                      href={`/organization/${organizationSlug}/issues/${issue.number}`}
-                      className="block text-blue-600 underline underline-offset-2"
-                    >
-                      #{issue.number} {issue.title}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {webSearchLinks.length > 0 ? (
-                <div className="space-y-1">
-                  {webSearchLinks.map((source) => (
-                    <a
-                      key={source.url}
-                      href={source.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate text-blue-600 underline underline-offset-2"
-                    >
-                      {source.title}
-                    </a>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )
-        }
-        if (part.type === "data-agent-assets") {
-          return (
-            <div key={key} className="mt-2 grid grid-cols-2 gap-2">
-              {part.data.assetIds.map((assetId) => {
-                const asset = part.data.assets?.find(
-                  (candidate) => candidate.id === assetId
-                )
+          if (part.type === "data-context-reference") {
+            return (
+              <span
+                key={key}
+                className="inline-flex max-w-full rounded-md bg-blue-500/10 px-1.5 py-0.5 text-blue-700 dark:text-blue-300"
+              >
+                @{part.data.label}
+              </span>
+            )
+          }
+          if (part.type === "source-url") {
+            return (
+              <a
+                key={key}
+                href={part.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block truncate text-xs text-blue-600 underline underline-offset-2"
+              >
+                {part.title ?? part.url}
+              </a>
+            )
+          }
+          if (part.type === "step-start") return null
+          if (isToolUIPart(part)) {
+            const toolName = getToolName(part)
+            if (part.state === "output-available") {
+              const pendingAction = v.safeParse(
+                pendingActionToolOutputSchema,
+                part.output
+              )
+              if (pendingAction.success) {
                 return (
-                  // The authenticated API image must bypass the Next optimizer.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={assetId}
-                    className="max-h-56 w-full rounded-lg object-cover"
-                    src={buildAgentAssetPreviewUrl(
-                      clientEnv.NEXT_PUBLIC_API_BASE_URL,
-                      {
-                        organizationId,
-                        assetId,
-                        width: FILE_PREVIEW_WIDTHS[1],
-                      }
-                    )}
-                    width={asset?.imageWidth}
-                    height={asset?.imageHeight}
-                    alt={asset?.filename ?? "Attached image"}
+                  <AgentApprovalCard
+                    key={key}
+                    actionId={pendingAction.output.actionId}
+                    organizationId={organizationId}
+                    organizationSlug={organizationSlug}
+                    frozen={frozen}
+                    onPendingChange={onPendingChange}
                   />
                 )
-              })}
-            </div>
-          )
-        }
-        return null
-      })}
-    </div>
-  </article>
-)
+              }
+            }
+            const issueLinks =
+              part.state === "output-available"
+                ? issueLinksFromToolOutput(toolName, part.output)
+                : []
+            const webSearchLinks =
+              part.state === "output-available"
+                ? webSearchLinksFromToolOutput(toolName, part.output).filter(
+                    (source) => !canonicalSourceUrls.has(source.url)
+                  )
+                : []
+            const attachmentReceipt =
+              part.state === "output-available"
+                ? v.safeParse(attachmentMutationToolReceiptSchema, part.output)
+                : null
+            return (
+              <div key={key} className="space-y-2 text-xs">
+                <div
+                  className="rounded-lg border bg-muted/30 px-3 py-2"
+                  role={part.state === "output-error" ? "alert" : "status"}
+                >
+                  <span className="font-medium">
+                    {toolName.replaceAll("_", " ")}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {toolStateLabel(
+                      part.state,
+                      part.state === "approval-responded"
+                        ? part.approval.approved
+                        : undefined
+                    )}
+                  </span>
+                </div>
+                {issueLinks.length > 0 ? (
+                  <div className="space-y-1">
+                    {issueLinks.map((issue) => (
+                      <Link
+                        key={issue.number}
+                        href={`/organization/${organizationSlug}/issues/${issue.number}`}
+                        className="block text-blue-600 underline underline-offset-2"
+                      >
+                        #{issue.number} {issue.title}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+                {attachmentReceipt?.success ? (
+                  <p role="status">
+                    {attachmentReceipt.output.operation === "added"
+                      ? "Added"
+                      : "Removed"}{" "}
+                    {attachmentReceipt.output.fileIds.length} attachment
+                    {attachmentReceipt.output.fileIds.length === 1
+                      ? ""
+                      : "s"}{" "}
+                    on{" "}
+                    <Link
+                      href={`/organization/${organizationSlug}/issues/${attachmentReceipt.output.issueNumber}`}
+                      className="text-blue-600 underline underline-offset-2"
+                    >
+                      Issue #{attachmentReceipt.output.issueNumber}
+                    </Link>{" "}
+                    at revision {attachmentReceipt.output.revision}.
+                  </p>
+                ) : null}
+                {webSearchLinks.length > 0 ? (
+                  <div className="space-y-1">
+                    {webSearchLinks.map((source) => (
+                      <a
+                        key={source.url}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block truncate text-blue-600 underline underline-offset-2"
+                      >
+                        {source.title}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          }
+          if (part.type === "data-agent-assets") {
+            return (
+              <div key={key} className="mt-2 grid grid-cols-2 gap-2">
+                {part.data.assetIds.map((assetId) => {
+                  const asset = part.data.assets?.find(
+                    (candidate) => candidate.id === assetId
+                  )
+                  return (
+                    // The authenticated API image must bypass the Next optimizer.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={assetId}
+                      className="max-h-56 w-full rounded-lg object-cover"
+                      src={buildAgentAssetPreviewUrl(
+                        clientEnv.NEXT_PUBLIC_API_BASE_URL,
+                        {
+                          organizationId,
+                          assetId,
+                          width: FILE_PREVIEW_WIDTHS[1],
+                        }
+                      )}
+                      width={asset?.imageWidth}
+                      height={asset?.imageHeight}
+                      alt={asset?.filename ?? "Attached image"}
+                    />
+                  )
+                })}
+              </div>
+            )
+          }
+          return null
+        })}
+      </div>
+    </article>
+  )
+}

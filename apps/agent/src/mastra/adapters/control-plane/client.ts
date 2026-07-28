@@ -9,6 +9,7 @@ import {
   agentIssueLabelListSchema,
   agentIssueListSchema,
   agentMemberListSchema,
+  agentMemoryCommitSettlementSchema,
   agentOrganizationContextSchema,
   agentRunGrantSchema,
   agentRunResultSchema,
@@ -256,6 +257,16 @@ export const createAgentInternalGateway = (
   binding: AgentInternalFetchBinding
 ): AgentInternalGateway => ({
   ...createIssueActionGateway(binding),
+  settleMemoryCommit: (body) =>
+    internalRequest(
+      binding,
+      {
+        body,
+        method: "POST",
+        path: "/internal/agent/memory/commit-settlement",
+      },
+      agentMemoryCommitSettlementSchema
+    ),
   consumeConnectionTicket: (body) =>
     internalRequest(
       binding,

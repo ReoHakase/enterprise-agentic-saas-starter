@@ -6,9 +6,144 @@ import {
   request,
 } from "./agent.test-support"
 import { createAgentInternalApi } from "./internal-api"
+import { configureAgentRuntime } from "./runtime"
 import { createAgentThreadForSession } from "./threads/repository"
 
 describe("Agent client tool continuation", () => {
+  it("rejects a malformed native tool state from private Memory history", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      title: "Malformed approval history",
+    })
+    configureAgentRuntime({
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            hasMore: false,
+            messages: [
+              {
+                id: "message_malformed_approval",
+                role: "assistant",
+                parts: [
+                  {
+                    type: "tool-delete_issue",
+                    toolCallId: "call_malformed_approval",
+                    state: "approval-requested",
+                    input: { expectedRevision: 1, issueId: "issue_1" },
+                    approval: { id: "approval_1", approved: true },
+                  },
+                ],
+              },
+            ],
+            page: 0,
+            perPage: 40,
+            total: 1,
+          })
+        ),
+    })
+
+    expect(
+      (await app.handle(request(`/agent/threads/${thread.id}/messages`))).status
+    ).toBe(503)
+  })
+
+  it("accepts bounded native approval states from the private Memory history boundary", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      userId: "agent-user-a",
+      title: "Approval history",
+    })
+    configureAgentRuntime({
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            hasMore: false,
+            messages: [
+              {
+                id: "message_approval",
+                role: "assistant",
+                parts: [
+                  {
+                    type: "tool-update_issue",
+                    toolCallId: "call_approval",
+                    state: "approval-responded",
+                    input: {
+                      expectedRevision: 1,
+                      issueId: "issue_1",
+                      title: "Declined title",
+                    },
+                    approval: {
+                      id: "approval_1",
+                      approved: false,
+                      reason: "Denied",
+                    },
+                  },
+                  {
+                    type: "tool-update_issue",
+                    toolCallId: "call_approved_result",
+                    state: "output-available",
+                    input: { issueId: "issue_1" },
+                    output: { status: "succeeded" },
+                    approval: { id: "approval_2", approved: true },
+                  },
+                  {
+                    type: "tool-update_issue",
+                    toolCallId: "call_approved_error",
+                    state: "output-error",
+                    errorText: "Agent tool execution failed.",
+                    approval: {
+                      id: "approval_3",
+                      approved: true,
+                      reason: "Approved by the user",
+                    },
+                  },
+                ],
+              },
+            ],
+            page: 0,
+            perPage: 40,
+            total: 1,
+          })
+        ),
+    })
+
+    const response = await app.handle(
+      request(`/agent/threads/${thread.id}/messages`)
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      messages: [
+        {
+          parts: [
+            expect.objectContaining({
+              state: "approval-responded",
+              approval: {
+                id: "approval_1",
+                approved: false,
+                reason: "Denied",
+              },
+            }),
+            expect.objectContaining({
+              state: "output-available",
+              approval: { id: "approval_2", approved: true },
+            }),
+            expect.objectContaining({
+              state: "output-error",
+              approval: {
+                id: "approval_3",
+                approved: true,
+                reason: "Approved by the user",
+              },
+            }),
+          ],
+        },
+      ],
+    })
+  })
+
   it("continues only the last persisted allowlisted client tool call", async () => {
     const { app, db } = await createFixture()
     const inputs = configureAgentStreamCapture()
@@ -26,6 +161,7 @@ describe("Agent client tool continuation", () => {
           toolCallId: "call_client_1",
           toolName: "ui_read_form_draft",
           state: "output-available",
+          input: { formId: "form_1" },
           output: {
             formId: "form_1",
             resource: "issue",
@@ -59,6 +195,7 @@ describe("Agent client tool continuation", () => {
           type: "tool-ui_read_form_draft",
           toolCallId: "call_client_1",
           state: "output-available",
+          input: continuationBody.clientToolResults[0]?.input,
           output: continuationBody.clientToolResults[0]?.output,
         },
       ],

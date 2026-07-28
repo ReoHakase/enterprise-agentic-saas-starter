@@ -11,7 +11,7 @@ last_reviewed: 2026-07-25
 
 Agent shellのheaderにorganization名を表示しません。thread selector、新規thread、赤いarchive、pane closeを上部へ置きます。UI上は`thread`を使い、実装都合のデータ操作略語は使いません。
 
-selectorはAPI順を維持し、`updatedAt DESC, id DESC`です。各itemはtitle、最終更新日時、吹き出しicon付きmessage数を表示します。archiveはdestructive styleと確認dialogを持ち、対象threadの未送信text、staged画像、upload、active responseへの影響を説明します。
+selectorはAPI順を維持し、`updatedAt DESC, id DESC`です。各itemはtitleと最終更新日時を表示します。archiveはdestructive styleと確認dialogを持ち、対象threadの未送信text、staged画像、upload、active responseへの影響を説明します。
 
 ## 新規thread
 
@@ -35,15 +35,17 @@ conversation全体とcomposerを1枚の大きなCardで囲みません。convers
 | part                       | 表示                                              |
 | -------------------------- | ------------------------------------------------- |
 | `text`                     | Markdown対応response                              |
-| `reasoning`                | `Thinking` details、既定で閉じる                  |
+| `reasoning`                | productionでは送信、保存、表示しない              |
 | transient `data-activity`  | 現在turnの「応答を生成中」だけ。履歴へ保存しない  |
-| tool part                  | tool名とstate、input/output details、既定で閉じる |
+| tool part                  | tool名とstate、安全なschema検証済みprojectionだけ |
 | pending action tool output | そのtool位置のinline approval card                |
 | `source-url`               | 外部link                                          |
 | `data-context-budget`      | messageではなくcontext meterへ反映                |
 | `data-thread-title`        | title更新通知とselector再取得                     |
 
-thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、providerがstreamしたbounded reasoningだけを保存・表示します。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
+thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、raw reasoning partをproduction stream、Storage、UIへ出しません。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
+
+toolのraw input/outputは折りたたみdetailsを含めてchat UIへ表示しません。各tool固有schemaで検証した公開projectionだけを表示し、tenant識別子、credential、provider payload、private URL、内部errorを汎用rendererへ渡しません。
 
 ### Scroll追従とminimap
 

@@ -5,18 +5,20 @@ import {
   toAgentControlFailure,
 } from "../adapters/control-plane/client"
 import type { AgentRuntimeEnv } from "../composition/environment"
+import { createAgentIsolateCompositionCache } from "../composition/isolate-composition"
 import { handleAgentRuntimeRequest } from "../runtime/run-agent"
 import { SCRIPTED_MODEL_SENTINEL } from "../test-support/scripted-model"
 import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
 export { IssueAssistant } from "../legacy/issue-assistant"
 
-class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
-  #composition?: ReturnType<typeof createScriptedAgentRuntimeComposition>
+const getScriptedAgentIsolateComposition = createAgentIsolateCompositionCache(
+  createScriptedAgentRuntimeComposition
+)
 
+class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
   fetch(request: Request): Promise<Response> | Response {
-    this.#composition ??= createScriptedAgentRuntimeComposition(this.env)
-    const composition = this.#composition
+    const composition = getScriptedAgentIsolateComposition(this.env)
     return handleAgentRuntimeRequest(request, this.env, this.ctx, {
       captureFailure: () => undefined,
       createControlPlane: createAgentInternalGateway,

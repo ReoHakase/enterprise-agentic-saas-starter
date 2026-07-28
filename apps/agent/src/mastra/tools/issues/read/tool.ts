@@ -1,12 +1,12 @@
 import {
   createGetIssueTool,
+  createReadIssueAttachmentImageTool,
   createReadAccountContextTool,
   createReadActiveOrganizationTool,
   createSearchIssueLabelsTool,
   createSearchIssuesTool,
   createSearchOrganizationMembersTool,
 } from "@enterprise-agentic-saas/agent-tools"
-import { createTool } from "@mastra/core/tools"
 
 import {
   type ProductAgentExecutionResolver,
@@ -17,16 +17,6 @@ import {
   createAgentReadHandlers,
   issueAttachmentImageToModelOutput,
 } from "./execute"
-import { issueAttachmentImageInputSchema } from "./schema"
-
-const readToolMetadata = {
-  annotations: {
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-    readOnlyHint: true,
-  },
-}
 
 export const createIssueReadTools = (
   resolveExecution: ProductAgentExecutionResolver
@@ -99,31 +89,17 @@ export const createIssueReadTools = (
 export const createIssueVisionTools = (
   resolveExecution: ProductAgentExecutionResolver
 ) => ({
-  read_issue_attachment_image: createTool<
-    "read_issue_attachment_image",
-    typeof issueAttachmentImageInputSchema,
-    undefined,
-    undefined,
-    undefined,
-    ProductAgentRequestContext
-  >({
-    id: "read_issue_attachment_image",
-    description:
-      "Read one supported JPEG, PNG, WebP, or GIF attachment from an Issue when its visual contents are needed. Call get_issue first and use only an attachment marked imageReadable.",
-    inputSchema: issueAttachmentImageInputSchema,
-    strict: true,
-    mcp: readToolMetadata,
-    execute: (input, context) => {
-      const runtime = resolveExecution(context.requestContext)
-      return createAgentIssueImageHandler(
-        runtime.api,
-        runtime.runGrant,
-        runtime.budget,
-        runtime.visionBudget
-      )(input)
-    },
-    // output schema validationはobjectをcloneし得るため、WeakMap keyの同一性を
-    // 維持するこのtoolではhandler内のclosed result constructionを正本にする。
-    toModelOutput: issueAttachmentImageToModelOutput,
-  }),
+  read_issue_attachment_image:
+    createReadIssueAttachmentImageTool<ProductAgentRequestContext>(
+      (input, context) => {
+        const runtime = resolveExecution(context.requestContext)
+        return createAgentIssueImageHandler(
+          runtime.api,
+          runtime.runGrant,
+          runtime.budget,
+          runtime.visionBudget
+        )(input)
+      },
+      issueAttachmentImageToModelOutput
+    ),
 })

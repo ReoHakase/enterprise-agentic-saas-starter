@@ -185,7 +185,11 @@ const main = async () => {
       name: environment.apiWorkerName,
       main: resolve(apiWorkspace, "src/worker.ts"),
       compatibility_date: "2026-07-22",
-      compatibility_flags: ["nodejs_compat"],
+      compatibility_flags: [
+        "nodejs_compat",
+        "enable_request_signal",
+        "request_signal_passthrough",
+      ],
       services: [
         {
           binding: "AGENT_RUNTIME",
@@ -237,7 +241,7 @@ const main = async () => {
       name: environment.agentWorkerName,
       main: resolve(agentWorkspace, agentE2EWorkerEntrypoint(scriptedAgent)),
       compatibility_date: "2026-07-22",
-      compatibility_flags: ["nodejs_compat"],
+      compatibility_flags: ["nodejs_compat", "enable_request_signal"],
       workers_dev: false,
       preview_urls: false,
       services: [

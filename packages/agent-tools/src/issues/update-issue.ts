@@ -1,5 +1,6 @@
 import {
   issueWriteToolOutputSchema,
+  issueWriteToolProviderOutputSchema,
   updateIssueToolInputSchema,
   type IssueWriteToolOutput,
   type UpdateIssueToolInput,
@@ -12,7 +13,7 @@ import { parseToolValue } from "../validation"
 import { normalizeUpdateIssueToolInput } from "./write-normalize"
 
 const inputSchema = toStandardJsonSchema(updateIssueToolInputSchema)
-const outputSchema = toStandardJsonSchema(issueWriteToolOutputSchema)
+const outputSchema = toStandardJsonSchema(issueWriteToolProviderOutputSchema)
 
 export const createUpdateIssueTool = <RequestContextData = unknown>(
   executor: AgentToolExecutor<

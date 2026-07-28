@@ -65,13 +65,13 @@ G2、Agent compositionはG2、MCP登録はA4でも検査します。
 
 ## Agent G1からG5
 
-| 名前                             | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 実物として使うもの                                                                       | 差し替えるもの                                        | 対象コード/ファイル                                                              | Test Runner                                | 実行速度           | CI時間課金以外の費用 | 量                     |
-| -------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------ | ------------------ | -------------------- | ---------------------- |
-| **Agent中核単体テスト G1**       | 単体                | <ul><li>abort、disconnect、provider error、timeoutを別状態へ分類する</li><li>Stopではsubmission IDを保持せず、disconnect/errorだけretry identityを保持する</li><li>useful-output watchdog、run timeout、tool side effect後retry禁止を境界値で確認する</li><li>resource ID、thread ID、model route、tool allowlist、reasoning policyを確認する</li><li>usage normalisation、safe error、secret scrubを確認する</li></ul>                                                                                 | pure function、Valibot schema、policy                                                    | clock、ID、pricing table                              | `apps/agent/src/mastra/core/**`、policy、usage、error                            | Vitest Node                                | 極めて速い         | なし                 | 非常に多い             |
-| **Agent tool実行単体テスト G2**  | 単体                | <ul><li>`packages/agent-contracts`のValibot schemaが未知fieldと過大inputを拒否する</li><li>`packages/agent-tools`のMastra toolがfake executorへ正しいinputを1回渡す</li><li>abort signal、timeout、safe error projectionを確認する</li><li>server toolとclient toolの分類を確認する</li><li>Web検索がnested Agentを呼ばずexact queryを変更しない</li><li>attachment add/removeがexpected revisionを必須にする</li><li>`transform`と`toModelOutput`がprivate URL、R2 key、raw bytesを除外する</li></ul>  | 実Mastra tool、実Valibot schema、fake executor                                           | API、DB、provider                                     | `packages/agent-tools/**`、`apps/agent/src/mastra/tools/**`                      | Vitest Node + fake executor                | 極めて速いから速い | なし                 | 多い                   |
-| **Agent決定的loop統合テスト G3** | 統合                | <ul><li>実Mastra Agent、Memory、LibSQLStore、native AI SDK streamを接続する</li><li>text、server tool、client tool、multi-step、source、approvalを確認する</li><li>server toolがbrowser client tool callbackへ流れないcontractを確認する</li><li>Stop、disconnect、reasoning-only timeout、provider error後に次turnを開始できる</li><li>Memoryへuserとassistant messageを保存し、process再生成後にreloadできる</li><li>suspended runを再発見し、approve/declineからresumeできる</li></ul>               | Agent、Memory、LibSQLStore、tool、stream、scripted model                                 | modelはscripted、business side effectはrecording fake | `apps/agent/src/mastra/agents/**`、`runtime/**`、`storage.ts`、`test-support/**` | Vitest + scripted model + temporary libSQL | 速いから中         | なし                 | 厚くする               |
-| **Agent制御面統合テスト G4**     | 統合                | <ul><li>API thread registryとAgent Memoryが同じthread IDを使う</li><li>API認可後だけlist/recallでき、archive後はAgent dataが残っていても拒否する</li><li>ticket、grant、run quota、explicit cancel、Stop直後の次runを確認する</li><li>cancel、Agent abort、expiryが一つのterminal stateへ収束する</li><li>usage settlement、idempotency、current permission再検証を確認する</li><li>Web検索provider adapterとattachment transactionを確認する</li><li>Service Bindingの本番contractを接続する</li></ul> | 実API app、実Agent runtime、Application libSQL、Agent libSQL、Service Binding相当adapter | modelはscripted、search/R2はcontrolled fake           | `apps/agent/**`、`apps/api/src/modules/agent/**`                                 | Vitest + Elysia + libSQL                   | 中から遅い         | なし                 | 必要な範囲で厚くする   |
-| **Agent実モデル挙動統合評価 G5** | 統合                | <ul><li>必要なtoolを選び禁止toolを選ばない</li><li>tool inputがValibot schemaを満たす</li><li>reasoningだけで終了せずtextまたはtoolへ進む</li><li>Web検索、画像読取、attachment mutationを正しく選択する</li><li>approval前にwriteしない</li><li>最大stepとtimeout内に終了する</li><li>Memoryから別thread情報を混同しない</li></ul>                                                                                                                                                                     | 実LLM、実instruction、実tool schema、実Memory設定                                        | business writeとDBはsynthetic                         | `apps/agent/src/mastra/evals/**`                                                 | Mastra evalまたはVitest                    | 遅い               | LLM料金あり          | 小さな評価データセット |
+| 名前                             | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 実物として使うもの                                                                       | 差し替えるもの                                        | 対象コード/ファイル                                                              | Test Runner                                | 実行速度           | CI時間課金以外の費用 | 量                     |
+| -------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------ | ------------------ | -------------------- | ---------------------- |
+| **Agent中核単体テスト G1**       | 単体                | <ul><li>abort、disconnect、provider error、timeoutを別状態へ分類する</li><li>Stopではsubmission IDを保持せず、disconnect/errorだけretry identityを保持する</li><li>useful-output watchdog、run timeout、tool side effect後retry禁止を境界値で確認する</li><li>resource ID、thread ID、model route、tool allowlist、reasoning policyを確認する</li><li>usage normalisation、safe error、secret scrubを確認する</li></ul>                                                                                                                                                | pure function、Valibot schema、policy                                                    | clock、ID、pricing table                              | `apps/agent/src/mastra/core/**`、policy、usage、error                            | Vitest Node                                | 極めて速い         | なし                 | 非常に多い             |
+| **Agent tool実行単体テスト G2**  | 単体                | <ul><li>`packages/agent-contracts`のValibot schemaが未知fieldと過大inputを拒否する</li><li>`packages/agent-tools`のMastra toolがfake executorへ正しいinputを1回渡す</li><li>abort signal、timeout、safe error projectionを確認する</li><li>server toolとclient toolの分類を確認する</li><li>Web検索がnested Agentを呼ばずexact queryを変更しない</li><li>attachment add/removeがexpected revisionを必須にする</li><li>`transform`と`toModelOutput`がprivate URL、R2 key、raw bytesを除外する</li></ul>                                                                 | 実Mastra tool、実Valibot schema、fake executor                                           | API、DB、provider                                     | `packages/agent-tools/**`、`apps/agent/src/mastra/tools/**`                      | Vitest Node + fake executor                | 極めて速いから速い | なし                 | 多い                   |
+| **Agent決定的loop統合テスト G3** | 統合                | <ul><li>実Mastra Agent、Memory、file-backed LibSQLStore、native AI SDK streamを接続する</li><li>text、server tool、client tool、multi-step、source、approvalを確認する</li><li>server toolがbrowser client tool callbackへ流れないcontractを確認する</li><li>Stop、disconnect、reasoning-only timeout、provider error後に次turnを開始できる</li><li>Storageをcloseし、新しいruntime compositionからreloadして停止turnのpartial text、tool input、`data-run`がなくuserだけ残ることを確認する</li><li>suspended runを再発見し、approve/declineからresumeできる</li></ul> | Agent、Memory、LibSQLStore、tool、stream、scripted model                                 | modelはscripted、business side effectはrecording fake | `apps/agent/src/mastra/agents/**`、`runtime/**`、`storage.ts`、`test-support/**` | Vitest + scripted model + temporary libSQL | 速いから中         | なし                 | 厚くする               |
+| **Agent制御面統合テスト G4**     | 統合                | <ul><li>API thread registryとAgent Memoryが同じthread IDを使う</li><li>API認可後だけlist/recallでき、archive後はAgent dataが残っていても拒否する</li><li>ticket、grant、run quota、explicit cancel、Stop直後の次runを確認する</li><li>cancel、Agent abort、expiryが一つのterminal stateへ収束する</li><li>usage settlement、idempotency、current permission再検証を確認する</li><li>Web検索provider adapterとattachment transactionを確認する</li><li>Service Bindingの本番contractを接続する</li></ul>                                                                | 実API app、実Agent runtime、Application libSQL、Agent libSQL、Service Binding相当adapter | modelはscripted、search/R2はcontrolled fake           | `apps/agent/**`、`apps/api/src/modules/agent/**`                                 | Vitest + Elysia + libSQL                   | 中から遅い         | なし                 | 必要な範囲で厚くする   |
+| **Agent実モデル挙動統合評価 G5** | 統合                | <ul><li>必要なtoolを選び禁止toolを選ばない</li><li>tool inputがValibot schemaを満たす</li><li>reasoningだけで終了せずtextまたはtoolへ進む</li><li>Web検索、画像読取、attachment mutationを正しく選択する</li><li>approval前にwriteしない</li><li>最大stepとtimeout内に終了する</li><li>Memoryから別thread情報を混同しない</li></ul>                                                                                                                                                                                                                                    | 実LLM、実instruction、実tool schema、実Memory設定                                        | business writeとDBはsynthetic                         | `apps/agent/src/mastra/evals/**`                                                 | Mastra evalまたはVitest                    | 遅い               | LLM料金あり          | 小さな評価データセット |
 
 ## G1必須case
 
@@ -82,6 +82,7 @@ G2、Agent compositionはG2、MCP登録はA4でも検査します。
 - reasoning deltaだけではuseful-output timerを延長しない
 - tool side effect後はprovider retryしない
 - cancelとsettlementが二重計上しない
+- user abortのfinalization順がcancel、usage、execution releaseになる
 - snapshotへAPI client、関数、grant、resume ticket、provider key、private URLが入らない
 
 ## G2必須case
@@ -109,6 +110,7 @@ approval requested
 approval approved
 approval declined
 user Stop
+user Stopとexplicit cancelの競合3順序
 network disconnect
 reasoning-only timeout
 provider timeout
@@ -131,6 +133,11 @@ archive registry更新直後
 Agent thread削除直前
 ```
 
+上の10点はrelease全体のcrash catalogです。Phase 2で必須とするのはmessage durable commitに関係する
+`before-memory-save`、`after-memory-save`、`after-run-settlement`の3点で、実host processを
+`SIGKILL`して新しいprocessから回復を確認します。approval suspension/resume、archive、Agent thread
+deleteのcrash pointはPhase 3以後の該当機能で追加し、Phase 2完了の証跡へ混ぜません。
+
 期待する不変条件:
 
 - business side effectは最大1回
@@ -139,6 +146,8 @@ Agent thread削除直前
 - archived threadは0件公開
 - Stop後の次turnは成功
 - suspended runは失われない
+- Memory保存済みresponseはApp settlement失敗で失われない
+- success snapshotはsettlement acknowledgement後だけ削除される
 
 ## API A1からA5
 
@@ -235,6 +244,12 @@ PAT関連caseはPhase 5までskipせず未実装として対象外にします�
   `bun run build:cloudflare`を実行する
 - Phase 1のE1は別Application libSQLとAgent libSQLを接続し、Browser Modeも必須とする
 - Phase 2とPhase 3のG5は各caseを3回実行し、3回とも成功した場合だけ合格とする
+- Phase 2 G5は`phase2-web-search-explicit`、`phase2-web-search-missing-attestation`、
+  `phase2-existing-issue-image-read`、`phase2-existing-issue-attachment-add`、
+  `phase2-existing-issue-attachment-remove`を各3回実行する
+- G5は自然言語の単語や定型文を合否に使わない。refusalはtool未実行、attestation未消費、
+  URL非出力、非空応答を確認し、画像readはexact tool input、vision usage、非空応答、
+  private material非出力を確認する
 - E2はrelease候補だけの有料カナリアとし、通常phase完了判定へ含めない
 
 ## E2E E1とE2
@@ -251,11 +266,16 @@ thread作成
 → reload
 → Stop
 → explicit cancel
-→ 同じthreadで次turn
+→ 同じthreadで3回連続送信し、毎回別submission ID
 → Web検索
 → attachment追加/読取/削除
+→ reloadでsearch/add/read/remove stateと秘密非露出を確認
 → archive後に履歴拒否
 ```
+
+今回のlocal multi-config E1 harnessではdisconnect単独のterminal cancelを決定的に観測できなかった
+ため、E1のStopは製品contractどおりexplicit cancelで`canceled`への収束を確認します。
+compatibility flagは構成test、Agentの直接`Request.signal` abortはG3/G4で検査します。
 
 実物:
 

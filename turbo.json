@@ -134,7 +134,7 @@
     "test:eval:agent": {
       "cache": false,
       "outputs": [],
-      "passThroughEnv": ["CI", "OPENROUTER_API_KEY"]
+      "passThroughEnv": ["AGENT_EVAL_CASES", "CI", "OPENROUTER_API_KEY"]
     },
     "typecheck": {
       "dependsOn": ["transit"],

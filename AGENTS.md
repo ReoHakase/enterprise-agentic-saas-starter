@@ -48,4 +48,7 @@
 - `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
 - AgentからDB、Auth、Email、Webを直接importしない。
 - reviewerからfileをwriteしない。
-- secret、token、email本文、private URL、provider raw errorをlogやtelemetryへ出さない。
+- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、
+  telemetry、Memory、trace、test artifactへ出さない。maintainerが明示承認した
+  `NODE_ENV=development`のAgent local consoleに限り、provider raw `Error`とbounded cause chainを
+  調査用に出してよい。出力は機密として扱い、保存、共有、外部送信しない。

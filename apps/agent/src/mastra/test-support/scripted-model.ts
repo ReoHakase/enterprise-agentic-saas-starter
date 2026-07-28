@@ -23,6 +23,8 @@ export type ScriptedModelPart =
 
 export type ScriptedStreamChunk = {
   delayMs?: number
+  onEmit?: () => void
+  waitFor?: Promise<void>
   value: unknown
 }
 
@@ -41,6 +43,14 @@ export type ScriptedModelOptions = {
   provider?: string
   repeat?: boolean
 }
+
+type ScriptedModelCallOptions = Parameters<
+  InstanceType<typeof MockLanguageModelV3>["doStream"]
+>[0]
+
+export type ScriptedModelStepResolver = (
+  options: ScriptedModelCallOptions
+) => ScriptedModelStep
 
 type GenerateResult = Awaited<
   ReturnType<InstanceType<typeof MockLanguageModelV3>["doGenerate"]>
@@ -170,7 +180,9 @@ const streamFrom = (
         await chunks.reduce(async (previous, chunk) => {
           await previous
           await waitForDelay(chunk.delayMs, abortSignal)
+          await waitForAbortable(chunk.waitFor, abortSignal)
           controller.enqueue(streamChunkSchema.parse(chunk.value))
+          chunk.onEmit?.()
         }, Promise.resolve())
         controller.close()
       } catch (error) {
@@ -179,17 +191,41 @@ const streamFrom = (
     },
   })
 
+const waitForAbortable = async (
+  pending: Promise<void> | undefined,
+  abortSignal: AbortSignal | undefined
+) => {
+  if (!pending) return
+  await new Promise<void>((resolve, reject) => {
+    const abort = () =>
+      reject(abortSignal?.reason ?? new DOMException("Aborted", "AbortError"))
+    abortSignal?.addEventListener("abort", abort, { once: true })
+    if (abortSignal?.aborted) {
+      abort()
+      return
+    }
+    void pending.then(resolve, reject).finally(() => {
+      abortSignal?.removeEventListener("abort", abort)
+    })
+  })
+}
+
 export const createScriptedModel = (
-  steps: readonly ScriptedModelStep[],
+  steps: readonly ScriptedModelStep[] | ScriptedModelStepResolver,
   options: ScriptedModelOptions = {}
 ) => {
-  const firstStep = steps.at(0)
-  if (!firstStep) throw new Error("Scripted model needs one step")
+  const firstStep = typeof steps === "function" ? undefined : steps.at(0)
+  if (typeof steps !== "function" && !firstStep) {
+    throw new Error("Scripted model needs one step")
+  }
   let cursor = 0
-  const nextStep = () => {
+  const nextStep = (callOptions: ScriptedModelCallOptions) => {
+    if (typeof steps === "function") return steps(callOptions)
     const step = steps[cursor]
     if (!step) {
-      if (!options.repeat) throw new Error("Scripted model is exhausted")
+      if (!options.repeat || !firstStep) {
+        throw new Error("Scripted model is exhausted")
+      }
       cursor = 1
       return firstStep
     }
@@ -201,8 +237,9 @@ export const createScriptedModel = (
     modelId:
       options.modelId ?? `${SCRIPTED_MODEL_SENTINEL}:scripted-agent-model`,
     provider: options.provider ?? "scripted",
-    doGenerate: async ({ abortSignal }) => {
-      const step = nextStep()
+    doGenerate: async (callOptions) => {
+      const { abortSignal } = callOptions
+      const step = nextStep(callOptions)
       await waitForDelay(step.delayMs, abortSignal)
       if (step.error) throw step.error
       const result: GenerateResult = {
@@ -216,8 +253,9 @@ export const createScriptedModel = (
       }
       return result
     },
-    doStream: async ({ abortSignal }) => {
-      const step = nextStep()
+    doStream: async (callOptions) => {
+      const { abortSignal } = callOptions
+      const step = nextStep(callOptions)
       await waitForDelay(step.delayMs, abortSignal)
       if (step.error) throw step.error
       const chunks =

@@ -1,3 +1,4 @@
+import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import { publicErrors } from "../../errors/app-error"
@@ -41,6 +42,13 @@ const parseInternalInput = <
 }
 
 export const createAgentInternalService = (ports: AgentInternalPorts) => ({
+  settleMemoryCommit(
+    input: v.InferInput<typeof agentMemoryCommitSettlementInputSchema>
+  ) {
+    return ports.settleMemoryCommit(
+      parseInternalInput(agentMemoryCommitSettlementInputSchema, input)
+    )
+  },
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
     return ports.cancelRun(parseInternalInput(agentGrantInputModel, input))
   },

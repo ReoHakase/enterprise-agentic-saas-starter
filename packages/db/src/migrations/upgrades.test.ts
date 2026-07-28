@@ -6,6 +6,10 @@ import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
 import {
+  assertLegacyUpdateActionCompatibility,
+  seedLegacyUpdateActionScope,
+} from "../test-support/agent-action-compatibility-fixture"
+import {
   removedAgentHistoryTables,
   retainedAgentRegistryTables,
   retainedAgentRegistryTriggers,
@@ -13,6 +17,74 @@ import {
 import { createMigrationPrefix, migrationsFolder } from "./helpers"
 
 describe("database migrations: upgrades", () => {
+  it("keeps legacy update action documents compatible through 0024", async () => {
+    expect.assertions(7)
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0023_gorgeous_titanium_man",
+    })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      const legacy = await seedLegacyUpdateActionScope(client, now)
+
+      await migrate(drizzle(client), { migrationsFolder })
+      await assertLegacyUpdateActionCompatibility(client, legacy, now)
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
+  it("upgrades attachment promotion guards for exact update operations", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0023_gorgeous_titanium_man",
+    })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle(client), { migrationsFolder })
+
+      const objects = await client.execute(
+        "select name, type, sql from sqlite_master where name in ('agent_action_assets_scope_insert','agent_action_assets_quota_classify_before','agent_assets_state_machine_update','storage_object_claims_promotion_update','agent_update_attachment_success_integrity') order by name"
+      )
+      expect(objects.rows.map(({ name }) => name)).toEqual([
+        "agent_action_assets_quota_classify_before",
+        "agent_action_assets_scope_insert",
+        "agent_assets_state_machine_update",
+        "agent_update_attachment_success_integrity",
+        "storage_object_claims_promotion_update",
+      ])
+      const scope = objects.rows.find(
+        ({ name }) => name === "agent_action_assets_scope_insert"
+      )
+      expect(scope?.sql).toContain("ac.`kind` = 'create_issue'")
+      expect(scope?.sql).toContain(
+        "json_extract(ac.`normalized_payload`, '$.operation') = 'add_attachments'"
+      )
+      const integrity = objects.rows.find(
+        ({ name }) => name === "agent_update_attachment_success_integrity"
+      )
+      expect(integrity?.sql).toContain(
+        "json_array_length(NEW.`normalized_payload`, '$.attachments')"
+      )
+      expect(integrity?.sql).toContain(
+        "coalesce(\n    json_extract(NEW.`normalized_payload`, '$.operation'),\n    'fields'"
+      )
+      expect(integrity?.sql).toContain(
+        "agent_action_attachment_promotion_incomplete"
+      )
+      expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
+        []
+      )
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
   it("upgrades the Agent message schema without losing run guards", async () => {
     const client = createClient({ url: "file::memory:" })
     const migrationPrefix = await createMigrationPrefix({

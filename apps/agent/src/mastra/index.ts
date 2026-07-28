@@ -5,9 +5,9 @@ const composition = createAgentRuntimeComposition(process.env)
 export const {
   approvedIssueActionExecutionRegistry,
   approvedIssueActionWorkflow,
+  executionRegistry,
   mastra,
   productAgent,
   productWebSearchTool,
-  publicWebResearchAgent,
   threadTitleAgent,
 } = composition

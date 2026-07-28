@@ -22,6 +22,189 @@ import { agentAssetDtoModel } from "./model"
 import { configureFileStorageRuntime } from "./runtime"
 
 describe("Agent asset Issue promotion and deletion", () => {
+  it("releases attachment leases on Stop so the same staged asset can be prepared again", async () => {
+    const { db } = await createFixture()
+    const assetId = await seedReadyAsset(db, {
+      id: "cancel-reusable-asset",
+      sizeBytes: 16,
+    })
+    const now = new Date()
+    const issueId = "cancel-reusable-issue"
+    await db.insert(schema.issues).values({
+      id: issueId,
+      organizationId: "asset-org-a",
+      number: 1,
+      title: "Reusable attachment target",
+      creatorId: "asset-user-a",
+      createdAt: now,
+      updatedAt: now,
+    })
+    const internal = await createAgentInternalApi(db)
+    const firstConnection = await openConnection(db)
+    const firstRun = await internal.startRun({
+      grant: firstConnection.grant,
+      clientMessageId: "cancel-reusable-first",
+      assetIds: [assetId],
+    })
+    const firstAction = await internal.prepareUpdateIssue({
+      grant: firstRun.grant,
+      toolCallId: "tool-cancel-reusable-first",
+      idempotencyKey: "prepare-cancel-reusable-first",
+      issue: {
+        operation: "add_attachments",
+        issueId,
+        expectedRevision: 1,
+        attachmentAssetIds: [assetId],
+      },
+    })
+
+    await internal.cancelRun({ grant: firstRun.grant })
+    const [releasedLease] = await db
+      .select({ releasedAt: schema.agentActionAssets.releasedAt })
+      .from(schema.agentActionAssets)
+      .where(eq(schema.agentActionAssets.actionId, firstAction.id))
+    expect(releasedLease?.releasedAt).toBeInstanceOf(Date)
+
+    const secondConnection = await openConnection(db)
+    const secondRun = await internal.startRun({
+      grant: secondConnection.grant,
+      clientMessageId: "cancel-reusable-second",
+      assetIds: [assetId],
+    })
+    await expect(
+      internal.prepareUpdateIssue({
+        grant: secondRun.grant,
+        toolCallId: "tool-cancel-reusable-second",
+        idempotencyKey: "prepare-cancel-reusable-second",
+        issue: {
+          operation: "add_attachments",
+          issueId,
+          expectedRevision: 1,
+          attachmentAssetIds: [assetId],
+        },
+      })
+    ).resolves.toMatchObject({
+      kind: "update_issue",
+      status: "pending",
+    })
+  })
+
+  it("fails closed when an update action reaches succeeded without an exact attachment operation", async () => {
+    const { db } = await createFixture()
+    const connection = await openConnection(db)
+    const run = await (
+      await createAgentInternalApi(db)
+    ).startRun({
+      grant: connection.grant,
+      clientMessageId: "malformed-update-operation",
+    })
+    const now = new Date()
+    const issueId = "malformed-update-issue"
+    await db.insert(schema.issues).values({
+      id: issueId,
+      organizationId: "asset-org-a",
+      number: 1,
+      title: "Malformed update target",
+      creatorId: "asset-user-a",
+      createdAt: now,
+      updatedAt: now,
+    })
+    const malformedPayloads = [
+      {
+        requestFingerprint: "missing-operation",
+        issueId,
+        expectedRevision: 1,
+      },
+      {
+        operation: null,
+        requestFingerprint: "null-operation",
+        issueId,
+        expectedRevision: 1,
+      },
+      {
+        operation: "add_attachments",
+        requestFingerprint: "missing-attachments",
+        issueId,
+        expectedRevision: 1,
+      },
+      {
+        operation: "add_attachments",
+        requestFingerprint: "null-attachments",
+        issueId,
+        expectedRevision: 1,
+        attachments: null,
+      },
+    ]
+
+    for (const [index, normalizedPayload] of malformedPayloads.entries()) {
+      const actionId = `malformed-update-action-${index}`
+      const storedPayload: typeof schema.agentActions.$inferInsert.normalizedPayload =
+        normalizedPayload
+      // oxlint-disable-next-line no-await-in-loop -- each malformed database transition is independently asserted.
+      await db.insert(schema.agentActions).values({
+        id: actionId,
+        organizationId: "asset-org-a",
+        threadId: "asset-thread-a",
+        runId: run.runId,
+        sessionId: "asset-session-a",
+        userId: "asset-user-a",
+        contextEpoch: 1,
+        toolCallId: `malformed-update-tool-${index}`,
+        kind: "update_issue",
+        normalizedPayload: storedPayload,
+        canonicalPreview: { title: "Malformed update" },
+        targetType: "issue",
+        targetId: issueId,
+        targetRevision: 1,
+        status: "pending",
+        idempotencyKey: `malformed-update-idempotency-${index}`,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: new Date(now.getTime() + 10 * 60_000),
+      })
+      // oxlint-disable-next-line no-await-in-loop -- the real pending-to-approved transition precedes each malformed completion attempt.
+      await db
+        .update(schema.agentRuns)
+        .set({ status: "waiting_approval" })
+        .where(eq(schema.agentRuns.id, run.runId))
+      // oxlint-disable-next-line no-await-in-loop -- the real pending-to-approved transition precedes each malformed completion attempt.
+      await db
+        .update(schema.agentActions)
+        .set({
+          status: "approved",
+          decisionProvenance: "manual",
+          decisionIdempotencyKey: `malformed-update-decision-${index}`,
+          decidedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(schema.agentActions.id, actionId))
+      // oxlint-disable-next-line no-await-in-loop -- each malformed database transition is independently asserted.
+      await expect(
+        db
+          .update(schema.agentActions)
+          .set({
+            status: "succeeded",
+            completedAt: now,
+            receipt: {
+              issueId,
+              number: 1,
+              revision: 1,
+              deleted: false,
+            },
+          })
+          .where(eq(schema.agentActions.id, actionId))
+      ).rejects.toMatchObject({
+        cause: {
+          message: expect.stringMatching(
+            /agent_action_(?:attachment_payload_mismatch|update_revision_mismatch)/
+          ),
+        },
+      })
+    }
+  })
+})
+
+describe("Agent asset private image and file lifecycle", () => {
   it("revalidates Issue image ownership, transforms privately, and consumes idempotent vision quota", async () => {
     const { db, now } = await createFixture()
     const storage = createRuntime()
@@ -204,6 +387,20 @@ describe("Agent asset Issue promotion and deletion", () => {
     const issueId = "promotion-audit-issue"
     const plannedFileId = "promotion-audit-file"
     const leaseExpiresAt = new Date(now.getTime() + 5 * 60_000)
+    await db.insert(schema.issues).values({
+      id: issueId,
+      organizationId: "asset-org-a",
+      number: 1,
+      title: "Issue from image",
+      description: "Generated description",
+      status: "open",
+      priority: "no_priority",
+      creatorId: "asset-user-a",
+      labels: ["Visual"],
+      dueDate: null,
+      createdAt: now,
+      updatedAt: now,
+    })
     await db.insert(schema.agentActions).values({
       id: actionId,
       organizationId: "asset-org-a",
@@ -213,11 +410,18 @@ describe("Agent asset Issue promotion and deletion", () => {
       userId: "asset-user-a",
       contextEpoch: 1,
       toolCallId: "promotion-audit-tool",
-      kind: "create_issue",
-      normalizedPayload: { title: "Issue from image" },
+      kind: "update_issue",
+      normalizedPayload: {
+        operation: "add_attachments",
+        requestFingerprint: "promotion-audit-fingerprint",
+        issueId,
+        expectedRevision: 1,
+        attachments: [{ assetId, fileId: plannedFileId }],
+      },
       canonicalPreview: { title: "Issue from image" },
       targetType: "issue",
       targetId: issueId,
+      targetRevision: 1,
       status: "pending",
       idempotencyKey: "promotion-audit-idempotency",
       createdAt: now,
@@ -245,21 +449,6 @@ describe("Agent asset Issue promotion and deletion", () => {
         updatedAt: decidedAt,
       })
       .where(eq(schema.agentActions.id, actionId))
-    await db.insert(schema.issues).values({
-      id: issueId,
-      organizationId: "asset-org-a",
-      number: 1,
-      title: "Issue from image",
-      description: "Generated description",
-      status: "open",
-      priority: "no_priority",
-      creatorId: "asset-user-a",
-      labels: ["Visual"],
-      dueDate: null,
-      createdAt: decidedAt,
-      updatedAt: decidedAt,
-    })
-
     await db.transaction((tx) =>
       promoteAgentAssetToIssueFileInTransaction(tx, {
         actionId,
@@ -271,6 +460,39 @@ describe("Agent asset Issue promotion and deletion", () => {
         plannedFileId,
       })
     )
+    const completedAt = new Date(decidedAt.getTime() + 2)
+    await db
+      .update(schema.issues)
+      .set({
+        description: "Generated description with attachment",
+        updatedAt: completedAt,
+      })
+      .where(eq(schema.issues.id, issueId))
+    await db
+      .update(schema.agentActions)
+      .set({
+        status: "succeeded",
+        resultId: issueId,
+        receipt: {
+          issueId,
+          number: 1,
+          revision: 2,
+          deleted: false,
+          attachmentMutation: {
+            operation: "added",
+            fileIds: [plannedFileId],
+          },
+        },
+        completedAt,
+        updatedAt: completedAt,
+      })
+      .where(eq(schema.agentActions.id, actionId))
+    expect(
+      await db
+        .select({ status: schema.agentActions.status })
+        .from(schema.agentActions)
+        .where(eq(schema.agentActions.id, actionId))
+    ).toEqual([{ status: "succeeded" }])
 
     expect(
       await db

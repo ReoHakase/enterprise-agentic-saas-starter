@@ -14,6 +14,8 @@ export {
 export type { FileDto } from "./model"
 export { getFileOwnerAdapter } from "./owner-adapters"
 export { listReadyFilesByOwner } from "./repository"
+export { deleteReadyFilesInTransaction } from "./repository"
+export type { FileWithOwner } from "./repository"
 /** @internal */
 export {
   configureFileStorageRuntime,

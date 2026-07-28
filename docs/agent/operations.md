@@ -13,6 +13,10 @@ last_reviewed: 2026-07-28
 
 Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true`、未知値をfail closedにします。local API supervisorは`bun run dev`時だけ`AGENT_ASSET_UPLOAD_ENABLED`未設定を`1`へ補い、明示値は尊重します。disabledとprovider/API障害は別のsafe toastにし、raw responseを表示しません。DB schema変更はDrizzle migrationを生成して適用し、通常起動でpush/resetしません。
 
+`NODE_ENV=development`のAgent processだけは、modelとWeb検索providerのraw `Error`および最大8段の
+cause chainをlocal consoleへ出します。公開HTTP response、Mastra Memory、workflow snapshot、
+Sentry、trace、paid test artifactへは転送しません。productionとtestではこの出力を無効にします。
+
 ## Paid test secret
 
 `OPENROUTER_API_KEY`はgitignore済みの`apps/agent/.env.local`またはGitHub Actionsのprotected

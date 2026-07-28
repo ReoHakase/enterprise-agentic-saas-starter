@@ -7,17 +7,81 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AgentApprovalCard } from "./components/agent-approval-card/agent-approval-card"
 import { AgentConversationViewport } from "./components/agent-conversation-viewport/agent-conversation-viewport"
+import { AgentConversation } from "./components/agent-conversation/agent-conversation"
+import { AgentMessage } from "./components/agent-message/agent-message"
 import {
   AgentNewThreadComposer,
   type AgentNewThreadInput,
 } from "./components/agent-new-thread-composer/agent-new-thread-composer"
 import { AgentSamplePrompts } from "./components/agent-sample-prompts/agent-sample-prompts"
-import type { AgentIssueAction } from "./schema"
-import { agentConversationTurns } from "./test-support/fixtures"
+import type { AgentChatMessage, AgentIssueAction, AgentThread } from "./schema"
+import {
+  AgentStoryScope,
+  agentConversationTurns,
+} from "./test-support/fixtures"
 
 const conversationTurns = [...agentConversationTurns]
 const organizationId = "organization-1"
 const timestamp = "2026-07-25T09:00:00.000Z"
+const toolFailureThread = {
+  id: "thread-tool-failure",
+  title: "Tool failure",
+  status: "active",
+  createdAt: timestamp,
+  updatedAt: timestamp,
+} satisfies AgentThread
+const attachmentReceiptMessage = {
+  id: "assistant-attachment-receipt",
+  role: "assistant",
+  parts: [
+    {
+      type: "tool-remove_issue_attachments",
+      toolCallId: "call-remove-attachment",
+      state: "output-available",
+      input: {
+        expectedRevision: 4,
+        fileIds: ["private-file-id"],
+        issueId: "private-issue-id",
+      },
+      output: {
+        actionId: "private-action-id",
+        operation: "removed",
+        issueId: "private-issue-id",
+        issueNumber: 184,
+        revision: 5,
+        fileIds: ["private-file-id"],
+      },
+    },
+  ],
+} satisfies AgentChatMessage
+const canonicalWebSearchMessage = {
+  id: "assistant-web-search",
+  role: "assistant",
+  parts: [
+    {
+      type: "tool-web_search",
+      toolCallId: "call-web-search",
+      state: "output-available",
+      input: { query: "Cloudflare Workers compatibility flags" },
+      output: {
+        content: "Cloudflare Workers compatibility flags documentation.",
+        sources: [
+          {
+            title: "Cloudflare Workers compatibility flags",
+            url: "https://developers.cloudflare.com/workers/configuration/compatibility-flags/",
+          },
+        ],
+        trust: "untrusted_public_web_content",
+      },
+    },
+    {
+      type: "source-url",
+      sourceId: "source-web-search",
+      title: "Cloudflare Workers compatibility flags",
+      url: "https://developers.cloudflare.com/workers/configuration/compatibility-flags/",
+    },
+  ],
+} satisfies AgentChatMessage
 
 type RecordedRequest = {
   method: string
@@ -37,6 +101,7 @@ const createAction = (
   preview: {
     kind: "create_issue",
     destructive: false,
+    attachmentOperation: null,
     title: `Approval ${actionId}`,
     issueNumber: null,
     issueRevision: null,
@@ -103,6 +168,64 @@ const installApiTransport = (
     ) {
       return Response.json([])
     }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/agent/threads/thread-tool-failure/messages"
+    ) {
+      return Response.json({
+        messages: [
+          {
+            id: "assistant-tool-failure",
+            role: "assistant",
+            parts: [
+              {
+                type: "tool-get_issue",
+                toolCallId: "call-failed",
+                state: "output-error",
+                errorText: "Agent tool execution failed.",
+              },
+              {
+                type: "tool-update_issue",
+                toolCallId: "call-denied",
+                state: "approval-responded",
+                input: {
+                  expectedRevision: 1,
+                  issueId: "issue-7",
+                  title: "Declined title",
+                },
+                approval: {
+                  id: "approval-1",
+                  approved: false,
+                  reason: "Denied",
+                },
+              },
+            ],
+          },
+        ],
+        total: 1,
+        page: 0,
+        perPage: 100,
+        hasMore: false,
+      })
+    }
+    if (
+      request.method === "GET" &&
+      url.pathname === "/agent/threads/thread-tool-failure/permission"
+    ) {
+      return Response.json({
+        mode: "ask_always",
+        permissions: {
+          createIssue: false,
+          updateIssue: false,
+          deleteIssue: false,
+        },
+      })
+    }
+    if (request.method === "POST" && url.pathname === "/agent/chat") {
+      return new Response("data: [DONE]\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      })
+    }
 
     const actionMatch =
       /^\/agent\/actions\/([^/]+)(?:\/(decision|resume))?$/u.exec(url.pathname)
@@ -168,6 +291,105 @@ afterEach(() => {
 })
 
 describe("Agent chat browser integration", () => {
+  it("keeps the composer usable after a server tool-local failure", async () => {
+    const { requests } = installApiTransport()
+    const actor = userEvent.setup()
+    const onAutoSubmit = vi.fn<() => void>()
+    const onInitialComposerSnapshotConsumed =
+      vi.fn<(threadId: string) => void>()
+    renderAgentUi(
+      <AgentStoryScope>
+        <AgentConversation
+          organizationId={organizationId}
+          organizationSlug="acme"
+          thread={toolFailureThread}
+          presentation="page"
+          disabled={false}
+          autoSubmit={false}
+          onAutoSubmit={onAutoSubmit}
+          onInitialComposerSnapshotConsumed={onInitialComposerSnapshotConsumed}
+        />
+      </AgentStoryScope>
+    )
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "get issue · failed"
+    )
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "update issue · denied"
+    )
+    const composer = screen.getByRole("textbox", { name: "Agent message" })
+    await actor.click(composer)
+    const typeCommittedText = async (
+      text: string,
+      committedText = composer.textContent ?? ""
+    ): Promise<void> => {
+      const [character, ...remainingCharacters] = Array.from(text)
+      if (!character) return
+      const nextCommittedText = `${committedText}${character}`
+      await actor.keyboard(character)
+      await waitFor(() => expect(composer.textContent).toBe(nextCommittedText))
+      await typeCommittedText(remainingCharacters.join(""), nextCommittedText)
+    }
+    await typeCommittedText("Continue after failure")
+    await actor.click(screen.getByRole("button", { name: "Send" }))
+    await waitFor(() =>
+      expect(
+        requests.filter(
+          ({ method, path }) => method === "POST" && path === "/agent/chat"
+        )
+      ).toHaveLength(1)
+    )
+    expect(
+      requests.find(
+        ({ method, path }) => method === "POST" && path === "/agent/chat"
+      )?.body
+    ).toMatchObject({
+      threadId: "thread-tool-failure",
+      contentSegments: [{ type: "text", text: "Continue after failure" }],
+    })
+  })
+
+  it("renders a bounded attachment receipt without exposing opaque IDs", () => {
+    const onPendingChange = vi.fn<(id: string, pending: boolean) => void>()
+    renderAgentUi(
+      <AgentMessage
+        frozen={false}
+        message={attachmentReceiptMessage}
+        organizationId={organizationId}
+        organizationSlug="acme"
+        onPendingChange={onPendingChange}
+      />
+    )
+
+    expect(screen.getByText(/Removed 1 attachment/u)).toHaveTextContent(
+      "Removed 1 attachment on Issue #184 at revision 5."
+    )
+    expect(screen.getByRole("link", { name: "Issue #184" })).toHaveAttribute(
+      "href",
+      "/organization/acme/issues/184"
+    )
+    expect(screen.queryByText(/private-file-id|private-issue-id/u)).toBeNull()
+  })
+
+  it("renders a canonical Web source once after reload", () => {
+    renderAgentUi(
+      <AgentMessage
+        frozen={false}
+        message={canonicalWebSearchMessage}
+        organizationId={organizationId}
+        organizationSlug="acme"
+        onPendingChange={vi.fn<(id: string, pending: boolean) => void>()}
+      />
+    )
+
+    expect(
+      screen.getAllByRole("link", {
+        name: "Cloudflare Workers compatibility flags",
+      })
+    ).toHaveLength(1)
+  })
+
   it("hands off a real inline mention with the default Ask always policy", async () => {
     const { requests } = installApiTransport()
     const actor = userEvent.setup()

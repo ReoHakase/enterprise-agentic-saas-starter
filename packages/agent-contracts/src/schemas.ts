@@ -149,17 +149,34 @@ export const getIssueToolInputSchema = v.variant("lookup", [
   }),
 ])
 
-export const agentAttachmentMutationReceiptSchema = v.strictObject({
-  operation: v.picklist(["added", "removed"]),
+const attachmentReceiptBaseEntries = {
+  actionId: agentIdentifierSchema,
   issueId: agentIdentifierSchema,
   issueNumber: agentPositiveIntegerSchema,
   revision: agentPositiveIntegerSchema,
-  fileIds: v.pipe(
-    v.array(agentIdentifierSchema),
-    v.minLength(1),
-    v.maxLength(20)
-  ),
-})
+}
+export const agentAttachmentMutationReceiptSchema = v.variant("operation", [
+  v.strictObject({
+    ...attachmentReceiptBaseEntries,
+    operation: v.literal("added"),
+    fileIds: v.pipe(
+      v.array(agentIdentifierSchema),
+      v.minLength(1),
+      v.maxLength(4),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+  v.strictObject({
+    ...attachmentReceiptBaseEntries,
+    operation: v.literal("removed"),
+    fileIds: v.pipe(
+      v.array(agentIdentifierSchema),
+      v.minLength(1),
+      v.maxLength(20),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+])
 
 const capabilitySchema = v.pipe(
   v.string(),
@@ -182,6 +199,11 @@ const agentActionLabelsSchema = v.pipe(
 const boundedStringArraySchema = v.pipe(
   v.array(v.pipe(v.string(), v.maxLength(500))),
   v.maxLength(20)
+)
+const attachmentFilenameSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(255)
 )
 
 export const agentConnectionSchema = v.strictObject({
@@ -272,17 +294,43 @@ export const agentCreateIssueActionInputSchema = v.strictObject({
   ),
 })
 
-export const agentUpdateIssueActionInputSchema = v.strictObject({
+const agentUpdateIssueActionBaseEntries = {
   issueId: agentIdentifierSchema,
   expectedRevision: agentPositiveIntegerSchema,
-  title: v.optional(agentActionTitleSchema),
-  description: v.optional(boundedStringSchema),
-  status: v.optional(agentIssueStatusSchema),
-  priority: v.optional(agentIssuePrioritySchema),
-  assigneeId: v.optional(v.nullable(agentIdentifierSchema)),
-  labels: v.optional(agentActionLabelsSchema),
-  dueDate: v.optional(v.nullable(agentIsoTimestampSchema)),
-})
+}
+export const agentUpdateIssueActionInputSchema = v.union([
+  v.strictObject({
+    ...agentUpdateIssueActionBaseEntries,
+    operation: v.optional(v.literal("fields")),
+    title: v.optional(agentActionTitleSchema),
+    description: v.optional(boundedStringSchema),
+    status: v.optional(agentIssueStatusSchema),
+    priority: v.optional(agentIssuePrioritySchema),
+    assigneeId: v.optional(v.nullable(agentIdentifierSchema)),
+    labels: v.optional(agentActionLabelsSchema),
+    dueDate: v.optional(v.nullable(agentIsoTimestampSchema)),
+  }),
+  v.strictObject({
+    ...agentUpdateIssueActionBaseEntries,
+    operation: v.literal("add_attachments"),
+    attachmentAssetIds: v.pipe(
+      v.array(agentIdentifierSchema),
+      v.minLength(1),
+      v.maxLength(4),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+  v.strictObject({
+    ...agentUpdateIssueActionBaseEntries,
+    operation: v.literal("remove_attachments"),
+    attachmentFileIds: v.pipe(
+      v.array(agentIdentifierSchema),
+      v.minLength(1),
+      v.maxLength(20),
+      v.checkItems((item, index, array) => array.indexOf(item) === index)
+    ),
+  }),
+])
 
 export const agentDeleteIssueActionInputSchema = v.strictObject({
   issueId: agentIdentifierSchema,
@@ -298,6 +346,7 @@ const agentIssueActionPreviewValueSchema = v.union([
 export const agentIssueActionPreviewSchema = v.strictObject({
   kind: agentIssueActionKindSchema,
   destructive: v.boolean(),
+  attachmentOperation: v.nullable(v.picklist(["add", "remove"])),
   title: agentTitleSchema,
   issueNumber: v.nullable(agentPositiveIntegerSchema),
   issueRevision: v.nullable(agentPositiveIntegerSchema),
@@ -321,11 +370,20 @@ export const agentIssueActionPreviewSchema = v.strictObject({
   ),
   attachments: v.pipe(
     v.array(
-      v.strictObject({
-        assetId: agentIdentifierSchema,
-        filename: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
-        sizeBytes: agentNonNegativeIntegerSchema,
-      })
+      v.variant("source", [
+        v.strictObject({
+          source: v.literal("asset"),
+          assetId: agentIdentifierSchema,
+          filename: attachmentFilenameSchema,
+          sizeBytes: agentNonNegativeIntegerSchema,
+        }),
+        v.strictObject({
+          source: v.literal("file"),
+          fileId: agentIdentifierSchema,
+          filename: attachmentFilenameSchema,
+          sizeBytes: agentNonNegativeIntegerSchema,
+        }),
+      ])
     ),
     v.maxLength(20)
   ),
@@ -351,6 +409,29 @@ export const agentIssueActionSchema = v.strictObject({
   completedAt: v.nullable(agentIsoTimestampSchema),
 })
 
+const addedAttachmentFileIdsSchema = v.pipe(
+  v.array(agentIdentifierSchema),
+  v.minLength(1),
+  v.maxLength(4),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const removedAttachmentFileIdsSchema = v.pipe(
+  v.array(agentIdentifierSchema),
+  v.minLength(1),
+  v.maxLength(20),
+  v.checkItems((item, index, array) => array.indexOf(item) === index)
+)
+const attachmentMutationSchema = v.variant("operation", [
+  v.strictObject({
+    operation: v.literal("added"),
+    fileIds: addedAttachmentFileIdsSchema,
+  }),
+  v.strictObject({
+    operation: v.literal("removed"),
+    fileIds: removedAttachmentFileIdsSchema,
+  }),
+])
+
 export const agentActionExecutionResultSchema = v.strictObject({
   actionId: agentIdentifierSchema,
   kind: agentIssueActionKindSchema,
@@ -360,6 +441,7 @@ export const agentActionExecutionResultSchema = v.strictObject({
     number: agentPositiveIntegerSchema,
     revision: agentPositiveIntegerSchema,
     deleted: v.boolean(),
+    attachmentMutation: v.optional(attachmentMutationSchema),
   }),
 })
 
@@ -423,63 +505,3 @@ export const agentIssueListSchema = v.pipe(
   v.array(agentIssueSchema),
   v.maxLength(50)
 )
-
-export type AgentAccountContext = v.InferOutput<
-  typeof agentAccountContextSchema
->
-export type AgentOrganizationContext = v.InferOutput<
-  typeof agentOrganizationContextSchema
->
-export type AgentMember = v.InferOutput<typeof agentMemberSchema>
-export type AgentIssueLabel = v.InferOutput<typeof agentIssueLabelSchema>
-export type AgentIssue = v.InferOutput<typeof agentIssueSchema>
-export type AgentIssueAttachment = v.InferOutput<
-  typeof agentIssueAttachmentSchema
->
-export type AgentIssueDetail = v.InferOutput<typeof agentIssueDetailSchema>
-export type GetIssueToolInput = v.InferOutput<typeof getIssueToolInputSchema>
-export type AgentAttachmentMutationReceipt = v.InferOutput<
-  typeof agentAttachmentMutationReceiptSchema
->
-export type AgentConnection = v.InferOutput<typeof agentConnectionSchema>
-export type AgentRunGrant = v.InferOutput<typeof agentRunGrantSchema>
-export type AgentRunResult = v.InferOutput<typeof agentRunResultSchema>
-export type AgentWebSearchReservation = v.InferOutput<
-  typeof agentWebSearchReservationSchema
->
-export type AgentGuardedWebSearchQuery = v.InferOutput<
-  typeof agentGuardedWebSearchQuerySchema
->
-export type AgentUsageRecordInput = v.InferOutput<
-  typeof agentUsageRecordInputSchema
->
-export type AgentUsageRecordResult = v.InferOutput<
-  typeof agentUsageRecordResultSchema
->
-export type AgentIssueActionKind = v.InferOutput<
-  typeof agentIssueActionKindSchema
->
-export type AgentCreateIssueActionInput = v.InferOutput<
-  typeof agentCreateIssueActionInputSchema
->
-export type AgentUpdateIssueActionInput = v.InferOutput<
-  typeof agentUpdateIssueActionInputSchema
->
-export type AgentDeleteIssueActionInput = v.InferOutput<
-  typeof agentDeleteIssueActionInputSchema
->
-export type AgentIssueActionPreview = v.InferOutput<
-  typeof agentIssueActionPreviewSchema
->
-export type AgentIssueAction = v.InferOutput<typeof agentIssueActionSchema>
-export type AgentActionExecutionResult = v.InferOutput<
-  typeof agentActionExecutionResultSchema
->
-export type AgentApprovalPolicy = v.InferOutput<
-  typeof agentApprovalPolicySchema
->
-export type AgentResumeTicket = v.InferOutput<typeof agentResumeTicketSchema>
-export type AgentSearchIssuesInput = v.InferOutput<
-  typeof agentSearchIssuesInputSchema
->
-export type AgentGetIssueInput = v.InferOutput<typeof agentGetIssueInputSchema>

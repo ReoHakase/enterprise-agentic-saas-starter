@@ -192,6 +192,18 @@ describe("mutual Worker Service Binding deployment", () => {
     ])
     expect(bootstrapConfig).toEqual(finalConfigWithoutServices)
     expect(bootstrapConfig).not.toHaveProperty("services")
+    expect(finalConfig.compatibility_flags).toEqual([
+      "nodejs_compat",
+      "enable_request_signal",
+      "request_signal_passthrough",
+    ])
+    expect(agentConfig.compatibility_flags).toEqual([
+      "nodejs_compat",
+      "enable_request_signal",
+    ])
+    expect(agentConfig.compatibility_flags).not.toContain(
+      "request_signal_passthrough"
+    )
     expect(agentConfig.services).toEqual([
       {
         binding: "AGENT_INTERNAL_API",

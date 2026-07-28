@@ -194,7 +194,7 @@ test("agent-canary-read-source", async ({ context, page }) => {
     )
     .toContain("web_search:output-available")
   await expect(
-    harness.agentShell.getByText(/web search · output available/u).last()
+    harness.agentShell.getByText(/web search · completed/u).last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
     assistantArticles(harness.agentShell)
@@ -210,7 +210,7 @@ test("agent-canary-read-source", async ({ context, page }) => {
   )
   await expect(
     harness.agentShell
-      .getByText(/(?:get issue|search issues) · output available/u)
+      .getByText(/(?:get issue|search issues) · completed/u)
       .last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
@@ -250,7 +250,7 @@ test("agent-canary-approved-image-write", async ({ context, page }) => {
     ].join("\n")
   )
   await expect(
-    harness.agentShell.getByText(/web search · output available/u).last()
+    harness.agentShell.getByText(/web search · completed/u).last()
   ).toBeVisible({ timeout: 120_000 })
   await expect(
     harness.agentShell.getByText("Approve Issue change?").last()

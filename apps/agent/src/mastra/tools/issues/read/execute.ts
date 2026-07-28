@@ -1,4 +1,6 @@
 import type {
+  ReadIssueAttachmentImageToolInput as AgentIssueAttachmentImageInput,
+  ReadIssueAttachmentImageToolResult as AgentIssueAttachmentImageResult,
   AgentIssue,
   AgentSearchIssuesInput,
   GetIssueToolInput,
@@ -14,12 +16,7 @@ import {
 import type { AgentVisionBudget } from "../../../core/budget/vision"
 import { readBoundedPrivateImage } from "../../../core/messages/chat-input"
 import type { AgentControlPlanePort } from "../../../runtime/ports"
-import type {
-  AgentIssueAttachmentImageInput,
-  AgentIssueAttachmentImageResult,
-} from "./schema"
-
-export type { AgentIssueAttachmentImageResult } from "./schema"
+export type { ReadIssueAttachmentImageToolResult as AgentIssueAttachmentImageResult } from "@enterprise-agentic-saas/agent-contracts"
 
 type AgentReadApi = Pick<
   AgentControlPlanePort,

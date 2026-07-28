@@ -1,0 +1,368 @@
+import * as schema from "@enterprise-agentic-saas/db/schema"
+import { and, eq, isNull } from "drizzle-orm"
+import { describe, expect, it, vi } from "vitest"
+
+import { createFixture, request } from "./agent.test-support"
+import { createAgentInternalApi } from "./module"
+import { configureAgentRuntime } from "./runtime"
+import {
+  createAgentThreadForSession,
+  issueAgentConnectionTicket,
+} from "./threads/repository"
+
+describe("public Agent run cancellation", () => {
+  it("returns the committed cancellation when the Agent runtime never responds", async () => {
+    vi.useFakeTimers()
+    try {
+      const { app, db } = await createFixture()
+      const thread = await createAgentThreadForSession(db, {
+        sessionId: "agent-session-a",
+        title: "Runtime cancellation timeout",
+        userId: "agent-user-a",
+      })
+      const ticket = await issueAgentConnectionTicket(db, {
+        sessionId: "agent-session-a",
+        threadId: thread.id,
+        userId: "agent-user-a",
+      })
+      const internal = createAgentInternalApi(db)
+      const connection = await internal.consumeConnectionTicket({
+        threadId: thread.id,
+        ticket: ticket.ticket,
+      })
+      const run = await internal.startRun({
+        clientMessageId: "runtime-cancel-timeout",
+        grant: connection.grant,
+      })
+      const action = await internal.prepareCreateIssue({
+        grant: run.grant,
+        toolCallId: "tool-runtime-cancel-timeout",
+        idempotencyKey: "prepare-runtime-cancel-timeout",
+        issue: { title: "Canceled before execution" },
+      })
+      expect(action.status).toBe("pending")
+
+      let markRuntimeFetchStarted: (() => void) | undefined
+      const runtimeFetchStarted = new Promise<void>((resolve) => {
+        markRuntimeFetchStarted = resolve
+      })
+      configureAgentRuntime({
+        fetch: () => {
+          markRuntimeFetchStarted?.()
+          return new Promise<Response>(() => undefined)
+        },
+      })
+
+      let responseSettled = false
+      const responsePromise = app
+        .handle(
+          request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
+            method: "POST",
+          })
+        )
+        .then((response) => {
+          responseSettled = true
+          return response
+        })
+      await runtimeFetchStarted
+
+      await vi.advanceTimersByTimeAsync(999)
+      expect(responseSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const response = await responsePromise
+
+      expect(response.status).toBe(200)
+      await expect(response.json()).resolves.toEqual({
+        runId: run.runId,
+        status: "canceled",
+      })
+      const [storedRun] = await db
+        .select({ status: schema.agentRuns.status })
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.id, run.runId))
+      expect(storedRun).toEqual({ status: "canceled" })
+      const [storedAction] = await db
+        .select({ status: schema.agentActions.status })
+        .from(schema.agentActions)
+        .where(eq(schema.agentActions.id, action.id))
+      expect(storedAction).toEqual({ status: "canceled" })
+      const liveGrants = await db
+        .select({ id: schema.agentGrants.id })
+        .from(schema.agentGrants)
+        .where(
+          and(
+            eq(schema.agentGrants.runId, run.runId),
+            isNull(schema.agentGrants.revokedAt)
+          )
+        )
+      expect(liveGrants).toEqual([])
+
+      const nextTicket = await issueAgentConnectionTicket(db, {
+        sessionId: "agent-session-a",
+        threadId: thread.id,
+        userId: "agent-user-a",
+      })
+      const nextConnection = await internal.consumeConnectionTicket({
+        threadId: thread.id,
+        ticket: nextTicket.ticket,
+      })
+      await expect(
+        internal.startRun({
+          clientMessageId: "after-runtime-cancel-timeout",
+          grant: nextConnection.grant,
+        })
+      ).resolves.toMatchObject({ attempt: 1 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("converges a real finish-versus-cancel race to one terminal status and one usage event", async () => {
+    const { db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Finish cancel race",
+      userId: "agent-user-a",
+    })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const internal = createAgentInternalApi(db)
+    const connection = await internal.consumeConnectionTicket({
+      threadId: thread.id,
+      ticket: ticket.ticket,
+    })
+    const run = await internal.startRun({
+      clientMessageId: "finish-cancel-race",
+      grant: connection.grant,
+    })
+    const results = await Promise.allSettled([
+      internal.finishRun({ grant: run.grant, outcome: "completed" }),
+      internal.cancelRun({ grant: run.grant }),
+    ])
+
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "rejected")
+    ).toHaveLength(1)
+    const [stored] = await db
+      .select({ status: schema.agentRuns.status })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.runId))
+    expect(["completed", "canceled"]).toContain(stored?.status)
+    const liveGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, run.runId),
+          isNull(schema.agentGrants.revokedAt)
+        )
+      )
+    expect(liveGrants).toEqual([])
+
+    const usage = {
+      grant: run.grant,
+      provider: "openrouter" as const,
+      model: "test/model",
+      inputTokenCount: 10,
+      inputNoCacheTokenCount: 10,
+      cacheReadTokenCount: 0,
+      cacheWriteTokenCount: 0,
+      outputTokenCount: 5,
+      textOutputTokenCount: 5,
+      reasoningTokenCount: 0,
+      totalTokenCount: 15,
+      imageInputCount: 0,
+      durationMs: 100,
+      runEventId: "race_attempt_1",
+    }
+    await expect(internal.recordUsage(usage)).resolves.toMatchObject({
+      recorded: true,
+    })
+    await expect(internal.recordUsage(usage)).resolves.toMatchObject({
+      recorded: false,
+    })
+  })
+
+  it("never downgrades completed or failed runs and replays canceled runs", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Terminal cancel race",
+      userId: "agent-user-a",
+    })
+    const internal = createAgentInternalApi(db)
+    const start = async (clientMessageId: string) => {
+      const ticket = await issueAgentConnectionTicket(db, {
+        sessionId: "agent-session-a",
+        threadId: thread.id,
+        userId: "agent-user-a",
+      })
+      const connection = await internal.consumeConnectionTicket({
+        threadId: thread.id,
+        ticket: ticket.ticket,
+      })
+      return internal.startRun({ clientMessageId, grant: connection.grant })
+    }
+
+    for (const outcome of ["completed", "failed"] as const) {
+      // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
+      const run = await start(`terminal-${outcome}`)
+      // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
+      await internal.finishRun({ grant: run.grant, outcome })
+      // oxlint-disable-next-line no-await-in-loop -- the public replay must observe the committed terminal status.
+      const response = await app.handle(
+        request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
+          method: "POST",
+        })
+      )
+      // oxlint-disable-next-line no-await-in-loop -- response bodies are consumed per terminal replay.
+      await expect(response.json()).resolves.toEqual({
+        runId: run.runId,
+        status: outcome,
+      })
+      // oxlint-disable-next-line no-await-in-loop -- a different internal terminal transition must conflict.
+      await expect(
+        internal.cancelRun({ grant: run.grant })
+      ).rejects.toMatchObject({ code: "conflict" })
+      // oxlint-disable-next-line no-await-in-loop -- verify the cancel request did not downgrade the row.
+      const [stored] = await db
+        .select({ status: schema.agentRuns.status })
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.id, run.runId))
+      expect(stored?.status).toBe(outcome)
+    }
+
+    const canceled = await start("terminal-canceled")
+    await expect(
+      internal.cancelRun({ grant: canceled.grant })
+    ).resolves.toEqual({
+      runId: canceled.runId,
+      status: "canceled",
+    })
+    await expect(
+      internal.cancelRun({ grant: canceled.grant })
+    ).resolves.toEqual({
+      runId: canceled.runId,
+      status: "canceled",
+    })
+    const replay = await app.handle(
+      request(`/agent/threads/${thread.id}/runs/${canceled.runId}/cancel`, {
+        method: "POST",
+      })
+    )
+    expect(await replay.json()).toEqual({
+      runId: canceled.runId,
+      status: "canceled",
+    })
+  })
+
+  it("authorizes ownership, converges idempotently, and does not refund usage", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Cancel",
+      userId: "agent-user-a",
+    })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const internal = createAgentInternalApi(db)
+    const connection = await internal.consumeConnectionTicket({
+      threadId: thread.id,
+      ticket: ticket.ticket,
+    })
+    const run = await internal.startRun({
+      clientMessageId: "cancel_message_1",
+      grant: connection.grant,
+    })
+    const path = `/agent/threads/${thread.id}/runs/${run.runId}/cancel`
+
+    const denied = await app.handle(
+      request(path, {
+        method: "POST",
+        sessionId: "agent-session-b",
+        userId: "agent-user-b",
+      })
+    )
+    expect(denied.status).toBe(404)
+
+    const first = await app.handle(request(path, { method: "POST" }))
+    expect(first.status).toBe(200)
+    expect(await first.json()).toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+    const repeated = await app.handle(request(path, { method: "POST" }))
+    expect(await repeated.json()).toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+
+    const [storedRun] = await db
+      .select({ status: schema.agentRuns.status })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.runId))
+    expect(storedRun).toEqual({ status: "canceled" })
+    const liveGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, run.runId),
+          isNull(schema.agentGrants.revokedAt)
+        )
+      )
+    expect(liveGrants).toEqual([])
+    const usageInput = {
+      grant: run.grant,
+      provider: "openrouter" as const,
+      model: "test/model",
+      inputTokenCount: 10,
+      inputNoCacheTokenCount: 10,
+      cacheReadTokenCount: 0,
+      cacheWriteTokenCount: 0,
+      outputTokenCount: 5,
+      textOutputTokenCount: 5,
+      reasoningTokenCount: 0,
+      totalTokenCount: 15,
+      imageInputCount: 0,
+      durationMs: 100,
+      runEventId: "attempt_1",
+    }
+    await expect(internal.recordUsage(usageInput)).resolves.toMatchObject({
+      recorded: true,
+    })
+    await expect(internal.recordUsage(usageInput)).resolves.toMatchObject({
+      recorded: false,
+    })
+    const modelBuckets = await db
+      .select({ count: schema.agentResourceUsageBuckets.count })
+      .from(schema.agentResourceUsageBuckets)
+      .where(eq(schema.agentResourceUsageBuckets.kind, "model_run"))
+    expect(modelBuckets).toEqual([{ count: 1 }, { count: 1 }])
+
+    const nextTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const nextConnection = await internal.consumeConnectionTicket({
+      threadId: thread.id,
+      ticket: nextTicket.ticket,
+    })
+    await expect(
+      internal.startRun({
+        clientMessageId: "cancel_message_2",
+        grant: nextConnection.grant,
+      })
+    ).resolves.toMatchObject({ attempt: 1 })
+  })
+})

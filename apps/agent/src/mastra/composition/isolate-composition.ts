@@ -3,18 +3,20 @@ import { createAgentRuntimeComposition } from "./runtime-composition"
 
 type AgentRuntimeComposition = ReturnType<typeof createAgentRuntimeComposition>
 
-const createAgentIsolateComposition = () => {
+export const createAgentIsolateCompositionCache = <Composition>(
+  createComposition: (environment: AgentRuntimeEnv) => Composition
+) => {
   let cached:
     | {
         authToken?: string
-        composition: AgentRuntimeComposition
+        composition: Composition
         modelApiKey?: string
         modelBaseUrl?: string
         storageUrl?: string
       }
     | undefined
 
-  return (environment: AgentRuntimeEnv): AgentRuntimeComposition => {
+  return (environment: AgentRuntimeEnv): Composition => {
     if (cached) {
       if (
         cached.authToken !== environment.MASTRA_STORAGE_AUTH_TOKEN ||
@@ -26,7 +28,7 @@ const createAgentIsolateComposition = () => {
       }
       return cached.composition
     }
-    const composition = createAgentRuntimeComposition(environment)
+    const composition = createComposition(environment)
     cached = {
       authToken: environment.MASTRA_STORAGE_AUTH_TOKEN,
       composition,
@@ -38,4 +40,7 @@ const createAgentIsolateComposition = () => {
   }
 }
 
-export const getAgentIsolateComposition = createAgentIsolateComposition()
+export const getAgentIsolateComposition =
+  createAgentIsolateCompositionCache<AgentRuntimeComposition>(
+    createAgentRuntimeComposition
+  )

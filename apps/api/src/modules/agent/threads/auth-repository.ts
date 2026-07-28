@@ -5,8 +5,6 @@ import {
   agentThreads,
   member,
   session,
-  type AgentRunScope,
-  type AgentRunStatus,
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt, isNull } from "drizzle-orm"
 
@@ -107,6 +105,78 @@ export const requireOwnedThread = async (
   return thread
 }
 
+type GrantRunIdentity = Pick<
+  typeof agentGrants.$inferSelect,
+  | "contextEpoch"
+  | "organizationId"
+  | "revokedAt"
+  | "runId"
+  | "sessionId"
+  | "threadId"
+  | "userId"
+>
+
+type GrantRunContext = Pick<
+  ValidGrant,
+  "resumedActionId" | "rootRunId" | "runScope" | "runStatus"
+>
+
+const validateRunGrantInTransaction = async (
+  tx: AgentTransaction,
+  grant: GrantRunIdentity,
+  input: {
+    allowRevokedTerminalRun?: boolean
+    allowTerminalRun?: boolean
+    now: Date
+  }
+): Promise<GrantRunContext> => {
+  if (!grant.runId) {
+    throw publicErrors.unauthorized("Agent capability is invalid")
+  }
+  const runRows = await tx
+    .select({
+      status: agentRuns.status,
+      scope: agentRuns.scope,
+      rootRunId: agentRuns.rootRunId,
+      resumedActionId: agentRuns.resumedActionId,
+    })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.id, grant.runId),
+        eq(agentRuns.organizationId, grant.organizationId),
+        eq(agentRuns.threadId, grant.threadId),
+        eq(agentRuns.sessionId, grant.sessionId),
+        eq(agentRuns.userId, grant.userId),
+        eq(agentRuns.contextEpoch, grant.contextEpoch),
+        gt(agentRuns.expiresAt, input.now)
+      )
+    )
+    .limit(1)
+  const run = runRows[0]
+  if (!run) {
+    throw publicErrors.unauthorized("Agent capability is invalid")
+  }
+  const active = run.status === "running" || run.status === "waiting_approval"
+  if (!input.allowTerminalRun && !active) {
+    throw publicErrors.conflict("Agent run is no longer active", {
+      resource: "agent_run",
+    })
+  }
+  if (
+    grant.revokedAt !== null &&
+    (!input.allowTerminalRun || !input.allowRevokedTerminalRun || active)
+  ) {
+    throw publicErrors.unauthorized("Agent capability is invalid")
+  }
+  return {
+    runStatus: run.status,
+    runScope: run.scope,
+    rootRunId: run.rootRunId,
+    resumedActionId: run.resumedActionId,
+  }
+}
+
 export const validateGrantInTransaction = async (
   tx: AgentTransaction,
   input: {
@@ -114,19 +184,27 @@ export const validateGrantInTransaction = async (
     kind: "connection" | "run"
     now: Date
     allowTerminalRun?: boolean
+    allowRevokedTerminalRun?: boolean
   }
 ): Promise<ValidGrant> => {
+  if (
+    input.allowRevokedTerminalRun &&
+    (input.kind !== "run" || !input.allowTerminalRun)
+  ) {
+    throw new Error("Revoked grant validation requires a terminal run")
+  }
+  const grantConditions = [
+    eq(agentGrants.tokenHash, input.tokenHash),
+    eq(agentGrants.kind, input.kind),
+    gt(agentGrants.expiresAt, input.now),
+  ]
+  if (!input.allowRevokedTerminalRun) {
+    grantConditions.push(isNull(agentGrants.revokedAt))
+  }
   const grantRows = await tx
     .select()
     .from(agentGrants)
-    .where(
-      and(
-        eq(agentGrants.tokenHash, input.tokenHash),
-        eq(agentGrants.kind, input.kind),
-        isNull(agentGrants.revokedAt),
-        gt(agentGrants.expiresAt, input.now)
-      )
-    )
+    .where(and(...grantConditions))
     .limit(1)
   const grant = grantRows[0]
   if (!grant) throw publicErrors.unauthorized("Agent capability is invalid")
@@ -166,51 +244,15 @@ export const validateGrantInTransaction = async (
     })
   }
 
-  let runStatus: AgentRunStatus | null = null
-  let runScope: AgentRunScope | null = null
-  let rootRunId: string | null = null
-  let resumedActionId: string | null = null
-  if (input.kind === "run") {
-    if (!grant.runId) {
-      throw publicErrors.unauthorized("Agent capability is invalid")
-    }
-    const runRows = await tx
-      .select({
-        status: agentRuns.status,
-        scope: agentRuns.scope,
-        rootRunId: agentRuns.rootRunId,
-        resumedActionId: agentRuns.resumedActionId,
-      })
-      .from(agentRuns)
-      .where(
-        and(
-          eq(agentRuns.id, grant.runId),
-          eq(agentRuns.organizationId, grant.organizationId),
-          eq(agentRuns.threadId, grant.threadId),
-          eq(agentRuns.sessionId, grant.sessionId),
-          eq(agentRuns.userId, grant.userId),
-          eq(agentRuns.contextEpoch, grant.contextEpoch),
-          gt(agentRuns.expiresAt, input.now)
-        )
-      )
-      .limit(1)
-    runStatus = runRows[0]?.status ?? null
-    runScope = runRows[0]?.scope ?? null
-    rootRunId = runRows[0]?.rootRunId ?? null
-    resumedActionId = runRows[0]?.resumedActionId ?? null
-    if (!runStatus) {
-      throw publicErrors.unauthorized("Agent capability is invalid")
-    }
-    if (
-      !input.allowTerminalRun &&
-      runStatus !== "running" &&
-      runStatus !== "waiting_approval"
-    ) {
-      throw publicErrors.conflict("Agent run is no longer active", {
-        resource: "agent_run",
-      })
-    }
-  }
+  const runContext: GrantRunContext =
+    input.kind === "run"
+      ? await validateRunGrantInTransaction(tx, grant, input)
+      : {
+          runStatus: null,
+          runScope: null,
+          rootRunId: null,
+          resumedActionId: null,
+        }
 
   return {
     organizationId: grant.organizationId,
@@ -221,10 +263,7 @@ export const validateGrantInTransaction = async (
     contextEpoch: grant.contextEpoch,
     webSearchQueryHash: grant.webSearchQueryHash,
     role,
-    runStatus,
-    runScope,
-    rootRunId,
-    resumedActionId,
+    ...runContext,
   }
 }
 

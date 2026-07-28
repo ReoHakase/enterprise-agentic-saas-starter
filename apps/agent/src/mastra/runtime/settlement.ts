@@ -4,9 +4,10 @@ type RunSettlementApi = Pick<AgentControlPlanePort, "cancelRun" | "finishRun">
 
 export type RunSettlement = {
   cancel: () => Promise<void>
-  complete: () => Promise<void>
+  complete: () => Promise<"completed" | null>
   fail: () => Promise<void>
   holdForApproval: () => void
+  isHeldForApproval: () => boolean
 }
 
 export const createRunSettlement = (
@@ -17,26 +18,32 @@ export const createRunSettlement = (
 
   const settle = async (
     outcome: "canceled" | "completed" | "failed"
-  ): Promise<void> => {
-    if (state !== "open") return
+  ): Promise<string | null> => {
+    if (state !== "open") return null
     state = "settled"
     try {
       if (outcome === "canceled") {
-        await api.cancelRun({ grant: runGrant })
-      } else {
-        await api.finishRun({ grant: runGrant, outcome })
+        return (await api.cancelRun({ grant: runGrant })).status
       }
+      return (await api.finishRun({ grant: runGrant, outcome })).status
     } catch {
       // API側のexpiry/reconcileを正本にし、provider payloadやgrantをlogへ出さない。
+      return null
     }
   }
 
   return {
-    cancel: () => settle("canceled"),
-    complete: () => settle("completed"),
-    fail: () => settle("failed"),
+    cancel: async () => {
+      await settle("canceled")
+    },
+    complete: async () =>
+      (await settle("completed")) === "completed" ? "completed" : null,
+    fail: async () => {
+      await settle("failed")
+    },
     holdForApproval: () => {
       if (state === "open") state = "held"
     },
+    isHeldForApproval: () => state === "held",
   }
 }

@@ -47,14 +47,23 @@ export const prepareAgentClientToolContinuationForSession = async (
       const message: AgentUiMessage = {
         id: input.assistantMessageId,
         role: "assistant",
-        parts: input.clientToolResults.map((result) => ({
-          type: `tool-${result.toolName}`,
-          toolCallId: result.toolCallId,
-          state: result.state,
-          ...(result.state === "output-available"
-            ? { output: result.output }
-            : { errorText: result.errorText }),
-        })),
+        parts: input.clientToolResults.map((result) =>
+          result.state === "output-available"
+            ? {
+                type: `tool-${result.toolName}` as const,
+                toolCallId: result.toolCallId,
+                state: result.state,
+                input: result.input,
+                output: result.output,
+              }
+            : {
+                type: `tool-${result.toolName}` as const,
+                toolCallId: result.toolCallId,
+                state: result.state,
+                input: result.input,
+                errorText: result.errorText,
+              }
+        ),
       }
       const connection = await issueConnectionTicketInTransaction(tx, {
         credential,

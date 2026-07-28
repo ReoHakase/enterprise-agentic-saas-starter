@@ -158,6 +158,51 @@ describe("Agent Sentry privacy", () => {
     expect(serialized).not.toContain("secret")
   })
 
+  it("drops malformed trace metadata and bounds exception mechanisms", () => {
+    expect(
+      scrubAgentSentryEvent({
+        contexts: {
+          trace: {
+            span_id: "0123456789abcdef",
+            trace_id: "not-a-trace-id",
+          },
+        },
+        exception: {
+          values: [
+            { mechanism: { handled: true, type: "bad value" } },
+            { mechanism: { type: "generic" } },
+          ],
+        },
+        request: { method: "private-method" },
+        sdkProcessingMetadata: {
+          dynamicSamplingContext: {
+            public_key: "bad key",
+            trace_id: "0123456789abcdef0123456789abcdef",
+          },
+        },
+      })
+    ).toEqual({
+      breadcrumbs: [],
+      exception: {
+        values: [
+          {
+            mechanism: { handled: true },
+            type: "AgentRuntimeError",
+            value: "Agent runtime error",
+          },
+          {
+            mechanism: { type: "generic" },
+            type: "AgentRuntimeError",
+            value: "Agent runtime error",
+          },
+        ],
+      },
+      message: undefined,
+      request: { method: undefined },
+      tags: undefined,
+    })
+  })
+
   it("uses an independent environment/release and conservative integrations", () => {
     const options = createAgentSentryOptions({
       SENTRY_DSN: "https://public@example.invalid/1",

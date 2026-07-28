@@ -1,6 +1,7 @@
 import {
   deleteIssueToolInputSchema,
   issueWriteToolOutputSchema,
+  issueWriteToolProviderOutputSchema,
   type DeleteIssueToolInput,
   type IssueWriteToolOutput,
 } from "@enterprise-agentic-saas/agent-contracts"
@@ -12,7 +13,7 @@ import { parseToolValue } from "../validation"
 import { normalizeDeleteIssueToolInput } from "./write-normalize"
 
 const inputSchema = toStandardJsonSchema(deleteIssueToolInputSchema)
-const outputSchema = toStandardJsonSchema(issueWriteToolOutputSchema)
+const outputSchema = toStandardJsonSchema(issueWriteToolProviderOutputSchema)
 
 export const createDeleteIssueTool = <RequestContextData = unknown>(
   executor: AgentToolExecutor<

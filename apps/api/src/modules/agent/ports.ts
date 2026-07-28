@@ -62,6 +62,21 @@ type AgentOrganizationUsage = {
 }
 
 export type AgentServicePorts = {
+  cancelAgentRunForSession(input: {
+    runId: string
+    sessionId: string
+    threadId: string
+    userId: string
+  }): Promise<{
+    runId: string
+    status:
+      | "running"
+      | "waiting_approval"
+      | "completed"
+      | "failed"
+      | "canceled"
+      | "expired"
+  }>
   archiveAgentThreadForSession(input: {
     sessionId: string
     threadId: string

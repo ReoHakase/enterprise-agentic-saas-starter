@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
   agentConnectionSchema,
   agentCreateIssueActionInputSchema,
+  agentActionExecutionResultSchema,
   agentGetIssueInputSchema,
   agentGetIssueToolOutputSchema,
   agentGuardedWebSearchQuerySchema,
@@ -16,8 +17,15 @@ import {
   agentRunGrantSchema,
   agentSearchIssuesInputSchema,
   agentUsageRecordResultSchema,
+  agentUpdateIssueActionInputSchema,
   getIssueToolInputSchema,
 } from "./schemas"
+import {
+  addAttachmentWriteToolOutputSchema,
+  addIssueAttachmentsToolInputSchema,
+  removeAttachmentWriteToolOutputSchema,
+  removeIssueAttachmentsToolInputSchema,
+} from "./tools"
 
 const VALID_GRANT = "grant_0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -35,6 +43,14 @@ const issue = {
   createdAt: "2026-07-28T00:00:00.000Z",
   updatedAt: "2026-07-28T00:00:00.000Z",
 } as const
+const attachmentReceipt = {
+  actionId: "action_1",
+  operation: "added",
+  issueId: "issue_1",
+  issueNumber: 1,
+  revision: 2,
+  fileIds: ["file_1"],
+} as const
 
 describe("agent contract runtime schemas", () => {
   it("accepts the bounded Issue contract", () => {
@@ -46,6 +62,46 @@ describe("agent contract runtime schemas", () => {
       v.safeParse(agentIssueSchema, {
         ...issue,
         organizationId: "org_1",
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentAttachmentMutationReceiptSchema, {
+        ...attachmentReceipt,
+        fileIds: ["file_1", "file_1"],
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentAttachmentMutationReceiptSchema, {
+        ...attachmentReceipt,
+        fileIds: Array.from({ length: 5 }, (_, index) => `file_${index}`),
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentAttachmentMutationReceiptSchema, {
+        ...attachmentReceipt,
+        operation: "removed",
+        fileIds: Array.from({ length: 20 }, (_, index) => `file_${index}`),
+      }).success
+    ).toBe(true)
+  })
+
+  it("rejects fields from a different update operation", () => {
+    expect(
+      v.safeParse(agentUpdateIssueActionInputSchema, {
+        operation: "add_attachments",
+        issueId: "issue_1",
+        expectedRevision: 1,
+        attachmentAssetIds: ["asset_1"],
+        title: "cross operation",
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentUpdateIssueActionInputSchema, {
+        operation: "remove_attachments",
+        issueId: "issue_1",
+        expectedRevision: 1,
+        attachmentFileIds: ["file_1"],
+        attachmentAssetIds: ["asset_1"],
       }).success
     ).toBe(false)
   })
@@ -64,23 +120,169 @@ describe("agent contract runtime schemas", () => {
   })
 
   it("bounds attachment receipts without exposing storage details", () => {
-    const receipt = {
-      operation: "added",
-      issueId: "issue_1",
-      issueNumber: 1,
-      revision: 2,
-      fileIds: ["file_1"],
-    } as const
-
-    expect(v.parse(agentAttachmentMutationReceiptSchema, receipt)).toEqual(
-      receipt
-    )
+    expect(
+      v.parse(agentAttachmentMutationReceiptSchema, attachmentReceipt)
+    ).toEqual(attachmentReceipt)
     expect(
       v.safeParse(agentAttachmentMutationReceiptSchema, {
-        ...receipt,
+        ...attachmentReceipt,
         privateUrl: "https://private.invalid/file",
       }).success
     ).toBe(false)
+  })
+
+  it("bounds attachment mutation inputs and rejects duplicate or private fields", () => {
+    expect(
+      v.safeParse(addIssueAttachmentsToolInputSchema, {
+        issueId: "issue_1",
+        expectedRevision: 1,
+        assetIds: ["a", "b", "c", "d"],
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(addIssueAttachmentsToolInputSchema, {
+        issueId: "issue_1",
+        expectedRevision: 1,
+        assetIds: ["a", "b", "c", "d", "e"],
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(removeIssueAttachmentsToolInputSchema, {
+        issueId: "issue_1",
+        expectedRevision: 1,
+        fileIds: ["file_1", "file_1"],
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(removeIssueAttachmentsToolInputSchema, {
+        issueId: "issue_1",
+        expectedRevision: 1,
+        fileIds: Array.from({ length: 20 }, (_, index) => `file_${index}`),
+        organizationId: "private_org",
+      }).success
+    ).toBe(false)
+  })
+
+  it("validates operation-specific attachment tool outputs", () => {
+    const pendingPreview = {
+      actionId: "action_1",
+      expiresAt: "2026-07-28T01:00:00.000Z",
+      requiresApproval: true,
+      status: "pending",
+      preview: {
+        kind: "update_issue",
+        destructive: true,
+        attachmentOperation: "add",
+        title: "Add attachment",
+        issueNumber: 1,
+        issueRevision: 1,
+        fields: [],
+        attachments: [
+          {
+            source: "asset",
+            assetId: "asset_1",
+            filename: "image.png",
+            sizeBytes: 4,
+          },
+        ],
+      },
+    } as const
+    expect(
+      v.safeParse(addAttachmentWriteToolOutputSchema, attachmentReceipt).success
+    ).toBe(true)
+    expect(
+      v.safeParse(removeAttachmentWriteToolOutputSchema, {
+        ...attachmentReceipt,
+        operation: "removed",
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(addAttachmentWriteToolOutputSchema, pendingPreview).success
+    ).toBe(true)
+    expect(
+      v.safeParse(removeAttachmentWriteToolOutputSchema, {
+        ...pendingPreview,
+        preview: {
+          ...pendingPreview.preview,
+          attachmentOperation: "remove",
+          attachments: [
+            {
+              source: "file",
+              fileId: "file_1",
+              filename: "image.png",
+              sizeBytes: 4,
+            },
+          ],
+        },
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(addAttachmentWriteToolOutputSchema, {
+        ...attachmentReceipt,
+        operation: "removed",
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(removeAttachmentWriteToolOutputSchema, attachmentReceipt)
+        .success
+    ).toBe(false)
+    expect(
+      v.safeParse(addAttachmentWriteToolOutputSchema, {
+        ...pendingPreview,
+        preview: {
+          ...pendingPreview.preview,
+          attachmentOperation: "remove",
+        },
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(removeAttachmentWriteToolOutputSchema, {
+        ...pendingPreview,
+        preview: {
+          ...pendingPreview.preview,
+          attachmentOperation: "remove",
+        },
+      }).success
+    ).toBe(false)
+    for (const schema of [
+      addAttachmentWriteToolOutputSchema,
+      removeAttachmentWriteToolOutputSchema,
+    ]) {
+      expect(
+        v.safeParse(schema, {
+          actionId: "action_1",
+          requiresApproval: false,
+          status: "canceled",
+        }).success
+      ).toBe(true)
+    }
+  })
+
+  it("rejects duplicate attachment mutations in execution receipts", () => {
+    for (const operation of ["added", "removed"] as const) {
+      const result = {
+        actionId: "action_1",
+        kind: "update_issue",
+        status: "succeeded",
+        issue: {
+          id: "issue_1",
+          number: 1,
+          revision: 2,
+          deleted: false,
+          attachmentMutation: {
+            operation,
+            fileIds: ["file_1", "file_1"],
+          },
+        },
+      }
+      expect(
+        v.safeParse(agentActionExecutionResultSchema, result).success
+      ).toBe(false)
+      result.issue.attachmentMutation.fileIds = ["file_1"]
+      expect(
+        v.safeParse(agentActionExecutionResultSchema, result).success
+      ).toBe(true)
+    }
   })
 
   it.each([
@@ -123,7 +325,9 @@ describe("agent contract runtime schemas", () => {
       ).toBe(success)
     }
   )
+})
 
+describe("agent contract response schemas", () => {
   it("accepts both lookup variants and rejects mixed or malformed variants", () => {
     expect(
       v.safeParse(getIssueToolInputSchema, {

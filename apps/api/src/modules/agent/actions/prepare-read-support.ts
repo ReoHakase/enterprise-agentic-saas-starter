@@ -19,6 +19,7 @@ import { publicErrors } from "../../../errors/app-error"
 import { type AgentTransaction, type ValidGrant } from "../threads/repository"
 import {
   MAX_ROOT_WRITE_ACTIONS,
+  normalizeStoredUpdateIssuePayload,
   safeStoredParse,
   storedCreateIssuePayloadModel,
   storedDeleteIssuePayloadModel,
@@ -155,6 +156,19 @@ export const findApplicablePolicy = async (
   context: ValidGrant,
   now: Date
 ) => {
+  const runRows = await tx
+    .select({ webSearchUsedAt: agentRuns.webSearchUsedAt })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.organizationId, context.organizationId),
+        eq(agentRuns.id, context.runId ?? "")
+      )
+    )
+    .limit(1)
+  const currentRun = runRows[0]
+  if (!currentRun || currentRun.webSearchUsedAt !== null) return null
+
   const permissionRows = await tx
     .select()
     .from(agentThreadPermissions)
@@ -253,7 +267,7 @@ export const findExistingPreparedAction = async (
       : existing.kind === "update_issue"
         ? safeStoredParse(
             storedUpdateIssuePayloadModel,
-            existing.normalizedPayload
+            normalizeStoredUpdateIssuePayload(existing.normalizedPayload)
           ).requestFingerprint
         : safeStoredParse(
             storedDeleteIssuePayloadModel,

@@ -169,6 +169,13 @@
       "when": 1785191750525,
       "tag": "0023_gorgeous_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1785196754695,
+      "tag": "0024_agent_update_attachment_actions",
+      "breakpoints": true
     }
   ]
 }

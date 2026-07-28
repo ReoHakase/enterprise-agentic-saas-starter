@@ -24,9 +24,11 @@ import {
 } from "./runs/web-search"
 import { getAgentRuntime } from "./runtime"
 import { createAgentService } from "./service"
+import { settleAgentMemoryCommit } from "./threads/memory-commit-repository"
 import {
   archiveAgentThreadForSession,
   cancelAgentRun,
+  cancelAgentRunForSession,
   consumeAgentConnectionTicket,
   createAgentThreadForSession,
   finishAgentRun,
@@ -54,6 +56,7 @@ export const createAgentModule = (
   createAccessControl: AccessControlFactory
 ) => {
   const service = createAgentService({
+    cancelAgentRunForSession: (input) => cancelAgentRunForSession(db, input),
     archiveAgentThreadForSession: (input) =>
       archiveAgentThreadForSession(db, input),
     createAgentThreadForSession: (input) =>
@@ -96,6 +99,7 @@ export const createAgentInternalApi = (db: Db) => {
   return createAgentInternalService({
     cancelRun: (input) => cancelAgentRun(db, input),
     consumeConnectionTicket: (input) => consumeAgentConnectionTicket(db, input),
+    settleMemoryCommit: (input) => settleAgentMemoryCommit(db, input),
     executeApprovedAction: (input) => executeAgentApprovedAction(db, input),
     finishRun: (input) => finishAgentRun(db, input),
     getAgentImageForModel: (input) => files.getAgentImageForModel(input),

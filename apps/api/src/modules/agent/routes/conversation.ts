@@ -1,5 +1,6 @@
 import { Elysia } from "elysia"
 
+import { agentRunResultSchema } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
 import { tenantErrorResponses } from "../../../models/api"
 import type { AccessControlFactory } from "../../authorization/public"
@@ -11,6 +12,7 @@ import {
   agentThreadListModel,
   agentThreadModel,
   agentThreadParamsModel,
+  agentRunParamsModel,
   createAgentThreadBodyModel,
 } from "../model"
 import type { AgentService } from "../service"
@@ -96,6 +98,31 @@ export const createAgentConversationRoutes = (
           summary: "Archive an Agent thread",
           description:
             "Archives a thread owned by the authenticated user and revokes its unused tickets, grants, and active runs in the same transaction so it cannot continue executing.",
+          tags: ["Agent"],
+          "x-route-status": "enabled",
+          "x-auth-context": "session-cookie",
+          "x-audience": "first-party-web",
+        },
+      }
+    )
+    .post(
+      "/agent/threads/:threadId/runs/:runId/cancel",
+      ({ authContext: { session, user }, params }) =>
+        service.cancelAgentRun({
+          runId: params.runId,
+          sessionId: session.id,
+          threadId: params.threadId,
+          userId: user.id,
+        }),
+      {
+        authenticated: true,
+        params: agentRunParamsModel,
+        response: { 200: agentRunResultSchema, ...tenantErrorResponses },
+        detail: {
+          operationId: "cancelAgentRun",
+          summary: "Cancel an active Agent run",
+          description:
+            "Revalidates the live session, active membership, private thread owner, and run ownership before idempotently canceling an active run.",
           tags: ["Agent"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",

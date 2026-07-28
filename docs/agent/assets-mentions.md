@@ -20,6 +20,9 @@ Browserは画像を一度だけAPIへmultipart uploadし、messageにはopaque a
 Agent WorkerにR2 bindingを渡しません。APIがACLとrun bindingを検証し、max edge 2,048px、WebP quality 75、4 MiB + 1 byte bounded readのmodel inputだけを返します。画像内のtextもuntrusted contentです。
 
 Issue attachmentへの昇格はphysical storage objectとlogical claim/fileを分け、action previewとapprovalへ含めます。promotion、Issue mutation、claim transferは同じtransactionへ閉じます。一般的なowner変更APIは作りません。
+既存Issueへの追加は`expectedRevision`、current Issue update permission、staged asset IDを必須にし、
+1 action最大4件です。削除は同じrevision/permission境界で1 action最大20件とし、typed owner/file rowを
+hard deleteしてphysical objectを`deleting`へ遷移し、storage cleanupへ引き渡します。
 
 ## Issue添付の読取
 

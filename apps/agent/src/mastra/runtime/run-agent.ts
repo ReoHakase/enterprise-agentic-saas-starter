@@ -2,41 +2,50 @@ import type {
   AgentActionExecutionResult,
   AgentRuntimeChatInput,
 } from "@enterprise-agentic-saas/agent-contracts"
-import { toAISdkStream } from "@mastra/ai-sdk"
 import {
   type AIV5Type,
   type MessageListInput,
 } from "@mastra/core/agent/message-list"
-import type { Mastra } from "@mastra/core/mastra"
 import { RequestContext } from "@mastra/core/request-context"
-import { createUIMessageStreamResponse } from "ai"
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  type UIMessage,
+} from "ai"
 
 import type { AgentFailureCode } from "../adapters/telemetry/capture"
-import { filterAgentTools } from "../agents/product-agent"
+import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import type { createThreadTitleAgent } from "../agents/thread-title-agent"
+import type { createProductRuntime } from "../composition/create-runtime"
 import type { PortableAgentRuntimeEnv as AgentRuntimeEnv } from "../composition/environment"
 import { estimateAgentContextBudget } from "../core/budget/context"
 import { createAgentToolBudget } from "../core/budget/tool"
 import { createAgentVisionBudget } from "../core/budget/vision"
-import {
-  createCurrentMessageImageContext,
-  loadCurrentMessageImages,
-} from "../core/messages/chat-input"
 import { parseAgentEvalToolAllowlist } from "../core/policy/eval-tool-allowlist"
 import { readAgentFeatureSwitches } from "../core/policy/feature-flags"
 import {
   isActiveOpaqueGrant,
   toLiveConnectionGrant,
 } from "../core/policy/grant"
-import { stopOnPendingIssueAction } from "../core/stop-conditions"
 import { normalizeAgentUsage } from "../core/usage/normalize"
-import { createAgentClientTools } from "../tools/client/tool"
 import type { ApprovedIssueActionExecutionRegistry } from "../workflows/approved-issue-action"
 import { suspendApprovedIssueAction } from "../workflows/approved-issue-action"
+import {
+  hasPendingMemoryCommit,
+  reconcilePendingMemoryCommitsForThread,
+} from "../workflows/memory-commit"
+import { createCanonicalResponsePersistence } from "./canonical-response-persistence"
+import { createRunFinalizer } from "./chat-finalization"
+import {
+  cancelActiveRun,
+  createRunAbortLifecycle,
+  createStoppedMessagePersistence,
+} from "./chat-lifecycle"
+import { AgentImageInputError, startProductOutput } from "./chat-output"
+import { createFinalizedProductStream } from "./chat-stream"
+import { scheduleMemoryReconciliation } from "./memory-reconciliation"
 import { handleMemoryHistory, handleMemoryThreads } from "./memory-routes"
-import { redactNativeStream } from "./native-stream"
 import type { AgentControlFailure, AgentControlPlanePort } from "./ports"
-import { productGenerationWebSearchOptions } from "./product-generation"
 import {
   parseAgentRuntimeChatInput,
   parseAgentRuntimeResumeInput,
@@ -48,11 +57,7 @@ import type {
 } from "./request-context"
 import { resumeIssueAction } from "./resume-action"
 import { createRunSettlement } from "./settlement"
-import { createThreadTitleTask } from "./thread-title"
 
-// Keep provider stalls below the five-minute capability lifetime so the run can
-// be settled and the composer can recover while its original grant is live.
-const RUN_TIMEOUT_MS = 2 * 60 * 1000
 const stepProviderMetadata = (
   steps: readonly { providerMetadata?: unknown }[]
 ) => steps.map((step) => step.providerMetadata)
@@ -82,7 +87,7 @@ const readEvalToolAllowlist = (
   return parseAgentEvalToolAllowlist(environment.AGENT_EVAL_ALLOWED_TOOLS)
 }
 
-type AgentExecutionContext = {
+export type AgentExecutionContext = {
   waitUntil(promise: Promise<unknown>): void
 }
 
@@ -91,7 +96,7 @@ export type AgentRuntimeDependencies = {
   createControlPlane: (
     binding: AgentRuntimeEnv["AGENT_INTERNAL_API"]
   ) => AgentControlPlanePort
-  mastra: Mastra
+  mastra: ReturnType<typeof createProductRuntime>
   threadTitleAgent: ReturnType<typeof createThreadTitleAgent>
   executionRegistry: ProductAgentExecutionRegistry
   approvedIssueActionExecutionRegistry: ApprovedIssueActionExecutionRegistry
@@ -134,7 +139,6 @@ const controlFailure = (
 const consumeStream = async (stream: ReadableStream<string>): Promise<void> => {
   await stream.pipeTo(new WritableStream()).catch(() => undefined)
 }
-
 const createProductRequestContext = (
   runtime: ProductAgentRequestContext["runtime"]
 ): RequestContext<ProductAgentRequestContext> => {
@@ -155,6 +159,14 @@ const createResolvedPageContext = (
         },
       ]
 
+const readChatInput = async (request: Request) => {
+  try {
+    return parseAgentRuntimeChatInput(await readBoundedPrivateJson(request))
+  } catch {
+    return null
+  }
+}
+
 const handleChat = async (
   request: Request,
   environment: AgentRuntimeEnv,
@@ -163,13 +175,7 @@ const handleChat = async (
 ): Promise<Response> => {
   const features = readAgentFeatureSwitches(environment)
   if (!isChatAvailable(environment, dependencies)) return unavailable()
-  let rawInput: unknown
-  try {
-    rawInput = await readBoundedPrivateJson(request)
-  } catch {
-    return invalidRequest()
-  }
-  const input = parseAgentRuntimeChatInput(rawInput)
+  const input = await readChatInput(request)
   if (!input) return invalidRequest()
   if (input.assetIds.length > 0 && !features.vision) return unavailable()
   const contextBudget = createContextBudget(input)
@@ -186,6 +192,14 @@ const handleChat = async (
     if (!liveGrant) return unavailable()
     connectionGrant = liveGrant.grant
     memoryResourceId = connection.memoryResourceId
+    await reconcilePendingMemoryCommitsForThread(
+      dependencies.mastra,
+      api,
+      input.threadId
+    )
+    if (await hasPendingMemoryCommit(dependencies.mastra, input.threadId)) {
+      return unavailable()
+    }
   } catch {
     return unavailable()
   }
@@ -227,6 +241,7 @@ const handleChat = async (
       suspendApprovedIssueAction(dependencies.mastra, actionId),
     visionBudget,
   })
+  const abortLifecycle = createRunAbortLifecycle(request, run.runId)
   const requestContext = createProductRequestContext({
     executionId: execution.executionId,
     modelRoute: "product",
@@ -245,158 +260,143 @@ const handleChat = async (
       JSON.stringify([input.message])
     )
     const transientContext = createResolvedPageContext(input)
-    if (input.assetIds.length > 0) {
-      try {
-        const images = await loadCurrentMessageImages(
-          api,
-          run.grant,
-          input.assetIds
-        )
-        transientContext.push(
-          ...createCurrentMessageImageContext(input.assetIds, images)
-        )
-      } catch {
-        dependencies.captureFailure("image_failed")
-        await settlement.fail()
-        execution.release()
-        return fixedResponse(502, "Image input failed")
-      }
-    }
 
-    const timeoutSignal = AbortSignal.timeout(RUN_TIMEOUT_MS)
-    const abortSignal = request.signal
-      ? AbortSignal.any([request.signal, timeoutSignal])
-      : timeoutSignal
+    const abortSignal = abortLifecycle.signal
     const productAgent = dependencies.mastra.getAgentById("product-agent")
     const threadTitleAgent = dependencies.threadTitleAgent
-    type FinalizationOutcome = "abort" | "error" | "finish"
-    let finalizationOutcome: FinalizationOutcome | undefined
-    let finalizationStarted = false
-    let outputReady = false
-    let titleTask: Promise<void> | undefined
-    let titleTaskScheduled = false
-    let recordObservedUsage: (() => Promise<void>) | undefined
-    const scheduleTitle = () => {
-      if (!run.shouldGenerateTitle || titleTaskScheduled) return
-      titleTaskScheduled = true
-      titleTask = (async () => {
-        const memory = await productAgent.getMemory()
-        if (!memory) return
-        await createThreadTitleTask({
+    const persistStoppedUserMessage = createStoppedMessagePersistence({
+      input,
+      memoryResourceId,
+      productAgent,
+    })
+    await persistStoppedUserMessage()
+    const finalizer = createRunFinalizer({
+      abort: abortLifecycle,
+      api,
+      attempt: run.attempt,
+      captureFailure: dependencies.captureFailure,
+      context,
+      input,
+      memoryResourceId,
+      persistStoppedUserMessage,
+      productAgent,
+      release: execution.release,
+      runGrant: run.grant,
+      settlement,
+      shouldGenerateTitle: run.shouldGenerateTitle,
+      threadTitleAgent,
+    })
+    const runStartedAt = Date.now()
+    let setupFailure: AgentFailureCode = "model_failed"
+    const startOutput = async () => {
+      try {
+        return await startProductOutput({
+          abortSignal,
           api,
-          attempt: run.attempt,
-          captureFailure: dependencies.captureFailure,
-          memory,
-          message: input.message,
-          resourceId: memoryResourceId,
+          budget,
+          input,
+          memoryResourceId,
+          modelMessages,
+          productAgent,
+          requestContext,
           runGrant: run.grant,
-          threadId: input.threadId,
-          titleAgent: threadTitleAgent,
+          toolAllowlist,
+          transientContext,
+          onAbort: () => finalizer.schedule(finalizer.outcomeFor("error")),
+          onError: (event) => {
+            reportDevelopmentCauseChain(
+              environment,
+              "product-model-stream",
+              event
+            )
+            finalizer.schedule(finalizer.outcomeFor("error"))
+          },
+          onFinish: () => finalizer.schedule(finalizer.outcomeFor("finish")),
         })
-      })().catch(() => dependencies.captureFailure("title_failed"))
-      context.waitUntil(titleTask)
-    }
-    const startFinalization = () => {
-      if (
-        !outputReady ||
-        !recordObservedUsage ||
-        !finalizationOutcome ||
-        finalizationStarted
-      ) {
-        return
+      } catch (cause) {
+        reportDevelopmentCauseChain(environment, "product-model-start", cause)
+        if (cause instanceof AgentImageInputError) setupFailure = "image_failed"
+        throw cause
       }
-      finalizationStarted = true
-      const outcome = finalizationOutcome
-      context.waitUntil(
-        (async () => {
-          try {
-            await recordObservedUsage()
-            await titleTask
-            if (outcome === "finish") {
-              await settlement.complete()
-            } else if (outcome === "abort") {
+    }
+    type RuntimeUiMessage = UIMessage
+    const stream = createUIMessageStream<RuntimeUiMessage>({
+      execute: async ({ writer }) => {
+        writer.write({
+          type: "data-run",
+          data: { runId: run.runId },
+          transient: true,
+        })
+        try {
+          const output = await startOutput()
+          let usageRecorded = false
+          const recordObservedUsage = async () => {
+            if (usageRecorded) return
+            try {
+              const usage = await output.totalUsage
+              await api.recordUsage({
+                grant: run.grant,
+                ...normalizeAgentUsage({
+                  usage,
+                  stepProviderMetadata: stepProviderMetadata(
+                    await output.steps
+                  ),
+                  imageInputCount: visionBudget.includedCount(),
+                  durationMs: Date.now() - runStartedAt,
+                  runEventId: `attempt_${run.attempt}`,
+                }),
+              })
+              usageRecorded = true
+            } catch {
+              dependencies.captureFailure("usage_record_failed")
+            }
+          }
+          const persistCanonicalResponse = createCanonicalResponsePersistence({
+            api,
+            applicationRunId: run.runId,
+            drainMessages: () => output.messageList.drainUnsavedMessages(),
+            mastra: dependencies.mastra,
+            memoryResourceId,
+            threadId: input.threadId,
+          })
+          finalizer.setOutputHandlers(
+            recordObservedUsage,
+            persistCanonicalResponse
+          )
+          writer.merge(
+            createFinalizedProductStream({
+              abortLifecycle,
+              api,
+              finalizer,
+              output,
+              runGrant: run.grant,
+            })
+          )
+        } catch (cause) {
+          reportDevelopmentCauseChain(environment, "product-output", cause)
+          abortLifecycle.close()
+          if (!finalizer.isStarted()) {
+            if (abortLifecycle.getCause() === "user") {
+              await persistStoppedUserMessage()
               await settlement.cancel()
             } else {
+              dependencies.captureFailure(setupFailure)
               await settlement.fail()
             }
-          } catch {
-            dependencies.captureFailure("model_failed")
-            await settlement.fail()
-          } finally {
             execution.release()
           }
-        })()
-      )
-    }
-    const scheduleFinalization = (outcome: FinalizationOutcome) => {
-      if (finalizationOutcome) return
-      finalizationOutcome = outcome
-      if (outcome === "error") {
-        dependencies.captureFailure("model_failed")
-      }
-      startFinalization()
-    }
-    const runStartedAt = Date.now()
-    const output = await productAgent.stream(modelMessages, {
-      abortSignal,
-      clientTools: filterAgentTools(
-        createAgentClientTools(budget),
-        toolAllowlist
-      ),
-      maxSteps: 8,
-      context: transientContext,
-      memory: {
-        resource: memoryResourceId,
-        thread: input.threadId,
+          if (abortLifecycle.getCause() === "user") return
+          throw new Error("Model response failed", { cause })
+        }
       },
-      modelSettings: { maxOutputTokens: 4_096, temperature: 0.2 },
-      ...productGenerationWebSearchOptions([input.message], toolAllowlist),
-      onAbort: () => scheduleFinalization("abort"),
-      onError: () => scheduleFinalization("error"),
-      onFinish: () => {
-        scheduleTitle()
-        scheduleFinalization("finish")
-      },
-      requestContext,
-      tracingOptions: {
-        hideInput: true,
-        hideOutput: true,
-      },
-      stopWhen: stopOnPendingIssueAction,
-      // Keep tool reservations and writes serial for deterministic ordering.
-      toolCallConcurrency: 1,
+      onError: () =>
+        abortLifecycle.getCause() === "total_timeout" ||
+        abortLifecycle.getCause() === "useful_timeout"
+          ? "Agent response timed out."
+          : "Model response failed.",
+      onEnd: () =>
+        finalizer.isReady() ? finalizer.waitForStream() : undefined,
     })
-    let usageRecorded = false
-    recordObservedUsage = async () => {
-      if (usageRecorded) return
-      try {
-        const usage = await output.totalUsage
-        await api.recordUsage({
-          grant: run.grant,
-          ...normalizeAgentUsage({
-            usage,
-            stepProviderMetadata: stepProviderMetadata(await output.steps),
-            imageInputCount: visionBudget.includedCount(),
-            durationMs: Date.now() - runStartedAt,
-            runEventId: `attempt_${run.attempt}`,
-          }),
-        })
-        usageRecorded = true
-      } catch {
-        dependencies.captureFailure("usage_record_failed")
-      }
-    }
-    outputReady = true
-    startFinalization()
-    const stream = redactNativeStream(
-      toAISdkStream(output, {
-        from: "agent",
-        onError: () => "Model response failed.",
-        sendReasoning: false,
-        sendSources: true,
-        version: "v6",
-      })
-    )
     return createUIMessageStreamResponse({
       headers: { "cache-control": "private, no-store" },
       stream,
@@ -404,8 +404,14 @@ const handleChat = async (
         context.waitUntil(consumeStream(sseStream))
       },
     })
-  } catch {
+  } catch (cause) {
+    reportDevelopmentCauseChain(environment, "chat-runtime", cause)
+    abortLifecycle.close()
     execution.release()
+    if (abortLifecycle.getCause() === "user") {
+      await settlement.cancel()
+      return fixedResponse(499, "Agent response canceled")
+    }
     dependencies.captureFailure("model_failed")
     await settlement.fail()
     return fixedResponse(502, "Model response failed")
@@ -452,11 +458,22 @@ export const handleAgentRuntimeRequest = (
 ): Promise<Response> | Response => {
   const url = new URL(request.url)
   if (url.search !== "") return invalidRequest()
+  scheduleMemoryReconciliation(environment, context, dependencies)
   if (request.method === "POST" && url.pathname === "/chat") {
     return handleChat(request, environment, context, dependencies)
   }
   if (request.method === "POST" && url.pathname === "/actions/resume") {
     return handleResume(request, environment, dependencies)
+  }
+  const cancelMatch = url.pathname.match(
+    /^\/runs\/([A-Za-z0-9_-]{1,128})\/cancel$/u
+  )
+  if (request.method === "POST" && cancelMatch?.[1]) {
+    cancelActiveRun(cancelMatch[1])
+    return new Response(null, {
+      status: 204,
+      headers: { "cache-control": "private, no-store" },
+    })
   }
   if (request.method === "POST" && url.pathname === "/memory/history") {
     return handleMemoryHistory(request, environment, dependencies)

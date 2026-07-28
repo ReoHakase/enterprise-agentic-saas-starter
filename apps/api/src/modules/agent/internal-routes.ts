@@ -19,6 +19,7 @@ import {
   issueSearchQueryModel,
   labelSearchQueryModel,
   memberSearchQueryModel,
+  memoryCommitSettlementBodyModel,
   prepareIssueActionBodyModel,
   recordUsageBodyModel,
   reserveWebSearchBodyModel,
@@ -56,10 +57,20 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
         /^\/internal\/agent\/actions\/[A-Za-z0-9_-]{1,128}\/resume$/u.test(
           url.pathname
         )
-      if (!isTicketConsume && !isActionResume) bearerGrant(request)
+      const isMemoryCommitSettlement =
+        request.method === "POST" &&
+        url.pathname === "/internal/agent/memory/commit-settlement"
+      if (!isTicketConsume && !isActionResume && !isMemoryCommitSettlement) {
+        bearerGrant(request)
+      }
     })
     .group("/internal/agent", (app) =>
       app
+        .post(
+          "/memory/commit-settlement",
+          ({ body }) => service.settleMemoryCommit(body),
+          { body: memoryCommitSettlementBodyModel }
+        )
         .post(
           "/connections/consume",
           ({ body }) => service.consumeConnectionTicket(body),

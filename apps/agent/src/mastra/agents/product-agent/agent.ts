@@ -2,6 +2,10 @@ import { Agent, type AgentConfig, type ToolsInput } from "@mastra/core/agent"
 import type { MastraMemory } from "@mastra/core/memory"
 
 import {
+  isLivenessLanguageModel,
+  withRunLiveness,
+} from "../../runtime/liveness-model"
+import {
   getOptionalProductAgentRequestState,
   type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
@@ -40,9 +44,23 @@ export const createProductAgent = ({
     {
       id: "product-agent",
       instructions: productAgentInstructions,
-      maxRetries: 1,
+      maxRetries: 0,
       memory,
-      model,
+      model: async ({ mastra, requestContext }) => {
+        const resolved =
+          typeof model === "function"
+            ? await model({ mastra, requestContext })
+            : model
+        if (!isLivenessLanguageModel(resolved)) {
+          throw new Error("Agent model liveness boundary is unavailable")
+        }
+        const execution = resolveExecution(requestContext)
+        return withRunLiveness(resolved, () =>
+          execution.api.readActiveOrganization({
+            grant: execution.runGrant,
+          })
+        )
+      },
       name: "Product Agent",
       skills: [
         coreSkill,

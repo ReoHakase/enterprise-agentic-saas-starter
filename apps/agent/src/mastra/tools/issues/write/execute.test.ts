@@ -17,6 +17,7 @@ type WriteApi = Pick<
 >
 
 const preview: NonNullable<AgentIssueAction["preview"]> = {
+  attachmentOperation: null,
   attachments: [],
   destructive: false,
   fields: [{ after: "Issue", before: null, field: "title" }],
@@ -282,13 +283,16 @@ describe("createAgentWriteHandlers", () => {
         ...action("pending"),
         expiresAt: "x".repeat(100),
         preview: {
+          attachmentOperation: "add",
           attachments: [
             {
+              source: "asset",
               assetId: "asset_1",
               filename: "safe.webp",
               sizeBytes: 12,
             },
             {
+              source: "asset",
               assetId: "unsafe/id",
               filename: "x".repeat(250),
               sizeBytes: -1,
@@ -418,7 +422,7 @@ describe("createAgentWriteHandlers", () => {
     ).rejects.not.toThrow(RUN_GRANT)
   })
 
-  it("routes normalized update and delete payloads through the production handlers", async () => {
+  it("routes normalized update, attachment, and delete payloads through the production handlers", async () => {
     const prepareUpdateIssue = vi
       .fn<WriteApi["prepareUpdateIssue"]>()
       .mockResolvedValue(terminalAction("update_issue"))
@@ -463,6 +467,26 @@ describe("createAgentWriteHandlers", () => {
         "call_delete"
       )
     ).resolves.toMatchObject({ status: "rejected" })
+    await expect(
+      handlers.addIssueAttachments(
+        {
+          assetIds: ["asset_1", "asset_1"],
+          expectedRevision: 1,
+          issueId: " issue_1 ",
+        },
+        "call_add_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
+    await expect(
+      handlers.removeIssueAttachments(
+        {
+          expectedRevision: 1,
+          fileIds: ["file_1", "file_1"],
+          issueId: " issue_1 ",
+        },
+        "call_remove_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
 
     expect(prepareUpdateIssue).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -482,18 +506,42 @@ describe("createAgentWriteHandlers", () => {
         toolCallId: "call_delete",
       })
     )
-    expect(consume).toHaveBeenCalledTimes(2)
+    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issue: {
+          attachmentAssetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+          operation: "add_attachments",
+        },
+        toolCallId: "call_add_attachments",
+      })
+    )
+    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issue: {
+          attachmentFileIds: ["file_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+          operation: "remove_attachments",
+        },
+        toolCallId: "call_remove_attachments",
+      })
+    )
+    expect(consume).toHaveBeenCalledTimes(4)
   })
 })
 
 describe("Issue write tool registry", () => {
-  it("defines only the three server-side Issue mutation tools", () => {
+  it("defines only the five server-side Issue mutation tools", () => {
     const issueWriteTools = createIssueWriteTools(() => {
       throw new Error("unused")
     })
     expect(Object.keys(issueWriteTools).toSorted()).toEqual([
+      "add_issue_attachments",
       "create_issue",
       "delete_issue",
+      "remove_issue_attachments",
       "update_issue",
     ])
   })

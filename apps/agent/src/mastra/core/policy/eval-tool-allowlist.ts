@@ -1,10 +1,12 @@
 const agentEvalRuntimeToolNames = [
+  "add_issue_attachments",
   "create_issue",
   "delete_issue",
   "get_issue",
   "read_account_context",
   "read_active_organization",
   "read_issue_attachment_image",
+  "remove_issue_attachments",
   "search_issue_labels",
   "search_issues",
   "search_organization_members",

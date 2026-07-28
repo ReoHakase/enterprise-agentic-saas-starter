@@ -74,6 +74,90 @@ describe("serialized Agent transport schemas", () => {
         parts: [textPart, { type: "step-start" }],
       }).success
     ).toBe(true)
+    for (const invalidPart of [
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_missing_input",
+        state: "input-available",
+      },
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_missing_output",
+        state: "output-available",
+        input: { issueId: "issue_1" },
+      },
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_missing_approval",
+        state: "approval-responded",
+        input: { issueId: "issue_1" },
+      },
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_invalid_denial",
+        state: "output-denied",
+        input: { issueId: "issue_1" },
+        approval: { id: "approval_1", approved: true },
+      },
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_invalid_approval_request",
+        state: "approval-requested",
+        input: { issueId: "issue_1" },
+        approval: { id: "approval_1", approved: true },
+      },
+    ]) {
+      expect(
+        v.safeParse(agentUiMessageSchema, {
+          id: "message_invalid_tool_state",
+          role: "assistant",
+          parts: [invalidPart],
+        }).success
+      ).toBe(false)
+    }
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_provider_input_error",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-update_issue",
+            toolCallId: "call_provider_input_error",
+            state: "output-error",
+            errorText: "Agent tool execution failed.",
+          },
+        ],
+      }).success
+    ).toBe(true)
+    for (const approvedPart of [
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_approved_result",
+        state: "output-available",
+        input: { issueId: "issue_1" },
+        output: { status: "succeeded" },
+        approval: { id: "approval_1", approved: true },
+      },
+      {
+        type: "tool-update_issue",
+        toolCallId: "call_approved_error",
+        state: "output-error",
+        errorText: "Agent tool execution failed.",
+        approval: {
+          id: "approval_1",
+          approved: true,
+          reason: "Approved by the user",
+        },
+      },
+    ]) {
+      expect(
+        v.safeParse(agentUiMessageSchema, {
+          id: "message_approved_tool",
+          role: "assistant",
+          parts: [approvedPart],
+        }).success
+      ).toBe(true)
+    }
     for (const forbiddenPart of [
       {
         type: "data-agent-assets",
@@ -105,6 +189,25 @@ describe("serialized Agent transport schemas", () => {
           {
             type: "data-agent-assets",
             data: { assetIds: ["asset_1"] },
+          },
+        ],
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_approval",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-update_issue",
+            toolCallId: "call_approval",
+            state: "approval-responded",
+            input: { issueId: "issue_1", expectedRevision: 1 },
+            approval: {
+              id: "approval_1",
+              approved: false,
+              reason: "Denied",
+            },
           },
         ],
       }).success
@@ -244,6 +347,7 @@ describe("serialized Agent transport schemas", () => {
     }
     for (const value of [
       {
+        input: { href: "/issues" },
         output: { ok: true },
         state: "output-available",
         toolCallId: "call_1",

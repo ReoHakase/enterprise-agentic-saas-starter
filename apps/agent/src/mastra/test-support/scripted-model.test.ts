@@ -8,7 +8,6 @@ import {
   type AgentInternalGateway,
 } from "../adapters/control-plane/client"
 import { createProductAgent } from "../agents/product-agent"
-import { createPublicWebResearchAgent } from "../agents/public-web-research-agent"
 import { createAgentToolBudget } from "../core/budget/tool"
 import { createAgentVisionBudget } from "../core/budget/vision"
 import type { ProductAgentRequestContext } from "../runtime/request-context"
@@ -77,13 +76,6 @@ describe("standard scripted model", () => {
         usage: { inputTokens: 12, outputTokens: 5 },
       },
     ])
-    const researchAgent = createPublicWebResearchAgent({
-      model: createScriptedModel(
-        [{ parts: [{ type: "text", text: "unused" }] }],
-        { repeat: true }
-      ),
-      tools: {},
-    })
     const executionRegistry = new ProductAgentExecutionRegistry()
     const agent = createProductAgent({
       memory: new Memory({
@@ -95,7 +87,7 @@ describe("standard scripted model", () => {
       model: productModel,
       resolveExecution: executionRegistry.resolve,
       webSearchTool: createWebSearchTool(
-        researchAgent,
+        async () => ({ finishReason: "stop", sources: [], text: "unused" }),
         executionRegistry.resolve
       ),
     })
@@ -136,5 +128,32 @@ describe("standard scripted model", () => {
     const pending = model.doGenerate(generateOptions)
     abort.abort(new DOMException("Stopped", "AbortError"))
     await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+  })
+
+  it("resolves a step from the current call options without shared cursor state", async () => {
+    const model = createScriptedModel((options) => ({
+      parts: [
+        {
+          type: "text",
+          text: JSON.stringify(options.prompt).includes("[E1:SECOND]")
+            ? "second"
+            : "first",
+        },
+      ],
+    }))
+
+    const first = await model.doGenerate({
+      prompt: [
+        { role: "user", content: [{ type: "text", text: "[E1:FIRST]" }] },
+      ],
+    })
+    const second = await model.doGenerate({
+      prompt: [
+        { role: "user", content: [{ type: "text", text: "[E1:SECOND]" }] },
+      ],
+    })
+
+    expect(first.content).toContainEqual({ type: "text", text: "first" })
+    expect(second.content).toContainEqual({ type: "text", text: "second" })
   })
 })

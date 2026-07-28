@@ -35,10 +35,12 @@ const isBoundedAgentJson = (
 }
 
 export const agentUiToolNames = [
+  "add_issue_attachments",
   "create_issue",
   "delete_issue",
   "get_issue",
   "read_issue_attachment_image",
+  "remove_issue_attachments",
   "read_account_context",
   "read_active_organization",
   "search_issue_labels",
@@ -59,19 +61,75 @@ export const agentJsonValueSchema = v.custom<AgentJsonValue>(
   "Invalid bounded JSON value"
 )
 
+const agentUiToolApprovalRequestSchema = v.strictObject({
+  id: agentIdentifierSchema,
+})
+
+const agentUiToolApprovalResponseSchema = v.strictObject({
+  id: agentIdentifierSchema,
+  approved: v.boolean(),
+  reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
+})
+
+const agentUiToolApprovedSchema = v.strictObject({
+  id: agentIdentifierSchema,
+  approved: v.literal(true),
+  reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
+})
+
+const agentUiToolDeniedApprovalSchema = v.strictObject({
+  id: agentIdentifierSchema,
+  approved: v.literal(false),
+  reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
+})
+
+const agentUiToolPartBase = {
+  type: v.picklist(agentUiToolTypes),
+  toolCallId: agentIdentifierSchema,
+}
+
 export const agentUiMessagePartSchema = v.union([
   v.strictObject({
-    type: v.picklist(agentUiToolTypes),
-    toolCallId: agentIdentifierSchema,
-    state: v.picklist([
-      "input-available",
-      "output-available",
-      "output-denied",
-      "output-error",
-    ]),
+    ...agentUiToolPartBase,
+    state: v.literal("input-streaming"),
     input: v.optional(agentJsonValueSchema),
-    output: v.optional(agentJsonValueSchema),
-    errorText: v.optional(v.pipe(v.string(), v.maxLength(2_000))),
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("input-available"),
+    input: agentJsonValueSchema,
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("output-available"),
+    input: agentJsonValueSchema,
+    output: agentJsonValueSchema,
+    approval: v.optional(agentUiToolApprovedSchema),
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("output-denied"),
+    input: agentJsonValueSchema,
+    approval: agentUiToolDeniedApprovalSchema,
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("output-error"),
+    input: v.optional(agentJsonValueSchema),
+    errorText: v.pipe(v.string(), v.maxLength(2_000)),
+    approval: v.optional(agentUiToolApprovedSchema),
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("approval-requested"),
+    input: agentJsonValueSchema,
+    approval: agentUiToolApprovalRequestSchema,
+  }),
+  v.strictObject({
+    ...agentUiToolPartBase,
+    state: v.literal("approval-responded"),
+    input: agentJsonValueSchema,
+    approval: agentUiToolApprovalResponseSchema,
   }),
   v.strictObject({
     type: v.literal("data-agent-assets"),

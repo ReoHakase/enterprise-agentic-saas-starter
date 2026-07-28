@@ -174,6 +174,7 @@ export const fictionalPendingAction = {
   preview: {
     kind: "update_issue",
     destructive: false,
+    attachmentOperation: "add",
     title: "Update Issue #184 priority",
     issueNumber: 184,
     issueRevision: 7,
@@ -186,6 +187,7 @@ export const fictionalPendingAction = {
     ],
     attachments: [
       {
+        source: "asset",
         assetId: "asset_01K1TENANTPOLICY000000",
         filename: "tenant-policy.png",
         sizeBytes: 2_048,

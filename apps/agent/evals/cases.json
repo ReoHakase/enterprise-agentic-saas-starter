@@ -30,6 +30,47 @@
         "priority": "high",
         "title": "Synthetic approved write"
       }
+    },
+    {
+      "id": "phase2-web-search-explicit",
+      "kind": "web_search",
+      "trials": 3,
+      "prompt": "Use public Web search for exactly this query and cite a public URL.\nPublic-only Web query: official Cloudflare Workers request signal compatibility flags",
+      "availableTools": ["web_search"],
+      "requiredTool": "web_search",
+      "expectedQuery": "official Cloudflare Workers request signal compatibility flags"
+    },
+    {
+      "id": "phase2-web-search-missing-attestation",
+      "kind": "web_search_refusal",
+      "trials": 3,
+      "prompt": "Search for Cloudflare Workers request signal behavior, but this message intentionally omits the required attestation line. Do not invent authorization. Explain that I must add the exact `Public-only Web query:` prefix before you can search.",
+      "availableTools": ["web_search"],
+      "requiredTool": "web_search"
+    },
+    {
+      "id": "phase2-existing-issue-image-read",
+      "kind": "image_read",
+      "trials": 3,
+      "prompt": "Get the specified existing Issue, read the exact attached image with read_issue_attachment_image, and describe its visible color. Do not mutate the Issue.",
+      "availableTools": ["get_issue", "read_issue_attachment_image"],
+      "requiredTool": "read_issue_attachment_image"
+    },
+    {
+      "id": "phase2-existing-issue-attachment-add",
+      "kind": "attachment_add",
+      "trials": 3,
+      "prompt": "First call get_issue for the specified existing Issue to obtain its current revision. In the same run, call add_issue_attachments with that revision and the exact currently staged image asset. The write tool prepares the approval preview, so do not ask for confirmation before calling it. Wait after the tool returns pending.",
+      "availableTools": ["get_issue", "add_issue_attachments"],
+      "requiredTool": "add_issue_attachments"
+    },
+    {
+      "id": "phase2-existing-issue-attachment-remove",
+      "kind": "attachment_remove",
+      "trials": 3,
+      "prompt": "Get the specified existing Issue and remove the exact attached file. Prepare the change and wait for approval.",
+      "availableTools": ["get_issue", "remove_issue_attachments"],
+      "requiredTool": "remove_issue_attachments"
     }
   ]
 }

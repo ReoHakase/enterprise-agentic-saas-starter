@@ -6,6 +6,7 @@ import { createProductRuntime } from "../composition/create-runtime"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import { createScriptedModel } from "../test-support/scripted-model"
 import { createWebSearchTool } from "../tools/web-search/tool"
+import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
 import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
 const scriptedComposition = createScriptedAgentRuntimeComposition({
@@ -18,10 +19,11 @@ export const {
   threadTitleAgent: scriptedThreadTitleAgent,
 } = scriptedComposition
 
-const { publicWebResearchAgent, storage } = scriptedComposition
+const { storage } = scriptedComposition
 export const scriptedSseExecutionRegistry = new ProductAgentExecutionRegistry()
+const scriptedSseMemory = createProductAgentMemory(storage)
 const scriptedSseProductAgent = createProductAgent({
-  memory: createProductAgentMemory(storage),
+  memory: scriptedSseMemory,
   model: createScriptedModel(
     [{ parts: [{ type: "text", text: "SCRIPTED_NATIVE_SSE_OK" }] }],
     {
@@ -32,14 +34,18 @@ const scriptedSseProductAgent = createProductAgent({
   ),
   resolveExecution: scriptedSseExecutionRegistry.resolve,
   webSearchTool: createWebSearchTool(
-    publicWebResearchAgent,
+    async () => ({
+      finishReason: "stop",
+      sources: [],
+      text: "No public search was scripted.",
+    }),
     scriptedSseExecutionRegistry.resolve
   ),
 })
 export const scriptedSseMastra = createProductRuntime({
   approvedIssueActionWorkflow: scriptedComposition.approvedIssueActionWorkflow,
+  memoryCommitWorkflow: createMemoryCommitWorkflow(scriptedSseMemory),
   productAgent: scriptedSseProductAgent,
-  publicWebResearchAgent,
   storage,
   threadTitleAgent: scriptedThreadTitleAgent,
 })

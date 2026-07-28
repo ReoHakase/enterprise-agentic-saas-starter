@@ -2,6 +2,7 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import {
   AGENT_RESUME_TICKET_MAX_LIFETIME_MS,
   agentActions,
+  agentGrants,
   agentResumeTickets,
   agentRuns,
 } from "@enterprise-agentic-saas/db/schema"
@@ -224,6 +225,30 @@ const decideAgentActionForSessionWithRetry = async (
           ? action.status !== "rejected"
           : action.status === "rejected")
       if (repeatedDecision) {
+        if (input.decision === "no") {
+          const [currentRun] = await tx
+            .select({ status: agentRuns.status })
+            .from(agentRuns)
+            .where(
+              and(
+                eq(agentRuns.organizationId, action.organizationId),
+                eq(agentRuns.id, action.runId)
+              )
+            )
+            .limit(1)
+          if (currentRun?.status === "canceled") {
+            await tx
+              .update(agentGrants)
+              .set({ revokedAt: now })
+              .where(
+                and(
+                  eq(agentGrants.organizationId, action.organizationId),
+                  eq(agentGrants.runId, action.runId),
+                  isNull(agentGrants.revokedAt)
+                )
+              )
+          }
+        }
         return { action, expired: false }
       }
       if (action.status !== "pending" || action.decisionProvenance !== null) {
@@ -280,6 +305,16 @@ const decideAgentActionForSessionWithRetry = async (
               eq(agentRuns.organizationId, action.organizationId),
               eq(agentRuns.id, action.runId),
               eq(agentRuns.status, "waiting_approval")
+            )
+          )
+        await tx
+          .update(agentGrants)
+          .set({ revokedAt: now })
+          .where(
+            and(
+              eq(agentGrants.organizationId, action.organizationId),
+              eq(agentGrants.runId, action.runId),
+              isNull(agentGrants.revokedAt)
             )
           )
       }

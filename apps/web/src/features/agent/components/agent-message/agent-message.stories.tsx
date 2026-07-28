@@ -1,8 +1,9 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn, userEvent } from "storybook/test"
+import { expect, fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
+import type { AgentChatMessage } from "../../schema"
 import {
   fictionalAgentIdentity,
   fictionalAgentMessages,
@@ -73,18 +74,123 @@ export const ToolResult = meta.story({
   args: { message: fictionalAgentMessages.toolSucceeded },
   play: async ({ canvas, step }) => {
     await step("Inspect a completed tool call", async () => {
-      await userEvent.click(canvas.getByText(/get issue · output available/i))
-      await expect(
-        canvas.getByText(
-          (_, element) =>
-            element?.tagName === "PRE" &&
-            element.textContent?.includes('"number": 184') === true
-        )
-      ).toBeVisible()
+      await expect(canvas.getByRole("status")).toHaveTextContent(
+        "get issue · completed"
+      )
+      await expect(canvas.queryByText(/"number": 184/u)).not.toBeInTheDocument()
       await expect(
         canvas.getByRole("link", { name: "#184 Review tenant access" })
       ).toHaveAttribute("href", "/organization/acme-cloud/issues/184")
     })
+  },
+})
+
+export const ServerToolRunning = meta.story({
+  args: {
+    message: {
+      id: "assistant-tool-running",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-web_search",
+          toolCallId: "call-search-running",
+          state: "input-available",
+          input: { query: "Cloudflare request signal compatibility" },
+        },
+      ],
+    } satisfies AgentChatMessage,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "web search · running"
+    )
+  },
+})
+
+export const FailedTool = meta.story({
+  args: {
+    message: {
+      id: "assistant-tool-failed",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-get_issue",
+          toolCallId: "call-failed",
+          state: "output-error",
+          input: { lookup: "id", id: "issue-184" },
+          errorText: "Issue read failed.",
+        },
+      ],
+    } satisfies AgentChatMessage,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("alert")).toHaveTextContent(
+      "get issue · failed"
+    )
+  },
+})
+
+export const ApprovalDeclined = meta.story({
+  args: {
+    message: {
+      id: "assistant-tool-denied",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-update_issue",
+          toolCallId: "call-denied",
+          state: "approval-responded",
+          input: {
+            issueId: "issue-184",
+            expectedRevision: 3,
+            title: "Declined title",
+          },
+          approval: { id: "approval-denied", approved: false },
+        },
+      ],
+    } satisfies AgentChatMessage,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("status")).toHaveTextContent(
+      "update issue · denied"
+    )
+  },
+})
+
+export const AttachmentReceipt = meta.story({
+  args: {
+    message: {
+      id: "assistant-attachment-receipt",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-add_issue_attachments",
+          toolCallId: "call-attachment-receipt",
+          state: "output-available",
+          input: {
+            assetIds: ["asset-opaque"],
+            expectedRevision: 3,
+            issueId: "issue-184",
+          },
+          output: {
+            actionId: "action-opaque",
+            operation: "added",
+            issueId: "issue-184",
+            issueNumber: 184,
+            revision: 4,
+            fileIds: ["file-opaque"],
+          },
+        },
+      ],
+    } satisfies AgentChatMessage,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/Added 1 attachment on/u)).toHaveTextContent(
+      "Added 1 attachment on Issue #184 at revision 4."
+    )
+    await expect(
+      canvas.queryByText(/asset-opaque|file-opaque/u)
+    ).not.toBeInTheDocument()
   },
 })
 

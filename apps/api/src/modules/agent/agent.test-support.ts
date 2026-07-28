@@ -150,7 +150,7 @@ export const createFixture = async () => {
     },
   ])
 
-  return { app: createApp(db), db }
+  return { app: createApp(db), databasePath, db }
 }
 
 export const headers = (

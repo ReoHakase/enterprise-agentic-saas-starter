@@ -1,10 +1,10 @@
+import { canonicalizePublicHttpUrl } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import { publicWebSearchInputValueSchema } from "./schema"
 
 const MAXIMUM_RESULT_CHARACTERS = 6_000
 const MAXIMUM_SOURCE_TITLE_CHARACTERS = 200
-const MAXIMUM_SOURCE_URL_CHARACTERS = 2_048
 const MAXIMUM_SOURCES = 5
 const TOOL_CALL_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u
 
@@ -42,56 +42,7 @@ type PublicWebSearchDependencies = {
 }
 
 const bounded = (value: string, maximum: number) =>
-  value.length <= maximum ? value : `${value.slice(0, maximum)}…`
-
-const isPrivateSourceHostname = (hostname: string) => {
-  const normalized = hostname.toLowerCase()
-  if (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized.endsWith(".local") ||
-    normalized.endsWith(".internal") ||
-    normalized.endsWith(".invalid") ||
-    normalized.endsWith(".test") ||
-    normalized.includes(":")
-  ) {
-    return true
-  }
-  const octets = normalized.split(".").map(Number)
-  if (
-    octets.length !== 4 ||
-    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
-  ) {
-    return false
-  }
-  return (
-    octets[0] === 10 ||
-    octets[0] === 127 ||
-    (octets[0] === 169 && octets[1] === 254) ||
-    (octets[0] === 172 && (octets[1] ?? 0) >= 16 && (octets[1] ?? 0) <= 31) ||
-    (octets[0] === 192 && octets[1] === 168)
-  )
-}
-
-const toPublicSourceUrl = (value: unknown): string | null => {
-  if (typeof value !== "string" || value.length > MAXIMUM_SOURCE_URL_CHARACTERS)
-    return null
-  try {
-    const url = new URL(value)
-    if (
-      (url.protocol !== "https:" && url.protocol !== "http:") ||
-      url.username !== "" ||
-      url.password !== "" ||
-      isPrivateSourceHostname(url.hostname)
-    ) {
-      return null
-    }
-    url.hash = ""
-    return url.toString()
-  } catch {
-    return null
-  }
-}
+  value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`
 
 const toBoundedSource = (
   source: RawWebSearchSource
@@ -101,7 +52,7 @@ const toBoundedSource = (
   }
   const payload = source.payload
   if (payload.sourceType !== "url") return null
-  const url = toPublicSourceUrl(payload.url)
+  const url = canonicalizePublicHttpUrl(payload.url)
   if (!url) return null
   const title =
     typeof payload.title === "string" && payload.title.trim() !== ""

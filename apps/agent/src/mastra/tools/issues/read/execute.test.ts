@@ -211,6 +211,12 @@ describe("createAgentReadHandlers", () => {
 })
 
 describe("Issue attachment image sidecar", () => {
+  it("rejects malformed image metadata before reading a sidecar", () => {
+    expect(() => issueAttachmentImageToModelOutput({})).toThrow(
+      "Issue attachment image is unavailable"
+    )
+  })
+
   it("keeps canonical output metadata-only and consumes the WeakMap sidecar once", async () => {
     const getIssueAttachmentImageForModel = vi.fn<
       AgentInternalGateway["getIssueAttachmentImageForModel"]

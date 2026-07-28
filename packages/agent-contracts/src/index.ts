@@ -1,7 +1,9 @@
 export * from "./chat"
+export * from "./public-url"
 export * from "./runtime"
 export * from "./schemas"
 export * from "./tools"
+export type * from "./schema-types"
 export type {
   AgentAccountContext,
   AgentActionExecutionResult,
@@ -29,7 +31,7 @@ export type {
   AgentUsageRecordInput,
   AgentUsageRecordResult,
   AgentWebSearchReservation,
-} from "./schemas"
+} from "./schema-types"
 
 export type AgentInternalFetchBinding = {
   fetch(

@@ -82,6 +82,8 @@ ui_patch_form_draft
 - cancel完了中だけSendを無効化する
 - stream先頭の一時的な`data-run`からopaque run IDを保持し、Memoryへ永続化しない
 - cancel完了後は新しいsubmission IDで次turnを開始する
+- 通常のthread切替では承認待ちactionをcancelせず、そのthreadに残す。active responseだけを切替前にStopする
+- archiveはAPI transactionが`running | waiting_approval` run、action、grant、resume ticketを失効させる正本であり、browser Stopへ置き換えない
 
 ### API
 
@@ -91,7 +93,8 @@ POST /agent/threads/:threadId/runs/:runId/cancel
 
 - live session、membership、owner、run ownershipを検証する
 - `running | waiting_approval`から`canceled`へ冪等に遷移する
-- grantとquota reservationを解放する
+- grantと未消費のlive concurrency reservation/leaseを解放する
+- 既に消費したmodel、Web検索、vision quotaは払い戻さない
 - Agent側abortと同時実行されても同じterminal stateへ収束する
 - completed runをcanceledへ戻さない
 - terminal runへの再cancelはgrant lookupより前にsession、membership、owner、run ownershipで認可し、
@@ -106,12 +109,22 @@ server tool、approval待ち、denied、failedはbrowser continuationを開始�
 - user abortはprovider errorとして記録しない
 - `onAbort`とAPI cancelの二重呼出しを冪等にする
 - abort後にusageが観測できた場合はbillable policyに従い一度だけsettleする
+- abort原因は最初に確定した`user | useful_timeout | total_timeout`から上書きしない
+- user abortはrun cancelを先に確定し、そのterminal grantでusageを記録して最後にexecutionを解放する
+
+Stopのpartial assistant outputと`data-run`はsession-local UIだけに残します。file-backed Mastra Storageを
+新しいruntime compositionから開き直したreloadでは、停止したuser messageだけを返します。
+本番Workerは`enable_request_signal`、APIは加えて`request_signal_passthrough`を使いますが、Stopの
+正本はbrowser abortと認可済みexplicit cancelです。今回のlocal multi-config E1 harnessでは
+disconnect単独のterminal cancelを決定的に観測できなかったため、E1はexplicit cancel、G3/G4は
+直接`Request.signal` abortを検査します。
 
 ## Reasoning contract
 
 ### 表示
 
-productionではraw reasoningを送信、保存、表示しません。
+productionではraw reasoning partを送信、保存、表示しません。Product Agentとtitle Agentのreasoningは
+`none`です。
 
 表示するstatus例:
 
@@ -138,29 +151,36 @@ reasoning deltaだけではtimerを延長しません。
 初期値:
 
 ```text
-30秒 useful outputなし → abort
-90秒 run全体未完了   → provider timeout
+30秒 useful outputなし → useful-output timeout
+90秒 run全体未完了   → total timeout
 ```
 
 実測で調整します。
 
 ### retry
 
-- tool side effect前のprovider timeoutは1回だけretry可能
-- tool side effect後は自動retryしない
-- retry時は同じbusiness idempotency keyを使う
+- model responseは自動retryしない
+- 明示的なuser retryは新しいsubmission IDを使い、business idempotency contractは維持する
 - user Stopは自動retryしない
 
 ## Web検索contract
 
 - exact public queryをAPI guardで再検証する
+- 外側の空白だけを除いたqueryを2〜200文字で検証し、同じ文字列をJSON promptへ渡す
+- provider内の検索engineが使う内部query文字列は保証対象外
 - query guard失敗時はproviderとquotaを呼ばない
 - nested Agentを作らない
-- search provider timeoutをAgent run timeoutより短くする
+- timeout 25秒、`maxRetries: 0`、OpenRouter request 1件、reasoningなし
+- Phase 2はQwen向けbeta server toolのlive compatibility失敗を受け、Exaの`web` pluginを
+  `max_results: 3`で一時利用する。server toolへ戻す場合も同じquery/source/G5契約を通す
 - sourceはHTTP(S) public URLだけ
 - result本文、source数、title、URLをboundedにする
 - provider固有errorをinternal telemetryへcodeとして残し、公開payloadへraw errorを出さない
 - search failureはtool-local errorとして返し、Issue writeへfallbackしない
+
+公開URLはAgent、Memory projection、API client、Webで同じcanonicalizerを使います。HTTP(S)だけを許可し、
+userinfo、private/reserved hostを拒否し、provider由来queryとfragmentは名前に依存せず全体を除去します。
+tool resultのsourceはcanonical `source-url` partへ昇格し、同一message内でcanonical URL単位に重複排除します。
 
 ## Issue attachment contract
 
@@ -168,6 +188,7 @@ reasoning deltaだけではtimerを延長しません。
 
 `add_issue_attachments`はstaged assetだけを受けます。
 
+- `get_issue`が返したcurrent revisionを使い、推測しない
 - 1回最大4件
 - `expectedRevision`必須
 - current permission必須
@@ -178,12 +199,14 @@ reasoning deltaだけではtimerを延長しません。
 
 `remove_issue_attachments`はready fileだけを受けます。
 
+- `get_issue`が返したcurrent revisionとfile IDを使い、推測しない
 - 1回最大20件
 - `expectedRevision`必須
 - current permission必須
 - 対象Issueに属するfileだけ
 - thumbnail整合を保つ
-- logical deleteとIssue revisionを同一transaction
+- typed owner/file rowのhard deleteとIssue revisionを同一transaction
+- physical objectを`deleting`へ遷移してstorage cleanupへ引き渡す
 
 ### 読取
 

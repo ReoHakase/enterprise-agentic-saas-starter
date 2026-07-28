@@ -34,4 +34,5 @@ export const createAgentModel = (apiKey?: string, baseURL?: string) =>
       enabled: false,
       exclude: true,
     },
+    usage: { include: true },
   })

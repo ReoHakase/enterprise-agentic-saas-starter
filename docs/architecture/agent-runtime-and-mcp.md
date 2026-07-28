@@ -41,6 +41,19 @@ MastraをAgent定義だけでなく、Memory、Storage、Approval、Workflow、o
 - PATはOAuth実装後の独立phaseにする
 - release前のため旧Agent contractとの後方互換性を維持しない
 
+## Runtime library baseline
+
+Phase 1とPhase 2の実装基準はAI SDK 7、`@ai-sdk/react` 4、OpenRouter provider 3、
+Mastra 1系、Node.js 24以上です。tool定義はMastra `createTool`、browser transportはAI SDK
+`createUIMessageStream`と`createUIMessageStreamResponse`、最終化待機はAI SDK 7の`onEnd`へ
+委譲します。独自tool DSL、独自UIMessage codec、stream末尾を検出するための
+`TransformStream`は追加しません。
+
+Mastra出力からUIMessage streamへの変換は`@mastra/ai-sdk`の`toAISdkStream`を使います。現在の
+adapterが要求する`version: "v6"`はUIMessage互換contractの指定であり、ApplicationのAI SDK 6
+依存を意味しません。adapterを迂回する手書き変換は作らず、Mastra側のAI SDK 7対応が公開された
+場合は同じboundary内で更新します。
+
 ## 対象外
 
 - MCPからMastra Agentをsubagentとして呼ぶtool
@@ -288,6 +301,36 @@ production、Studio、testは同じstorage factoryを利用し、process内で�
 requestごとに`LibSQLStore`を生成しません。productionではAgent DB URLがApplication DB URLと同一なら
 起動を拒否します。
 
+### Application DBとの最小同期
+
+Agent応答の正本と回復journalはMastra Storageが所有します。Application DBとの同期点を次に限定します。
+
+- run開始時のticket consume、authorization、quota reservation
+- business toolごとの認可済みtransaction
+- main model usageの冪等記録
+- `completed`応答をMemoryへ保存した後のrun settlement 1回
+
+`waiting_approval`はbusiness action transactionがrunを遷移させるため、Memory commit専用の
+Application DB callを追加しません。thread title、message count、last message、commit状態の
+projectionも作りません。
+
+`memory-commit` workflowへのdurable stageを生成済み応答の線形化点にします。以後は
+`Memory.saveMessages`、completed run settlement、snapshot削除の順で進めます。settlementは
+`applicationRunId`だけを受け、running runをcompletedへCASし、missingまたはterminal runを
+状態変更なしでacknowledgeします。stage後のmembership、context epoch、thread、expiry変更を理由に
+messageをdiscardせず、read時のApplication registry認可で公開をfail closedにします。
+
+Worker eviction、deploy、CPU limit、OOM、`SIGKILL`相当は任意のawait間で起きるものとして扱います。
+suspended、running、success snapshotを新しいisolateからreconcileし、Memory保存とApp settlementを
+それぞれ冪等に再実行します。通常streamもcommit完了を待ち、`waitUntil`だけを正しさの根拠にしません。
+
+historyとthread listは、Application registryが許可した対象threadすべてについてpending snapshotを
+reconcileしてから一回限りのconnection ticketをconsumeします。ticket consume直後にもpending有無を
+再確認して競合をfail closedにします。最初の確認が1秒以内に収束しない場合やpendingが残る場合は、
+部分的な履歴を返さずticket未消費の503にします。consumeとの競合で直後の再確認が失敗した場合も
+503にします。このread barrierは既存のrun settlementを再実行するだけで、Application DBへ
+message projectionや新しい同期点を追加しません。
+
 ### 将来のComposite Storage
 
 初期実装は単一`LibSQLStore`です。trace量が増えた場合だけ次へ変更します。
@@ -349,6 +392,11 @@ GET /agent/threads
 archive済みthreadがAgent DBへ残っていても、Application DBの認可台帳で除外します。
 
 初期公開contractから`messageCount`を外してよいものとします。message countを必須にする場合は、Mastra Storageから取得する専用readを追加し、Application DBへ同期projectionを作らないことを優先します。
+title生成はmain responseを待たせないbest-effort処理です。失敗時は`New conversation`を維持し、
+製品品質へ影響しない低優先度の補助modelとして扱います。
+successful runはmain usage、Mastra workflow stage、Memory保存、Application run settlementを先に完了し、
+run/concurrencyを解放してからtitle taskを開始します。title usageは`title_<attempt>`の別eventとして、
+失効済みterminal run grantを許可するusage専用の冪等APIへ記録し、business capabilityへ再利用しません。
 
 ### 履歴
 
@@ -418,11 +466,11 @@ server toolとclient toolを分離します。
 
 ```text
 Stop
-  → browser stream abort
-  → stream先頭のtransient data-runで受け取ったopaque run IDを使う
-  → explicit cancel command
+  → streamを開いたままtransient data-runでopaque run IDを受け取る
+  → run IDを使って認可済みexplicit cancel commandを送る
   → runを冪等にcanceledへ遷移
   → quota reservationとgrantを解放
+  → browser streamをlocal abortする
   → pending submission IDを破棄
   → draftだけ復元
   → clearError
@@ -430,17 +478,24 @@ Stop
 ```
 
 network disconnectとprovider errorだけを同一submission IDでretry可能にします。
+Stop時のpartial assistant outputと`data-run`はsession-local UIだけに残し、Mastra Storageへ保存しません。
+canonical reloadは停止したuser messageだけを返します。cancelは未使用のgrant、concurrency reservation、
+leaseを解放しますが、既に消費したmodel、Web検索、vision quotaを払い戻しません。
+
+`enable_request_signal`とAPIの`request_signal_passthrough`は本番Workerの防御層です。Stopの正本は
+browser abortと認可済みexplicit cancelの組み合わせであり、network disconnectだけでDB上の
+`canceled`を保証しません。今回のlocal multi-config E1 harnessではdisconnect単独のterminal cancelを
+決定的に観測できなかったため、E1はexplicit cancel、G3/G4はAgentへ直接渡した`Request.signal`の
+abort分類とcancel先行settlementを検査します。
 
 `data-run`は表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
 最終stepに完了済みの`ui_*` toolだけが存在する場合に限定し、server tool完了では開始しません。
 
 ## Reasoning
 
-production UIへraw reasoning全文を表示しません。`sendReasoning: false`を既定にし、boundedなstatusだけ表示します。
+production UIへraw reasoning partを送信、保存、表示しません。`sendReasoning: false`を既定にし、boundedなstatusだけ表示します。
 
-- default reasoningは`none`または`low`
-- 複雑なtaskだけ`medium`
-- title Agentはreasoningなし
+- Product Agentとtitle Agentのreasoningは`none`
 - title生成はmain stream開始を妨げない
 - text、tool call、tool resultが一定時間ないreasoning-only状態をtimeoutする
 - tool side effect後の自動model retryは禁止する
@@ -457,9 +512,21 @@ Product Agent
   → Product Agentが結果を要約
 ```
 
-公開queryの完全一致、PIIとprivate情報拒否、quota、source URL検証は維持します。検索結果は本文とURLのbounded projectionだけを返し、provider固有payloadを保存しません。
+公開queryの完全一致、PIIとprivate情報拒否、quota、source URL検証は維持します。外側の空白だけを
+除いた2〜200文字のqueryを検証し、その同じ文字列をOpenRouterのJSON promptへ変更せず渡します。
+provider内の検索engineが内部で使うquery文字列までは保証しません。検索は25秒、`maxRetries: 0`、
+reasoningなしです。Phase 2はOpenRouterへQwenとExa `web` plugin
+（`max_results: 3`）を持つ1 requestだけを送り、検索結果は本文とURLのbounded projectionだけを返し、
+provider固有payloadを保存しません。
 
-OpenRouter server toolを利用する場合でも、別Agentを挟まずprovider adapterから直接呼びます。exact query保証が必要なため、queryをモデルに生成させる方式より直接search APIを優先します。
+Phase 2のlive compatibility確認では同じQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
+非推奨予定のpluginを一時利用します。provider SDKまたはroute更新後にserver toolを再検証し、
+exact query、1 request、public source projection、timeout、G5 3/3を維持できた時点で置き換えます。
+どちらの経路でも別Agentを挟みません。
+
+Agent、Memory projection、API client、Webは`agent-contracts`の同じpublic URL canonicalizerを使います。
+tool resultのsourceはcanonical `source-url` partへ昇格し、既存sourceとcanonical URL単位で重複排除します。
+provider由来queryとfragmentは名前に依存せず全体を除去し、userinfo、private/reserved hostは拒否します。
 
 ## Issue attachment tool
 
@@ -477,7 +544,7 @@ remove_issue_attachments
 - `issueId`
 - `expectedRevision`
 - staged `assetIds`
-- current permission
+- current Issue update permission
 - asset owner、expiry、typeの検証
 - promotion、Issue mutation、claim transfer、auditを同じtransaction
 
@@ -486,10 +553,11 @@ remove_issue_attachments
 - `issueId`
 - `expectedRevision`
 - `fileIds`
-- current permission
+- current Issue update permission
 - 対象Issue ownership
 - thumbnail整合
-- logical delete、Issue revision、auditを同じtransaction
+- typed owner/file rowのhard delete、Issue revision、auditを同じtransaction
+- physical objectは同じtransactionで`deleting`へ遷移し、storage cleanupへ引き渡す
 
 raw bytes、R2 key、ETag、private URLをtool resultへ含めません。
 
@@ -506,13 +574,15 @@ APIが正本です。
 - Web search quota
 - file quota
 
-Mastraはstep、tool call、timeout、model retryの実行上限を扱います。
+Mastraはstep、tool call、timeoutの実行上限を扱います。model responseの自動retryは行いません。
 
 ### Usage
 
 AgentまたはAI Gatewayがprovider usageを観測し、APIへ1回settleします。APIはpricing、credit、planを適用してbillable ledgerを更新します。
 
 Mastra observabilityはdebug、API usage ledgerは課金の正本です。
+
+Phase 3ではdirect provider検索をAI Gatewayのmain/search run profileへ統合し、main model、検索provider、検索toolのusageを同じrun IDで相関しつつ、それぞれを重複なく1回だけsettleする契約を確定します。
 
 ### Approval
 
@@ -523,7 +593,7 @@ Mastra observabilityはdebug、API usage ledgerは課金の正本です。
 
 Mastra Approvalだけをbusiness authorizationとして信用しません。
 
-Mastra 1.52.1はWorkflowとAgent Approvalのsnapshotへ`RequestContext.toJSON()`を保存します。そのため
+Mastra 1.53.0はWorkflowとAgent Approvalのsnapshotへ`RequestContext.toJSON()`を保存します。そのため
 `RequestContext`はJSON-safeなopaque ID、expected revision、表示用policyだけに限定し、API client関数、
 executor、settlement callback、grant、resume ticket、provider key、cookie、private URLを置きません。
 executorとmodel adapterはcomposition closureから解決します。

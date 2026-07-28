@@ -1,47 +1,20 @@
 import { createTool } from "@mastra/core/tools"
 
 import {
-  type createPublicWebResearchAgent,
-  publicWebResearchProviderOptions,
-} from "../../agents/public-web-research-agent"
-import {
   type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../runtime/request-context"
-import {
-  executePublicWebSearch,
-  type RawPublicWebResearchResult,
-} from "./execute"
+import { executePublicWebSearch } from "./execute"
 import { publicWebSearchInputSchema } from "./schema"
-
-const PUBLIC_WEB_RESEARCH_TIMEOUT_MS = 60_000
-
-const searchWithIsolatedAgent = async (
-  researchAgent: ReturnType<typeof createPublicWebResearchAgent>,
-  query: string,
-  abortSignal?: AbortSignal
-): Promise<RawPublicWebResearchResult> => {
-  const timeoutSignal = AbortSignal.timeout(PUBLIC_WEB_RESEARCH_TIMEOUT_MS)
-  const searchSignal = abortSignal
-    ? AbortSignal.any([abortSignal, timeoutSignal])
-    : timeoutSignal
-  const result = await researchAgent.generate(query, {
-    abortSignal: searchSignal,
-    maxSteps: 1,
-    modelSettings: { maxOutputTokens: 768, temperature: 0 },
-    providerOptions: publicWebResearchProviderOptions,
-  })
-  return {
-    error: result.error,
-    finishReason: result.finishReason,
-    sources: result.sources,
-    text: result.text,
-  }
-}
+import {
+  searchWithTimeout,
+  type PublicWebSearchProvider,
+} from "./search-timeout"
 
 export const createWebSearchTool = (
-  researchAgent: ReturnType<typeof createPublicWebResearchAgent>,
-  resolveExecution: ProductAgentExecutionResolver
+  search: PublicWebSearchProvider,
+  resolveExecution: ProductAgentExecutionResolver,
+  options: { onProviderError?: (cause: unknown) => void } = {}
 ) =>
   createTool<
     "web_search",
@@ -81,7 +54,12 @@ export const createWebSearchTool = (
             operationId,
           }),
         search: (query, abortSignal) =>
-          searchWithIsolatedAgent(researchAgent, query, abortSignal),
+          searchWithTimeout(
+            search,
+            query,
+            abortSignal,
+            options.onProviderError
+          ),
       })
     },
   })

@@ -1,18 +1,29 @@
 import type {
+  AddAttachmentWriteToolOutput,
+  AddIssueAttachmentsToolInput,
   AgentAccountContext,
+  AgentAttachmentMutationReceipt,
   AgentIssue,
   AgentIssueLabel,
   AgentMember,
   AgentOrganizationContext,
   IssueWriteToolOutput,
+  ReadIssueAttachmentImageToolResult,
+  ReadIssueAttachmentImageToolInput,
+  RemoveAttachmentWriteToolOutput,
+  RemoveIssueAttachmentsToolInput,
 } from "@enterprise-agentic-saas/agent-contracts"
 import { RequestContext } from "@mastra/core/request-context"
 import { noopObserve } from "@mastra/core/tools"
 import { describe, expect, it, vi } from "vitest"
 
 import { createReadAccountContextTool } from "./account/read-account-context"
+import type { AgentToolExecutor } from "./executor"
+import { createAddIssueAttachmentsTool } from "./issues/add-issue-attachments"
 import { createCreateIssueTool } from "./issues/create-issue"
 import { createDeleteIssueTool } from "./issues/delete-issue"
+import { createReadIssueAttachmentImageTool } from "./issues/read-issue-attachment-image"
+import { createRemoveIssueAttachmentsTool } from "./issues/remove-issue-attachments"
 import { createSearchIssueLabelsTool } from "./issues/search-issue-labels"
 import { createSearchIssuesTool } from "./issues/search-issues"
 import { createUpdateIssueTool } from "./issues/update-issue"
@@ -60,6 +71,85 @@ const invalidToolOutput = () =>
   Promise.resolve(JSON.parse('{"privateUrl":"private"}'))
 
 describe("shared read tool factories", () => {
+  it("validates image input and preserves result identity for model projection", async () => {
+    const abortController = new AbortController()
+    const result: ReadIssueAttachmentImageToolResult = {
+      contentType: "image/webp",
+      fileId: "file_1",
+      issueId: "issue_1",
+      sizeBytes: 4,
+    }
+    const bytesByResult = new WeakMap<object, Uint8Array>([
+      [result, Uint8Array.of(1, 2, 3, 4)],
+    ])
+    const executor = vi.fn<
+      AgentToolExecutor<
+        ReadIssueAttachmentImageToolInput,
+        ReadIssueAttachmentImageToolResult
+      >
+    >(() => Promise.resolve(result))
+    const toModelOutput = vi.fn<(output: unknown) => object>((output) => ({
+      type: "content",
+      value: [
+        {
+          type: "image",
+          data:
+            typeof output === "object" && output !== null
+              ? bytesByResult.get(output)
+              : undefined,
+          mimeType: "image/webp",
+        },
+      ],
+    }))
+    const tool = createReadIssueAttachmentImageTool(executor, toModelOutput)
+    const imageContext = {
+      ...context,
+      abortSignal: abortController.signal,
+    }
+    const output = await tool.execute?.(
+      { fileId: "file_1", issueId: "issue_1" },
+      imageContext
+    )
+
+    expect(output).toBe(result)
+    expect(executor).toHaveBeenCalledWith(
+      { fileId: "file_1", issueId: "issue_1" },
+      {
+        abortSignal: abortController.signal,
+        requestContext,
+        toolCallId: "call_1",
+      }
+    )
+    expect(tool.toModelOutput?.(output)).toEqual({
+      type: "content",
+      value: [
+        {
+          type: "image",
+          data: Uint8Array.of(1, 2, 3, 4),
+          mimeType: "image/webp",
+        },
+      ],
+    })
+    expect(toModelOutput).toHaveBeenCalledWith(result)
+
+    const invalidExecutor = vi.fn<
+      AgentToolExecutor<
+        ReadIssueAttachmentImageToolInput,
+        ReadIssueAttachmentImageToolResult
+      >
+    >(() => Promise.resolve(result))
+    const invalidImageInput = JSON.parse(
+      '{"fileId":"file_1","issueId":"issue_1","organizationId":"private_org"}'
+    )
+    await expect(
+      createReadIssueAttachmentImageTool(
+        invalidExecutor,
+        toModelOutput
+      ).execute?.(invalidImageInput, imageContext)
+    ).resolves.toMatchObject({ error: true })
+    expect(invalidExecutor).not.toHaveBeenCalled()
+  })
+
   it("passes bounded inputs, default limits, and execution context", async () => {
     const account = vi.fn<() => Promise<AgentAccountContext>>(() =>
       Promise.resolve({ name: "User", profileImage: null })
@@ -215,6 +305,148 @@ describe("shared read tool factories", () => {
 })
 
 describe("shared write tool factories", () => {
+  it("passes bounded attachment mutations once and validates the receipt", async () => {
+    const receipt: AgentAttachmentMutationReceipt = {
+      actionId: "action_1",
+      operation: "added",
+      issueId: "issue_1",
+      issueNumber: 1,
+      revision: 2,
+      fileIds: ["file_1"],
+    }
+    const add = vi.fn<
+      AgentToolExecutor<
+        AddIssueAttachmentsToolInput,
+        AddAttachmentWriteToolOutput
+      >
+    >(() => Promise.resolve(receipt))
+    const removedReceipt: AgentAttachmentMutationReceipt = {
+      ...receipt,
+      operation: "removed",
+    }
+    const remove = vi.fn<
+      AgentToolExecutor<
+        RemoveIssueAttachmentsToolInput,
+        RemoveAttachmentWriteToolOutput
+      >
+    >(() => Promise.resolve(removedReceipt))
+    await expect(
+      createAddIssueAttachmentsTool<unknown>(add).execute?.(
+        {
+          assetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).resolves.toEqual(receipt)
+    await expect(
+      createRemoveIssueAttachmentsTool<unknown>(remove).execute?.(
+        {
+          expectedRevision: 2,
+          fileIds: ["file_1"],
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).resolves.toMatchObject({ operation: "removed" })
+    expect(add).toHaveBeenCalledOnce()
+    expect(remove).toHaveBeenCalledOnce()
+    const wrongAddExecutor = vi.fn<
+      AgentToolExecutor<
+        AddIssueAttachmentsToolInput,
+        AddAttachmentWriteToolOutput
+      >
+    >(() => Promise.resolve(JSON.parse(JSON.stringify(removedReceipt))))
+    const wrongRemoveExecutor = vi.fn<
+      AgentToolExecutor<
+        RemoveIssueAttachmentsToolInput,
+        RemoveAttachmentWriteToolOutput
+      >
+    >(() => Promise.resolve(JSON.parse(JSON.stringify(receipt))))
+    await expect(
+      createAddIssueAttachmentsTool<unknown>(wrongAddExecutor).execute?.(
+        {
+          assetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    await expect(
+      createRemoveIssueAttachmentsTool<unknown>(wrongRemoveExecutor).execute?.(
+        {
+          expectedRevision: 2,
+          fileIds: ["file_1"],
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    const duplicateExecutor = vi.fn<
+      AgentToolExecutor<
+        AddIssueAttachmentsToolInput,
+        AddAttachmentWriteToolOutput
+      >
+    >(() => Promise.resolve(receipt))
+    await expect(
+      createAddIssueAttachmentsTool<unknown>(duplicateExecutor).execute?.(
+        {
+          assetIds: ["asset_1", "asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    expect(duplicateExecutor).not.toHaveBeenCalled()
+    await expect(
+      createAddIssueAttachmentsTool<unknown>(invalidToolOutput).execute?.(
+        {
+          assetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    await expect(
+      createRemoveIssueAttachmentsTool<unknown>(invalidToolOutput).execute?.(
+        {
+          expectedRevision: 2,
+          fileIds: ["file_1"],
+          issueId: "issue_1",
+        },
+        context
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    const contextWithoutToolCall = {
+      observe: noopObserve,
+      requestContext,
+    }
+    await expect(
+      createAddIssueAttachmentsTool<unknown>(add).execute?.(
+        {
+          assetIds: ["asset_1"],
+          expectedRevision: 1,
+          issueId: "issue_1",
+        },
+        contextWithoutToolCall
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+    await expect(
+      createRemoveIssueAttachmentsTool<unknown>(remove).execute?.(
+        {
+          expectedRevision: 2,
+          fileIds: ["file_1"],
+          issueId: "issue_1",
+        },
+        contextWithoutToolCall
+      )
+    ).rejects.toThrow("Agent tool execution failed")
+  })
+
   it("normalizes writes and preserves the provider tool-call identity", async () => {
     const create = vi.fn<() => Promise<IssueWriteToolOutput>>(() =>
       Promise.resolve(rejected)

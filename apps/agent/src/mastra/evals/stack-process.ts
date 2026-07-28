@@ -5,9 +5,20 @@ import { join, resolve } from "node:path"
 
 import { z } from "zod"
 
+import {
+  AGENT_STORAGE_AUTH_TOKEN,
+  APPLICATION_DATABASE_AUTH_TOKEN,
+  createAgentEvalConfigs,
+} from "./stack-config"
+import {
+  type AgentEvalFixtureIdentity,
+  fixtureIdentitySchema,
+  seedAndVerifySentinelMemory,
+  verifySentinelThroughPublicHistory,
+} from "./stack-memory-isolation"
+
 const repositoryRoot = resolve(import.meta.dirname, "../../../../..")
 const apiWorkspace = resolve(repositoryRoot, "apps/api")
-const agentWorkspace = resolve(repositoryRoot, "apps/agent")
 const databaseWorkspace = resolve(repositoryRoot, "packages/db")
 const fixtureScript = resolve(
   databaseWorkspace,
@@ -18,8 +29,6 @@ const scopeProbeScript = resolve(
   "scripts/agent-eval-scope-probes.ts"
 )
 const wranglerBinary = resolve(apiWorkspace, "node_modules/.bin/wrangler")
-const APPLICATION_DATABASE_AUTH_TOKEN: string = "agent-eval-application-token"
-const AGENT_STORAGE_AUTH_TOKEN: string = "agent-eval-storage-token"
 
 const inheritedEnvironment = Object.fromEntries(
   ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "LC_ALL"].flatMap(
@@ -32,27 +41,22 @@ const inheritedEnvironment = Object.fromEntries(
 
 type ManagedProcess = ReturnType<typeof Bun.spawn>
 
-const fixtureIdentitySchema = z
-  .object({
-    organizationId: z.string().min(1),
-    sessionId: z.string().min(1),
-    userId: z.string().min(1),
-  })
-  .passthrough()
-
 const usageSnapshotSchema = z
   .object({
     actions: z.array(
       z
         .object({
           completedAt: z.number().int().nonnegative().nullable(),
+          canonicalPreview: z.unknown(),
           createdAt: z.number().int().nonnegative(),
           decidedAt: z.number().int().nonnegative().nullable(),
           id: z.string().min(1),
           kind: z.string().min(1),
           organizationId: z.string().min(1),
           resultId: z.string().nullable(),
+          receipt: z.unknown(),
           status: z.string().min(1),
+          threadId: z.string().min(1),
         })
         .passthrough()
     ),
@@ -72,6 +76,7 @@ const usageSnapshotSchema = z
           id: z.string().min(1),
           organizationId: z.string().min(1),
           priority: z.string().min(1),
+          revision: z.number().int().positive(),
           title: z.string().min(1),
         })
         .passthrough()
@@ -79,10 +84,37 @@ const usageSnapshotSchema = z
     usage: z.array(
       z
         .object({
+          calculatedCostMicros: z.number().int().nonnegative(),
           isEstimate: z.boolean(),
+          imageInputCount: z.number().int().nonnegative(),
+          inputTokenCount: z.number().int().nonnegative(),
           model: z.string().min(1),
           organizationId: z.string().min(1),
+          outputTokenCount: z.number().int().nonnegative(),
+          pricingVersion: z.string().min(1),
+          providerCostMicros: z.number().int().nonnegative().nullable(),
+          runEventId: z.string().min(1),
           threadId: z.string().min(1),
+        })
+        .passthrough()
+    ),
+    runs: z.array(
+      z
+        .object({
+          id: z.string().min(1),
+          organizationId: z.string().min(1),
+          status: z.string().min(1),
+          threadId: z.string().min(1),
+          webSearchUsedAt: z.number().int().nonnegative().nullable(),
+        })
+        .passthrough()
+    ),
+    files: z.array(
+      z
+        .object({
+          id: z.string().min(1),
+          organizationId: z.string().min(1),
+          status: z.string().min(1),
         })
         .passthrough()
     ),
@@ -114,12 +146,11 @@ const scopeProbeResultSchema = z.union([
   scopeProbeSchema,
   z.object({ failureStage: scopeProbeFailureStageSchema }).strict(),
 ])
-
 export type AgentEvalStack = {
   apiOrigin: string
   close: () => Promise<void>
   databaseEnvironment: Record<string, string>
-  identity: z.infer<typeof fixtureIdentitySchema>
+  identity: AgentEvalFixtureIdentity
 }
 
 export type AgentEvalStackUsageSnapshot = z.infer<typeof usageSnapshotSchema>
@@ -209,93 +240,6 @@ const writePrivateFile = async (path: string, contents: string) => {
   await writeFile(path, contents, { encoding: "utf8", mode: 0o600 })
   await chmod(path, 0o600)
 }
-
-const createConfigs = (input: {
-  agentName: string
-  availableTools: readonly string[]
-  apiName: string
-  apiOrigin: string
-  agentDatabaseOrigin: string
-  databaseOrigin: string
-  namespace: string
-}) => ({
-  api: {
-    compatibility_date: "2026-07-22",
-    compatibility_flags: ["nodejs_compat"],
-    images: { binding: "IMAGES" },
-    main: resolve(apiWorkspace, "src/worker.ts"),
-    name: input.apiName,
-    observability: { enabled: false },
-    r2_buckets: [
-      {
-        binding: "FILES",
-        bucket_name: `agent-eval-${input.namespace.slice(-32)}`,
-      },
-    ],
-    services: [
-      {
-        binding: "AGENT_RUNTIME",
-        entrypoint: "AgentRuntime",
-        service: input.agentName,
-      },
-    ],
-    vars: {
-      AGENT_ASSET_UPLOAD_ENABLED: "0",
-      API_PUBLIC_URL: input.apiOrigin,
-      APP_BASE_URL: input.apiOrigin,
-      APP_NAME: "Enterprise Agentic SaaS Agent Eval",
-      AUTH_COOKIE_DOMAIN: "127.0.0.1",
-      BETTER_AUTH_SECRET:
-        "agent-eval-only-secret-with-at-least-thirty-two-characters",
-      BETTER_AUTH_URL: input.apiOrigin,
-      CORS_ORIGIN: input.apiOrigin,
-      EMAIL_FROM: "noreply@example.test",
-      EMAIL_PROVIDER: "noop",
-      GITHUB_CLIENT_ID: "agent-eval-unused",
-      GITHUB_CLIENT_SECRET: "agent-eval-unused-secret",
-      NODE_ENV: "test",
-      PORT: new URL(input.apiOrigin).port,
-      SENTRY_DSN: "",
-      SENTRY_ENVIRONMENT: "agent-eval",
-      SENTRY_RELEASE: "",
-      SENTRY_SPOTLIGHT: "",
-      SENTRY_TRACES_SAMPLE_RATE: "0",
-      TRUSTED_ORIGINS: input.apiOrigin,
-      TURSO_AUTH_TOKEN: APPLICATION_DATABASE_AUTH_TOKEN,
-      TURSO_DATABASE_URL: input.databaseOrigin,
-    },
-  },
-  agent: {
-    compatibility_date: "2026-07-22",
-    compatibility_flags: ["nodejs_compat"],
-    main: resolve(agentWorkspace, "src/mastra/worker.ts"),
-    migrations: [{ new_sqlite_classes: ["IssueAssistant"], tag: "v1" }],
-    name: input.agentName,
-    observability: { enabled: false },
-    preview_urls: false,
-    services: [
-      {
-        binding: "AGENT_INTERNAL_API",
-        entrypoint: "AgentInternalApi",
-        service: input.apiName,
-      },
-    ],
-    vars: {
-      AGENT_EVAL_ALLOWED_TOOLS: JSON.stringify(input.availableTools),
-      AGENT_RUNS_ENABLED: "1",
-      AGENT_VISION_ENABLED: "1",
-      AGENT_WRITES_ENABLED: "1",
-      MASTRA_STORAGE_AUTH_TOKEN: AGENT_STORAGE_AUTH_TOKEN,
-      MASTRA_STORAGE_URL: input.agentDatabaseOrigin,
-      NODE_ENV: "test",
-      SENTRY_DSN: "",
-      SENTRY_ENVIRONMENT: "agent-eval",
-      SENTRY_RELEASE: "",
-      SENTRY_TRACES_SAMPLE_RATE: "0",
-    },
-    workers_dev: false,
-  },
-})
 
 export const startAgentEvalStack = async ({
   availableTools,
@@ -424,11 +368,17 @@ export const startAgentEvalStack = async ({
     const identity = fixtureIdentitySchema.parse(
       JSON.parse(await identityOutput)
     )
+    await seedAndVerifySentinelMemory({
+      agentDatabaseOrigin,
+      agentStorageAuthToken: AGENT_STORAGE_AUTH_TOKEN,
+      identity,
+      namespace,
+    })
     const names = {
       agentName: `enterprise-agent-eval-${namespace.slice(-32)}`,
       apiName: `enterprise-api-eval-${namespace.slice(-32)}`,
     }
-    const configs = createConfigs({
+    const configs = createAgentEvalConfigs({
       ...names,
       availableTools,
       apiOrigin,
@@ -485,6 +435,7 @@ export const startAgentEvalStack = async ({
       }
     )
     await waitForHttp(`${apiOrigin}/ready`, 180_000, "worker", wranglerProcess)
+    await verifySentinelThroughPublicHistory({ apiOrigin, identity })
     return { apiOrigin, close, databaseEnvironment, identity }
   } catch (cause) {
     await close()

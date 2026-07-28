@@ -7,7 +7,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
 
-import type { AgentRunGrant, AgentRunResult } from "../../../agent-client"
+import type { AgentRunGrant } from "../../../agent-client"
 import { AppError, publicErrors } from "../../../errors/app-error"
 import { bindAgentAssetsToRunInTransaction } from "../../files/public"
 import { createAgentToken, hashAgentToken } from "../crypto"
@@ -23,6 +23,12 @@ import {
   type AgentTransaction,
   type ValidGrant,
 } from "./repository-support"
+
+export {
+  cancelAgentRun,
+  cancelAgentRunForSession,
+  finishAgentRun,
+} from "./run-transition-repository"
 
 export type StartAgentRunInput = {
   grant: string
@@ -293,80 +299,6 @@ const startAgentRunWithRetry = async (
 
 export const startAgentRun = (db: Db, input: StartAgentRunInput) =>
   startAgentRunWithRetry(db, input)
-
-const transitionAgentRun = async (
-  db: Db,
-  input: {
-    grant: string
-    status: "completed" | "failed" | "canceled"
-    now?: Date
-  }
-): Promise<AgentRunResult> => {
-  const tokenHash = await hashAgentToken(input.grant)
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const context = await validateGrantInTransaction(tx, {
-        tokenHash,
-        kind: "run",
-        now,
-        allowTerminalRun: true,
-      })
-      if (!context.runId || !context.runStatus) {
-        throw publicErrors.unauthorized("Agent capability is invalid")
-      }
-      if (context.runStatus === input.status) {
-        return { runId: context.runId, status: context.runStatus }
-      }
-      if (
-        context.runStatus !== "running" &&
-        context.runStatus !== "waiting_approval"
-      ) {
-        throw publicErrors.conflict("Agent run is already terminal", {
-          resource: "agent_run",
-        })
-      }
-      const rows = await tx
-        .update(agentRuns)
-        .set({ status: input.status, finishedAt: now })
-        .where(
-          and(
-            eq(agentRuns.id, context.runId),
-            eq(agentRuns.organizationId, context.organizationId),
-            inArray(agentRuns.status, ["running", "waiting_approval"])
-          )
-        )
-        .returning({ id: agentRuns.id, status: agentRuns.status })
-      const run = rows[0]
-      if (!run) {
-        throw publicErrors.conflict("Agent run changed concurrently", {
-          resource: "agent_run",
-        })
-      }
-      await tx
-        .update(agentGrants)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentGrants.organizationId, context.organizationId),
-            eq(agentGrants.runId, context.runId),
-            isNull(agentGrants.revokedAt)
-          )
-        )
-      return { runId: run.id, status: run.status }
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "transitionAgentRun")
-  }
-}
-
-export const cancelAgentRun = (db: Db, input: { grant: string; now?: Date }) =>
-  transitionAgentRun(db, { ...input, status: "canceled" })
-
-export const finishAgentRun = (
-  db: Db,
-  input: { grant: string; outcome: "completed" | "failed"; now?: Date }
-) => transitionAgentRun(db, { ...input, status: input.outcome })
 
 export const withRunGrant = async <T>(
   db: Db,

@@ -147,6 +147,43 @@ export const createAgentService = (ports: AgentServicePorts) => {
     threadId: string
   }) => ports.archiveAgentThreadForSession(input)
 
+  const cancelAgentRun = async (
+    input: Parameters<AgentServicePorts["cancelAgentRunForSession"]>[0]
+  ) => {
+    const result = await ports.cancelAgentRunForSession(input)
+    const abortController = new AbortController()
+    const abortDeadline = setTimeout(
+      () =>
+        abortController.abort(
+          new DOMException("Agent abort timed out", "TimeoutError")
+        ),
+      1_000
+    )
+    try {
+      const response = await Promise.race([
+        ports.fetchAgentRuntime(
+          new Request(
+            `https://agent.internal/runs/${encodeURIComponent(input.runId)}/cancel`,
+            { method: "POST", signal: abortController.signal }
+          )
+        ),
+        new Promise<never>((_resolve, reject) => {
+          abortController.signal.addEventListener(
+            "abort",
+            () => reject(abortController.signal.reason),
+            { once: true }
+          )
+        }),
+      ])
+      await response.body?.cancel().catch(() => undefined)
+    } catch {
+      // The database cancellation remains authoritative and idempotent.
+    } finally {
+      clearTimeout(abortDeadline)
+    }
+    return result
+  }
+
   const prepareAgentChat = (
     input: Parameters<AgentServicePorts["prepareAgentChatForSession"]>[0]
   ) => ports.prepareAgentChatForSession(input)
@@ -316,6 +353,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
   }) => ports.putAgentApprovalPolicyForSession(input)
 
   return {
+    cancelAgentRun,
     archiveAgentThread,
     createAgentThread,
     decideAgentAction,

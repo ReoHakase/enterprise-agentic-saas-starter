@@ -301,20 +301,92 @@ Mastra traceを課金の正本にしません。
 - Agent tool callとUI state
 
 Mastra snapshotへaccess token、grant、session cookie、presigned URLを保存しません。
-Mastra 1.52.1では`RequestContext.toJSON()`もsnapshotへ保存されるため、関数、API client、settlement
+Mastra 1.53.0では`RequestContext.toJSON()`もsnapshotへ保存されるため、関数、API client、settlement
 callback、resume ticket、provider keyも置きません。resume capabilityはAPI再認可後に再発行し、
 永続化せず即時consumeします。
 
+## 応答messageのdurable commit
+
+chat応答の正本はMastra Storageです。Application DBへmessage副本やcommit可否の判断を持たせません。
+workflow run IDはApplication run IDから決定的に導出し、snapshotは`applicationRunId`、
+`threadId`、`resourceId`、`desiredOutcome`と、`drainUnsavedMessages()`で一度だけ取得した
+canonical message batchを持ちます。message IDはMastra native IDを変更せず、重複と上限を検査します。
+
+正常系の順序は次です。
+
+1. main model usageをApplication DBへ冪等記録する
+2. `memory-commit` workflowをsuspendし、応答batchをAgent DBへdurable stageする
+3. workflowをresumeし、`Memory.saveMessages`を同じmessage IDで冪等実行する
+4. `desiredOutcome=completed`だけ、private named Service Bindingの
+   `POST /internal/agent/memory/commit-settlement`でApplication runを精算する
+5. settlement acknowledgement後にworkflow snapshotを削除する
+6. background title taskを開始する
+
+2のdurable stageを、生成済み応答をcanonical historyへ採用する線形化点とします。通常のstreamは
+2から5の完了を待って閉じ、`waitUntil`はclient disconnect時の継続手段に限定します。
+`waiting_approval`はbusiness action transactionがApplication runを既に遷移させているため、
+Memory保存後の追加Application DB callを行いません。
+
+通常streamはAI SDK 7の`createUIMessageStream`にある`onEnd`を最終化barrierとして使います。
+commitは同じrequest内で最大4回、5ms、10ms、20msの間隔で試行します。それでも完了しない場合は
+`memory_commit_deferred`を記録し、runを`failed`へ上書きせず、snapshotを保持したままstreamを
+generic persistence errorで閉じます。後続のreconciliationがMemory保存、Application settlement、
+snapshot削除を同じIDで再実行します。
+
+settlement routeはpublic APIへmountせず、grantなしのService Binding callだけを受けます。入力は
+`applicationRunId`だけです。runが`running`なら`completed`へのCASとrun grant失効を同じ
+Application DB transactionで行い、missingまたは既存terminalなら状態を変えずacknowledgeします。
+stage後にsession、membership、thread、context epoch、expiryを再判定してmessageをdiscardしません。
+公開可否は各readのApplication registry認可で決めます。stageと同時にcancelまたはarchiveが先に
+terminal化した場合、Application ledgerはそのterminal状態を維持し、生成済みmessageはAgent DBへ
+残り得ますが、認可を失ったreadからは公開しません。
+
+保存失敗はpayloadを保ったまま再suspendします。Memory保存後にprocessが停止した場合は`success`
+snapshotを残し、次の同thread chat、history read、thread list、またはrequest時reconciliationが
+Application settlementとsnapshot削除を再試行します。recovery対象は`suspended | running | success`
+です。回復後もpending commitが残る場合は部分的な200を返さず、bounded recoverable unavailableを
+返します。process-local lockは正しさの根拠にしません。
+
+history readは対象thread、thread listはApplication registryが渡した最大1,000件のthreadすべてを
+reconciliation対象にします。最大1秒待ってpending有無を確認してからone-time connection ticketを
+consumeし、consume直後にも再確認します。最初の確認でpendingが残る場合はticketを消費せず503を
+返します。選択threadの探索はstatusごとに100件ずつpaginationし、総run数10,000件を上限として
+超過時はfail closedにします。request外のopportunistic sweepはstatusごとに先頭25件へ限定します。
+
+snapshotへgrant、resume ticket、API client、provider credential、provider metadata、
+private URL、provider raw errorを入れない。user-authored text自体をkeywordで拒否せず、
+runtime専用fieldを構造的に除外する。tool partはallowlist済みtool名とnative stateごとの
+strict schemaで投影し、検証済みinput/output、`step`、approval、attachment receiptだけを保持する。
+provider固有field、raw input、raw error、非公開URLはcanonical historyへ保存しない。
+
+projectionはtool名とstateの積をfail closedで検証します。`partial-call | call`はinputだけ、
+`result`はinputと検証済みoutput、`approval-requested`は未決定approval、`approval-responded`は
+boolean decision、`output-denied`は拒否decisionだけを許可します。`output-error`はraw causeを捨てて
+固定文言へ置き換えます。矛盾する組合せ、未知tool、schema不一致はraw値を残さず
+`Tool state unavailable`へ置き換えます。attachment receiptもshared bounded schemaで
+action ID、operation、Issue ID/number/revision、file IDだけを保持します。
+
+title taskのusageは`title_<attempt>`で別eventにし、
+terminal transitionでrun grantが失効した後もusage専用APIだけが同じgrantの冪等記録を許可します。
+title完了を待ってterminal transitionや次turnのconcurrency releaseを遅らせません。
+
+成功した`web_search` tool resultのsourceはstable ID付き`source-url` partへ昇格します。既存のnative
+source partと合わせてshared public URL canonicalizerを通し、同一message内でcanonical URL単位に
+重複排除します。provider由来queryとfragmentは名前に依存せず全体を除去し、userinfo、
+private/reserved hostを含むURLは保存しません。
+
 ## Failure behavior
 
-| failure                        | behavior                                                   |
-| ------------------------------ | ---------------------------------------------------------- |
-| Agent Storage unavailable      | 新しいrunとhistory readを503。業務DBを推測でfallbackしない |
-| Application DB unavailable     | 認可不能のためfail closed                                  |
-| registry作成後にAgent作成失敗  | 空registryを削除または同ID retry                           |
-| Memory保存後にusage settle失敗 | messageは保持し、usage settlementを冪等retry               |
-| hard delete時にAgent削除失敗   | 認可は失効済み。delete jobをretry                          |
-| Workflow snapshot復元失敗      | business actionを実行せず、明示的なrecoverable error       |
+| failure                          | behavior                                                   |
+| -------------------------------- | ---------------------------------------------------------- |
+| Agent Storage unavailable        | 新しいrunとhistory readを503。業務DBを推測でfallbackしない |
+| Application DB unavailable       | 認可不能のためfail closed                                  |
+| registry作成後にAgent作成失敗    | 空registryを削除または同ID retry                           |
+| durable stage前にAgent DB失敗    | runをfailedにし、streamをerrorで閉じる                     |
+| Memory保存後にApp settlement失敗 | success snapshotを保持し、同thread境界で冪等retry          |
+| cancel/archiveとcommitが競合     | App terminalを維持し、read認可でmessageを非公開にする      |
+| hard delete時にAgent削除失敗     | 認可は失効済み。delete jobをretry                          |
+| Workflow snapshot復元失敗        | business actionを実行せず、明示的なrecoverable error       |
 
 ## 検証
 

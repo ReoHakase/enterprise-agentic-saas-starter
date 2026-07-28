@@ -1,12 +1,12 @@
 import type { MastraCompositeStore } from "@mastra/core/storage"
 
 import { createAgentModel } from "../adapters/model/openrouter"
-import { createOpenRouterWebSearchTool } from "../adapters/model/openrouter-web-search"
+import { createDirectOpenRouterWebSearch } from "../adapters/model/openrouter-web-search"
+import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import {
   createProductAgent,
   createProductAgentMemory,
 } from "../agents/product-agent"
-import { createPublicWebResearchAgent } from "../agents/public-web-research-agent"
 import { createThreadTitleAgent } from "../agents/thread-title-agent"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import type { AgentStorageEnvironment } from "../storage"
@@ -26,20 +26,18 @@ export const createProductAgentComposition = (
       environment.OPENROUTER_API_KEY,
       environment.OPENROUTER_BASE_URL
     )
-  const publicWebResearchAgent = createPublicWebResearchAgent({
-    model,
-    tools: {
-      openrouter_web_search: createOpenRouterWebSearchTool(
-        environment.OPENROUTER_API_KEY,
-        environment.OPENROUTER_BASE_URL
-      ),
-    },
-  })
   const threadTitleAgent = createThreadTitleAgent(model)
   const executionRegistry = new ProductAgentExecutionRegistry()
   const productWebSearchTool = createWebSearchTool(
-    publicWebResearchAgent,
-    executionRegistry.resolve
+    createDirectOpenRouterWebSearch(
+      environment.OPENROUTER_API_KEY,
+      environment.OPENROUTER_BASE_URL
+    ),
+    executionRegistry.resolve,
+    {
+      onProviderError: (cause) =>
+        reportDevelopmentCauseChain(environment, "web-search-provider", cause),
+    }
   )
   const memory = createProductAgentMemory(storage)
   const productAgent = createProductAgent({
@@ -50,9 +48,9 @@ export const createProductAgentComposition = (
   })
   return {
     executionRegistry,
+    memory,
     productAgent,
     productWebSearchTool,
-    publicWebResearchAgent,
     threadTitleAgent,
   }
 }

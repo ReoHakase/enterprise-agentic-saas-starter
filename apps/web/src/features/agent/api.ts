@@ -9,6 +9,7 @@ import {
   parseAgentContextRevocation,
   parseAgentIssueAction,
   parseAgentMessagePage,
+  parseAgentRunResult,
   parseAgentThread,
   parseAgentThreads,
 } from "./schema"
@@ -43,6 +44,19 @@ export const createAgentThread = async (
 export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
   parseAgentThread(
     unwrap(await client.agent.threads({ threadId }).archive.post())
+  )
+
+export const cancelAgentRun = async (
+  client: ApiClient,
+  input: { runId: string; threadId: string }
+) =>
+  parseAgentRunResult(
+    unwrap(
+      await client.agent
+        .threads({ threadId: input.threadId })
+        .runs({ runId: input.runId })
+        .cancel.post()
+    )
   )
 
 export const listAgentMessages = async (

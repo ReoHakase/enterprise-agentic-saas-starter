@@ -1,7 +1,6 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   auditLogs,
-  fileCleanupJobs,
   files,
   issueFileOwners,
   member,
@@ -20,12 +19,9 @@ import {
   type PreviewableImageFormat,
 } from "./constants"
 import { decodeFileCursor, encodeFileCursor } from "./cursor"
+import { deleteReadyFilesInTransaction } from "./file-deletion-transaction"
 import type { FileDto, FileListDto } from "./model"
 import { getFileOwnerAdapter } from "./owner-adapters"
-import {
-  isLegacyFileStorage,
-  releaseDeletedFileStorageObjectsInTransaction,
-} from "./storage-object-release"
 
 export type StoredFile = typeof files.$inferSelect
 
@@ -37,6 +33,7 @@ type FileRow = {
 }
 
 export type FileWithOwner = StoredFile & { ownerId: string }
+export { deleteReadyFilesInTransaction }
 
 const fileSelection = {
   stored: files,
@@ -432,90 +429,18 @@ export const finalizePendingFile = async (
   }
 }
 
-const releaseUsage = async (
-  tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
-  input: { organizationId: string; sizeBytes: number }
-) => {
-  const rows = await tx
-    .update(organizationFileUsage)
-    .set({
-      usedBytes: sql`${organizationFileUsage.usedBytes} - ${input.sizeBytes}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(organizationFileUsage.organizationId, input.organizationId),
-        sql`${organizationFileUsage.usedBytes} >= ${input.sizeBytes}`
-      )
-    )
-    .returning({ usedBytes: organizationFileUsage.usedBytes })
-  if (!rows[0]) throw new Error("Organization file usage is inconsistent")
-}
-
 export const deleteReadyFile = async (
   db: Db,
   input: { actorUserId: string; file: FileWithOwner }
 ): Promise<boolean> => {
   try {
-    return await db.transaction(async (tx) => {
-      const now = new Date()
-      const rows = await tx
-        .delete(files)
-        .where(
-          and(
-            eq(files.id, input.file.id),
-            eq(files.organizationId, input.file.organizationId),
-            eq(files.status, "ready")
-          )
-        )
-        .returning({
-          keyVersion: files.keyVersion,
-          objectKey: files.objectKey,
-          sizeBytes: files.sizeBytes,
-          storageObjectId: files.storageObjectId,
-        })
-      const file = rows[0]
-      if (!file) return false
-      await releaseDeletedFileStorageObjectsInTransaction(tx, {
-        files: [file],
-        now,
-        organizationId: input.file.organizationId,
-      })
-      await releaseUsage(tx, {
-        organizationId: input.file.organizationId,
-        sizeBytes: file.sizeBytes,
-      })
-      if (isLegacyFileStorage(file)) {
-        await tx
-          .insert(fileCleanupJobs)
-          .values({
-            id: crypto.randomUUID(),
-            organizationId: input.file.organizationId,
-            kind: "exact",
-            objectKey: file.objectKey,
-          })
-          .onConflictDoNothing()
-      }
-      await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
+    return await db.transaction((tx) =>
+      deleteReadyFilesInTransaction(tx, {
         actorUserId: input.actorUserId,
-        fileId: input.file.id,
-        filename: input.file.filename,
-        kind: "file_deleted",
-        occurredAt: now,
-        organizationId: input.file.organizationId,
-        ownerId: input.file.ownerId,
+        files: [input.file],
+        now: new Date(),
       })
-      await tx.insert(auditLogs).values({
-        id: crypto.randomUUID(),
-        organizationId: input.file.organizationId,
-        actorUserId: input.actorUserId,
-        action: "file.deleted",
-        targetType: "file",
-        targetId: input.file.id,
-        metadata: {},
-      })
-      return true
-    })
+    )
   } catch (cause) {
     return preserveAppError(cause, "deleteReadyFile")
   }

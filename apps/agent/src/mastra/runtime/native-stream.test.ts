@@ -1,6 +1,24 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import { redactNativeStream } from "./native-stream"
+import {
+  observeUsefulNativeOutput,
+  projectServerTimeoutError,
+  redactNativeStream,
+} from "./native-stream"
+
+const streamOf = <Value>(...values: Value[]) =>
+  new ReadableStream<Value>({
+    start(controller) {
+      for (const value of values) controller.enqueue(value)
+      controller.close()
+    },
+  })
+
+const readAll = async <Value>(stream: ReadableStream<Value>) => {
+  const values: Value[] = []
+  for await (const value of stream) values.push(value)
+  return values
+}
 
 describe("native UIMessage stream privacy", () => {
   it("preserves native tool/source state while recursively removing provider metadata", async () => {
@@ -48,5 +66,50 @@ describe("native UIMessage stream privacy", () => {
     expect(JSON.stringify(redacted)).not.toContain("private response")
     expect(JSON.stringify(redacted)).not.toContain("private-trace")
     expect(JSON.stringify(redacted)).not.toContain("array-provider-secret")
+  })
+
+  it("projects only server timeout aborts to a bounded safe error", async () => {
+    await expect(
+      readAll(
+        projectServerTimeoutError(streamOf({ type: "abort" }), () => true)
+      )
+    ).resolves.toEqual([
+      { type: "error", errorText: "Agent response timed out." },
+    ])
+    await expect(
+      readAll(
+        projectServerTimeoutError(streamOf({ type: "abort" }), () => false)
+      )
+    ).resolves.toEqual([{ type: "abort" }])
+    await expect(
+      readAll(
+        projectServerTimeoutError(streamOf({ type: "text-delta" }), () => true)
+      )
+    ).resolves.toEqual([{ type: "text-delta" }])
+  })
+
+  it("resets activity only for useful native progress", async () => {
+    const onUseful = vi.fn<() => void>()
+    const usefulTypes = [
+      "text-delta",
+      "tool-input-start",
+      "tool-input-delta",
+      "tool-input-available",
+      "tool-input-error",
+      "tool-output-available",
+      "tool-output-denied",
+      "tool-output-error",
+      "tool-approval-request",
+    ]
+    await readAll(
+      observeUsefulNativeOutput(
+        streamOf(
+          { type: "reasoning-delta" },
+          ...usefulTypes.map((type) => ({ type }))
+        ),
+        onUseful
+      )
+    )
+    expect(onUseful).toHaveBeenCalledTimes(usefulTypes.length)
   })
 })

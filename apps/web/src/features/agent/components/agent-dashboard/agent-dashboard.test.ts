@@ -83,6 +83,7 @@ describe("agent action projection", () => {
         organizationId: "org/acme",
         attachments: [
           {
+            source: "asset",
             assetId: "asset one",
             filename: "incident.png",
             sizeBytes: 2048,
@@ -144,7 +145,7 @@ describe("agent action projection", () => {
     expect(
       screen.getByRole("group", { name: "Agent answer" })
     ).toHaveTextContent("The urgent Issue was confirmed.")
-    expect(screen.getByText(/"number": 7/u)).not.toBeVisible()
+    expect(screen.queryByText(/"number": 7/u)).not.toBeInTheDocument()
     expect(
       screen.getByRole("link", { name: "#7 Restore production access" })
     ).toBeVisible()

@@ -1,6 +1,9 @@
 import * as v from "valibot"
 
-import { agentUiMessageListSchema } from "../../agent-client"
+import {
+  agentJsonValueSchema,
+  agentUiMessageListSchema,
+} from "../../agent-client"
 import { isoTimestampModel } from "../../models/common"
 
 export const identifierModel = v.pipe(
@@ -10,6 +13,10 @@ export const identifierModel = v.pipe(
   v.maxLength(128),
   v.regex(/^[A-Za-z0-9_-]+$/)
 )
+export const agentRunParamsModel = v.strictObject({
+  threadId: identifierModel,
+  runId: identifierModel,
+})
 
 const agentUiMessageListModel = v.pipe(
   agentUiMessageListSchema,
@@ -107,6 +114,7 @@ const clientToolSuccessBase = {
   toolCallId: identifierModel,
   toolName: clientToolNameModel,
   state: v.literal("output-available"),
+  input: agentJsonValueSchema,
 }
 
 const clientToolSimpleOutputModel = v.strictObject({ ok: v.literal(true) })
@@ -186,6 +194,7 @@ const clientToolResultModel = v.variant("state", [
     toolCallId: identifierModel,
     toolName: clientToolNameModel,
     state: v.literal("output-error"),
+    input: v.optional(agentJsonValueSchema),
     errorText: v.pipe(v.string(), v.minLength(1), v.maxLength(500)),
   }),
 ])

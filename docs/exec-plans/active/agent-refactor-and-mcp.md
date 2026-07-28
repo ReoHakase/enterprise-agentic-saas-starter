@@ -41,7 +41,7 @@ linked_adrs:
 
 ## 前提条件
 
-- branchは`major-refactor`
+- branchは`agent-rearchitecture`
 - migration historyはappend-only
 - release前のため破壊的なAgent contract変更を許容する
 - schemaはValibotへ統一する
@@ -51,6 +51,8 @@ linked_adrs:
 - Agent WorkerはApplication DBとR2へ直接接続しない
 - API WorkerはAgent DBへ直接接続しない
 - MCP writeはOAuth scopeとcurrent permissionで直接実行する
+- Node.js 24以上、AI SDK 7、`@ai-sdk/react` 4、OpenRouter provider 3をruntime baselineにする
+- Mastra packageは互換する現行1系へ揃え、標準`createTool`、Memory、Workflow、stream adapterを優先する
 
 ## 変更対象path
 
@@ -162,7 +164,12 @@ serialized contractには使用しません。
 
 ### 1.5 Native stream
 
+- [x] `ai` 7.0.40、`@ai-sdk/react` 4.0.43、`@openrouter/ai-sdk-provider` 3.0.0へ更新する
+- [x] `@mastra/core` 1.53.0、`@mastra/ai-sdk` 1.6.3、`@mastra/memory` 1.23.1、
+      `@mastra/libsql` 1.17.1、`mastra` 1.20.2へ揃える
+- [x] browser client toolをAI SDKの汎用tool定義ではなくMastra `createTool`へ統一する
 - [x] Mastra native AI SDK UIMessage streamを返す
+- [x] AI SDK 7の`createUIMessageStream.onEnd`をfinalization barrierにする
 - [x] `toAISdkStream`後の再包装を削除する
 - [x] 独自canonical message codecを削除する
 - [x] API側`appendRunMessages`を削除する
@@ -212,60 +219,79 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 
 ### 2.1 Tool UI
 
-- [ ] server tool実行中にerror表示されないことを再現確認する
-- [ ] browser `onToolCall`が`ui_*`以外を無視することを確認する
-- [ ] running、completed、denied、failedの表示を分離する
-- [ ] tool-local errorをglobal errorへ昇格させない
-- [ ] raw tool payloadを既定表示しない
+- [x] server tool実行中にerror表示されないことを再現確認する
+- [x] browser `onToolCall`が`ui_*`以外を無視することを確認する
+- [x] running、completed、denied、failedの表示を分離する
+- [x] tool-local errorをglobal errorへ昇格させない
+- [x] raw tool payloadを既定表示しない
 
 ### 2.2 Stop
 
-- [ ] Stopを正常cancelとして扱う
-- [ ] stream先頭の一時的な`data-run` partでopaque run IDをWebへ渡す
-- [ ] abort時にpending submission IDを破棄する
-- [ ] draftだけを復元する
-- [ ] `clearError()`を呼ぶ
-- [ ] explicit cancel APIを追加する
-- [ ] cancel、Agent abort、expiryを冪等にする
-- [ ] cancel完了後に次turnを開始できる
-- [ ] quota reservationとgrantが残らない
-- [ ] 最終stepが完了済み`ui_*`だけの場合に限りclient tool結果を自動送信する
+- [x] Stopを正常cancelとして扱う
+- [x] stream先頭の一時的な`data-run` partでopaque run IDをWebへ渡す
+- [x] abort時にpending submission IDを破棄する
+- [x] draftだけを復元する
+- [x] `clearError()`を呼ぶ
+- [x] explicit cancel APIを追加する
+- [x] cancel、Agent abort、expiryを冪等にする
+- [x] cancel完了後に次turnを開始できる
+- [x] quota reservationとgrantが残らない
+- [x] 最終stepが完了済み`ui_*`だけの場合に限りclient tool結果を自動送信する
 
 ### 2.3 Reasoning
 
-- [ ] `sendReasoning: false`をproduction既定にする
-- [ ] default reasoningを`none`または`low`へ下げる
-- [ ] title生成をmain stream開始前に待たない
-- [ ] useful-output watchdogを追加する
-- [ ] run全体timeoutを明示する
-- [ ] tool side effect後の自動retryを禁止する
-- [ ] reasoning-only synthetic scenarioを追加する
+- [x] `sendReasoning: false`をproduction既定にする
+- [x] default reasoningを`none`へ下げる
+- [x] title生成をmain stream開始前に待たない
+- [x] useful-output watchdogを追加する
+- [x] run全体timeoutを明示する
+- [x] model responseの自動retryを禁止する
+- [x] reasoning-only synthetic scenarioを追加する
 
 ### 2.4 Web検索
 
-- [ ] nested Public Web Research Agentを削除する
-- [ ] direct search provider adapterへ置き換える
-- [ ] exact query、PII/private guard、quotaを維持する
-- [ ] source URL parserをprovider contractへ合わせる
-- [ ] provider failureをtool-local errorへする
-- [ ] success、timeout、invalid source、quota、guard failureを検査する
+- [x] nested Public Web Research Agentを削除する
+- [x] direct search provider adapterへ置き換える
+- [x] exact query、PII/private guard、quotaを維持する
+- [x] source URL parserをprovider contractへ合わせる
+- [x] provider failureをtool-local errorへする
+- [x] success、timeout、invalid source、quota、guard failureを検査する
 
 ### 2.5 Issue attachment
 
-- [ ] `add_issue_attachments`を追加する
-- [ ] `remove_issue_attachments`を追加する
-- [ ] `get_issue`と`read_issue_attachment_image`を共有toolへ移す
-- [ ] promotion、claim transfer、revision、auditをtransaction化する
-- [ ] thumbnail整合を保つ
-- [ ] Web、Agent、MCPで同じcontractを利用する
+- [x] `add_issue_attachments`を追加する
+- [x] `remove_issue_attachments`を追加する
+- [x] `get_issue`と`read_issue_attachment_image`を共有toolへ移す
+- [x] promotion、claim transfer、revision、auditをtransaction化する
+- [x] thumbnail整合を保つ
+- [x] WebとAgentで同じshared contractを利用する
+- [x] shared contractをPhase 4のMCP tool登録から再利用できる境界へ置く
+- [ ] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
+
+### 2.6 Mastra-owned durable commit
+
+- [x] canonical responseとrecovery journalをMastra Storageへ集約する
+- [x] workflow stageを生成済みresponseの線形化点にする
+- [x] Memory保存後だけApplication runを冪等settlementする
+- [x] `waiting_approval`ではMemory commit専用のApplication DB callを行わない
+- [x] session、membership、thread、context epoch、expiryの再判定でstaged responseをdiscardしない
+- [x] suspended、running、success snapshotを同thread境界でreconcileする
+- [x] 通常streamをfinalization完了まで閉じず、`waitUntil`を唯一のcorrectness boundaryにしない
+- [x] 同一requestのcommitをbounded retryし、未完了ならsnapshotを残してstreamをerrorにする
+- [x] historyとthread listの全対象threadをone-time ticket消費前にreconcileする
+- [x] ticket消費直後にもpending commitを再確認し、readとの競合をfail closedにする
+- [x] Memory保存直前、保存直後、Application settlement直後の`SIGKILL`から回復する
 
 ### Phase 2 exit criteria
 
-- [ ] 既知5症状の全再現testが成功する
-- [ ] Stop後に同じthreadで3回連続送信できる
-- [ ] Web検索がsource付きで成功する
-- [ ] attachment add/read/removeがE1で一巡する
-- [ ] fatal Agent errorがtool-local failureから発生しない
+- [x] 既知5症状の全再現testが成功する
+- [x] Stop後に同じthreadで3回連続送信できる
+- [x] Web検索がsource付きで成功する
+- [x] attachment add/read/removeがE1で一巡する
+- [x] fatal Agent errorがtool-local failureから発生しない
+
+機能条件、deterministic E1、G4の実process `SIGKILL` 3点、paid G5の5 case×3、
+Browser Mode、Cloudflare build、DB整合、`bun run check`のrequired gateはすべて完了しています。
 
 # Phase 3 Mastra機能とCloudflare AI基盤
 
@@ -293,6 +319,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [ ] logical model routeをAPI grantへ含める
 - [ ] Workers AIとAI Gatewayのprovider差をAgent定義へ漏らさない
 - [ ] `packages/ai`を作らない
+- [ ] direct provider検索をGatewayのmain/search run profileへ移し、main model、検索provider、検索toolのusageをrun単位で各1回だけsettleする
 
 ### Phase 3 exit criteria
 
@@ -388,7 +415,7 @@ PATはこのphaseへ含めません。
 - [x] Phase 1から開始し、PATを最後に分離する方針を決定した
 - [x] Phase 1Aとしてpackage境界、`get_issue` factory、Service Binding response検証を実装した
 - [x] Phase 1を実装した
-- [ ] Phase 2を実装した
+- [x] Phase 2を実装した
 - [ ] Phase 3を実装した
 - [ ] Phase 4を実装した
 - [ ] Phase 5を実装した
@@ -411,25 +438,30 @@ PATはこのphaseへ含めません。
 | 2026-07-28 | AgentはService BindingのJSON responseをendpoint別に検証する    | private field、未知field、型不一致、過大bodyをAgent runtimeへ入れない           |
 | 2026-07-28 | JSON-RPC request IDを業務冪等キーへ使用しない                  | transport retryと同じIDの別業務操作を混同せず、明示的なclient keyを要求する     |
 | 2026-07-28 | Approval永続化をPhase 1とPhase 3へ分ける                       | Phase 1で秘密を含まないsnapshot基盤を作り、Phase 3で再起動resumeを完成させる    |
+| 2026-07-28 | canonical response commitをMastra Storageへ集約する            | App/Agent同期を最小化し、cross-database transactionなしでSIGKILLから回復する    |
+| 2026-07-28 | PostgreSQL移行をdurable commitの解決策にしない                 | database製品を替えても別DB間のcommit順序とWorker中断は解決しない                |
+| 2026-07-28 | AI SDK 7と現行Mastra 1系をbaselineにする                       | stream、tool、Memory、Workflowの標準機能へ委譲し、手書きruntimeを減らす         |
 
 ## 検証証跡
 
-| command                                       | 結果   | 証跡                                     |
-| --------------------------------------------- | ------ | ---------------------------------------- |
-| `bun run check`                               | 成功   | Phase 1、2026-07-28                      |
-| `bun run typecheck`                           | 成功   | `bun run check`内                        |
-| `bun run lint`                                | 成功   | `bun run check`内                        |
-| `bun run test`                                | 成功   | `bun run check`内                        |
-| `bun run --cwd packages/agent-contracts test` | 成功   | 49 tests、coverage 100%                  |
-| `bun run --cwd packages/agent-tools test`     | 成功   | 13 tests、coverage 100%                  |
-| `bun run --cwd apps/agent test`               | 成功   | 198 tests、coverage閾値内                |
-| `bun run --cwd apps/api test`                 | 成功   | 317 tests、localhost許可                 |
-| `bun run --cwd packages/db db:check`          | 成功   | schema、migration、snapshot整合          |
-| `bun run test:browser`                        | 成功   | UI 95、Web 248、browser 6、W6 17+1 tests |
-| `bun run test:e2e`                            | 成功   | E1 3 tests                               |
-| `bun run test:eval:agent`                     | 未実行 | Phase 2、3                               |
-| `bun run build:cloudflare`                    | 成功   | Phase 1、3 Workers build                 |
-| `bun run dev:studio`、`studio:*`              | 成功   | health、3 Agents、paid smoke             |
+| command                                                                                             | 結果 | 証跡                                                       |
+| --------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------- |
+| `bun install`                                                                                       | 成功 | AI SDK 7、React 4、OpenRouter provider 3、現行Mastra 1系   |
+| `bun run check`                                                                                     | 成功 | Phase 2最終required gate、2026-07-28                       |
+| `bun run typecheck`                                                                                 | 成功 | Phase 2 current diff                                       |
+| `bun run check:static`                                                                              | 成功 | lint、Knip full/strict、jscpd                              |
+| `bun run test`                                                                                      | 成功 | root 42 tests、11 workspace tasks                          |
+| `bun run --cwd packages/agent-contracts test`                                                       | 成功 | 86 tests、coverage 100%                                    |
+| `bun run --cwd packages/agent-tools test`                                                           | 成功 | 15 tests、coverage 100%                                    |
+| `bun run --cwd apps/agent test`                                                                     | 成功 | 291 tests、coverage閾値内                                  |
+| `bun run --cwd apps/api test`                                                                       | 成功 | 350 tests、G4 3 testsを含む                                |
+| `bun run --cwd packages/db db:check`                                                                | 成功 | migration history、Drizzle snapshot、schema drift          |
+| `bun run test:browser`                                                                              | 成功 | UI 95、Web 256、browser 9、W6 Chromium 17 + WebKit 1 tests |
+| `bun run test:e2e`                                                                                  | 成功 | E1 3 tests                                                 |
+| `bunx vitest run --coverage.enabled=false src/modules/agent/agent.memory-crash.integration.test.ts` | 成功 | 実host `SIGKILL` 3点、3 tests                              |
+| `bun run --cwd apps/agent test:eval:agent`                                                          | 成功 | 全24/24、Phase 2必須15/15、`qwen/qwen3.6-flash`            |
+| `bun run build:cloudflare`                                                                          | 成功 | Web、API、Agent production dry-run bundle                  |
+| `bun run dev:studio`、`studio:*`                                                                    | 成功 | Phase 1 health、3 Agents、paid smoke                       |
 
 ## リスクとrollback
 
@@ -472,7 +504,7 @@ PATはこのphaseへ含めません。
 - API側の独自message historyとcanonical codecが削除される
 - Mastra Memory、Storage、Approval/Workflow、observabilityが有効になる
 - Agent DBとApplication DBがcredential分離される
-- Issue attachment add/remove/readがWeb AgentとMCPで共通利用できる
+- Issue attachment add/remove/readはWebとAgentでshared contractを利用し、Phase 4でMCPへ同じcontractを登録する
 - MCP OAuthで全business toolをread/writeできる
 - PATが最後のphaseで追加される
 - A1からA5、G1からG5、W1からW6、AUTH1からAUTH4、E1/E2の番号体系を維持する
