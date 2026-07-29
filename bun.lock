@@ -28,7 +28,6 @@
       "dependencies": {
         "@enterprise-agentic-saas/agent-contracts": "workspace:*",
         "@enterprise-agentic-saas/agent-tools": "workspace:*",
-        "@enterprise-agentic-saas/observability": "workspace:*",
         "@inference-net/otel-cf-workers": "2.5.0",
         "@mastra/ai-sdk": "catalog:",
         "@mastra/core": "catalog:",
@@ -69,7 +68,6 @@
         "@enterprise-agentic-saas/auth": "workspace:*",
         "@enterprise-agentic-saas/db": "workspace:*",
         "@enterprise-agentic-saas/email": "workspace:*",
-        "@enterprise-agentic-saas/observability": "workspace:*",
         "@inference-net/otel-cf-workers": "2.5.0",
         "@opentelemetry/api": "1.9.1",
         "@valibot/to-json-schema": "catalog:",
@@ -116,14 +114,11 @@
         "@better-auth-ui/react": "catalog:",
         "@enterprise-agentic-saas/api": "workspace:*",
         "@enterprise-agentic-saas/auth": "workspace:*",
-        "@enterprise-agentic-saas/observability": "workspace:*",
         "@enterprise-agentic-saas/ui": "workspace:*",
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/api-logs": "0.221.0",
         "@opentelemetry/exporter-logs-otlp-http": "0.221.0",
         "@opentelemetry/exporter-logs-otlp-proto": "0.221.0",
-        "@opentelemetry/exporter-metrics-otlp-http": "0.221.0",
-        "@opentelemetry/exporter-metrics-otlp-proto": "0.221.0",
         "@opentelemetry/exporter-trace-otlp-http": "0.221.0",
         "@opentelemetry/exporter-trace-otlp-proto": "0.221.0",
         "@opentelemetry/instrumentation": "0.221.0",
@@ -131,7 +126,6 @@
         "@opentelemetry/instrumentation-fetch": "0.221.0",
         "@opentelemetry/resources": "2.10.0",
         "@opentelemetry/sdk-logs": "0.221.0",
-        "@opentelemetry/sdk-metrics": "2.10.0",
         "@opentelemetry/sdk-node": "0.221.0",
         "@opentelemetry/sdk-trace-web": "2.10.0",
         "@streamdown/cjk": "catalog:",
@@ -290,18 +284,6 @@
         "@types/react": "catalog:",
         "@vitest/coverage-v8": "catalog:",
         "react-email": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/observability": {
-      "name": "@enterprise-agentic-saas/observability",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@enterprise-agentic-saas/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "@vitest/coverage-v8": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
       },
@@ -847,8 +829,6 @@
     "@enterprise-agentic-saas/email": ["@enterprise-agentic-saas/email@workspace:packages/email"],
 
     "@enterprise-agentic-saas/emulate": ["@enterprise-agentic-saas/emulate@workspace:apps/emulate"],
-
-    "@enterprise-agentic-saas/observability": ["@enterprise-agentic-saas/observability@workspace:packages/observability"],
 
     "@enterprise-agentic-saas/portless-topology": ["@enterprise-agentic-saas/portless-topology@workspace:packages/portless-topology"],
 
