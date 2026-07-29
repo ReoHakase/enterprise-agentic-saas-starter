@@ -104,7 +104,25 @@ export const checkObservability = async (
   tools: ObservabilityDependencies = dependencies
 ) => {
   try {
-    if (await ready(tools)) return
+    const [isReady, routes] = await Promise.all([
+      ready(tools),
+      tools.run(["portless", "list"]),
+    ])
+    const routeLines = routes.stdout.split("\n")
+    const hasAlias = (alias: string, port: string) =>
+      routeLines.some(
+        (line) =>
+          line.includes(`https://${alias}.localhost`) &&
+          line.includes(`localhost:${port}`) &&
+          line.includes("(alias)")
+      )
+    if (
+      isReady &&
+      routes.exitCode === 0 &&
+      hasAlias(GRAFANA_ALIAS, "3000") &&
+      hasAlias(OTEL_ALIAS, "4318")
+    )
+      return
   } catch {
     // The stable error below explains the only supported recovery.
   }

@@ -6,6 +6,13 @@ import {
   type ResolveConfigFn,
 } from "@inference-net/otel-cf-workers"
 import {
+  context as otelContext,
+  SpanStatusCode,
+  trace,
+  type Context,
+  type Span,
+} from "@opentelemetry/api"
+import {
   logs,
   type LoggerProvider as OtelLoggerProvider,
 } from "@opentelemetry/api-logs"
@@ -69,6 +76,120 @@ const connectMastraLoggerProvider = (environment: AgentRuntimeEnv) => {
   mastraLoggerProviderConnected = true
 }
 
+type AgentHttpTelemetryAttributes = Record<
+  string,
+  boolean | number | string | undefined
+>
+
+const definedAgentHttpAttributes = (attributes: AgentHttpTelemetryAttributes) =>
+  Object.fromEntries(
+    Object.entries(attributes).filter(
+      (entry): entry is [string, boolean | number | string] =>
+        entry[1] !== undefined
+    )
+  )
+
+const logAgentHttpEvent = (
+  environment: AgentRuntimeEnv,
+  message: string,
+  attributes: AgentHttpTelemetryAttributes,
+  level: "error" | "info" | "warn" = "info"
+) => {
+  const resource = resolveLocalTelemetryResource(environment)
+  if (!resource) return
+  const eventAttributes = definedAgentHttpAttributes({
+    ...resource,
+    ...attributes,
+    "event.name": message,
+  })
+  trace.getActiveSpan()?.addEvent(message, eventAttributes)
+  getLogger("enterprise-agentic-saas-agent")[level](message, eventAttributes)
+}
+
+const flushAgentTelemetry = async (input: {
+  attributes: AgentHttpTelemetryAttributes
+  composition: ReturnType<typeof getAgentIsolateComposition>
+  environment: AgentRuntimeEnv
+  pending: Set<Promise<unknown>>
+  requestContext: Context
+  startedAt: number
+  streamStartedAt: number
+  stream?: ReadableStream<Uint8Array>
+  streamSpan?: Span
+}) => {
+  let byteCount = 0
+  let chunkCount = 0
+  let firstByteAt: number | undefined
+  try {
+    if (input.stream) {
+      await input.stream.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            if (firstByteAt === undefined) {
+              const observedAt = performance.now()
+              firstByteAt = observedAt
+              otelContext.with(input.requestContext, () => {
+                logAgentHttpEvent(
+                  input.environment,
+                  "Agent response first byte",
+                  {
+                    ...input.attributes,
+                    time_to_first_byte_ms: Number(
+                      (observedAt - input.startedAt).toFixed(2)
+                    ),
+                  }
+                )
+              })
+            }
+            byteCount += chunk.byteLength
+            chunkCount += 1
+          },
+        })
+      )
+    }
+    const completedAt = performance.now()
+    input.streamSpan?.setAttributes({
+      "agent.stream.byte_count": byteCount,
+      "agent.stream.chunk_count": chunkCount,
+      "agent.stream.duration_ms": Number(
+        (completedAt - input.streamStartedAt).toFixed(2)
+      ),
+    })
+    otelContext.with(input.requestContext, () => {
+      logAgentHttpEvent(input.environment, "Agent request completed", {
+        ...input.attributes,
+        byte_count: byteCount,
+        chunk_count: chunkCount,
+        duration_ms: Number((completedAt - input.startedAt).toFixed(2)),
+      })
+    })
+  } catch {
+    input.streamSpan?.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: "Agent response stream failed",
+    })
+    otelContext.with(input.requestContext, () => {
+      logAgentHttpEvent(
+        input.environment,
+        "Agent response stream failed",
+        {
+          ...input.attributes,
+          byte_count: byteCount,
+          chunk_count: chunkCount,
+        },
+        "error"
+      )
+    })
+  } finally {
+    input.streamSpan?.end()
+  }
+  await Promise.allSettled(input.pending)
+  await Promise.race([
+    input.composition.mastra.observability.flush().catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+  ])
+}
+
 const agentRuntimeHandler = {
   async fetch(
     request: Request,
@@ -77,6 +198,13 @@ const agentRuntimeHandler = {
   ): Promise<Response> {
     connectMastraLoggerProvider(environment)
     const composition = getAgentIsolateComposition(environment)
+    const requestStartedAt = performance.now()
+    const requestPath = new URL(request.url).pathname
+    const activeContext = otelContext.active()
+    logAgentHttpEvent(environment, "Agent request started", {
+      "http.request.method": request.method,
+      "http.route": requestPath,
+    })
     const pending = new Set<Promise<unknown>>()
     const observedContext = {
       waitUntil(promise: Promise<unknown>) {
@@ -88,37 +216,101 @@ const agentRuntimeHandler = {
         context.waitUntil(promise)
       },
     }
-    const response = await handleAgentRuntimeRequest(
-      request,
-      environment,
-      observedContext,
-      {
-        captureFailure: createAgentFailureCapture(environment),
-        createControlPlane: createAgentInternalGateway,
-        executionRegistry: composition.executionRegistry,
-        createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-        mastra: composition.mastra,
-        requireModelCredential: true,
-        threadTitleAgent: composition.threadTitleAgent,
-        toControlFailure: toAgentControlFailure,
-      }
-    )
-    const flushAfterStream = async (stream?: ReadableStream<Uint8Array>) => {
-      if (stream) {
-        await stream.pipeTo(new WritableStream())
-      }
-      await Promise.allSettled(pending)
-      await Promise.race([
-        composition.mastra.observability.flush().catch(() => undefined),
-        new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
-      ])
+    let response: Response
+    try {
+      response = await handleAgentRuntimeRequest(
+        request,
+        environment,
+        observedContext,
+        {
+          captureFailure: createAgentFailureCapture(environment),
+          createControlPlane: createAgentInternalGateway,
+          executionRegistry: composition.executionRegistry,
+          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
+          mastra: composition.mastra,
+          requireModelCredential: true,
+          threadTitleAgent: composition.threadTitleAgent,
+          toControlFailure: toAgentControlFailure,
+        }
+      )
+    } catch (error) {
+      trace
+        .getActiveSpan()
+        ?.recordException(new Error("Agent request handler failed"))
+      logAgentHttpEvent(
+        environment,
+        "Agent request failed",
+        {
+          duration_ms: Number(
+            (performance.now() - requestStartedAt).toFixed(2)
+          ),
+          "http.request.method": request.method,
+          "http.route": requestPath,
+        },
+        "error"
+      )
+      throw error
     }
+    const responseAttributes = {
+      "http.request.method": request.method,
+      "http.response.status_code": response.status,
+      "http.route": requestPath,
+      response_header_duration_ms: Number(
+        (performance.now() - requestStartedAt).toFixed(2)
+      ),
+    }
+    logAgentHttpEvent(
+      environment,
+      "Agent response headers returned",
+      responseAttributes,
+      response.status >= 500
+        ? "error"
+        : response.status >= 400
+          ? "warn"
+          : "info"
+    )
     if (!response.body) {
-      context.waitUntil(flushAfterStream())
+      context.waitUntil(
+        flushAgentTelemetry({
+          attributes: responseAttributes,
+          composition,
+          environment,
+          pending,
+          requestContext: activeContext,
+          startedAt: requestStartedAt,
+          streamStartedAt: requestStartedAt,
+        })
+      )
       return response
     }
     const [clientBody, telemetryBody] = response.body.tee()
-    context.waitUntil(flushAfterStream(telemetryBody))
+    const streamStartedAt = performance.now()
+    const streamSpan = trace
+      .getTracer("enterprise-agentic-saas-agent")
+      .startSpan(
+        "Agent response stream",
+        {
+          attributes: definedAgentHttpAttributes({
+            ...resolveLocalTelemetryResource(environment),
+            ...responseAttributes,
+          }),
+        },
+        activeContext
+      )
+    const streamContext = trace.setSpan(activeContext, streamSpan)
+    context.waitUntil(
+      flushAgentTelemetry({
+        attributes: responseAttributes,
+        composition,
+        environment,
+        pending,
+        requestContext: streamContext,
+        startedAt: requestStartedAt,
+        streamStartedAt,
+        stream: telemetryBody,
+        streamSpan,
+      })
+    )
     return new Response(clientBody, response)
   },
 }

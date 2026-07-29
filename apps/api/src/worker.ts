@@ -131,12 +131,18 @@ export const createWorkerOtelConfig: ResolveConfigFn<WorkerObservabilityEnv> = (
 ) => resolveWorkerOtelConfig(workerEnv)
 
 const configureWorkerObservability = (workerEnv: WorkerObservabilityEnv) => {
+  const resource = resolveLocalTelemetryResource(
+    workerEnv,
+    "enterprise-agentic-saas-api"
+  )
   const runtime = createOtelObservabilityRuntime(
     "enterprise-agentic-saas-api",
-    resolveLocalTelemetryResource(workerEnv, "enterprise-agentic-saas-api")
+    resource
   )
   configureObservability(
-    withStructuredConsole(runtime, "enterprise-agentic-saas-api")
+    resource
+      ? withStructuredConsole(runtime, "enterprise-agentic-saas-api")
+      : runtime
   )
 }
 

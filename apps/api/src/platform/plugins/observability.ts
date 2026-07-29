@@ -1,6 +1,7 @@
 import { Elysia, StatusMap } from "elysia"
 
 import {
+  logObservedEvent,
   logObservedResponse,
   setObservedRequestContext,
 } from "../observability/runtime"
@@ -42,6 +43,11 @@ export const observabilityPlugin = new Elysia({
       method: request.method,
       requestId,
       route: route || "unmatched",
+    })
+    logObservedEvent("info", "HTTP request started", {
+      http_method: request.method,
+      http_route: route || "unmatched",
+      request_id: requestId,
     })
   })
   .onAfterResponse(({ request, responseValue, route, set }) => {

@@ -14,12 +14,16 @@ export type ErrorTelemetryContext = RequestTelemetryContext & {
   statusCode: number
 }
 
+export type TelemetryLevel = "error" | "info" | "warn"
+
 export type ObservabilityRuntime = {
   captureException(error: unknown, context: ErrorTelemetryContext): void
-  logResponse(
-    level: "error" | "info" | "warn",
+  logEvent(
+    level: TelemetryLevel,
+    message: string,
     attributes: TelemetryAttributes
   ): void
+  logResponse(level: TelemetryLevel, attributes: TelemetryAttributes): void
   recordHttpStatus(statusCode: number, errorCode?: string): void
   setRequestContext(context: RequestTelemetryContext): void
   startSpan<T>(
@@ -34,6 +38,7 @@ export type ObservabilityRuntime = {
 
 const noopRuntime: ObservabilityRuntime = {
   captureException: () => undefined,
+  logEvent: () => undefined,
   logResponse: () => undefined,
   recordHttpStatus: () => undefined,
   setRequestContext: () => undefined,
@@ -64,10 +69,18 @@ export const captureObservedException = (
 }
 
 export const logObservedResponse = (
-  level: "error" | "info" | "warn",
+  level: TelemetryLevel,
   attributes: TelemetryAttributes
 ): void => {
   ignoreTelemetryFailure(() => runtime.logResponse(level, attributes))
+}
+
+export const logObservedEvent = (
+  level: TelemetryLevel,
+  message: string,
+  attributes: TelemetryAttributes
+): void => {
+  ignoreTelemetryFailure(() => runtime.logEvent(level, message, attributes))
 }
 
 export const recordObservedHttpStatus = (

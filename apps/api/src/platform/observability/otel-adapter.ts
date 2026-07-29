@@ -42,6 +42,16 @@ export const createOtelObservabilityRuntime = (
         "exception.stacktrace": recorded.stack ?? "",
       })
     },
+    logEvent(level, message, attributes) {
+      const eventAttributes = {
+        ...resource,
+        ...attributes,
+      }
+      trace
+        .getActiveSpan()
+        ?.addEvent(message, scalarAttributes(eventAttributes))
+      logger[level](message, eventAttributes)
+    },
     logResponse(level, attributes) {
       logger[level]("HTTP request completed", {
         ...resource,

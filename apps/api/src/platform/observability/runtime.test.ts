@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   captureObservedException,
   configureObservability,
+  logObservedEvent,
   logObservedResponse,
   type ObservabilityRuntime,
   recordObservedHttpStatus,
@@ -12,6 +13,7 @@ import {
 
 const noopRuntime = (): ObservabilityRuntime => ({
   captureException: () => undefined,
+  logEvent: () => undefined,
   logResponse: () => undefined,
   recordHttpStatus: () => undefined,
   setRequestContext: () => undefined,
@@ -27,6 +29,9 @@ describe("observability runtime failure containment", () => {
     const telemetryFailure = new Error("synthetic telemetry failure")
     configureObservability({
       captureException: () => {
+        throw telemetryFailure
+      },
+      logEvent: () => {
         throw telemetryFailure
       },
       logResponse: () => {
@@ -48,6 +53,11 @@ describe("observability runtime failure containment", () => {
         requestId: "request_1",
         route: "/synthetic",
         statusCode: 500,
+      })
+    ).not.toThrow()
+    expect(() =>
+      logObservedEvent("info", "Synthetic event", {
+        requestId: "request_1",
       })
     ).not.toThrow()
     expect(() =>

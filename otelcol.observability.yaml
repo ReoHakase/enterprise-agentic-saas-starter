@@ -49,6 +49,8 @@ processors:
           - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
       - context: span
         statements:
+          - set(resource.attributes["dev.worktree.id"], attributes["dev.worktree.id"]) where resource.attributes["dev.worktree.id"] == nil and attributes["dev.worktree.id"] != nil
+          - set(resource.attributes["dev.session.id"], attributes["dev.session.id"]) where resource.attributes["dev.session.id"] == nil and attributes["dev.session.id"] != nil
           - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
           - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")

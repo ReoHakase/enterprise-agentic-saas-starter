@@ -4,6 +4,8 @@ const telemetry = vi.hoisted(() => {
   const span = {
     end: vi.fn<() => void>(),
     recordException: vi.fn<(error: Error) => void>(),
+    addEvent:
+      vi.fn<(name: string, attributes?: Record<string, unknown>) => void>(),
     setAttribute: vi.fn<(key: string, value: unknown) => void>(),
     setAttributes: vi.fn<(attributes: Record<string, unknown>) => void>(),
     setStatus: vi.fn<(status: Record<string, unknown>) => void>(),
@@ -70,6 +72,9 @@ describe("OpenTelemetry observability adapter", () => {
       route: "/agent",
     })
     runtime.recordHttpStatus(503, "provider_failed")
+    runtime.logEvent("info", "Agent chat prepared", {
+      trigger: "submit-message",
+    })
     runtime.logResponse("warn", {
       provider: "openrouter",
       statusCode: 503,
@@ -107,6 +112,14 @@ describe("OpenTelemetry observability adapter", () => {
     expect(telemetry.logger.warn).toHaveBeenCalledWith(
       "HTTP request completed",
       expect.objectContaining({ provider: "openrouter" })
+    )
+    expect(telemetry.logger.info).toHaveBeenCalledWith(
+      "Agent chat prepared",
+      expect.objectContaining({ trigger: "submit-message" })
+    )
+    expect(telemetry.span.addEvent).toHaveBeenCalledWith(
+      "Agent chat prepared",
+      expect.objectContaining({ trigger: "submit-message" })
     )
     expect(telemetry.logger.error).toHaveBeenCalledWith(
       "HTTP request failed",

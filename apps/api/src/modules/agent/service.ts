@@ -6,6 +6,10 @@ import type {
   AgentRuntimeResumeInput,
 } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
+import {
+  logObservedEvent,
+  withObservedSpan,
+} from "../../platform/observability/runtime"
 import { agentActionExecutionResultModel } from "./action-schema"
 import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
 import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
@@ -127,6 +131,32 @@ const listAgentMessagesFromMemory = async (
   }
 }
 
+const observeAgentRuntimeChat = (
+  input: AgentRuntimeChatInput,
+  callback: () => Promise<Response>
+): Promise<Response> =>
+  withObservedSpan(
+    {
+      attributes: {
+        "agent.chat.asset_count": input.assetIds.length,
+        "agent.chat.context_reference_count": input.contextReferences.length,
+        "agent.chat.trigger": input.trigger,
+      },
+      name: "Call Agent runtime",
+      op: "agent.runtime.fetch",
+    },
+    () => {
+      logObservedEvent("info", "Agent runtime request started", {
+        "agent.chat.asset_count": input.assetIds.length,
+        "agent.chat.context_reference_count": input.contextReferences.length,
+        "agent.chat.reusable_asset_count": input.reusableAssets.length,
+        "agent.chat.trigger": input.trigger,
+        "agent.runtime.route": "/chat",
+      })
+      return callback()
+    }
+  )
+
 export const createAgentService = (ports: AgentServicePorts) => {
   const listAgentThreads = (input: AgentSessionIdentity) =>
     listAgentThreadsWithMemory(ports, input)
@@ -215,71 +245,90 @@ export const createAgentService = (ports: AgentServicePorts) => {
   const forwardAgentChat = async (
     input: AgentRuntimeChatInput,
     signal?: AbortSignal
-  ): Promise<Response> => {
-    let response: Response
-    try {
-      response = await ports.fetchAgentRuntime(
-        new Request("https://agent.internal/chat", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
-          signal,
+  ): Promise<Response> =>
+    observeAgentRuntimeChat(input, async () => {
+      let response: Response
+      try {
+        response = await ports.fetchAgentRuntime(
+          new Request("https://agent.internal/chat", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(input),
+            signal,
+          })
+        )
+      } catch (cause) {
+        logObservedEvent("error", "Agent runtime request failed", {
+          "agent.runtime.route": "/chat",
         })
-      )
-    } catch (cause) {
-      throw publicErrors.unavailable(cause)
-    }
+        throw publicErrors.unavailable(cause)
+      }
 
-    if (response.status !== 200) {
-      const status = response.status
-      const retryAfter =
-        status === 429
-          ? boundedRetryAfter(response.headers.get("retry-after"))
-          : null
-      await response.body?.cancel().catch(() => undefined)
-      const publicStatus =
-        status === 400 || status === 409 || status === 429 ? status : 503
-      return new Response(
-        publicStatus === 400
-          ? "Invalid agent request"
-          : publicStatus === 409
-            ? "Agent run already in progress"
-            : publicStatus === 429
-              ? "Agent capacity temporarily limited"
-              : "Agent unavailable",
+      const contentType = response.headers.get("content-type") ?? "missing"
+      logObservedEvent(
+        response.status >= 500
+          ? "error"
+          : response.status >= 400
+            ? "warn"
+            : "info",
+        "Agent runtime response received",
         {
-          status: publicStatus,
-          headers: {
-            "cache-control": "private, no-store",
-            "content-type": "text/plain; charset=utf-8",
-            ...(retryAfter === null
-              ? {}
-              : { "retry-after": String(retryAfter) }),
-          },
+          "agent.runtime.content_type": contentType,
+          "agent.runtime.route": "/chat",
+          "http.response.status_code": response.status,
         }
       )
-    }
 
-    if (
-      response.body === null ||
-      !response.headers.get("content-type")?.startsWith("text/event-stream")
-    ) {
-      await response.body?.cancel().catch(() => undefined)
-      throw publicErrors.unavailable(
-        new Error("Invalid Agent runtime response")
-      )
-    }
+      if (response.status !== 200) {
+        const status = response.status
+        const retryAfter =
+          status === 429
+            ? boundedRetryAfter(response.headers.get("retry-after"))
+            : null
+        await response.body?.cancel().catch(() => undefined)
+        const publicStatus =
+          status === 400 || status === 409 || status === 429 ? status : 503
+        return new Response(
+          publicStatus === 400
+            ? "Invalid agent request"
+            : publicStatus === 409
+              ? "Agent run already in progress"
+              : publicStatus === 429
+                ? "Agent capacity temporarily limited"
+                : "Agent unavailable",
+          {
+            status: publicStatus,
+            headers: {
+              "cache-control": "private, no-store",
+              "content-type": "text/plain; charset=utf-8",
+              ...(retryAfter === null
+                ? {}
+                : { "retry-after": String(retryAfter) }),
+            },
+          }
+        )
+      }
 
-    return new Response(response.body, {
-      status: 200,
-      headers: {
-        "cache-control": "private, no-store",
-        "content-type": "text/event-stream",
-        "x-accel-buffering": "no",
-        "x-vercel-ai-ui-message-stream": "v1",
-      },
+      if (
+        response.body === null ||
+        !contentType.startsWith("text/event-stream")
+      ) {
+        await response.body?.cancel().catch(() => undefined)
+        throw publicErrors.unavailable(
+          new Error("Invalid Agent runtime response")
+        )
+      }
+
+      return new Response(response.body, {
+        status: 200,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no",
+          "x-vercel-ai-ui-message-stream": "v1",
+        },
+      })
     })
-  }
 
   const forwardAgentActionResume = async (
     input: AgentRuntimeResumeInput
