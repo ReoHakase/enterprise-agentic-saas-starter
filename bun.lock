@@ -8,6 +8,7 @@
         "@commitlint/cli": "21.2.1",
         "@commitlint/config-conventional": "21.2.0",
         "@commitlint/types": "21.2.0",
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@socketsecurity/bun-security-scanner": "catalog:",
         "@spotlightjs/spotlight": "catalog:",
@@ -41,12 +42,12 @@
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
         "@vitest/coverage-v8": "catalog:",
         "mastra": "catalog:",
-        "portless": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
         "wrangler": "catalog:",
@@ -73,6 +74,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@libsql/client": "catalog:",
         "@sentry/cli": "catalog:",
@@ -93,6 +95,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "@vitest/coverage-v8": "catalog:",
@@ -143,6 +146,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@opennextjs/cloudflare": "catalog:",
         "@playwright/test": "catalog:",
@@ -240,6 +244,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@faker-js/faker": "catalog:",
         "@types/node": "catalog:",
@@ -259,12 +264,29 @@
         "react": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@react-email/ui": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
         "@vitest/coverage-v8": "catalog:",
         "react-email": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/portless-topology": {
+      "name": "@enterprise-agentic-saas/portless-topology",
+      "version": "0.0.0",
+      "bin": {
+        "portless-topology": "src/cli.ts",
+      },
+      "dependencies": {
+        "portless": "catalog:",
+      },
+      "devDependencies": {
+        "@enterprise-agentic-saas/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
       },
@@ -302,6 +324,7 @@
         "tw-animate-css": "catalog:",
       },
       "devDependencies": {
+        "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
         "@fontsource-variable/geist-mono": "catalog:",
         "@fontsource-variable/inter": "catalog:",
@@ -804,6 +827,8 @@
     "@enterprise-agentic-saas/email": ["@enterprise-agentic-saas/email@workspace:packages/email"],
 
     "@enterprise-agentic-saas/emulate": ["@enterprise-agentic-saas/emulate@workspace:apps/emulate"],
+
+    "@enterprise-agentic-saas/portless-topology": ["@enterprise-agentic-saas/portless-topology@workspace:packages/portless-topology"],
 
     "@enterprise-agentic-saas/typescript-config": ["@enterprise-agentic-saas/typescript-config@workspace:packages/typescript-config"],
 

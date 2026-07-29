@@ -17,6 +17,8 @@ description: enterprise-agentic-saas-starterのNix、direnv、dotenvx、Bun、Wr
 1. host、Nix shell、Bun、Workerのどのruntimeで失敗しているかを切り分ける。
 2. secretを表示せず、必要なenvironment variable名とbindingだけを確認する。
 3. repository commandとpackage scriptを正本にしてlocal serviceを起動する。
+   Portless公開URLは`bun run portless-topology resolve <logical-name>`で確認し、
+   serviceごとにraw `portless get`を実行しない。
 4. generated typeやlockfileは所有commandで再生成する。
 5. environment変更後はfresh shell相当とNix evaluationを検証する。
 

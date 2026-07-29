@@ -165,7 +165,7 @@ describe("Mastra Studio development configuration", () => {
     expect(studioScript).toBeTypeOf("string")
     expect(studioScript).toContain("MASTRA_AUTO_DETECT_URL=true")
     expect(studioScript).toContain(
-      "portless run --name mastra-studio.enterprise-agentic-saas"
+      "portless-topology run mastra-studio.enterprise-agentic-saas"
     )
   })
 })

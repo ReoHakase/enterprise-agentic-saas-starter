@@ -13,7 +13,7 @@
     "build:storybook": "storybook build",
     "cf:typegen": "wrangler types --include-runtime=false --env-interface CloudflareEnv cloudflare-env.d.ts && oxfmt cloudflare-env.d.ts",
     "deploy": "opennextjs-cloudflare deploy",
-    "dev": "portless run next dev --turbopack",
+    "dev": "portless-topology run enterprise-agentic-saas -- next dev --turbopack",
     "dev:portless": "bun run dev",
     "dev:spotlight": "spotlight run -p 8969 bun run dev",
     "e2e:emulate:github": "bun run --cwd ../emulate dev:http github",
@@ -23,7 +23,7 @@
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
     "start:test:browser:app": "env API_PUBLIC_URL=http://127.0.0.1:3001 NEXT_DIST_DIR=.next-browser NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3001 next start --hostname 127.0.0.1 --port 3000",
-    "storybook": "portless run --name storybook.enterprise-agentic-saas storybook dev --no-open --exact-port",
+    "storybook": "portless-topology run storybook.enterprise-agentic-saas -- storybook dev --no-open --exact-port",
     "test": "vitest run --project=unit",
     "test:browser": "bun run test:browser:components && bun run test:browser:app",
     "test:browser:app": "bun run build:test:browser:app && bun run test:browser:app:chromium && bun run test:browser:app:webkit",
@@ -76,6 +76,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@opennextjs/cloudflare": "catalog:",
     "@playwright/test": "catalog:",

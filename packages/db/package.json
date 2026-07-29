@@ -24,9 +24,9 @@
     "db:wait": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run src/development/wait.ts",
     "db:bootstrap": "bun run db:assert-local && bun run db:wait && bun run db:prepare",
     "db:studio": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} node node_modules/drizzle-kit/bin.cjs studio",
-    "db:turso": "portless run bun run db:turso:serve",
+    "db:turso": "portless-topology run db.enterprise-agentic-saas -- bun run db:turso:serve",
     "db:turso:serve": "mkdir -p .local/turso && turso dev --db-file .local/turso/dev.db --port ${PORT:-8080}",
-    "dev": "bun run db:bootstrap && bun run db:studio",
+    "dev": "portless-topology exec -- sh -c 'bun run db:bootstrap && bun run db:studio'",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
@@ -41,6 +41,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
     "@faker-js/faker": "catalog:",
     "@types/node": "catalog:",
