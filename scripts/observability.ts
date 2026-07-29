@@ -8,10 +8,9 @@ const COMPOSE_FILE = resolve(
 )
 const GRAFANA_ALIAS = "grafana.enterprise-agentic-saas"
 const OTEL_ALIAS = "otel.enterprise-agentic-saas"
-const GRAFANA_HEALTH =
-  "https://grafana.enterprise-agentic-saas.localhost/api/health"
+const GRAFANA_HEALTH = "http://127.0.0.1:3000/api/health"
 const COLLECTOR_HEALTH = "http://127.0.0.1:13133/ready"
-const OTLP_TRACES = "https://otel.enterprise-agentic-saas.localhost/v1/traces"
+const OTLP_TRACES = "http://127.0.0.1:4318/v1/traces"
 
 type RunResult = {
   exitCode: number
@@ -85,10 +84,13 @@ const ready = async (tools: ObservabilityDependencies) => {
     grafanaBody.database !== "ok"
   )
     return false
+  if (!collector.ok || collector.status !== 200) return false
+  const collectorBody = await collector.json()
   if (
-    !collector.ok ||
-    collector.status !== 200 ||
-    (await collector.text()).trim() !== "Server available"
+    typeof collectorBody !== "object" ||
+    collectorBody === null ||
+    !("status" in collectorBody) ||
+    collectorBody.status !== "Server available"
   )
     return false
   return (

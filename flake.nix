@@ -135,6 +135,19 @@
             };
           };
 
+          # MCP: Codexの管理対象設定と生成設定が同じ読み取り専用Grafana起動処理を使う。
+          grafanaMcp = pkgs.writeShellApplication {
+            name = "mcp-grafana-readonly";
+            runtimeInputs = [ pkgs.mcp-grafana ];
+            text = ''
+              export GRAFANA_URL="http://127.0.0.1:3000"
+              exec mcp-grafana \
+                --disable-write \
+                --enabled-tools=datasource,prometheus,loki,proxied \
+                "$@"
+            '';
+          };
+
           # MCP: bunx は nixpkgs 固定。npm package を固定するなら name@version にする。
           mcpServers = {
             chrome-devtools-mcp = {
@@ -154,26 +167,15 @@
             };
 
             grafana = {
-              command = "${pkgs.mcp-grafana}/bin/mcp-grafana";
-              args = [
-                "--disable-write"
-                "--enabled-tools=datasource,prometheus,loki,proxied"
-              ];
-              env.GRAFANA_URL = "http://127.0.0.1:3000";
+              command = "${grafanaMcp}/bin/mcp-grafana-readonly";
+              args = [ ];
             };
           };
 
           # MCP: Cursor は Claude Code 互換の stdio type を付ける。
           stdioMcpServers = lib.mapAttrs (_: server: server // { type = "stdio"; }) mcpServers;
 
-          # MCP: module が出せない Codex / Cursor だけ mkConfig で生成する。
-          codexMcpConfig = mcp-servers-nix.lib.mkConfig pkgs {
-            flavor = "codex";
-            format = "toml-inline";
-            fileName = ".mcp.toml";
-            settings.servers = mcpServers;
-          };
-
+          # MCP: Cursorだけmoduleが出力できないためmkConfigで生成する。
           cursorMcpConfig = mcp-servers-nix.lib.mkConfig pkgs {
             flavor = "claude-code";
             fileName = "mcp.json";
@@ -198,7 +200,6 @@
               )
 
               mkdir -p "$root/.cursor"
-              ln -sfn ${lib.escapeShellArg "${codexMcpConfig}"} "$root/.mcp.toml"
               ln -sfn ${lib.escapeShellArg "${cursorMcpConfig}"} "$root/.cursor/mcp.json"
 
               echo "agent-config: synced skills and MCP config"
@@ -247,6 +248,11 @@
           apps.sync-agent-config = {
             type = "app";
             program = "${syncAgentConfig}/bin/sync-agent-config";
+          };
+
+          apps.grafana-mcp = {
+            type = "app";
+            program = "${grafanaMcp}/bin/mcp-grafana-readonly";
           };
 
           packages = {

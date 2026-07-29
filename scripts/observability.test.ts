@@ -23,9 +23,14 @@ const tools = (
     const grafana = input.includes("/api/health")
     return {
       headers: {
-        get: () => (collector ? "text/plain" : "application/json"),
+        get: () => "application/json",
       },
-      json: async () => (grafana ? { database: "ok" } : {}),
+      json: async () =>
+        grafana
+          ? { database: "ok" }
+          : collector
+            ? { status: "Server available" }
+            : {},
       ok: true,
       status: 200,
       text: async () => (collector ? "Server available" : "{}"),
@@ -36,7 +41,7 @@ const tools = (
 })
 
 describe("local observability lifecycle", () => {
-  it("checks the fixed aliases without starting a process", async () => {
+  it("checks the fixed loopback endpoints without starting a process", async () => {
     const dependencies = tools()
 
     await checkObservability(dependencies)

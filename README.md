@@ -115,8 +115,9 @@ bun install --frozen-lockfile
 
 開発シェルはBun, Turso CLI, `sqld`, Mailpit, dotenvx, Portlessなどを提供します。
 起動時に`.agents/local-skills/`とNixで固定した外部`skill`を
-`.agents/skills/`へ同期し、Codex, VS Code, Cursor用のMCP設定も生成します。手動で
-同期する場合は次を実行します。
+`.agents/skills/`へ同期し、VS CodeとCursor用のMCP設定を生成します。Codexはバージョン管理する
+`.codex/config.toml`からNixで固定したMCPアプリケーションを起動します。手動で同期する場合は
+次を実行します。
 
 ```sh
 nix run .#sync-agent-config
