@@ -76,7 +76,7 @@ export default definePreview({
   },
   decorators: [
     (Story, context) => (
-      <WithQueryClient>
+      <WithQueryClient key={context.id}>
         <div
           className="min-h-64 bg-background p-6 text-foreground"
           data-storybook-content-root
