@@ -4,7 +4,7 @@ import { agentRunResultSchema } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
 import { tenantErrorResponses } from "../../../models/api"
 import {
-  logObservedEvent,
+  createObservedLogger,
   withObservedSpan,
 } from "../../../platform/observability/runtime"
 import type { AccessControlFactory } from "../../authorization/public"
@@ -20,6 +20,8 @@ import {
   createAgentThreadBodyModel,
 } from "../model"
 import type { AgentService } from "../service"
+
+const logger = createObservedLogger("agent").child("chat")
 
 export const createAgentConversationRoutes = (
   service: AgentService,
@@ -141,7 +143,7 @@ export const createAgentConversationRoutes = (
           "contentSegments" in body
             ? "user-message"
             : "client-tool-continuation"
-        logObservedEvent("info", "Agent chat request accepted", {
+        logger.info("Agent chat request accepted", {
           "agent.chat.kind": requestKind,
           "agent.chat.asset_count":
             "assetIds" in body ? body.assetIds.length : 0,
@@ -186,7 +188,7 @@ export const createAgentConversationRoutes = (
             new Error("Prepared Agent message is unavailable")
           )
         }
-        logObservedEvent("info", "Agent chat request prepared", {
+        logger.debug("Agent chat request prepared", {
           "agent.chat.asset_count": prepared.assetIds.length,
           "agent.chat.context_reference_count":
             prepared.contextReferences.length,

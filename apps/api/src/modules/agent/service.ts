@@ -7,7 +7,8 @@ import type {
 } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
 import {
-  logObservedEvent,
+  createObservedLogger,
+  injectObservedRequestHeaders,
   withObservedSpan,
 } from "../../platform/observability/runtime"
 import { agentActionExecutionResultModel } from "./action-schema"
@@ -15,6 +16,44 @@ import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
 import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
+const logger = createObservedLogger("agent").child("runtime")
+
+const agentRuntimeHeaders = (): Headers => {
+  const headers = new Headers({ "content-type": "application/json" })
+  injectObservedRequestHeaders(headers)
+  return headers
+}
+
+type AgentRuntimeSpanCompletion = {
+  promise: Promise<void>
+  reject(reason?: unknown): void
+  resolve(value?: void | PromiseLike<void>): void
+}
+
+const observeAgentRuntimeStream = (
+  spanCompletion: AgentRuntimeSpanCompletion,
+  body: ReadableStream<Uint8Array>
+) => {
+  const observedStream = new TransformStream<Uint8Array, Uint8Array>()
+  const completion = body.pipeTo(observedStream.writable).then(
+    () => {
+      logger.info("Agent runtime response stream completed", {
+        "agent.runtime.route": "/chat",
+      })
+      spanCompletion.resolve()
+      return undefined
+    },
+    (cause) => {
+      logger.error("Agent runtime response stream failed", {
+        "agent.runtime.route": "/chat",
+      })
+      spanCompletion.reject(cause)
+      throw cause
+    }
+  )
+  void completion.catch(() => undefined)
+  return observedStream.readable
+}
 
 const boundedRetryAfter = (value: string | null): number => {
   if (value && /^[1-9][0-9]{0,4}$/.test(value)) {
@@ -55,7 +94,7 @@ const listAgentThreadsWithMemory = async (
     response = await ports.fetchAgentRuntime(
       new Request("https://agent.internal/memory/threads", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: agentRuntimeHeaders(),
         body: JSON.stringify({
           registryThreadIds: registryThreads.map((thread) => thread.id),
           threadId: first.id,
@@ -108,7 +147,7 @@ const listAgentMessagesFromMemory = async (
     response = await ports.fetchAgentRuntime(
       new Request("https://agent.internal/memory/history", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: agentRuntimeHeaders(),
         body: JSON.stringify({
           threadId: input.threadId,
           ticket: capability.ticket,
@@ -133,7 +172,7 @@ const listAgentMessagesFromMemory = async (
 
 const observeAgentRuntimeChat = (
   input: AgentRuntimeChatInput,
-  callback: () => Promise<Response>
+  callback: (completion: AgentRuntimeSpanCompletion) => Promise<Response>
 ): Promise<Response> =>
   withObservedSpan(
     {
@@ -145,15 +184,21 @@ const observeAgentRuntimeChat = (
       name: "Call Agent runtime",
       op: "agent.runtime.fetch",
     },
-    () => {
-      logObservedEvent("info", "Agent runtime request started", {
+    (lifecycle) => {
+      const completion = Promise.withResolvers<void>()
+      lifecycle.endWhen(completion.promise)
+      void completion.promise.catch(() => undefined)
+      logger.debug("Agent runtime request started", {
         "agent.chat.asset_count": input.assetIds.length,
         "agent.chat.context_reference_count": input.contextReferences.length,
         "agent.chat.reusable_asset_count": input.reusableAssets.length,
         "agent.chat.trigger": input.trigger,
         "agent.runtime.route": "/chat",
       })
-      return callback()
+      return callback(completion).catch((cause) => {
+        completion.reject(cause)
+        throw cause
+      })
     }
   )
 
@@ -194,7 +239,11 @@ export const createAgentService = (ports: AgentServicePorts) => {
         ports.fetchAgentRuntime(
           new Request(
             `https://agent.internal/runs/${encodeURIComponent(input.runId)}/cancel`,
-            { method: "POST", signal: abortController.signal }
+            {
+              method: "POST",
+              headers: agentRuntimeHeaders(),
+              signal: abortController.signal,
+            }
           )
         ),
         new Promise<never>((_resolve, reject) => {
@@ -246,38 +295,36 @@ export const createAgentService = (ports: AgentServicePorts) => {
     input: AgentRuntimeChatInput,
     signal?: AbortSignal
   ): Promise<Response> =>
-    observeAgentRuntimeChat(input, async () => {
+    observeAgentRuntimeChat(input, async (spanCompletion) => {
       let response: Response
       try {
         response = await ports.fetchAgentRuntime(
           new Request("https://agent.internal/chat", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: agentRuntimeHeaders(),
             body: JSON.stringify(input),
             signal,
           })
         )
       } catch (cause) {
-        logObservedEvent("error", "Agent runtime request failed", {
+        logger.error("Agent runtime request failed", {
           "agent.runtime.route": "/chat",
         })
         throw publicErrors.unavailable(cause)
       }
 
       const contentType = response.headers.get("content-type") ?? "missing"
-      logObservedEvent(
+      logger[
         response.status >= 500
           ? "error"
           : response.status >= 400
             ? "warn"
-            : "info",
-        "Agent runtime response received",
-        {
-          "agent.runtime.content_type": contentType,
-          "agent.runtime.route": "/chat",
-          "http.response.status_code": response.status,
-        }
-      )
+            : "info"
+      ]("Agent runtime response received", {
+        "agent.runtime.content_type": contentType,
+        "agent.runtime.route": "/chat",
+        "http.response.status_code": response.status,
+      })
 
       if (response.status !== 200) {
         const status = response.status
@@ -286,6 +333,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
             ? boundedRetryAfter(response.headers.get("retry-after"))
             : null
         await response.body?.cancel().catch(() => undefined)
+        spanCompletion.resolve()
         const publicStatus =
           status === 400 || status === 409 || status === 429 ? status : 503
         return new Response(
@@ -319,7 +367,12 @@ export const createAgentService = (ports: AgentServicePorts) => {
         )
       }
 
-      return new Response(response.body, {
+      const clientBody = observeAgentRuntimeStream(
+        spanCompletion,
+        response.body
+      )
+
+      return new Response(clientBody, {
         status: 200,
         headers: {
           "cache-control": "private, no-store",
@@ -338,7 +391,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
       response = await ports.fetchAgentRuntime(
         new Request("https://agent.internal/actions/resume", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: agentRuntimeHeaders(),
           body: JSON.stringify(input),
         })
       )

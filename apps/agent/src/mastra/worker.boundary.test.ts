@@ -21,7 +21,12 @@ vi.mock("cloudflare:workers", () => ({
 
 vi.mock("@inference-net/otel-cf-workers", () => ({
   getLogger: () => ({
+    debug: vi.fn<() => void>(),
     emit: vi.fn<() => void>(),
+    error: vi.fn<() => void>(),
+    info: vi.fn<() => void>(),
+    setProperties: vi.fn<() => void>(),
+    warn: vi.fn<() => void>(),
   }),
   instrument: workerSpies.instrument,
   OTLPTransport: vi.fn<(options: unknown) => void>(),
@@ -106,5 +111,47 @@ describe("Agent Worker OpenTelemetry boundary", () => {
       })
     }
     expect(workerSpies.withNextSpan).not.toHaveBeenCalled()
+  })
+
+  it("prefers the API request identity for local Agent telemetry", () => {
+    workerSpies.withNextSpan.mockClear()
+    const request = new Request("https://agent.test/chat", {
+      headers: {
+        "x-dev-session-id": "api-session",
+        "x-dev-worktree-id": "main",
+      },
+    })
+
+    createAgentOtelConfig(
+      {
+        ...local,
+        DEV_SESSION_ID: "agent-process-session",
+      },
+      request
+    )
+
+    expect(workerSpies.withNextSpan).toHaveBeenCalledWith({
+      "dev.session.id": "api-session",
+      "dev.worktree.id": "main",
+      "service.name": "enterprise-agentic-saas-agent",
+    })
+  })
+
+  it("rejects malformed request identities and uses the process identity", () => {
+    workerSpies.withNextSpan.mockClear()
+    const request = new Request("https://agent.test/chat", {
+      headers: {
+        "x-dev-session-id": "api session",
+        "x-dev-worktree-id": "main",
+      },
+    })
+
+    createAgentOtelConfig(local, request)
+
+    expect(workerSpies.withNextSpan).toHaveBeenCalledWith({
+      "dev.session.id": "session-1",
+      "dev.worktree.id": "feature-auth",
+      "service.name": "enterprise-agentic-saas-agent",
+    })
   })
 })

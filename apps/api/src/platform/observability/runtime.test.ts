@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   captureObservedException,
   configureObservability,
-  logObservedEvent,
+  createObservedLogger,
+  injectObservedRequestHeaders,
   logObservedResponse,
   type ObservabilityRuntime,
   recordObservedHttpStatus,
@@ -11,13 +12,16 @@ import {
   withObservedSpan,
 } from "./runtime"
 
+const spanLifecycle = { endWhen: () => undefined }
+
 const noopRuntime = (): ObservabilityRuntime => ({
   captureException: () => undefined,
+  injectRequestHeaders: () => undefined,
   logEvent: () => undefined,
   logResponse: () => undefined,
   recordHttpStatus: () => undefined,
   setRequestContext: () => undefined,
-  startSpan: (_options, callback) => callback(),
+  startSpan: (_options, callback) => callback(spanLifecycle),
 })
 
 afterEach(() => {
@@ -29,6 +33,9 @@ describe("observability runtime failure containment", () => {
     const telemetryFailure = new Error("synthetic telemetry failure")
     configureObservability({
       captureException: () => {
+        throw telemetryFailure
+      },
+      injectRequestHeaders: () => {
         throw telemetryFailure
       },
       logEvent: () => {
@@ -43,7 +50,7 @@ describe("observability runtime failure containment", () => {
       setRequestContext: () => {
         throw telemetryFailure
       },
-      startSpan: (_options, callback) => callback(),
+      startSpan: (_options, callback) => callback(spanLifecycle),
     })
 
     expect(() =>
@@ -56,7 +63,7 @@ describe("observability runtime failure containment", () => {
       })
     ).not.toThrow()
     expect(() =>
-      logObservedEvent("info", "Synthetic event", {
+      createObservedLogger("test").info("Synthetic event", {
         requestId: "request_1",
       })
     ).not.toThrow()
@@ -74,6 +81,24 @@ describe("observability runtime failure containment", () => {
         route: "/synthetic",
       })
     ).not.toThrow()
+    expect(() => injectObservedRequestHeaders(new Headers())).not.toThrow()
+  })
+
+  it("adds hierarchical logger scope and inherited attributes", () => {
+    const logEvent = vi.fn<ObservabilityRuntime["logEvent"]>()
+    configureObservability({ ...noopRuntime(), logEvent })
+
+    createObservedLogger("agent", { component: "runtime" })
+      .child("chat", { operation: "forward" })
+      .debug("Agent request dispatched", { attempt: 1 })
+
+    expect(logEvent).toHaveBeenCalledWith("debug", "Agent request dispatched", {
+      attempt: 1,
+      component: "runtime",
+      "event.name": "Agent request dispatched",
+      "logger.scope": "agent.chat",
+      operation: "forward",
+    })
   })
 
   it("executes the application callback once inside a span", () => {
@@ -102,7 +127,7 @@ describe("observability runtime failure containment", () => {
           if (timing === "before") {
             throw new Error("synthetic span setup failure")
           }
-          run()
+          run(spanLifecycle)
           throw new Error("synthetic span completion failure")
         },
       })
@@ -124,7 +149,7 @@ describe("observability runtime failure containment", () => {
     const applicationFailure = new Error("synthetic application failure")
     configureObservability({
       ...noopRuntime(),
-      startSpan: (_options, run) => run(),
+      startSpan: (_options, run) => run(spanLifecycle),
     })
 
     expect(() =>

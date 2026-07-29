@@ -31,10 +31,29 @@ export { IssueAssistant } from "./legacy/issue-assistant"
 
 let mastraLoggerProviderConnected = false
 const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
+const AGENT_SERVICE_NAME = "enterprise-agentic-saas-agent"
+const LOCAL_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u
 
-const resolveLocalTelemetryResource = (environment: AgentRuntimeEnv) => {
-  const sessionId = environment.DEV_SESSION_ID?.trim()
-  const worktreeId = environment.DEV_WORKTREE_ID?.trim()
+const localRequestIdentity = (request?: Request) => {
+  const sessionId = request?.headers.get("x-dev-session-id")?.trim()
+  const worktreeId = request?.headers.get("x-dev-worktree-id")?.trim()
+  return sessionId &&
+    worktreeId &&
+    LOCAL_ID_PATTERN.test(sessionId) &&
+    LOCAL_ID_PATTERN.test(worktreeId)
+    ? { sessionId, worktreeId }
+    : undefined
+}
+
+const resolveLocalTelemetryResource = (
+  environment: AgentRuntimeEnv,
+  request?: Request
+) => {
+  const requestIdentity = localRequestIdentity(request)
+  const sessionId =
+    requestIdentity?.sessionId ?? environment.DEV_SESSION_ID?.trim()
+  const worktreeId =
+    requestIdentity?.worktreeId ?? environment.DEV_WORKTREE_ID?.trim()
   if (
     environment.NODE_ENV !== "development" ||
     environment.OTEL_EXPORTER_OTLP_ENDPOINT !== LOCAL_OTLP_HTTP_ENDPOINT ||
@@ -45,7 +64,7 @@ const resolveLocalTelemetryResource = (environment: AgentRuntimeEnv) => {
   return {
     "dev.session.id": sessionId,
     "dev.worktree.id": worktreeId,
-    "service.name": "enterprise-agentic-saas-agent",
+    "service.name": AGENT_SERVICE_NAME,
   }
 }
 
@@ -53,14 +72,18 @@ const connectMastraLoggerProvider = (environment: AgentRuntimeEnv) => {
   if (mastraLoggerProviderConnected) return
   const provider: OtelLoggerProvider = {
     getLogger(name) {
-      const logger = getLogger(name)
+      const scope = `mastra.${name}`
+      const logger = getLogger(`${AGENT_SERVICE_NAME}.${scope}`)
       const resource = resolveLocalTelemetryResource(environment)
       if (resource) logger.setProperties(resource)
       return {
         enabled: () => true,
         emit(record) {
           logger.emit({
-            attributes: record.attributes ?? {},
+            attributes: {
+              ...record.attributes,
+              "logger.scope": scope,
+            },
             body:
               typeof record.body === "string" ||
               (record.body !== null && typeof record.body === "object")
@@ -80,6 +103,15 @@ type AgentHttpTelemetryAttributes = Record<
   string,
   boolean | number | string | undefined
 >
+type AgentLogLevel = "debug" | "error" | "info" | "warn"
+type AgentLogger = {
+  child(segment: string, attributes?: AgentHttpTelemetryAttributes): AgentLogger
+  log(
+    level: AgentLogLevel,
+    message: string,
+    attributes?: AgentHttpTelemetryAttributes
+  ): void
+}
 
 const definedAgentHttpAttributes = (attributes: AgentHttpTelemetryAttributes) =>
   Object.fromEntries(
@@ -89,27 +121,36 @@ const definedAgentHttpAttributes = (attributes: AgentHttpTelemetryAttributes) =>
     )
   )
 
-const logAgentHttpEvent = (
-  environment: AgentRuntimeEnv,
-  message: string,
-  attributes: AgentHttpTelemetryAttributes,
-  level: "error" | "info" | "warn" = "info"
-) => {
-  const resource = resolveLocalTelemetryResource(environment)
-  if (!resource) return
-  const eventAttributes = definedAgentHttpAttributes({
-    ...resource,
-    ...attributes,
-    "event.name": message,
-  })
-  trace.getActiveSpan()?.addEvent(message, eventAttributes)
-  getLogger("enterprise-agentic-saas-agent")[level](message, eventAttributes)
-}
+const createAgentLogger = (
+  resource: ReturnType<typeof resolveLocalTelemetryResource>,
+  scope: string,
+  baseAttributes: AgentHttpTelemetryAttributes = {}
+): AgentLogger => ({
+  child: (segment, attributes = {}) =>
+    createAgentLogger(resource, `${scope}.${segment}`, {
+      ...baseAttributes,
+      ...attributes,
+    }),
+  log(level, message, attributes = {}) {
+    if (!resource) return
+    const eventAttributes = definedAgentHttpAttributes({
+      ...resource,
+      ...baseAttributes,
+      ...attributes,
+      "event.name": message,
+      "logger.scope": scope,
+    })
+    trace.getActiveSpan()?.addEvent(message, eventAttributes)
+    const logger = getLogger(`${AGENT_SERVICE_NAME}.${scope}`)
+    logger.setProperties(resource)
+    logger[level](message, eventAttributes)
+  },
+})
 
 const flushAgentTelemetry = async (input: {
   attributes: AgentHttpTelemetryAttributes
   composition: ReturnType<typeof getAgentIsolateComposition>
-  environment: AgentRuntimeEnv
+  logger: AgentLogger
   pending: Set<Promise<unknown>>
   requestContext: Context
   startedAt: number
@@ -129,16 +170,12 @@ const flushAgentTelemetry = async (input: {
               const observedAt = performance.now()
               firstByteAt = observedAt
               otelContext.with(input.requestContext, () => {
-                logAgentHttpEvent(
-                  input.environment,
-                  "Agent response first byte",
-                  {
-                    ...input.attributes,
-                    time_to_first_byte_ms: Number(
-                      (observedAt - input.startedAt).toFixed(2)
-                    ),
-                  }
-                )
+                input.logger.log("debug", "Agent response first byte", {
+                  ...input.attributes,
+                  time_to_first_byte_ms: Number(
+                    (observedAt - input.startedAt).toFixed(2)
+                  ),
+                })
               })
             }
             byteCount += chunk.byteLength
@@ -156,7 +193,7 @@ const flushAgentTelemetry = async (input: {
       ),
     })
     otelContext.with(input.requestContext, () => {
-      logAgentHttpEvent(input.environment, "Agent request completed", {
+      input.logger.log("info", "Agent request completed", {
         ...input.attributes,
         byte_count: byteCount,
         chunk_count: chunkCount,
@@ -169,16 +206,11 @@ const flushAgentTelemetry = async (input: {
       message: "Agent response stream failed",
     })
     otelContext.with(input.requestContext, () => {
-      logAgentHttpEvent(
-        input.environment,
-        "Agent response stream failed",
-        {
-          ...input.attributes,
-          byte_count: byteCount,
-          chunk_count: chunkCount,
-        },
-        "error"
-      )
+      input.logger.log("error", "Agent response stream failed", {
+        ...input.attributes,
+        byte_count: byteCount,
+        chunk_count: chunkCount,
+      })
     })
   } finally {
     input.streamSpan?.end()
@@ -201,9 +233,23 @@ const agentRuntimeHandler = {
     const requestStartedAt = performance.now()
     const requestPath = new URL(request.url).pathname
     const activeContext = otelContext.active()
-    logAgentHttpEvent(environment, "Agent request started", {
+    const telemetryResource = resolveLocalTelemetryResource(
+      environment,
+      request
+    )
+    if (telemetryResource) {
+      trace.getActiveSpan()?.setAttributes(telemetryResource)
+    }
+    const logger = createAgentLogger(telemetryResource, "http", {
       "http.request.method": request.method,
       "http.route": requestPath,
+    })
+    const runtimeLogger = createAgentLogger(telemetryResource, "runtime").child(
+      "request"
+    )
+    logger.log("debug", "Agent request started")
+    runtimeLogger.log("debug", "Agent runtime dispatch started", {
+      "agent.runtime.route": requestPath,
     })
     const pending = new Set<Promise<unknown>>()
     const observedContext = {
@@ -237,18 +283,11 @@ const agentRuntimeHandler = {
       trace
         .getActiveSpan()
         ?.recordException(new Error("Agent request handler failed"))
-      logAgentHttpEvent(
-        environment,
-        "Agent request failed",
-        {
-          duration_ms: Number(
-            (performance.now() - requestStartedAt).toFixed(2)
-          ),
-          "http.request.method": request.method,
-          "http.route": requestPath,
-        },
-        "error"
-      )
+      logger.log("error", "Agent request failed", {
+        duration_ms: Number((performance.now() - requestStartedAt).toFixed(2)),
+        "http.request.method": request.method,
+        "http.route": requestPath,
+      })
       throw error
     }
     const responseAttributes = {
@@ -259,22 +298,30 @@ const agentRuntimeHandler = {
         (performance.now() - requestStartedAt).toFixed(2)
       ),
     }
-    logAgentHttpEvent(
-      environment,
-      "Agent response headers returned",
-      responseAttributes,
+    runtimeLogger.log(
       response.status >= 500
         ? "error"
         : response.status >= 400
           ? "warn"
-          : "info"
+          : "info",
+      "Agent runtime response created",
+      responseAttributes
+    )
+    logger.log(
+      response.status >= 500
+        ? "error"
+        : response.status >= 400
+          ? "warn"
+          : "debug",
+      "Agent response headers returned",
+      responseAttributes
     )
     if (!response.body) {
       context.waitUntil(
         flushAgentTelemetry({
           attributes: responseAttributes,
           composition,
-          environment,
+          logger,
           pending,
           requestContext: activeContext,
           startedAt: requestStartedAt,
@@ -291,7 +338,7 @@ const agentRuntimeHandler = {
         "Agent response stream",
         {
           attributes: definedAgentHttpAttributes({
-            ...resolveLocalTelemetryResource(environment),
+            ...telemetryResource,
             ...responseAttributes,
           }),
         },
@@ -302,7 +349,7 @@ const agentRuntimeHandler = {
       flushAgentTelemetry({
         attributes: responseAttributes,
         composition,
-        environment,
+        logger,
         pending,
         requestContext: streamContext,
         startedAt: requestStartedAt,
@@ -316,11 +363,15 @@ const agentRuntimeHandler = {
 }
 
 export const createAgentOtelConfig: ResolveConfigFn<AgentRuntimeEnv> = (
-  environment
+  environment,
+  trigger
 ) => {
-  const resource = resolveLocalTelemetryResource(environment)
+  const resource = resolveLocalTelemetryResource(
+    environment,
+    trigger instanceof Request ? trigger : undefined
+  )
   if (!resource) {
-    return { service: { name: "enterprise-agentic-saas-agent" } }
+    return { service: { name: AGENT_SERVICE_NAME } }
   }
   withNextSpan(resource)
   return {

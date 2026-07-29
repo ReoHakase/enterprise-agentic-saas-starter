@@ -10,6 +10,7 @@ export const withStructuredConsole = (
       ...attributes,
       event: message,
       level,
+      logger: `${service}.${attributes["logger.scope"] ?? "application"}`,
       service,
       timestamp: new Date().toISOString(),
     }
@@ -18,6 +19,8 @@ export const withStructuredConsole = (
       console.error(payload)
     } else if (level === "warn") {
       console.warn(payload)
+    } else if (level === "debug") {
+      console.debug(payload)
     } else {
       console.info(payload)
     }
@@ -29,6 +32,7 @@ export const withStructuredConsole = (
       ...attributes,
       event: "http.response",
       level,
+      logger: `${service}.http`,
       service,
       timestamp: new Date().toISOString(),
     }
@@ -37,6 +41,8 @@ export const withStructuredConsole = (
       console.error(payload)
     } else if (level === "warn") {
       console.warn(payload)
+    } else if (level === "debug") {
+      console.debug(payload)
     } else {
       console.info(payload)
     }

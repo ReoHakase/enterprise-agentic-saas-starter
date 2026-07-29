@@ -1,7 +1,9 @@
 import { db } from "@enterprise-agentic-saas/db"
 import {
+  BatchTraceSpanProcessor,
   getLogger,
   instrument,
+  OTLPExporter,
   OTLPTransport,
   withNextSpan,
   type ResolveConfigFn,
@@ -36,7 +38,10 @@ import {
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
-import { createOtelObservabilityRuntime } from "./platform/observability/otel-adapter"
+import {
+  createOtelObservabilityRuntime,
+  withOtelObservabilityWaitUntil,
+} from "./platform/observability/otel-adapter"
 import { configureObservability } from "./platform/observability/runtime"
 import { withStructuredConsole } from "./platform/observability/structured-console"
 import { authPlugin } from "./platform/plugins/auth"
@@ -67,6 +72,12 @@ type WorkerScheduledController = {
 }
 
 const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
+
+class NonForcingTraceSpanProcessor extends BatchTraceSpanProcessor {
+  override forceFlush(): Promise<void> {
+    return Promise.resolve()
+  }
+}
 
 type LocalTelemetryEnvironment = {
   DEV_SESSION_ID?: string
@@ -104,12 +115,15 @@ export const resolveWorkerOtelConfig = (
   )
   if (resource) {
     withNextSpan(resource)
+    const traceExporterUrl = `${LOCAL_OTLP_HTTP_ENDPOINT}/v1/traces`
     return {
       service: { name: resource["service.name"] },
       trace: {
-        exporter: {
-          url: `${LOCAL_OTLP_HTTP_ENDPOINT}/v1/traces`,
-        },
+        spanProcessors: [
+          new NonForcingTraceSpanProcessor(
+            new OTLPExporter({ url: traceExporterUrl })
+          ),
+        ],
         batching: { strategy: "immediate" },
       },
       logs: {
@@ -218,22 +232,28 @@ const workerWithScheduled = {
   async fetch(
     request: Request,
     workerEnv: WorkerObservabilityEnv,
-    _context: WorkerExecutionContext
+    context: WorkerExecutionContext
   ) {
-    configureWorkerObservability(workerEnv)
-    const agentGateResponse = publicAgentRuntimeGateResponse(request, {
-      maintenanceMode: workerEnv.AGENT_MAINTENANCE_MODE,
-      runtimeAvailable: workerEnv.AGENT_RUNTIME !== undefined,
-    })
-    if (agentGateResponse) return agentGateResponse
-    if (workerEnv.AGENT_RUNTIME) configureAgentRuntime(workerEnv.AGENT_RUNTIME)
-    configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
-    const seedResponse = await handleDevelopmentFileSeedRequest(
-      db,
-      request,
-      workerEnv
+    return withOtelObservabilityWaitUntil(
+      (completion) => context.waitUntil(completion),
+      async () => {
+        configureWorkerObservability(workerEnv)
+        const agentGateResponse = publicAgentRuntimeGateResponse(request, {
+          maintenanceMode: workerEnv.AGENT_MAINTENANCE_MODE,
+          runtimeAvailable: workerEnv.AGENT_RUNTIME !== undefined,
+        })
+        if (agentGateResponse) return agentGateResponse
+        if (workerEnv.AGENT_RUNTIME)
+          configureAgentRuntime(workerEnv.AGENT_RUNTIME)
+        configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
+        const seedResponse = await handleDevelopmentFileSeedRequest(
+          db,
+          request,
+          workerEnv
+        )
+        return seedResponse ?? appFetch(request)
+      }
     )
-    return seedResponse ?? appFetch(request)
   },
   scheduled(
     _controller: WorkerScheduledController,

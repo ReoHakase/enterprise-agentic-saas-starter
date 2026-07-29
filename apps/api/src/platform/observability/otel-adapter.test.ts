@@ -1,6 +1,24 @@
+import { runInNewContext } from "node:vm"
+
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const telemetry = vi.hoisted(() => {
+  class TestContext {
+    private readonly values: ReadonlyMap<symbol, unknown>
+
+    constructor(values: ReadonlyMap<symbol, unknown> = new Map()) {
+      this.values = values
+    }
+
+    getValue(key: symbol): unknown {
+      return this.values.get(key)
+    }
+
+    setValue(key: symbol, value: unknown): TestContext {
+      return new TestContext(new Map([...this.values, [key, value]]))
+    }
+  }
+  let activeContext = new TestContext()
   const span = {
     end: vi.fn<() => void>(),
     recordException: vi.fn<(error: Error) => void>(),
@@ -19,9 +37,24 @@ const telemetry = vi.hoisted(() => {
       activeSpan = value
     },
     logger: {
+      debug: vi.fn<(message: string, attributes: unknown) => void>(),
       error: vi.fn<(message: string, attributes: unknown) => void>(),
       info: vi.fn<(message: string, attributes: unknown) => void>(),
+      setProperties: vi.fn<(attributes: unknown) => void>(),
       warn: vi.fn<(message: string, attributes: unknown) => void>(),
+    },
+    loggerNames: Array<string>(),
+    context: {
+      active: () => activeContext,
+      with: <T>(nextContext: TestContext, callback: () => T): T => {
+        const previousContext = activeContext
+        activeContext = nextContext
+        try {
+          return callback()
+        } finally {
+          activeContext = previousContext
+        }
+      },
     },
     span,
     startActiveSpan: vi.fn<
@@ -39,10 +72,15 @@ const telemetry = vi.hoisted(() => {
 })
 
 vi.mock("@inference-net/otel-cf-workers", () => ({
-  getLogger: () => telemetry.logger,
+  getLogger: (name: string) => {
+    telemetry.loggerNames.push(name)
+    return telemetry.logger
+  },
 }))
 
 vi.mock("@opentelemetry/api", () => ({
+  context: telemetry.context,
+  createContextKey: (description: string) => Symbol.for(description),
   SpanStatusCode: { ERROR: 2 },
   trace: {
     getActiveSpan: () => telemetry.activeSpan,
@@ -50,7 +88,10 @@ vi.mock("@opentelemetry/api", () => ({
   },
 }))
 
-import { createOtelObservabilityRuntime } from "./otel-adapter"
+import {
+  createOtelObservabilityRuntime,
+  withOtelObservabilityWaitUntil,
+} from "./otel-adapter"
 
 const resource = {
   "dev.session.id": "session-1",
@@ -61,6 +102,7 @@ const resource = {
 beforeEach(() => {
   vi.clearAllMocks()
   telemetry.activeSpan = telemetry.span
+  telemetry.loggerNames.length = 0
 })
 
 describe("OpenTelemetry observability adapter", () => {
@@ -72,7 +114,8 @@ describe("OpenTelemetry observability adapter", () => {
       route: "/agent",
     })
     runtime.recordHttpStatus(503, "provider_failed")
-    runtime.logEvent("info", "Agent chat prepared", {
+    runtime.logEvent("debug", "Agent chat prepared", {
+      "logger.scope": "agent.chat",
       trigger: "submit-message",
     })
     runtime.logResponse("warn", {
@@ -113,10 +156,14 @@ describe("OpenTelemetry observability adapter", () => {
       "HTTP request completed",
       expect.objectContaining({ provider: "openrouter" })
     )
-    expect(telemetry.logger.info).toHaveBeenCalledWith(
+    expect(telemetry.logger.debug).toHaveBeenCalledWith(
       "Agent chat prepared",
-      expect.objectContaining({ trigger: "submit-message" })
+      expect.objectContaining({
+        "logger.scope": "agent.chat",
+        trigger: "submit-message",
+      })
     )
+    expect(telemetry.loggerNames).toContain("api.agent.chat")
     expect(telemetry.span.addEvent).toHaveBeenCalledWith(
       "Agent chat prepared",
       expect.objectContaining({ trigger: "submit-message" })
@@ -180,6 +227,66 @@ describe("OpenTelemetry observability adapter", () => {
         message: expect.stringContaining("rich non-Error failure"),
       })
     )
+  })
+
+  it("keeps a span open for a cross-realm style thenable", async () => {
+    const runtime = createOtelObservabilityRuntime("api", resource)
+    const crossRealmPromise: Promise<string> = runInNewContext(
+      "Promise.resolve('done')"
+    )
+
+    expect(
+      runtime.startSpan(
+        { name: "thenable", op: "test.thenable" },
+        () => crossRealmPromise
+      )
+    ).toBe(crossRealmPromise)
+    expect(crossRealmPromise).not.toBeInstanceOf(Promise)
+    expect(telemetry.span.end).not.toHaveBeenCalled()
+
+    await crossRealmPromise
+    await vi.waitFor(() => expect(telemetry.span.end).toHaveBeenCalledOnce())
+  })
+
+  it("keeps a span open until deferred stream completion", async () => {
+    const waitUntil = vi.fn<(completion: Promise<unknown>) => void>()
+    const runtime = createOtelObservabilityRuntime("api", resource)
+    let complete: (() => void) | undefined
+    const streamCompletion = new Promise<void>((resolve) => {
+      complete = resolve
+    })
+
+    expect(
+      withOtelObservabilityWaitUntil(waitUntil, () =>
+        runtime.startSpan(
+          { name: "stream", op: "test.stream" },
+          (lifecycle) => {
+            lifecycle.endWhen(streamCompletion)
+            return "response"
+          }
+        )
+      )
+    ).toBe("response")
+    expect(telemetry.span.end).not.toHaveBeenCalled()
+    expect(waitUntil).toHaveBeenCalledWith(streamCompletion)
+
+    complete?.()
+    await streamCompletion
+    await vi.waitFor(() => expect(telemetry.span.end).toHaveBeenCalledOnce())
+    expect(telemetry.span.end).toHaveBeenCalledWith(expect.any(Number))
+  })
+
+  it("injects local correlation headers only when resource values exist", () => {
+    const localHeaders = new Headers()
+    createOtelObservabilityRuntime("api", resource).injectRequestHeaders(
+      localHeaders
+    )
+    expect(localHeaders.get("x-dev-session-id")).toBe("session-1")
+    expect(localHeaders.get("x-dev-worktree-id")).toBe("feature-auth")
+
+    const remoteHeaders = new Headers()
+    createOtelObservabilityRuntime("api").injectRequestHeaders(remoteHeaders)
+    expect([...remoteHeaders]).toEqual([])
   })
 
   it("contains absent active spans and projects non-Error failures", () => {

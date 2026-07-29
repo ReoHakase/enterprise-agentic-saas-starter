@@ -7,6 +7,7 @@ const boundarySpies = vi.hoisted(() => ({
   fileRuntime: vi.fn<() => void>(),
   internalApi: vi.fn<() => void>(),
   invitationJobs: vi.fn<() => void>(),
+  otlpExporter: vi.fn<(options: unknown) => void>(),
   organizationDeletion: vi.fn<() => void>(),
   profileImageCleanup: vi.fn<() => void>(),
   resolveConfig: vi.fn<(environment: unknown) => void>(),
@@ -24,6 +25,11 @@ vi.mock("cloudflare:workers", () => ({
 }))
 
 vi.mock("@inference-net/otel-cf-workers", () => ({
+  BatchTraceSpanProcessor: class {
+    forceFlush(): Promise<void> {
+      return Promise.resolve()
+    }
+  },
   getLogger: () => ({ error: vi.fn<() => void>() }),
   instrument: (
     handler: {
@@ -48,6 +54,14 @@ vi.mock("@inference-net/otel-cf-workers", () => ({
         }
       : undefined,
   }),
+  OTLPExporter: class {
+    readonly options: unknown
+
+    constructor(options: unknown) {
+      this.options = options
+      boundarySpies.otlpExporter(options)
+    }
+  },
   OTLPTransport: vi.fn<(options: unknown) => void>(),
   withNextSpan: boundarySpies.withNextSpan,
 }))
@@ -191,8 +205,11 @@ describe("Worker maintenance executable boundaries", () => {
       service: { name: "enterprise-agentic-saas-api" },
       trace: {
         batching: { strategy: "immediate" },
-        exporter: { url: "http://127.0.0.1:4318/v1/traces" },
+        spanProcessors: [expect.anything()],
       },
+    })
+    expect(boundarySpies.otlpExporter).toHaveBeenCalledWith({
+      url: "http://127.0.0.1:4318/v1/traces",
     })
   })
 

@@ -1,5 +1,10 @@
 import { getLogger } from "@inference-net/otel-cf-workers"
-import { SpanStatusCode, trace } from "@opentelemetry/api"
+import {
+  context as otelContext,
+  createContextKey,
+  SpanStatusCode,
+  trace,
+} from "@opentelemetry/api"
 
 import type { ObservabilityRuntime } from "./runtime"
 
@@ -19,12 +24,57 @@ const toRecordedException = (error: unknown) => {
   return new Error(typeof error === "string" ? error : JSON.stringify(error))
 }
 
+const loggerScope = (
+  attributes: Record<string, unknown>,
+  fallback: string
+): string => {
+  const scope = attributes["logger.scope"]
+  return typeof scope === "string" && scope.length > 0 ? scope : fallback
+}
+
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  (typeof value === "object" && value !== null) || typeof value === "function"
+    ? "then" in value && typeof value.then === "function"
+    : false
+
+const waitUntilContextKey = createContextKey(
+  "enterprise-agentic-saas.observability.wait-until"
+)
+
+type WaitUntil = (completion: Promise<unknown>) => void
+
+const isWaitUntil = (value: unknown): value is WaitUntil =>
+  typeof value === "function"
+
+const activeWaitUntil = (): WaitUntil | undefined => {
+  const value = otelContext.active().getValue(waitUntilContextKey)
+  return isWaitUntil(value) ? value : undefined
+}
+
+export const withOtelObservabilityWaitUntil = <T>(
+  waitUntil: WaitUntil,
+  callback: () => T
+): T =>
+  otelContext.with(
+    otelContext.active().setValue(waitUntilContextKey, waitUntil),
+    callback
+  )
+
 export const createOtelObservabilityRuntime = (
   service: string,
   resource?: LocalTelemetryResource
 ): ObservabilityRuntime => {
   const tracer = trace.getTracer(service)
-  const logger = getLogger(service)
+  const loggers = new Map<string, ReturnType<typeof getLogger>>()
+  const getScopedLogger = (scope: string) => {
+    const loggerName = `${service}.${scope}`
+    const existing = loggers.get(loggerName)
+    if (existing) return existing
+    const logger = getLogger(loggerName)
+    if (resource) logger.setProperties(resource)
+    loggers.set(loggerName, logger)
+    return logger
+  }
 
   return {
     captureException(error, context) {
@@ -35,27 +85,40 @@ export const createOtelObservabilityRuntime = (
         code: SpanStatusCode.ERROR,
         message: context.errorCode,
       })
-      logger.error("HTTP request failed", {
+      getScopedLogger("http").error("HTTP request failed", {
         ...resource,
         ...context,
+        "event.name": "HTTP request failed",
+        "logger.scope": "http",
         "exception.message": recorded.message,
         "exception.stacktrace": recorded.stack ?? "",
       })
     },
+    injectRequestHeaders(headers) {
+      const sessionId = resource?.["dev.session.id"]
+      const worktreeId = resource?.["dev.worktree.id"]
+      if (sessionId) headers.set("x-dev-session-id", sessionId)
+      if (worktreeId) headers.set("x-dev-worktree-id", worktreeId)
+    },
     logEvent(level, message, attributes) {
+      const scope = loggerScope(attributes, "application")
       const eventAttributes = {
         ...resource,
         ...attributes,
+        "event.name": attributes["event.name"] ?? message,
+        "logger.scope": scope,
       }
       trace
         .getActiveSpan()
         ?.addEvent(message, scalarAttributes(eventAttributes))
-      logger[level](message, eventAttributes)
+      getScopedLogger(scope)[level](message, eventAttributes)
     },
     logResponse(level, attributes) {
-      logger[level]("HTTP request completed", {
+      getScopedLogger("http")[level]("HTTP request completed", {
         ...resource,
         ...attributes,
+        "event.name": "HTTP request completed",
+        "logger.scope": "http",
       })
     },
     recordHttpStatus(statusCode, errorCode) {
@@ -83,25 +146,51 @@ export const createOtelObservabilityRuntime = (
           }),
         },
         (span) => {
+          let deferred = false
+          let ended = false
+          const end = (error?: unknown, endTime?: number) => {
+            if (ended) return
+            ended = true
+            if (error !== undefined) {
+              span.recordException(toRecordedException(error))
+              span.setStatus({ code: SpanStatusCode.ERROR })
+            }
+            span.end(endTime)
+          }
+          const lifecycle = {
+            endWhen(completion: PromiseLike<unknown>) {
+              deferred = true
+              const completionPromise = Promise.resolve(completion)
+              const waitUntil = activeWaitUntil()
+              span.setAttribute("app.span.deferred", true)
+              span.setAttribute(
+                "app.span.wait_until_registered",
+                waitUntil !== undefined
+              )
+              try {
+                waitUntil?.(completionPromise)
+              } catch {
+                // Telemetry completion must not change the application response.
+              }
+              void completionPromise.then(
+                () => end(undefined, Date.now()),
+                (error) => end(error, Date.now())
+              )
+            },
+          }
           try {
-            const result = callback()
-            if (result instanceof Promise) {
-              void result.then(
-                () => span.end(),
-                (error) => {
-                  span.recordException(toRecordedException(error))
-                  span.setStatus({ code: SpanStatusCode.ERROR })
-                  span.end()
-                }
+            const result = callback(lifecycle)
+            if (isPromiseLike(result)) {
+              void Promise.resolve(result).then(
+                () => (deferred ? undefined : end()),
+                (error) => end(error)
               )
               return result
             }
-            span.end()
+            if (!deferred) end()
             return result
           } catch (error) {
-            span.recordException(toRecordedException(error))
-            span.setStatus({ code: SpanStatusCode.ERROR })
-            span.end()
+            end(error)
             throw error
           }
         }
