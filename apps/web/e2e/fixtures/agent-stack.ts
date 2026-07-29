@@ -230,11 +230,6 @@ const main = async () => {
         GITHUB_OAUTH_EMULATOR_CLIENT_SECRET:
           "enterprise-agentic-saas-local-secret",
         GITHUB_OAUTH_CALLBACK_URL: `${environment.apiOrigin}/auth/oauth2/callback/github`,
-        SENTRY_DSN: "",
-        SENTRY_ENVIRONMENT: "agent-e2e",
-        SENTRY_RELEASE: "",
-        SENTRY_SPOTLIGHT: "",
-        SENTRY_TRACES_SAMPLE_RATE: "0",
       },
     }
     const agentConfig = {
@@ -262,10 +257,6 @@ const main = async () => {
         AGENT_WRITES_ENABLED: "1",
         MASTRA_STORAGE_URL: environment.agentStorageOrigin,
         MASTRA_STORAGE_AUTH_TOKEN: environment.agentStorageAuthToken,
-        SENTRY_DSN: "",
-        SENTRY_ENVIRONMENT: "agent-e2e",
-        SENTRY_RELEASE: "",
-        SENTRY_TRACES_SAMPLE_RATE: "0",
       },
     }
 

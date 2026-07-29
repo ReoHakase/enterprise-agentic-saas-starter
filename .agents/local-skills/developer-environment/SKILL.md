@@ -1,6 +1,6 @@
 ---
 name: developer-environment
-description: enterprise-agentic-saas-starterのNix、direnv、dotenvx、Bun、Wrangler、Turso、Mailpit、Spotlightとlocal development commandを変更または診断するときに使う。
+description: enterprise-agentic-saas-starterのNix、direnv、dotenvx、Bun、Wrangler、Turso、Mailpit、LGTMとlocal development commandを変更または診断するときに使う。
 ---
 
 # Developer Environment
@@ -19,6 +19,8 @@ description: enterprise-agentic-saas-starterのNix、direnv、dotenvx、Bun、Wr
 3. repository commandとpackage scriptを正本にしてlocal serviceを起動する。
    Portless公開URLは`bun run portless-topology resolve <logical-name>`で確認し、
    serviceごとにraw `portless get`を実行しない。
+   ObservabilityはDocker/Portlessを利用者が起動した後に`bun run observability:up`を使う。
+   `bun run dev`からdaemon、desktop app、container lifecycleを起動しない。
 4. generated typeやlockfileは所有commandで再生成する。
 5. environment変更後はfresh shell相当とNix evaluationを検証する。
 

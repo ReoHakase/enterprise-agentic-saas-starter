@@ -42,3 +42,4 @@ last_reviewed: 2026-07-25
 - [ADR-007 workspace別テスト戦略](ADR-007-workspace-testing-strategy.md)
 - [ADR-008 Mastra-native Agent runtimeと専用Storage](ADR-008-mastra-native-agent-runtime.md)
 - [ADR-009 MCPをAPIへ配置しOAuth認証でbusiness toolを直接実行する](ADR-009-mcp-authentication-and-direct-tools.md)
+- [ADR-010 local observabilityをOpenTelemetryと共有LGTMへ統一する](ADR-010-local-opentelemetry-lgtm.md)

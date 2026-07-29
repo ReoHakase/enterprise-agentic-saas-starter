@@ -20,7 +20,7 @@
 - 💬 Agentの会話, メンション, ページコンテキスト, 使用量, コンテキスト上限の表示
 - 🗄️ Cloudflare R2, Images, Cacheを使う認証付きファイル配信
 - ✉️ React Email, Mailpit, Cloudflare Email Sendingによるメール配送
-- 📈 SentryとSpotlightによる、機密情報を除去した可観測性
+- 📈 OpenTelemetryとGrafana LGTMによる、開発用のログ・メトリクス・トレース
 - ✅ Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwrightによる品質検査
 
 ## 🏗️ システム構成
@@ -61,7 +61,7 @@ Agent WorkerはTurso, Better Auth, R2, Webを直接参照しません。APIが�
 | データベース | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                       |
 | ファイル     | Cloudflare R2, Images, Workers Cache                                                         |
 | メール       | React Email, Mailpit, Cloudflare Email Sending                                               |
-| 可観測性     | Sentry, Spotlight                                                                            |
+| 可観測性     | OpenTelemetry, Grafana LGTM, Grafana MCP                                                     |
 | 品質         | Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwright                                    |
 
 依存関係の版はルートの`workspaces.catalog`で固定しています。外部依存には`catalog:`、

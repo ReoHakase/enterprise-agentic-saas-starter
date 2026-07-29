@@ -3,6 +3,9 @@
 const REPOSITORY_LOGICAL_NAME = "enterprise-agentic-saas"
 const LOCALHOST_SUFFIX = ".localhost"
 const LOCAL_AGENT_STORAGE_TOKEN = "local-agent-storage"
+const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
+const LOCAL_BROWSER_OTLP_HTTP_ENDPOINT =
+  "https://otel.enterprise-agentic-saas.localhost"
 
 type Environment = Record<string, string | undefined>
 
@@ -83,7 +86,8 @@ export const resolvePortlessService = (
 
 export const createLocalTopologyEnvironment = (
   baseOrigin: string,
-  source: Environment
+  source: Environment,
+  createSessionId: () => string = () => crypto.randomUUID()
 ): Environment => {
   const environment = { ...source }
   delete environment.EMULATE_BASE_URL
@@ -94,6 +98,14 @@ export const createLocalTopologyEnvironment = (
     (homeDirectory ? `${homeDirectory}/.portless/ca.pem` : undefined)
 
   const web = resolvePortlessService(baseOrigin, REPOSITORY_LOGICAL_NAME)
+  const worktreePrefix = web.hostname.slice(
+    0,
+    -`${REPOSITORY_LOGICAL_NAME}${LOCALHOST_SUFFIX}`.length
+  )
+  const worktreeId = worktreePrefix
+    ? worktreePrefix.replace(/\.$/u, "")
+    : "main"
+  const sessionId = source.DEV_SESSION_ID?.trim() || createSessionId()
   const api = resolvePortlessService(
     baseOrigin,
     `api.${REPOSITORY_LOGICAL_NAME}`
@@ -118,16 +130,22 @@ export const createLocalTopologyEnvironment = (
     AUTH_COOKIE_DOMAIN: web.hostname,
     BETTER_AUTH_URL: api.origin,
     CORS_ORIGIN: web.origin,
+    DEV_SESSION_ID: sessionId,
+    DEV_WORKTREE_ID: worktreeId,
     GITHUB_OAUTH_CALLBACK_URL: `${api.origin}/auth/oauth2/callback/github`,
     GITHUB_OAUTH_EMULATOR_URL: githubEmulator.origin,
     MASTRA_STORAGE_AUTH_TOKEN: LOCAL_AGENT_STORAGE_TOKEN,
     MASTRA_STORAGE_URL: agentStorage.origin,
     NEXT_PUBLIC_API_BASE_URL: api.origin,
+    NEXT_PUBLIC_DEV_SESSION_ID: sessionId,
+    NEXT_PUBLIC_DEV_WORKTREE_ID: worktreeId,
+    NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT: LOCAL_BROWSER_OTLP_HTTP_ENDPOINT,
     ...(environment.NODE_EXTRA_CA_CERTS?.trim() || !portlessCaCertificate
       ? {}
       : { NODE_EXTRA_CA_CERTS: portlessCaCertificate }),
     TRUSTED_ORIGINS: web.origin,
     TURSO_DATABASE_URL: database.origin,
+    OTEL_EXPORTER_OTLP_ENDPOINT: LOCAL_OTLP_HTTP_ENDPOINT,
   }
 }
 

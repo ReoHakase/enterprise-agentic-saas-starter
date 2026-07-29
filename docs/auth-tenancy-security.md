@@ -142,7 +142,7 @@ OpenAPI上のcookie名は `better-auth.session_token` で表現しますが、�
 
 BrowserはBetter Auth cookieをAgent Workerへ送らず、cookie認証済みAPI public routeだけを呼びます。APIのglobal CSRF guardはunsafe methodの`Origin`を必須にし、`CORS_ORIGIN`または`API_PUBLIC_URL`とのexact matchを検証します。Agent専用の`x-csrf-token`方式は追加しません。
 
-Cloudflare Service Bindingはpublic internetを遮断するnetwork boundaryであり、actorの認可ではありません。APIはsessionからuserとactive organizationを決め、membershipとprivate thread ownerをDB transaction内で再検証してから、60秒・一回限りのopaque connection ticketをAgent Workerへ渡します。tokenは256-bit以上のrandom値とし、DBにはhashだけを保存します。Browser response、URL、log、Sentryへ出しません。
+Cloudflare Service Bindingはpublic internetを遮断するnetwork boundaryであり、actorの認可ではありません。APIはsessionからuserとactive organizationを決め、membershipとprivate thread ownerをDB transaction内で再検証してから、60秒・一回限りのopaque connection ticketをAgent Workerへ渡します。tokenは256-bit以上のrandom値とし、DBにはhashだけを保存します。Browser response、URL、production log、remote telemetryへ出しません。local telemetryでもticket値は常時redactします。
 
 Agent WorkerはAPI named `WorkerEntrypoint`内のprivate Elysia `POST /internal/agent/connections/consume`でticketをatomic consumeし、5分以内のrun grantへ交換します。以後はgrantを`Authorization: Bearer`で同じnamed entrypointの`/internal/agent/*`へ送り、各routeがlive session、active organization、membership、context epoch、thread/run owner、scope、expiry、現在permissionを再検証します。`x-user-id` / `x-organization-id`、modelのtool argument、page context、route slugをactor authorityにしません。public Elysia appへinternal appをmountせず、Agent WorkerへBetter Auth secret、cookie署名鍵、Turso credentialを渡しません。
 

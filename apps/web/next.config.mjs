@@ -1,5 +1,4 @@
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare"
-import { withSentryConfig } from "@sentry/nextjs"
 
 const safeOrigin = (value) => {
   if (!value) return undefined
@@ -17,14 +16,10 @@ const configuredWebOrigin = safeOrigin(process.env.APP_BASE_URL)
 const webHostname = configuredWebOrigin
   ? new URL(configuredWebOrigin).hostname
   : "enterprise-agentic-saas.localhost"
-const sentryOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_DSN)
-const spotlightOrigin = safeOrigin(process.env.NEXT_PUBLIC_SENTRY_SPOTLIGHT)
-const connectSources = [
-  "'self'",
-  apiOrigin,
-  sentryOrigin,
-  spotlightOrigin,
-].filter(Boolean)
+const otelOrigin =
+  safeOrigin(process.env.NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT) ??
+  "https://otel.enterprise-agentic-saas.localhost"
+const connectSources = ["'self'", apiOrigin, otelOrigin].filter(Boolean)
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -61,30 +56,7 @@ const nextConfig = {
   },
 }
 
-const hasSentrySourceMapCredentials = Boolean(
-  process.env.SENTRY_AUTH_TOKEN &&
-  process.env.SENTRY_ORG &&
-  process.env.SENTRY_PROJECT
-)
-
-export default withSentryConfig(nextConfig, {
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  silent: !process.env.CI,
-  telemetry: false,
-  widenClientFileUpload: true,
-  sourcemaps: {
-    disable: !hasSentrySourceMapCredentials,
-    deleteSourcemapsAfterUpload: true,
-  },
-  webpack: {
-    automaticVercelMonitors: false,
-    treeshake: {
-      removeDebugLogging: true,
-    },
-  },
-})
+export default nextConfig
 
 if (process.env.NODE_ENV === "development") {
   initOpenNextCloudflareForDev()

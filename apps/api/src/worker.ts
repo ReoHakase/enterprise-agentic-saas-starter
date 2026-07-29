@@ -1,15 +1,11 @@
 import { db } from "@enterprise-agentic-saas/db"
 import {
-  captureException,
-  getActiveSpan,
-  getIsolationScope,
-  logger,
-  setHttpStatus,
-  startSpan,
-  updateSpanName,
-  withScope,
-  withSentry,
-} from "@sentry/cloudflare"
+  getLogger,
+  instrument,
+  OTLPTransport,
+  withNextSpan,
+  type ResolveConfigFn,
+} from "@inference-net/otel-cf-workers"
 import { WorkerEntrypoint } from "cloudflare:workers"
 import { Elysia } from "elysia"
 import { CloudflareAdapter } from "elysia/adapter/cloudflare-worker"
@@ -40,32 +36,24 @@ import {
 } from "./modules/organizations/deletion-jobs"
 import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
+import { createOtelObservabilityRuntime } from "./platform/observability/otel-adapter"
 import { configureObservability } from "./platform/observability/runtime"
-import { createSentryObservabilityRuntime } from "./platform/observability/sentry-adapter"
-import {
-  filterSentryIntegrations,
-  sentryPrivacyOptions,
-  SPOTLIGHT_DSN,
-} from "./platform/observability/sentry-options"
-import { resolveSpotlightTarget } from "./platform/observability/spotlight"
 import { withStructuredConsole } from "./platform/observability/structured-console"
 import { authPlugin } from "./platform/plugins/auth"
 import { corsPlugin } from "./platform/plugins/cors"
 import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
-type WorkerSentryEnv = {
+type WorkerObservabilityEnv = {
   AGENT_RUNTIME?: AgentRuntimeBinding
   AGENT_ASSET_UPLOAD_ENABLED?: string
   AGENT_MAINTENANCE_MODE?: string
+  DEV_SESSION_ID?: string
+  DEV_WORKTREE_ID?: string
   DEV_FILE_SEED_TOKEN?: string
   FILES: FileR2Bucket & OrganizationFilesBucket
   IMAGES: FileImagesBinding
   NODE_ENV?: string
-  SENTRY_DSN?: string
-  SENTRY_ENVIRONMENT?: string
-  SENTRY_RELEASE?: string
-  SENTRY_SPOTLIGHT?: string
-  SENTRY_TRACES_SAMPLE_RATE?: string
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string
   TURSO_DATABASE_URL?: string
 }
 
@@ -78,62 +66,93 @@ type WorkerScheduledController = {
   scheduledTime: number
 }
 
-const tracesSampleRate = (value: string | undefined): number => {
-  const parsed = Number(value ?? "0.1")
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.1
+const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
+
+type LocalTelemetryEnvironment = {
+  DEV_SESSION_ID?: string
+  DEV_WORKTREE_ID?: string
+  NODE_ENV?: string
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string
 }
 
-const createWorkerSentryOptions = (workerEnv: WorkerSentryEnv) => {
-  const development = workerEnv.NODE_ENV === "development"
-  const spotlight = resolveSpotlightTarget(
-    workerEnv.SENTRY_SPOTLIGHT,
-    development ? "development" : "production"
+const resolveLocalTelemetryResource = (
+  environment: LocalTelemetryEnvironment,
+  serviceName: string
+) => {
+  const sessionId = environment.DEV_SESSION_ID?.trim()
+  const worktreeId = environment.DEV_WORKTREE_ID?.trim()
+  if (
+    environment.NODE_ENV !== "development" ||
+    environment.OTEL_EXPORTER_OTLP_ENDPOINT !== LOCAL_OTLP_HTTP_ENDPOINT ||
+    !sessionId ||
+    !worktreeId
   )
-  const spotlightEnabled = spotlight !== false
-
+    return undefined
   return {
-    ...sentryPrivacyOptions,
-    dsn: spotlightEnabled
-      ? SPOTLIGHT_DSN
-      : development
-        ? undefined
-        : workerEnv.SENTRY_DSN,
-    enableLogs: true,
-    environment:
-      workerEnv.SENTRY_ENVIRONMENT ??
-      (development ? "development" : "production"),
-    integrations: filterSentryIntegrations,
-    release: workerEnv.SENTRY_RELEASE,
-    sampleRate: 1,
-    spotlight,
-    tracesSampleRate: spotlightEnabled
-      ? 1
-      : tracesSampleRate(workerEnv.SENTRY_TRACES_SAMPLE_RATE),
+    "dev.session.id": sessionId,
+    "dev.worktree.id": worktreeId,
+    "service.name": serviceName,
   }
 }
 
-const sentryRuntimeApi = {
-  captureException,
-  getActiveSpan,
-  getIsolationScope,
-  logger,
-  setHttpStatus,
-  startSpan,
-  updateSpanName,
-  withScope,
-}
-
-configureObservability(
-  withStructuredConsole(
-    createSentryObservabilityRuntime(
-      sentryRuntimeApi,
-      "enterprise-agentic-saas-api"
-    ),
+export const resolveWorkerOtelConfig = (
+  workerEnv: LocalTelemetryEnvironment
+): ReturnType<ResolveConfigFn<WorkerObservabilityEnv>> => {
+  const resource = resolveLocalTelemetryResource(
+    workerEnv,
     "enterprise-agentic-saas-api"
   )
-)
+  if (resource) {
+    withNextSpan(resource)
+    return {
+      service: { name: resource["service.name"] },
+      trace: {
+        exporter: {
+          url: `${LOCAL_OTLP_HTTP_ENDPOINT}/v1/traces`,
+        },
+        batching: { strategy: "immediate" },
+      },
+      logs: {
+        batching: { strategy: "immediate" },
+        instrumentation: { instrumentConsole: false },
+        transports: [
+          new OTLPTransport({
+            url: `${LOCAL_OTLP_HTTP_ENDPOINT}/v1/logs`,
+          }),
+        ],
+      },
+    }
+  }
+  return { service: { name: "enterprise-agentic-saas-api" } }
+}
 
-// Bun向けSentry SDKをbundleせず、Worker requestごとにCloudflare SDKを初期化する。
+export const createWorkerOtelConfig: ResolveConfigFn<WorkerObservabilityEnv> = (
+  workerEnv
+) => resolveWorkerOtelConfig(workerEnv)
+
+const configureWorkerObservability = (workerEnv: WorkerObservabilityEnv) => {
+  const runtime = createOtelObservabilityRuntime(
+    "enterprise-agentic-saas-api",
+    resolveLocalTelemetryResource(workerEnv, "enterprise-agentic-saas-api")
+  )
+  configureObservability(
+    withStructuredConsole(runtime, "enterprise-agentic-saas-api")
+  )
+}
+
+const logScheduledFailure = (
+  component: string,
+  errorCode: string,
+  attributes: Record<string, unknown>
+) => {
+  getLogger("enterprise-agentic-saas-api").error("Scheduled operation failed", {
+    ...attributes,
+    component,
+    errorCode,
+  })
+}
+
+// OpenTelemetry SDKはWorker request境界で初期化し、application portを維持する。
 const worker = new Elysia({ adapter: CloudflareAdapter })
   .use(createApp(db))
   .use(authPlugin)
@@ -148,29 +167,54 @@ const agentInternalWorker = new Elysia({ adapter: CloudflareAdapter })
   .compile()
 const agentInternalFetch = agentInternalWorker.fetch.bind(agentInternalWorker)
 
-class AgentInternalApiBase extends WorkerEntrypoint<WorkerSentryEnv> {
-  fetch(request: Request): Promise<Response> | Response {
-    if (isAgentMaintenanceMode(this.env.AGENT_MAINTENANCE_MODE)) {
-      return agentMaintenanceResponse()
-    }
-    // named entrypointはdefault/public Workerとは別isolateになり得るため、
-    // asset prepare/execute/model imageの全経路でbindingを初期化する。
-    configureFileStorageRuntimeFromWorkerEnvironment(this.env)
-    return agentInternalFetch(request)
+const instrumentedAgentInternalApi = instrument(
+  {
+    fetch(
+      request: Request,
+      workerEnv: WorkerObservabilityEnv
+    ): Promise<Response> | Response {
+      configureWorkerObservability(workerEnv)
+      if (isAgentMaintenanceMode(workerEnv.AGENT_MAINTENANCE_MODE)) {
+        return agentMaintenanceResponse()
+      }
+      // named entrypointはdefault/public Workerとは別isolateになり得るため、
+      // asset prepare/execute/model imageの全経路でbindingを初期化する。
+      configureFileStorageRuntimeFromWorkerEnvironment(workerEnv)
+      return agentInternalFetch(request)
+    },
+  },
+  createWorkerOtelConfig
+)
+type InstrumentedAgentInternalFetch = NonNullable<
+  typeof instrumentedAgentInternalApi.fetch
+>
+const fetchInstrumentedAgentInternalApi = async (
+  request: Parameters<InstrumentedAgentInternalFetch>[0],
+  workerEnv: WorkerObservabilityEnv,
+  context: Parameters<InstrumentedAgentInternalFetch>[2]
+): Promise<Response> => {
+  const fetchHandler = instrumentedAgentInternalApi.fetch
+  if (!fetchHandler) {
+    throw new Error("Instrumented internal API is missing its fetch handler")
   }
+  return await fetchHandler(request, workerEnv, context)
 }
 
-export const AgentInternalApi = withSentry(
-  createWorkerSentryOptions,
-  AgentInternalApiBase
-)
+export class AgentInternalApi extends WorkerEntrypoint<WorkerObservabilityEnv> {
+  fetch(
+    request: Parameters<InstrumentedAgentInternalFetch>[0]
+  ): Promise<Response> {
+    return fetchInstrumentedAgentInternalApi(request, this.env, this.ctx)
+  }
+}
 
 const workerWithScheduled = {
   async fetch(
     request: Request,
-    workerEnv: WorkerSentryEnv,
+    workerEnv: WorkerObservabilityEnv,
     _context: WorkerExecutionContext
   ) {
+    configureWorkerObservability(workerEnv)
     const agentGateResponse = publicAgentRuntimeGateResponse(request, {
       maintenanceMode: workerEnv.AGENT_MAINTENANCE_MODE,
       runtimeAvailable: workerEnv.AGENT_RUNTIME !== undefined,
@@ -187,21 +231,17 @@ const workerWithScheduled = {
   },
   scheduled(
     _controller: WorkerScheduledController,
-    workerEnv: WorkerSentryEnv,
+    workerEnv: WorkerObservabilityEnv,
     context: WorkerExecutionContext
   ) {
+    configureWorkerObservability(workerEnv)
     if (isAgentMaintenanceMode(workerEnv.AGENT_MAINTENANCE_MODE)) return
     const deletionJobs = processOrganizationDeletionJobs({
       bucket: workerEnv.FILES,
       database: db,
       onFailure: ({ attempts }) => {
-        const error = new Error("Organization file cleanup failed")
-        captureException(error, {
-          tags: {
-            component: "organization-deletion",
-            errorCode: "r2_cleanup_failed",
-          },
-          extra: { attempts },
+        logScheduledFailure("organization-deletion", "r2_cleanup_failed", {
+          attempts,
         })
         console.error({
           attempts,
@@ -224,14 +264,7 @@ const workerWithScheduled = {
       bucket: workerEnv.FILES,
       database: db,
       onFailure: ({ attempts }) => {
-        const error = new Error("File cleanup failed")
-        captureException(error, {
-          tags: {
-            component: "file-cleanup",
-            errorCode: "r2_cleanup_failed",
-          },
-          extra: { attempts },
-        })
+        logScheduledFailure("file-cleanup", "r2_cleanup_failed", { attempts })
         console.error({
           attempts,
           component: "file-cleanup",
@@ -253,13 +286,8 @@ const workerWithScheduled = {
       bucket: workerEnv.FILES,
       database: db,
       onFailure: ({ attempts }) => {
-        const error = new Error("Profile image cleanup failed")
-        captureException(error, {
-          tags: {
-            component: "profile-image-cleanup",
-            errorCode: "r2_cleanup_failed",
-          },
-          extra: { attempts },
+        logScheduledFailure("profile-image-cleanup", "r2_cleanup_failed", {
+          attempts,
         })
         console.error({
           attempts,
@@ -282,14 +310,7 @@ const workerWithScheduled = {
       bucket: workerEnv.FILES,
       database: db,
       onFailure: ({ attempts, errorCode }) => {
-        const error = new Error("Agent asset cleanup failed")
-        captureException(error, {
-          tags: {
-            component: "agent-asset-cleanup",
-            errorCode,
-          },
-          extra: { attempts },
-        })
+        logScheduledFailure("agent-asset-cleanup", errorCode, { attempts })
         console.error({
           attempts,
           component: "agent-asset-cleanup",
@@ -317,14 +338,9 @@ const workerWithScheduled = {
     const invitationJobs = processInvitationEmailJobs({
       database: db,
       onFailure: ({ attempts, errorCode, retryable }) => {
-        const error = new Error("Organization invitation delivery failed")
-        captureException(error, {
-          tags: {
-            component: "invitation-email",
-            errorCode,
-            retryable,
-          },
-          extra: { attempts },
+        logScheduledFailure("invitation-email", errorCode, {
+          attempts,
+          retryable,
         })
         console.error({
           attempts,
@@ -367,7 +383,4 @@ const workerWithScheduled = {
   },
 }
 
-export default withSentry<WorkerSentryEnv>(
-  createWorkerSentryOptions,
-  workerWithScheduled
-)
+export default instrument(workerWithScheduled, createWorkerOtelConfig)

@@ -1,5 +1,4 @@
 import type { ObservabilityRuntime } from "./runtime"
-import { scrubTelemetryAttributes } from "./sanitize"
 
 export const withStructuredConsole = (
   runtime: ObservabilityRuntime,
@@ -7,9 +6,8 @@ export const withStructuredConsole = (
 ): ObservabilityRuntime => ({
   ...runtime,
   logResponse(level, attributes) {
-    const safeAttributes = scrubTelemetryAttributes(attributes) ?? {}
     const payload = {
-      ...safeAttributes,
+      ...attributes,
       event: "http.response",
       level,
       service,

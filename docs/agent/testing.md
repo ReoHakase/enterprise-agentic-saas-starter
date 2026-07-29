@@ -43,7 +43,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - 組織、Issue、ページコンテキスト、スレッド履歴との完全一致を拒否し、曖昧な部分一致も
   公開情報だけへ言い換えて再送するまで拒否
 - メンバー識別情報、Issue、message、文字数の検査上限を超えた場合の拒否
-- query、拒否文字列、Issue本文がlog/Sentryへ残らない
+- query、拒否文字列、Issue本文がproduction log、remote telemetry、test artifactへ残らない
 - 専用title Agentのforced rename、transient status sanitizer、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
 - vision flagによる画像tool登録、chat画像との合計4枚上限、WeakMap media sidecar、実model入力だけのusage加算

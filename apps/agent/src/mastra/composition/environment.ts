@@ -5,16 +5,15 @@ export type PortableAgentRuntimeEnv = {
   AGENT_RUNS_ENABLED?: string
   AGENT_VISION_ENABLED?: string
   AGENT_WRITES_ENABLED?: string
+  DEV_SESSION_ID?: string
+  DEV_WORKTREE_ID?: string
   NODE_ENV?: string
   AGENT_INTERNAL_API: AgentInternalFetchBinding
   MASTRA_STORAGE_AUTH_TOKEN?: string
   MASTRA_STORAGE_URL?: string
   OPENROUTER_API_KEY?: string
   OPENROUTER_BASE_URL?: string
-  SENTRY_DSN?: string
-  SENTRY_ENVIRONMENT?: string
-  SENTRY_RELEASE?: string
-  SENTRY_TRACES_SAMPLE_RATE?: string
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string
 }
 
 type TypedAgentInternalApi = CloudflareEnv["AGENT_INTERNAL_API"] &

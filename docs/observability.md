@@ -2,78 +2,94 @@
 title: Observability
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-07-29
 ---
 
 # Observability
 
-このrepoではSentryをapplication observabilityの正本、Cloudflare Workers Observabilityをplatform runtimeの補助、Spotlightをlocal Sentry envelopeの確認先にする。productionで同じWorkerのlogs/tracesをSentry SDKとCloudflare OTLP destinationの両方から送ると重複するため、初期構成ではapplication codeからSentry SDKへ送る経路だけを有効にする。
+local developmentではOpenTelemetryをsignal contract、`grafana/otel-lgtm`をquery backendにします。SentryとSpotlightは併用しません。長期判断と実装を小さく保つ制約は[ADR-010](./decisions/ADR-010-local-opentelemetry-lgtm.md)が正本です。
 
-## Runtime構成
+## 最小構成
 
-| Runtime              | Integration                             | 主な対象                                                          |
-| -------------------- | --------------------------------------- | ----------------------------------------------------------------- |
-| Next.js browser      | `@sentry/nextjs` client instrumentation | render/navigation error、Web Vitalsに連なるtrace、frontend log    |
-| Next.js server/edge  | `@sentry/nextjs` instrumentation        | Server Component、route、request error、server trace              |
-| Elysia on Cloudflare | `@sentry/cloudflare` Worker wrapper     | request error、Worker trace、structured log                       |
-| Elysia on Bun        | `@sentry/bun` preload                   | local/test entrypointのerror、trace、structured log               |
-| Cloudflare platform  | Workers Observability                   | invocation、CPU/wall time、platform log、deployment単位の運用確認 |
-| Local                | Spotlight sidecar                       | Sentryへ外送しないerror、trace、logの確認                         |
+repository固有の基盤はrootの3 fileだけです。
 
-WebとAPIはSentry projectを分け、同じ`SENTRY_RELEASE`とenvironmentを付ける。browserからAPI originへのtrace propagationを許可し、1 requestを両projectで追跡できるようにする。
+- `compose.observability.yaml`: 固定container、loopback port、persistent named volume
+- `otelcol.observability.yaml`: OTLP、Loki、Tempo、Prometheus、spanmetrics、認証material除去
+- `scripts/observability.ts`: `check`、`up`、`down`
 
-## Data境界
+`tooling`やobservability専用packageは作りません。runtimeは既存のNext.js instrumentation、API Worker、Agent Worker、Mastra compositionへ直接設定します。
 
-SDKは`sendDefaultPii: false`を固定し、送信直前のscrubberをerror、transaction、breadcrumb、logへ共通適用する。次をevent、span、log、breadcrumbへ入れない。
+| Runtime         | integration                                       | signal                             |
+| --------------- | ------------------------------------------------- | ---------------------------------- |
+| Next.js browser | OpenTelemetry Web SDK                             | navigation/fetch trace、log        |
+| Next.js server  | OpenTelemetry Node SDK                            | server trace、log                  |
+| Elysia Worker   | `@inference-net/otel-cf-workers`                  | HTTP trace、structured log         |
+| Agent Worker    | Worker OTel + Mastra `Observability`/`OtelBridge` | Agent/model/tool trace、log        |
+| collector       | `spanmetrics` connector                           | span count、duration、error metric |
 
-- `cookie`、`authorization`、request/response body、form data
-- session、magic link、invitation、verification token
-- email address、IP address、user/organization/member/resource ID
-- Turso URL/token、Cloudflare/Sentry secret、providerのraw error
-- URL query/hashと動的なtenant/resource path segment
-- React EmailのHTML/textと`renderProps`の値
+`packages/portless-topology`は最上位の起動で`DEV_SESSION_ID`を生成し、入れ子の`exec -> run`では同じIDを継承します。全runtimeへ`service.name`、`dev.worktree.id`、`dev.session.id`を付けます。LGTMはworktreeごとに分けず、全checkoutで一つを共有します。この絞り込みはsecurity isolationではありません。
 
-相関には`request_id`、正規化したroute、HTTP method/status、duration、service、runtime、environment、release、error codeを使う。自由文へcontextを埋めず、allowlistした低cardinality fieldをstructured attributesにする。
+## endpointとlifecycle
 
-## Sampling
+- Grafana: `http://127.0.0.1:3000` / `https://grafana.enterprise-agentic-saas.localhost`
+- OTLP gRPC: `http://127.0.0.1:4317`
+- OTLP HTTP: `http://127.0.0.1:4318`
+- browser OTLP: `https://otel.enterprise-agentic-saas.localhost`
+- collector health: `http://127.0.0.1:13133/ready`
 
-- Spotlight: error/log/traceを100%。local machine外のendpointは受け付けない。
-- Production error: 初期値100%。容量が問題になった場合もsecurity/auth/email failureは落とさず、noiseの原因を先に直す。
-- Production trace: 初期値10%。trafficとSentry usageを見てenvで調整する。
-- Session Replay: このstarterでは無効。認証・tenant管理画面を含むため、導入時は別のprivacy reviewとmask testを必須にする。
-
-sampling rateは0から1の範囲だけを受け付け、範囲外は安全な既定値へ戻す。release後にrateを変える場合はWeb browser、Web server、APIの値を意図的に揃える。
-
-## Healthとalert
-
-APIの`GET /health`はprocess/Workerのliveness endpointで、依存サービスへ接続せず200 JSONを返す。`GET /ready`はTurso/libSQLへ軽量な`select 1`を行い、利用不能ならprivate causeを含まない503を返す。Sentry Uptime monitorはliveness、readiness、Web公開URLを分け、単なるDB障害をWorker停止として扱わない。
-
-production開始時の最小monitorは次の通り。
-
-- API/Web uptime failure
-- unhandled errorまたは5xx率の急増
-- p95/p99 transaction durationの悪化
-- auth failure、permission denial、CSRF failureの急増
-- `email_failed`、特にrate limit/internal errorの継続
-- Turso request latency/error
-- organization削除R2 cleanupのfailed件数と最古job age。eventへjob/organization/user IDやobject keyを載せない
-
-Monitorは検知条件、Alertは通知先として分離する。production high priorityはSlackとemailへ通知し、test notificationを実行する。閾値、owner、runbook URL、通知抑制時間を設定し、staging eventでproduction alertを鳴らさない。
-
-## Incident確認順
-
-1. Sentry issue/monitorでservice、environment、release、route、request IDを確認する。
-2. 同じrelease/request IDをCloudflare Workers logsとtraceで確認し、CPU/wall time/platform failureを分離する。
-3. deploy直後なら直前versionとのevent rateとperformance差分を確認する。
-4. email failureはtemplate、Cloudflare error code、retryableだけを確認し、recipientや本文をlogから探さない。
-5. secret/PII混入を見つけたらevent削除だけで終えず、credential rotation、scrubber test、repo-local skill更新まで行う。
-
-## Release前の確認
+browserはPortless HTTPS aliasへ直接送信し、Next.js relayを作りません。
 
 ```sh
-bun run dev:spotlight
-bun run check
-bun run build:cloudflare
+# Docker/OrbStackとPortless proxyは利用者が先に起動する
+bun run observability:up
+bun run dev
+
+# named volumeを残して停止する
+bun run observability:down
 ```
 
-Spotlightでbrowser、Next server、APIのtest error/log/traceが見え、token/PIIが含まれないことを確認する。production deploy後はSentry release/source map、API/Web Uptime monitor、Slack/email test notification、Cloudflare Worker invocation metricsを確認する。
+`bun run dev`はreadiness確認だけを行います。Docker daemon、OrbStack、Portless proxyを起動せず、`sudo`、`open`、`osascript`、`docker compose up`を呼びません。停止中は`bun run observability:up`を案内してapplication processの起動前に失敗します。
+
+`observability:up`は`docker compose up --wait`でimage標準healthcheckを待ち、固定Grafana/OTLP aliasを登録します。`observability:down`はcontainerを停止してaliasを外しますが、`enterprise-agentic-saas-observability-data` volumeは削除しません。
+
+## local data境界
+
+localではprompt、completion、Issue本文、business payload、tool input/output、provider error/body/stack、5段までの`cause` chain、run/thread/request IDをsamplingなしで残します。
+
+常時除去するのは認証materialだけです。
+
+- `Authorization`、Cookie
+- API key、token、secret、password、credential
+- run grant、connection ticket、authorization/verification code
+- signed URLのcredential、signature、token query
+
+collectorはflat attribute、span event、string log bodyの既知の認証key/valueを保存前に除去します。通常のURL path/query、`errorCode`、`statusCode`、provider本文は残します。Mastraのnested model/tool eventにはframework標準の`SensitiveDataFilter`を認証fieldだけに指定します。独自の共通redactorやexporter wrapperは作りません。
+
+詳細telemetryは`NODE_ENV=development`、固定local endpoint、worktree/session IDが揃う場合だけ初期化します。productionや任意のremote endpointでは無効です。
+
+## Codexでの調査
+
+1. in-app browserで対象導線を再現する。
+2. 遅い場合は`service.name`、`dev.worktree.id`、`dev.session.id`でTraceQLを絞る。
+3. 失敗した場合はtrace IDと同じ属性でLokiのlogを読む。
+4. regressionはspanmetricsをPromQLで比較する。
+5. 修正後に同じ導線とqueryを繰り返す。
+
+生成MCPは固定Grafanaへ接続するread-only `mcp-grafana`です。write toolは無効です。
+
+実containerを使うacceptanceは自動smokeにしません。利用者がstackを起動した状態で、Web/API/Agentの各導線を一度実行し、GrafanaまたはCodex MCPからLogQL、TraceQL、PromQLを確認します。volume永続性が必要なときだけ保守時間に`down -> up`して同じqueryを手動確認します。Docker singletonを`bun run check`やCIへ含めません。
+
+## production
+
+production backendは未構成です。同じquery modelを使う場合はGrafana Cloudのmanaged Loki、Tempo、Mimir、Grafanaが第一候補です。self-hostする場合はAlloy、Loki、Tempo、Mimir、Grafana、object storageを別serviceとして運用します。localのone-container image、固定endpoint、rich-content設定はproductionへ持ち込みません。retention、tenant isolation、sampling、alert、費用、Cloudflare native exportとの重複は別ADRで決めます。
+
+## 検証
+
+```sh
+bun run check
+bun run build:cloudflare
+nix flake check
+docker compose --file compose.observability.yaml config
+```
+
+deterministic testはPortlessのID継承、固定endpoint gate、薄いlifecycle command、collector配線だけを対象にします。live query、MCP、volume再起動の自動smokeは追加しません。

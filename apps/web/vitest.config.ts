@@ -27,8 +27,7 @@ const nodeCoverageIncludes = [
   "src/features/organizations/components/**/*.tsx",
   "src/features/organizations/schema.ts",
   "src/features/auth/redirect-to.ts",
-  "src/lib/observability/sentry-runtime.ts",
-  "src/lib/observability/sentry-scrub.ts",
+  "src/lib/report-observed-error.ts",
   "src/lib/server/auth-session-response.ts",
 ]
 const browserCoverageIncludes = [
@@ -45,10 +44,6 @@ const coverageExcludes = [
   "**/test-support/**",
 ]
 const browserAliases = {
-  "@sentry/nextjs": path.join(
-    dirname,
-    "test-support/storybook/sentry-nextjs.ts"
-  ),
   "next/link": path.join(dirname, "test-support/storybook/next-link.tsx"),
   "next/navigation": path.join(
     dirname,
@@ -131,6 +126,7 @@ export default defineConfig({
           environment: "happy-dom",
           include: [
             "*.test.{ts,tsx}",
+            "src/instrumentation*.test.ts",
             "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
             "testing/**/*.test.{ts,tsx}",
           ],

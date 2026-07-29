@@ -412,8 +412,7 @@ const createDevelopmentSeedCommandServices =
             MAILPIT_URL: undefined,
             NODE_ENV: "development",
             PORT: String(port),
-            SENTRY_DSN: undefined,
-            SENTRY_SPOTLIGHT: undefined,
+            OTEL_EXPORTER_OTLP_ENDPOINT: undefined,
           },
         })
         await writePrivateFile(

@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-07-29
 ---
 
 # ローカル開発
@@ -219,27 +219,25 @@ bun run --cwd apps/emulate dev:service google
 bun run --cwd apps/emulate dev:service slack
 ```
 
-## Sentry Spotlight
+## local observability
 
-通常の`bun run dev`はSentryへlocal telemetryを送らない。error、trace、structured logをlocalだけで確認するときはSpotlight sidecarと全workspaceをまとめて起動する。
+LGTMは全worktreeで一つのcontainerとpersistent named volumeを共有します。Docker/OrbStackとPortless proxyを利用者が起動してから次を実行します。
 
 ```sh
-bun run dev:spotlight
+bun run observability:up
+bun run dev
 ```
 
-Spotlight UIは `http://localhost:8969`。このscriptはbrowser用`NEXT_PUBLIC_SENTRY_SPOTLIGHT`とserver/API用`SENTRY_SPOTLIGHT`へlocal sidecar URLを注入し、localではerror/log/traceを100%収集する。production DSNがlocal envに残っていてもdevelopmentから外送しない。
+Grafanaは`https://grafana.enterprise-agentic-saas.localhost`です。browserは`https://otel.enterprise-agentic-saas.localhost`へ、server/Workerは`http://127.0.0.1:4318`へOTLP/HTTPを直接送ります。`bun run dev`はreadiness checkだけを行い、Docker daemon、OrbStack、container、Portless proxyを起動しません。停止中は利用手順を表示して非0で終了します。
 
-別にsidecarを起動する場合は、`.dev.vars`へ次のどちらかを設定する。
-
-```dotenv
-SENTRY_SPOTLIGHT=1
-NEXT_PUBLIC_SENTRY_SPOTLIGHT=1
-# custom local endpointを使う場合だけ:
-# SENTRY_SPOTLIGHT=http://localhost:8969/stream
-# NEXT_PUBLIC_SENTRY_SPOTLIGHT=http://localhost:8969/stream
+```sh
+# telemetryを残してcontainerを停止
+bun run observability:down
 ```
 
-remote hostのSpotlight URLとproduction環境のSpotlight flagは無効化される。`nix develop`または`sync-agent-config`で生成する`Sentry Spotlight` MCPも同じlocal sidecarを読むため、agentへ調査を依頼する前にsidecarを起動する。詳細は [Observability](./observability.md) を参照する。
+main checkoutとlinked worktreeは`dev.worktree.id`、各`bun run dev` sessionは`dev.session.id`で絞り込みます。共有containerはsecurity isolationではありません。Codexには生成済みread-only `mcp-grafana`からTraceQL、LogQL、PromQLを使わせます。詳細は[Observability](./observability.md)を参照してください。
+
+開発専用observabilityに共通package、generic wrapper、live query smoke、曖昧な`tooling` directoryを追加しません。最小構成を維持する判断は[ADR-010](./decisions/ADR-010-local-opentelemetry-lgtm.md)を参照してください。
 
 ## 日常の品質確認
 
@@ -278,5 +276,6 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 - seed後に一時processが残る: `bun run dev:db:seed`は自身が起動したTurso/Wranglerだけを停止する。別terminalの既存dev processは停止しないため、残っているprocessのownerと起動commandを確認する。永続化したDB/R2 stateが残るのは正常。
 - R2 seedが拒否される: remote Turso、`NODE_ENV=production`、`wrangler --remote`を使っていないことを確認する。HTTP 5xxは同じfixtureで最大3回だけretryして終了するため、固定errorの原因を直して`bun run dev:db:seed`を明示再実行する。tokenやobject keyをlogへ出して回避しない。
 - local previewとproductionの変換差: local Imagesは低忠実度なので、API contract testとは別の資格情報付きremote Images smokeで確認する。
-- Spotlightにeventが出ない: `http://localhost:8969` が開けること、browser/server両方のSpotlight env、SDK initより前にerrorが起きていないことを確認する。
+- `bun run dev`がobservability readinessで失敗する: Docker/OrbStackとPortless proxyを自分で起動し、`bun run observability:up`を実行する。`bun run dev`へ`sudo`やdesktop app起動権限を渡して回避しない。
+- Grafanaにsignalが出ない: `bun run portless-topology exec -- env`で`DEV_WORKTREE_ID`、`DEV_SESSION_ID`、固定OTLP endpointを確認し、Grafana queryへ同じID filterを指定する。
 - `bun install`がsecurity scannerの5xxで止まる: scannerは意図的にfail-closed。恒久的に無効化せず、まず再試行する。localの一時回避条件とreleaseで禁止する理由は`developer-environment` skillを参照する。

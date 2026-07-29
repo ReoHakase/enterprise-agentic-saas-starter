@@ -153,13 +153,13 @@
               ];
             };
 
-            sentry-spotlight = {
-              command = "${pkgs.bun}/bin/bunx";
+            grafana = {
+              command = "${pkgs.mcp-grafana}/bin/mcp-grafana";
               args = [
-                "-y"
-                "@spotlightjs/spotlight@4.11.7"
-                "mcp"
+                "--disable-write"
+                "--enabled-tools=datasource,prometheus,loki,proxied"
               ];
+              env.GRAFANA_URL = "http://127.0.0.1:3000";
             };
           };
 

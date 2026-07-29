@@ -10,7 +10,6 @@ const environment = (storageUrl = ":memory:"): AgentRuntimeEnv => ({
   AGENT_WRITES_ENABLED: "1",
   MASTRA_STORAGE_URL: storageUrl,
   NODE_ENV: "test",
-  SENTRY_ENVIRONMENT: "test",
 })
 
 describe("Worker isolate composition", () => {

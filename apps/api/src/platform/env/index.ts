@@ -32,11 +32,6 @@ const nodeEnvSchema = v.pipe(
   v.picklist(["development", "test", "production"])
 )
 
-const optionalNonEmptyString = v.pipe(
-  v.optional(v.string()),
-  v.transform((input) => input?.trim() || undefined)
-)
-
 const emailProviderSchema = v.pipe(
   v.optional(v.string()),
   v.transform((input) => resolveEmailProvider(input, process.env.NODE_ENV)),
@@ -47,14 +42,6 @@ const mailpitUrlSchema = v.pipe(
   v.optional(v.string()),
   v.transform((input) => resolveMailpitUrl(input, process.env.NODE_ENV)),
   v.optional(v.pipe(v.string(), v.url()))
-)
-
-const sampleRate = v.pipe(
-  v.optional(v.string(), "0.1"),
-  v.transform(Number),
-  v.number(),
-  v.minValue(0),
-  v.maxValue(1)
 )
 
 const emailFromSchema = v.pipe(
@@ -102,11 +89,9 @@ export const env = defineEnv({
     EMAIL_PROVIDER: emailProviderSchema,
     EMAIL_FROM: emailFromSchema,
     MAILPIT_URL: mailpitUrlSchema,
-    SENTRY_DSN: optionalNonEmptyString,
-    SENTRY_ENVIRONMENT: optionalNonEmptyString,
-    SENTRY_RELEASE: optionalNonEmptyString,
-    SENTRY_SPOTLIGHT: optionalNonEmptyString,
-    SENTRY_TRACES_SAMPLE_RATE: sampleRate,
+    DEV_SESSION_ID: v.optional(v.string()),
+    DEV_WORKTREE_ID: v.optional(v.string()),
+    OTEL_EXPORTER_OTLP_ENDPOINT: v.optional(v.string()),
   },
   isServer: true,
   env: process.env,

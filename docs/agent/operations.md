@@ -15,7 +15,7 @@ Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true
 
 `NODE_ENV=development`のAgent processだけは、modelとWeb検索providerのraw `Error`および最大8段の
 cause chainをlocal consoleへ出します。公開HTTP response、Mastra Memory、workflow snapshot、
-Sentry、trace、paid test artifactへは転送しません。productionとtestではこの出力を無効にします。
+production log、remote telemetry、paid test artifactへは転送しません。local LGTMは認証materialをredactした同じcause chainを保持できます。productionとtestではこの出力を無効にします。
 
 ## Paid test secret
 
@@ -41,7 +41,7 @@ productionはAPI/Agent Worker、migration ledger、cross-database secret invento
 
 maintenance APIはpublic `/agent`、Agent thread/asset file route、named `AgentInternalApi`、scheduled jobを同時に閉じます。health/readiness/OpenAPIは維持し、実routeの503とCloudflare settings上の`AGENT_RUNTIME`欠如、`AGENT_MAINTENANCE_MODE=1`を確認します。drainはApplication DB clockを使う単一aggregate snapshotでticket、resume ticket、grant、runを数え、全件0がgrace window中継続しなければmigrationへ進みません。初回inventoryがcleanだった後にstale secretが現れた場合はraceとして削除せず停止します。final API後は`AGENT_RUNTIME`の存在と`AGENT_MAINTENANCE_MODE=0`をremote settingsで再確認します。
 
-API/Agent/Webのtypegen、dry-run/build、Sentry source map uploadを先に完了します。Sentry upload失敗後にdeployを続行しません。3 Workerは同じcommit SHAをrelease IDに使います。
+API/Agent/Webのtypegenとdry-run/buildを先に完了します。production remote telemetryは未構成であり、local OTLP envをdeployへ注入しません。
 
 ## Smoke
 
@@ -55,7 +55,7 @@ API/Agent/Webのtypegen、dry-run/build、Sentry source map uploadを先に完�
 - approval Yes/No、Issue write receipt
 - image input
 - reasoning/tool/activity/context/usage parts
-- 3 Sentry projectのreadable stackとprivacy
+- production remote telemetry未構成とlocal OTLP env非注入
 
 ## Retention
 

@@ -31,7 +31,7 @@ BrowserはAgent Workerを直接呼びません。Agent Workerは`workers.dev`、
 - connection ticket、connection grant、run grant、resume ticketは256-bit以上のopaque random値です。DBにはhashだけを保存します。
 - capabilityはsession、user、active organization、thread、context epoch、run/scope、expiryへ束縛します。
 - active organization、account、role、membershipの変更時はepochをtransaction内でrotationし、旧capability、run、action、policyを失効します。
-- Browser response、URL、log、Sentry、auditへticket/grant/session値を出しません。
+- Browser response、URL、production log、remote telemetry、auditへticket/grant/session値を出しません。
 
 connection ticketは一回限り、60秒以内です。run grantは5分以内とし、各internal callでlive session、active organization、epoch、membership、permission、thread owner、run ownerを再検証します。別tenant、非member、不存在resourceは同じnot-found projectionへ丸めます。
 
@@ -75,4 +75,4 @@ export/backfill、件数確認、保持方針、backup確認を終えた別relea
 
 ## Privacyとobservability
 
-Sentry SDKをapplication telemetryの正本とし、Cloudflare Sentry OTLP exportを重ねません。prompt、Issue本文、検索query、拒否文字列、tool payload、member identity、credential、raw provider errorをlog/traceへ出しません。transaction名、error code、bounded status、opaqueでないaggregateだけを許可します。
+OpenTelemetryをapplication signal contractにし、localでは共有LGTMへ一本化します。production remote backendは未構成です。production log、remote telemetry、test artifactにはprompt、Issue本文、検索query、拒否文字列、tool payload、member identity、credential、raw provider errorを出しません。localは`NODE_ENV=development`かつ固定loopback endpointの場合だけ調査用contentを保持し、認証materialを常時redactします。binary/image bytesはmetadataだけを残します。

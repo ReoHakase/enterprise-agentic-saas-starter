@@ -22,7 +22,6 @@ const createComposition = async () => {
     AGENT_WRITES_ENABLED: "0",
     MASTRA_STORAGE_URL: ":memory:",
     NODE_ENV: "test",
-    SENTRY_ENVIRONMENT: "test",
   })
   await composition.storage.init()
   openCompositions.push(composition)

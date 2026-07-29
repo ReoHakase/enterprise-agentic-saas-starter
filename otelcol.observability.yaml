@@ -1,0 +1,109 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - https://enterprise-agentic-saas.localhost
+            - https://*.enterprise-agentic-saas.localhost
+          allowed_headers: [baggage, content-type, traceparent, tracestate]
+  prometheus/collector:
+    config:
+      scrape_configs:
+        - job_name: opentelemetry-collector
+          scrape_interval: 1s
+          static_configs:
+            - targets: ["127.0.0.1:8888"]
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /ready
+
+connectors:
+  spanmetrics:
+    namespace: local
+    histogram:
+      explicit:
+        buckets: [10ms, 50ms, 100ms, 250ms, 500ms, 1s, 2s, 5s]
+    dimensions:
+      - name: dev.worktree.id
+      - name: dev.session.id
+    exclude_dimensions: [collector.instance.id]
+    aggregation_cardinality_limit: 10000
+    metrics_flush_interval: 5s
+    resource_metrics_key_attributes:
+      - service.name
+      - dev.worktree.id
+      - dev.session.id
+
+processors:
+  transform/redact-auth:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+      - context: span
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
+      - context: spanevent
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
+    log_statements:
+      - context: resource
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+      - context: log
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
+          - replace_pattern(body, "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]") where IsString(body)
+          - replace_pattern(body, "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]") where IsString(body)
+          - replace_pattern(body, "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]") where IsString(body)
+          - replace_pattern(body, "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@") where IsString(body)
+  batch:
+
+exporters:
+  otlp_http/metrics:
+    endpoint: http://127.0.0.1:9090/api/v1/otlp
+    tls:
+      insecure: true
+  otlp_http/traces:
+    endpoint: http://127.0.0.1:4418
+    tls:
+      insecure: true
+  otlp_http/logs:
+    endpoint: http://127.0.0.1:3100/otlp
+    tls:
+      insecure: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/redact-auth, batch]
+      exporters: [otlp_http/traces, spanmetrics]
+    metrics:
+      receivers: [prometheus/collector, spanmetrics]
+      processors: [batch]
+      exporters: [otlp_http/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [transform/redact-auth, batch]
+      exporters: [otlp_http/logs]

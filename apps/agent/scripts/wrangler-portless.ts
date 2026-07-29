@@ -1,4 +1,5 @@
 const LOCAL_STORAGE_TOKEN = "local-agent-storage"
+const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
 const REPOSITORY_HOST_SUFFIX = ".enterprise-agentic-saas.localhost"
 
 type Environment = Record<string, string | undefined>
@@ -51,9 +52,17 @@ export const createWranglerArguments = (environment: Environment): string[] => {
   const inspectorPort = resolvePort(environment, "WRANGLER_INSPECTOR_PORT", "0")
   const storageOrigin = resolveStorageOrigin(environment)
   const storageToken = requireValue(environment, "MASTRA_STORAGE_AUTH_TOKEN")
+  const worktreeId = requireValue(environment, "DEV_WORKTREE_ID")
+  const sessionId = requireValue(environment, "DEV_SESSION_ID")
+  const otlpEndpoint = requireValue(environment, "OTEL_EXPORTER_OTLP_ENDPOINT")
   if (storageToken !== LOCAL_STORAGE_TOKEN) {
     throw new Error(
       "MASTRA_STORAGE_AUTH_TOKEN must use the local Agent storage token"
+    )
+  }
+  if (otlpEndpoint !== LOCAL_OTLP_HTTP_ENDPOINT) {
+    throw new Error(
+      `OTEL_EXPORTER_OTLP_ENDPOINT must be ${LOCAL_OTLP_HTTP_ENDPOINT}`
     )
   }
 
@@ -71,6 +80,12 @@ export const createWranglerArguments = (environment: Environment): string[] => {
     `MASTRA_STORAGE_URL:${storageOrigin}`,
     "--var",
     `MASTRA_STORAGE_AUTH_TOKEN:${storageToken}`,
+    "--var",
+    `DEV_WORKTREE_ID:${worktreeId}`,
+    "--var",
+    `DEV_SESSION_ID:${sessionId}`,
+    "--var",
+    `OTEL_EXPORTER_OTLP_ENDPOINT:${otlpEndpoint}`,
   ]
 }
 

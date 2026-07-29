@@ -16,8 +16,4 @@ TURSO_AUTH_TOKEN=
 # `.env*`, defaults to Mailpit, and injects its direct loopback URL instead.
 EMAIL_PROVIDER=cloudflare
 EMAIL_FROM=noreply@example.com
-SENTRY_ENVIRONMENT=development
-# Set this to 1 only while a local Spotlight sidecar is running.
-SENTRY_SPOTLIGHT=0
-SENTRY_TRACES_SAMPLE_RATE=1
-# SENTRY_DSN is not used in development. Production provides it as a secret.
+# Root `bun run dev` injects DEV_* and the fixed loopback OTLP endpoint.

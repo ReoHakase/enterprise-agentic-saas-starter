@@ -169,7 +169,6 @@ export const nativeRuntimeEnvironment = {
   AGENT_WRITES_ENABLED: "1",
   MASTRA_STORAGE_URL: ":memory:",
   NODE_ENV: "test",
-  SENTRY_ENVIRONMENT: "test",
 } as const
 
 export class CountingExecutionRegistry extends ProductAgentExecutionRegistry {

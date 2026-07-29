@@ -50,7 +50,7 @@ deduplication/reference設計を伴わない暗黙copyは行いません。
 
 画像toolは`AGENT_VISION_ENABLED=1`のrunだけへ登録します。APIのprivate `GET /internal/agent/issues/:issueId/attachments/:fileId/model`はrun grant、live session、active organization、Issue owner、ready file、JPEG/PNG/WebP/GIFを複合条件で再検証し、tenant外、owner不一致、不存在、非対応画像を同じ404へ丸めます。R2 originalはCloudflare Imagesでmax edge 2,048px、WebP quality 75、animation無効へ変換し、unknown-lengthを含め4 MiBでbounded readします。user/organizationの日次vision quotaはrun IDとfile IDで冪等消費します。
 
-Agent Workerは画像bytesをtoolのcanonical outputへ入れず、実行結果オブジェクトをkeyにした一時`WeakMap`だけへ保持します。Mastra `toModelOutput`がmodel用media partへ変換した直後にsidecarを破棄します。stream、Turso、reload履歴、log、Sentryへbase64、private URL、object key、raw bytesを残しません。reload後のtool traceは`issueId`、`fileId`、`contentType=image/webp`、変換後`sizeBytes`だけです。現在messageのchat画像とIssue画像を合わせて1 run最大4枚とし、実際にmodelへ渡した枚数だけusageの`imageInputCount`へ加算します。
+Agent Workerは画像bytesをtoolのcanonical outputへ入れず、実行結果オブジェクトをkeyにした一時`WeakMap`だけへ保持します。Mastra `toModelOutput`がmodel用media partへ変換した直後にsidecarを破棄します。stream、Turso、reload履歴、log、telemetryへbase64、private URL、object key、raw bytesを残しません。local telemetryもtypeとbyte lengthだけを保持します。reload後のtool traceは`issueId`、`fileId`、`contentType=image/webp`、変換後`sizeBytes`だけです。現在messageのchat画像とIssue画像を合わせて1 run最大4枚とし、実際にmodelへ渡した枚数だけusageの`imageInputCount`へ加算します。
 
 ## Mention model
 

@@ -69,4 +69,4 @@ chat composerは一runのcontext window占有率だけを円形ringで表示し�
 
 ## Error behavior
 
-usage記録失敗で既に生成したuser responseを失わせない一方、Sentryへpayloadなしのerror codeを送りrelease gateでは失敗扱いにします。daily projectionだけ失敗してeventだけcommitする状態はtransactionで禁止します。duplicate eventは成功扱いで`recorded: false`を返します。
+usage記録失敗で既に生成したuser responseを失わせない一方、local telemetryへerror codeを送りrelease gateでは失敗扱いにします。daily projectionだけ失敗してeventだけcommitする状態はtransactionで禁止します。duplicate eventは成功扱いで`recorded: false`を返します。
