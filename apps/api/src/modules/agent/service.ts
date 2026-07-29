@@ -17,6 +17,9 @@ import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
 const logger = createObservedLogger("agent").child("runtime")
+const messageLogger = createObservedLogger("agent").child("messages")
+const permissionLogger = createObservedLogger("agent").child("permission")
+const threadLogger = createObservedLogger("agent").child("threads")
 
 const agentRuntimeHeaders = (): Headers => {
   const headers = new Headers({ "content-type": "application/json" })
@@ -74,6 +77,23 @@ const normalizeAgentTimezone = (value: string): string => {
 }
 
 type AgentSessionIdentity = { sessionId: string; userId: string }
+type AgentApprovalPolicyInput = AgentSessionIdentity & { threadId: string }
+
+const getAgentApprovalPolicyForSession = async (
+  ports: AgentServicePorts,
+  input: AgentApprovalPolicyInput
+) => {
+  const policy = await ports.getAgentApprovalPolicyForSession(input)
+  permissionLogger.info("Agent thread permission resolved", {
+    "app.operation": "getAgentThreadPermission",
+    "app.outcome": "success",
+    "agent.permission.mode": policy.mode,
+    "agent.permission.allowed_action_count": Object.values(
+      policy.permissions
+    ).filter(Boolean).length,
+  })
+  return policy
+}
 
 const listAgentThreadsWithMemory = async (
   ports: AgentServicePorts,
@@ -81,7 +101,17 @@ const listAgentThreadsWithMemory = async (
 ) => {
   const registryThreads = await ports.listAgentThreadsForSession(input)
   const first = registryThreads[0]
-  if (!first) return []
+  if (!first) {
+    threadLogger.info("Agent thread list resolved", {
+      "app.operation": "listAgentThreads",
+      "app.outcome": "success",
+      "agent.thread.registry_count": 0,
+      "agent.thread.memory_count": 0,
+      "agent.thread.memory_match_count": 0,
+      "agent.thread.result_count": 0,
+    })
+    return []
+  }
   if (registryThreads.length > 1_000) {
     throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
   }
@@ -116,7 +146,10 @@ const listAgentThreadsWithMemory = async (
     throw publicErrors.unavailable(cause)
   }
   const byId = new Map(memoryThreads.map((thread) => [thread.id, thread]))
-  return registryThreads
+  const memoryMatchCount = registryThreads.filter((thread) =>
+    byId.has(thread.id)
+  ).length
+  const threads = registryThreads
     .map((thread) => {
       const memoryThread = byId.get(thread.id)
       return memoryThread
@@ -131,6 +164,15 @@ const listAgentThreadsWithMemory = async (
         right.updatedAt.localeCompare(left.updatedAt) ||
         right.id.localeCompare(left.id)
     )
+  threadLogger.info("Agent thread list resolved", {
+    "app.operation": "listAgentThreads",
+    "app.outcome": "success",
+    "agent.thread.registry_count": registryThreads.length,
+    "agent.thread.memory_count": memoryThreads.length,
+    "agent.thread.memory_match_count": memoryMatchCount,
+    "agent.thread.result_count": threads.length,
+  })
+  return threads
 }
 
 const listAgentMessagesFromMemory = async (
@@ -164,7 +206,17 @@ const listAgentMessagesFromMemory = async (
     throw publicErrors.unavailable(new Error("Agent history unavailable"))
   }
   try {
-    return v.parse(agentMessagePageModel, await response.json())
+    const result = v.parse(agentMessagePageModel, await response.json())
+    messageLogger.info("Agent message history loaded", {
+      "app.operation": "listAgentThreadMessages",
+      "app.outcome": "success",
+      "agent.message.result_count": result.messages.length,
+      "agent.message.total_count": result.total,
+      "agent.message.page": result.page,
+      "agent.message.per_page": result.perPage,
+      "agent.message.has_more": result.hasMore,
+    })
+    return result
   } catch (cause) {
     throw publicErrors.unavailable(cause)
   }
@@ -441,11 +493,8 @@ export const createAgentService = (ports: AgentServicePorts) => {
     })
   }
 
-  const getAgentApprovalPolicy = (input: {
-    sessionId: string
-    userId: string
-    threadId: string
-  }) => ports.getAgentApprovalPolicyForSession(input)
+  const getAgentApprovalPolicy = (input: AgentApprovalPolicyInput) =>
+    getAgentApprovalPolicyForSession(ports, input)
 
   const putAgentApprovalPolicy = (input: {
     sessionId: string

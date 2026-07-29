@@ -31,6 +31,37 @@ repository固有の基盤はrootの3 fileだけです。
 
 Elysiaは全レスポンスについてルート、HTTP method、status、所要時間、request IDを構造化ログへ出し、例外は有効なspanと同じtrace IDへ関連付けます。チャットではWebがrequest、response header、first byte、stream完了を、APIがrequest準備とAgent Worker呼び出しを、Agent Workerがresponse streamを記録します。Mastraの計測は自動検出任せではなく、Agent Workerで`Observability`と`OtelBridge`を明示的に組み込み、Agent、モデル、ツールのspanを外側のWorker spanへ接続します。
 
+## ログの責務
+
+HTTPの開始と終了だけを並べても、処理内容や業務上の結果は分かりません。spanを時間軸の正本にし、
+ログは「何を判断し、何件を返し、どの状態へ移したか」を補足します。同じ事実を複数の層から
+重複して記録しません。
+
+| 層                               | 記録する内容                                                                                              | 記録しない内容                                                          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| トランスポート、Elysiaプラグイン | 完了時のルート、HTTP method、status、所要時間、request ID。開始時刻はspanで確認する                       | 成功した全リクエストの開始ログ、業務結果の推測                          |
+| ルート                           | 入力形式により処理分岐が変わる場合の受付種別、入力要素数                                                  | サービスと同じ成功結果、認可済み利用者やテナントのID                    |
+| サービス                         | `app.operation`、`app.outcome`、返却件数、総件数、ページ、適用したフィルター種別、権限モード、状態遷移    | HTTP status、SQL、認証情報、本文や名前などの業務データ                  |
+| ドメイン                         | ロガーを`import`しない。純粋関数は判定結果を型として返し、サービスが必要な結果だけを記録する              | 副作用、環境依存の属性、成功・失敗の二重記録                            |
+| リポジトリ                       | 通常はDB spanへ委ねる。DB spanだけで不足する低速処理では、固定したクエリ分類と行数だけを`debug`で記録する | 生のSQL、bind値、各行の内容、サービスと同じ業務結果                     |
+| 外部`adapter`                    | 外部操作の固定名、所要時間、status、再試行回数、正規化済み失敗分類                                        | Authorization、Cookie、ticket、grant、生のプロバイダー応答              |
+| Agent Worker、Mastra             | chat、Memory、action、model、toolの段階、件数、使用量、停止理由、正規化済み結果                           | 認証情報、private URL、binary bytes、OTLPへ送れない生のprovider `Error` |
+
+ロガー名は`<service.name>.<module>.<operation>`の階層にします。例えば
+`enterprise-agentic-saas-api.agent.threads`と
+`enterprise-agentic-saas-agent.runtime.memory-history`です。動的なIDやURLをロガー名へ含めません。
+
+levelは次の基準で使います。
+
+- `debug`: HTTP完了、外部呼び出しの途中経過、ページやフィルターの診断情報
+- `info`: 利用者が開始した業務操作の成功結果、重要な状態遷移、ストリーム完了
+- `warn`: 想定内だが調査対象になる拒否、再試行、縮退動作
+- `error`: 処理を完了できなかった失敗。例外の記録は最外側のerror処理と重複させない
+
+業務操作ログには可能な範囲で`app.operation`と`app.outcome`を付けます。件数は
+`*.result_count`、全件数は`*.total_count`、条件の有無はbooleanまたは条件数で記録します。
+同じtrace IDからspanとログを相互に辿れるため、ログ本文へrouteやIDを埋め込みません。
+
 ## endpointとlifecycle
 
 - Grafana: `http://127.0.0.1:3000` / `https://grafana.enterprise-agentic-saas.localhost`

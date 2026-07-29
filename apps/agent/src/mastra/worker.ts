@@ -104,6 +104,11 @@ type AgentHttpTelemetryAttributes = Record<
   boolean | number | string | undefined
 >
 type AgentLogLevel = "debug" | "error" | "info" | "warn"
+type AgentRuntimeOperation = {
+  name: string
+  operation: string
+  scope: string
+}
 type AgentLogger = {
   child(segment: string, attributes?: AgentHttpTelemetryAttributes): AgentLogger
   log(
@@ -111,6 +116,55 @@ type AgentLogger = {
     message: string,
     attributes?: AgentHttpTelemetryAttributes
   ): void
+}
+
+const resolveAgentRuntimeOperation = (
+  method: string,
+  path: string
+): AgentRuntimeOperation => {
+  if (method === "POST" && path === "/chat") {
+    return {
+      name: "Agent chat",
+      operation: "streamAgentChat",
+      scope: "chat",
+    }
+  }
+  if (method === "POST" && path === "/actions/resume") {
+    return {
+      name: "Agent action resume",
+      operation: "resumeAgentAction",
+      scope: "action-resume",
+    }
+  }
+  if (method === "POST" && path === "/memory/history") {
+    return {
+      name: "Agent memory history",
+      operation: "listAgentThreadMessages",
+      scope: "memory-history",
+    }
+  }
+  if (method === "POST" && path === "/memory/threads") {
+    return {
+      name: "Agent memory thread list",
+      operation: "listAgentThreads",
+      scope: "memory-threads",
+    }
+  }
+  if (
+    method === "POST" &&
+    /^\/runs\/[A-Za-z0-9_-]{1,128}\/cancel$/u.test(path)
+  ) {
+    return {
+      name: "Agent run cancellation",
+      operation: "cancelAgentRun",
+      scope: "run-cancel",
+    }
+  }
+  return {
+    name: "Agent runtime request",
+    operation: "handleAgentRuntimeRequest",
+    scope: "request",
+  }
 }
 
 const definedAgentHttpAttributes = (attributes: AgentHttpTelemetryAttributes) =>
@@ -151,6 +205,7 @@ const flushAgentTelemetry = async (input: {
   attributes: AgentHttpTelemetryAttributes
   composition: ReturnType<typeof getAgentIsolateComposition>
   logger: AgentLogger
+  operation: AgentRuntimeOperation
   pending: Set<Promise<unknown>>
   requestContext: Context
   startedAt: number
@@ -170,12 +225,16 @@ const flushAgentTelemetry = async (input: {
               const observedAt = performance.now()
               firstByteAt = observedAt
               otelContext.with(input.requestContext, () => {
-                input.logger.log("debug", "Agent response first byte", {
-                  ...input.attributes,
-                  time_to_first_byte_ms: Number(
-                    (observedAt - input.startedAt).toFixed(2)
-                  ),
-                })
+                input.logger.log(
+                  "debug",
+                  `${input.operation.name} first byte`,
+                  {
+                    ...input.attributes,
+                    time_to_first_byte_ms: Number(
+                      (observedAt - input.startedAt).toFixed(2)
+                    ),
+                  }
+                )
               })
             }
             byteCount += chunk.byteLength
@@ -193,8 +252,9 @@ const flushAgentTelemetry = async (input: {
       ),
     })
     otelContext.with(input.requestContext, () => {
-      input.logger.log("info", "Agent request completed", {
+      input.logger.log("info", `${input.operation.name} completed`, {
         ...input.attributes,
+        "app.outcome": "success",
         byte_count: byteCount,
         chunk_count: chunkCount,
         duration_ms: Number((completedAt - input.startedAt).toFixed(2)),
@@ -206,8 +266,9 @@ const flushAgentTelemetry = async (input: {
       message: "Agent response stream failed",
     })
     otelContext.with(input.requestContext, () => {
-      input.logger.log("error", "Agent response stream failed", {
+      input.logger.log("error", `${input.operation.name} stream failed`, {
         ...input.attributes,
+        "app.outcome": "failure",
         byte_count: byteCount,
         chunk_count: chunkCount,
       })
@@ -232,6 +293,7 @@ const agentRuntimeHandler = {
     const composition = getAgentIsolateComposition(environment)
     const requestStartedAt = performance.now()
     const requestPath = new URL(request.url).pathname
+    const operation = resolveAgentRuntimeOperation(request.method, requestPath)
     const activeContext = otelContext.active()
     const telemetryResource = resolveLocalTelemetryResource(
       environment,
@@ -245,10 +307,12 @@ const agentRuntimeHandler = {
       "http.route": requestPath,
     })
     const runtimeLogger = createAgentLogger(telemetryResource, "runtime").child(
-      "request"
+      operation.scope,
+      {
+        "app.operation": operation.operation,
+      }
     )
-    logger.log("debug", "Agent request started")
-    runtimeLogger.log("debug", "Agent runtime dispatch started", {
+    runtimeLogger.log("debug", `${operation.name} dispatched`, {
       "agent.runtime.route": requestPath,
     })
     const pending = new Set<Promise<unknown>>()
@@ -303,8 +367,8 @@ const agentRuntimeHandler = {
         ? "error"
         : response.status >= 400
           ? "warn"
-          : "info",
-      "Agent runtime response created",
+          : "debug",
+      `${operation.name} response created`,
       responseAttributes
     )
     logger.log(
@@ -321,7 +385,8 @@ const agentRuntimeHandler = {
         flushAgentTelemetry({
           attributes: responseAttributes,
           composition,
-          logger,
+          logger: runtimeLogger,
+          operation,
           pending,
           requestContext: activeContext,
           startedAt: requestStartedAt,
@@ -349,7 +414,8 @@ const agentRuntimeHandler = {
       flushAgentTelemetry({
         attributes: responseAttributes,
         composition,
-        logger,
+        logger: runtimeLogger,
+        operation,
         pending,
         requestContext: streamContext,
         startedAt: requestStartedAt,

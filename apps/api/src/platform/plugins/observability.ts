@@ -1,13 +1,11 @@
 import { Elysia, StatusMap } from "elysia"
 
 import {
-  createObservedLogger,
   logObservedResponse,
   setObservedRequestContext,
 } from "../observability/runtime"
 
 const startedAt = new WeakMap<Request, number>()
-const logger = createObservedLogger("http")
 
 const requestIdFor = (responseRequestId: number | string | undefined): string =>
   String(responseRequestId ?? "request-id-unavailable")
@@ -44,11 +42,6 @@ export const observabilityPlugin = new Elysia({
       method: request.method,
       requestId,
       route: route || "unmatched",
-    })
-    logger.debug("HTTP request started", {
-      http_method: request.method,
-      http_route: route || "unmatched",
-      request_id: requestId,
     })
   })
   .onAfterResponse(({ request, responseValue, route, set }) => {
