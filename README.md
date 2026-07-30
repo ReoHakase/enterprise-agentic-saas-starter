@@ -20,7 +20,7 @@
 - 💬 Agentの会話, メンション, ページコンテキスト, 使用量, コンテキスト上限の表示
 - 🗄️ Cloudflare R2, Images, Cacheを使う認証付きファイル配信
 - ✉️ React Email, Mailpit, Cloudflare Email Sendingによるメール配送
-- 📈 SentryとSpotlightによる、機密情報を除去した可観測性
+- 📈 OpenTelemetryとGrafana LGTMによる、開発用のログ・メトリクス・トレース
 - ✅ Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwrightによる品質検査
 
 ## 🏗️ システム構成
@@ -61,7 +61,7 @@ Agent WorkerはTurso, Better Auth, R2, Webを直接参照しません。APIが�
 | データベース | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                       |
 | ファイル     | Cloudflare R2, Images, Workers Cache                                                         |
 | メール       | React Email, Mailpit, Cloudflare Email Sending                                               |
-| 可観測性     | Sentry, Spotlight                                                                            |
+| 可観測性     | OpenTelemetry, Grafana LGTM, Grafana MCP                                                     |
 | 品質         | Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwright                                    |
 
 依存関係の版はルートの`workspaces.catalog`で固定しています。外部依存には`catalog:`、
@@ -115,8 +115,9 @@ bun install --frozen-lockfile
 
 開発シェルはBun, Turso CLI, `sqld`, Mailpit, dotenvx, Portlessなどを提供します。
 起動時に`.agents/local-skills/`とNixで固定した外部`skill`を
-`.agents/skills/`へ同期し、Codex, VS Code, Cursor用のMCP設定も生成します。手動で
-同期する場合は次を実行します。
+`.agents/skills/`へ同期し、VS CodeとCursor用のMCP設定を生成します。Codexはバージョン管理する
+`.codex/config.toml`からNixで固定したMCPアプリケーションを起動します。手動で同期する場合は
+次を実行します。
 
 ```sh
 nix run .#sync-agent-config

@@ -32,6 +32,11 @@ command = "/bin/zsh"
 args = ["-lic", "-c", "exec bunx -y chrome-devtools-mcp"]
 id = ""
 
+[mcp_servers.grafana]
+command = "/usr/bin/env"
+args = ["nix", "run", ".#grafana-mcp"]
+id = ""
+
 [mcp_servers.next-devtools-mcp.env]
 
 [mcp_servers.chrome-devtools-mcp.env]

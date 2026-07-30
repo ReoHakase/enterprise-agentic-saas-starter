@@ -5,9 +5,7 @@ export const serverEnv = {
     process.env.API_PUBLIC_URL ??
     process.env.NEXT_PUBLIC_API_BASE_URL ??
     "https://api.enterprise-agentic-saas.localhost",
-  SENTRY_DSN: process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN,
-  SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
-  SENTRY_ERROR_SAMPLE_RATE: process.env.SENTRY_ERROR_SAMPLE_RATE,
-  SENTRY_SPOTLIGHT: process.env.SENTRY_SPOTLIGHT,
-  SENTRY_TRACES_SAMPLE_RATE: process.env.SENTRY_TRACES_SAMPLE_RATE,
+  DEV_SESSION_ID: process.env.DEV_SESSION_ID,
+  DEV_WORKTREE_ID: process.env.DEV_WORKTREE_ID,
+  OTEL_EXPORTER_OTLP_ENDPOINT: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
 }

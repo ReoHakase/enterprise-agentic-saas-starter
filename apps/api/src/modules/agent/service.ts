@@ -6,11 +6,57 @@ import type {
   AgentRuntimeResumeInput,
 } from "../../agent-client"
 import { publicErrors } from "../../errors/app-error"
+import {
+  createObservedLogger,
+  injectObservedRequestHeaders,
+  withObservedSpan,
+} from "../../platform/observability/runtime"
 import { agentActionExecutionResultModel } from "./action-schema"
 import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
 import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
+const logger = createObservedLogger("agent").child("runtime")
+const messageLogger = createObservedLogger("agent").child("messages")
+const permissionLogger = createObservedLogger("agent").child("permission")
+const threadLogger = createObservedLogger("agent").child("threads")
+
+const agentRuntimeHeaders = (): Headers => {
+  const headers = new Headers({ "content-type": "application/json" })
+  injectObservedRequestHeaders(headers)
+  return headers
+}
+
+type AgentRuntimeSpanCompletion = {
+  promise: Promise<void>
+  reject(reason?: unknown): void
+  resolve(value?: void | PromiseLike<void>): void
+}
+
+const observeAgentRuntimeStream = (
+  spanCompletion: AgentRuntimeSpanCompletion,
+  body: ReadableStream<Uint8Array>
+) => {
+  const observedStream = new TransformStream<Uint8Array, Uint8Array>()
+  const completion = body.pipeTo(observedStream.writable).then(
+    () => {
+      logger.info("Agent runtime response stream completed", {
+        "agent.runtime.route": "/chat",
+      })
+      spanCompletion.resolve()
+      return undefined
+    },
+    (cause) => {
+      logger.error("Agent runtime response stream failed", {
+        "agent.runtime.route": "/chat",
+      })
+      spanCompletion.reject(cause)
+      throw cause
+    }
+  )
+  void completion.catch(() => undefined)
+  return observedStream.readable
+}
 
 const boundedRetryAfter = (value: string | null): number => {
   if (value && /^[1-9][0-9]{0,4}$/.test(value)) {
@@ -31,6 +77,23 @@ const normalizeAgentTimezone = (value: string): string => {
 }
 
 type AgentSessionIdentity = { sessionId: string; userId: string }
+type AgentApprovalPolicyInput = AgentSessionIdentity & { threadId: string }
+
+const getAgentApprovalPolicyForSession = async (
+  ports: AgentServicePorts,
+  input: AgentApprovalPolicyInput
+) => {
+  const policy = await ports.getAgentApprovalPolicyForSession(input)
+  permissionLogger.info("Agent thread permission resolved", {
+    "app.operation": "getAgentThreadPermission",
+    "app.outcome": "success",
+    "agent.permission.mode": policy.mode,
+    "agent.permission.allowed_action_count": Object.values(
+      policy.permissions
+    ).filter(Boolean).length,
+  })
+  return policy
+}
 
 const listAgentThreadsWithMemory = async (
   ports: AgentServicePorts,
@@ -38,7 +101,17 @@ const listAgentThreadsWithMemory = async (
 ) => {
   const registryThreads = await ports.listAgentThreadsForSession(input)
   const first = registryThreads[0]
-  if (!first) return []
+  if (!first) {
+    threadLogger.info("Agent thread list resolved", {
+      "app.operation": "listAgentThreads",
+      "app.outcome": "success",
+      "agent.thread.registry_count": 0,
+      "agent.thread.memory_count": 0,
+      "agent.thread.memory_match_count": 0,
+      "agent.thread.result_count": 0,
+    })
+    return []
+  }
   if (registryThreads.length > 1_000) {
     throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
   }
@@ -51,7 +124,7 @@ const listAgentThreadsWithMemory = async (
     response = await ports.fetchAgentRuntime(
       new Request("https://agent.internal/memory/threads", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: agentRuntimeHeaders(),
         body: JSON.stringify({
           registryThreadIds: registryThreads.map((thread) => thread.id),
           threadId: first.id,
@@ -73,7 +146,10 @@ const listAgentThreadsWithMemory = async (
     throw publicErrors.unavailable(cause)
   }
   const byId = new Map(memoryThreads.map((thread) => [thread.id, thread]))
-  return registryThreads
+  const memoryMatchCount = registryThreads.filter((thread) =>
+    byId.has(thread.id)
+  ).length
+  const threads = registryThreads
     .map((thread) => {
       const memoryThread = byId.get(thread.id)
       return memoryThread
@@ -88,6 +164,15 @@ const listAgentThreadsWithMemory = async (
         right.updatedAt.localeCompare(left.updatedAt) ||
         right.id.localeCompare(left.id)
     )
+  threadLogger.info("Agent thread list resolved", {
+    "app.operation": "listAgentThreads",
+    "app.outcome": "success",
+    "agent.thread.registry_count": registryThreads.length,
+    "agent.thread.memory_count": memoryThreads.length,
+    "agent.thread.memory_match_count": memoryMatchCount,
+    "agent.thread.result_count": threads.length,
+  })
+  return threads
 }
 
 const listAgentMessagesFromMemory = async (
@@ -104,7 +189,7 @@ const listAgentMessagesFromMemory = async (
     response = await ports.fetchAgentRuntime(
       new Request("https://agent.internal/memory/history", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: agentRuntimeHeaders(),
         body: JSON.stringify({
           threadId: input.threadId,
           ticket: capability.ticket,
@@ -121,11 +206,53 @@ const listAgentMessagesFromMemory = async (
     throw publicErrors.unavailable(new Error("Agent history unavailable"))
   }
   try {
-    return v.parse(agentMessagePageModel, await response.json())
+    const result = v.parse(agentMessagePageModel, await response.json())
+    messageLogger.info("Agent message history loaded", {
+      "app.operation": "listAgentThreadMessages",
+      "app.outcome": "success",
+      "agent.message.result_count": result.messages.length,
+      "agent.message.total_count": result.total,
+      "agent.message.page": result.page,
+      "agent.message.per_page": result.perPage,
+      "agent.message.has_more": result.hasMore,
+    })
+    return result
   } catch (cause) {
     throw publicErrors.unavailable(cause)
   }
 }
+
+const observeAgentRuntimeChat = (
+  input: AgentRuntimeChatInput,
+  callback: (completion: AgentRuntimeSpanCompletion) => Promise<Response>
+): Promise<Response> =>
+  withObservedSpan(
+    {
+      attributes: {
+        "agent.chat.asset_count": input.assetIds.length,
+        "agent.chat.context_reference_count": input.contextReferences.length,
+        "agent.chat.trigger": input.trigger,
+      },
+      name: "Call Agent runtime",
+      op: "agent.runtime.fetch",
+    },
+    (lifecycle) => {
+      const completion = Promise.withResolvers<void>()
+      lifecycle.endWhen(completion.promise)
+      void completion.promise.catch(() => undefined)
+      logger.debug("Agent runtime request started", {
+        "agent.chat.asset_count": input.assetIds.length,
+        "agent.chat.context_reference_count": input.contextReferences.length,
+        "agent.chat.reusable_asset_count": input.reusableAssets.length,
+        "agent.chat.trigger": input.trigger,
+        "agent.runtime.route": "/chat",
+      })
+      return callback(completion).catch((cause) => {
+        completion.reject(cause)
+        throw cause
+      })
+    }
+  )
 
 export const createAgentService = (ports: AgentServicePorts) => {
   const listAgentThreads = (input: AgentSessionIdentity) =>
@@ -164,7 +291,11 @@ export const createAgentService = (ports: AgentServicePorts) => {
         ports.fetchAgentRuntime(
           new Request(
             `https://agent.internal/runs/${encodeURIComponent(input.runId)}/cancel`,
-            { method: "POST", signal: abortController.signal }
+            {
+              method: "POST",
+              headers: agentRuntimeHeaders(),
+              signal: abortController.signal,
+            }
           )
         ),
         new Promise<never>((_resolve, reject) => {
@@ -215,71 +346,94 @@ export const createAgentService = (ports: AgentServicePorts) => {
   const forwardAgentChat = async (
     input: AgentRuntimeChatInput,
     signal?: AbortSignal
-  ): Promise<Response> => {
-    let response: Response
-    try {
-      response = await ports.fetchAgentRuntime(
-        new Request("https://agent.internal/chat", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
-          signal,
+  ): Promise<Response> =>
+    observeAgentRuntimeChat(input, async (spanCompletion) => {
+      let response: Response
+      try {
+        response = await ports.fetchAgentRuntime(
+          new Request("https://agent.internal/chat", {
+            method: "POST",
+            headers: agentRuntimeHeaders(),
+            body: JSON.stringify(input),
+            signal,
+          })
+        )
+      } catch (cause) {
+        logger.error("Agent runtime request failed", {
+          "agent.runtime.route": "/chat",
         })
-      )
-    } catch (cause) {
-      throw publicErrors.unavailable(cause)
-    }
+        throw publicErrors.unavailable(cause)
+      }
 
-    if (response.status !== 200) {
-      const status = response.status
-      const retryAfter =
-        status === 429
-          ? boundedRetryAfter(response.headers.get("retry-after"))
-          : null
-      await response.body?.cancel().catch(() => undefined)
-      const publicStatus =
-        status === 400 || status === 409 || status === 429 ? status : 503
-      return new Response(
-        publicStatus === 400
-          ? "Invalid agent request"
-          : publicStatus === 409
-            ? "Agent run already in progress"
-            : publicStatus === 429
-              ? "Agent capacity temporarily limited"
-              : "Agent unavailable",
-        {
-          status: publicStatus,
-          headers: {
-            "cache-control": "private, no-store",
-            "content-type": "text/plain; charset=utf-8",
-            ...(retryAfter === null
-              ? {}
-              : { "retry-after": String(retryAfter) }),
-          },
-        }
-      )
-    }
+      const contentType = response.headers.get("content-type") ?? "missing"
+      logger[
+        response.status >= 500
+          ? "error"
+          : response.status >= 400
+            ? "warn"
+            : "info"
+      ]("Agent runtime response received", {
+        "agent.runtime.content_type": contentType,
+        "agent.runtime.route": "/chat",
+        "http.response.status_code": response.status,
+      })
 
-    if (
-      response.body === null ||
-      !response.headers.get("content-type")?.startsWith("text/event-stream")
-    ) {
-      await response.body?.cancel().catch(() => undefined)
-      throw publicErrors.unavailable(
-        new Error("Invalid Agent runtime response")
-      )
-    }
+      if (response.status !== 200) {
+        const status = response.status
+        const retryAfter =
+          status === 429
+            ? boundedRetryAfter(response.headers.get("retry-after"))
+            : null
+        await response.body?.cancel().catch(() => undefined)
+        spanCompletion.resolve()
+        const publicStatus =
+          status === 400 || status === 409 || status === 429 ? status : 503
+        return new Response(
+          publicStatus === 400
+            ? "Invalid agent request"
+            : publicStatus === 409
+              ? "Agent run already in progress"
+              : publicStatus === 429
+                ? "Agent capacity temporarily limited"
+                : "Agent unavailable",
+          {
+            status: publicStatus,
+            headers: {
+              "cache-control": "private, no-store",
+              "content-type": "text/plain; charset=utf-8",
+              ...(retryAfter === null
+                ? {}
+                : { "retry-after": String(retryAfter) }),
+            },
+          }
+        )
+      }
 
-    return new Response(response.body, {
-      status: 200,
-      headers: {
-        "cache-control": "private, no-store",
-        "content-type": "text/event-stream",
-        "x-accel-buffering": "no",
-        "x-vercel-ai-ui-message-stream": "v1",
-      },
+      if (
+        response.body === null ||
+        !contentType.startsWith("text/event-stream")
+      ) {
+        await response.body?.cancel().catch(() => undefined)
+        throw publicErrors.unavailable(
+          new Error("Invalid Agent runtime response")
+        )
+      }
+
+      const clientBody = observeAgentRuntimeStream(
+        spanCompletion,
+        response.body
+      )
+
+      return new Response(clientBody, {
+        status: 200,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "text/event-stream",
+          "x-accel-buffering": "no",
+          "x-vercel-ai-ui-message-stream": "v1",
+        },
+      })
     })
-  }
 
   const forwardAgentActionResume = async (
     input: AgentRuntimeResumeInput
@@ -289,7 +443,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
       response = await ports.fetchAgentRuntime(
         new Request("https://agent.internal/actions/resume", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: agentRuntimeHeaders(),
           body: JSON.stringify(input),
         })
       )
@@ -339,11 +493,8 @@ export const createAgentService = (ports: AgentServicePorts) => {
     })
   }
 
-  const getAgentApprovalPolicy = (input: {
-    sessionId: string
-    userId: string
-    threadId: string
-  }) => ports.getAgentApprovalPolicyForSession(input)
+  const getAgentApprovalPolicy = (input: AgentApprovalPolicyInput) =>
+    getAgentApprovalPolicyForSession(ports, input)
 
   const putAgentApprovalPolicy = (input: {
     sessionId: string

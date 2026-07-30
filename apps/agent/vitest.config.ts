@@ -8,7 +8,6 @@ export default defineConfig({
       reporter: ["text", "json-summary", "lcov", "html"],
       reportsDirectory: "./coverage/node",
       include: [
-        "src/mastra/adapters/telemetry/privacy.ts",
         "src/mastra/core/budget/context.ts",
         "src/mastra/core/budget/tool.ts",
         "src/mastra/core/messages/chat-input.ts",

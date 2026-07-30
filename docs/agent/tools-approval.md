@@ -55,7 +55,7 @@ provider call前にAgent local guardとAPI server guardを順に通します。
   過去のメッセージとツール結果に含まれる固有情報
 - `private issue`、`internal note`等として転記された固有情報
 
-queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本文をerror、log、Sentry、auditへ出しません。guard失敗時はproviderとquota reservationを呼びません。
+queryは2〜200文字です。guardはquery、拒否対象文字列、Issue本文をpublic error、production log、remote telemetry、auditへ出しません。local rich telemetryは認証materialをredactして保持できます。guard失敗時はproviderとquota reservationを呼びません。
 完全一致する非公開文字列は常に拒否します。現在の発話で初めて現れた語も、保存済みメッセージ内の
 公開情報だけの検索語と完全一致しない限りプロバイダーへ送りません。非公開コンテキストとの部分一致に
 より安全な一般化を確定できない場合も拒否し、ユーザーが公開情報だけの`query`へ言い換えて再送する

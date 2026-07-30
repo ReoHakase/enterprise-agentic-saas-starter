@@ -82,13 +82,12 @@ apps/web/
 
     lib/
       client/
+      report-observed-error.ts
       server/
       shared/
 
     instrumentation.ts
     instrumentation-client.ts
-    sentry.server.config.ts
-    sentry.edge.config.ts
 
   e2e/
   test/
@@ -257,8 +256,8 @@ Ready、loading、errorは同じ外側のshell、grid column、header/body領域
 
 Error表示は`Error.message`、Next.jsの`digest`、stack、cause、現在URL/query、API/providerのraw応答、
 email、tenant/resource IDをDOM、accessible name、`aria-live`へ出しません。表示するのは固定の
-利用者向け文言と、公開可と検証済みのrequest IDだけです。raw errorは既存のredactionを通して
-Sentryへ送り、UIのpropsへ展開しません。
+利用者向け文言と、公開可と検証済みのrequest IDだけです。raw errorはlocal OpenTelemetryへ送り、
+認証materialはcollectorで除去し、UIのpropsへ展開しません。
 
 async Server Componentを使うNext.js route segmentには`loading.tsx`と`error.tsx`を置きます。
 `loading.tsx`はfeatureの`components/<screen>/skeleton.tsx`、`error.tsx`は

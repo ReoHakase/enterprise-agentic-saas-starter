@@ -1,7 +1,10 @@
 import { publicErrors } from "../../errors/app-error"
+import { createObservedLogger } from "../../platform/observability/runtime"
 import type { IssuePriority, IssueStatus, ListIssuesInput } from "./domain"
 import type { IssuesPorts } from "./ports"
 import { decodeIssueTimelineCursor } from "./timeline-cursor"
+
+const issueListLogger = createObservedLogger("issues").child("list")
 
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
@@ -54,7 +57,30 @@ const createIssueReadService = (ports: IssuesPorts) => {
     }
   ) => {
     await ports.requireMembership(input)
-    return ports.listIssues(input)
+    const result = await ports.listIssues(input)
+    issueListLogger.info("Issue list resolved", {
+      "app.operation": "listIssues",
+      "app.outcome": "success",
+      "issue.result_count": result.items.length,
+      "issue.total_count": result.total,
+      "issue.page": result.page,
+      "issue.page_size": result.pageSize,
+      "issue.filter.has_search": Boolean(input.search?.trim()),
+      "issue.filter.status_count":
+        input.statuses?.length ?? (input.status ? 1 : 0),
+      "issue.filter.assignee_count":
+        input.assigneeIds?.length ?? (input.assigneeId ? 1 : 0),
+      "issue.filter.label_count": input.labels?.length ?? (input.label ? 1 : 0),
+      "issue.filter.has_priority_range": Boolean(
+        input.priorityFrom || input.priorityTo
+      ),
+      "issue.filter.has_due_date_range": Boolean(
+        input.dueDateFrom || input.dueDateTo
+      ),
+      "issue.sort_by": input.sortBy ?? "default",
+      "issue.sort_direction": input.sortDirection ?? "default",
+    })
+    return result
   }
 
   const listLabels = async (input: {

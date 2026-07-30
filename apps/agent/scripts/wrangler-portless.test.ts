@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest"
 import { createWranglerArguments } from "./wrangler-portless"
 
 const localEnvironment = {
+  DEV_SESSION_ID: "session_123",
+  DEV_WORKTREE_ID: "feature-auth",
   MASTRA_STORAGE_AUTH_TOKEN: "local-agent-storage",
   MASTRA_STORAGE_URL:
     "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost",
   PORT: "43123",
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
 }
 
 describe("Agent Wrangler Portless launcher", () => {
@@ -25,6 +28,12 @@ describe("Agent Wrangler Portless launcher", () => {
       "MASTRA_STORAGE_URL:https://agent-storage.feature-auth.enterprise-agentic-saas.localhost",
       "--var",
       "MASTRA_STORAGE_AUTH_TOKEN:local-agent-storage",
+      "--var",
+      "DEV_WORKTREE_ID:feature-auth",
+      "--var",
+      "DEV_SESSION_ID:session_123",
+      "--var",
+      "OTEL_EXPORTER_OTLP_ENDPOINT:http://127.0.0.1:4318",
     ])
   })
 
@@ -53,6 +62,13 @@ describe("Agent Wrangler Portless launcher", () => {
     [
       { ...localEnvironment, MASTRA_STORAGE_AUTH_TOKEN: "remote-token" },
       "MASTRA_STORAGE_AUTH_TOKEN must use the local Agent storage token",
+    ],
+    [
+      {
+        ...localEnvironment,
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://telemetry.example.test",
+      },
+      "OTEL_EXPORTER_OTLP_ENDPOINT must be http://127.0.0.1:4318",
     ],
   ])("rejects unsafe environment input", (environment, message) => {
     expect(() => createWranglerArguments(environment)).toThrow(message)

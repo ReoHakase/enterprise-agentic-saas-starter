@@ -3,6 +3,10 @@ import { Elysia } from "elysia"
 import { agentRunResultSchema } from "../../../agent-client"
 import { publicErrors } from "../../../errors/app-error"
 import { tenantErrorResponses } from "../../../models/api"
+import {
+  createObservedLogger,
+  withObservedSpan,
+} from "../../../platform/observability/runtime"
 import type { AccessControlFactory } from "../../authorization/public"
 import { agentStreamResponseModel } from "../action-schema"
 import {
@@ -16,6 +20,8 @@ import {
   createAgentThreadBodyModel,
 } from "../model"
 import type { AgentService } from "../service"
+
+const logger = createObservedLogger("agent").child("chat")
 
 export const createAgentConversationRoutes = (
   service: AgentService,
@@ -133,32 +139,62 @@ export const createAgentConversationRoutes = (
     .post(
       "/agent/chat",
       async ({ authContext: { session, user }, body, request }) => {
-        const timezone = service.normalizeAgentTimezone(body.timezone)
-        const prepared =
+        const requestKind =
           "contentSegments" in body
-            ? await service.prepareAgentChat({
-                assetIds: body.assetIds,
-                contentSegments: body.contentSegments,
-                messageId: body.messageId,
-                sessionId: session.id,
-                userId: user.id,
-                threadId: body.threadId,
-                timezone,
-              })
-            : await service.prepareAgentClientToolContinuation({
-                assistantMessageId: body.assistantMessageId,
-                clientToolResults: body.clientToolResults,
-                sessionId: session.id,
-                userId: user.id,
-                threadId: body.threadId,
-                timezone,
-              })
+            ? "user-message"
+            : "client-tool-continuation"
+        logger.info("Agent chat request accepted", {
+          "agent.chat.kind": requestKind,
+          "agent.chat.asset_count":
+            "assetIds" in body ? body.assetIds.length : 0,
+          "agent.chat.content_segment_count":
+            "contentSegments" in body ? body.contentSegments.length : 0,
+          "agent.chat.client_tool_result_count":
+            "clientToolResults" in body ? body.clientToolResults.length : 0,
+        })
+        const prepared = await withObservedSpan(
+          {
+            attributes: {
+              "agent.chat.kind": requestKind,
+            },
+            name: "Prepare Agent chat",
+            op: "agent.chat.prepare",
+          },
+          async () => {
+            const timezone = service.normalizeAgentTimezone(body.timezone)
+            return "contentSegments" in body
+              ? await service.prepareAgentChat({
+                  assetIds: body.assetIds,
+                  contentSegments: body.contentSegments,
+                  messageId: body.messageId,
+                  sessionId: session.id,
+                  userId: user.id,
+                  threadId: body.threadId,
+                  timezone,
+                })
+              : await service.prepareAgentClientToolContinuation({
+                  assistantMessageId: body.assistantMessageId,
+                  clientToolResults: body.clientToolResults,
+                  sessionId: session.id,
+                  userId: user.id,
+                  threadId: body.threadId,
+                  timezone,
+                })
+          }
+        )
         const message = prepared.messages.at(-1)
         if (!message) {
           throw publicErrors.unavailable(
             new Error("Prepared Agent message is unavailable")
           )
         }
+        logger.debug("Agent chat request prepared", {
+          "agent.chat.asset_count": prepared.assetIds.length,
+          "agent.chat.context_reference_count":
+            prepared.contextReferences.length,
+          "agent.chat.reusable_asset_count": prepared.reusableAssets.length,
+          "agent.chat.trigger": prepared.trigger,
+        })
         return service.forwardAgentChat(
           {
             assetIds: prepared.assetIds,

@@ -13,8 +13,7 @@ export default defineConfig({
         "src/client.ts",
         "src/modules/organizations/routes/deletion-access.ts",
         "src/modules/organizations/deletion-jobs.ts",
-        "src/platform/observability/sanitize.ts",
-        "src/platform/observability/spotlight.ts",
+        "src/platform/observability/otel-adapter.ts",
         "src/platform/plugins/request-id.ts",
       ],
       thresholds: {

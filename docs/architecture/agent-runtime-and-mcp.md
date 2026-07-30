@@ -740,7 +740,7 @@ DB migration historyはappend-onlyを維持し、新しいdestructive migration�
 - archived threadはAgent DBへ残っていても読めない
 - session失効、membership変更、organization切替、archive、hard delete、credential rotateの各時点で
   capabilityを再検証し、失効済み主体へMemoryやbusiness toolを公開しない
-- snapshot、trace、Memory、stream、Sentryへgrant、resume ticket、provider key、private payloadを残さない
+- snapshot、Memory、stream、production log、remote telemetryへgrant、resume ticket、provider key、private payloadを残さない
 
 ## 受入条件
 

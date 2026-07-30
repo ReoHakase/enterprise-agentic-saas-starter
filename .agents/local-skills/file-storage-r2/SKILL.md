@@ -32,4 +32,4 @@ description: enterprise-agentic-saas-starterの認証付きfile storage、R2 bin
 - R2 object key、private URL、image optimizer URLをclientへ露出しない。
 - filename、MIME、content lengthをclient申告だけで信用しない。
 - attachment一覧をN+1 queryで取得しない。
-- raw bytesやsigned materialをlog、Sentry、canonical messageへ保存しない。
+- raw bytesやsigned materialをlog、telemetry、canonical messageへ保存しない。

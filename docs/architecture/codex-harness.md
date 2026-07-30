@@ -52,7 +52,7 @@ coding harness
   static check / test / review
 ```
 
-Spotlight、worktree隔離、runtime observability、performance monitoringはapplication observabilityであり、別の運用文書が正本です。名称を混同しません。
+LGTM、worktree/session filter、runtime observability、performance monitoringはapplication observabilityであり、別の運用文書が正本です。名称を混同しません。
 
 ## 構成
 

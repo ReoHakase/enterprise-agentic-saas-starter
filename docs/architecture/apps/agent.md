@@ -224,7 +224,7 @@ Vitestはtest fileからtest-supportを直接importしてfactoryへ渡せます�
 apps/web/**
 ```
 
-`core/**`と`runtime/ports.ts`から`@mastra/*`、`@openrouter/*`、Sentry concrete SDKを禁止します。
+`core/**`と`runtime/ports.ts`から`@mastra/*`、`@openrouter/*`、OpenTelemetry concrete SDKを禁止します。
 `agents/**`、`runtime/**`、`tools/**/execute.ts`からAPI concrete clientも禁止します。
 
 ## テスト配置

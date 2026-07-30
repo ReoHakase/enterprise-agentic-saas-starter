@@ -1,6 +1,6 @@
 ---
 name: error-handling
-description: enterprise-agentic-saas-starterのAppError、public error contract、retry/capture policy、Error.cause、safe loggingとSentry error handlingを変更するときに使う。
+description: enterprise-agentic-saas-starterのAppError、public error contract、retry/capture policy、Error.cause、safe loggingとOpenTelemetry error handlingを変更するときに使う。
 ---
 
 # Error Handling

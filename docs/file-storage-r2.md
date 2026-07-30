@@ -119,7 +119,7 @@ local seedのreconcileは次の動作です。
 - custom metadata不一致: 上書きせず停止
 - manifest file row削除済み: 再作成しない
 
-各fixtureはmanifest順に処理し、retry時も失敗したfixture位置を保持します。retry可能なHTTP失敗はそのfixtureで最大3回までとし、最初のfixtureへ戻るloopや無限retryは行いません。R2 PUT後にDB確定が失敗してもobjectとpendingを残すため、原因を直して同じcommandを明示再実行します。filename、object key、provider raw errorをlog/Sentryへ出さないでください。
+各fixtureはmanifest順に処理し、retry時も失敗したfixture位置を保持します。retry可能なHTTP失敗はそのfixtureで最大3回までとし、最初のfixtureへ戻るloopや無限retryは行いません。R2 PUT後にDB確定が失敗してもobjectとpendingを残すため、原因を直して同じcommandを明示再実行します。filename、object key、provider raw errorをproduction log、remote telemetry、test artifactへ出さないでください。
 
 ## 検証
 

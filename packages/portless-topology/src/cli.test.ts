@@ -176,7 +176,8 @@ describe("Portless topology resolver", () => {
     }
     const environment = createLocalTopologyEnvironment(
       "https://feature-auth.enterprise-agentic-saas.localhost:7443",
-      source
+      source,
+      () => "session-123"
     )
 
     expect(environment).toMatchObject({
@@ -190,6 +191,8 @@ describe("Portless topology resolver", () => {
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443",
       CORS_ORIGIN:
         "https://feature-auth.enterprise-agentic-saas.localhost:7443",
+      DEV_SESSION_ID: "session-123",
+      DEV_WORKTREE_ID: "feature-auth",
       GITHUB_OAUTH_EMULATOR_URL:
         "https://github.emulate.feature-auth.enterprise-agentic-saas.localhost:7443",
       GITHUB_OAUTH_CALLBACK_URL:
@@ -199,11 +202,16 @@ describe("Portless topology resolver", () => {
         "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
       NEXT_PUBLIC_API_BASE_URL:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443",
+      NEXT_PUBLIC_DEV_SESSION_ID: "session-123",
+      NEXT_PUBLIC_DEV_WORKTREE_ID: "feature-auth",
+      NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT:
+        "https://otel.enterprise-agentic-saas.localhost",
       NODE_EXTRA_CA_CERTS: "/Users/example/.portless/ca.pem",
       TRUSTED_ORIGINS:
         "https://feature-auth.enterprise-agentic-saas.localhost:7443",
       TURSO_DATABASE_URL:
         "https://db.feature-auth.enterprise-agentic-saas.localhost:7443",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
     })
     expect(environment).not.toHaveProperty("EMULATE_BASE_URL")
     expect(environment).not.toHaveProperty("TURSO_AUTH_TOKEN")
@@ -224,6 +232,37 @@ describe("Portless topology resolver", () => {
         }
       )
     ).toMatchObject({ NODE_EXTRA_CA_CERTS: "/tmp/custom-ca.pem" })
+  })
+
+  it("uses main as the root checkout worktree identity", () => {
+    expect(
+      createLocalTopologyEnvironment(
+        "https://enterprise-agentic-saas.localhost",
+        {},
+        () => "session-main"
+      )
+    ).toMatchObject({
+      DEV_SESSION_ID: "session-main",
+      DEV_WORKTREE_ID: "main",
+    })
+  })
+
+  it("preserves an existing development session across nested topology wrappers", () => {
+    const createSessionId = vi.fn<() => string>(() => "new-session")
+    expect(
+      createLocalTopologyEnvironment(
+        "https://feature-auth.enterprise-agentic-saas.localhost",
+        {
+          DEV_SESSION_ID: " parent-session ",
+          NEXT_PUBLIC_DEV_SESSION_ID: "stale-browser-session",
+        },
+        createSessionId
+      )
+    ).toMatchObject({
+      DEV_SESSION_ID: "parent-session",
+      NEXT_PUBLIC_DEV_SESSION_ID: "parent-session",
+    })
+    expect(createSessionId).not.toHaveBeenCalled()
   })
 })
 
@@ -317,6 +356,38 @@ describe("Portless topology CLI", () => {
       storageUrl:
         "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
       tursoToken: null,
+    })
+  })
+
+  it("keeps one session id through root exec and nested service run", async () => {
+    const stubDirectory = await createPortlessStub(
+      "https://feature-auth.enterprise-agentic-saas.localhost"
+    )
+    const argumentsFile = join(stubDirectory, "arguments.txt")
+    const result = await runCli(
+      [
+        "exec",
+        "--",
+        "portless-topology",
+        "run",
+        "api.enterprise-agentic-saas",
+        "--",
+        "bun",
+        "-e",
+        "process.stdout.write(`${process.env.DEV_SESSION_ID}:${process.env.NEXT_PUBLIC_DEV_SESSION_ID}`)",
+      ],
+      {
+        DEV_SESSION_ID: "root-session",
+        NEXT_PUBLIC_DEV_SESSION_ID: "stale-session",
+        PATH: `${stubDirectory}:${process.env.PATH ?? ""}`,
+        PORTLESS_ARGUMENTS_FILE: argumentsFile,
+      }
+    )
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "root-session:root-session",
     })
   })
 

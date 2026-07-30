@@ -34,10 +34,10 @@ Agent Workerの`AGENT_INTERNAL_API`はAPI Worker `enterprise-agentic-saas-api`�
 
 Cloudflare dashboardまたはIaCでAPI Workerへ次を設定します。
 
-- vars: `NODE_ENV=production`, `APP_NAME`, `APP_BASE_URL`, `API_PUBLIC_URL`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`, `TRUSTED_ORIGINS`, `CORS_ORIGIN`, `EMAIL_PROVIDER=cloudflare`, `EMAIL_FROM`, `AGENT_ASSET_UPLOAD_ENABLED`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`, sampling rate
-- secrets: `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `SENTRY_DSN`
+- vars: `NODE_ENV=production`, `APP_NAME`, `APP_BASE_URL`, `API_PUBLIC_URL`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`, `TRUSTED_ORIGINS`, `CORS_ORIGIN`, `EMAIL_PROVIDER=cloudflare`, `EMAIL_FROM`, `AGENT_ASSET_UPLOAD_ENABLED`
+- secrets: `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
 
-Agent Workerへはvarsとして`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`AGENT_WRITES_ENABLED`、`NODE_ENV=production`、`SENTRY_ENVIRONMENT`、`SENTRY_RELEASE`、secretsとして`OPENROUTER_API_KEY`とAgent専用`SENTRY_DSN`を設定します。
+Agent Workerへはvarsとして`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`AGENT_WRITES_ENABLED`、`NODE_ENV=production`、secretとして`OPENROUTER_API_KEY`を設定します。production remote telemetryは未構成です。
 
 Web buildには`API_PUBLIC_URL`と`NEXT_PUBLIC_API_BASE_URL`を同じAPI originとして渡します。`NEXT_PUBLIC_AGENT_BASE_URL`は設定しません。file preview/download/Agent chatはBetter Auth cookieを使うAPI routeなので、Web/APIは同じregistrable domain配下に置き、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、credential付き`CORS_ORIGIN`を揃えます。R2、Images、Agent専用domainは不要です。
 
@@ -60,18 +60,18 @@ Issue添付画像toolのrolloutでは、既存環境の`AGENT_VISION_ENABLED`を
 
 GitHub `production` Environmentでは、少なくとも次を登録します。
 
-- vars: `APP_NAME`、`APP_BASE_URL`、`API_PUBLIC_URL`、`AUTH_COOKIE_DOMAIN`、`EMAIL_PROVIDER=cloudflare`、`EMAIL_FROM`、4つのAgent flag、`SENTRY_ORG`、`SENTRY_API_PROJECT`、`SENTRY_AGENT_PROJECT`、`SENTRY_WEB_PROJECT`
-- secrets: `BETTER_AUTH_SECRET`、`OAUTH_GITHUB_CLIENT_ID`、`OAUTH_GITHUB_CLIENT_SECRET`、`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`OPENROUTER_API_KEY`、`SENTRY_API_DSN`、`SENTRY_AGENT_DSN`、`SENTRY_WEB_DSN`、`SENTRY_AUTH_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`
+- vars: `APP_NAME`、`APP_BASE_URL`、`API_PUBLIC_URL`、`AUTH_COOKIE_DOMAIN`、`EMAIL_PROVIDER=cloudflare`、`EMAIL_FROM`、4つのAgent flag
+- secrets: `BETTER_AUTH_SECRET`、`OAUTH_GITHUB_CLIENT_ID`、`OAUTH_GITHUB_CLIENT_SECRET`、`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`OPENROUTER_API_KEY`、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`
 
 workflowはsecretをjob全体のenvへ置かず、validation、migration、各deployの必要stepだけへ渡します。3 Workerとも`umask 077`で作った一時JSONへruntime secretを書き、WebのOpenNext経由を含む`wrangler deploy --secrets-file`でcodeと同じversionへ加算的に注入し、step終了時に必ず削除します。値をCLI引数、`echo`、`GITHUB_OUTPUT`、artifactへ渡しません。`--secrets-file`に含めなかった既存secretは保持されるため、secret削除は別の明示手順で行います。
 
-workflowはcommit SHAを3 Worker共通の`SENTRY_RELEASE`に使います。API/Agent/Web server runtimeのDSNはdeploy versionへsecretとして注入し、Web buildには公開可能なbrowser用`NEXT_PUBLIC_SENTRY_DSN`として同じWeb project値を渡します。`SENTRY_AUTH_TOKEN`はmigration前のpreflight validationとsource map upload stepだけで使い、Worker runtimeへ保存しません。
+production telemetry backendは未構成です。local OTLP endpointと`DEV_*`をproduction deployへ注入しません。
 
 ## Fileとorganization削除のR2 cleanup
 
 API Workerのscheduled handlerは`apps/api/wrangler.jsonc`のcron（既定は毎分）で`file_cleanup_jobs`と`organization_deletion_jobs`を処理します。file削除はquota解放、metadata削除、exact-key job、auditを同じtransactionで確定し、R2 objectをbackgroundで冪等削除します。Issue削除はowner prefix、organization削除は`organizations/<encoded organization id>/` prefixを対象にします。job tableは削除済みresourceへの外部keyを持たないため、cleanupを継続できます。
 
-processorはleaseと指数backoffで再試行します。`pending` / retry可能な`failed` / lease切れ`processing`だけをclaimし、成功を`completed`にします。完了/失敗更新はclaim時の`attempts + locked_at`が一致する場合だけ行うため、時間のかかった旧workerがlease再取得後の状態を上書きしません。batch logは`claimed/completed/failed/stale`の件数、失敗eventはattemptと固定error codeだけを記録します。job ID、organization/user ID、slug、email、filename、object keyをconsoleやSentryへ出しません。運用では`failed`件数、`stale`発生、最古job ageを監視し、`FILES` bindingやbucket権限を解消後、次回cronの冪等retryに任せます。
+processorはleaseと指数backoffで再試行します。`pending` / retry可能な`failed` / lease切れ`processing`だけをclaimし、成功を`completed`にします。完了/失敗更新はclaim時の`attempts + locked_at`が一致する場合だけ行うため、時間のかかった旧workerがlease再取得後の状態を上書きしません。batch logは`claimed/completed/failed/stale`の件数、失敗eventはattemptと固定error codeだけを記録します。job ID、organization/user ID、slug、email、filename、object keyをproduction logやremote telemetryへ出しません。運用では`failed`件数、`stale`発生、最古job ageを監視し、`FILES` bindingやbucket権限を解消後、次回cronの冪等retryに任せます。
 
 ## Cloudflare Email Sending
 
@@ -87,23 +87,11 @@ organization invitationは`invitation_email_jobs`から配送します。jobはr
 
 招待再送/期限切れ復活ではinvitationごとに一意な同じjobを`pending`へ戻し、error、lock、next attempt、completed時刻をclearします。`attempts`はresetせず単調増加させるため、再送直前まで動いていた旧workerの完了/失敗更新はfencing条件に一致せずstaleになります。job欠損時だけ同じtransactionで再作成します。
 
-監視対象はbatchの`claimed/completed/failed/canceled/stale`件数、失敗時のattempt・固定error code・retryableだけです。job/invitation/organization/user ID、email、URL、provider raw errorをlog/Sentryへ出しません。`failed`増加、`stale`、最古pending ageをalertにし、bindingやsender domainを修復後はcronの再試行へ任せます。provider受付とjob完了の間でWorkerが停止すると重複配送の可能性が残るため、運用上はat-least-onceとして扱います。
+監視対象はbatchの`claimed/completed/failed/canceled/stale`件数、失敗時のattempt・固定error code・retryableだけです。job/invitation/organization/user ID、email、URL、provider raw errorをproduction logやremote telemetryへ出しません。`failed`増加、`stale`、最古pending ageをalertにし、bindingやsender domainを修復後はcronの再試行へ任せます。provider受付とjob完了の間でWorkerが停止すると重複配送の可能性が残るため、運用上はat-least-onceとして扱います。
 
-## Sentry
+## Production observability
 
-Web、API、Agentに別projectを作り、projectごとにDSNを設定します。Web browserは`NEXT_PUBLIC_SENTRY_DSN`、Web server/API/Agentは各Workerの`SENTRY_DSN`を使います。同じcommit SHAを3 projectの`SENTRY_RELEASE`、deploy先を`SENTRY_ENVIRONMENT`へ設定し、browser→APIとAgent→APIのtrace境界を確認します。
-
-source mapは実際にdeployするartifactと一致させます。
-
-- API: Wrangler dry-runでbundle/mapを生成し、Sentry CLIでdebug IDをinject・uploadしてから同じ`dist/worker/worker.js`を`--no-bundle`でdeployする
-- Agent: APIと同様に`apps/agent/dist/worker`へdebug IDをinject・Agent projectへuploadし、同じartifactを`--no-bundle`でdeployする
-- Web: `opennextjs-cloudflare build`中のSentry Next.js pluginでuploadを完了してから、生成済み`.open-next`を`opennextjs-cloudflare deploy`する。buildを省略してdeployしない
-
-preflight validationとsource map uploadを行うstepだけに`SENTRY_AUTH_TOKEN`を渡し、対象serviceの`SENTRY_PROJECT`はupload stepだけへ渡します。非secretの`SENTRY_ORG`とservice別project名はGitHub Environment varsとして検証します。auth tokenはWorker runtimeへ配置せず、public DSN以外の値へ`NEXT_PUBLIC_`を付けません。Wranglerの`upload_source_maps=true`はCloudflare側でstackを復号するためにも維持しますが、Sentry側のartifact uploadを代替しません。Sentry uploadが失敗したartifactはdeployせず、deploy後は3 projectのtest eventでrelease、debug ID、元sourceのfile/lineを確認します。
-
-application error/log/traceはSentry SDKから直接送る。Cloudflare Workers Observabilityはplatform metricsとCloudflare側の調査用に残すが、同じWorkerへSentry OTLP log/trace destinationを追加すると二重計上になるため、この構成と併用しない。切り替える場合はrelease単位で送信経路を一つにし、dashboard/event countを検証する。
-
-初期samplingはproduction error 100%、trace 10%、Spotlight 100%。trafficと契約量に応じてenvで変更します。Sentry Uptime monitorはAPIの`/health`（Worker liveness）、`/ready`（Tursoを含むreadiness）、Web公開URLを別々に作ります。Agentはpublic HTTP health routeを持たないため、APIからnamed `AgentRuntime`へ最小requestを送り、Agentからnamed `AgentInternalApi`の`/internal/agent/*`へ到達するrelease smokeを使います。5xx/error rate、p95/p99 duration、Turso latency、auth/permission failure、Agent provider failure、`email_failed`、R2 cleanup failure/backlogのmetric monitorを追加します。Monitorからproduction用Alertへ接続し、Slackとemailのtest notificationを実行します。詳細は [Observability](./observability.md) を参照してください。
+production remote backendは未構成です。local用`grafana/otel-lgtm`、fixed endpoint、Portless alias、rich content policyをproductionへ持ち込みません。Grafana Cloudまたはself-hosted LGTMを導入するときはretention、tenant isolation、source map、alert、sampling、費用、Cloudflare native exportとの重複防止を別ADRで決めます。詳細は[Observability](./observability.md)を参照してください。
 
 本番では `AUTH_COOKIE_DOMAIN` が必須です。異なる親domainへapp/APIを分離するとcookie sessionが成立しないため、DNS設計を先に確定します。
 
@@ -159,14 +147,13 @@ compatibility rolloutはremote inventory、maintenance smoke、drainを伴うた
 - user/org profile imageが512x512 WebPとしてprivate R2から配信され、ETag/304、`private, no-cache`、`nosniff`、same-site CORPを満たす。userは円、organizationは角丸四角で表示される。
 - memberがorganization設定やrole elevationを実行できない。
 - Web asset、R2 cache、3 Workerのlogにsecret、prompt、raw image、filename、object key、provider raw errorが出ていない。
-- 3 Sentry projectで同じreleaseとsource mapが成立し、Web→APIとAgent→APIのtraceを確認でき、event/logにPII、tenant ID、ticket、grant、tokenがない。
-- Sentry Uptime monitorとSlack/email notificationのtestが成功する。
+- production remote telemetryが未構成であり、local endpointとrich telemetry envがdeploy設定へ含まれない。
 - Cloudflare Emailのmagic link、verification、organization invitationが検証済みsenderから届き、delivery failureがsanitized eventになる。
 - test organization削除でtenant rowとactive sessionが即時に消え、jobが残り、cron後に対象R2 prefixだけが削除される。同一key retryは同じreceipt、別keyは404、別organizationへのkey再利用は409になる。
 
 ## Observability
 
-Wrangler configでWorkers Observabilityを有効にし、application telemetryはSentryへ集約する。相関にはrequest ID、正規化route、status、duration、releaseを使い、session cookie、token、magic link、raw body、email、tenant/user/resource IDをlogへ出さない。運用とredactionの正本は [Observability](./observability.md)。
+Wrangler configのWorkers Observabilityはplatform診断用です。applicationのproduction remote backendは未構成で、local OTLP envを注入しません。運用とredactionの正本は[Observability](./observability.md)です。
 
 ## Rollback
 

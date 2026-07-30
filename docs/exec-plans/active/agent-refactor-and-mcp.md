@@ -305,9 +305,12 @@ Browser Mode、Cloudflare build、DB整合、`bun run check`のrequired gateは�
 
 ### 3.2 Observability
 
-- [ ] Mastra observabilityをAgent Tursoへ保存する
-- [ ] run IDをSentryとAI Gatewayへ伝播する
-- [ ] prompt、reasoning、private payloadをredactする
+- [x] Mastra observabilityをambient OpenTelemetryへbridgeする
+- [x] Next.js、Elysia、Mastraのlocal signalを共有LGTMへ送る
+- [x] worktree/session/service attributeを全local signalへ付ける
+- [x] localではprompt、completion、business/tool/provider payloadを保持し、認証materialだけをredactする
+- [x] `bun run dev`をreadiness-onlyにし、Docker lifecycleを明示commandへ分離する
+- [ ] run IDをAI Gatewayへ伝播する
 - [ ] time to first useful outputとreasoning-only durationを記録する
 - [ ] trace量を計測する
 - [ ] ClickHouseは導入条件を満たすまで追加しない

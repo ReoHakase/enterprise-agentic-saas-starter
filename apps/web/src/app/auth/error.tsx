@@ -1,9 +1,9 @@
 "use client"
 
-import { captureException } from "@sentry/nextjs"
 import { useEffect } from "react"
 
 import { AuthRouteError } from "@/components/public-route-error-boundary.client/public-route-error-boundary.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 export default function AuthError({
   error,
@@ -13,7 +13,7 @@ export default function AuthError({
   reset: () => void
 }) {
   useEffect(() => {
-    captureException(error)
+    reportObservedError(error)
   }, [error])
 
   return <AuthRouteError reset={reset} />

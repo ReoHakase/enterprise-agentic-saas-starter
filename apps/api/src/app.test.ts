@@ -95,6 +95,15 @@ describe("createApp security and OpenAPI", () => {
     expect(preflight.headers.get("access-control-allow-credentials")).toBe(
       "true"
     )
+    expect(preflight.headers.get("access-control-allow-headers")).toContain(
+      "traceparent"
+    )
+    expect(preflight.headers.get("access-control-allow-headers")).toContain(
+      "tracestate"
+    )
+    expect(preflight.headers.get("access-control-allow-headers")).not.toContain(
+      "sentry-trace"
+    )
 
     const untrusted = await app.handle(
       new Request("http://localhost/health", {

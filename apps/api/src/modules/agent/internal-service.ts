@@ -2,6 +2,7 @@ import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas
 import * as v from "valibot"
 
 import { publicErrors } from "../../errors/app-error"
+import { createObservedLogger } from "../../platform/observability/runtime"
 import {
   executeApprovedActionInputModel,
   getIssueActionDecisionInputModel,
@@ -26,6 +27,8 @@ import {
   searchAgentMembersInputModel,
   startAgentRunInputModel,
 } from "./runtime-schema"
+
+const connectionLogger = createObservedLogger("agent").child("connection")
 
 const parseInternalInput = <
   const TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
@@ -52,12 +55,21 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
     return ports.cancelRun(parseInternalInput(agentGrantInputModel, input))
   },
-  consumeConnectionTicket(
+  async consumeConnectionTicket(
     input: v.InferInput<typeof consumeConnectionTicketInputModel>
   ) {
-    return ports.consumeConnectionTicket(
+    const connection = await ports.consumeConnectionTicket(
       parseInternalInput(consumeConnectionTicketInputModel, input)
     )
+    connectionLogger.info("Agent connection established", {
+      "app.operation": "consumeAgentConnectionTicket",
+      "app.outcome": "success",
+      "agent.connection.organization_role": connection.organization.role,
+      "agent.connection.allowed_action_count": Object.values(
+        connection.organization.permissions
+      ).filter(Boolean).length,
+    })
+    return connection
   },
   executeApprovedAction(
     input: v.InferInput<typeof executeApprovedActionInputModel>

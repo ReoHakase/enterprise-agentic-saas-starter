@@ -13,9 +13,9 @@ bun run cf:typegen
 bun run dev
 ```
 
-Worker用の`OPENROUTER_API_KEY`、`SENTRY_DSN`、remote利用時の`MASTRA_STORAGE_AUTH_TOKEN`は追跡対象外の`.env.local`にのみ設定します。`bun run dev`は公開可能な既定値を`.dev.vars.example`、秘密値を`.env.local`から読み込み、Application DBとは別のlocal Agent DBを`storage:dev`で同時起動します。Portless topologyが`MASTRA_STORAGE_URL`とlocal tokenをworktreeごとに解決し、Agent WorkerとMastra Studioへ同じ値を渡します。`MASTRA_STORAGE_URL`とcredentialはApplication Tursoと共有できず、production deployも同一URLまたはtokenを拒否します。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED`は明示値`1`でだけ有効になるfail-closed switchです。
+Worker用の`OPENROUTER_API_KEY`とremote利用時の`MASTRA_STORAGE_AUTH_TOKEN`は追跡対象外の`.env.local`にのみ設定します。`bun run dev`は公開可能な既定値を`.dev.vars.example`、秘密値を`.env.local`から読み込み、Application DBとは別のlocal Agent DBを`storage:dev`で同時起動します。Portless topologyが`MASTRA_STORAGE_URL`とlocal tokenをworktreeごとに解決し、Agent WorkerとMastra Studioへ同じ値を渡します。`MASTRA_STORAGE_URL`とcredentialはApplication Tursoと共有できず、production deployも同一URLまたはtokenを拒否します。`AGENT_RUNS_ENABLED`、`AGENT_WRITES_ENABLED`、`AGENT_VISION_ENABLED`は明示値`1`でだけ有効になるfail-closed switchです。
 
-SentryはAgent Worker専用の `SENTRY_ENVIRONMENT` と `SENTRY_RELEASE` を使います。event、log、spanからrequest data、ticket、grant、resume ticket、prompt、tool payloadを除去し、固定error codeだけを記録します。
+local Agent WorkerはMastra observabilityをambient OpenTelemetryへbridgeし、Agent/model/tool spanとlogを共有LGTMへ送ります。固定local endpoint以外とproductionでは無効です。
 
 Mastra Studioはrepo rootの`bun run dev`でAgent Workerと一緒に起動します。
 

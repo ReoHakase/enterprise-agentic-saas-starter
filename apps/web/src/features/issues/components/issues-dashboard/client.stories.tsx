@@ -448,14 +448,22 @@ export const UpdateFailure = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(actions)
-      await waitFor(() =>
-        expect(actions).toHaveAttribute("aria-expanded", "true")
-      )
-      const closeIssue = await body.findByRole("menuitem", {
-        name: "Close issue",
+      actions.click()
+      const menu = await body.findByRole("menu", {
+        name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(closeIssue)
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "View details" })
+        ).toHaveFocus()
+      )
+      await userEvent.keyboard("{ArrowDown}")
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "Close issue" })
+        ).toHaveFocus()
+      )
+      await userEvent.keyboard("{Enter}")
       await expect(
         await body.findByText(/Issue update failed/)
       ).toBeInTheDocument()
@@ -491,16 +499,22 @@ export const DeleteFailure = meta.story({
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(actions)
-      await waitFor(() =>
-        expect(actions).toHaveAttribute("aria-expanded", "true")
-      )
+      actions.click()
       const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
-      await userEvent.click(
-        within(menu).getByRole("menuitem", { name: "Delete issue" })
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "View details" })
+        ).toHaveFocus()
       )
+      await userEvent.keyboard("{ArrowDown}{ArrowDown}")
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "Delete issue" })
+        ).toHaveFocus()
+      )
+      await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",
         {

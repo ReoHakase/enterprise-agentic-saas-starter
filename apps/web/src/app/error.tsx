@@ -1,9 +1,9 @@
 "use client"
 
-import { captureException } from "@sentry/nextjs"
 import { useEffect } from "react"
 
 import { RootRouteError } from "@/components/public-route-error-boundary.client/public-route-error-boundary.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 export default function ErrorPage({
   error,
@@ -13,7 +13,7 @@ export default function ErrorPage({
   reset: () => void
 }) {
   useEffect(() => {
-    captureException(error)
+    reportObservedError(error)
   }, [error])
 
   return <RootRouteError reset={reset} />

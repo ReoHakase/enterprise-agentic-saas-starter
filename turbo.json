@@ -25,20 +25,12 @@
         "TURSO_AUTH_TOKEN",
         "EMAIL_PROVIDER",
         "EMAIL_FROM",
-        "SENTRY_DSN",
-        "SENTRY_ENVIRONMENT",
-        "SENTRY_ERROR_SAMPLE_RATE",
-        "SENTRY_ORG",
-        "SENTRY_PROJECT",
-        "SENTRY_RELEASE",
-        "SENTRY_TRACES_SAMPLE_RATE",
+        "DEV_SESSION_ID",
+        "DEV_WORKTREE_ID",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
         "NEXT_PUBLIC_*"
       ],
-      "passThroughEnv": [
-        "MASTRA_STORAGE_AUTH_TOKEN",
-        "MASTRA_STORAGE_URL",
-        "SENTRY_AUTH_TOKEN"
-      ]
+      "passThroughEnv": ["MASTRA_STORAGE_AUTH_TOKEN", "MASTRA_STORAGE_URL"]
     },
     "build:cloudflare": {
       "cache": false,
@@ -59,21 +51,16 @@
         "TURSO_AUTH_TOKEN",
         "EMAIL_PROVIDER",
         "EMAIL_FROM",
-        "SENTRY_DSN",
-        "SENTRY_ENVIRONMENT",
-        "SENTRY_ERROR_SAMPLE_RATE",
-        "SENTRY_RELEASE",
-        "SENTRY_TRACES_SAMPLE_RATE",
+        "DEV_SESSION_ID",
+        "DEV_WORKTREE_ID",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
         "NEXT_PUBLIC_*"
       ],
       "passThroughEnv": [
         "CLOUDFLARE_ACCOUNT_ID",
         "CLOUDFLARE_API_TOKEN",
         "MASTRA_STORAGE_AUTH_TOKEN",
-        "MASTRA_STORAGE_URL",
-        "SENTRY_AUTH_TOKEN",
-        "SENTRY_ORG",
-        "SENTRY_PROJECT"
+        "MASTRA_STORAGE_URL"
       ]
     },
     "build:storybook": {
@@ -143,14 +130,7 @@
     "deploy": {
       "dependsOn": ["build:cloudflare"],
       "cache": false,
-      "passThroughEnv": [
-        "CLOUDFLARE_ACCOUNT_ID",
-        "CLOUDFLARE_API_TOKEN",
-        "SENTRY_AUTH_TOKEN",
-        "SENTRY_ORG",
-        "SENTRY_PROJECT",
-        "SENTRY_RELEASE"
-      ]
+      "passThroughEnv": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"]
     },
     "storybook": {
       "cache": false,
@@ -175,15 +155,12 @@
         "GITHUB_OAUTH_EMULATOR_CLIENT_ID",
         "GITHUB_OAUTH_EMULATOR_CLIENT_SECRET",
         "GITHUB_OAUTH_CALLBACK_URL",
-        "SENTRY_DSN",
-        "SENTRY_ENVIRONMENT",
-        "SENTRY_ERROR_SAMPLE_RATE",
-        "SENTRY_RELEASE",
-        "SENTRY_SPOTLIGHT",
-        "SENTRY_TRACES_SAMPLE_RATE",
-        "NEXT_PUBLIC_SENTRY_DSN",
-        "NEXT_PUBLIC_SENTRY_ENVIRONMENT",
-        "NEXT_PUBLIC_SENTRY_SPOTLIGHT"
+        "DEV_SESSION_ID",
+        "DEV_WORKTREE_ID",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "NEXT_PUBLIC_DEV_SESSION_ID",
+        "NEXT_PUBLIC_DEV_WORKTREE_ID",
+        "NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT"
       ],
       "passThroughEnv": ["MASTRA_STORAGE_AUTH_TOKEN", "MASTRA_STORAGE_URL"]
     },

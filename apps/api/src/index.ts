@@ -1,7 +1,3 @@
-import { initializeBunObservability } from "./platform/observability/sentry-bun"
-
-initializeBunObservability()
-
 const [
   { db },
   { createApp },

@@ -1,4 +1,5 @@
 import { publicErrors } from "../../errors/app-error"
+import { createObservedLogger } from "../../platform/observability/runtime"
 import type { SessionContext } from "../auth/public"
 import {
   isOrganizationRole,
@@ -7,6 +8,8 @@ import {
   type OrganizationRole,
 } from "../authorization/public"
 import type { OrganizationsPorts } from "./ports"
+
+const memberListLogger = createObservedLogger("organizations").child("members")
 
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
@@ -219,7 +222,22 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
     organizationId: string
   }) => {
     await ports.requireMembership(input)
-    return ports.listMembersByOrganization(input.organizationId)
+    const members = await ports.listMembersByOrganization(input.organizationId)
+    memberListLogger.info("Organization member list resolved", {
+      "app.operation": "listOrganizationMembers",
+      "app.outcome": "success",
+      "organization.member.result_count": members.length,
+      "organization.member.super_admin_count": members.filter(
+        (member) => member.role === "super_admin"
+      ).length,
+      "organization.member.admin_count": members.filter(
+        (member) => member.role === "admin"
+      ).length,
+      "organization.member.member_count": members.filter(
+        (member) => member.role === "member"
+      ).length,
+    })
+    return members
   }
 
   const updateMemberRole = async (input: {

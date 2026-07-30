@@ -24,11 +24,9 @@ const forwardedEnvironmentKeys = [
   "EMAIL_PROVIDER",
   "EMAIL_FROM",
   "MAILPIT_URL",
-  "SENTRY_DSN",
-  "SENTRY_ENVIRONMENT",
-  "SENTRY_RELEASE",
-  "SENTRY_SPOTLIGHT",
-  "SENTRY_TRACES_SAMPLE_RATE",
+  "DEV_SESSION_ID",
+  "DEV_WORKTREE_ID",
+  "OTEL_EXPORTER_OTLP_ENDPOINT",
 ] as const
 
 export const createLocalWorkerEnvironment = ({

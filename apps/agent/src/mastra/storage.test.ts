@@ -323,7 +323,6 @@ describe("Agent storage restart persistence", () => {
           AGENT_WRITES_ENABLED: "0",
           MASTRA_STORAGE_URL: url,
           NODE_ENV: "test",
-          SENTRY_ENVIRONMENT: "test",
         })
         await reopenedComposition.storage.init()
         const freshMemory = await reopenedComposition.productAgent.getMemory()

@@ -14,12 +14,29 @@ export type ErrorTelemetryContext = RequestTelemetryContext & {
   statusCode: number
 }
 
+export type TelemetryLevel = "debug" | "error" | "info" | "warn"
+
+export type ObservedLogger = {
+  child(segment: string, attributes?: TelemetryAttributes): ObservedLogger
+  debug(message: string, attributes?: TelemetryAttributes): void
+  error(message: string, attributes?: TelemetryAttributes): void
+  info(message: string, attributes?: TelemetryAttributes): void
+  warn(message: string, attributes?: TelemetryAttributes): void
+}
+
+export type ObservedSpanLifecycle = {
+  endWhen(completion: PromiseLike<unknown>): void
+}
+
 export type ObservabilityRuntime = {
   captureException(error: unknown, context: ErrorTelemetryContext): void
-  logResponse(
-    level: "error" | "info" | "warn",
+  injectRequestHeaders(headers: Headers): void
+  logEvent(
+    level: TelemetryLevel,
+    message: string,
     attributes: TelemetryAttributes
   ): void
+  logResponse(level: TelemetryLevel, attributes: TelemetryAttributes): void
   recordHttpStatus(statusCode: number, errorCode?: string): void
   setRequestContext(context: RequestTelemetryContext): void
   startSpan<T>(
@@ -28,16 +45,22 @@ export type ObservabilityRuntime = {
       name: string
       op: string
     },
-    callback: () => T
+    callback: (lifecycle: ObservedSpanLifecycle) => T
   ): T
+}
+
+const noopSpanLifecycle: ObservedSpanLifecycle = {
+  endWhen: () => undefined,
 }
 
 const noopRuntime: ObservabilityRuntime = {
   captureException: () => undefined,
+  injectRequestHeaders: () => undefined,
+  logEvent: () => undefined,
   logResponse: () => undefined,
   recordHttpStatus: () => undefined,
   setRequestContext: () => undefined,
-  startSpan: (_options, callback) => callback(),
+  startSpan: (_options, callback) => callback(noopSpanLifecycle),
 }
 
 let runtime = noopRuntime
@@ -64,10 +87,51 @@ export const captureObservedException = (
 }
 
 export const logObservedResponse = (
-  level: "error" | "info" | "warn",
+  level: TelemetryLevel,
   attributes: TelemetryAttributes
 ): void => {
   ignoreTelemetryFailure(() => runtime.logResponse(level, attributes))
+}
+
+const logObservedEvent = (
+  level: TelemetryLevel,
+  message: string,
+  attributes: TelemetryAttributes
+): void => {
+  ignoreTelemetryFailure(() => runtime.logEvent(level, message, attributes))
+}
+
+export const createObservedLogger = (
+  scope: string,
+  baseAttributes: TelemetryAttributes = {}
+): ObservedLogger => {
+  const write = (
+    level: TelemetryLevel,
+    message: string,
+    attributes: TelemetryAttributes = {}
+  ) =>
+    logObservedEvent(level, message, {
+      ...baseAttributes,
+      ...attributes,
+      "event.name": message,
+      "logger.scope": scope,
+    })
+
+  return {
+    child: (segment, attributes = {}) =>
+      createObservedLogger(`${scope}.${segment}`, {
+        ...baseAttributes,
+        ...attributes,
+      }),
+    debug: (message, attributes) => write("debug", message, attributes),
+    error: (message, attributes) => write("error", message, attributes),
+    info: (message, attributes) => write("info", message, attributes),
+    warn: (message, attributes) => write("warn", message, attributes),
+  }
+}
+
+export const injectObservedRequestHeaders = (headers: Headers): void => {
+  ignoreTelemetryFailure(() => runtime.injectRequestHeaders(headers))
 }
 
 export const recordObservedHttpStatus = (
@@ -89,16 +153,16 @@ export const withObservedSpan = <T>(
     name: string
     op: string
   },
-  callback: () => T
+  callback: (lifecycle: ObservedSpanLifecycle) => T
 ): T => {
   let outcome:
     | { kind: "failure"; error: unknown }
     | { kind: "success"; value: T }
     | undefined
 
-  const observedCallback = (): T => {
+  const observedCallback = (lifecycle: ObservedSpanLifecycle): T => {
     try {
-      const value = callback()
+      const value = callback(lifecycle)
       outcome = { kind: "success", value }
       return value
     } catch (error) {
@@ -116,6 +180,6 @@ export const withObservedSpan = <T>(
     if (outcome?.kind === "success") {
       return outcome.value
     }
-    return observedCallback()
+    return observedCallback(noopSpanLifecycle)
   }
 }

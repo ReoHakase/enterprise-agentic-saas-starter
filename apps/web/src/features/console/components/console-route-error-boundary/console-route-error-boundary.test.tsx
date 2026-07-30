@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from "vitest"
 
 import { ConsoleRouteErrorBoundary } from "./client"
 
-const captureException = vi.hoisted(() => vi.fn<(error: unknown) => void>())
+const reportObservedError = vi.hoisted(() => vi.fn<(error: unknown) => void>())
 const reset = vi.fn<() => void>()
 
-vi.mock("@sentry/nextjs", () => ({
-  captureException,
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -65,7 +65,7 @@ describe("ConsoleRouteErrorBoundary", () => {
     expect(alert).toHaveTextContent("The workspace is temporarily unavailable")
     expect(alert).not.toHaveTextContent(privateSentinel)
     expect(document.body).not.toHaveTextContent(privateSentinel)
-    expect(captureException).toHaveBeenCalledWith(
+    expect(reportObservedError).toHaveBeenCalledWith(
       expect.objectContaining({ message: privateSentinel })
     )
   })

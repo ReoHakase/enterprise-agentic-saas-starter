@@ -10,6 +10,7 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra runtime、t
 - [Agent設計](../../../docs/architecture/apps/agent.md)
 - [Agent仕様](../../../docs/agent/README.md)
 - [Agentテスト戦略](../../../docs/testing-strategy/apps/agent.md)
+- observability変更時: [Observability](../../../docs/observability.md)
 - securityやapproval変更時: [Agent security](../../../docs/agent/architecture-security.md)
 
 ## Workflow
@@ -32,5 +33,5 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra runtime、t
 
 - DB、Auth、Email、WebをAgentから直接importしない。
 - model output、label、opaque ID、Mastra Memoryを認可へ使わない。
-- secret、private URL、raw bytes、provider raw responseをlogやartifactへ残さない。
+- production、test artifact、remote telemetryへsecret、private URL、raw bytes、provider raw responseを残さない。local rich telemetryは固定local endpointかつdevelopmentの場合だけ認証materialをredactして保持する。
 - `IssueAssistant`を削除するWrangler migrationをこの移行へ含めない。

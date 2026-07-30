@@ -7,8 +7,11 @@ const boundarySpies = vi.hoisted(() => ({
   fileRuntime: vi.fn<() => void>(),
   internalApi: vi.fn<() => void>(),
   invitationJobs: vi.fn<() => void>(),
+  otlpExporter: vi.fn<(options: unknown) => void>(),
   organizationDeletion: vi.fn<() => void>(),
   profileImageCleanup: vi.fn<() => void>(),
+  resolveConfig: vi.fn<(environment: unknown) => void>(),
+  withNextSpan: vi.fn<(attributes: unknown) => void>(),
 }))
 
 vi.mock("cloudflare:workers", () => ({
@@ -21,16 +24,46 @@ vi.mock("cloudflare:workers", () => ({
   },
 }))
 
-vi.mock("@sentry/cloudflare", () => ({
-  captureException: vi.fn<() => void>(),
-  getActiveSpan: vi.fn<() => void>(),
-  getIsolationScope: vi.fn<() => void>(),
-  logger: {},
-  setHttpStatus: vi.fn<() => void>(),
-  startSpan: vi.fn<() => void>(),
-  updateSpanName: vi.fn<() => void>(),
-  withScope: vi.fn<() => void>(),
-  withSentry: (_options: unknown, handler: unknown) => handler,
+vi.mock("@inference-net/otel-cf-workers", () => ({
+  BatchTraceSpanProcessor: class {
+    forceFlush(): Promise<void> {
+      return Promise.resolve()
+    }
+  },
+  getLogger: () => ({ error: vi.fn<() => void>() }),
+  instrument: (
+    handler: {
+      fetch?: (...arguments_: unknown[]) => unknown
+      scheduled?: (...arguments_: unknown[]) => unknown
+    },
+    resolveConfig: (environment: unknown) => unknown
+  ) => ({
+    ...handler,
+    fetch: handler.fetch
+      ? (...arguments_: unknown[]) => {
+          boundarySpies.resolveConfig(arguments_[1])
+          resolveConfig(arguments_[1])
+          return handler.fetch?.(...arguments_)
+        }
+      : undefined,
+    scheduled: handler.scheduled
+      ? (...arguments_: unknown[]) => {
+          boundarySpies.resolveConfig(arguments_[1])
+          resolveConfig(arguments_[1])
+          return handler.scheduled?.(...arguments_)
+        }
+      : undefined,
+  }),
+  OTLPExporter: class {
+    readonly options: unknown
+
+    constructor(options: unknown) {
+      this.options = options
+      boundarySpies.otlpExporter(options)
+    }
+  },
+  OTLPTransport: vi.fn<(options: unknown) => void>(),
+  withNextSpan: boundarySpies.withNextSpan,
 }))
 
 vi.mock("@enterprise-agentic-saas/db", () => ({ db: {} }))
@@ -76,7 +109,7 @@ vi.mock("./modules/profile-images/cleanup-jobs", () => ({
   processProfileImageCleanupJobs: boundarySpies.profileImageCleanup,
 }))
 
-import apiWorker, { AgentInternalApi } from "./worker"
+import apiWorker, { AgentInternalApi, resolveWorkerOtelConfig } from "./worker"
 
 describe("Worker maintenance executable boundaries", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -125,5 +158,86 @@ describe("Worker maintenance executable boundaries", () => {
     expect(boundarySpies.invitationJobs).not.toHaveBeenCalled()
     expect(boundarySpies.organizationDeletion).not.toHaveBeenCalled()
     expect(boundarySpies.profileImageCleanup).not.toHaveBeenCalled()
+  })
+
+  it("executes local telemetry identity resolution at default, named, and scheduled boundaries", async () => {
+    const localEnvironment = Object.assign(Object.create(null), {
+      AGENT_MAINTENANCE_MODE: "1",
+      DEV_SESSION_ID: "session-1",
+      DEV_WORKTREE_ID: "feature-auth",
+      NODE_ENV: "development",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+    })
+    const context = {
+      waitUntil: vi.fn<(promise: Promise<unknown>) => void>(),
+    }
+
+    await apiWorker.fetch?.(
+      new Request("https://api.example.test/agent"),
+      localEnvironment,
+      context
+    )
+    const entrypoint = new AgentInternalApi(
+      Object.create(null),
+      localEnvironment
+    )
+    await entrypoint.fetch(new Request("https://internal.example.test/agent"))
+    apiWorker.scheduled?.(
+      { cron: "* * * * *", scheduledTime: 0 },
+      localEnvironment,
+      context
+    )
+
+    expect(boundarySpies.resolveConfig).toHaveBeenCalledTimes(3)
+    expect(boundarySpies.withNextSpan).toHaveBeenCalledTimes(3)
+    expect(boundarySpies.withNextSpan).toHaveBeenCalledWith({
+      "dev.session.id": "session-1",
+      "dev.worktree.id": "feature-auth",
+      "service.name": "enterprise-agentic-saas-api",
+    })
+
+    const config = resolveWorkerOtelConfig(localEnvironment)
+    expect(config).toMatchObject({
+      logs: {
+        batching: { strategy: "immediate" },
+        instrumentation: { instrumentConsole: false },
+      },
+      service: { name: "enterprise-agentic-saas-api" },
+      trace: {
+        batching: { strategy: "immediate" },
+        spanProcessors: [expect.anything()],
+      },
+    })
+    expect(boundarySpies.otlpExporter).toHaveBeenCalledWith({
+      url: "http://127.0.0.1:4318/v1/traces",
+    })
+  })
+
+  it("keeps API exporters disabled for production, remote, or incomplete identities", () => {
+    for (const environment of [
+      {
+        DEV_SESSION_ID: "session-1",
+        DEV_WORKTREE_ID: "feature-auth",
+        NODE_ENV: "production",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+      },
+      {
+        DEV_SESSION_ID: "session-1",
+        DEV_WORKTREE_ID: "feature-auth",
+        NODE_ENV: "development",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.example.test",
+      },
+      {
+        DEV_SESSION_ID: "",
+        DEV_WORKTREE_ID: "feature-auth",
+        NODE_ENV: "development",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+      },
+    ]) {
+      expect(resolveWorkerOtelConfig(environment)).toEqual({
+        service: { name: "enterprise-agentic-saas-api" },
+      })
+    }
+    expect(boundarySpies.withNextSpan).not.toHaveBeenCalled()
   })
 })

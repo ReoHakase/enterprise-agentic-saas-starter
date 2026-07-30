@@ -97,7 +97,7 @@ composition
 
 - AgentからDB、Auth、Email、UIへ直接依存する
 - public API clientを使う
-- tool executorからMastra、OpenRouter、Sentryをimportする
+- tool executorからMastra、OpenRouter、OpenTelemetry concrete SDKをimportする
 - coreからprovider SDKをimportする
 - nested Web Research Agentを追加する
 

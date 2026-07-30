@@ -51,7 +51,7 @@ export const observabilityPlugin = new Elysia({
     const statusCode = statusCodeFor(set.status, responseValue)
     const requestId = requestIdFor(set.headers["x-request-id"])
     const level =
-      statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "info"
+      statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "debug"
 
     logObservedResponse(level, {
       duration_ms:

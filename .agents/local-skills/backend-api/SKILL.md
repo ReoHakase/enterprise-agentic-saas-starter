@@ -11,6 +11,7 @@ description: enterprise-agentic-saas-starterのElysia API、authorization、tran
 - [命名とlayer](../../../docs/architecture/naming-and-layers.md)
 - [API / OpenAPI](../../../docs/api-openapi.md)
 - [APIテスト戦略](../../../docs/testing-strategy/apps/api.md)
+- observability変更時: [Observability](../../../docs/observability.md)
 
 ## Workflow
 
@@ -19,6 +20,7 @@ description: enterprise-agentic-saas-starterのElysia API、authorization、tran
 3. authorizationとtenant predicateをtransaction境界の内側で検証する。
 4. public error、OpenAPI metadata、Eden client surfaceを同じ変更で更新する。
 5. `app.handle()`を使う最小testから始め、Worker変更時はCloudflare bundleも検証する。
+6. telemetry変更では`ObservabilityRuntime` portを維持し、local endpoint gate、認証material redaction、response非影響をtestする。
 
 ## Validation
 

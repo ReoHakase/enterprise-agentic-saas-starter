@@ -8,7 +8,7 @@ Elysia on Bun の API app workspace。
 - `index.ts` は本番 plugin を合成して listen する。
 - `client.ts` は`parseDate: false`固定のEden client、file/profile image DTO・URL builder・XHR upload helperをexportする。
 - `worker.ts`はCloudflare request handler、private `FILES` R2/`IMAGES` binding、durable cleanup cronを合成する。
-- 本番固有の関心事（auth, cors, Sentry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
+- runtime固有の関心事（auth, cors, OpenTelemetry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
 
 ## 公開 entrypoint
 
@@ -39,7 +39,7 @@ Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だ
 - `GITHUB_OAUTH_EMULATOR_URL`（`packages/auth`が検証するlocal-only URL）
 - `NODE_ENV`
 
-SentryはBunとCloudflare WorkerのSDKをruntime entrypointで分離する。productionでは`SENTRY_DSN`、`SENTRY_ENVIRONMENT`、`SENTRY_RELEASE`、`SENTRY_TRACES_SAMPLE_RATE`を設定する。Cloudflareでは`SENTRY_DSN`を`wrangler secret put SENTRY_DSN`で登録し、releaseはdeploy時のversion/commitへ揃える。
+local Workerは`@inference-net/otel-cf-workers`を使い、固定loopback OTLP endpointかつdevelopmentの場合だけtrace/logを送ります。production remote backendは未構成です。
 
 ## Local Worker development
 
@@ -51,17 +51,14 @@ fixture投入の公開入口はrootの`bun run dev:db:seed`だけにする。hea
 
 ## Local observability
 
-Spotlight sidecarを起動したうえで次を実行する。
+Docker/OrbStackとPortless proxyを利用者が起動してから共有LGTMを起動します。
 
 ```sh
-bun run dev:spotlight
+bun run observability:up
+bun run dev
 ```
 
-`SENTRY_SPOTLIGHT=1`または`spotlight run`が注入するlocal sidecar URLはdevelopmentだけで有効になり、placeholder DSNを使うためSentry SaaSへlocal eventを送らない。任意URLはlocalhost、loopback、`host.docker.internal`、`.localhost`だけを許可し、remote URLとcredential付きURLは拒否する。Cloudflare Workerをlocal previewするときだけ`.dev.vars`の`SENTRY_SPOTLIGHT`を`1`またはlocal sidecar URLへ変更する。remote previewからlocalhostのsidecarへは接続できない。
-
-Sentryへ送るrequest logは`request_id`、HTTP method、登録route pattern、status、durationだけに制限する。cookie、authorization、request/response body、query、SQL、DB URL、email/IP/tenant/user識別子はevent/log/span送信前にredactする。`x-request-id`は128文字以内の安全な形式だけを受理する。
-
-Elysiaのrequest trace/logはSentry SDKとPII-safeなstructured console sinkへ一本化し、旧`@elysiajs/opentelemetry` / `logixlysia` pluginは併用しない。Cloudflare native traceも二重計測を避けるため無効にし、Workers Logsとplatform metricsは維持する。
+`portless-topology`がworktree/session IDと固定endpointを注入します。localはrequest/business/provider contextを保持し、Authorization、Cookie、key/token/secret/grant/ticket/signed credentialだけをredactします。`x-request-id`は128文字以内の安全な形式だけを受理します。`bun run dev`はLGTM readinessだけを確認しDocker lifecycleを呼びません。
 
 ## Validation
 
@@ -109,7 +106,7 @@ Better Authのfresh sessionは15分。`step_up_required` (403) を受けたclien
 
 organization削除は`DELETE /organizations/:organizationId`と専用`organizationDeletionAccess` macroを使います。通常はactive organization、`super_admin`、fresh session、slug完全一致、`DELETE`確認、opaqueな冪等性keyを必須にします。削除済みorganizationへの同一request retryだけはactor・organization・key完全一致のjobを確認し、fresh sessionを再要求して同じreceiptを返します。別actor/key/organizationは許可しません。
 
-DB transactionはPIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteします。tenant rowはcascadeで即時削除し、外部keyを持たないjobは残します。Cloudflare cronがR2のorganization prefixをlease/backoff付きで冪等削除します。job/tenant/user IDをlogやSentryへ出しません。
+DB transactionはPIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteします。tenant rowはcascadeで即時削除し、外部keyを持たないjobは残します。Cloudflare cronがR2のorganization prefixをlease/backoff付きで冪等削除します。job/tenant/user IDをproduction logやremote telemetryへ出しません。
 
 ## Audit
 
@@ -125,7 +122,7 @@ timelineは新しい順のtotal orderで返し、`nextCursor`は内部構造を�
 
 `/files/*`はprivate R2 objectを認証付きでupload/list/preview/download/deleteする汎用moduleです。v1のowner typeは`issue`だけに閉じますが、route、DB metadata、cleanup job、client helperはfileを正本にします。URLはDBへ保存せず、object keyも公開DTOへ返しません。
 
-uploadは1 file/1 multipart request、decimal 20,000,000 bytes上限、organization 1 GiB quota、`uploadId`冪等性を持ちます。同じIDのretryはR2 objectとrequest bodyをstream比較し、別内容なら409にします。R2/Imagesのraw provider errorはcause、log、Sentryへ渡しません。
+uploadは1 file/1 multipart request、decimal 20,000,000 bytes上限、organization 1 GiB quota、`uploadId`冪等性を持ちます。同じIDのretryはR2 objectとrequest bodyをstream比較し、別内容なら409にします。R2/Imagesのraw provider errorはpublic response、production log、remote telemetryへ渡しません。
 
 preview幅は`360 / 720 / 1200 / 2400`だけです。認証・tenant/file確認後に内部cacheを読み、Cloudflare ImagesでWebP quality 75、静止画、scale-downへ変換します。original downloadはoctet-stream attachment、single Range、ETag conditional requestを扱います。
 
