@@ -15,7 +15,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 
 ## Workflow
 
-1. `test_planner`で最も低いdeterministic layerとbrowserが必要な境界を決める。
+1. 最も低い決定的なテスト層とブラウザーが必要な境界を変更前に決める。
 2. 一般UIとmock transportはW3、W4、W6へ置き、auth/session/cookie/Origin/CORS/CSRF、OAuth、
    実Worker/API/DBの最終配線はE1へ置く。
 3. Emulateのprovider suiteは`test:e2e`内のE1 profileに集約し、独立root scriptを追加しない。

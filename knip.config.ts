@@ -9,17 +9,8 @@ const config: KnipConfig = {
   treatConfigHintsAsErrors: true,
   workspaces: {
     ".": {
-      entry: [
-        ".codex/hooks/**/*.ts",
-        "*.config.{js,mjs,ts}",
-        "scripts/**/*.ts",
-      ],
-      project: [
-        ".codex/**/*.ts",
-        ".github/**/*.ts",
-        "*.config.{js,mjs,ts}",
-        "scripts/**/*.ts",
-      ],
+      entry: ["*.config.{js,mjs,ts}", "scripts/**/*.ts"],
+      project: [".github/**/*.ts", "*.config.{js,mjs,ts}", "scripts/**/*.ts"],
       // Issue: Knip's Bun plugin only parses bunfig.toml `test.preload` and does
       // not recognize `install.security.scanner`. Owner: CI/quality maintainers.
       // Reason: Bun dynamically loads this scanner during install. Remove when

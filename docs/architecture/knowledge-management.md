@@ -2,7 +2,7 @@
 title: 知識管理と正本
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 ---
 
 # 知識管理と正本
@@ -170,8 +170,9 @@ skillへ長い設計理由、feature固有要件、テストmatrixを置きま�
 ## 製品Agentとcoding agent
 
 `docs/agent/`は製品Agentの機能、security、operation、release acceptanceを扱います。
-Codex custom agent、reviewer、sole-writer、hookは
-[Codex harness](codex-harness.md)で扱います。
+coding agentの情報routing、Nix生成設定、実装、検証、差分レビューは
+[coding agentの作業手順](coding-agent-workflow.md)で扱います。project hooks、custom agents、Rulesは
+リポジトリの契約にしません。
 
 `docs/agent/`を`docs/product-agent/`へ改名する案も検討しましたが、既存linkと運用参照の変更量に
 対して情報の責務はindexで十分区別できるため、現pathを維持します。将来、
@@ -182,7 +183,7 @@ Codex custom agent、reviewer、sole-writer、hookは
 ADRが必要な条件:
 
 - 複数workspaceへ影響する
-- public contract、security、tenant、migration、CI、harnessを変える
+- public contract、security、tenant、migration、CI、coding agentの作業契約を変える
 - 有力な代替案を却下する
 - 将来の変更を制約する
 - 一般知識だけでは逆の判断をしやすい
@@ -206,7 +207,7 @@ task固有の小さな判断はexec planの判断記録へ置き、再利用さ�
 exec planが必要な条件:
 
 - 複数workspaceを横断する
-- migration、auth、tenant、public API、CI、harnessを変更する
+- migration、auth、tenant、public API、CI、coding agentの作業契約を変更する
 - 失敗時のrollbackが必要
 - 変更が一つの通常PRで把握しにくい
 

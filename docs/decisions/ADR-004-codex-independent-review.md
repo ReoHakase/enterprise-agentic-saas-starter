@@ -1,15 +1,20 @@
 ---
 id: ADR-004
 title: Codex独立review
-status: accepted
+status: superseded
 date: 2026-07-24
 owners:
   - repository-maintainers
 supersedes:
   - none
+superseded_by:
+  - ADR-011
 ---
 
 # ADR-004 Codex独立review
+
+この判断は[ADR-011 coding agentのskillとMCP設定をNixで管理する](ADR-011-nix-managed-agent-config.md)で
+置き換えました。以下は採用当時の判断を履歴として残します。
 
 ## 背景
 

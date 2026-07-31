@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-01
 ---
 
 # ローカル開発
@@ -20,6 +20,16 @@ nix develop
 
 bun install --frozen-lockfile
 ```
+
+開発シェルは`.agents/local-skills/`と固定した外部skillを`.agents/skills/`へ同期し、
+`flake.nix#mcpServers`からCodex、VS Code、Cursor用のMCP設定を生成します。手動で同期する場合は
+次を実行します。
+
+```sh
+nix run .#sync-agent-config
+```
+
+Codex用の`.codex/config.toml`を含む生成物はGitに追加せず、手編集しません。
 
 ## 環境変数
 

@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -11,7 +11,6 @@ applies_to:
   - .jscpd.json
   - lefthook.yml
   - vitest.config.ts
-  - .codex/**/*.test.ts
   - .github/**/*.test.ts
   - .github/workflows/**
 ---
@@ -305,7 +304,7 @@ Temporary waiverはmainへmergeしません。全変更をbudgetへ適合させ�
 - budgetへ合わせるだけの不自然な分割が起こり得る
 - Knip/jscpdのfalse positive調査が必要
 
-Ruleを目的ではなく責務境界のsignalとして扱い、意味のないhelper抽出はreviewerが拒否します。
+Ruleを目的ではなく責務境界のsignalとして扱い、意味のないhelper抽出は差分レビューで拒否します。
 
 ## 受入条件
 

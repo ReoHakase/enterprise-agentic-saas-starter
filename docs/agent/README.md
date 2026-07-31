@@ -2,14 +2,14 @@
 title: 製品Agent仕様の入口
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 ---
 
 # Agent仕様
 
-このディレクトリは、製品Agentの仕様、実装境界、release acceptanceの正本です。coding agent、
-Codex custom agent、reviewer、sole-writerの契約は
-[`docs/architecture/codex-harness.md`](../architecture/codex-harness.md)を参照します。
+このディレクトリは、製品Agentの仕様、実装境界、release acceptanceの正本です。coding agentの
+情報routing、実装、検証、差分レビューの手順は
+[`docs/architecture/coding-agent-workflow.md`](../architecture/coding-agent-workflow.md)を参照します。
 
 過去の機能・test草案にあった有効な要件はここへ統合し、草案なしで設計と検証範囲を追跡します。
 test layerと公開commandの正本は

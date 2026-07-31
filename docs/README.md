@@ -2,7 +2,7 @@
 title: 開発者文書の入口
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 ---
 
 # 開発者文書の入口
@@ -17,7 +17,7 @@ last_reviewed: 2026-07-25
 6. [品質強制](architecture/quality-enforcement.md)
 7. [テスト戦略](testing-strategy/README.md)
 8. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
-9. [Codex harness](architecture/codex-harness.md)
+9. [coding agentの作業手順](architecture/coding-agent-workflow.md)
 10. [ADR](decisions/README.md)
 11. 必要な[active exec plan](exec-plans/README.md)
 
@@ -32,9 +32,10 @@ last_reviewed: 2026-07-25
 5. skillが指定するtest契約
 6. 関連ADR
 
-`docs/agent/`は製品として提供するAgentの機能・security・release受入仕様です。coding agentの
-作業harnessは[`docs/architecture/codex-harness.md`](architecture/codex-harness.md)が正本です。
-同名の「Agent」を混同しないため、この区別をindexで固定します。
+`docs/agent/`は製品として提供するAgentの機能、security、release受入仕様です。coding agentの
+情報routingと作業手順は
+[`docs/architecture/coding-agent-workflow.md`](architecture/coding-agent-workflow.md)が正本です。
+同名の「Agent」を混同しないため、この区別を索引で固定します。
 
 ## 文書の責務
 

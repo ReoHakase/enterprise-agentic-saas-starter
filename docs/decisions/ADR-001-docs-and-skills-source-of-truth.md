@@ -35,8 +35,8 @@ acceptedはmaintainerの承認状態を表し、main上にあるときだけ有�
 
 ## 結果
 
-`docs/agent`は製品Agent、`docs/architecture/codex-harness.md`はcoding agentという区別をindexへ
-明記し、path renameは必要性が増えるまでdeferします。
+`docs/agent`は製品Agent、`docs/architecture/coding-agent-workflow.md`はcoding agentという区別を
+索引へ明記し、path renameは必要性が増えるまでdeferします。
 
 ## 強制方法
 

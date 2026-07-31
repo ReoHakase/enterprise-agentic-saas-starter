@@ -61,8 +61,8 @@ npm-debug.log*
 .DS_Store
 *.pem
 
-# Nix-generated MCP config
-.mcp.toml
+# Nix-generated agent and MCP config
+/.codex/config.toml
 .vscode/mcp.json
 .cursor/
 .claude/

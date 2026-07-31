@@ -2,7 +2,7 @@
 title: exec plan運用
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 ---
 
 # exec plan運用
@@ -45,6 +45,7 @@ last_reviewed: 2026-07-26
 
 ### 完了
 
+- [coding agent設定のNix集約](completed/nix-managed-agent-config.md)
 - [Emulate対応サービス拡張](completed/emulate-expansion.md)
 - [文書、source構成、品質ゲート、テスト、Codex harnessの全面移行](completed/one-shot-harness-migration.md)
 
