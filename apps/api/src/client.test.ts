@@ -21,6 +21,7 @@ import {
 class SuccessfulXMLHttpRequest {
   static instances: SuccessfulXMLHttpRequest[] = []
   static nextResponse: unknown
+  static nextStatus: number | undefined
 
   readonly listeners = new Map<string, () => void>()
   readonly uploadListeners = new Map<
@@ -59,6 +60,9 @@ class SuccessfulXMLHttpRequest {
     if (SuccessfulXMLHttpRequest.nextResponse !== undefined) {
       this.response = SuccessfulXMLHttpRequest.nextResponse
     }
+    if (SuccessfulXMLHttpRequest.nextStatus !== undefined) {
+      this.status = SuccessfulXMLHttpRequest.nextStatus
+    }
     SuccessfulXMLHttpRequest.instances.push(this)
   }
 
@@ -69,6 +73,10 @@ class SuccessfulXMLHttpRequest {
 
   addEventListener(name: string, listener: () => void) {
     this.listeners.set(name, listener)
+  }
+
+  getResponseHeader() {
+    return null
   }
 
   send(body: unknown) {
@@ -88,9 +96,20 @@ class SuccessfulXMLHttpRequest {
   }
 }
 
+const uploadFileErrorFixture = () =>
+  uploadFileWithProgress({
+    baseUrl: "https://api.example.test",
+    file: new File(["content"], "evidence.txt"),
+    organizationId: "org-1",
+    ownerId: "issue-1",
+    ownerType: "issue",
+    uploadId: "upload-error",
+  })
+
 afterEach(() => {
   SuccessfulXMLHttpRequest.instances = []
   SuccessfulXMLHttpRequest.nextResponse = undefined
+  SuccessfulXMLHttpRequest.nextStatus = undefined
   vi.unstubAllGlobals()
 })
 
@@ -312,6 +331,32 @@ describe("file client helpers", () => {
       status: 503,
       code: "service_unavailable",
       requestId: "request-1",
+    })
+  })
+
+  it("uses only the public 4xx upload message and hides 5xx detail", async () => {
+    vi.stubGlobal("XMLHttpRequest", SuccessfulXMLHttpRequest)
+
+    SuccessfulXMLHttpRequest.nextStatus = 415
+    SuccessfulXMLHttpRequest.nextResponse = {
+      error: "unsupported_media_type",
+      message: "Choose a supported file type.",
+    }
+    await expect(uploadFileErrorFixture()).rejects.toMatchObject({
+      code: "unsupported_media_type",
+      message: "Choose a supported file type.",
+      status: 415,
+    })
+
+    SuccessfulXMLHttpRequest.nextStatus = 503
+    SuccessfulXMLHttpRequest.nextResponse = {
+      error: "service_unavailable",
+      message: "provider token=private",
+    }
+    await expect(uploadFileErrorFixture()).rejects.toMatchObject({
+      code: "service_unavailable",
+      message: "File upload failed",
+      status: 503,
     })
   })
 })

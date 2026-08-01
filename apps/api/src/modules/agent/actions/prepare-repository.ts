@@ -6,7 +6,7 @@ import type {
   AgentIssueAction,
   AgentUpdateIssueActionInput,
 } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { bindReusableAgentAssetsToRunInTransaction } from "../../files/public"
 import { type AgentTransaction } from "../threads/repository"
 import {
@@ -26,7 +26,6 @@ import {
   actionRequestFingerprint,
   isActiveAssetLeaseConflict,
   isPrepareRetryableRace,
-  preserveAgentActionError,
   toActionDto,
   withAgentPrepareLock,
   type PrepareInput,
@@ -55,10 +54,7 @@ const prepareInTransaction = async (
   })
   if (existing) return existing
   if (context.runStatus !== "running") {
-    throw publicErrors.conflict("Agent run cannot prepare another action", {
-      reason: "invalid_run_scope",
-      resource: "agent_run",
-    })
+    throw new HttpError({ code: "conflict" })
   }
 
   const attachmentAssetIds =
@@ -107,20 +103,14 @@ export const prepareCreateIssueAction = async (
         return toActionDto(action)
       } catch (cause) {
         if (isActiveAssetLeaseConflict(cause)) {
-          throw publicErrors.conflict(
-            "Agent attachment is already reserved by another action",
-            {
-              reason: "asset_lease_conflict",
-              resource: "agent_asset",
-            }
-          )
+          throw new HttpError({ code: "conflict", cause })
         }
         if (attempt < 4 && isPrepareRetryableRace(cause)) {
           // oxlint-disable-next-line no-await-in-loop -- committed canonical actionをbounded retryで再読込する。
           await new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt))
           continue
         }
-        return preserveAgentActionError(cause, "prepareCreateIssueAction")
+        throw cause
       }
     }
     throw new Error("Agent create action retry exhausted")
@@ -144,7 +134,7 @@ export const prepareUpdateIssueAction = async (
           await new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt))
           continue
         }
-        return preserveAgentActionError(cause, "prepareUpdateIssueAction")
+        throw cause
       }
     }
     throw new Error("Agent update action retry exhausted")
@@ -168,7 +158,7 @@ export const prepareDeleteIssueAction = async (
           await new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt))
           continue
         }
-        return preserveAgentActionError(cause, "prepareDeleteIssueAction")
+        throw cause
       }
     }
     throw new Error("Agent delete action retry exhausted")

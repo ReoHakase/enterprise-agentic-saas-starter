@@ -49,8 +49,8 @@ export const Ready = meta.story({
       )
     )
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Review and cancel passkey deletion", async () => {
       await expect(await canvas.findByText("Avery's MacBook")).toBeVisible()

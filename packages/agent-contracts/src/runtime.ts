@@ -91,15 +91,6 @@ export const agentRuntimeResumeInputSchema = v.strictObject({
   resumeTicket: capabilitySchema,
 })
 
-export const agentMemoryCommitSettlementInputSchema = v.strictObject({
-  applicationRunId: agentIdentifierSchema,
-})
-
-export const agentMemoryCommitSettlementSchema = v.strictObject({
-  applicationRunId: agentIdentifierSchema,
-  acknowledged: v.literal(true),
-})
-
 export const agentContextReferenceInputSchema = v.variant("kind", [
   v.strictObject({
     kind: v.picklist(["issue", "file", "member"]),
@@ -170,12 +161,6 @@ export type AgentResolvedContextReference = v.InferOutput<
 export type AgentReusableAsset = v.InferOutput<typeof agentReusableAssetSchema>
 export type AgentRuntimeResumeInput = v.InferOutput<
   typeof agentRuntimeResumeInputSchema
->
-export type AgentMemoryCommitSettlementInput = v.InferOutput<
-  typeof agentMemoryCommitSettlementInputSchema
->
-export type AgentMemoryCommitSettlement = v.InferOutput<
-  typeof agentMemoryCommitSettlementSchema
 >
 export type AgentContextReferenceInput = v.InferOutput<
   typeof agentContextReferenceInputSchema

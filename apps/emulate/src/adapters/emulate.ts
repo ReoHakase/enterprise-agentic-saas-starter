@@ -1,1 +1,0 @@
-export { createEmulator } from "emulate"

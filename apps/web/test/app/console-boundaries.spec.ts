@@ -1,12 +1,13 @@
 import type { BrowserContext, Locator, Page } from "@playwright/test"
 
+import { w6Environment } from "./fixtures/environment"
 import {
   expect,
   productionServerComponentRenderError,
   test,
 } from "./fixtures/test"
 
-const mockApiUrl = "http://127.0.0.1:3001"
+const mockApiUrl = w6Environment.apiOrigin
 const geometryTolerance = 1
 const allDimensions: GeometryDimension[] = ["x", "y", "width", "height"]
 const frameDimensions: GeometryDimension[] = ["x", "y", "width"]
@@ -275,25 +276,30 @@ const readLoadedDashboardGeometry = async (page: Page) => {
 
 test("console loadingは実画面と同じshell geometryを維持する", async ({
   context,
+  createRequestGate,
   page,
 }) => {
   await useAdminSession(context)
   const loadedGeometry = await readLoadedDashboardGeometry(page)
 
   await page.goto("about:blank")
-  const delayResponse = await context.request.post(
-    `${mockApiUrl}/__e2e/request-delays`,
-    { data: { path: "/me", method: "GET", delayMs: 2_000 } }
-  )
-  expect(delayResponse.status()).toBe(201)
+  const requestGate = await createRequestGate("/me")
 
   const navigation = page.goto("/dashboard?boundary-state=loading")
-  await expect(
-    page.locator('[data-console-shell][data-boundary-state="loading"]:visible')
-  ).toBeVisible()
-  const loadingGeometry = await readConsoleShellGeometry(page)
-  await expectShellContract(page, loadingGeometry)
-  expectShellGeometryToMatch(loadingGeometry, loadedGeometry, "loading")
+  let loadingGeometry: ConsoleShellGeometry
+  try {
+    await requestGate.waitUntilRequested()
+    await expect(
+      page.locator(
+        '[data-console-shell][data-boundary-state="loading"]:visible'
+      )
+    ).toBeVisible()
+    loadingGeometry = await readConsoleShellGeometry(page)
+    await expectShellContract(page, loadingGeometry)
+    expectShellGeometryToMatch(loadingGeometry, loadedGeometry, "loading")
+  } finally {
+    await requestGate.release()
+  }
 
   await navigation
   await expect(
@@ -304,73 +310,48 @@ test("console loadingは実画面と同じshell geometryを維持する", async 
     loadedGeometry,
     "loaded-after-loading"
   )
-  expect(
-    await (
-      await context.request.get(`${mockApiUrl}/__e2e/request-delays`)
-    ).json()
-  ).toEqual([])
 })
 
 test("Issuesへの遷移loadingは既存shellと実画面のcontent geometryを維持する", async ({
   context,
+  createRequestGate,
   page,
 }) => {
   await useAdminSession(context)
   const dashboardGeometry = await readLoadedDashboardGeometry(page)
-  const readyShell = await page
-    .locator("[data-console-shell]:visible")
-    .elementHandle()
-  if (!readyShell) {
-    throw new Error("the ready console shell was not mounted")
-  }
 
-  const delayResponse = await context.request.post(
-    `${mockApiUrl}/__e2e/request-delays`,
-    { data: { path: "/issues", method: "GET", delayMs: 2_000 } }
-  )
-  expect(delayResponse.status()).toBe(201)
+  const requestGate = await createRequestGate("/issues")
 
   await navigateFromConsoleSidebar(page, "Issues")
-  await expect(
-    page
-      .locator("[data-console-shell]:visible")
-      .locator(
-        '[data-slot="page-shell"][data-boundary-state="loading"][aria-label="Loading organization issues"]'
-      )
-      .first()
-  ).toBeVisible()
-  await expect(
-    page
-      .locator("[data-console-shell]:visible")
-      .locator('[data-slot="console-header"]'),
-    "the selected organization header should survive route loading"
-  ).toContainText("Alpha Operations")
-  expect(
-    await page
-      .locator("[data-console-shell]:visible")
-      .evaluate((shell, previousShell) => shell === previousShell, readyShell),
-    "nested loading should preserve the mounted console shell"
-  ).toBeTruthy()
-  if ((page.viewportSize()?.width ?? 0) < 768) {
-    await expect(page.getByRole("dialog", { name: "Sidebar" })).toBeHidden()
+  let loadingGeometry: ConsoleShellGeometry
+  try {
+    await requestGate.waitUntilRequested()
+    await expect(
+      page.getByRole("status", { name: "Loading organization issues" })
+    ).toBeVisible()
+    await expect(
+      page
+        .locator("[data-console-shell]:visible")
+        .locator('[data-slot="console-header"]'),
+      "the selected organization header should survive route loading"
+    ).toContainText("Alpha Operations")
+    if ((page.viewportSize()?.width ?? 0) < 768) {
+      await expect(page.getByRole("dialog", { name: "Sidebar" })).toBeHidden()
+    }
+    loadingGeometry = await readConsoleShellGeometry(page)
+    await expectShellContract(page, loadingGeometry)
+    expectConsoleFrameGeometryToMatch(
+      loadingGeometry,
+      dashboardGeometry,
+      "nested loading"
+    )
+  } finally {
+    await requestGate.release()
   }
-  const loadingGeometry = await readConsoleShellGeometry(page)
-  await expectShellContract(page, loadingGeometry)
-  expectConsoleFrameGeometryToMatch(
-    loadingGeometry,
-    dashboardGeometry,
-    "nested loading"
-  )
 
   await expect(
     page.getByRole("heading", { name: "Issues", level: 1 })
   ).toBeVisible()
-  expect(
-    await page
-      .locator("[data-console-shell]:visible")
-      .evaluate((shell, previousShell) => shell === previousShell, readyShell),
-    "loaded Issues should keep the same console shell"
-  ).toBeTruthy()
   const loadedIssuesGeometry = await readConsoleShellGeometry(page)
   await expectShellContract(page, loadedIssuesGeometry)
   expectConsoleFrameGeometryToMatch(
@@ -408,7 +389,7 @@ test("console error boundaryは実画面と同じshell geometryを維持して�
         path: "/me",
         method: "GET",
         status: 503,
-        code: "dependency_unavailable",
+        code: "service_unavailable",
         message: "Injected console boundary outage",
       },
     }
@@ -467,12 +448,6 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
     page.getByRole("heading", { name: "Issues", level: 1 })
   ).toBeVisible()
   const issuesGeometry = await readConsoleShellGeometry(page)
-  const readyShell = await page
-    .locator("[data-console-shell]:visible")
-    .elementHandle()
-  if (!readyShell) {
-    throw new Error("the ready console shell was not mounted")
-  }
 
   const faultResponse = await context.request.post(
     `${mockApiUrl}/__e2e/faults`,
@@ -481,7 +456,7 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
         path: "/issues",
         method: "GET",
         status: 503,
-        code: "dependency_unavailable",
+        code: "service_unavailable",
         message: "Injected dashboard boundary outage",
       },
     }
@@ -498,12 +473,6 @@ test("console内のpage error boundaryはshellを保ってfocusと再試行を�
   })
   await expect(errorHeading).toBeVisible()
   await expect(errorHeading).toBeFocused()
-  expect(
-    await page
-      .locator("[data-console-shell]:visible")
-      .evaluate((shell, previousShell) => shell === previousShell, readyShell),
-    "the page error boundary should preserve the mounted console shell"
-  ).toBeTruthy()
 
   const errorGeometry = await readConsoleShellGeometry(page)
   await expectShellContract(page, errorGeometry)

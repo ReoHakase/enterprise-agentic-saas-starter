@@ -1,4 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { createObservedLogger } from "../../platform/observability/runtime"
 import type { SessionContext } from "../auth/public"
 import {
@@ -14,7 +14,12 @@ const memberListLogger = createObservedLogger("organizations").child("members")
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
   if (!normalized) {
-    throw publicErrors.validation(`${field} is required`, { field })
+    const message = `${field} is required.`
+    throw new HttpError({
+      code: "validation_error",
+      fieldErrors: { [field]: [message] },
+      publicMessage: message,
+    })
   }
   return normalized
 }
@@ -41,15 +46,17 @@ const normalizeSlug = (slug: string) => {
     .replace(/^-+|-+$/g, "")
 
   if (normalized.length < 3 || normalized.length > 48) {
-    throw publicErrors.validation("Slug must be 3 to 48 characters", {
-      field: "slug",
-      reason: "invalid_length",
+    throw new HttpError({
+      code: "validation_error",
+      fieldErrors: { slug: ["Use 3 to 48 characters."] },
+      publicMessage: "The organization slug must be 3 to 48 characters.",
     })
   }
   if (reservedOrganizationSlugs.has(normalized)) {
-    throw publicErrors.validation("Slug is reserved", {
-      field: "slug",
-      reason: "reserved",
+    throw new HttpError({
+      code: "validation_error",
+      fieldErrors: { slug: ["Choose another slug."] },
+      publicMessage: "This organization slug is reserved.",
     })
   }
   return normalized
@@ -72,7 +79,7 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
     slug: string
     keepCurrentActiveOrganization?: boolean
   }) => {
-    const organization = await ports.insertOrganizationWithSuperAdmin({
+    const organization = await ports.insertOrganizationWithOwner({
       userId: input.userId,
       sessionId: input.sessionId,
       activate: !input.keepCurrentActiveOrganization,
@@ -90,15 +97,10 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
   }) => {
     const result = await ports.updateSessionActiveOrganization(input)
     if (result === "not_member") {
-      throw publicErrors.notFound("Organization not found", {
-        resource: "organization",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     if (result === "session_not_found") {
-      throw publicErrors.internal(new Error("Session not found"), {
-        module: "organizations",
-        operation: "activateOrganization",
-      })
+      throw new Error("Session not found")
     }
     return { activeOrganizationId: input.organizationId }
   }
@@ -110,9 +112,7 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
   }) => {
     const organization = await ports.findOrganizationForUser(input)
     if (!organization) {
-      throw publicErrors.notFound("Organization not found", {
-        resource: "organization",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     return organization
   }
@@ -126,12 +126,15 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
     await ports.requireOrganizationRole({
       userId: input.userId,
       organizationId: input.organizationId,
-      allow: ["super_admin"],
+      allow: ["owner"],
       action: "organization.update",
     })
 
     if (input.name === undefined && input.slug === undefined) {
-      throw publicErrors.validation("No organization changes provided")
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "Provide an organization change.",
+      })
     }
 
     const updated = await ports.updateOrganizationById({
@@ -145,9 +148,7 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
     })
 
     if (!updated) {
-      throw publicErrors.notFound("Organization not found", {
-        resource: "organization",
-      })
+      throw new HttpError({ code: "not_found" })
     }
 
     return { ...updated, active: true }
@@ -166,7 +167,10 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
     requireFreshSession(input.session, action)
 
     if (input.confirmation !== "DELETE") {
-      throw publicErrors.confirmationRequired(action)
+      throw new HttpError({
+        code: "confirmation_required",
+        fieldErrors: { confirmation: ["Type DELETE exactly."] },
+      })
     }
 
     const result = await ports.deleteOrganizationById({
@@ -178,29 +182,27 @@ const createOrganizationCoreService = (ports: OrganizationsPorts) => {
     })
 
     if (result.kind === "active_organization_mismatch") {
-      throw publicErrors.activeOrganizationMismatch()
+      throw new HttpError({ code: "active_organization_mismatch" })
     }
     if (result.kind === "forbidden") {
-      throw publicErrors.forbidden(
-        "You are not allowed to perform this action",
-        {
-          action,
-        }
-      )
+      throw new HttpError({ code: "forbidden" })
     }
     if (result.kind === "idempotency_conflict") {
-      throw publicErrors.conflict("Idempotency key has already been used", {
-        constraint: "idempotency_key",
-        field: "idempotencyKey",
+      throw new HttpError({
+        code: "conflict",
+        fieldErrors: {
+          idempotencyKey: ["This idempotency key has already been used."],
+        },
       })
     }
     if (result.kind === "not_found") {
-      throw publicErrors.notFound("Organization not found", {
-        resource: "organization",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     if (result.kind === "slug_mismatch") {
-      throw publicErrors.confirmationRequired(action, { field: "slug" })
+      throw new HttpError({
+        code: "confirmation_required",
+        fieldErrors: { slug: ["Type the organization slug exactly."] },
+      })
     }
 
     return result.receipt
@@ -227,8 +229,8 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
       "app.operation": "listOrganizationMembers",
       "app.outcome": "success",
       "organization.member.result_count": members.length,
-      "organization.member.super_admin_count": members.filter(
-        (member) => member.role === "super_admin"
+      "organization.member.owner_count": members.filter(
+        (member) => member.role === "owner"
       ).length,
       "organization.member.admin_count": members.filter(
         (member) => member.role === "admin"
@@ -250,30 +252,28 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
     requireFreshSession(input.session, "organization.member.role_update")
 
     if (!isOrganizationRole(input.role)) {
-      throw publicErrors.validation("Invalid role", {
-        field: "role",
-        reason: "unsupported_role",
+      throw new HttpError({
+        code: "validation_error",
+        fieldErrors: { role: ["Choose a supported role."] },
       })
     }
 
     await ports.requireOrganizationRole({
       ...input,
-      allow: ["super_admin"],
+      allow: ["owner"],
       action: "organization.member.role_update",
     })
     const target = await ports.findMemberById(input)
 
     if (!target) {
-      throw publicErrors.notFound("Member not found", {
-        resource: "member",
-      })
+      throw new HttpError({ code: "not_found" })
     }
 
-    if (input.role === "super_admin" || target.role === "super_admin") {
-      throw publicErrors.validation(
-        "Use the ownership transfer flow for super admin changes",
-        { action: "organization.transfer_super_admin" }
-      )
+    if (input.role === "owner" || target.role === "owner") {
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "Use the ownership transfer flow for owner changes.",
+      })
     }
 
     if (target.role === input.role) {
@@ -288,52 +288,55 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
     return ports.listMembersByOrganization(input.organizationId)
   }
 
-  const transferSuperAdmin = async (input: {
+  const transferOwnership = async (input: {
     userId: string
     session: SessionContext
     organizationId: string
     memberId: string
     confirmation: string
   }) => {
-    const action = "organization.transfer_super_admin"
+    const action = "organization.transfer_owner"
     requireFreshSession(input.session, action)
 
     const actor = await ports.requireOrganizationRole({
       ...input,
-      allow: ["super_admin"],
+      allow: ["owner"],
       action,
     })
     const target = await ports.findMemberById(input)
     if (!target) {
-      throw publicErrors.notFound("Member not found", { resource: "member" })
+      throw new HttpError({ code: "not_found" })
     }
     if (target.id === actor.id) {
-      throw publicErrors.validation("Select another member", {
-        field: "memberId",
+      throw new HttpError({
+        code: "validation_error",
+        fieldErrors: { memberId: ["Choose another member."] },
       })
     }
     if (input.confirmation !== target.email) {
-      throw publicErrors.confirmationRequired(action)
+      throw new HttpError({
+        code: "confirmation_required",
+        fieldErrors: {
+          confirmation: ["Type the member email address exactly."],
+        },
+      })
     }
 
-    const result = await ports.transferSuperAdminById({
+    const result = await ports.transferOwnershipById({
       actorMemberId: actor.id,
       actorUserId: input.userId,
       organizationId: input.organizationId,
       targetMemberId: target.id,
     })
 
-    if (result === "actor_not_super_admin") {
-      throw publicErrors.forbidden("Only the current super admin can transfer")
+    if (result === "actor_not_owner") {
+      throw new HttpError({ code: "forbidden" })
     }
     if (result === "target_not_found") {
-      throw publicErrors.notFound("Member not found", { resource: "member" })
+      throw new HttpError({ code: "not_found" })
     }
-    if (result === "invalid_super_admin_count") {
-      throw publicErrors.internal(new Error("Invalid super admin count"), {
-        module: "organizations",
-        operation: "transferSuperAdmin",
-      })
+    if (result === "invalid_owner_count") {
+      throw new Error("Invalid owner count")
     }
 
     return ports.listMembersByOrganization(input.organizationId)
@@ -351,32 +354,41 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
     const target = await ports.findMemberById(input)
 
     if (!target) {
-      throw publicErrors.notFound("Member not found", {
-        resource: "member",
-      })
+      throw new HttpError({ code: "not_found" })
     }
 
     if (target.userId === input.userId) {
-      throw publicErrors.validation("Use leave organization flow for yourself")
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "Use the leave organization flow for yourself.",
+      })
     }
 
     if (input.confirmation !== target.email) {
-      throw publicErrors.confirmationRequired("organization.member.remove")
+      throw new HttpError({
+        code: "confirmation_required",
+        fieldErrors: {
+          confirmation: ["Type the member email address exactly."],
+        },
+      })
     }
 
     if (actor.role === "member") {
-      throw publicErrors.forbidden("Members cannot remove members")
+      throw new HttpError({ code: "forbidden" })
     }
 
     if (actor.role === "admin" && target.role !== "member") {
-      throw publicErrors.forbidden("Admins can only remove members")
+      throw new HttpError({ code: "forbidden" })
     }
 
     if (
-      target.role === "super_admin" &&
-      (await ports.countSuperAdmins(input.organizationId)) <= 1
+      target.role === "owner" &&
+      (await ports.countOwners(input.organizationId)) <= 1
     ) {
-      throw publicErrors.validation("Organization must keep one super admin")
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "The organization must keep one owner.",
+      })
     }
 
     const deleted = await ports.deleteMemberById({
@@ -385,9 +397,7 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
       removedRole: target.role,
     })
     if (!deleted) {
-      throw publicErrors.notFound("Member not found", {
-        resource: "member",
-      })
+      throw new HttpError({ code: "not_found" })
     }
 
     return { id: deleted.id }
@@ -396,7 +406,7 @@ const createOrganizationMemberService = (ports: OrganizationsPorts) => {
   return {
     listMembers,
     removeMember,
-    transferSuperAdmin,
+    transferOwnership,
     updateMemberRole,
   }
 }

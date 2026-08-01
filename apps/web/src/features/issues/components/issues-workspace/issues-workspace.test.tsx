@@ -238,9 +238,8 @@ const selectOption = async (
 }
 
 describe("organization issues", () => {
-  it("renders the full-width table with the requested columns and filters", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderWorkspace()
+  it("renders the full-width table with the requested columns and filters", () => {
+    renderWorkspace()
 
     const headers = screen
       .getAllByRole("columnheader")
@@ -332,8 +331,15 @@ describe("organization issues", () => {
         name: "Choose visible columns",
       })
     ).not.toBeInTheDocument()
+  })
+
+  it("publishes the issue search after the input settles", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+    const search = screen.getByRole("searchbox", { name: "Search issues" })
 
     await user.type(search, "billing")
+    expect(search).toHaveValue("billing")
     expect(screen.getByText(billingIssue.title)).toBeInTheDocument()
     expect(callbacks.onSearchChange).not.toHaveBeenCalled()
     await waitFor(() => expect(callbacks.onSearchChange).toHaveBeenCalledOnce())

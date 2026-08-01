@@ -10,9 +10,14 @@ type FaultRule = OneShotRule & {
   status: number
 }
 
-type DelayRule = OneShotRule & {
-  delayMs: number
+type RequestGateRule = OneShotRule & {
+  release: () => void
+  released: boolean
+  requested: boolean
+  waitUntilReleased: Promise<void>
 }
+
+import { w6Environment } from "./environment"
 
 const fixedNow = "2026-07-14T09:00:00.000Z"
 const expiresAt = "2026-08-14T09:00:00.000Z"
@@ -20,12 +25,12 @@ const corsHeaders = {
   "access-control-allow-credentials": "true",
   "access-control-allow-headers": "content-type,x-e2e-namespace",
   "access-control-allow-methods": "GET,OPTIONS,POST",
-  "access-control-allow-origin": "http://127.0.0.1:3000",
+  "access-control-allow-origin": w6Environment.webOrigin,
   vary: "Origin",
 }
 
 const faultRules: FaultRule[] = []
-const delayRules: DelayRule[] = []
+const requestGateRules: RequestGateRule[] = []
 
 const user = {
   id: "user-admin",
@@ -39,7 +44,7 @@ const permissions = {
   canInviteMembers: true,
   canManageMembers: true,
   canManageAdmins: true,
-  canTransferSuperAdmin: true,
+  canTransferOwnership: true,
 }
 
 const member = {
@@ -50,7 +55,7 @@ const member = {
   profileImage: null,
   githubLinked: true,
   passkeyLinked: true,
-  role: "super_admin",
+  role: "owner",
   createdAt: "2026-07-01T09:00:00.000Z",
 }
 
@@ -58,7 +63,7 @@ const organization = {
   id: "org-a",
   name: "Alpha Operations",
   slug: "alpha-operations",
-  role: "super_admin",
+  role: "owner",
   active: true,
   profileImage: null,
   memberCount: 1,
@@ -106,8 +111,17 @@ const issue = {
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: corsHeaders })
 
-const apiError = (code: string, message: string, status: number) =>
-  json({ error: { code, message, requestId: "req_e2e_fixture" } }, status)
+const appError = (code: string, message: string, status: number) =>
+  Response.json(
+    { error: code, message },
+    {
+      status,
+      headers: { ...corsHeaders, "x-request-id": "req_e2e_fixture" },
+    }
+  )
+
+const betterAuthError = (code: string, message: string, status: number) =>
+  json({ code, message }, status)
 
 const cookieValue = (request: Request, name: string) => {
   const escapedName = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -123,9 +137,16 @@ const namespaceFor = (request: Request) =>
   "default"
 
 const removeNamespaceRules = (namespace: string) => {
-  for (const rules of [faultRules, delayRules]) {
-    for (let index = rules.length - 1; index >= 0; index -= 1) {
-      if (rules[index]?.namespace === namespace) rules.splice(index, 1)
+  for (let index = requestGateRules.length - 1; index >= 0; index -= 1) {
+    const rule = requestGateRules[index]
+    if (rule?.namespace !== namespace) continue
+    rule.released = true
+    rule.release()
+    requestGateRules.splice(index, 1)
+  }
+  for (let index = faultRules.length - 1; index >= 0; index -= 1) {
+    if (faultRules[index]?.namespace === namespace) {
+      faultRules.splice(index, 1)
     }
   }
 }
@@ -157,6 +178,29 @@ const parseControlBody = async (request: Request) => {
 const nonEmptyString = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : null
 
+const noop = () => undefined
+
+const requestGateView = (rule: RequestGateRule) => ({
+  method: rule.method,
+  path: rule.path,
+  released: rule.released,
+  requested: rule.requested,
+})
+
+const createRequestGateRule = (input: OneShotRule): RequestGateRule => {
+  let release: () => void = noop
+  const waitUntilReleased = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return {
+    ...input,
+    release,
+    released: false,
+    requested: false,
+    waitUntilReleased,
+  }
+}
+
 const handleControlRequest = async (
   request: Request,
   url: URL,
@@ -167,27 +211,52 @@ const handleControlRequest = async (
     removeNamespaceRules(namespace)
     return json({ reset: true })
   }
-  if (url.pathname === "/__e2e/request-delays" && request.method === "GET") {
-    return json(delayRules.filter((rule) => rule.namespace === namespace))
+  if (url.pathname === "/__e2e/request-gates" && request.method === "GET") {
+    return json(
+      requestGateRules
+        .filter((rule) => rule.namespace === namespace)
+        .map(requestGateView)
+    )
   }
-  if (url.pathname === "/__e2e/request-delays") {
+  if (
+    url.pathname === "/__e2e/request-gates/release" &&
+    request.method === "POST"
+  ) {
     const body = await parseControlBody(request)
     const path = nonEmptyString(body.path)
     const method = nonEmptyString(body.method)?.toUpperCase()
-    const delayMs =
-      typeof body.delayMs === "number" && Number.isInteger(body.delayMs)
-        ? body.delayMs
-        : 0
-    if (!path?.startsWith("/") || !method || delayMs < 1 || delayMs > 5_000) {
-      return apiError(
-        "invalid_request",
-        "path, method and a delay from 1 to 5000ms are required",
-        400
-      )
+    const index = requestGateRules.findIndex(
+      (rule) =>
+        rule.namespace === namespace &&
+        rule.path === path &&
+        rule.method === method
+    )
+    const rule = requestGateRules[index]
+    if (!rule) return appError("not_found", "Request gate not found.", 404)
+    rule.released = true
+    rule.release()
+    requestGateRules.splice(index, 1)
+    return json({ released: true })
+  }
+  if (url.pathname === "/__e2e/request-gates" && request.method === "POST") {
+    const body = await parseControlBody(request)
+    const path = nonEmptyString(body.path)
+    const method = nonEmptyString(body.method)?.toUpperCase()
+    if (!path?.startsWith("/") || !method) {
+      return appError("validation_error", "Path and method are required.", 400)
     }
-    const rule = { namespace, path, method, delayMs }
-    delayRules.push(rule)
-    return json(rule, 201)
+    const duplicate = requestGateRules.some(
+      (rule) =>
+        rule.namespace === namespace &&
+        rule.path === path &&
+        rule.method === method
+    )
+    if (duplicate) {
+      return appError("conflict", "Request gate already exists.", 409)
+    }
+    const rule = createRequestGateRule({ namespace, path, method })
+    requestGateRules.push(rule)
+    return json(requestGateView(rule), 201)
   }
   if (url.pathname === "/__e2e/faults" && request.method === "GET") {
     return json(faultRules.filter((rule) => rule.namespace === namespace))
@@ -201,9 +270,9 @@ const handleControlRequest = async (
         ? body.status
         : 0
     if (!path?.startsWith("/") || !method || status < 400 || status > 599) {
-      return apiError(
-        "invalid_request",
-        "path, method and an error status are required",
+      return appError(
+        "validation_error",
+        "Path, method, and an error status are required.",
         400
       )
     }
@@ -212,7 +281,7 @@ const handleControlRequest = async (
       path,
       method,
       status,
-      code: nonEmptyString(body.code) ?? "e2e_fault",
+      code: nonEmptyString(body.code) ?? "service_unavailable",
       message: nonEmptyString(body.message) ?? "Injected E2E failure",
     }
     faultRules.push(rule)
@@ -249,12 +318,14 @@ const handleAuthRequest = (
     return json(authSession(sessionKey))
   }
   if (url.pathname === "/auth/organization/get-invitation") {
-    if (!sessionKey) return apiError("UNAUTHORIZED", "Sign in required", 401)
+    if (!sessionKey) {
+      return betterAuthError("UNAUTHORIZED", "Sign in required", 401)
+    }
     if (
       sessionKey !== "new-user" ||
       url.searchParams.get("id") !== invitation.id
     ) {
-      return apiError(
+      return betterAuthError(
         "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
         "Use the account that received this invitation",
         403
@@ -393,14 +464,15 @@ const handleRequest = async (request: Request) => {
   const controlResponse = await handleControlRequest(request, url, namespace)
   if (controlResponse) return controlResponse
 
-  const delayRule = takeRule(
-    delayRules,
-    namespace,
-    request.method,
-    url.pathname
+  const requestGate = requestGateRules.find(
+    (rule) =>
+      rule.namespace === namespace &&
+      rule.method === request.method &&
+      rule.path === url.pathname
   )
-  if (delayRule) {
-    await Bun.sleep(delayRule.delayMs)
+  if (requestGate) {
+    requestGate.requested = true
+    await requestGate.waitUntilReleased
   }
   const faultRule = takeRule(
     faultRules,
@@ -409,27 +481,29 @@ const handleRequest = async (request: Request) => {
     url.pathname
   )
   if (faultRule) {
-    return apiError(faultRule.code, faultRule.message, faultRule.status)
+    return url.pathname.startsWith("/auth/")
+      ? betterAuthError(faultRule.code, faultRule.message, faultRule.status)
+      : appError(faultRule.code, faultRule.message, faultRule.status)
   }
 
   const sessionKey = cookieValue(request, "e2e-session")
   const authResponse = handleAuthRequest(request, url, sessionKey)
   if (authResponse) return authResponse
   if (!sessionKey) {
-    return apiError("unauthorized", "Authentication required", 401)
+    return appError("unauthorized", "Authentication required.", 401)
   }
 
   const response =
     handleConsoleRequest(url) ??
     handleIssueRequest(url) ??
     handleAgentRequest(url)
-  return response ?? apiError("not_found", url.pathname, 404)
+  return response ?? appError("not_found", "Resource not found.", 404)
 }
 
 Bun.serve({
-  port: 3001,
+  port: w6Environment.apiPort,
   hostname: "127.0.0.1",
   fetch: handleRequest,
 })
 
-console.log("E2E fixture API listening on http://127.0.0.1:3001")
+console.log(`W6 fixture API listening on ${w6Environment.apiOrigin}`)

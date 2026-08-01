@@ -17,6 +17,7 @@ linked_adrs:
   - ../../decisions/ADR-007-workspace-testing-strategy.md
   - ../../decisions/ADR-008-mastra-native-agent-runtime.md
   - ../../decisions/ADR-009-mcp-authentication-and-direct-tools.md
+  - ../../decisions/ADR-012-standard-memory-and-auth-delivery.md
 ---
 
 # Mastra-native Agentリファクタとremote MCP導入
@@ -26,6 +27,18 @@ linked_adrs:
 現在の多重stream変換、API側message永続化、custom approval、nested Web research Agentを整理し、Mastra Memory、Storage、native AI SDK stream、Approval、Workflow、observabilityを標準経路として利用します。
 
 構造切替後に既知不具合を再現し、残っている原因だけを修正します。その後、`apps/api`へMastra MCPServerとOAuthを導入し、read/writeを含む全business toolを直接実行できるようにします。PAT形式のMCP個人アクセストークンは最後のphaseへ分離します。
+
+## PLAN-2026-029への所有権移管
+
+2026-08-01以降、Mastra Memoryの書き込み・スレッド名生成を標準機能へ戻す変更と、独自の
+`memory-commit` Workflow、`canonical commit`、`reconciliation`、`drain`を削除する変更は、
+[PLAN-2026-029](../completed/PLAN-2026-029-standard-library-observability-browser-hardening.md)が所有します。本計画のPhase 1と
+Phase 2にあるMemory・耐久確定処理の完了項目と検証証跡は、当時の実装履歴として残しますが、
+今後の完了条件にはしません。
+
+本計画は、approval Workflow、opaque resume ticket、Workers AI・AI Gateway、リモートMCP、OAuth、
+MCP個人アクセストークンを引き続き所有します。PLAN-2026-029はAPIの認可・トランザクションや
+approvalをMastra Memoryへ移しません。
 
 ## 対象外
 
@@ -89,7 +102,6 @@ apps/agent/src/mastra/
   observability.ts
   agents/
     product-agent/
-    thread-title-agent/
   workflows/
     approved-issue-action/
   tools/
@@ -228,7 +240,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 ### 2.2 Stop
 
 - [x] Stopを正常cancelとして扱う
-- [x] stream先頭の一時的な`data-run` partでopaque run IDをWebへ渡す
+- [x] stream先頭のAI SDK `messageMetadata`でopaque run IDをWebへ渡す
 - [x] abort時にpending submission IDを破棄する
 - [x] draftだけを復元する
 - [x] `clearError()`を呼ぶ
@@ -268,7 +280,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] shared contractをPhase 4のMCP tool登録から再利用できる境界へ置く
 - [ ] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
 
-### 2.6 Mastra-owned durable commit
+### 2.6 Mastra-owned durable commit（PLAN-2026-029へ移管済みの実装履歴）
 
 - [x] canonical responseとrecovery journalをMastra Storageへ集約する
 - [x] workflow stageを生成済みresponseの線形化点にする
@@ -419,9 +431,10 @@ PATはこのphaseへ含めません。
 - [x] Phase 1Aとしてpackage境界、`get_issue` factory、Service Binding response検証を実装した
 - [x] Phase 1を実装した
 - [x] Phase 2を実装した
-- [x] Product Agent、title、直接Web検索補助をGPT-5.6 Luna profileへ統一した
+- [x] Product Agent、Mastra Memoryのtitle補助、直接Web検索補助をGPT-5.6 Luna profileへ統一した
 - [x] 標準reasoning本文とallowlist済み`reasoning_details`のMemory保存・再送・公開境界を実装した
 - [x] 中央寄せconversation、reasoning/tool進行表示、回答copy、Enter送信を実装した
+- [x] Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移管した
 - [ ] Lunaの複数user turn間`reasoning_details`再送を観測する専用live probeを追加し、明示承認後に実行する
 - [ ] Phase 3を実装した
 - [ ] Phase 4を実装した
@@ -450,6 +463,7 @@ PATはこのphaseへ含めません。
 | 2026-07-28 | AI SDK 7と現行Mastra 1系をbaselineにする                       | stream、tool、Memory、Workflowの標準機能へ委譲し、手書きruntimeを減らす         |
 | 2026-08-01 | Lunaの標準reasoningをstream、保存、再送する                    | 独自CoT protocolを作らず、Mastra、AI SDK、OpenRouterの標準partを正本にする      |
 | 2026-08-01 | Agent UIにmodel headerとturn minimapを置かない                 | conversation、進行表示、composerの主要操作へ情報階層を集中する                  |
+| 2026-08-01 | Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移す      | 標準Memoryへの切替と耐久性変更を、MCP・approvalの残作業から分離するため         |
 
 ## 検証証跡
 
@@ -526,7 +540,7 @@ production相当のmodel挙動を検査する。それまでは同じsystem回�
 - Phase 1からPhase 5のexit criteriaを満たす
 - 既知5不具合が再現testで解消される
 - API側の独自message historyとcanonical codecが削除される
-- Mastra Memory、Storage、Approval/Workflow、observabilityが有効になる
+- Mastra Storage、Approval/Workflow、observabilityが有効になる。Memoryの保存契約はPLAN-2026-029を正本にする
 - Agent DBとApplication DBがcredential分離される
 - Issue attachment add/remove/readはWebとAgentでshared contractを利用し、Phase 4でMCPへ同じcontractを登録する
 - MCP OAuthで全business toolをread/writeできる

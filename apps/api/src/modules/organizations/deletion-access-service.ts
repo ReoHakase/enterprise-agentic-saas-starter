@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { SessionContext } from "../auth/public"
 import {
   requireActiveOrganization,
@@ -29,11 +29,8 @@ export const createOrganizationDeletionAccessService = (
       })
 
       requireActiveOrganization(input.session, input.organizationId)
-      if (membership.role !== "super_admin") {
-        throw publicErrors.forbidden(
-          "You are not allowed to perform this action",
-          { action: deletionAction }
-        )
+      if (membership.role !== "owner") {
+        throw new HttpError({ code: "forbidden" })
       }
       requireFreshSession(input.session, deletionAction)
 
@@ -42,7 +39,7 @@ export const createOrganizationDeletionAccessService = (
         replayDeletionId: null,
       }
     } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "not_found") {
+      if (!(error instanceof HttpError) || error.code !== "not_found") {
         throw error
       }
 

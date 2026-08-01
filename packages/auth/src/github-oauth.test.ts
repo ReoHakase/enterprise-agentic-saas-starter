@@ -18,14 +18,20 @@ const profile = {
 
 describe("GitHub OAuth emulator URL", () => {
   it.each([
-    ["http://localhost:4001", "http://localhost:4001"],
     [
-      " https://github.emulate.enterprise-agentic-saas.localhost/ ",
-      "https://github.emulate.enterprise-agentic-saas.localhost",
+      "http://localhost:4001/emulate/github",
+      "http://localhost:4001/emulate/github",
     ],
-    ["http://127.42.0.1:4001", "http://127.42.0.1:4001"],
-    ["http://[::1]:4001", "http://[::1]:4001"],
-  ])("normalizes the local root URL %s", (input, expected) => {
+    [
+      " https://github.emulate.enterprise-agentic-saas.localhost/emulate/github ",
+      "https://github.emulate.enterprise-agentic-saas.localhost/emulate/github",
+    ],
+    [
+      "http://127.42.0.1:4001/emulate/github",
+      "http://127.42.0.1:4001/emulate/github",
+    ],
+    ["http://[::1]:4001/emulate/github", "http://[::1]:4001/emulate/github"],
+  ])("normalizes the local emulator base URL %s", (input, expected) => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "development",
@@ -39,23 +45,25 @@ describe("GitHub OAuth emulator URL", () => {
     "http://192.168.1.2:4001",
     "ftp://localhost:4001",
     "http://user:secret@localhost:4001",
+    "http://localhost:4001",
     "http://localhost:4001/user",
-    "http://localhost:4001?token=secret",
-    "http://localhost:4001#authorize",
-  ])("rejects the non-local or non-root URL %s", (input) => {
+    "http://localhost:4001/emulate/github/",
+    "http://localhost:4001/emulate/github?token=secret",
+    "http://localhost:4001/emulate/github#authorize",
+  ])("rejects the non-local or non-canonical URL %s", (input) => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "development",
         emulatorUrl: input,
       })
     ).toThrow(
-      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback root URL"
+      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback /emulate/github base URL"
     )
   })
 
   it.each([
-    "http://user:RAW_EMULATOR_SECRET@localhost:4001",
-    "http://localhost:4001?token=RAW_EMULATOR_TOKEN",
+    "http://user:RAW_EMULATOR_SECRET@localhost:4001/emulate/github",
+    "http://localhost:4001/emulate/github?token=RAW_EMULATOR_TOKEN",
   ])("does not retain rejected URL secrets in the thrown error", (input) => {
     let thrown: unknown
     try {
@@ -82,13 +90,13 @@ describe("GitHub OAuth environment boundary", () => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "development",
-        emulatorUrl: "http://github.emulate.localhost:4001",
+        emulatorUrl: "http://github.emulate.localhost:4001/emulate/github",
         githubClientId: "real-production-client-id",
         githubClientSecret: "real-production-client-secret",
       })
     ).toEqual({
       mode: "emulator",
-      emulatorUrl: "http://github.emulate.localhost:4001",
+      emulatorUrl: "http://github.emulate.localhost:4001/emulate/github",
       clientId: LOCAL_GITHUB_OAUTH_CLIENT_ID,
       clientSecret: LOCAL_GITHUB_OAUTH_CLIENT_SECRET,
     })
@@ -98,7 +106,7 @@ describe("GitHub OAuth environment boundary", () => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "test",
-        emulatorUrl: "http://localhost:4001",
+        emulatorUrl: "http://localhost:4001/emulate/github",
         emulatorClientId: "e2e-client",
         emulatorClientSecret: "e2e-secret",
       })
@@ -121,7 +129,7 @@ describe("GitHub OAuth environment boundary", () => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "test",
-        emulatorUrl: "http://localhost:4001",
+        emulatorUrl: "http://localhost:4001/emulate/github",
         emulatorClientId: "partial-client",
       })
     ).toThrow(
@@ -133,7 +141,7 @@ describe("GitHub OAuth environment boundary", () => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "production",
-        emulatorUrl: "http://localhost:4001",
+        emulatorUrl: "http://localhost:4001/emulate/github",
         githubClientId: "real-client",
         githubClientSecret: "real-secret",
       })

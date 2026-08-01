@@ -240,7 +240,7 @@ test("agent-canary-approved-image-write", async ({ context, page }) => {
   const harness = await openCanaryHarness(page, context.request)
   const issueTitle = `Approved image write ${harness.runSuffix}`
 
-  await harness.agentShell.locator('input[type="file"]').setInputFiles({
+  await harness.agentShell.getByLabel("Attach images").setInputFiles({
     name: "preview.png",
     mimeType: "image/png",
     buffer: await readFile(
@@ -351,7 +351,7 @@ test("agent-canary-existing-issue-image-followup @diagnostic-qwen", async ({
     ),
   }
   const stageImage = async () => {
-    await harness.agentShell.locator('input[type="file"]').setInputFiles(image)
+    await harness.agentShell.getByLabel("Attach images").setInputFiles(image)
     await expect(
       harness.agentShell.getByLabel("Images ready to send")
     ).toBeVisible({ timeout: 30_000 })

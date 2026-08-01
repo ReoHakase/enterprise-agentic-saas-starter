@@ -53,11 +53,12 @@ const commonEnvironment = {
   AUTH_COOKIE_DOMAIN: environment.cookieDomain,
   TRUSTED_ORIGINS: environment.webOrigin,
   CORS_ORIGIN: environment.webOrigin,
-  GITHUB_OAUTH_EMULATOR_URL: environment.githubOrigin,
+  GITHUB_OAUTH_EMULATOR_URL: `${environment.githubOrigin}/emulate/github`,
   GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
   GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
   GITHUB_OAUTH_CALLBACK_URL: callbackUrl,
   NEXT_TELEMETRY_DISABLED: "1",
+  NEXT_PUBLIC_BROWSER_TEST: "true",
 }
 
 export default defineConfig({
@@ -100,7 +101,7 @@ export default defineConfig({
       ? [
           {
             command: "bun --no-env-file run e2e:emulate:github",
-            url: `http://127.0.0.1:${environment.githubPort}/meta`,
+            url: `http://127.0.0.1:${environment.githubPort}/emulate/github/meta`,
             reuseExistingServer: false,
             timeout: 60_000,
             env: {

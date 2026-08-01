@@ -33,7 +33,7 @@ import { MemberMutationContext } from "./members-table-context"
 
 const memberActionsTrigger = <Button variant="ghost" size="icon-sm" />
 const memberRoleOrder: Record<OrganizationRole, number> = {
-  super_admin: 0,
+  owner: 0,
   admin: 1,
   member: 2,
 }
@@ -185,7 +185,7 @@ const MemberActions = ({
 }) => {
   const pending = useContext(MemberMutationContext)
   const permanentlyDisabled =
-    member.role === "super_admin" ||
+    member.role === "owner" ||
     (organizationRole === "admin" && member.role !== "member")
   const requestRemoval = useCallback(() => {
     if (!pending && !permanentlyDisabled) onRequestRemove(member)
@@ -209,8 +209,8 @@ const MemberActions = ({
               variant="destructive"
               disabled={permanentlyDisabled || pending}
               title={
-                member.role === "super_admin"
-                  ? "Transfer Super Admin before removing this member."
+                member.role === "owner"
+                  ? "Transfer ownership before removing this member."
                   : undefined
               }
               onClick={requestRemoval}
@@ -230,7 +230,7 @@ export const useMemberTableColumns = ({
   members,
   canManageMembers,
   canManageRoles,
-  canTransferSuperAdmin,
+  canTransferOwnership,
   onChangeRole,
   onRequestRemove,
 }: {
@@ -238,26 +238,25 @@ export const useMemberTableColumns = ({
   members: OrganizationMember[]
   canManageMembers: boolean
   canManageRoles: boolean
-  canTransferSuperAdmin: boolean
+  canTransferOwnership: boolean
   onChangeRole: (member: OrganizationMember, role: OrganizationRole) => void
   onRequestRemove: (member: OrganizationMember) => void
 }) => {
-  const superAdminCount = useMemo(
-    () => members.filter((member) => member.role === "super_admin").length,
+  const ownerCount = useMemo(
+    () => members.filter((member) => member.role === "owner").length,
     [members]
   )
-  const isOnlySuperAdmin = useCallback(
-    (member: OrganizationMember) =>
-      member.role === "super_admin" && superAdminCount <= 1,
-    [superAdminCount]
+  const isOnlyOwner = useCallback(
+    (member: OrganizationMember) => member.role === "owner" && ownerCount <= 1,
+    [ownerCount]
   )
   const canSelectRole = useCallback(
     (member: OrganizationMember, nextRole: OrganizationRole) => {
       if (!canManageRoles) return nextRole === member.role
-      if (nextRole === "super_admin" && !canTransferSuperAdmin) return false
-      return !(isOnlySuperAdmin(member) && nextRole !== "super_admin")
+      if (nextRole === "owner" && !canTransferOwnership) return false
+      return !(isOnlyOwner(member) && nextRole !== "owner")
     },
-    [canManageRoles, canTransferSuperAdmin, isOnlySuperAdmin]
+    [canManageRoles, canTransferOwnership, isOnlyOwner]
   )
 
   return useMemo<ColumnDef<OrganizationMember>[]>(
@@ -333,7 +332,7 @@ export const useMemberTableColumns = ({
           <MemberRoleSelect
             member={row.original}
             canManageRoles={canManageRoles}
-            isOnlySuperAdmin={isOnlySuperAdmin(row.original)}
+            isOnlyOwner={isOnlyOwner(row.original)}
             canSelectRole={canSelectRole}
             onChange={onChangeRole}
           />
@@ -360,7 +359,7 @@ export const useMemberTableColumns = ({
       canManageMembers,
       canManageRoles,
       canSelectRole,
-      isOnlySuperAdmin,
+      isOnlyOwner,
       onChangeRole,
       onRequestRemove,
       organizationRole,

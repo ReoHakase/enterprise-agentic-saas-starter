@@ -29,7 +29,7 @@ const responseFor = (request: Request): Response => {
           canReadIssues: true,
           canUpdateIssues: true,
         },
-        role: "super_admin",
+        role: "owner",
         slug: "organization",
       },
       thread: { id: "thread_1", title: "Thread" },
@@ -185,6 +185,36 @@ describe("Agent internal HTTP gateway", () => {
     expect(caught).toBeInstanceOf(Error)
     expect(String(caught)).toContain("Agent internal capability is unavailable")
     expect(String(caught)).not.toContain(RUN_GRANT)
+  })
+
+  it("preserves the original response stream failure as Error.cause", async () => {
+    const cause = new Error("private response stream failure")
+    const binding: AgentInternalFetchBinding = {
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(cause)
+              },
+            })
+          )
+        ),
+    }
+
+    let caught: unknown
+    try {
+      await createAgentInternalGateway(binding).readAccountContext({
+        grant: RUN_GRANT,
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    if (!(caught instanceof Error)) throw new Error("Expected transport error")
+    expect(caught.cause).toBe(cause)
+    expect(String(caught)).not.toContain(cause.message)
   })
 })
 
@@ -417,7 +447,7 @@ describe("Agent internal response contracts", () => {
             canReadIssues: true,
             canUpdateIssues: true,
           },
-          role: "super_admin",
+          role: "owner",
           slug: "organization",
         },
         thread: { id: "thread_1", title: "Thread" },

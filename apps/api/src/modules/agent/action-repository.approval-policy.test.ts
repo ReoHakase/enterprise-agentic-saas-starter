@@ -151,7 +151,7 @@ describe("Agent Issue approval policies and full access", () => {
             userId: "action-user-a",
             contextEpoch: 1,
             webSearchQueryHash: null,
-            role: "super_admin",
+            role: "owner",
             runStatus: "running",
             runScope: "chat",
             rootRunId: "missing-run",
@@ -369,14 +369,14 @@ describe("Agent Issue approval policies and full access", () => {
         userId: "action-user-a",
         threadId: otherTenant.thread.id,
       })
-    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    ).rejects.toMatchObject({ code: "not_found" })
     await expect(
       deleteAgentApprovalPolicyForSession(db, {
         sessionId: "action-session-a",
         userId: "action-user-a",
         threadId: otherOwner.thread.id,
       })
-    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    ).rejects.toMatchObject({ code: "not_found" })
 
     const [otherTenantPolicy] = await db
       .select({ mode: schema.agentThreadPermissions.mode })

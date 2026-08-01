@@ -12,7 +12,7 @@ import * as v from "valibot"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createApp } from "../../app"
-import { AppError } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   FILE_MAX_BYTES,
   FILE_PREVIEW_WIDTHS,
@@ -302,7 +302,7 @@ const upload = (
   database: Db,
   file: File,
   uploadId: string,
-  actorRole: "admin" | "member" | "super_admin" = "member"
+  actorRole: "admin" | "member" | "owner" = "member"
 ) =>
   uploadFile(database, {
     actorRole,
@@ -346,7 +346,7 @@ describe("file service", () => {
     )
     await expect(
       upload(database, tooLarge, "upload-too-large")
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("converges identical retry and returns 409 for different bytes", async () => {
@@ -369,8 +369,6 @@ describe("file service", () => {
       )
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "upload_id_mismatch" },
-      statusCode: 409,
     })
   })
 
@@ -461,14 +459,17 @@ describe("file service", () => {
       fromValue: "collision.txt",
     })
 
-    await expect(
-      removeFile(database, {
-        actorRole: "member",
-        actorUserId: "user-1",
-        fileId: uploaded.dto.id,
-        organizationId: "org-1",
-      })
-    ).rejects.toMatchObject({ code: "internal_error", statusCode: 500 })
+    const removalError = await removeFile(database, {
+      actorRole: "member",
+      actorUserId: "user-1",
+      fileId: uploaded.dto.id,
+      organizationId: "org-1",
+    }).then(
+      () => undefined,
+      (cause: unknown) => cause
+    )
+    expect(removalError).toBeInstanceOf(Error)
+    expect(removalError).not.toBeInstanceOf(HttpError)
 
     await expect(database.select().from(files)).resolves.toMatchObject([
       { id: uploaded.dto.id, status: "ready" },
@@ -535,7 +536,7 @@ describe("file service", () => {
     }
   })
 
-  it("keeps pending quota and strips a raw provider failure from the AppError cause", async () => {
+  it("keeps pending quota and preserves the provider cause", async () => {
     const raw = new Error("secret bucket object and provider token")
     vi.mocked(storage.runtime.bucket.put).mockRejectedValueOnce(raw)
 
@@ -545,13 +546,11 @@ describe("file service", () => {
     } catch (error) {
       caught = error
     }
-    expect(caught).toBeInstanceOf(AppError)
+    expect(caught).toBeInstanceOf(HttpError)
     expect(caught).toMatchObject({
-      cause: undefined,
       code: "service_unavailable",
-      privateContext: { operation: "putUpload", provider: "r2" },
-      statusCode: 503,
     })
+    expect(caught).toHaveProperty("cause", raw)
     expect(JSON.stringify(caught)).not.toContain("secret bucket")
     await expect(database.select().from(files)).resolves.toMatchObject([
       { status: "pending" },
@@ -561,10 +560,9 @@ describe("file service", () => {
     ).resolves.toMatchObject([{ usedBytes: 7 }])
   })
 
-  it("redacts Images failures and keeps the image upload pending", async () => {
-    vi.mocked(storage.runtime.images.info).mockRejectedValueOnce(
-      new Error("provider token and private image detail")
-    )
+  it("preserves Images failures and keeps the image upload pending", async () => {
+    const raw = new Error("provider token and private image detail")
+    vi.mocked(storage.runtime.images.info).mockRejectedValueOnce(raw)
     const png = new File(
       [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
       "broken.png",
@@ -578,11 +576,9 @@ describe("file service", () => {
       caught = error
     }
     expect(caught).toMatchObject({
-      cause: undefined,
       code: "service_unavailable",
-      privateContext: { operation: "readImageInfo", provider: "images" },
-      statusCode: 503,
     })
+    expect(caught).toHaveProperty("cause", raw)
     expect(JSON.stringify(caught)).not.toContain("provider token")
     await expect(database.select().from(files)).resolves.toMatchObject([
       { detectedImageFormat: "png", status: "pending" },
@@ -623,8 +619,6 @@ describe("file service", () => {
     ).rejects.toMatchObject({
       cause: undefined,
       code: "service_unavailable",
-      privateContext: { operation: "verifyUploadedObject", provider: "r2" },
-      statusCode: 503,
     })
     expect(storage.runtime.bucket.delete).not.toHaveBeenCalled()
     expect(storage.objects.size).toBe(1)
@@ -795,7 +789,6 @@ describe("file service", () => {
       })
     ).rejects.toMatchObject({
       code: "unsupported_media_type",
-      statusCode: 415,
     })
     expect(storage.runtime.bucket.get).not.toHaveBeenCalled()
 
@@ -819,20 +812,18 @@ describe("file service", () => {
         })
       ).rejects.toMatchObject({
         code: "unsupported_media_type",
-        statusCode: 415,
       })
     }
   })
 
-  it("redacts R2 text preview failures", async () => {
+  it("preserves R2 text preview failures", async () => {
     const result = await upload(
       database,
       new File(["secret-free content"], "notes.txt", { type: "text/plain" }),
       "text-preview-r2-failure"
     )
-    vi.mocked(storage.runtime.bucket.get).mockRejectedValueOnce(
-      new Error("private object key and provider token")
-    )
+    const raw = new Error("private object key and provider token")
+    vi.mocked(storage.runtime.bucket.get).mockRejectedValueOnce(raw)
 
     let caught: unknown
     try {
@@ -846,11 +837,9 @@ describe("file service", () => {
       caught = error
     }
     expect(caught).toMatchObject({
-      cause: undefined,
       code: "service_unavailable",
-      privateContext: { operation: "readTextPreviewObject", provider: "r2" },
-      statusCode: 503,
     })
+    expect(caught).toHaveProperty("cause", raw)
     expect(JSON.stringify(caught)).not.toContain("provider token")
   })
 
@@ -965,7 +954,7 @@ describe("file service", () => {
         request: new Request("https://api.example.test/preview"),
         width: "0360",
       })
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("checks tenant/file authorization before consulting preview cache", async () => {
@@ -978,7 +967,7 @@ describe("file service", () => {
         request: new Request("https://api.example.test/preview"),
         width: "360",
       })
-    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    ).rejects.toMatchObject({ code: "not_found" })
     expect(storage.runtime.cache?.match).not.toHaveBeenCalled()
   })
 

@@ -2,6 +2,7 @@ import * as schema from "@enterprise-agentic-saas/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
+import { HttpError } from "../../errors/http-error"
 import { agentAssetObjectKey } from "../files/public"
 import { updateIssueById } from "../issues/public"
 import { findEffectiveIssueThumbnail } from "../issues/repository-support"
@@ -288,7 +289,6 @@ describe("Agent Issue attachment action transactions", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "stale_revision" },
     })
     expect(
       await db
@@ -380,7 +380,6 @@ describe("Agent Issue attachment action transactions", () => {
       })
     ).rejects.toMatchObject({
       code: "not_found",
-      publicContext: { resource: "agent_asset" },
     })
     const [issue] = await db
       .select({ revision: schema.issues.revision })
@@ -455,12 +454,17 @@ describe("Agent Issue attachment action transactions", () => {
       updatedAt: new Date(),
     })
 
-    await expect(
-      internal.executeApprovedAction({
+    const executionError = await internal
+      .executeApprovedAction({
         grant: run.grant,
         actionId: prepared.id,
       })
-    ).rejects.toMatchObject({ code: "internal_error" })
+      .then(
+        () => undefined,
+        (cause: unknown) => cause
+      )
+    expect(executionError).toBeInstanceOf(Error)
+    expect(executionError).not.toBeInstanceOf(HttpError)
     const [issue] = await db
       .select({ revision: schema.issues.revision })
       .from(schema.issues)

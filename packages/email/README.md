@@ -29,7 +29,7 @@ transport本体はenvを直接読まない。呼び出し側は検証済みのpr
 
 すべての送信inputは固定の`template`識別子を持つ。Cloudflareへ渡すのは`to`、`from`、`subject`、`text`、`html`だけで、tokenを含み得る`renderProps`はtransport payloadや観測eventへ渡さない。accepted/failed eventもtemplate、recipient domain、provider code、retry可否、message IDに限定する。
 
-Mailpit senderはdevelopment専用で、接続先をloopback（`127.0.0.0/8`、`::1`）または `localhost` / `*.localhost` のHTTP(S) URLへ限定する。`POST /api/v1/send` へ渡すfieldは `From`、`To`、`Subject`、`Text`、任意の`HTML`、template識別用`Tags`だけで、`renderProps`は渡さない。Workersで未対応の`redirect: "error"`は使わず`manual`にし、local URL guardの外へredirectを追従しない。response bodyとproviderのraw errorは読み取らず、安全なcode、retry可否、HTTP statusだけを持つerrorへ変換する。requestは5秒でtimeoutする。
+Mailpit senderはdevelopment専用で、接続先をloopback（`127.0.0.0/8`、`::1`）または `localhost` / `*.localhost` のHTTP(S) URLへ限定する。`POST /api/v1/send` へ渡すfieldは `From`、`To`、`Subject`、`Text`、任意の`HTML`、template識別用`Tags`だけで、`renderProps`は渡さない。Workersで未対応の`redirect: "error"`は使わず`manual`にし、local URL guardの外へredirectを追従しない。response bodyは読み取らず、安全なcode、retry可否、HTTP statusだけを公開fieldに持つerrorへ変換する。捕捉した元の例外は`cause`の同一性を保ち、公開本文や通常logへ出さない。固定ローカルでの原因調査はADR-013の専用reporterだけがこの`cause`を扱う。requestは5秒でtimeoutする。
 
 console senderはlocal dev専用で、templateとrecipient domainだけをlogへ出す。`subject`、`text`、`html`、recipient全文、`renderProps` の値はloggerへも渡さない。
 
@@ -45,7 +45,7 @@ rootの `bun run dev` でMailpitも起動し、main checkoutでは `https://mail
 bun run test
 ```
 
-template renderでは共有brand shell、CTA、fallback URL、HTML・plain text・`renderProps` を確認する。senderはCloudflare/Mailpitへ渡すfield allowlist、Mailpitのlocal URL境界、sanitized error、URL/token非出力、error codeのretry分類、production consoleのfail-closed、noopの副作用なしを検証し、実メール送信は行わない。
+template renderでは共有brand shell、CTA、fallback URL、HTML・plain text・`renderProps` を確認する。senderはCloudflare/Mailpitへ渡すfield allowlist、Mailpitのlocal URL境界、sanitized error、元の`cause`の保持、URL/token非出力、error codeのretry分類、production consoleのfail-closed、noopの副作用なしを検証し、実メール送信は行わない。
 
 ## 入れてはいけないもの
 

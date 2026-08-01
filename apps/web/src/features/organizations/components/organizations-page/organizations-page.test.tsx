@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console"
+import { httpError } from "@/test-support/http-error"
 
 import type { OrganizationSummary } from "../../schema"
 import { OrganizationsPage } from "./organizations-page"
@@ -74,7 +74,7 @@ const permissions = {
   canInviteMembers: true,
   canManageMembers: true,
   canManageAdmins: true,
-  canTransferSuperAdmin: true,
+  canTransferOwnership: true,
 }
 
 const organizations: OrganizationSummary[] = [
@@ -82,7 +82,7 @@ const organizations: OrganizationSummary[] = [
     id: "org-acme",
     name: "Acme",
     slug: "acme",
-    role: "super_admin" as const,
+    role: "owner" as const,
     active: true,
     profileImage: null,
     memberCount: 2,
@@ -151,9 +151,9 @@ describe("OrganizationsPage", () => {
       },
     ])
 
-    expect(
-      screen.getByTestId("organization-role-super_admin")
-    ).toHaveTextContent("Super Admin")
+    expect(screen.getByTestId("organization-role-owner")).toHaveTextContent(
+      "Owner"
+    )
     expect(screen.getByTestId("organization-role-admin")).toHaveTextContent(
       "Admin"
     )
@@ -215,7 +215,7 @@ describe("OrganizationsPage", () => {
         id: "org-invitations",
         name: "Invitation Operations",
         slug: "invitations",
-        role: "super_admin",
+        role: "owner",
         active: true,
         profileImage: null,
         memberCount: 2,
@@ -280,16 +280,9 @@ describe("OrganizationsPage", () => {
     expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
   })
 
-  it("keeps create input and renders API field errors below it", async () => {
+  it("keeps create input and renders fixed failure copy", async () => {
     const actor = userEvent.setup()
-    mocks.createOrganization.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "validation_failed",
-        fieldErrors: { slug: ["This slug is already in use."] },
-        message: "Fix the highlighted field.",
-        status: 409,
-      })
-    )
+    mocks.createOrganization.mockRejectedValueOnce(httpError(409, "conflict"))
     renderOrganizations()
 
     await actor.click(
@@ -302,36 +295,23 @@ describe("OrganizationsPage", () => {
     )
 
     expect(
-      await screen.findByText("This slug is already in use.")
-    ).toBeInTheDocument()
+      await screen.findByText("The organization could not be created.")
+    ).toBeVisible()
     expect(screen.getByLabelText("Name")).toHaveValue("New Team")
     const slug = screen.getByLabelText("Slug")
     expect(slug).toHaveValue("new-team")
-    expect(slug).toHaveAccessibleDescription(/This slug is already in use\./u)
-    expect(
-      screen.queryByText("Fix the highlighted field.")
-    ).not.toBeInTheDocument()
 
     await actor.type(slug, "-edited")
 
     expect(
-      screen.queryByText("This slug is already in use.")
+      screen.queryByText("The organization could not be created.")
     ).not.toBeInTheDocument()
-    expect(slug).not.toHaveAccessibleDescription(
-      /This slug is already in use\./u
-    )
   })
 
-  it("shows a safe retry and support reference when switching fails", async () => {
+  it("shows fixed recovery copy when switching fails", async () => {
     const actor = userEvent.setup()
     mocks.activateOrganization.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "service_unavailable",
-        context: { retryAfter: 4 },
-        message: "Organization service is temporarily unavailable.",
-        requestId: "req_switch_01",
-        status: 503,
-      })
+      httpError(503, "service_unavailable")
     )
     renderOrganizations()
 
@@ -339,9 +319,9 @@ describe("OrganizationsPage", () => {
 
     await waitFor(() => {
       expect(mocks.toastError).toHaveBeenCalledWith(
-        "Organization service is temporarily unavailable.",
+        "Could not switch organization",
         {
-          description: "Try again in 4 seconds. Reference ID: req_switch_01",
+          description: "Try again. If the problem continues, contact support.",
         }
       )
     })

@@ -1,4 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { createObservedLogger } from "../../platform/observability/runtime"
 import type { IssuePriority, IssueStatus, ListIssuesInput } from "./domain"
 import type { IssuesPorts } from "./ports"
@@ -9,7 +9,12 @@ const issueListLogger = createObservedLogger("issues").child("list")
 const normalizeRequired = (value: string, field: string) => {
   const normalized = value.trim()
   if (!normalized) {
-    throw publicErrors.validation(`${field} is required`, { field })
+    const message = `${field} is required.`
+    throw new HttpError({
+      code: "validation_error",
+      fieldErrors: { [field]: [message] },
+      publicMessage: message,
+    })
   }
   return normalized
 }
@@ -25,8 +30,10 @@ const parseDueDate = (value: string | null | undefined) => {
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime()) || date.toISOString() !== value) {
-    throw publicErrors.validation("Invalid due date and time", {
-      field: "dueDate",
+    throw new HttpError({
+      code: "validation_error",
+      fieldErrors: { dueDate: ["Enter a valid date and time."] },
+      publicMessage: "Enter a valid due date and time.",
     })
   }
   return date
@@ -43,10 +50,13 @@ const createIssueReadService = (ports: IssuesPorts) => {
       organizationId: input.organizationId,
     })
     if (!membership) {
-      throw publicErrors.validation(
-        "Assignee must be a member of the organization",
-        { field: "assigneeId", reason: "not_a_member" }
-      )
+      throw new HttpError({
+        code: "validation_error",
+        fieldErrors: {
+          assigneeId: ["Choose a member of this organization."],
+        },
+        publicMessage: "The assignee must be an organization member.",
+      })
     }
   }
 
@@ -105,7 +115,7 @@ const createIssueReadService = (ports: IssuesPorts) => {
     await ports.requireMembership(input)
     const issue = await ports.findIssue(input)
     if (!issue) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     return issue
   }
@@ -118,7 +128,7 @@ const createIssueReadService = (ports: IssuesPorts) => {
     await ports.requireMembership(input)
     const issue = await ports.findIssueByNumber(input)
     if (!issue) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     return issue
   }
@@ -155,8 +165,10 @@ const createIssueReadService = (ports: IssuesPorts) => {
         ? decodeIssueTimelineCursor(input.cursor)
         : undefined
     } catch {
-      throw publicErrors.validation("Invalid timeline cursor", {
-        field: "cursor",
+      throw new HttpError({
+        code: "validation_error",
+        fieldErrors: { cursor: ["The cursor is invalid."] },
+        publicMessage: "The timeline cursor is invalid.",
       })
     }
 
@@ -237,7 +249,10 @@ const createIssueMutationService = (
       input.dueDate,
     ]
     if (changes.every((value) => value === undefined)) {
-      throw publicErrors.validation("No issue changes provided")
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "Provide at least one issue change.",
+      })
     }
 
     const issue = await ports.updateIssue({
@@ -258,7 +273,7 @@ const createIssueMutationService = (
     })
 
     if (!issue) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     return issue
   }
@@ -271,10 +286,10 @@ const createIssueMutationService = (
     const membership = await ports.requireMembership(input)
     const current = await ports.findIssue(input)
     if (!current) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     if (membership.role === "member" && current.creatorId !== input.userId) {
-      throw publicErrors.forbidden("Only the creator or an admin can delete")
+      throw new HttpError({ code: "forbidden" })
     }
 
     const issue = await ports.deleteIssue({
@@ -283,7 +298,7 @@ const createIssueMutationService = (
       actorUserId: input.userId,
     })
     if (!issue) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     return issue
   }
@@ -330,12 +345,10 @@ const createIssueMutationService = (
     const membership = await ports.requireMembership(input)
     const current = await ports.findComment(input)
     if (!current) {
-      throw publicErrors.notFound("Comment not found", {
-        resource: "issue_comment",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     if (membership.role === "member" && current.authorId !== input.userId) {
-      throw publicErrors.forbidden("Only the author or an admin can edit")
+      throw new HttpError({ code: "forbidden" })
     }
 
     const comment = await ports.updateComment({
@@ -346,9 +359,7 @@ const createIssueMutationService = (
       body: normalizeRequired(input.body, "body"),
     })
     if (!comment) {
-      throw publicErrors.notFound("Comment not found", {
-        resource: "issue_comment",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     return comment
   }
@@ -362,12 +373,10 @@ const createIssueMutationService = (
     const membership = await ports.requireMembership(input)
     const current = await ports.findComment(input)
     if (!current) {
-      throw publicErrors.notFound("Comment not found", {
-        resource: "issue_comment",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     if (membership.role === "member" && current.authorId !== input.userId) {
-      throw publicErrors.forbidden("Only the author or an admin can delete")
+      throw new HttpError({ code: "forbidden" })
     }
 
     const comment = await ports.deleteComment({
@@ -377,9 +386,7 @@ const createIssueMutationService = (
       actorUserId: input.userId,
     })
     if (!comment) {
-      throw publicErrors.notFound("Comment not found", {
-        resource: "issue_comment",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     return comment
   }
@@ -398,7 +405,7 @@ const createIssueMutationService = (
       organizationId: input.organizationId,
     })
     if (!thumbnail) {
-      throw publicErrors.notFound("Issue not found", { resource: "issue" })
+      throw new HttpError({ code: "not_found" })
     }
     return thumbnail
   }

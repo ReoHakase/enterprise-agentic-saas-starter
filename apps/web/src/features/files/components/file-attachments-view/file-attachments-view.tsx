@@ -52,7 +52,7 @@ type FileAttachmentsViewProps = {
   filesPending: boolean
   filesError: boolean
   retryList: () => void
-  requestDelete: (file: FileDto) => void
+  requestDelete: (file: FileDto, trigger: HTMLButtonElement) => void
   requestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
   selectThumbnail: (fileId: string) => void
   thumbnailGroupName: string
@@ -66,6 +66,7 @@ type FileAttachmentsViewProps = {
   selectPreviewFile: (fileId: string) => void
   closePreview: () => void
   fileToDelete: FileDto | null
+  deleteTriggerRef: RefObject<HTMLElement | null>
   handleDeleteOpenChange: (open: boolean) => void
   deletePending: boolean
   confirmDelete: () => void
@@ -106,6 +107,7 @@ const FileAttachmentsView = ({
   selectPreviewFile,
   closePreview,
   fileToDelete,
+  deleteTriggerRef,
   handleDeleteOpenChange,
   deletePending,
   confirmDelete,
@@ -274,7 +276,7 @@ const FileAttachmentsView = ({
       open={fileToDelete !== null}
       onOpenChange={handleDeleteOpenChange}
     >
-      <AlertDialogContent>
+      <AlertDialogContent finalFocus={deleteTriggerRef}>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this file?</AlertDialogTitle>
           <AlertDialogDescription>

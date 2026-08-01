@@ -10,7 +10,7 @@ const auditActionModel = v.picklist([
   "organization.created",
   "organization.updated",
   "organization.member.role_updated",
-  "organization.super_admin.transferred",
+  "organization.owner.transferred",
   "organization.member.removed",
   "organization.invitation.created",
   "organization.invitation.resent",

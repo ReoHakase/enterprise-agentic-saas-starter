@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import * as v from "valibot"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { errorPlugin } from "../../platform/plugins/error"
 import { observabilityPlugin } from "../../platform/plugins/observability"
 import { requestIdPlugin } from "../../platform/plugins/request-id"
@@ -19,7 +19,6 @@ import {
   issueSearchQueryModel,
   labelSearchQueryModel,
   memberSearchQueryModel,
-  memoryCommitSettlementBodyModel,
   prepareIssueActionBodyModel,
   recordUsageBodyModel,
   reserveWebSearchBodyModel,
@@ -33,7 +32,7 @@ const bearerGrant = (request: Request): string => {
   const result = v.safeParse(agentInternalAuthorizationModel, {
     authorization: request.headers.get("authorization") ?? "",
   })
-  if (!result.success) throw publicErrors.unauthorized()
+  if (!result.success) throw new HttpError({ code: "unauthorized" })
   return result.output.authorization.slice("Bearer ".length)
 }
 
@@ -57,20 +56,12 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
         /^\/internal\/agent\/actions\/[A-Za-z0-9_-]{1,128}\/resume$/u.test(
           url.pathname
         )
-      const isMemoryCommitSettlement =
-        request.method === "POST" &&
-        url.pathname === "/internal/agent/memory/commit-settlement"
-      if (!isTicketConsume && !isActionResume && !isMemoryCommitSettlement) {
+      if (!isTicketConsume && !isActionResume) {
         bearerGrant(request)
       }
     })
     .group("/internal/agent", (app) =>
       app
-        .post(
-          "/memory/commit-settlement",
-          ({ body }) => service.settleMemoryCommit(body),
-          { body: memoryCommitSettlementBodyModel }
-        )
         .post(
           "/connections/consume",
           ({ body }) => service.consumeConnectionTicket(body),

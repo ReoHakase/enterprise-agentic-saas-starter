@@ -62,18 +62,21 @@ bun run dev
 
 ## Validation
 
-API routeのbody/query/params/responseと環境変数はValibotへ統一します。route modelはStandard SchemaとしてElysiaへ直接渡し、OpenAPIは`@valibot/to-json-schema` mapperで生成します。request validationは400 `validation_error`と安全な`fieldErrors`へ正規化し、422は返しません。
+API routeのbody/query/params/responseと環境変数はValibotへ統一します。route modelはStandard SchemaとしてElysiaへ直接渡し、OpenAPIは`@valibot/to-json-schema` mapperで生成します。request validationは400 `validation_error`へ正規化し、422は返しません。
 
 Eden clientはoptionsをspreadした後で`parseDate: false`を固定し、consumerから上書きできません。issue due dateの公開値はISO timestampまたは`null`、DB内部は`timestamp_ms`です。実HTTP transport testでdue dateとtimestampが文字列のまま届くことを確認します。
 
 ## API documentation
 
 - Scalar API Reference: `/openapi`
-- app routeとBetter Auth routeを統合したOpenAPI 3.0.3 JSON: `/openapi/json`
+- アプリケーション所有ルートだけのOpenAPI 3.0.3 JSON: `/openapi/json`
+- Better Authが生成するOpenAPI 3.1.1 JSON: `/auth/open-api/generate-schema`
 - liveness: `/health`
 - Turso/libSQL readiness: `/ready`
 
-各routeは `operationId`、tag、request/response schema、共通error schema、cookie securityを持つ。Better Authの実plugin構成から生成したpathは `/auth` prefixで同じdocumentへ統合し、`disabledPaths` のrouteは掲載しない。個別の `/auth/reference` は404にしてdocumentationの正本を増やさない。
+各routeは`operationId`、tag、request/response schema、共通error schema、cookie securityを持つ。
+Better Authの実plugin構成から生成した仕様は変換せず独立公開し、Scalarの`source`でアプリケーション仕様と
+切り替える。個別の`/auth/reference`は404を維持する。
 
 Scalarはagent upload、telemetry、local auth persistence、外部default fontを無効化する。try-outではBetter AuthのSecure/HttpOnly cookieをUIへ貼り付けず、同一originのbrowser credentialとして送る。
 
@@ -89,22 +92,16 @@ Better Authのfresh sessionは15分。`step_up_required` (403) を受けたclien
 
 ```json
 {
-  "error": {
-    "code": "step_up_required",
-    "message": "Recent authentication required",
-    "context": {
-      "action": "organization.transfer_super_admin",
-      "maxAgeSeconds": 900,
-      "reason": "session_not_fresh"
-    },
-    "requestId": "..."
-  }
+  "error": "step_up_required",
+  "message": "Recent authentication is required."
 }
 ```
 
-`super_admin`移管は通常のmember role PATCHから分離する。`POST /organizations/:organizationId/ownership-transfer` へtarget `memberId` とtarget member emailの完全一致 `confirmation` を送り、fresh sessionを要求する。member削除もtarget email確認とfresh sessionが必要。
+request IDは`x-request-id`、再試行情報は必要な場合だけ`Retry-After`へ返す。
 
-organization削除は`DELETE /organizations/:organizationId`と専用`organizationDeletionAccess` macroを使います。通常はactive organization、`super_admin`、fresh session、slug完全一致、`DELETE`確認、opaqueな冪等性keyを必須にします。削除済みorganizationへの同一request retryだけはactor・organization・key完全一致のjobを確認し、fresh sessionを再要求して同じreceiptを返します。別actor/key/organizationは許可しません。
+`owner`移管は通常のmember role PATCHから分離する。`POST /organizations/:organizationId/ownership-transfer`へ移管先の`memberId`とmember emailの完全一致`confirmation`を送り、新しいsessionを要求する。member削除も対象emailの確認と新しいsessionが必要。
+
+organization削除は`DELETE /organizations/:organizationId`と専用`organizationDeletionAccess` macroを使います。通常はactive organization、`owner`、新しいsession、slug完全一致、`DELETE`確認、opaqueな冪等性keyを必須にします。削除済みorganizationへの同一request retryだけはactor・organization・key完全一致のjobを確認し、新しいsessionを再要求して同じreceiptを返します。別actor/key/organizationは許可しません。
 
 DB transactionはPIIを持たないcleanup jobを先に保存し、対象をactiveにする全sessionをnullへ戻してorganizationをhard deleteします。tenant rowはcascadeで即時削除し、外部keyを持たないjobは残します。Cloudflare cronがR2のorganization prefixをlease/backoff付きで冪等削除します。job/tenant/user IDをproduction logやremote telemetryへ出しません。
 
@@ -132,7 +129,7 @@ UserとOrganizationの画像はapp境界で`profileImage`に統一し、Better A
 
 browserから受け取るcrop済みPNGはmagic bytes、5,000,000 bytes上限、512x512を再検証し、Cloudflare Imagesで512x512 WebP quality 85へ正規化してprivate `FILES` R2へ保存します。安定したfirst-party routeとopaqueな`?v={profileImageId}`だけをauth tableへ戻し、R2 key、source hash、upload ID、ETag、置換前URLは`profile_images`へ閉じます。同一upload IDの別内容は409、同じready内容は冪等retry、置換・削除済みのupload IDは`superseded` tombstoneへ収束し、並行更新は最後に開始した有効なuploadを採用します。
 
-Organization更新はactive organizationの`super_admin`だけを許可し、finalize/delete transactionでもmembership、active session、roleを再検証します。Organization表示はmembershipを確認して他tenantを404にし、User表示は認証済みsessionへ許可します。配信はETag/304、`Cache-Control: private, no-cache`、`nosniff`、same-site CORPを返します。置換・削除・期限切れpendingのobjectは`profile_image_cleanup_jobs`へ保存し、cronがlease/backoff付きで再試行します。
+Organization更新はactive organizationの`owner`だけを許可し、finalize/delete transactionでもmembership、active session、roleを再検証します。Organization表示はmembershipを確認して他tenantを404にし、User表示は認証済みsessionへ許可します。配信はETag/304、`Cache-Control: private, no-cache`、`nosniff`、same-site CORPを返します。置換・削除・期限切れpendingのobjectは`profile_image_cleanup_jobs`へ保存し、cronがlease/backoff付きで再試行します。
 
 ## テスト
 
@@ -142,7 +139,7 @@ bun run test
 
 API integration は `createApp(testDb())` と `app.handle(new Request(...))` を使う。テストは `@enterprise-agentic-saas/auth` / `@enterprise-agentic-saas/db` を import しないため起動が軽い。
 
-security testでは401/403/404、active tenant不一致、tenant leak非開示、stale session、admin権限昇格、single `super_admin` invariant、同時issue採番、cross-tenant commentを確認する。organization削除は非super admin、stale session、確認不一致、exact replay、key衝突、cascade、session null、job残存、R2 retryを別々に固定する。
+security testでは401/403/404、active tenant不一致、tenant leak非開示、stale session、admin権限昇格、単一`owner`不変条件、同時issue採番、cross-tenant commentを確認する。organization削除は非owner、stale session、確認不一致、exact replay、key衝突、cascade、session null、job残存、R2 retryを別々に固定する。
 
 ## 入れてはいけないもの
 

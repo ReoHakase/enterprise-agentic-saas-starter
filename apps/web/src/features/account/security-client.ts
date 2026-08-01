@@ -1,25 +1,7 @@
-import { parseSafeAuthError, type PublicAuthErrorCode } from "@/features/auth"
+import { safeAuthErrorMessage } from "@/features/auth"
 
 import type { SecurityMethods } from "./schema"
 import { parseSecurityMethods } from "./schema"
-
-const authenticationRequestFailedMessage = "Authentication request failed"
-
-class SecurityMutationError extends Error {
-  readonly code?: PublicAuthErrorCode
-
-  constructor({
-    code,
-    message,
-  }: {
-    code?: PublicAuthErrorCode
-    message: string
-  }) {
-    super(message)
-    this.name = "SecurityMutationError"
-    this.code = code
-  }
-}
 
 export type SecurityAuthCapabilities = {
   listAccounts?: () => Promise<unknown>
@@ -104,7 +86,7 @@ export const createSecurityAuthCapabilities = (
 
 const unwrapAuthResult = (result: unknown): unknown => {
   if (isObjectRecord(result) && "error" in result && result.error) {
-    throw securityMutationError(result)
+    throw result.error
   }
   if (isObjectRecord(result) && "data" in result) {
     return result.data
@@ -112,30 +94,18 @@ const unwrapAuthResult = (result: unknown): unknown => {
   return result
 }
 
-const securityMutationError = (error: unknown) =>
-  new SecurityMutationError(
-    parseSafeAuthError(error, authenticationRequestFailedMessage)
-  )
+const settleAuthRequest = (request: Promise<unknown>) => request
 
-const settleAuthRequest = async (request: Promise<unknown>) => {
-  try {
-    return await request
-  } catch (error) {
-    if (error instanceof SecurityMutationError) throw error
-    throw securityMutationError(error)
-  }
+export const securityMutationErrorCode = (error: unknown) => {
+  if (!isObjectRecord(error)) return undefined
+  const code = error.code
+  return typeof code === "string" ? code : undefined
 }
-
-export const securityMutationErrorCode = (error: unknown) =>
-  error instanceof SecurityMutationError ? error.code : undefined
 
 export const securityMutationErrorMessage = (
   error: unknown,
   fallback: string
-) =>
-  error instanceof SecurityMutationError && error.code
-    ? error.message
-    : fallback
+) => safeAuthErrorMessage(error, fallback)
 
 export const hasSecurityMethodsCapability = (
   capabilities: SecurityAuthCapabilities

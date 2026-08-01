@@ -12,7 +12,8 @@ export type RunSettlement = {
 
 export const createRunSettlement = (
   api: RunSettlementApi,
-  runGrant: string
+  runGrant: string,
+  onFailure?: (cause: unknown) => void
 ): RunSettlement => {
   let state: "held" | "open" | "settled" = "open"
 
@@ -26,8 +27,14 @@ export const createRunSettlement = (
         return (await api.cancelRun({ grant: runGrant })).status
       }
       return (await api.finishRun({ grant: runGrant, outcome })).status
-    } catch {
+    } catch (cause) {
       // API側のexpiry/reconcileを正本にし、provider payloadやgrantをlogへ出さない。
+      try {
+        onFailure?.(cause)
+      } catch (reportingCause) {
+        void reportingCause
+        // 観測境界の失敗でrunのbest-effort精算を再失敗させない。
+      }
       return null
     }
   }

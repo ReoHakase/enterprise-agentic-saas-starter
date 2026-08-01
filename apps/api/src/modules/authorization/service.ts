@@ -1,4 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { AuthorizationPorts, MembershipQuery } from "./ports"
 import type { OrganizationRole } from "./roles"
 
@@ -9,9 +9,7 @@ export const createAuthorizationService = (ports: AuthorizationPorts) => {
     const membership = await getMembership(input)
     if (!membership) {
       // organizationの存在と「他tenantに存在する」ことを区別させない。
-      throw publicErrors.notFound("Organization not found", {
-        resource: "organization",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     return membership
   }
@@ -24,10 +22,7 @@ export const createAuthorizationService = (ports: AuthorizationPorts) => {
   ) => {
     const membership = await requireMembership(input)
     if (!input.allow.includes(membership.role)) {
-      throw publicErrors.forbidden(
-        "You are not allowed to perform this action",
-        { action: input.action }
-      )
+      throw new HttpError({ code: "forbidden" })
     }
     return membership
   }

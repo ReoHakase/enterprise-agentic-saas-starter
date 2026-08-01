@@ -12,6 +12,7 @@ import { toast } from "sonner"
 import { issueKeys } from "@/features/issues"
 import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { clientEnv } from "@/lib/env.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { createAgentChatTransport } from "../chat-transport"
 import { executeAgentClientTool } from "../client-tools"
@@ -84,15 +85,12 @@ const useAgentToolCall = ({
           output,
         })
       } catch (error) {
-        const errorText =
-          error instanceof Error && error.message.trim().length > 0
-            ? error.message
-            : "Client tool failed."
+        reportObservedError(error)
         void addToolOutput({
           tool: toolName,
           toolCallId: toolCall.toolCallId,
           state: "output-error",
-          errorText: errorText.slice(0, 500),
+          errorText: "Client tool failed.",
         })
       }
     },
@@ -268,13 +266,17 @@ export const useAgentController = ({
     setSendingAssetIds,
     threadId: thread.id,
   })
-  const { ensureLocalStop, isCancelRequested, stopCurrentTurn } = stopLifecycle
+  const {
+    ensureLocalStop,
+    isCancelRequested,
+    observeMessages,
+    stopCurrentTurn,
+  } = stopLifecycle
   const chat = useChat<AgentChatMessage>({
     id: thread.id,
     messages: initialMessages,
     transport,
     onToolCall: handleToolCall,
-    onData: stopLifecycle.onData,
     onError: stopLifecycle.onError,
     onFinish: (event) => {
       if (stopLifecycle.interceptFinish(event)) return
@@ -283,6 +285,9 @@ export const useAgentController = ({
     sendAutomaticallyWhen: shouldAutoContinueAgentClientTools,
   })
   stopLifecycle.bindChat(chat)
+  useEffect(() => {
+    observeMessages(chat.messages)
+  }, [chat.messages, observeMessages])
   useEffect(() => {
     if (stopLifecycle.turnStopped && chat.error) chat.clearError()
   }, [chat, stopLifecycle.turnStopped])

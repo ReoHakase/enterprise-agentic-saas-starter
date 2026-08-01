@@ -26,7 +26,6 @@ class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
       createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
       mastra: composition.mastra,
       requireModelCredential: false,
-      threadTitleAgent: composition.threadTitleAgent,
       toControlFailure: toAgentControlFailure,
     })
   }

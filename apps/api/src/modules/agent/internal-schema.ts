@@ -1,4 +1,3 @@
-import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
 import { FILE_LIST_MAX_LIMIT } from "../files/public"
@@ -37,8 +36,6 @@ const limitQueryModel = v.optional(
 )
 
 export const emptyBodyModel = v.strictObject({})
-export const memoryCommitSettlementBodyModel =
-  agentMemoryCommitSettlementInputSchema
 export const startRunBodyModel = v.omit(startAgentRunInputModel, ["grant"])
 export const reserveWebSearchBodyModel = v.omit(
   reserveAgentWebSearchInputModel,

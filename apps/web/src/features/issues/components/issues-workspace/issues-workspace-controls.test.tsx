@@ -74,7 +74,6 @@ const filterDefaults = {
   dueTo: "",
   dueFromOffset: 0,
   dueToOffset: 0,
-  dueOffset: 0,
   page: 1,
 } as const
 

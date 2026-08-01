@@ -25,6 +25,7 @@ import {
   issueThumbnailQueryOptions,
 } from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { deleteFile, type FileOwnerType } from "../../api"
 import { useFilesController } from "../../hooks/use-files-controller"
@@ -45,6 +46,7 @@ export const FileAttachments = ({
   const queryClient = useQueryClient()
   const thumbnailGroupName = useId()
   const inputRef = useRef<HTMLInputElement>(null)
+  const deleteTriggerRef = useRef<HTMLElement | null>(null)
   const previewTriggerRef = useRef<HTMLElement | null>(null)
   const [fileToDelete, setFileToDelete] = useState<FileDto | null>(null)
   const [previewFileId, setPreviewFileId] = useState<string | null>(null)
@@ -82,7 +84,8 @@ export const FileAttachments = ({
   const notifyFilesChanged = useCallback(async () => {
     try {
       await onFilesChanged?.()
-    } catch {
+    } catch (error) {
+      reportObservedError(error, { operation: "file.timeline.refresh" })
       // The file mutation remains authoritative when a parent timeline refresh
       // fails. Its normal query retry path can reconcile the stale timeline.
     }
@@ -182,9 +185,13 @@ export const FileAttachments = ({
     },
     [addFiles]
   )
-  const requestDelete = useCallback((file: FileDto) => {
-    setFileToDelete(file)
-  }, [])
+  const requestDelete = useCallback(
+    (file: FileDto, trigger: HTMLButtonElement) => {
+      deleteTriggerRef.current = trigger
+      setFileToDelete(file)
+    },
+    []
+  )
   const requestPreview = useCallback(
     (file: FileDto, trigger: HTMLButtonElement) => {
       previewTriggerRef.current = trigger
@@ -270,6 +277,7 @@ export const FileAttachments = ({
       selectPreviewFile={selectPreviewFile}
       closePreview={closePreview}
       fileToDelete={fileToDelete}
+      deleteTriggerRef={deleteTriggerRef}
       handleDeleteOpenChange={handleDeleteOpenChange}
       deletePending={deletePending}
       confirmDelete={confirmDelete}

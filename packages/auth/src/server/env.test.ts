@@ -75,7 +75,7 @@ describe("authentication email environment", () => {
     setRequiredEnv("")
     vi.stubEnv(
       "GITHUB_OAUTH_EMULATOR_URL",
-      " http://github.emulate.enterprise-agentic-saas.localhost:4001/ "
+      " http://github.emulate.enterprise-agentic-saas.localhost:4001/emulate/github "
     )
     vi.stubEnv("GITHUB_CLIENT_ID", "real-production-client")
     vi.stubEnv("GITHUB_CLIENT_SECRET", "real-production-secret")
@@ -85,7 +85,7 @@ describe("authentication email environment", () => {
     expect(githubOAuthEnvironment).toEqual({
       mode: "emulator",
       emulatorUrl:
-        "http://github.emulate.enterprise-agentic-saas.localhost:4001",
+        "http://github.emulate.enterprise-agentic-saas.localhost:4001/emulate/github",
       clientId: "enterprise-agentic-saas-local",
       clientSecret: "enterprise-agentic-saas-local-secret",
     })
@@ -93,7 +93,9 @@ describe("authentication email environment", () => {
 
   it.each([
     "https://github.com",
-    "http://localhost:4001/user",
+    "http://localhost:4001",
+    "http://localhost:4001/emulate/github/",
+    "http://localhost:4001/emulate/gitlab",
     "http://user:secret@localhost:4001",
     "http://localhost:4001?token=secret",
   ])("rejects the unsafe emulator URL %s", async (emulatorUrl) => {
@@ -101,14 +103,17 @@ describe("authentication email environment", () => {
     vi.stubEnv("GITHUB_OAUTH_EMULATOR_URL", emulatorUrl)
 
     await expect(import("./env")).rejects.toThrow(
-      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback root URL"
+      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback /emulate/github base URL"
     )
   })
 
   it("fails closed when the emulator is configured in production", async () => {
     setRequiredEnv("")
     vi.stubEnv("NODE_ENV", "production")
-    vi.stubEnv("GITHUB_OAUTH_EMULATOR_URL", "http://localhost:4001")
+    vi.stubEnv(
+      "GITHUB_OAUTH_EMULATOR_URL",
+      "http://localhost:4001/emulate/github"
+    )
 
     await expect(import("./env")).rejects.toThrow(
       "GITHUB_OAUTH_EMULATOR_URL must not be set in production"

@@ -98,9 +98,10 @@ export class EmailDeliveryError extends Error {
   constructor(
     code: CloudflareEmailErrorCode,
     retryable: boolean,
-    field?: "from" | "to"
+    field?: "from" | "to",
+    cause?: unknown
   ) {
-    super("Email delivery failed")
+    super("Email delivery failed", { cause })
     this.name = "EmailDeliveryError"
     this.code = code
     this.retryable = retryable
@@ -163,7 +164,7 @@ export const createCloudflareEmailSender = ({
         code,
         retryable,
       })
-      throw new EmailDeliveryError(code, retryable)
+      throw new EmailDeliveryError(code, retryable, undefined, error)
     }
   }
 }

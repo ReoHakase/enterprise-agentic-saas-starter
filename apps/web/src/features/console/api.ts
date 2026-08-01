@@ -5,20 +5,13 @@ import {
   parseUserProfile,
   parseUserSessions,
 } from "@/features/account"
-import {
-  parseBulkInvitationResponse,
-  parseInvitations,
-  parseMembers,
-  parseResendInvitationResponse,
-} from "@/features/members"
+import { parseInvitations, parseMembers } from "@/features/members"
 import {
   parseOrganizationDeletionReceipt,
   parseOrganization,
   parseOrganizations,
   type OrganizationRole,
 } from "@/features/organizations"
-
-import { ConsoleApiError, toConsoleApiError } from "./error"
 
 type ConsoleApiOptions = {
   baseUrl: string
@@ -41,22 +34,9 @@ type EdenResult<T> =
     }
 
 const unwrap = <T>(result: EdenResult<T>): T => {
-  if (result.error) {
-    throw toConsoleApiError(result.error, result.status)
-  }
-
-  if (result.data === null || result.data === undefined) {
-    throw new ConsoleApiError({
-      code: "invalid_response",
-      message: "API response did not include data",
-      status: result.status,
-    })
-  }
-
+  if (result.error) throw result.error
   return result.data
 }
-
-export { ConsoleApiError, toConsoleApiError } from "./error"
 
 export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
   const client = createApiClient(baseUrl, {
@@ -127,7 +107,7 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
     updateMemberRole: async (
       organizationId: string,
       memberId: string,
-      role: Exclude<OrganizationRole, "super_admin">
+      role: Exclude<OrganizationRole, "owner">
     ) =>
       parseMembers(
         unwrap(
@@ -137,7 +117,7 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
             .patch({ role })
         )
       ),
-    transferSuperAdmin: async (
+    transferOwnership: async (
       organizationId: string,
       body: { memberId: string; confirmation: string }
     ) => {
@@ -165,33 +145,12 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
             .invitations.get({ fetch: { signal } })
         )
       ),
-    createInvitations: async (
-      organizationId: string,
-      body: {
-        emails: string[]
-        role: Exclude<OrganizationRole, "super_admin">
-      }
-    ) =>
-      parseBulkInvitationResponse(
-        unwrap(
-          await client.organizations({ organizationId }).invitations.post(body)
-        )
-      ),
     cancelInvitation: async (organizationId: string, invitationId: string) =>
       unwrap(
         await client
           .organizations({ organizationId })
           .invitations({ invitationId })
           .delete()
-      ),
-    resendInvitation: async (organizationId: string, invitationId: string) =>
-      parseResendInvitationResponse(
-        unwrap(
-          await client
-            .organizations({ organizationId })
-            .invitations({ invitationId })
-            .resend.post()
-        )
       ),
   }
 }

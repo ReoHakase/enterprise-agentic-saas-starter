@@ -30,8 +30,8 @@ export const Ready = meta.story({
       http.get("*/me/sessions", () => HttpResponse.json(fictionalSessions))
     )
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Cancel revoking every other session", async () => {
       const trigger = await canvas.findByRole("button", {
@@ -73,7 +73,10 @@ export const RetrySuccess = meta.story({
         attempt += 1
         return attempt === 1
           ? HttpResponse.json(
-              { message: "Temporary session failure." },
+              {
+                error: "validation_error",
+                message: "Temporary session failure.",
+              },
               { status: 400 }
             )
           : HttpResponse.json(fictionalSessions)

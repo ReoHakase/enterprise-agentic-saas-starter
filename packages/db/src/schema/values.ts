@@ -91,16 +91,6 @@ export const organizationDeletionJobStatuses = [
 export type OrganizationDeletionJobStatus =
   (typeof organizationDeletionJobStatuses)[number]
 
-export const invitationEmailJobStatuses = [
-  "pending",
-  "processing",
-  "failed",
-  "completed",
-  "canceled",
-] as const
-export type InvitationEmailJobStatus =
-  (typeof invitationEmailJobStatuses)[number]
-
 export const agentThreadStatuses = ["active", "archived"] as const
 export type AgentThreadStatus = (typeof agentThreadStatuses)[number]
 

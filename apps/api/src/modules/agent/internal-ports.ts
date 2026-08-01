@@ -9,8 +9,6 @@ import type {
   AgentIssueDetail,
   AgentIssueLabel,
   AgentMember,
-  AgentMemoryCommitSettlement,
-  AgentMemoryCommitSettlementInput,
   AgentOrganizationContext,
   AgentRunGrant,
   AgentRunResult,
@@ -25,9 +23,6 @@ import type {
 type AgentGrantInput = { grant: string }
 
 export type AgentInternalPorts = {
-  settleMemoryCommit(
-    input: AgentMemoryCommitSettlementInput
-  ): Promise<AgentMemoryCommitSettlement>
   cancelRun(input: AgentGrantInput): Promise<AgentRunResult>
   consumeConnectionTicket(input: {
     threadId: string

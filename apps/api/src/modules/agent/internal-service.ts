@@ -1,7 +1,6 @@
-import { agentMemoryCommitSettlementInputSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { createObservedLogger } from "../../platform/observability/runtime"
 import {
   executeApprovedActionInputModel,
@@ -39,19 +38,12 @@ const parseInternalInput = <
   const result = v.safeParse(schema, input)
   if (!result.success) {
     // Valibot issueには入力値が含まれ得る。HTTP境界へtokenを含むcauseを渡さない。
-    throw publicErrors.validation("Invalid agent request")
+    throw new HttpError({ code: "validation_error" })
   }
   return result.output
 }
 
 export const createAgentInternalService = (ports: AgentInternalPorts) => ({
-  settleMemoryCommit(
-    input: v.InferInput<typeof agentMemoryCommitSettlementInputSchema>
-  ) {
-    return ports.settleMemoryCommit(
-      parseInternalInput(agentMemoryCommitSettlementInputSchema, input)
-    )
-  },
   cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
     return ports.cancelRun(parseInternalInput(agentGrantInputModel, input))
   },

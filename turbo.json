@@ -101,7 +101,8 @@
     },
     "test:browser": {
       "dependsOn": ["transit"],
-      "outputs": ["test-results/browser/**"]
+      "cache": false,
+      "outputs": []
     },
     "test:e2e": {
       "cache": false,

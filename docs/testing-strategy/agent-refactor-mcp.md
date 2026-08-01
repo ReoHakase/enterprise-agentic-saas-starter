@@ -118,36 +118,12 @@ Memory reload
 suspended run reload
 ```
 
-## G4 crash point
+## G4 Memoryとprocess終了
 
-```text
-Application thread作成直後
-Mastra user message保存直後
-business tool side effect直後
-Mastra assistant message保存直後
-usage settlement直前
-usage settlement直後
-approval suspension直後
-approval resume直後
-archive registry更新直後
-Agent thread削除直前
-```
-
-上の10点はrelease全体のcrash catalogです。Phase 2で必須とするのはmessage durable commitに関係する
-`before-memory-save`、`after-memory-save`、`after-run-settlement`の3点で、実host processを
-`SIGKILL`して新しいprocessから回復を確認します。approval suspension/resume、archive、Agent thread
-deleteのcrash pointはPhase 3以後の該当機能で追加し、Phase 2完了の証跡へ混ぜません。
-
-期待する不変条件:
-
-- business side effectは最大1回
-- usage ledgerは最大1件
-- stale grantは利用不可
-- archived threadは0件公開
-- Stop後の次turnは成功
-- suspended runは失われない
-- Memory保存済みresponseはApp settlement失敗で失われない
-- success snapshotはsettlement acknowledgement後だけ削除される
+Memory保存はMastra標準のbest-effort契約です。stream終了時に独自commit、drain、reconciliationを
+待たず、`SIGKILL`直前のresponseが必ず復元されることも要求しません。G4は認可境界、business side
+effectの冪等性、usage ledger、stale grant、approval、archive、Stop後のlivenessを検査します。
+標準Memoryの保存・再読込はAgent packageのintegration testで確認し、独自crash hookを追加しません。
 
 ## API A1からA5
 

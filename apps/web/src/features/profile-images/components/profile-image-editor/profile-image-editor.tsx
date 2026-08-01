@@ -44,6 +44,7 @@ import { OrganizationProfileImage } from "@/features/organizations"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 import { isFirstPartyProfileImageUrl } from "@/lib/profile-image-url"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import {
   deleteOrganizationProfileImage,
@@ -298,7 +299,8 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       setRemoveError(undefined)
       try {
         await refreshProfileImages()
-      } catch {
+      } catch (error) {
+        reportObservedError(error)
         // Deletion is authoritative. Normal query retry or the RSC refresh
         // will reconcile a cache refresh that failed afterward.
       }
@@ -358,7 +360,8 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         setUploadProgress(undefined)
         try {
           await refreshProfileImages()
-        } catch {
+        } catch (error) {
+          reportObservedError(error)
           // Upload is authoritative. Normal query retry or the RSC refresh
           // will reconcile a cache refresh that failed afterward.
         }
@@ -368,6 +371,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         if (error instanceof Error && error.name === "AbortError") {
           setUploadError("The profile image upload was canceled.")
         } else {
+          reportObservedError(error)
           setUploadError(uploadErrorText)
         }
       } finally {

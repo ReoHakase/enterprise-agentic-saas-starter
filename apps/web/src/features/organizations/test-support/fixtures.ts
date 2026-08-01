@@ -5,14 +5,14 @@ const fictionalOrganizationPermissions = {
   canInviteMembers: true,
   canManageMembers: true,
   canManageAdmins: true,
-  canTransferSuperAdmin: true,
+  canTransferOwnership: true,
 } as const
 
 const fictionalOrganizationSummary = {
   id: "org_01K1ACMECLOUD0000000000",
   name: "Acme Cloud",
   slug: "acme",
-  role: "super_admin",
+  role: "owner",
   active: true,
   profileImage: null,
   memberCount: 4,
@@ -49,6 +49,6 @@ export const fictionalReadOnlyOrganization = {
     canInviteMembers: false,
     canManageMembers: false,
     canManageAdmins: false,
-    canTransferSuperAdmin: false,
+    canTransferOwnership: false,
   },
 } satisfies OrganizationDetail

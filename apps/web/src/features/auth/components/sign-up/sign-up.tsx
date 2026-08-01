@@ -27,6 +27,7 @@ import { type FormEvent, useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { safeAuthErrorMessage, createSignUpFormSchema } from "@/features/auth"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { useFetchOptions } from "../../fetch-options"
 import { findCaptchaComponent, formDataString } from "../../runtime-guards"
@@ -161,7 +162,8 @@ const useSignUpController = ({
             (entry): entry is [string, unknown] => entry !== undefined
           )
         )
-      } catch {
+      } catch (error) {
+        reportObservedError(error, { operation: "auth.signup.validate" })
         setSubmitError(additionalFieldFailedMessage)
         return
       }

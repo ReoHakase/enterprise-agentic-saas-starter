@@ -2,17 +2,10 @@
   "extends": ["//"],
   "tasks": {
     "dev": {
-      "env": [
-        "NODE_ENV",
-        "DEBUG",
-        "EMULATE_DEBUG",
-        "EMULATE_BASE_URL",
-        "PORT",
-        "PORTLESS_URL",
-        "GITHUB_OAUTH_EMULATOR_CLIENT_ID",
-        "GITHUB_OAUTH_EMULATOR_CLIENT_SECRET",
-        "GITHUB_OAUTH_CALLBACK_URL"
-      ]
+      "env": ["NODE_ENV", "PORT", "PORTLESS_URL"]
+    },
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }

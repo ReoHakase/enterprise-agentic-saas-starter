@@ -1,24 +1,10 @@
-import type { AgentRuntimeChatInput } from "@enterprise-agentic-saas/agent-contracts"
-import { Memory } from "@mastra/memory"
-
 const RUN_TIMEOUT_MS = 90_000
 const USEFUL_OUTPUT_TIMEOUT_MS = 30_000
 const noop = () => undefined
 
 export type AbortCause = "revoked" | "total_timeout" | "useful_timeout" | "user"
 
-const activeRunAbortControllers = new Map<
-  string,
-  (reason: DOMException) => void
->()
-
-export const cancelActiveRun = (runId: string) => {
-  activeRunAbortControllers.get(runId)?.(
-    new DOMException("Stopped by user", "AbortError")
-  )
-}
-
-export const createRunAbortLifecycle = (request: Request, runId: string) => {
+export const createRunAbortLifecycle = (request: Request) => {
   const controller = new AbortController()
   let cause: AbortCause | undefined
   let closed = false
@@ -27,7 +13,6 @@ export const createRunAbortLifecycle = (request: Request, runId: string) => {
     cause = nextCause
     controller.abort(reason)
   }
-  activeRunAbortControllers.set(runId, (reason) => abortFrom("user", reason))
   const onRequestAbort = () =>
     abortFrom(
       "user",
@@ -66,7 +51,6 @@ export const createRunAbortLifecycle = (request: Request, runId: string) => {
   const close = () => {
     if (closed) return
     closed = true
-    activeRunAbortControllers.delete(runId)
     clearTimeout(totalTimeoutTimer)
     clearTimeout(usefulOutputTimer)
     request.signal.removeEventListener("abort", onRequestAbort)
@@ -79,71 +63,6 @@ export const createRunAbortLifecycle = (request: Request, runId: string) => {
     signal: controller.signal,
   }
 }
-
-type MemoryAgent = {
-  getMemory(): unknown
-}
-
-export const createStoppedMessagePersistence =
-  ({
-    input,
-    memoryResourceId,
-    productAgent,
-  }: {
-    input: AgentRuntimeChatInput
-    memoryResourceId: string
-    productAgent: MemoryAgent
-  }) =>
-  async () => {
-    if (input.message.role !== "user") return
-    const memory = await productAgent.getMemory()
-    if (!(memory instanceof Memory)) return
-    const thread = await memory.getThreadById({
-      resourceId: memoryResourceId,
-      threadId: input.threadId,
-    })
-    if (thread) {
-      const existing = await memory.recall({
-        page: 0,
-        perPage: false,
-        resourceId: memoryResourceId,
-        threadId: input.threadId,
-      })
-      if (
-        existing.messages.some((message) => message.id === input.message.id)
-      ) {
-        return
-      }
-    }
-    const now = new Date()
-    if (!thread) {
-      await memory.saveThread({
-        thread: {
-          id: input.threadId,
-          resourceId: memoryResourceId,
-          createdAt: now,
-          updatedAt: now,
-          title: "New conversation",
-          metadata: {},
-        },
-      })
-    }
-    await memory.saveMessages({
-      messages: [
-        {
-          id: input.message.id,
-          role: "user",
-          createdAt: now,
-          resourceId: memoryResourceId,
-          threadId: input.threadId,
-          content: {
-            format: 2,
-            parts: JSON.parse(JSON.stringify(input.message.parts)),
-          },
-        },
-      ],
-    })
-  }
 
 export const waitForAbortable = async <Value>(
   operation: Promise<Value>,

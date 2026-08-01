@@ -1,19 +1,40 @@
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import * as v from "valibot"
 
-import { safeAuthErrorMessage } from "@/features/auth"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 export const invitationFallbacks = {
   accept: "Invitation could not be accepted. Try again.",
   reject: "Invitation could not be rejected. Try again.",
 } as const
 
-export class InvitationDecisionError extends Error {
-  override name = "InvitationDecisionError"
-}
-
-export class InvitationAuthenticationError extends Error {
-  override name = "InvitationAuthenticationError"
+export const sendOrganizationInvitation = async ({
+  apiBaseUrl,
+  cookie,
+  email,
+  organizationId,
+  resend = false,
+  role,
+}: {
+  apiBaseUrl: string
+  cookie?: string
+  email: string
+  organizationId: string
+  resend?: boolean
+  role: "admin" | "member"
+}) => {
+  const authClient = createAuthClientForBaseUrl(apiBaseUrl)
+  return authClient.organization.inviteMember({
+    email,
+    organizationId,
+    resend,
+    role,
+    fetchOptions: {
+      credentials: "include",
+      headers: cookie ? { cookie } : undefined,
+      throw: true,
+    },
+  })
 }
 
 const invitationDateSchema = v.union([v.string(), v.date()])
@@ -62,7 +83,7 @@ const isRecipientMismatch = (error: unknown) => {
   )
 }
 
-const isInvitationAuthenticationError = (error: unknown) => {
+export const isInvitationAuthenticationError = (error: unknown) => {
   const code = invitationErrorValue(error, "code")
   const status = invitationErrorValue(error, "status")
   const statusCode = invitationErrorValue(error, "statusCode")
@@ -113,9 +134,11 @@ export const getInvitationContext = async ({
       if (isInvitationAuthenticationError(result.error)) {
         return { kind: "signed_out" }
       }
-      return isTerminalInvitationError(result.error)
-        ? { kind: "unavailable" }
-        : { kind: "load_error" }
+      if (isTerminalInvitationError(result.error)) {
+        return { kind: "unavailable" }
+      }
+      reportObservedError(result.error)
+      return { kind: "load_error" }
     }
     if (!result.data) {
       return { kind: "load_error" }
@@ -130,7 +153,8 @@ export const getInvitationContext = async ({
         expiresAt: toIsoString(invitation.expiresAt),
       },
     }
-  } catch {
+  } catch (error) {
+    reportObservedError(error)
     return { kind: "load_error" }
   }
 }
@@ -145,30 +169,11 @@ export const decideInvitation = async ({
   invitationId: string
 }) => {
   const authClient = createAuthClientForBaseUrl(apiBaseUrl)
-  try {
-    const result =
-      action === "accept"
-        ? await authClient.organization.acceptInvitation({ invitationId })
-        : await authClient.organization.rejectInvitation({ invitationId })
+  const result =
+    action === "accept"
+      ? await authClient.organization.acceptInvitation({ invitationId })
+      : await authClient.organization.rejectInvitation({ invitationId })
 
-    if (result.error) {
-      if (isInvitationAuthenticationError(result.error)) {
-        throw new InvitationAuthenticationError()
-      }
-      throw new InvitationDecisionError(
-        safeAuthErrorMessage(result.error, invitationFallbacks[action])
-      )
-    }
-  } catch (error) {
-    if (
-      error instanceof InvitationAuthenticationError ||
-      error instanceof InvitationDecisionError
-    ) {
-      throw error
-    }
-    if (isInvitationAuthenticationError(error)) {
-      throw new InvitationAuthenticationError()
-    }
-    throw new InvitationDecisionError(invitationFallbacks[action])
-  }
+  if (result.error) throw result.error
+  return result.data
 }

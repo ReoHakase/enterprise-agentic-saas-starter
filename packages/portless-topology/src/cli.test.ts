@@ -194,7 +194,7 @@ describe("Portless topology resolver", () => {
       DEV_SESSION_ID: "session-123",
       DEV_WORKTREE_ID: "feature-auth",
       GITHUB_OAUTH_EMULATOR_URL:
-        "https://github.emulate.feature-auth.enterprise-agentic-saas.localhost:7443",
+        "https://github.emulate.feature-auth.enterprise-agentic-saas.localhost:7443/emulate/github",
       GITHUB_OAUTH_CALLBACK_URL:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/oauth2/callback/github",
       MASTRA_STORAGE_AUTH_TOKEN: "local-agent-storage",

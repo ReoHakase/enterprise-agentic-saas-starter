@@ -102,6 +102,7 @@ export type ApprovedIssueActionRuntime = {
     AgentControlPlanePort,
     "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
   >
+  captureSettlementFailure?: () => void
   features: AgentFeatureSwitches
   reportFailure?: (cause: unknown) => void
   resumeTicket: string
@@ -113,7 +114,8 @@ const reportRuntimeFailure = (
 ): void => {
   try {
     runtime.reportFailure?.(cause)
-  } catch {
+  } catch (reportingCause) {
+    void reportingCause
     return
   }
 }
@@ -192,7 +194,14 @@ export const createApprovedIssueActionWorkflow = (
         throw new Error("Issue action resume is unavailable")
       }
 
-      const settlement = createRunSettlement(runtime.api, run.grant)
+      const settlement = createRunSettlement(
+        runtime.api,
+        run.grant,
+        (cause) => {
+          reportRuntimeFailure(runtime, cause)
+          runtime.captureSettlementFailure?.()
+        }
+      )
       try {
         const receipt = toSafeActionReceipt(
           await runtime.api.executeApprovedAction({

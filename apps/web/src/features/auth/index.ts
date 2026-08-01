@@ -1,8 +1,4 @@
-export {
-  parseSafeAuthError,
-  safeAuthErrorMessage,
-  type PublicAuthErrorCode,
-} from "./error"
+export { safeAuthErrorMessage } from "./error"
 export { createAuthCallbackURL } from "./callback-url"
 export { Auth } from "./components/auth/client"
 export { AuthProvider } from "./components/auth-provider/auth-provider"

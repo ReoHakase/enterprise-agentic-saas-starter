@@ -13,7 +13,7 @@ import type {
   AgentIssueAction,
   AgentResumeTicket,
 } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken, hashAgentToken } from "../crypto"
 import {
@@ -28,7 +28,6 @@ import {
   AgentActionWriteRaceError,
   executionResult,
   isActionWriteRetryableRace,
-  preserveAgentActionError,
   toActionDto,
   withAgentActionLock,
 } from "./repository-support"
@@ -54,9 +53,7 @@ export const requireActionForGrant = async (
     .limit(1)
   const action = rows[0]
   if (!action) {
-    throw publicErrors.notFound("Agent action not found", {
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   return action
 }
@@ -65,20 +62,16 @@ export const getAgentIssueActionDecision = async (
   db: Db,
   input: { grant: string; actionId: string; now?: Date }
 ): Promise<AgentIssueAction> => {
-  try {
-    const action = await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const context = await validateGrantInTransaction(tx, {
-        tokenHash: await hashAgentToken(input.grant),
-        kind: "run",
-        now,
-      })
-      return requireActionForGrant(tx, context, input.actionId)
+  const action = await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const context = await validateGrantInTransaction(tx, {
+      tokenHash: await hashAgentToken(input.grant),
+      kind: "run",
+      now,
     })
-    return toActionDto(action)
-  } catch (cause) {
-    return preserveAgentActionError(cause, "getAgentIssueActionDecision")
-  }
+    return requireActionForGrant(tx, context, input.actionId)
+  })
+  return toActionDto(action)
 }
 
 const requirePublicAction = async (
@@ -103,9 +96,7 @@ const requirePublicAction = async (
     .limit(1)
   const action = rows[0]
   if (!action) {
-    throw publicErrors.notFound("Agent action not found", {
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   await requireOwnedThread(tx, {
     threadId: action.threadId,
@@ -134,9 +125,7 @@ const requireHistoricalPublicAction = async (
     .limit(1)
   const action = rows[0]
   if (!action) {
-    throw publicErrors.notFound("Agent action not found", {
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   await requireOwnedThread(tx, {
     threadId: action.threadId,
@@ -151,33 +140,29 @@ export const getAgentActionForSession = async (
   db: Db,
   input: { actionId: string; sessionId: string; userId: string; now?: Date }
 ): Promise<AgentIssueAction> => {
-  try {
-    const action = await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireHistoricalPublicAction(tx, { ...input, now })
-      if (
-        (current.status === "pending" || current.status === "approved") &&
-        current.expiresAt.getTime() <= now.getTime()
-      ) {
-        const rows = await tx
-          .update(agentActions)
-          .set({ status: "expired", completedAt: now, updatedAt: now })
-          .where(
-            and(
-              eq(agentActions.organizationId, current.organizationId),
-              eq(agentActions.id, current.id),
-              inArray(agentActions.status, ["pending", "approved"])
-            )
+  const action = await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireHistoricalPublicAction(tx, { ...input, now })
+    if (
+      (current.status === "pending" || current.status === "approved") &&
+      current.expiresAt.getTime() <= now.getTime()
+    ) {
+      const rows = await tx
+        .update(agentActions)
+        .set({ status: "expired", completedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(agentActions.organizationId, current.organizationId),
+            eq(agentActions.id, current.id),
+            inArray(agentActions.status, ["pending", "approved"])
           )
-          .returning()
-        return rows[0] ?? current
-      }
-      return current
-    })
-    return toActionDto(action)
-  } catch (cause) {
-    return preserveAgentActionError(cause, "getAgentActionForSession")
-  }
+        )
+        .returning()
+      return rows[0] ?? current
+    }
+    return current
+  })
+  return toActionDto(action)
 }
 
 export type DecideAgentActionInput = {
@@ -210,13 +195,7 @@ const decideAgentActionForSessionWithRetry = async (
         )
         .limit(1)
       if (decisionKeyRows[0] && decisionKeyRows[0].id !== action.id) {
-        throw publicErrors.conflict(
-          "Agent decision idempotency key is already in use",
-          {
-            reason: "idempotency_conflict",
-            resource: "agent_action",
-          }
-        )
+        throw new HttpError({ code: "conflict" })
       }
       const repeatedDecision =
         action.decisionProvenance === "manual" &&
@@ -252,10 +231,7 @@ const decideAgentActionForSessionWithRetry = async (
         return { action, expired: false }
       }
       if (action.status !== "pending" || action.decisionProvenance !== null) {
-        throw publicErrors.conflict("Agent action was already decided", {
-          reason: "decision_conflict",
-          resource: "agent_action",
-        })
+        throw new HttpError({ code: "conflict" })
       }
       if (action.expiresAt.getTime() <= now.getTime()) {
         const rows = await tx
@@ -321,10 +297,7 @@ const decideAgentActionForSessionWithRetry = async (
       return { action: decided, expired: false }
     })
     if (outcome.expired) {
-      throw publicErrors.conflict("Agent action expired", {
-        reason: "action_expired",
-        resource: "agent_action",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return toActionDto(outcome.action)
   } catch (cause) {
@@ -332,7 +305,7 @@ const decideAgentActionForSessionWithRetry = async (
       await new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt))
       return decideAgentActionForSessionWithRetry(db, input, attempt + 1)
     }
-    return preserveAgentActionError(cause, "decideAgentActionForSession")
+    throw cause
   }
 }
 
@@ -351,75 +324,64 @@ export type AgentActionResumePreparation =
 export const prepareAgentActionResumeForSession = async (
   db: Db,
   input: { actionId: string; sessionId: string; userId: string; now?: Date }
-): Promise<AgentActionResumePreparation> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const action = await requirePublicAction(tx, { ...input, now })
-      if (action.status === "succeeded") {
-        return {
-          kind: "receipt",
-          result: executionResult(action, action.receipt),
-        }
+): Promise<AgentActionResumePreparation> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const action = await requirePublicAction(tx, { ...input, now })
+    if (action.status === "succeeded") {
+      return {
+        kind: "receipt",
+        result: executionResult(action, action.receipt),
       }
-      if (
-        action.status !== "approved" ||
-        action.decisionProvenance !== "manual" ||
-        action.expiresAt.getTime() <= now.getTime()
-      ) {
-        throw publicErrors.conflict("Agent action cannot be resumed", {
-          reason: "action_not_approved",
-          resource: "agent_action",
-        })
-      }
-      const credential = await createAgentToken()
-      await tx
-        .update(agentResumeTickets)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentResumeTickets.organizationId, action.organizationId),
-            eq(agentResumeTickets.actionId, action.id),
-            isNull(agentResumeTickets.consumedAt),
-            isNull(agentResumeTickets.revokedAt)
-          )
-        )
-      const expiresAt = new Date(
-        Math.min(
-          now.getTime() + AGENT_RESUME_TICKET_MAX_LIFETIME_MS,
-          action.expiresAt.getTime()
+    }
+    if (
+      action.status !== "approved" ||
+      action.decisionProvenance !== "manual" ||
+      action.expiresAt.getTime() <= now.getTime()
+    ) {
+      throw new HttpError({ code: "conflict" })
+    }
+    const credential = await createAgentToken()
+    await tx
+      .update(agentResumeTickets)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(agentResumeTickets.organizationId, action.organizationId),
+          eq(agentResumeTickets.actionId, action.id),
+          isNull(agentResumeTickets.consumedAt),
+          isNull(agentResumeTickets.revokedAt)
         )
       )
-      if (expiresAt.getTime() <= now.getTime()) {
-        throw publicErrors.conflict("Agent action expired", {
-          reason: "action_expired",
-          resource: "agent_action",
-        })
-      }
-      await tx.insert(agentResumeTickets).values({
-        id: crypto.randomUUID(),
-        tokenHash: credential.tokenHash,
-        actionId: action.id,
-        organizationId: action.organizationId,
-        threadId: action.threadId,
-        sessionId: action.sessionId,
-        userId: action.userId,
-        contextEpoch: action.contextEpoch,
-        issuedAt: now,
-        expiresAt,
-      })
-      return {
-        kind: "ticket",
-        resume: {
-          ticket: credential.token,
-          expiresAt: expiresAt.toISOString(),
-        },
-      }
+    const expiresAt = new Date(
+      Math.min(
+        now.getTime() + AGENT_RESUME_TICKET_MAX_LIFETIME_MS,
+        action.expiresAt.getTime()
+      )
+    )
+    if (expiresAt.getTime() <= now.getTime()) {
+      throw new HttpError({ code: "conflict" })
+    }
+    await tx.insert(agentResumeTickets).values({
+      id: crypto.randomUUID(),
+      tokenHash: credential.tokenHash,
+      actionId: action.id,
+      organizationId: action.organizationId,
+      threadId: action.threadId,
+      sessionId: action.sessionId,
+      userId: action.userId,
+      contextEpoch: action.contextEpoch,
+      issuedAt: now,
+      expiresAt,
     })
-  } catch (cause) {
-    return preserveAgentActionError(cause, "prepareAgentActionResumeForSession")
-  }
-}
+    return {
+      kind: "ticket",
+      resume: {
+        ticket: credential.token,
+        expiresAt: expiresAt.toISOString(),
+      },
+    }
+  })
 
 /** @internal */
 export const issueAgentActionResumeTicket = async (
@@ -428,10 +390,7 @@ export const issueAgentActionResumeTicket = async (
 ): Promise<AgentResumeTicket> => {
   const preparation = await prepareAgentActionResumeForSession(db, input)
   if (preparation.kind === "receipt") {
-    throw publicErrors.conflict("Agent action is already complete", {
-      reason: "idempotency_conflict",
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   return preparation.resume
 }

@@ -59,7 +59,7 @@ beforeAll(async () => {
   vi.stubEnv("GITHUB_CLIENT_SECRET", "real-github-secret-must-not-be-used")
   vi.stubEnv(
     "GITHUB_OAUTH_EMULATOR_URL",
-    "http://github.emulate.localhost:4001"
+    "http://github.emulate.localhost:4001/emulate/github"
   )
   vi.stubEnv("GITHUB_OAUTH_EMULATOR_CLIENT_ID", "")
   vi.stubEnv("GITHUB_OAUTH_EMULATOR_CLIENT_SECRET", "")
@@ -164,7 +164,9 @@ describe("Better Auth GitHub emulator routing", () => {
     const authorizationUrl = new URL(result.url)
 
     expect(authorizationUrl.origin).toBe("http://github.emulate.localhost:4001")
-    expect(authorizationUrl.pathname).toBe("/login/oauth/authorize")
+    expect(authorizationUrl.pathname).toBe(
+      "/emulate/github/login/oauth/authorize"
+    )
     expect(authorizationUrl.searchParams.get("client_id")).toBe(
       "enterprise-agentic-saas-local"
     )
@@ -189,7 +191,9 @@ describe("Better Auth GitHub emulator routing", () => {
     const result = v.parse(redirectResponseSchema, await response.json())
     const authorizationUrl = new URL(result.url)
 
-    expect(authorizationUrl.pathname).toBe("/login/oauth/authorize")
+    expect(authorizationUrl.pathname).toBe(
+      "/emulate/github/login/oauth/authorize"
+    )
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
       "http://api.localhost/auth/oauth2/callback/github"
     )

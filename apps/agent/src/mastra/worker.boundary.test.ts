@@ -30,6 +30,7 @@ vi.mock("@inference-net/otel-cf-workers", () => ({
   }),
   instrument: workerSpies.instrument,
   OTLPTransport: vi.fn<(options: unknown) => void>(),
+  SEVERITY_NUMBERS: {},
   withNextSpan: workerSpies.withNextSpan,
 }))
 

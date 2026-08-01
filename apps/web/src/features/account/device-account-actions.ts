@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query"
 import { revokeAgentContext } from "@/features/agent"
 import { clearAuthenticatedQueryCache } from "@/features/auth"
 import { apiClient } from "@/lib/api-client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import {
   completeMultiSessionAction,
@@ -85,7 +86,8 @@ const completeIdentityChange = async (
 ) => {
   try {
     await lifecycle.onComplete?.()
-  } catch {
+  } catch (error) {
+    reportObservedError(error, { operation: "account.identity.cleanup" })
     // The server identity has already changed. A full-document navigation is
     // now the fail-closed cleanup boundary, so local cleanup must not strand
     // the browser on the old React tree.
@@ -120,8 +122,7 @@ export const switchDeviceAccount = async ({
   })
   await prepareIdentityChange(queryClient, lifecycle)
   await completeMultiSessionAction(
-    multiSession.setActive({ sessionToken: account.session.token }),
-    "Could not switch account. Try again."
+    multiSession.setActive({ sessionToken: account.session.token })
   )
   await completeIdentityChange(queryClient, lifecycle)
 }
@@ -152,8 +153,7 @@ export const signOutCurrentDeviceAccount = async ({
   await completeMultiSessionAction(
     multiSession.revoke({
       sessionToken: currentAccount.session.token,
-    }),
-    "Could not sign out. Try again."
+    })
   )
   await completeIdentityChange(queryClient, lifecycle)
 }
@@ -184,8 +184,7 @@ export const removeDeviceAccount = async ({
   }
 
   await completeMultiSessionAction(
-    multiSession.revoke({ sessionToken: account.session.token }),
-    "Could not remove account. Try again."
+    multiSession.revoke({ sessionToken: account.session.token })
   )
 
   // Better Auth verifies and revokes through separate requests. This post-check
@@ -198,7 +197,8 @@ export const removeDeviceAccount = async ({
       currentSession.user.id !== currentUserId ||
       currentSession.session.token !== currentAccount.session.token
     )
-  } catch {
+  } catch (error) {
+    reportObservedError(error, { operation: "account.identity.verify" })
     return true
   }
 }

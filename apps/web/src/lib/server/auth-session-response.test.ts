@@ -10,20 +10,8 @@ describe("readAuthSessionResult", () => {
   })
 
   it("surfaces an API outage to the route error boundary", () => {
-    expect(() =>
-      readAuthSessionResult({ data: null, error: { status: 503 } })
-    ).toThrow("Session request failed with status 503")
-    const error = (() => {
-      try {
-        readAuthSessionResult({ data: null, error: { status: 503 } })
-      } catch (requestError) {
-        return requestError
-      }
-    })()
-    expect(error).toMatchObject({
-      name: "AuthSessionRequestError",
-      status: 503,
-    })
+    const error = { status: 503, message: "upstream unavailable" }
+    expect(() => readAuthSessionResult({ data: null, error })).toThrow(error)
   })
 
   it("returns a successful session payload", () => {

@@ -1,6 +1,6 @@
 import { Elysia } from "elysia"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { env } from "../env"
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"])
@@ -27,11 +27,11 @@ export const csrfPlugin = new Elysia({ name: "csrf" })
 
     const origin = request.headers.get("origin")
     if (!origin) {
-      throw publicErrors.csrfOriginForbidden("missing_origin")
+      throw new HttpError({ code: "csrf_origin_forbidden" })
     }
     const normalized = normalizeOrigin(origin)
     if (!normalized || !allowedOrigins.has(normalized)) {
-      throw publicErrors.csrfOriginForbidden("untrusted_origin")
+      throw new HttpError({ code: "csrf_origin_forbidden" })
     }
   })
   .as("global")

@@ -8,7 +8,7 @@ import {
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
 
 import type { AgentRunGrant } from "../../../agent-client"
-import { AppError, publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { bindAgentAssetsToRunInTransaction } from "../../files/public"
 import { createAgentToken, hashAgentToken } from "../crypto"
 import { reserveAgentModelRunInTransaction } from "../usage/resource-limits"
@@ -19,7 +19,6 @@ import {
 import {
   AGENT_RUN_TTL_MS,
   isRetryableDatabaseRace,
-  preserveAgentError,
   type AgentTransaction,
   type ValidGrant,
 } from "./repository-support"
@@ -108,10 +107,7 @@ const startAgentRunWithRetry = async (
           .limit(1)
         run = existingRows[0]
         if (!isCompatibleExistingRun(input, run, context)) {
-          throw publicErrors.conflict("Agent message id is already in use", {
-            reason: "idempotency_conflict",
-            resource: "agent_run",
-          })
+          throw new HttpError({ code: "conflict" })
         }
 
         const runningExpired =
@@ -121,16 +117,7 @@ const startAgentRunWithRetry = async (
           run.status === "canceled" ||
           run.status === "expired"
         if (!runningExpired && !retryableTerminal) {
-          throw publicErrors.conflict(
-            "Agent run is already active or complete",
-            {
-              reason:
-                run.status === "running" || run.status === "waiting_approval"
-                  ? "run_in_progress"
-                  : "idempotency_conflict",
-              resource: "agent_run",
-            }
-          )
+          throw new HttpError({ code: "conflict" })
         }
 
         const unresolvedActions = await tx
@@ -145,13 +132,7 @@ const startAgentRunWithRetry = async (
           )
           .limit(1)
         if (unresolvedActions[0]) {
-          throw publicErrors.conflict(
-            "Agent action must be resolved before retrying",
-            {
-              reason: "action_pending",
-              resource: "agent_action",
-            }
-          )
+          throw new HttpError({ code: "conflict" })
         }
 
         const retryRows = await tx
@@ -176,10 +157,7 @@ const startAgentRunWithRetry = async (
           .returning()
         const retried = retryRows[0]
         if (!retried) {
-          throw publicErrors.conflict("Agent run changed concurrently", {
-            reason: "run_in_progress",
-            resource: "agent_run",
-          })
+          throw new HttpError({ code: "conflict" })
         }
         run = retried
         await reserveAgentModelRunInTransaction(tx, {
@@ -242,10 +220,7 @@ const startAgentRunWithRetry = async (
         )
         .returning({ id: agentGrants.id })
       if (!consumedConnectionGrant[0]) {
-        throw publicErrors.conflict("Agent connection grant was already used", {
-          reason: "idempotency_conflict",
-          resource: "agent_run",
-        })
+        throw new HttpError({ code: "conflict" })
       }
       const threadRows = await tx
         .select({ id: agentThreads.id })
@@ -261,9 +236,7 @@ const startAgentRunWithRetry = async (
         .limit(1)
       const thread = threadRows[0]
       if (!thread) {
-        throw publicErrors.notFound("Agent thread not found", {
-          resource: "agent_thread",
-        })
+        throw new HttpError({ code: "not_found" })
       }
       return {
         runId: run.id,
@@ -280,20 +253,13 @@ const startAgentRunWithRetry = async (
         await new Promise((resolve) => setTimeout(resolve, 5 * 2 ** attempt))
         return startAgentRunWithRetry(db, input, attempt + 1)
       }
-      throw new AppError({
+      throw new HttpError({
         code: "rate_limited",
-        publicMessage: "Agent run is temporarily busy. Try again",
-        publicContext: {
-          constraint: "active_model_run_transaction",
-          reason: "concurrency_limit_exceeded",
-          resource: "agent_run",
-          retryAfter: 1,
-        },
-        privateContext: { module: "agent", operation: "startAgentRun" },
         cause,
+        retryAfter: 1,
       })
     }
-    return preserveAgentError(cause, "startAgentRun")
+    throw cause
   }
 }
 

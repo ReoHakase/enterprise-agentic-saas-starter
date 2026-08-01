@@ -24,7 +24,7 @@ export const createAuditRoutes = (
     {
       organizationAccess: {
         action: "organization.audit.read",
-        allow: ["super_admin", "admin"],
+        allow: ["owner", "admin"],
         source: "params",
       },
       params: organizationIdParamsModel,
@@ -34,7 +34,7 @@ export const createAuditRoutes = (
         operationId: "listOrganizationAuditLogs",
         summary: "List organization audit events",
         description:
-          "Returns append-only audit events in reverse chronological order for the active organization. Only administrators and super administrators may read this tenant-scoped collection.",
+          "Returns append-only audit events in reverse chronological order for the active organization. Only owners and administrators may read this tenant-scoped collection.",
         tags: ["Audit"],
         "x-route-status": "enabled",
         "x-auth-context": "session-cookie",

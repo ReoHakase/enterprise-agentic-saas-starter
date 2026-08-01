@@ -125,13 +125,7 @@ describe("Agent staged image API and lifecycle", () => {
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({
-      error: {
-        code: "service_unavailable",
-        context: {
-          reason: "feature_disabled",
-          resource: "agent_asset",
-        },
-      },
+      error: "service_unavailable",
     })
     expect(storage.head).not.toHaveBeenCalled()
     expect(storage.put).not.toHaveBeenCalled()
@@ -227,7 +221,7 @@ describe("Agent staged image API and lifecycle", () => {
     )
     expect(changed.status).toBe(409)
     expect(await changed.json()).toMatchObject({
-      error: { code: "conflict" },
+      error: "conflict",
     })
     expect(storage.put).toHaveBeenCalledTimes(1)
   })
@@ -272,7 +266,6 @@ describe("Agent staged image API and lifecycle", () => {
       })
     ).rejects.toMatchObject({
       code: "active_organization_mismatch",
-      statusCode: 409,
     })
     expect(
       await db
@@ -338,7 +331,7 @@ describe("Agent staged image API and lifecycle", () => {
         runtime: storage.runtime,
         value: stalePendingSnapshot,
       })
-    ).rejects.toMatchObject({ code: "conflict", statusCode: 409 })
+    ).rejects.toMatchObject({ code: "conflict" })
 
     expect(
       await db
@@ -410,8 +403,6 @@ describe("Agent staged image API and lifecycle", () => {
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      publicContext: { constraint: "ready_per_organization" },
-      statusCode: 429,
     })
 
     expect(
@@ -453,7 +444,7 @@ describe("Agent staged image API and lifecycle", () => {
       // oxlint-disable-next-line no-await-in-loop -- each rejected case must leave the same DB/R2 baseline.
       await expect(
         uploadDirect(db, file, `invalid-${index}`)
-      ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+      ).rejects.toMatchObject({ code: "validation_error" })
     }
     expect(storage.put).not.toHaveBeenCalled()
     expect(await db.select().from(schema.storageObjects)).toEqual([])
@@ -468,7 +459,7 @@ describe("Agent staged image API and lifecycle", () => {
     })
     await expect(
       uploadDirect(db, quotaFile, "quota-rejected")
-    ).rejects.toMatchObject({ code: "rate_limited", statusCode: 429 })
+    ).rejects.toMatchObject({ code: "rate_limited" })
     expect(storage.put).not.toHaveBeenCalled()
     expect(await db.select().from(schema.storageObjects)).toEqual([])
     const [usage] = await db.select().from(schema.organizationFileUsage)

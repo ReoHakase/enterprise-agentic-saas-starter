@@ -52,8 +52,8 @@ export const ImageAndText = meta.story({
       )
     )
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Move between files with the keyboard", async () => {
       await expect(

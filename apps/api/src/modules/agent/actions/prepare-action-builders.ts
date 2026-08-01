@@ -11,7 +11,7 @@ import type {
   AgentIssueActionPreview,
   AgentUpdateIssueActionInput,
 } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import {
   createIssueActionPayloadModel,
   deleteIssueActionPayloadModel,
@@ -143,13 +143,10 @@ const readCurrentIssue = async (
     .limit(1)
   const current = currentRows[0]
   if (!current) {
-    throw publicErrors.notFound("Issue not found", { resource: "issue" })
+    throw new HttpError({ code: "not_found" })
   }
   if (current.revision !== expectedRevision) {
-    throw publicErrors.conflict("Issue revision changed", {
-      reason: "stale_revision",
-      resource: "issue",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   return current
 }
@@ -162,7 +159,7 @@ const buildDeleteIssueAction = (
 ): PreparedIssueAction => {
   safeStoredParse(deleteIssueActionPayloadModel, input.issue)
   if (context.role === "member" && current.creatorId !== context.userId) {
-    throw publicErrors.forbidden("Only the creator or an admin can delete")
+    throw new HttpError({ code: "forbidden" })
   }
   const stored = {
     requestFingerprint,
@@ -341,9 +338,7 @@ const buildUpdateIssueAction = async (
         )
       )
     if (rows.length !== issue.attachmentFileIds.length) {
-      throw publicErrors.notFound("Issue attachment not found", {
-        resource: "file",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     const byId = new Map(rows.map((row) => [row.fileId, row]))
     const ordered = issue.attachmentFileIds.map((fileId) => {
@@ -390,7 +385,7 @@ const buildUpdateIssueAction = async (
     "dueDate",
   ] as const
   if (!changeKeys.some((key) => Object.hasOwn(issue, key))) {
-    throw publicErrors.validation("No issue changes provided")
+    throw new HttpError({ code: "validation_error" })
   }
   const labels =
     issue.labels === undefined

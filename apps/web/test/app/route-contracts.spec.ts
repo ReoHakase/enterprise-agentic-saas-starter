@@ -1,12 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test"
 
+import { w6Environment } from "./fixtures/environment"
 import {
   expect,
   productionServerComponentRenderError,
   test,
 } from "./fixtures/test"
+import type { CreateRequestGate } from "./fixtures/test"
 
-const mockApiUrl = "http://127.0.0.1:3001"
+const mockApiUrl = w6Environment.apiOrigin
 
 type AllowClientErrors = (...patterns: RegExp[]) => void
 
@@ -40,17 +42,6 @@ const useSession = async (
 const withBoundaryQuery = (route: string, state: string) =>
   `${route}${route.includes("?") ? "&" : "?"}route-contract=${state}`
 
-const createRequestDelay = async (
-  context: BrowserContext,
-  requestPath: string
-) => {
-  const response = await context.request.post(
-    `${mockApiUrl}/__e2e/request-delays`,
-    { data: { path: requestPath, method: "GET", delayMs: 2_000 } }
-  )
-  expect(response.status()).toBe(201)
-}
-
 const createRequestFault = async (
   context: BrowserContext,
   requestPath: string
@@ -60,7 +51,7 @@ const createRequestFault = async (
       path: requestPath,
       method: "GET",
       status: 503,
-      code: "dependency_unavailable",
+      code: "service_unavailable",
       message: "Injected route contract outage",
     },
   })
@@ -139,11 +130,13 @@ const openReadySourceRoute = async (
 const verifyConsoleRouteContract = async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
   contract,
 }: {
   allowClientErrors: AllowClientErrors
   context: BrowserContext
+  createRequestGate: CreateRequestGate
   page: Page
   contract: ConsoleRouteContract
 }) => {
@@ -157,14 +150,19 @@ const verifyConsoleRouteContract = async ({
   await blockRoutePrefetches(page)
 
   await openReadySourceRoute(page, contract)
-  await createRequestDelay(context, contract.requestPath)
+  const requestGate = await createRequestGate(contract.requestPath)
   const loadingNavigation = navigateToContract(page, contract)
-  await expectConsoleShellReady(page)
-  await expect(
-    page.locator(
-      '[data-route-boundary="true"][data-boundary-state="loading"]:visible'
-    )
-  ).toBeVisible()
+  try {
+    await requestGate.waitUntilRequested()
+    await expectConsoleShellReady(page)
+    await expect(
+      page.locator(
+        '[data-route-boundary="true"][data-boundary-state="loading"]:visible'
+      )
+    ).toBeVisible()
+  } finally {
+    await requestGate.release()
+  }
   await loadingNavigation
   await expectReadyConsoleRoute(page, contract.heading, contract.headingLevel)
   await contract.assertReady?.(page)
@@ -189,11 +187,13 @@ const verifyConsoleRouteContract = async ({
 const verifyInvitationRouteContract = async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
   route,
 }: {
   allowClientErrors: AllowClientErrors
   context: BrowserContext
+  createRequestGate: CreateRequestGate
   page: Page
   route: string
 }) => {
@@ -213,13 +213,18 @@ const verifyInvitationRouteContract = async ({
   ).toBeVisible()
 
   await page.goto("about:blank")
-  await createRequestDelay(context, "/auth/get-session")
+  const requestGate = await createRequestGate("/auth/get-session")
   const loadingNavigation = page.goto(withBoundaryQuery(route, "loading"))
-  await expect(
-    page.locator(
-      '[data-route-boundary="true"][data-boundary-state="loading"]:visible'
-    )
-  ).toBeVisible()
+  try {
+    await requestGate.waitUntilRequested()
+    await expect(
+      page.locator(
+        '[data-route-boundary="true"][data-boundary-state="loading"]:visible'
+      )
+    ).toBeVisible()
+  } finally {
+    await requestGate.release()
+  }
   await loadingNavigation
   await expect(
     page.locator(
@@ -246,11 +251,13 @@ const verifyInvitationRouteContract = async ({
 test("@route-contract /organization/[organizationSlug]/dashboard は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Overview",
@@ -265,11 +272,13 @@ test("@route-contract /organization/[organizationSlug]/dashboard は全boundary 
 test("@route-contract /organization/[organizationSlug]/issues は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Issues",
@@ -303,11 +312,13 @@ test("@route-contract Agent paneは同一organizationのclient navigation後も�
 test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       assertReady: async (currentPage) => {
@@ -438,11 +449,13 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
 test("@route-contract /organization/[organizationSlug]/members は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Members",
@@ -457,11 +470,13 @@ test("@route-contract /organization/[organizationSlug]/members は全boundary st
 test("@route-contract /organization/[organizationSlug]/settings は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Organization settings",
@@ -476,11 +491,13 @@ test("@route-contract /organization/[organizationSlug]/settings は全boundary s
 test("@route-contract /settings/account は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Account settings",
@@ -495,11 +512,13 @@ test("@route-contract /settings/account は全boundary stateから復帰する",
 test("@route-contract /settings/organizations は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyConsoleRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     contract: {
       heading: "Organizations",
@@ -514,11 +533,13 @@ test("@route-contract /settings/organizations は全boundary stateから復帰�
 test("@route-contract /invitations/[invitationId] は全boundary stateから復帰する", async ({
   allowClientErrors,
   context,
+  createRequestGate,
   page,
 }) => {
   await verifyInvitationRouteContract({
     allowClientErrors,
     context,
+    createRequestGate,
     page,
     route: "/invitations/invitation-new-user",
   })

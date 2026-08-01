@@ -1,4 +1,4 @@
-import { delay, http, HttpResponse } from "msw"
+import { http, HttpResponse } from "msw"
 import { useMemo } from "react"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
@@ -7,6 +7,7 @@ import { Providers } from "@/components/providers/providers"
 import { fictionalMe } from "@/features/account/test-support/fixtures"
 import { useRegisterAgentForm } from "@/features/agent"
 
+import { createDeferred } from "../../../../../test-support/storybook/deferred"
 import { ConsoleShell } from "./console-shell"
 
 const deviceAccountsResponse = [
@@ -39,7 +40,7 @@ const secondaryOrganization = {
   id: "org_01K1SECONDARY000000000",
   name: "Secondary Workspace",
   slug: "secondary",
-  role: "super_admin" as const,
+  role: "owner" as const,
   active: false,
   profileImage: null,
   memberCount: 3,
@@ -49,7 +50,7 @@ const secondaryOrganization = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
 }
 
@@ -58,17 +59,6 @@ let releasePendingOrganizationRequest: (() => void) | undefined
 let releaseReadySetActiveRequest: (() => void) | undefined
 let readySetActiveRequests = 0
 let sessionMutationRequests = 0
-
-const tabUntilFocused = async (
-  target: HTMLElement,
-  remainingAttempts = 40
-): Promise<void> => {
-  if (document.activeElement === target) return
-  if (remainingAttempts === 0)
-    throw new Error("Could not reach the account trigger with Tab")
-  await userEvent.tab()
-  await tabUntilFocused(target, remainingAttempts - 1)
-}
 
 const DirtyIssueDraft = () => {
   const organizationId =
@@ -383,7 +373,7 @@ export const Ready = meta.story({
         if (!stableTrigger)
           throw new Error("Stable sidebar trigger was not rendered")
         stableTrigger.focus()
-        await tabUntilFocused(accountTrigger)
+        await userEvent.tab({ shift: true })
         await expect(accountTrigger).toHaveFocus()
         await userEvent.keyboard("{Enter}")
         const ownerBody = canvasElement.ownerDocument.body
@@ -535,7 +525,10 @@ export const OrganizationPendingShape = meta.story({
           releasePendingOrganizationRequest = resolve
         })
         return HttpResponse.json(
-          { message: "temporarily unavailable" },
+          {
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
+          },
           { status: 503 }
         )
       })
@@ -566,9 +559,6 @@ export const OrganizationPendingShape = meta.story({
       name: /Acme Cloud/u,
     })
     await userEvent.click(organizationTrigger)
-    await waitFor(() =>
-      expect(organizationTrigger).toHaveAttribute("aria-expanded", "true")
-    )
     const organizationMenu = await findVisibleMenu(
       canvasElement.ownerDocument.body
     )
@@ -722,12 +712,14 @@ export const DirtyAccountActionsFailSafely = meta.story({
 
 export const AccountsLoading = meta.story({
   beforeEach({ msw }) {
+    const responseGate = createDeferred<void>()
     msw.use(
       http.get("*/auth/multi-session/list-device-sessions", async () => {
-        await delay("infinite")
+        await responseGate.promise
         return HttpResponse.json([])
       })
     )
+    return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, canvasElement }) => {
     await userEvent.click(
@@ -767,6 +759,7 @@ export const AccountsError = meta.story({
 
 export const AccountsPending = meta.story({
   beforeEach({ msw }) {
+    const responseGate = createDeferred<void>()
     msw.use(
       http.get("*/auth/multi-session/list-device-sessions", () =>
         HttpResponse.json(deviceAccountsResponse)
@@ -778,10 +771,11 @@ export const AccountsPending = meta.story({
         HttpResponse.json({ contextEpoch: 2 })
       ),
       http.post("*/auth/multi-session/set-active", async () => {
-        await delay("infinite")
-        return HttpResponse.json({})
+        await responseGate.promise
+        return HttpResponse.json({}, { status: 503 })
       })
     )
+    return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, canvasElement }) => {
     const accountTrigger = canvas.getByRole("button", {

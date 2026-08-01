@@ -82,7 +82,7 @@ export const createFixture = async () => {
       id: "agent-member-a-1",
       organizationId: "agent-org-a",
       userId: "agent-user-a",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {

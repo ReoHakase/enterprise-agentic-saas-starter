@@ -181,7 +181,8 @@ describe("device account actions", () => {
     const complete = vi.fn<() => Promise<void>>().mockResolvedValue()
     const setActive =
       vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
-    setActive.mockRejectedValue(new Error("provider detail"))
+    const providerError = new Error("provider detail")
+    setActive.mockRejectedValue(providerError)
 
     await expect(
       switchDeviceAccount({
@@ -192,7 +193,7 @@ describe("device account actions", () => {
         multiSession: freshCapabilities({ setActive }),
         queryClient,
       })
-    ).rejects.toThrow("Could not switch account. Try again.")
+    ).rejects.toBe(providerError)
 
     expect(complete).not.toHaveBeenCalled()
     expect(queryClient.getQueryData(["private"])).toBe("old account")

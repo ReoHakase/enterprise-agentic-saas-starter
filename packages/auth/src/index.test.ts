@@ -1,12 +1,29 @@
 import { createServer, type Server } from "node:http"
 
+import type {
+  backgroundTaskHandler as BackgroundTaskHandler,
+  createRuntimeEmailSender as CreateRuntimeEmailSender,
+} from "@enterprise-agentic-saas/email/runtime"
 import { makeSignature } from "better-auth/crypto"
 import { eq } from "drizzle-orm"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 import type { auth as Auth } from "./index"
-import type { AuthOpenApiSchema } from "./openapi"
+
+type EmailRuntimeModule = {
+  backgroundTaskHandler: typeof BackgroundTaskHandler
+  createRuntimeEmailSender: typeof CreateRuntimeEmailSender
+}
+
+const emailSpies = vi.hoisted(() => ({
+  send: vi.fn<() => Promise<void>>(),
+}))
+
+vi.mock("@enterprise-agentic-saas/email/runtime", async (importOriginal) => ({
+  ...(await importOriginal<EmailRuntimeModule>()),
+  createRuntimeEmailSender: () => emailSpies.send,
+}))
 
 type AuthInstance = typeof Auth
 type AuthSessionResult = NonNullable<
@@ -22,12 +39,18 @@ let blockedOrganizationPluginEndpoints: ReadonlyArray<{
   path: string
 }>
 let organizationSecurityHooks: {
+  beforeCreateInvitation(input: {
+    invitation: { role?: string | null }
+  }): Promise<void>
   beforeAcceptInvitation(input: {
     invitation: { role?: string | null }
   }): Promise<void>
 }
-let generateAuthOpenApiSchema: () => Promise<AuthOpenApiSchema>
 let createPasskeySessionHeaders: (ageInMilliseconds: number) => Promise<Headers>
+let createOrganizationOwnerFixture: () => Promise<{
+  headers: Headers
+  organizationId: string
+}>
 let createMultiSessionFixture: (accountCount: number) => Promise<{
   cookie: string
   tokens: string[]
@@ -37,7 +60,27 @@ let sessionExists: (token: string) => Promise<boolean>
 let authServer: Server | undefined
 let authServerBaseUrl: string
 
+type InvitationRoleHook = (input: {
+  invitation: { role?: string | null }
+}) => Promise<void>
+
+const assertInvitationRoleBoundary = async (hook: InvitationRoleHook) => {
+  await expect(hook({ invitation: { role: "admin" } })).resolves.toBeUndefined()
+  await expect(
+    hook({ invitation: { role: "member" } })
+  ).resolves.toBeUndefined()
+  await Promise.all(
+    ["owner", "super_admin", null, undefined].map((role) =>
+      expect(hook({ invitation: { role } })).rejects.toMatchObject({
+        statusCode: 400,
+        body: { code: "INVALID_ORGANIZATION_INVITATION_ROLE" },
+      })
+    )
+  )
+}
+
 beforeAll(async () => {
+  emailSpies.send.mockResolvedValue(undefined)
   Object.assign(process.env, {
     NODE_ENV: "test",
     BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
@@ -55,8 +98,6 @@ beforeAll(async () => {
   blockedOrganizationPluginEndpoints =
     authModule.blockedOrganizationPluginEndpoints
   organizationSecurityHooks = authModule.organizationSecurityHooks
-  const authOpenApiModule = await import("./openapi")
-  generateAuthOpenApiSchema = authOpenApiModule.generateAuthOpenApiSchema
 
   const [{ db }, schema] = await Promise.all([
     import("@enterprise-agentic-saas/db"),
@@ -97,6 +138,56 @@ beforeAll(async () => {
       cookie: `${context.authCookies.sessionToken.name}=${signedToken}`,
       origin: "http://app.localhost",
     })
+  }
+  createOrganizationOwnerFixture = async () => {
+    sessionSequence += 1
+    const suffix = `${sessionSequence}-${crypto.randomUUID()}`
+    const userId = `organization-owner-${suffix}`
+    const token = `organization-owner-session-${suffix}`
+    const organizationId = `organization-${suffix}`
+    const now = new Date()
+
+    await db.insert(schema.user).values({
+      id: userId,
+      name: "Organization Owner",
+      email: `owner-${suffix}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await db.insert(schema.organization).values({
+      id: organizationId,
+      name: "Native Invitation Organization",
+      slug: `native-invitation-${suffix}`,
+      createdAt: now,
+    })
+    await db.insert(schema.member).values({
+      id: `owner-membership-${suffix}`,
+      organizationId,
+      userId,
+      role: "owner",
+      createdAt: now,
+    })
+    await db.insert(schema.session).values({
+      id: `owner-session-row-${suffix}`,
+      token,
+      userId,
+      activeOrganizationId: organizationId,
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    })
+
+    const context = await auth.$context
+    const signedToken = `${token}.${await makeSignature(token, context.secret)}`
+    return {
+      headers: new Headers({
+        "content-type": "application/json",
+        cookie: `${context.authCookies.sessionToken.name}=${signedToken}`,
+        origin: "http://app.localhost",
+      }),
+      organizationId,
+    }
   }
   createMultiSessionFixture = async (accountCount) => {
     const context = await auth.$context
@@ -575,30 +666,77 @@ describe("multi-session current-account revocation", () => {
 })
 
 describe("organization invitation acceptance", () => {
-  it("accepts only app-issued admin and member roles", async () => {
-    await expect(
-      organizationSecurityHooks.beforeAcceptInvitation({
-        invitation: { role: "admin" },
-      })
-    ).resolves.toBeUndefined()
-    await expect(
-      organizationSecurityHooks.beforeAcceptInvitation({
-        invitation: { role: "member" },
-      })
-    ).resolves.toBeUndefined()
-
+  it("creates and accepts only app-issued admin and member roles", async () => {
+    expect.hasAssertions()
     await Promise.all(
-      ["owner", "super_admin", null, undefined].map((role) =>
-        expect(
-          organizationSecurityHooks.beforeAcceptInvitation({
-            invitation: { role },
-          })
-        ).rejects.toMatchObject({
-          statusCode: 400,
-          body: { code: "INVALID_ORGANIZATION_INVITATION_ROLE" },
+      [
+        organizationSecurityHooks.beforeCreateInvitation,
+        organizationSecurityHooks.beforeAcceptInvitation,
+      ].map(assertInvitationRoleBoundary)
+    )
+  })
+
+  it("creates and resends one invitation through the native endpoint", async () => {
+    const fixture = await createOrganizationOwnerFixture()
+    const rawFailure = "provider token=raw-invitation-secret"
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    emailSpies.send.mockClear()
+    emailSpies.send.mockRejectedValueOnce(new Error(rawFailure))
+    const invite = (
+      resend: boolean,
+      role: "member" | "owner" = "member",
+      email = "member@example.test"
+    ) =>
+      auth.handler(
+        new Request("http://api.localhost/auth/organization/invite-member", {
+          method: "POST",
+          headers: fixture.headers,
+          body: JSON.stringify({
+            email,
+            organizationId: fixture.organizationId,
+            resend,
+            role,
+          }),
         })
       )
-    )
+
+    try {
+      const createdResponse = await invite(false)
+      const created = await createdResponse.json()
+      const resentResponse = await invite(true)
+      const resent = await resentResponse.json()
+      const ownerInvitationResponse = await invite(
+        false,
+        "owner",
+        "owner-invite@example.test"
+      )
+
+      expect(createdResponse.status).toBe(200)
+      expect(created).toMatchObject({
+        email: "member@example.test",
+        organizationId: fixture.organizationId,
+        role: "member",
+        status: "pending",
+      })
+      expect(resentResponse.status).toBe(200)
+      expect(resent).toMatchObject({ id: created.id, status: "pending" })
+      expect(ownerInvitationResponse.status).toBe(400)
+      expect(await ownerInvitationResponse.json()).toMatchObject({
+        code: "INVALID_ORGANIZATION_INVITATION_ROLE",
+      })
+      expect(new Date(resent.expiresAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(created.expiresAt).getTime()
+      )
+      expect(emailSpies.send).toHaveBeenCalledTimes(2)
+      expect(errorLog).toHaveBeenCalledWith({
+        component: "better-auth",
+        event: "request_failed",
+        level: "error",
+      })
+      expect(JSON.stringify(errorLog.mock.calls)).not.toContain(rawFailure)
+    } finally {
+      errorLog.mockRestore()
+    }
   })
 })
 
@@ -625,8 +763,8 @@ describe("app-owned organization boundary", () => {
     )
   })
 
-  it("generates the enabled auth routes and only recipient-facing organization routes", async () => {
-    const schema = await generateAuthOpenApiSchema()
+  it("generates the native invitation and recipient-facing organization routes", async () => {
+    const schema = await auth.api.generateOpenAPISchema()
     const paths = Object.keys(schema.paths)
 
     expect(paths).toEqual(
@@ -641,10 +779,11 @@ describe("app-owned organization boundary", () => {
       path.startsWith("/organization/")
     )
 
-    expect(organizationPaths).toHaveLength(4)
+    expect(organizationPaths).toHaveLength(5)
     expect(organizationPaths).toEqual(
       expect.arrayContaining([
         "/organization/get-invitation",
+        "/organization/invite-member",
         "/organization/list-user-invitations",
         "/organization/accept-invitation",
         "/organization/reject-invitation",
@@ -663,6 +802,20 @@ describe("app-owned organization boundary", () => {
     )
 
     expect(response.status).toBe(404)
+  })
+
+  it("serves the native Better Auth OpenAPI source", async () => {
+    const response = await auth.handler(
+      new Request("http://api.localhost/auth/open-api/generate-schema")
+    )
+    const schema = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(schema).toMatchObject({
+      openapi: "3.1.1",
+      paths: expect.any(Object),
+    })
+    expect(Object.keys(schema.paths)).toContain("/organization/invite-member")
   })
 })
 

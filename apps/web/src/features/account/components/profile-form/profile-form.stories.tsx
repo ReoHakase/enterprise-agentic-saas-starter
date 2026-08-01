@@ -97,10 +97,8 @@ export const ApiFailure = meta.story({
       http.patch("*/me", () =>
         HttpResponse.json(
           {
-            error: {
-              code: "internal_error",
-              message: "Request failed.",
-            },
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
           },
           { status: 503 }
         )

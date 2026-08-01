@@ -5,7 +5,6 @@ import {
   scriptedCreateApprovalResumeRuntime,
   scriptedSseExecutionRegistry,
   scriptedSseMastra,
-  scriptedThreadTitleAgent,
 } from "../e2e/scripted-scenarios"
 import {
   createNativeChatRequest as chatRequest,
@@ -14,7 +13,6 @@ import {
   nativeRuntimeEnvironment as runtimeEnvironment,
   TEST_RUN_GRANT as GRANT,
 } from "../test-support/native-runtime"
-import { hasPendingMemoryCommit } from "../workflows/memory-commit"
 import type { AgentControlPlanePort } from "./ports"
 import { ProductAgentExecutionRegistry } from "./request-context"
 import {
@@ -51,7 +49,62 @@ const readRemaining = async (
 }
 
 describe("native runtime SSE privacy", () => {
-  it("emits run identity before provider startup and cancels through the private run endpoint", async () => {
+  it("reports a provider startup failure to the local raw boundary exactly once", async () => {
+    const providerFailure = new Error("MODEL_START_EXACTLY_ONCE")
+    const executionRegistry = new ProductAgentExecutionRegistry()
+    const stream = vi.fn<() => Promise<never>>(() =>
+      Promise.reject(providerFailure)
+    )
+    const mastra = createFakeMastra(stream)
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined)
+    const captureFailure = vi.fn<(code: AgentFailureCode) => void>()
+    const pending: Promise<unknown>[] = []
+
+    try {
+      const response = await handleAgentRuntimeRequest(
+        chatRequest(),
+        {
+          ...runtimeEnvironment,
+          DEV_SESSION_ID: "session-1",
+          DEV_WORKTREE_ID: "worktree-1",
+          NODE_ENV: "development",
+          OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+        },
+        { waitUntil: (promise) => pending.push(promise) },
+        {
+          captureFailure,
+          createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
+          createControlPlane: () => createControlPlane(),
+          executionRegistry,
+          mastra,
+          requireModelCredential: false,
+          toControlFailure: () => null,
+        }
+      )
+
+      const body = await response.text()
+      await Promise.all(pending)
+      const rawRecords = consoleError.mock.calls
+        .filter(([prefix]) => prefix === "[agent development]")
+        .map(([, record]) => record)
+
+      expect(rawRecords).toEqual([
+        expect.objectContaining({
+          "app.operation": "product-model-start",
+          "exception.message": providerFailure.message,
+        }),
+      ])
+      expect(captureFailure).toHaveBeenCalledWith("model_failed")
+      expect(body).toContain("Model response failed.")
+      expect(body).not.toContain(providerFailure.message)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it("emits run identity before provider startup and cancels from the request signal", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<
       (
@@ -85,7 +138,6 @@ describe("native runtime SSE privacy", () => {
       executionRegistry,
       mastra,
       requireModelCredential: false,
-      threadTitleAgent: scriptedThreadTitleAgent,
       toControlFailure: () => null,
     }
     const response = await handleAgentRuntimeRequest(
@@ -99,17 +151,9 @@ describe("native runtime SSE privacy", () => {
     const first = await reader.read()
     const decoder = new TextDecoder()
     let body = decoder.decode(first.value)
-    expect(body).toContain('"type":"data-run"')
+    expect(body).toContain('"messageMetadata":{"runId":"run_1"}')
 
-    const canceled = await handleAgentRuntimeRequest(
-      new Request("https://agent.internal/runs/run_1/cancel", {
-        method: "POST",
-      }),
-      runtimeEnvironment,
-      { waitUntil: (promise) => pending.push(promise) },
-      dependencies
-    )
-    expect(canceled.status).toBe(204)
+    requestController.abort(new DOMException("Stopped by user", "AbortError"))
     body += await readRemaining(reader, decoder)
     await Promise.all(pending)
 
@@ -188,7 +232,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry,
         mastra,
         requireModelCredential: false,
-        threadTitleAgent: composition.threadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -199,7 +242,7 @@ describe("native runtime SSE privacy", () => {
     await bodyPromise
     await Promise.all(pending)
 
-    expect(order).toEqual(["cancel", "usage", "release"])
+    expect(order).toEqual(["cancel", "release"])
   })
 
   it("bounds image-loading stalls behind the already-emitted run identity", async () => {
@@ -230,7 +273,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry,
         mastra,
         requireModelCredential: false,
-        threadTitleAgent: scriptedThreadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -238,7 +280,7 @@ describe("native runtime SSE privacy", () => {
     if (!reader) throw new Error("Expected SSE body")
     const first = await reader.read()
     let body = new TextDecoder().decode(first.value)
-    expect(body).toContain('"type":"data-run"')
+    expect(body).toContain('"messageMetadata":{"runId":"run_1"}')
 
     requestController.abort(new DOMException("Client stopped", "AbortError"))
     body += await readRemaining(reader, new TextDecoder())
@@ -275,7 +317,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry,
         mastra,
         requireModelCredential: false,
-        threadTitleAgent: scriptedThreadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -285,7 +326,7 @@ describe("native runtime SSE privacy", () => {
     const body = await bodyPromise
     await Promise.all(pending)
 
-    expect(body).toContain('"type":"data-run"')
+    expect(body).toContain('"messageMetadata":{"runId":"run_1"}')
     expect(body).toContain("Agent response timed out.")
     expect(body).not.toContain("Model response failed.")
     expect(finishRun).toHaveBeenCalledWith({
@@ -333,7 +374,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry,
         mastra,
         requireModelCredential: false,
-        threadTitleAgent: composition.threadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -389,7 +429,6 @@ describe("native runtime SSE privacy", () => {
           executionRegistry,
           mastra,
           requireModelCredential: false,
-          threadTitleAgent: composition.threadTitleAgent,
           toControlFailure: () => null,
         }
       )
@@ -445,7 +484,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry,
         mastra,
         requireModelCredential: false,
-        threadTitleAgent: composition.threadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -462,56 +500,6 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("fails the native stream after bounded settlement retries while preserving the Mastra journal", async () => {
-    const { composition, executionRegistry, mastra } = createModelRuntime([
-      {
-        parts: [{ type: "text", text: "PERSIST_BEFORE_SUCCESS" }],
-      },
-    ])
-    const settleMemoryCommit = vi
-      .fn<AgentControlPlanePort["settleMemoryCommit"]>()
-      .mockRejectedValue(new Error("application settlement unavailable"))
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const captureFailure = vi.fn<(code: AgentFailureCode) => void>()
-    const pending: Promise<unknown>[] = []
-
-    try {
-      const response = await handleAgentRuntimeRequest(
-        chatRequest(),
-        runtimeEnvironment,
-        { waitUntil: (promise) => pending.push(promise) },
-        {
-          captureFailure,
-          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-          createControlPlane: () =>
-            createControlPlane({ finishRun, settleMemoryCommit }),
-          executionRegistry,
-          mastra,
-          requireModelCredential: false,
-          threadTitleAgent: composition.threadTitleAgent,
-          toControlFailure: () => null,
-        }
-      )
-
-      await expect(response.text()).rejects.toThrow(
-        "Agent response persistence is deferred"
-      )
-      await Promise.all(pending)
-
-      expect(settleMemoryCommit).toHaveBeenCalledTimes(4)
-      expect(finishRun).not.toHaveBeenCalled()
-      expect(captureFailure).toHaveBeenCalledWith("memory_commit_deferred")
-      expect(captureFailure).not.toHaveBeenCalledWith("model_failed")
-      await expect(hasPendingMemoryCommit(mastra, "thread_1")).resolves.toBe(
-        true
-      )
-    } finally {
-      await composition.storage.close()
-    }
-  })
-
   it("redacts provider metadata on the actual SSE response path", async () => {
     const pending: Promise<unknown>[] = []
     const response = await handleAgentRuntimeRequest(
@@ -525,7 +513,6 @@ describe("native runtime SSE privacy", () => {
         executionRegistry: scriptedSseExecutionRegistry,
         mastra: scriptedSseMastra,
         requireModelCredential: false,
-        threadTitleAgent: scriptedThreadTitleAgent,
         toControlFailure: () => null,
       }
     )
@@ -533,10 +520,8 @@ describe("native runtime SSE privacy", () => {
     await Promise.all(pending)
 
     expect(body).toContain("SCRIPTED_NATIVE_SSE_OK")
-    expect(body).toContain('"type":"data-run"')
-    expect(body).toContain('"runId":"run_1"')
-    expect(body).toContain('"transient":true')
-    expect(body.indexOf('"type":"data-run"')).toBeLessThan(
+    expect(body).toContain('"messageMetadata":{"runId":"run_1"}')
+    expect(body.indexOf('"messageMetadata":{"runId":"run_1"}')).toBeLessThan(
       body.indexOf("SCRIPTED_NATIVE_SSE_OK")
     )
     expect(response.status).toBe(200)

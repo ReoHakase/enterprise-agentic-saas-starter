@@ -11,7 +11,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, asc, eq, inArray, sql } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
 import {
   getFileOwnerAdapter,
   releaseDeletedFileStorageObjectsInTransaction,
@@ -172,43 +171,27 @@ export const deleteIssueById = async (
   db: Db,
   input: DeleteIssueInput
 ): Promise<IssueDto | null> => {
-  try {
-    const row = await db.transaction((tx) =>
-      deleteIssueInTransaction(tx, input)
-    )
-    return row ? toIssueDto(row) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "deleteIssueById",
-    })
-  }
+  const row = await db.transaction((tx) => deleteIssueInTransaction(tx, input))
+  return row ? toIssueDto(row) : null
 }
 
 export const listIssueComments = async (
   db: Db,
   input: { organizationId: string; issueId: string }
 ): Promise<IssueCommentDto[]> => {
-  try {
-    const rows = await db
-      .select(issueCommentSelection)
-      .from(issueComments)
-      .leftJoin(user, tenantSafeAuthorJoin)
-      .where(
-        and(
-          eq(issueComments.organizationId, input.organizationId),
-          eq(issueComments.issueId, input.issueId)
-        )
+  const rows = await db
+    .select(issueCommentSelection)
+    .from(issueComments)
+    .leftJoin(user, tenantSafeAuthorJoin)
+    .where(
+      and(
+        eq(issueComments.organizationId, input.organizationId),
+        eq(issueComments.issueId, input.issueId)
       )
-      .orderBy(asc(issueComments.createdAt))
+    )
+    .orderBy(asc(issueComments.createdAt))
 
-    return rows.map(toIssueCommentDto)
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "listIssueComments",
-    })
-  }
+  return rows.map(toIssueCommentDto)
 }
 
 export const insertIssueComment = async (
@@ -220,70 +203,56 @@ export const insertIssueComment = async (
     body: string
   }
 ): Promise<IssueCommentDto> => {
-  try {
-    const rows = await db.transaction(async (tx) => {
-      const insertedRows = await tx
-        .insert(issueComments)
-        .values({ id: crypto.randomUUID(), ...input })
-        .returning()
-      if (insertedRows[0]) {
-        await tx.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          organizationId: input.organizationId,
-          actorUserId: input.authorId,
-          action: "issue.comment.created",
-          targetType: "issue_comment",
-          targetId: insertedRows[0].id,
-          metadata: { issueId: input.issueId },
-        })
-      }
-      return insertedRows
-    })
-    const comment = rows[0]
-    if (!comment) {
-      throw new Error("insert returned no comment")
+  const rows = await db.transaction(async (tx) => {
+    const insertedRows = await tx
+      .insert(issueComments)
+      .values({ id: crypto.randomUUID(), ...input })
+      .returning()
+    if (insertedRows[0]) {
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.organizationId,
+        actorUserId: input.authorId,
+        action: "issue.comment.created",
+        targetType: "issue_comment",
+        targetId: insertedRows[0].id,
+        metadata: { issueId: input.issueId },
+      })
     }
-    const hydrated = await findIssueCommentById(db, {
-      organizationId: input.organizationId,
-      issueId: input.issueId,
-      commentId: comment.id,
-    })
-    if (!hydrated) {
-      throw new Error("inserted comment could not be loaded")
-    }
-    return hydrated
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "insertIssueComment",
-    })
+    return insertedRows
+  })
+  const comment = rows[0]
+  if (!comment) {
+    throw new Error("insert returned no comment")
   }
+  const hydrated = await findIssueCommentById(db, {
+    organizationId: input.organizationId,
+    issueId: input.issueId,
+    commentId: comment.id,
+  })
+  if (!hydrated) {
+    throw new Error("inserted comment could not be loaded")
+  }
+  return hydrated
 }
 
 export const findIssueCommentById = async (
   db: Db,
   input: { organizationId: string; issueId: string; commentId: string }
 ): Promise<IssueCommentDto | null> => {
-  try {
-    const rows = await db
-      .select(issueCommentSelection)
-      .from(issueComments)
-      .leftJoin(user, tenantSafeAuthorJoin)
-      .where(
-        and(
-          eq(issueComments.id, input.commentId),
-          eq(issueComments.issueId, input.issueId),
-          eq(issueComments.organizationId, input.organizationId)
-        )
+  const rows = await db
+    .select(issueCommentSelection)
+    .from(issueComments)
+    .leftJoin(user, tenantSafeAuthorJoin)
+    .where(
+      and(
+        eq(issueComments.id, input.commentId),
+        eq(issueComments.issueId, input.issueId),
+        eq(issueComments.organizationId, input.organizationId)
       )
-      .limit(1)
-    return rows[0] ? toIssueCommentDto(rows[0]) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "findIssueCommentById",
-    })
-  }
+    )
+    .limit(1)
+  return rows[0] ? toIssueCommentDto(rows[0]) : null
 }
 
 export const updateIssueCommentById = async (
@@ -296,46 +265,39 @@ export const updateIssueCommentById = async (
     body: string
   }
 ): Promise<IssueCommentDto | null> => {
-  try {
-    const rows = await db.transaction(async (tx) => {
-      const updatedRows = await tx
-        .update(issueComments)
-        .set({ body: input.body, updatedAt: new Date() })
-        .where(
-          and(
-            eq(issueComments.id, input.commentId),
-            eq(issueComments.issueId, input.issueId),
-            eq(issueComments.organizationId, input.organizationId)
-          )
+  const rows = await db.transaction(async (tx) => {
+    const updatedRows = await tx
+      .update(issueComments)
+      .set({ body: input.body, updatedAt: new Date() })
+      .where(
+        and(
+          eq(issueComments.id, input.commentId),
+          eq(issueComments.issueId, input.issueId),
+          eq(issueComments.organizationId, input.organizationId)
         )
-        .returning()
-      if (updatedRows[0]) {
-        await tx.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "issue.comment.updated",
-          targetType: "issue_comment",
-          targetId: input.commentId,
-          metadata: { issueId: input.issueId },
-        })
-      }
-      return updatedRows
-    })
-    if (!rows[0]) {
-      return null
+      )
+      .returning()
+    if (updatedRows[0]) {
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: "issue.comment.updated",
+        targetType: "issue_comment",
+        targetId: input.commentId,
+        metadata: { issueId: input.issueId },
+      })
     }
-    return findIssueCommentById(db, {
-      organizationId: input.organizationId,
-      issueId: input.issueId,
-      commentId: input.commentId,
-    })
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "updateIssueCommentById",
-    })
+    return updatedRows
+  })
+  if (!rows[0]) {
+    return null
   }
+  return findIssueCommentById(db, {
+    organizationId: input.organizationId,
+    issueId: input.issueId,
+    commentId: input.commentId,
+  })
 }
 
 export const deleteIssueCommentById = async (
@@ -347,40 +309,33 @@ export const deleteIssueCommentById = async (
     commentId: string
   }
 ): Promise<IssueCommentDto | null> => {
-  try {
-    const current = await findIssueCommentById(db, input)
-    if (!current) {
-      return null
-    }
-    const rows = await db.transaction(async (tx) => {
-      const deletedRows = await tx
-        .delete(issueComments)
-        .where(
-          and(
-            eq(issueComments.id, input.commentId),
-            eq(issueComments.issueId, input.issueId),
-            eq(issueComments.organizationId, input.organizationId)
-          )
-        )
-        .returning()
-      if (deletedRows[0]) {
-        await tx.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "issue.comment.deleted",
-          targetType: "issue_comment",
-          targetId: input.commentId,
-          metadata: { issueId: input.issueId },
-        })
-      }
-      return deletedRows
-    })
-    return rows[0] ? current : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "deleteIssueCommentById",
-    })
+  const current = await findIssueCommentById(db, input)
+  if (!current) {
+    return null
   }
+  const rows = await db.transaction(async (tx) => {
+    const deletedRows = await tx
+      .delete(issueComments)
+      .where(
+        and(
+          eq(issueComments.id, input.commentId),
+          eq(issueComments.issueId, input.issueId),
+          eq(issueComments.organizationId, input.organizationId)
+        )
+      )
+      .returning()
+    if (deletedRows[0]) {
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: "issue.comment.deleted",
+        targetType: "issue_comment",
+        targetId: input.commentId,
+        metadata: { issueId: input.issueId },
+      })
+    }
+    return deletedRows
+  })
+  return rows[0] ? current : null
 }

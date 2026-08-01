@@ -36,7 +36,6 @@ import {
   processOrganizationDeletionJobs,
   type OrganizationFilesBucket,
 } from "./modules/organizations/deletion-jobs"
-import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
 import {
   createOtelObservabilityRuntime,
@@ -195,7 +194,7 @@ const instrumentedAgentInternalApi = instrument(
     ): Promise<Response> | Response {
       configureWorkerObservability(workerEnv)
       if (isAgentMaintenanceMode(workerEnv.AGENT_MAINTENANCE_MODE)) {
-        return agentMaintenanceResponse()
+        return agentMaintenanceResponse(request)
       }
       // named entrypointはdefault/public Workerとは別isolateになり得るため、
       // asset prepare/execute/model imageの全経路でbindingを初期化する。
@@ -361,31 +360,6 @@ const workerWithScheduled = {
       })
       return result
     })
-    const invitationJobs = processInvitationEmailJobs({
-      database: db,
-      onFailure: ({ attempts, errorCode, retryable }) => {
-        logScheduledFailure("invitation-email", errorCode, {
-          attempts,
-          retryable,
-        })
-        console.error({
-          attempts,
-          component: "invitation-email",
-          errorCode,
-          event: "delivery_job_failed",
-          level: "error",
-          retryable,
-        })
-      },
-    }).then((result) => {
-      console.info({
-        component: "invitation-email",
-        event: "delivery_batch_completed",
-        level: "info",
-        ...result,
-      })
-      return result
-    })
     const agentActionSweep = sweepAgentActions(db).then((result) => {
       console.info({
         component: "agent-action-sweep",
@@ -403,7 +377,6 @@ const workerWithScheduled = {
         fileCleanupJobs,
         profileImageCleanupJobs,
         agentAssetLifecycle,
-        invitationJobs,
       ]).then(() => undefined)
     )
   },

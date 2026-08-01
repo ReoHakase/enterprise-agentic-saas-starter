@@ -77,7 +77,46 @@ const createOpenApiDocument = async (): Promise<JsonObject> => {
   }
 }
 
-describe("public OpenAPI consumer contract", () => {
+describe("app-owned OpenAPI consumer contract", () => {
+  it("does not merge Better Auth paths or components", async () => {
+    const document = await createOpenApiDocument()
+    const paths = requiredObject(document.paths, "paths")
+    const components = requiredObject(document.components, "components")
+    const securitySchemes = requiredObject(
+      components.securitySchemes,
+      "securitySchemes"
+    )
+
+    expect(document.openapi).toBe("3.0.3")
+    expect(Object.keys(paths).some((path) => path.startsWith("/auth/"))).toBe(
+      false
+    )
+    expect(Object.keys(securitySchemes)).toEqual(["sessionCookie"])
+  })
+
+  it("documents the maintenance response on every public Agent operation", async () => {
+    const document = await createOpenApiDocument()
+    const paths = requiredObject(document.paths, "paths")
+
+    for (const [path, pathValue] of Object.entries(paths)) {
+      if (!path.startsWith("/agent/")) continue
+      const pathItem = requiredObject(pathValue, path)
+      for (const method of operationMethods) {
+        const operationValue = pathItem[method]
+        if (operationValue === undefined) continue
+        const operation = requiredObject(
+          operationValue,
+          `${method.toUpperCase()} ${path}`
+        )
+        const responses = requiredObject(
+          operation.responses,
+          `${method.toUpperCase()} ${path} responses`
+        )
+        expect(responses).toHaveProperty("503")
+      }
+    }
+  })
+
   it("documents every operation with English metadata and classifications", async () => {
     const document = await createOpenApiDocument()
     if (!Array.isArray(document.tags)) {

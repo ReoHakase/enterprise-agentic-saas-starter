@@ -1,10 +1,11 @@
 import type { UseChatHelpers } from "@ai-sdk/react"
 import type { QueryClient } from "@tanstack/react-query"
-import type { ChatOnDataCallback, ChatOnFinishCallback } from "ai"
+import type { ChatOnFinishCallback } from "ai"
 import { useCallback, useRef, useState } from "react"
 
 import { issueKeys } from "@/features/issues"
 import { apiClient } from "@/lib/api-client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { cancelAgentRun } from "../api"
 import type {
@@ -55,6 +56,10 @@ const createStopAttempt = () => {
   })
   return { promise, resolve: resolveAttempt }
 }
+const latestRunId = (messages: AgentChatMessage[]) =>
+  messages.findLast(
+    (message) => message.role === "assistant" && message.metadata?.runId
+  )?.metadata?.runId
 
 export const useAgentStopLifecycle = ({
   busyRef,
@@ -84,6 +89,7 @@ export const useAgentStopLifecycle = ({
     "idle" | "canceling" | "failed"
   >("idle")
   const activeRunIdRef = useRef<string | undefined>(undefined)
+  const settledRunIdRef = useRef<string | undefined>(undefined)
   const cancelRequestedRef = useRef(false)
   const cancelRequestRef = useRef<Promise<void> | undefined>(undefined)
   const finalizingStopRef = useRef(false)
@@ -115,7 +121,8 @@ export const useAgentStopLifecycle = ({
           throw new Error("Agent run did not cancel")
         }
         throw new Error("Agent run returned an unsupported status")
-      } catch {
+      } catch (error) {
+        reportObservedError(error)
         activeRunIdRef.current = runId
         setCancelState("failed")
         return "error" satisfies CancelOutcome
@@ -127,7 +134,9 @@ export const useAgentStopLifecycle = ({
     if (!localStopRef.current) {
       localStopRef.current = chatControlsRef.current
         .stop()
-        .catch(() => undefined)
+        .catch((error: unknown) => {
+          reportObservedError(error)
+        })
     }
     return localStopRef.current
   }, [])
@@ -163,6 +172,7 @@ export const useAgentStopLifecycle = ({
       const settled = outcome !== "error"
       if (settled) {
         cancelRequestedRef.current = false
+        settledRunIdRef.current = activeRunIdRef.current
         activeRunIdRef.current = undefined
         localStopRef.current = undefined
         setCancelState("idle")
@@ -209,26 +219,41 @@ export const useAgentStopLifecycle = ({
     },
     [cancelKnownRun, finalizeStop]
   )
-  const onData = useCallback<ChatOnDataCallback<AgentChatMessage>>(
-    (dataPart) => {
-      if (dataPart.type === "data-run") {
-        activeRunIdRef.current = dataPart.data.runId
-        if (cancelRequestedRef.current) {
-          void requestAuthoritativeCancel(dataPart.data.runId)
-        }
-      }
+  const observeMessages = useCallback(
+    (messages: AgentChatMessage[]) => {
+      const runId = latestRunId(messages)
+      if (
+        !runId ||
+        activeRunIdRef.current === runId ||
+        settledRunIdRef.current === runId
+      )
+        return
+      activeRunIdRef.current = runId
+      if (cancelRequestedRef.current) void requestAuthoritativeCancel(runId)
     },
     [requestAuthoritativeCancel]
   )
-  const onError = useCallback(() => {
-    if (!cancelRequestedRef.current) activeRunIdRef.current = undefined
+  const onError = useCallback((error: Error) => {
+    reportObservedError(error)
+    if (!cancelRequestedRef.current) {
+      settledRunIdRef.current = activeRunIdRef.current
+      activeRunIdRef.current = undefined
+    }
   }, [])
   const interceptFinish = useCallback(
     (event: FinishEvent) => {
       if (finalizingStopRef.current) return true
       if (!cancelRequestedRef.current) {
+        settledRunIdRef.current =
+          event.message.metadata?.runId ?? activeRunIdRef.current
         activeRunIdRef.current = undefined
         return false
+      }
+      const eventRunId = event.message.metadata?.runId
+      if (!activeRunIdRef.current && eventRunId) {
+        activeRunIdRef.current = eventRunId
+        void requestAuthoritativeCancel(eventRunId)
+        return true
       }
       if (!activeRunIdRef.current) {
         const outcome: CancelOutcome =
@@ -239,7 +264,7 @@ export const useAgentStopLifecycle = ({
       }
       return true
     },
-    [finalizeStop]
+    [finalizeStop, requestAuthoritativeCancel]
   )
   const stopCurrentTurn = useCallback((): Promise<boolean> => {
     if (stopAttemptRef.current) return stopAttemptRef.current.promise
@@ -282,7 +307,7 @@ export const useAgentStopLifecycle = ({
     ensureLocalStop,
     interceptFinish,
     isCancelRequested,
-    onData,
+    observeMessages,
     onError,
     stopCurrentTurn,
     turnStopped,

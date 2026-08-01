@@ -59,7 +59,6 @@ const filterState = (state: IssueSearchState): IssueSearchPatch => ({
   dueTo: state.dueTo,
   dueFromOffset: state.dueFromOffset,
   dueToOffset: state.dueToOffset,
-  dueOffset: 0,
 })
 const defaultFilterState = filterState(defaultIssueSearchState)
 const defaultFilterStateKey = JSON.stringify(defaultFilterState)

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "./error"
+import { httpError } from "@/test-support/http-error"
+
 import { showConsoleApiErrorToast } from "./error-toast"
 
 const mocks = vi.hoisted(() => ({
@@ -15,22 +16,16 @@ vi.mock("sonner", () => ({
 describe("console API error toast", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("renders the action fallback and safe support reference", () => {
+  it("renders only fixed action and recovery copy", () => {
     showConsoleApiErrorToast(
-      new ConsoleApiError({
-        code: "internal_error",
-        message: "Internal server error",
-        requestId: "req_toast_01",
-        status: 500,
-      }),
+      httpError(500, "internal_error"),
       "The session could not be revoked."
     )
 
     expect(mocks.toastError).toHaveBeenCalledWith(
       "The session could not be revoked.",
       {
-        description:
-          "Try again. If the problem continues, contact support. Reference ID: req_toast_01",
+        description: "Try again. If the problem continues, contact support.",
       }
     )
   })

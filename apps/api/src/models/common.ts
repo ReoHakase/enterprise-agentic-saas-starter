@@ -4,11 +4,7 @@ export const nonEmptyStringModel = v.pipe(v.string(), v.minLength(1))
 
 export const isoTimestampModel = v.pipe(v.string(), v.isoTimestamp())
 
-export const organizationRoleModel = v.picklist([
-  "super_admin",
-  "admin",
-  "member",
-])
+export const organizationRoleModel = v.picklist(["owner", "admin", "member"])
 
 export const organizationIdParamsModel = v.object({
   organizationId: nonEmptyStringModel,

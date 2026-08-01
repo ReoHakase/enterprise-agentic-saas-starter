@@ -2,8 +2,8 @@ export { organizationSummaryModel } from "./model"
 export type { OrganizationSummary } from "./domain"
 /** @internal */
 export {
-  insertOrganizationWithSuperAdmin,
-  transferSuperAdminById,
+  insertOrganizationWithOwner,
+  transferOwnershipById,
   updateMemberRoleById,
 } from "./repository"
 export { listOrganizationsForUser } from "./repository"

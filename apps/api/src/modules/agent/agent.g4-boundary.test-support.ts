@@ -69,11 +69,9 @@ export const startInternalApiServer = async (
 }
 
 export const startAgentHost = async ({
-  crashWindow,
   internalApiUrl,
   storageUrl,
 }: {
-  crashWindow?: string
   internalApiUrl: string
   storageUrl: string
 }): Promise<{ child: ChildProcess; url: string }> => {
@@ -86,11 +84,10 @@ export const startAgentHost = async ({
       ),
       `AGENT_G4_INTERNAL_API_URL=${internalApiUrl}`,
       `AGENT_G4_STORAGE_URL=${storageUrl}`,
-      ...(crashWindow ? [`AGENT_G4_CRASH_WINDOW=${crashWindow}`] : []),
       "bun",
       "--no-env-file",
       "run",
-      "test:g4-memory-host",
+      "scripts/g4-memory-host.ts",
     ],
     {
       cwd: join(repositoryRoot, "apps/agent"),
@@ -125,15 +122,6 @@ export const startAgentHost = async ({
       resolveHost({ child, url: match[1] })
     })
   })
-}
-
-export const crashChild = async (child: ChildProcess): Promise<void> => {
-  if (child.exitCode !== null) return
-  const exited = new Promise<void>((resolveExit) =>
-    child.once("exit", () => resolveExit())
-  )
-  child.kill("SIGKILL")
-  await exited
 }
 
 export const closeServer = (server: Server) =>

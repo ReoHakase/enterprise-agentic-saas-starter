@@ -6,7 +6,7 @@ import { OrganizationRoleBadge } from "./organization-role-badge"
 
 describe("OrganizationRoleBadge", () => {
   it.each([
-    ["super_admin", "Super Admin", "lucide-crown"],
+    ["owner", "Owner", "lucide-crown"],
     ["admin", "Admin", "lucide-shield"],
     ["member", "Member", "lucide-user-round"],
   ] satisfies ReadonlyArray<

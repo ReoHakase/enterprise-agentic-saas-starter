@@ -135,7 +135,7 @@ const startAgentHost = async ({
       "bun",
       "--no-env-file",
       "run",
-      "test:g4-memory-host",
+      "scripts/g4-memory-host.ts",
     ],
     {
       cwd: join(repositoryRoot, "apps/agent"),
@@ -203,7 +203,7 @@ const stopChild = async (child: ChildProcess): Promise<void> => {
 const readNotFound = async (
   response: Response,
   forbiddenValues: readonly string[]
-): Promise<{ code: string; message: string }> => {
+): Promise<string> => {
   expect(response.status).toBe(404)
   const bodyText = await response.text()
   expect(bodyText.length).toBeLessThan(512)
@@ -215,16 +215,11 @@ const readNotFound = async (
     !body ||
     typeof body !== "object" ||
     !("error" in body) ||
-    !body.error ||
-    typeof body.error !== "object" ||
-    !("code" in body.error) ||
-    typeof body.error.code !== "string" ||
-    !("message" in body.error) ||
-    typeof body.error.message !== "string"
+    typeof body.error !== "string"
   ) {
     throw new Error("Public not-found response is invalid")
   }
-  return { code: body.error.code, message: body.error.message }
+  return body.error
 }
 
 describe("Agent public API to private Memory boundary", () => {
@@ -269,7 +264,7 @@ describe("Agent public API to private Memory boundary", () => {
           id: "agent-member-a",
           organizationId: "agent-org-a",
           userId: "agent-user-a",
-          role: "super_admin",
+          role: "owner",
           createdAt: now,
         },
         {
@@ -390,11 +385,15 @@ describe("Agent public API to private Memory boundary", () => {
       )
       expect(chat.status).toBe(200)
       expect(await chat.text()).toContain("SCRIPTED_AGENT_OK")
-      expect(
-        await fetch(`${host.url}/__g4/drain`, { method: "POST" }).then(
-          (response) => response.status
-        )
-      ).toBe(200)
+
+      await vi.waitFor(async () => {
+        expect(
+          await db
+            .select({ status: schema.agentRuns.status })
+            .from(schema.agentRuns)
+            .where(eq(schema.agentRuns.threadId, threadId))
+        ).toEqual([{ status: "completed" }])
+      })
 
       const tickets = await db
         .select({
@@ -407,15 +406,6 @@ describe("Agent public API to private Memory boundary", () => {
         expect.objectContaining({
           consumedAt: expect.any(Date),
           revokedAt: null,
-        }),
-      ])
-      const runs = await db
-        .select({ status: schema.agentRuns.status })
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.threadId, threadId))
-      expect(runs).toEqual([
-        expect.objectContaining({
-          status: "completed",
         }),
       ])
       const grants = await db
@@ -452,18 +442,12 @@ describe("Agent public API to private Memory boundary", () => {
           .where(eq(schema.issues.organizationId, "agent-org-a"))
       ).toEqual([{ title: "Scripted Agent cross-worker issue" }])
 
-      expect(
-        await fetch(`${host.url}/__g4/reopen`, { method: "POST" }).then(
-          (response) => response.status
-        )
-      ).toBe(200)
-
       const listed = await app.handle(publicRequest("/agent/threads"))
       expect(listed.status).toBe(200)
       expect(await listed.json()).toEqual([
         expect.objectContaining({
           id: threadId,
-          title: "Scripted Agent conversation",
+          title: "New conversation",
         }),
       ])
       const history = await app.handle(

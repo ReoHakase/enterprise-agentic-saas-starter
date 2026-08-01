@@ -18,11 +18,14 @@ import { mermaid } from "@streamdown/mermaid"
 import { CopyIcon, ExternalLinkIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { memo, useCallback } from "react"
+import { toast } from "sonner"
 import {
   Streamdown,
   type LinkSafetyConfig,
   type LinkSafetyModalProps,
 } from "streamdown"
+
+import { reportObservedError } from "@/lib/report-observed-error"
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>
 
@@ -42,7 +45,10 @@ const MessageLinkSafetyModal = ({
   )
   const handleCopy = useCallback(() => {
     if (!navigator.clipboard) return
-    void navigator.clipboard.writeText(url).catch(() => undefined)
+    void navigator.clipboard.writeText(url).catch((error: unknown) => {
+      reportObservedError(error, { operation: "agent.link.copy" })
+      toast.error("The link could not be copied.")
+    })
   }, [url])
   const handleConfirm = useCallback(() => {
     onConfirm()

@@ -46,38 +46,61 @@ processors:
     trace_statements:
       - context: resource
         statements:
-          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - delete_matching_keys(attributes, "(?i)(?:^|[._-])(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)(?:$|[._-])")
       - context: span
         statements:
           - set(resource.attributes["dev.worktree.id"], attributes["dev.worktree.id"]) where resource.attributes["dev.worktree.id"] == nil and attributes["dev.worktree.id"] != nil
           - set(resource.attributes["dev.session.id"], attributes["dev.session.id"]) where resource.attributes["dev.session.id"] == nil and attributes["dev.session.id"] != nil
-          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - delete_matching_keys(attributes, "(?i)(?:^|[._-])(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)(?:$|[._-])")
           - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:cookie|set[._-]?cookie)\\b\\s*[:=]\\s*)[^\\r\\n,]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
-          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|access_token|authorization_code|client_secret|code|id_token|oauth_token|refresh_token|state|signature|sig|token)=)[^&#\\s]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
       - context: spanevent
         statements:
-          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - delete_matching_keys(attributes, "(?i)(?:^|[._-])(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)(?:$|[._-])")
           - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:cookie|set[._-]?cookie)\\b\\s*[:=]\\s*)[^\\r\\n,]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
-          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|access_token|authorization_code|client_secret|code|id_token|oauth_token|refresh_token|state|signature|sig|token)=)[^&#\\s]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
     log_statements:
       - context: resource
         statements:
-          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - delete_matching_keys(attributes, "(?i)(?:^|[._-])(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)(?:$|[._-])")
       - context: log
         statements:
-          - delete_matching_keys(attributes, "(?i)^(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)$")
+          - delete_matching_keys(attributes, "(?i)(?:^|[._-])(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)(?:$|[._-])")
           - replace_all_patterns(attributes, "value", "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)(\\b(?:cookie|set[._-]?cookie)\\b\\s*[:=]\\s*)[^\\r\\n,]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]")
-          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]")
+          - replace_all_patterns(attributes, "value", "\\beyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", "[REDACTED]")
+          - replace_all_patterns(attributes, "value", "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|access_token|authorization_code|client_secret|code|id_token|oauth_token|refresh_token|state|signature|sig|token)=)[^&#\\s]+", "$$1[REDACTED]")
           - replace_all_patterns(attributes, "value", "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@")
           - replace_pattern(body, "(?i)\\b(?:bearer|basic)\\s+[A-Za-z0-9+/._~=-]+", "[REDACTED]") where IsString(body)
+          - replace_pattern(body, "(?i)(\\b(?:cookie|set[._-]?cookie)\\b\\s*[:=]\\s*)[^\\r\\n,]+", "$$1[REDACTED]") where IsString(body)
           - replace_pattern(body, "(?i)(\\b(?:authorization|proxy[._-]?authorization|cookie|set[._-]?cookie|api[._-]?key|access[._-]?token|refresh[._-]?token|id[._-]?token|client[._-]?secret|private[._-]?key|run[._-]?grant|connection[._-]?ticket|authorization[._-]?code|verification[._-]?code|password|credential|secret|token)\\b\\s*[:=]\\s*)[^\\s,;&#]+", "$$1[REDACTED]") where IsString(body)
-          - replace_pattern(body, "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|signature|sig)=)[^&#\\s]+", "$$1[REDACTED]") where IsString(body)
+          - replace_pattern(body, "\\beyJ[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b", "[REDACTED]") where IsString(body)
+          - replace_pattern(body, "(?i)([?&](?:x-amz-(?:credential|security-token|signature)|x-goog-(?:credential|signature)|access_token|authorization_code|client_secret|code|id_token|oauth_token|refresh_token|state|signature|sig|token)=)[^&#\\s]+", "$$1[REDACTED]") where IsString(body)
           - replace_pattern(body, "(?i)(https?://)[^/@\\s:]+:[^/@\\s]+@", "$$1[REDACTED]:[REDACTED]@") where IsString(body)
+  transform/remove-trace-error-details:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:exception(?:\\.|$)|error(?:\\.|$))")
+          - set(status.message, "") where status.message != nil
+      - context: spanevent
+        statements:
+          - delete_matching_keys(attributes, "(?i)^(?:exception(?:\\.|$)|error(?:\\.|$))")
+  filter/drop-trace-exceptions:
+    error_mode: ignore
+    traces:
+      spanevent:
+        - 'IsMatch(name, "(?i)^exception(?:\\..*)?$")'
   batch:
 
 exporters:
@@ -99,7 +122,11 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [transform/redact-auth, batch]
+      processors:
+        - transform/redact-auth
+        - transform/remove-trace-error-details
+        - filter/drop-trace-exceptions
+        - batch
       exporters: [otlp_http/traces, spanmetrics]
     metrics:
       receivers: [prometheus/collector, spanmetrics]

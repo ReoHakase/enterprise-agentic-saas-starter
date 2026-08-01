@@ -54,7 +54,7 @@ describe("organization deletion and membership transitions", () => {
       id: "member_org_3_owner",
       userId: "user_1",
       organizationId: "org_3",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     })
     await db.insert(schema.session).values([
@@ -183,10 +183,7 @@ describe("organization deletion and membership transitions", () => {
     )
     expect(staleReplay.status).toBe(403)
     expect(await staleReplay.json()).toMatchObject({
-      error: {
-        code: "step_up_required",
-        context: { action: "organization.delete" },
-      },
+      error: "step_up_required",
     })
 
     const otherActorReplay = await app.handle(
@@ -227,18 +224,7 @@ describe("organization deletion and membership transitions", () => {
       })
     )
     expect(collision.status).toBe(409)
-    expect(await collision.json()).toMatchObject({
-      error: {
-        code: "conflict",
-        context: {
-          constraint: "idempotency_key",
-          field: "idempotencyKey",
-        },
-        fieldErrors: {
-          idempotencyKey: ["Idempotency key has already been used"],
-        },
-      },
-    })
+    expect(await collision.json()).toMatchObject({ error: "conflict" })
     expect(
       await db
         .select({ id: schema.organization.id })
@@ -250,7 +236,7 @@ describe("organization deletion and membership transitions", () => {
     ).toHaveLength(1)
   })
 
-  it("returns 403 when an admin attempts a super-admin-only role change", async () => {
+  it("returns 403 when an admin attempts an owner-only role change", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest("/organizations/org_1/members/member_4", {
@@ -274,13 +260,7 @@ describe("organization deletion and membership transitions", () => {
     )
     expect(response.status).toBe(403)
     expect(await response.json()).toMatchObject({
-      error: {
-        code: "step_up_required",
-        context: {
-          action: "organization.member.role_update",
-          maxAgeSeconds: 900,
-        },
-      },
+      error: "step_up_required",
     })
   })
 
@@ -400,7 +380,7 @@ describe("organization deletion and membership transitions", () => {
     }
   })
 
-  it("transfers ownership atomically and keeps one super admin", async () => {
+  it("transfers ownership atomically and keeps one owner", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
     const wrong = await app.handle(
@@ -411,7 +391,9 @@ describe("organization deletion and membership transitions", () => {
       })
     )
     expect(wrong.status).toBe(400)
-    expect((await wrong.json()).error.code).toBe("confirmation_required")
+    expect(await wrong.json()).toMatchObject({
+      error: "confirmation_required",
+    })
 
     const response = await app.handle(
       jsonRequest("/organizations/org_1/ownership-transfer", {
@@ -426,17 +408,15 @@ describe("organization deletion and membership transitions", () => {
     expect(response.status).toBe(200)
     const members = await response.json()
     expect(
-      members.filter((item: { role: string }) => item.role === "super_admin")
+      members.filter((item: { role: string }) => item.role === "owner")
     ).toHaveLength(1)
     expect(
       members.find((item: { id: string }) => item.id === "member_4").role
-    ).toBe("super_admin")
+    ).toBe("owner")
 
     const audits = await db.select().from(schema.auditLogs)
     expect(
-      audits.some(
-        (event) => event.action === "organization.super_admin.transferred"
-      )
+      audits.some((event) => event.action === "organization.owner.transferred")
     ).toBe(true)
   })
 

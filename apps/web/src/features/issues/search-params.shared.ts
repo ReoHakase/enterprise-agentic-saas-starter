@@ -120,15 +120,6 @@ const parsePageSize = (value: string): 20 | 50 | 100 => {
   return 20
 }
 
-const isIssuePriority = (
-  value: string | null | undefined
-): value is (typeof issuePriorities)[number] =>
-  value === "no_priority" ||
-  value === "low" ||
-  value === "medium" ||
-  value === "high" ||
-  value === "urgent"
-
 const issueTableSearchParsers = {
   q: boundedString(200).withDefault(""),
   statuses: canonicalArrayParser(32, issueStatuses),
@@ -142,7 +133,6 @@ const issueTableSearchParsers = {
   dueTo: isoDateParser.withDefault(""),
   dueFromOffset: timezoneOffsetParser.withDefault(0),
   dueToOffset: timezoneOffsetParser.withDefault(0),
-  dueOffset: timezoneOffsetParser.withDefault(0),
   sort: parseAsStringLiteral(issueSorts).withDefault("updatedAt"),
   dir: parseAsStringLiteral(sortDirections).withDefault("desc"),
   page: positivePageParser.withDefault(1),
@@ -203,7 +193,6 @@ export const defaultIssueSearchState: IssueSearchState = {
   dueTo: "",
   dueFromOffset: 0,
   dueToOffset: 0,
-  dueOffset: 0,
   sort: "updatedAt",
   dir: "desc",
   page: 1,
@@ -212,57 +201,21 @@ export const defaultIssueSearchState: IssueSearchState = {
 }
 
 export const normalizeIssueSearchState = (
-  state: IssueSearchState,
-  source?: URLSearchParams | Record<string, string | string[] | undefined>
+  state: IssueSearchState
 ): IssueSearchState => {
-  const hasSourceKey = (key: string) =>
-    source instanceof URLSearchParams
-      ? source.has(key)
-      : source
-        ? source[key] !== undefined
-        : false
-  const sourceValue = (key: string) => {
-    const value =
-      source instanceof URLSearchParams ? source.get(key) : source?.[key]
-    return Array.isArray(value) ? value[0] : value
-  }
-  const legacyPriority = sourceValue("priority")
-  const useLegacyPriority =
-    !hasSourceKey("priorityFrom") &&
-    !hasSourceKey("priorityTo") &&
-    isIssuePriority(legacyPriority)
-  const requestedPriorityFrom = useLegacyPriority
-    ? legacyPriority
-    : state.priorityFrom
-  const requestedPriorityTo = useLegacyPriority
-    ? legacyPriority
-    : state.priorityTo
-  const priorityFromIndex = issuePriorities.indexOf(requestedPriorityFrom)
-  const priorityToIndex = issuePriorities.indexOf(requestedPriorityTo)
+  const priorityFromIndex = issuePriorities.indexOf(state.priorityFrom)
+  const priorityToIndex = issuePriorities.indexOf(state.priorityTo)
   const [priorityFrom, priorityTo] =
     priorityFromIndex <= priorityToIndex
-      ? [requestedPriorityFrom, requestedPriorityTo]
-      : [requestedPriorityTo, requestedPriorityFrom]
+      ? [state.priorityFrom, state.priorityTo]
+      : [state.priorityTo, state.priorityFrom]
   const hasReversedDueRange =
     Boolean(state.dueFrom && state.dueTo) && state.dueFrom > state.dueTo
   const clearDueRange = hasReversedDueRange
-  const legacyDueOffset = hasSourceKey("dueOffset")
-    ? state.dueOffset
-    : state.dueOffset === 0
-      ? undefined
-      : state.dueOffset
   const dueFrom = clearDueRange ? "" : state.dueFrom
   const dueTo = clearDueRange ? "" : state.dueTo
-  const dueFromOffset = clearDueRange
-    ? 0
-    : hasSourceKey("dueFromOffset")
-      ? state.dueFromOffset
-      : (legacyDueOffset ?? state.dueFromOffset)
-  const dueToOffset = clearDueRange
-    ? 0
-    : hasSourceKey("dueToOffset")
-      ? state.dueToOffset
-      : (legacyDueOffset ?? state.dueToOffset)
+  const dueFromOffset = clearDueRange ? 0 : state.dueFromOffset
+  const dueToOffset = clearDueRange ? 0 : state.dueToOffset
 
   return {
     ...state,
@@ -276,7 +229,6 @@ export const normalizeIssueSearchState = (
     dueTo,
     dueFromOffset,
     dueToOffset,
-    dueOffset: 0,
   }
 }
 

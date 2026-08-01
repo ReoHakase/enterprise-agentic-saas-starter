@@ -8,7 +8,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm"
 
 import type { AgentRunResult } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import {
   requireActiveMembership,
@@ -16,7 +16,7 @@ import {
   requireOwnedThread,
   validateGrantInTransaction,
 } from "./auth-repository"
-import { preserveAgentError, type AgentTransaction } from "./repository-support"
+import type { AgentTransaction } from "./repository-support"
 
 const cancelRunActionsInTransaction = async (
   tx: AgentTransaction,
@@ -66,54 +66,19 @@ const transitionAgentRun = async (
   }
 ): Promise<AgentRunResult> => {
   const tokenHash = await hashAgentToken(input.grant)
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const context = await validateGrantInTransaction(tx, {
-        tokenHash,
-        kind: "run",
-        now,
-        allowTerminalRun: true,
-        allowRevokedTerminalRun: true,
-      })
-      if (!context.runId || !context.runStatus) {
-        throw publicErrors.unauthorized("Agent capability is invalid")
-      }
-      if (context.runStatus === input.status) {
-        if (input.status === "canceled") {
-          await cancelRunActionsInTransaction(tx, {
-            organizationId: context.organizationId,
-            runId: context.runId,
-            now,
-          })
-        }
-        return { runId: context.runId, status: context.runStatus }
-      }
-      if (
-        context.runStatus !== "running" &&
-        context.runStatus !== "waiting_approval"
-      ) {
-        throw publicErrors.conflict("Agent run is already terminal", {
-          resource: "agent_run",
-        })
-      }
-      const rows = await tx
-        .update(agentRuns)
-        .set({ status: input.status, finishedAt: now })
-        .where(
-          and(
-            eq(agentRuns.id, context.runId),
-            eq(agentRuns.organizationId, context.organizationId),
-            inArray(agentRuns.status, ["running", "waiting_approval"])
-          )
-        )
-        .returning({ id: agentRuns.id, status: agentRuns.status })
-      const run = rows[0]
-      if (!run) {
-        throw publicErrors.conflict("Agent run changed concurrently", {
-          resource: "agent_run",
-        })
-      }
+  return await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const context = await validateGrantInTransaction(tx, {
+      tokenHash,
+      kind: "run",
+      now,
+      allowTerminalRun: true,
+      allowRevokedTerminalRun: true,
+    })
+    if (!context.runId || !context.runStatus) {
+      throw new HttpError({ code: "unauthorized" })
+    }
+    if (context.runStatus === input.status) {
       if (input.status === "canceled") {
         await cancelRunActionsInTransaction(tx, {
           organizationId: context.organizationId,
@@ -121,21 +86,48 @@ const transitionAgentRun = async (
           now,
         })
       }
-      await tx
-        .update(agentGrants)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentGrants.organizationId, context.organizationId),
-            eq(agentGrants.runId, context.runId),
-            isNull(agentGrants.revokedAt)
-          )
+      return { runId: context.runId, status: context.runStatus }
+    }
+    if (
+      context.runStatus !== "running" &&
+      context.runStatus !== "waiting_approval"
+    ) {
+      throw new HttpError({ code: "conflict" })
+    }
+    const rows = await tx
+      .update(agentRuns)
+      .set({ status: input.status, finishedAt: now })
+      .where(
+        and(
+          eq(agentRuns.id, context.runId),
+          eq(agentRuns.organizationId, context.organizationId),
+          inArray(agentRuns.status, ["running", "waiting_approval"])
         )
-      return { runId: run.id, status: run.status }
-    })
-  } catch (cause) {
-    return preserveAgentError(cause, "transitionAgentRun")
-  }
+      )
+      .returning({ id: agentRuns.id, status: agentRuns.status })
+    const run = rows[0]
+    if (!run) {
+      throw new HttpError({ code: "conflict" })
+    }
+    if (input.status === "canceled") {
+      await cancelRunActionsInTransaction(tx, {
+        organizationId: context.organizationId,
+        runId: context.runId,
+        now,
+      })
+    }
+    await tx
+      .update(agentGrants)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(agentGrants.organizationId, context.organizationId),
+          eq(agentGrants.runId, context.runId),
+          isNull(agentGrants.revokedAt)
+        )
+      )
+    return { runId: run.id, status: run.status }
+  })
 }
 
 export const cancelAgentRun = (db: Db, input: { grant: string; now?: Date }) =>
@@ -150,24 +142,81 @@ export const cancelAgentRunForSession = async (
     userId: string
     now?: Date
   }
-): Promise<AgentRunResult> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const thread = await requireOwnedThread(tx, {
-        activeOrganizationId: current.activeOrganizationId,
-        requireActive: false,
-        threadId: input.threadId,
-        userId: input.userId,
-      })
-      const rows = await tx
+): Promise<AgentRunResult> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireLiveSession(tx, { ...input, now })
+    await requireActiveMembership(tx, current)
+    const thread = await requireOwnedThread(tx, {
+      activeOrganizationId: current.activeOrganizationId,
+      requireActive: false,
+      threadId: input.threadId,
+      userId: input.userId,
+    })
+    const rows = await tx
+      .select({ id: agentRuns.id, status: agentRuns.status })
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.id, input.runId),
+          eq(agentRuns.organizationId, thread.organizationId),
+          eq(agentRuns.threadId, thread.id),
+          eq(agentRuns.sessionId, input.sessionId),
+          eq(agentRuns.userId, input.userId)
+        )
+      )
+      .limit(1)
+    const existing = rows[0]
+    if (!existing) {
+      throw new HttpError({ code: "not_found" })
+    }
+    const revokeRunGrants = () =>
+      tx
+        .update(agentGrants)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(agentGrants.organizationId, thread.organizationId),
+            eq(agentGrants.runId, existing.id),
+            isNull(agentGrants.revokedAt)
+          )
+        )
+    if (
+      existing.status !== "running" &&
+      existing.status !== "waiting_approval"
+    ) {
+      if (existing.status === "canceled") {
+        await cancelRunActionsInTransaction(tx, {
+          organizationId: thread.organizationId,
+          runId: existing.id,
+          now,
+        })
+      }
+      await revokeRunGrants()
+      return { runId: existing.id, status: existing.status }
+    }
+    const canceledRows = await tx
+      .update(agentRuns)
+      .set({ status: "canceled", finishedAt: now })
+      .where(
+        and(
+          eq(agentRuns.id, existing.id),
+          eq(agentRuns.organizationId, thread.organizationId),
+          eq(agentRuns.threadId, thread.id),
+          eq(agentRuns.sessionId, input.sessionId),
+          eq(agentRuns.userId, input.userId),
+          inArray(agentRuns.status, ["running", "waiting_approval"])
+        )
+      )
+      .returning({ id: agentRuns.id, status: agentRuns.status })
+    const canceled = canceledRows[0]
+    if (!canceled) {
+      const concurrentRows = await tx
         .select({ id: agentRuns.id, status: agentRuns.status })
         .from(agentRuns)
         .where(
           and(
-            eq(agentRuns.id, input.runId),
+            eq(agentRuns.id, existing.id),
             eq(agentRuns.organizationId, thread.organizationId),
             eq(agentRuns.threadId, thread.id),
             eq(agentRuns.sessionId, input.sessionId),
@@ -175,102 +224,34 @@ export const cancelAgentRunForSession = async (
           )
         )
         .limit(1)
-      const existing = rows[0]
-      if (!existing) {
-        throw publicErrors.notFound("Agent run not found", {
-          resource: "agent_run",
+      const concurrent = concurrentRows[0]
+      if (!concurrent) {
+        throw new HttpError({ code: "not_found" })
+      }
+      if (
+        concurrent.status === "running" ||
+        concurrent.status === "waiting_approval"
+      ) {
+        throw new HttpError({ code: "conflict" })
+      }
+      if (concurrent.status === "canceled") {
+        await cancelRunActionsInTransaction(tx, {
+          organizationId: thread.organizationId,
+          runId: existing.id,
+          now,
         })
       }
-      const revokeRunGrants = () =>
-        tx
-          .update(agentGrants)
-          .set({ revokedAt: now })
-          .where(
-            and(
-              eq(agentGrants.organizationId, thread.organizationId),
-              eq(agentGrants.runId, existing.id),
-              isNull(agentGrants.revokedAt)
-            )
-          )
-      if (
-        existing.status !== "running" &&
-        existing.status !== "waiting_approval"
-      ) {
-        if (existing.status === "canceled") {
-          await cancelRunActionsInTransaction(tx, {
-            organizationId: thread.organizationId,
-            runId: existing.id,
-            now,
-          })
-        }
-        await revokeRunGrants()
-        return { runId: existing.id, status: existing.status }
-      }
-      const canceledRows = await tx
-        .update(agentRuns)
-        .set({ status: "canceled", finishedAt: now })
-        .where(
-          and(
-            eq(agentRuns.id, existing.id),
-            eq(agentRuns.organizationId, thread.organizationId),
-            eq(agentRuns.threadId, thread.id),
-            eq(agentRuns.sessionId, input.sessionId),
-            eq(agentRuns.userId, input.userId),
-            inArray(agentRuns.status, ["running", "waiting_approval"])
-          )
-        )
-        .returning({ id: agentRuns.id, status: agentRuns.status })
-      const canceled = canceledRows[0]
-      if (!canceled) {
-        const concurrentRows = await tx
-          .select({ id: agentRuns.id, status: agentRuns.status })
-          .from(agentRuns)
-          .where(
-            and(
-              eq(agentRuns.id, existing.id),
-              eq(agentRuns.organizationId, thread.organizationId),
-              eq(agentRuns.threadId, thread.id),
-              eq(agentRuns.sessionId, input.sessionId),
-              eq(agentRuns.userId, input.userId)
-            )
-          )
-          .limit(1)
-        const concurrent = concurrentRows[0]
-        if (!concurrent) {
-          throw publicErrors.notFound("Agent run not found", {
-            resource: "agent_run",
-          })
-        }
-        if (
-          concurrent.status === "running" ||
-          concurrent.status === "waiting_approval"
-        ) {
-          throw publicErrors.conflict("Agent run changed concurrently", {
-            resource: "agent_run",
-          })
-        }
-        if (concurrent.status === "canceled") {
-          await cancelRunActionsInTransaction(tx, {
-            organizationId: thread.organizationId,
-            runId: existing.id,
-            now,
-          })
-        }
-        await revokeRunGrants()
-        return { runId: concurrent.id, status: concurrent.status }
-      }
-      await cancelRunActionsInTransaction(tx, {
-        organizationId: thread.organizationId,
-        runId: existing.id,
-        now,
-      })
       await revokeRunGrants()
-      return { runId: canceled.id, status: canceled.status }
+      return { runId: concurrent.id, status: concurrent.status }
+    }
+    await cancelRunActionsInTransaction(tx, {
+      organizationId: thread.organizationId,
+      runId: existing.id,
+      now,
     })
-  } catch (cause) {
-    return preserveAgentError(cause, "cancelAgentRunForSession")
-  }
-}
+    await revokeRunGrants()
+    return { runId: canceled.id, status: canceled.status }
+  })
 
 export const finishAgentRun = (
   db: Db,

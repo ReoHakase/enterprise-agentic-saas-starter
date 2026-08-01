@@ -73,7 +73,7 @@ const OrganizationSensitiveControls = ({
           Sensitive controls
         </h2>
         <p className="text-sm text-muted-foreground">
-          Only the Super Admin can transfer ownership or permanently delete this
+          Only the Owner can transfer ownership or permanently delete this
           organization.
         </p>
       </div>
@@ -161,14 +161,10 @@ export const OrganizationDangerZone = ({
       } catch (error) {
         if (isStepUpRequiredError(error)) {
           setFieldErrors({})
-          const action =
-            typeof error.context.action === "string"
-              ? error.context.action
-              : undefined
           setSubmitError(
             "Sign in again before deleting this organization, then retry with the same confirmation."
           )
-          setReauthenticationHref(getReauthenticationHref(action))
+          setReauthenticationHref(getReauthenticationHref())
           return
         }
 
@@ -288,7 +284,7 @@ export const OrganizationDangerZone = ({
     [organization.slug]
   )
 
-  if (organization.role !== "super_admin") {
+  if (organization.role !== "owner") {
     return <OrganizationSensitiveControls organization={organization} />
   }
 

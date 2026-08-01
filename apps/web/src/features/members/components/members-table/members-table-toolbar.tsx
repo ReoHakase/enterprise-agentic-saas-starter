@@ -53,12 +53,7 @@ type LoginMethod = MemberTableSearchState["methods"][number]
 
 const memberRoleOptions = memberTableRoles.map((role) => ({
   value: role,
-  label:
-    role === "super_admin"
-      ? "Super Admin"
-      : role === "admin"
-        ? "Admin"
-        : "Member",
+  label: role === "owner" ? "Owner" : role === "admin" ? "Admin" : "Member",
 })) satisfies DataTableFilterOption<OrganizationRole>[]
 const memberLoginMethodOptions = [
   { value: "github", label: "GitHub" },

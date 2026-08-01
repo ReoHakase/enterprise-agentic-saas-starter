@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(client?: unknown, organizationId?: string) => Promise<void>>(),
   deleteUserProfileImage: vi.fn<(client?: unknown) => Promise<void>>(),
   refresh: vi.fn<() => void>(),
+  reportObservedError: vi.fn<(error: unknown) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   uploadOrganizationProfileImageWithProgress:
     vi.fn<(input: MockUploadInput) => Promise<unknown>>(),
@@ -68,6 +69,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("sonner", () => ({
   toast: { success: mocks.toastSuccess },
+}))
+
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError: mocks.reportObservedError,
 }))
 
 const renderEditor = (
@@ -181,9 +186,11 @@ describe("ProfileImageEditor", () => {
 
   it("retries a failed upload but gives a newly selected crop a new upload ID", async () => {
     const actor = userEvent.setup()
+    const uploadError = new Error("private upload failure")
+    const retryError = new Error("private retry failure")
     mocks.uploadUserProfileImageWithProgress
-      .mockRejectedValueOnce(new Error("private upload failure"))
-      .mockRejectedValueOnce(new Error("private retry failure"))
+      .mockRejectedValueOnce(uploadError)
+      .mockRejectedValueOnce(retryError)
       .mockResolvedValueOnce(profileImageDto)
     renderEditor()
 
@@ -218,6 +225,8 @@ describe("ProfileImageEditor", () => {
     expect(
       mocks.uploadUserProfileImageWithProgress.mock.calls[2]?.[0].uploadId
     ).not.toBe(firstUploadId)
+    expect(mocks.reportObservedError).toHaveBeenNthCalledWith(1, uploadError)
+    expect(mocks.reportObservedError).toHaveBeenNthCalledWith(2, retryError)
   })
 
   it("uploads an organization crop through the organization helper", async () => {

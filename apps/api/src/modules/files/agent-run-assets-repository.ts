@@ -7,7 +7,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, gt, inArray, ne, notInArray } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { ValidGrant } from "../agent/public"
 import {
   AGENT_ASSET_MAX_READY_PER_ORGANIZATION,
@@ -84,7 +84,7 @@ export const listReusableAgentAssetsInTransaction = async (
     currentIds.length > AGENT_RUN_ASSET_MAX_COUNT ||
     new Set(currentIds).size !== currentIds.length
   ) {
-    throw publicErrors.validation("Invalid agent asset selection")
+    throw new HttpError({ code: "validation_error" })
   }
   const currentAssets = await selectCurrentAgentAssetsInTransaction(tx, {
     assetIds: currentIds,
@@ -92,19 +92,14 @@ export const listReusableAgentAssetsInTransaction = async (
     scope: input.scope,
   })
   if (currentAssets.length !== currentIds.length) {
-    throw publicErrors.notFound("Agent asset not found", {
-      resource: "agent_asset",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   const currentBytes = currentAssets.reduce(
     (sum, asset) => sum + asset.sizeBytes,
     0
   )
   if (currentBytes > AGENT_RUN_ASSET_MAX_BYTES) {
-    throw publicErrors.validation("Agent image selection is too large", {
-      field: "assetIds",
-      constraint: "max_total_bytes",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   const reusableCandidates = await tx
     .select({
@@ -175,7 +170,7 @@ export const bindAgentAssetsToRunInTransaction = async (
     new Set(expectedIds).size !== expectedIds.length ||
     expectedIds.length > AGENT_RUN_ASSET_MAX_COUNT
   ) {
-    throw publicErrors.validation("Invalid agent asset selection")
+    throw new HttpError({ code: "validation_error" })
   }
 
   const existing = await tx
@@ -195,10 +190,7 @@ export const bindAgentAssetsToRunInTransaction = async (
   if (existing.length > 0 || expectedIds.length === 0) {
     const existingIds = new Set(existing.map(({ assetId }) => assetId))
     if (expectedIds.some((assetId) => !existingIds.has(assetId))) {
-      throw publicErrors.conflict("Agent message id is already in use", {
-        reason: "idempotency_conflict",
-        resource: "agent_run",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return existing
   }
@@ -251,16 +243,11 @@ export const bindAgentAssetsToRunInTransaction = async (
         row.claimHolderId !== row.assetId
     )
   ) {
-    throw publicErrors.notFound("Agent asset not found", {
-      resource: "agent_asset",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   const totalBytes = rows.reduce((sum, row) => sum + row.sizeBytes, 0)
   if (totalBytes > AGENT_RUN_ASSET_MAX_BYTES) {
-    throw publicErrors.validation("Agent image selection is too large", {
-      field: "assetIds",
-      constraint: "max_total_bytes",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   await tx.insert(agentRunAssets).values(
     rows.map((row) => ({
@@ -285,14 +272,14 @@ export const bindReusableAgentAssetsToRunInTransaction = async (
   }
 ) => {
   if (!input.context.runId) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   const expectedIds = [...input.assetIds].toSorted()
   if (
     expectedIds.length > AGENT_RUN_ASSET_MAX_COUNT ||
     new Set(expectedIds).size !== expectedIds.length
   ) {
-    throw publicErrors.validation("Invalid agent asset selection")
+    throw new HttpError({ code: "validation_error" })
   }
   if (expectedIds.length === 0) return []
 
@@ -314,7 +301,7 @@ export const bindReusableAgentAssetsToRunInTransaction = async (
   const missingIds = expectedIds.filter((assetId) => !existingIds.has(assetId))
   if (missingIds.length === 0) return existing
   if (existing.length + missingIds.length > AGENT_RUN_ASSET_MAX_COUNT) {
-    throw publicErrors.validation("Invalid agent asset selection")
+    throw new HttpError({ code: "validation_error" })
   }
 
   const reusableRows = await tx
@@ -375,18 +362,13 @@ export const bindReusableAgentAssetsToRunInTransaction = async (
     reusableRows.length !== missingIds.length ||
     reusableRows.some(({ sourceEtag }) => !sourceEtag)
   ) {
-    throw publicErrors.notFound("Agent asset not found", {
-      resource: "agent_asset",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   const combinedBytes =
     existing.reduce((sum, row) => sum + row.sizeBytes, 0) +
     reusableRows.reduce((sum, row) => sum + row.sizeBytes, 0)
   if (combinedBytes > AGENT_RUN_ASSET_MAX_BYTES) {
-    throw publicErrors.validation("Agent image selection is too large", {
-      field: "assetIds",
-      constraint: "max_total_bytes",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   const snapshots = reusableRows.map((row) => ({
     organizationId: input.context.organizationId,

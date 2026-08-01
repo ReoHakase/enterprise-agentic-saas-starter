@@ -4,8 +4,10 @@ import {
   type PlaywrightTestConfig,
 } from "@playwright/test"
 
+import { w6Environment } from "./test/app/fixtures/environment"
+
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
-const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000"
+const baseURL = externalBaseUrl ?? w6Environment.webOrigin
 
 const appIntegrationConfig = {
   testDir: "./test/app",
@@ -32,7 +34,7 @@ const appIntegrationConfig = {
     : [
         {
           command: "bun run test:browser:mock-api",
-          url: "http://127.0.0.1:3001/health",
+          url: `${w6Environment.apiOrigin}/health`,
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },
@@ -43,9 +45,10 @@ const appIntegrationConfig = {
           timeout: 180_000,
           env: {
             ...process.env,
-            API_PUBLIC_URL: "http://127.0.0.1:3001",
+            API_PUBLIC_URL: w6Environment.apiOrigin,
             NEXT_DIST_DIR: ".next-browser",
-            NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:3001",
+            NEXT_PUBLIC_API_BASE_URL: w6Environment.apiOrigin,
+            PORT: String(w6Environment.webPort),
           },
         },
       ],

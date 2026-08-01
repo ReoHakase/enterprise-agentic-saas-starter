@@ -34,11 +34,7 @@ describe("readiness endpoint", () => {
 
     expect(response.status).toBe(503)
     expect(payload).toMatchObject({
-      error: {
-        code: "service_unavailable",
-        context: { retryAfter: 30 },
-        message: "Service temporarily unavailable",
-      },
+      error: "service_unavailable",
     })
     expect(JSON.stringify(payload)).not.toMatch(/libsql|database|closed/i)
   })

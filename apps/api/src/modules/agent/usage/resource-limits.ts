@@ -7,7 +7,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, asc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm"
 
-import { AppError } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 
 export type AgentResourceUsageTransaction = Parameters<
   Parameters<Db["transaction"]>[0]
@@ -90,17 +90,12 @@ const diagnosticText = (cause: unknown) => {
 }
 
 const limitExceeded = (input: { now: Date; windowEnd: Date }) =>
-  new AppError({
+  new HttpError({
     code: "rate_limited",
-    publicMessage: "Agent resource limit exceeded. Try again later",
-    publicContext: {
-      reason: "rate_limit_exceeded",
-      retryAfter: Math.max(
-        1,
-        Math.ceil((input.windowEnd.getTime() - input.now.getTime()) / 1000)
-      ),
-    },
-    privateContext: { module: "agent-resource-usage" },
+    retryAfter: Math.max(
+      1,
+      Math.ceil((input.windowEnd.getTime() - input.now.getTime()) / 1000)
+    ),
   })
 
 const concurrencyLimitExceeded = (input: {
@@ -108,19 +103,12 @@ const concurrencyLimitExceeded = (input: {
   now: Date
   retryAt: Date
 }) =>
-  new AppError({
+  new HttpError({
     code: "rate_limited",
-    publicMessage: "Too many agent runs are active. Try again later",
-    publicContext: {
-      constraint: input.constraint,
-      reason: "concurrency_limit_exceeded",
-      resource: "agent_run",
-      retryAfter: Math.max(
-        1,
-        Math.ceil((input.retryAt.getTime() - input.now.getTime()) / 1000)
-      ),
-    },
-    privateContext: { module: "agent-resource-usage" },
+    retryAfter: Math.max(
+      1,
+      Math.ceil((input.retryAt.getTime() - input.now.getTime()) / 1000)
+    ),
   })
 
 const usageBucketId = async (input: {

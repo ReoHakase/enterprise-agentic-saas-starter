@@ -20,7 +20,7 @@ import {
   organizationListModel,
   organizationMemberParamsModel,
   removeMemberBodyModel,
-  transferSuperAdminBodyModel,
+  transferOwnershipBodyModel,
   updateMemberRoleBodyModel,
   updateOrganizationBodyModel,
 } from "./model"
@@ -93,7 +93,7 @@ const createOrganizationCoreRoutes = (
           operationId: "createOrganization",
           summary: "Create an organization",
           description:
-            "Creates a tenant organization, installs the authenticated user as its sole super administrator, and activates the new organization unless the request explicitly preserves the current tenant.",
+            "Creates a tenant organization, installs the authenticated user as its sole owner, and activates the new organization unless the request explicitly preserves the current tenant.",
           tags: ["Organizations"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -171,7 +171,7 @@ const createOrganizationCoreRoutes = (
       {
         organizationAccess: {
           action: "organization.update",
-          allow: ["super_admin"],
+          allow: ["owner"],
           source: "params",
         },
         params: organizationIdParamsModel,
@@ -181,7 +181,7 @@ const createOrganizationCoreRoutes = (
           operationId: "updateOrganization",
           summary: "Update organization settings",
           description:
-            "Updates the active organization's validated name or slug. Only its current super administrator may perform this mutation, and slug conflicts return a bounded conflict response.",
+            "Updates the active organization's validated name or slug. Only its current owner may perform this mutation, and slug conflicts return a bounded conflict response.",
           tags: ["Organizations"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -221,7 +221,7 @@ const createOrganizationCoreRoutes = (
           operationId: "deleteOrganization",
           summary: "Delete an organization",
           description:
-            "Deletes tenant data only for the active organization's super administrator with a fresh session, exact slug, DELETE confirmation, and opaque idempotency key. Repeating the same actor, tenant, and key returns the same receipt while private R2 cleanup retries durably.",
+            "Deletes tenant data only for the active organization's owner with a fresh session, exact slug, DELETE confirmation, and opaque idempotency key. Repeating the same actor, tenant, and key returns the same receipt while private R2 cleanup retries durably.",
           tags: ["Organizations"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -275,7 +275,7 @@ const createOrganizationMemberRoutes = (
       {
         organizationAccess: {
           action: "organization.member.role_update",
-          allow: ["super_admin"],
+          allow: ["owner"],
           fresh: true,
           source: "params",
         },
@@ -286,7 +286,7 @@ const createOrganizationMemberRoutes = (
           operationId: "updateOrganizationMemberRole",
           summary: "Update an organization member role",
           description:
-            "Allows only the active organization's super administrator with a fresh session to change an admin or member role. Super administrator ownership must use the dedicated transfer operation.",
+            "Allows only the active organization's owner with a fresh session to change an admin or member role. Ownership must use the dedicated transfer operation.",
           tags: ["Organization members"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -297,7 +297,7 @@ const createOrganizationMemberRoutes = (
     .post(
       "/organizations/:organizationId/ownership-transfer",
       async ({ authContext, body, organizationAccess }) =>
-        service.transferSuperAdmin({
+        service.transferOwnership({
           userId: authContext.user.id,
           session: authContext.session,
           organizationId: organizationAccess.id,
@@ -306,19 +306,19 @@ const createOrganizationMemberRoutes = (
         }),
       {
         organizationAccess: {
-          action: "organization.transfer_super_admin",
-          allow: ["super_admin"],
+          action: "organization.transfer_owner",
+          allow: ["owner"],
           fresh: true,
           source: "params",
         },
         params: organizationIdParamsModel,
-        body: transferSuperAdminBodyModel,
+        body: transferOwnershipBodyModel,
         response: { 200: memberListModel, ...tenantErrorResponses },
         detail: {
-          operationId: "transferOrganizationSuperAdmin",
+          operationId: "transferOrganizationOwnership",
           summary: "Transfer organization ownership",
           description:
-            "Transfers the super administrator role transactionally after requiring a fresh session and exact confirmation of the target member's email. The organization retains exactly one super administrator.",
+            "Transfers the owner role transactionally after requiring a fresh session and exact confirmation of the target member's email. The organization retains exactly one owner.",
           tags: ["Organization members"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -339,7 +339,7 @@ const createOrganizationMemberRoutes = (
       {
         organizationAccess: {
           action: "organization.member.remove",
-          allow: ["super_admin", "admin"],
+          allow: ["owner", "admin"],
           fresh: true,
           source: "params",
         },

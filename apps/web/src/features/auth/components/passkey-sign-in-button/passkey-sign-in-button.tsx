@@ -10,6 +10,7 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
 import { safeAuthErrorMessage } from "@/features/auth"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { clearAuthenticatedQueryCache } from "../../query-cache"
 import { requirePasskeyAuthClient } from "../../runtime-guards"
@@ -37,12 +38,14 @@ export function PasskeySignInButton() {
           },
           onError: ({ error }) => {
             errorPresented = true
+            reportObservedError(error)
             router.refresh()
             toast.error(safeAuthErrorMessage(error, passkeySignInFallback))
           },
         },
       })
-    } catch {
+    } catch (error) {
+      reportObservedError(error)
       if (!errorPresented) {
         router.refresh()
         toast.error(passkeySignInFallback)

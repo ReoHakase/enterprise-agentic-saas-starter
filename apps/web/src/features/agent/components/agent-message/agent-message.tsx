@@ -18,8 +18,10 @@ import {
 import { isToolUIPart } from "ai"
 import { CheckIcon, CopyIcon } from "lucide-react"
 import { useCallback, useState } from "react"
+import { toast } from "sonner"
 
 import { clientEnv } from "@/lib/env.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { AgentChatMessage } from "../../schema"
 import { MessageResponse } from "../message-response/message-response"
@@ -41,8 +43,10 @@ const useCopyAnswer = (answer: string) => {
     try {
       await navigator.clipboard.writeText(answer)
       setCopied(true)
-    } catch {
+    } catch (error) {
+      reportObservedError(error, { operation: "agent.message.copy" })
       setCopied(false)
+      toast.error("The response could not be copied.")
     }
   }, [answer])
   return { copied, copyAnswer }

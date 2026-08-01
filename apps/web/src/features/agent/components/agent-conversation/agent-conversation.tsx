@@ -249,6 +249,7 @@ const AgentChatSession = ({
               <Input
                 className="sr-only"
                 type="file"
+                aria-label="Attach images"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
                 disabled={

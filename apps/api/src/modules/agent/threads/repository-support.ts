@@ -6,7 +6,6 @@ import type {
   AgentIssueAttachment,
   AgentOrganizationContext,
 } from "../../../agent-client"
-import { AppError, publicErrors } from "../../../errors/app-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
 import type { FileDto } from "../../files/public"
 import type { IssueDto } from "../../issues/public"
@@ -89,14 +88,6 @@ export const toOrganizationContext = (input: {
     role,
     permissions: permissionsForAgent(role),
   }
-}
-
-export const preserveAgentError = (
-  cause: unknown,
-  operation: string
-): never => {
-  if (cause instanceof AppError) throw cause
-  throw publicErrors.internal(cause, { module: "agent", operation })
 }
 
 export const isRetryableDatabaseRace = (cause: unknown) => {

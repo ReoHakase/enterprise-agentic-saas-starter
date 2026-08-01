@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn, userEvent } from "storybook/test"
+import { expect, fn, userEvent, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -34,11 +34,16 @@ export const Pending = meta.story({
   },
   play: async ({ args, canvas, step }) => {
     await step("Review the typed canonical preview", async () => {
+      const approval = await canvas.findByRole("region", {
+        name: "Issue change approval",
+      })
       await expect(
-        await canvas.findByText("Approve Issue change?")
+        await within(approval).findByText("Approve Issue change?")
       ).toBeVisible()
-      await expect(canvas.getByText("medium → high")).toBeVisible()
-      await expect(canvas.getByText("tenant-policy.png")).toBeVisible()
+      await expect(within(approval).getByText("medium → high")).toBeVisible()
+      await expect(
+        within(approval).getByText("tenant-policy.png")
+      ).toBeVisible()
       await expect(args.onPendingChange).toHaveBeenCalledWith(
         fictionalPendingAction.id,
         true
@@ -66,8 +71,13 @@ export const Reject = meta.story({
   },
   play: async ({ canvas, step }) => {
     await step("Reject the proposed change", async () => {
-      await userEvent.click(await canvas.findByRole("button", { name: "No" }))
-      await expect(await canvas.findByText("rejected")).toBeVisible()
+      const approval = await canvas.findByRole("region", {
+        name: "Issue change approval",
+      })
+      await userEvent.click(
+        await within(approval).findByRole("button", { name: "No" })
+      )
+      await expect(await within(approval).findByText("rejected")).toBeVisible()
     })
   },
 })
@@ -79,19 +89,30 @@ export const RetryAfterFailure = meta.story({
       http.get("*/agent/actions/action-pending", () => {
         requestCount += 1
         return requestCount === 1
-          ? HttpResponse.json({ message: "Unavailable" }, { status: 503 })
+          ? HttpResponse.json(
+              {
+                error: "service_unavailable",
+                message: "The service is temporarily unavailable.",
+              },
+              { status: 503 }
+            )
           : HttpResponse.json(fictionalPendingAction)
       })
     )
   },
   play: async ({ canvas, step }) => {
     await step("Recover the approval details deterministically", async () => {
-      await expect(await canvas.findByRole("alert")).toHaveTextContent(
-        "Approval details could not be loaded."
-      )
-      await userEvent.click(canvas.getByRole("button", { name: "Try again" }))
+      const approval = await canvas.findByRole("region", {
+        name: "Issue change approval",
+      })
       await expect(
-        await canvas.findByText("Approve Issue change?")
+        await within(approval).findByRole("alert")
+      ).toHaveTextContent("Approval details could not be loaded.")
+      await userEvent.click(
+        within(approval).getByRole("button", { name: "Try again" })
+      )
+      await expect(
+        await within(approval).findByText("Approve Issue change?")
       ).toBeVisible()
     })
   },
@@ -107,9 +128,14 @@ export const Frozen = meta.story({
     )
   },
   play: async ({ canvas }) => {
+    const approval = await canvas.findByRole("region", {
+      name: "Issue change approval",
+    })
     await expect(
-      await canvas.findByRole("button", { name: "Yes" })
+      await within(approval).findByRole("button", { name: "Yes" })
     ).toBeDisabled()
-    await expect(canvas.getByRole("button", { name: "No" })).toBeDisabled()
+    await expect(
+      within(approval).getByRole("button", { name: "No" })
+    ).toBeDisabled()
   },
 })

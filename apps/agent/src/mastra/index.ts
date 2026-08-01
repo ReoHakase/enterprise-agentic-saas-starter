@@ -11,5 +11,4 @@ export const {
   mastra,
   productAgent,
   productWebSearchTool,
-  threadTitleAgent,
 } = composition

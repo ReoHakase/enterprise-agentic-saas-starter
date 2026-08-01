@@ -1,7 +1,5 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console"
-
 import {
   type AgentChatMessage,
   parseAgentActionExecutionResult,
@@ -16,14 +14,7 @@ import {
 
 type EdenResult = { data: unknown; error: unknown; status: number }
 const unwrap = (result: EdenResult) => {
-  if (result.error) throw toConsoleApiError(result.error, result.status)
-  if (result.data === null || result.data === undefined) {
-    throw new ConsoleApiError({
-      code: "invalid_response",
-      message: "API response did not include data",
-      status: result.status,
-    })
-  }
+  if (result.error) throw result.error
   return result.data
 }
 
@@ -79,11 +70,7 @@ export const listAgentMessages = async (
     messages.unshift(...result.messages)
     if (!result.hasMore) return messages
   }
-  throw new ConsoleApiError({
-    code: "invalid_response",
-    message: "Agent history exceeded the pagination limit",
-    status: 503,
-  })
+  throw new Error("Agent history exceeded the pagination limit")
 }
 
 export const getAgentAction = async (
@@ -154,5 +141,5 @@ export const deleteAgentAsset = async (
   const result = await organizationFiles["agent-assets"]({
     assetId: input.assetId,
   }).delete()
-  if (result.error) throw toConsoleApiError(result.error, result.status)
+  if (result.error) throw result.error
 }

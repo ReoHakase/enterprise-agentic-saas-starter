@@ -33,8 +33,8 @@ export const AskAlways = meta.story({
   beforeEach() {
     modeChanged.mockClear()
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Select full access with the keyboard", async () => {
       const trigger = canvas.getByRole("combobox", {
@@ -102,7 +102,9 @@ export const SavedPolicy = meta.story({
       threadId={fictionalPrimaryAgentThread.id}
     />
   ),
-  play: async ({ canvas, step }) => {
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
+
     await step("Persist a thread-scoped permission", async () => {
       const trigger = canvas.getByRole("combobox", {
         name: "Agent permission",
@@ -110,15 +112,13 @@ export const SavedPolicy = meta.story({
       await userEvent.click(trigger)
       await userEvent.keyboard("{End}")
       await userEvent.click(
-        await within(document.body).findByRole("option", {
+        await body.findByRole("option", {
           name: /Full access/,
         })
       )
       await waitFor(() => expect(trigger).toHaveTextContent("Full access"))
       await waitFor(() =>
-        expect(
-          within(document.body).queryByRole("listbox")
-        ).not.toBeInTheDocument()
+        expect(body.queryByRole("listbox")).not.toBeInTheDocument()
       )
     })
   },

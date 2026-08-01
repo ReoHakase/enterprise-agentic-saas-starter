@@ -101,9 +101,10 @@ export class MailpitDeliveryError extends Error {
     code: MailpitDeliveryErrorCode,
     retryable: boolean,
     field?: "from" | "to",
-    status?: number
+    status?: number,
+    cause?: unknown
   ) {
-    super("Local email delivery failed")
+    super("Local email delivery failed", { cause })
     this.name = "MailpitDeliveryError"
     this.code = code
     this.retryable = retryable
@@ -151,8 +152,14 @@ export const createMailpitEmailSender = ({
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       })
-    } catch {
-      throw new MailpitDeliveryError("E_NETWORK", true)
+    } catch (error) {
+      throw new MailpitDeliveryError(
+        "E_NETWORK",
+        true,
+        undefined,
+        undefined,
+        error
+      )
     }
 
     if (!response.ok) {

@@ -50,9 +50,7 @@ export const Ready = meta.story({
       await expect(
         canvas.getByRole("button", { name: "Active" })
       ).toBeDisabled()
-      await expect(
-        canvas.getByTestId("organization-role-super_admin")
-      ).toBeVisible()
+      await expect(canvas.getByTestId("organization-role-owner")).toBeVisible()
       await expect(canvas.getByTestId("organization-role-admin")).toBeVisible()
       await userEvent.tab()
       await expect(

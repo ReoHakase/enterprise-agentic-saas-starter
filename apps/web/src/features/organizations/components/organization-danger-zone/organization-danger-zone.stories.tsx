@@ -26,10 +26,10 @@ const meta = preview.meta({
   args: { organization: fictionalOrganization },
 })
 
-export const SuperAdmin = meta.story({
+export const Owner = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Require both destructive confirmations", async () => {
       await userEvent.click(

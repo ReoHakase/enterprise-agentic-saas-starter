@@ -146,13 +146,13 @@ describe("database migrations: invariants", () => {
           id: "dedupe-a-stable",
           organizationId: "org-dedupe",
           userId: "dedupe-user",
-          role: "super_admin",
+          role: "owner",
         },
         {
           id: "multi-a-canonical",
           organizationId: "org-multi",
           userId: "multi-a-user",
-          role: "super_admin",
+          role: "owner",
         },
         {
           id: "multi-z-demoted",
@@ -170,7 +170,7 @@ describe("database migrations: invariants", () => {
           id: "zero-z-admin",
           organizationId: "org-zero",
           userId: "zero-admin-user",
-          role: "super_admin",
+          role: "owner",
         },
       ])
 
@@ -178,17 +178,17 @@ describe("database migrations: invariants", () => {
         `select
           organization.id,
           count(member.id) as memberCount,
-          sum(case when member.role = 'super_admin' then 1 else 0 end) as superAdminCount
+          sum(case when member.role = 'owner' then 1 else 0 end) as ownerCount
         from organization
         left join member on member.organization_id = organization.id
         group by organization.id
         order by organization.id`
       )
       expect(organizationRoles.rows).toMatchObject([
-        { id: "org-dedupe", memberCount: 1, superAdminCount: 1 },
-        { id: "org-empty", memberCount: 0, superAdminCount: 0 },
-        { id: "org-multi", memberCount: 2, superAdminCount: 1 },
-        { id: "org-zero", memberCount: 2, superAdminCount: 1 },
+        { id: "org-dedupe", memberCount: 1, ownerCount: 1 },
+        { id: "org-empty", memberCount: 0, ownerCount: 0 },
+        { id: "org-multi", memberCount: 2, ownerCount: 1 },
+        { id: "org-zero", memberCount: 2, ownerCount: 1 },
       ])
 
       await migrate(db, { migrationsFolder })
@@ -211,7 +211,7 @@ describe("database migrations: invariants", () => {
       ).rejects.toThrow(/unique/i)
       await expect(
         client.execute(
-          "update member set role = 'super_admin' where id = 'multi-z-demoted'"
+          "update member set role = 'owner' where id = 'multi-z-demoted'"
         )
       ).rejects.toThrow(/unique/i)
     } finally {
@@ -517,7 +517,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
     }
   })
 
-  it("keeps one super admin membership under concurrent insert attempts", async () => {
+  it("keeps one owner membership under concurrent insert attempts", async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "enterprise-saas-membership-concurrency-")
     )
@@ -548,23 +548,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
       const attempts = await Promise.allSettled([
         contenderA.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "membership-a",
-            "org-concurrent",
-            "user-a",
-            "super_admin",
-            now,
-          ],
+          args: ["membership-a", "org-concurrent", "user-a", "owner", now],
         }),
         contenderB.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "membership-b",
-            "org-concurrent",
-            "user-a",
-            "super_admin",
-            now,
-          ],
+          args: ["membership-b", "org-concurrent", "user-a", "owner", now],
         }),
       ])
       expect(
@@ -574,13 +562,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
       const invariant = await bootstrapClient.execute(
         `select
           count(*) as memberCount,
-          sum(case when role = 'super_admin' then 1 else 0 end) as superAdminCount
+          sum(case when role = 'owner' then 1 else 0 end) as ownerCount
         from member
         where organization_id = 'org-concurrent'`
       )
-      expect(invariant.rows).toMatchObject([
-        { memberCount: 1, superAdminCount: 1 },
-      ])
+      expect(invariant.rows).toMatchObject([{ memberCount: 1, ownerCount: 1 }])
 
       await expect(
         bootstrapClient.execute({
@@ -598,10 +584,10 @@ describe("database migrations: tenant and concurrency invariants", () => {
         bootstrapClient.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
           args: [
-            "membership-second-super-admin",
+            "membership-second-owner",
             "org-concurrent",
             "user-b",
-            "super_admin",
+            "owner",
             now + 1,
           ],
         })

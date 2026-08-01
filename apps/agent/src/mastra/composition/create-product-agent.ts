@@ -10,7 +10,6 @@ import {
   createProductAgent,
   createProductAgentMemory,
 } from "../agents/product-agent"
-import { createThreadTitleAgent } from "../agents/thread-title-agent"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import type { AgentStorageEnvironment } from "../storage"
 import { createWebSearchTool } from "../tools/web-search/tool"
@@ -36,11 +35,9 @@ export const createProductAgentComposition = (
       environment.OPENROUTER_API_KEY,
       environment.OPENROUTER_BASE_URL
     )
-  const threadTitleAgent = createThreadTitleAgent(() =>
-    createAgentAuxiliaryModel(
-      environment.OPENROUTER_API_KEY,
-      environment.OPENROUTER_BASE_URL
-    )
+  const titleModel = createAgentAuxiliaryModel(
+    environment.OPENROUTER_API_KEY,
+    environment.OPENROUTER_BASE_URL
   )
   const executionRegistry = new ProductAgentExecutionRegistry()
   const productWebSearchTool = createWebSearchTool(
@@ -54,7 +51,7 @@ export const createProductAgentComposition = (
         reportDevelopmentCauseChain(environment, "web-search-provider", cause),
     }
   )
-  const memory = createProductAgentMemory(storage)
+  const memory = createProductAgentMemory(storage, titleModel)
   const productAgent = createProductAgent({
     allowUnscopedModel: unscopedModelEnabled,
     memory: unscopedModelEnabled ? undefined : memory,
@@ -67,6 +64,5 @@ export const createProductAgentComposition = (
     memory,
     productAgent,
     productWebSearchTool,
-    threadTitleAgent,
   }
 }

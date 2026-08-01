@@ -150,9 +150,9 @@ export const member = sqliteTable(
       table.organizationId,
       table.userId
     ),
-    uniqueIndex("member_organization_super_admin_uidx")
+    uniqueIndex("member_organization_owner_uidx")
       .on(table.organizationId)
-      .where(sql`${table.role} = 'super_admin'`),
+      .where(sql`${table.role} = 'owner'`),
   ]
 )
 

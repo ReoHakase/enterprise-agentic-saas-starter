@@ -306,14 +306,11 @@ describe("email senders", () => {
     ).toBeTypeOf("function")
   })
 
-  it("maps Mailpit network failures without retaining provider details", async () => {
-    const request = vi
-      .fn<typeof fetch>()
-      .mockRejectedValue(
-        new Error(
-          "provider failed for user@example.com at https://example.com/token=abc"
-        )
-      )
+  it("maps Mailpit network failures while preserving the original cause", async () => {
+    const providerError = new Error(
+      "provider failed for user@example.com at https://example.com/token=abc"
+    )
+    const request = vi.fn<typeof fetch>().mockRejectedValue(providerError)
     const sender = createMailpitEmailSender({
       baseUrl: "http://localhost:8025",
       from: "auth@example.com",
@@ -327,8 +324,8 @@ describe("email senders", () => {
       message: "Local email delivery failed",
       code: "E_NETWORK",
       retryable: true,
+      cause: providerError,
     })
-    await expect(delivery).rejects.not.toHaveProperty("cause")
     await expect(delivery).rejects.not.toHaveProperty("to")
     await expect(delivery).rejects.not.toHaveProperty("body")
   })
@@ -409,10 +406,11 @@ describe("email senders", () => {
   })
 
   it("maps Cloudflare failures to a sanitized retry policy", async () => {
-    const send = vi.fn().mockRejectedValue({
+    const providerError = {
       code: "E_RATE_LIMIT_EXCEEDED",
       message: "raw provider message containing user@example.com",
-    })
+    }
+    const send = vi.fn().mockRejectedValue(providerError)
     const observe = vi.fn()
     const sender = createCloudflareEmailSender({
       binding: { send },
@@ -426,6 +424,7 @@ describe("email senders", () => {
         message: "Email delivery failed",
         code: "E_RATE_LIMIT_EXCEEDED",
         retryable: true,
+        cause: providerError,
       })
     )
     expect(observe).toHaveBeenCalledWith({

@@ -1,84 +1,39 @@
 import { describe, expect, it } from "vitest"
 
+import { httpError } from "@/test-support/http-error"
+
 import {
   clearConsoleApiFieldError,
-  ConsoleApiError,
+  getConsoleApiFieldError,
+  getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
+  isStepUpRequiredError,
   presentConsoleApiError,
   shouldRetryConsoleQuery,
-  toConsoleApiError,
 } from "./error"
 
 describe("console API error presentation", () => {
-  it("keeps only validated public recovery fields", () => {
-    const error = toConsoleApiError(
-      {
-        value: {
-          error: {
-            code: "validation_error",
-            message: "Fix the highlighted fields",
-            context: {
-              field: "profile.name",
-              retryAfter: 12,
-              organizationId: "org-private",
-            },
-            fieldErrors: {
-              "profile.name": ["Use a recognizable display name."],
-              constructor: ["must not be used"],
-              title: ["", "A".repeat(501)],
-            },
-            requestId: "req_01JQ8YF2J7Q0J2X8R8S3Q9M6P4",
-          },
-        },
-      },
-      400
-    )
-
-    expect(error).toMatchObject({
-      code: "validation_error",
-      context: { field: "profile.name", retryAfter: 12 },
-      fieldErrors: {
-        "profile.name": ["Use a recognizable display name."],
-      },
-      message: "Fix the highlighted fields",
-      requestId: "req_01JQ8YF2J7Q0J2X8R8S3Q9M6P4",
-      status: 400,
+  it("reads the native public status and code without wrapping the error", () => {
+    const error = httpError(403, "step_up_required", {
+      message: "Recent authentication is required.",
     })
+
+    expect(isStepUpRequiredError(error)).toBe(true)
+    expect(
+      presentConsoleApiError(error, "The operation was not completed.").message
+    ).toBe("Recent authentication is required.")
   })
 
-  it("uses the action fallback for internal failures and retains a reference", () => {
-    const error = new ConsoleApiError({
-      code: "internal_error",
-      message: "Internal server error",
-      requestId: "req_internal_01",
-      status: 500,
-    })
-
+  it("uses fixed action copy for server failures", () => {
     expect(
-      presentConsoleApiError(error, "The organization was not updated.")
+      presentConsoleApiError(
+        httpError(500, "internal_error"),
+        "The organization was not updated."
+      )
     ).toEqual({
-      description:
-        "Try again. If the problem continues, contact support. Reference ID: req_internal_01",
+      description: "Try again. If the problem continues, contact support.",
       fieldErrors: {},
       message: "The organization was not updated.",
-      requestId: "req_internal_01",
-    })
-  })
-
-  it("keeps a service recovery message and retry timing", () => {
-    const error = new ConsoleApiError({
-      code: "service_unavailable",
-      context: { retryAfter: 3 },
-      message: "Email delivery is temporarily unavailable.",
-      requestId: "req_service_01",
-      status: 503,
-    })
-
-    expect(presentConsoleApiError(error, "Invitation failed.")).toEqual({
-      description: "Try again in 3 seconds. Reference ID: req_service_01",
-      fieldErrors: {},
-      message: "Email delivery is temporarily unavailable.",
-      requestId: "req_service_01",
     })
   })
 
@@ -89,29 +44,58 @@ describe("console API error presentation", () => {
         "The issue could not be created."
       )
     ).toEqual({
-      description: "Check your connection and try again.",
+      description: undefined,
       fieldErrors: {},
       message: "The issue could not be created.",
     })
   })
 
-  it("drops malformed request IDs without losing the public message", () => {
-    const error = toConsoleApiError(
-      {
-        error: {
-          code: "conflict",
-          message: "The record changed. Reload and retry.",
-          requestId: "invalid request id with spaces",
-        },
+  it("presents only bounded public field errors from a 4xx response", () => {
+    const error = httpError(400, "validation_error", {
+      fieldErrors: {
+        __proto__: ["unsafe"],
+        name: ["Choose another name."],
+        title: ["x".repeat(501)],
       },
-      409
-    )
+      message: "Check the highlighted fields.",
+    })
 
-    expect(error.message).toBe("The record changed. Reload and retry.")
-    expect(error.requestId).toBeUndefined()
+    expect(getConsoleApiFieldErrors(error)).toEqual({
+      name: ["Choose another name."],
+    })
+    expect(getConsoleApiFieldError(error, "name")).toBe("Choose another name.")
+    expect(presentConsoleApiError(error, "Request failed").message).toBe(
+      "Check the highlighted fields."
+    )
   })
 
-  it("clears only the edited server field", () => {
+  it("does not present server-controlled details for a 5xx response", () => {
+    const error = httpError(500, "internal_error", {
+      fieldErrors: { token: ["private"] },
+      message: "provider token=private",
+    })
+
+    expect(presentConsoleApiError(error, "Request failed")).toEqual({
+      description: "Try again. If the problem continues, contact support.",
+      fieldErrors: {},
+      message: "Request failed",
+    })
+  })
+
+  it("handles throwing property access without replacing the error", () => {
+    const error = new Proxy(new Error("provider detail"), {
+      get() {
+        throw new Error("getter failed")
+      },
+    })
+
+    expect(isStepUpRequiredError(error)).toBe(false)
+    expect(presentConsoleApiError(error, "Request failed").message).toBe(
+      "Request failed"
+    )
+  })
+
+  it("clears only the edited local field state", () => {
     const fieldErrors = {
       name: ["Choose another name."],
       slug: ["Choose another slug."],
@@ -131,16 +115,8 @@ describe("console API error presentation", () => {
   })
 
   it("retries network and server failures once but never retries API 4xx", () => {
-    const badRequest = new ConsoleApiError({
-      code: "validation_error",
-      message: "Invalid request",
-      status: 400,
-    })
-    const unavailable = new ConsoleApiError({
-      code: "service_unavailable",
-      message: "Service temporarily unavailable",
-      status: 503,
-    })
+    const badRequest = httpError(400, "validation_error")
+    const unavailable = httpError(503, "service_unavailable")
 
     expect(shouldRetryConsoleQuery(0, badRequest)).toBe(false)
     expect(shouldRetryConsoleQuery(0, unavailable)).toBe(true)

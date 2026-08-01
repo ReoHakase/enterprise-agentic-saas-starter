@@ -2,7 +2,7 @@
 title: apps/apiの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - apps/api/**
 ---
@@ -43,12 +43,9 @@ apps/api/src/
     observability/
     plugins/
       openapi.ts
-    openapi/
-      normalize-auth-schema.ts
 
   errors/
-    app-error.ts
-    error-registry.ts
+    http-error.ts
 
   modules/
     <module>/
@@ -118,34 +115,20 @@ telemetry、clock等のapp-global contractに限り、moduleをimportしませ�
 
 ## error
 
-`AppError`はHTTPへ公開してよい情報のmarkerです。
+`HttpError`は有限な`code`と、必要な場合だけ`cause`、`retryAfter`、明示的に公開可能な`publicMessage`、
+`fieldErrors`を持つHTTP境界です。任意のcontextは所有しません。公開文言はアプリケーションが管理する
+固定文言またはレビュー済みの入力エラーだけとし、生の例外やprovider応答から作りません。
 
-改善後の原則:
+- domain errorはHTTP statusを持たず、既知の失敗だけを`cause`付き`HttpError`へ1回変換する
+- 未知の例外は再生成せず、元の値をElysiaの`onError`まで運ぶ
+- statusは固定対応表から決め、本文は`error`、安全な`message`、任意の`fieldErrors`だけにする
+- request IDは`x-request-id`、再試行情報は`Retry-After`へ返す
+- 4xxは記録せず、5xxは元の例外または`cause`を1回だけ記録する
+- 5xxは固定`message`だけを返し、`fieldErrors`、生のmessage、contextを返さない
+- error handler内の観測処理が失敗してもレスポンスを壊さない
+- 全エラーレスポンスへ`Cache-Control: no-store`を付ける
 
-- error codeをfinite registryへする
-- callerが任意のpublic messageを組み立てない
-- raw provider/DB errorは`cause`とprivate contextへ閉じる
-- 4xxと5xxのcapture policyをregistryで定義する
-- error handler内のtelemetry failureでresponseを壊さない
-- responseへ`Cache-Control: no-store`とrequest IDを付ける
-- validation field pathをallowlistする
-
-`domain` errorはHTTP statusを持たず、application/transport boundaryで`AppError`へmapします。
-
-Dependency failureはadapterで次の有限taxonomyへmapし、message文字列検索で分類しません。
-
-| failure                   | HTTP projection | 備考                             |
-| ------------------------- | --------------: | -------------------------------- |
-| upstream rejected request |             502 | providerのraw本文は非公開        |
-| dependency unavailable    |             503 | retry可能な場合だけ`Retry-After` |
-| dependency timeout        |             504 | caller abortと区別する           |
-| local rate/budget limit   |             429 | local policyの有限code           |
-| caller cancellation       |     request中断 | 500としてcaptureしない           |
-| programming bug / unknown |             500 | safe messageだけ返す             |
-
-domain errorにはHTTP statusを持たせません。adapterがtyped status/codeを受け取り、transportが
-registryからstatus、public message、capture policyを決めます。既存serviceを一律に`Result`型へ
-移すことは要求せず、期待されるfailureを明示した方が安全なboundaryだけでtyped resultを使います。
+Better Authルートはライブラリーの標準エラーレスポンスを維持します。
 
 ## plugin
 
@@ -157,40 +140,26 @@ registryからstatus、public message、capture policyを決めます。既存se
 
 ## OpenAPIとScalar
 
-`apps/api`はapp-owned routeとBetter Auth/library routeを一つの`/openapi/json`へ統合し、Scalarを
-`/openapi`で提供します。詳細なconsumer contractは[API / OpenAPI](../../api-openapi.md)を正本にします。
+`apps/api`はアプリケーション所有の仕様を`/openapi/json`、Better Auth所有の仕様を
+`/auth/open-api/generate-schema`から別々に公開し、Scalarを`/openapi`で提供します。詳細な利用者契約は
+[API / OpenAPI](../../api-openapi.md)を正本にします。
 
 - `platform/plugins/openapi.ts`はElysiaの`openapi({ documentation, scalar })`を設定する
-- `platform/openapi/normalize-auth-schema.ts`はBetter Authの3.1 fragmentを3.0.3へ変換するだけで、
-  人向けdescriptionを所有しない
-- app-owned request/responseはValibot/Elysia route schemaを正本にする
-- app-owned operationの英語`operationId`、summary、description、tag、`x-*`分類は各Elysia routeの
+- アプリケーション所有のrequestとresponseはValibotとElysiaのルートスキーマを正本にする
+- アプリケーション所有operationの英語`operationId`、summary、description、tag、`x-*`分類は各ルートの
   `detail`へ書く
-- request/response全体とpropertyの英語descriptionは、そのrouteへ渡すValibot schema metadataへ書く
-- Better Authは有効pluginから実生成したschemaを正本にし、body/responseを手書きで複製しない
-- global `info`、tag/security scheme description、Scalar設定はElysia OpenAPI pluginへ書く
-- Better Authの生成fragmentはElysia OpenAPI plugin内でprefix付与、normalization、英語metadata/security
-  の補足を行い、Elysia `openapi({ documentation })`へ渡す
-- public API appのElysia route、各modeのBetter Auth実生成operation、最終OpenAPIの和集合を検証する
-- GitHub plugin topologyとOAuth emulator modeをfresh processで別々に検証する
-- libraryが登録するがproduct policyで無効なrouteは`x-route-status: configured-disabled`と明示する
-- private `/internal/agent/**`、development/test routeをpublic documentへ含めない
-- OpenAPIの説明をYAML/YML/JSON、生成済みspec、独立metadata registryへ書かない
-
-repo向けsource commentと規範文書は日本語でよいですが、Scalarへ出る`info`、tag、summary、
-description、response、security、schema/propertyの人向け文言は詳細な英語にします。fallbackで
-`GET auth / path`のような機械生成文言を本番documentへ残しません。
-
-OpenAPI normalizationはBetter AuthのOpenAPI 3.1 fragmentの明示allowlist subsetだけを
-semantics-preservingに3.0.3へ変換し、未対応keyword/type unionはJSON Pointer付きで起動/testを
-fail-fastします。raw generated securityを一律に信用せず、public callback、
-session-required、cookie/bearer等の実runtimeをElysia OpenAPI plugin内でoperation単位に補足します。
-Scalarはauth永続化、telemetry、Agent/uploadを無効にし、credentialやPIIをexampleへ埋め込みません。
+- request、response、propertyの英語descriptionは、そのルートへ渡すValibot metadataへ書く
+- 全体の`info`、tag、`sessionCookie`、Scalar設定はElysia OpenAPIプラグインへ書く
+- Better Authは標準`openAPI`プラグインが生成するOpenAPI 3.1.1をそのまま正本にする
+- Scalarの`source`へ2つのURLを指定し、path、component、security schemeを結合しない
+- Better Auth仕様のprefix追加、3.0への変換、metadataやsecurityの補正を行わない
+- private `/internal/agent/**`と開発・テスト専用ルートをアプリケーション仕様へ含めない
+- Scalarは認証値の永続化、telemetry、Agentによるアップロードを無効にする
 
 ## repository
 
 - tenant resource queryは`id + organizationId`
-- transactionでaudit/outboxを同時に保存する
+- transactionでauditと業務更新を同時に保存する
 - DB errorをsafe error taxonomyへmapする
 - Drizzle query builderをmockせず、integration testで実libSQLを使う
 - business repositoryを`packages/db`へ移さない
@@ -244,15 +213,15 @@ package-owned testと合わせて境界を検査します。test fileも別modul
 - Elysia型推論を維持しながらrouteを薄くする
 - DBとHTTPからbusiness ruleを隔離する
 - repositoryを実DBで検証し、mockの偽陽性を避ける
-- Better Authの実生成schemaを使い、library upgradeとruntime contractのdriftを検出する
-- app routeの実装、validation、英語OpenAPI説明を同じElysia moduleでreviewできる
-- consumer品質のためにBetter Auth routeを手で複製せず、Elysia OpenAPI pluginで生成結果を補足する
+- Better Authの実生成スキーマを使い、ライブラリー更新と実行時契約の不整合を検出する
+- アプリケーションルートの実装、検証、英語OpenAPI説明を同じElysiaモジュールでレビューできる
+- Scalarの複数仕様機能へ委譲し、結合と変換の保守をなくす
 
 ### 代償
 
 - moduleの接続codeが増える
 - error mappingを明示する必要がある
-- Better Auth upgrade時にElysia OpenAPI pluginのmetadata/security補足を見直す必要がある
+- 利用者はScalar上でアプリケーションAPIと認証APIを切り替える
 - 小さいmoduleではfile数が増える
 
 小さいmoduleはflat構造を維持し、責務のないdirectoryは作りません。
@@ -265,6 +234,7 @@ package-owned testと合わせて境界を検査します。test fileも別modul
 - tenant queryにorganizationIdがある
 - raw error messageがHTTPへ出ない
 - public/private Agent appが分離されている
-- public/library routeとOpenAPI operationがexactly once一致する
-- Scalar consumer metadataが詳細な英語で、private routeやcredential exampleがない
-- app routeの説明がElysia `detail`とValibot metadataにあり、外部YAML/JSON description sourceがない
+- `/openapi/json`にアプリケーション所有ルートだけが1回ずつ存在する
+- Better Auth仕様が標準生成ルートから独立して取得できる
+- Scalarが2つの仕様を参照し、private routeやcredentialの例を含まない
+- アプリケーションルートの説明がElysia `detail`とValibot metadataにあり、外部YAML/JSONの説明元がない

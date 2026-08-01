@@ -2,7 +2,7 @@
 title: packages/authの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - packages/auth/**
 ---
@@ -11,7 +11,7 @@ applies_to:
 
 ## 責務
 
-Better Auth server factory、browser client factory、GitHub OAuth contract、OpenAPI生成を提供します。
+Better Auth server factory、browser client factory、GitHub OAuth contract、標準OpenAPI生成ルートを提供します。
 
 ## 目標構造
 
@@ -20,7 +20,6 @@ packages/auth/src/
   index.ts
   client.ts
   github-oauth.ts
-  openapi.ts
   contracts/
   server/
     callbacks/
@@ -34,7 +33,6 @@ packages/auth/src/
 - `@enterprise-agentic-saas/auth`
 - `@enterprise-agentic-saas/auth/client`
 - `@enterprise-agentic-saas/auth/github-oauth`
-- `@enterprise-agentic-saas/auth/openapi`
 
 `client.ts`からDB、Email、Node builtin、`process.env`、`server-only`、server codeをimportしません。
 `github-oauth.ts`はemulatorとserverが共有するprotocol/schemaだけを公開し、Better Auth server
@@ -51,7 +49,7 @@ Knip、Web buildとpackage testで検査します。
 
 - plugin contract
 - session serialization
-- OpenAPI generation
+- `auth.api.generateOpenAPISchema()`と`/auth/open-api/generate-schema`
 - callback privacy
 - client bundle isolation
 
@@ -63,4 +61,5 @@ Auth serverとbrowser clientを同一packageで提供しながら、entrypoint�
 
 - client entrypointにserver dependencyがない
 - generated Auth schemaとの整合testがある
+- Better Auth OpenAPIを結合または変換する独自entrypointがない
 - appへの逆依存がない

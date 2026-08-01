@@ -22,11 +22,11 @@ export const Ready = meta.story({
   beforeEach() {
     invited.mockClear()
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
-    await step("Invite normalized fictional recipients", async () => {
-      const trigger = canvas.getByRole("button", { name: "Invite members" })
+    await step("Invite one normalized fictional recipient", async () => {
+      const trigger = canvas.getByRole("button", { name: "Invite member" })
       await userEvent.click(trigger)
       const roleTrigger = body.getByRole("combobox", {
         name: "Invitation role",
@@ -50,15 +50,15 @@ export const Ready = meta.story({
       )
       await userEvent.keyboard("{Escape}")
       await userEvent.type(
-        body.getByRole("textbox", { name: "Email addresses" }),
-        "One@Example.test, two@example.test"
+        body.getByRole("textbox", { name: "Email address" }),
+        "One@Example.test"
       )
       await userEvent.click(
-        body.getByRole("button", { name: "Send invitations" })
+        body.getByRole("button", { name: "Send invitation" })
       )
       await waitFor(() =>
         expect(invited).toHaveBeenCalledWith({
-          emails: ["one@example.test", "two@example.test"],
+          email: "one@example.test",
           role: "member",
         })
       )
@@ -69,11 +69,9 @@ export const Ready = meta.story({
 
 export const PermissionLimited = meta.story({
   args: { canInviteAdmins: false },
-  play: async ({ canvas }) => {
-    const body = within(document.body)
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Invite members" })
-    )
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await userEvent.click(canvas.getByRole("button", { name: "Invite member" }))
     const role = await body.findByRole("combobox", {
       name: "Invitation role",
     })
@@ -87,7 +85,7 @@ export const PermissionLimited = meta.story({
     await userEvent.click(body.getByRole("button", { name: "Cancel" }))
     await waitFor(() =>
       expect(
-        body.queryByRole("dialog", { name: "Invite members" })
+        body.queryByRole("dialog", { name: "Invite member" })
       ).not.toBeInTheDocument()
     )
   },
@@ -97,7 +95,7 @@ export const Pending = meta.story({
   args: { pending: true },
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByRole("button", { name: "Invite members" })
+      canvas.getByRole("button", { name: "Invite member" })
     ).toBeDisabled()
   },
 })

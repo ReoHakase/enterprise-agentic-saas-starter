@@ -2,6 +2,7 @@ import * as schema from "@enterprise-agentic-saas/db/schema"
 import { and, eq, isNull } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
+import { HttpError } from "../../errors/http-error"
 import {
   agentAssetObjectKey,
   findPreviewableAgentAssetForSession,
@@ -146,11 +147,6 @@ describe("Agent Issue action execution lifecycle", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      statusCode: 409,
-      publicContext: {
-        reason: "asset_lease_conflict",
-        resource: "agent_asset",
-      },
     })
     const created = await internal.executeApprovedAction({
       grant: run.grant,
@@ -203,7 +199,7 @@ describe("Agent Issue action execution lifecycle", () => {
         userId: "action-user-b",
         now,
       })
-    ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+    ).rejects.toMatchObject({ code: "not_found" })
     const [promotedUsage] = await db
       .select()
       .from(schema.organizationFileUsage)
@@ -293,7 +289,6 @@ describe("Agent Issue action execution lifecycle", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "write_limit_reached" },
     })
     const [root] = await db
       .select({ writeCount: schema.agentRuns.writeCount })
@@ -329,12 +324,17 @@ describe("Agent Issue action execution lifecycle", () => {
         select raise(abort, 'transient_agent_action_failure');
       end
     `)
-    await expect(
-      internal.executeApprovedAction({
+    const executionError = await internal
+      .executeApprovedAction({
         grant: run.grant,
         actionId: prepared.id,
       })
-    ).rejects.toMatchObject({ code: "internal_error" })
+      .then(
+        () => undefined,
+        (cause: unknown) => cause
+      )
+    expect(executionError).toBeInstanceOf(Error)
+    expect(executionError).not.toBeInstanceOf(HttpError)
     const failedAction = await db
       .select({
         attempt: schema.agentActions.attempt,

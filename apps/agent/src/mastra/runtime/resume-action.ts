@@ -29,6 +29,7 @@ export const resumeIssueAction = async (
   input: unknown,
   dependencies: {
     api: ResumeIssueActionApi
+    captureSettlementFailure?: () => void
     executionRegistry: ApprovedIssueActionExecutionRegistry
     features: AgentFeatureSwitches
     mastra: Mastra
@@ -60,6 +61,7 @@ export const resumeIssueAction = async (
 
   const execution = dependencies.executionRegistry.register({
     api: dependencies.api,
+    captureSettlementFailure: dependencies.captureSettlementFailure,
     features: dependencies.features,
     reportFailure: dependencies.reportFailure,
     resumeTicket: parsed.output.resumeTicket,

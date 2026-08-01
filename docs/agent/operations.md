@@ -13,9 +13,10 @@ last_reviewed: 2026-07-28
 
 Agentのfeature flagは`1`だけを有効とし、productionの未設定、`true`、未知値をfail closedにします。local API supervisorは`bun run dev`時だけ`AGENT_ASSET_UPLOAD_ENABLED`未設定を`1`へ補い、明示値は尊重します。disabledとprovider/API障害は別のsafe toastにし、raw responseを表示しません。DB schema変更はDrizzle migrationを生成して適用し、通常起動でpush/resetしません。
 
-`NODE_ENV=development`のAgent processだけは、modelとWeb検索providerのraw `Error`および最大8段の
-cause chainをlocal consoleへ出します。公開HTTP response、Mastra Memory、workflow snapshot、
-production log、remote telemetry、paid test artifactへは転送しません。local LGTMは認証materialをredactした同じcause chainを保持できます。productionとtestではこの出力を無効にします。
+ADR-013の固定ローカル条件を満たす`NODE_ENV=development`のAgent processだけは、modelとWeb検索providerの
+raw `Error`および起点を含む最大5段のcause chainから認証情報を除去し、local consoleとLokiへ出します。
+公開HTTP response、Mastra Memory、workflow snapshot、Tempo、production log、remote telemetry、test・evalの
+出力やartifactへは転送しません。consoleとLokiは独立して出力し、片方の失敗でAgent処理を止めません。
 
 ## Paid test secret
 

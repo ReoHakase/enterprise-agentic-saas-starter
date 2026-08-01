@@ -25,6 +25,7 @@ export default defineConfig({
   jsPlugins: [
     "oxlint-tailwindcss",
     { name: "query", specifier: "@tanstack/eslint-plugin-query" },
+    { name: "storybook", specifier: "eslint-plugin-storybook" },
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
     { name: "playwright", specifier: "eslint-plugin-playwright" },
   ],
@@ -117,16 +118,33 @@ export default defineConfig({
       },
     },
     {
-      files: ["e2e/**/*.ts"],
+      files: ["e2e/**/*.ts", "test/app/**/*.spec.ts"],
       rules: {
         "playwright/missing-playwright-await": "error",
+        "playwright/no-element-handle": "error",
         "playwright/no-focused-test": "error",
+        "playwright/no-force-option": "error",
         "playwright/no-networkidle": "error",
         "playwright/no-page-pause": "error",
         "playwright/no-wait-for-timeout": "error",
+        "playwright/prefer-native-locators": "error",
         "playwright/prefer-web-first-assertions": "error",
         "playwright/valid-expect": "error",
         "playwright/valid-title": "error",
+      },
+    },
+    {
+      files: ["src/**/*.stories.ts", "src/**/*.stories.tsx"],
+      rules: {
+        "storybook/await-interactions": "error",
+        "storybook/context-in-play-function": "error",
+        "storybook/default-exports": "error",
+        "storybook/no-redundant-story-name": "warn",
+        "storybook/no-renderer-packages": "error",
+        "storybook/prefer-pascal-case": "warn",
+        "storybook/story-exports": "error",
+        "storybook/use-storybook-expect": "error",
+        "storybook/use-storybook-testing-library": "error",
       },
     },
     {

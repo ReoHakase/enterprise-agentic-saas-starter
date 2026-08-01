@@ -1,17 +1,13 @@
 import * as v from "valibot"
 
-export const organizationRoleSchema = v.picklist([
-  "super_admin",
-  "admin",
-  "member",
-])
+export const organizationRoleSchema = v.picklist(["owner", "admin", "member"])
 
 const organizationPermissionsSchema = v.object({
   canEditOrganization: v.boolean(),
   canInviteMembers: v.boolean(),
   canManageMembers: v.boolean(),
   canManageAdmins: v.boolean(),
-  canTransferSuperAdmin: v.boolean(),
+  canTransferOwnership: v.boolean(),
 })
 
 const memberProfileImageSchema = v.object({
@@ -110,8 +106,8 @@ export const parseOrganizationDeletionReceipt = (value: unknown) =>
   v.parse(organizationDeletionReceiptSchema, value)
 
 export const roleLabel = (role: OrganizationRole) => {
-  if (role === "super_admin") {
-    return "Super Admin"
+  if (role === "owner") {
+    return "Owner"
   }
 
   if (role === "admin") {

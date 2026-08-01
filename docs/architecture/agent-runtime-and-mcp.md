@@ -223,10 +223,6 @@ apps/agent/src/mastra/
       processors/
       scorers/
 
-    thread-title-agent/
-      agent.ts
-      instructions.ts
-
   workflows/
     approved-issue-action/
       workflow.ts
@@ -303,33 +299,21 @@ requestごとに`LibSQLStore`を生成しません。productionではAgent DB UR
 
 ### Application DBとの最小同期
 
-Agent応答の正本と回復journalはMastra Storageが所有します。Application DBとの同期点を次に限定します。
+message履歴とtitleはMastra標準Memoryが所有します。Application DBとの同期点を次に限定します。
 
 - run開始時のticket consume、authorization、quota reservation
 - business toolごとの認可済みtransaction
 - main model usageの冪等記録
-- `completed`応答をMemoryへ保存した後のrun settlement 1回
+- runのusageとterminal settlement
 
-`waiting_approval`はbusiness action transactionがrunを遷移させるため、Memory commit専用の
-Application DB callを追加しません。thread title、message count、last message、commit状態の
-projectionも作りません。
+`waiting_approval`はbusiness action transactionがrunを遷移させます。Memory commit専用のAPI、
+Application DB message副本、thread title、message count、last message、commit状態のprojectionは
+作りません。
 
-`memory-commit` workflowへのdurable stageを生成済み応答の線形化点にします。以後は
-`Memory.saveMessages`、completed run settlement、snapshot削除の順で進めます。settlementは
-`applicationRunId`だけを受け、running runをcompletedへCASし、missingまたはterminal runを
-状態変更なしでacknowledgeします。stage後のmembership、context epoch、thread、expiry変更を理由に
-messageをdiscardせず、read時のApplication registry認可で公開をfail closedにします。
-
-Worker eviction、deploy、CPU limit、OOM、`SIGKILL`相当は任意のawait間で起きるものとして扱います。
-suspended、running、success snapshotを新しいisolateからreconcileし、Memory保存とApp settlementを
-それぞれ冪等に再実行します。通常streamもcommit完了を待ち、`waitUntil`だけを正しさの根拠にしません。
-
-historyとthread listは、Application registryが許可した対象threadすべてについてpending snapshotを
-reconcileしてから一回限りのconnection ticketをconsumeします。ticket consume直後にもpending有無を
-再確認して競合をfail closedにします。最初の確認が1秒以内に収束しない場合やpendingが残る場合は、
-部分的な履歴を返さずticket未消費の503にします。consumeとの競合で直後の再確認が失敗した場合も
-503にします。このread barrierは既存のrun settlementを再実行するだけで、Application DBへ
-message projectionや新しい同期点を追加しません。
+Memoryの読込、保存、title生成はMastra標準機能へ委譲します。streamは独自commit barrierを待たず、
+Worker eviction、OOM、`SIGKILL`時の未保存messageはbest-effortです。独自Workflow stage、
+reconciliation、drainでMastra Memoryと同じ状態を再実装しません。公開可否は各readでApplication
+registryを検証してfail closedにします。
 
 ### 将来のComposite Storage
 
@@ -392,11 +376,8 @@ GET /agent/threads
 archive済みthreadがAgent DBへ残っていても、Application DBの認可台帳で除外します。
 
 初期公開contractから`messageCount`を外してよいものとします。message countを必須にする場合は、Mastra Storageから取得する専用readを追加し、Application DBへ同期projectionを作らないことを優先します。
-title生成はmain responseを待たせないbest-effort処理です。失敗時は`New conversation`を維持し、
-製品品質へ影響しない低優先度の補助modelとして扱います。
-successful runはmain usage、Mastra workflow stage、Memory保存、Application run settlementを先に完了し、
-run/concurrencyを解放してからtitle taskを開始します。title usageは`title_<attempt>`の別eventとして、
-失効済みterminal run grantを許可するusage専用の冪等APIへ記録し、business capabilityへ再利用しません。
+title生成はMastra Memoryの`generateTitle`へ委譲するbest-effort処理です。main responseは完了を待たず、
+失敗時は既定titleを維持します。補助modelの厳密usage課金や独自Title Agentは持ちません。
 
 ### 履歴
 
@@ -466,7 +447,7 @@ server toolとclient toolを分離します。
 
 ```text
 Stop
-  → streamを開いたままtransient data-runでopaque run IDを受け取る
+  → streamを開いたままAI SDKのmessage metadataでopaque run IDを受け取る
   → run IDを使って認可済みexplicit cancel commandを送る
   → runを冪等にcanceledへ遷移
   → quota reservationとgrantを解放
@@ -478,8 +459,8 @@ Stop
 ```
 
 network disconnectとprovider errorだけを同一submission IDでretry可能にします。
-Stop時のpartial assistant outputと`data-run`はsession-local UIだけに残し、Mastra Storageへ保存しません。
-canonical reloadは停止したuser messageだけを返します。cancelは未使用のgrant、concurrency reservation、
+Stop時のpartial assistant outputとrun ID metadataはsession-local UIだけに残し、Mastra Storageへ保存しません。
+履歴の再読込は停止したuser messageだけを返します。cancelは未使用のgrant、concurrency reservation、
 leaseを解放しますが、既に消費したmodel、Web検索、vision quotaを払い戻しません。
 
 `enable_request_signal`とAPIの`request_signal_passthrough`は本番Workerの防御層です。Stopの正本は
@@ -488,7 +469,7 @@ browser abortと認可済みexplicit cancelの組み合わせであり、network
 決定的に観測できなかったため、E1はexplicit cancel、G3/G4はAgentへ直接渡した`Request.signal`の
 abort分類とcancel先行settlementを検査します。
 
-`data-run`は表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
+run IDのmessage metadataは表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
 最終stepに完了済みの`ui_*` toolだけが存在する場合に限定し、server tool完了では開始しません。
 
 ## Reasoning
@@ -496,7 +477,7 @@ abort分類とcancel先行settlementを検査します。
 Product AgentはAI SDK標準reasoning partを`sendReasoning: true`で送信し、本文をMastra Memoryへ保存して再表示します。OpenRouter標準`reasoning_details`はallowlist後に次turnへ再送しますが、暗号化detailとprovider metadataはserver外へ出しません。存在しない非公開chain-of-thoughtを別modelで生成しません。
 
 - Product Agentは`openai/gpt-5.6-luna`のreasoning `xhigh`
-- title Agentと直接Web検索補助は同じLunaのreasoning `none`
+- Mastra Memoryのtitle補助と直接Web検索補助は同じLunaのreasoning `none`
 - title生成はmain stream開始を妨げない
 - text、tool call、tool resultが一定時間ないreasoning-only状態をtimeoutする
 - tool side effect後の自動model retryは禁止する
@@ -620,7 +601,6 @@ APIはlogical routeと利用可否だけをgrantへ含めます。
 ```text
 product-standard
 product-premium
-thread-title
 web-search-summary
 memory-observer
 ```

@@ -21,7 +21,7 @@ export default defineConfig({
   rules: {
     ...workspaceBoundaryRule("emulate"),
   },
-  overrides: createBudgetOverrides({ adapter: ["src/**/*.{ts,tsx}"] }),
+  overrides: createBudgetOverrides({ adapter: ["app/**/*.{ts,tsx}"] }),
   env: {
     node: true,
   },

@@ -9,7 +9,6 @@ import {
   agentIssueLabelListSchema,
   agentIssueListSchema,
   agentMemberListSchema,
-  agentMemoryCommitSettlementSchema,
   agentOrganizationContextSchema,
   agentRunGrantSchema,
   agentRunResultSchema,
@@ -66,8 +65,8 @@ const readBoundedJson = async (response: Response): Promise<unknown> => {
   }
   try {
     await readNextChunk()
-  } catch {
-    throw new Error(INTERNAL_RESPONSE_ERROR)
+  } catch (cause) {
+    throw new Error(INTERNAL_RESPONSE_ERROR, { cause })
   }
 
   const bytes = new Uint8Array(totalBytes)
@@ -78,8 +77,8 @@ const readBoundedJson = async (response: Response): Promise<unknown> => {
   }
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))
-  } catch {
-    throw new Error(INTERNAL_RESPONSE_ERROR)
+  } catch (cause) {
+    throw new Error(INTERNAL_RESPONSE_ERROR, { cause })
   }
 }
 
@@ -155,7 +154,9 @@ const internalRequest = async <TSchema extends v.GenericSchema>(
     throw new Error(INTERNAL_RESPONSE_ERROR)
   }
   const result = v.safeParse(schema, await readBoundedJson(response))
-  if (!result.success) throw new Error(INTERNAL_RESPONSE_ERROR)
+  if (!result.success) {
+    throw new Error(INTERNAL_RESPONSE_ERROR, { cause: result.issues })
+  }
   return result.output
 }
 
@@ -257,16 +258,6 @@ export const createAgentInternalGateway = (
   binding: AgentInternalFetchBinding
 ): AgentInternalGateway => ({
   ...createIssueActionGateway(binding),
-  settleMemoryCommit: (body) =>
-    internalRequest(
-      binding,
-      {
-        body,
-        method: "POST",
-        path: "/internal/agent/memory/commit-settlement",
-      },
-      agentMemoryCommitSettlementSchema
-    ),
   consumeConnectionTicket: (body) =>
     internalRequest(
       binding,

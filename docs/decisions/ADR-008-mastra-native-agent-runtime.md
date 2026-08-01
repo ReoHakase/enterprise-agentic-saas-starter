@@ -11,6 +11,7 @@ related:
   - ../architecture/agent-runtime-and-mcp.md
   - ../agent/storage-memory.md
   - ../agent/runtime-reliability.md
+  - ./ADR-012-standard-memory-and-auth-delivery.md
 ---
 
 # ADR-008 Mastra-native Agent runtimeと専用Storage
@@ -34,10 +35,10 @@ related:
 - APIでthread ownershipを検証した後、Service BindingでMastra Memoryを読む
 - 初期実装ではtitle、message count、last message previewの読み取り用projectionを作らない
 - native AI SDK streamとMastra tool stateを利用し、独自canonical message codecを削除する
-- AI SDK 7のUIMessage stream、`onEnd`、Mastra `createTool`を標準境界として使う
-- 生成済み応答の線形化点をMastra Workflowのdurable stageとする
-- Memory保存後だけApplication runを冪等settlementし、commit可否の再認可を行わない
-- `waiting_approval`のMemory保存ではApplication DBとの追加同期を行わない
+- `@mastra/ai-sdk`の`handleChatStream`、AI SDK標準response、Mastra `createTool`を標準境界として使う
+- Memoryの読込、message保存、title生成をMastra標準機能へ委譲する
+- stream完了はMemoryの厳密commitを待たず、保存耐久性をbest-effortとする
+- Application runのusageとterminal settlementは`onFinish`で維持し、Memory commit専用APIを置かない
 - file-based agentのdirectory規約だけを採用し、登録はcode-basedのまま維持する
 - schemaはValibotへ統一する
 - 後方互換性、dual write、backfillは実装しない
@@ -60,23 +61,16 @@ AgentからAPIを経由する独自Mastra Storage adapterは、Storage API、pag
 
 Mastraはthread title、updatedAt、metadata、pagination、sortを持ちます。Application DBへ複製すると、stream切断、title失敗、retry、archive時の結果整合性を新たに管理する必要があります。実測または製品要件が生じるまで投影を作りません。
 
-### cross-database commitをMastra側へ寄せる
+### Memoryの耐久化を再実装しない
 
-Application DBとAgent DBをまたぐtransactionは作れません。そこで、canonical responseと回復journalを
-Mastra Storageへ集約します。workflow snapshotを先にdurable stageし、Memory保存、Application runの
-冪等settlement、snapshot削除の順に進めます。Application settlementが失敗してもMemory保存済みの
-responseとsuccess snapshotを保持し、新しいisolateから再試行できます。
+Application DBとAgent DBをまたぐtransactionは作れません。独自Workflow stage、reconciliation、
+commit settlementを追加すると、Mastra Memoryと同じ保存状態を別実装で保守することになります。
+ADR-012により、message保存とtitle生成はMastra Memoryへ委譲し、Worker停止時の未保存messageは
+best-effortとして扱います。
 
-settlementは`applicationRunId`だけを受け、running runをcompletedへCASします。missingまたは既存
-terminal runは状態を変えずacknowledgeします。stage後のmembership、thread、context epoch、expiryを
-再検証してresponseをdiscardすると、すでに完了したmodel出力とApplication側失効処理の競合が新しい
-dual-writeになるため行いません。messageの公開可否はread時のApplication registry認可で決めます。
-
-通常request内ではAI SDK 7のstream `onEnd`からcommit完了を待ちます。短いbounded retryで
-settlementが完了しなければ、workflow snapshotを保持したままstreamをerrorで閉じます。historyと
-thread listはApplication registryで選択された全threadのsnapshotをconnection ticket消費前に
-reconcileし、消費直後にもpending有無を再確認します。これによりone-time ticketを復旧待ちだけで
-失わず、部分的な200 responseも返しません。
+tenant認可は引き続きApplication registryをreadごとに検証します。Memory保存失敗を補うために
+Application DBへmessage副本や回復journalを作らず、Mastra内部で非throwとなる保存失敗は固定codeの
+traceで観測します。
 
 ### code registrationを維持する
 
@@ -129,13 +123,13 @@ MemoryとWorkflowだけなら利用できますが、現在の要件ではMastra
 - Worker再起動後にMemoryとsuspended runを復元できる
 - Mastra Studioとruntimeが同じStorageを参照できる
 - Agent DBと業務DBのsecurity boundaryが明確になる
-- Worker中断後もsnapshotからMemory保存とrun settlementを再開できる
+- 独自Memory commit、回復journal、title Agentを保守しなくてよい
 
 ### 代償
 
 - Application DBとAgent DBをまたぐSQL FKは作れない
 - thread作成、archive、物理削除はcross-database lifecycleになる
-- completed responseごとにMemory保存後のApplication settlementが1回必要になる
+- Worker停止時の未保存messageはbest-effortになる
 - history取得はAPIからAgent WorkerへのService Bindingを1回必要とする
 - Agent Storage停止時は履歴とAgent実行が利用できない
 - developmentで2つのTurso databaseを起動する必要がある
@@ -143,9 +137,9 @@ MemoryとWorkflowだけなら利用できますが、現在の要件ではMastra
 ### 整合性方針
 
 - 認可はApplication DBで同期的に失効させる
-- canonical responseはMastra Workflow stage後にdiscardしない
-- Application run settlementはMemory保存後にだけ実行し、terminal状態を上書きしない
-- 通常streamはcommit完了を待ち、`waitUntil`だけへ依存しない
+- Memoryの読込、保存、title生成はMastra標準処理へ委譲する
+- Application run settlementはMemory commitから独立して冪等に行う
+- 通常streamは独自Memory commit barrierを待たない
 - Agent DBの物理削除は失敗しても認可を復活させない
 - 必要な削除retryだけoutboxで行う
 - projectionは将来追加しても再構築可能な副次indexとする
@@ -164,7 +158,7 @@ MemoryとWorkflowだけなら利用できますが、現在の要件ではMastra
 
 - G3でMemory、Storage、process再生成、Approval resumeを検査する
 - G4でthread registry、Service Binding、archive後の非公開を検査する
-- G4でMemory保存直前、保存直後、Application settlement直後に実hostを`SIGKILL`する
+- G4でMemory保存失敗がstreamを独自retryやreconciliationへ分岐させないことを検査する
 - W4でnative tool stateとStop後の復旧を検査する
 - E1でWebからMemory保存、reload、cancel、new turnを一巡させる
 - production Worker buildとMastra Studio smokeを実行する

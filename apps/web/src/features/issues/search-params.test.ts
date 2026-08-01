@@ -60,10 +60,7 @@ describe("issue search params", () => {
     const source = new URLSearchParams(
       "dueFrom=2026-03-09&dueTo=2026-03-07&dueFromOffset=240&dueToOffset=300&due=next_7_days"
     )
-    const parsed = normalizeIssueSearchState(
-      loadIssueSearchParams(source),
-      source
-    )
+    const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
 
     expect(parsed).toMatchObject({
       dueFrom: "",
@@ -91,38 +88,13 @@ describe("issue search params", () => {
     expect(issueSearchUrlKeys).not.toHaveProperty("duePreset")
   })
 
-  it("maps the legacy singular priority to an exact inclusive range", () => {
+  it("ignores the removed singular priority key", () => {
     const source = new URLSearchParams("priority=urgent")
-    const parsed = normalizeIssueSearchState(
-      loadIssueSearchParams(source),
-      source
-    )
+    const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
 
-    expect(parsed.priorityFrom).toBe("urgent")
+    expect(parsed.priorityFrom).toBe("no_priority")
     expect(parsed.priorityTo).toBe("urgent")
-    expect(toIssueListRequest("org-1", parsed)).toMatchObject({
-      priorityFrom: "urgent",
-      priorityTo: "urgent",
-    })
-  })
-
-  it.each([
-    {
-      query: "priority=urgent&priorityFrom=low",
-      expected: ["low", "urgent"],
-    },
-    {
-      query: "priority=urgent&priorityTo=high",
-      expected: ["no_priority", "high"],
-    },
-  ])("prefers a present new priority range key for $query", (testCase) => {
-    const source = new URLSearchParams(testCase.query)
-    const parsed = normalizeIssueSearchState(
-      loadIssueSearchParams(source),
-      source
-    )
-
-    expect([parsed.priorityFrom, parsed.priorityTo]).toEqual(testCase.expected)
+    expect(toIssueListRequest("org-1", parsed).priorityFrom).toBeUndefined()
   })
 
   it("uses the same normalized values for the API request and query key", () => {
@@ -203,21 +175,20 @@ describe("issue search params", () => {
         dueToOffset: -480,
       },
     })
-    const legacy = new URLSearchParams(
+    const removed = new URLSearchParams(
       "dueFrom=2026-07-27&dueTo=2026-08-02&dueOffset=-540"
     )
     expect(
-      normalizeIssueSearchState(loadIssueSearchParams(legacy), legacy)
+      normalizeIssueSearchState(loadIssueSearchParams(removed))
     ).toMatchObject({
-      dueFromOffset: -540,
-      dueToOffset: -540,
-      dueOffset: 0,
+      dueFromOffset: 0,
+      dueToOffset: 0,
     })
     const invalid = new URLSearchParams(
       "dueFrom=2026-07-27&dueTo=2026-08-02&dueFromOffset=900&dueToOffset=-900"
     )
     expect(
-      normalizeIssueSearchState(loadIssueSearchParams(invalid), invalid)
+      normalizeIssueSearchState(loadIssueSearchParams(invalid))
     ).toMatchObject({
       dueFromOffset: 0,
       dueToOffset: 0,
@@ -236,10 +207,7 @@ describe("issue search params", () => {
     const source = new URLSearchParams()
     for (const assignee of assignees) source.append("assignee", assignee)
     for (const label of labels) source.append("label", label)
-    const parsed = normalizeIssueSearchState(
-      loadIssueSearchParams(source),
-      source
-    )
+    const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
     const request = toIssueListRequest("org-1", parsed)
 
     expect(request.assigneeIds).toHaveLength(50)

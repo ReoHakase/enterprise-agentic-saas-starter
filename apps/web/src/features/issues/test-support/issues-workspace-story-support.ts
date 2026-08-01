@@ -70,9 +70,9 @@ export const verifyWideToolbarGroups = ({
   expect(filterRect.right).toBeLessThanOrEqual(sortRect.left)
 
   for (const group of [filterGroup, sortGroup]) {
-    expect(group).not.toHaveClass("grow")
-    expect(group).not.toHaveClass("flex-1")
-    expect(group).not.toHaveClass("basis-full")
+    const style = getComputedStyle(group)
+    expect(style.flexGrow).toBe("0")
+    expect(style.flexBasis).not.toBe("100%")
   }
   const resetActions = getToolbarGroupActions(filterGroup, "Reset filters")
   const previousControl = resetActions.previousElementSibling
@@ -120,14 +120,14 @@ export const verifyWrappedToolbarGroups = ({
   )
 
   const resetActions = getToolbarGroupActions(filterGroup, "Reset filters")
-  expect(resetActions).not.toHaveClass("basis-full")
-  expect(resetActions).not.toHaveClass("w-full")
   const previousControl = resetActions.previousElementSibling
   if (!(previousControl instanceof HTMLElement)) {
     throw new globalThis.Error("Expected control before filter reset")
   }
   const resetRect = resetActions.getBoundingClientRect()
   const previousRect = previousControl.getBoundingClientRect()
+  expect(getComputedStyle(resetActions).flexBasis).not.toBe("100%")
+  expect(resetRect.width).toBeLessThan(filterRect.width)
   expect((resetRect.top + resetRect.bottom) / 2).toBeCloseTo(
     (previousRect.top + previousRect.bottom) / 2,
     0

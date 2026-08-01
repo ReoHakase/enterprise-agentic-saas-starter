@@ -18,6 +18,7 @@ import {
   membersQueryOptions,
 } from "@/features/console"
 import type { OrganizationDetail } from "@/features/organizations"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { OrganizationInvitation, OrganizationMember } from "../../schema"
 import { MembersPanel } from "../members-panel/members-panel"
@@ -49,10 +50,10 @@ export const MembersPage = ({
   const { refetch: refetchMembers } = membersQuery
   const { refetch: refetchInvitations } = invitationsQuery
   const retryMembers = useCallback(() => {
-    void refetchMembers()
+    void refetchMembers().catch(reportObservedError)
   }, [refetchMembers])
   const retryInvitations = useCallback(() => {
-    void refetchInvitations()
+    void refetchInvitations().catch(reportObservedError)
   }, [refetchInvitations])
 
   if (membersQuery.isError) {

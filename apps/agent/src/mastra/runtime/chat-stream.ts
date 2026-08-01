@@ -1,5 +1,3 @@
-import { toAISdkStream } from "@mastra/ai-sdk"
-
 import type { createRunFinalizer } from "./chat-finalization"
 import type { createRunAbortLifecycle } from "./chat-lifecycle"
 import type { startProductOutput } from "./chat-output"
@@ -24,15 +22,8 @@ export const createFinalizedProductStream = ({
   output: Awaited<ReturnType<typeof startProductOutput>>
   runGrant: string
 }) => {
-  const aiStream = toAISdkStream(output, {
-    from: "agent",
-    onError: () => "Model response failed.",
-    sendReasoning: true,
-    sendSources: true,
-    version: "v6",
-  })
   const liveStream = enforceRunLiveness(
-    aiStream,
+    output,
     () => api.readActiveOrganization({ grant: runGrant }),
     (cause) => {
       abortLifecycle.abortFrom("revoked", cause)

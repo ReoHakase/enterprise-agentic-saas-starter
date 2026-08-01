@@ -1,6 +1,6 @@
 import { runInNewContext } from "node:vm"
 
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const telemetry = vi.hoisted(() => {
   class TestContext {
@@ -27,6 +27,10 @@ const telemetry = vi.hoisted(() => {
     setAttribute: vi.fn<(key: string, value: unknown) => void>(),
     setAttributes: vi.fn<(attributes: Record<string, unknown>) => void>(),
     setStatus: vi.fn<(status: Record<string, unknown>) => void>(),
+    spanContext: vi.fn<() => { spanId: string; traceId: string }>(() => ({
+      spanId: "span-1",
+      traceId: "trace-1",
+    })),
   }
   let activeSpan: typeof span | undefined = span
   return {
@@ -105,8 +109,13 @@ beforeEach(() => {
   telemetry.loggerNames.length = 0
 })
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe("OpenTelemetry observability adapter", () => {
-  it("records request, response, status, and rich failures", () => {
+  it("keeps trace failures fixed while local raw detail goes only to logs", () => {
+    const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
     const runtime = createOtelObservabilityRuntime("api", resource)
     runtime.setRequestContext({
       method: "POST",
@@ -144,7 +153,7 @@ describe("OpenTelemetry observability adapter", () => {
       "dev.worktree.id": "feature-auth",
       "http.request.method": "POST",
       "http.route": "/agent",
-      "request.id": "request-1",
+      request_id: "request-1",
       "service.name": "api",
     })
     expect(telemetry.span.setAttribute).toHaveBeenCalledWith(
@@ -164,15 +173,20 @@ describe("OpenTelemetry observability adapter", () => {
       })
     )
     expect(telemetry.loggerNames).toContain("api.agent.chat")
-    expect(telemetry.span.addEvent).toHaveBeenCalledWith(
-      "Agent chat prepared",
-      expect.objectContaining({ trigger: "submit-message" })
-    )
+    expect(telemetry.span.addEvent).not.toHaveBeenCalled()
+    expect(telemetry.logger.error).toHaveBeenCalledTimes(2)
     expect(telemetry.logger.error).toHaveBeenCalledWith(
-      "HTTP request failed",
-      expect.objectContaining({ errorCode: "provider_failed" })
+      "Development exception cause",
+      expect.objectContaining({
+        "app.error.code": "provider_failed",
+        "exception.message": "provider body",
+        span_id: "span-1",
+        trace_id: "trace-1",
+      })
     )
-    expect(telemetry.span.recordException).toHaveBeenCalled()
+    expect(telemetry.span.recordException).not.toHaveBeenCalled()
+    expect(terminal).toHaveBeenCalledTimes(2)
+    terminal.mockRestore()
   })
 
   it("ends synchronous, asynchronous, and failed spans", async () => {
@@ -215,17 +229,10 @@ describe("OpenTelemetry observability adapter", () => {
     expect(rethrown).toBe(nonErrorFailure)
 
     expect(telemetry.span.end).toHaveBeenCalledTimes(5)
-    expect(telemetry.span.recordException).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining(
-          "application failure with provider quota details"
-        ),
-      })
-    )
-    expect(telemetry.span.recordException).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining("rich non-Error failure"),
-      })
+    expect(telemetry.span.recordException).not.toHaveBeenCalled()
+    expect(telemetry.span.setAttribute).toHaveBeenCalledWith(
+      "app.error.code",
+      "internal_error"
     )
   })
 
@@ -289,7 +296,7 @@ describe("OpenTelemetry observability adapter", () => {
     expect([...remoteHeaders]).toEqual([])
   })
 
-  it("contains absent active spans and projects non-Error failures", () => {
+  it("contains absent active spans and disables raw logs without local identity", () => {
     telemetry.activeSpan = undefined
     const runtime = createOtelObservabilityRuntime("api")
 
@@ -311,6 +318,6 @@ describe("OpenTelemetry observability adapter", () => {
         }
       )
     }).not.toThrow()
-    expect(telemetry.logger.error).toHaveBeenCalled()
+    expect(telemetry.logger.error).not.toHaveBeenCalled()
   })
 })

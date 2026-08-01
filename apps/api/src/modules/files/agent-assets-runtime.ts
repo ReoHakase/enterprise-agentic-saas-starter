@@ -1,4 +1,4 @@
-import { AppError } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   getFileStorageRuntime,
   type FileR2Object,
@@ -7,21 +7,25 @@ import {
 } from "./runtime"
 
 export const agentAssetProviderUnavailable = (
-  provider: "images" | "r2" | "runtime",
-  operation: string
+  _provider: "images" | "r2" | "runtime",
+  _operation: string,
+  cause?: unknown
 ) =>
-  new AppError({
+  new HttpError({
+    cause,
     code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "agent-assets", operation, provider },
+    retryAfter: 30,
   })
 
 export const getAgentAssetRuntime = (): FileStorageRuntime => {
   try {
     return getFileStorageRuntime()
-  } catch {
-    throw agentAssetProviderUnavailable("runtime", "getFileStorageRuntime")
+  } catch (cause) {
+    throw agentAssetProviderUnavailable(
+      "runtime",
+      "getFileStorageRuntime",
+      cause
+    )
   }
 }
 

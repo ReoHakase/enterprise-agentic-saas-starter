@@ -33,15 +33,9 @@ provider metadata、credential、raw imageはbrowser、log、traceへ出しま�
 
 ## 自動title
 
-最初の有意なuser messageではmain responseと独立したbest-effort title taskを開始します。main streamは
-title完了を待ちません。専用title Agentはtoolを持たず、reasoning `none`、temperature 0、10秒timeout、
-最大96 output tokenで1〜80文字のtitleを生成します。Mastra Storageの現在titleが既定値のときだけ
-更新し、失敗時は`New conversation`を維持して通常応答を継続します。titleは低優先度の補助modelで、
-raw input/outputをtraceへ残しません。
-
-main usage、Mastra workflow stage、Memory保存、Application run settlementを先に終え、title taskは
-解放後のbackground処理として待ちます。title model usageは`title_<attempt>`の独立eventで、terminal
-runに対するusage専用の冪等記録契約を使います。title失敗やusage重複でmain responseを失わせません。
+最初の有意なuser messageからのtitle生成はMastra Memoryの`generateTitle`へ委譲します。main streamは
+title完了を待たず、失敗時は既定titleを維持します。独自Title Agent、独自CAS、補助modelの厳密usage
+課金は持ちません。title用modelのraw input/outputはtraceへ残しません。
 
 ## Model profile snapshot
 
@@ -83,7 +77,7 @@ compaction後も安全に収まらない場合、現在のthreadへ送信せず�
 ## Failure behavior
 
 - 履歴取得失敗: conversationを捏造せずretry UIを表示
-- title CAS競合: 現在titleを維持し通常応答を継続
+- title生成失敗: 既定titleを維持し通常応答を継続
 - compaction保存失敗: runをfail closedにし、全文を無制限送信しない
 - provider cancel/fail: 観測済みusageとstream partを可能な範囲で保存し、local draftを保持
 - archived/missing thread: 同じnot-found projection。local stale selectionを解除

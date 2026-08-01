@@ -2,7 +2,7 @@ import * as schema from "@enterprise-agentic-saas/db/schema"
 import { eq } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
-import { insertOrganizationWithSuperAdmin } from "../organizations/public"
+import { insertOrganizationWithOwner } from "../organizations/public"
 import {
   createFixture,
   createRun,
@@ -24,7 +24,7 @@ describe("Agent Issue organization context and resume tickets", () => {
       .from(schema.agentSessionContexts)
       .where(eq(schema.agentSessionContexts.sessionId, "action-session-a"))
 
-    const created = await insertOrganizationWithSuperAdmin(db, {
+    const created = await insertOrganizationWithOwner(db, {
       activate: true,
       name: "Replacement Organization",
       sessionId: "action-session-a",

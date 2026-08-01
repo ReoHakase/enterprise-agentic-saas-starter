@@ -125,10 +125,7 @@ describe("createApp security and OpenAPI", () => {
     )
     expect(missing.status).toBe(403)
     expect(await missing.json()).toMatchObject({
-      error: {
-        code: "csrf_origin_forbidden",
-        context: { reason: "missing_origin" },
-      },
+      error: "csrf_origin_forbidden",
     })
 
     const untrusted = await app.handle(
@@ -141,9 +138,9 @@ describe("createApp security and OpenAPI", () => {
       })
     )
     expect(untrusted.status).toBe(403)
-    expect((await untrusted.json()).error.context.reason).toBe(
-      "untrusted_origin"
-    )
+    expect(await untrusted.json()).toMatchObject({
+      error: "csrf_origin_forbidden",
+    })
 
     const trusted = await app.handle(
       jsonRequest("/organizations/org_1/activate", {
@@ -154,7 +151,7 @@ describe("createApp security and OpenAPI", () => {
     expect(trusted.status).toBe(200)
   })
 
-  it("serves health and a tagged, secured OpenAPI document", async () => {
+  it("serves health and an app-owned OpenAPI document", async () => {
     const app = createApp(testDb())
     const health = await app.handle(new Request("http://localhost/health"))
     expect(health.status).toBe(200)
@@ -169,52 +166,16 @@ describe("createApp security and OpenAPI", () => {
       in: "cookie",
       type: "apiKey",
     })
-    expect(spec.components.securitySchemes.apiKeyCookie).toMatchObject({
-      in: "cookie",
-      type: "apiKey",
-    })
-    expect(spec.components.securitySchemes.bearerAuth).toMatchObject({
-      scheme: "bearer",
-      type: "http",
-    })
-    expect(spec.components.schemas.AuthUser.properties.displayName).toEqual({
-      nullable: true,
-      type: "string",
-    })
-    expect(
-      spec.paths["/auth/passkey/generate-register-options"].get.responses["200"]
-        .content["application/json"].schema
-    ).toEqual({
-      allOf: [{ $ref: "#/components/schemas/AuthUser" }, { type: "object" }],
-    })
-    expect(spec.paths["/auth/sign-in/magic-link"].post.tags).toEqual([
-      "Auth / Magic link",
+    expect(Object.keys(spec.components.securitySchemes)).toEqual([
+      "sessionCookie",
     ])
-    expect(
-      spec.paths["/auth/multi-session/list-device-sessions"].get.operationId
-    ).toBe("betterAuthGetAuthMultiSessionListDeviceSessions")
-    expect(spec.paths["/auth/organization/accept-invitation"]).toBeDefined()
-    expect(spec.paths["/auth/organization/list-user-invitations"]).toBeDefined()
-    expect(spec.paths["/auth/organization/invite-member"]).toBeUndefined()
+    expect(Object.keys(spec.paths)).not.toContainEqual(
+      expect.stringMatching(/^\/auth(?:\/|$)/u)
+    )
     expect(
       spec.paths["/organizations/{organizationId}/ownership-transfer"].post
         .security
     ).toEqual([{ sessionCookie: [] }])
-    expect(
-      spec.paths[
-        "/organizations/{organizationId}/invitations/{invitationId}/resend"
-      ].post
-    ).toMatchObject({
-      operationId: "resendOrganizationInvitation",
-      security: [{ sessionCookie: [] }],
-      responses: {
-        200: expect.any(Object),
-        403: expect.any(Object),
-        404: expect.any(Object),
-        409: expect.any(Object),
-        429: expect.any(Object),
-      },
-    })
     expect(spec.paths["/issues/{id}"].get.operationId).toBe("getIssue")
     expect(spec.paths["/issues/by-number/{number}"].get.operationId).toBe(
       "getIssueByNumber"
@@ -258,61 +219,25 @@ describe("createApp security and OpenAPI", () => {
     const createOrganizationResponses =
       spec.paths["/organizations"].post.responses
     expect(createOrganizationResponses["201"]).toBeDefined()
-    expect(
-      createOrganizationResponses["403"].content["application/json"].schema
-        .properties.error.properties.code.examples
-    ).toContain("csrf_origin_forbidden")
-    expect(
-      createOrganizationResponses["403"].content["application/json"].schema
-        .properties.error.properties.fieldErrors
-    ).toBeDefined()
     const documentedError =
       createOrganizationResponses["403"].content["application/json"].schema
-        .properties.error
-    expect(documentedError.required).toContain("requestId")
-    expect(documentedError.properties.requestId).toMatchObject({
+    expect(documentedError.required).toEqual(["error", "message"])
+    expect(documentedError.properties.error).toMatchObject({
       type: "string",
     })
-    expect(Object.keys(documentedError.properties.context.properties)).toEqual([
-      "action",
-      "constraint",
-      "field",
-      "maxAgeSeconds",
-      "reason",
-      "resource",
-      "retryAfter",
+    expect(documentedError.properties.error.examples).toContain(
+      "csrf_origin_forbidden"
+    )
+    expect(Object.keys(documentedError.properties)).toEqual([
+      "error",
+      "message",
+      "fieldErrors",
     ])
-    expect(
-      documentedError.properties.context.properties.organizationId
-    ).toBeUndefined()
     expect(
       spec.paths["/issues/{id}/comments"].post.responses["201"].content[
         "application/json"
       ].schema.properties.author.required
     ).toEqual(["id", "name", "profileImage"])
-    const invitationOperation =
-      spec.paths["/organizations/{organizationId}/invitations"].post
-    expect(
-      invitationOperation.requestBody.content["application/json"].schema
-        .properties.emails
-    ).toMatchObject({
-      items: { format: "email", type: "string" },
-      maxItems: 20,
-      minItems: 1,
-      type: "array",
-    })
-    expect(
-      invitationOperation.responses["201"].content["application/json"]
-    ).toMatchObject({
-      schema: {
-        properties: {
-          delivery: { enum: ["queued"] },
-          queuedCount: { maximum: 20, minimum: 1, type: "integer" },
-        },
-        required: ["invitations", "queuedCount", "delivery"],
-      },
-    })
-    expect(invitationOperation.responses["429"]).toBeDefined()
     const deleteOrganizationOperation =
       spec.paths["/organizations/{organizationId}"].delete
     expect(deleteOrganizationOperation.security).toEqual([
@@ -327,8 +252,8 @@ describe("createApp security and OpenAPI", () => {
     ).toEqual(["slug", "confirmation", "idempotencyKey"])
     expect(
       deleteOrganizationOperation.responses["400"].content["application/json"]
-        .schema.properties.error.properties.fieldErrors
-    ).toBeDefined()
+        .schema.required
+    ).toEqual(["error", "message"])
 
     const operationMethods = ["get", "post", "put", "patch", "delete"] as const
     type OpenApiOperation = {
@@ -364,7 +289,7 @@ describe("createApp security and OpenAPI", () => {
     expect(new Set(operationIds).size).toBe(operationIds.length)
   })
 
-  it("serves Scalar without local auth persistence, telemetry, or agent upload", async () => {
+  it("serves Scalar with separate application and Better Auth sources", async () => {
     const app = createApp(testDb())
     const response = await app.handle(new Request("http://localhost/openapi"))
     const html = await response.text()
@@ -376,6 +301,11 @@ describe("createApp security and OpenAPI", () => {
     expect(html).toContain('"agent":{"disabled":true}')
     expect(html).toContain('"persistAuth":false')
     expect(html).toContain('"showOperationId":true')
+    expect(html).toContain('"slug":"application-api"')
+    expect(html).toContain('"url":"/openapi/json"')
+    expect(html).toContain('"slug":"authentication-api"')
+    expect(html).toContain('"url":"/auth/open-api/generate-schema"')
+    expect(html).not.toContain('"url":"openapi/json"')
     expect(html).toContain('"telemetry":false')
     expect(html).toContain('"withDefaultFonts":false')
   })
@@ -388,13 +318,8 @@ describe("createApp security and OpenAPI", () => {
       })
     )
     expect(response.status).toBe(401)
-    expect(await response.json()).toEqual({
-      error: {
-        code: "unauthorized",
-        message: "Authentication required",
-        requestId: "req_unauthorized",
-      },
-    })
+    expect(response.headers.get("x-request-id")).toBe("req_unauthorized")
+    expect(await response.json()).toMatchObject({ error: "unauthorized" })
   })
 
   it("does not list or load another tenant", async () => {
@@ -420,12 +345,8 @@ describe("createApp security and OpenAPI", () => {
     )
     expect(otherTenant.status).toBe(404)
     expect(nonexistent.status).toBe(404)
-    expect(await otherTenant.json()).toMatchObject({
-      error: { code: "not_found", context: { resource: "organization" } },
-    })
-    expect(await nonexistent.json()).toMatchObject({
-      error: { code: "not_found", context: { resource: "organization" } },
-    })
+    expect(await otherTenant.json()).toMatchObject({ error: "not_found" })
+    expect(await nonexistent.json()).toMatchObject({ error: "not_found" })
   })
 
   it("requires the requested member tenant to be active", async () => {
@@ -437,9 +358,7 @@ describe("createApp security and OpenAPI", () => {
       })
     )
     expect(response.status).toBe(409)
-    expect((await response.json()).error.code).toBe(
-      "active_organization_mismatch"
-    )
+    expect((await response.json()).error).toBe("active_organization_mismatch")
   })
 
   it("repairs stale real-session organization context and persists the result", async () => {

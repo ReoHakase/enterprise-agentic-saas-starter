@@ -12,7 +12,6 @@ import {
 } from "../test-support/scripted-model"
 import type { PublicWebSearchProvider } from "../tools/web-search/search-timeout"
 import { createWebSearchTool } from "../tools/web-search/tool"
-import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
 
 export const TEST_RUN_GRANT = "grant_0123456789abcdefghijklmnopqrstuvwxyz"
 const future = new Date(Date.now() + 60_000).toISOString()
@@ -22,20 +21,6 @@ export const createNativeControlPlane = (
   lifecycle: Partial<AgentControlPlanePort> = {}
 ): AgentControlPlanePort => ({
   cancelRun: lifecycle.cancelRun ?? unavailable,
-  settleMemoryCommit:
-    lifecycle.settleMemoryCommit ??
-    (async (input) => {
-      if (lifecycle.finishRun) {
-        await lifecycle.finishRun({
-          grant: TEST_RUN_GRANT,
-          outcome: "completed",
-        })
-      }
-      return {
-        acknowledged: true,
-        applicationRunId: input.applicationRunId,
-      }
-    }),
   consumeConnectionTicket: () =>
     Promise.resolve({
       expiresAt: future,
@@ -171,23 +156,6 @@ export const nativeRuntimeEnvironment = {
   NODE_ENV: "test",
 } as const
 
-export class CountingExecutionRegistry extends ProductAgentExecutionRegistry {
-  releases = 0
-
-  override register(
-    input: Parameters<ProductAgentExecutionRegistry["register"]>[0]
-  ) {
-    const registration = super.register(input)
-    return {
-      ...registration,
-      release: () => {
-        this.releases += 1
-        registration.release()
-      },
-    }
-  }
-}
-
 export const createNativeModelRuntime = (
   steps: readonly ScriptedModelStep[],
   executionRegistry: ProductAgentExecutionRegistry = new ProductAgentExecutionRegistry(),
@@ -215,10 +183,8 @@ export const createNativeModelRuntime = (
     executionRegistry,
     mastra: createProductRuntime({
       approvedIssueActionWorkflow: composition.approvedIssueActionWorkflow,
-      memoryCommitWorkflow: createMemoryCommitWorkflow(memory),
       productAgent,
       storage: composition.storage,
-      threadTitleAgent: composition.threadTitleAgent,
     }),
   }
 }

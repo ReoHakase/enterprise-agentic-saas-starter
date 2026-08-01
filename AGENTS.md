@@ -47,7 +47,8 @@
 - `drizzle-kit push`を使わず、`main`に存在するmigrationを変更しない。
 - `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
 - AgentからDB、Auth、Email、Webを直接importしない。
-- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、
-  telemetry、Memory、trace、test artifactへ出さない。maintainerが明示承認した
-  `NODE_ENV=development`のAgent local consoleに限り、provider raw `Error`とbounded cause chainを
-  調査用に出してよい。出力は機密として扱い、保存、共有、外部送信しない。
+- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、Memory、
+  trace、remote telemetry、test・evalの出力やartifactへ出さない。ADR-013の固定条件を満たす
+  `NODE_ENV=development`のAPI・Agent・Webに限り、認証情報を除去したbounded cause chainを端末・
+  ブラウザーconsoleとlocal Lokiへ出してよい。local Lokiは機密development dataとして扱い、共有・
+  export・artifact添付をしない。

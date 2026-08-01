@@ -225,7 +225,7 @@ const main = async () => {
         MAILPIT_URL: "",
         GITHUB_CLIENT_ID: "unused-in-emulator",
         GITHUB_CLIENT_SECRET: "unused-in-emulator",
-        GITHUB_OAUTH_EMULATOR_URL: environment.githubOrigin,
+        GITHUB_OAUTH_EMULATOR_URL: `${environment.githubOrigin}/emulate/github`,
         GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
         GITHUB_OAUTH_EMULATOR_CLIENT_SECRET:
           "enterprise-agentic-saas-local-secret",

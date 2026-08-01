@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn, userEvent } from "storybook/test"
+import { expect, fn, userEvent, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -225,11 +225,18 @@ export const ApprovalRequired = meta.story({
   },
   play: async ({ canvas, step }) => {
     await step("Render the canonical approval preview", async () => {
+      const approval = await canvas.findByRole("region", {
+        name: "Issue change approval",
+      })
       await expect(
-        await canvas.findByText("Approve Issue change?")
+        await within(approval).findByText("Approve Issue change?")
       ).toBeVisible()
-      await expect(canvas.getByRole("button", { name: "Yes" })).toBeEnabled()
-      await expect(canvas.getByText("tenant-policy.png")).toBeVisible()
+      await expect(
+        within(approval).getByRole("button", { name: "Yes" })
+      ).toBeEnabled()
+      await expect(
+        within(approval).getByText("tenant-policy.png")
+      ).toBeVisible()
     })
   },
 })

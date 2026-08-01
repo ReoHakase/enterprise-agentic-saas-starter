@@ -1,8 +1,9 @@
-import { delay, http, HttpResponse } from "msw"
+import { http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
+import { createDeferred } from "../../../../../test-support/storybook/deferred"
 import { authApiBaseUrl, AuthStoryScope } from "../../test-support/fixtures"
 import { ProviderButtons } from "./provider-buttons"
 
@@ -37,12 +38,14 @@ export const Vertical = meta.story({
 
 export const Pending = meta.story({
   beforeEach({ msw }) {
+    const responseGate = createDeferred<void>()
     msw.use(
       http.post(`${authApiBaseUrl}/auth/sign-in/social`, async () => {
-        await delay("infinite")
+        await responseGate.promise
         return HttpResponse.json({ url: "https://github.example.test/login" })
       })
     )
+    return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, step }) => {
     await step("Disable social sign-in during provider setup", async () => {
@@ -61,12 +64,12 @@ export const ApiFailure = meta.story({
       )
     )
   },
-  play: async ({ canvas, step }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     await step("Restore the provider action after a failure", async () => {
       const button = canvas.getByRole("button", { name: "GitHub" })
       await userEvent.click(button)
       await expect(
-        await within(document.body).findByText(
+        await within(canvasElement.ownerDocument.body).findByText(
           "GitHub sign-in could not be started. Try again."
         )
       ).toBeInTheDocument()

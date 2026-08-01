@@ -53,7 +53,7 @@ export const seedLegacyUpdateActionScope = async (
         "legacy-update-member",
         "legacy-update-org",
         "legacy-update-user",
-        "super_admin",
+        "owner",
         now,
       ],
     },

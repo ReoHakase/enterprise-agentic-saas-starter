@@ -1,6 +1,6 @@
 import { Elysia } from "elysia"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { sessionCookieSecurity } from "../../models/api"
 import type { SessionContext, SessionUser } from "../auth/public"
 import type { OrganizationRole } from "./roles"
@@ -24,16 +24,12 @@ const organizationIdFrom = (
 ) => {
   const container = context[source]
   if (!container || typeof container !== "object") {
-    throw publicErrors.validation("Organization id is required", {
-      field: "organizationId",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
 
   const organizationId = Reflect.get(container, "organizationId")
   if (typeof organizationId !== "string" || !organizationId.trim()) {
-    throw publicErrors.validation("Organization id is required", {
-      field: "organizationId",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
 
   return organizationId
@@ -44,11 +40,11 @@ export const requireActiveOrganization = (
   organizationId: string
 ) => {
   if (!session.activeOrganizationId) {
-    throw publicErrors.activeOrganizationRequired()
+    throw new HttpError({ code: "active_organization_required" })
   }
 
   if (session.activeOrganizationId !== organizationId) {
-    throw publicErrors.activeOrganizationMismatch()
+    throw new HttpError({ code: "active_organization_mismatch" })
   }
 }
 
@@ -63,7 +59,7 @@ export const requireFreshSession = (
 
   // 欠損・不正値・未来時刻もfreshとして扱わず、常に再認証へ倒す。
   if (!Number.isFinite(createdAt) || age < 0 || age > maxAge) {
-    throw publicErrors.stepUpRequired(action, STEP_UP_MAX_AGE_SECONDS)
+    throw new HttpError({ code: "step_up_required" })
   }
 }
 
@@ -107,10 +103,7 @@ export const createAccessControlRoutes = ({
         }
 
         if (options.allow && !options.allow.includes(membership.role)) {
-          throw publicErrors.forbidden(
-            "You are not allowed to perform this action",
-            { action: options.action }
-          )
+          throw new HttpError({ code: "forbidden" })
         }
 
         if (options.fresh) {

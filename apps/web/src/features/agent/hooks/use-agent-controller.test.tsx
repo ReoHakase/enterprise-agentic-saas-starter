@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import type {
-  ChatOnDataCallback,
   ChatOnErrorCallback,
   ChatOnFinishCallback,
   ChatOnToolCallCallback,
@@ -17,7 +16,6 @@ import type { AgentChatMessage } from "../schema"
 import type { PendingChatSubmission } from "../submission-identity"
 
 type AgentChatOptions = {
-  onData?: ChatOnDataCallback<AgentChatMessage>
   onError?: ChatOnErrorCallback
   onFinish?: ChatOnFinishCallback<AgentChatMessage>
   onToolCall?: ChatOnToolCallCallback<AgentChatMessage>
@@ -36,6 +34,8 @@ type ControllerMocks = {
   clearError: Mock<() => void>
   error: Error | undefined
   messages: AgentChatMessage[]
+  patchForm: Mock<() => Promise<unknown>>
+  reportObservedError: Mock<(error: unknown) => void>
   sendMessage: Mock<(message: { id: string }) => Promise<void>>
   status: "ready" | "streaming"
   stop: Mock<() => Promise<void>>
@@ -56,6 +56,8 @@ const mocks = vi.hoisted<ControllerMocks>(() => ({
       parts: [{ type: "text", text: "Partial answer stays visible." }],
     },
   ],
+  patchForm: vi.fn<() => Promise<unknown>>(() => Promise.resolve({})),
+  reportObservedError: vi.fn<(error: unknown) => void>(),
   sendMessage: vi.fn<(message: { id: string }) => Promise<void>>(() =>
     Promise.resolve()
   ),
@@ -89,7 +91,7 @@ vi.mock("./use-agent-mention-candidates", () => ({
 }))
 vi.mock("../components/form-registry/form-registry", () => ({
   useAgentFormRegistry: () => ({
-    patch: vi.fn<() => void>(),
+    patch: mocks.patchForm,
     read: vi.fn<() => void>(),
   }),
 }))
@@ -98,6 +100,9 @@ vi.mock("@/features/issues", () => ({
 }))
 vi.mock("@/features/issues/search-params.client", () => ({
   useIssueSearchState: () => ({ state: {} }),
+}))
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError: mocks.reportObservedError,
 }))
 
 type RuntimeMock = {
@@ -147,12 +152,6 @@ const finishEvent = (
   isDisconnect: false,
   isError: false,
   ...input,
-})
-const runData = (
-  runId: string
-): Parameters<ChatOnDataCallback<AgentChatMessage>>[0] => ({
-  type: "data-run",
-  data: { runId },
 })
 const composerSnapshot = (text: string): AgentComposerSnapshot => ({
   document: { type: "doc", content: [] },
@@ -209,6 +208,23 @@ const renderController = () =>
     { wrapper }
   )
 
+const observeRunMetadata = (
+  rerender: ReturnType<typeof renderController>["rerender"],
+  runId: string
+) => {
+  const latestAssistantIndex = mocks.messages.findLastIndex(
+    (message) => message.role === "assistant"
+  )
+  if (latestAssistantIndex < 0) throw new Error("Assistant message is required")
+  const latestAssistant = mocks.messages[latestAssistantIndex]
+  if (!latestAssistant) throw new Error("Assistant message is required")
+  mocks.messages = mocks.messages.with(latestAssistantIndex, {
+    ...latestAssistant,
+    metadata: { ...latestAssistant.metadata, runId },
+  })
+  rerender()
+}
+
 const resetControllerMocks = () => {
   vi.clearAllMocks()
   mocks.chatOptions = undefined
@@ -222,6 +238,7 @@ const resetControllerMocks = () => {
   ]
   mocks.status = "streaming"
   mocks.stop.mockResolvedValue(undefined)
+  mocks.patchForm.mockResolvedValue({})
   runtime.pendingSubmission = undefined
   runtime.setPendingSubmission.mockImplementation((submission) => {
     runtime.pendingSubmission = submission
@@ -232,11 +249,9 @@ describe("useAgentController Stop lifecycle", () => {
   beforeEach(resetControllerMocks)
 
   it("handles three Stop cycles without deleting partial output", async () => {
-    const { result } = renderController()
+    const { result, rerender } = renderController()
 
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_1"))
-    })
+    act(() => observeRunMetadata(rerender, "run_1"))
     await act(async () => {
       await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
     })
@@ -247,9 +262,7 @@ describe("useAgentController Stop lifecycle", () => {
       })
     )
 
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_2"))
-    })
+    act(() => observeRunMetadata(rerender, "run_2"))
     mocks.cancelAgentRun.mockRejectedValueOnce(new Error("temporary failure"))
     await act(async () => {
       await expect(result.current.stopCurrentTurn()).resolves.toBe(false)
@@ -266,9 +279,7 @@ describe("useAgentController Stop lifecycle", () => {
     )
     await waitFor(() => expect(result.current.cancelState).toBe("idle"))
 
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_3"))
-    })
+    act(() => observeRunMetadata(rerender, "run_3"))
     await act(async () => {
       await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
     })
@@ -284,6 +295,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(result.current.chat.messages).toEqual([
       {
         id: "assistant-partial",
+        metadata: { runId: "run_3" },
         role: "assistant",
         parts: [{ type: "text", text: "Partial answer stays visible." }],
       },
@@ -292,7 +304,7 @@ describe("useAgentController Stop lifecycle", () => {
   })
 
   it("keeps the stream open for a run identity after an early Stop request", async () => {
-    const { result } = renderController()
+    const { result, rerender } = renderController()
 
     let stopPromise: Promise<boolean> | undefined
     act(() => {
@@ -303,21 +315,76 @@ describe("useAgentController Stop lifecycle", () => {
       await Promise.resolve()
     })
     expect(result.current.cancelState).toBe("canceling")
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_queued"))
-    })
+    act(() => observeRunMetadata(rerender, "run_queued"))
     await waitFor(() =>
       expect(mocks.cancelAgentRun).toHaveBeenCalledWith(expect.anything(), {
         runId: "run_queued",
         threadId: "thread_1",
       })
     )
-    expect(result.current.turnStopped).toBe(true)
     await act(async () => {
       await expect(stopPromise).resolves.toBe(true)
     })
     expect(mocks.stop).toHaveBeenCalledOnce()
     expect(result.current.cancelState).toBe("idle")
+    expect(result.current.turnStopped).toBe(true)
+  })
+
+  it("does not reuse settled message metadata for the next early Stop", async () => {
+    const previousAssistant = {
+      id: "assistant-previous",
+      metadata: { runId: "run_previous" },
+      role: "assistant",
+      parts: [{ type: "text", text: "Previous answer." }],
+    } satisfies AgentChatMessage
+    mocks.messages = [previousAssistant]
+    mocks.status = "ready"
+    const { result, rerender } = renderController()
+
+    await act(async () => {
+      await mocks.chatOptions?.onFinish?.(
+        finishEvent({
+          message: previousAssistant,
+          messages: [previousAssistant],
+        })
+      )
+    })
+    mocks.messages = [
+      previousAssistant,
+      {
+        id: "user-current",
+        role: "user",
+        parts: [{ type: "text", text: "Current request." }],
+      },
+    ]
+    mocks.status = "streaming"
+    rerender()
+
+    let stopPromise: Promise<boolean> | undefined
+    act(() => {
+      stopPromise = result.current.stopCurrentTurn()
+    })
+    expect(mocks.cancelAgentRun).not.toHaveBeenCalled()
+
+    mocks.messages = [
+      ...mocks.messages,
+      {
+        id: "assistant-current",
+        metadata: { runId: "run_current" },
+        role: "assistant",
+        parts: [{ type: "text", text: "Current partial answer." }],
+      },
+    ]
+    rerender()
+    await act(async () => {
+      await expect(stopPromise).resolves.toBe(true)
+    })
+
+    expect(mocks.cancelAgentRun).toHaveBeenCalledOnce()
+    expect(mocks.cancelAgentRun).toHaveBeenCalledWith(expect.anything(), {
+      runId: "run_current",
+      threadId: "thread_1",
+    })
   })
 
   it("deduplicates same-microtask Stop calls before React rerenders", async () => {
@@ -330,10 +397,8 @@ describe("useAgentController Stop lifecycle", () => {
           resolveCancel = resolve
         })
     )
-    const { result } = renderController()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_deduplicated"))
-    })
+    const { result, rerender } = renderController()
+    act(() => observeRunMetadata(rerender, "run_deduplicated"))
     let first: Promise<boolean> | undefined
     let second: Promise<boolean> | undefined
     act(() => {
@@ -367,10 +432,8 @@ describe("useAgentController Stop lifecycle", () => {
         ],
       },
     ]
-    const { result } = renderController()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_waiting_approval"))
-    })
+    const { result, rerender } = renderController()
+    act(() => observeRunMetadata(rerender, "run_waiting_approval"))
     await act(async () => {
       await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
     })
@@ -384,9 +447,9 @@ describe("useAgentController Stop lifecycle", () => {
     const invalidate = vi
       .spyOn(QueryClient.prototype, "invalidateQueries")
       .mockImplementation(() => new Promise(() => undefined))
-    const { result } = renderController()
+    const { result, rerender } = renderController()
+    act(() => observeRunMetadata(rerender, "run_refetch"))
     await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_refetch"))
       await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
     })
     expect(mocks.stop).toHaveBeenCalledOnce()
@@ -405,9 +468,7 @@ describe("useAgentController Stop lifecycle", () => {
         })
     )
     const { result, rerender } = renderController()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_deferred"))
-    })
+    act(() => observeRunMetadata(rerender, "run_deferred"))
 
     let stopPromise: Promise<boolean> | undefined
     act(() => {
@@ -431,9 +492,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(result.current.cancelState).toBe("idle")
     expect(runtime.setPendingSubmission).toHaveBeenCalledTimes(1)
 
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_failed"))
-    })
+    act(() => observeRunMetadata(rerender, "run_failed"))
     mocks.cancelAgentRun.mockResolvedValueOnce({
       runId: "run_failed",
       status: "failed",
@@ -456,10 +515,8 @@ describe("useAgentController Stop lifecycle", () => {
   })
 
   it("keeps transport cancel failures retryable", async () => {
-    const { result } = renderController()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_retry"))
-    })
+    const { result, rerender } = renderController()
+    act(() => observeRunMetadata(rerender, "run_retry"))
     mocks.cancelAgentRun.mockRejectedValueOnce(new Error("network failure"))
 
     await act(async () => {
@@ -508,9 +565,7 @@ describe("useAgentController Stop lifecycle", () => {
       resolveStop?.()
       await expect(stopPromise).resolves.toBe(false)
     })
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_after_terminal"))
-    })
+    act(() => observeRunMetadata(rerender, "run_after_terminal"))
 
     expect(result.current.cancelState).toBe("idle")
     await waitFor(() => expect(mocks.clearError).toHaveBeenCalled())
@@ -629,9 +684,7 @@ describe("useAgentController Stop submission recovery", () => {
       mocks.status = "streaming"
       rerender()
       // oxlint-disable-next-line no-await-in-loop -- run identity arrives after the corresponding submission.
-      await act(async () => {
-        await mocks.chatOptions?.onData?.(runData(runId))
-      })
+      act(() => observeRunMetadata(rerender, runId))
       // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before the next submission.
       await act(async () => {
         await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
@@ -704,9 +757,7 @@ describe("useAgentController Stop submission recovery", () => {
       expect(initialId).toBeTypeOf("string")
       mocks.status = "streaming"
       rerender()
-      await act(async () => {
-        await mocks.chatOptions?.onData?.(runData(`run_${status}`))
-      })
+      act(() => observeRunMetadata(rerender, `run_${status}`))
       mocks.cancelAgentRun.mockResolvedValueOnce({
         runId: `run_${status}`,
         status,
@@ -755,9 +806,7 @@ describe("useAgentController Stop submission recovery", () => {
     const initialId = mocks.sendMessage.mock.calls[0]?.[0].id
     mocks.status = "streaming"
     rerender()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_transport"))
-    })
+    act(() => observeRunMetadata(rerender, "run_transport"))
     mocks.cancelAgentRun.mockRejectedValueOnce(new Error("network failure"))
 
     await act(async () => {
@@ -790,9 +839,7 @@ describe("useAgentController Stop submission recovery", () => {
     composerText = "newer local draft"
     mocks.status = "streaming"
     rerender()
-    await act(async () => {
-      await mocks.chatOptions?.onData?.(runData("run_draft"))
-    })
+    act(() => observeRunMetadata(rerender, "run_draft"))
     await act(async () => {
       await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
     })
@@ -822,6 +869,39 @@ describe("useAgentController Stop submission recovery", () => {
       })
     })
     expect(mocks.addToolOutput).not.toHaveBeenCalled()
+  })
+
+  it("keeps raw client tool failures out of AI SDK history", async () => {
+    const error = new Error("DATABASE_URL=file:private-client-tool.db")
+    mocks.patchForm.mockRejectedValueOnce(error)
+    renderController()
+
+    await act(async () => {
+      await mocks.chatOptions?.onToolCall?.({
+        toolCall: {
+          dynamic: true,
+          input: {
+            formId: "issue:1",
+            expectedEpoch: "epoch-1",
+            expectedRevision: 1,
+            patch: { title: "Updated" },
+          },
+          toolCallId: "call_client_tool",
+          toolName: "ui_patch_form_draft",
+        },
+      })
+    })
+
+    expect(mocks.reportObservedError).toHaveBeenCalledWith(error)
+    expect(mocks.addToolOutput).toHaveBeenCalledWith({
+      tool: "ui_patch_form_draft",
+      toolCallId: "call_client_tool",
+      state: "output-error",
+      errorText: "Client tool failed.",
+    })
+    expect(JSON.stringify(mocks.addToolOutput.mock.calls)).not.toContain(
+      "private-client-tool"
+    )
   })
 
   it("invalidates Issue queries after a successful attachment mutation turn", async () => {

@@ -11,7 +11,7 @@ import type {
   AgentUsageRecordInput,
   AgentUsageRecordResult,
 } from "../../../agent-client"
-import { AppError, publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import {
   requireActiveMembership,
@@ -27,165 +27,154 @@ export const recordAgentUsage = async (
   input: AgentUsageRecordInput & { grant: string; now?: Date }
 ): Promise<AgentUsageRecordResult> => {
   const tokenHash = await hashAgentToken(input.grant)
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const context = await validateGrantInTransaction(tx, {
-        tokenHash,
-        kind: "run",
-        now,
-        allowTerminalRun: true,
-        allowRevokedTerminalRun: true,
+  return db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const context = await validateGrantInTransaction(tx, {
+      tokenHash,
+      kind: "run",
+      now,
+      allowTerminalRun: true,
+      allowRevokedTerminalRun: true,
+    })
+    if (!context.runId) throw new HttpError({ code: "unauthorized" })
+
+    const priceRows = await tx
+      .select()
+      .from(agentModelPrices)
+      .where(
+        and(
+          eq(agentModelPrices.provider, input.provider),
+          eq(agentModelPrices.model, input.model),
+          lte(agentModelPrices.effectiveFrom, now),
+          or(
+            isNull(agentModelPrices.effectiveTo),
+            gt(agentModelPrices.effectiveTo, now)
+          )
+        )
+      )
+      .orderBy(desc(agentModelPrices.effectiveFrom), desc(agentModelPrices.id))
+      .limit(1)
+    const price = priceRows[0]
+    const usesTierPrice =
+      price?.tierThresholdTokenCount !== null &&
+      price?.tierThresholdTokenCount !== undefined &&
+      input.inputTokenCount > price.tierThresholdTokenCount
+    const inputPrice = usesTierPrice
+      ? price.tierInputPriceMicrosPerMillion
+      : price?.inputPriceMicrosPerMillion
+    const cacheReadPrice = usesTierPrice
+      ? price.tierCacheReadPriceMicrosPerMillion
+      : price?.cacheReadPriceMicrosPerMillion
+    const cacheWritePrice = usesTierPrice
+      ? price.tierCacheWritePriceMicrosPerMillion
+      : price?.cacheWritePriceMicrosPerMillion
+    const outputPrice = usesTierPrice
+      ? price.tierOutputPriceMicrosPerMillion
+      : price?.outputPriceMicrosPerMillion
+    const calculatedCostMicros = price
+      ? pricedMicros(
+          input.inputNoCacheTokenCount,
+          inputPrice ?? price.inputPriceMicrosPerMillion
+        ) +
+        pricedMicros(
+          input.cacheReadTokenCount,
+          cacheReadPrice ?? price.cacheReadPriceMicrosPerMillion
+        ) +
+        pricedMicros(
+          input.cacheWriteTokenCount,
+          cacheWritePrice ?? price.cacheWritePriceMicrosPerMillion
+        ) +
+        pricedMicros(
+          input.outputTokenCount,
+          outputPrice ?? price.outputPriceMicrosPerMillion
+        )
+      : 0
+    const pricingVersion = price?.pricingVersion ?? "unpriced"
+    const eventRows = await tx
+      .insert(agentUsageEvents)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: context.organizationId,
+        threadId: context.threadId,
+        runId: context.runId,
+        userId: context.userId,
+        provider: input.provider,
+        model: input.model,
+        inputTokenCount: input.inputTokenCount,
+        inputNoCacheTokenCount: input.inputNoCacheTokenCount,
+        cacheReadTokenCount: input.cacheReadTokenCount,
+        cacheWriteTokenCount: input.cacheWriteTokenCount,
+        outputTokenCount: input.outputTokenCount,
+        textOutputTokenCount: input.textOutputTokenCount,
+        reasoningTokenCount: input.reasoningTokenCount,
+        totalTokenCount: input.totalTokenCount,
+        imageInputCount: input.imageInputCount,
+        calculatedCostMicros,
+        providerCostMicros: input.providerCostMicros ?? null,
+        pricingVersion,
+        currency: "USD",
+        isEstimate: input.providerCostMicros === undefined,
+        durationMs: input.durationMs,
+        runEventId: input.runEventId,
+        createdAt: now,
       })
-      if (!context.runId) throw publicErrors.unauthorized()
+      .onConflictDoNothing()
+      .returning({ id: agentUsageEvents.id })
+    if (!eventRows[0]) {
+      return { recorded: false, calculatedCostMicros, pricingVersion }
+    }
 
-      const priceRows = await tx
-        .select()
-        .from(agentModelPrices)
-        .where(
-          and(
-            eq(agentModelPrices.provider, input.provider),
-            eq(agentModelPrices.model, input.model),
-            lte(agentModelPrices.effectiveFrom, now),
-            or(
-              isNull(agentModelPrices.effectiveTo),
-              gt(agentModelPrices.effectiveTo, now)
-            )
-          )
-        )
-        .orderBy(
-          desc(agentModelPrices.effectiveFrom),
-          desc(agentModelPrices.id)
-        )
-        .limit(1)
-      const price = priceRows[0]
-      const usesTierPrice =
-        price?.tierThresholdTokenCount !== null &&
-        price?.tierThresholdTokenCount !== undefined &&
-        input.inputTokenCount > price.tierThresholdTokenCount
-      const inputPrice = usesTierPrice
-        ? price.tierInputPriceMicrosPerMillion
-        : price?.inputPriceMicrosPerMillion
-      const cacheReadPrice = usesTierPrice
-        ? price.tierCacheReadPriceMicrosPerMillion
-        : price?.cacheReadPriceMicrosPerMillion
-      const cacheWritePrice = usesTierPrice
-        ? price.tierCacheWritePriceMicrosPerMillion
-        : price?.cacheWritePriceMicrosPerMillion
-      const outputPrice = usesTierPrice
-        ? price.tierOutputPriceMicrosPerMillion
-        : price?.outputPriceMicrosPerMillion
-      const calculatedCostMicros = price
-        ? pricedMicros(
-            input.inputNoCacheTokenCount,
-            inputPrice ?? price.inputPriceMicrosPerMillion
-          ) +
-          pricedMicros(
-            input.cacheReadTokenCount,
-            cacheReadPrice ?? price.cacheReadPriceMicrosPerMillion
-          ) +
-          pricedMicros(
-            input.cacheWriteTokenCount,
-            cacheWritePrice ?? price.cacheWritePriceMicrosPerMillion
-          ) +
-          pricedMicros(
-            input.outputTokenCount,
-            outputPrice ?? price.outputPriceMicrosPerMillion
-          )
-        : 0
-      const pricingVersion = price?.pricingVersion ?? "unpriced"
-      const eventRows = await tx
-        .insert(agentUsageEvents)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: context.organizationId,
-          threadId: context.threadId,
-          runId: context.runId,
-          userId: context.userId,
-          provider: input.provider,
-          model: input.model,
-          inputTokenCount: input.inputTokenCount,
-          inputNoCacheTokenCount: input.inputNoCacheTokenCount,
-          cacheReadTokenCount: input.cacheReadTokenCount,
-          cacheWriteTokenCount: input.cacheWriteTokenCount,
-          outputTokenCount: input.outputTokenCount,
-          textOutputTokenCount: input.textOutputTokenCount,
-          reasoningTokenCount: input.reasoningTokenCount,
-          totalTokenCount: input.totalTokenCount,
-          imageInputCount: input.imageInputCount,
-          calculatedCostMicros,
-          providerCostMicros: input.providerCostMicros ?? null,
-          pricingVersion,
-          currency: "USD",
-          isEstimate: input.providerCostMicros === undefined,
-          durationMs: input.durationMs,
-          runEventId: input.runEventId,
-          createdAt: now,
-        })
-        .onConflictDoNothing()
-        .returning({ id: agentUsageEvents.id })
-      if (!eventRows[0]) {
-        return { recorded: false, calculatedCostMicros, pricingVersion }
-      }
-
-      const costMicros = input.providerCostMicros ?? calculatedCostMicros
-      const date = now.toISOString().slice(0, 10)
-      await tx
-        .insert(agentUsageDaily)
-        .values({
-          id: crypto.randomUUID(),
-          date,
-          organizationId: context.organizationId,
-          userId: context.userId,
-          provider: input.provider,
-          model: input.model,
-          runCount: 1,
-          inputTokenCount: input.inputTokenCount,
-          outputTokenCount: input.outputTokenCount,
-          reasoningTokenCount: input.reasoningTokenCount,
-          totalTokenCount: input.totalTokenCount,
-          costMicros,
+    const costMicros = input.providerCostMicros ?? calculatedCostMicros
+    const date = now.toISOString().slice(0, 10)
+    await tx
+      .insert(agentUsageDaily)
+      .values({
+        id: crypto.randomUUID(),
+        date,
+        organizationId: context.organizationId,
+        userId: context.userId,
+        provider: input.provider,
+        model: input.model,
+        runCount: 1,
+        inputTokenCount: input.inputTokenCount,
+        outputTokenCount: input.outputTokenCount,
+        reasoningTokenCount: input.reasoningTokenCount,
+        totalTokenCount: input.totalTokenCount,
+        costMicros,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          agentUsageDaily.date,
+          agentUsageDaily.organizationId,
+          agentUsageDaily.userId,
+          agentUsageDaily.provider,
+          agentUsageDaily.model,
+        ],
+        set: {
+          runCount: sql`${agentUsageDaily.runCount} + 1`,
+          inputTokenCount: sql`${agentUsageDaily.inputTokenCount} + ${input.inputTokenCount}`,
+          outputTokenCount: sql`${agentUsageDaily.outputTokenCount} + ${input.outputTokenCount}`,
+          reasoningTokenCount: sql`${agentUsageDaily.reasoningTokenCount} + ${input.reasoningTokenCount}`,
+          totalTokenCount: sql`${agentUsageDaily.totalTokenCount} + ${input.totalTokenCount}`,
+          costMicros: sql`${agentUsageDaily.costMicros} + ${costMicros}`,
           updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [
-            agentUsageDaily.date,
-            agentUsageDaily.organizationId,
-            agentUsageDaily.userId,
-            agentUsageDaily.provider,
-            agentUsageDaily.model,
-          ],
-          set: {
-            runCount: sql`${agentUsageDaily.runCount} + 1`,
-            inputTokenCount: sql`${agentUsageDaily.inputTokenCount} + ${input.inputTokenCount}`,
-            outputTokenCount: sql`${agentUsageDaily.outputTokenCount} + ${input.outputTokenCount}`,
-            reasoningTokenCount: sql`${agentUsageDaily.reasoningTokenCount} + ${input.reasoningTokenCount}`,
-            totalTokenCount: sql`${agentUsageDaily.totalTokenCount} + ${input.totalTokenCount}`,
-            costMicros: sql`${agentUsageDaily.costMicros} + ${costMicros}`,
-            updatedAt: now,
-          },
-        })
-      await tx
-        .update(agentRuns)
-        .set({
-          inputTokenCount: input.inputTokenCount,
-          outputTokenCount: input.outputTokenCount,
-        })
-        .where(
-          and(
-            eq(agentRuns.organizationId, context.organizationId),
-            eq(agentRuns.id, context.runId)
-          )
+        },
+      })
+    await tx
+      .update(agentRuns)
+      .set({
+        inputTokenCount: input.inputTokenCount,
+        outputTokenCount: input.outputTokenCount,
+      })
+      .where(
+        and(
+          eq(agentRuns.organizationId, context.organizationId),
+          eq(agentRuns.id, context.runId)
         )
-      return { recorded: true, calculatedCostMicros, pricingVersion }
-    })
-  } catch (cause) {
-    if (cause instanceof AppError) throw cause
-    throw publicErrors.internal(cause, {
-      module: "agent-usage",
-      operation: "recordAgentUsage",
-    })
-  }
+      )
+    return { recorded: true, calculatedCostMicros, pricingVersion }
+  })
 }
 
 type UsageTotal = {
@@ -280,7 +269,7 @@ export const getAgentOrganizationUsageForSession = async (
     const current = await requireLiveSession(tx, { ...input, now })
     const role = await requireActiveMembership(tx, current)
     if (role === "member") {
-      throw publicErrors.forbidden("Only organization admins can view usage")
+      throw new HttpError({ code: "forbidden" })
     }
     const period = usagePeriod(input.month, now)
     const rows = await tx

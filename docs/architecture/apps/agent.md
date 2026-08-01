@@ -2,7 +2,7 @@
 title: apps/agentの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 applies_to:
   - apps/agent/**
 ---
@@ -59,9 +59,14 @@ apps/agent/src/
       create-runtime.ts
 
     agents/
-      product-agent.ts
-      title-agent.ts
-      public-web-research-agent.ts
+      product-agent/
+        agent.ts
+        instructions.ts
+        memory.ts
+        memory-output-processor.ts
+        reasoning-details.ts
+        tools.ts
+        skills/
 
     core/
       messages/

@@ -7,6 +7,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { clientEnv } from "@/lib/env.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { FileOwnerType } from "../api"
 import { MAX_CONCURRENT_FILE_UPLOADS } from "../file-upload-limits"
@@ -107,18 +108,20 @@ export const useFilesController = ({
           removeUpload(upload.id)
           try {
             await onUploadedRef.current(file)
-          } catch {
+          } catch (error) {
+            reportObservedError(error)
             // Upload success remains authoritative when a follow-up cache
             // refresh fails. The stale query will retry through its policy.
           }
           return file
         })
-        .catch(async () => {
+        .catch(async (error: unknown) => {
           if (controller.signal.aborted) {
             if (canceledRef.current.delete(upload.id)) {
               try {
                 await onCanceledRef.current?.()
-              } catch {
+              } catch (callbackError) {
+                reportObservedError(callbackError)
                 // Keep the owner query stale; its normal retry path will
                 // reconcile an upload that committed after the abort.
               }
@@ -126,6 +129,7 @@ export const useFilesController = ({
             removeUpload(upload.id)
             return undefined
           }
+          reportObservedError(error)
           updateUpload(upload.id, {
             status: "failed",
             error: safeUploadError,

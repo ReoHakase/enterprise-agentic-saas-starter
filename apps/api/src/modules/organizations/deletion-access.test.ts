@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { AppError } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { parseOrganizationDeletionIdempotencyKey } from "./routes/deletion-access"
 
 describe("organization deletion access", () => {
@@ -17,13 +17,8 @@ describe("organization deletion access", () => {
         parseOrganizationDeletionIdempotencyKey(value)
         throw new Error("Expected idempotency key validation to fail")
       } catch (error) {
-        expect(error).toBeInstanceOf(AppError)
-        expect(error).toMatchObject({
-          code: "validation_error",
-          message: "Invalid idempotency key",
-          publicContext: { field: "idempotencyKey" },
-          statusCode: 400,
-        })
+        expect(error).toBeInstanceOf(HttpError)
+        expect(error).toMatchObject({ code: "validation_error" })
         expect(String(error)).not.toContain(String(value))
       }
     }

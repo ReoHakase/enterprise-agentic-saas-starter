@@ -297,7 +297,7 @@ project名は導入順に合わせます。存在しないprojectを先にscript
 
 ## DataTableの検査層
 
-- W1: prefixあり・なしのURL key、legacy alias、canonical repeated query、request/query key一致、
+- W1: prefixあり・なしのURL key、複数値URLの正規化、廃止済み単一値キーの非移行と削除、request/query key一致、
   assignee 50件・label 20件の上限、期日2境界のoffset、selection prune、pagination window、
   versioned localStorageの復元を純粋testで固定する
 - W2: `Table<TData>` rendererへlink、button、select、menuなど任意のinteractive cellを渡し、row selectionと

@@ -16,7 +16,7 @@ const permissions = {
   canInviteMembers: true,
   canManageAdmins: true,
   canManageMembers: true,
-  canTransferSuperAdmin: true,
+  canTransferOwnership: true,
 }
 
 const organizations: OrganizationSummary[] = [
@@ -24,7 +24,7 @@ const organizations: OrganizationSummary[] = [
     id: "org-alpha",
     name: "Alpha",
     slug: "alpha",
-    role: "super_admin",
+    role: "owner",
     active: true,
     profileImage: null,
     memberCount: 2,

@@ -27,8 +27,8 @@ export const Open = meta.story({
   beforeEach() {
     changed.mockClear()
   },
-  play: async ({ step }) => {
-    const body = within(document.body)
+  play: async ({ canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Review and close the keyboard reference", async () => {
       await waitFor(() =>

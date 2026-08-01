@@ -46,13 +46,12 @@ describe("multi-session client boundary", () => {
     if (!capabilities.setActive)
       throw new Error("Expected setActive capability")
     await completeMultiSessionAction(
-      capabilities.setActive({ sessionToken: "session-1" }),
-      "Could not switch account"
+      capabilities.setActive({ sessionToken: "session-1" })
     )
     expect(setActive).toHaveBeenCalledWith({ sessionToken: "session-1" })
   })
 
-  it("validates account responses and hides provider error details", async () => {
+  it("validates account responses and preserves native auth failures", async () => {
     await expect(
       createDeviceAccountsQueryFn({
         multiSession: {
@@ -62,29 +61,27 @@ describe("multi-session client boundary", () => {
         },
       })()
     ).rejects.toThrow("Invalid type")
+    const responseError = { status: 503, message: "private provider detail" }
     await expect(
       createDeviceAccountsQueryFn({
         multiSession: {
-          listDeviceSessions: async () => ({
-            error: { message: "private provider detail" },
-          }),
+          listDeviceSessions: async () => ({ error: responseError }),
         },
       })()
-    ).rejects.toThrow("Accounts could not be loaded. Try again.")
+    ).rejects.toBe(responseError)
+    const rejectedError = new Error("BETTER_AUTH_SECRET=provider-secret")
     await expect(
       createDeviceAccountsQueryFn({
         multiSession: {
           listDeviceSessions: async () => {
-            throw new Error("BETTER_AUTH_SECRET=provider-secret")
+            throw rejectedError
           },
         },
       })()
-    ).rejects.toThrow("Accounts could not be loaded. Try again.")
+    ).rejects.toBe(rejectedError)
+    const actionError = new Error("SELECT token FROM session")
     await expect(
-      completeMultiSessionAction(
-        Promise.reject(new Error("SELECT token FROM session")),
-        "Could not switch account. Try again."
-      )
-    ).rejects.toThrow("Could not switch account. Try again.")
+      completeMultiSessionAction(Promise.reject(actionError))
+    ).rejects.toBe(actionError)
   })
 })

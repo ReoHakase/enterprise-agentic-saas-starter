@@ -23,7 +23,11 @@ describe("Agent maintenance boundary", () => {
         )
         expect(response?.status).toBe(503)
         expect(response?.headers.get("retry-after")).toBe("300")
-        expect(await response?.text()).toBe("Agent maintenance in progress")
+        expect(response?.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/)
+        expect(await response?.json()).toEqual({
+          error: "service_unavailable",
+          message: "Agent maintenance is in progress.",
+        })
       })
     )
     expect(
@@ -51,15 +55,26 @@ describe("Agent maintenance boundary", () => {
     expect(isAgentMaintenanceMode("1")).toBe(true)
     expect(isAgentMaintenanceMode("0")).toBe(false)
     expect(isAgentMaintenanceMode(undefined)).toBe(false)
-    const response = agentMaintenanceResponse()
+    const response = agentMaintenanceResponse(
+      new Request("https://api.example.test/agent", {
+        headers: { "x-request-id": "request-maintenance" },
+      })
+    )
     expect(response.status).toBe(503)
-    expect(await response.text()).toBe("Agent maintenance in progress")
+    expect(response.headers.get("x-request-id")).toBe("request-maintenance")
+    expect(await response.json()).toEqual({
+      error: "service_unavailable",
+      message: "Agent maintenance is in progress.",
+    })
     const unavailable = publicAgentRuntimeGateResponse(
       new Request("https://api.example.test/agent/threads"),
       { maintenanceMode: "0", runtimeAvailable: false }
     )
     expect(unavailable?.status).toBe(503)
-    expect(await unavailable?.text()).toBe("Agent unavailable")
+    expect(await unavailable?.json()).toEqual({
+      error: "service_unavailable",
+      message: "Agent is temporarily unavailable.",
+    })
     expect(
       publicAgentRuntimeGateResponse(
         new Request("https://api.example.test/agent/threads"),

@@ -1,4 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { UsersPorts } from "./ports"
 
 export const createUsersService = (ports: UsersPorts) => {
@@ -9,7 +9,7 @@ export const createUsersService = (ports: UsersPorts) => {
   }) => {
     const user = await ports.findUser(input.userId)
     if (!user) {
-      throw publicErrors.notFound("User not found", { resource: "user" })
+      throw new HttpError({ code: "not_found" })
     }
 
     const activeOrganizationId = await ports.resolveActiveOrganization(input)
@@ -28,12 +28,16 @@ export const createUsersService = (ports: UsersPorts) => {
   const updateMe = async (input: { userId: string; name: string }) => {
     const name = input.name.trim()
     if (!name) {
-      throw publicErrors.validation("Name is required", { field: "name" })
+      throw new HttpError({
+        code: "validation_error",
+        fieldErrors: { name: ["Enter a display name."] },
+        publicMessage: "A display name is required.",
+      })
     }
 
     const user = await ports.updateUser({ userId: input.userId, name })
     if (!user) {
-      throw publicErrors.notFound("User not found", { resource: "user" })
+      throw new HttpError({ code: "not_found" })
     }
     return user
   }
@@ -49,14 +53,15 @@ export const createUsersService = (ports: UsersPorts) => {
     sessionId: string
   }) => {
     if (input.sessionId === input.currentSessionId) {
-      throw publicErrors.validation("Current session cannot be revoked here")
+      throw new HttpError({
+        code: "validation_error",
+        publicMessage: "The current session cannot be revoked here.",
+      })
     }
 
     const deleted = await ports.deleteSession(input)
     if (!deleted) {
-      throw publicErrors.notFound("Session not found", {
-        resource: "session",
-      })
+      throw new HttpError({ code: "not_found" })
     }
 
     return { id: deleted.id }

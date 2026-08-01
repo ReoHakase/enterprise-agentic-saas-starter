@@ -6,11 +6,16 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
+  reportObservedError: vi.fn<(error: unknown) => void>(),
   uploadFileWithProgress: vi.fn<typeof uploadFileWithProgress>(),
 }))
 
 vi.mock("@enterprise-agentic-saas/api/client", () => ({
   uploadFileWithProgress: mocks.uploadFileWithProgress,
+}))
+
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError: mocks.reportObservedError,
 }))
 
 import { MAX_CONCURRENT_FILE_UPLOADS } from "../file-upload-limits"
@@ -33,7 +38,10 @@ const uploadedFile = (id: string): FileDto => ({
 })
 
 describe("file upload queue", () => {
-  afterEach(() => mocks.uploadFileWithProgress.mockReset())
+  afterEach(() => {
+    mocks.reportObservedError.mockClear()
+    mocks.uploadFileWithProgress.mockReset()
+  })
 
   it("runs no more than three uploads and keeps the upload id for retry", async () => {
     const pending: Array<{
@@ -77,7 +85,8 @@ describe("file upload queue", () => {
 
     const secondCall = mocks.uploadFileWithProgress.mock.calls[1]?.[0]
     const secondUploadId = secondCall?.uploadId
-    await act(async () => pending[1]?.reject(new Error("injected failure")))
+    const uploadError = new Error("injected failure")
+    await act(async () => pending[1]?.reject(uploadError))
     await waitFor(() =>
       expect(
         result.current.uploads.some((upload) => upload.status === "failed")
@@ -97,6 +106,7 @@ describe("file upload queue", () => {
       ([input], index) => index > 1 && input.uploadId === secondUploadId
     )
     expect(retryCall?.[0].uploadId).toBe(secondUploadId)
+    expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
   })
 
   it("aborts an active upload and reconciles the owner list", async () => {

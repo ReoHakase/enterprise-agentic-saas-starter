@@ -9,7 +9,6 @@ Better Auth による認証・認可パッケージ。
 | `@enterprise-agentic-saas/auth`              | singleton `auth` インスタンス（server-only）                                                 |
 | `@enterprise-agentic-saas/auth/client`       | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
 | `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
-| `@enterprise-agentic-saas/auth/openapi`      | 実plugin構成からauth OpenAPIを生成するserver-only境界                                        |
 
 ## Plugin 構成
 
@@ -17,7 +16,7 @@ Better Auth による認証・認可パッケージ。
 - `passkey` — WebAuthn/passkey 認証
 - `organization` — マルチテナント組織管理
 - `multiSession` — 同一browserで最大5 accountを保持し、再ログインなしで切り替える
-- `openAPI` — auth OpenAPI schemaを生成する。既定reference pageは無効化し、`apps/api`の`/openapi`へ統合する
+- `openAPI` — auth OpenAPI schemaを`/auth/open-api/generate-schema`から生成する。既定reference pageは無効化し、`apps/api`のScalarから独立した仕様として参照する
 - `socialProviders.github` — productionおよびemulator未使用時のGitHub OAuth sign-in / account linking
 - `genericOAuth` — development/testで明示したlocal emulatorだけをGitHub providerとして登録
 
@@ -33,17 +32,24 @@ Passkey登録は15分以内に作成されたfresh sessionを要求する。stal
 
 cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、web/APIが共有する親domainを指定する。localの `.localhost` だけはweb hostnameへ自動fallbackする。cookieのSecure属性は `BETTER_AUTH_URL` のprotocolへ合わせ、productionはHTTPS以外を起動時に拒否する。これによりlocal HTTP E2EだけSecure属性を外せる。
 
-Better Auth organization pluginは招待recipient向けの `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` だけを公開する。organization/member/invitation/team/custom roleの管理・参照endpointは `disabledPaths` で404にし、tenant guard・fresh session・確認入力・auditを持つ `apps/api` のrouteへ集約する。
+Better Auth organization pluginは、招待送信者向けの`invite-member`と、招待受信者向けの
+`get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation`を公開する。
+招待は1回の送信につき1つのメールアドレスを受け取り、再送は標準の`resend`オプションを使う。
+`organization`、`member`、`invitation`、`team`、`custom role`のほかの管理・参照エンドポイントは
+`disabledPaths`で404にし、テナント境界、新しいセッション、確認入力、監査が必要な操作と招待の
+一覧・取消は`apps/api`のルートへ集約する。
 
-`@enterprise-agentic-saas/auth/openapi`の`generateAuthOpenApiSchema()`はsingletonの実plugin構成と`disabledPaths`を正本にする。`apps/api`は結果へ`/auth` prefixを付け、app routeと同じ`/openapi/json`へ統合する。別の`/auth/reference`は404にし、documentationのdriftとScalar設定の二重管理を防ぐ。
+`auth.api.generateOpenAPISchema()`と標準`/auth/open-api/generate-schema`は、singletonの実plugin構成と
+`disabledPaths`を正本にする。`apps/api`は生成結果を結合、変換、補正せず、Scalarから独立した情報源として
+参照する。別の`/auth/reference`は404にする。
 
-招待accept直前のhookでもroleを `admin | member` に限定し、legacy `owner`、`super_admin`、null、未知roleを拒否する。membershipはDBのtenant/user複合一意制約でreplay・同時acceptによる重複を防ぐ。
+招待作成前とaccept直前のhookでroleを`admin | member`に限定し、移管専用の`owner`、legacy `super_admin`、null、未知roleを拒否する。membershipはDBのtenant/user複合一意制約でreplay・同時acceptによる重複を防ぐ。
 
 新規sessionのactive organizationは、同じuserの最新かつ未失効でmembershipが有効なsession contextを継承する。履歴がなくmembershipが1件なら自動選択し、複数ならnullのままappの明示選択へ委ねる。
 
 magic-link tokenとverification identifierはhashed保存する。Better Auth loggerはlibraryのmessage/error argsを記録せず固定metadataだけを出し、DB errorのSQL params、token、cookie、request bodyをlogへ流さない。
 
-magic linkとemail verificationは共有React Email templateをrenderし、`@enterprise-agentic-saas/email/runtime`から送る。Cloudflare WorkerではBetter Authのbackground task handlerを`waitUntil`へ接続し、response完了後も配送promiseを生存させる。organization招待の作成・送信はtenant guardとauditを持つ`apps/api`だけを正本とし、Better Auth側に別の招待senderを重ねない。
+magic linkとemail verificationは共有React Email templateをrenderし、`@enterprise-agentic-saas/email/runtime`から送る。Cloudflare WorkerではBetter Authのbackground task handlerを`waitUntil`へ接続し、response完了後も配送promiseを生存させる。organization招待はBetter Authの`sendInvitationEmail`コールバックから同じemailパッケージを呼ぶ。配送失敗は固定内容だけを記録して招待作成を継続し、自動再試行や永続`outbox`は追加しない。
 
 ## 依存方向
 
@@ -56,20 +62,20 @@ magic linkとemail verificationは共有React Email templateをrenderし、`@ent
 
 Better Auth が `process.env` から自動読み込みする。`apps/api/.env` に設定する。
 
-| 変数                                  | 必須             | 説明                                                                                                                                        |
-| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                  | Yes              | セッション署名用シークレット                                                                                                                |
-| `BETTER_AUTH_URL`                     | Yes              | Better Auth のベース URL                                                                                                                    |
-| `AUTH_COOKIE_DOMAIN`                  | Production       | web/APIでsessionを共有する親domain                                                                                                          |
-| `GITHUB_CLIENT_ID`                    | Emulator未使用時 | GitHub OAuth App の Client ID                                                                                                               |
-| `GITHUB_CLIENT_SECRET`                | Emulator未使用時 | GitHub OAuth App の Client Secret                                                                                                           |
-| `GITHUB_OAUTH_EMULATOR_URL`           | No               | development/testだけで許可するemulatorのroot URL。`localhost`、`*.localhost`、IPv4/IPv6 loopback以外、userinfo/path/query/hash付きURLを拒否 |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_ID`     | No               | emulator専用Client ID override。Secretと必ず同時指定                                                                                        |
-| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No               | emulator専用Client Secret override。Client IDと必ず同時指定                                                                                 |
-| `TRUSTED_ORIGINS`                     | Yes              | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う                                                   |
-| `EMAIL_PROVIDER`                      | No               | 未指定時はdevelopment=`mailpit`、test=`noop`、production=`cloudflare`                                                                       |
-| `EMAIL_FROM`                          | Production       | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address                                          |
-| `MAILPIT_URL`                         | No               | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可   |
+| 変数                                  | 必須             | 説明                                                                                                                                          |
+| ------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                  | Yes              | セッション署名用シークレット                                                                                                                  |
+| `BETTER_AUTH_URL`                     | Yes              | Better Auth のベース URL                                                                                                                      |
+| `AUTH_COOKIE_DOMAIN`                  | Production       | web/APIでsessionを共有する親domain                                                                                                            |
+| `GITHUB_CLIENT_ID`                    | Emulator未使用時 | GitHub OAuth App の Client ID                                                                                                                 |
+| `GITHUB_CLIENT_SECRET`                | Emulator未使用時 | GitHub OAuth App の Client Secret                                                                                                             |
+| `GITHUB_OAUTH_EMULATOR_URL`           | No               | development/testだけで許可するemulatorのbase URL。認証情報を含まないloopback URLの`/emulate/github`だけを許可し、query、hash、末尾の`/`を拒否 |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_ID`     | No               | emulator専用Client ID override。Secretと必ず同時指定                                                                                          |
+| `GITHUB_OAUTH_EMULATOR_CLIENT_SECRET` | No               | emulator専用Client Secret override。Client IDと必ず同時指定                                                                                   |
+| `TRUSTED_ORIGINS`                     | Yes              | カンマ区切りの信頼するweb origin。先頭をmagic link・invitation callbackのweb originに使う                                                     |
+| `EMAIL_PROVIDER`                      | No               | 未指定時はdevelopment=`mailpit`、test=`noop`、production=`cloudflare`                                                                         |
+| `EMAIL_FROM`                          | Production       | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address                                            |
+| `MAILPIT_URL`                         | No               | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可     |
 
 emulator URL指定時は通常の `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` を意図的に無視し、本番credentialをseedやlocal requestへ流さない。emulator専用overrideがなければ `@enterprise-agentic-saas/auth/github-oauth` の公開固定値を使う。この値はlocal emulator識別用でありsecretではない。productionではemulator URLをfail-closedで拒否する。
 
@@ -109,6 +115,6 @@ unit testはemulator URL・credential境界・profile mapping・非漏洩を検�
 ## 入れないもの
 
 - `createAuth()` ファクトリ — singleton で十分
-- React Email / email sender の直接 import
+- organization招待用の独自`outbox`、自動再試行、配送処理ルート
 - resource permission（app 側に寄せる）
 - audit log（app 側に寄せる）

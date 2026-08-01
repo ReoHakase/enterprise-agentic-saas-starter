@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   AGENT_ASSET_MODEL_MAX_BYTES,
   AGENT_ASSET_MODEL_MAX_EDGE,
@@ -9,12 +9,15 @@ import {
   type FileStorageRuntime,
 } from "./runtime"
 
-const providerUnavailable = (provider: "images" | "r2", operation: string) =>
-  new AppError({
+const providerUnavailable = (
+  _provider: "images" | "r2",
+  _operation: string,
+  cause?: unknown
+) =>
+  new HttpError({
+    cause,
     code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "model-image", operation, provider },
+    retryAfter: 30,
   })
 
 const bodyObject = (
@@ -30,7 +33,7 @@ const httpEtag = (etag: string) =>
 const readBoundedImage = async (
   body: ReadableStream<Uint8Array>,
   maximumBytes: number,
-  resource: "agent_asset" | "issue_attachment"
+  _resource: "agent_asset" | "issue_attachment"
 ) => {
   const reader = body.getReader()
   const chunks: Uint8Array[] = []
@@ -42,10 +45,7 @@ const readBoundedImage = async (
       if (result.done) break
       byteLength += result.value.byteLength
       if (byteLength > maximumBytes) {
-        throw publicErrors.validation("Image is too large for model input", {
-          resource,
-          reason: "model_image_too_large",
-        })
+        throw new HttpError({ code: "validation_error" })
       }
       chunks.push(result.value)
     }
@@ -88,8 +88,8 @@ export const createModelImageResponse = async (
       .output({ format: "image/webp", quality: 75, anim: false })
     transformed = result.response()
   } catch (cause) {
-    if (cause instanceof AppError) throw cause
-    throw providerUnavailable("images", "transformModelImage")
+    if (cause instanceof HttpError) throw cause
+    throw providerUnavailable("images", "transformModelImage", cause)
   }
 
   if (!transformed.ok || !transformed.body) {
@@ -101,10 +101,7 @@ export const createModelImageResponse = async (
     declaredLength > AGENT_ASSET_MODEL_MAX_BYTES
   ) {
     await transformed.body.cancel().catch(() => undefined)
-    throw publicErrors.validation("Image is too large for model input", {
-      resource: input.resource,
-      reason: "model_image_too_large",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   const outputContentType = transformed.headers
     .get("content-type")

@@ -67,8 +67,8 @@ export const Empty = meta.story({
 })
 
 export const Mention = meta.story({
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Choose an Issue mention with the keyboard", async () => {
       const editor = await canvas.findByRole("textbox", {

@@ -3,14 +3,47 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { Agent } from "@mastra/core/agent"
+import { Mastra } from "@mastra/core/mastra"
 import { Memory } from "@mastra/memory"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
+import {
+  createProductAgent,
+  createProductAgentMemory,
+} from "./agents/product-agent"
 import { createAgentRuntimeComposition } from "./composition/runtime-composition"
 import { createCurrentMessageImageContext } from "./core/messages/chat-input"
 import { handleMemoryHistory } from "./runtime/memory-routes"
 import { createAgentStorage } from "./storage"
 import { createScriptedModel } from "./test-support/scripted-model"
+import { createWebSearchTool } from "./tools/web-search/tool"
+
+const noop = () => undefined
+
+const createUnscopedProductAgent = (
+  storage: ReturnType<typeof createAgentStorage>,
+  model: ReturnType<typeof createScriptedModel>
+) => {
+  const productAgent = createProductAgent({
+    allowUnscopedModel: true,
+    memory: createProductAgentMemory(storage),
+    model,
+    resolveExecution: () => {
+      throw new Error("Unexpected scoped execution")
+    },
+    webSearchTool: createWebSearchTool(
+      async () => ({ finishReason: "stop", sources: [], text: "unused" }),
+      () => {
+        throw new Error("Unexpected scoped execution")
+      }
+    ),
+  })
+  return new Mastra({
+    agents: { productAgent },
+    logger: false,
+    storage,
+  }).getAgentById("product-agent")
+}
 
 describe("Agent storage configuration", () => {
   it("fails closed when production storage is absent", () => {
@@ -36,71 +69,153 @@ describe("Agent storage configuration", () => {
     ).not.toThrow()
   })
 
-  it("coalesces and serializes local HTTP schema initialization", async () => {
+  it("uses the standard repeatable LibSQLStore initialization", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mastra-init-"))
     const storage = createAgentStorage(
       {
-        MASTRA_STORAGE_URL: "http://127.0.0.1:18080",
-        NODE_ENV: "development",
+        MASTRA_STORAGE_URL: `file:${join(directory, "memory.db")}`,
+        NODE_ENV: "test",
       },
-      "serialized-local-http"
-    )
-    let activeInitializers = 0
-    let maximumActiveInitializers = 0
-    const stores = Object.values(storage.stores).filter(
-      (store) => store !== undefined
-    )
-    const spies = stores.map((store) =>
-      vi.spyOn(store, "init").mockImplementation(async () => {
-        activeInitializers += 1
-        maximumActiveInitializers = Math.max(
-          maximumActiveInitializers,
-          activeInitializers
-        )
-        await new Promise<void>((resolve) => queueMicrotask(resolve))
-        activeInitializers -= 1
-      })
+      "standard-init"
     )
 
     try {
       await Promise.all([storage.init(), storage.init(), storage.init()])
-
-      expect(maximumActiveInitializers).toBe(1)
-      expect(spies.every((spy) => spy.mock.calls.length === 1)).toBe(true)
+      await expect(storage.init()).resolves.toBeUndefined()
     } finally {
       await storage.close()
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+})
+
+describe("Product Agent standard Memory contracts", () => {
+  it("runs the Product Agent security processor before MessageHistory persistence", async () => {
+    const storage = createAgentStorage(
+      { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
+      "processor-order"
+    )
+    const rawSkillInstructionSentinel =
+      "画像の asset ID は、サーバーが現在のメッセージ"
+    const agent = createUnscopedProductAgent(
+      storage,
+      createScriptedModel([
+        {
+          finishReason: "tool-calls",
+          parts: [
+            {
+              type: "tool-call",
+              input: { name: "issue-triage" },
+              toolCallId: "call_skill",
+              toolName: "skill",
+            },
+          ],
+        },
+        { parts: [{ type: "text", text: "Triage completed." }] },
+      ])
+    )
+
+    try {
+      await storage.init()
+      const output = await agent.stream("Triage this request.", {
+        memory: { resource: "resource_processor", thread: "thread_processor" },
+      })
+      await output.consumeStream()
+      const memory = await agent.getMemory()
+      if (!(memory instanceof Memory)) throw new Error("Memory unavailable")
+      const recalled = await memory.recall({
+        page: 0,
+        perPage: false,
+        resourceId: "resource_processor",
+        threadId: "thread_processor",
+      })
+      const serialized = JSON.stringify(recalled.messages)
+
+      expect(serialized).toContain("Triage completed.")
+      expect(serialized).toContain('"activated":true')
+      expect(serialized).toContain('"name":"issue-triage"')
+      expect(serialized).not.toContain(rawSkillInstructionSentinel)
+    } finally {
+      await storage.close().catch(() => undefined)
     }
   })
 
-  it("retries local HTTP schema initialization after a failed attempt", async () => {
+  it("keeps a completed Product Agent stream successful when standard Memory persistence fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mastra-best-effort-"))
     const storage = createAgentStorage(
       {
-        MASTRA_STORAGE_URL: "https://agent-storage.example.localhost",
-        NODE_ENV: "development",
+        MASTRA_STORAGE_URL: `file:${join(directory, "memory.db")}`,
+        NODE_ENV: "test",
       },
-      "retry-local-http"
+      "best-effort-memory"
     )
-    const firstStore = Object.values(storage.stores).find(
-      (store) => store !== undefined
+    let releaseClosed: () => void = noop
+    const closed = new Promise<void>((resolve) => {
+      releaseClosed = resolve
+    })
+    const agent = createUnscopedProductAgent(
+      storage,
+      createScriptedModel([
+        {
+          parts: [{ type: "text", text: "Completed before persistence." }],
+          stream: [
+            { value: { type: "stream-start", warnings: [] } },
+            { value: { type: "text-start", id: "best-effort-text" } },
+            {
+              onEmit: () => {
+                void storage.close().finally(releaseClosed)
+              },
+              value: {
+                type: "text-delta",
+                id: "best-effort-text",
+                delta: "Completed before persistence.",
+              },
+            },
+            {
+              waitFor: closed,
+              value: { type: "text-end", id: "best-effort-text" },
+            },
+            {
+              value: {
+                type: "finish",
+                finishReason: { unified: "stop", raw: "stop" },
+                usage: {
+                  inputTokens: {
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                    noCache: 1,
+                    total: 1,
+                  },
+                  outputTokens: {
+                    reasoning: 0,
+                    text: 1,
+                    total: 1,
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ])
     )
-    if (!firstStore) throw new Error("Agent storage domains are unavailable")
-    const init = vi
-      .spyOn(firstStore, "init")
-      .mockRejectedValueOnce(new Error("transient schema failure"))
-      .mockResolvedValue(undefined)
-    const remainingSpies = Object.values(storage.stores)
-      .filter((store) => store !== undefined && store !== firstStore)
-      .map((store) => vi.spyOn(store, "init").mockResolvedValue(undefined))
 
     try {
-      await expect(storage.init()).rejects.toThrow("transient schema failure")
-      await expect(storage.init()).resolves.toBeUndefined()
+      await storage.init()
+      const output = await agent.stream("Save this response.", {
+        memory: {
+          resource: "resource_best_effort",
+          thread: "thread_best_effort",
+        },
+      })
 
-      expect(init).toHaveBeenCalledTimes(2)
-      expect(remainingSpies.every((spy) => spy.mock.calls.length === 1)).toBe(
-        true
-      )
+      const chunks: unknown[] = []
+      for await (const chunk of output.fullStream) chunks.push(chunk)
+
+      expect(JSON.stringify(chunks)).toContain("Completed before persistence.")
+      await closed
     } finally {
-      await storage.close()
+      await storage.close().catch(() => undefined)
+      await rm(directory, { force: true, recursive: true })
     }
   })
 })
@@ -347,8 +462,6 @@ describe("Agent storage restart persistence", () => {
           {
             mastra: reopenedComposition.mastra,
             createControlPlane: () => ({
-              settleMemoryCommit: () =>
-                Promise.reject(new Error("Memory settlement unavailable")),
               consumeConnectionTicket: async () => ({
                 grant: "grant_reload_12345678901234567890",
                 expiresAt: new Date(Date.now() + 60_000).toISOString(),

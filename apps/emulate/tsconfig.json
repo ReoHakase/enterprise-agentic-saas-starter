@@ -1,11 +1,15 @@
 {
-  "extends": "@enterprise-agentic-saas/typescript-config/bun.json",
+  "extends": "@enterprise-agentic-saas/typescript-config/nextjs.json",
   "compilerOptions": {
     "declaration": false,
     "declarationMap": false,
-    "outDir": "dist",
-    "types": ["bun"]
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "next-env.d.ts",
+    "next.config.mjs",
+    "app/**/*.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "oxlint.config.ts"]
 }

@@ -103,10 +103,10 @@ jobs:
       - name: Check migration history and schema drift
         run: bun run --cwd packages/db db:check
 
-  browser:
-    name: Browser
+  browser-web-components:
+    name: Browser · Web components
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
       - name: Checkout full history
@@ -115,32 +115,134 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-bun
 
-      - name: Install browser-suite browsers
+      - name: Install Chromium
         working-directory: apps/web
-        run: bunx playwright install --with-deps chromium webkit
+        run: bunx playwright install --with-deps chromium
 
-      - name: Run Storybook and Browser Mode tests
-        run: bun run test:browser
+      - name: Run Web Storybook and Browser Mode tests
+        run: bun run --cwd apps/web test:browser:components
 
-      - name: Build Storybook
-        run: bun run build:storybook
+      - name: Build Web Storybook
+        run: bun run --cwd apps/web build:storybook
 
-      - name: Upload Storybook
+      - name: Upload Web Storybook
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: storybook-static
-          path: |
-            apps/web/storybook-static
-            packages/ui/storybook-static
+          name: storybook-web-static
+          path: apps/web/storybook-static
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Upload Web component failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-web-component-failures
+          path: apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-ui-components:
+    name: Browser · UI components
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium
+        working-directory: packages/ui
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run UI Storybook tests
+        run: bun run --cwd packages/ui test:browser
+
+      - name: Build UI Storybook
+        run: bun run --cwd packages/ui build:storybook
+
+      - name: Upload UI Storybook
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: storybook-ui-static
+          path: packages/ui/storybook-static
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload UI component failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-ui-component-failures
+          path: packages/ui/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-w6:
+    name: Browser · W6
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium and WebKit
+        working-directory: apps/web
+        run: bunx playwright install --with-deps chromium webkit
+
+      - name: Build W6 application
+        run: bun run --cwd apps/web build:test:browser:app
+
+      - name: Run W6 Chromium
+        run: bun run --cwd apps/web test:browser:app:chromium
+
+      - name: Run representative W6 WebKit journey
+        run: bun run --cwd apps/web test:browser:app:webkit
+
+      - name: Upload W6 failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-w6-failures
+          path: |
+            apps/web/playwright-report/app-integration
+            apps/web/test-results/app-integration
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser:
+    name: Browser
+    if: ${{ always() }}
+    needs:
+      - browser-web-components
+      - browser-ui-components
+      - browser-w6
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify browser lanes
+        env:
+          UI_COMPONENTS: ${{ needs.browser-ui-components.result }}
+          W6: ${{ needs.browser-w6.result }}
+          WEB_COMPONENTS: ${{ needs.browser-web-components.result }}
+        run: |
+          test "$WEB_COMPONENTS" = success
+          test "$UI_COMPONENTS" = success
+          test "$W6" = success
+
   free-e2e:
     name: Free E2E
-    # Playwright WebKit 26 loses its network process on Linux hosted runners
-    # before the first navigation; run the full cross-browser suite on macOS.
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
@@ -154,9 +256,9 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Install free-suite browsers
+      - name: Install Chromium
         working-directory: apps/web
-        run: bunx playwright install chromium webkit
+        run: bunx playwright install --with-deps chromium
 
       - name: Run the full free E2E suite
         run: >-
@@ -164,7 +266,7 @@ jobs:
           bun run test:e2e
 
       - name: Upload Playwright artifacts
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-free-e2e

@@ -1,23 +1,33 @@
-const maintenanceHeaders = {
+import { trustedRequestId } from "../../platform/plugins/request-id"
+
+const maintenanceHeaders = (request?: Request) => ({
   "cache-control": "private, no-store",
-  "content-type": "text/plain; charset=utf-8",
   "retry-after": "300",
-}
+  "x-request-id": trustedRequestId(
+    request?.headers.get("x-request-id") ?? null
+  ),
+})
 
 export const isAgentMaintenanceMode = (value: string | undefined): boolean =>
   value === "1"
 
-export const agentMaintenanceResponse = (): Response =>
-  new Response("Agent maintenance in progress", {
-    status: 503,
-    headers: maintenanceHeaders,
-  })
+export const agentMaintenanceResponse = (request?: Request): Response =>
+  Response.json(
+    {
+      error: "service_unavailable",
+      message: "Agent maintenance is in progress.",
+    },
+    { status: 503, headers: maintenanceHeaders(request) }
+  )
 
-const agentUnavailableResponse = (): Response =>
-  new Response("Agent unavailable", {
-    status: 503,
-    headers: maintenanceHeaders,
-  })
+const agentUnavailableResponse = (request: Request): Response =>
+  Response.json(
+    {
+      error: "service_unavailable",
+      message: "Agent is temporarily unavailable.",
+    },
+    { status: 503, headers: maintenanceHeaders(request) }
+  )
 
 const isPublicAgentCapabilityPath = (pathname: string): boolean =>
   pathname === "/agent" ||
@@ -35,7 +45,7 @@ export const publicAgentRuntimeGateResponse = (
 ): Response | null => {
   if (!isPublicAgentCapabilityPath(new URL(request.url).pathname)) return null
   if (isAgentMaintenanceMode(input.maintenanceMode)) {
-    return agentMaintenanceResponse()
+    return agentMaintenanceResponse(request)
   }
-  return input.runtimeAvailable ? null : agentUnavailableResponse()
+  return input.runtimeAvailable ? null : agentUnavailableResponse(request)
 }

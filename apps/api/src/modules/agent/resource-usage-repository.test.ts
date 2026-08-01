@@ -95,14 +95,14 @@ const createFixture = async () => {
       id: "quota-member-a",
       organizationId: "quota-org-a",
       userId: "quota-user-a",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {
       id: "quota-member-b",
       organizationId: "quota-org-b",
       userId: "quota-user-b",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
   ])
@@ -235,12 +235,7 @@ describe("Agent billable resource reservations", () => {
     expect(rejected).toHaveLength(1)
     expect(rejected[0]?.reason).toMatchObject({
       code: "rate_limited",
-      statusCode: 429,
-      publicContext: {
-        constraint: expect.stringMatching(/^active_model_run/),
-        reason: "concurrency_limit_exceeded",
-        retryAfter: expect.any(Number),
-      },
+      retryAfter: expect.any(Number),
     })
 
     const firstBuckets = await db
@@ -329,8 +324,7 @@ describe("Agent billable resource reservations", () => {
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      statusCode: 429,
-      publicContext: { retryAfter: 2_700 },
+      retryAfter: 2_700,
     })
     const buckets = await db
       .select({
@@ -371,8 +365,7 @@ describe("Agent billable resource reservations", () => {
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      statusCode: 429,
-      publicContext: { retryAfter: 85_500 },
+      retryAfter: 85_500,
     })
     await expect(
       startAgentRun(db, {
@@ -433,8 +426,7 @@ describe("Agent billable resource reservations", () => {
     )
     expect(rejected?.reason).toMatchObject({
       code: "rate_limited",
-      statusCode: 429,
-      publicContext: { retryAfter: expect.any(Number) },
+      retryAfter: expect.any(Number),
     })
     const bucket = await db
       .select({ count: schema.agentResourceUsageBuckets.count })
@@ -500,8 +492,7 @@ describe("Agent billable resource reservations", () => {
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      statusCode: 429,
-      publicContext: { retryAfter: 2_700 },
+      retryAfter: 2_700,
     })
     await expect(
       reserveAgentWebSearch(db, {
@@ -601,10 +592,13 @@ describe("Agent billable resource reservations", () => {
 
     expect(response.status).toBe(429)
     expect(response.headers.get("retry-after")).toBe("37")
-    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("x-internal-secret")).toBeNull()
-    const body = await response.text()
-    expect(body).toBe("Agent capacity temporarily limited")
-    expect(body).not.toContain("RAW_INTERNAL_QUOTA_BODY")
+    const body = await response.json()
+    expect(body).toEqual({
+      error: "rate_limited",
+      message: "Too many requests. Try again later.",
+    })
+    expect(JSON.stringify(body)).not.toContain("RAW_INTERNAL_QUOTA_BODY")
   })
 })

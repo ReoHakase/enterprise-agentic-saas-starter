@@ -3,6 +3,7 @@ import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto"
 import { resourceFromAttributes } from "@opentelemetry/resources"
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs"
 import { NodeSDK } from "@opentelemetry/sdk-node"
+import type { Instrumentation } from "next"
 
 import { reportObservedError } from "@/lib/report-observed-error"
 
@@ -49,4 +50,16 @@ export const register = async () => {
   }
 }
 
-export const onRequestError = (error: unknown) => reportObservedError(error)
+export const onRequestError: Instrumentation.onRequestError = (
+  error,
+  request,
+  context
+) => {
+  const requestId = request.headers["x-request-id"]
+  reportObservedError(error, {
+    httpMethod: request.method,
+    httpRoute: context.routePath,
+    operation: "next.request",
+    requestId: Array.isArray(requestId) ? requestId[0] : requestId,
+  })
+}

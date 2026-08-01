@@ -7,7 +7,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../agent/public"
 import {
   toOrganizationDeletionReceipt,
@@ -23,29 +23,22 @@ export const findOrganizationDeletionReceipt = async (
     organizationId: string
   }
 ): Promise<OrganizationDeletionReceipt | null> => {
-  try {
-    const rows = await db
-      .select({
-        id: organizationDeletionJobs.id,
-        organizationId: organizationDeletionJobs.organizationId,
-      })
-      .from(organizationDeletionJobs)
-      .where(
-        and(
-          eq(organizationDeletionJobs.requestedByUserId, input.actorUserId),
-          eq(organizationDeletionJobs.organizationId, input.organizationId),
-          eq(organizationDeletionJobs.idempotencyKey, input.idempotencyKey)
-        )
-      )
-      .limit(1)
-
-    return rows[0] ? toOrganizationDeletionReceipt(rows[0]) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "organizations",
-      operation: "findOrganizationDeletionReceipt",
+  const rows = await db
+    .select({
+      id: organizationDeletionJobs.id,
+      organizationId: organizationDeletionJobs.organizationId,
     })
-  }
+    .from(organizationDeletionJobs)
+    .where(
+      and(
+        eq(organizationDeletionJobs.requestedByUserId, input.actorUserId),
+        eq(organizationDeletionJobs.organizationId, input.organizationId),
+        eq(organizationDeletionJobs.idempotencyKey, input.idempotencyKey)
+      )
+    )
+    .limit(1)
+
+  return rows[0] ? toOrganizationDeletionReceipt(rows[0]) : null
 }
 
 export type DeleteOrganizationResult =
@@ -107,7 +100,7 @@ export const deleteOrganizationById = async (
       if (!membership) {
         return { kind: "not_found" as const }
       }
-      if (membership.role !== "super_admin") {
+      if (membership.role !== "owner") {
         return { kind: "forbidden" as const }
       }
 
@@ -167,9 +160,7 @@ export const deleteOrganizationById = async (
         .where(eq(organization.id, input.organizationId))
         .returning({ id: organization.id })
       if (!deletedRows[0]) {
-        throw publicErrors.notFound("Organization not found", {
-          resource: "organization",
-        })
+        throw new HttpError({ code: "not_found" })
       }
 
       return {
@@ -181,7 +172,7 @@ export const deleteOrganizationById = async (
       }
     })
   } catch (cause) {
-    if (cause instanceof AppError) {
+    if (cause instanceof HttpError) {
       throw cause
     }
     if (isDeletionRequestConflict(cause)) {
@@ -191,9 +182,6 @@ export const deleteOrganizationById = async (
       }
       return { kind: "idempotency_conflict" }
     }
-    throw publicErrors.internal(cause, {
-      module: "organizations",
-      operation: "deleteOrganizationById",
-    })
+    throw cause
   }
 }

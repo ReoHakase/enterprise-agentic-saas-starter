@@ -5,6 +5,8 @@ import { XIcon } from "lucide-react"
 import { useCallback } from "react"
 import { toast } from "sonner"
 
+import { reportObservedError } from "@/lib/report-observed-error"
+
 import type { StagedAgentAsset } from "../runtime-state/runtime-state"
 
 export const AgentStagedAsset = ({
@@ -18,9 +20,10 @@ export const AgentStagedAsset = ({
 }) => {
   const remove = useCallback(
     () =>
-      void onRemove(item.asset.id).catch(() =>
+      void onRemove(item.asset.id).catch((error: unknown) => {
+        reportObservedError(error, { operation: "agent.asset.remove" })
         toast.error("The staged image could not be deleted from storage.")
-      ),
+      }),
     [item.asset.id, onRemove]
   )
   return (

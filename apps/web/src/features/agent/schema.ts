@@ -32,7 +32,7 @@ type AgentChatAssetData = {
   }>
 }
 export type AgentChatMessage = UIMessage<
-  unknown,
+  { runId?: string },
   {
     "agent-assets": AgentChatAssetData
     "context-reference":

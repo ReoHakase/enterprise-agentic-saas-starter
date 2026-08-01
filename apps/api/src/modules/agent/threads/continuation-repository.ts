@@ -10,7 +10,6 @@ import {
   requireLiveSession,
   requireOwnedThread,
 } from "./auth-repository"
-import { preserveAgentError } from "./repository-support"
 import { issueConnectionTicketInTransaction } from "./thread-repository"
 
 export const prepareAgentClientToolContinuationForSession = async (
@@ -34,61 +33,54 @@ export const prepareAgentClientToolContinuationForSession = async (
     )
   ).slice(0, 64)}`
   const credential = await createAgentToken()
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const thread = await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-      })
-      const message: AgentUiMessage = {
-        id: input.assistantMessageId,
-        role: "assistant",
-        parts: input.clientToolResults.map((result) =>
-          result.state === "output-available"
-            ? {
-                type: `tool-${result.toolName}` as const,
-                toolCallId: result.toolCallId,
-                state: result.state,
-                input: result.input,
-                output: result.output,
-              }
-            : {
-                type: `tool-${result.toolName}` as const,
-                toolCallId: result.toolCallId,
-                state: result.state,
-                input: result.input,
-                errorText: result.errorText,
-              }
-        ),
-      }
-      const connection = await issueConnectionTicketInTransaction(tx, {
-        credential,
-        current,
-        now,
-        sessionId: input.sessionId,
-        threadId: thread.id,
-        userId: input.userId,
-      })
-      return {
-        ...connection,
-        assetIds: [],
-        contextReferences: [],
-        clientMessageId,
-        messages: [message],
-        reusableAssets: [],
-        threadId: thread.id,
-        timezone: input.timezone,
-        trigger: "client_tool_result" as const,
-      }
+  return await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireLiveSession(tx, { ...input, now })
+    await requireActiveMembership(tx, current)
+    const thread = await requireOwnedThread(tx, {
+      threadId: input.threadId,
+      userId: input.userId,
+      activeOrganizationId: current.activeOrganizationId,
     })
-  } catch (cause) {
-    return preserveAgentError(
-      cause,
-      "prepareAgentClientToolContinuationForSession"
-    )
-  }
+    const message: AgentUiMessage = {
+      id: input.assistantMessageId,
+      role: "assistant",
+      parts: input.clientToolResults.map((result) =>
+        result.state === "output-available"
+          ? {
+              type: `tool-${result.toolName}` as const,
+              toolCallId: result.toolCallId,
+              state: result.state,
+              input: result.input,
+              output: result.output,
+            }
+          : {
+              type: `tool-${result.toolName}` as const,
+              toolCallId: result.toolCallId,
+              state: result.state,
+              input: result.input,
+              errorText: result.errorText,
+            }
+      ),
+    }
+    const connection = await issueConnectionTicketInTransaction(tx, {
+      credential,
+      current,
+      now,
+      sessionId: input.sessionId,
+      threadId: thread.id,
+      userId: input.userId,
+    })
+    return {
+      ...connection,
+      assetIds: [],
+      contextReferences: [],
+      clientMessageId,
+      messages: [message],
+      reusableAssets: [],
+      threadId: thread.id,
+      timezone: input.timezone,
+      trigger: "client_tool_result" as const,
+    }
+  })
 }

@@ -16,85 +16,31 @@ const observability = vi.hoisted(() => ({
   recordHttpStatus: vi.fn<(statusCode: number, errorCode?: string) => void>(),
 }))
 
-const errorCorpus = [
-  {
-    name: "string",
-    create: () => "TURSO_AUTH_TOKEN=private-string-value",
-  },
-  { name: "number", create: () => 42 },
-  { name: "null", create: () => null },
-  {
-    name: "plain object",
-    create: () => ({ message: "DATABASE_URL=private-object-value" }),
-  },
-  {
-    name: "throwing getter",
-    create: () =>
-      Object.defineProperty({}, "message", {
-        enumerable: true,
-        get: () => {
-          throw new Error("private getter value")
-        },
-      }),
-  },
-  {
-    name: "hostile proxy",
-    create: () =>
-      new Proxy(
-        {},
-        {
-          getPrototypeOf: () => {
-            throw new Error("private proxy value")
-          },
-        }
-      ),
-  },
-  {
-    name: "circular object",
-    create: () => {
-      const value: { message: string; self?: unknown } = {
-        message: "private circular value",
-      }
-      value.self = value
-      return value
-    },
-  },
-  {
-    name: "prototype-shaped object",
-    create: () => ({
-      ["__proto__"]: "private prototype value",
-      constructor: "private constructor value",
-    }),
-  },
-] as const
-
 vi.mock("../observability/runtime", () => ({
   captureObservedException: observability.captureException,
   recordObservedHttpStatus: observability.recordHttpStatus,
 }))
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { errorPlugin, projectErrorForResponse } from "./error"
 import { requestIdPlugin } from "./request-id"
 
+const resetObservability = () => {
+  observability.captureException.mockClear()
+  observability.recordHttpStatus.mockClear()
+}
+
 describe("errorPlugin", () => {
   it("treats response validation as an observed internal defect", async () => {
-    observability.captureException.mockClear()
-    observability.recordHttpStatus.mockClear()
+    resetObservability()
     const secret = "TURSO_AUTH_TOKEN=private-response-value"
-    const responseModel = v.object({
-      status: v.pipe(
-        v.string(),
-        v.check((value) => value === "ok")
-      ),
-    })
+    const responseModel = v.object({ status: v.literal("ok") })
+    const invalidResponse = JSON.parse(JSON.stringify({ status: secret }))
     const app = new Elysia()
       .use(requestIdPlugin)
       .use(errorPlugin)
-      .get("/invalid-response", () => ({ status: secret }), {
-        response: {
-          200: responseModel,
-        },
+      .get("/invalid-response", () => invalidResponse, {
+        response: { 200: responseModel },
       })
 
     const response = await app.handle(
@@ -106,12 +52,10 @@ describe("errorPlugin", () => {
 
     expect(response.status).toBe(500)
     expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("x-request-id")).toBe("req_response_validation")
     expect(body).toEqual({
-      error: {
-        code: "internal_error",
-        message: "Internal server error",
-        requestId: "req_response_validation",
-      },
+      error: "internal_error",
+      message: "An unexpected error occurred.",
     })
     expect(JSON.stringify(body)).not.toContain(secret)
     expect(observability.recordHttpStatus).toHaveBeenCalledWith(
@@ -120,10 +64,6 @@ describe("errorPlugin", () => {
     )
     const capturedError = observability.captureException.mock.calls[0]?.[0]
     expect(capturedError).toBeInstanceOf(ValidationError)
-    if (!(capturedError instanceof ValidationError)) {
-      throw new Error("Expected Elysia response validation error")
-    }
-    expect(capturedError.type).toBe("response")
     expect(observability.captureException).toHaveBeenCalledWith(capturedError, {
       errorCode: "internal_error",
       method: "GET",
@@ -133,15 +73,20 @@ describe("errorPlugin", () => {
     })
   })
 
-  it("uses registry retry and capture policies without leaking the cause", async () => {
-    observability.captureException.mockClear()
-    observability.recordHttpStatus.mockClear()
-    const secret = "TURSO_AUTH_TOKEN=private-dependency-value"
+  it("captures the original 5xx cause and exposes retry metadata only as a header", async () => {
+    resetObservability()
+    const cause = new Error("TURSO_AUTH_TOKEN=private-dependency-value")
     const app = new Elysia()
       .use(requestIdPlugin)
       .use(errorPlugin)
       .get("/unavailable", () => {
-        throw publicErrors.unavailable(new Error(secret), 17)
+        throw new HttpError({
+          cause,
+          code: "service_unavailable",
+          fieldErrors: { token: ["private-field-value"] },
+          publicMessage: "provider token=private-public-value",
+          retryAfter: 17,
+        })
       })
 
     const response = await app.handle(
@@ -155,25 +100,23 @@ describe("errorPlugin", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("retry-after")).toBe("17")
     expect(body).toEqual({
-      error: {
-        code: "service_unavailable",
-        context: { retryAfter: 17 },
-        message: "Service temporarily unavailable",
-        requestId: "req_unavailable",
-      },
+      error: "service_unavailable",
+      message: "The service is temporarily unavailable.",
     })
-    expect(JSON.stringify(body)).not.toContain(secret)
+    expect(JSON.stringify(body)).not.toMatch(
+      /private-field-value|private-public-value/u
+    )
     expect(observability.captureException).toHaveBeenCalledOnce()
+    expect(observability.captureException.mock.calls[0]?.[0]).toBe(cause)
   })
 
-  it("does not capture registry errors whose capture policy is disabled", async () => {
-    observability.captureException.mockClear()
-    observability.recordHttpStatus.mockClear()
+  it("does not capture expected 4xx errors", async () => {
+    resetObservability()
     const app = new Elysia()
       .use(requestIdPlugin)
       .use(errorPlugin)
       .get("/forbidden", () => {
-        throw publicErrors.forbidden()
+        throw new HttpError({ code: "forbidden" })
       })
 
     const response = await app.handle(
@@ -183,47 +126,153 @@ describe("errorPlugin", () => {
     )
 
     expect(response.status).toBe(403)
-    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(await response.json()).toEqual({
+      error: "forbidden",
+      message: "You do not have permission to perform this action.",
+    })
     expect(response.headers.get("retry-after")).toBeNull()
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it.each(errorCorpus)(
-    "projects a hostile $name through the bounded internal error contract",
-    ({ create }) => {
-      const thrown = create()
-      const projection = projectErrorForResponse(
-        "UNKNOWN",
-        thrown,
-        "req_hostile_error"
-      )
-
-      expect(projection).toEqual({
-        httpStatus: 500,
-        retryAfter: undefined,
-        body: {
-          error: {
-            code: "internal_error",
-            message: "Internal server error",
-            requestId: "req_hostile_error",
+  it("returns an explicitly public message and bounded field errors for 4xx", async () => {
+    resetObservability()
+    const app = new Elysia()
+      .use(requestIdPlugin)
+      .use(errorPlugin)
+      .get("/conflict", () => {
+        throw new HttpError({
+          code: "conflict",
+          fieldErrors: {
+            __proto__: ["unsafe"],
+            name: ["Choose another name."],
+            title: ["x".repeat(501)],
           },
-        },
+          publicMessage: "Choose different values.",
+        })
       })
-      expect(JSON.stringify(projection)).not.toMatch(
-        /TURSO_AUTH_TOKEN|DATABASE_URL|private/iu
-      )
-    }
-  )
 
-  it("keeps the integration response bounded for unknown thrown errors", async () => {
-    observability.captureException.mockClear()
-    observability.recordHttpStatus.mockClear()
-    const secret = "DATABASE_URL=private-integration-value"
+    const response = await app.handle(new Request("http://localhost/conflict"))
+
+    expect(await response.json()).toEqual({
+      error: "conflict",
+      fieldErrors: { name: ["Choose another name."] },
+      message: "Choose different values.",
+    })
+    expect(observability.captureException).not.toHaveBeenCalled()
+  })
+
+  it("projects request validation to safe field paths without echoing values", async () => {
+    resetObservability()
+    const secret = "token=private-input-value"
+    const app = new Elysia()
+      .use(requestIdPlugin)
+      .use(errorPlugin)
+      .post("/validation", () => ({ ok: true }), {
+        body: v.object({
+          title: v.pipe(v.string(), v.minLength(1), v.maxLength(10)),
+        }),
+      })
+
+    const response = await app.handle(
+      new Request("http://localhost/validation", {
+        body: JSON.stringify({ title: secret }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      })
+    )
+    const body = await response.json()
+
+    expect(body).toEqual({
+      error: "validation_error",
+      fieldErrors: { title: ["Invalid value."] },
+      message: "The request is invalid.",
+    })
+    expect(JSON.stringify(body)).not.toContain(secret)
+    expect(observability.captureException).not.toHaveBeenCalled()
+  })
+
+  it("treats malformed JSON as an expected validation failure", async () => {
+    resetObservability()
+    const app = new Elysia()
+      .use(requestIdPlugin)
+      .use(errorPlugin)
+      .post("/parse", () => ({ ok: true }), {
+        body: v.object({ title: v.string() }),
+      })
+
+    const response = await app.handle(
+      new Request("http://localhost/parse", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      })
+    )
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "validation_error",
+      message: "The request is invalid.",
+    })
+    expect(observability.recordHttpStatus).toHaveBeenCalledWith(
+      400,
+      "validation_error"
+    )
+    expect(observability.captureException).not.toHaveBeenCalled()
+  })
+
+  it("does not invent an undefined field path for root validation", async () => {
+    resetObservability()
+    const app = new Elysia()
+      .use(requestIdPlugin)
+      .use(errorPlugin)
+      .post("/root-validation", () => ({ ok: true }), {
+        body: v.object({ title: v.string() }),
+      })
+
+    const response = await app.handle(
+      new Request("http://localhost/root-validation", {
+        body: "null",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      })
+    )
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: "validation_error",
+      message: "The request is invalid.",
+    })
+    expect(observability.captureException).not.toHaveBeenCalled()
+  })
+
+  it("returns a bounded response while preserving a hostile unknown for capture", () => {
+    const hostile = new Proxy(
+      {},
+      {
+        getPrototypeOf: () => {
+          throw new Error("private proxy value")
+        },
+      }
+    )
+
+    const projection = projectErrorForResponse("UNKNOWN", hostile)
+
+    expect(projection.body).toEqual({
+      error: "internal_error",
+      message: "An unexpected error occurred.",
+    })
+    expect(projection.httpStatus).toBe(500)
+    expect(projection.capture?.value).toBe(hostile)
+  })
+
+  it("captures an unknown thrown value exactly once without wrapping it", async () => {
+    resetObservability()
+    const thrown = { detail: "DATABASE_URL=private-integration-value" }
     const app = new Elysia()
       .use(requestIdPlugin)
       .use(errorPlugin)
       .get("/unknown-error", () => {
-        throw new Error(secret)
+        throw thrown
       })
 
     const response = await app.handle(
@@ -231,18 +280,24 @@ describe("errorPlugin", () => {
         headers: { "x-request-id": "req_unknown_error" },
       })
     )
-    const body = await response.json()
 
     expect(response.status).toBe(500)
-    expect(response.headers.get("cache-control")).toBe("no-store")
-    expect(body).toEqual({
-      error: {
-        code: "internal_error",
-        message: "Internal server error",
-        requestId: "req_unknown_error",
-      },
+    expect(await response.json()).toEqual({
+      error: "internal_error",
+      message: "An unexpected error occurred.",
     })
-    expect(JSON.stringify(body)).not.toContain(secret)
     expect(observability.captureException).toHaveBeenCalledOnce()
+    expect(observability.captureException.mock.calls[0]?.[0]).toBe(thrown)
+  })
+
+  it("does not confuse an undefined unknown with the no-capture sentinel", () => {
+    const projection = projectErrorForResponse("UNKNOWN", undefined)
+
+    expect(projection.body).toEqual({
+      error: "internal_error",
+      message: "An unexpected error occurred.",
+    })
+    expect(projection.capture).toBeDefined()
+    expect(projection.capture?.value).toBeUndefined()
   })
 })

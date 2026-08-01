@@ -6,6 +6,12 @@ import {
   trace,
 } from "@opentelemetry/api"
 
+import {
+  activeTraceAttributes,
+  redactDevelopmentErrorText,
+  redactTelemetryAttributes,
+  reportDevelopmentCauseChain,
+} from "./development-error"
 import type { ObservabilityRuntime } from "./runtime"
 
 const scalarAttributes = (attributes: Record<string, unknown>) =>
@@ -19,11 +25,6 @@ const scalarAttributes = (attributes: Record<string, unknown>) =>
     )
   )
 
-const toRecordedException = (error: unknown) => {
-  if (error instanceof Error) return error
-  return new Error(typeof error === "string" ? error : JSON.stringify(error))
-}
-
 const loggerScope = (
   attributes: Record<string, unknown>,
   fallback: string
@@ -32,10 +33,20 @@ const loggerScope = (
   return typeof scope === "string" && scope.length > 0 ? scope : fallback
 }
 
-const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
-  (typeof value === "object" && value !== null) || typeof value === "function"
-    ? "then" in value && typeof value.then === "function"
-    : false
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> => {
+  if (
+    !(
+      (typeof value === "object" && value !== null) ||
+      typeof value === "function"
+    )
+  )
+    return false
+  try {
+    return "then" in value && typeof value.then === "function"
+  } catch {
+    return false
+  }
+}
 
 const waitUntilContextKey = createContextKey(
   "enterprise-agentic-saas.observability.wait-until"
@@ -78,20 +89,30 @@ export const createOtelObservabilityRuntime = (
 
   return {
     captureException(error, context) {
-      const recorded = toRecordedException(error)
       const span = trace.getActiveSpan()
-      span?.recordException(recorded)
-      span?.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: context.errorCode,
-      })
-      getScopedLogger("http").error("HTTP request failed", {
-        ...resource,
-        ...context,
-        "event.name": "HTTP request failed",
-        "logger.scope": "http",
-        "exception.message": recorded.message,
-        "exception.stacktrace": recorded.stack ?? "",
+      span?.setAttribute("app.error.code", context.errorCode)
+      span?.setStatus({ code: SpanStatusCode.ERROR })
+      if (!resource) return
+
+      const correlation = activeTraceAttributes()
+      reportDevelopmentCauseChain(error, context, {
+        log(record) {
+          getScopedLogger("development.error").error(
+            "Development exception cause",
+            { ...resource, ...correlation, ...record }
+          )
+        },
+        terminal(record) {
+          console.error({
+            ...resource,
+            ...correlation,
+            ...record,
+            level: "error",
+            severityText: "ERROR",
+            "service.name": service,
+            timestamp: new Date().toISOString(),
+          })
+        },
       })
     },
     injectRequestHeaders(headers) {
@@ -102,24 +123,29 @@ export const createOtelObservabilityRuntime = (
     },
     logEvent(level, message, attributes) {
       const scope = loggerScope(attributes, "application")
-      const eventAttributes = {
+      const eventAttributes = redactTelemetryAttributes({
         ...resource,
+        ...activeTraceAttributes(),
         ...attributes,
         "event.name": attributes["event.name"] ?? message,
         "logger.scope": scope,
-      }
-      trace
-        .getActiveSpan()
-        ?.addEvent(message, scalarAttributes(eventAttributes))
-      getScopedLogger(scope)[level](message, eventAttributes)
+      })
+      getScopedLogger(scope)[level](
+        redactDevelopmentErrorText(message),
+        eventAttributes
+      )
     },
     logResponse(level, attributes) {
-      getScopedLogger("http")[level]("HTTP request completed", {
-        ...resource,
-        ...attributes,
-        "event.name": "HTTP request completed",
-        "logger.scope": "http",
-      })
+      getScopedLogger("http")[level](
+        "HTTP request completed",
+        redactTelemetryAttributes({
+          ...resource,
+          ...activeTraceAttributes(),
+          ...attributes,
+          "event.name": "http.response.completed",
+          "logger.scope": "http",
+        })
+      )
     },
     recordHttpStatus(statusCode, errorCode) {
       const span = trace.getActiveSpan()
@@ -131,7 +157,7 @@ export const createOtelObservabilityRuntime = (
       trace.getActiveSpan()?.setAttributes({
         "http.request.method": context.method,
         "http.route": context.route,
-        "request.id": context.requestId,
+        request_id: context.requestId,
         ...resource,
       })
     },
@@ -148,11 +174,11 @@ export const createOtelObservabilityRuntime = (
         (span) => {
           let deferred = false
           let ended = false
-          const end = (error?: unknown, endTime?: number) => {
+          const end = (failed = false, endTime?: number) => {
             if (ended) return
             ended = true
-            if (error !== undefined) {
-              span.recordException(toRecordedException(error))
+            if (failed) {
+              span.setAttribute("app.error.code", "internal_error")
               span.setStatus({ code: SpanStatusCode.ERROR })
             }
             span.end(endTime)
@@ -173,8 +199,8 @@ export const createOtelObservabilityRuntime = (
                 // Telemetry completion must not change the application response.
               }
               void completionPromise.then(
-                () => end(undefined, Date.now()),
-                (error) => end(error, Date.now())
+                () => end(false, Date.now()),
+                () => end(true, Date.now())
               )
             },
           }
@@ -183,14 +209,14 @@ export const createOtelObservabilityRuntime = (
             if (isPromiseLike(result)) {
               void Promise.resolve(result).then(
                 () => (deferred ? undefined : end()),
-                (error) => end(error)
+                () => end(true)
               )
               return result
             }
             if (!deferred) end()
             return result
           } catch (error) {
-            end(error)
+            end(true)
             throw error
           }
         }

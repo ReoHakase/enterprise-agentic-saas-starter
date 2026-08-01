@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console"
+import { httpError } from "@/test-support/http-error"
 
 import type { OrganizationDetail } from "../../schema"
 import { OrganizationSettingsForm } from "./organization-settings-form"
@@ -37,7 +37,7 @@ const organization: OrganizationDetail = {
   name: "Acme",
   slug: "acme",
   profileImage: null,
-  role: "super_admin",
+  role: "owner",
   active: true,
   createdAt: "2026-07-14T00:00:00.000Z",
   invitationCount: 0,
@@ -48,7 +48,7 @@ const organization: OrganizationDetail = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
 }
 
@@ -89,16 +89,9 @@ describe("OrganizationSettingsForm", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization updated")
   })
 
-  it("shows a slug error below the input and retains the draft", async () => {
+  it("shows fixed failure copy and retains the draft", async () => {
     const actor = userEvent.setup()
-    mocks.updateOrganization.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "validation_failed",
-        fieldErrors: { slug: ["This slug is already in use."] },
-        message: "Fix the highlighted field.",
-        status: 409,
-      })
-    )
+    mocks.updateOrganization.mockRejectedValueOnce(httpError(409, "conflict"))
     renderSettings()
 
     const slug = screen.getByLabelText("Slug")
@@ -107,22 +100,15 @@ describe("OrganizationSettingsForm", () => {
     await actor.click(screen.getByRole("button", { name: "Save changes" }))
 
     expect(
-      await screen.findByText("This slug is already in use.")
-    ).toBeInTheDocument()
+      await screen.findByText("The organization could not be updated.")
+    ).toBeVisible()
     expect(slug).toHaveValue("acme-new")
-    expect(slug).toHaveAccessibleDescription(/This slug is already in use\./u)
-    expect(
-      screen.queryByText("Fix the highlighted field.")
-    ).not.toBeInTheDocument()
 
     await actor.type(slug, "-edited")
 
     expect(
-      screen.queryByText("This slug is already in use.")
+      screen.queryByText("The organization could not be updated.")
     ).not.toBeInTheDocument()
-    expect(slug).not.toHaveAccessibleDescription(
-      /This slug is already in use\./u
-    )
   })
 
   it("replaces the settings URL after a slug change", async () => {

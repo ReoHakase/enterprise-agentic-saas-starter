@@ -1,6 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
-
-const organizationRoles = ["super_admin", "admin", "member"] as const
+const organizationRoles = ["owner", "admin", "member"] as const
 
 export type OrganizationRole = (typeof organizationRoles)[number]
 
@@ -9,32 +7,28 @@ export type OrganizationPermissions = {
   canInviteMembers: boolean
   canManageMembers: boolean
   canManageAdmins: boolean
-  canTransferSuperAdmin: boolean
+  canTransferOwnership: boolean
 }
 
 export const isOrganizationRole = (value: string): value is OrganizationRole =>
-  value === "super_admin" || value === "admin" || value === "member"
+  value === "owner" || value === "admin" || value === "member"
 
 export const normalizeOrganizationRole = (role: string): OrganizationRole => {
   if (isOrganizationRole(role)) {
     return role
   }
 
-  throw publicErrors.internal(new Error("Invalid organization role"), {
-    module: "authorization",
-    operation: "normalizeOrganizationRole",
-    role,
-  })
+  throw new Error("Invalid organization role")
 }
 
 export const permissionsForRole = (role: string): OrganizationPermissions => {
   const normalized = normalizeOrganizationRole(role)
 
   return {
-    canEditOrganization: normalized === "super_admin",
-    canInviteMembers: normalized === "super_admin" || normalized === "admin",
-    canManageMembers: normalized === "super_admin" || normalized === "admin",
-    canManageAdmins: normalized === "super_admin",
-    canTransferSuperAdmin: normalized === "super_admin",
+    canEditOrganization: normalized === "owner",
+    canInviteMembers: normalized === "owner" || normalized === "admin",
+    canManageMembers: normalized === "owner" || normalized === "admin",
+    canManageAdmins: normalized === "owner",
+    canTransferOwnership: normalized === "owner",
   }
 }

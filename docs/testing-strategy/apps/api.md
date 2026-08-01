@@ -2,7 +2,7 @@
 title: APIテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - apps/api/**
 related:
@@ -37,11 +37,9 @@ apps/api/src/
     observability/
     plugins/
       openapi.ts
-    openapi/
 
   errors/
-    app-error.ts
-    error-registry.ts
+    http-error.ts
 
   modules/
     <module>/
@@ -91,13 +89,13 @@ app.ts
 
 ## テスト層
 
-| 名前                                           | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 実物として使うもの                                                                                    | 差し替えるもの                                                        | 対象コード/ファイル                                                                                      | Test Runner                                   | 実行速度           | CI時間課金以外の費用 | 量         |
-| ---------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------ | -------------------- | ---------- |
-| **APIドメイン単体テスト (A1)**                 | 単体                | <ul><li>値の正規化、状態遷移、permission matrixを境界値ごとに確認する</li><li>cursor、date、opaque ID、resource limitのparseと拒否条件を確認する</li><li>冪等性、retry、公開error reasonの分類を確認する</li><li>frameworkやDBなしで同じ入力から同じ結果になることを確認する</li></ul>                                                                                                                                                                                                              | domain function、value object、policy、純粋schema                                                     | clock、ID generator、randomだけを固定する                             | `apps/api/src/modules/**/domain.ts`、`domain/**`、framework非依存の`schema.ts`、`errors`内の純粋registry | Vitest Node                                   | 極めて速い         | なし                 | 非常に多い |
-| **APIアプリケーションサービス単体テスト (A2)** | 単体                | <ul><li>認可前にwriteや外部通信を行わないことを確認する</li><li>validation失敗時にrepositoryやproviderを呼ばないことを確認する</li><li>transaction内で必要なoperationだけを正しい順序で実行することを確認する</li><li>重複operation、partial failure、cancel、timeoutを安全に処理することを確認する</li><li>domain errorとprovider errorを公開可能なAppErrorへ変換することを確認する</li></ul>                                                                                                      | service、domain、port interface                                                                       | repository、unit of work、email、R2、external provider、clock、logger | `apps/api/src/modules/**/service.ts`、`application/**`、`ports.ts`、application error mapper             | Vitest Node + fake ports                      | 極めて速いから速い | なし                 | 多い       |
-| **APIリポジトリ統合テスト (A3)**               | 統合                | <ul><li>Drizzle queryが必ずtenant predicateを含み、別tenantの存在を漏らさないことを確認する</li><li>FK、unique、check、cascade、transaction、rollbackが実DBで働くことを確認する</li><li>compare-and-swap、pagination order、outbox、lease、fencingを確認する</li><li>競合操作が一意性または業務不変条件を破らないことを確認する</li><li>DB errorをserviceが扱える有限なerrorへ変換することを確認する</li></ul>                                                                                      | 本番Drizzle query、実libSQL、実schema、transaction                                                    | remote Turso、外部provider。必要なclockとIDだけ固定する               | `apps/api/src/modules/**/repository.ts`、`adapters/persistence/**`、DBを使う`infrastructure/**`          | Vitest + in-memoryまたはtemporary-file libSQL | 速いから中         | なし                 | 厚くする   |
-| **API HTTP契約統合テスト (A4)**                | 統合                | <ul><li>body、params、query、response schemaが契約どおり検証されることを確認する</li><li>status、request ID、Cache-Control、Retry-After、content typeを確認する</li><li>auth、organization access、CSRF、Origin、CORS前段のmacroとpluginを確認する</li><li>not found、field error、conflict、rate limit、unknown errorの公開形式を確認する</li><li>stack、cause、secret、private contextをresponseへ含めないことを確認する</li><li>OpenAPI operationと実route契約がずれないことを確認する</li></ul> | Elysia app、route、service、schema、error serializer、`app.handle(new Request())`、必要に応じ実libSQL | OAuth provider、email provider、R2、Web search、telemetry backend     | `apps/api/src/modules/**/routes.ts`、`module.ts`、`plugins/**`、`errors/**`、`app.ts`                    | Vitest + Elysia `app.handle()`                | 速いから中         | なし                 | 厚くする   |
-| **API実HTTP統合テスト (A5)**                   | 統合                | <ul><li>Web Standard Requestだけでは証明しにくいcookie serialisationと複数Set-Cookieを確認する</li><li>実socket上のCORS、streaming、multipart、client disconnectを確認する</li><li>Eden clientがdate、nullable、error unionをruntimeで正しく受け取ることを確認する</li><li>Service Binding adapterとWorker入口のrequest転送を確認する</li><li>全routeを重複検査せず、transport固有の代表caseだけを確認する</li></ul>                                                                                | ephemeral HTTP server、Eden client、Workerまたはserver adapter、実Request/Response                    | remote DB、production secrets、external provider                      | `apps/api/src/worker.ts`、`client.ts`、`agent-client.ts`、HTTP/stream/multipart adapter、transport test  | Vitest + ephemeral HTTP server                | 中から遅い         | なし                 | 少数       |
+| 名前                                           | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 実物として使うもの                                                                                 | 差し替えるもの                                                        | 対象コード/ファイル                                                                                      | Test Runner                                   | 実行速度           | CI時間課金以外の費用 | 量         |
+| ---------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------ | -------------------- | ---------- |
+| **APIドメイン単体テスト (A1)**                 | 単体                | <ul><li>値の正規化、状態遷移、permission matrixを境界値ごとに確認する</li><li>cursor、date、opaque ID、resource limitのparseと拒否条件を確認する</li><li>冪等性、retry、公開error reasonの分類を確認する</li><li>frameworkやDBなしで同じ入力から同じ結果になることを確認する</li></ul>                                                                                                                                                                                                                                                                         | domain function、value object、policy、純粋schema                                                  | clock、ID generator、randomだけを固定する                             | `apps/api/src/modules/**/domain.ts`、`domain/**`、framework非依存の`schema.ts`、`errors`内の純粋registry | Vitest Node                                   | 極めて速い         | なし                 | 非常に多い |
+| **APIアプリケーションサービス単体テスト (A2)** | 単体                | <ul><li>認可前にwriteや外部通信を行わないことを確認する</li><li>validation失敗時にrepositoryやproviderを呼ばないことを確認する</li><li>transaction内で必要なoperationだけを正しい順序で実行することを確認する</li><li>重複operation、partial failure、cancel、timeoutを安全に処理することを確認する</li><li>既知のdomain errorだけをcause付きHttpErrorへ1回変換することを確認する</li></ul>                                                                                                                                                                    | service、domain、port interface                                                                    | repository、unit of work、email、R2、external provider、clock、logger | `apps/api/src/modules/**/service.ts`、`application/**`、`ports.ts`、application error mapper             | Vitest Node + fake ports                      | 極めて速いから速い | なし                 | 多い       |
+| **APIリポジトリ統合テスト (A3)**               | 統合                | <ul><li>Drizzle queryが必ずtenant predicateを含み、別tenantの存在を漏らさないことを確認する</li><li>FK、unique、check、cascade、transaction、rollbackが実DBで働くことを確認する</li><li>compare-and-swap、pagination order、outbox、lease、fencingを確認する</li><li>競合操作が一意性または業務不変条件を破らないことを確認する</li><li>DB errorをserviceが扱える有限なerrorへ変換することを確認する</li></ul>                                                                                                                                                 | 本番Drizzle query、実libSQL、実schema、transaction                                                 | remote Turso、外部provider。必要なclockとIDだけ固定する               | `apps/api/src/modules/**/repository.ts`、`adapters/persistence/**`、DBを使う`infrastructure/**`          | Vitest + in-memoryまたはtemporary-file libSQL | 速いから中         | なし                 | 厚くする   |
+| **API HTTP契約統合テスト (A4)**                | 統合                | <ul><li>body、params、query、response schemaが契約どおり検証されることを確認する</li><li>status、x-request-id、Cache-Control、Retry-After、content typeを確認する</li><li>auth、organization access、CSRF、Origin、CORS前段のmacroとpluginを確認する</li><li>4xx、5xx、validation、not foundの本文が有限な`error`、安全な`message`、任意の`fieldErrors`だけであることを確認する</li><li>stack、cause、secret、private contextをresponseへ含めないことを確認する</li><li>アプリケーションOpenAPIと実ルート契約、Scalarの独立した2つの仕様元を確認する</li></ul> | Elysia app、route、service、schema、error handler、`app.handle(new Request())`、必要に応じ実libSQL | OAuth provider、email provider、R2、Web search、telemetry backend     | `apps/api/src/modules/**/routes.ts`、`module.ts`、`plugins/**`、`errors/**`、`app.ts`                    | Vitest + Elysia `app.handle()`                | 速いから中         | なし                 | 厚くする   |
+| **API実HTTP統合テスト (A5)**                   | 統合                | <ul><li>Web Standard Requestだけでは証明しにくいcookie serialisationと複数Set-Cookieを確認する</li><li>実socket上のCORS、streaming、multipart、client disconnectを確認する</li><li>Eden clientがdate、nullable、error unionをruntimeで正しく受け取ることを確認する</li><li>Service Binding adapterとWorker入口のrequest転送を確認する</li><li>全routeを重複検査せず、transport固有の代表caseだけを確認する</li></ul>                                                                                                                                           | ephemeral HTTP server、Eden client、Workerまたはserver adapter、実Request/Response                 | remote DB、production secrets、external provider                      | `apps/api/src/worker.ts`、`client.ts`、`agent-client.ts`、HTTP/stream/multipart adapter、transport test  | Vitest + ephemeral HTTP server                | 中から遅い         | なし                 | 少数       |
 
 ## A1: APIドメイン単体テスト
 
@@ -173,7 +171,14 @@ apps/api A3
 
 `createApp(testDependencies)`と`app.handle()`を標準にします。実HTTP serverを起動せず、Elysiaのschema、macro、plugin、route、serviceを接続できます。
 
-error serializerには通常の`Error`だけでなく、string、`null`、circular object、throwing getter、Proxy、secretを含むcause、telemetry failureを投入します。serializer自身がthrowして元のerrorを隠さないことを確認します。
+error handlerには通常の`Error`だけでなく、string、`null`、循環参照、例外を投げるgetter、Proxy、secretを
+含むcause、観測処理の失敗を投入します。handler自身が例外を投げて元のerrorを隠さず、4xxを記録せず、
+5xxの元の例外またはcauseを1回だけ記録することを確認します。公開`message`と`fieldErrors`は上限付きで、
+生の例外、入力値、contextを含まず、Webが4xxだけを表示できることも確認します。
+
+`/openapi/json`はアプリケーション所有ルートだけを検査します。Better Authの生成仕様はAuthパッケージで
+`auth.api.generateOpenAPISchema()`と`/auth/open-api/generate-schema`を検査し、結合済み仕様や変換処理の
+テストは作りません。Scalarは2つの`source`と認証情報を保存しない設定をHTMLから確認します。
 
 ## A5: API実HTTP統合テスト
 
@@ -196,6 +201,7 @@ A5へ上げる判断:
 ### `packages/auth`
 
 - Better Auth server、cookie、OAuth contractはAuth package
+- Better AuthのOpenAPI 3.1.1生成と標準schema routeはAuth package
 - APIへのmount、API middlewareとのcompositionはA4/A5
 
 ### `packages/email`
@@ -222,6 +228,7 @@ A1からA5は、外部cloudと有料providerを使わない範囲で`bun run tes
 - 実HTTP caseがtransport固有の少数へ限定される
 - unknown errorでもserializerがthrowしない
 - package側の責務とAPI consumer integrationが区別される
+- app-owned OpenAPIとBetter Auth OpenAPIが結合されず、Scalarだけが両方を参照する
 
 Issues一覧のfilter contractはA3/A4で実libSQLを使い、複数status、priority範囲、assigneeの
 `unassigned`、label Any/All、解決済み期日範囲、動的page size、semantic sort、literal `%`/`_`検索を

@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react"
 
+import { reportObservedError } from "@/lib/report-observed-error"
+
 import type { IssueUpdateField } from "../../issue-update-state"
 import type {
   ImmediateField,
@@ -27,7 +29,8 @@ export const useIssueImmediateFields = ({
       setSavingFields((current) => new Set(current).add(field))
       try {
         await onUpdate(issue, update)
-      } catch {
+      } catch (error) {
+        reportObservedError(error, { operation: "issue.field.update" })
         // The controller owns the user-facing toast. Settle fire-and-forget
         // changes here so rejected mutations do not leak to the browser.
       } finally {

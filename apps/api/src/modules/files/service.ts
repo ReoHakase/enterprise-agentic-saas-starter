@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { OrganizationRole } from "../authorization/public"
 import {
   FILE_MAX_BYTES,
@@ -23,7 +23,7 @@ import { bodyObject, providerUnavailable } from "./service-runtime"
 const normalizeFilename = (value: string) => {
   const filename = value.trim()
   if (filename.length < 1 || filename.length > 255) {
-    throw publicErrors.validation("Invalid filename", { field: "file" })
+    throw new HttpError({ code: "validation_error" })
   }
   return filename
 }
@@ -31,7 +31,7 @@ const normalizeFilename = (value: string) => {
 const normalizeDeclaredContentType = (value: string) => {
   const contentType = value.trim().toLowerCase() || "application/octet-stream"
   if (contentType.length > 255) {
-    throw publicErrors.validation("Invalid content type", { field: "file" })
+    throw new HttpError({ code: "validation_error" })
   }
   return contentType
 }
@@ -149,22 +149,19 @@ const assertUploadContentMatches = async (
   let source: FileR2ObjectBody | null
   try {
     source = bodyObject(await runtime.bucket.get(stored.objectKey))
-  } catch {
-    throw providerUnavailable("r2", "readUploadRetry")
+  } catch (cause) {
+    throw providerUnavailable("r2", "readUploadRetry", cause)
   }
   if (!source) throw providerUnavailable("r2", "readUploadRetry")
 
   let matches: boolean
   try {
     matches = await streamsEqual(upload.stream(), source.body)
-  } catch {
-    throw providerUnavailable("r2", "compareUploadRetry")
+  } catch (cause) {
+    throw providerUnavailable("r2", "compareUploadRetry", cause)
   }
   if (!matches) {
-    throw publicErrors.conflict("Upload id is already in use", {
-      reason: "upload_id_mismatch",
-      resource: "file",
-    })
+    throw new HttpError({ code: "conflict" })
   }
 }
 
@@ -192,8 +189,8 @@ const imageMetadata = async (
   let source: FileR2ObjectBody | null
   try {
     source = bodyObject(await runtime.bucket.get(file.objectKey))
-  } catch {
-    throw providerUnavailable("r2", "readImageForInfo")
+  } catch (cause) {
+    throw providerUnavailable("r2", "readImageForInfo", cause)
   }
   if (!source) {
     throw providerUnavailable("r2", "readImageForInfo")
@@ -216,8 +213,8 @@ const imageMetadata = async (
     }
     return { imageHeight: info.height, imageWidth: info.width }
   } catch (error) {
-    if (error instanceof AppError) throw error
-    throw providerUnavailable("images", "readImageInfo")
+    if (error instanceof HttpError) throw error
+    throw providerUnavailable("images", "readImageInfo", error)
   }
 }
 
@@ -231,8 +228,8 @@ export const createFileService = (ports: FileServicePorts) => {
     let object: FileR2Object | null
     try {
       object = await runtime.bucket.head(input.file.objectKey)
-    } catch {
-      throw providerUnavailable("r2", "headPendingUpload")
+    } catch (cause) {
+      throw providerUnavailable("r2", "headPendingUpload", cause)
     }
     if (!object) {
       throw providerUnavailable("r2", "headPendingUpload")
@@ -275,9 +272,7 @@ export const createFileService = (ports: FileServicePorts) => {
       input.file.size < 1 ||
       input.file.size > FILE_MAX_BYTES
     ) {
-      throw publicErrors.validation("File size does not match", {
-        field: "fileSize",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
 
     await ports.assertOwnerUploadable({
@@ -321,10 +316,7 @@ export const createFileService = (ports: FileServicePorts) => {
         uploadId: input.uploadId,
       })
     ) {
-      throw publicErrors.conflict("Upload id is already in use", {
-        reason: "upload_id_mismatch",
-        resource: "file",
-      })
+      throw new HttpError({ code: "conflict" })
     }
 
     if (reservation.file.status === "ready") {
@@ -332,8 +324,8 @@ export const createFileService = (ports: FileServicePorts) => {
       let object: FileR2Object | null
       try {
         object = await runtime.bucket.head(reservation.file.objectKey)
-      } catch {
-        throw providerUnavailable("r2", "headUploadRetry")
+      } catch (cause) {
+        throw providerUnavailable("r2", "headUploadRetry", cause)
       }
       if (!object || !metadataMatches(object, reservation.file)) {
         throw providerUnavailable("r2", "verifyUploadRetry")
@@ -345,8 +337,7 @@ export const createFileService = (ports: FileServicePorts) => {
         fileId: reservation.file.id,
         organizationId: input.organizationId,
       })
-      if (!ready)
-        throw publicErrors.notFound("File not found", { resource: "file" })
+      if (!ready) throw new HttpError({ code: "not_found" })
       return { created: false, dto: ready.dto }
     }
 
@@ -374,8 +365,8 @@ export const createFileService = (ports: FileServicePorts) => {
         object =
           putObject ?? (await runtime.bucket.head(reservation.file.objectKey))
       }
-    } catch {
-      throw providerUnavailable("r2", "putUpload")
+    } catch (cause) {
+      throw providerUnavailable("r2", "putUpload", cause)
     }
     if (!object || !metadataMatches(object, reservation.file)) {
       // onlyIf競合や未知metadataは上書きもcleanupもしない。次回retryも
@@ -397,8 +388,7 @@ export const createFileService = (ports: FileServicePorts) => {
       fileId: reservation.file.id,
       organizationId: input.organizationId,
     })
-    if (!ready)
-      throw publicErrors.notFound("File not found", { resource: "file" })
+    if (!ready) throw new HttpError({ code: "not_found" })
     return { created: reservation.created, dto: ready.dto }
   }
 

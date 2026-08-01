@@ -2,7 +2,7 @@
 title: 製品Agentのtestとrelease gate
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 ---
 
 # Testとrelease gate
@@ -24,7 +24,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - migrationのfresh/upgrade、既存row保持、trigger整合性
 - thread所有者/tenant境界、message count、更新順とID tie break
 - thread作成時の`permissionMode`既定値、明示的Full access、invalid mode拒否、session/user/organization/context epoch境界、threadと初期permissionのtransaction整合性
-- title state/revision、manual CAS、auto/manual競合、最大80文字
+- Mastra標準title生成失敗時の既定title維持と最大80文字
 - context compaction threshold、最新12 message、summary idempotency
 - usage event idempotency、daily projection、price version切替、admin境界
 - historical approval GETは現在ownerで読め、decision/resumeは元scope外で拒否
@@ -44,7 +44,7 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
   公開情報だけへ言い換えて再送するまで拒否
 - メンバー識別情報、Issue、message、文字数の検査上限を超えた場合の拒否
 - query、拒否文字列、Issue本文がproduction log、remote telemetry、test artifactへ残らない
-- 専用title Agentのforced rename、transient status sanitizer、usage正規化、approval resume
+- Mastra標準Memoryのtitle生成、security projection、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
 - vision flagによる画像tool登録、chat画像との合計4枚上限、WeakMap media sidecar、実model入力だけのusage加算
 - canonical履歴、stream、reload traceにbase64、private URL、object key、raw bytesがない
@@ -79,7 +79,7 @@ contract profile:
 
 stack profile:
 
-1. 専用title Agentの自動titleとmanual rename race
+1. Mastra標準Memoryの自動titleと、生成失敗時の既定title維持
 2. 画像upload、公開Web検索、画像付きIssue作成のtool inputとDB/file/claim
 3. Issue/member/current page mentionのserver再解決
 4. thinking、transient status、tool/source traceのcanonical persistence

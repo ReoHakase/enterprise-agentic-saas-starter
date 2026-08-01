@@ -11,110 +11,88 @@ import {
 } from "./threads/repository"
 
 describe("public Agent run cancellation", () => {
-  it("returns the committed cancellation when the Agent runtime never responds", async () => {
-    vi.useFakeTimers()
-    try {
-      const { app, db } = await createFixture()
-      const thread = await createAgentThreadForSession(db, {
-        sessionId: "agent-session-a",
-        title: "Runtime cancellation timeout",
-        userId: "agent-user-a",
-      })
-      const ticket = await issueAgentConnectionTicket(db, {
-        sessionId: "agent-session-a",
-        threadId: thread.id,
-        userId: "agent-user-a",
-      })
-      const internal = createAgentInternalApi(db)
-      const connection = await internal.consumeConnectionTicket({
-        threadId: thread.id,
-        ticket: ticket.ticket,
-      })
-      const run = await internal.startRun({
-        clientMessageId: "runtime-cancel-timeout",
-        grant: connection.grant,
-      })
-      const action = await internal.prepareCreateIssue({
-        grant: run.grant,
-        toolCallId: "tool-runtime-cancel-timeout",
-        idempotencyKey: "prepare-runtime-cancel-timeout",
-        issue: { title: "Canceled before execution" },
-      })
-      expect(action.status).toBe("pending")
+  it("commits cancellation without cross-request runtime I/O", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Request signal cancellation",
+      userId: "agent-user-a",
+    })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const internal = createAgentInternalApi(db)
+    const connection = await internal.consumeConnectionTicket({
+      threadId: thread.id,
+      ticket: ticket.ticket,
+    })
+    const run = await internal.startRun({
+      clientMessageId: "request-signal-cancel",
+      grant: connection.grant,
+    })
+    const action = await internal.prepareCreateIssue({
+      grant: run.grant,
+      toolCallId: "tool-request-signal-cancel",
+      idempotencyKey: "prepare-request-signal-cancel",
+      issue: { title: "Canceled before execution" },
+    })
+    expect(action.status).toBe("pending")
 
-      let markRuntimeFetchStarted: (() => void) | undefined
-      const runtimeFetchStarted = new Promise<void>((resolve) => {
-        markRuntimeFetchStarted = resolve
-      })
-      configureAgentRuntime({
-        fetch: () => {
-          markRuntimeFetchStarted?.()
-          return new Promise<Response>(() => undefined)
-        },
-      })
+    const runtimeFetch = vi.fn<() => Promise<Response>>(() =>
+      Promise.reject(new Error("Runtime cancel endpoint must not be called"))
+    )
+    configureAgentRuntime({ fetch: runtimeFetch })
 
-      let responseSettled = false
-      const responsePromise = app
-        .handle(
-          request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
-            method: "POST",
-          })
+    const response = await app.handle(
+      request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
+        method: "POST",
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(runtimeFetch).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+    const [storedRun] = await db
+      .select({ status: schema.agentRuns.status })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.runId))
+    expect(storedRun).toEqual({ status: "canceled" })
+    const [storedAction] = await db
+      .select({ status: schema.agentActions.status })
+      .from(schema.agentActions)
+      .where(eq(schema.agentActions.id, action.id))
+    expect(storedAction).toEqual({ status: "canceled" })
+    const liveGrants = await db
+      .select({ id: schema.agentGrants.id })
+      .from(schema.agentGrants)
+      .where(
+        and(
+          eq(schema.agentGrants.runId, run.runId),
+          isNull(schema.agentGrants.revokedAt)
         )
-        .then((response) => {
-          responseSettled = true
-          return response
-        })
-      await runtimeFetchStarted
+      )
+    expect(liveGrants).toEqual([])
 
-      await vi.advanceTimersByTimeAsync(999)
-      expect(responseSettled).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      const response = await responsePromise
-
-      expect(response.status).toBe(200)
-      await expect(response.json()).resolves.toEqual({
-        runId: run.runId,
-        status: "canceled",
+    const nextTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const nextConnection = await internal.consumeConnectionTicket({
+      threadId: thread.id,
+      ticket: nextTicket.ticket,
+    })
+    await expect(
+      internal.startRun({
+        clientMessageId: "after-request-signal-cancel",
+        grant: nextConnection.grant,
       })
-      const [storedRun] = await db
-        .select({ status: schema.agentRuns.status })
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.id, run.runId))
-      expect(storedRun).toEqual({ status: "canceled" })
-      const [storedAction] = await db
-        .select({ status: schema.agentActions.status })
-        .from(schema.agentActions)
-        .where(eq(schema.agentActions.id, action.id))
-      expect(storedAction).toEqual({ status: "canceled" })
-      const liveGrants = await db
-        .select({ id: schema.agentGrants.id })
-        .from(schema.agentGrants)
-        .where(
-          and(
-            eq(schema.agentGrants.runId, run.runId),
-            isNull(schema.agentGrants.revokedAt)
-          )
-        )
-      expect(liveGrants).toEqual([])
-
-      const nextTicket = await issueAgentConnectionTicket(db, {
-        sessionId: "agent-session-a",
-        threadId: thread.id,
-        userId: "agent-user-a",
-      })
-      const nextConnection = await internal.consumeConnectionTicket({
-        threadId: thread.id,
-        ticket: nextTicket.ticket,
-      })
-      await expect(
-        internal.startRun({
-          clientMessageId: "after-runtime-cancel-timeout",
-          grant: nextConnection.grant,
-        })
-      ).resolves.toMatchObject({ attempt: 1 })
-    } finally {
-      vi.useRealTimers()
-    }
+    ).resolves.toMatchObject({ attempt: 1 })
   })
 
   it("converges a real finish-versus-cancel race to one terminal status and one usage event", async () => {

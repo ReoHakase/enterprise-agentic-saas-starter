@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { useIssueSearchState } from "@/features/issues/search-params.client"
 import { apiClient } from "@/lib/api-client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { archiveAgentThread, createAgentThread } from "../../api"
 import { isAgentHotkeyAllowed } from "../../hotkey-scope"
@@ -18,6 +19,7 @@ import {
   type AgentDashboardViewProps,
 } from "../agent-dashboard-view/agent-dashboard-view"
 import type { AgentNewThreadInput } from "../agent-new-thread-composer/agent-new-thread-composer"
+import { getAgentImageUploadErrorText } from "../runtime-state-types/runtime-state-types"
 import {
   hasBlockingThreadSwitchRisks,
   useAgentRuntimeState,
@@ -131,6 +133,10 @@ const useMissingAgentThreadCleanup = ({
     void runtime
       .completeThreadSwitch(threadId, { discardDraft: true })
       .then(() => setDiscrete({ agentThread: null }, { history: "replace" }))
+      .catch((error: unknown) => {
+        reportObservedError(error, { operation: "agent.thread.cleanup" })
+        toast.error("The missing Agent thread could not be cleaned up.")
+      })
       .finally(() => runtime.cancelThreadSwitch())
   }, [disabled, runtime, selectedThread, setDiscrete, threadId, threads])
 }
@@ -169,7 +175,8 @@ const useThreadTransitionActions = ({
     void runtime
       .completeThreadSwitch(transition.thread.id, { discardDraft: true })
       .then(() => runArchiveThread(transition.thread.id))
-      .catch(() => {
+      .catch((error: unknown) => {
+        reportObservedError(error, { operation: "agent.thread.discard" })
         runtime.cancelThreadSwitch()
         toast.error("The local Agent thread draft could not be discarded.")
       })
@@ -263,6 +270,7 @@ const useAgentDashboardController = ({
           await runtime.uploadImages(thread.id, input.files)
         }
       } catch (error) {
+        reportObservedError(error)
         uploadError = error
       }
       return {
@@ -281,9 +289,7 @@ const useAgentDashboardController = ({
       await setDiscrete({ agentThread: thread.id }, { history: "push" })
       if (uploadError) {
         toast.error(
-          uploadError instanceof Error
-            ? uploadError.message
-            : "Image upload failed. The new thread was kept."
+          `${getAgentImageUploadErrorText(uploadError)} The new thread was kept.`
         )
       }
     },

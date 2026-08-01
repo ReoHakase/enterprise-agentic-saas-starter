@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 import type { ReactNode } from "react"
@@ -476,8 +482,11 @@ describe("Agent chat browser integration", () => {
       />
     )
 
-    await screen.findByText(`Approval ${actionId}`)
-    await actor.click(screen.getByRole("button", { name: "Yes" }))
+    const approval = await screen.findByRole("region", {
+      name: "Issue change approval",
+    })
+    await within(approval).findByText(`Approval ${actionId}`)
+    await actor.click(within(approval).getByRole("button", { name: "Yes" }))
 
     await expect
       .element(await screen.findByRole("link", { name: "Open Issue #42" }))
@@ -511,8 +520,11 @@ describe("Agent chat browser integration", () => {
       />
     )
 
-    await screen.findByText(`Approval ${actionId}`)
-    await actor.click(screen.getByRole("button", { name: "No" }))
+    const approval = await screen.findByRole("region", {
+      name: "Issue change approval",
+    })
+    await within(approval).findByText(`Approval ${actionId}`)
+    await actor.click(within(approval).getByRole("button", { name: "No" }))
 
     await expect.element(await screen.findByText("rejected")).toBeVisible()
     await waitFor(() =>
@@ -564,8 +576,14 @@ describe("Agent chat browser integration", () => {
       </div>
     )
 
-    expect(screen.getByTestId("agent-conversation-content")).toHaveClass(
-      "max-w-3xl"
+    const viewport = screen.getByTestId("agent-conversation-viewport")
+    const content = screen.getByTestId("agent-conversation-content")
+    const viewportRect = viewport.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    expect(contentRect.width).toBeLessThanOrEqual(768)
+    expect(contentRect.left + contentRect.width / 2).toBeCloseTo(
+      viewportRect.left + viewportRect.width / 2,
+      0
     )
     expect(
       screen.getByRole("navigation", { name: "Conversation turns" })

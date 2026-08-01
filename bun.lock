@@ -92,14 +92,18 @@
       "name": "@enterprise-agentic-saas/emulate",
       "version": "0.0.0",
       "dependencies": {
-        "@enterprise-agentic-saas/auth": "workspace:*",
-        "emulate": "catalog:",
-        "valibot": "catalog:",
+        "@emulators/adapter-next": "catalog:",
+        "@emulators/github": "catalog:",
+        "next": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
       },
       "devDependencies": {
         "@enterprise-agentic-saas/portless-topology": "workspace:*",
         "@enterprise-agentic-saas/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
         "@vitest/coverage-v8": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:",
@@ -183,6 +187,7 @@
         "@vitest/browser-playwright": "catalog:",
         "@vitest/coverage-v8": "catalog:",
         "eslint-plugin-playwright": "catalog:",
+        "eslint-plugin-storybook": "catalog:",
         "eslint-plugin-testing-library": "catalog:",
         "happy-dom": "catalog:",
         "msw": "catalog:",
@@ -384,6 +389,8 @@
     "@elysia/eden": "1.4.10",
     "@elysia/openapi": "1.4.15",
     "@elysiajs/server-timing": "1.4.1",
+    "@emulators/adapter-next": "0.9.0",
+    "@emulators/github": "0.9.0",
     "@faker-js/faker": "10.5.0",
     "@fontsource-variable/geist-mono": "5.3.0",
     "@fontsource-variable/inter": "5.3.0",
@@ -444,7 +451,6 @@
     "drizzle-orm": "0.45.2",
     "drizzle-seed": "0.3.1",
     "elysia": "1.4.29",
-    "emulate": "0.9.0",
     "envin": "1.2.0",
     "eslint-plugin-playwright": "2.10.5",
     "eslint-plugin-storybook": "10.5.3",
@@ -815,6 +821,12 @@
     "@emnapi/runtime": ["@emnapi/runtime@1.11.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-vgj7R3y3Wgx24IQaGPA/R6YFXLHVMOZ0uVEyIQPaWs+rd1AzfEMXlAC22FYwO1XkKR6NPsq7mUandH8oIRdZFw=="],
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.2", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA=="],
+
+    "@emulators/adapter-next": ["@emulators/adapter-next@0.9.0", "", { "dependencies": { "@emulators/core": "0.9.0" } }, "sha512-sgToW4GelNQj9XEB3pxbaULfjbQgg/fLBG/3efdSUjXkzBUbhKdTPyxDQFrmSg1tc9OJsRygylBpqxNubAGhGA=="],
+
+    "@emulators/core": ["@emulators/core@0.9.0", "", { "dependencies": { "jose": "^6.2.2" } }, "sha512-Li/QxGzxzS0MRbRvfSximcH7ABaoX0k13eGRRdrCRhHHmuS2KVlotiatfGL7hFX+6DJMyhYG0uQV6zTEBbT/0A=="],
+
+    "@emulators/github": ["@emulators/github@0.9.0", "", { "dependencies": { "@emulators/core": "0.9.0" } }, "sha512-3WhwXNQylweeu9KL52VvruP6GwjX81S2St5koc+Lu7IWO0wS8jJw+WrGp6usZvOfd0YX+NQdQPUago8XqlxBEA=="],
 
     "@enterprise-agentic-saas/agent": ["@enterprise-agentic-saas/agent@workspace:apps/agent"],
 
@@ -2511,8 +2523,6 @@
     "emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 
     "empathic": ["empathic@2.0.1", "", {}, "sha512-YGRs8knHhKHVShLkFET/rWAU8kmHbOV5LwN938RHI0pljAJ1Gf6SzXsSmRaEzcXTtOOmVqJ5+WtQPL5uigY50Q=="],
-
-    "emulate": ["emulate@0.9.0", "", { "dependencies": { "commander": "^14", "picocolors": "^1.1.1", "yaml": "^2" }, "bin": { "emulate": "dist/index.js" } }, "sha512-wgOFQSrjAt0NqPDnYUFyCcCwAVw01aNS3M24SZ2C5ViLQW8ECi0qIyUsW+y2uvflBD48JFqomB+jRox+ktKK/w=="],
 
     "encodeurl": ["encodeurl@2.0.0", "", {}, "sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg=="],
 

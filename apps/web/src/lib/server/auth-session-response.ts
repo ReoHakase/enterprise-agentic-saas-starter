@@ -1,15 +1,5 @@
-class AuthSessionRequestError extends Error {
-  readonly status: number
-
-  constructor(status: number) {
-    super(`Session request failed with status ${status}`)
-    this.name = "AuthSessionRequestError"
-    this.status = status
-  }
-}
-
 type AuthSessionResult =
-  | { data: null; error: { status: number } }
+  | { data: null; error: { status: number; [key: string]: unknown } }
   | { data: unknown; error: null }
 
 export const readAuthSessionResult = (result: AuthSessionResult) => {
@@ -18,7 +8,7 @@ export const readAuthSessionResult = (result: AuthSessionResult) => {
   }
 
   if (result.error) {
-    throw new AuthSessionRequestError(result.error.status)
+    throw result.error
   }
 
   return result.data

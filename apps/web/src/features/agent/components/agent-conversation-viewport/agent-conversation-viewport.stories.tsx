@@ -42,8 +42,13 @@ export const CenteredConversation = meta.story({
   play: async ({ canvas }) => {
     const viewport = canvas.getByTestId("agent-conversation-viewport")
     await expect(viewport).toBeVisible()
-    await expect(canvas.getByTestId("agent-conversation-content")).toHaveClass(
-      "max-w-3xl"
+    const content = canvas.getByTestId("agent-conversation-content")
+    const viewportRect = viewport.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    expect(contentRect.width).toBeLessThanOrEqual(768)
+    expect(contentRect.left + contentRect.width / 2).toBeCloseTo(
+      viewportRect.left + viewportRect.width / 2,
+      0
     )
     await expect(
       canvas.queryByRole("navigation", { name: "Conversation turns" })

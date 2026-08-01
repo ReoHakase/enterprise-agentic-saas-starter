@@ -11,6 +11,7 @@ import {
   getConsoleApiErrorText,
   getConsoleApiFieldError,
 } from "@/features/console"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import type {
   IssueAssigneeOption,
@@ -75,7 +76,7 @@ export const getActionFieldError = (error: unknown, field: string) =>
 
 export const safelyRunAction = (action: void | Promise<void>) => {
   if (action instanceof Promise) {
-    void action.catch(() => undefined)
+    void action.catch((error: unknown) => reportObservedError(error))
   }
 }
 

@@ -61,9 +61,9 @@
     "lint": "oxlint --deny-warnings",
     "storybook": "portless-topology run storybook.ui.enterprise-agentic-saas -- storybook dev --no-open --exact-port",
     "test": "vitest run --project=unit",
-    "test:browser": "vitest run --project=storybook-light --project=storybook-dark",
-    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light --project=storybook-dark",
-    "test:storybook": "vitest run --project=storybook-light --project=storybook-dark",
+    "test:browser": "vitest run --project=storybook-light && vitest run --project=storybook-dark",
+    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light && env BROWSER_COVERAGE=1 vitest run --project=storybook-dark",
+    "test:storybook": "vitest run --project=storybook-light && vitest run --project=storybook-dark",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

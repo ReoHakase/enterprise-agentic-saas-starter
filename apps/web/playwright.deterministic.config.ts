@@ -50,11 +50,12 @@ const agentStackEnvironment = {
   AUTH_COOKIE_DOMAIN: agentEnvironment.cookieDomain,
   TRUSTED_ORIGINS: agentEnvironment.webOrigin,
   CORS_ORIGIN: agentEnvironment.webOrigin,
-  GITHUB_OAUTH_EMULATOR_URL: agentEnvironment.githubOrigin,
+  GITHUB_OAUTH_EMULATOR_URL: `${agentEnvironment.githubOrigin}/emulate/github`,
   GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
   GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
   GITHUB_OAUTH_CALLBACK_URL: agentCallbackUrl,
   NEXT_TELEMETRY_DISABLED: "1",
+  NEXT_PUBLIC_BROWSER_TEST: "true",
 }
 
 const oauthStackEnvironment = {
@@ -76,11 +77,12 @@ const oauthStackEnvironment = {
   MAILPIT_URL: "",
   GITHUB_CLIENT_ID: "unused-in-emulator",
   GITHUB_CLIENT_SECRET: "unused-in-emulator",
-  GITHUB_OAUTH_EMULATOR_URL: oauthGithubOrigin,
+  GITHUB_OAUTH_EMULATOR_URL: `${oauthGithubOrigin}/emulate/github`,
   GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
   GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
   GITHUB_OAUTH_CALLBACK_URL: oauthCallbackUrl,
   NEXT_TELEMETRY_DISABLED: "1",
+  NEXT_PUBLIC_BROWSER_TEST: "true",
 }
 
 export default defineConfig({
@@ -93,11 +95,11 @@ export default defineConfig({
     agentE2EMode: "scripted",
     oauthDatabasePath,
   },
-  fullyParallel: false,
+  fullyParallel: true,
   failOnFlakyTests: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: 2,
   timeout: 180_000,
   expect: { timeout: 30_000 },
   reporter: [
@@ -111,7 +113,7 @@ export default defineConfig({
   projects: [
     {
       name: "e1-scripted-agent-chromium",
-      testMatch: "scripted-agent.spec.ts",
+      testMatch: "scripted-agent-*.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
         baseURL: agentEnvironment.webOrigin,
@@ -121,7 +123,9 @@ export default defineConfig({
     },
     {
       name: "e1-oauth-chromium",
+      fullyParallel: false,
       testMatch: "github-oauth.spec.ts",
+      workers: 1,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: oauthWebOrigin,
@@ -133,11 +137,12 @@ export default defineConfig({
   webServer: [
     {
       command: "bun --no-env-file run e2e:emulate:github",
-      url: `http://127.0.0.1:${agentEnvironment.githubPort}/meta`,
+      url: `http://127.0.0.1:${agentEnvironment.githubPort}/emulate/github/meta`,
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
         ...agentStackEnvironment,
+        NEXT_DIST_DIR: `.next-e2e-agent-${runId}`,
         PORT: String(agentEnvironment.githubPort),
         PORTLESS_URL: agentEnvironment.githubOrigin,
       },
@@ -168,11 +173,12 @@ export default defineConfig({
     },
     {
       command: "bun --no-env-file run e2e:emulate:github",
-      url: `${oauthGithubOrigin}/meta`,
+      url: `${oauthGithubOrigin}/emulate/github/meta`,
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
         ...oauthStackEnvironment,
+        NEXT_DIST_DIR: `.next-e2e-oauth-${process.pid}`,
         PORT: "4101",
         PORTLESS_URL: oauthGithubOrigin,
       },

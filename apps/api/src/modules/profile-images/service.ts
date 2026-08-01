@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   type FileR2Object,
   type FileR2ObjectBody,
@@ -19,14 +19,14 @@ import type { ProfileImageDto } from "./model"
 import type { ProfileImagePorts, StoredProfileImage } from "./ports"
 
 const providerUnavailable = (
-  provider: "images" | "r2" | "runtime",
-  operation: string
+  _provider: "images" | "r2" | "runtime",
+  _operation: string,
+  cause?: unknown
 ) =>
-  new AppError({
+  new HttpError({
+    cause,
     code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "profile-images", operation, provider },
+    retryAfter: 30,
   })
 
 const bodyObject = (
@@ -119,24 +119,20 @@ const validateSource = async (
     file.size < 1 ||
     file.size > PROFILE_IMAGE_SOURCE_MAX_BYTES
   ) {
-    throw publicErrors.validation("Profile image size does not match", {
-      field: "fileSize",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   if (
     file.type.trim().toLowerCase() !== PROFILE_IMAGE_SOURCE_CONTENT_TYPE ||
     !(await hasPngMagicBytes(file))
   ) {
-    throw publicErrors.validation("Profile image must be a PNG", {
-      field: "file",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
 
   let info: Awaited<ReturnType<FileStorageRuntime["images"]["info"]>>
   try {
     info = await runtime.images.info(file.stream())
-  } catch {
-    throw providerUnavailable("images", "readSourceInfo")
+  } catch (cause) {
+    throw providerUnavailable("images", "readSourceInfo", cause)
   }
   if (
     normalizeImagesFormat(info.format) !== "png" ||
@@ -144,10 +140,7 @@ const validateSource = async (
     info.height !== PROFILE_IMAGE_SIZE ||
     (info.fileSize !== undefined && info.fileSize !== file.size)
   ) {
-    throw publicErrors.validation(
-      `Profile image must be ${PROFILE_IMAGE_SIZE}x${PROFILE_IMAGE_SIZE}`,
-      { field: "file" }
-    )
+    throw new HttpError({ code: "validation_error" })
   }
 }
 
@@ -187,8 +180,8 @@ const transformAndStore = async (
   let object: FileR2Object | null
   try {
     object = await runtime.bucket.head(image.objectKey)
-  } catch {
-    throw providerUnavailable("r2", "headProfileImageObject")
+  } catch (cause) {
+    throw providerUnavailable("r2", "headProfileImageObject", cause)
   }
   if (!object) {
     let transformedImage: Blob
@@ -216,8 +209,8 @@ const transformAndStore = async (
       }
       transformedImage = await readTransformedProfileImage(response.body)
     } catch (error) {
-      if (error instanceof AppError) throw error
-      throw providerUnavailable("images", "transformProfileImage")
+      if (error instanceof HttpError) throw error
+      throw providerUnavailable("images", "transformProfileImage", error)
     }
 
     try {
@@ -231,8 +224,8 @@ const transformAndStore = async (
         },
       })
       object ??= await runtime.bucket.head(image.objectKey)
-    } catch {
-      throw providerUnavailable("r2", "storeProfileImage")
+    } catch (cause) {
+      throw providerUnavailable("r2", "storeProfileImage", cause)
     }
   }
   if (
@@ -253,8 +246,8 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
   const getRuntime = () => {
     try {
       return ports.getRuntime()
-    } catch {
-      throw providerUnavailable("runtime", "getFileStorageRuntime")
+    } catch (cause) {
+      throw providerUnavailable("runtime", "getFileStorageRuntime", cause)
     }
   }
 
@@ -278,25 +271,19 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
       uploadId: input.uploadId,
     })
     if (reservation.image.sourceHash !== hash) {
-      throw publicErrors.conflict("Upload id is already in use", {
-        reason: "upload_id_mismatch",
-        resource: "profile_image",
-      })
+      throw new HttpError({ code: "conflict" })
     }
 
     if (reservation.image.status === "superseded") {
-      throw publicErrors.conflict("Profile image upload was superseded", {
-        reason: "upload_superseded",
-        resource: "profile_image",
-      })
+      throw new HttpError({ code: "conflict" })
     }
 
     if (reservation.image.status === "ready") {
       let object: FileR2Object | null
       try {
         object = await runtime.bucket.head(reservation.image.objectKey)
-      } catch {
-        throw providerUnavailable("r2", "headProfileImageRetry")
+      } catch (cause) {
+        throw providerUnavailable("r2", "headProfileImageRetry", cause)
       }
       if (!object || !metadataMatches(object, reservation.image)) {
         throw providerUnavailable("r2", "verifyProfileImageRetry")
@@ -330,10 +317,7 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
     }
     if (finalized.kind !== "ready") {
       await ports.supersedePendingProfileImage(reservation.image)
-      throw publicErrors.conflict("Profile image upload was superseded", {
-        reason: "upload_superseded",
-        resource: "profile_image",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return {
       created: reservation.created,
@@ -347,9 +331,7 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
   }): Promise<Response> => {
     const image = await ports.findReadyProfileImage(input.subject)
     if (!image || !image.etag) {
-      throw publicErrors.notFound("Profile image not found", {
-        resource: "profile_image",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     const etag = httpEtag(image.etag)
     const headers = privateProfileImageHeaders()
@@ -366,8 +348,8 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
           onlyIf: new Headers({ "if-match": etag }),
         })
       )
-    } catch {
-      throw providerUnavailable("r2", "readProfileImage")
+    } catch (cause) {
+      throw providerUnavailable("r2", "readProfileImage", cause)
     }
     if (!source || !metadataMatches(source, image)) {
       throw providerUnavailable("r2", "readProfileImage")
@@ -383,9 +365,7 @@ export const createProfileImageService = (ports: ProfileImagePorts) => {
   }) => {
     const removed = await ports.deleteProfileImage(input)
     if (!removed) {
-      throw publicErrors.notFound("Profile image not found", {
-        resource: "profile_image",
-      })
+      throw new HttpError({ code: "not_found" })
     }
   }
 

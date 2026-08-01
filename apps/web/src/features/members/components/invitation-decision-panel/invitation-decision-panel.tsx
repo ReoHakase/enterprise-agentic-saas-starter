@@ -27,8 +27,7 @@ import { clientEnv } from "@/lib/env.client"
 
 import {
   decideInvitation,
-  InvitationAuthenticationError,
-  InvitationDecisionError,
+  isInvitationAuthenticationError,
   invitationFallbacks,
   type InvitationContext,
 } from "../../api"
@@ -141,7 +140,7 @@ export const InvitationDecisionPanel = (
   )
   const retryInvitation = useCallback(() => router.refresh(), [router])
   const sessionExpired =
-    mutation.isError && mutation.error instanceof InvitationAuthenticationError
+    mutation.isError && isInvitationAuthenticationError(mutation.error)
 
   if (props.state === "signed_out" || sessionExpired) {
     return (
@@ -273,9 +272,7 @@ export const InvitationDecisionPanel = (
   }
 
   const mutationError = mutation.isError
-    ? mutation.error instanceof InvitationDecisionError
-      ? mutation.error.message
-      : invitationFallbacks[mutation.variables ?? "accept"]
+    ? invitationFallbacks[mutation.variables ?? "accept"]
     : undefined
 
   return (

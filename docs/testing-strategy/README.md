@@ -148,6 +148,7 @@ E2E
 ### 共通
 
 - [静的検査](./common/static-analysis.md)
+- [Browser test記述規約](./common/browser-test-writing.md)
 - [Storybookとブラウザーコンポーネントテスト](./common/storybook.md)
 - [テストデータとfixture](./common/test-data-and-fixtures.md)
 - [テストカバレッジ](./common/coverage.md)

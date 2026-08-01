@@ -1,8 +1,8 @@
 import { Elysia } from "elysia"
 
 import { agentRunResultSchema } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
-import { tenantErrorResponses } from "../../../models/api"
+import { HttpError } from "../../../errors/http-error"
+import { errorResponseModel, tenantErrorResponses } from "../../../models/api"
 import {
   createObservedLogger,
   withObservedSpan,
@@ -23,6 +23,11 @@ import type { AgentService } from "../service"
 
 const logger = createObservedLogger("agent").child("chat")
 
+const agentErrorResponses = {
+  ...tenantErrorResponses,
+  503: errorResponseModel,
+} as const
+
 export const createAgentConversationRoutes = (
   service: AgentService,
   createAccessControl: AccessControlFactory
@@ -40,7 +45,7 @@ export const createAgentConversationRoutes = (
         authenticated: true,
         response: {
           200: agentThreadListModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "listAgentThreads",
@@ -70,7 +75,7 @@ export const createAgentConversationRoutes = (
         body: createAgentThreadBodyModel,
         response: {
           201: agentThreadModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "createAgentThread",
@@ -97,7 +102,7 @@ export const createAgentConversationRoutes = (
         params: agentThreadParamsModel,
         response: {
           200: agentThreadModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "archiveAgentThread",
@@ -123,7 +128,7 @@ export const createAgentConversationRoutes = (
       {
         authenticated: true,
         params: agentRunParamsModel,
-        response: { 200: agentRunResultSchema, ...tenantErrorResponses },
+        response: { 200: agentRunResultSchema, ...agentErrorResponses },
         detail: {
           operationId: "cancelAgentRun",
           summary: "Cancel an active Agent run",
@@ -138,7 +143,7 @@ export const createAgentConversationRoutes = (
     )
     .post(
       "/agent/chat",
-      async ({ authContext: { session, user }, body, request }) => {
+      async ({ authContext: { session, user }, body, request, set }) => {
         const requestKind =
           "contentSegments" in body
             ? "user-message"
@@ -184,9 +189,11 @@ export const createAgentConversationRoutes = (
         )
         const message = prepared.messages.at(-1)
         if (!message) {
-          throw publicErrors.unavailable(
-            new Error("Prepared Agent message is unavailable")
-          )
+          throw new HttpError({
+            code: "service_unavailable",
+            cause: new Error("Prepared Agent message is unavailable"),
+            retryAfter: 30,
+          })
         }
         logger.debug("Agent chat request prepared", {
           "agent.chat.asset_count": prepared.assetIds.length,
@@ -207,7 +214,10 @@ export const createAgentConversationRoutes = (
             timezone: prepared.timezone,
             trigger: prepared.trigger,
           },
-          request.signal
+          request.signal,
+          typeof set.headers["x-request-id"] === "string"
+            ? set.headers["x-request-id"]
+            : undefined
         )
       },
       {
@@ -215,13 +225,14 @@ export const createAgentConversationRoutes = (
         body: agentChatBodyModel,
         response: {
           200: agentStreamResponseModel,
-          400: agentStreamResponseModel,
+          400: errorResponseModel,
           401: tenantErrorResponses[401],
           403: tenantErrorResponses[403],
           404: tenantErrorResponses[404],
-          409: tenantErrorResponses[409],
+          409: errorResponseModel,
+          429: errorResponseModel,
           500: tenantErrorResponses[500],
-          503: agentStreamResponseModel,
+          503: errorResponseModel,
         },
         detail: {
           operationId: "streamAgentChat",
@@ -253,7 +264,7 @@ export const createAgentConversationRoutes = (
         query: agentMessagePageQueryModel,
         response: {
           200: agentMessagePageModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "listAgentThreadMessages",

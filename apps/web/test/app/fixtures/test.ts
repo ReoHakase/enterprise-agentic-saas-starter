@@ -6,6 +6,8 @@ import {
   type Page,
 } from "@playwright/test"
 
+import { w6Environment } from "./environment"
+
 type ClientDiagnosticsFixtures = {
   allowClientErrors: (...patterns: RegExp[]) => void
   assertNoClientErrors: void
@@ -13,10 +15,21 @@ type ClientDiagnosticsFixtures = {
     allowedPatterns: RegExp[]
     browserName: string
   }
+  createRequestGate: CreateRequestGate
   e2eNamespace: string
 }
 
-const mockApiUrl = "http://127.0.0.1:3001"
+export type RequestGate = {
+  release: () => Promise<void>
+  waitUntilRequested: () => Promise<void>
+}
+
+export type CreateRequestGate = (
+  path: string,
+  method?: string
+) => Promise<RequestGate>
+
+const mockApiUrl = w6Environment.apiOrigin
 
 export const productionServerComponentRenderError =
   /An error occurred in the Server Components render\. The specific message is omitted in production builds/
@@ -101,6 +114,68 @@ export const test = base.extend<ClientDiagnosticsFixtures>({
     },
     { auto: true },
   ],
+  createRequestGate: async ({ e2eNamespace, request }, use) => {
+    const activeGates = new Set<RequestGate>()
+    const headers = { "x-e2e-namespace": e2eNamespace }
+
+    try {
+      await use(async (path, requestedMethod = "GET") => {
+        const method = requestedMethod.toUpperCase()
+        const response = await request.post(
+          `${mockApiUrl}/__e2e/request-gates`,
+          {
+            data: { method, path },
+            headers,
+          }
+        )
+        expect(response.status()).toBe(201)
+
+        let released = false
+        const gate: RequestGate = {
+          waitUntilRequested: async () => {
+            await expect
+              .poll(
+                async () => {
+                  const statusResponse = await request.get(
+                    `${mockApiUrl}/__e2e/request-gates`,
+                    { headers }
+                  )
+                  if (!statusResponse.ok()) return false
+                  const rules: unknown = await statusResponse.json()
+                  return (
+                    Array.isArray(rules) &&
+                    rules.some(
+                      (rule) =>
+                        typeof rule === "object" &&
+                        rule !== null &&
+                        Reflect.get(rule, "method") === method &&
+                        Reflect.get(rule, "path") === path &&
+                        Reflect.get(rule, "requested") === true
+                    )
+                  )
+                },
+                { message: `${method} ${path} should reach the request gate` }
+              )
+              .toBe(true)
+          },
+          release: async () => {
+            if (released) return
+            released = true
+            activeGates.delete(gate)
+            const releaseResponse = await request.post(
+              `${mockApiUrl}/__e2e/request-gates/release`,
+              { data: { method, path }, headers }
+            )
+            expect(releaseResponse.ok()).toBeTruthy()
+          },
+        }
+        activeGates.add(gate)
+        return gate
+      })
+    } finally {
+      await Promise.all([...activeGates].map((gate) => gate.release()))
+    }
+  },
   clientErrorPolicy: async ({ browserName }, use) => {
     await use({ allowedPatterns: [], browserName })
   },

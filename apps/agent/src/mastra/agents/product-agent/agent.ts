@@ -12,6 +12,7 @@ import {
 } from "../../runtime/request-context"
 import type { createWebSearchTool } from "../../tools/web-search/tool"
 import { productAgentInstructions } from "./instructions"
+import { productMemoryOutputProcessor } from "./memory-output-processor"
 import {
   coreSkill,
   issueTriageSkill,
@@ -70,6 +71,7 @@ export const createProductAgent = ({
         )
       },
       name: "Product Agent",
+      outputProcessors: [productMemoryOutputProcessor],
       skills: [
         coreSkill,
         issueTriageSkill,

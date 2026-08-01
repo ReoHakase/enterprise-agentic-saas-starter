@@ -107,7 +107,7 @@ export const MemberConfirmationDialog = ({
             getConsoleApiErrorText(
               error,
               action === "transfer"
-                ? "Super Admin could not be transferred."
+                ? "Ownership could not be transferred."
                 : "The member could not be removed."
             )
           )
@@ -153,12 +153,12 @@ export const MemberConfirmationDialog = ({
             </AlertDialogMedia>
             <AlertDialogTitle>
               {transfer
-                ? `Transfer Super Admin to ${member.name}?`
+                ? `Transfer ownership to ${member.name}?`
                 : `Remove ${member.name}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {transfer
-                ? "The current Super Admin becomes an Admin, and ownership plus destructive authority moves immediately."
+                ? "The current Owner becomes an Admin, and ownership plus destructive authority moves immediately."
                 : "This immediately revokes the member's access to this organization."}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -196,7 +196,7 @@ export const MemberConfirmationDialog = ({
                   ) : (
                     <Trash2Icon data-icon="inline-start" aria-hidden="true" />
                   )}
-                  {transfer ? "Transfer Super Admin" : "Remove member"}
+                  {transfer ? "Transfer ownership" : "Remove member"}
                 </AlertDialogAction>
               )}
             </form.Subscribe>

@@ -3,6 +3,11 @@ import { expect, test } from "../fixtures/test"
 const apiOrigin = "http://api.oauth-e2e.enterprise-agentic-saas.localhost:3101"
 const apiLoopbackOrigin = "http://127.0.0.1:3101"
 const githubOrigin = "http://127.0.0.1:4101"
+const githubAssetOrigin = "http://localhost:4101"
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+test.describe.configure({ mode: "serial" })
 
 test("決定的GitHub emulatorで認証しsessionを永続化できる", async ({
   context,
@@ -19,7 +24,9 @@ test("決定的GitHub emulatorで認証しsessionを永続化できる", async (
   ).toBeVisible()
   const authorizationUrl = new URL(page.url())
   expect(authorizationUrl.origin).toBe(githubOrigin)
-  expect(authorizationUrl.pathname).toBe("/login/oauth/authorize")
+  expect(authorizationUrl.pathname).toBe(
+    "/emulate/github/login/oauth/authorize"
+  )
   expect(authorizationUrl.searchParams.get("client_id")).toBe(
     "enterprise-agentic-saas-local"
   )
@@ -50,7 +57,7 @@ test("決定的GitHub emulatorで認証しsessionを永続化できる", async (
       user: expect.objectContaining({
         email: "oauth-alice@example.test",
         emailVerified: true,
-        image: `${githubOrigin}/avatars/u/oauth-alice`,
+        image: `${githubAssetOrigin}/emulate/github/avatars/u/oauth-alice`,
         name: "OAuth Alice",
       }),
     })
@@ -108,6 +115,8 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
       },
     }
   )
+  let authenticatedHeaders: { cookie: string; origin: string } | undefined
+  let registeredPasskeyId: string | undefined
 
   try {
     await page.goto("/auth/sign-in?redirectTo=%2Fsettings%2Faccount")
@@ -117,7 +126,7 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     const cookieHeader = (await context.cookies())
       .map(({ name, value }) => `${name}=${value}`)
       .join("; ")
-    const authenticatedHeaders = {
+    authenticatedHeaders = {
       cookie: cookieHeader,
       origin: new URL(page.url()).origin,
     }
@@ -142,12 +151,24 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
       { headers: authenticatedHeaders }
     )
     expect(listAfterRegistration.status()).toBe(200)
-    expect(await listAfterRegistration.json()).toEqual([
+    const registeredPasskeys: unknown = await listAfterRegistration.json()
+    expect(registeredPasskeys).toEqual([
       expect.objectContaining({
+        id: expect.any(String),
         name: "Enterprise Agentic SaaS",
         credentialID: expect.any(String),
       }),
     ])
+    const registeredPasskey = Array.isArray(registeredPasskeys)
+      ? registeredPasskeys[0]
+      : undefined
+    if (
+      !isRecord(registeredPasskey) ||
+      typeof registeredPasskey.id !== "string"
+    ) {
+      throw new Error("Registered passkey id is missing")
+    }
+    registeredPasskeyId = registeredPasskey.id
 
     await page.reload()
     await expect(
@@ -162,6 +183,7 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     )
     await page.getByRole("button", { name: "Delete passkey" }).click()
     expect((await deleteRegistration).status()).toBe(200)
+    registeredPasskeyId = undefined
     await expect(
       page.getByText("No passkeys are registered yet.")
     ).toBeVisible()
@@ -173,7 +195,22 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
     expect(listAfterDeletion.status()).toBe(200)
     expect(await listAfterDeletion.json()).toEqual([])
   } finally {
-    await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId })
-    await cdp.send("WebAuthn.disable")
+    try {
+      if (authenticatedHeaders && registeredPasskeyId) {
+        const cleanupResponse = await context.request.post(
+          `${apiLoopbackOrigin}/auth/passkey/delete-passkey`,
+          {
+            headers: authenticatedHeaders,
+            data: { id: registeredPasskeyId },
+          }
+        )
+        expect(cleanupResponse.status()).toBe(200)
+      }
+    } finally {
+      await cdp.send("WebAuthn.removeVirtualAuthenticator", {
+        authenticatorId,
+      })
+      await cdp.send("WebAuthn.disable")
+    }
   }
 })

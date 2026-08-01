@@ -349,7 +349,7 @@ const createIssueMutationRoutes = (
           operationId: "deleteIssue",
           summary: "Delete an organization issue",
           description:
-            "Deletes an issue from the active organization. Members may delete only issues they created, while administrators and super administrators may delete any issue in that tenant.",
+            "Deletes an issue from the active organization. Members may delete only issues they created, while owners and administrators may delete any issue in that tenant.",
           tags: ["Issues"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
