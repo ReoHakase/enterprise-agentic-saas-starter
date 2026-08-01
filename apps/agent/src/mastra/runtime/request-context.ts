@@ -29,6 +29,7 @@ export type ProductAgentRequestContext = {
 export type ProductAgentExecution = {
   api: AgentControlPlanePort
   budget: AgentToolBudget
+  onRevoked: (cause: unknown) => void
   rootRunId: string
   runGrant: string
   settlement: RunSettlement

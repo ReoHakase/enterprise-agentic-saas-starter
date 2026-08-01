@@ -15,6 +15,7 @@ export type AgentFailureCode =
   | "model_failed"
   | "response_stream_failed"
   | "resume_failed"
+  | "resume_storage_close_failed"
   | "run_finalization_failed"
   | "run_grant_invalid"
   | "run_settlement_failed"
@@ -29,6 +30,7 @@ const failureMessages: Record<AgentFailureCode, string> = {
   model_failed: "Agent model response failed",
   response_stream_failed: "Agent response stream failed",
   resume_failed: "Agent action resume failed",
+  resume_storage_close_failed: "Agent resume storage cleanup failed",
   run_finalization_failed: "Agent run finalization failed",
   run_grant_invalid: "Agent run grant validation failed",
   run_settlement_failed: "Agent run settlement failed",

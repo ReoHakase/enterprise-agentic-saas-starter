@@ -310,8 +310,8 @@ export const createAgentWriteHandlers = (
         budget,
         control
       )
-    } catch {
-      throw new Error("Issue write capability is unavailable")
+    } catch (cause) {
+      throw new Error("Issue write capability is unavailable", { cause })
     }
   }
 

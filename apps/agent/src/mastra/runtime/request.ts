@@ -84,8 +84,8 @@ export const readBoundedPrivateJson = async (
   }
   try {
     return JSON.parse(text)
-  } catch {
-    throw new Error("Invalid private Agent request")
+  } catch (cause) {
+    throw new Error("Invalid private Agent request", { cause })
   }
 }
 

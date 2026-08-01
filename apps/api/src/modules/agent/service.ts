@@ -20,6 +20,7 @@ import {
 } from "./runtime-stream"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
+const AGENT_ACTION_RESUME_TIMEOUT_MS = 50_000
 const logger = createObservedLogger("agent").child("runtime")
 const messageLogger = createObservedLogger("agent").child("messages")
 const permissionLogger = createObservedLogger("agent").child("permission")
@@ -45,8 +46,8 @@ const normalizeAgentTimezone = (value: string): string => {
     return new Intl.DateTimeFormat("en-US", {
       timeZone: value,
     }).resolvedOptions().timeZone
-  } catch {
-    throw new HttpError({ code: "validation_error" })
+  } catch (cause) {
+    throw new HttpError({ code: "validation_error", cause })
   }
 }
 
@@ -378,15 +379,20 @@ export const createAgentService = (ports: AgentServicePorts) => {
     })
 
   const forwardAgentActionResume = async (
-    input: AgentRuntimeResumeInput
+    input: AgentRuntimeResumeInput,
+    signal?: AbortSignal
   ): Promise<AgentActionExecutionResult> => {
     let response: Response
     try {
+      const timeoutSignal = AbortSignal.timeout(AGENT_ACTION_RESUME_TIMEOUT_MS)
       response = await ports.fetchAgentRuntime(
         new Request("https://agent.internal/actions/resume", {
           method: "POST",
           headers: agentRuntimeHeaders(),
           body: JSON.stringify(input),
+          signal: signal
+            ? AbortSignal.any([signal, timeoutSignal])
+            : timeoutSignal,
         })
       )
     } catch (cause) {
@@ -417,17 +423,23 @@ export const createAgentService = (ports: AgentServicePorts) => {
     }
   }
 
-  const resumeAgentAction = async (input: {
-    actionId: string
-    sessionId: string
-    userId: string
-  }): Promise<AgentActionExecutionResult> => {
+  const resumeAgentAction = async (
+    input: {
+      actionId: string
+      sessionId: string
+      userId: string
+    },
+    signal?: AbortSignal
+  ): Promise<AgentActionExecutionResult> => {
     const preparation = await ports.prepareAgentActionResumeForSession(input)
     if (preparation.kind === "receipt") return preparation.result
-    return forwardAgentActionResume({
-      actionId: input.actionId,
-      resumeTicket: preparation.resume.ticket,
-    })
+    return forwardAgentActionResume(
+      {
+        actionId: input.actionId,
+        resumeTicket: preparation.resume.ticket,
+      },
+      signal
+    )
   }
 
   const getAgentApprovalPolicy = (input: AgentApprovalPolicyInput) =>

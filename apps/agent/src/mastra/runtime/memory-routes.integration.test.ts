@@ -2,7 +2,6 @@ import { Memory } from "@mastra/memory"
 import { describe, expect, it, vi } from "vitest"
 
 import type { AgentFailureCode } from "../adapters/telemetry/capture"
-import { productMemoryOutputProcessor } from "../agents/product-agent/memory-output-processor"
 import { createAgentRuntimeComposition } from "../composition/runtime-composition"
 import { handleMemoryHistory, handleMemoryThreads } from "./memory-routes"
 
@@ -78,32 +77,64 @@ describe("App registry to Agent Memory boundary", () => {
       },
     })
     await memory.saveMessages({
-      messages: productMemoryOutputProcessor.processOutputResult({
-        messages: [
-          {
-            id: "message_boundary",
-            role: "assistant",
-            createdAt: now,
-            threadId,
-            resourceId,
-            content: {
-              format: 2,
-              parts: [
-                { type: "text", text: "Persisted boundary message" },
-                {
-                  type: "source",
-                  source: {
-                    sourceType: "url",
-                    id: "source_1",
-                    title: "Public source",
-                    url: "https://example.com/docs?sig=PRIVATE_SIGNATURE",
+      messages: [
+        {
+          id: "message_boundary",
+          role: "assistant",
+          createdAt: now,
+          threadId,
+          resourceId,
+          content: {
+            format: 2,
+            parts: [
+              {
+                type: "text",
+                text: "Persisted boundary message",
+                providerMetadata: {
+                  privateProvider: {
+                    token: "PRIVATE_PROVIDER_METADATA_SENTINEL",
                   },
                 },
-              ],
-            },
+              },
+              {
+                type: "source",
+                source: {
+                  sourceType: "url",
+                  id: "source:opaque|1",
+                  title: "Public source",
+                  url: "https://example.com/docs?sig=PRIVATE_SIGNATURE",
+                },
+              },
+              {
+                type: "tool-invocation",
+                toolInvocation: {
+                  state: "result",
+                  toolCallId: "call:get-issue|opaque",
+                  toolName: "get_issue",
+                  args: {
+                    attachmentCursor: null,
+                    attachmentLimit: 100,
+                    id: null,
+                    lookup: "number",
+                    number: 42,
+                  },
+                  result: { priority: "urgent" },
+                },
+              },
+              {
+                type: "tool-invocation",
+                toolInvocation: {
+                  state: "result",
+                  toolCallId: "call:skill|opaque",
+                  toolName: "skill",
+                  args: { name: "issue-triage" },
+                  result: "PRIVATE_SKILL_INSTRUCTIONS_SENTINEL",
+                },
+              },
+            ],
           },
-        ],
-      }),
+        },
+      ],
     })
 
     const tickets = new Set(["ticket_history", "ticket_threads"])
@@ -157,6 +188,38 @@ describe("App registry to Agent Memory boundary", () => {
       })
       expect(JSON.stringify(body)).toContain("https://example.com/docs")
       expect(JSON.stringify(body)).not.toContain("PRIVATE_SIGNATURE")
+      expect(body).toMatchObject({
+        messages: [
+          {
+            parts: expect.arrayContaining([
+              expect.objectContaining({
+                input: expect.objectContaining({
+                  id: null,
+                  lookup: "number",
+                  number: 42,
+                }),
+                output: { priority: "urgent" },
+                state: "output-available",
+                toolCallId: "call:get-issue|opaque",
+                type: "tool-get_issue",
+              }),
+              expect.objectContaining({
+                input: { name: "issue-triage" },
+                output: { activated: true },
+                state: "output-available",
+                toolCallId: "call:skill|opaque",
+                type: "tool-skill",
+              }),
+            ]),
+          },
+        ],
+      })
+      expect(JSON.stringify(body)).not.toContain(
+        "PRIVATE_PROVIDER_METADATA_SENTINEL"
+      )
+      expect(JSON.stringify(body)).not.toContain(
+        "PRIVATE_SKILL_INSTRUCTIONS_SENTINEL"
+      )
 
       const threads = await handleMemoryThreads(
         request("/memory/threads", {

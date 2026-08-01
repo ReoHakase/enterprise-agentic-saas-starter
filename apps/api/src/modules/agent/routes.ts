@@ -153,13 +153,16 @@ export const createAgentRoutes = (
     )
     .post(
       "/agent/actions/:actionId/resume",
-      async ({ authContext: { session, user }, params, set }) => {
+      async ({ authContext: { session, user }, params, request, set }) => {
         set.headers["cache-control"] = "private, no-store"
-        return service.resumeAgentAction({
-          actionId: params.actionId,
-          sessionId: session.id,
-          userId: user.id,
-        })
+        return service.resumeAgentAction(
+          {
+            actionId: params.actionId,
+            sessionId: session.id,
+            userId: user.id,
+          },
+          request.signal
+        )
       },
       {
         authenticated: true,

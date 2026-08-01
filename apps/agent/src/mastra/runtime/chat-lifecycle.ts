@@ -1,8 +1,7 @@
-const RUN_TIMEOUT_MS = 90_000
-const USEFUL_OUTPUT_TIMEOUT_MS = 30_000
+const RUN_TIMEOUT_MS = 270_000
 const noop = () => undefined
 
-export type AbortCause = "revoked" | "total_timeout" | "useful_timeout" | "user"
+export type AbortCause = "revoked" | "total_timeout" | "user"
 
 export const createRunAbortLifecycle = (request: Request) => {
   const controller = new AbortController()
@@ -28,38 +27,16 @@ export const createRunAbortLifecycle = (request: Request) => {
       ),
     RUN_TIMEOUT_MS
   )
-  let usefulOutputTimer = setTimeout(
-    () =>
-      abortFrom(
-        "useful_timeout",
-        new DOMException("Agent useful output timed out", "TimeoutError")
-      ),
-    USEFUL_OUTPUT_TIMEOUT_MS
-  )
-  const resetUsefulOutputTimer = () => {
-    if (closed || cause) return
-    clearTimeout(usefulOutputTimer)
-    usefulOutputTimer = setTimeout(
-      () =>
-        abortFrom(
-          "useful_timeout",
-          new DOMException("Agent useful output timed out", "TimeoutError")
-        ),
-      USEFUL_OUTPUT_TIMEOUT_MS
-    )
-  }
   const close = () => {
     if (closed) return
     closed = true
     clearTimeout(totalTimeoutTimer)
-    clearTimeout(usefulOutputTimer)
     request.signal.removeEventListener("abort", onRequestAbort)
   }
   return {
     abortFrom,
     close,
     getCause: () => cause,
-    resetUsefulOutputTimer,
     signal: controller.signal,
   }
 }

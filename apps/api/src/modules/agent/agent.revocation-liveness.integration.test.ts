@@ -247,7 +247,7 @@ describe("Agent external revocation liveness", () => {
                 metrics: {
                   cancelRunCalls: 0,
                   finishRunCalls: 1,
-                  livenessRejections: 2,
+                  livenessRejections: 1,
                   prepareCreateIssueCalls: 0,
                   releaseCalls: 1,
                 },
@@ -288,7 +288,7 @@ describe("Agent external revocation liveness", () => {
                 metrics: {
                   cancelRunCalls: 0,
                   finishRunCalls: 1,
-                  livenessRejections: 2,
+                  livenessRejections: 1,
                   prepareCreateIssueCalls: 0,
                   releaseCalls: 1,
                 },

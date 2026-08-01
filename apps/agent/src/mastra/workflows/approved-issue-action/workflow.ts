@@ -106,6 +106,7 @@ export type ApprovedIssueActionRuntime = {
   features: AgentFeatureSwitches
   reportFailure?: (cause: unknown) => void
   resumeTicket: string
+  signal: AbortSignal
 }
 
 const reportRuntimeFailure = (
@@ -124,6 +125,10 @@ const reportRuntimeFailure = (
 // thrown value so provider details cannot be serialized into storage.
 const workflowUnavailable = () =>
   new Error("Issue action resume is unavailable")
+
+const requireActiveResumeRequest = (signal: AbortSignal): void => {
+  if (signal.aborted) throw workflowUnavailable()
+}
 
 export class ApprovedIssueActionExecutionRegistry {
   readonly #executions = new Map<string, ApprovedIssueActionRuntime>()
@@ -176,6 +181,7 @@ export const createApprovedIssueActionWorkflow = (
     outputSchema,
     execute: async ({ inputData }) => {
       const runtime = registry.take(inputData.executionId)
+      requireActiveResumeRequest(runtime.signal)
       if (!runtime.features.runs || !runtime.features.writes) {
         throw new Error("Issue action resume is unavailable")
       }
@@ -203,6 +209,7 @@ export const createApprovedIssueActionWorkflow = (
         }
       )
       try {
+        requireActiveResumeRequest(runtime.signal)
         const receipt = toSafeActionReceipt(
           await runtime.api.executeApprovedAction({
             actionId: inputData.actionId,
@@ -240,9 +247,10 @@ export type ApprovedIssueActionWorkflow = ReturnType<
   typeof createApprovedIssueActionWorkflow
 >
 
-export const createApprovedIssueActionResumeRuntime = (
-  storage: MastraCompositeStore
+export const createApprovedIssueActionResumeRuntime = async (
+  storage: MastraCompositeStore & { close(): Promise<void> }
 ) => {
+  await storage.init()
   const executionRegistry = new ApprovedIssueActionExecutionRegistry()
   const approvedIssueActionWorkflow =
     createApprovedIssueActionWorkflow(executionRegistry)
@@ -253,6 +261,7 @@ export const createApprovedIssueActionResumeRuntime = (
       storage,
       workflows: { approvedIssueActionWorkflow },
     }),
+    storage,
   }
 }
 

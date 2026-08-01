@@ -167,9 +167,8 @@ describe("createGetIssueTool", () => {
 
   it("projects executor failures to a fixed safe error", async () => {
     const secret = "private-grant-value"
-    const execute = createGetIssueTool(() =>
-      Promise.reject(new Error(`provider failure ${secret}`))
-    ).execute
+    const cause = new Error(`provider failure ${secret}`)
+    const execute = createGetIssueTool(() => Promise.reject(cause)).execute
 
     let caught: unknown
     try {
@@ -181,7 +180,9 @@ describe("createGetIssueTool", () => {
       caught = error
     }
     expect(caught).toBeInstanceOf(Error)
-    expect(String(caught)).toContain("Agent tool execution failed")
+    if (!(caught instanceof Error)) throw new Error("Expected tool error")
+    expect(caught.message).toBe("Agent tool execution failed")
+    expect(caught.cause).toBe(cause)
     expect(String(caught)).not.toContain(secret)
   })
 })

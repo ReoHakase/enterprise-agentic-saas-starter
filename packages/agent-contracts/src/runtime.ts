@@ -1,12 +1,21 @@
 import * as v from "valibot"
 
-import { agentJsonValueSchema, agentUiMessageSchema } from "./chat"
+import {
+  agentJsonValueSchema,
+  agentProviderOpaqueIdSchema,
+  agentUiMessageSchema,
+} from "./chat"
 import {
   agentIdentifierSchema,
   agentIssuePrioritySchema,
   agentIssueStatusSchema,
   agentRoleSchema,
 } from "./schemas"
+
+export const AGENT_MODEL_CONTEXT_WINDOW_TOKENS = 1_050_000
+export const AGENT_MODEL_RESERVED_OUTPUT_TOKENS = 4_096
+export const AGENT_MAX_ESTIMATED_INPUT_TOKENS =
+  AGENT_MODEL_CONTEXT_WINDOW_TOKENS - AGENT_MODEL_RESERVED_OUTPUT_TOKENS
 
 const capabilitySchema = v.pipe(
   v.string(),
@@ -137,14 +146,14 @@ export const agentClientToolNameSchema = v.picklist(agentClientToolNames)
 
 export const agentClientToolResultSchema = v.variant("state", [
   v.strictObject({
-    toolCallId: agentIdentifierSchema,
+    toolCallId: agentProviderOpaqueIdSchema,
     toolName: agentClientToolNameSchema,
     state: v.literal("output-available"),
     input: agentJsonValueSchema,
     output: agentJsonValueSchema,
   }),
   v.strictObject({
-    toolCallId: agentIdentifierSchema,
+    toolCallId: agentProviderOpaqueIdSchema,
     toolName: agentClientToolNameSchema,
     state: v.literal("output-error"),
     input: v.optional(agentJsonValueSchema),

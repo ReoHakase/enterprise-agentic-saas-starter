@@ -25,6 +25,7 @@ const createRuntimeContext = (
   const execution = executionRegistry.register({
     api,
     budget: createAgentToolBudget(),
+    onRevoked: () => undefined,
     rootRunId: "run_scripted",
     runGrant: "grant_scripted",
     settlement: createRunSettlement(api, "grant_scripted"),

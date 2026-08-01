@@ -193,12 +193,13 @@ const flushAgentTelemetry = async (input: {
         duration_ms: Number((completedAt - input.startedAt).toFixed(2)),
       })
     })
-  } catch {
+  } catch (cause) {
     input.streamSpan?.setAttribute("app.error.code", "response_stream_failed")
     input.streamSpan?.setStatus({
       code: SpanStatusCode.ERROR,
     })
     otelContext.with(input.requestContext, () => {
+      reportDevelopmentCauseChain(input.environment, "response-stream", cause)
       input.logger.log("error", `${input.operation.name} stream failed`, {
         ...input.attributes,
         "app.outcome": "failure",
@@ -275,9 +276,9 @@ const agentRuntimeHandler = {
         observedContext,
         {
           captureFailure: createAgentFailureCapture(environment),
+          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           createControlPlane: createAgentInternalGateway,
           executionRegistry: composition.executionRegistry,
-          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           mastra: composition.mastra,
           requireModelCredential: true,
           toControlFailure: toAgentControlFailure,

@@ -48,6 +48,7 @@ import { corsPlugin } from "./platform/plugins/cors"
 import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
 type WorkerObservabilityEnv = {
+  AGENT_E2E_RUN_ID?: string
   AGENT_RUNTIME?: AgentRuntimeBinding
   AGENT_ASSET_UPLOAD_ENABLED?: string
   AGENT_MAINTENANCE_MODE?: string
@@ -150,7 +151,8 @@ const configureWorkerObservability = (workerEnv: WorkerObservabilityEnv) => {
   )
   const runtime = createOtelObservabilityRuntime(
     "enterprise-agentic-saas-api",
-    resource
+    resource,
+    !workerEnv.AGENT_E2E_RUN_ID
   )
   configureObservability(
     resource

@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { Agent } from "@mastra/core/agent"
 import { Mastra } from "@mastra/core/mastra"
 import { Memory } from "@mastra/memory"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   createProductAgent,
@@ -69,7 +69,7 @@ describe("Agent storage configuration", () => {
     ).not.toThrow()
   })
 
-  it("uses the standard repeatable LibSQLStore initialization", async () => {
+  it("uses the standard repeatable LibSQLStore initialization for local files", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-init-"))
     const storage = createAgentStorage(
       {
@@ -87,10 +87,114 @@ describe("Agent storage configuration", () => {
       await rm(directory, { force: true, recursive: true })
     }
   })
+
+  it("coalesces and serializes local HTTP schema initialization", async () => {
+    const storage = createAgentStorage(
+      {
+        MASTRA_STORAGE_URL: "http://127.0.0.1:18080",
+        NODE_ENV: "development",
+      },
+      "serialized-local-http"
+    )
+    let activeInitializers = 0
+    let maximumActiveInitializers = 0
+    const stores = Object.values(storage.stores).filter(
+      (store) => store !== undefined
+    )
+    const spies = stores.map((store) =>
+      vi.spyOn(store, "init").mockImplementation(async () => {
+        activeInitializers += 1
+        maximumActiveInitializers = Math.max(
+          maximumActiveInitializers,
+          activeInitializers
+        )
+        await new Promise<void>((resolve) => queueMicrotask(resolve))
+        activeInitializers -= 1
+      })
+    )
+
+    try {
+      await Promise.all([storage.init(), storage.init(), storage.init()])
+
+      expect(maximumActiveInitializers).toBe(1)
+      expect(spies.every((spy) => spy.mock.calls.length === 1)).toBe(true)
+    } finally {
+      await storage.close()
+    }
+  })
+
+  it("retries local HTTP schema initialization after a failed attempt", async () => {
+    const storage = createAgentStorage(
+      {
+        MASTRA_STORAGE_URL: "https://agent-storage.example.localhost",
+        NODE_ENV: "development",
+      },
+      "retry-local-http"
+    )
+    const firstStore = Object.values(storage.stores).find(
+      (store) => store !== undefined
+    )
+    if (!firstStore) throw new Error("Agent storage domains are unavailable")
+    const init = vi
+      .spyOn(firstStore, "init")
+      .mockRejectedValueOnce(new Error("transient schema failure"))
+      .mockResolvedValue(undefined)
+    const remainingSpies = Object.values(storage.stores)
+      .filter((store) => store !== undefined && store !== firstStore)
+      .map((store) => vi.spyOn(store, "init").mockResolvedValue(undefined))
+
+    try {
+      await expect(storage.init()).rejects.toThrow("transient schema failure")
+      await expect(storage.init()).resolves.toBeUndefined()
+
+      expect(init).toHaveBeenCalledTimes(2)
+      expect(remainingSpies.every((spy) => spy.mock.calls.length === 1)).toBe(
+        true
+      )
+    } finally {
+      await storage.close()
+    }
+  })
+
+  it.each([
+    "http://agent-storage.example.test",
+    "https://agent-storage.example.test",
+    "libsql://agent-storage.example.test",
+  ])("keeps Mastra's standard parallel initialization for %s", async (url) => {
+    const storage = createAgentStorage(
+      { MASTRA_STORAGE_URL: url, NODE_ENV: "development" },
+      "standard-remote-init"
+    )
+    const stores = Object.values(storage.stores).filter(
+      (store) => store !== undefined
+    )
+    let activeInitializers = 0
+    let maximumActiveInitializers = 0
+    const spies = stores.map((store) =>
+      vi.spyOn(store, "init").mockImplementation(async () => {
+        activeInitializers += 1
+        maximumActiveInitializers = Math.max(
+          maximumActiveInitializers,
+          activeInitializers
+        )
+        await new Promise<void>((resolve) => queueMicrotask(resolve))
+        activeInitializers -= 1
+      })
+    )
+
+    try {
+      await storage.init()
+
+      expect(maximumActiveInitializers).toBeGreaterThan(1)
+      expect(spies.every((spy) => spy.mock.calls.length === 1)).toBe(true)
+    } finally {
+      await storage.close()
+    }
+  })
 })
 
 describe("Product Agent standard Memory contracts", () => {
-  it("runs the Product Agent security processor before MessageHistory persistence", async () => {
+  it("lets MessageHistory retain complete skill context for later turns", async () => {
     const storage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "processor-order"
@@ -132,9 +236,47 @@ describe("Product Agent standard Memory contracts", () => {
       const serialized = JSON.stringify(recalled.messages)
 
       expect(serialized).toContain("Triage completed.")
-      expect(serialized).toContain('"activated":true')
       expect(serialized).toContain('"name":"issue-triage"')
-      expect(serialized).not.toContain(rawSkillInstructionSentinel)
+      expect(serialized).toContain(rawSkillInstructionSentinel)
+    } finally {
+      await storage.close().catch(() => undefined)
+    }
+  })
+
+  it("does not persist a provider failure in MessageHistory", async () => {
+    const storage = createAgentStorage(
+      { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
+      "provider-error-memory"
+    )
+    const sentinel = "PRIVATE_RAW_PROVIDER_ERROR_SENTINEL"
+    const agent = createUnscopedProductAgent(
+      storage,
+      createScriptedModel([{ error: new Error(sentinel), parts: [] }])
+    )
+
+    try {
+      await storage.init()
+      try {
+        const output = await agent.stream("Trigger the provider failure.", {
+          memory: {
+            resource: "resource_provider_error",
+            thread: "thread_provider_error",
+          },
+        })
+        await output.consumeStream()
+      } catch {
+        // The standard stream may reject before or during consumption.
+      }
+      const memory = await agent.getMemory()
+      if (!(memory instanceof Memory)) throw new Error("Memory unavailable")
+      const recalled = await memory.recall({
+        page: 0,
+        perPage: false,
+        resourceId: "resource_provider_error",
+        threadId: "thread_provider_error",
+      })
+
+      expect(JSON.stringify(recalled.messages)).not.toContain(sentinel)
     } finally {
       await storage.close().catch(() => undefined)
     }

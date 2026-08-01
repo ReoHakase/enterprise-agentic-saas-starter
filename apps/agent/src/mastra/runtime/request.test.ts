@@ -254,15 +254,22 @@ describe("private Agent runtime request", () => {
         })
       )
     ).rejects.toThrow("Invalid private Agent request")
-    await expect(
-      readBoundedPrivateJson(
-        new Request("https://agent.internal/chat", {
-          body: "not-json",
-          headers: { "content-type": "application/json" },
-          method: "POST",
-        })
-      )
-    ).rejects.toThrow("Invalid private Agent request")
+    const malformedFailure = await readBoundedPrivateJson(
+      new Request("https://agent.internal/chat", {
+        body: "not-json",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      })
+    ).then(
+      () => undefined,
+      (error: unknown) => error
+    )
+    expect(malformedFailure).toBeInstanceOf(Error)
+    if (!(malformedFailure instanceof Error)) {
+      throw new Error("Expected private request error")
+    }
+    expect(malformedFailure.message).toBe("Invalid private Agent request")
+    expect(malformedFailure.cause).toBeInstanceOf(SyntaxError)
     await expect(
       readBoundedPrivateJson(
         new Request("https://agent.internal/chat", {

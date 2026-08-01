@@ -3,13 +3,43 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
+
+const telemetry = vi.hoisted(() => ({
+  reportDevelopmentCauseChain:
+    vi.fn<(environment: unknown, label: string, cause: unknown) => void>(),
+}))
+
+vi.mock("../adapters/telemetry/development-error", () => ({
+  reportDevelopmentCauseChain: telemetry.reportDevelopmentCauseChain,
+}))
 
 import { createAgentRuntimeComposition } from "../composition/runtime-composition"
-import { approvedIssueActionExecutionRegistry, mastra } from "../index"
+import {
+  approvedIssueActionExecutionRegistry,
+  executionRegistry,
+  mastra,
+} from "../index"
+import {
+  createNativeControlPlane,
+  nativeRuntimeEnvironment,
+} from "../test-support/native-runtime"
 import { suspendApprovedIssueAction } from "../workflows/approved-issue-action"
 import type { AgentControlPlanePort } from "./ports"
 import { resumeIssueAction } from "./resume-action"
+import {
+  handleAgentRuntimeRequest,
+  type AgentRuntimeDependencies,
+} from "./run-agent"
 
 const RESUME_TICKET = "ticket_0123456789abcdefghijklmnopqrstuvwxyz"
 const RUN_GRANT = "run_0123456789abcdefghijklmnopqrstuvwxyz"
@@ -20,6 +50,14 @@ beforeAll(() => {
 })
 
 afterAll(() => workflowError.mockRestore())
+
+beforeEach(() => {
+  telemetry.reportDevelopmentCauseChain.mockClear()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 type ResumeApi = Pick<
   AgentControlPlanePort,
@@ -69,12 +107,61 @@ const harness = (id: string) => {
 }
 
 const enabled = { runs: true, vision: true, writes: true }
-const dependencies = (api: ResumeApi, features = enabled) => ({
+const dependencies = (
+  api: ResumeApi,
+  features = enabled,
+  signal = new AbortController().signal
+) => ({
   api,
   executionRegistry: approvedIssueActionExecutionRegistry,
   features,
   mastra,
+  signal,
 })
+const resumeRequest = (id: string, signal?: AbortSignal) =>
+  new Request("https://agent.internal/actions/resume", {
+    body: JSON.stringify({ actionId: id, resumeTicket: RESUME_TICKET }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    signal,
+  })
+type ApprovalRuntimeInitialize = ReturnType<
+  AgentRuntimeDependencies["createApprovalResumeRuntime"]
+>["initialize"]
+const runtimeDependencies = (
+  api: AgentControlPlanePort,
+  close: () => Promise<void>,
+  captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>(),
+  initialize: ApprovalRuntimeInitialize = () =>
+    Promise.resolve({
+      executionRegistry: approvedIssueActionExecutionRegistry,
+      mastra,
+    })
+) =>
+  ({
+    captureFailure,
+    createApprovalResumeRuntime: () => ({
+      initialize,
+      storage: { close },
+    }),
+    createControlPlane: () => api,
+    executionRegistry,
+    mastra,
+    requireModelCredential: false,
+    toControlFailure: () => null,
+  }) satisfies AgentRuntimeDependencies
+
+const runtimeContext = () => {
+  const pending: Promise<unknown>[] = []
+  return {
+    context: {
+      waitUntil(promise: Promise<unknown>) {
+        pending.push(promise)
+      },
+    },
+    pending,
+  }
+}
 
 describe("resumeIssueAction", () => {
   it("requires fail-closed run/write switches", async () => {
@@ -173,19 +260,25 @@ describe("resumeIssueAction", () => {
         rootRunId: secrets.clientMarker,
       })
       await suspendApprovedIssueAction(composition.mastra, id)
-      const resumeRuntime = composition.createApprovalResumeRuntime()
-      await expect(
-        resumeIssueAction(
-          { actionId: id, resumeTicket: secrets.ticket },
-          {
-            api,
-            executionRegistry: resumeRuntime.executionRegistry,
-            features: enabled,
-            mastra: resumeRuntime.mastra,
-            reportFailure,
-          }
-        )
-      ).rejects.toThrow("Issue action resume is unavailable")
+      const resumeRuntimeLease = composition.createApprovalResumeRuntime()
+      const resumeRuntime = await resumeRuntimeLease.initialize()
+      try {
+        await expect(
+          resumeIssueAction(
+            { actionId: id, resumeTicket: secrets.ticket },
+            {
+              api,
+              executionRegistry: resumeRuntime.executionRegistry,
+              features: enabled,
+              mastra: resumeRuntime.mastra,
+              reportFailure,
+              signal: new AbortController().signal,
+            }
+          )
+        ).rejects.toThrow("Issue action resume is unavailable")
+      } finally {
+        await resumeRuntimeLease.storage.close()
+      }
       expect(reportFailure).toHaveBeenCalledWith(
         expect.objectContaining({ message: privateClient() })
       )
@@ -220,7 +313,7 @@ describe("resumeIssueAction", () => {
     }
   })
 
-  it("reopens and resumes a persisted approval from a request-local workflow runtime", async () => {
+  it("reopens and resumes a persisted approval with a fresh request runtime", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-resume-"))
     const databasePath = join(directory, "workflow.db")
     const environment = {
@@ -239,30 +332,257 @@ describe("resumeIssueAction", () => {
       await composition.storage.close()
 
       reopenedComposition = createAgentRuntimeComposition(environment)
-      const resumeRuntime = reopenedComposition.createApprovalResumeRuntime()
-      expect(resumeRuntime.mastra).not.toBe(reopenedComposition.mastra)
-      const test = harness(id)
-      const receipt = await resumeIssueAction(
-        { actionId: id, resumeTicket: RESUME_TICKET },
-        {
-          api: test.api,
-          executionRegistry: resumeRuntime.executionRegistry,
-          features: enabled,
-          mastra: resumeRuntime.mastra,
+      const resumeRuntimeLease =
+        reopenedComposition.createApprovalResumeRuntime()
+      const resumeRuntime = await resumeRuntimeLease.initialize()
+      try {
+        expect(resumeRuntime.mastra).not.toBe(reopenedComposition.mastra)
+        expect(resumeRuntimeLease.storage).not.toBe(reopenedComposition.storage)
+        const identityRuntimeLease =
+          reopenedComposition.createApprovalResumeRuntime()
+        const identityRuntime = await identityRuntimeLease.initialize()
+        try {
+          expect(identityRuntime.mastra).not.toBe(resumeRuntime.mastra)
+          expect(identityRuntimeLease.storage).not.toBe(
+            resumeRuntimeLease.storage
+          )
+        } finally {
+          await identityRuntimeLease.storage.close()
         }
-      )
 
-      expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
-      expect(test.executeApprovedAction).toHaveBeenCalledOnce()
-      expect(test.finishRun).toHaveBeenCalledOnce()
-      expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
+        const test = harness(id)
+        const receipt = await resumeIssueAction(
+          { actionId: id, resumeTicket: RESUME_TICKET },
+          {
+            api: test.api,
+            executionRegistry: resumeRuntime.executionRegistry,
+            features: enabled,
+            mastra: resumeRuntime.mastra,
+            signal: new AbortController().signal,
+          }
+        )
+
+        expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
+        expect(test.executeApprovedAction).toHaveBeenCalledOnce()
+        expect(test.finishRun).toHaveBeenCalledOnce()
+        expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
+      } finally {
+        await resumeRuntimeLease.storage.close()
+      }
     } finally {
       await composition.storage.close().catch(() => undefined)
       await reopenedComposition?.storage.close().catch(() => undefined)
       await rm(directory, { force: true, recursive: true })
     }
   })
+})
 
+describe("approval resume request lifecycle", () => {
+  it("closes the request storage after a successful runtime resume", async () => {
+    const id = actionId()
+    const test = harness(id)
+    const close = vi.fn<() => Promise<void>>().mockResolvedValue()
+    const runtime = runtimeContext()
+    await suspendApprovedIssueAction(mastra, id)
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies({ ...createNativeControlPlane(), ...test.api }, close)
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      actionId: id,
+      status: "succeeded",
+    })
+    await Promise.all(runtime.pending)
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("closes the request storage after a failed runtime resume", async () => {
+    const id = actionId()
+    const close = vi.fn<() => Promise<void>>().mockResolvedValue()
+    const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
+    const runtime = runtimeContext()
+    await suspendApprovedIssueAction(mastra, id)
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies(
+        {
+          ...createNativeControlPlane(),
+          resumeApprovedAction: () => Promise.reject(new Error("unavailable")),
+        },
+        close,
+        captureFailure
+      )
+    )
+
+    expect(response.status).toBe(503)
+    await Promise.all(runtime.pending)
+    expect(captureFailure).toHaveBeenCalledWith("resume_failed")
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("does not consume a ticket after the API-owned request deadline aborts", async () => {
+    const id = actionId()
+    const test = harness(id)
+    const controller = new AbortController()
+    const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
+    const close = vi.fn<() => Promise<void>>().mockResolvedValue()
+    const runtime = runtimeContext()
+    controller.abort(new Error("private caller timeout"))
+    await suspendApprovedIssueAction(mastra, id)
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id, controller.signal),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies(
+        { ...createNativeControlPlane(), ...test.api },
+        close,
+        captureFailure
+      )
+    )
+
+    expect(response.status).toBe(503)
+    expect(test.resumeApprovedAction).not.toHaveBeenCalled()
+    expect(test.executeApprovedAction).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
+    expect(runtime.pending).toHaveLength(0)
+    expect(captureFailure.mock.calls).toEqual([["resume_failed"]])
+    expect(telemetry.reportDevelopmentCauseChain).not.toHaveBeenCalled()
+  })
+
+  it("reports a rejected storage close once without raw error reporting", async () => {
+    const id = actionId()
+    const test = harness(id)
+    const privateCloseFailure = new Error("private storage close failure")
+    const close = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(privateCloseFailure)
+    const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
+    const runtime = runtimeContext()
+    await suspendApprovedIssueAction(mastra, id)
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies(
+        { ...createNativeControlPlane(), ...test.api },
+        close,
+        captureFailure
+      )
+    )
+
+    expect(response.status).toBe(200)
+    expect(runtime.pending).toHaveLength(1)
+    await Promise.all(runtime.pending)
+    expect(captureFailure.mock.calls).toEqual([["resume_storage_close_failed"]])
+    expect(telemetry.reportDevelopmentCauseChain).not.toHaveBeenCalled()
+  })
+
+  it("reports init and rejected close failures with separate fixed ownership", async () => {
+    const id = actionId()
+    const initFailure = new Error("private storage init failure")
+    const closeFailure = new Error("private storage close failure")
+    const close = vi.fn<() => Promise<void>>().mockRejectedValue(closeFailure)
+    const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
+    const runtime = runtimeContext()
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies(
+        createNativeControlPlane(),
+        close,
+        captureFailure,
+        () => Promise.reject(initFailure)
+      )
+    )
+
+    expect(response.status).toBe(503)
+    expect(runtime.pending).toHaveLength(1)
+    await Promise.all(runtime.pending)
+    expect(captureFailure.mock.calls).toEqual([
+      ["resume_failed"],
+      ["resume_storage_close_failed"],
+    ])
+    expect(telemetry.reportDevelopmentCauseChain).toHaveBeenCalledOnce()
+    expect(telemetry.reportDevelopmentCauseChain).toHaveBeenCalledWith(
+      nativeRuntimeEnvironment,
+      "action-resume",
+      initFailure
+    )
+    expect(telemetry.reportDevelopmentCauseChain).not.toHaveBeenCalledWith(
+      nativeRuntimeEnvironment,
+      "action-resume-storage-close",
+      closeFailure
+    )
+  })
+
+  it("returns before an init-failure close timeout and bounds waitUntil cleanup", async () => {
+    vi.useFakeTimers()
+    const id = actionId()
+    const initFailure = new Error("private storage init failure")
+    let finishClose: (() => void) | undefined
+    const close = vi.fn<() => Promise<void>>(
+      () =>
+        new Promise<void>((resolve) => {
+          finishClose = resolve
+        })
+    )
+    const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
+    const runtime = runtimeContext()
+
+    const response = await handleAgentRuntimeRequest(
+      resumeRequest(id),
+      nativeRuntimeEnvironment,
+      runtime.context,
+      runtimeDependencies(
+        createNativeControlPlane(),
+        close,
+        captureFailure,
+        () => Promise.reject(initFailure)
+      )
+    )
+
+    expect(response.status).toBe(503)
+    expect(runtime.pending).toHaveLength(1)
+    expect(close).toHaveBeenCalledOnce()
+    expect(captureFailure.mock.calls).toEqual([["resume_failed"]])
+
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(captureFailure.mock.calls).toEqual([["resume_failed"]])
+    await vi.advanceTimersByTimeAsync(1)
+    await Promise.all(runtime.pending)
+    expect(captureFailure.mock.calls).toEqual([
+      ["resume_failed"],
+      ["resume_storage_close_failed"],
+    ])
+
+    finishClose?.()
+    await vi.runAllTicks()
+    expect(captureFailure.mock.calls).toEqual([
+      ["resume_failed"],
+      ["resume_storage_close_failed"],
+    ])
+    expect(telemetry.reportDevelopmentCauseChain).toHaveBeenCalledOnce()
+    expect(telemetry.reportDevelopmentCauseChain).toHaveBeenCalledWith(
+      nativeRuntimeEnvironment,
+      "action-resume",
+      initFailure
+    )
+  })
+})
+
+describe("resumeIssueAction execution", () => {
   it("atomically consumes the ticket, executes with the fresh grant, and settles", async () => {
     const id = actionId()
     const test = harness(id)
@@ -288,6 +608,38 @@ describe("resumeIssueAction", () => {
     expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
     expect(JSON.stringify(receipt)).not.toContain(RESUME_TICKET)
     expect(JSON.stringify(receipt)).not.toContain(RUN_GRANT)
+  })
+
+  it("stops before the approved side effect when the caller aborts during ticket consumption", async () => {
+    const id = actionId()
+    const test = harness(id)
+    const controller = new AbortController()
+    test.resumeApprovedAction.mockImplementation(async () => {
+      controller.abort(new Error("private caller timeout"))
+      return {
+        attempt: 1,
+        expiresAt: "2999-07-22T00:00:00.000Z",
+        grant: RUN_GRANT,
+        rootRunId: "root_1",
+        runId: "run_2",
+        shouldGenerateTitle: false,
+      }
+    })
+    await suspendApprovedIssueAction(mastra, id)
+
+    await expect(
+      resumeIssueAction(
+        { actionId: id, resumeTicket: RESUME_TICKET },
+        dependencies(test.api, enabled, controller.signal)
+      )
+    ).rejects.toThrow("Issue action resume is unavailable")
+
+    expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
+    expect(test.executeApprovedAction).not.toHaveBeenCalled()
+    expect(test.finishRun).toHaveBeenCalledWith({
+      grant: RUN_GRANT,
+      outcome: "failed",
+    })
   })
 
   it("settles the continuation as failed and hides execution details", async () => {

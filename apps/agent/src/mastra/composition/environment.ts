@@ -1,6 +1,7 @@
 import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-contracts"
 
 export type PortableAgentRuntimeEnv = {
+  AGENT_E2E_RUN_ID?: string
   AGENT_EVAL_ALLOWED_TOOLS?: string
   AGENT_RUNS_ENABLED?: string
   AGENT_VISION_ENABLED?: string

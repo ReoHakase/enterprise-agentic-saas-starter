@@ -1,9 +1,14 @@
+import {
+  AGENT_MODEL_CONTEXT_WINDOW_TOKENS,
+  AGENT_MODEL_RESERVED_OUTPUT_TOKENS,
+} from "@enterprise-agentic-saas/agent-contracts"
+
 export const AGENT_MODEL_PROFILE = {
-  contextWindowTokens: 1_050_000,
+  contextWindowTokens: AGENT_MODEL_CONTEXT_WINDOW_TOKENS,
   id: "openrouter-gpt-5.6-luna-xhigh",
   model: "openai/gpt-5.6-luna",
   provider: "openrouter",
-  reservedOutputTokens: 4_096,
+  reservedOutputTokens: AGENT_MODEL_RESERVED_OUTPUT_TOKENS,
 } as const
 
 export const PRODUCT_AGENT_REASONING = {

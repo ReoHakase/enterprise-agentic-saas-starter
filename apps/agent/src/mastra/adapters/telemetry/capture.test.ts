@@ -64,6 +64,29 @@ describe("Agent failure capture", () => {
     })
   })
 
+  it("observes resume storage cleanup with only its fixed code", () => {
+    createAgentFailureCapture(local)("resume_storage_close_failed")
+
+    expect(telemetry.setAttribute).toHaveBeenCalledWith(
+      "app.error.code",
+      "resume_storage_close_failed"
+    )
+    expect(telemetry.emit).toHaveBeenCalledWith({
+      attributes: expect.objectContaining({
+        "app.error.code": "resume_storage_close_failed",
+        "app.operation": "agent.runtime",
+        "app.outcome": "failure",
+        "event.name": "agent.runtime.failed",
+      }),
+      body: "Agent resume storage cleanup failed",
+      severityNumber: 17,
+      severityText: "ERROR",
+    })
+    expect(JSON.stringify(telemetry.emit.mock.calls)).not.toContain(
+      "private storage"
+    )
+  })
+
   it("does not let span or log sink failures replace the application failure", () => {
     telemetry.setAttribute.mockImplementationOnce(() => {
       throw new Error("span unavailable")

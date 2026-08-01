@@ -411,15 +411,20 @@ describe("createAgentWriteHandlers", () => {
 
   it("replaces internal failures with a fixed error", async () => {
     const test = harness("pending")
-    test.api.prepareCreateIssue = () =>
-      Promise.reject(new Error(`private ${RUN_GRANT}`))
+    const cause = new Error(`private ${RUN_GRANT}`)
+    test.api.prepareCreateIssue = () => Promise.reject(cause)
 
-    await expect(
-      test.handlers.createIssue({ title: "Issue" }, "call_1")
-    ).rejects.toThrow("Issue write capability is unavailable")
-    await expect(
-      test.handlers.createIssue({ title: "Issue" }, "call_2")
-    ).rejects.not.toThrow(RUN_GRANT)
+    const failure = await test.handlers
+      .createIssue({ title: "Issue" }, "call_1")
+      .then(
+        () => undefined,
+        (error: unknown) => error
+      )
+    expect(failure).toBeInstanceOf(Error)
+    if (!(failure instanceof Error)) throw new Error("Expected write error")
+    expect(failure.message).toBe("Issue write capability is unavailable")
+    expect(failure.cause).toBe(cause)
+    expect(String(failure)).not.toContain(RUN_GRANT)
   })
 
   it("routes normalized update, attachment, and delete payloads through the production handlers", async () => {

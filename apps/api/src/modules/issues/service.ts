@@ -164,9 +164,10 @@ const createIssueReadService = (ports: IssuesPorts) => {
       cursor = input.cursor
         ? decodeIssueTimelineCursor(input.cursor)
         : undefined
-    } catch {
+    } catch (cause) {
       throw new HttpError({
         code: "validation_error",
+        cause,
         fieldErrors: { cursor: ["The cursor is invalid."] },
         publicMessage: "The timeline cursor is invalid.",
       })

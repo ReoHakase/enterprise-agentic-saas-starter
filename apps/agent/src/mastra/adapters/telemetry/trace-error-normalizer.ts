@@ -33,6 +33,7 @@ const fixedErrorCodes = new Set([
   "processor_failed",
   "response_stream_failed",
   "resume_failed",
+  "resume_storage_close_failed",
   "run_finalization_failed",
   "run_grant_invalid",
   "run_settlement_failed",

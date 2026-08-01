@@ -16,7 +16,7 @@ const isBoundedAgentJson = (
 ): value is AgentJsonValue => {
   if (value === null || typeof value === "boolean") return true
   if (typeof value === "number") return Number.isFinite(value)
-  if (typeof value === "string") return value.length <= 10_000
+  if (typeof value === "string") return value.length <= 50_000
   if (depth >= 8 || typeof value !== "object") return false
   if (Array.isArray(value)) {
     return (
@@ -57,36 +57,41 @@ export const agentUiToolNames = [
 ] as const
 
 const agentUiToolTypes = agentUiToolNames.map((name) => `tool-${name}` as const)
+export const agentProviderOpaqueIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(512)
+)
 export const agentJsonValueSchema = v.custom<AgentJsonValue>(
   (value) => isBoundedAgentJson(value),
   "Invalid bounded JSON value"
 )
 
 const agentUiToolApprovalRequestSchema = v.strictObject({
-  id: agentIdentifierSchema,
+  id: agentProviderOpaqueIdSchema,
 })
 
 const agentUiToolApprovalResponseSchema = v.strictObject({
-  id: agentIdentifierSchema,
+  id: agentProviderOpaqueIdSchema,
   approved: v.boolean(),
   reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
 })
 
 const agentUiToolApprovedSchema = v.strictObject({
-  id: agentIdentifierSchema,
+  id: agentProviderOpaqueIdSchema,
   approved: v.literal(true),
   reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
 })
 
 const agentUiToolDeniedApprovalSchema = v.strictObject({
-  id: agentIdentifierSchema,
+  id: agentProviderOpaqueIdSchema,
   approved: v.literal(false),
   reason: v.optional(v.pipe(v.string(), v.maxLength(500))),
 })
 
 const agentUiToolPartBase = {
   type: v.picklist(agentUiToolTypes),
-  toolCallId: agentIdentifierSchema,
+  toolCallId: agentProviderOpaqueIdSchema,
 }
 
 export const agentUiMessagePartSchema = v.union([
@@ -174,7 +179,7 @@ export const agentUiMessagePartSchema = v.union([
   }),
   v.strictObject({
     type: v.literal("source-url"),
-    sourceId: agentIdentifierSchema,
+    sourceId: agentProviderOpaqueIdSchema,
     url: v.pipe(v.string(), v.url(), v.maxLength(2_048)),
     title: v.optional(v.pipe(v.string(), v.maxLength(500))),
   }),

@@ -1,6 +1,12 @@
+import {
+  agentUiMessagePartSchema,
+  canonicalizePublicHttpUrl,
+  type AgentUiMessagePart,
+} from "@enterprise-agentic-saas/agent-contracts"
 import { MessageList } from "@mastra/core/agent/message-list"
 import type { Mastra } from "@mastra/core/mastra"
 import { Memory } from "@mastra/memory"
+import * as v from "valibot"
 
 import type { AgentFailureCode } from "../adapters/telemetry/capture"
 import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
@@ -133,15 +139,9 @@ const projectNativeApproval = (value: unknown) => {
   const approval = Object.fromEntries(Object.entries(value))
   if (
     typeof approval.id !== "string" ||
-    !/^[A-Za-z0-9_-]{1,128}$/u.test(approval.id) ||
-    (approval.approved !== undefined &&
-      typeof approval.approved !== "boolean") ||
-    (approval.reason !== undefined &&
-      (typeof approval.reason !== "string" ||
-        approval.reason.length > 500 ||
-        /(?:https?:\/\/|authorization|bearer|password|secret|token|api[_ -]?key)/iu.test(
-          approval.reason
-        )))
+    approval.id.length < 1 ||
+    approval.id.length > 512 ||
+    (approval.approved !== undefined && typeof approval.approved !== "boolean")
   ) {
     return
   }
@@ -150,39 +150,53 @@ const projectNativeApproval = (value: unknown) => {
     ...(typeof approval.approved === "boolean"
       ? { approved: approval.approved }
       : {}),
-    ...(typeof approval.reason === "string" ? { reason: approval.reason } : {}),
   }
+}
+
+const validatedHistoryPart = (
+  candidate: unknown
+): AgentUiMessagePart | undefined => {
+  const parsed = v.safeParse(agentUiMessagePartSchema, candidate)
+  return parsed.success ? parsed.output : undefined
 }
 
 const projectNativeHistoryPart = (
   value: unknown
-): Record<string, unknown> | undefined => {
+): AgentUiMessagePart | undefined => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined
   }
   const part = Object.fromEntries(Object.entries(value))
   if (part.type === "reasoning" && typeof part.text === "string") {
-    return { type: "reasoning", text: part.text, state: "done" }
+    return validatedHistoryPart({
+      type: "reasoning",
+      text: part.text,
+      state: "done",
+    })
   }
   if (part.type === "text" && typeof part.text === "string") {
-    return { type: "text", text: part.text }
+    return validatedHistoryPart({ type: "text", text: part.text })
   }
   if (
     (part.type === "data-agent-assets" ||
       part.type === "data-context-reference") &&
     "data" in part
   ) {
-    return { type: part.type, data: part.data }
+    return validatedHistoryPart({ type: part.type, data: part.data })
   }
   if (part.type === "source-url") {
-    return {
+    const url = canonicalizePublicHttpUrl(part.url)
+    if (!url) return undefined
+    return validatedHistoryPart({
       type: "source-url",
       sourceId: part.sourceId,
-      url: part.url,
+      url,
       ...(typeof part.title === "string" ? { title: part.title } : {}),
-    }
+    })
   }
-  if (part.type === "step-start") return { type: "step-start" }
+  if (part.type === "step-start") {
+    return validatedHistoryPart({ type: "step-start" })
+  }
   const toolType =
     part.type === "dynamic-tool" && typeof part.toolName === "string"
       ? `tool-${part.toolName}`
@@ -191,17 +205,21 @@ const projectNativeHistoryPart = (
         : undefined
   if (!toolType) return undefined
   const safeApproval = projectNativeApproval(part.approval)
-  return {
+  return validatedHistoryPart({
     type: toolType,
     toolCallId: part.toolCallId,
     state: part.state,
     ...("input" in part ? { input: part.input } : {}),
-    ...("output" in part ? { output: part.output } : {}),
+    ...("output" in part
+      ? {
+          output: toolType === "tool-skill" ? { activated: true } : part.output,
+        }
+      : {}),
     ...(safeApproval ? { approval: safeApproval } : {}),
     ...(typeof part.errorText === "string"
-      ? { errorText: part.errorText }
+      ? { errorText: "Agent tool execution failed." }
       : {}),
-  }
+  })
 }
 
 export const handleMemoryHistory = async (
@@ -287,6 +305,7 @@ export const handleMemoryHistory = async (
           .map((part) => projectNativeHistoryPart(part))
           .filter((part) => part !== undefined),
       }))
+      .filter(({ parts }) => parts.length > 0)
     return Response.json(
       {
         hasMore: recalled.hasMore,

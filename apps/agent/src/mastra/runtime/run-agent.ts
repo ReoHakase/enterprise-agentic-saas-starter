@@ -84,8 +84,11 @@ export type AgentExecutionContext = {
 export type AgentRuntimeDependencies = {
   captureFailure: (code: AgentFailureCode) => void
   createApprovalResumeRuntime: () => {
-    executionRegistry: ApprovedIssueActionExecutionRegistry
-    mastra: Mastra
+    initialize: () => Promise<{
+      executionRegistry: ApprovedIssueActionExecutionRegistry
+      mastra: Mastra
+    }>
+    storage: { close(): Promise<void> }
   }
   createControlPlane: (
     binding: AgentRuntimeEnv["AGENT_INTERNAL_API"]
@@ -131,6 +134,44 @@ const controlFailure = (
 const consumeStream = async (stream: ReadableStream<string>): Promise<void> => {
   await stream.pipeTo(new WritableStream())
 }
+
+const APPROVAL_RESUME_STORAGE_CLOSE_TIMEOUT_MS = 2_000
+
+const closeApprovalResumeStorage = async (
+  storage: { close(): Promise<void> },
+  captureFailure: AgentRuntimeDependencies["captureFailure"]
+): Promise<void> => {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const closeResult = Promise.resolve()
+    .then(() => storage.close())
+    .then(
+      () => "closed" as const,
+      () => "failed" as const
+    )
+  const timeoutResult = new Promise<"timed_out">((resolve) => {
+    timeout = setTimeout(
+      () => resolve("timed_out"),
+      APPROVAL_RESUME_STORAGE_CLOSE_TIMEOUT_MS
+    )
+  })
+  const result = await Promise.race([closeResult, timeoutResult])
+  if (timeout !== undefined) clearTimeout(timeout)
+  if (result === "closed") return
+  try {
+    captureFailure("resume_storage_close_failed")
+  } catch {
+    // Telemetry must not extend cleanup or replace the application response.
+  }
+}
+
+const scheduleApprovalResumeStorageClose = (
+  runtime: ReturnType<AgentRuntimeDependencies["createApprovalResumeRuntime"]>,
+  context: AgentExecutionContext,
+  captureFailure: AgentRuntimeDependencies["captureFailure"]
+): void => {
+  context.waitUntil(closeApprovalResumeStorage(runtime.storage, captureFailure))
+}
+
 const createProductRequestContext = (
   runtime: ProductAgentRequestContext["runtime"]
 ): RequestContext<ProductAgentRequestContext> => {
@@ -221,9 +262,11 @@ const handleChat = async (
   const budget = createAgentToolBudget()
   const visionBudget = createAgentVisionBudget(input.assetIds.length)
   const toolAllowlist = readEvalToolAllowlist(environment)
+  const abortLifecycle = createRunAbortLifecycle(request)
   const execution = dependencies.executionRegistry.register({
     api,
     budget,
+    onRevoked: (cause) => abortLifecycle.abortFrom("revoked", cause),
     rootRunId: run.rootRunId,
     runGrant: run.grant,
     settlement,
@@ -231,7 +274,6 @@ const handleChat = async (
       suspendApprovedIssueAction(dependencies.mastra, actionId),
     visionBudget,
   })
-  const abortLifecycle = createRunAbortLifecycle(request)
   const requestContext = createProductRequestContext({
     executionId: execution.executionId,
     modelRoute: "product",
@@ -332,10 +374,7 @@ const handleChat = async (
           writer.merge(
             createFinalizedProductStream({
               abortLifecycle,
-              api,
-              finalizer,
               output,
-              runGrant: run.grant,
             })
           )
         } catch (cause) {
@@ -348,8 +387,7 @@ const handleChat = async (
       },
       onEnd: () => finalizer.waitForStream(),
       onError: () =>
-        abortLifecycle.getCause() === "total_timeout" ||
-        abortLifecycle.getCause() === "useful_timeout"
+        abortLifecycle.getCause() === "total_timeout"
           ? "Agent response timed out."
           : "Model response failed.",
     })
@@ -387,6 +425,7 @@ const handleChat = async (
 const handleResume = async (
   request: Request,
   environment: AgentRuntimeEnv,
+  context: AgentExecutionContext,
   dependencies: AgentRuntimeDependencies
 ): Promise<Response> => {
   let rawInput: unknown
@@ -397,34 +436,60 @@ const handleResume = async (
   }
   const input = parseAgentRuntimeResumeInput(rawInput)
   if (!input) return invalidRequest()
+  // The API owns the resume deadline. The Agent observes only the propagated
+  // request signal so it cannot outlive the caller and consume a capability.
+  if (request.signal.aborted) {
+    dependencies.captureFailure("resume_failed")
+    return unavailable()
+  }
   const api = dependencies.createControlPlane(environment.AGENT_INTERNAL_API)
+
+  let approvalRuntime: ReturnType<
+    AgentRuntimeDependencies["createApprovalResumeRuntime"]
+  >
+  try {
+    approvalRuntime = dependencies.createApprovalResumeRuntime()
+  } catch (cause) {
+    reportDevelopmentCauseChain(environment, "action-resume", cause)
+    dependencies.captureFailure("resume_failed")
+    return unavailable()
+  }
 
   let result: AgentActionExecutionResult
   let failureReported = false
   try {
-    const approvalRuntime = dependencies.createApprovalResumeRuntime()
-    result = await resumeIssueAction(input, {
-      api,
-      captureSettlementFailure: () =>
-        dependencies.captureFailure("run_settlement_failed"),
-      executionRegistry: approvalRuntime.executionRegistry,
-      features: readAgentFeatureSwitches(environment),
-      mastra: approvalRuntime.mastra,
-      reportFailure: (cause) => {
-        failureReported = true
+    try {
+      const initializedRuntime = await approvalRuntime.initialize()
+      result = await resumeIssueAction(input, {
+        api,
+        captureSettlementFailure: () =>
+          dependencies.captureFailure("run_settlement_failed"),
+        executionRegistry: initializedRuntime.executionRegistry,
+        features: readAgentFeatureSwitches(environment),
+        mastra: initializedRuntime.mastra,
+        reportFailure: (cause) => {
+          failureReported = true
+          reportDevelopmentCauseChain(environment, "action-resume", cause)
+        },
+        signal: request.signal,
+      })
+    } catch (cause) {
+      if (!failureReported) {
         reportDevelopmentCauseChain(environment, "action-resume", cause)
-      },
-    })
-  } catch (cause) {
-    if (!failureReported) {
-      reportDevelopmentCauseChain(environment, "action-resume", cause)
+      }
+      dependencies.captureFailure("resume_failed")
+      return unavailable()
     }
-    dependencies.captureFailure("resume_failed")
-    return unavailable()
+    return Response.json(result, {
+      headers: { "cache-control": "private, no-store" },
+    })
+  } finally {
+    scheduleApprovalResumeStorageClose(
+      approvalRuntime,
+      context,
+      dependencies.captureFailure
+    )
   }
-  return Response.json(result, {
-    headers: { "cache-control": "private, no-store" },
-  })
 }
 
 export const handleAgentRuntimeRequest = (
@@ -439,7 +504,7 @@ export const handleAgentRuntimeRequest = (
     return handleChat(request, environment, context, dependencies)
   }
   if (request.method === "POST" && url.pathname === "/actions/resume") {
-    return handleResume(request, environment, dependencies)
+    return handleResume(request, environment, context, dependencies)
   }
   if (request.method === "POST" && url.pathname === "/memory/history") {
     return handleMemoryHistory(request, environment, dependencies)

@@ -48,6 +48,91 @@ const readRemaining = async (
   )
 }
 
+const createReasoningToTextRuntime = () =>
+  createModelRuntime([
+    {
+      parts: [
+        { type: "reasoning", text: "reasoning-progress" },
+        { type: "text", text: "completed-after-reasoning" },
+      ],
+      stream: [
+        { value: { type: "stream-start", warnings: [] } },
+        { value: { type: "reasoning-start", id: "reasoning_1" } },
+        {
+          delayMs: 20,
+          value: {
+            type: "reasoning-delta",
+            id: "reasoning_1",
+            delta: "reasoning-progress",
+          },
+        },
+        { value: { type: "reasoning-end", id: "reasoning_1" } },
+        { value: { type: "text-start", id: "text_1" } },
+        {
+          delayMs: 20,
+          value: {
+            type: "text-delta",
+            id: "text_1",
+            delta: "completed-after-reasoning",
+          },
+        },
+        { value: { type: "text-end", id: "text_1" } },
+        {
+          value: {
+            type: "finish",
+            finishReason: { unified: "stop", raw: "stop" },
+            usage: {
+              inputTokens: {
+                cacheRead: 0,
+                cacheWrite: 0,
+                noCache: 1,
+                total: 1,
+              },
+              outputTokens: {
+                reasoning: 1,
+                text: 1,
+                total: 2,
+              },
+            },
+          },
+        },
+      ],
+    },
+  ])
+
+const assertReasoningToTextCompletes = async () => {
+  const { composition, executionRegistry, mastra } =
+    createReasoningToTextRuntime()
+  const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
+    Promise.resolve({ runId: "run_1", status: input.outcome })
+  )
+  const pending: Promise<unknown>[] = []
+  const response = await handleAgentRuntimeRequest(
+    chatRequest(),
+    runtimeEnvironment,
+    { waitUntil: (promise) => pending.push(promise) },
+    {
+      captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+      createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
+      createControlPlane: () => createControlPlane({ finishRun }),
+      executionRegistry,
+      mastra,
+      requireModelCredential: false,
+      toControlFailure: () => null,
+    }
+  )
+  const body = await response.text()
+  await Promise.all(pending)
+
+  expect(body).toContain("reasoning-progress")
+  expect(body).toContain("completed-after-reasoning")
+  expect(body).not.toContain("Agent response timed out.")
+  expect(finishRun).toHaveBeenCalledWith({
+    grant: GRANT,
+    outcome: "completed",
+  })
+}
+
 describe("native runtime SSE privacy", () => {
   it("reports a provider startup failure to the local raw boundary exactly once", async () => {
     const providerFailure = new Error("MODEL_START_EXACTLY_ONCE")
@@ -109,12 +194,18 @@ describe("native runtime SSE privacy", () => {
     const stream = vi.fn<
       (
         messages: unknown,
-        options: { abortSignal: AbortSignal }
+        options: {
+          abortSignal: AbortSignal
+          modelSettings: { maxOutputTokens: number }
+        }
       ) => Promise<never>
     >(
       (
         _messages: unknown,
-        options: { abortSignal: AbortSignal }
+        options: {
+          abortSignal: AbortSignal
+          modelSettings: { maxOutputTokens: number }
+        }
       ): Promise<never> =>
         new Promise((_resolve, reject) => {
           const abort = () => reject(options.abortSignal.reason)
@@ -159,6 +250,7 @@ describe("native runtime SSE privacy", () => {
 
     expect(cancelRun).toHaveBeenCalledWith({ grant: GRANT })
     expect(stream).toHaveBeenCalledOnce()
+    expect(stream.mock.calls[0]?.[1].modelSettings.maxOutputTokens).toBe(4_096)
     expect(finishRun).not.toHaveBeenCalled()
     expect(body).not.toContain('"type":"error"')
     expect(body).not.toContain("Model response failed")
@@ -292,7 +384,7 @@ describe("native runtime SSE privacy", () => {
     expect(body).not.toContain('"type":"error"')
   })
 
-  it("projects a pre-output provider stall as a recoverable timeout", async () => {
+  it("projects a provider stall at the total deadline as a recoverable timeout", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<() => Promise<never>>(
       () => new Promise(() => undefined)
@@ -322,7 +414,7 @@ describe("native runtime SSE privacy", () => {
     )
     const bodyPromise = response.text()
     await vi.advanceTimersByTimeAsync(0)
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(270_000)
     const body = await bodyPromise
     await Promise.all(pending)
 
@@ -337,21 +429,23 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("enforces the immutable 90 second total timeout despite useful progress", async () => {
+  it("enforces the 270 second total timeout despite visible reasoning progress", async () => {
     const { composition, executionRegistry, mastra } = createModelRuntime([
       {
         parts: [],
         stream: [
           { value: { type: "stream-start", warnings: [] } },
-          { value: { type: "text-start", id: "text_1" } },
-          ...[1, 2, 3, 4, 5].map((index) => ({
-            delayMs: 20_000,
-            value: {
-              type: "text-delta",
-              id: "text_1",
-              delta: `progress-${index}`,
-            },
-          })),
+          { value: { type: "reasoning-start", id: "reasoning_1" } },
+          ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(
+            (index) => ({
+              delayMs: 20_000,
+              value: {
+                type: "reasoning-delta",
+                id: "reasoning_1",
+                delta: `progress-${index}`,
+              },
+            })
+          ),
         ],
       },
     ])
@@ -379,12 +473,12 @@ describe("native runtime SSE privacy", () => {
     )
     const bodyPromise = response.text()
     await vi.advanceTimersByTimeAsync(0)
-    await vi.advanceTimersByTimeAsync(90_000)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(270_000)
+    await vi.advanceTimersByTimeAsync(20_000)
     const body = await bodyPromise
     await Promise.all(pending)
 
-    expect(body).toContain("progress-4")
+    expect(body).toContain("progress-13")
     expect(body).toContain("Agent response timed out.")
     expect(finishRun).toHaveBeenCalledWith({
       grant: GRANT,
@@ -394,62 +488,9 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("keeps the first useful-output timeout cause when the request abort follows", async () => {
-    vi.useFakeTimers()
-    const { composition, executionRegistry, mastra } = createModelRuntime([
-      {
-        parts: [],
-        stream: [
-          {
-            delayMs: 31_000,
-            value: { type: "stream-start", warnings: [] },
-          },
-        ],
-      },
-    ])
-    const requestController = new AbortController()
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
-    const pending: Promise<unknown>[] = []
-
-    try {
-      const response = await handleAgentRuntimeRequest(
-        chatRequest(requestController.signal),
-        runtimeEnvironment,
-        { waitUntil: (promise) => pending.push(promise) },
-        {
-          captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
-          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-          createControlPlane: () =>
-            createControlPlane({ cancelRun, finishRun }),
-          executionRegistry,
-          mastra,
-          requireModelCredential: false,
-          toControlFailure: () => null,
-        }
-      )
-      const bodyPromise = response.text()
-      await vi.advanceTimersByTimeAsync(0)
-      await vi.advanceTimersByTimeAsync(30_000)
-      requestController.abort(new DOMException("Client stopped", "AbortError"))
-      await vi.advanceTimersByTimeAsync(1_000)
-      const body = await bodyPromise
-      await Promise.all(pending)
-
-      expect(body).toContain("Agent response timed out.")
-      expect(finishRun).toHaveBeenCalledWith({
-        grant: GRANT,
-        outcome: "failed",
-      })
-      expect(cancelRun).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
+  it("completes when visible reasoning hands off to text within the total deadline", async () => {
+    expect.hasAssertions()
+    await assertReasoningToTextCompletes()
   })
 
   it("settles an earlier user abort as cancel even when the provider reports an error", async () => {

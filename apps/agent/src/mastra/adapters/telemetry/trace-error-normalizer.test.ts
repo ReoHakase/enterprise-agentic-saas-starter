@@ -74,23 +74,24 @@ describe("AgentTraceErrorNormalizer", () => {
     })
   })
 
-  it("preserves an existing fixed error code", () => {
-    const span = createSpan({
-      attributes: {},
-      errorInfo: { message: "raw" },
-      name: "model generation",
-      type: SpanType.MODEL_GENERATION,
-    })
-    Reflect.set(
-      span.attributes ?? {},
-      "app.error.code",
-      "run_settlement_failed"
-    )
+  it.each(["run_settlement_failed", "resume_storage_close_failed"])(
+    "preserves the existing fixed error code %s",
+    (code) => {
+      const span = createSpan({
+        attributes: {},
+        errorInfo: { message: "raw" },
+        name: "model generation",
+        type: SpanType.MODEL_GENERATION,
+      })
+      Reflect.set(span.attributes ?? {}, "app.error.code", code)
 
-    expect(new AgentTraceErrorNormalizer().process(span)?.attributes).toEqual({
-      "app.error.code": "run_settlement_failed",
-    })
-  })
+      expect(new AgentTraceErrorNormalizer().process(span)?.attributes).toEqual(
+        {
+          "app.error.code": code,
+        }
+      )
+    }
+  )
 
   it("does not preserve an unregistered provider error code", () => {
     const span = createSpan({

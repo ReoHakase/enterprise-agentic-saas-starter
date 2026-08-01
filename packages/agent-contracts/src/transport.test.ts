@@ -44,7 +44,7 @@ describe("serialized Agent transport schemas", () => {
 
   it.each([
     Number.POSITIVE_INFINITY,
-    "x".repeat(10_001),
+    "x".repeat(50_001),
     undefined,
     Array.from({ length: 101 }, () => null),
     [undefined],
@@ -96,6 +96,21 @@ describe("serialized Agent transport schemas", () => {
         ],
       }).success
     ).toBe(false)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_opaque_tool_ids",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-get_issue",
+            toolCallId: "call:provider|opaque/value",
+            state: "output-available",
+            input: { lookup: "number", number: 42 },
+            output: { priority: "urgent" },
+          },
+        ],
+      }).success
+    ).toBe(true)
     expect(
       v.safeParse(agentUiMessageSchema, {
         id: "message_user_reasoning",

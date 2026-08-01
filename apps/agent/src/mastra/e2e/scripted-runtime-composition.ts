@@ -485,8 +485,16 @@ export const createScriptedAgentRuntimeComposition = (
   return {
     approvedIssueActionExecutionRegistry,
     approvedIssueActionWorkflow,
-    createApprovalResumeRuntime: () =>
-      createApprovedIssueActionResumeRuntime(storage),
+    createApprovalResumeRuntime: () => {
+      const resumeStorage = createAgentStorage(
+        environment,
+        "scripted-runtime-resume"
+      )
+      return {
+        initialize: () => createApprovedIssueActionResumeRuntime(resumeStorage),
+        storage: resumeStorage,
+      }
+    },
     executionRegistry,
     mastra: createProductRuntime({
       approvedIssueActionWorkflow,

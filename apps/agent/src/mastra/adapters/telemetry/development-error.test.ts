@@ -130,6 +130,7 @@ describe("development provider error reporting", () => {
 
     for (const environment of [
       { ...local, NODE_ENV: "test" },
+      { ...local, AGENT_E2E_RUN_ID: "101" },
       { ...local, AGENT_EVAL_ALLOWED_TOOLS: "web_search" },
       { ...local, OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.test" },
       { ...local, DEV_SESSION_ID: "" },

@@ -1,3 +1,4 @@
+import { AGENT_MAX_ESTIMATED_INPUT_TOKENS } from "@enterprise-agentic-saas/agent-contracts"
 import {
   issuePriorities,
   issueStatuses,
@@ -27,7 +28,12 @@ export const startAgentRunInputModel = v.strictObject({
   grant: agentTokenModel,
   clientMessageId: identifierModel,
   estimatedInputTokenCount: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(995_904)),
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(AGENT_MAX_ESTIMATED_INPUT_TOKENS)
+    ),
     0
   ),
   assetIds: v.optional(

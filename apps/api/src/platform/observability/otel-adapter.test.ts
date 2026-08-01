@@ -114,6 +114,27 @@ afterEach(() => {
 })
 
 describe("OpenTelemetry observability adapter", () => {
+  it("keeps fixed E2 failure telemetry without reporting raw causes", () => {
+    const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
+    const runtime = createOtelObservabilityRuntime("api", resource, false)
+    runtime.captureException(new Error("provider body must stay out of E2"), {
+      errorCode: "provider_failed",
+      method: "POST",
+      requestId: "request-1",
+      route: "/agent",
+      statusCode: 503,
+    })
+
+    expect(telemetry.span.setAttribute).toHaveBeenCalledWith(
+      "app.error.code",
+      "provider_failed"
+    )
+    expect(telemetry.span.setStatus).toHaveBeenCalled()
+    expect(telemetry.logger.error).not.toHaveBeenCalled()
+    expect(terminal).not.toHaveBeenCalled()
+    terminal.mockRestore()
+  })
+
   it("keeps trace failures fixed while local raw detail goes only to logs", () => {
     const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
     const runtime = createOtelObservabilityRuntime("api", resource)

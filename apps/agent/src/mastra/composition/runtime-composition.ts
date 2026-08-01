@@ -74,8 +74,13 @@ export const createAgentRuntimeComposition = (
     ...agents,
     approvedIssueActionExecutionRegistry,
     approvedIssueActionWorkflow,
-    createApprovalResumeRuntime: () =>
-      createApprovedIssueActionResumeRuntime(storage),
+    createApprovalResumeRuntime: () => {
+      const resumeStorage = createAgentStorage(environment)
+      return {
+        initialize: () => createApprovedIssueActionResumeRuntime(resumeStorage),
+        storage: resumeStorage,
+      }
+    },
     mastra: createProductRuntime({
       ...agents,
       approvedIssueActionWorkflow,

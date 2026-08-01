@@ -73,7 +73,8 @@ export const withOtelObservabilityWaitUntil = <T>(
 
 export const createOtelObservabilityRuntime = (
   service: string,
-  resource?: LocalTelemetryResource
+  resource?: LocalTelemetryResource,
+  reportDevelopmentErrors = true
 ): ObservabilityRuntime => {
   const tracer = trace.getTracer(service)
   const loggers = new Map<string, ReturnType<typeof getLogger>>()
@@ -92,7 +93,7 @@ export const createOtelObservabilityRuntime = (
       const span = trace.getActiveSpan()
       span?.setAttribute("app.error.code", context.errorCode)
       span?.setStatus({ code: SpanStatusCode.ERROR })
-      if (!resource) return
+      if (!resource || !reportDevelopmentErrors) return
 
       const correlation = activeTraceAttributes()
       reportDevelopmentCauseChain(error, context, {

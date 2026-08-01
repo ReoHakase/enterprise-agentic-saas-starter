@@ -2,6 +2,7 @@ import { trace } from "@opentelemetry/api"
 import { logs, SeverityNumber } from "@opentelemetry/api-logs"
 
 type LocalTelemetryEnvironment = {
+  AGENT_E2E_RUN_ID?: string
   AGENT_EVAL_ALLOWED_TOOLS?: string
   DEV_SESSION_ID?: string
   DEV_WORKTREE_ID?: string
@@ -282,6 +283,7 @@ export const reportDevelopmentCauseChain = (
   const worktreeId = environment.DEV_WORKTREE_ID?.trim()
   if (
     environment.NODE_ENV !== "development" ||
+    environment.AGENT_E2E_RUN_ID ||
     environment.AGENT_EVAL_ALLOWED_TOOLS ||
     environment.OTEL_EXPORTER_OTLP_ENDPOINT !== "http://127.0.0.1:4318" ||
     !sessionId ||

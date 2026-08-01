@@ -104,7 +104,6 @@ export const startProductOutput = async ({
         memory: { resource: memoryResourceId, thread: input.threadId },
         modelSettings: {
           maxOutputTokens: AGENT_MODEL_PROFILE.reservedOutputTokens,
-          temperature: 0.2,
         },
         ...productGenerationWebSearchOptions([input.message], toolAllowlist),
         onAbort,

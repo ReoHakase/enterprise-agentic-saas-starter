@@ -65,8 +65,8 @@ export const createGetIssueTool = <RequestContextData = unknown>(
         const validated = v.safeParse(agentGetIssueToolOutputSchema, output)
         if (!validated.success) throw new Error("Invalid tool output")
         return validated.output
-      } catch {
-        throw new Error("Agent tool execution failed")
+      } catch (cause) {
+        throw new Error("Agent tool execution failed", { cause })
       }
     },
   })

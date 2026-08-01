@@ -27,6 +27,7 @@ const productAgentRequestContext = (
   const execution = executionRegistry.register({
     api,
     budget: createAgentToolBudget(),
+    onRevoked: () => undefined,
     rootRunId: "run_mastra_registry",
     runGrant: TEST_RUN_GRANT,
     settlement: createRunSettlement(api, TEST_RUN_GRANT),
