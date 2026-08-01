@@ -46,6 +46,7 @@ export const agentUiToolNames = [
   "search_issue_labels",
   "search_issues",
   "search_organization_members",
+  "skill",
   "ui_navigate",
   "ui_open_issue",
   "ui_patch_form_draft",
@@ -163,12 +164,9 @@ export const agentUiMessagePartSchema = v.union([
     ]),
   }),
   v.strictObject({
-    type: v.literal("data-activity"),
-    data: v.strictObject({
-      kind: v.picklist(["status", "tool"]),
-      status: v.picklist(["running", "completed", "failed"]),
-      label: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
-    }),
+    type: v.literal("reasoning"),
+    text: v.pipe(v.string(), v.maxLength(50_000)),
+    state: v.optional(v.picklist(["streaming", "done"])),
   }),
   v.strictObject({
     type: v.literal("text"),

@@ -2,7 +2,7 @@
 title: 製品Agentのusageとbilling
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 ---
 
 # Usageとbilling
@@ -50,7 +50,9 @@ private APIは同じrunの失効済みgrantをterminal runの認可にだけ使�
 
 provider costが観測できれば表示集計はprovider costを優先し、なければcalculated costを使って`isEstimate = true`とします。price未登録は`unpriced`として0を記録し、黙って別model priceを流用しません。
 
-Qwen3.6 Flashは256,000 input token以下と超過で単価が変わるため、低/high tierをversion付きmigrationでseedします。threshold判定はproviderへ送った総input tokenで行い、そのrequest全体へ該当tierを適用します。将来の価格改定は既存rowを書き換えず、新しいeffective versionを追加します。
+GPT-5.6 Lunaは272,000 input token超過でrequest全体のinputが2倍、outputが1.5倍になります。cache readはinputの10%、cache writeはinputの1.25倍として、低/high tierを`openai-2026-08-01`のversion付きmigrationでseedします。threshold判定はproviderへ送った総input tokenで行います。将来の価格改定は既存rowを書き換えず、新しいeffective versionを追加します。
+
+この原価は内部の利用量・採算分析だけに使います。顧客の料金plan、invoice、請求額を算出するtableやAPIへ接続しません。
 
 ## Daily projection
 

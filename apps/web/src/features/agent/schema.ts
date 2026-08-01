@@ -38,11 +38,6 @@ export type AgentChatMessage = UIMessage<
     "context-reference":
       | { kind: "issue" | "file" | "member"; id: string; label: string }
       | { kind: "current_page"; path: string; label: string }
-    activity: {
-      kind: "status" | "tool"
-      status: "running" | "completed" | "failed"
-      label: string
-    }
     run: { runId: string }
   },
   {

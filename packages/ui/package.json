@@ -17,6 +17,7 @@
     "./components/calendar": "./src/components/calendar/calendar.tsx",
     "./components/card": "./src/components/card/card.tsx",
     "./components/checkbox": "./src/components/checkbox/checkbox.tsx",
+    "./components/collapsible": "./src/components/collapsible/collapsible.tsx",
     "./components/combobox": "./src/components/combobox/combobox.tsx",
     "./components/dialog": "./src/components/dialog/dialog.tsx",
     "./components/drawer": "./src/components/drawer/drawer.tsx",
@@ -44,6 +45,11 @@
     "./components/textarea": "./src/components/textarea/textarea.tsx",
     "./components/toggle-group": "./src/components/toggle-group/toggle-group.tsx",
     "./components/tooltip": "./src/components/tooltip/tooltip.tsx",
+    "./components/ai-elements/conversation": "./src/components/ai-elements/conversation.tsx",
+    "./components/ai-elements/message": "./src/components/ai-elements/message.tsx",
+    "./components/ai-elements/reasoning": "./src/components/ai-elements/reasoning.tsx",
+    "./components/ai-elements/shimmer": "./src/components/ai-elements/shimmer.tsx",
+    "./components/ai-elements/tool": "./src/components/ai-elements/tool.tsx",
     "./hooks/use-mobile": "./src/hooks/use-mobile.ts",
     "./lib/create-cropped-image": "./src/lib/create-cropped-image.ts",
     "./lib/utils": "./src/lib/utils.ts"
@@ -76,7 +82,8 @@
     "streamdown": "catalog:",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
-    "tw-animate-css": "catalog:"
+    "tw-animate-css": "catalog:",
+    "use-stick-to-bottom": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/portless-topology": "workspace:*",

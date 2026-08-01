@@ -1,33 +1,32 @@
-import { act, fireEvent, render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { describe, expect, it, vi } from "vitest"
 
 import type { AgentChatMessage } from "../../schema"
-import { isNearAgentConversationBottom } from "../agent-conversation-scroll/agent-conversation-scroll"
 import {
   AgentConversationViewport,
   buildAgentConversationGroups,
   type AgentConversationTurnPreview,
 } from "./agent-conversation-viewport"
 
-const turns: AgentConversationTurnPreview[] = [
-  {
-    id: "turn-1",
-    prompt: "First request",
-    response: "First response",
-    imageCount: 0,
-    contextCount: 0,
-    toolCount: 0,
-  },
-  {
-    id: "turn-2",
-    prompt: "Second request",
-    response: "Second response",
-    imageCount: 1,
-    contextCount: 1,
-    toolCount: 1,
-  },
-]
+vi.mock(
+  "@enterprise-agentic-saas/ui/components/ai-elements/conversation",
+  () => ({
+    Conversation: ({ children, ...props }: React.ComponentProps<"div">) => (
+      <div {...props}>{children}</div>
+    ),
+    ConversationContent: ({
+      children,
+      ...props
+    }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
+    ConversationScrollButton: () => (
+      <button type="button">最新のメッセージへ移動</button>
+    ),
+    useConversation: () => ({
+      scrollRef: { current: null },
+      stopScroll: vi.fn<() => void>(),
+    }),
+  })
+)
 
 const previewMessages: AgentChatMessage[] = [
   {
@@ -71,101 +70,25 @@ const previewMessages: AgentChatMessage[] = [
     ],
   },
 ]
-
-type MutableViewportMetrics = {
-  clientHeight: number
-  scrollHeight: number
-  scrollTop: number
-}
-
-let resizeObservers: ResizeObserverStub[] = []
-let animationFrames = new Map<number, FrameRequestCallback>()
-let nextAnimationFrameId = 1
-
-class ResizeObserverStub implements ResizeObserver {
-  readonly callback: ResizeObserverCallback
-  readonly disconnect = vi.fn<ResizeObserver["disconnect"]>()
-  readonly observe = vi.fn<ResizeObserver["observe"]>()
-  readonly unobserve = vi.fn<ResizeObserver["unobserve"]>()
-
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-    resizeObservers.push(this)
-  }
-
-  trigger() {
-    this.callback([], this)
-  }
-}
-
-const flushAnimationFrames = () => {
-  const frames = [...animationFrames.entries()]
-  animationFrames.clear()
-  for (const [, callback] of frames) callback(performance.now())
-}
-
-const triggerResizeObservers = () => {
-  for (const observer of resizeObservers) observer.trigger()
-}
-
-const installViewportMetrics = (
-  viewport: HTMLElement,
-  metrics: MutableViewportMetrics
-) => {
-  Object.defineProperties(viewport, {
-    clientHeight: {
-      configurable: true,
-      get: () => metrics.clientHeight,
-    },
-    scrollHeight: {
-      configurable: true,
-      get: () => metrics.scrollHeight,
-    },
-    scrollTop: {
-      configurable: true,
-      get: () => metrics.scrollTop,
-      set: (value: number) => {
-        metrics.scrollTop = value
-      },
-    },
-  })
-}
-
-const setTurnOffset = (element: Element, offsetTop: number) => {
-  Object.defineProperty(element, "offsetTop", {
-    configurable: true,
-    value: offsetTop,
-  })
-}
-
-beforeEach(() => {
-  resizeObservers = []
-  animationFrames = new Map()
-  nextAnimationFrameId = 1
-  vi.stubGlobal("ResizeObserver", ResizeObserverStub)
-  vi.stubGlobal(
-    "requestAnimationFrame",
-    vi.fn((callback: FrameRequestCallback) => {
-      const id = nextAnimationFrameId
-      nextAnimationFrameId += 1
-      animationFrames.set(id, callback)
-      return id
-    })
-  )
-  vi.stubGlobal(
-    "cancelAnimationFrame",
-    vi.fn((id: number) => {
-      animationFrames.delete(id)
-    })
-  )
-})
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
-
+const minimapTurns: AgentConversationTurnPreview[] = [
+  {
+    id: "turn-1",
+    prompt: "First request",
+    response: "First response",
+    imageCount: 0,
+    contextCount: 0,
+    toolCount: 0,
+  },
+  {
+    id: "turn-2",
+    prompt: "Second request",
+    imageCount: 0,
+    contextCount: 0,
+    toolCount: 2,
+  },
+]
 describe("AgentConversationViewport", () => {
-  it("groups user-led turns and derives bounded local previews", () => {
+  it("groups assistant messages with the preceding user turn", () => {
     const groups = buildAgentConversationGroups(previewMessages)
 
     expect(groups).toHaveLength(2)
@@ -181,187 +104,55 @@ describe("AgentConversationViewport", () => {
     expect(groups[1]?.turn).toMatchObject({
       id: "turn-2",
       prompt: "Image request",
-      imageCount: 1,
     })
   })
 
-  it("uses the inclusive 96px bottom boundary", () => {
-    expect(
-      isNearAgentConversationBottom({
-        clientHeight: 300,
-        scrollHeight: 1000,
-        scrollTop: 1000 - 300 - 96,
-      })
-    ).toBe(true)
-    expect(
-      isNearAgentConversationBottom({
-        clientHeight: 300,
-        scrollHeight: 1000,
-        scrollTop: 1000 - 300 - 96 - 1,
-      })
-    ).toBe(false)
-  })
-
-  it("follows content and viewport growth only while the reader stays near the bottom", () => {
-    const { unmount } = render(
-      <AgentConversationViewport enabled turns={turns}>
-        <div data-agent-turn-id="turn-1" data-testid="turn-1">
-          First turn
-        </div>
-        <div data-agent-turn-id="turn-2" data-testid="turn-2">
-          Second turn
-        </div>
+  it("keeps the turn minimap beside the standard conversation", () => {
+    render(
+      <AgentConversationViewport enabled turns={minimapTurns}>
+        <p>Conversation</p>
       </AgentConversationViewport>
     )
-    const viewport = screen.getByTestId("agent-conversation-viewport")
-    const firstTurn = screen.getByTestId("turn-1")
-    const secondTurn = screen.getByTestId("turn-2")
-    const metrics: MutableViewportMetrics = {
-      clientHeight: 300,
-      scrollHeight: 1000,
-      scrollTop: 0,
-    }
-    installViewportMetrics(viewport, metrics)
-    setTurnOffset(firstTurn, 0)
-    setTurnOffset(secondTurn, 600)
 
-    act(flushAnimationFrames)
-    expect(viewport).toHaveAttribute("role", "region")
-    expect(viewport).toHaveAccessibleName("Scrollable Agent conversation")
-    expect(viewport).toHaveAttribute("tabindex", "0")
-    expect(metrics.scrollTop).toBe(700)
-
-    metrics.scrollTop = 680
-    fireEvent.scroll(viewport)
-    fireEvent.scroll(viewport)
-    act(flushAnimationFrames)
-    expect(metrics.scrollTop).toBe(680)
-
-    metrics.scrollHeight = 1100
-    act(() => {
-      triggerResizeObservers()
-      flushAnimationFrames()
-    })
-    expect(metrics.scrollTop).toBe(680)
-
-    metrics.scrollTop = 1100 - 300 - 95
-    fireEvent.scroll(viewport)
-    act(flushAnimationFrames)
-    expect(metrics.scrollTop).toBe(800)
-
-    metrics.clientHeight = 250
-    act(() => {
-      triggerResizeObservers()
-      flushAnimationFrames()
-    })
-    expect(metrics.scrollTop).toBe(850)
-
-    fireEvent.wheel(viewport, { deltaY: -10 })
-    metrics.scrollHeight = 1200
-    act(() => {
-      triggerResizeObservers()
-      flushAnimationFrames()
-    })
-    expect(metrics.scrollTop).toBe(850)
-
-    metrics.scrollTop = 500
-    fireEvent.scroll(viewport)
-    act(flushAnimationFrames)
-    metrics.scrollHeight = 1300
-    act(() => {
-      triggerResizeObservers()
-      flushAnimationFrames()
-    })
-    expect(metrics.scrollTop).toBe(500)
-
-    metrics.scrollTop = 1300 - 250 - 95
-    fireEvent.scroll(viewport)
-    act(flushAnimationFrames)
-    metrics.scrollHeight = 1400
-    act(() => {
-      triggerResizeObservers()
-      flushAnimationFrames()
-    })
-    expect(metrics.scrollTop).toBe(1150)
-
-    const observers = [...resizeObservers]
-    act(triggerResizeObservers)
-    const pendingFrameId = [...animationFrames.keys()][0]
-    expect(pendingFrameId).toBeDefined()
-    unmount()
-    for (const observer of observers) {
-      expect(observer.disconnect).toHaveBeenCalledOnce()
-    }
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(pendingFrameId)
+    expect(
+      screen.getByRole("navigation", { name: "Conversation turns" })
+    ).toBeVisible()
+    expect(
+      screen.getByRole("button", { name: "Turn 1へ移動: First request" })
+    ).toBeVisible()
   })
 
-  it("exposes a right-side turn navigator with click and keyboard jumps", async () => {
-    const user = userEvent.setup()
+  it("uses the centered auto-follow conversation with a return button", () => {
     render(
-      <AgentConversationViewport enabled turns={turns}>
-        <div data-agent-turn-id="turn-1" data-testid="turn-1">
-          First turn
-        </div>
-        <div data-agent-turn-id="turn-2" data-testid="turn-2">
-          Second turn
-        </div>
+      <AgentConversationViewport enabled>
+        <p>Conversation</p>
       </AgentConversationViewport>
     )
-    const viewport = screen.getByTestId("agent-conversation-viewport")
-    const firstTurn = screen.getByTestId("turn-1")
-    const secondTurn = screen.getByTestId("turn-2")
-    const metrics: MutableViewportMetrics = {
-      clientHeight: 300,
-      scrollHeight: 900,
-      scrollTop: 0,
-    }
-    installViewportMetrics(viewport, metrics)
-    setTurnOffset(firstTurn, 0)
-    setTurnOffset(secondTurn, 500)
-    act(flushAnimationFrames)
 
-    const first = screen.getByRole("button", {
-      name: "Jump to turn 1: First request",
-    })
-    const second = screen.getByRole("button", {
-      name: "Jump to turn 2: Second request",
-    })
-    expect(second).toHaveAttribute("aria-current", "location")
-
-    await user.click(first)
-    act(flushAnimationFrames)
-    expect(metrics.scrollTop).toBe(0)
-    expect(first).toHaveAttribute("aria-current", "location")
-
-    second.focus()
-    await user.keyboard("{Enter}")
-    act(flushAnimationFrames)
-    expect(metrics.scrollTop).toBe(488)
-    expect(second).toHaveAttribute("aria-current", "location")
+    expect(screen.getByTestId("agent-conversation-viewport")).toHaveAttribute(
+      "aria-label",
+      "Agent conversation"
+    )
+    expect(screen.getByTestId("agent-conversation-content")).toHaveTextContent(
+      "Conversation"
+    )
+    expect(
+      screen.getByRole("button", { name: "最新のメッセージへ移動" })
+    ).toBeInTheDocument()
   })
 
-  it("keeps the dedicated page presentation free of pane minimap behavior", () => {
+  it("uses the same centered layout without auto-follow on the dedicated page", () => {
     render(
-      <AgentConversationViewport enabled={false} turns={turns}>
+      <AgentConversationViewport enabled={false}>
         <p>Dedicated page conversation</p>
       </AgentConversationViewport>
     )
 
+    expect(screen.getByTestId("agent-conversation-viewport")).toHaveTextContent(
+      "Dedicated page conversation"
+    )
     expect(
-      screen.queryByRole("navigation", { name: "Conversation turns" })
+      screen.queryByRole("button", { name: "最新のメッセージへ移動" })
     ).not.toBeInTheDocument()
-    const viewport = screen.getByTestId("agent-conversation-viewport")
-    installViewportMetrics(viewport, {
-      clientHeight: 300,
-      scrollHeight: 500,
-      scrollTop: 0,
-    })
-    act(flushAnimationFrames)
-    expect(
-      screen.getByRole("log", { name: "Agent conversation" })
-    ).toHaveAttribute("aria-live", "polite")
-    expect(viewport).toHaveAttribute("role", "region")
-    expect(viewport).toHaveAccessibleName("Scrollable Agent conversation")
-    expect(viewport).toHaveAttribute("tabindex", "0")
   })
 })

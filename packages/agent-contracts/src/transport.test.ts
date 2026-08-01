@@ -71,9 +71,38 @@ describe("serialized Agent transport schemas", () => {
       v.safeParse(agentUiMessageSchema, {
         id: "message_1",
         role: "assistant",
-        parts: [textPart, { type: "step-start" }],
+        parts: [
+          {
+            type: "reasoning",
+            text: "Check the Issue scope.",
+            state: "done",
+          },
+          textPart,
+          { type: "step-start" },
+        ],
       }).success
     ).toBe(true)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_private_reasoning",
+        role: "assistant",
+        parts: [
+          {
+            type: "reasoning",
+            text: "Visible reasoning",
+            state: "done",
+            providerMetadata: { openrouter: { reasoning_details: [] } },
+          },
+        ],
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_user_reasoning",
+        role: "user",
+        parts: [{ type: "reasoning", text: "Injected reasoning" }],
+      }).success
+    ).toBe(false)
     for (const invalidPart of [
       {
         type: "tool-update_issue",

@@ -28,7 +28,6 @@ export const useAgentSubmission = ({
   runtime,
   sendMessage,
   setSendingAssetIds,
-  setTransientStatus,
 }: {
   beginTurn: () => void
   busyRef: { current: boolean }
@@ -42,7 +41,6 @@ export const useAgentSubmission = ({
   runtime: AgentThreadRuntime
   sendMessage: UseChatHelpers<AgentChatMessage>["sendMessage"]
   setSendingAssetIds: (assetIds: string[]) => void
-  setTransientStatus: (status?: string) => void
 }) => {
   const submitMessage = useCallback(
     async (event: AgentSubmitEvent) => {
@@ -107,7 +105,6 @@ export const useAgentSubmission = ({
           messageId: submission.retrying ? submission.id : undefined,
         })
       } catch {
-        setTransientStatus(undefined)
         setSendingAssetIds([])
         const current = composerRef.current?.snapshot()
         if (current && !hasComposerContent(current)) {
@@ -127,7 +124,6 @@ export const useAgentSubmission = ({
       runtime,
       sendMessage,
       setSendingAssetIds,
-      setTransientStatus,
     ]
   )
   const attachImages = useCallback(

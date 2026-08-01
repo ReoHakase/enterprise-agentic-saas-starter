@@ -65,7 +65,6 @@ export const useAgentStopLifecycle = ({
   queryClient,
   runtime,
   setSendingAssetIds,
-  setTransientStatus,
   threadId,
 }: {
   busyRef: { current: boolean }
@@ -78,7 +77,6 @@ export const useAgentStopLifecycle = ({
   queryClient: QueryClient
   runtime: AgentThreadRuntime
   setSendingAssetIds: (assetIds: string[]) => void
-  setTransientStatus: (status?: string) => void
   threadId: string
 }) => {
   const [turnStopped, setTurnStopped] = useState(false)
@@ -160,7 +158,6 @@ export const useAgentStopLifecycle = ({
         pendingComposerSnapshotRef.current = undefined
       }
       setSendingAssetIds([])
-      setTransientStatus(undefined)
       setTurnStopped(outcome === "canceled")
       await ensureLocalStop()
       const settled = outcome !== "error"
@@ -192,7 +189,6 @@ export const useAgentStopLifecycle = ({
       restorePendingDraft,
       runtime,
       setSendingAssetIds,
-      setTransientStatus,
     ]
   )
   const requestAuthoritativeCancel = useCallback(
@@ -220,18 +216,13 @@ export const useAgentStopLifecycle = ({
         if (cancelRequestedRef.current) {
           void requestAuthoritativeCancel(dataPart.data.runId)
         }
-      } else if (dataPart.type === "data-activity") {
-        setTransientStatus(
-          dataPart.data.status === "running" ? dataPart.data.label : undefined
-        )
       }
     },
-    [requestAuthoritativeCancel, setTransientStatus]
+    [requestAuthoritativeCancel]
   )
   const onError = useCallback(() => {
     if (!cancelRequestedRef.current) activeRunIdRef.current = undefined
-    setTransientStatus(undefined)
-  }, [setTransientStatus])
+  }, [])
   const interceptFinish = useCallback(
     (event: FinishEvent) => {
       if (finalizingStopRef.current) return true
@@ -266,7 +257,6 @@ export const useAgentStopLifecycle = ({
     cancelRequestedRef.current = true
     setCancelState("canceling")
     chatControlsRef.current.clearError()
-    setTransientStatus(undefined)
     if (!runId) {
       stopDeadlineRef.current = setTimeout(() => {
         void finalizeStop("error")
@@ -275,13 +265,7 @@ export const useAgentStopLifecycle = ({
     }
     void requestAuthoritativeCancel(runId)
     return stopAttempt.promise
-  }, [
-    busyRef,
-    cancelState,
-    finalizeStop,
-    requestAuthoritativeCancel,
-    setTransientStatus,
-  ])
+  }, [busyRef, cancelState, finalizeStop, requestAuthoritativeCancel])
   const beginTurn = useCallback(() => {
     activeRunIdRef.current = undefined
     setTurnStopped(false)

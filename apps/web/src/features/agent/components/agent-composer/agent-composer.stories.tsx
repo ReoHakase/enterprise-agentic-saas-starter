@@ -10,6 +10,7 @@ import {
 import { AgentComposer } from "./agent-composer"
 
 const draftChanged = fn()
+const submitted = fn()
 const mentionCandidates = [...fictionalMentionCandidates]
 
 const ControlledComposer = ({
@@ -30,6 +31,7 @@ const ControlledComposer = ({
       disabled={disabled}
       draftText={draft}
       onDraftTextChange={changeDraft}
+      onSubmit={submitted}
     />
   )
 }
@@ -86,6 +88,30 @@ export const Mention = meta.story({
         })
       ).toBeVisible()
     })
+  },
+})
+
+export const KeyboardSubmission = meta.story({
+  play: async ({ canvas, step }) => {
+    await step(
+      "Insert a line break with Shift+Enter and submit with Enter",
+      async () => {
+        const editor = await canvas.findByRole("textbox", {
+          name: "Agent message",
+        })
+        await userEvent.click(editor)
+        await userEvent.type(editor, "First line")
+        await userEvent.keyboard("{Shift>}{Enter}{/Shift}")
+        await userEvent.type(editor, "Second line")
+        await expect(draftChanged).toHaveBeenLastCalledWith(
+          "First line\nSecond line"
+        )
+        await expect(submitted).not.toHaveBeenCalled()
+
+        await userEvent.keyboard("{Enter}")
+        await expect(submitted).toHaveBeenCalledOnce()
+      }
+    )
   },
 })
 

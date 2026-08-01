@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn } from "storybook/test"
+import { expect, fn, userEvent } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -40,6 +40,17 @@ export const UserMessage = meta.story({
 
 export const RichAssistantMessage = meta.story({
   tags: ["theme-sensitive"],
+  beforeEach() {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: fn().mockResolvedValue(undefined) },
+    })
+    return () => {
+      if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor)
+      else Reflect.deleteProperty(navigator, "clipboard")
+    }
+  },
   play: async ({ canvas, step }) => {
     await step(
       "Render Markdown, code, table, CJK, math, and Mermaid",
@@ -49,6 +60,12 @@ export const RichAssistantMessage = meta.story({
         ).toBeVisible()
         await expect(canvas.getByRole("table")).toBeVisible()
         await expect(canvas.getByText(/日本語と English/)).toBeVisible()
+        await userEvent.click(
+          canvas.getByRole("button", { name: "回答をコピー" })
+        )
+        await expect(
+          canvas.getByRole("button", { name: "回答をコピー済み" })
+        ).toBeVisible()
       }
     )
   },
@@ -57,6 +74,11 @@ export const RichAssistantMessage = meta.story({
 export const Source = meta.story({
   args: { message: fictionalAgentMessages.reasoningAndSources },
   play: async ({ canvas, step }) => {
+    await step("Read the collapsed reasoning summary", async () => {
+      await expect(
+        canvas.getByRole("button", { name: /思考完了/u })
+      ).toHaveTextContent("Check the active organization")
+    })
     await step("Expose the source", async () => {
       await expect(
         canvas.getByRole("link", {
@@ -75,7 +97,7 @@ export const ToolResult = meta.story({
   play: async ({ canvas, step }) => {
     await step("Inspect a completed tool call", async () => {
       await expect(canvas.getByRole("status")).toHaveTextContent(
-        "get issue · completed"
+        "Issue #184を確認完了"
       )
       await expect(canvas.queryByText(/"number": 184/u)).not.toBeInTheDocument()
       await expect(
@@ -102,7 +124,7 @@ export const ServerToolRunning = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "web search · running"
+      "Webで検索実行中"
     )
   },
 })
@@ -124,9 +146,7 @@ export const FailedTool = meta.story({
     } satisfies AgentChatMessage,
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "get issue · failed"
-    )
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Issueを確認失敗")
   },
 })
 
@@ -152,7 +172,7 @@ export const ApprovalDeclined = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "update issue · denied"
+      "Issueを更新拒否"
     )
   },
 })

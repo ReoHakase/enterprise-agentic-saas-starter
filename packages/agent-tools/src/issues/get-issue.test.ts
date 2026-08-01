@@ -67,6 +67,23 @@ describe("createGetIssueTool", () => {
     ).resolves.toMatchObject({ issues: expect.any(Array) })
   })
 
+  it("publishes a provider-compatible root object JSON Schema", () => {
+    const schema = createGetIssueTool(() => Promise.resolve(issue)).inputSchema
+    const jsonSchema = schema?.["~standard"].jsonSchema?.input({
+      target: "draft-07",
+    })
+
+    expect(jsonSchema).toMatchObject({
+      type: "object",
+      properties: {
+        lookup: expect.any(Object),
+        id: expect.any(Object),
+        number: expect.any(Object),
+      },
+      additionalProperties: false,
+    })
+  })
+
   it("does not invoke the executor for invalid tool input", async () => {
     const executor = vi.fn<GetIssueExecutor>(() => Promise.resolve(issue))
     const execute = createGetIssueTool(executor).execute
@@ -88,6 +105,19 @@ describe("createGetIssueTool", () => {
       error: true,
       validationErrors: { fields: { number: expect.any(Object) } },
     })
+    expect(executor).not.toHaveBeenCalled()
+  })
+
+  it("rejects mixed lookup variants before invoking the executor", async () => {
+    const executor = vi.fn<GetIssueExecutor>(() => Promise.resolve(issue))
+    const execute = createGetIssueTool(executor).execute
+
+    await expect(
+      execute?.(
+        { lookup: "id", id: "issue_1", number: 1 },
+        { observe: noopObserve, requestContext: new RequestContext() }
+      )
+    ).rejects.toThrow("Agent tool execution failed")
     expect(executor).not.toHaveBeenCalled()
   })
 

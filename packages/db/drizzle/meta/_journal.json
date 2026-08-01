@@ -176,6 +176,20 @@
       "when": 1785196754695,
       "tag": "0024_agent_update_attachment_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1785556310625,
+      "tag": "0025_agent_luna_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1785556330132,
+      "tag": "0026_agent_luna_pricing",
+      "breakpoints": true
     }
   ]
 }

@@ -20,9 +20,9 @@ import {
   agentConversationTurns,
 } from "./test-support/fixtures"
 
-const conversationTurns = [...agentConversationTurns]
 const organizationId = "organization-1"
 const timestamp = "2026-07-25T09:00:00.000Z"
+const browserConversationTurns = [...agentConversationTurns]
 const toolFailureThread = {
   id: "thread-tool-failure",
   title: "Tool failure",
@@ -313,11 +313,9 @@ describe("Agent chat browser integration", () => {
     )
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "get issue · failed"
+      "Issueを確認失敗"
     )
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "update issue · denied"
-    )
+    expect(screen.getByRole("status")).toHaveTextContent("Issueを更新拒否")
     const composer = screen.getByRole("textbox", { name: "Agent message" })
     await actor.click(composer)
     const typeCommittedText = async (
@@ -548,11 +546,10 @@ describe("Agent chat browser integration", () => {
     )
   })
 
-  it("jumps between real scroll regions from the conversation minimap", async () => {
-    const actor = userEvent.setup()
+  it("renders the centered auto-follow conversation with its turn minimap", () => {
     render(
       <div className="flex h-80 min-w-0">
-        <AgentConversationViewport enabled turns={conversationTurns}>
+        <AgentConversationViewport enabled turns={browserConversationTurns}>
           {agentConversationTurns.map((turn) => (
             <article
               key={turn.id}
@@ -567,14 +564,12 @@ describe("Agent chat browser integration", () => {
       </div>
     )
 
-    const viewport = screen.getByTestId("agent-conversation-viewport")
-    const before = viewport.scrollTop
-    await actor.click(
-      screen.getByRole("button", {
-        name: /Jump to turn 1: Review the organization access policy/u,
-      })
+    expect(screen.getByTestId("agent-conversation-content")).toHaveClass(
+      "max-w-3xl"
     )
-    expect(viewport.scrollTop).toBeLessThanOrEqual(before)
+    expect(
+      screen.getByRole("navigation", { name: "Conversation turns" })
+    ).toBeVisible()
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth
     )

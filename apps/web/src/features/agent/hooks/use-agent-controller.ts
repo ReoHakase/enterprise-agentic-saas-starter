@@ -117,7 +117,6 @@ const useAgentChatFinish = ({
   queryClient,
   runtime,
   setSendingAssetIds,
-  setTransientStatus,
   threadId,
 }: {
   composerRef: { current: AgentComposerHandle | null }
@@ -129,12 +128,10 @@ const useAgentChatFinish = ({
   queryClient: ReturnType<typeof useQueryClient>
   runtime: AgentThreadRuntime
   setSendingAssetIds: (assetIds: string[]) => void
-  setTransientStatus: (status?: string) => void
   threadId: string
 }) =>
   useCallback<ChatOnFinishCallback<AgentChatMessage>>(
     ({ isAbort, isDisconnect, isError }) => {
-      setTransientStatus(undefined)
       if (shouldRetainAgentSubmission({ isAbort, isDisconnect, isError })) {
         setSendingAssetIds([])
         const failedSnapshot = pendingComposerSnapshotRef.current
@@ -182,7 +179,6 @@ const useAgentChatFinish = ({
       queryClient,
       runtime,
       setSendingAssetIds,
-      setTransientStatus,
       threadId,
     ]
   )
@@ -230,7 +226,6 @@ export const useAgentController = ({
     undefined
   )
   const [sendingAssetIds, setSendingAssetIds] = useState<string[]>([])
-  const [transientStatus, setTransientStatus] = useState<string>()
   const busyRef = useRef(false)
   const mentionCandidates = useAgentMentionCandidates(organizationId)
   const transport = useMemo(
@@ -260,7 +255,6 @@ export const useAgentController = ({
     queryClient,
     runtime,
     setSendingAssetIds,
-    setTransientStatus,
     threadId: thread.id,
   })
   const stopLifecycle = useAgentStopLifecycle({
@@ -272,7 +266,6 @@ export const useAgentController = ({
     queryClient,
     runtime,
     setSendingAssetIds,
-    setTransientStatus,
     threadId: thread.id,
   })
   const { ensureLocalStop, isCancelRequested, stopCurrentTurn } = stopLifecycle
@@ -342,26 +335,10 @@ export const useAgentController = ({
     runtime,
     sendMessage: chat.sendMessage,
     setSendingAssetIds,
-    setTransientStatus,
   })
   useAutoSubmitAgentMessage(autoSubmit, composerFormRef, onAutoSubmit)
   useHotkeys(
     [
-      {
-        hotkey: "Mod+Enter",
-        callback: (event) => {
-          if (isAgentHotkeyAllowed(event))
-            composerFormRef.current?.requestSubmit()
-        },
-        options: {
-          enabled:
-            !disabled &&
-            !runtime.frozen &&
-            runtime.uploadingCount === 0 &&
-            !busyRef.current,
-          ignoreInputs: false,
-        },
-      },
       {
         hotkey: "Mod+.",
         callback: (event) => {
@@ -389,7 +366,6 @@ export const useAgentController = ({
     sendingAssetIds,
     stopCurrentTurn,
     submitMessage,
-    transientStatus,
     turnStopped: stopLifecycle.turnStopped,
   }
 }

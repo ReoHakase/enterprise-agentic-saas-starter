@@ -10,7 +10,16 @@ import * as v from "valibot"
 
 import type { AgentToolExecutor } from "../executor"
 
-const getIssueInputJsonSchema = toStandardJsonSchema(getIssueToolInputSchema)
+const getIssueProviderInputSchema = v.strictObject({
+  lookup: v.picklist(["id", "number"]),
+  id: v.optional(getIssueToolInputSchema.options[0].entries.id),
+  number: v.optional(getIssueToolInputSchema.options[1].entries.number),
+  attachmentCursor: getIssueToolInputSchema.options[0].entries.attachmentCursor,
+  attachmentLimit: getIssueToolInputSchema.options[0].entries.attachmentLimit,
+})
+const getIssueInputJsonSchema = toStandardJsonSchema(
+  getIssueProviderInputSchema
+)
 const agentIssueDetailJsonSchema = toStandardJsonSchema(
   agentGetIssueToolOutputSchema
 )
@@ -46,7 +55,10 @@ export const createGetIssueTool = <RequestContextData = unknown>(
     },
     execute: async (input, context) => {
       try {
-        const output = await executor(input, {
+        const validatedInput = v.safeParse(getIssueToolInputSchema, input)
+        if (!validatedInput.success)
+          throw new Error("Agent tool execution failed")
+        const output = await executor(validatedInput.output, {
           abortSignal: context.abortSignal,
           requestContext: context.requestContext,
         })

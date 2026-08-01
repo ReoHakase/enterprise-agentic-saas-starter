@@ -1,8 +1,8 @@
 ---
 title: 製品Agent runtime信頼性
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-28
+status: accepted
+implementation: active
+last_reviewed: 2026-08-01
 applies_to:
   - apps/web/src/features/agent/**
   - apps/api/src/modules/agent/**
@@ -32,13 +32,13 @@ Phase 1のMastra-native化後に、既知の不具合を同じ操作で再現し
 
 ## 不具合と構造上の原因
 
-| 症状                    | 現在の構造上の原因                                                                                          | Phase 1後の期待                                                               |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| 実行中toolがerror表示   | browserの`onToolCall`がserver toolまでclient tool executorへ渡し、allowlist外として`output-error`を書き戻す | client toolは`ui_*`だけ。server toolはnative stateを表示する                  |
-| Stop後に会話不能        | abortでも同じsubmission IDを保持し、run cancel完了前にretryし、chat errorをclearしない                      | Stopは正常cancel。IDを破棄し、explicit cancel完了後に新規turnを許可する       |
-| thinkingが終わらない    | raw reasoningを流し、reasoning-onlyを進捗として扱い、title callを先に待ち、output budgetがreasoningへ偏る   | raw reasoningを非表示、useful-output watchdog、titleはmain streamを遅らせない |
-| Web検索error            | client tool誤判定に加え、Product Agentからsearch Agent、その内部でprovider server toolという多段構造        | 1つの`web_search` toolからsearch providerを直接呼ぶ                           |
-| 既存Issueへ画像追加不可 | create toolだけがstaged asset promotionを持ち、update toolにattachment mutationがない                       | add/remove/readを独立toolとして提供する                                       |
+| 症状                    | 現在の構造上の原因                                                                                          | Phase 1後の期待                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 実行中toolがerror表示   | browserの`onToolCall`がserver toolまでclient tool executorへ渡し、allowlist外として`output-error`を書き戻す | client toolは`ui_*`だけ。server toolはnative stateを表示する              |
+| Stop後に会話不能        | abortでも同じsubmission IDを保持し、run cancel完了前にretryし、chat errorをclearしない                      | Stopは正常cancel。IDを破棄し、explicit cancel完了後に新規turnを許可する   |
+| thinkingが終わらない    | reasoning-onlyをuseful outputとして扱い、title callを先に待ち、output budgetがreasoningへ偏る               | 標準reasoningを表示してもwatchdogは維持し、titleはmain streamを遅らせない |
+| Web検索error            | client tool誤判定に加え、Product Agentからsearch Agent、その内部でprovider server toolという多段構造        | 1つの`web_search` toolからsearch providerを直接呼ぶ                       |
+| 既存Issueへ画像追加不可 | create toolだけがstaged asset promotionを持ち、update toolにattachment mutationがない                       | add/remove/readを独立toolとして提供する                                   |
 
 ## Tool UI state
 
@@ -123,16 +123,18 @@ disconnect単独のterminal cancelを決定的に観測できなかったため�
 
 ### 表示
 
-productionではraw reasoning partを送信、保存、表示しません。Product Agentとtitle Agentのreasoningは
-`none`です。
+Product Agentは`openai/gpt-5.6-luna`のreasoning `xhigh`を使い、providerが返した標準reasoning partを
+送信、保存、表示します。OpenRouterの`reasoning_details`はallowlist済みの型だけをMemoryへ保存して
+次turnへ再送します。history APIはreasoning本文だけを返し、暗号化detailやprovider metadataをbrowser、
+log、traceへ出しません。titleと直接Web検索補助は同じLunaのreasoning `none`です。
 
 表示するstatus例:
 
 ```text
-考えています
-Issueを検索しています
-画像を確認しています
-公開情報を検索しています
+思考中…
+Issueを検索 · 実行中
+添付画像を確認 · 実行中
+Webで検索 · 実行中
 ```
 
 statusはfinish、error、abort、disconnectで必ず消します。
@@ -171,7 +173,7 @@ reasoning deltaだけではtimerを延長しません。
 - query guard失敗時はproviderとquotaを呼ばない
 - nested Agentを作らない
 - timeout 25秒、`maxRetries: 0`、OpenRouter request 1件、reasoningなし
-- Phase 2はQwen向けbeta server toolのlive compatibility失敗を受け、Exaの`web` pluginを
+- 過去のQwen向けbeta server toolのlive compatibility失敗を受け、LunaでもExaの`web` pluginを
   `max_results: 3`で一時利用する。server toolへ戻す場合も同じquery/source/G5契約を通す
 - sourceはHTTP(S) public URLだけ
 - result本文、source数、title、URLをboundedにする

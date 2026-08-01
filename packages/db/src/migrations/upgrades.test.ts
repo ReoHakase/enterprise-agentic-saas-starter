@@ -17,6 +17,104 @@ import {
 import { createMigrationPrefix, migrationsFolder } from "./helpers"
 
 describe("database migrations: upgrades", () => {
+  it("changes only new Agent run defaults to the Luna profile", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const migrationPrefix = await createMigrationPrefix({
+      through: "0024_agent_update_attachment_actions",
+    })
+
+    try {
+      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["luna-user", "Luna User", "luna@example.test", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["luna-org", "Luna Org", "luna-org", now],
+        },
+        {
+          sql: "insert into session(id,expires_at,token,created_at,updated_at,user_id,active_organization_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "luna-session",
+            now + 3_600_000,
+            "luna-session-token",
+            now,
+            now,
+            "luna-user",
+            "luna-org",
+          ],
+        },
+        {
+          sql: "insert into agent_session_contexts(session_id,user_id,context_epoch,updated_at) values(?,?,?,?)",
+          args: ["luna-session", "luna-user", 1, now],
+        },
+        {
+          sql: "insert into agent_threads(id,organization_id,owner_user_id,status,created_at,archived_at) values(?,?,?,?,?,?)",
+          args: ["luna-thread", "luna-org", "luna-user", "active", now, null],
+        },
+        {
+          sql: "insert into agent_runs(id,organization_id,thread_id,root_run_id,session_id,user_id,context_epoch,client_message_id,status,scope,model_profile_id,context_window_token_count,started_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          args: [
+            "qwen-run",
+            "luna-org",
+            "luna-thread",
+            "qwen-run",
+            "luna-session",
+            "luna-user",
+            1,
+            "qwen-message",
+            "running",
+            "chat",
+            "openrouter-qwen3.6-flash",
+            256_000,
+            now,
+            now + 300_000,
+          ],
+        },
+      ])
+
+      await migrate(drizzle(client), { migrationsFolder })
+      await client.execute({
+        sql: "insert into agent_runs(id,organization_id,thread_id,root_run_id,session_id,user_id,context_epoch,client_message_id,status,scope,started_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
+        args: [
+          "luna-run",
+          "luna-org",
+          "luna-thread",
+          "luna-run",
+          "luna-session",
+          "luna-user",
+          1,
+          "luna-message",
+          "running",
+          "chat",
+          now + 1,
+          now + 300_001,
+        ],
+      })
+      const runs = await client.execute(
+        "select id,model_profile_id,context_window_token_count from agent_runs order by id"
+      )
+      expect(runs.rows).toEqual([
+        {
+          id: "luna-run",
+          model_profile_id: "openrouter-gpt-5.6-luna-xhigh",
+          context_window_token_count: 1_050_000,
+        },
+        {
+          id: "qwen-run",
+          model_profile_id: "openrouter-qwen3.6-flash",
+          context_window_token_count: 256_000,
+        },
+      ])
+    } finally {
+      client.close()
+      await rm(migrationPrefix, { recursive: true, force: true })
+    }
+  })
+
   it("keeps legacy update action documents compatible through 0024", async () => {
     expect.assertions(7)
     const client = createClient({ url: "file::memory:" })

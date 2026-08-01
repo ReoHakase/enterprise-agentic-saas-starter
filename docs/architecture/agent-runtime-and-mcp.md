@@ -493,9 +493,10 @@ abort分類とcancel先行settlementを検査します。
 
 ## Reasoning
 
-production UIへraw reasoning partを送信、保存、表示しません。`sendReasoning: false`を既定にし、boundedなstatusだけ表示します。
+Product AgentはAI SDK標準reasoning partを`sendReasoning: true`で送信し、本文をMastra Memoryへ保存して再表示します。OpenRouter標準`reasoning_details`はallowlist後に次turnへ再送しますが、暗号化detailとprovider metadataはserver外へ出しません。存在しない非公開chain-of-thoughtを別modelで生成しません。
 
-- Product Agentとtitle Agentのreasoningは`none`
+- Product Agentは`openai/gpt-5.6-luna`のreasoning `xhigh`
+- title Agentと直接Web検索補助は同じLunaのreasoning `none`
 - title生成はmain stream開始を妨げない
 - text、tool call、tool resultが一定時間ないreasoning-only状態をtimeoutする
 - tool side effect後の自動model retryは禁止する
@@ -515,11 +516,11 @@ Product Agent
 公開queryの完全一致、PIIとprivate情報拒否、quota、source URL検証は維持します。外側の空白だけを
 除いた2〜200文字のqueryを検証し、その同じ文字列をOpenRouterのJSON promptへ変更せず渡します。
 provider内の検索engineが内部で使うquery文字列までは保証しません。検索は25秒、`maxRetries: 0`、
-reasoningなしです。Phase 2はOpenRouterへQwenとExa `web` plugin
+reasoningなしです。現在はOpenRouterへLunaとExa `web` plugin
 （`max_results: 3`）を持つ1 requestだけを送り、検索結果は本文とURLのbounded projectionだけを返し、
 provider固有payloadを保存しません。
 
-Phase 2のlive compatibility確認では同じQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
+Phase 2のlive compatibility確認では当時のQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
 非推奨予定のpluginを一時利用します。provider SDKまたはroute更新後にserver toolを再検証し、
 exact query、1 request、public source projection、timeout、G5 3/3を維持できた時点で置き換えます。
 どちらの経路でも別Agentを挟みません。

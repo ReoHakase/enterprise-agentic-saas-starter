@@ -1,6 +1,9 @@
 import type { MastraCompositeStore } from "@mastra/core/storage"
 
-import { createAgentModel } from "../adapters/model/openrouter"
+import {
+  createAgentAuxiliaryModel,
+  createAgentModel,
+} from "../adapters/model/openrouter"
 import { createDirectOpenRouterWebSearch } from "../adapters/model/openrouter-web-search"
 import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import {
@@ -33,7 +36,12 @@ export const createProductAgentComposition = (
       environment.OPENROUTER_API_KEY,
       environment.OPENROUTER_BASE_URL
     )
-  const threadTitleAgent = createThreadTitleAgent(model)
+  const threadTitleAgent = createThreadTitleAgent(() =>
+    createAgentAuxiliaryModel(
+      environment.OPENROUTER_API_KEY,
+      environment.OPENROUTER_BASE_URL
+    )
+  )
   const executionRegistry = new ProductAgentExecutionRegistry()
   const productWebSearchTool = createWebSearchTool(
     createDirectOpenRouterWebSearch(

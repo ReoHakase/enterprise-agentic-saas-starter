@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import type { UIMessage } from "ai"
 import { createElement } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -8,6 +9,40 @@ import { parseAgentMessagePage } from "../../schema"
 import { AgentApprovalAttachments } from "../agent-approval-attachments/agent-approval-attachments"
 import { AgentMessage } from "../agent-message/agent-message"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
+
+const streamedWebSearchMessage = (
+  state: "input-available" | "output-available"
+) =>
+  createElement(AgentMessage, {
+    message: {
+      id: "message-tool-open-state",
+      role: "assistant" as const,
+      parts: [
+        state === "input-available"
+          ? {
+              type: "dynamic-tool" as const,
+              toolName: "web_search",
+              toolCallId: "call-web-search",
+              state,
+              input: { query: "AI SDK" },
+            }
+          : {
+              type: "dynamic-tool" as const,
+              toolName: "web_search",
+              toolCallId: "call-web-search",
+              state,
+              input: { query: "AI SDK" },
+              output: {
+                sources: [{ title: "AI SDK", url: "https://ai-sdk.dev/" }],
+              },
+            },
+      ],
+    },
+    organizationId: "org-1",
+    organizationSlug: "acme",
+    frozen: false,
+    onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
+  })
 
 describe("agent action projection", () => {
   it("deduplicates canonical action IDs from completed tool outputs", () => {
@@ -115,14 +150,6 @@ describe("agent action projection", () => {
           id: "message-trace",
           role: "assistant",
           parts: [
-            {
-              type: "data-activity",
-              data: {
-                kind: "tool",
-                status: "completed",
-                label: "Searched Issues",
-              },
-            },
             { type: "text", text: "The urgent Issue was confirmed." },
             {
               type: "dynamic-tool",
@@ -152,6 +179,133 @@ describe("agent action projection", () => {
     expect(
       screen.getByRole("link", { name: "#7 Restore production access" })
     ).toHaveAttribute("href", "/organization/acme/issues/7")
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "UrgentのIssueを検索完了"
+    )
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "条件: Urgent結果: 1件"
+    )
+  })
+
+  it("keeps reasoning and tools in stream order and renders reasoning Markdown", async () => {
+    const actor = userEvent.setup()
+    render(
+      createElement(AgentMessage, {
+        message: {
+          id: "message-interleaved",
+          role: "assistant",
+          parts: [
+            {
+              type: "reasoning",
+              text: "**Choosing a filter**\n\nSearch open urgent Issues first.",
+              state: "done",
+            },
+            {
+              type: "dynamic-tool",
+              toolName: "search_issues",
+              toolCallId: "call-search-empty",
+              state: "output-available",
+              input: {
+                status: "open",
+                priority: "urgent",
+                sortBy: "dueDate",
+                sortDirection: "asc",
+                limit: 50,
+              },
+              output: [],
+            },
+            {
+              type: "reasoning",
+              text: "**Trying the next priority**",
+              state: "done",
+            },
+          ],
+        },
+        organizationId: "org-1",
+        organizationSlug: "acme",
+        frozen: false,
+        onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
+      })
+    )
+
+    const firstReasoning = screen.getByRole("button", {
+      name: /Choosing a filter/u,
+    })
+    const tool = screen.getByRole("status")
+    const secondReasoning = screen.getByRole("button", {
+      name: /Trying the next priority/u,
+    })
+    expect(
+      firstReasoning.compareDocumentPosition(tool) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(
+      tool.compareDocumentPosition(secondReasoning) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(tool).toHaveTextContent("Open・UrgentのIssueを検索完了")
+    expect(tool).toHaveTextContent(
+      "条件: Open · Urgent · 並び順: dueDate asc · 最大50件結果: 0件"
+    )
+    await actor.click(firstReasoning)
+    expect(
+      screen
+        .getAllByText("Choosing a filter")
+        .some((element) => element.dataset.streamdown === "strong")
+    ).toBe(true)
+    expect(firstReasoning).not.toHaveTextContent("**")
+  })
+
+  it("names skill activation without exposing its instruction output", () => {
+    render(
+      createElement(AgentMessage, {
+        message: {
+          id: "message-skill",
+          role: "assistant",
+          parts: [
+            {
+              type: "dynamic-tool",
+              toolName: "skill",
+              toolCallId: "call-skill",
+              state: "output-available",
+              input: { name: "issue-triage" },
+              output: "PRIVATE_SKILL_INSTRUCTIONS",
+            },
+          ],
+        },
+        organizationId: "org-1",
+        organizationSlug: "acme",
+        frozen: false,
+        onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
+      })
+    )
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Issue分析の手順を確認完了"
+    )
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Issue分析の手順を読み込みました"
+    )
+    expect(screen.queryByText("PRIVATE_SKILL_INSTRUCTIONS")).toBeNull()
+    expect(screen.queryByText("Agent機能を実行")).toBeNull()
+  })
+
+  it("keeps a streamed tool collapsible controlled as safe details arrive", async () => {
+    const consoleErrors: string[] = []
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) =>
+        consoleErrors.push(args.map(String).join(" "))
+      )
+    const view = render(streamedWebSearchMessage("input-available"))
+    view.rerender(streamedWebSearchMessage("output-available"))
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: "AI SDK" })).toBeVisible()
+    )
+    consoleError.mockRestore()
+    expect(consoleErrors.join("\n")).not.toContain(
+      "changing the default open state of an uncontrolled Collapsible"
+    )
   })
 
   it("uses a full-width assistant response and omits repeated speaker labels", () => {

@@ -32,6 +32,7 @@ import {
   agentClientToolValueSchemas,
 } from "../../tools/client/schema"
 import { publicWebSearchInputValueSchema } from "../../tools/web-search/schema"
+import { projectOpenRouterReasoningOptions } from "./reasoning-details"
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u
 const TOOL_STATES = new Set([
@@ -61,8 +62,24 @@ const webSearchOutputSchema = v.strictObject({
 type ToolContract = {
   input: v.GenericSchema
   output?: v.GenericSchema
+  projectOutput?: (output: unknown, input: unknown) => unknown
   publicOutputUrls?: boolean
 }
+
+const productSkillNameSchema = v.picklist([
+  "core",
+  "issue-triage",
+  "issue-writing",
+  "web-assistance",
+])
+const skillToolInputSchema = v.strictObject({ name: productSkillNameSchema })
+const skillToolOutputSchema = v.union([
+  v.pipe(v.string(), v.maxLength(50_000)),
+  v.strictObject({
+    activated: v.literal(true),
+    name: productSkillNameSchema,
+  }),
+])
 
 const TOOL_CONTRACTS: Record<string, ToolContract> = {
   add_issue_attachments: {
@@ -108,6 +125,16 @@ const TOOL_CONTRACTS: Record<string, ToolContract> = {
   search_organization_members: {
     input: memberSearchToolInputSchema,
     output: memberSearchToolOutputSchema,
+  },
+  skill: {
+    input: skillToolInputSchema,
+    output: skillToolOutputSchema,
+    projectOutput: (_output, input) => {
+      const parsed = v.safeParse(skillToolInputSchema, input)
+      return parsed.success
+        ? { activated: true, name: parsed.output.name }
+        : undefined
+    },
   },
   ui_navigate: {
     input: agentClientToolValueSchemas.navigate,
@@ -252,21 +279,28 @@ const hasValidToolStatePayload = (input: {
   }
 }
 
-const projectToolPartFields = (part: Record<string, unknown>) => ({
-  title: optionalBoundedString(part.title, 200),
-  preliminary:
-    typeof part.preliminary === "boolean" ? part.preliminary : undefined,
-  providerExecuted:
-    typeof part.providerExecuted === "boolean"
-      ? part.providerExecuted
-      : undefined,
-  createdAt:
-    typeof part.createdAt === "number" &&
-    Number.isFinite(part.createdAt) &&
-    part.createdAt >= 0
-      ? part.createdAt
-      : undefined,
-})
+const projectToolPartFields = (part: Record<string, unknown>) => {
+  const providerMetadata = projectOpenRouterReasoningOptions(
+    part.providerOptions,
+    part.providerMetadata
+  )
+  return {
+    title: optionalBoundedString(part.title, 200),
+    preliminary:
+      typeof part.preliminary === "boolean" ? part.preliminary : undefined,
+    providerExecuted:
+      typeof part.providerExecuted === "boolean"
+        ? part.providerExecuted
+        : undefined,
+    createdAt:
+      typeof part.createdAt === "number" &&
+      Number.isFinite(part.createdAt) &&
+      part.createdAt >= 0
+        ? part.createdAt
+        : undefined,
+    ...(providerMetadata ? { providerMetadata } : {}),
+  }
+}
 
 const projectToolInvocation = (part: Record<string, unknown>) => {
   if (!isRecord(part.toolInvocation)) return
@@ -287,11 +321,17 @@ const projectToolInvocation = (part: Record<string, unknown>) => {
   const contract = TOOL_CONTRACTS[toolName]
   if (!contract) return
   const args = parseToolValue(contract.input, invocation.args)
-  const result = parseToolValue(
+  const parsedResult = parseToolValue(
     contract.output,
     invocation.result,
     contract.publicOutputUrls
   )
+  const result =
+    parsedResult === undefined
+      ? undefined
+      : contract.projectOutput
+        ? contract.projectOutput(parsedResult, args)
+        : parsedResult
   const approval = projectApproval(invocation.approval)
   const step =
     typeof invocation.step === "number" &&
@@ -343,6 +383,19 @@ const projectPart = (value: unknown) => {
       text: optionalBoundedString(value.text, 50_000) ?? "",
     }
   }
+  if (value.type === "reasoning") {
+    const text = optionalBoundedString(value.text ?? value.reasoning, 50_000)
+    const providerMetadata = projectOpenRouterReasoningOptions(
+      value.providerOptions,
+      value.providerMetadata
+    )
+    if (text === undefined && !providerMetadata) return
+    return {
+      type: "reasoning",
+      reasoning: text ?? "",
+      ...(providerMetadata ? { providerMetadata } : {}),
+    }
+  }
   if (value.type === "source" || value.type === "source-url") {
     return projectSource(value)
   }
@@ -351,8 +404,7 @@ const projectPart = (value: unknown) => {
   }
   if (
     value.type === "data-agent-assets" ||
-    value.type === "data-context-reference" ||
-    value.type === "data-activity"
+    value.type === "data-context-reference"
   ) {
     const parsed = v.safeParse(
       agentUiMessagePartSchema,

@@ -1,17 +1,17 @@
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 
+import type { AgentWaitingState } from "../agent-conversation/agent-waiting-state"
+
 export const AgentTurnStatus = ({
-  busy,
   cancelState,
   error,
-  transientStatus,
   turnStopped,
+  waitingState,
 }: {
-  busy: boolean
   cancelState: "idle" | "canceling" | "failed"
   error?: Error
-  transientStatus?: string
   turnStopped: boolean
+  waitingState?: AgentWaitingState
 }) => (
   <>
     {cancelState === "failed" ? (
@@ -26,12 +26,15 @@ export const AgentTurnStatus = ({
           : "Agent response failed. You can retry the same draft safely."}
       </p>
     ) : null}
-    {transientStatus && busy ? (
+    {waitingState ? (
       <div
-        className="flex w-full items-center gap-2 py-2 text-sm text-muted-foreground"
+        className="flex items-center gap-2 py-2 text-sm text-muted-foreground"
         role="status"
       >
-        <Spinner /> {transientStatus}
+        <Spinner aria-hidden="true" />
+        {waitingState === "continuation"
+          ? "続きを待っています…"
+          : "応答を待っています…"}
       </div>
     ) : null}
     {turnStopped ? (

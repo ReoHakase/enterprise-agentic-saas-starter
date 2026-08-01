@@ -75,11 +75,6 @@ export const createThreadTitleTask = ({
       {
         abortSignal: AbortSignal.timeout(TITLE_TIMEOUT_MS),
         modelSettings: { maxOutputTokens: 96, temperature: 0 },
-        providerOptions: {
-          openrouter: {
-            reasoning: { enabled: false, effort: "none", exclude: true },
-          },
-        },
         tracingOptions: { hideInput: true, hideOutput: true },
       }
     )

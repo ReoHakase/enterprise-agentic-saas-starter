@@ -16,17 +16,13 @@ describe("Product Agent generation options", () => {
       "Use public Web search.\nPublic-only Web query: official Cloudflare Workers limits",
       true,
     ],
-  ])("disables reasoning for %s", (text, expectsForcedSearch) => {
+  ])("preserves product reasoning for %s", (text, expectsForcedSearch) => {
     const options = productGenerationWebSearchOptions(
       [userMessage(text)],
       ["web_search"]
     )
 
-    expect(options.providerOptions).toEqual({
-      openrouter: {
-        reasoning: { enabled: false, effort: "none", exclude: true },
-      },
-    })
+    expect(options).not.toHaveProperty("providerOptions")
     expect("prepareStep" in options).toBe(expectsForcedSearch)
   })
 

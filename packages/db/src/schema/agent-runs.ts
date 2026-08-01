@@ -42,10 +42,10 @@ export const agentRuns = sqliteTable(
     outputTokenCount: integer("output_token_count").notNull().default(0),
     modelProfileId: text("model_profile_id")
       .notNull()
-      .default("openrouter-qwen3.6-flash"),
+      .default("openrouter-gpt-5.6-luna-xhigh"),
     contextWindowTokenCount: integer("context_window_token_count")
       .notNull()
-      .default(1_000_000),
+      .default(1_050_000),
     estimatedInputTokenCount: integer("estimated_input_token_count")
       .notNull()
       .default(0),

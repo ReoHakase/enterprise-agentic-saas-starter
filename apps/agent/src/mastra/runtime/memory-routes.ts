@@ -175,14 +175,15 @@ const projectNativeHistoryPart = (
     return undefined
   }
   const part = Object.fromEntries(Object.entries(value))
-  if (part.type === "reasoning") return undefined
+  if (part.type === "reasoning" && typeof part.text === "string") {
+    return { type: "reasoning", text: part.text, state: "done" }
+  }
   if (part.type === "text" && typeof part.text === "string") {
     return { type: "text", text: part.text }
   }
   if (
     (part.type === "data-agent-assets" ||
-      part.type === "data-context-reference" ||
-      part.type === "data-activity") &&
+      part.type === "data-context-reference") &&
     "data" in part
   ) {
     return { type: part.type, data: part.data }

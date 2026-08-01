@@ -2,7 +2,7 @@
 title: 製品Agentのthreadとcontext
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 ---
 
 # Threadとcontext
@@ -27,8 +27,9 @@ Mastra Storageのthread metadataの積集合を`updatedAt DESC, id DESC`で返�
 
 Mastra Storageがthread metadataとmessage履歴の正本です。Mastra Memoryは同じStorage上のthreadから
 model文脈を構成し、Application DBのregistryがauthorizationの正本です。API側へmessage副本を
-作りません。transient `data-activity`、`data-run`、raw reasoning、provider metadata、credential、
-raw imageは保存しません。
+作りません。表示用の標準reasoning本文と、次turnへ再送するOpenRouterの`reasoning_details`だけを
+型、個数、サイズ付きallowlistで保存します。history APIは本文だけを返し、暗号化detail、signature、
+provider metadata、credential、raw imageはbrowser、log、traceへ出しません。
 
 ## 自動title
 
@@ -44,12 +45,15 @@ runに対するusage専用の冪等記録契約を使います。title失敗やu
 
 ## Model profile snapshot
 
-各runはprofile/modelとcontext設定をsnapshotします。Qwen3.6 Flash profileは次です。
+各runはprofile/modelとcontext設定をsnapshotします。Product AgentのLuna profileは次です。
 
-- provider model: `qwen/qwen3.6-flash`
-- context window: 1,000,000 token
-- reasoning effort: none
+- profile: `openrouter-gpt-5.6-luna-xhigh`
+- provider model: `openai/gpt-5.6-luna`
+- context window: 1,050,000 token
+- reasoning effort: `xhigh`
 - max output: 4,096 token
+
+title生成と直接Web検索補助も同じLunaを使いますが、補助処理はreasoning `none`です。既存runのprofile snapshotはmigrationで書き換えません。
 
 modelの将来設定変更で過去runの解釈を変えないため、run rowへprofile、context window、事前推定input、reserved outputを保持します。
 

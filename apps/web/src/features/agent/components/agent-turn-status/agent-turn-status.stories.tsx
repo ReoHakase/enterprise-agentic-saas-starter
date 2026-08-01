@@ -9,26 +9,40 @@ const meta = preview.meta({
   component: AgentTurnStatus,
   tags: ["autodocs"],
   args: {
-    busy: false,
     cancelState: "idle",
     turnStopped: false,
+    waitingState: undefined,
   },
 })
 
-export const Thinking = meta.story({
+export const WaitingForFirstByte = meta.story({
   args: {
-    busy: true,
     cancelState: "idle",
     turnStopped: false,
-    transientStatus: "Thinking…",
+    waitingState: "first-byte",
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("Thinking…")).toBeVisible()
+    const status = canvas.getByRole("status")
+    await expect(status).toHaveTextContent("応答を待っています…")
+    await expect(status.querySelector("svg")).not.toBeNull()
+  },
+})
+
+export const WaitingAfterTool = meta.story({
+  args: {
+    cancelState: "idle",
+    turnStopped: false,
+    waitingState: "continuation",
+  },
+  play: async ({ canvas }) => {
+    const status = canvas.getByRole("status")
+    await expect(status).toHaveTextContent("続きを待っています…")
+    await expect(status.querySelector("svg")).not.toBeNull()
   },
 })
 
 export const TurnStopped = meta.story({
-  args: { busy: false, cancelState: "idle", turnStopped: true },
+  args: { cancelState: "idle", turnStopped: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent("Turn stopped.")
   },
@@ -36,7 +50,6 @@ export const TurnStopped = meta.story({
 
 export const RecoverableTimeout = meta.story({
   args: {
-    busy: false,
     cancelState: "idle",
     turnStopped: false,
     error: new Error("Agent response timed out."),
@@ -49,7 +62,7 @@ export const RecoverableTimeout = meta.story({
 })
 
 export const CancelFailed = meta.story({
-  args: { busy: false, cancelState: "failed", turnStopped: false },
+  args: { cancelState: "failed", turnStopped: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("alert")).toHaveTextContent(
       "Agent response could not be canceled safely. Retry stop."

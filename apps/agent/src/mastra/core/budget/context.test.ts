@@ -5,9 +5,9 @@ import { estimateAgentContextBudget } from "./context"
 describe("estimateAgentContextBudget", () => {
   it.each([
     [0, "normal"],
-    [669, "notice"],
-    [816, "warning"],
-    [913, "critical"],
+    [704, "notice"],
+    [858, "warning"],
+    [960, "critical"],
   ] as const)(
     "projects attachment pressure %i as %s",
     (attachmentCount, level) => {
@@ -17,7 +17,7 @@ describe("estimateAgentContextBudget", () => {
       })
 
       expect(budget.level).toBe(level)
-      expect(budget.contextWindowTokens).toBe(1_000_000)
+      expect(budget.contextWindowTokens).toBe(1_050_000)
       expect(budget.reservedOutputTokens).toBe(4_096)
       expect(budget.observedInputTokens).toBeNull()
     }

@@ -27,7 +27,7 @@ export const createFinalizedProductStream = ({
   const aiStream = toAISdkStream(output, {
     from: "agent",
     onError: () => "Model response failed.",
-    sendReasoning: false,
+    sendReasoning: true,
     sendSources: true,
     version: "v6",
   })

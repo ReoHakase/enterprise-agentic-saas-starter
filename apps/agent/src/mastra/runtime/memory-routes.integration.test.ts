@@ -19,6 +19,25 @@ const toolHistoryParts = () =>
   JSON.parse(
     JSON.stringify([
       {
+        type: "reasoning",
+        text: "Issueの状態を確認する。",
+        providerMetadata: {
+          openrouter: {
+            reasoning_details: [
+              {
+                type: "reasoning.encrypted",
+                data: "PRIVATE_REASONING_CIPHERTEXT_SENTINEL",
+              },
+              {
+                type: "reasoning.text",
+                text: "Private provider continuation",
+                signature: "PRIVATE_REASONING_SIGNATURE_SENTINEL",
+              },
+            ],
+          },
+        },
+      },
+      {
         type: "tool-invocation",
         toolInvocation: {
           state: "call",
@@ -337,6 +356,11 @@ describe("App registry to Agent Memory boundary", () => {
           {
             id: "message_tool_history",
             parts: expect.arrayContaining([
+              {
+                type: "reasoning",
+                text: "Issueの状態を確認する。",
+                state: "done",
+              },
               expect.objectContaining({
                 type: "tool-web_search",
                 state: "input-available",
@@ -384,15 +408,16 @@ describe("App registry to Agent Memory boundary", () => {
           },
         ],
       })
-      expect(JSON.stringify(toolHistoryBody)).not.toContain(
-        "PRIVATE_RAW_INPUT_SENTINEL"
-      )
-      expect(JSON.stringify(toolHistoryBody)).not.toContain(
-        "PRIVATE_ERROR_TOKEN"
-      )
-      expect(JSON.stringify(toolHistoryBody)).not.toContain(
-        "PRIVATE_RELOAD_SIGNATURE"
-      )
+      for (const privateValue of [
+        "PRIVATE_RAW_INPUT_SENTINEL",
+        "PRIVATE_ERROR_TOKEN",
+        "PRIVATE_RELOAD_SIGNATURE",
+        "PRIVATE_REASONING_CIPHERTEXT_SENTINEL",
+        "PRIVATE_REASONING_SIGNATURE_SENTINEL",
+        "reasoning_details",
+      ]) {
+        expect(JSON.stringify(toolHistoryBody)).not.toContain(privateValue)
+      }
 
       await suspendMemoryCommit(composition.mastra, {
         applicationRunId: "run_pending_memory",

@@ -12,6 +12,7 @@ import {
   createCurrentMessageImageContext,
   loadCurrentMessageImages,
 } from "../core/messages/chat-input"
+import { AGENT_MODEL_PROFILE } from "../core/model-profile"
 import { stopOnPendingIssueAction } from "../core/stop-conditions"
 import { createAgentClientTools } from "../tools/client/tool"
 import { waitForAbortable } from "./chat-lifecycle"
@@ -85,7 +86,10 @@ export const startProductOutput = async ({
           resource: memoryResourceId,
           thread: input.threadId,
         },
-        modelSettings: { maxOutputTokens: 4_096, temperature: 0.2 },
+        modelSettings: {
+          maxOutputTokens: AGENT_MODEL_PROFILE.reservedOutputTokens,
+          temperature: 0.2,
+        },
         ...productGenerationWebSearchOptions([input.message], toolAllowlist),
         onAbort,
         onError,
