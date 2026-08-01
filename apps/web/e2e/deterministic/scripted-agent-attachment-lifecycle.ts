@@ -14,6 +14,7 @@ import {
   createScriptedIssue,
   isRecord,
   readCreatedIssue,
+  selectAgentPermission,
   setupScriptedAgentScenario,
   type ScriptedAgentTestFixtures,
 } from "./scripted-agent-fixture"
@@ -171,9 +172,7 @@ export const runScriptedAgentAttachmentLifecycle = async (
     })
   ).toHaveLength(0)
 
-  await permission.click()
-  await page.getByRole("option", { name: /Ask always/u }).click()
-  await expect(permission).toContainText("Ask always")
+  await selectAgentPermission({ page, permission }, "Ask always")
   const addResult = await sendAndApproveNextAction(
     page,
     agentShell,
@@ -245,9 +244,7 @@ export const runScriptedAgentAttachmentLifecycle = async (
     )
   ).toBeVisible()
 
-  await permission.click()
-  await page.getByRole("option", { name: /Full access/u }).click()
-  await expect(permission).toContainText("Full access")
+  await selectAgentPermission({ page, permission }, "Full access")
   await composer.fill(
     "[E1:ATTACHMENT_READ] Read the image attached to Issue number 1."
   )

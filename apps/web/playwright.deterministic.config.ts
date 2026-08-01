@@ -42,6 +42,8 @@ const inheritedEnvironment = Object.fromEntries(
 
 const agentStackEnvironment = {
   ...inheritedEnvironment,
+  AGENT_E2E_OBSERVABILITY:
+    process.env.AGENT_E2E_OBSERVABILITY === "1" ? "1" : "0",
   NODE_ENV: "development",
   APP_NAME: "Enterprise Agentic SaaS Deterministic E2E",
   APP_BASE_URL: agentEnvironment.webOrigin,

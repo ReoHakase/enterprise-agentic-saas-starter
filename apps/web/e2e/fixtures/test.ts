@@ -152,7 +152,7 @@ export const test = base.extend<ClientDiagnosticsFixtures, AgentWorkerFixtures>(
       })
     },
     assertNoClientErrors: [
-      async ({ clientErrorPolicy, page }, use) => {
+      async ({ clientErrorPolicy, page }, use, testInfo) => {
         // Next/Turbopack development can emit an invalid RSC timing interval
         // during redirects and error-boundary recovery. Suppress only that
         // framework-owned measurement; product timing and every other browser
@@ -201,6 +201,13 @@ export const test = base.extend<ClientDiagnosticsFixtures, AgentWorkerFixtures>(
               pattern.test(error)
             )
         )
+        if (testInfo.config.metadata.agentE2EMode === "full") {
+          expect(
+            unexpectedErrors.length,
+            "unexpected browser console/page error count"
+          ).toBe(0)
+          return
+        }
         expect(
           unexpectedErrors,
           "unexpected browser console/page errors"

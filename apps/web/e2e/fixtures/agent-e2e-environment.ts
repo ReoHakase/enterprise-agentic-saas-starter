@@ -51,6 +51,8 @@ export const createAgentE2EEnvironment = (input: string | number) => {
 
   return {
     runId,
+    telemetrySessionId: `agent-e2e-${runId}`,
+    telemetryWorktreeId: "agent-e2e",
     webPort,
     apiPort,
     githubPort,
@@ -78,6 +80,19 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     agentWorkerName: `enterprise-agentic-saas-agent-e2e-${runId}`,
   }
 }
+
+export const createAgentE2ETelemetryVariables = (
+  environment: AgentE2EEnvironment,
+  enabled: boolean
+) =>
+  enabled
+    ? {
+        AGENT_E2E_RUN_ID: String(environment.runId),
+        DEV_SESSION_ID: environment.telemetrySessionId,
+        DEV_WORKTREE_ID: environment.telemetryWorktreeId,
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+      }
+    : {}
 
 export const removeAgentE2EArtifacts = async (
   input: string | number

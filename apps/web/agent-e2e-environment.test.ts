@@ -7,12 +7,14 @@ import { describe, expect, it } from "vitest"
 import {
   agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
+  createAgentE2ETelemetryVariables,
   parseAgentE2ERunId,
   removeAgentE2EArtifacts,
   removeAgentE2EStackArtifacts,
 } from "./e2e/fixtures/agent-e2e-environment"
 import { removeFullE2EArtifacts } from "./e2e/fixtures/full-e2e-cleanup"
 import {
+  createFullE2EPlaywrightEnvironment,
   runFullE2ECommand,
   selectFullE2EPlaywrightArguments,
 } from "./e2e/fixtures/run-full-e2e"
@@ -58,7 +60,16 @@ describe("Agent E2E environment", () => {
       environment.agentStorageAuthToken
     )
     expect(environment.nextDistDirectory).toBe(".next-e2e-full-321")
+    expect(environment.telemetrySessionId).toBe("agent-e2e-321")
+    expect(environment.telemetryWorktreeId).toBe("agent-e2e")
     expect(environment.apiWorkerName).not.toBe(environment.agentWorkerName)
+    expect(createAgentE2ETelemetryVariables(environment, true)).toEqual({
+      AGENT_E2E_RUN_ID: "321",
+      DEV_SESSION_ID: "agent-e2e-321",
+      DEV_WORKTREE_ID: "agent-e2e",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+    })
+    expect(createAgentE2ETelemetryVariables(environment, false)).toEqual({})
   })
 
   it("removes stack-owned state without deleting sibling runner artifacts", async () => {
@@ -143,8 +154,8 @@ describe("Agent E2E environment", () => {
       })
       await playwrightStarted
 
-      await expect(access(environment.temporaryRoot)).resolves.toBeUndefined()
-      await expect(access(nextDistPath)).resolves.toBeUndefined()
+      await access(environment.temporaryRoot)
+      await access(nextDistPath)
 
       finishPlaywright?.()
       await expect(command).resolves.toBe(0)
@@ -163,37 +174,73 @@ describe("Agent E2E environment", () => {
     }
   })
 
-  it("keeps the Qwen diagnostic out of the blocking full E2E arguments", () => {
-    const requested = ["--grep", "agent-canary"]
-
-    expect(selectFullE2EPlaywrightArguments(requested, {})).toEqual([
-      "--grep-invert",
-      "(?:@diagnostic-qwen)",
-      ...requested,
+  it("keeps all three Luna canaries in the blocking full E2E suite", async () => {
+    const [runnerSource, specSource] = await Promise.all([
+      readFile(resolve(process.cwd(), "e2e/fixtures/run-full-e2e.ts"), "utf8"),
+      readFile(resolve(process.cwd(), "e2e/full/real-agent.spec.ts"), "utf8"),
     ])
-    expect(
-      selectFullE2EPlaywrightArguments(requested, {
-        PAID_E2E_DIAGNOSTIC: "1",
-      })
-    ).toEqual(requested)
+    const canaryCount = [...specSource.matchAll(/test\("agent-canary-/gu)]
+      .length
+
+    expect({
+      canaryCount,
+      hasConditionalExclusion: runnerSource.includes("grep-invert"),
+      hasDiagnosticTag: /@diagnostic-/u.test(specSource),
+    }).toEqual({
+      canaryCount: 3,
+      hasConditionalExclusion: false,
+      hasDiagnosticTag: false,
+    })
   })
 
-  it("keeps the diagnostic exclusion when callers also invert a pattern", () => {
+  it("allows listing but rejects arguments that weaken the paid E2E gate", () => {
+    expect(selectFullE2EPlaywrightArguments([])).toEqual([])
+    expect(selectFullE2EPlaywrightArguments(["--list"])).toEqual(["--list"])
+
+    for (const playwrightArguments of [
+      ["--grep", "agent-canary-read-source"],
+      ["--workers=2"],
+      ["--retries=1"],
+      ["--trace", "on"],
+      ["--reporter=html"],
+      ["--output", "test-results"],
+      ["--config", "playwright.config.ts"],
+      ["--list", "--workers=2"],
+      ["e2e/full/real-agent.spec.ts"],
+    ]) {
+      expect(() =>
+        selectFullE2EPlaywrightArguments(playwrightArguments)
+      ).toThrow("Full E2E accepts only the optional --list argument")
+    }
+  })
+
+  it("allowlists the paid Playwright environment and drops debug outputs", () => {
     expect(
-      selectFullE2EPlaywrightArguments(
-        [
-          "--grep-invert",
-          "agent-canary-read-source",
-          "--grep-invert=agent-canary-approved-image-write",
-          "--list",
-        ],
-        {}
+      createFullE2EPlaywrightEnvironment(
+        {
+          PATH: "/test/bin",
+          HOME: "/test/home",
+          OPENROUTER_API_KEY: "provider-secret",
+          PAID_E2E_APPROVED: "1",
+          AGENT_E2E_OBSERVABILITY: "1",
+          AGENT_E2E_RUN_ID: "stale",
+          DEBUG: "pw:protocol",
+          DEBUG_FILE: "/tmp/private-playwright.log",
+          PWDEBUG: "console",
+          PLAYWRIGHT_JSON_OUTPUT_NAME: "/tmp/private-results.json",
+          NODE_OPTIONS: "--inspect",
+          UNRELATED_SECRET: "private",
+        },
+        4321
       )
-    ).toEqual([
-      "--grep-invert",
-      "(?:@diagnostic-qwen)|(?:agent-canary-read-source)|(?:agent-canary-approved-image-write)",
-      "--list",
-    ])
+    ).toEqual({
+      PATH: "/test/bin",
+      HOME: "/test/home",
+      OPENROUTER_API_KEY: "provider-secret",
+      PAID_E2E_APPROVED: "1",
+      AGENT_E2E_OBSERVABILITY: "1",
+      AGENT_E2E_RUN_ID: "4321",
+    })
   })
 
   it("propagates a blocking Playwright failure after full cleanup", async () => {

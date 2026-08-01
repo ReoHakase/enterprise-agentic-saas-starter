@@ -1,7 +1,11 @@
-import { readFile } from "node:fs/promises"
+import type {
+  APIRequestContext,
+  APIResponse,
+  Locator,
+  Page,
+} from "@playwright/test"
 
-import type { APIRequestContext, Locator, Page } from "@playwright/test"
-
+import { projectAgentE2EHistory } from "../../testing/agent-e2e-projection"
 import { expect, test } from "../fixtures/test"
 
 type CanaryHarness = {
@@ -14,6 +18,164 @@ type CanaryHarness = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
+
+const LUNA_MODEL_ID = "openai/gpt-5.6-luna"
+const LUNA_PROVIDER_ID = "openrouter"
+const AGENT_RESUME_RESPONSE_TIMEOUT_MS = 60_000
+
+const safeApiRequest = async (
+  run: () => Promise<APIResponse>
+): Promise<APIResponse | undefined> => {
+  try {
+    return await run()
+  } catch {
+    return undefined
+  }
+}
+
+const safeResponseJson = async (
+  response: Pick<APIResponse, "json" | "ok"> | undefined
+) => {
+  if (!response?.ok()) return { responseOk: false, value: undefined }
+  try {
+    const value: unknown = await response.json()
+    return { responseOk: true, value }
+  } catch {
+    return { responseOk: false, value: undefined }
+  }
+}
+
+const readHistoryProjection = async (
+  request: APIRequestContext,
+  apiOrigin: string,
+  threadId: string
+) => {
+  const response = await safeApiRequest(() =>
+    request.get(
+      `${apiOrigin}/agent/threads/${encodeURIComponent(threadId)}/messages`
+    )
+  )
+  const parsed = await safeResponseJson(response)
+  return projectAgentE2EHistory(parsed.value, parsed.responseOk)
+}
+
+const readIssueState = async (
+  request: APIRequestContext,
+  input: {
+    apiOrigin: string
+    organizationId: string
+    title: string
+  }
+) => {
+  const response = await safeApiRequest(() =>
+    request.get(`${input.apiOrigin}/issues`, {
+      params: {
+        organizationId: input.organizationId,
+        search: input.title,
+      },
+    })
+  )
+  const parsed = await safeResponseJson(response)
+  const body = isRecord(parsed.value) ? parsed.value : undefined
+  const items = body && Array.isArray(body.items) ? body.items : undefined
+  const candidates = items ?? []
+  const matches = candidates.filter(
+    (candidate) => isRecord(candidate) && candidate.title === input.title
+  )
+  const single = matches.length === 1 ? matches[0] : undefined
+  const issueId =
+    isRecord(single) && typeof single.id === "string" ? single.id : undefined
+  const priority = isRecord(single) ? single.priority : undefined
+  return {
+    issueId,
+    projection: {
+      matchingIssueCount: matches.length,
+      matchingIssueHasId: issueId !== undefined,
+      matchingOpenCount: matches.filter(
+        (candidate) => isRecord(candidate) && candidate.status === "open"
+      ).length,
+      matchingPriority:
+        typeof priority === "string" &&
+        ["high", "low", "medium", "urgent"].includes(priority)
+          ? priority
+          : null,
+      responseOk: parsed.responseOk && items !== undefined,
+    },
+  }
+}
+
+const readIssueByNumberState = async (
+  request: APIRequestContext,
+  input: {
+    apiOrigin: string
+    expectedTitle: string
+    number: number
+    organizationId: string
+  }
+) => {
+  const response = await safeApiRequest(() =>
+    request.get(`${input.apiOrigin}/issues/by-number/${input.number}`, {
+      params: { organizationId: input.organizationId },
+    })
+  )
+  const parsed = await safeResponseJson(response)
+  const issue = isRecord(parsed.value) ? parsed.value : undefined
+  const priority = issue?.priority
+  const status = issue?.status
+  return {
+    issueHasId: typeof issue?.id === "string",
+    priority:
+      typeof priority === "string" &&
+      ["high", "low", "medium", "urgent"].includes(priority)
+        ? priority
+        : null,
+    responseOk: parsed.responseOk && issue !== undefined,
+    status:
+      typeof status === "string" &&
+      ["closed", "in_progress", "open"].includes(status)
+        ? status
+        : null,
+    titleMatches: issue?.title === input.expectedTitle,
+  }
+}
+
+const usageCount = (value: unknown) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : 0
+
+const readLunaUsage = async (request: APIRequestContext, apiOrigin: string) => {
+  const response = await safeApiRequest(() =>
+    request.get(`${apiOrigin}/agent/usage/monthly`)
+  )
+  const parsed = await safeResponseJson(response)
+  const rows =
+    isRecord(parsed.value) && Array.isArray(parsed.value.byModel)
+      ? parsed.value.byModel
+      : []
+  const lunaRows = rows.filter(
+    (row) =>
+      isRecord(row) &&
+      row.provider === LUNA_PROVIDER_ID &&
+      row.model === LUNA_MODEL_ID
+  )
+  const totals = isRecord(parsed.value) ? parsed.value.totals : undefined
+  const lunaOutputTokenCount = lunaRows.reduce(
+    (total, row) =>
+      total + (isRecord(row) ? usageCount(row.outputTokenCount) : 0),
+    0
+  )
+  return {
+    lunaModelRowCount: lunaRows.length,
+    lunaOutputObserved: lunaOutputTokenCount > 0,
+    lunaRunCount: lunaRows.reduce(
+      (total, row) => total + (isRecord(row) ? usageCount(row.runCount) : 0),
+      0
+    ),
+    responseOk: parsed.responseOk,
+    totalRunCount: isRecord(totals) ? usageCount(totals.runCount) : 0,
+  }
+}
 
 const readApiOrigin = (metadata: Record<string, unknown>): string => {
   const origin = Reflect.get(metadata, "agentE2EApiOrigin")
@@ -28,43 +190,36 @@ const readApiOrigin = (metadata: Record<string, unknown>): string => {
   return origin
 }
 
-const assistantArticles = (agentShell: Locator) =>
-  agentShell.locator('article[aria-label="Agent response"]')
+const agentAnswers = (agentShell: Locator) =>
+  agentShell.getByRole("group", { name: "Agent answer" })
 
-const readPersistedToolStates = async (
-  request: APIRequestContext,
-  apiOrigin: string,
-  threadId: string
-) => {
-  const response = await request.get(
-    `${apiOrigin}/agent/threads/${encodeURIComponent(threadId)}/messages`
-  )
-  if (!response.ok()) return []
-  const body: unknown = await response.json()
-  const messages = Array.isArray(body)
-    ? body
-    : isRecord(body) && Array.isArray(body.messages)
-      ? body.messages
-      : []
-  return messages.flatMap((message) => {
-    if (!isRecord(message) || !Array.isArray(message.parts)) return []
-    return message.parts.flatMap((part) =>
-      isRecord(part) &&
-      typeof part.type === "string" &&
-      part.type.startsWith("tool-") &&
-      typeof part.state === "string"
-        ? [`${part.type.slice(5)}:${part.state}`]
-        : []
-    )
-  })
+const projectCanonicalIssueLink = async (
+  agentShell: Locator,
+  expectedHref: string
+) => ({
+  canonicalIssueLinkMatches: await agentShell
+    .getByRole("link")
+    .evaluateAll(
+      (links, href) => links.some((link) => link.getAttribute("href") === href),
+      expectedHref
+    ),
+})
+
+const reloadCanaryThread = async (page: Page) => {
+  await page.reload()
+  await page.getByRole("button", { name: "Open Agent" }).click()
+  const agentShell = page.getByRole("complementary", { name: "Agent" })
+  await expect(agentShell).toBeVisible()
+  return agentShell
 }
 
 const sendMessage = async (
   page: Page,
   agentShell: Locator,
-  message: string
+  message: string,
+  options: { requireAnswer?: boolean } = {}
 ) => {
-  const previousCount = await assistantArticles(agentShell).count()
+  const previousAnswerCount = await agentAnswers(agentShell).count()
   const composer = agentShell.getByPlaceholder(
     "Describe the issue, or attach screenshots for analysis."
   )
@@ -81,17 +236,121 @@ const sendMessage = async (
   expect(
     response.headers()["content-type"]?.startsWith("text/event-stream")
   ).toBe(true)
+  const sendButton = agentShell.getByRole("button", {
+    name: "Send",
+    exact: true,
+  })
+  const terminalAlerts = agentShell.getByRole("alert")
+  await expect(sendButton).toBeEnabled({ timeout: 360_000 })
   await expect
-    .poll(() => assistantArticles(agentShell).count(), { timeout: 120_000 })
-    .toBeGreaterThan(previousCount)
-  await expect(
-    agentShell.getByRole("button", { name: "Send", exact: true })
-  ).toBeEnabled({ timeout: 360_000 })
-  await expect(
-    agentShell.getByText(
-      "Agent response failed. You can retry the same draft safely."
+    .poll(
+      async () => {
+        const terminalError =
+          (await terminalAlerts.count()) === 0
+            ? null
+            : (await terminalAlerts.first().textContent())?.trim()
+        return {
+          answerCreated:
+            !options.requireAnswer ||
+            (await agentAnswers(agentShell).count()) > previousAnswerCount,
+          terminalErrorCode:
+            terminalError ===
+            "Agent response timed out. You can retry the same draft safely."
+              ? "agent_timeout"
+              : terminalError ===
+                  "Agent response failed. You can retry the same draft safely."
+                ? "model_failed"
+                : terminalError === null
+                  ? null
+                  : "unknown_error",
+        }
+      },
+      { timeout: 10_000 }
     )
-  ).toHaveCount(0)
+    .toEqual({
+      answerCreated: true,
+      terminalErrorCode: null,
+    })
+}
+
+const approveLastAction = async (page: Page, agentShell: Locator) => {
+  const approvalButton = agentShell.getByRole("button", { name: "Yes" }).last()
+  await expect(approvalButton).toBeEnabled({ timeout: 60_000 })
+  const decisionPromise = page.waitForResponse(
+    (response) =>
+      /\/agent\/actions\/[^/]+\/decision$/u.test(
+        new URL(response.url()).pathname
+      ) && response.request().method() === "POST",
+    { timeout: 60_000 }
+  )
+  const decisionRequestPromise = page.waitForRequest(
+    (request) =>
+      /\/agent\/actions\/[^/]+\/decision$/u.test(
+        new URL(request.url()).pathname
+      ) && request.method() === "POST",
+    { timeout: 60_000 }
+  )
+  const resumePromise = page.waitForResponse(
+    (response) =>
+      /\/agent\/actions\/[^/]+\/resume$/u.test(
+        new URL(response.url()).pathname
+      ) && response.request().method() === "POST",
+    { timeout: AGENT_RESUME_RESPONSE_TIMEOUT_MS }
+  )
+  const resumeRequestPromise = page.waitForRequest(
+    (request) =>
+      /\/agent\/actions\/[^/]+\/resume$/u.test(
+        new URL(request.url()).pathname
+      ) && request.method() === "POST",
+    { timeout: 60_000 }
+  )
+  await approvalButton.click()
+  const [
+    decisionRequestResult,
+    decisionResult,
+    resumeRequestResult,
+    resumeResult,
+  ] = await Promise.allSettled([
+    decisionRequestPromise,
+    decisionPromise,
+    resumeRequestPromise,
+    resumePromise,
+  ])
+  const resumeParsed =
+    resumeResult.status === "fulfilled"
+      ? await safeResponseJson(resumeResult.value)
+      : { responseOk: false, value: undefined }
+  const resumeBody = isRecord(resumeParsed.value)
+    ? resumeParsed.value
+    : undefined
+  const resumeIssue = isRecord(resumeBody?.issue) ? resumeBody.issue : undefined
+  const resumeKind = resumeBody?.kind
+  return {
+    issueNumber:
+      typeof resumeIssue?.number === "number" &&
+      Number.isSafeInteger(resumeIssue.number) &&
+      resumeIssue.number > 0
+        ? resumeIssue.number
+        : undefined,
+    projection: {
+      decisionHttpStatus:
+        decisionResult.status === "fulfilled"
+          ? decisionResult.value.status()
+          : 0,
+      decisionRequestObserved: decisionRequestResult.status === "fulfilled",
+      resumeHttpStatus:
+        resumeResult.status === "fulfilled" ? resumeResult.value.status() : 0,
+      resumeIssueHasId: typeof resumeIssue?.id === "string",
+      resumeKind:
+        typeof resumeKind === "string" &&
+        ["create_issue", "delete_issue", "update_issue"].includes(resumeKind)
+          ? resumeKind
+          : null,
+      resumeRequestObserved: resumeRequestResult.status === "fulfilled",
+      resumeSucceeded:
+        resumeParsed.responseOk && resumeBody?.status === "succeeded",
+    },
+  }
 }
 
 const createSeedIssue = async (
@@ -103,20 +362,24 @@ const createSeedIssue = async (
     title: string
   }
 ) => {
-  const response = await request.post(`${input.apiOrigin}/issues`, {
-    headers: { origin: input.origin },
-    data: {
-      organizationId: input.organizationId,
-      title: input.title,
-      description:
-        "A private tenant detail about an unreleased access-control regression.",
-      status: "open",
-      priority: "urgent",
-      labels: ["Security"],
-    },
-  })
-  expect(response.status()).toBe(201)
-  const issue: unknown = await response.json()
+  const response = await safeApiRequest(() =>
+    request.post(`${input.apiOrigin}/issues`, {
+      headers: { origin: input.origin },
+      data: {
+        organizationId: input.organizationId,
+        title: input.title,
+        description:
+          "A private tenant detail about an unreleased access-control regression.",
+        status: "open",
+        priority: "urgent",
+        labels: ["Security"],
+      },
+    })
+  )
+  if (response?.status() !== 201) {
+    throw new Error("Agent canary seed Issue request failed")
+  }
+  const issue = (await safeResponseJson(response)).value
   if (
     !isRecord(issue) ||
     typeof issue.id !== "string" ||
@@ -138,20 +401,30 @@ const openCanaryHarness = async (
   await page.goto("/auth/sign-in?redirectTo=%2Fsettings%2Forganizations")
   await page.getByRole("button", { name: "GitHub" }).click()
   await page.getByRole("button", { name: /oauth-alice/u }).click()
-  await expect(page).toHaveURL(/\/settings\/organizations$/u)
+  await expect
+    .poll(() => {
+      try {
+        return new URL(page.url()).pathname === "/settings/organizations"
+      } catch {
+        return false
+      }
+    })
+    .toBe(true)
 
-  const createOrganizationResponse = await request.post(
-    `${apiOrigin}/organizations`,
-    {
+  const createOrganizationResponse = await safeApiRequest(() =>
+    request.post(`${apiOrigin}/organizations`, {
       headers: { origin: new URL(page.url()).origin },
       data: {
         name: `Agent Canary ${runSuffix}`,
         slug: organizationSlug,
       },
-    }
+    })
   )
-  expect(createOrganizationResponse.status()).toBe(201)
-  const organization: unknown = await createOrganizationResponse.json()
+  if (createOrganizationResponse?.status() !== 201) {
+    throw new Error("Agent canary organization request failed")
+  }
+  const organization = (await safeResponseJson(createOrganizationResponse))
+    .value
   const organizationId =
     isRecord(organization) && typeof organization.id === "string"
       ? organization.id
@@ -175,255 +448,250 @@ const openCanaryHarness = async (
   }
 }
 
-test("agent-canary-read-source", async ({ context, page }) => {
+test("agent-canary-web-search-source", async ({ context, page }) => {
   const harness = await openCanaryHarness(page, context.request)
-  const issueTitle = `Urgent access regression ${harness.runSuffix}`
-  await createSeedIssue(context.request, {
-    apiOrigin: harness.apiOrigin,
-    organizationId: harness.organizationId,
-    origin: new URL(page.url()).origin,
-    title: issueTitle,
-  })
+  let agentShell = harness.agentShell
 
   await sendMessage(
     page,
-    harness.agentShell,
+    agentShell,
     [
       "Use public Web search and cite the latest official source.",
       "Public-only Web query: official Cloudflare Workers CPU time limits",
-    ].join("\n")
+    ].join("\n"),
+    { requireAnswer: true }
   )
   const threadId = new URL(page.url()).searchParams.get("agentThread")
   expect(threadId).toBeTruthy()
-  await expect
-    .poll(
-      () =>
-        readPersistedToolStates(
-          context.request,
-          harness.apiOrigin,
-          threadId ?? ""
-        ),
-      { timeout: 30_000 }
-    )
-    .toContain("web_search:output-available")
-  await expect(
-    harness.agentShell.getByText(/web search · completed/u).last()
-  ).toBeVisible({ timeout: 120_000 })
-  await expect(
-    assistantArticles(harness.agentShell)
-      .last()
-      .locator('a[href^="http"]')
-      .first()
-  ).toBeVisible({ timeout: 120_000 })
-
-  await sendMessage(
-    page,
-    harness.agentShell,
-    `Read the Issue titled "${issueTitle}" in this organization and explain its priority. Use the Issue tool rather than guessing.`
-  )
-  await expect(
-    harness.agentShell
-      .getByText(/(?:get issue|search issues) · completed/u)
-      .last()
-  ).toBeVisible({ timeout: 120_000 })
-  await expect(
-    harness.agentShell
-      .getByRole("link", { name: new RegExp(issueTitle, "u") })
-      .first()
-  ).toHaveAttribute(
-    "href",
-    `/organization/${harness.organizationSlug}/issues/1`
-  )
-})
-
-test("agent-canary-approved-image-write", async ({ context, page }) => {
-  const harness = await openCanaryHarness(page, context.request)
-  const issueTitle = `Approved image write ${harness.runSuffix}`
-
-  await harness.agentShell.getByLabel("Attach images").setInputFiles({
-    name: "preview.png",
-    mimeType: "image/png",
-    buffer: await readFile(
-      new URL(
-        "../../../../packages/db/fixtures/files/preview.png",
-        import.meta.url
-      )
-    ),
-  })
-  await expect(
-    harness.agentShell.getByLabel("Images ready to send")
-  ).toBeVisible({ timeout: 30_000 })
-
-  await sendMessage(
-    page,
-    harness.agentShell,
-    [
-      `Compare this image with current public Cloudflare dashboard accessibility guidance, cite the official source, then prepare a high-priority Issue titled "${issueTitle}" and attach this image.`,
-      "Public-only Web query: official Cloudflare dashboard accessibility guidance",
-    ].join("\n")
-  )
-  await expect(
-    harness.agentShell.getByText(/web search · completed/u).last()
-  ).toBeVisible({ timeout: 120_000 })
-  await expect(
-    harness.agentShell.getByText("Approve Issue change?").last()
-  ).toBeVisible({ timeout: 120_000 })
-  await expect(harness.agentShell).toContainText("preview.png")
-
-  const issueBeforeApproval = await context.request.get(
-    `${harness.apiOrigin}/issues`,
-    {
-      params: {
-        organizationId: harness.organizationId,
-        search: issueTitle,
-      },
-    }
-  )
-  expect(await issueBeforeApproval.text()).not.toContain(issueTitle)
-
-  await harness.agentShell.getByRole("button", { name: "Yes" }).last().click()
-  let createdIssueId = ""
   await expect
     .poll(
       async () => {
-        const response = await context.request.get(
-          `${harness.apiOrigin}/issues`,
-          {
-            params: {
-              organizationId: harness.organizationId,
-              search: issueTitle,
-            },
-          }
+        const history = await readHistoryProjection(
+          context.request,
+          harness.apiOrigin,
+          threadId ?? ""
         )
-        if (!response.ok()) return false
-        const value: unknown = await response.json()
-        if (!isRecord(value) || !Array.isArray(value.items)) return false
-        const issue = value.items.find(
-          (candidate) => isRecord(candidate) && candidate.title === issueTitle
-        )
-        if (!isRecord(issue) || typeof issue.id !== "string") return false
-        createdIssueId = issue.id
-        return true
+        return {
+          assistantAnswerAvailable: history.assistantAnswerAvailable,
+          bounded: history.bounded,
+          hasPublicUrl: history.hasPublicUrl,
+          responseOk: history.responseOk,
+          webSearchOutputAvailable: history.webSearchOutputAvailable,
+        }
       },
-      { timeout: 60_000 }
+      { timeout: 120_000 }
     )
-    .toBe(true)
+    .toEqual({
+      assistantAnswerAvailable: true,
+      bounded: true,
+      hasPublicUrl: true,
+      responseOk: true,
+      webSearchOutputAvailable: true,
+    })
+  await expect(
+    agentShell.getByRole("status", { name: "Webで検索" }).last()
+  ).toBeVisible({ timeout: 120_000 })
+  await expect
+    .poll(() => readLunaUsage(context.request, harness.apiOrigin), {
+      timeout: 60_000,
+    })
+    .toEqual({
+      lunaModelRowCount: 1,
+      lunaOutputObserved: true,
+      lunaRunCount: 1,
+      responseOk: true,
+      totalRunCount: 1,
+    })
 
-  const filesResponse = await context.request.get(
-    `${harness.apiOrigin}/files/organizations/${harness.organizationId}/owners/issue/${createdIssueId}`
-  )
-  expect(filesResponse.status()).toBe(200)
-  expect(JSON.stringify(await filesResponse.json())).toContain("preview.png")
-
-  const threadId = new URL(page.url()).searchParams.get("agentThread")
-  expect(threadId).toBeTruthy()
-  const historyResponse = await context.request.get(
-    `${harness.apiOrigin}/agent/threads/${encodeURIComponent(threadId ?? "")}/messages`
-  )
-  expect(historyResponse.status()).toBe(200)
-  const serializedHistory = JSON.stringify(await historyResponse.json())
-  expect(serializedHistory).toContain("data-agent-assets")
-  expect(serializedHistory).toContain("attachmentAssetIds")
-  expect(serializedHistory).not.toContain("data:image")
-  expect(serializedHistory).not.toContain('"objectKey"')
+  agentShell = await reloadCanaryThread(page)
+  await expect
+    .poll(() => agentAnswers(agentShell).count(), { timeout: 120_000 })
+    .toBeGreaterThanOrEqual(1)
+  await expect(
+    agentShell.getByRole("status", { name: "Webで検索" }).last()
+  ).toBeVisible({ timeout: 120_000 })
 })
 
-test("agent-canary-existing-issue-image-followup @diagnostic-qwen", async ({
-  context,
-  page,
-}) => {
+test("agent-canary-private-issue-read", async ({ context, page }) => {
   const harness = await openCanaryHarness(page, context.request)
-  const issueTitle = `Existing image target ${harness.runSuffix}`
+  const issueTitle = `Urgent access regression ${harness.runSuffix}`
   const issue = await createSeedIssue(context.request, {
     apiOrigin: harness.apiOrigin,
     organizationId: harness.organizationId,
     origin: new URL(page.url()).origin,
     title: issueTitle,
   })
-  const image = {
-    name: "followup.png",
-    mimeType: "image/png",
-    buffer: await readFile(
-      new URL(
-        "../../../../packages/db/fixtures/files/preview.png",
-        import.meta.url
-      )
-    ),
-  }
-  const stageImage = async () => {
-    await harness.agentShell.getByLabel("Attach images").setInputFiles(image)
-    await expect(
-      harness.agentShell.getByLabel("Images ready to send")
-    ).toBeVisible({ timeout: 30_000 })
-  }
+  let agentShell = harness.agentShell
 
-  await stageImage()
   await sendMessage(
     page,
-    harness.agentShell,
-    "Describe this image in one sentence. Do not create or update an Issue."
+    agentShell,
+    `Call get_issue for Issue #${issue.number} titled "${issueTitle}". Do not answer until the tool returns; then state the returned priority.`,
+    { requireAnswer: true }
   )
   const threadId = new URL(page.url()).searchParams.get("agentThread")
   expect(threadId).toBeTruthy()
-
-  await sendMessage(
-    page,
-    harness.agentShell,
-    `Attach the image from my previous message to Issue #${issue.number} titled "${issueTitle}". Call get_issue with the Issue number, then call add_issue_attachments in the same response using the server-authorized reusable asset ID and the returned exact Issue id and revision. Do not stop after the read.`
-  )
+  const canonicalIssueHref = `/organization/${harness.organizationSlug}/issues/${issue.number}`
   await expect(
-    harness.agentShell
-      .getByText(/(?:get issue|search issues) · completed/u)
+    agentShell
+      .getByRole("status", { name: `Issue #${issue.number}を確認` })
       .last()
   ).toBeVisible({ timeout: 120_000 })
-  await expect(
-    harness.agentShell.getByText("Approve Issue change?").last()
-  ).toBeVisible({ timeout: 120_000 })
-  await expect(harness.agentShell).toContainText("followup.png")
-  await harness.agentShell.getByRole("button", { name: "Yes" }).last().click()
-
   await expect
     .poll(
       async () => {
-        const response = await context.request.get(
-          `${harness.apiOrigin}/files/organizations/${harness.organizationId}/owners/issue/${issue.id}`
+        const history = await readHistoryProjection(
+          context.request,
+          harness.apiOrigin,
+          threadId ?? ""
         )
-        return response.ok() ? await response.text() : ""
+        return {
+          assistantAnswerAvailable: history.assistantAnswerAvailable,
+          bounded: history.bounded,
+          getIssueInputAvailable: history.getIssueInputAvailable,
+          getIssueOutputAvailable: history.getIssueOutputAvailable,
+          getIssuePartAvailable: history.getIssuePartAvailable,
+          getIssuePriorityUrgent: history.getIssuePriorityUrgent,
+          hasDataImage: history.hasDataImage,
+          hasObjectKey: history.hasObjectKey,
+          hasPrivateUrl: history.hasPrivateUrl,
+          hasRawProviderField: history.hasRawProviderField,
+          responseOk: history.responseOk,
+        }
       },
-      { timeout: 60_000 }
+      { timeout: 120_000 }
     )
-    .toContain("followup.png")
+    .toEqual({
+      assistantAnswerAvailable: true,
+      bounded: true,
+      getIssueInputAvailable: true,
+      getIssueOutputAvailable: true,
+      getIssuePartAvailable: true,
+      getIssuePriorityUrgent: true,
+      hasDataImage: false,
+      hasObjectKey: false,
+      hasPrivateUrl: false,
+      hasRawProviderField: false,
+      responseOk: true,
+    })
+  await expect
+    .poll(() => projectCanonicalIssueLink(agentShell, canonicalIssueHref), {
+      timeout: 120_000,
+    })
+    .toEqual({ canonicalIssueLinkMatches: true })
+  await expect
+    .poll(() => readLunaUsage(context.request, harness.apiOrigin), {
+      timeout: 60_000,
+    })
+    .toEqual({
+      lunaModelRowCount: 1,
+      lunaOutputObserved: true,
+      lunaRunCount: 1,
+      responseOk: true,
+      totalRunCount: 1,
+    })
 
+  agentShell = await reloadCanaryThread(page)
+  await expect
+    .poll(() => agentAnswers(agentShell).count(), { timeout: 120_000 })
+    .toBeGreaterThanOrEqual(1)
+  await expect
+    .poll(() => projectCanonicalIssueLink(agentShell, canonicalIssueHref), {
+      timeout: 120_000,
+    })
+    .toEqual({ canonicalIssueLinkMatches: true })
+})
+
+test("agent-canary-approved-issue-write", async ({ context, page }) => {
+  const harness = await openCanaryHarness(page, context.request)
+  const issueTitle = `Approved issue write ${harness.runSuffix}`
+  const agentShell = harness.agentShell
+
+  await sendMessage(
+    page,
+    agentShell,
+    `Prepare a high-priority Issue titled "${issueTitle}". Ask for approval before writing it.`
+  )
+  await expect(
+    agentShell.getByText("Approve Issue change?").last()
+  ).toBeVisible({ timeout: 120_000 })
+  const issueBeforeApproval = await readIssueState(context.request, {
+    apiOrigin: harness.apiOrigin,
+    organizationId: harness.organizationId,
+    title: issueTitle,
+  })
+  expect(issueBeforeApproval.projection).toEqual({
+    matchingIssueCount: 0,
+    matchingIssueHasId: false,
+    matchingOpenCount: 0,
+    matchingPriority: null,
+    responseOk: true,
+  })
+
+  const approval = await approveLastAction(page, agentShell)
+  expect(approval.projection).toEqual({
+    decisionHttpStatus: 200,
+    decisionRequestObserved: true,
+    resumeHttpStatus: 200,
+    resumeIssueHasId: true,
+    resumeKind: "create_issue",
+    resumeRequestObserved: true,
+    resumeSucceeded: true,
+  })
+  if (!approval.issueNumber) {
+    throw new Error("Agent canary approved Issue number is missing")
+  }
   await expect
     .poll(
       () =>
-        readPersistedToolStates(
+        readIssueByNumberState(context.request, {
+          apiOrigin: harness.apiOrigin,
+          expectedTitle: issueTitle,
+          number: approval.issueNumber ?? 0,
+          organizationId: harness.organizationId,
+        }),
+      { timeout: 60_000 }
+    )
+    .toEqual({
+      issueHasId: true,
+      priority: "high",
+      responseOk: true,
+      status: "open",
+      titleMatches: true,
+    })
+  const threadId = new URL(page.url()).searchParams.get("agentThread")
+  expect(threadId).toBeTruthy()
+  await expect
+    .poll(
+      () =>
+        readHistoryProjection(
           context.request,
           harness.apiOrigin,
           threadId ?? ""
         ),
       { timeout: 30_000 }
     )
-    .toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(
-          /^(?:get_issue|search_issues):output-available$/u
-        ),
-        expect.stringMatching(
-          /^add_issue_attachments:(?:approval-requested|output-available)$/u
-        ),
-      ])
-    )
+    .toMatchObject({
+      bounded: true,
+      hasAgentAssetsPart: false,
+      hasDataImage: false,
+      hasObjectKey: false,
+      hasPrivateUrl: false,
+      hasRawProviderField: false,
+      hasStructuredContentUnavailable: false,
+      hasToolStateUnavailable: false,
+      responseOk: true,
+    })
 
-  const historyResponse = await context.request.get(
-    `${harness.apiOrigin}/agent/threads/${encodeURIComponent(threadId ?? "")}/messages`
-  )
-  expect(historyResponse.status()).toBe(200)
-  const serializedHistory = JSON.stringify(await historyResponse.json())
-  expect(serializedHistory).toContain("data-agent-assets")
-  expect(serializedHistory).toContain("tool-add_issue_attachments")
-  expect(serializedHistory).not.toContain("Structured content unavailable")
-  expect(serializedHistory).not.toContain("Tool state unavailable")
-  expect(serializedHistory).not.toContain("data:image")
-  expect(serializedHistory).not.toContain('"objectKey"')
+  await expect
+    .poll(() => readLunaUsage(context.request, harness.apiOrigin), {
+      timeout: 60_000,
+    })
+    .toMatchObject({
+      lunaModelRowCount: 1,
+      lunaOutputObserved: true,
+      lunaRunCount: 1,
+      responseOk: true,
+      totalRunCount: 1,
+    })
 })

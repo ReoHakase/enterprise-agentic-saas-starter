@@ -76,6 +76,11 @@ export const assertCanonicalMessages = (
           status: "pending",
         }),
       }),
+      expect.objectContaining({
+        type: "tool-get_issue",
+        state: "output-available",
+        output: expect.objectContaining({ number: 1, priority: "high" }),
+      }),
       expect.objectContaining({ type: "text", text: "SCRIPTED_AGENT_OK" }),
     ])
   )

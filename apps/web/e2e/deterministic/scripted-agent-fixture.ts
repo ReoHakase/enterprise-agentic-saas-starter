@@ -60,6 +60,27 @@ export type ScriptedCreatedIssueRuntime = ScriptedAgentRuntime & {
   threadId: string
 }
 
+export const selectAgentPermission = async (
+  runtime: Pick<ScriptedAgentRuntime, "page" | "permission">,
+  label: "Ask always" | "Full access"
+): Promise<void> => {
+  const { page, permission } = runtime
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      /\/agent\/threads\/[^/]+\/permission$/u.test(
+        new URL(response.url()).pathname
+      ) && response.request().method() === "PUT"
+  )
+  await permission.click()
+  const option = page.getByRole("option", { name: new RegExp(label, "u") })
+  await expect(option).toBeVisible()
+  await page.keyboard.press(label === "Full access" ? "End" : "Home")
+  await option.click()
+  const response = await responsePromise
+  expect(response.status()).toBe(200)
+  await expect(permission).toContainText(label)
+}
+
 export const setupScriptedAgentScenario = async (
   { agentScenario, context, page }: ScriptedAgentTestFixtures,
   testInfo: TestInfo
@@ -165,9 +186,7 @@ export const createScriptedIssue = async (
   await expect(
     agentShell.getByRole("button", { name: "Send", exact: true })
   ).toBeEnabled()
-  await runtime.permission.click()
-  await page.getByRole("option", { name: /Full access/u }).click()
-  await expect(runtime.permission).toContainText("Full access")
+  await selectAgentPermission(runtime, "Full access")
   const threadId = new URL(page.url()).searchParams.get("agentThread")
   expect(threadId).toBeTruthy()
   if (!threadId) throw new Error("Scripted Agent thread id is missing")

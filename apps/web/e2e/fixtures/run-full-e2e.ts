@@ -12,51 +12,43 @@ type FullE2ECommandOptions = {
   webWorkspace: string
 }
 
-const QWEN_DIAGNOSTIC_TAG = "@diagnostic-qwen"
+const playwrightEnvironmentNames = [
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "USER",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "CI",
+  "TERM",
+  "OPENROUTER_API_KEY",
+  "PAID_E2E_APPROVED",
+  "AGENT_E2E_OBSERVABILITY",
+] as const
 
-const combineGrepInvertArguments = (
-  arguments_: readonly string[]
-): string[] => {
-  const forwardedArguments: string[] = []
-  const invertedPatterns = [QWEN_DIAGNOSTIC_TAG]
-
-  for (let index = 0; index < arguments_.length; index += 1) {
-    const argument = arguments_[index]
-    if (argument === undefined) {
-      throw new Error("Playwright arguments must be defined")
-    }
-    if (argument === "--grep-invert") {
-      const pattern = arguments_[index + 1]
-      if (pattern === undefined || pattern.startsWith("--")) {
-        throw new Error("--grep-invert requires a pattern")
-      }
-      invertedPatterns.push(pattern)
-      index += 1
-    } else if (argument.startsWith("--grep-invert=")) {
-      const pattern = argument.slice("--grep-invert=".length)
-      if (pattern.length === 0) {
-        throw new Error("--grep-invert requires a pattern")
-      }
-      invertedPatterns.push(pattern)
-    } else {
-      forwardedArguments.push(argument)
-    }
-  }
-
-  return [
-    "--grep-invert",
-    invertedPatterns.map((pattern) => `(?:${pattern})`).join("|"),
-    ...forwardedArguments,
-  ]
-}
+export const createFullE2EPlaywrightEnvironment = (
+  environment: Readonly<Record<string, string | undefined>>,
+  runId: number
+): Record<string, string> => ({
+  ...Object.fromEntries(
+    playwrightEnvironmentNames.flatMap((name) => {
+      const value = environment[name]
+      return value === undefined ? [] : [[name, value]]
+    })
+  ),
+  AGENT_E2E_RUN_ID: String(runId),
+})
 
 export const selectFullE2EPlaywrightArguments = (
-  arguments_: readonly string[],
-  environment: Readonly<Record<string, string | undefined>>
-): string[] =>
-  environment.PAID_E2E_DIAGNOSTIC === "1"
-    ? [...arguments_]
-    : combineGrepInvertArguments(arguments_)
+  arguments_: readonly string[]
+): string[] => {
+  if (arguments_.length === 0) return []
+  if (arguments_.length === 1 && arguments_[0] === "--list") {
+    return ["--list"]
+  }
+  throw new Error("Full E2E accepts only the optional --list argument")
+}
 
 export const runFullE2ECommand = async ({
   runId,
@@ -74,10 +66,6 @@ const runPlaywright = async (
   runId: number,
   arguments_: readonly string[]
 ): Promise<number> => {
-  const childEnvironment = Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => name !== "NO_COLOR")
-  )
-  childEnvironment.AGENT_E2E_RUN_ID = String(runId)
   const child = Bun.spawn(
     [
       "node",
@@ -89,7 +77,7 @@ const runPlaywright = async (
     ],
     {
       cwd: process.cwd(),
-      env: childEnvironment,
+      env: createFullE2EPlaywrightEnvironment(process.env, runId),
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
@@ -117,7 +105,7 @@ if (import.meta.main) {
     runPlaywright: (currentRunId) =>
       runPlaywright(
         currentRunId,
-        selectFullE2EPlaywrightArguments(process.argv.slice(2), process.env)
+        selectFullE2EPlaywrightArguments(process.argv.slice(2))
       ),
     webWorkspace: resolve(process.cwd()),
   })
