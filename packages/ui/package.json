@@ -109,6 +109,7 @@
     "eslint-plugin-testing-library": "catalog:",
     "happy-dom": "catalog:",
     "oxlint-tailwindcss": "catalog:",
+    "playwright": "catalog:",
     "storybook": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
