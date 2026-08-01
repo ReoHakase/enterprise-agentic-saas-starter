@@ -1,3 +1,4 @@
+import { FileUploadError } from "@enterprise-agentic-saas/api/client"
 import { describe, expect, it } from "vitest"
 
 import { httpError } from "@/test-support/http-error"
@@ -80,6 +81,29 @@ describe("console API error presentation", () => {
       fieldErrors: {},
       message: "Request failed",
     })
+  })
+
+  it("presents only the bounded message carried by the XHR upload adapter", () => {
+    expect(
+      presentConsoleApiError(
+        new FileUploadError({
+          code: "unsupported_media_type",
+          message: "Choose a PNG, JPEG, or WebP image.",
+          status: 415,
+        }),
+        "Upload failed"
+      ).message
+    ).toBe("Choose a PNG, JPEG, or WebP image.")
+
+    expect(
+      presentConsoleApiError(
+        new FileUploadError({
+          message: "provider token=private",
+          status: 503,
+        }),
+        "Upload failed"
+      ).message
+    ).toBe("Upload failed")
   })
 
   it("handles throwing property access without replacing the error", () => {

@@ -1,6 +1,7 @@
-import type {
-  FileDto,
-  uploadFileWithProgress,
+import {
+  FileUploadError,
+  type FileDto,
+  type uploadFileWithProgress,
 } from "@enterprise-agentic-saas/api/client"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -10,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   uploadFileWithProgress: vi.fn<typeof uploadFileWithProgress>(),
 }))
 
-vi.mock("@enterprise-agentic-saas/api/client", () => ({
+vi.mock("@enterprise-agentic-saas/api/client", async (importOriginal) => ({
+  ...(await importOriginal()),
   uploadFileWithProgress: mocks.uploadFileWithProgress,
 }))
 
@@ -106,6 +108,39 @@ describe("file upload queue", () => {
       ([input], index) => index > 1 && input.uploadId === secondUploadId
     )
     expect(retryCall?.[0].uploadId).toBe(secondUploadId)
+    expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
+  })
+
+  it("shows a requester-safe 4xx upload reason and reports the original error", async () => {
+    const uploadError = new FileUploadError({
+      code: "unsupported_media_type",
+      message: "Choose a supported file type.",
+      status: 415,
+    })
+    mocks.uploadFileWithProgress.mockRejectedValueOnce(uploadError)
+    const { result } = renderHook(() =>
+      useFilesController({
+        organizationId: "org-1",
+        ownerType: "issue",
+        ownerId: "issue-1",
+        onUploaded: vi.fn<() => void>(),
+      })
+    )
+
+    act(() =>
+      result.current.addFiles([
+        new File(["test"], "unsupported.bin", {
+          type: "application/octet-stream",
+        }),
+      ])
+    )
+
+    await waitFor(() =>
+      expect(result.current.uploads[0]).toMatchObject({
+        error: "Choose a supported file type.",
+        status: "failed",
+      })
+    )
     expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
   })
 

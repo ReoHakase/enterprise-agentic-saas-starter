@@ -1,3 +1,4 @@
+import { FileUploadError } from "@enterprise-agentic-saas/api/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -5,6 +6,7 @@ import { useCallback } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { accountKeys } from "@/features/account"
+import { httpError } from "@/test-support/http-error"
 
 import { ProfileImageEditor } from "./profile-image-editor"
 
@@ -229,6 +231,28 @@ describe("ProfileImageEditor", () => {
     expect(mocks.reportObservedError).toHaveBeenNthCalledWith(2, retryError)
   })
 
+  it("shows the requester-safe reason from a rejected profile image upload", async () => {
+    const actor = userEvent.setup()
+    const uploadError = new FileUploadError({
+      code: "unsupported_media_type",
+      message: "Choose a PNG, JPEG, or WebP image.",
+      status: 415,
+    })
+    mocks.uploadUserProfileImageWithProgress.mockRejectedValueOnce(uploadError)
+    renderEditor()
+
+    await actor.upload(
+      screen.getByLabelText("Choose profile image"),
+      new File(["png"], "profile.png", { type: "image/png" })
+    )
+    await actor.click(screen.getByRole("button", { name: "Confirm crop" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Choose a PNG, JPEG, or WebP image."
+    )
+    expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
+  })
+
   it("uploads an organization crop through the organization helper", async () => {
     const actor = userEvent.setup()
     renderEditor({
@@ -316,6 +340,30 @@ describe("ProfileImageEditor", () => {
     ).toBeInTheDocument()
     expect(screen.getByRole("alertdialog")).toBeInTheDocument()
     expect(screen.queryByText("private provider detail")).toBeNull()
+  })
+
+  it("shows an application-owned removal reason from a 4xx response", async () => {
+    const actor = userEvent.setup()
+    mocks.deleteUserProfileImage.mockRejectedValueOnce(
+      httpError(409, "conflict", {
+        message: "The profile image changed. Review it and try again.",
+      })
+    )
+    renderEditor({
+      subject: "user",
+      name: "Alex",
+      profileImage:
+        "/files/profile-images/users/user-1?v=profile-image-user-1-1",
+    })
+
+    await actor.click(screen.getByRole("button", { name: "Remove" }))
+    await actor.click(screen.getByRole("button", { name: "Remove image" }))
+
+    expect(
+      await screen.findByText(
+        "The profile image changed. Review it and try again."
+      )
+    ).toBeInTheDocument()
   })
 
   it("does not offer removal for an external fallback image", () => {

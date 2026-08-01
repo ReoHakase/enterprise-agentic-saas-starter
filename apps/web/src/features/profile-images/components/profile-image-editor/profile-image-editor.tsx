@@ -37,7 +37,7 @@ import { toast } from "sonner"
 
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 import { accountKeys } from "@/features/account"
-import { consoleKeys } from "@/features/console"
+import { consoleKeys, getConsoleApiErrorText } from "@/features/console"
 import { fileKeys, registerFileUpload } from "@/features/files"
 import { issueKeys } from "@/features/issues"
 import { OrganizationProfileImage } from "@/features/organizations"
@@ -306,8 +306,13 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       }
       toast.success("Profile image removed")
     },
-    onError: () => {
-      setRemoveError("The profile image could not be removed. Try again.")
+    onError: (error) => {
+      setRemoveError(
+        getConsoleApiErrorText(
+          error,
+          "The profile image could not be removed. Try again."
+        )
+      )
     },
   })
   const { isPending: removePending, mutate: mutateRemove } = removeMutation
@@ -372,7 +377,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
           setUploadError("The profile image upload was canceled.")
         } else {
           reportObservedError(error)
-          setUploadError(uploadErrorText)
+          setUploadError(getConsoleApiErrorText(error, uploadErrorText))
         }
       } finally {
         releaseUpload()

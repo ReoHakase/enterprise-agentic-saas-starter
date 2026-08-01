@@ -1,3 +1,5 @@
+import { FileUploadError } from "@enterprise-agentic-saas/api/client"
+
 export type ConsoleApiFieldErrors = Record<string, string[]>
 
 const fieldPathPattern =
@@ -25,8 +27,19 @@ const publicText = (value: unknown): string | undefined => {
 
 const getHttpErrorValue = (error: unknown) => readProperty(error, "value")
 
+const isFileUploadError = (error: unknown): error is FileUploadError => {
+  try {
+    return error instanceof FileUploadError
+  } catch {
+    return false
+  }
+}
+
 const getHttpErrorMessage = (error: unknown) =>
-  publicText(readProperty(getHttpErrorValue(error), "message"))
+  publicText(readProperty(getHttpErrorValue(error), "message")) ??
+  (isFileUploadError(error)
+    ? publicText(readProperty(error, "message"))
+    : undefined)
 
 const readFieldErrors = (value: unknown): ConsoleApiFieldErrors => {
   if (typeof value !== "object" || value === null) return {}

@@ -6,6 +6,7 @@ import {
 } from "@enterprise-agentic-saas/api/client"
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { getConsoleApiErrorText } from "@/features/console"
 import { clientEnv } from "@/lib/env.client"
 import { reportObservedError } from "@/lib/report-observed-error"
 
@@ -132,7 +133,7 @@ export const useFilesController = ({
           reportObservedError(error)
           updateUpload(upload.id, {
             status: "failed",
-            error: safeUploadError,
+            error: getConsoleApiErrorText(error, safeUploadError),
           })
           return undefined
         })
