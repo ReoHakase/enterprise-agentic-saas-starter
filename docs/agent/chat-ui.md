@@ -32,19 +32,29 @@ permissionは新規draftでは`Ask always`をlocal既定値とし、thread作成
 
 conversation全体とcomposerを1枚の大きなCardで囲みません。conversationは平面、composerは独立した下部surfaceです。assistantは枠なし全幅、userだけを右寄せbubbleにし、各messageの`You` / `Issue agent`表示は省略してaccessible nameだけを保持します。approvalをabsolute/fixed layerやmessage末尾の別listへ移動せず、part順序を履歴の正本にします。
 
-| part                       | 表示                                              |
-| -------------------------- | ------------------------------------------------- |
-| `text`                     | Markdown対応response                              |
-| `reasoning`                | providerが返した標準本文をstream、保存、再表示    |
-| tool part                  | tool名とstate、安全なschema検証済みprojectionだけ |
-| pending action tool output | そのtool位置のinline approval card                |
-| `source-url`               | 外部link                                          |
-| `data-context-budget`      | messageではなくcontext meterへ反映                |
-| `data-thread-title`        | title更新通知とselector再取得                     |
+| part                       | 表示                                                |
+| -------------------------- | --------------------------------------------------- |
+| `text`                     | Markdown対応response                                |
+| `reasoning`                | providerが返した標準本文をstream、保存、再表示      |
+| tool part                  | tool名とstate、公開スキーマで検証したprojectionだけ |
+| pending action tool output | そのtool位置のinline approval card                  |
+| `source-url`               | 外部link                                            |
+| `data-context-budget`      | messageではなくcontext meterへ反映                  |
+| `data-thread-title`        | title更新通知とselector再取得                       |
 
 thinkingは「`useChat`のstatus」「providerの標準reasoning」「canonical tool part」を混同しません。送信後から最初の`stream part`を受け取るまでと、tool完了後から次のreasoningまたはtext partを受け取るまでは、conversation末尾にspinnerを表示します。reasoningまたは実行中のtoolが表示されている間は、それぞれの状態表示へ引き継ぎます。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。存在しない非公開chain-of-thoughtを別modelで推測生成しません。標準reasoningは各partをtoolと同じcanonical順序で表示し、stream中に自動展開して`思考中…`を表示し、完了後に閉じます。閉じた状態でもMarkdown記号を除いた先頭の有効な1行、完了状態、live runで計測できた所要時間を表示し、展開時は保存済み本文をMarkdownとして読めます。
 
-toolのraw input/outputは折りたたみdetailsを含めてchat UIへ表示しません。各tool固有schemaで検証した公開projectionから、対象Issue番号、検索条件、結果件数、確認済みIssueへのlinkを表示します。Mastra標準の`skill` toolは`core`などの公開名と読込結果だけを表示・保存し、skill本文は公開しません。tenant識別子、credential、provider payload、private URL、内部errorを汎用rendererへ渡しません。
+Mastra標準Memoryは、次turnのmodel文脈に必要な有効なツール入力・出力、reasoning、approval、`skill`本文を
+保持します。一方、公開historyとchat UIはそのmessageを薄く投影し、生のtool input/outputを
+折りたたみdetailsを含めて表示しません。各tool固有スキーマで検証した公開projectionから、対象Issue番号、
+検索条件、結果件数、確認済みIssueへのlinkを表示します。Mastra標準の`skill` toolは`core`などの公開名と
+読込結果だけを表示し、skill本文は公開しません。tenant識別子、credential、provider payload、
+private URL、内部errorを汎用rendererへ渡しません。
+
+Memory保存前の`memory-persistence-guard`は、toolの`toModelOutput`で現在のturnへ渡した生のメディアが
+`providerMetadata.mastra.modelOutput`へ複製された場合に、その副本だけを除去します。provider metadata、
+検証失敗を含むツール入力・出力、`file`・`source`類、live streamは表示用形式へ書き換えません。
+ブラウザーへ返すhistoryとstreamの公開projectionは別境界に置き、Memoryへ逆流させません。
 
 ### Scroll追従
 

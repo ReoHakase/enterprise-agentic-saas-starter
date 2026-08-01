@@ -47,8 +47,10 @@
 - `drizzle-kit push`を使わず、`main`に存在するmigrationを変更しない。
 - `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
 - AgentからDB、Auth、Email、Webを直接importしない。
-- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、Memory、
-  trace、remote telemetry、test・evalの出力やartifactへ出さない。ADR-013の固定条件を満たす
+- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、trace、
+  remote telemetry、test・evalの出力やartifactへ出さない。標準`MessageHistory`はADR-012に従って
+  利用者が入力した会話を保存するが、アプリとtoolが認証情報、private URL、生のprovider errorを
+  Memoryへ追加しない。ADR-013の固定条件を満たす
   `NODE_ENV=development`のAPI・Agent・Webに限り、認証情報を除去したbounded cause chainを端末・
   ブラウザーconsoleとlocal Lokiへ出してよい。local Lokiは機密development dataとして扱い、共有・
   export・artifact添付をしない。

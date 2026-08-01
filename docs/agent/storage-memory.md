@@ -73,9 +73,31 @@ Product Agentは`Memory`をread/write可能な標準設定で使います。
 - titleはMemoryの`generateTitle`と補助model設定へ委譲する
 - streamとtitle補助処理のraw input/outputをtraceへ残さない
 
-security projectionはAgentの`outputProcessors`へ置き、`MessageHistory`より前に実行します。公開可能な
-reasoning本文、allowlist済み`reasoning_details`、検証済みtool state、公開sourceだけをMemoryへ渡します。
-provider metadata、credential、private URL、raw error、raw image dataは保存しません。
+message全体をアプリ独自スキーマへ写し替える全面的なsecurity projectionは置かず、Mastraの
+`MessageHistory`へ標準messageを渡します。有効なreasoning、ツール入力・出力、approval、Mastraの
+`skill`本文、プロバイダーSDKが検証した型付きmetadataは次turnのcontextとして保持します。
+プロバイダーが追加した正規fieldをアプリ独自スキーマの不一致で黙って削除しません。
+
+例外は、標準保存経路で実測した`providerMetadata.mastra.modelOutput`だけです。toolの`toModelOutput`が
+現在のmodel turnへ渡した生のメディアをMastraがpart metadataへ複製するため、36行の
+`memory-persistence-guard`がこの副本だけを保存前に除去します。reasoning detailを含むprovider metadata、
+検証失敗を含むツール入力・出力、`file`、`source`、`source-document`、live streamは変更しません。
+このguardへcredential scanner、一般的なmessage変換、公開履歴用の投影を追加しません。
+
+標準`generateTitle`は同じユーザーメッセージからtitleを生成し、独自sanitizerを追加しません。そのため、
+利用者がcredentialを本文へ入力した場合は、modelがtitleへ復唱してMastra Storageへ残す可能性があります。
+これは標準機能を優先する残余riskとして受容し、titleをlog、trace、テスト成果物へ出しません。
+
+保存してはいけない値は、Memory直前の一括変換ではなく値を作る境界で除外します。
+
+- 現在messageとIssue添付の画像bytesは`context`またはtoolの`toModelOutput`だけへ渡し、
+  `providerMetadata.mastra.modelOutput`の副本はMemoryへ保存しない
+- accountとmemberの画像URLはAgent tool outputで`null`へする
+- Web検索sourceとcredentialを含み得るURLはtool executorでpublic URLへ正規化する
+- providerの生Error、cause、response bodyは失敗したstreamからmessageへ変換しない
+
+history APIは`MessageList`のAI SDK v6互換messageを公開schemaへ薄く変換し、provider metadata、
+`skill`本文、生のtool errorをbrowserへ返しません。この表示用変換はMemoryへ逆流させません。
 
 ## Streamと保存耐久性
 
@@ -108,17 +130,16 @@ approvalはsecurity境界なので次を維持します。
 
 ## Reasoningとtool state
 
-表示用reasoning本文と、次turnへ再送するOpenRouter `reasoning_details`だけを型、件数、サイズ付き
-allowlistで保持します。tool partは既知tool名とnative stateの組合せを検証します。
+OpenRouter `reasoning_details`を含むprovider metadata、reasoning本文、Mastraのnative tool stateは
+標準messageのまま保存します。ツール入力・出力のスキーマ検証と認可はツール実行時の境界が所有し、
+Memory保存時に有効な呼び出しを重ねて検証しません。検証に失敗したツール入力・出力もMastraの標準partを
+変更せず保持します。tool call ID、approval IDはプロバイダーが所有するopaque文字列として扱い、
+アプリ固有の文字種へ制限しません。source URLの正規化はtool executorと公開historyの境界が所有し、
+`memory-persistence-guard`はsource IDを再生成しません。
 
-- call状態は検証済みinputだけ
-- result状態は検証済みinput/output
-- approval状態はaction IDとboolean decisionだけ
-- `output-error`は固定文言
-- 未知tool、矛盾したstate、schema不一致は`Tool state unavailable`
-
-成功したWeb検索sourceはpublic URL canonicalizerを通し、userinfo、private/reserved host、provider query、
-fragmentを除去します。
+公開historyでは、公開schemaに合うnative partだけを返し、`output-error`を固定文言へ置き換えます。
+成功したWeb検索sourceはtool executorと公開historyの両方でpublic URL canonicalizerを通し、userinfo、
+private/reserved host、provider query、fragmentを除去します。
 
 ## Thread lifecycle
 
@@ -158,10 +179,21 @@ hard deleteはApplication registryとAgent Storageの両方を対象にします
 
 ## 検証
 
-- processorがMemoryより前にsecurity projectionを実行する
-- 複数turnでreasoning detailsを安全に再送できる
+- 標準`MessageHistory`がreasoning、tool、approvalを欠落させず保存する
+- 複数turnで許可済みOpenRouter `reasoning_details`を再送できる
+- 有効なツール入力・出力、reasoning本文、approval、`skill`本文を保持する
+- `providerMetadata.mastra.modelOutput`の生のメディア副本だけを保存しない
+- 検証失敗を含むツール入力・出力、provider metadata、`file`・`source`類、live streamを変更しない
+- 標準title生成へ独自sanitizerを追加せず、credential復唱の残余riskを文書化する
+- provider失敗の生Error、cause、response bodyをMemoryへ保存しない
+- 公開historyがprovider metadata、`skill`本文、生のtool errorを返さない
 - Memory保存失敗がcustom reconciliationを起動しない
-- usage、cancel、approval、resume、livenessがMemory commitから独立して収束する
+- usage、cancel、approval、resume、model境界のliveness再検証がbest-effortのMemory保存から独立して収束する
+- approval resumeがrequest専用のMastraと`LibSQLStore`を使い、isolate storageを再登録しない
+- APIの50秒deadlineまたはcaller abort後はticket消費とbusiness writeへ進まず、公開応答を
+  `service_unavailable`と`Retry-After: 30`へ固定する
+- request専用Storageのcloseをresponseから分離した`waitUntil`で実行し、rejectまたは2秒timeoutを
+  raw causeなしの`resume_storage_close_failed`として観測する
 - list/historyがApplication registryのowner/archive境界を越えない
 - `LibSQLStore.init()`の反復初期化probeを通す
 - E1で送信、reload、cancel、new turnを一巡させる

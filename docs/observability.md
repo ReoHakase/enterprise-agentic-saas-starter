@@ -108,6 +108,20 @@ collectorはflat attribute、span event、string log bodyの既知の認証key/v
 
 詳細telemetryは`NODE_ENV=development`、固定local endpoint、worktree/session IDが揃う場合だけ初期化します。productionや任意のremote endpointでは無効です。
 
+E2Eでは通常の実行とCIを既定で無効にします。ローカルLGTMへ非rawのAPI trace・logと、有料E2Eの
+Agent trace・logを送る場合だけ次の明示的なopt-inを使います。
+
+```sh
+AGENT_E2E_OBSERVABILITY=1 PAID_E2E_APPROVED=1 \
+  bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full
+```
+
+ランナーは`http://127.0.0.1:4318`、実行ごとの`DEV_SESSION_ID`、E2E用`DEV_WORKTREE_ID`、
+`AGENT_E2E_RUN_ID`を一組でWorkerへ渡します。`AGENT_E2E_RUN_ID`がある場合、通常のtrace・log exportは
+有効なまま、APIとAgentの`reportDevelopmentCauseChain`は生のmessage、stack、causeを端末やLokiへ
+出しません。固定error code、失敗status、HTTP・request・trace属性だけを残し、E2Eの標準出力や
+Playwright成果物へLGTMデータを添付しません。
+
 ## Codexでの調査
 
 1. in-app browserで対象導線を再現する。

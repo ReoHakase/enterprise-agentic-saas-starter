@@ -27,15 +27,19 @@ Mastra Storageのthread metadataの積集合を`updatedAt DESC, id DESC`で返�
 
 Mastra Storageがthread metadataとmessage履歴の正本です。Mastra Memoryは同じStorage上のthreadから
 model文脈を構成し、Application DBのregistryがauthorizationの正本です。API側へmessage副本を
-作りません。表示用の標準reasoning本文と、次turnへ再送するOpenRouterの`reasoning_details`だけを
-型、個数、サイズ付きallowlistで保存します。history APIは本文だけを返し、暗号化detail、signature、
-provider metadata、credential、raw imageはbrowser、log、traceへ出しません。
+作りません。有効なreasoning本文、ツール入力・出力、approval、`skill`本文を標準`MessageHistory`へ保存し、
+次turnへ再送します。`memory-persistence-guard`は、現在のturnで使った生のメディアをMastraが
+`providerMetadata.mastra.modelOutput`へ複製した副本だけを保存前に除去します。それ以外のprovider
+metadata、検証失敗を含むツール入力・出力、`file`、`source`、`source-document`は標準形式を維持します。
+history APIはさらに公開スキーマへ薄く投影し、暗号化detail、signature、provider metadata、`skill`本文、
+credential、生の画像やツールerrorをブラウザー、log、traceへ出しません。
 
 ## 自動title
 
 最初の有意なuser messageからのtitle生成はMastra Memoryの`generateTitle`へ委譲します。main streamは
 title完了を待たず、失敗時は既定titleを維持します。独自Title Agent、独自CAS、補助modelの厳密usage
-課金は持ちません。title用modelのraw input/outputはtraceへ残しません。
+課金、独自sanitizerは持ちません。利用者がcredentialを本文へ入力するとtitleへ復唱される残余riskがあり、
+title用modelのraw input/outputと生成titleをlog、trace、テスト成果物へ残しません。
 
 ## Model profile snapshot
 
@@ -44,10 +48,17 @@ title完了を待たず、失敗時は既定titleを維持します。独自Titl
 - profile: `openrouter-gpt-5.6-luna-xhigh`
 - provider model: `openai/gpt-5.6-luna`
 - context window: 1,050,000 token
+- max input: 1,045,904 token
 - reasoning effort: `xhigh`
 - max output: 4,096 token
 
 title生成と直接Web検索補助も同じLunaを使いますが、補助処理はreasoning `none`です。既存runのprofile snapshotはmigrationで書き換えません。
+
+[OpenRouterのreasoning token契約](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)では、
+`low`は`max_tokens`の一部をreasoningへ割り当て、reasoningもoutput tokenへ数えます。transportは
+`effort: "xhigh"`と4,096 tokenの出力上限を送信しますが、応答にreasoning tokenが含まれることは
+要求しません。1,045,904 tokenは1,050,000 tokenのcontext windowから4,096 tokenを予約した
+事前入力上限です。
 
 modelの将来設定変更で過去runの解釈を変えないため、run rowへprofile、context window、事前推定input、reserved outputを保持します。
 

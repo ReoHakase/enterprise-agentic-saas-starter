@@ -44,7 +44,14 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
   公開情報だけへ言い換えて再送するまで拒否
 - メンバー識別情報、Issue、message、文字数の検査上限を超えた場合の拒否
 - query、拒否文字列、Issue本文がproduction log、remote telemetry、test artifactへ残らない
-- Mastra標準Memoryのtitle生成、security projection、usage正規化、approval resume
+- main modelのtransport requestがreasoning `xhigh`、`maxOutputTokens: 4,096`であり、事前入力上限が
+  1,045,904 tokenである
+- 許可済みOpenRouter `reasoning_details`、有効なツール入力・出力、reasoning本文、approval、`skill`本文を
+  標準`MessageHistory`が保存し、次turnへ再送する
+- `memory-persistence-guard`が`providerMetadata.mastra.modelOutput`の生のメディア副本だけを削除する
+- 検証失敗を含むツール入力・出力、provider metadata、`file`・`source`類、live streamを変更しない
+- 公開historyがprovider metadata、`skill`本文、生のツールerrorを返さず、Memoryの正規messageへ逆流しない
+- Mastra標準Memoryのtitle生成、usage正規化、approval resume
 - fail/cancelでも観測済みusageを記録
 - vision flagによる画像tool登録、chat画像との合計4枚上限、WeakMap media sidecar、実model入力だけのusage加算
 - canonical履歴、stream、reload traceにbase64、private URL、object key、raw bytesがない
@@ -91,24 +98,34 @@ authorization、tenant、privacy、idempotency、approval、tool allowlistはdet
 
 ## Paid full-stack canary
 
-`bun run test:e2e:full`は一時Turso、real API/Agent Service Binding、real Better Auth session、
-release modelを使い、標準free E2Eへ混ぜません。E2は次の固定2本を各1回実行します。
+`bun run test:e2e:full`は一時Turso、実API・Agent Service Binding、実Better Authセッション、
+製品と同じ`openai/gpt-5.6-luna`を使い、標準の無料E2Eへ混ぜません。E2は次の固定3本を
+1ワーカー、再試行0で各1回実行します。
 
-1. `agent-canary-read-source`: 明示した公開検索語からread/Web検索tool、source、Issue linkを表示する
-2. `agent-canary-approved-image-write`: approval後だけ画像付きIssue作成を完了する
+1. `agent-canary-web-search-source`: 明示した公開検索語からWeb検索ツールを選び、公開情報源を表示する
+2. `agent-canary-private-issue-read`: 非公開Issueを読み取り、組織slug付きのIssueリンクを表示する
+3. `agent-canary-approved-issue-write`: 承認前にIssueがなく、承認後だけ優先度highのIssueが作成される
 
-`agent-canary-existing-issue-image-followup @diagnostic-qwen`は低価格modelのtool選択がflakyなため、
-固定2本には含めません。次のように明示した時だけ実行し、終了codeをrelease gateへ混ぜません。
+使用量APIでは`openrouter`、`openai/gpt-5.6-luna`、実行数、出力tokenの記録を確認します。
+reasoning `xhigh`の送信はtransport契約テストで固定し、有料E2Eではreasoning tokenを検証値にしません。
+画像のライフサイクル、過去画像の選択と再利用は決定的E1とAPI契約が所有し、有料E2Eでは画像入力を
+扱いません。
+
+保守担当者が料金発生を明示承認し、Git管理外の環境ファイルから認証情報を読み込む場合だけ実行します。
 
 ```sh
-PAID_E2E_APPROVED=1 PAID_E2E_DIAGNOSTIC=1 bun run test:e2e:full \
-  --grep agent-canary-existing-issue-image-followup
+PAID_E2E_APPROVED=1 bun --env-file="$PWD/apps/agent/.env.local" \
+  run --cwd apps/web test:e2e:full
 ```
 
-上のacceptance scenarioを全て有料browserで重複実行しません。deterministic suite、
-browserless G5 eval、E2 canaryへ責務を配分します。
+APIレスポンスはテスト内で真偽値、件数、固定識別子、使用量の数値へ変換してから検証します。
+プロンプト全文、モデル出力、非公開URL、`objectKey`、生のプロバイダーレスポンスを検証値、
+標準出力、成果物へ渡しません。
 
-G5/E2のsecret管理責任者、env隔離、artifact禁止、cleanupは
+上の受入シナリオを全て有料ブラウザーで重複実行しません。決定的なテスト一式、ブラウザーなしの
+G5評価、E2カナリアテストへ責務を配分します。
+
+G5とE2のシークレット管理責任者、環境隔離、成果物禁止、終了時処理は
 [Paid test secret](./operations.md#paid-test-secret)を共通契約とします。
 
 ## 3回eval

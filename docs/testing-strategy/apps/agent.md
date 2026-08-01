@@ -154,7 +154,10 @@ scripted modelは、次をscenario IDごとに決定的に返します。
 
 実Product Agentと標準Memoryを組み合わせ、独自の保存処理へ差し替えずに次も確認します。
 
-- `outputProcessors`のsecurity projectionが`MessageHistory`より前に適用され、生のtool出力を保存しない
+- 標準`MessageHistory`が有効なreasoning、ツール入力・出力、approval、`skill`本文を保持する
+- `memory-persistence-guard`が`mastra.modelOutput`の生のメディア副本だけを除去する
+- 検証失敗を含むツール入力・出力、provider metadata、`file`・`source`類、live streamを変更しない
+- 公開historyがprovider metadata、`skill`本文、生のツールerrorを返さず、Memoryへ逆流しない
 - 標準Memoryの保存失敗後も生成済みstreamを完了し、`memory_failed`のtraceを残す
 - provider起動失敗の生causeを固定ローカルの専用reporterへ1回だけ渡す
 

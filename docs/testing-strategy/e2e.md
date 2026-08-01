@@ -2,7 +2,7 @@
 title: E2Eテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - apps/web/e2e/**
   - apps/web/playwright*.config.ts
@@ -32,7 +32,7 @@ E2Eを二層だけにします。
 | 名前                     | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                           | 実物として使うもの                                                                                                                                   | 差し替えるもの                                                                                  | 対象コード/ファイル                                                                                           | Test Runner | 実行速度 | CI時間課金以外の費用                  | 量   |
 | ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------- | -------- | ------------------------------------- | ---- |
 | **決定的E2Eテスト (E1)** | E2E                 | <ul><li>実browserからWeb、API、Agent、DB、認証までのcritical journeyを一巡させる</li><li>Agent stream、tool execution、approval、DB persistence、reloadを確認する</li><li>Service Binding、capability、session refresh、usage projection、asset lifecycleを確認する</li><li>LLMと外部providerを台本付きまたはfakeへ差し替え、同じ入力から同じ結果になることを確認する</li><li>認可行列や全failureを網羅せず、workspace間配線だけを確認する</li></ul> | 実Chromium、実Next.js、実API Worker、実Agent Worker、実Service Binding、一時libSQL、Better Auth、必要に応じEmulateのGitHub service、local R2/Mailpit | LLMはscripted model、Web searchと外部providerはfake、実利用者データは使わない                   | `apps/web/e2e/deterministic/**`、`playwright.deterministic.config.ts`、E2E専用Worker config、test fixture API | Playwright  | 遅い     | なし                                  | 少数 |
-| **完全E2Eテスト (E2)**   | E2E                 | <ul><li>本番に限りなく近いWeb、API、Agent、DB/Auth、実LLMを接続して最終疎通を確認する</li><li>自然文から実モデルのtool selection、source表示、approval付きwrite、永続化、reloadを確認する</li><li>画像入力または主要な外部adapterを含む代表journeyを必要に応じ確認する</li><li>確率的失敗、provider rate limit、model driftを観測し、G5と下位層へ回帰caseを追加する</li><li>リリース可否に必要な最小journeyだけを実行する</li></ul>                  | 実browser、production相当Web/API/Agent、実LLM、一時またはrelease専用DB/Auth、production相当adapter                                                   | 実利用者データとproduction write targetは禁止。安全なsandboxがない外部serviceは明示的に制御する | `apps/web/e2e/full/**`、`playwright.full.config.ts`、release test environment                                 | Playwright  | 最も遅い | LLM料金と外部provider料金が発生し得る | 最小 |
+| **完全E2Eテスト (E2)**   | E2E                 | <ul><li>本番に限りなく近いWeb、API、Agent、DB/Auth、実LLMを接続して最終疎通を確認する</li><li>自然文から実モデルのtool selection、source表示、approval付きwrite、永続化、reloadを確認する</li><li>公開Web検索、非公開Issue読取、承認付きIssue作成の固定3 journeyを確認する</li><li>確率的失敗、provider rate limit、model driftを観測し、G5と下位層へ回帰caseを追加する</li><li>リリース可否に必要な最小journeyだけを実行する</li></ul>              | 実browser、production相当Web/API/Agent、実LLM、一時またはrelease専用DB/Auth、production相当adapter                                                   | 実利用者データとproduction write targetは禁止。安全なsandboxがない外部serviceは明示的に制御する | `apps/web/e2e/full/**`、`playwright.full.config.ts`、release test environment                                 | Playwright  | 最も遅い | LLM料金と外部provider料金が発生し得る | 最小 |
 
 ## E1: 決定的E2Eテスト
 
@@ -96,7 +96,9 @@ write journey
 asset journey
   upload
   → scripted image/file tool
-  → attachment projection
+  → current画像と過去画像の選択・再利用
+  → attachment追加・読取・削除
+  → reload
   → cleanup
 ```
 
@@ -130,13 +132,17 @@ real browser
 
 E2は完全ですが網羅的ではありません。
 
-### 推奨journey
+### 固定journey
 
-- 自然文から実モデルがread toolを選び、sourceを表示する
-- approval付きwriteを行い、DBへ保存し、reload後も表示する
-- 画像入力から実モデルが適切なtoolを選び、保存または検索する
+- `agent-canary-web-search-source`: 明示した公開検索語からWeb検索を行い、公開情報源を表示する
+- `agent-canary-private-issue-read`: 非公開Issueを読み取り、組織slug付きのIssueリンクを表示する
+- `agent-canary-approved-issue-write`: 承認前に書き込まず、承認後だけIssueを作成する
 
-通常は1から2種類の代表journeyに限定し、重要な場合だけ追加します。
+画像のライフサイクル、過去画像の選択と再利用は決定的E1が所有し、有料E2では画像入力を扱いません。
+reasoning `xhigh`の送信はtransport契約テストで固定し、有料E2ではreasoning tokenを検証値にしません。
+
+通常は1から3種類の代表journeyに限定し、追加する場合は本番相当の配線でしか証明できないリスクを
+明記します。
 
 ### 実行条件
 
@@ -281,7 +287,9 @@ secret、cookie value、private contentをredactします。
 - trace
 - screenshot
 
-E2のdebugに画像が必要な場合は、synthetic dataだけであることを確認し、明示承認と短いretentionを設定します。
+E2のAPIレスポンスは真偽値、件数、固定識別子、使用量の数値へ変換してから検証します。Playwrightの
+検証失敗時にも、プロンプト全文、モデル出力、非公開URL、`objectKey`、生のプロバイダーレスポンスを
+受信値へ含めません。
 
 ## 実行
 
@@ -295,6 +303,18 @@ E2のdebugに画像が必要な場合は、synthetic dataだけであること�
 ```
 
 内部project名はrootへ個別公開しません。
+
+ローカルLGTMへ非rawのAPI trace・logと有料E2のAgent trace・logを送る場合だけ、明示的に次を指定します。
+
+```sh
+AGENT_E2E_OBSERVABILITY=1 PAID_E2E_APPROVED=1 \
+  bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full
+```
+
+既定値は無効で、CIでは設定しません。E2Eランナーは固定loopback endpoint、実行ごとのsession ID、
+E2E用worktree IDと`AGENT_E2E_RUN_ID`を一組でWorkerへ渡します。`AGENT_E2E_RUN_ID`はAPI・Agentの
+生のcause報告を無効にし、固定error code、失敗status、HTTP属性だけをtrace・通常logへ残します。
+Loki・Tempoの内容をPlaywright成果物へ添付しません。
 
 ## 受入条件
 

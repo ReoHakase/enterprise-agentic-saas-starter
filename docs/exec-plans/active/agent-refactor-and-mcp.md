@@ -36,6 +36,13 @@ linked_adrs:
 Phase 2にあるMemory・耐久確定処理の完了項目と検証証跡は、当時の実装履歴として残しますが、
 今後の完了条件にはしません。
 
+PLAN-2026-029の完了履歴にある全面的なsecurity projectionの前提は、現在のADR-012で置き換えます。
+Mastra標準`MessageHistory`を正本とし、有効なreasoning本文、ツール入力・出力、approval、`skill`本文を
+保持したまま、`memory-persistence-guard`が`providerMetadata.mastra.modelOutput`へ複製された生のメディアの
+副本だけを保存前に除去します。credential、private URL、provider raw errorは値を作るtool・error境界で
+除外し、Memory直前の独自allowlistは持ちません。
+PLAN-2026-029本文は当時の実装履歴として変更しません。
+
 本計画は、approval Workflow、opaque resume ticket、Workers AI・AI Gateway、リモートMCP、OAuth、
 MCP個人アクセストークンを引き続き所有します。PLAN-2026-029はAPIの認可・トランザクションや
 approvalをMastra Memoryへ移しません。
@@ -252,11 +259,13 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 
 ### 2.3 Reasoning
 
-- [x] `sendReasoning: false`をproduction既定にする
-- [x] default reasoningを`none`へ下げる
+- [x] `sendReasoning: true`でAI SDK標準reasoning partを送信する
+- [x] Product Agentをreasoning `xhigh`、titleとWeb検索補助を`none`へ固定する
+- [x] Product Agentの最大出力とcontext予算に4,096 tokenを予約する
 - [x] title生成をmain stream開始前に待たない
-- [x] useful-output watchdogを追加する
-- [x] run全体timeoutを明示する
+- [x] liveness再検証をmodel境界1か所へ集約し、native streamの重複wrapperを削除する
+- [x] 独自useful-output watchdogを削除する
+- [x] 270秒のrun全体timeoutを明示する
 - [x] model responseの自動retryを禁止する
 - [x] reasoning-only synthetic scenarioを追加する
 
@@ -431,8 +440,8 @@ PATはこのphaseへ含めません。
 - [x] Phase 1Aとしてpackage境界、`get_issue` factory、Service Binding response検証を実装した
 - [x] Phase 1を実装した
 - [x] Phase 2を実装した
-- [x] Product Agent、Mastra Memoryのtitle補助、直接Web検索補助をGPT-5.6 Luna profileへ統一した
-- [x] 標準reasoning本文とallowlist済み`reasoning_details`のMemory保存・再送・公開境界を実装した
+- [x] Product AgentをGPT-5.6 Lunaのreasoning `xhigh`、最大出力4,096 tokenへ固定し、titleと直接Web検索補助をreasoning `none`へ統一した
+- [x] 標準reasoning本文と許可済みOpenRouter `reasoning_details`のMemory保存・再送・公開境界を実装した
 - [x] 中央寄せconversation、reasoning/tool進行表示、回答copy、Enter送信を実装した
 - [x] Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移管した
 - [ ] Lunaの複数user turn間`reasoning_details`再送を観測する専用live probeを追加し、明示承認後に実行する
@@ -467,39 +476,38 @@ PATはこのphaseへ含めません。
 
 ## 検証証跡
 
-| command                                                                                                                                                                                    | 結果 | 証跡                                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | --------------------------------------------------------------------------------------------------- |
-| `bun install`                                                                                                                                                                              | 成功 | AI SDK 7、React 4、OpenRouter provider 3、現行Mastra 1系                                            |
-| `bun run check`                                                                                                                                                                            | 成功 | Phase 2最終required gate、2026-07-28                                                                |
-| `bun run typecheck`                                                                                                                                                                        | 成功 | Phase 2 current diff                                                                                |
-| `bun run check:static`                                                                                                                                                                     | 成功 | lint、Knip full/strict、jscpd                                                                       |
-| `bun run test`                                                                                                                                                                             | 成功 | root 42 tests、11 workspace tasks                                                                   |
-| `bun run --cwd packages/agent-contracts test`                                                                                                                                              | 成功 | 86 tests、coverage 100%                                                                             |
-| `bun run --cwd packages/agent-tools test`                                                                                                                                                  | 成功 | 15 tests、coverage 100%                                                                             |
-| `bun run --cwd apps/agent test`                                                                                                                                                            | 成功 | 298 tests、coverage閾値内                                                                           |
-| `bun run --cwd apps/api test`                                                                                                                                                              | 成功 | 357 tests、G4 3 testsを含む                                                                         |
-| `bun run --cwd packages/db db:check`                                                                                                                                                       | 成功 | migration history、Drizzle snapshot、schema drift                                                   |
-| `bun run test:browser`                                                                                                                                                                     | 成功 | UI 95、Web 256、browser 9、W6 Chromium 17 + WebKit 1 tests                                          |
-| `bun run test:e2e`                                                                                                                                                                         | 成功 | E1 3 tests、6枚中最古の過去画像をAsk alwaysで承認してresume                                         |
-| `PAID_E2E_APPROVED=1 bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full --grep agent-canary-approved-image-write`                                                | 成功 | E2 1 test、実modelでapproval resume、Issue、画像、履歴を確認                                        |
-| `PAID_E2E_APPROVED=1 PAID_E2E_DIAGNOSTIC=1 bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full --grep agent-canary-existing-issue-image-followup --repeat-each 2` | 参考 | `qwen/qwen3.6-flash`のtool選択がflakyなため非blocking                                               |
-| `bunx vitest run --coverage.enabled=false src/modules/agent/agent.memory-crash.integration.test.ts`                                                                                        | 成功 | 実host `SIGKILL` 3点、3 tests                                                                       |
-| `bun run --cwd apps/agent test:eval:agent`                                                                                                                                                 | 成功 | 全24/24、Phase 2必須15/15、`qwen/qwen3.6-flash`                                                     |
-| `bun run build:cloudflare`                                                                                                                                                                 | 成功 | Web、API、Agent production dry-run bundle                                                           |
-| `bun run check`                                                                                                                                                                            | 成功 | Luna、reasoning、Agent UI current diff、2026-08-01                                                  |
-| `bun run --cwd packages/ui test:browser`                                                                                                                                                   | 成功 | light/dark 99 tests、2026-08-01                                                                     |
-| `bun run --cwd apps/web test:browser:components`                                                                                                                                           | 成功 | light 203、dark 76、browser 9 tests、2026-08-01                                                     |
-| `bun run build:cloudflare`                                                                                                                                                                 | 成功 | Luna切替後のWeb、API、Agent production dry-run bundle                                               |
-| `bun run --cwd apps/agent smoke:mastra`                                                                                                                                                    | 参考 | Studio用unscoped AgentのLuna文字列生成。business toolと製品chat経路は対象外                         |
-| Luna local Product Agent chat                                                                                                                                                              | 失敗 | OpenRouterのAzure経路がroot `oneOf`の`get_issue` schemaをHTTP 400で拒否。修正後のpaid再検証は未実施 |
-| `bun run dev:studio`、`studio:*`                                                                                                                                                           | 成功 | Product/Thread Titleの2 Agents、Product paid smoke                                                  |
+| command                                                                                                                                                                                    | 結果 | 証跡                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun install`                                                                                                                                                                              | 成功 | AI SDK 7、React 4、OpenRouter provider 3、現行Mastra 1系                                                                                                                                |
+| `bun run check`                                                                                                                                                                            | 成功 | Phase 2最終required gate、2026-07-28                                                                                                                                                    |
+| `bun run typecheck`                                                                                                                                                                        | 成功 | Phase 2 current diff                                                                                                                                                                    |
+| `bun run check:static`                                                                                                                                                                     | 成功 | lint、Knip full/strict、jscpd                                                                                                                                                           |
+| `bun run test`                                                                                                                                                                             | 成功 | root 42 tests、11 workspace tasks                                                                                                                                                       |
+| `bun run --cwd packages/agent-contracts test`                                                                                                                                              | 成功 | 86 tests、coverage 100%                                                                                                                                                                 |
+| `bun run --cwd packages/agent-tools test`                                                                                                                                                  | 成功 | 15 tests、coverage 100%                                                                                                                                                                 |
+| `bun run --cwd apps/agent test`                                                                                                                                                            | 成功 | 298 tests、coverage閾値内                                                                                                                                                               |
+| `bun run --cwd apps/api test`                                                                                                                                                              | 成功 | 357 tests、G4 3 testsを含む                                                                                                                                                             |
+| `bun run --cwd packages/db db:check`                                                                                                                                                       | 成功 | migration history、Drizzle snapshot、schema drift                                                                                                                                       |
+| `bun run test:browser`                                                                                                                                                                     | 成功 | UI 95、Web 256、browser 9、W6 Chromium 17 + WebKit 1 tests                                                                                                                              |
+| `bun run test:e2e`                                                                                                                                                                         | 成功 | E1 3 tests、6枚中最古の過去画像をAsk alwaysで承認してresume                                                                                                                             |
+| `PAID_E2E_APPROVED=1 bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full --grep agent-canary-approved-image-write`                                                | 過去 | 旧E2 1 testの成功履歴。現在の3 canaryの完了証跡には使わない                                                                                                                             |
+| `PAID_E2E_APPROVED=1 PAID_E2E_DIAGNOSTIC=1 bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full --grep agent-canary-existing-issue-image-followup --repeat-each 2` | 過去 | `qwen/qwen3.6-flash`の診断履歴。現在の完了証跡には使わない                                                                                                                              |
+| `bunx vitest run --coverage.enabled=false src/modules/agent/agent.memory-crash.integration.test.ts`                                                                                        | 成功 | 実host `SIGKILL` 3点、3 tests                                                                                                                                                           |
+| `bun run --cwd apps/agent test:eval:agent`                                                                                                                                                 | 成功 | 全24/24、Phase 2必須15/15、`qwen/qwen3.6-flash`                                                                                                                                         |
+| `bun run build:cloudflare`                                                                                                                                                                 | 成功 | Web、API、Agent production dry-run bundle                                                                                                                                               |
+| `bun run check`                                                                                                                                                                            | 成功 | Luna、reasoning、Agent UI current diff、2026-08-01                                                                                                                                      |
+| `bun run --cwd packages/ui test:browser`                                                                                                                                                   | 成功 | light/dark 99 tests、2026-08-01                                                                                                                                                         |
+| `bun run --cwd apps/web test:browser:components`                                                                                                                                           | 成功 | light 203、dark 76、browser 9 tests、2026-08-01                                                                                                                                         |
+| `bun run build:cloudflare`                                                                                                                                                                 | 成功 | Luna切替後のWeb、API、Agent production dry-run bundle                                                                                                                                   |
+| `bun run --cwd apps/agent smoke:mastra`                                                                                                                                                    | 参考 | Studio用unscoped AgentのLuna文字列生成。business toolと製品chat経路は対象外                                                                                                             |
+| Luna local Product Agent chat                                                                                                                                                              | 過去 | OpenRouterのAzure経路がroot `oneOf`の`get_issue` schemaをHTTP 400で拒否した旧失敗。現在の3 canary成功はPLAN-2026-030が所有し、製品の`xhigh` profileによるLGTM付き最終再実行だけが未実施 |
+| `bun run dev:studio`、`studio:*`                                                                                                                                                           | 過去 | 独自Thread Title Agent廃止前の2 AgentsとProduct paid smoke。現在のtitle生成証跡には使わない                                                                                             |
 
-E2の`qwen/qwen3.6-flash`は低価格な開発用canaryであり、現在のflakyなtool選択をphase完了の
-blockerにしない。過去画像follow-upには`@diagnostic-qwen`を付け、runnerがdefault
-`test:e2e:full`から除外し、`PAID_E2E_DIAGNOSTIC=1`でだけ実行する。予算確保後は、
-GPT-5.6 Luna/Terra等のproduction採用modelについてprovider、model、versionをE2と一致させ、
-production相当のmodel挙動を検査する。それまでは同じsystem回帰を決定的なE1で必須化し、
-複数の過去画像からの自然言語選択品質は明示した一時的なblocking coverage gapとする。
+上記の旧E2とQwen検査は当時の履歴です。現在の有料E2は製品と同じGPT-5.6 Lunaだけを使い、
+`@diagnostic-qwen`と`PAID_E2E_DIAGNOSTIC`を持ちません。現在のWeb検索、非公開Issue読取、承認付き
+Issue書込の3 canary整備と課金実行の証跡は[PLAN-2026-030](./PLAN-2026-030-luna-paid-e2e-hardening.md)が
+所有します。本計画は引き続きMCPとapprovalの実装契約を所有します。画像の追加、過去画像reuse、読取、
+削除は決定的E1とAPI契約を正本とし、有料E2へ重複させません。
 
 ## リスクとrollback
 

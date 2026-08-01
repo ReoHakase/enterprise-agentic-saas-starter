@@ -36,6 +36,19 @@ Agentの応答保存では、Mastra Workflowを回復記録として使い、Mem
   削除する。通常のストリーム完了はMemory保存の厳密な完了を待たない。
 - Memory内部で保存失敗が例外として返らない場合は、固定エラーコードを持つtraceで観測し、
   保存処理を横取りする独自処理を追加しない。
+- message全体をアプリ独自スキーマへ写し替える全面的なsecurity projectionは置かない。Mastraと
+  プロバイダーSDKが作る有効なreasoning、ツール入力・出力、approval、型付きprovider metadataを
+  `MessageHistory`へ保存し、次のturnで使う。
+- 例外として、標準`MessageHistory`で実測した`providerMetadata.mastra.modelOutput`だけを
+  `memory-persistence-guard`で除去する。これはtoolの`toModelOutput`が現在のturnへ渡した生のメディアを
+  Mastraがmetadataへ複製する値であり、次turnに不要な副本である。
+- reasoning detailを含むprovider metadata、検証失敗を含むツール入力・出力、`file`、`source`、
+  `source-document`、live streamは標準形式のまま保持する。保存前のcredential scannerや独自allowlistを
+  追加しない。
+- private URLやraw bytesは保存直前の一括変換ではなく、toolの返却値と一時的なmodel contextを作る
+  境界で除外する。providerの生Errorとcauseは失敗したstreamからMemoryへ保存しない。
+- browserへ返すhistoryだけをAI SDK v6互換messageから公開schemaへ変換し、provider metadata、
+  `skill`本文、生のtool errorを除外する。この表示用変換をMemoryへ逆流させない。
 - approval Workflow、opaque resume ticket、APIの認可・トランザクション・`run`精算は維持する。
 - `AgentLibSQLStore`の独自回避処理は、標準`LibSQLStore.init()`を繰り返す試験で同じ初期化契約を
   満たすことを確認できた場合だけ削除する。
@@ -58,6 +71,10 @@ Agentの応答保存では、Mastra Workflowを回復記録として使い、Mem
 ## 理由
 
 - Mastra MemoryとBetter Auth organizationの更新に追従する独自状態機械を減らせる。
+- providerやAI SDKが正規に追加したmessage fieldを独自schema不一致で黙って失わず、次turnのcontextと
+  調査可能性を維持できる。
+- 標準保存で確認したprovider metadata、生のメディア、未検証ツール入力、model生成file、sourceの経路だけを
+  閉じ、filterの保守範囲を固定できる。
 - 書き込みの正本と失敗時の挙動が、それぞれのフレームワークの標準契約へ揃う。
 - 独自の回復・配送経路に必要だったAPI、DB行、定期処理、テストを削除できる。
 - approval、認可、テナント境界など製品固有の安全境界は、標準機能へ誤って委譲せず維持できる。
@@ -82,7 +99,8 @@ Agentの応答保存では、Mastra Workflowを回復記録として使い、Mem
 
 ## 強制方法
 
-- Product AgentのMemory設定とMastra標準ストリーム境界を契約テストで固定する。
+- Product AgentのMemory設定、Mastra標準ストリーム境界、限定的な`outputProcessor`の不変条件を
+  契約テストで固定する。
 - `apps/agent`から独自`memory-commit`、回復journal、独自スレッド名Agentの実行入口を除去する。
 - Better Auth organizationの標準クライアント・サーバーAPIだけをWebとAuthの接続境界にする。
 - `super_admin`、招待配送`outbox`、独自一括招待・再送ルートの残存を静的検査とテストで検出する。
@@ -90,7 +108,10 @@ Agentの応答保存では、Mastra Workflowを回復記録として使い、Mem
 
 ## 検証
 
-- 複数ターンのMemory保存・再読み込みと`reasoning_details`の再送
+- 複数ターンのMemory保存・再読み込みと、許可済みOpenRouter `reasoning_details`の再送
+- 有効なツール入力・出力、reasoning本文、approval、`skill`本文を保持すること
+- `providerMetadata.mastra.modelOutput`の生のメディア副本だけを保存しないこと
+- 検証失敗を含むツール入力・出力、provider metadata、`file`・`source`類、live streamを変更しないこと
 - Memory保存失敗時のbest-effort動作と固定エラーコード付きtrace
 - approvalの中断・再開、opaque ticket、API認可、使用量とrun精算
 - ローカルTursoに対する`LibSQLStore.init()`の3並行呼び出しと同一instanceの反復初期化試験

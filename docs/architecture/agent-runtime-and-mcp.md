@@ -49,8 +49,8 @@ Mastra 1系、Node.js 24以上です。tool定義はMastra `createTool`、browse
 委譲します。独自tool DSL、独自UIMessage codec、stream末尾を検出するための
 `TransformStream`は追加しません。
 
-Mastra出力からUIMessage streamへの変換は`@mastra/ai-sdk`の`toAISdkStream`を使います。現在の
-adapterが要求する`version: "v6"`はUIMessage互換contractの指定であり、ApplicationのAI SDK 6
+MastraのMemory付き生成とUIMessage streamへの接続は`@mastra/ai-sdk`の`handleChatStream`を使います。
+現在のadapterが要求する`version: "v6"`はUIMessage互換contractの指定であり、ApplicationのAI SDK 6
 依存を意味しません。adapterを迂回する手書き変換は作らず、Mastra側のAI SDK 7対応が公開された
 場合は同じboundary内で更新します。
 
@@ -247,7 +247,6 @@ export const mastra = new Mastra({
   observability,
   agents: {
     productAgent,
-    threadTitleAgent,
   },
   workflows: {
     approvedIssueActionWorkflow,
@@ -293,9 +292,16 @@ Mastra Storageは完全なthread metadataとmessage履歴の正本です。Mastr
 利用して、直近履歴、working memory、semantic recallなどモデルへ渡す文脈を構成します。Memoryを
 認可台帳、全履歴の別正本、thread横断の共有状態として扱いません。
 
-production、Studio、testは同じstorage factoryを利用し、process内では1つのinstanceを再利用します。
-requestごとに`LibSQLStore`を生成しません。productionではAgent DB URLがApplication DB URLと同一なら
-起動を拒否します。
+production、Studio、testは同じstorage factoryを利用し、chat、Memory、通常のWorkflowでは
+isolate内の1 instanceを再利用します。例外は別requestで承認Workflowをresumeする経路です。
+Cloudflareのrequest scopeを越えて元のMastra実行objectを再利用せず、同じAgent DBへ接続する標準
+`LibSQLStore`とMastraをresume request内で生成します。APIがcaller signalと50秒のdeadlineを所有し、
+Agentはticket消費前とbusiness write直前に同じsignalを検査します。timeout時の公開応答は
+`service_unavailable`と`Retry-After: 30`です。request専用Storageのcloseはresponseと分離して
+`waitUntil`へ渡し、2秒で打ち切ります。rejectまたはtimeoutはraw causeを記録せず、固定code
+`resume_storage_close_failed`だけで観測します。既存storage instanceを別のMastraへ渡すと
+`storage.__registerMastra()`が所有者を差し替えるため共有しません。productionではAgent DB URLが
+Application DB URLと同一なら起動を拒否します。
 
 ### Application DBとの最小同期
 
@@ -314,6 +320,13 @@ Memoryの読込、保存、title生成はMastra標準機能へ委譲します。
 Worker eviction、OOM、`SIGKILL`時の未保存messageはbest-effortです。独自Workflow stage、
 reconciliation、drainでMastra Memoryと同じ状態を再実装しません。公開可否は各readでApplication
 registryを検証してfail closedにします。
+
+標準`MessageHistory`には、有効なreasoning本文、ツール入力・出力、approval、`skill`本文を保持します。
+message全体を独自スキーマへ写し替える全面的なsecurity projectionは置きません。
+`memory-persistence-guard`は、現在のmodel turnで使った生のメディアが
+`providerMetadata.mastra.modelOutput`へ複製された副本だけを保存前に除去します。reasoning detailを含む
+provider metadata、検証失敗を含むツール入力・出力、`file`・`source`類、live streamは変更しません。
+ブラウザーへ返すhistoryは別の薄い公開projectionとし、Memoryへ逆流させません。
 
 ### 将来のComposite Storage
 
@@ -474,12 +487,16 @@ run IDのmessage metadataは表示とcancel用の一時情報であり、Mastra 
 
 ## Reasoning
 
-Product AgentはAI SDK標準reasoning partを`sendReasoning: true`で送信し、本文をMastra Memoryへ保存して再表示します。OpenRouter標準`reasoning_details`はallowlist後に次turnへ再送しますが、暗号化detailとprovider metadataはserver外へ出しません。存在しない非公開chain-of-thoughtを別modelで生成しません。
+Product AgentはAI SDK標準reasoning partを`sendReasoning: true`で送信し、本文をMastra Memoryへ保存して
+再表示します。OpenRouter `reasoning_details`を含むprovider metadataは次turnへ再送しますが、
+reasoning detailとprovider metadataはserver外へ出しません。存在しない非公開
+chain-of-thoughtを別modelで生成しません。
 
-- Product Agentは`openai/gpt-5.6-luna`のreasoning `xhigh`
+- Product Agentは`openrouter-gpt-5.6-luna-xhigh` profileを使い、reasoning `xhigh`、最大出力4,096 tokenとする
 - Mastra Memoryのtitle補助と直接Web検索補助は同じLunaのreasoning `none`
 - title生成はmain stream開始を妨げない
-- text、tool call、tool resultが一定時間ないreasoning-only状態をtimeoutする
+- liveness再検証はmodel境界1か所に限定し、native streamで重複させない
+- reasoning/text/toolを独自watchdogで分類せず、reasoning-onlyでも270秒のrun全体上限を延長しない
 - tool side effect後の自動model retryは禁止する
 
 ## Web検索
@@ -506,7 +523,7 @@ Phase 2のlive compatibility確認では当時のQwen向けbeta server tool requ
 exact query、1 request、public source projection、timeout、G5 3/3を維持できた時点で置き換えます。
 どちらの経路でも別Agentを挟みません。
 
-Agent、Memory projection、API client、Webは`agent-contracts`の同じpublic URL canonicalizerを使います。
+ツールexecutor、公開history、API client、Webは`agent-contracts`の同じpublic URL canonicalizerを使います。
 tool resultのsourceはcanonical `source-url` partへ昇格し、既存sourceとcanonical URL単位で重複排除します。
 provider由来queryとfragmentは名前に依存せず全体を除去し、userinfo、private/reserved hostは拒否します。
 
@@ -730,7 +747,7 @@ DB migration historyはappend-onlyを維持し、新しいdestructive migration�
 - API側message repositoryが存在しない
 - native tool stateがbrowserへ届く
 - Stop直後に同じthreadで次turnを開始できる
-- reasoning-only timeoutがfatal lockを残さない
+- model境界のliveness再検証と270秒のrun全体timeoutがfatal lockを残さず、stream層に重複したliveness wrapperを置かない
 - Web検索がnested Agentなしで動く
 - Issue attachmentの追加、削除、読取がtoolから可能
 - MCPが`apps/agent`へ依存せず全business toolを公開する
