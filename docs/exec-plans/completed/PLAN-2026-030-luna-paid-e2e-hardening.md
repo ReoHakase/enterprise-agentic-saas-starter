@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-030
 title: GPT-5.6 Luna有料E2Eの強化
-status: active
+status: completed
 created: 2026-08-01
 owners:
   - repository-maintainers
@@ -86,7 +86,7 @@ docs/testing-strategy/agent-refactor-mcp.md
 docs/observability.md
 docs/exec-plans/active/agent-refactor-and-mcp.md
 docs/exec-plans/README.md
-docs/exec-plans/active/PLAN-2026-030-luna-paid-e2e-hardening.md
+docs/exec-plans/completed/PLAN-2026-030-luna-paid-e2e-hardening.md
 ```
 
 ## 作業単位
@@ -118,7 +118,7 @@ docs/exec-plans/active/PLAN-2026-030-luna-paid-e2e-hardening.md
 - [x] 3本のLunaカナリアテストを機密情報を含まない検証へ更新する。
 - [x] 無料の単体・設定検査を成功させる。
 - [x] 明示承認済みの有料E2Eを1回成功させる。
-- [ ] 正本文書、既存PR、最終CIを現在の実行結果へ揃える。
+- [x] 正本文書、既存PR、最終CIを現在の実行結果へ揃える。
 
 ## 判断記録
 
@@ -154,7 +154,7 @@ docs/exec-plans/active/PLAN-2026-030-luna-paid-e2e-hardening.md
 | `bun run check`                          | 成功   | sandboxのlistener制限を除いた通常環境で12 workspace全検査が成功                                                                                       |
 | `bun run build:cloudflare`               | 成功   | Web、API、Agentの3 dry-run bundle                                                                                                                     |
 | DB generate/check                        | 成功   | `db:generate`はschema変更なし、migration history・snapshot・schema drift成功                                                                          |
-| 更新後HEADのGitHub Actions               | 未実施 | 無料の全検査を再実行する                                                                                                                              |
+| 更新後HEADのGitHub Actions               | 成功   | run `30737784211`。`242d4ee`でBrowser集約を含む11ジョブが全件成功                                                                                     |
 
 ## リスクと切り戻し
 

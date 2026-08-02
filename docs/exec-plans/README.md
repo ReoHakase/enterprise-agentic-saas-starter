@@ -41,7 +41,6 @@ last_reviewed: 2026-08-01
 
 ### 実行中
 
-- [GPT-5.6 Luna有料E2Eの強化](active/PLAN-2026-030-luna-paid-e2e-hardening.md)
 - [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
 - [Issue-first DataTableとURL同期](active/issue-first-data-table.md)
 
@@ -49,6 +48,7 @@ last_reviewed: 2026-08-01
 
 - [coding agent設定のNix集約](completed/nix-managed-agent-config.md)
 - [Emulate対応サービス拡張](completed/emulate-expansion.md)
+- [GPT-5.6 Luna有料E2Eの強化](completed/PLAN-2026-030-luna-paid-e2e-hardening.md)
 - [標準機能優先のAgent・エラー・可観測性・ブラウザーテスト整理](completed/PLAN-2026-029-standard-library-observability-browser-hardening.md)
 - [文書、source構成、品質ゲート、テスト、Codex harnessの全面移行](completed/one-shot-harness-migration.md)
 
