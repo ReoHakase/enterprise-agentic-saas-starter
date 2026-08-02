@@ -10,11 +10,9 @@ import { setupWorker } from "msw/browser"
 import { type ReactNode, useState } from "react"
 
 import "@enterprise-agentic-saas/ui/globals.css"
+import "./preview.css"
 
-import { fontMono, inter } from "../src/app/fonts"
 import { storybookApiHandlers } from "../test-support/storybook/api-handlers"
-
-const fontClassNames = `${fontMono.variable} font-sans ${inter.variable} antialiased`
 
 const WithQueryClient = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
@@ -88,8 +86,8 @@ export default definePreview({
     ),
     withThemeByClassName({
       themes: {
-        light: `light ${fontClassNames}`,
-        dark: `dark ${fontClassNames}`,
+        light: "light font-sans antialiased",
+        dark: "dark font-sans antialiased",
       },
       defaultTheme: "light",
     }),

@@ -34,6 +34,10 @@ Storybookは単一のテスト層ではありません。storyは、状態カタ
 
 二つのStorybookを分離し、必要ならcompositionまたはStorybook MCPで横断的に参照します。
 
+UI Storybookは既存の`@fontsource-variable`、Web Storybookは`.storybook/preview.css`の固定system font
+stackを使います。Web Storybookから製品用の`next/font/google`をimportせず、static buildとbrowser
+testをGoogle Fontsの可用性から分離します。製品のNext.js font設定はこのテスト用CSSへ置き換えません。
+
 ## CSF Next
 
 CSF Nextの`defineMain`、`definePreview`、`preview.meta`、`meta.story`を採用します。

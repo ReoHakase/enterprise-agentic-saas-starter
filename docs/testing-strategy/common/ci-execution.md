@@ -100,6 +100,7 @@ deploy target固有のCloudflare dry-runも別jobとして維持します。
 - `Storybook · light`、`Storybook · dark`、`Vitest Browser Mode`、`Storybook static build`を
   独立jobとして並列実行し、`Browser · Web components`で集約する
 - Storybookの各テーマ内は`fileParallelism: false`、`maxWorkers: 1`を維持する
+- static buildのfontはlocal assetまたは固定system stackを使い、外部font APIへ依存しない
 - `Browser · Next.js integration`で実Next.jsと差し替え済みdownstreamの統合を検査する
 - pinned Chromium、WebKit install
 - laneごとに一意なfailure artifact

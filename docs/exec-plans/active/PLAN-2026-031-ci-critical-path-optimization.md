@@ -76,6 +76,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | 2026-08-02 | rootの公開スクリプトを変更しない                     | ローカル契約を安定させ、CI専用の分割を内部に閉じるため                    |
 | 2026-08-02 | Agentのcancel scenarioを依存projectへ分ける          | Linux workerdで他scenarioと同時にstreamを切断するとWranglerが終了したため |
 | 2026-08-02 | 2ユーザーの初回作成をsetup projectで直列実行する     | 3 workerが同じ新規userを同時作成するとBetter Authの一意制約と競合するため |
+| 2026-08-02 | Web Storybookのfontを固定system stackへ分離する      | dependencyを変えず、static buildをGoogle Fontsの可用性から分離するため    |
 
 ## 検証証跡
 
@@ -91,12 +92,13 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | `bun run test:browser`                    | 成功 | Web/UI全件とNext.js integration、2分13秒                             |
 | `bun run test:e2e`                        | 成功 | 未指定`all`で7件、1分5秒                                             |
 | `bun run build`                           | 成功 | Emulateを含むworkspace build                                         |
-| `bun run build:storybook`                 | 成功 | Web/UI。sandbox外のfont取得を許可して再実行                          |
+| `bun run build:storybook`                 | 成功 | Web/UI。Webは外部font取得なしでstatic artifactを生成                 |
 | `bun run build:cloudflare`                | 成功 | Web、API、Agentのdry-run build                                       |
 | `nix flake check`                         | 成功 | aarch64-darwin対象                                                   |
 | `git diff --check`                        | 成功 | whitespace errorなし                                                 |
 | CI run `30752916540`                      | 修正 | cancelとの同時実行でLinux workerdが終了。依存project化後に再計測する |
 | CI run `30753696597`                      | 修正 | 共有userの初回作成が競合。setup projectで直列認証して再計測する      |
+| CI run `30754423942` attempt 2            | 修正 | Google Fonts取得失敗。固定system stackへ置換して再計測する           |
 
 ## リスクとrollback
 
