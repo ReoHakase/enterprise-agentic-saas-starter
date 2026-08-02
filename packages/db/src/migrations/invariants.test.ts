@@ -7,7 +7,11 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
-import { applyBaselineSchema, migrationsFolder } from "./helpers"
+import {
+  applyBaselineSchema,
+  createMigrationPrefix,
+  migrationsFolder,
+} from "./helpers"
 
 describe("database migrations: invariants", () => {
   it("repairs legacy membership invariants deterministically and safely replays", async () => {
@@ -435,7 +439,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
     }
   })
 
-  it("allows only one pending invitation per tenant and normalized email", async () => {
+  it("allows expired pending history alongside a new active invitation", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle(client)
 
@@ -458,11 +462,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
         {
           sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
           args: [
-            "invitation-1",
+            "invitation-expired-by-time",
             "org-a",
             "member@example.com",
             "pending",
-            now + 60_000,
+            now - 1,
             now,
             "user-1",
           ],
@@ -473,7 +477,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
         client.execute({
           sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
           args: [
-            "invitation-duplicate",
+            "invitation-active",
             "org-a",
             "MEMBER@EXAMPLE.COM",
             "pending",
@@ -482,38 +486,98 @@ describe("database migrations: tenant and concurrency invariants", () => {
             "user-1",
           ],
         })
-      ).rejects.toThrow(/unique/i)
+      ).resolves.toBeDefined()
 
       await expect(
-        client.batch([
-          {
-            sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
-            args: [
-              "invitation-expired",
-              "org-a",
-              "member@example.com",
-              "expired",
-              now - 1,
-              now,
-              "user-1",
-            ],
-          },
-          {
-            sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
-            args: [
-              "invitation-other-tenant",
-              "org-b",
-              "member@example.com",
-              "pending",
-              now + 60_000,
-              now,
-              "user-1",
-            ],
-          },
-        ])
+        client.execute({
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "invitation-other-tenant",
+            "org-b",
+            "member@example.com",
+            "pending",
+            now + 60_000,
+            now,
+            "user-1",
+          ],
+        })
       ).resolves.toBeDefined()
+
+      const invitations = await client.execute(
+        "select id, status from invitation where organization_id = 'org-a' order by id"
+      )
+      expect(invitations.rows).toMatchObject([
+        { id: "invitation-active", status: "pending" },
+        { id: "invitation-expired-by-time", status: "pending" },
+      ])
+      const indexes = await client.execute("pragma index_list('invitation')")
+      expect(indexes.rows.map((row) => row.name)).not.toContain(
+        "invitation_pending_organization_email_uidx"
+      )
     } finally {
       client.close()
+    }
+  })
+
+  it("drops the pending invitation index without changing existing rows", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const db = drizzle(client)
+    const previousMigrations = await createMigrationPrefix({
+      through: "0027_nostalgic_sugar_man",
+    })
+
+    try {
+      await migrate(db, { migrationsFolder: previousMigrations })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["upgrade-user", "Owner", "owner@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["upgrade-org", "Upgrade Org", "upgrade-org", now],
+        },
+        {
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-expired",
+            "upgrade-org",
+            "member@example.com",
+            "pending",
+            now - 1,
+            now,
+            "upgrade-user",
+          ],
+        },
+      ])
+
+      await migrate(db, { migrationsFolder })
+      await expect(
+        client.execute({
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-active",
+            "upgrade-org",
+            "member@example.com",
+            "pending",
+            now + 60_000,
+            now + 1,
+            "upgrade-user",
+          ],
+        })
+      ).resolves.toBeDefined()
+
+      const invitations = await client.execute(
+        "select id, status from invitation order by id"
+      )
+      expect(invitations.rows).toMatchObject([
+        { id: "upgrade-active", status: "pending" },
+        { id: "upgrade-expired", status: "pending" },
+      ])
+    } finally {
+      client.close()
+      await rm(previousMigrations, { recursive: true, force: true })
     }
   })
 

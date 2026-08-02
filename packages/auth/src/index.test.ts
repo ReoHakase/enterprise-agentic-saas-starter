@@ -676,7 +676,7 @@ describe("organization invitation acceptance", () => {
     )
   })
 
-  it("creates and resends one invitation through the native endpoint", async () => {
+  it("resends active invitations and renews expired invitations natively", async () => {
     const fixture = await createOrganizationOwnerFixture()
     const rawFailure = "provider token=raw-invitation-secret"
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
@@ -705,11 +705,32 @@ describe("organization invitation acceptance", () => {
       const created = await createdResponse.json()
       const resentResponse = await invite(true)
       const resent = await resentResponse.json()
+      const [{ db }, schema] = await Promise.all([
+        import("@enterprise-agentic-saas/db"),
+        import("@enterprise-agentic-saas/db/schema"),
+      ])
+      await db
+        .update(schema.invitation)
+        .set({ expiresAt: new Date(Date.now() - 1) })
+        .where(eq(schema.invitation.id, created.id))
+      const renewedResponse = await invite(true)
+      const renewed = await renewedResponse.json()
+      const renewedAgainResponse = await invite(true)
+      const renewedAgain = await renewedAgainResponse.json()
       const ownerInvitationResponse = await invite(
         false,
         "owner",
         "owner-invite@example.test"
       )
+      const storedInvitations = await db
+        .select({
+          expiresAt: schema.invitation.expiresAt,
+          id: schema.invitation.id,
+          status: schema.invitation.status,
+        })
+        .from(schema.invitation)
+        .where(eq(schema.invitation.organizationId, fixture.organizationId))
+        .orderBy(schema.invitation.createdAt, schema.invitation.id)
 
       expect(createdResponse.status).toBe(200)
       expect(created).toMatchObject({
@@ -720,6 +741,14 @@ describe("organization invitation acceptance", () => {
       })
       expect(resentResponse.status).toBe(200)
       expect(resent).toMatchObject({ id: created.id, status: "pending" })
+      expect(renewedResponse.status).toBe(200)
+      expect(renewed).toMatchObject({ status: "pending" })
+      expect(renewed.id).not.toBe(created.id)
+      expect(renewedAgainResponse.status).toBe(200)
+      expect(renewedAgain).toMatchObject({
+        id: renewed.id,
+        status: "pending",
+      })
       expect(ownerInvitationResponse.status).toBe(400)
       expect(await ownerInvitationResponse.json()).toMatchObject({
         code: "INVALID_ORGANIZATION_INVITATION_ROLE",
@@ -727,7 +756,21 @@ describe("organization invitation acceptance", () => {
       expect(new Date(resent.expiresAt).getTime()).toBeGreaterThanOrEqual(
         new Date(created.expiresAt).getTime()
       )
-      expect(emailSpies.send).toHaveBeenCalledTimes(2)
+      expect(new Date(renewed.expiresAt).getTime()).toBeGreaterThan(Date.now())
+      expect(storedInvitations).toHaveLength(2)
+      expect(
+        storedInvitations.map(({ id, status }) => ({ id, status }))
+      ).toEqual([
+        { id: created.id, status: "pending" },
+        { id: renewed.id, status: "pending" },
+      ])
+      expect(storedInvitations[0]?.expiresAt.getTime()).toBeLessThanOrEqual(
+        Date.now()
+      )
+      expect(storedInvitations[1]?.expiresAt.getTime()).toBeGreaterThan(
+        Date.now()
+      )
+      expect(emailSpies.send).toHaveBeenCalledTimes(4)
       expect(errorLog).toHaveBeenCalledWith({
         component: "better-auth",
         event: "request_failed",

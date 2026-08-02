@@ -7,7 +7,7 @@ import {
   session,
   user,
 } from "@enterprise-agentic-saas/db/schema"
-import { and, count, eq, inArray } from "drizzle-orm"
+import { and, count, eq, gt, inArray } from "drizzle-orm"
 
 import { HttpError } from "../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../agent/public"
@@ -128,7 +128,8 @@ export const findOrganizationForUser = async (
     .where(
       and(
         eq(invitation.organizationId, input.organizationId),
-        eq(invitation.status, "pending")
+        eq(invitation.status, "pending"),
+        gt(invitation.expiresAt, new Date())
       )
     )
 
