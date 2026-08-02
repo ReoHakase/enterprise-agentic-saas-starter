@@ -451,12 +451,16 @@ export const UpdateFailure = meta.story({
 
     await step("Report an update failure without losing the row", async () => {
       await canvas.findByText(issueTitle)
-      const actions = canvas.getByRole("button", {
-        name: `Actions for ${issueTitle}`,
-      })
-      await waitFor(() => expect(actions).toBeEnabled())
-      await userEvent.click(actions)
-      const menu = await body.findByRole("menu", {
+      const getActions = () =>
+        canvas.getByRole("button", {
+          name: `Actions for ${issueTitle}`,
+        })
+      await waitFor(() => expect(getActions()).toBeEnabled())
+      await userEvent.click(getActions())
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-expanded", "true")
+      )
+      const menu = body.getByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
       await waitFor(() => expect(menu).toBeVisible())
@@ -468,7 +472,9 @@ export const UpdateFailure = meta.story({
         await body.findByText(/Issue update failed/)
       ).toBeInTheDocument()
       await expect(canvas.getByText(issueTitle)).toBeVisible()
-      await waitFor(() => expect(actions).toHaveAttribute("aria-busy", "false"))
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-busy", "false")
+      )
     })
   },
 })
@@ -494,12 +500,16 @@ export const DeleteFailure = meta.story({
 
     await step("Report a deletion failure without losing the row", async () => {
       await canvas.findByText(issueTitle)
-      const actions = canvas.getByRole("button", {
-        name: `Actions for ${issueTitle}`,
-      })
-      await waitFor(() => expect(actions).toBeEnabled())
-      await userEvent.click(actions)
-      const menu = await body.findByRole("menu", {
+      const getActions = () =>
+        canvas.getByRole("button", {
+          name: `Actions for ${issueTitle}`,
+        })
+      await waitFor(() => expect(getActions()).toBeEnabled())
+      await userEvent.click(getActions())
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-expanded", "true")
+      )
+      const menu = body.getByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
       await waitFor(() => expect(menu).toBeVisible())
