@@ -244,8 +244,9 @@ state isolation後にparallel executionを有効にします。
 - 内部環境変数`DETERMINISTIC_E2E_PROFILE=agent|auth|all`で必要なproject、web server、DB、
   teardownだけを構築する。未指定時は`all`としてrootの実行契約を維持する
 - CIではAgent workflowを3ワーカー、OAuth・WebAuthnを含むAuth profileを1ワーカーで直列実行し、
-  `Free E2E`で集約する。Agent profileはwrite、search、attachmentを3ワーカーで実行し、共有runtimeの
-  stream切断を伴うcancelは1ワーカーの依存projectとして最後に実行する
+  `Free E2E`で集約する。Agent profileの2ユーザーはsetup projectで初回作成し、各workerは既存userへ
+  ログインして独立したsessionとstorage stateを持つ。write、search、attachmentを3ワーカーで実行し、
+  共有runtimeのstream切断を伴うcancelは1ワーカーの依存projectとして最後に実行する
 - WebKitはauth、keyboard、upload、focusなどbrowser差が重要な代表journeyだけにする
 - mobileはlayout boundaryを持つ代表journeyだけにする
 

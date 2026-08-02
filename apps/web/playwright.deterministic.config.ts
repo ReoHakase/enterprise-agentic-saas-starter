@@ -76,7 +76,19 @@ const createAgentProfile = () => {
   }
   const projects = [
     {
+      name: "e1-scripted-agent-auth-setup",
+      testMatch: "agent-auth.setup.ts",
+      workers: 1,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: environment.webOrigin,
+        viewport: { width: 1280, height: 720 },
+        video: "off",
+      },
+    },
+    {
       name: "e1-scripted-agent-chromium",
+      dependencies: ["e1-scripted-agent-auth-setup"],
       testMatch: "scripted-agent-*.spec.ts",
       testIgnore: "scripted-agent-cancel.spec.ts",
       use: {
