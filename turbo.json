@@ -111,6 +111,7 @@
         "AGENT_E2E_OBSERVABILITY",
         "AGENT_E2E_RUN_ID",
         "CI",
+        "DETERMINISTIC_E2E_PROFILE",
         "PLAYWRIGHT_BASE_URL"
       ]
     },

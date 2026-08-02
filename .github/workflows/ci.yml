@@ -313,10 +313,19 @@ jobs:
           test "$UI_COMPONENTS" = success
           test "$NEXTJS_INTEGRATION" = success
 
-  free-e2e:
-    name: Free E2E
+  free-e2e-profiles:
+    name: Free E2E · ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Agent workflows
+            profile: agent
+          - name: Authentication
+            profile: auth
 
     steps:
       - name: Checkout full history
@@ -333,21 +342,37 @@ jobs:
         working-directory: apps/web
         run: bunx playwright install --with-deps chromium
 
-      - name: Run the full free E2E suite
+      - name: Run the ${{ matrix.name }} free E2E profile
         run: >-
           nix develop --command env -u NO_COLOR
           bun run test:e2e
+        env:
+          DETERMINISTIC_E2E_PROFILE: ${{ matrix.profile }}
 
       - name: Upload Playwright artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-free-e2e
+          name: playwright-free-e2e-${{ matrix.profile }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
           if-no-files-found: warn
           retention-days: 7
+
+  free-e2e:
+    name: Free E2E
+    if: ${{ always() }}
+    needs:
+      - free-e2e-profiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify free E2E profiles
+        env:
+          FREE_E2E_PROFILES: ${{ needs.free-e2e-profiles.result }}
+        run: test "$FREE_E2E_PROFILES" = success
 
   cloudflare-dry-run:
     name: Cloudflare dry-run · ${{ matrix.name }}
