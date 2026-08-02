@@ -14,7 +14,7 @@ const runPlaywright = () =>
         "node_modules/@playwright/test/cli.js",
         "test",
         "--config=playwright.app.config.ts",
-        "--project=w6-webkit-representative",
+        "--project=nextjs-integration-webkit-representative",
         "--retries=0",
       ],
       {

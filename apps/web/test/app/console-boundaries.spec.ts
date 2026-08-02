@@ -1,13 +1,13 @@
 import type { BrowserContext, Locator, Page } from "@playwright/test"
 
-import { w6Environment } from "./fixtures/environment"
+import { nextjsIntegrationEnvironment } from "./fixtures/environment"
 import {
   expect,
   productionServerComponentRenderError,
   test,
 } from "./fixtures/test"
 
-const mockApiUrl = w6Environment.apiOrigin
+const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
 const geometryTolerance = 1
 const allDimensions: GeometryDimension[] = ["x", "y", "width", "height"]
 const frameDimensions: GeometryDimension[] = ["x", "y", "width"]

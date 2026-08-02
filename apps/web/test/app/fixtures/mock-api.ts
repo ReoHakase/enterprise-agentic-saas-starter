@@ -17,7 +17,7 @@ type RequestGateRule = OneShotRule & {
   waitUntilReleased: Promise<void>
 }
 
-import { w6Environment } from "./environment"
+import { nextjsIntegrationEnvironment } from "./environment"
 
 const fixedNow = "2026-07-14T09:00:00.000Z"
 const expiresAt = "2026-08-14T09:00:00.000Z"
@@ -25,7 +25,7 @@ const corsHeaders = {
   "access-control-allow-credentials": "true",
   "access-control-allow-headers": "content-type,x-e2e-namespace",
   "access-control-allow-methods": "GET,OPTIONS,POST",
-  "access-control-allow-origin": w6Environment.webOrigin,
+  "access-control-allow-origin": nextjsIntegrationEnvironment.webOrigin,
   vary: "Origin",
 }
 
@@ -501,9 +501,11 @@ const handleRequest = async (request: Request) => {
 }
 
 Bun.serve({
-  port: w6Environment.apiPort,
+  port: nextjsIntegrationEnvironment.apiPort,
   hostname: "127.0.0.1",
   fetch: handleRequest,
 })
 
-console.log(`W6 fixture API listening on ${w6Environment.apiOrigin}`)
+console.log(
+  `Next.js integration fixture API listening on ${nextjsIntegrationEnvironment.apiOrigin}`
+)

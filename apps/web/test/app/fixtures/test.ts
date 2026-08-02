@@ -6,7 +6,7 @@ import {
   type Page,
 } from "@playwright/test"
 
-import { w6Environment } from "./environment"
+import { nextjsIntegrationEnvironment } from "./environment"
 
 type ClientDiagnosticsFixtures = {
   allowClientErrors: (...patterns: RegExp[]) => void
@@ -29,7 +29,7 @@ export type CreateRequestGate = (
   method?: string
 ) => Promise<RequestGate>
 
-const mockApiUrl = w6Environment.apiOrigin
+const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
 
 export const productionServerComponentRenderError =
   /An error occurred in the Server Components render\. The specific message is omitted in production builds/
@@ -80,7 +80,7 @@ const watchClientErrors = (page: Page) => {
 export const test = base.extend<ClientDiagnosticsFixtures>({
   e2eNamespace: [
     async ({ context, request }, use, testInfo) => {
-      if (!testInfo.project.name.startsWith("w6-")) {
+      if (!testInfo.project.name.startsWith("nextjs-integration-")) {
         await use("external-stack")
         return
       }

@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from "@playwright/test"
 
-import { w6Environment } from "./fixtures/environment"
+import { nextjsIntegrationEnvironment } from "./fixtures/environment"
 import {
   expect,
   productionServerComponentRenderError,
@@ -8,7 +8,7 @@ import {
 } from "./fixtures/test"
 import type { CreateRequestGate } from "./fixtures/test"
 
-const mockApiUrl = w6Environment.apiOrigin
+const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
 
 type AllowClientErrors = (...patterns: RegExp[]) => void
 

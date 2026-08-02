@@ -4,10 +4,10 @@ import {
   type PlaywrightTestConfig,
 } from "@playwright/test"
 
-import { w6Environment } from "./test/app/fixtures/environment"
+import { nextjsIntegrationEnvironment } from "./test/app/fixtures/environment"
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
-const baseURL = externalBaseUrl ?? w6Environment.webOrigin
+const baseURL = externalBaseUrl ?? nextjsIntegrationEnvironment.webOrigin
 
 const appIntegrationConfig = {
   testDir: "./test/app",
@@ -34,7 +34,7 @@ const appIntegrationConfig = {
     : [
         {
           command: "bun run test:browser:mock-api",
-          url: `${w6Environment.apiOrigin}/health`,
+          url: `${nextjsIntegrationEnvironment.apiOrigin}/health`,
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },
@@ -45,10 +45,10 @@ const appIntegrationConfig = {
           timeout: 180_000,
           env: {
             ...process.env,
-            API_PUBLIC_URL: w6Environment.apiOrigin,
+            API_PUBLIC_URL: nextjsIntegrationEnvironment.apiOrigin,
             NEXT_DIST_DIR: ".next-browser",
-            NEXT_PUBLIC_API_BASE_URL: w6Environment.apiOrigin,
-            PORT: String(w6Environment.webPort),
+            NEXT_PUBLIC_API_BASE_URL: nextjsIntegrationEnvironment.apiOrigin,
+            PORT: String(nextjsIntegrationEnvironment.webPort),
           },
         },
       ],
@@ -58,7 +58,7 @@ export default defineConfig({
   ...appIntegrationConfig,
   projects: [
     {
-      name: "w6-chromium",
+      name: "nextjs-integration-chromium",
       testIgnore: "webkit-representative.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
@@ -66,7 +66,7 @@ export default defineConfig({
       },
     },
     {
-      name: "w6-webkit-representative",
+      name: "nextjs-integration-webkit-representative",
       testMatch: "webkit-representative.spec.ts",
       use: { ...devices["iPhone 13"] },
     },
