@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-032
 title: Next devエラー可視化とBetter Auth招待再送修正
-status: active
+status: completed
 created: 2026-08-03
 owners:
   - repository-maintainers
@@ -70,7 +70,7 @@ Better Auth標準の招待再送契約を妨げているDB indexをappend-only m
 - [x] package別検査とrootの無料gate
 - [x] 実ローカル導線とLGTMの再確認
 - [x] GPT-5.6 Luna有料full E2E
-- [ ] commit、push、PR #9更新とCI確認
+- [x] commit、push、PR #9更新とCI確認
 
 ## 判断記録
 
@@ -103,6 +103,11 @@ Better Auth標準の招待再送契約を妨げているDB indexをappend-only m
 | Grafana MCP Loki・Tempo                  | 成功 | 修正前500と修正後200をrequest/trace IDで相関し、Tempoにraw原因なし  |
 | 修正後のWorkerdログ                      | 成功 | 期限切れ・active再送の双方でcross-request Promise警告は再現せず     |
 | GPT-5.6 Luna full E2E                    | 成功 | 3件、1 worker、retry 0。thread付きcanonical Issueリンクも再読込確認 |
+| PR #9 CI                                 | 成功 | head `0455bc5`、run `30761536800`。全Quality・Browser・E2E lane成功 |
+
+CI初回は`Free E2E · Agent workflows`の`bun ci`中に、外部Socket Security Scannerのfree modeが
+5分でtimeoutしました。Playwright開始前の外部要因であり、failed-only rerunでは同じheadのAgent E2Eが
+3分37秒で成功しました。
 
 ## リスクとrollback
 

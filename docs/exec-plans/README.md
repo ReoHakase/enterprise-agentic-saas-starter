@@ -41,12 +41,12 @@ last_reviewed: 2026-08-01
 
 ### 実行中
 
-- [Next devエラー可視化とBetter Auth招待再送修正](active/PLAN-2026-032-development-error-and-invitation-resend.md)
 - [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
 - [Issue-first DataTableとURL同期](active/issue-first-data-table.md)
 
 ### 完了
 
+- [Next devエラー可視化とBetter Auth招待再送修正](completed/PLAN-2026-032-development-error-and-invitation-resend.md)
 - [CIクリティカルパス短縮](completed/PLAN-2026-031-ci-critical-path-optimization.md)
 - [coding agent設定のNix集約](completed/nix-managed-agent-config.md)
 - [Emulate対応サービス拡張](completed/emulate-expansion.md)
