@@ -534,7 +534,7 @@ test("agent-canary-private-issue-read", async ({ context, page }) => {
   )
   const threadId = new URL(page.url()).searchParams.get("agentThread")
   expect(threadId).toBeTruthy()
-  const canonicalIssueHref = `/organization/${harness.organizationSlug}/issues/${issue.number}`
+  const canonicalIssueHref = `/organization/${harness.organizationSlug}/issues/${issue.number}?agentThread=${encodeURIComponent(threadId ?? "")}`
   await expect(
     agentShell
       .getByRole("status", { name: `View Issue #${issue.number}` })
