@@ -23,7 +23,7 @@ export const WaitingForFirstByte = meta.story({
   },
   play: async ({ canvas }) => {
     const status = canvas.getByRole("status")
-    await expect(status).toHaveTextContent("応答を待っています…")
+    await expect(status).toHaveTextContent("Waiting for a response…")
     await expect(status.querySelector("svg")).not.toBeNull()
   },
 })
@@ -36,7 +36,7 @@ export const WaitingAfterTool = meta.story({
   },
   play: async ({ canvas }) => {
     const status = canvas.getByRole("status")
-    await expect(status).toHaveTextContent("続きを待っています…")
+    await expect(status).toHaveTextContent("Waiting for the next step…")
     await expect(status.querySelector("svg")).not.toBeNull()
   },
 })

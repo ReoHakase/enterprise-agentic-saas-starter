@@ -44,7 +44,7 @@ export const runScriptedAgentWebSearchRead = async (
   )
   await agentShell.getByRole("button", { name: "Send", exact: true }).click()
   await expect(
-    agentShell.getByRole("status", { name: "Webで検索" }).last()
+    agentShell.getByRole("status", { name: "Search the web" }).last()
   ).toBeVisible()
   await expect(
     agentShell.getByRole("link", {
@@ -63,7 +63,7 @@ export const runScriptedAgentWebSearchRead = async (
   await page.getByRole("button", { name: "Open Agent" }).click()
   const reloadedAgent = page.getByRole("complementary", { name: "Agent" })
   await expect(
-    reloadedAgent.getByRole("status", { name: "Webで検索" })
+    reloadedAgent.getByRole("status", { name: "Search the web" })
   ).toBeVisible()
   await expect(
     reloadedAgent.getByRole("link", {

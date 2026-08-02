@@ -111,10 +111,10 @@ export const ReasoningTrigger = ({
     >
       <BrainIcon className="size-3.5 shrink-0" aria-hidden />
       {isStreaming ? (
-        <Shimmer>思考中…</Shimmer>
+        <Shimmer>Reasoning…</Shimmer>
       ) : (
         <span className="min-w-0 truncate">
-          思考完了{duration ? ` · ${duration}秒` : ""}
+          Reasoning complete{duration ? ` · ${duration}s` : ""}
           {summary ? ` · ${summary}` : ""}
         </span>
       )}

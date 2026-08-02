@@ -17,7 +17,7 @@ describe("Reasoning", () => {
   it("opens while streaming and closes after completion", async () => {
     vi.useFakeTimers()
     const { rerender } = render(reasoning(true))
-    const trigger = screen.getByRole("button", { name: /思考中/u })
+    const trigger = screen.getByRole("button", { name: /Reasoning/u })
     expect(trigger).toHaveAttribute("aria-expanded", "true")
 
     await act(() => vi.advanceTimersByTimeAsync(1_100))
@@ -25,7 +25,7 @@ describe("Reasoning", () => {
     await act(() => vi.advanceTimersByTimeAsync(300))
     expect(trigger).toHaveAttribute("aria-expanded", "false")
     expect(trigger).toHaveTextContent(
-      "思考完了 · 2秒 · Issueの状態を確認する。"
+      "Reasoning complete · 2s · Issueの状態を確認する。"
     )
 
     vi.useRealTimers()

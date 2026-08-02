@@ -26,13 +26,13 @@ export type ToolState =
   | "output-error"
 
 const status = {
-  "input-streaming": { label: "準備中", icon: CircleEllipsisIcon },
-  "input-available": { label: "実行中", icon: ClockIcon },
-  "approval-requested": { label: "承認待ち", icon: ClockIcon },
-  "approval-responded": { label: "承認済み", icon: CheckCircleIcon },
-  "output-available": { label: "完了", icon: CheckCircleIcon },
-  "output-denied": { label: "拒否", icon: XCircleIcon },
-  "output-error": { label: "失敗", icon: XCircleIcon },
+  "input-streaming": { label: "Preparing", icon: CircleEllipsisIcon },
+  "input-available": { label: "Running", icon: ClockIcon },
+  "approval-requested": { label: "Approval needed", icon: ClockIcon },
+  "approval-responded": { label: "Approved", icon: CheckCircleIcon },
+  "output-available": { label: "Done", icon: CheckCircleIcon },
+  "output-denied": { label: "Denied", icon: XCircleIcon },
+  "output-error": { label: "Failed", icon: XCircleIcon },
 } satisfies Record<ToolState, { label: string; icon: typeof ClockIcon }>
 
 export const Tool = ({

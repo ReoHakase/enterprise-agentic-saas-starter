@@ -207,8 +207,8 @@ export const AgentMessage = ({
       {message.role === "assistant" && answer ? (
         <MessageActions>
           <MessageAction
-            label={copied ? "回答をコピー済み" : "回答をコピー"}
-            tooltip={copied ? "コピー済み" : "コピー"}
+            label={copied ? "Response copied" : "Copy response"}
+            tooltip={copied ? "Copied" : "Copy"}
             onClick={copyAnswer}
           >
             {copied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}

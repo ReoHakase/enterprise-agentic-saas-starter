@@ -489,8 +489,11 @@ test("agent-canary-web-search-source", async ({ context, page }) => {
       webSearchOutputAvailable: true,
     })
   await expect(
-    agentShell.getByRole("status", { name: "Webで検索" }).last()
+    agentShell.getByRole("status", { name: "Search the web" }).last()
   ).toBeVisible({ timeout: 120_000 })
+  await expect(
+    agentShell.getByRole("combobox", { name: "Agent thread" })
+  ).not.toHaveText("New conversation", { timeout: 60_000 })
   await expect
     .poll(() => readLunaUsage(context.request, harness.apiOrigin), {
       timeout: 60_000,
@@ -508,7 +511,7 @@ test("agent-canary-web-search-source", async ({ context, page }) => {
     .poll(() => agentAnswers(agentShell).count(), { timeout: 120_000 })
     .toBeGreaterThanOrEqual(1)
   await expect(
-    agentShell.getByRole("status", { name: "Webで検索" }).last()
+    agentShell.getByRole("status", { name: "Search the web" }).last()
   ).toBeVisible({ timeout: 120_000 })
 })
 
@@ -534,7 +537,7 @@ test("agent-canary-private-issue-read", async ({ context, page }) => {
   const canonicalIssueHref = `/organization/${harness.organizationSlug}/issues/${issue.number}`
   await expect(
     agentShell
-      .getByRole("status", { name: `Issue #${issue.number}を確認` })
+      .getByRole("status", { name: `View Issue #${issue.number}` })
       .last()
   ).toBeVisible({ timeout: 120_000 })
   await expect

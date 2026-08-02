@@ -1,25 +1,25 @@
 import * as v from "valibot"
 
 const toolTitles: Record<string, string> = {
-  add_issue_attachments: "Issueへ添付を追加",
-  create_issue: "Issueを作成",
-  delete_issue: "Issueを削除",
-  get_issue: "Issueを確認",
-  read_issue_attachment_image: "添付画像を確認",
-  remove_issue_attachments: "Issueの添付を削除",
-  read_account_context: "アカウント情報を確認",
-  read_active_organization: "組織情報を確認",
-  search_issue_labels: "ラベルを検索",
-  search_issues: "Issueを検索",
-  search_organization_members: "メンバーを検索",
-  skill: "Agentの手順を確認",
-  ui_navigate: "画面を移動",
-  ui_open_issue: "Issueを開く",
-  ui_patch_form_draft: "フォーム下書きを更新",
-  ui_read_form_draft: "フォーム下書きを確認",
-  ui_set_issue_query: "Issue検索条件を更新",
-  update_issue: "Issueを更新",
-  web_search: "Webで検索",
+  add_issue_attachments: "Add attachments to Issue",
+  create_issue: "Create Issue",
+  delete_issue: "Delete Issue",
+  get_issue: "View Issue",
+  read_issue_attachment_image: "View attachment image",
+  remove_issue_attachments: "Remove Issue attachments",
+  read_account_context: "View account context",
+  read_active_organization: "View organization",
+  search_issue_labels: "Search labels",
+  search_issues: "Search Issues",
+  search_organization_members: "Search members",
+  skill: "Load Agent instructions",
+  ui_navigate: "Navigate",
+  ui_open_issue: "Open Issue",
+  ui_patch_form_draft: "Update form draft",
+  ui_read_form_draft: "View form draft",
+  ui_set_issue_query: "Update Issue filters",
+  update_issue: "Update Issue",
+  web_search: "Search the web",
 }
 
 type ToolPresentation = {
@@ -49,10 +49,10 @@ const issuePriorityLabels = {
   urgent: "Urgent",
 } as const
 const skillLabels = {
-  core: "基本手順",
-  "issue-triage": "Issue分析の手順",
-  "issue-writing": "Issue更新の手順",
-  "web-assistance": "Web調査の手順",
+  core: "core instructions",
+  "issue-triage": "Issue triage instructions",
+  "issue-writing": "Issue writing instructions",
+  "web-assistance": "web research instructions",
 } as const
 const searchIssuesInputSchema = v.object({
   label: v.optional(v.pipe(v.string(), v.maxLength(40))),
@@ -93,12 +93,10 @@ const skillPresentation = ({ input, state }: PresentationInput) => {
   const parsed = v.safeParse(skillInputSchema, input)
   const label = parsed.success ? skillLabels[parsed.output.name] : undefined
   return {
-    title: label ? `${label}を確認` : "Agentの手順を確認",
-    request: label ? `使用する手順: ${label}` : undefined,
+    title: label ? `Load ${label}` : "Load Agent instructions",
+    request: label ? `Instructions: ${label}` : undefined,
     result:
-      state === "output-available" && label
-        ? `${label}を読み込みました`
-        : undefined,
+      state === "output-available" && label ? `Loaded ${label}` : undefined,
   }
 }
 
@@ -112,11 +110,11 @@ const getIssuePresentation = ({
   const number =
     (parsed.success ? parsed.output.number : undefined) ?? issueNumber
   return {
-    title: number ? `Issue #${number}を確認` : "Issueを確認",
-    request: number ? `対象: Issue #${number}` : undefined,
+    title: number ? `View Issue #${number}` : "View Issue",
+    request: number ? `Target: Issue #${number}` : undefined,
     result:
       state === "output-available" && issueCount > 0
-        ? `結果: Issue ${issueCount}件を取得`
+        ? `Result: ${issueCount} Issue${issueCount === 1 ? "" : "s"}`
         : undefined,
   }
 }
@@ -128,7 +126,7 @@ const searchIssuesPresentation = ({
   state,
 }: PresentationInput): ToolPresentation => {
   const parsed = v.safeParse(searchIssuesInputSchema, input)
-  if (!parsed.success) return { title: "Issueを検索" }
+  if (!parsed.success) return { title: "Search Issues" }
   const filters = [
     parsed.output.status ? issueStatusLabels[parsed.output.status] : undefined,
     parsed.output.priority
@@ -141,20 +139,24 @@ const searchIssuesPresentation = ({
     ? `${parsed.output.sortBy} ${parsed.output.sortDirection ?? "asc"}`
     : undefined
   const request = [
-    filters.length > 0 ? `条件: ${filters.join(" · ")}` : "条件: すべてのIssue",
-    sort ? `並び順: ${sort}` : undefined,
-    parsed.output.limit ? `最大${parsed.output.limit}件` : undefined,
+    filters.length > 0
+      ? `Filters: ${filters.join(" · ")}`
+      : "Filters: All Issues",
+    sort ? `Sort: ${sort}` : undefined,
+    parsed.output.limit ? `Limit: ${parsed.output.limit}` : undefined,
   ]
     .filter((value): value is string => Boolean(value))
     .join(" · ")
   const validResult = Array.isArray(output) && issueCount === output.length
   return {
     title:
-      filters.length > 0 ? `${filters.join("・")}のIssueを検索` : "Issueを検索",
+      filters.length > 0
+        ? `Search Issues · ${filters.join(" · ")}`
+        : "Search Issues",
     request,
     result:
       state === "output-available" && validResult
-        ? `結果: ${issueCount}件`
+        ? `Result: ${issueCount}`
         : undefined,
   }
 }
@@ -166,12 +168,12 @@ const organizationPresentation = ({
   const parsed = v.safeParse(organizationOutputSchema, output)
   return {
     title: parsed.success
-      ? `${parsed.output.name}の組織情報を確認`
-      : "組織情報を確認",
-    request: "対象: 現在の組織",
+      ? `View ${parsed.output.name} organization`
+      : "View organization",
+    request: "Target: Current organization",
     result:
       state === "output-available" && parsed.success
-        ? `結果: ${parsed.output.name}を確認`
+        ? `Result: ${parsed.output.name}`
         : undefined,
   }
 }
@@ -184,14 +186,14 @@ const directoryPresentation = ({
 }: PresentationInput): ToolPresentation => {
   const parsed = v.safeParse(boundedQueryInputSchema, input)
   return {
-    title: toolTitles[toolName] ?? "Agent機能を実行",
+    title: toolTitles[toolName] ?? "Run Agent tool",
     request:
       parsed.success && parsed.output.query
-        ? `検索語: “${parsed.output.query}”`
-        : "検索語: すべて",
+        ? `Query: “${parsed.output.query}”`
+        : "Query: All",
     result:
       state === "output-available" && Array.isArray(output)
-        ? `結果: ${output.length}件`
+        ? `Result: ${output.length}`
         : undefined,
   }
 }
@@ -209,5 +211,5 @@ export const toolPresentation = (
     input.toolName === "search_organization_members"
   )
     return directoryPresentation(input)
-  return { title: toolTitles[input.toolName] ?? "Agent機能を実行" }
+  return { title: toolTitles[input.toolName] ?? "Run Agent tool" }
 }

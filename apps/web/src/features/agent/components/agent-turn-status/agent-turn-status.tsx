@@ -33,8 +33,8 @@ export const AgentTurnStatus = ({
       >
         <Spinner aria-hidden="true" />
         {waitingState === "continuation"
-          ? "続きを待っています…"
-          : "応答を待っています…"}
+          ? "Waiting for the next step…"
+          : "Waiting for a response…"}
       </div>
     ) : null}
     {turnStopped ? (

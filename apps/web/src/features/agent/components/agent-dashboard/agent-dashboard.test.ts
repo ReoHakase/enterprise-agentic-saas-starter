@@ -180,10 +180,10 @@ describe("agent action projection", () => {
       screen.getByRole("link", { name: "#7 Restore production access" })
     ).toHaveAttribute("href", "/organization/acme/issues/7")
     expect(screen.getByRole("status")).toHaveTextContent(
-      "UrgentのIssueを検索完了"
+      "Search Issues · UrgentDone"
     )
     expect(screen.getByRole("status")).toHaveTextContent(
-      "条件: Urgent結果: 1件"
+      "Filters: UrgentResult: 1"
     )
   })
 
@@ -243,9 +243,9 @@ describe("agent action projection", () => {
       tool.compareDocumentPosition(secondReasoning) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
-    expect(tool).toHaveTextContent("Open・UrgentのIssueを検索完了")
+    expect(tool).toHaveTextContent("Search Issues · Open · UrgentDone")
     expect(tool).toHaveTextContent(
-      "条件: Open · Urgent · 並び順: dueDate asc · 最大50件結果: 0件"
+      "Filters: Open · Urgent · Sort: dueDate asc · Limit: 50Result: 0"
     )
     await actor.click(firstReasoning)
     expect(
@@ -281,13 +281,13 @@ describe("agent action projection", () => {
     )
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Issue分析の手順を確認完了"
+      "Load Issue triage instructionsDone"
     )
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Issue分析の手順を読み込みました"
+      "Loaded Issue triage instructions"
     )
     expect(screen.queryByText("PRIVATE_SKILL_INSTRUCTIONS")).toBeNull()
-    expect(screen.queryByText("Agent機能を実行")).toBeNull()
+    expect(screen.queryByText("Run Agent tool")).toBeNull()
   })
 
   it("keeps a streamed tool collapsible controlled as safe details arrive", async () => {

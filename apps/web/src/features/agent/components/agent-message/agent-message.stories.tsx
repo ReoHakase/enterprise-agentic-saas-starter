@@ -61,10 +61,10 @@ export const RichAssistantMessage = meta.story({
         await expect(canvas.getByRole("table")).toBeVisible()
         await expect(canvas.getByText(/日本語と English/)).toBeVisible()
         await userEvent.click(
-          canvas.getByRole("button", { name: "回答をコピー" })
+          canvas.getByRole("button", { name: "Copy response" })
         )
         await expect(
-          canvas.getByRole("button", { name: "回答をコピー済み" })
+          canvas.getByRole("button", { name: "Response copied" })
         ).toBeVisible()
       }
     )
@@ -76,7 +76,7 @@ export const Source = meta.story({
   play: async ({ canvas, step }) => {
     await step("Read the collapsed reasoning summary", async () => {
       await expect(
-        canvas.getByRole("button", { name: /思考完了/u })
+        canvas.getByRole("button", { name: /Reasoning complete/u })
       ).toHaveTextContent("Check the active organization")
     })
     await step("Expose the source", async () => {
@@ -97,7 +97,7 @@ export const ToolResult = meta.story({
   play: async ({ canvas, step }) => {
     await step("Inspect a completed tool call", async () => {
       await expect(canvas.getByRole("status")).toHaveTextContent(
-        "Issue #184を確認完了"
+        "View Issue #184Done"
       )
       await expect(canvas.queryByText(/"number": 184/u)).not.toBeInTheDocument()
       await expect(
@@ -124,7 +124,7 @@ export const ServerToolRunning = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "Webで検索実行中"
+      "Search the webRunning"
     )
   },
 })
@@ -146,7 +146,9 @@ export const FailedTool = meta.story({
     } satisfies AgentChatMessage,
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent("Issueを確認失敗")
+    await expect(canvas.getByRole("alert")).toHaveTextContent(
+      "View IssueFailed"
+    )
   },
 })
 
@@ -172,7 +174,7 @@ export const ApprovalDeclined = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "Issueを更新拒否"
+      "Update IssueDenied"
     )
   },
 })

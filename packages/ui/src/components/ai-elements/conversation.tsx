@@ -14,7 +14,7 @@ const ConversationScrollAccess = () => {
     const element = scrollRef.current
     if (!element) return
     element.tabIndex = 0
-    element.setAttribute("aria-label", "メッセージ履歴")
+    element.setAttribute("aria-label", "Message history")
   }, [scrollRef])
   return null
 }
@@ -64,7 +64,7 @@ export const ConversationScrollButton = ({
   if (isAtBottom) return null
   return (
     <Button
-      aria-label="最新のメッセージへ移動"
+      aria-label="Jump to latest message"
       className={cn(
         "absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background shadow-sm",
         className

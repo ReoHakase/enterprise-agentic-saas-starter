@@ -250,10 +250,10 @@ export const runScriptedAgentAttachmentLifecycle = async (
   )
   await agentShell.getByRole("button", { name: "Send", exact: true }).click()
   await expect(
-    agentShell.getByRole("status", { name: "Issue #1を確認" }).last()
+    agentShell.getByRole("status", { name: "View Issue #1" }).last()
   ).toBeVisible()
   await expect(
-    agentShell.getByRole("status", { name: "添付画像を確認" }).last()
+    agentShell.getByRole("status", { name: "View attachment image" }).last()
   ).toBeVisible()
   await expect(
     agentShell.getByText("E1_ATTACHMENT_READ_OK blue gradient")
@@ -263,7 +263,7 @@ export const runScriptedAgentAttachmentLifecycle = async (
   )
   await agentShell.getByRole("button", { name: "Send", exact: true }).click()
   await expect(
-    agentShell.getByRole("status", { name: "Issueの添付を削除" }).last()
+    agentShell.getByRole("status", { name: "Remove Issue attachments" }).last()
   ).toBeVisible()
   await expect(agentShell.getByText("E1_ATTACHMENT_REMOVE_OK")).toBeVisible()
   await expect
@@ -348,10 +348,12 @@ export const runScriptedAgentAttachmentLifecycle = async (
     reloadedAgent.getByText("succeeded", { exact: true })
   ).toHaveCount(2)
   await expect(
-    reloadedAgent.getByRole("status", { name: "Issueの添付を削除" }).last()
+    reloadedAgent
+      .getByRole("status", { name: "Remove Issue attachments" })
+      .last()
   ).toBeVisible()
   await expect(
-    reloadedAgent.getByRole("status", { name: "添付画像を確認" }).last()
+    reloadedAgent.getByRole("status", { name: "View attachment image" }).last()
   ).toBeVisible()
   const visibleConversation = await reloadedAgent.textContent()
   expect(visibleConversation).not.toContain("data:image")

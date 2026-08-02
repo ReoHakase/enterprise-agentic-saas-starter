@@ -19,7 +19,7 @@ vi.mock(
       ...props
     }: React.ComponentProps<"div">) => <div {...props}>{children}</div>,
     ConversationScrollButton: () => (
-      <button type="button">最新のメッセージへ移動</button>
+      <button type="button">Jump to latest message</button>
     ),
     useConversation: () => ({
       scrollRef: { current: null },
@@ -118,7 +118,7 @@ describe("AgentConversationViewport", () => {
       screen.getByRole("navigation", { name: "Conversation turns" })
     ).toBeVisible()
     expect(
-      screen.getByRole("button", { name: "Turn 1へ移動: First request" })
+      screen.getByRole("button", { name: "Jump to turn 1: First request" })
     ).toBeVisible()
   })
 
@@ -137,7 +137,7 @@ describe("AgentConversationViewport", () => {
       "Conversation"
     )
     expect(
-      screen.getByRole("button", { name: "最新のメッセージへ移動" })
+      screen.getByRole("button", { name: "Jump to latest message" })
     ).toBeInTheDocument()
   })
 
@@ -152,7 +152,7 @@ describe("AgentConversationViewport", () => {
       "Dedicated page conversation"
     )
     expect(
-      screen.queryByRole("button", { name: "最新のメッセージへ移動" })
+      screen.queryByRole("button", { name: "Jump to latest message" })
     ).not.toBeInTheDocument()
   })
 })

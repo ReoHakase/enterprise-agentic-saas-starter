@@ -54,7 +54,7 @@ export const CenteredConversation = meta.story({
       canvas.queryByRole("navigation", { name: "Conversation turns" })
     ).toBeVisible()
     const firstTurn = canvas.getByRole("button", {
-      name: /Turn 1へ移動: Review the organization access policy/u,
+      name: /Jump to turn 1: Review the organization access policy/u,
     })
     await userEvent.click(firstTurn)
     await expect(firstTurn).toHaveAttribute("aria-current", "location")

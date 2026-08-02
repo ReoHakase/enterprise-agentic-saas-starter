@@ -38,7 +38,7 @@ const Marker = ({
       <TooltipTrigger
         type="button"
         className="group pointer-events-auto grid h-3 w-6 shrink-0 place-items-center outline-none"
-        aria-label={`Turn ${index + 1}へ移動: ${turn.prompt}`}
+        aria-label={`Jump to turn ${index + 1}: ${turn.prompt}`}
         aria-current={active ? "location" : undefined}
         onClick={jumpToTurn}
       >

@@ -319,9 +319,9 @@ describe("Agent chat browser integration", () => {
     )
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Issueを確認失敗"
+      "View IssueFailed"
     )
-    expect(screen.getByRole("status")).toHaveTextContent("Issueを更新拒否")
+    expect(screen.getByRole("status")).toHaveTextContent("Update IssueDenied")
     const composer = screen.getByRole("textbox", { name: "Agent message" })
     await actor.click(composer)
     const typeCommittedText = async (
