@@ -39,11 +39,14 @@
     "@enterprise-agentic-saas/db": "workspace:*",
     "@enterprise-agentic-saas/email": "workspace:*",
     "@inference-net/otel-cf-workers": "2.5.0",
+    "@mastra/core": "catalog:",
+    "@mastra/mcp": "catalog:",
     "@opentelemetry/api": "1.9.1",
     "@valibot/to-json-schema": "catalog:",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
     "envin": "catalog:",
+    "fetch-to-node": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

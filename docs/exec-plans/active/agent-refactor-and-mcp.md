@@ -357,12 +357,12 @@ PATはこのphaseへ含めません。
 
 ### 4.1 MCP server
 
-- [ ] `apps/api/src/mcp`を追加する
-- [ ] Mastra `MCPServer`を追加する
-- [ ] Cloudflare serverless transportへ接続する
+- [x] `apps/api/src/mcp`を追加する
+- [x] Mastra `MCPServer`を追加する
+- [x] Cloudflare serverless transportへ接続する
 - [ ] `packages/agent-tools`をlocal executorへ接続する
-- [ ] `apps/api -> apps/agent`依存がないことを固定する
-- [ ] Agent、Workflow、samplingを登録しない
+- [x] `apps/api -> apps/agent`依存がないことを固定する
+- [x] Agent、Workflow、samplingを登録しない
 - [ ] promptsとresourcesへ公開skillsを追加する
 
 ### 4.2 OAuth

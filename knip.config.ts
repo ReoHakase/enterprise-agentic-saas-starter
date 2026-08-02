@@ -45,6 +45,7 @@ const config: KnipConfig = {
         "src/**/*.test.ts",
         "src/dev.ts",
         "src/index.ts!",
+        "src/mcp/index.ts!",
         "src/smoke/upload-memory/worker.ts!",
       ],
       // Knip strict implies production mode. Keep the production graph explicit
