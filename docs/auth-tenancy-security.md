@@ -61,9 +61,9 @@ Better Auth organization pluginの管理・参照APIは原則として直接公�
 
 ### Organization招待
 
-WebはBetter Auth clientの`organization.inviteMember`へ1回につき1つのemailと`admin | member` roleを渡します。再送と期限切れ招待の更新も同じAPIの`resend: true`を使い、独自の一括作成・再送routeを持ちません。
+WebはBetter Auth clientの`organization.inviteMember`へ1回につき1つのemailと`admin | member` roleを渡します。再送と期限切れ招待の更新も同じAPIの`resend: true`を使い、独自の一括作成・再送routeを持ちません。期限内のactive invitationは同じIDと期限を更新し、期限切れ後は古いrowを履歴として残して新しいIDを作ります。その後の再送は新しいactive IDを更新します。
 
-Better Authの標準permission、invitation重複判定、rate limitをserver境界として使います。Elysiaはtenant-scopedな招待一覧と取消を引き続き所有しますが、作成・再送の状態機械を重ねません。
+Better Authの標準permission、時間判定を含むinvitation重複判定、rate limitをserver境界として使います。Elysiaはtenant-scopedな招待一覧と取消を引き続き所有しますが、作成・再送の状態機械を重ねません。一覧は期限切れpending rowを`expired`として投影するだけでread時にDBを更新せず、organizationの招待件数は期限内pendingだけを数えます。
 
 `sendInvitationEmail`コールバックは既存email packageを呼びます。配送は自動再試行のないbest-effortで、失敗してもinvitation rowをrollbackしません。provider raw error、recipient、URLをlogやtraceへ出さず、固定eventだけを記録します。
 
@@ -75,7 +75,7 @@ Better Authの標準permission、invitation重複判定、rate limitをserver境
 - 高権限操作はfresh session/step-upを要求し、有効期間は900秒。
 - UIはAPIの `step_up_required` を受け、追加認証後に元操作を再実行する。
 - 成功した操作のactor、tenant、target、action、resultをaudit logへ残す。拒否はrequest ID付きoperational logへ残す。tokenやsecretはどちらにも入れない。
-- invitation cancelは期限内pendingだけに許可する。accepted/rejected/cancelled/expiredは409 `invitation_not_pending`、期限を過ぎたpendingは一覧取得時にexpiredへ遷移する。
+- invitation cancelは期限内pendingだけに許可する。accepted/rejected/cancelled/expiredは409 `invitation_not_pending`、期限を過ぎたpendingは一覧で`expired`と投影し、取消を試みた場合だけDB statusもexpiredへ更新する。
 
 ### Organization即時削除
 

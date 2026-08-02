@@ -55,11 +55,17 @@ OpenTelemetry Logs経由のLokiだけへ保存します。Tempoには固定エ�
 `app.operation`、`app.outcome`、`trace_id`、`span_id`、`request_id`、HTTP method・route・status、
 `duration_ms`とします。動的なIDやURLを`event.name`へ埋め込みません。
 
-生エラーは各ランタイムの既存可観測性境界に置く`reportDevelopmentCauseChain`だけが扱います。起点を
-含む最大5件を1つの`cause`につき1件のログへし、`exception.type`、`exception.message`、
+生エラーは各ランタイムの既存可観測性境界に置く`reportDevelopmentCauseChain`だけが扱います。Lokiは起点を
+含む最大5件を1つの`cause`につき1件の構造化ログへし、`exception.type`、`exception.message`、
 `exception.stacktrace`、`exception.depth`、`exception.cause_truncated`を使います。`message`は8 KiB、
 `stack`は32 KiBへ制限します。循環参照、例外を投げるgetterやProxy、`BigInt`、`Symbol`、非`Error`を
 受けても報告処理が失敗しない、上限付きの単純な`record`へ変換します。
+
+端末またはブラウザー`console`には、同じrecordから再構築した認証情報除去済みの`Error.cause`ツリーを
+起点ごとに1回だけ`console.error(error, safeContext)`で渡します。`name`、`message`、元のstack、最大5段の
+causeを保持し、reporter自身のstackを生成しません。`safeContext`は固定error code、operation、service、
+HTTP method・route・status、リクエスト・trace・span IDだけに限定します。元の生`Error`はconsoleへ直接
+渡しません。
 
 `Authorization`、Cookie、Bearer・Basic認証、API key、token、secret、password、JWT、URL userinfo、
 OAuth・署名付きURLの認証queryを、アプリケーション側で端末出力前に除去し、Collectorでも
@@ -126,7 +132,8 @@ Lokiの全`stream`は168時間の保持期間とします。compactorによる�
 
 ## 検証
 
-- 5段の`cause`、循環参照、例外を投げるgetter・Proxy、`BigInt`、文字数制限、出力条件
+- 5段の`cause`、循環参照、例外を投げるgetter・Proxy、`BigInt`、文字数制限、出力条件、
+  console 1回とLokiのcause別record
 - 端末・ブラウザー`console`とLokiの生エラー`sentinel`、認証情報`sentinel`の`[REDACTED]`
 - Tempoのattribute・event・`status.message`、Memory、テスト出力に生エラー`sentinel`がないこと
 - `app.error.code`、失敗状態、HTTP route、リクエスト・trace・span IDが残ること

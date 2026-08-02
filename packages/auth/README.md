@@ -34,7 +34,7 @@ cross-subdomain cookieはproductionで `AUTH_COOKIE_DOMAIN` を必須とし、we
 
 Better Auth organization pluginは、招待送信者向けの`invite-member`と、招待受信者向けの
 `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation`を公開する。
-招待は1回の送信につき1つのメールアドレスを受け取り、再送は標準の`resend`オプションを使う。
+招待は1回の送信につき1つのメールアドレスを受け取り、再送は標準の`resend`オプションを使う。期限内は同じIDを更新し、期限切れ後は古いrowを履歴として残して新しいIDを作る。
 `organization`、`member`、`invitation`、`team`、`custom role`のほかの管理・参照エンドポイントは
 `disabledPaths`で404にし、テナント境界、新しいセッション、確認入力、監査が必要な操作と招待の
 一覧・取消は`apps/api`のルートへ集約する。

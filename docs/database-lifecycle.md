@@ -87,6 +87,7 @@ bun run --cwd packages/db db:migrate
 - memberがいるorganizationはexactly one `owner` とする。`0027_nostalgic_sugar_man`はlegacyの`super_admin`を`owner`へ変換し、`role='owner'`のpartial unique indexがat-most-oneを保証する。at-least-oneはownership transferなどのapp transactionで維持する。
 - memberがいないlegacy organizationはmigrationで架空membershipを作らず、認証・認可をfail closedにする。復旧は監査可能な運用手順で実ユーザーを割り当てる。
 - pending invitationは `admin` / `member` roleだけを許可し、legacyの `owner` / `super_admin` / null /未知roleはmigrationでexpiredにする。
+- `0028_chubby_blackheart`はpending invitationのorganization・email partial unique indexを削除する。期限切れ時点でもstatusがpendingの履歴rowと、新しいactive pending rowの併存を許し、作成・再送の時間判定はBetter Auth native endpointへ委ねる。招待一覧はread時にstatusを変更せず期限切れを投影し、件数は`status = pending`かつ`expires_at > now`だけを数える。
 - repository queryも `id + organization_id` を条件にする。
 - migration testで異なるtenantのcomment挿入が失敗することを確認する。
 

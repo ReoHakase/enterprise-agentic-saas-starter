@@ -89,9 +89,12 @@ bun run observability:down
 
 localではprompt、completion、Issue本文、business payload、tool input/output、run/thread/request IDをsamplingなしで残します。provider raw `Error`とbounded cause chainはADR-013の固定条件を満たす場合だけ、認証情報を除去してAPI・Agentの端末またはWebのブラウザーconsoleとlocal Lokiへ出します。Tempo、Memory、test・evalの出力やartifact、production、remote telemetryには保存しません。
 
-生エラーの所有者は各ランタイムの`reportDevelopmentCauseChain`だけです。起点を含む最大5件を
-1 causeにつき1 recordにし、messageを8 KiB、stackを32 KiBへ制限します。通常logやspan eventへ
-複製せず、端末・consoleとLokiの一方が失敗しても他方とアプリケーション処理を止めません。
+生エラーの所有者は各ランタイムの`reportDevelopmentCauseChain`だけです。Lokiでは起点を含む最大5件を
+1 causeにつき1 structured recordにし、messageを8 KiB、stackを32 KiBへ制限します。端末または
+ブラウザーconsoleには同じrecordから再構築した認証情報除去済みの`Error.cause`ツリーを起点ごとに1回、
+元stackと固定した相関contextだけで渡します。reporter自身のstackや元の生`Error`をconsoleへ渡さず、
+通常logやspan eventへ複製しません。consoleとLokiの一方が失敗しても他方とアプリケーション処理を
+止めません。
 
 常時除去するのは認証materialだけです。
 
