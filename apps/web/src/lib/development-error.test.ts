@@ -28,14 +28,20 @@ const errorAttributes = {
 
 type CapturedRecord = Record<string, boolean | number | string>
 
-const capturedRecords = (cause: unknown) => {
+const captureReport = (cause: unknown) => {
   const records: CapturedRecord[] = []
+  const consoleCalls: Array<{
+    context: Record<string, number | string>
+    error: Error
+  }> = []
   reportDevelopmentCauseChain(browserLocal, cause, errorAttributes, {
-    consoleError: (record) => records.push(record),
-    logError: () => {},
+    consoleError: (error, context) => consoleCalls.push({ context, error }),
+    logError: (record) => records.push(record),
   })
-  return records
+  return { consoleCalls, records }
 }
+
+const capturedRecords = (cause: unknown) => captureReport(cause).records
 
 const capturedMessage = (cause: unknown) =>
   String(capturedRecords(cause)[0]?.["exception.message"])
@@ -120,8 +126,72 @@ describe("Web development error reporting", () => {
     }
   })
 
+  it("prints one sanitized Error tree with the original stack and safe context", () => {
+    const nested = new TypeError("provider token=nested-secret")
+    Object.defineProperty(nested, "stack", {
+      configurable: true,
+      value: "TypeError: provider token=nested-stack\n    at provider.ts:2:3",
+    })
+    const root = new Error("request failed password=root-secret", {
+      cause: nested,
+    })
+    Object.defineProperty(root, "stack", {
+      configurable: true,
+      value: "Error: request failed password=root-stack\n    at action.ts:1:2",
+    })
+
+    const { consoleCalls, records } = captureReport(root)
+    const printed = consoleCalls[0]?.error
+    const printedCause = printed?.cause
+
+    expect(consoleCalls).toHaveLength(1)
+    expect(printed).toBeInstanceOf(Error)
+    expect(printed).not.toBe(root)
+    expect(printed?.message).toBe("request failed password=[REDACTED]")
+    expect(printed?.name).toBe("Error")
+    expect(printed?.stack).toBe(
+      "Error: request failed password=[REDACTED]\n    at action.ts:1:2"
+    )
+    expect(printedCause).toBeInstanceOf(Error)
+    if (!(printedCause instanceof Error)) {
+      throw new Error("Expected a sanitized nested Error")
+    }
+    expect(printedCause.message).toBe("provider token=[REDACTED]")
+    expect(printedCause.name).toBe("TypeError")
+    expect(printedCause.stack).toBe(
+      "TypeError: provider token=[REDACTED]\n    at provider.ts:2:3"
+    )
+    expect(consoleCalls[0]?.context).toEqual({
+      "app.error.code": "internal_error",
+      "app.operation": "web.application",
+      "service.name": "enterprise-agentic-saas-web-browser",
+      span_id: "span-1",
+      trace_id: "trace-1",
+    })
+    expect(consoleCalls[0]?.context).not.toHaveProperty("exception.message")
+    expect(records).toHaveLength(2)
+  })
+
+  it("projects non-Errors and cycles without exposing reporter stack frames", () => {
+    const value: Record<string, unknown> = { message: "plain failure" }
+    value.cause = value
+
+    const { consoleCalls, records } = captureReport(value)
+    const printed = consoleCalls[0]?.error
+
+    expect(consoleCalls).toHaveLength(1)
+    expect(printed?.message).toBe("plain failure")
+    expect(printed?.name).toBe("NonError")
+    expect(printed?.stack).toBe("")
+    expect(printed?.cause).toBeUndefined()
+    expect(records).toHaveLength(1)
+    expect(records[0]?.["exception.cause_truncated"]).toBe(true)
+  })
+
   it("isolates sinks and rejects non-local, server, and test gates", () => {
-    const consoleError = vi.fn<(record: unknown) => void>(() => {
+    const consoleError = vi.fn<
+      (error: Error, context: Record<string, number | string>) => void
+    >(() => {
       throw new Error("console unavailable")
     })
     const logError = vi.fn<(record: unknown) => void>(() => {
@@ -137,7 +207,7 @@ describe("Web development error reporting", () => {
         sinks
       )
     ).not.toThrow()
-    expect(consoleError).toHaveBeenCalledTimes(2)
+    expect(consoleError).toHaveBeenCalledTimes(1)
     expect(logError).toHaveBeenCalledTimes(2)
 
     for (const environment of [
@@ -161,7 +231,7 @@ describe("Web development error reporting", () => {
         sinks
       )
 
-    expect(consoleError).toHaveBeenCalledTimes(2)
+    expect(consoleError).toHaveBeenCalledTimes(1)
     expect(logError).toHaveBeenCalledTimes(2)
   })
 
@@ -184,7 +254,13 @@ describe("Web development error reporting", () => {
         "http.route": "/organization/[organizationSlug]",
         request_id: "request-1",
       },
-      { consoleError: vi.fn<(record: unknown) => void>(), logError }
+      {
+        consoleError:
+          vi.fn<
+            (error: Error, context: Record<string, number | string>) => void
+          >(),
+        logError,
+      }
     )
 
     expect(logError).toHaveBeenCalledWith(

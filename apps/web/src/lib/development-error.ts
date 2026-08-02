@@ -253,13 +253,13 @@ export const isDevelopmentCauseReportingEnabled = (
 }
 
 type ReporterDependencies = {
-  consoleError(record: DevelopmentCauseRecord): void
+  consoleError(error: Error, context: Record<string, number | string>): void
   logError(record: DevelopmentCauseRecord): void
 }
 
 const defaultDependencies: ReporterDependencies = {
-  consoleError(record) {
-    console.error("[web development]", record)
+  consoleError(error, context) {
+    console.error(error, context)
   },
   logError(record) {
     const serviceName = record["service.name"]
@@ -276,6 +276,40 @@ const defaultDependencies: ReporterDependencies = {
         severityText: "ERROR",
       })
   },
+}
+
+const consoleContextOf = (
+  record: DevelopmentCauseRecord
+): Record<string, number | string> => {
+  const context: Record<string, number | string> = {}
+  for (const key of [
+    "app.error.code",
+    "app.operation",
+    "service.name",
+    "http.request.method",
+    "http.response.status_code",
+    "http.route",
+    "request_id",
+    "trace_id",
+    "span_id",
+  ] as const) {
+    const value = record[key]
+    if (typeof value === "number" || typeof value === "string") {
+      context[key] = value
+    }
+  }
+  return context
+}
+
+const sanitizedErrorOf = (records: DevelopmentCauseRecord[]): Error => {
+  let cause: Error | undefined
+  for (const record of records.toReversed()) {
+    const error = new Error(String(record["exception.message"]), { cause })
+    error.name = String(record["exception.type"])
+    error.stack = String(record["exception.stacktrace"])
+    cause = error
+  }
+  return cause ?? new Error("Unknown development error")
 }
 
 export const reportDevelopmentCauseChain = (
@@ -296,7 +330,7 @@ export const reportDevelopmentCauseChain = (
   const serviceName = environment.isBrowser
     ? "enterprise-agentic-saas-web-browser"
     : "enterprise-agentic-saas-web-server"
-  for (const record of developmentCauseRecords(
+  const records = developmentCauseRecords(
     cause,
     {
       "dev.session.id": sessionId,
@@ -304,16 +338,22 @@ export const reportDevelopmentCauseChain = (
       "service.name": serviceName,
     },
     attributes
-  )) {
+  )
+  const rootRecord = records[0]
+  if (rootRecord) {
     try {
-      dependencies.consoleError(record)
+      dependencies.consoleError(
+        sanitizedErrorOf(records),
+        consoleContextOf(rootRecord)
+      )
     } catch {
-      // A console failure must not suppress the local OTLP log.
+      // A console failure must not suppress local OTLP logs.
     }
+  }
+  for (const record of records)
     try {
       dependencies.logError(record)
     } catch {
-      // A local OTLP failure must not suppress the application response.
+      // A local OTLP failure must not suppress other causes or the response.
     }
-  }
 }
