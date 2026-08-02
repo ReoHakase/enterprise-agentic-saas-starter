@@ -10,6 +10,8 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import * as v from "valibot"
 
+import { withAgentThreadHref } from "@/features/issues"
+
 import {
   attachmentMutationToolReceiptSchema,
   pendingActionToolOutputSchema,
@@ -24,6 +26,7 @@ export const AgentToolPart = ({
   frozen,
   organizationId,
   organizationSlug,
+  threadId,
   part,
   onPendingChange,
 }: {
@@ -31,6 +34,7 @@ export const AgentToolPart = ({
   frozen: boolean
   organizationId: string
   organizationSlug: string
+  threadId: string
   part: DynamicToolUIPart | ToolUIPart
   onPendingChange: (actionId: string, pending: boolean) => void
 }) => {
@@ -110,7 +114,10 @@ export const AgentToolPart = ({
               {issueLinks.map((issue) => (
                 <Link
                   key={issue.number}
-                  href={`/organization/${organizationSlug}/issues/${issue.number}`}
+                  href={withAgentThreadHref(
+                    `/organization/${organizationSlug}/issues/${issue.number}`,
+                    threadId
+                  )}
                   className="block text-blue-600 underline underline-offset-2"
                 >
                   #{issue.number} {issue.title}
@@ -126,7 +133,10 @@ export const AgentToolPart = ({
               {attachmentReceipt.output.fileIds.length} attachment
               {attachmentReceipt.output.fileIds.length === 1 ? "" : "s"} on{" "}
               <Link
-                href={`/organization/${organizationSlug}/issues/${attachmentReceipt.output.issueNumber}`}
+                href={withAgentThreadHref(
+                  `/organization/${organizationSlug}/issues/${attachmentReceipt.output.issueNumber}`,
+                  threadId
+                )}
                 className="text-blue-600 underline underline-offset-2"
               >
                 Issue #{attachmentReceipt.output.issueNumber}

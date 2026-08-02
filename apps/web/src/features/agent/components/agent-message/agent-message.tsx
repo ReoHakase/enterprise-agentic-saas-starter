@@ -93,6 +93,7 @@ export const AgentMessage = ({
   message,
   organizationId,
   organizationSlug,
+  threadId,
   frozen,
   isStreaming = false,
   onPendingChange,
@@ -100,6 +101,7 @@ export const AgentMessage = ({
   message: AgentChatMessage
   organizationId: string
   organizationSlug: string
+  threadId: string
   frozen: boolean
   isStreaming?: boolean
   onPendingChange: (actionId: string, pending: boolean) => void
@@ -188,6 +190,7 @@ export const AgentMessage = ({
                 frozen={frozen}
                 organizationId={organizationId}
                 organizationSlug={organizationSlug}
+                threadId={threadId}
                 part={part}
                 onPendingChange={onPendingChange}
               />

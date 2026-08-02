@@ -191,6 +191,7 @@ const AgentChatSession = ({
                   message={message}
                   organizationId={organizationId}
                   organizationSlug={organizationSlug}
+                  threadId={thread.id}
                   frozen={runtime.frozen || disabled || session.busy}
                   isStreaming={
                     chat.status === "streaming" &&

@@ -40,6 +40,7 @@ const streamedWebSearchMessage = (
     },
     organizationId: "org-1",
     organizationSlug: "acme",
+    threadId: "thread-tool-open-state",
     frozen: false,
     onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
   })
@@ -163,6 +164,7 @@ describe("agent action projection", () => {
         },
         organizationId: "org-1",
         organizationSlug: "acme",
+        threadId: "thread-trace",
         frozen: false,
         onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
       })
@@ -178,7 +180,10 @@ describe("agent action projection", () => {
     ).toBeVisible()
     expect(
       screen.getByRole("link", { name: "#7 Restore production access" })
-    ).toHaveAttribute("href", "/organization/acme/issues/7")
+    ).toHaveAttribute(
+      "href",
+      "/organization/acme/issues/7?agentThread=thread-trace"
+    )
     expect(screen.getByRole("status")).toHaveTextContent(
       "Search Issues · UrgentDone"
     )
@@ -223,6 +228,7 @@ describe("agent action projection", () => {
         },
         organizationId: "org-1",
         organizationSlug: "acme",
+        threadId: "thread-interleaved",
         frozen: false,
         onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
       })
@@ -275,6 +281,7 @@ describe("agent action projection", () => {
         },
         organizationId: "org-1",
         organizationSlug: "acme",
+        threadId: "thread-skill",
         frozen: false,
         onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
       })
@@ -318,6 +325,7 @@ describe("agent action projection", () => {
         },
         organizationId: "org-1",
         organizationSlug: "acme",
+        threadId: "thread-plain",
         frozen: false,
         onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
       })

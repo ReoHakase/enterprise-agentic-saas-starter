@@ -362,6 +362,7 @@ describe("Agent chat browser integration", () => {
         message={attachmentReceiptMessage}
         organizationId={organizationId}
         organizationSlug="acme"
+        threadId="thread-attachment-receipt"
         onPendingChange={onPendingChange}
       />
     )
@@ -371,7 +372,7 @@ describe("Agent chat browser integration", () => {
     )
     expect(screen.getByRole("link", { name: "Issue #184" })).toHaveAttribute(
       "href",
-      "/organization/acme/issues/184"
+      "/organization/acme/issues/184?agentThread=thread-attachment-receipt"
     )
     expect(screen.queryByText(/private-file-id|private-issue-id/u)).toBeNull()
   })
@@ -383,6 +384,7 @@ describe("Agent chat browser integration", () => {
         message={canonicalWebSearchMessage}
         organizationId={organizationId}
         organizationSlug="acme"
+        threadId="thread-web-search"
         onPendingChange={vi.fn<(id: string, pending: boolean) => void>()}
       />
     )

@@ -8,6 +8,7 @@ import {
   fictionalAgentIdentity,
   fictionalAgentMessages,
   fictionalPendingAction,
+  fictionalPrimaryAgentThread,
 } from "../../test-support/fixtures"
 import { AgentMessage } from "./agent-message"
 
@@ -21,6 +22,7 @@ const meta = preview.meta({
     onPendingChange: fn(),
     organizationId: fictionalAgentIdentity.organizationId,
     organizationSlug: fictionalAgentIdentity.organizationSlug,
+    threadId: fictionalPrimaryAgentThread.id,
   },
 })
 
@@ -102,7 +104,10 @@ export const ToolResult = meta.story({
       await expect(canvas.queryByText(/"number": 184/u)).not.toBeInTheDocument()
       await expect(
         canvas.getByRole("link", { name: "#184 Review tenant access" })
-      ).toHaveAttribute("href", "/organization/acme-cloud/issues/184")
+      ).toHaveAttribute(
+        "href",
+        `/organization/acme-cloud/issues/184?agentThread=${fictionalPrimaryAgentThread.id}`
+      )
     })
   },
 })

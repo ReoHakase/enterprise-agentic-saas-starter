@@ -372,6 +372,35 @@ export const runScriptedAgentAttachmentLifecycle = async (
   expect(serializedHistory).not.toContain('"previewUrl"')
   expect(serializedHistory).not.toContain("/agent-assets/")
 
+  const navigationSentinel = `${threadId}:soft-navigation`
+  await page.evaluate((sentinel) => {
+    Reflect.set(window, "__agentSoftNavigationSentinel", sentinel)
+  }, navigationSentinel)
+  await reloadedAgent
+    .getByRole("link", {
+      name: "#1 Scripted Agent cross-worker issue",
+    })
+    .last()
+    .click()
+  await expect
+    .poll(() => {
+      const url = new URL(page.url())
+      return {
+        agentThread: url.searchParams.get("agentThread"),
+        pathname: url.pathname,
+      }
+    })
+    .toEqual({
+      agentThread: threadId,
+      pathname: expect.stringMatching(/\/issues\/1$/u),
+    })
+  await expect
+    .poll(() =>
+      page.evaluate(() => Reflect.get(window, "__agentSoftNavigationSentinel"))
+    )
+    .toBe(navigationSentinel)
+  await expect(reloadedAgent).toBeVisible()
+
   await reloadedAgent.getByRole("button", { name: /^Archive /u }).click()
   await page.getByRole("button", { name: "Archive and discard" }).click()
   await expect
