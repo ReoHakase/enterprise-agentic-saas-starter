@@ -41,12 +41,12 @@ last_reviewed: 2026-08-01
 
 ### 実行中
 
-- [CIクリティカルパス短縮](active/PLAN-2026-031-ci-critical-path-optimization.md)
 - [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
 - [Issue-first DataTableとURL同期](active/issue-first-data-table.md)
 
 ### 完了
 
+- [CIクリティカルパス短縮](completed/PLAN-2026-031-ci-critical-path-optimization.md)
 - [coding agent設定のNix集約](completed/nix-managed-agent-config.md)
 - [Emulate対応サービス拡張](completed/emulate-expansion.md)
 - [GPT-5.6 Luna有料E2Eの強化](completed/PLAN-2026-030-luna-paid-e2e-hardening.md)

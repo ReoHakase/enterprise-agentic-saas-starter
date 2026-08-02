@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-031
 title: CIクリティカルパス短縮
-status: active
+status: completed
 created: 2026-08-02
 owners:
   - repository-maintainers
@@ -33,7 +33,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 
 ## 前提条件
 
-- Issue #8とPR #9はopenで、現在のブランチとhead `e92a45a`に対応しています。
+- Issue #8とPR #9はopenで、計測対象headは`e43339c`です。
 - `Quality`内の型検査、無料テスト、アプリケーションビルドに順序依存はありません。
 - Storybookの各テーマ内は1ワーカーを維持し、CIのジョブ間だけを並列化します。
 - OAuthとWebAuthnは直列のまま、Agentの決定的E1だけを最大3ワーカーで実行します。
@@ -65,7 +65,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 - [x] Next.js integrationへの名称変更
 - [x] 決定的E1のprofile分離
 - [x] 決定的な反復検証と全必須品質検査
-- [ ] CIの3回計測とPR本文更新
+- [x] CIの3回計測とPR本文更新
 
 ## 判断記録
 
@@ -102,6 +102,15 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | CI run `30753696597`                      | 修正 | 共有userの初回作成が競合。setup projectで直列認証して再計測する      |
 | CI run `30754423942` attempt 2            | 修正 | Google Fonts取得失敗。固定system stackへ置換して再計測する           |
 | CI run `30755342091`                      | 修正 | menuのpointer起動が不安定。focusとEnterによるsemantic操作へ置換する  |
+| CI run `30755777092` attempts 1・2・3     | 成功 | 同一head `e43339c`で全jobが3回連続成功                               |
+
+計測対象はqueue時間を除いた各jobの`started_at`から`completed_at`までです。
+
+| 対象                | attempt 1 | attempt 2 | attempt 3 | 中央値 | 目標      |
+| ------------------- | --------- | --------- | --------- | ------ | --------- |
+| Quality最長lane     | 218秒     | 222秒     | 235秒     | 222秒  | 240秒以下 |
+| Web components最長  | 178秒     | 201秒     | 194秒     | 194秒  | 240秒以下 |
+| Free E2E最長profile | 221秒     | 199秒     | 214秒     | 214秒  | 220秒以下 |
 
 ## リスクとrollback
 
