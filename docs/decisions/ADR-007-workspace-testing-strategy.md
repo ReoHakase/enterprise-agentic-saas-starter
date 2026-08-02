@@ -49,9 +49,11 @@ StorybookとPlaywrightでは、利用者が観測できる状態を同期条件�
   フォーカス、コールバックなど、利用者またはテストが観測できる状態を待つ。
 - 非同期処理を止めるStorybook storyとW6の`mock` APIは、テストが明示的に解除できる遅延処理を
   使い、`finally`で全て解除する。自動的に解決しないPromiseをstoryへ残さない。
-- Storybookの`light`テーマと`dark`テーマはそれぞれ1ワーカーで順次実行する。
-- E1を並列化する場合は、ワーカーごとの認証利用者、organization、thread、保存状態へ分離し、
-  `--workers=2 --repeat-each=3`で競合がないことを確認してから2ワーカーを通常値にする。
+- Storybookの`light`テーマと`dark`テーマはそれぞれ1ワーカーで実行する。ローカルの全件scriptは
+  テーマを順次実行し、CIはテーマ、通常のBrowser Mode、static buildを独立jobとして並列実行する。
+- E1は内部profileを`agent`と`auth`へ分ける。Agent profileはワーカーごとの認証利用者、
+  organization、thread、保存状態へ分離し、`--workers=3 --repeat-each=3`で競合がないことを
+  確認してから3ワーカーを通常値にする。OAuthとWebAuthnを含むAuth profileは1ワーカーで直列実行する。
 - OAuthとWebAuthn、有料E2Eは直列実行を維持する。有料テストは明示承認なしに実行しない。
 - 不安定なテストを再試行やタイムアウト延長で成功扱いにせず、CIは不安定判定を失敗にする。
 
@@ -76,7 +78,8 @@ workspaceごとのtest名は増えますが、利用者がrootで覚えるcomman
 - root scriptとTurborepo taskの公開契約
 - Playwright deterministic/full configの分離
 - ブラウザーテスト記述規約とStorybook・Playwright向けOxlint rule
-- Storybookの1ワーカー実行、W6の独立したChromium・代表WebKit検査、E1のワーカー別状態
+- Storybookテーマ内の1ワーカー実行とCI job間の並列実行、W6の独立したChromium・代表WebKit検査、
+  E1のprofile別実行とワーカー別状態
 - 通常PRと`main`で全無料suiteを実行するCI job
 - fork codeへpaid secretを渡さないrelease workflow
 
@@ -87,7 +90,8 @@ workspaceごとのtest名は増えますが、利用者がrootで覚えるcomman
 - `bun run test:browser`
 - `bun run test:e2e`
 - Storybookを1ワーカーでshuffle seed 17、83、101により反復する確認
-- W6の`--repeat-each=3`と、E1の`--workers=2 --repeat-each=3`
+- W6の`--repeat-each=3`、Agent E1の`--workers=3 --repeat-each=3`、Auth E1の
+  `--workers=1 --repeat-each=3`
 - StorybookとCloudflare build
 - `nix flake check`
 - command、配置、import、CSF Next、文書linkの静的検査

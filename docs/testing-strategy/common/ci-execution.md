@@ -2,7 +2,7 @@
 title: CIとテスト実行契約
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-02
 applies_to:
   - package.json
   - turbo.json
@@ -68,41 +68,50 @@ affected / changedによる選択は後続作業へ延期します。導入時�
 必須job:
 
 ```text
-nix
-quality
-static-quality
-browser
-free-e2e
-cloudflare-dry-run
+Nix
+Static analysis
+Quality
+Browser
+Free E2E
+Cloudflare dry-run
 ```
 
-### quality
+### Static analysis
 
 - format
-- typecheck
-- full `test`
-- build
-
-### static-quality
-
 - DB history check
 - DB schema drift
 - migration immutability
 - lint、Knip、jscpd
 
-### browser
+### Quality
 
+`fail-fast: false`のmatrixで次を独立jobとして並列実行し、`Quality`で集約します。
+
+- `Quality · Typecheck`
+- `Quality · Unit and integration tests`
+- `Quality · Application builds`
+
+coverageはunit・integration test laneだけがuploadします。workspaceの通常buildにはEmulateを含め、
+deploy target固有のCloudflare dry-runも別jobとして維持します。
+
+### Browser
+
+- `Storybook · light`、`Storybook · dark`、`Vitest Browser Mode`、`Storybook static build`を
+  独立jobとして並列実行し、`Browser · Web components`で集約する
+- Storybookの各テーマ内は`fileParallelism: false`、`maxWorkers: 1`を維持する
+- `Browser · Next.js integration`で実Next.jsと差し替え済みdownstreamの統合を検査する
 - pinned Chromium、WebKit install
-- full `test:browser`
-- Storybook/a11y report
-- failure artifact
+- laneごとに一意なfailure artifact
 
-### free-e2e
+### Free E2E
 
-- `test:e2e`
+- `DETERMINISTIC_E2E_PROFILE=agent`を3ワーカーで実行する
+- `DETERMINISTIC_E2E_PROFILE=auth`を1ワーカーで直列実行する
+- 未指定時は`all`としてrootの`test:e2e`契約を維持する
 - provider secretなし
-- temporary DB、Wrangler state
-- failure artifact
+- profileに必要なtemporary DB、Wrangler state、web serverだけを構築する
+- profileごとに一意なfailure artifact
 
 ### cloudflare-dry-run
 
@@ -120,10 +129,12 @@ artifact policyを要求します。
 cacheしてよいもの:
 
 - Bun package cache
-- browser binary
 - build cacheのうちsecret非依存なもの
 - migration済みtest DB template
 - Storybook/Vite transform cache
+
+Playwrightのbrowser binaryは公式の費用対効果に関する注意に従い、通常CIではcacheしません。
+Playwright公式containerと独自CI imageもこの構成では使いません。
 
 cacheしない、または慎重に扱うもの:
 

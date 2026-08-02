@@ -41,6 +41,7 @@ last_reviewed: 2026-08-01
 
 ### 実行中
 
+- [CIクリティカルパス短縮](active/PLAN-2026-031-ci-critical-path-optimization.md)
 - [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
 - [Issue-first DataTableとURL同期](active/issue-first-data-table.md)
 

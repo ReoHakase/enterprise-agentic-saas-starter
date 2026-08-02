@@ -2,7 +2,7 @@
 title: Webテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-02
 applies_to:
   - apps/web/**
 related:
@@ -173,8 +173,9 @@ W3は一つの表示単位を実ブラウザーで検査します。通信やfea
 - long content、overflow
 
 lightでは全interactionとa11y、darkではtheme-sensitive storyだけを実行します。Storybook projectは
-`fileParallelism: false`と`maxWorkers: 1`でfileを直列化し、light、dark、通常のBrowser Modeを順に実行します。
-unitとStorybook以外のbrowser projectの並列度は変更しません。
+`fileParallelism: false`と`maxWorkers: 1`で各テーマ内のfileを直列化します。ローカルの
+`test:browser:components`はlight、dark、通常のBrowser Modeを順に実行し、CIは3つを独立jobとして
+並列実行します。unitとStorybook以外のbrowser projectの並列度は変更しません。
 
 ## W4: Web機能ブラウザー統合テスト
 
@@ -238,6 +239,8 @@ W6へ残すもの:
 ## W6: Webアプリケーション統合テスト
 
 W6はPlaywrightを使いますが、Web内で閉じるためE2Eではありません。
+CI、Playwright project、artifact、利用者向けログでは責務が分かる`Next.js integration`という名称を
+使い、W6は文書上のテスト分類名としてだけ使います。
 
 W6でdownstreamを差し替える理由:
 

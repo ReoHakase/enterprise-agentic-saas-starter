@@ -2,7 +2,7 @@
 title: E2Eテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-02
 applies_to:
   - apps/web/e2e/**
   - apps/web/playwright*.config.ts
@@ -241,6 +241,10 @@ state isolation後にparallel executionを有効にします。
 ### PR、mainのE1
 
 - Chromium desktopを標準にする
+- 内部環境変数`DETERMINISTIC_E2E_PROFILE=agent|auth|all`で必要なproject、web server、DB、
+  teardownだけを構築する。未指定時は`all`としてrootの実行契約を維持する
+- CIではAgent workflowを3ワーカー、OAuth・WebAuthnを含むAuth profileを1ワーカーで直列実行し、
+  `Free E2E`で集約する
 - WebKitはauth、keyboard、upload、focusなどbrowser差が重要な代表journeyだけにする
 - mobileはlayout boundaryを持つ代表journeyだけにする
 
