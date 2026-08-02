@@ -82,7 +82,7 @@ export const test = base.extend<ClientDiagnosticsFixtures, AgentWorkerFixtures>(
       async ({ browser }, use, workerInfo) => {
         const oauthUserLogin =
           workerInfo.parallelIndex % 2 === 0 ? "oauth-alice" : "oauth-bob"
-        if (workerInfo.project.name !== "e1-scripted-agent-chromium") {
+        if (!workerInfo.project.name.startsWith("e1-scripted-agent-")) {
           await use({ oauthUserLogin, storageState: undefined })
           return
         }

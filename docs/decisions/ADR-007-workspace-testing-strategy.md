@@ -53,7 +53,9 @@ StorybookとPlaywrightでは、利用者が観測できる状態を同期条件�
   テーマを順次実行し、CIはテーマ、通常のBrowser Mode、static buildを独立jobとして並列実行する。
 - E1は内部profileを`agent`と`auth`へ分ける。Agent profileはワーカーごとの認証利用者、
   organization、thread、保存状態へ分離し、`--workers=3 --repeat-each=3`で競合がないことを
-  確認してから3ワーカーを通常値にする。OAuthとWebAuthnを含むAuth profileは1ワーカーで直列実行する。
+  確認してから3ワーカーを通常値にする。共有runtimeのstream切断を検証するcancel scenarioは、
+  他の3 scenarioを3ワーカーで完了した後に1ワーカーの依存projectとして実行する。OAuthとWebAuthnを含む
+  Auth profileは1ワーカーで直列実行する。
 - OAuthとWebAuthn、有料E2Eは直列実行を維持する。有料テストは明示承認なしに実行しない。
 - 不安定なテストを再試行やタイムアウト延長で成功扱いにせず、CIは不安定判定を失敗にする。
 

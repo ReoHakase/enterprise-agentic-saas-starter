@@ -78,6 +78,19 @@ const createAgentProfile = () => {
     {
       name: "e1-scripted-agent-chromium",
       testMatch: "scripted-agent-*.spec.ts",
+      testIgnore: "scripted-agent-cancel.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: environment.webOrigin,
+        viewport: { width: 1280, height: 720 },
+        video: "off",
+      },
+    },
+    {
+      name: "e1-scripted-agent-cancel-chromium",
+      dependencies: ["e1-scripted-agent-chromium"],
+      testMatch: "scripted-agent-cancel.spec.ts",
+      workers: 1,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: environment.webOrigin,

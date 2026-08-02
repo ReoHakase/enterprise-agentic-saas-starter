@@ -69,28 +69,32 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 
 ## 判断記録
 
-| 日付       | 判断                                                 | 理由                                                     |
-| ---------- | ---------------------------------------------------- | -------------------------------------------------------- |
-| 2026-08-02 | GitHub Actionsのジョブ数よりPR待ち時間を優先する     | 公開リポジトリであり、現在は単一ジョブの直列処理が支配的 |
-| 2026-08-02 | Playwright公式コンテナとブラウザーキャッシュを見送る | NixとTursoを使うE1との共通化で独自保守対象が増えるため   |
-| 2026-08-02 | rootの公開スクリプトを変更しない                     | ローカル契約を安定させ、CI専用の分割を内部に閉じるため   |
+| 日付       | 判断                                                 | 理由                                                                      |
+| ---------- | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| 2026-08-02 | GitHub Actionsのジョブ数よりPR待ち時間を優先する     | 公開リポジトリであり、現在は単一ジョブの直列処理が支配的                  |
+| 2026-08-02 | Playwright公式コンテナとブラウザーキャッシュを見送る | NixとTursoを使うE1との共通化で独自保守対象が増えるため                    |
+| 2026-08-02 | rootの公開スクリプトを変更しない                     | ローカル契約を安定させ、CI専用の分割を内部に閉じるため                    |
+| 2026-08-02 | Agentのcancel scenarioを依存projectへ分ける          | Linux workerdで他scenarioと同時にstreamを切断するとWranglerが終了したため |
 
 ## 検証証跡
 
-| command                                | 結果 | 証跡                                                         |
-| -------------------------------------- | ---- | ------------------------------------------------------------ |
-| profile別`--list`                      | 成功 | `all` 6件、`agent` 4件、`auth` 2件。未知profileは即時失敗    |
-| Storybook light/dark、seed 17・83・101 | 成功 | 各seedでlight 205件、dark 76件                               |
-| Agent E1 `--workers=3 --repeat-each=3` | 成功 | 12件、3分0秒                                                 |
-| Auth E1 `--workers=1 --repeat-each=3`  | 成功 | 6件、37.8秒                                                  |
-| `bun run check`                        | 成功 | lint、Knip、jscpd、format、typecheck、unit・integration test |
-| `bun run test:browser`                 | 成功 | Web/UI全件とNext.js integration、2分13秒                     |
-| `bun run test:e2e`                     | 成功 | 未指定`all`で6件、1分4秒                                     |
-| `bun run build`                        | 成功 | Emulateを含むworkspace build                                 |
-| `bun run build:storybook`              | 成功 | Web/UI。sandbox外のfont取得を許可して再実行                  |
-| `bun run build:cloudflare`             | 成功 | Web、API、Agentのdry-run build                               |
-| `nix flake check`                      | 成功 | aarch64-darwin対象                                           |
-| `git diff --check`                     | 成功 | whitespace errorなし                                         |
+| command                                   | 結果 | 証跡                                                                 |
+| ----------------------------------------- | ---- | -------------------------------------------------------------------- |
+| profile別`--list`                         | 成功 | `all` 6件、`agent` 4件、`auth` 2件。未知profileは即時失敗            |
+| Storybook light/dark、seed 17・83・101    | 成功 | 各seedでlight 205件、dark 76件                                       |
+| Agent E1並列project `--repeat-each=3`     | 成功 | write、search、attachmentを3ワーカーで9件、52.8秒                    |
+| Agent E1 cancel project `--repeat-each=3` | 成功 | `--no-deps --workers=1`で3件、32.5秒                                 |
+| Agent E1通常profile                       | 成功 | 並列project完了後にcancelを実行し、4件、41.1秒                       |
+| Auth E1 `--workers=1 --repeat-each=3`     | 成功 | 6件、37.8秒                                                          |
+| `bun run check`                           | 成功 | lint、Knip、jscpd、format、typecheck、unit・integration test         |
+| `bun run test:browser`                    | 成功 | Web/UI全件とNext.js integration、2分13秒                             |
+| `bun run test:e2e`                        | 成功 | 未指定`all`で6件、1分4秒                                             |
+| `bun run build`                           | 成功 | Emulateを含むworkspace build                                         |
+| `bun run build:storybook`                 | 成功 | Web/UI。sandbox外のfont取得を許可して再実行                          |
+| `bun run build:cloudflare`                | 成功 | Web、API、Agentのdry-run build                                       |
+| `nix flake check`                         | 成功 | aarch64-darwin対象                                                   |
+| `git diff --check`                        | 成功 | whitespace errorなし                                                 |
+| CI run `30752916540`                      | 修正 | cancelとの同時実行でLinux workerdが終了。依存project化後に再計測する |
 
 ## リスクとrollback
 
