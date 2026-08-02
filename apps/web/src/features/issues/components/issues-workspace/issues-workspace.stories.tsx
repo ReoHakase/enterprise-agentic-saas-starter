@@ -81,7 +81,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, canvasElement, step }) => {
-    const ownerBody = canvasElement.ownerDocument.body
+    const ownerBody = within(canvasElement.ownerDocument.body)
 
     await step("Search and open the row action menu", async () => {
       const searchInput = canvas.getByRole("searchbox", {
@@ -93,20 +93,20 @@ export const Ready = meta.story({
         name: `Actions for ${fictionalIssueView.title}`,
       })
       await userEvent.click(actions)
-      await waitFor(() =>
-        expect(actions).toHaveAttribute("aria-expanded", "true")
-      )
+      const menu = await ownerBody.findByRole("menu", {
+        name: `Actions for ${fictionalIssueView.title}`,
+      })
+      await waitFor(() => expect(menu).toBeVisible())
+      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.keyboard("{Escape}")
       await waitFor(() =>
-        expect(actions).toHaveAttribute("aria-expanded", "false")
+        expect(
+          ownerBody.queryByRole("menu", {
+            name: `Actions for ${fictionalIssueView.title}`,
+          })
+        ).not.toBeInTheDocument()
       )
-      await waitFor(
-        () =>
-          expect(
-            ownerBody.querySelector("[data-base-ui-focus-guard]")
-          ).not.toBeInTheDocument(),
-        { timeout: 3_000 }
-      )
+      await waitFor(() => expect(actions).toHaveFocus())
     })
   },
 })
@@ -123,12 +123,11 @@ export const FacetedFilters = meta.story({
     await userEvent.keyboard("i")
     await waitFor(() => expect(inProgress).toHaveFocus())
     await userEvent.keyboard("{Enter}")
-    await expect(trigger).toHaveAttribute("aria-expanded", "true")
     const closed = ownerBody.getByRole("option", { name: "Closed" })
     await userEvent.keyboard("{ArrowDown}")
     await waitFor(() => expect(closed).toHaveFocus())
     await userEvent.keyboard("{Enter}")
-    await expect(trigger).toHaveAttribute("aria-expanded", "true")
+    await expect(closed).toBeVisible()
     await userEvent.keyboard("{Escape}")
     await waitFor(() => expect(trigger).toHaveFocus())
     await waitFor(() =>
@@ -176,8 +175,6 @@ export const InclusivePriorityRange = meta.story({
     }
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{Enter}")
     await expect(medium).toHaveAttribute("aria-pressed", "true")
-    expect(medium).toHaveClass("data-pressed:bg-muted")
-    expect(medium).not.toHaveClass("data-pressed:bg-primary")
     await waitFor(() =>
       expect(getComputedStyle(medium).backgroundColor).toBe(
         getComputedStyle(medium).getPropertyValue("--muted").trim()
@@ -221,15 +218,6 @@ export const InclusivePriorityRange = meta.story({
         ownerBody.queryByRole("dialog", { name: "Priority filter" })
       ).not.toBeInTheDocument()
     )
-    await waitFor(
-      () =>
-        expect(
-          canvasElement.ownerDocument.body.querySelector(
-            "[data-base-ui-focus-guard]"
-          )
-        ).not.toBeInTheDocument(),
-      { timeout: 3_000 }
-    )
   },
 })
 
@@ -265,15 +253,7 @@ export const ColumnVisibilityPersistence = meta.story({
       name: "Choose visible columns",
     })
     await userEvent.click(trigger)
-    await waitFor(() =>
-      expect(trigger).toHaveAttribute("aria-expanded", "true")
-    )
-    await waitFor(() =>
-      expect(
-        ownerBody.getByRole("menuitemcheckbox", { name: "Thumbnail" })
-      ).toBeVisible()
-    )
-    const thumbnail = ownerBody.getByRole("menuitemcheckbox", {
+    const thumbnail = await ownerBody.findByRole("menuitemcheckbox", {
       name: "Thumbnail",
     })
     expect(thumbnail).toHaveAttribute("aria-checked", "true")
@@ -284,7 +264,6 @@ export const ColumnVisibilityPersistence = meta.story({
         canvas.queryByAltText("issue-thumbnail.png")
       ).not.toBeInTheDocument()
     )
-    expect(trigger).toHaveClass("ring-primary", "text-primary")
     canvasElement.ownerDocument.defaultView?.localStorage.removeItem(
       getDataTableStorageKey(
         fictionalIssueAssignees[0]?.id ?? "user-1",
@@ -292,21 +271,13 @@ export const ColumnVisibilityPersistence = meta.story({
         2
       )
     )
-    if (trigger.getAttribute("aria-expanded") === "true") {
+    if (ownerBody.queryByRole("menu")) {
       await userEvent.keyboard("{Escape}")
     }
     await waitFor(() =>
-      expect(trigger).toHaveAttribute("aria-expanded", "false")
+      expect(ownerBody.queryByRole("menu")).not.toBeInTheDocument()
     )
-    await waitFor(
-      () =>
-        expect(
-          canvasElement.ownerDocument.body.querySelector(
-            "[data-base-ui-focus-guard]"
-          )
-        ).not.toBeInTheDocument(),
-      { timeout: 3_000 }
-    )
+    await waitFor(() => expect(trigger).toHaveFocus())
   },
 })
 
@@ -368,8 +339,8 @@ export const ToolbarComposition = meta.story({
         throw new globalThis.Error("Expected in-flow toolbar group actions")
       }
       expect(actions.parentElement).toBe(group)
-      expect(actions).toHaveClass("ml-auto", "shrink-0")
-      expect(actions).not.toHaveClass("basis-full")
+      expect(getComputedStyle(actions).flexShrink).toBe("0")
+      expect(getComputedStyle(actions).flexBasis).toBe("auto")
       const groupStyle = getComputedStyle(group)
       const groupRect = group.getBoundingClientRect()
       expect(actions.getBoundingClientRect().right).toBeCloseTo(
@@ -378,8 +349,6 @@ export const ToolbarComposition = meta.story({
           parseFloat(groupStyle.borderRightWidth),
         0
       )
-      expect(reset.className).toContain("hover:bg-muted")
-      expect(reset.className).not.toContain("bg-primary")
     }
     const sortReset = within(sortGroup).getByRole("button", {
       name: "Reset sort",
@@ -897,8 +866,8 @@ export const MobileOverflow = meta.story({
         throw new globalThis.Error("Expected mobile toolbar group actions")
       }
       expect(getComputedStyle(group).flexWrap).toBe("wrap")
-      expect(actions).toHaveClass("ml-auto", "shrink-0")
-      expect(actions).not.toHaveClass("basis-full")
+      expect(getComputedStyle(actions).flexShrink).toBe("0")
+      expect(getComputedStyle(actions).flexBasis).toBe("auto")
       const groupStyle = getComputedStyle(group)
       const groupRect = group.getBoundingClientRect()
       expect(actions.getBoundingClientRect().right).toBeCloseTo(
@@ -1023,7 +992,9 @@ export const MobileOverflow = meta.story({
     }
     expect(selectionAnchor.getBoundingClientRect().height).toBeGreaterThan(0)
     expect(getComputedStyle(selectionAnchor).position).toBe("sticky")
-    expect(selectionAnchor.className).toContain("safe-area-inset-bottom")
+    expect(
+      parseFloat(getComputedStyle(selectionAnchor).bottom)
+    ).toBeGreaterThanOrEqual(16)
     expect(selectionBar.getBoundingClientRect().left).toBeGreaterThanOrEqual(0)
     expect(selectionBar.getBoundingClientRect().right).toBeLessThanOrEqual(
       canvasElement.ownerDocument.documentElement.clientWidth

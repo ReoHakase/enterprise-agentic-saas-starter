@@ -29,17 +29,20 @@ export const resumeIssueAction = async (
   input: unknown,
   dependencies: {
     api: ResumeIssueActionApi
+    captureSettlementFailure?: () => void
     executionRegistry: ApprovedIssueActionExecutionRegistry
     features: AgentFeatureSwitches
     mastra: Mastra
     reportFailure?: (cause: unknown) => void
+    signal: AbortSignal
   }
 ): Promise<AgentActionExecutionResult> => {
   const parsed = v.safeParse(resumeIssueActionSchema, input)
   if (
     !parsed.success ||
     !dependencies.features.runs ||
-    !dependencies.features.writes
+    !dependencies.features.writes ||
+    dependencies.signal.aborted
   ) {
     throw new Error("Issue action resume is unavailable")
   }
@@ -53,16 +56,19 @@ export const resumeIssueAction = async (
     : undefined
   if (
     state?.status !== "suspended" ||
-    suspended?.stepId !== "await-issue-action-approval"
+    suspended?.stepId !== "await-issue-action-approval" ||
+    dependencies.signal.aborted
   ) {
     throw new Error("Issue action resume is unavailable")
   }
 
   const execution = dependencies.executionRegistry.register({
     api: dependencies.api,
+    captureSettlementFailure: dependencies.captureSettlementFailure,
     features: dependencies.features,
     reportFailure: dependencies.reportFailure,
     resumeTicket: parsed.output.resumeTicket,
+    signal: dependencies.signal,
   })
   try {
     const run = await workflow.createRun({ runId: parsed.output.actionId })

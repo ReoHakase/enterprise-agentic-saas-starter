@@ -1,10 +1,6 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
-import {
-  observeUsefulNativeOutput,
-  projectServerTimeoutError,
-  redactNativeStream,
-} from "./native-stream"
+import { projectServerTimeoutError, redactNativeStream } from "./native-stream"
 
 const streamOf = <Value>(...values: Value[]) =>
   new ReadableStream<Value>({
@@ -86,30 +82,5 @@ describe("native UIMessage stream privacy", () => {
         projectServerTimeoutError(streamOf({ type: "text-delta" }), () => true)
       )
     ).resolves.toEqual([{ type: "text-delta" }])
-  })
-
-  it("resets activity only for useful native progress", async () => {
-    const onUseful = vi.fn<() => void>()
-    const usefulTypes = [
-      "text-delta",
-      "tool-input-start",
-      "tool-input-delta",
-      "tool-input-available",
-      "tool-input-error",
-      "tool-output-available",
-      "tool-output-denied",
-      "tool-output-error",
-      "tool-approval-request",
-    ]
-    await readAll(
-      observeUsefulNativeOutput(
-        streamOf(
-          { type: "reasoning-delta" },
-          ...usefulTypes.map((type) => ({ type }))
-        ),
-        onUseful
-      )
-    )
-    expect(onUseful).toHaveBeenCalledTimes(usefulTypes.length)
   })
 })

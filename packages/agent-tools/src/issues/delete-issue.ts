@@ -56,8 +56,8 @@ export const createDeleteIssueTool = <RequestContextData = unknown>(
             toolCallId,
           })
         )
-      } catch {
-        throw new Error("Agent tool execution failed")
+      } catch (cause) {
+        throw new Error("Agent tool execution failed", { cause })
       }
     },
   })

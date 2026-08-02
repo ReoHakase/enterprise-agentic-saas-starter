@@ -10,7 +10,7 @@ description: enterprise-agentic-saas-starterのGitHub Actions、Oxlint/Oxfmt、K
 - [品質強制](../../../docs/architecture/quality-enforcement.md)
 - [システム境界](../../../docs/architecture/system-boundaries.md)
 - [テスト戦略](../../../docs/testing-strategy/README.md)
-- [Codex harness](../../../docs/architecture/codex-harness.md)
+- [coding agentの作業手順](../../../docs/architecture/coding-agent-workflow.md)
 
 ## Workflow
 

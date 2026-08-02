@@ -48,40 +48,27 @@ export const Ready = meta.story({
       await expect(previewDialog).toBeInTheDocument()
       await userEvent.keyboard("{Escape}")
       await waitFor(() => expect(trigger).toHaveFocus())
-      await waitFor(
-        () => expect(previewDialog).toHaveAttribute("data-closed"),
-        { timeout: 3_000 }
-      )
-      await waitFor(
-        () =>
-          expect(
-            ownerBody.querySelector("[data-base-ui-focus-guard]")
-          ).not.toBeInTheDocument(),
-        { timeout: 5_000 }
+      await waitFor(() =>
+        expect(
+          body.queryByRole("dialog", { name: "tenant-architecture.png" })
+        ).not.toBeInTheDocument()
       )
     })
 
     await step("Cancel a destructive deletion", async () => {
-      await userEvent.click(
-        canvas.getByRole("button", {
-          name: "Delete tenant-architecture.png",
-        })
-      )
+      const deleteTrigger = canvas.getByRole("button", {
+        name: "Delete tenant-architecture.png",
+      })
+      await userEvent.click(deleteTrigger)
       const deleteDialog = body.getByRole("alertdialog", {
         name: "Delete this file?",
       })
       await expect(deleteDialog).toBeInTheDocument()
-      await userEvent.keyboard("{Escape}")
-      await waitFor(() => expect(deleteDialog).toHaveAttribute("data-closed"), {
-        timeout: 3_000,
-      })
-      await waitFor(
-        () =>
-          expect(
-            ownerBody.querySelector("[data-base-ui-focus-guard]")
-          ).not.toBeInTheDocument(),
-        { timeout: 5_000 }
+      await userEvent.click(
+        within(deleteDialog).getByRole("button", { name: "Cancel" })
       )
+      await waitFor(() => expect(deleteTrigger).toHaveFocus())
+      await waitFor(() => expect(deleteDialog).not.toBeVisible())
     })
   },
 })
@@ -102,7 +89,10 @@ export const RetrySuccess = meta.story({
         attempt += 1
         return attempt === 1
           ? HttpResponse.json(
-              { message: "Attachment list failed." },
+              {
+                error: "internal_error",
+                message: "The request could not be completed.",
+              },
               { status: 500 }
             )
           : HttpResponse.json({ items: fictionalFiles, nextCursor: null })

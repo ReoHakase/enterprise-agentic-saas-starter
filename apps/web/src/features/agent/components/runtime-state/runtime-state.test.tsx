@@ -6,7 +6,7 @@ import { createStore, Provider as JotaiProvider } from "jotai"
 import { useCallback, useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 
-import { toAgentImageUploadError } from "../runtime-state-types/runtime-state-types"
+import { getAgentImageUploadErrorText } from "../runtime-state-types/runtime-state-types"
 import {
   AgentRuntimeProvider,
   useAgentThreadRuntimeState,
@@ -60,19 +60,32 @@ const Harness = () => {
 describe("AgentRuntimeProvider", () => {
   it("distinguishes disabled and unavailable image upload failures", () => {
     expect(
-      toAgentImageUploadError(
+      getAgentImageUploadErrorText(
         new FileUploadError({
           code: "feature_not_enabled",
           message: "Service temporarily unavailable",
           status: 503,
         })
-      ).message
+      )
     ).toContain("disabled in this environment")
     expect(
-      toAgentImageUploadError(
+      getAgentImageUploadErrorText(
         new FileUploadError({ message: "Network error", status: 0 })
-      ).message
+      )
     ).toContain("temporarily unavailable")
+    expect(
+      getAgentImageUploadErrorText(
+        new FileUploadError({
+          message: "Choose an image smaller than 10 MB.",
+          status: 400,
+        })
+      )
+    ).toBe("Choose an image smaller than 10 MB.")
+    expect(
+      getAgentImageUploadErrorText(
+        new Error("DATABASE_URL=file:private-upload.db")
+      )
+    ).toBe("Image upload failed.")
   })
 
   it("keeps a failed submission identity when the shell session unmounts", async () => {

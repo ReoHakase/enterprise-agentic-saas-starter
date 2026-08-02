@@ -209,7 +209,7 @@ export default async function DashboardPage({
               {activeOrganization.permissions.canEditOrganization ? (
                 <Badge variant="outline">Edit organization</Badge>
               ) : null}
-              {activeOrganization.permissions.canTransferSuperAdmin ? (
+              {activeOrganization.permissions.canTransferOwnership ? (
                 <Badge variant="outline">Transfer ownership</Badge>
               ) : null}
             </CardContent>

@@ -2,7 +2,7 @@
 title: Observability
 status: accepted
 implementation: active
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-01
 ---
 
 # Observability
@@ -37,15 +37,15 @@ HTTPの開始と終了だけを並べても、処理内容や業務上の結果�
 ログは「何を判断し、何件を返し、どの状態へ移したか」を補足します。同じ事実を複数の層から
 重複して記録しません。
 
-| 層                               | 記録する内容                                                                                              | 記録しない内容                                                          |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| トランスポート、Elysiaプラグイン | 完了時のルート、HTTP method、status、所要時間、request ID。開始時刻はspanで確認する                       | 成功した全リクエストの開始ログ、業務結果の推測                          |
-| ルート                           | 入力形式により処理分岐が変わる場合の受付種別、入力要素数                                                  | サービスと同じ成功結果、認可済み利用者やテナントのID                    |
-| サービス                         | `app.operation`、`app.outcome`、返却件数、総件数、ページ、適用したフィルター種別、権限モード、状態遷移    | HTTP status、SQL、認証情報、本文や名前などの業務データ                  |
-| ドメイン                         | ロガーを`import`しない。純粋関数は判定結果を型として返し、サービスが必要な結果だけを記録する              | 副作用、環境依存の属性、成功・失敗の二重記録                            |
-| リポジトリ                       | 通常はDB spanへ委ねる。DB spanだけで不足する低速処理では、固定したクエリ分類と行数だけを`debug`で記録する | 生のSQL、bind値、各行の内容、サービスと同じ業務結果                     |
-| 外部`adapter`                    | 外部操作の固定名、所要時間、status、再試行回数、正規化済み失敗分類                                        | Authorization、Cookie、ticket、grant、生のプロバイダー応答              |
-| Agent Worker、Mastra             | chat、Memory、action、model、toolの段階、件数、使用量、停止理由、正規化済み結果                           | 認証情報、private URL、binary bytes、OTLPへ送れない生のprovider `Error` |
+| 層                               | 記録する内容                                                                                              | 記録しない内容                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| トランスポート、Elysiaプラグイン | 完了時のルート、HTTP method、status、所要時間、request ID。開始時刻はspanで確認する                       | 成功した全リクエストの開始ログ、業務結果の推測                                |
+| ルート                           | 入力形式により処理分岐が変わる場合の受付種別、入力要素数                                                  | サービスと同じ成功結果、認可済み利用者やテナントのID                          |
+| サービス                         | `app.operation`、`app.outcome`、返却件数、総件数、ページ、適用したフィルター種別、権限モード、状態遷移    | HTTP status、SQL、認証情報、本文や名前などの業務データ                        |
+| ドメイン                         | ロガーを`import`しない。純粋関数は判定結果を型として返し、サービスが必要な結果だけを記録する              | 副作用、環境依存の属性、成功・失敗の二重記録                                  |
+| リポジトリ                       | 通常はDB spanへ委ねる。DB spanだけで不足する低速処理では、固定したクエリ分類と行数だけを`debug`で記録する | 生のSQL、bind値、各行の内容、サービスと同じ業務結果                           |
+| 外部`adapter`                    | 外部操作の固定名、所要時間、status、再試行回数、正規化済み失敗分類                                        | Authorization、Cookie、ticket、grant、生のプロバイダー応答                    |
+| Agent Worker、Mastra             | chat、Memory、action、model、toolの段階、件数、使用量、停止理由、正規化済み結果                           | 認証情報、private URL、binary bytes、通常log・traceへ送る生のprovider `Error` |
 
 ロガー名は`<service.name>.<module>.<operation>`の階層にします。例えば
 `enterprise-agentic-saas-api.agent.threads`と
@@ -87,9 +87,20 @@ bun run observability:down
 
 ## local data境界
 
-localではprompt、completion、Issue本文、business payload、tool input/output、run/thread/request IDをsamplingなしで残します。provider raw `Error`とbounded cause chainは`NODE_ENV=development`のAgent consoleだけへ出し、OTLP、Grafana、共有artifactには保存しません。
+localではprompt、completion、Issue本文、business payload、tool input/output、run/thread/request IDをsamplingなしで残します。provider raw `Error`とbounded cause chainはADR-013の固定条件を満たす場合だけ、認証情報を除去してAPI・Agentの端末またはWebのブラウザーconsoleとlocal Lokiへ出します。Tempo、Memory、test・evalの出力やartifact、production、remote telemetryには保存しません。
+
+生エラーの所有者は各ランタイムの`reportDevelopmentCauseChain`だけです。Lokiでは起点を含む最大5件を
+1 causeにつき1 structured recordにし、messageを8 KiB、stackを32 KiBへ制限します。端末または
+ブラウザーconsoleには同じrecordから再構築した認証情報除去済みの`Error.cause`ツリーを起点ごとに1回、
+元stackと固定した相関contextだけで渡します。reporter自身のstackや元の生`Error`をconsoleへ渡さず、
+通常logやspan eventへ複製しません。consoleとLokiの一方が失敗しても他方とアプリケーション処理を
+止めません。
 
 常時除去するのは認証materialだけです。
+
+CollectorはLogsを認証情報除去、`batch`、Lokiの順に処理します。Tracesは認証情報除去、生の
+`error.*`・`exception.*`・status messageとexception eventの除去、`batch`、Tempo・spanmetricsの順です。
+Lokiの全streamは168時間保持し、compactorとdelete delay後に物理削除します。
 
 - `Authorization`、Cookie
 - API key、token、secret、password、credential
@@ -99,6 +110,20 @@ localではprompt、completion、Issue本文、business payload、tool input/out
 collectorはflat attribute、span event、string log bodyの既知の認証key/valueを保存前に除去します。通常のURL path/query、`errorCode`、`statusCode`は残します。Mastraのnested model/tool eventにはframework標準の`SensitiveDataFilter`を認証fieldだけに指定します。独自の共通redactorやexporter wrapperは作りません。
 
 詳細telemetryは`NODE_ENV=development`、固定local endpoint、worktree/session IDが揃う場合だけ初期化します。productionや任意のremote endpointでは無効です。
+
+E2Eでは通常の実行とCIを既定で無効にします。ローカルLGTMへ非rawのAPI trace・logと、有料E2Eの
+Agent trace・logを送る場合だけ次の明示的なopt-inを使います。
+
+```sh
+AGENT_E2E_OBSERVABILITY=1 PAID_E2E_APPROVED=1 \
+  bun --env-file="$PWD/apps/agent/.env.local" run --cwd apps/web test:e2e:full
+```
+
+ランナーは`http://127.0.0.1:4318`、実行ごとの`DEV_SESSION_ID`、E2E用`DEV_WORKTREE_ID`、
+`AGENT_E2E_RUN_ID`を一組でWorkerへ渡します。`AGENT_E2E_RUN_ID`がある場合、通常のtrace・log exportは
+有効なまま、APIとAgentの`reportDevelopmentCauseChain`は生のmessage、stack、causeを端末やLokiへ
+出しません。固定error code、失敗status、HTTP・request・trace属性だけを残し、E2Eの標準出力や
+Playwright成果物へLGTMデータを添付しません。
 
 ## Codexでの調査
 

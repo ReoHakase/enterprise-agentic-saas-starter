@@ -1,6 +1,10 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 
-const OPENROUTER_MODEL_ID = "qwen/qwen3.6-flash" as const
+import {
+  AGENT_MODEL_PROFILE,
+  AUXILIARY_AGENT_REASONING,
+  PRODUCT_AGENT_REASONING,
+} from "../../core/model-profile"
 
 const requireLoopbackBaseURL = (value: string) => {
   const parsed = new URL(value)
@@ -27,12 +31,15 @@ export const createAgentOpenRouter = (apiKey?: string, baseURL?: string) =>
   })
 
 export const createAgentModel = (apiKey?: string, baseURL?: string) =>
-  createAgentOpenRouter(apiKey, baseURL).chat(OPENROUTER_MODEL_ID, {
+  createAgentOpenRouter(apiKey, baseURL).chat(AGENT_MODEL_PROFILE.model, {
     parallelToolCalls: false,
-    reasoning: {
-      effort: "none",
-      enabled: false,
-      exclude: true,
-    },
+    reasoning: PRODUCT_AGENT_REASONING,
+    usage: { include: true },
+  })
+
+export const createAgentAuxiliaryModel = (apiKey?: string, baseURL?: string) =>
+  createAgentOpenRouter(apiKey, baseURL).chat(AGENT_MODEL_PROFILE.model, {
+    parallelToolCalls: false,
+    reasoning: AUXILIARY_AGENT_REASONING,
     usage: { include: true },
   })

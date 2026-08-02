@@ -8,7 +8,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt, isNull } from "drizzle-orm"
 
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
 import {
   AGENT_GRANT_TTL_MS,
@@ -37,9 +37,9 @@ export const requireLiveSession = async (
     )
     .limit(1)
   const current = rows[0]
-  if (!current) throw publicErrors.unauthorized()
+  if (!current) throw new HttpError({ code: "unauthorized" })
   if (!current.activeOrganizationId) {
-    throw publicErrors.activeOrganizationRequired()
+    throw new HttpError({ code: "active_organization_required" })
   }
   return {
     id: current.id,
@@ -64,9 +64,7 @@ export const requireActiveMembership = async (
     .limit(1)
   const membership = rows[0]
   if (!membership) {
-    throw publicErrors.notFound("Organization not found", {
-      resource: "organization",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   return normalizeOrganizationRole(membership.role)
 }
@@ -93,14 +91,10 @@ export const requireOwnedThread = async (
     .limit(1)
   const thread = rows[0]
   if (!thread) {
-    throw publicErrors.notFound("Agent thread not found", {
-      resource: "agent_thread",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   if (input.requireActive !== false && thread.status !== "active") {
-    throw publicErrors.notFound("Agent thread not found", {
-      resource: "agent_thread",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   return thread
 }
@@ -131,7 +125,7 @@ const validateRunGrantInTransaction = async (
   }
 ): Promise<GrantRunContext> => {
   if (!grant.runId) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   const runRows = await tx
     .select({
@@ -155,19 +149,17 @@ const validateRunGrantInTransaction = async (
     .limit(1)
   const run = runRows[0]
   if (!run) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   const active = run.status === "running" || run.status === "waiting_approval"
   if (!input.allowTerminalRun && !active) {
-    throw publicErrors.conflict("Agent run is no longer active", {
-      resource: "agent_run",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   if (
     grant.revokedAt !== null &&
     (!input.allowTerminalRun || !input.allowRevokedTerminalRun || active)
   ) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   return {
     runStatus: run.status,
@@ -207,7 +199,7 @@ export const validateGrantInTransaction = async (
     .where(and(...grantConditions))
     .limit(1)
   const grant = grantRows[0]
-  if (!grant) throw publicErrors.unauthorized("Agent capability is invalid")
+  if (!grant) throw new HttpError({ code: "unauthorized" })
 
   const currentSession = await requireLiveSession(tx, {
     sessionId: grant.sessionId,
@@ -215,7 +207,7 @@ export const validateGrantInTransaction = async (
     now: input.now,
   })
   if (currentSession.activeOrganizationId !== grant.organizationId) {
-    throw publicErrors.activeOrganizationMismatch()
+    throw new HttpError({ code: "active_organization_mismatch" })
   }
 
   const contextRows = await tx
@@ -229,7 +221,7 @@ export const validateGrantInTransaction = async (
     context.userId !== grant.userId ||
     context.contextEpoch !== grant.contextEpoch
   ) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
 
   const role = await requireActiveMembership(tx, currentSession)
@@ -239,9 +231,7 @@ export const validateGrantInTransaction = async (
     activeOrganizationId: grant.organizationId,
   })
   if (thread.organizationId !== grant.organizationId) {
-    throw publicErrors.notFound("Agent thread not found", {
-      resource: "agent_thread",
-    })
+    throw new HttpError({ code: "not_found" })
   }
 
   const runContext: GrantRunContext =

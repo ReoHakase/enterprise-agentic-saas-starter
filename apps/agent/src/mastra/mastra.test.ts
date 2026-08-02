@@ -27,6 +27,7 @@ const productAgentRequestContext = (
   const execution = executionRegistry.register({
     api,
     budget: createAgentToolBudget(),
+    onRevoked: () => undefined,
     rootRunId: "run_mastra_registry",
     runGrant: TEST_RUN_GRANT,
     settlement: createRunSettlement(api, TEST_RUN_GRANT),
@@ -58,7 +59,7 @@ describe("Mastra product agent registry", () => {
     expect(approvedIssueActionWorkflow.id).toBe("approved-issue-action")
   })
 
-  it("registers the canonical agent and Qwen model", async () => {
+  it("registers the canonical agent and Luna model", async () => {
     expect(mastra.getAgentById("product-agent")).toBe(productAgent)
     expect(productAgent.id).toBe("product-agent")
     const runtime = productAgentRequestContext(false)
@@ -66,7 +67,7 @@ describe("Mastra product agent registry", () => {
       const model = await productAgent.getModel({
         requestContext: runtime.requestContext,
       })
-      expect(model.modelId).toBe("qwen/qwen3.6-flash")
+      expect(model.modelId).toBe("openai/gpt-5.6-luna")
       expect(model.provider).toBe("openrouter")
       expect(productAgent.hasOwnMemory()).toBe(true)
       await expect(productAgent.getModel()).rejects.toThrow(

@@ -2,9 +2,9 @@ import type { Db } from "@enterprise-agentic-saas/db"
 import { sql } from "drizzle-orm"
 import { Elysia } from "elysia"
 
-import { publicErrors } from "./errors/app-error"
+import { HttpError } from "./errors/http-error"
 import {
-  apiErrorModel,
+  errorResponseModel,
   healthResponseModel,
   readinessResponseModel,
 } from "./models/api"
@@ -47,7 +47,7 @@ export const createApp = (db: Db) => {
       {
         response: {
           200: healthResponseModel,
-          500: apiErrorModel,
+          500: errorResponseModel,
         },
         detail: {
           operationId: "healthCheck",
@@ -75,15 +75,19 @@ export const createApp = (db: Db) => {
               await db.run(sql`select 1`)
               return { status: "ready" as const }
             } catch (cause) {
-              throw publicErrors.unavailable(cause)
+              throw new HttpError({
+                code: "service_unavailable",
+                cause: cause,
+                retryAfter: 30,
+              })
             }
           }
         ),
       {
         response: {
           200: readinessResponseModel,
-          500: apiErrorModel,
-          503: apiErrorModel,
+          500: errorResponseModel,
+          503: errorResponseModel,
         },
         detail: {
           operationId: "readinessCheck",

@@ -5,10 +5,6 @@ export default defineConfig({
     coverage: {
       enabled: false,
     },
-    include: [
-      ".codex/**/*.test.ts",
-      ".github/**/*.test.ts",
-      "scripts/**/*.test.ts",
-    ],
+    include: [".github/**/*.test.ts", "scripts/**/*.test.ts"],
   },
 })

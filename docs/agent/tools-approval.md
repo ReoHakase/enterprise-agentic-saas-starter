@@ -2,7 +2,7 @@
 title: 製品Agentのtool、Web検索、approval
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 ---
 
 # Tool、Web検索、approval
@@ -70,7 +70,7 @@ guard成功後、operation IDでWeb検索quotaを冪等予約し、`web_search`�
 OpenRouterを直接呼びます。別の検索Agentは作りません。外側の空白だけを除いた検証済みqueryを
 2〜200文字のままJSON promptへ渡し、provider内の検索engineが使う内部query文字列は保証対象外と
 します。reasoningは無効、`maxRetries: 0`、timeoutは25秒です。OpenRouterへは
-`qwen/qwen3.6-flash`と`web` pluginを持つ1 requestだけを送り、engineはExa、`max_results`は3です。結果は
+`openai/gpt-5.6-luna`、reasoning `none`、`web` pluginを持つ1 requestだけを送り、engineはExa、`max_results`は3です。結果は
 本文6,000文字、公開HTTP(S) source 5件へ制限し、`untrusted_public_web_content`として扱います。
 Webはtool outputのsourceを同じ公開URL境界で再検証してリンク表示し、モデル本文がURLを再掲するか
 には依存しません。Web上のinstructionをIssue toolのinstructionへ昇格させません。

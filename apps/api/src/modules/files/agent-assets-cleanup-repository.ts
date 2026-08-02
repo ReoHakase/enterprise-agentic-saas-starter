@@ -9,13 +9,9 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { selectAgentAssetById } from "./agent-assets-access-repository"
-import {
-  assertAgentAssetClaim,
-  assetNotFound,
-  preserveAgentAssetError,
-} from "./agent-assets-domain"
+import { assertAgentAssetClaim, assetNotFound } from "./agent-assets-domain"
 import type { AgentAssetTransaction } from "./agent-assets-repository-support"
 import { requireLiveUploadScope } from "./agent-assets-reservation-repository"
 
@@ -90,10 +86,7 @@ const claimAgentAssetForCleanupInTransaction = async (
     .limit(1)
   if (unreleasedLeaseRows[0]) {
     if (input.activeLease === "conflict") {
-      throw publicErrors.conflict("Agent asset is awaiting a decision", {
-        reason: "action_lease_active",
-        resource: "agent_asset",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return false
   }
@@ -178,27 +171,22 @@ export const discardPendingAgentAsset = async (
     expectedStorageCleanupRevision: number
     now?: Date
   }
-) => {
-  try {
-    return await db.transaction((tx) =>
-      claimAgentAssetForCleanupInTransaction(tx, {
-        ...input,
-        now: input.now ?? new Date(),
-        activeLease: "skip",
-        expected: {
-          assetStatus: "pending",
-          claimRevision: input.expectedClaimRevision,
-          storageCleanupRevision: input.expectedStorageCleanupRevision,
-          storageStatus: "pending",
-        },
-        requireExpired: false,
-        terminalStatus: "expired",
-      })
-    )
-  } catch (cause) {
-    return preserveAgentAssetError(cause, "discardPendingAgentAsset")
-  }
-}
+) =>
+  db.transaction((tx) =>
+    claimAgentAssetForCleanupInTransaction(tx, {
+      ...input,
+      now: input.now ?? new Date(),
+      activeLease: "skip",
+      expected: {
+        assetStatus: "pending",
+        claimRevision: input.expectedClaimRevision,
+        storageCleanupRevision: input.expectedStorageCleanupRevision,
+        storageStatus: "pending",
+      },
+      requireExpired: false,
+      terminalStatus: "expired",
+    })
+  )
 
 export const deleteReadyAgentAsset = async (
   db: Db,
@@ -209,42 +197,37 @@ export const deleteReadyAgentAsset = async (
     userId: string
     now?: Date
   }
-) => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const value = await selectAgentAssetById(tx, input)
-      if (
-        !value ||
-        value.asset.status !== "ready" ||
-        value.asset.uploaderId !== input.userId ||
-        value.asset.sessionId !== input.sessionId
-      ) {
-        throw assetNotFound()
-      }
-      await requireLiveUploadScope(tx, {
-        organizationId: input.organizationId,
-        sessionId: input.sessionId,
-        threadId: value.asset.threadId,
-        userId: input.userId,
-        now,
-        expectedContextEpoch: value.asset.contextEpoch,
-      })
-      const claimed = await claimAgentAssetForCleanupInTransaction(tx, {
-        assetId: input.assetId,
-        organizationId: input.organizationId,
-        terminalStatus: "deleted",
-        now,
-        activeLease: "conflict",
-        requireExpired: false,
-      })
-      if (!claimed) throw assetNotFound()
-      return true
+) =>
+  db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const value = await selectAgentAssetById(tx, input)
+    if (
+      !value ||
+      value.asset.status !== "ready" ||
+      value.asset.uploaderId !== input.userId ||
+      value.asset.sessionId !== input.sessionId
+    ) {
+      throw assetNotFound()
+    }
+    await requireLiveUploadScope(tx, {
+      organizationId: input.organizationId,
+      sessionId: input.sessionId,
+      threadId: value.asset.threadId,
+      userId: input.userId,
+      now,
+      expectedContextEpoch: value.asset.contextEpoch,
     })
-  } catch (cause) {
-    return preserveAgentAssetError(cause, "deleteReadyAgentAsset")
-  }
-}
+    const claimed = await claimAgentAssetForCleanupInTransaction(tx, {
+      assetId: input.assetId,
+      organizationId: input.organizationId,
+      terminalStatus: "deleted",
+      now,
+      activeLease: "conflict",
+      requireExpired: false,
+    })
+    if (!claimed) throw assetNotFound()
+    return true
+  })
 
 export const expireDueAgentAssets = async (
   db: Db,

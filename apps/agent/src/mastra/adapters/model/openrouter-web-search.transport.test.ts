@@ -30,7 +30,7 @@ const providerResponse = {
   ],
   created: 1,
   id: "generation_1",
-  model: "qwen/qwen3.6-flash",
+  model: "openai/gpt-5.6-luna",
   object: "chat.completion",
   usage: {
     completion_tokens: 1,
@@ -79,7 +79,7 @@ describe("direct OpenRouter Web search transport", () => {
     )
     expect(body).toMatchObject({
       max_tokens: 768,
-      model: "qwen/qwen3.6-flash",
+      model: "openai/gpt-5.6-luna",
       parallel_tool_calls: false,
       plugins: [{ engine: "exa", id: "web", max_results: 3 }],
       temperature: 0,
@@ -87,6 +87,8 @@ describe("direct OpenRouter Web search transport", () => {
     })
     expect(body).not.toHaveProperty("tools")
     expect(body).not.toHaveProperty("tool_choice")
+    expect(body.reasoning).toEqual({ enabled: false, effort: "none" })
+    expect(body.reasoning).not.toHaveProperty("exclude")
     expect(JSON.stringify(body)).toContain(
       'Query JSON: \\"public \\\\\\"query\\\\\\"\\"'
     )

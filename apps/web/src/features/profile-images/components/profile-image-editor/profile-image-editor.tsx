@@ -37,13 +37,14 @@ import { toast } from "sonner"
 
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 import { accountKeys } from "@/features/account"
-import { consoleKeys } from "@/features/console"
+import { consoleKeys, getConsoleApiErrorText } from "@/features/console"
 import { fileKeys, registerFileUpload } from "@/features/files"
 import { issueKeys } from "@/features/issues"
 import { OrganizationProfileImage } from "@/features/organizations"
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
 import { isFirstPartyProfileImageUrl } from "@/lib/profile-image-url"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import {
   deleteOrganizationProfileImage,
@@ -298,14 +299,20 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       setRemoveError(undefined)
       try {
         await refreshProfileImages()
-      } catch {
+      } catch (error) {
+        reportObservedError(error)
         // Deletion is authoritative. Normal query retry or the RSC refresh
         // will reconcile a cache refresh that failed afterward.
       }
       toast.success("Profile image removed")
     },
-    onError: () => {
-      setRemoveError("The profile image could not be removed. Try again.")
+    onError: (error) => {
+      setRemoveError(
+        getConsoleApiErrorText(
+          error,
+          "The profile image could not be removed. Try again."
+        )
+      )
     },
   })
   const { isPending: removePending, mutate: mutateRemove } = removeMutation
@@ -358,7 +365,8 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         setUploadProgress(undefined)
         try {
           await refreshProfileImages()
-        } catch {
+        } catch (error) {
+          reportObservedError(error)
           // Upload is authoritative. Normal query retry or the RSC refresh
           // will reconcile a cache refresh that failed afterward.
         }
@@ -368,7 +376,8 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         if (error instanceof Error && error.name === "AbortError") {
           setUploadError("The profile image upload was canceled.")
         } else {
-          setUploadError(uploadErrorText)
+          reportObservedError(error)
+          setUploadError(getConsoleApiErrorText(error, uploadErrorText))
         }
       } finally {
         releaseUpload()

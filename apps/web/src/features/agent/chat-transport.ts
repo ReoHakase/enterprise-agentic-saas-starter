@@ -2,6 +2,8 @@ import { context, SpanStatusCode, trace, type Span } from "@opentelemetry/api"
 import { logs, SeverityNumber } from "@opentelemetry/api-logs"
 import { DefaultChatTransport } from "ai"
 
+import { reportObservedError } from "@/lib/report-observed-error"
+
 import { prepareAgentChatBody } from "./chat-request-body"
 import type { AgentChatMessage } from "./schema"
 
@@ -40,7 +42,6 @@ const emitChatEvent = (
     ...attributes,
     "event.name": message,
   })
-  span.addEvent(message, eventAttributes)
   context.with(trace.setSpan(context.active(), span), () => {
     logs.getLogger("enterprise-agentic-saas-web-browser").emit({
       attributes: eventAttributes,
@@ -110,7 +111,7 @@ const observeChatResponse = async (
           const now = performance.now()
           if (firstByteAt === undefined) {
             firstByteAt = now
-            emitChatEvent(span, "Agent chat response first byte", {
+            emitChatEvent(span, "agent.chat.response.first_byte", {
               ...attributes,
               time_to_first_byte_ms: Number((now - startedAt).toFixed(2)),
             })
@@ -130,7 +131,7 @@ const observeChatResponse = async (
         ),
       })
     )
-    emitChatEvent(span, "Agent chat response stream completed", {
+    emitChatEvent(span, "agent.chat.response.stream_completed", {
       ...attributes,
       byte_count: byteCount,
       chunk_count: chunkCount,
@@ -139,15 +140,25 @@ const observeChatResponse = async (
         (completedAt - (firstByteAt ?? completedAt)).toFixed(2)
       ),
     })
-  } catch {
-    span.recordException(new Error("Agent chat response stream failed"))
-    span.setStatus({
-      code: SpanStatusCode.ERROR,
-      message: "Agent chat response stream failed",
+  } catch (error) {
+    context.with(trace.setSpan(context.active(), span), () => {
+      reportObservedError(error, {
+        httpMethod: "POST",
+        httpRoute: "/agent/chat",
+        httpStatus:
+          typeof attributes["http.response.status_code"] === "number"
+            ? attributes["http.response.status_code"]
+            : undefined,
+        operation: "agent.chat.stream",
+        requestId:
+          typeof attributes.request_id === "string"
+            ? attributes.request_id
+            : undefined,
+      })
     })
     emitChatEvent(
       span,
-      "Agent chat response stream failed",
+      "agent.chat.response.stream_failed",
       {
         ...attributes,
         byte_count: byteCount,
@@ -175,7 +186,7 @@ const createObservedChatFetch = (threadId: string): typeof globalThis.fetch => {
           "http.route": "/agent/chat",
         }),
       })
-    emitChatEvent(span, "Agent chat request started", attributes)
+    emitChatEvent(span, "agent.chat.request.started", attributes)
     try {
       const response = await context.with(
         trace.setSpan(context.active(), span),
@@ -184,17 +195,16 @@ const createObservedChatFetch = (threadId: string): typeof globalThis.fetch => {
       const responseAttributes = {
         ...attributes,
         "http.response.status_code": response.status,
+        request_id: response.headers.get("x-request-id") ?? undefined,
       }
       span.setAttribute("http.response.status_code", response.status)
       if (!response.ok) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: `HTTP ${response.status}`,
-        })
+        span.setAttribute("app.error.code", "http_error")
+        span.setStatus({ code: SpanStatusCode.ERROR })
       }
       emitChatEvent(
         span,
-        "Agent chat response headers received",
+        "agent.chat.response.headers_received",
         responseAttributes,
         response.ok ? SeverityNumber.INFO : SeverityNumber.WARN
       )
@@ -211,14 +221,16 @@ const createObservedChatFetch = (threadId: string): typeof globalThis.fetch => {
       )
       return new Response(clientBody, response)
     } catch (error) {
-      span.recordException(new Error("Agent chat request failed"))
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: "Agent chat request failed",
+      context.with(trace.setSpan(context.active(), span), () => {
+        reportObservedError(error, {
+          httpMethod: "POST",
+          httpRoute: "/agent/chat",
+          operation: "agent.chat.request",
+        })
       })
       emitChatEvent(
         span,
-        "Agent chat request failed",
+        "agent.chat.request.failed",
         {
           ...attributes,
         },

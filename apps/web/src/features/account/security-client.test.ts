@@ -5,6 +5,7 @@ import {
   createSecurityAuthCapabilities,
   hasSecurityMethodsCapability,
   loadSecurityMethods,
+  securityMutationErrorMessage,
 } from "./security-client"
 
 describe("security auth client boundary", () => {
@@ -42,48 +43,57 @@ describe("security auth client boundary", () => {
     expect(authClient.passkey.listUserPasskeys).toHaveBeenCalledOnce()
   })
 
-  it("rejects malformed provider data and provider errors", async () => {
+  it("rejects malformed provider data and preserves provider errors", async () => {
     await expect(
       loadSecurityMethods({
         listAccounts: async () => ({ data: [{ providerId: 42 }] }),
       })
     ).rejects.toThrow("Invalid type")
+    const returnedError = { message: "TURSO_AUTH_TOKEN=provider-secret" }
     await expect(
-      completeSecurityMutation(
-        Promise.resolve({
-          error: { message: "TURSO_AUTH_TOKEN=provider-secret" },
-        })
-      )
-    ).rejects.toThrow("Authentication request failed")
-    await expect(
-      completeSecurityMutation(
-        Promise.resolve({
-          error: {
-            code: "SESSION_NOT_FRESH",
-            message: "SELECT token FROM session WHERE secret = 'private'",
-          },
-        })
-      )
-    ).rejects.toMatchObject({
+      completeSecurityMutation(Promise.resolve({ error: returnedError }))
+    ).rejects.toBe(returnedError)
+    const sessionError = {
       code: "SESSION_NOT_FRESH",
-      message: "Sign in again to continue.",
-    })
+      message: "SELECT token FROM session WHERE secret = 'private'",
+    }
     await expect(
-      completeSecurityMutation(
-        Promise.reject(new Error("SELECT token FROM account"))
-      )
-    ).rejects.toThrow("Authentication request failed")
+      completeSecurityMutation(Promise.resolve({ error: sessionError }))
+    ).rejects.toBe(sessionError)
+    const rejectedError = new Error("SELECT token FROM account")
+    await expect(
+      completeSecurityMutation(Promise.reject(rejectedError))
+    ).rejects.toBe(rejectedError)
+    const loadError = new Error("DATABASE_URL=file:private.db")
     await expect(
       loadSecurityMethods({
         listAccounts: async () => {
-          throw new Error("DATABASE_URL=file:private.db")
+          throw loadError
         },
       })
-    ).rejects.toThrow("Authentication request failed")
+    ).rejects.toBe(loadError)
   })
 
   it("reports unavailable clients without inventing capabilities", () => {
     const capabilities = createSecurityAuthCapabilities(undefined)
     expect(hasSecurityMethodsCapability(capabilities)).toBe(false)
+  })
+
+  it("maps allowlisted Better Auth codes without exposing provider messages", () => {
+    expect(
+      securityMutationErrorMessage(
+        {
+          code: "ERROR_CEREMONY_ABORTED",
+          message: "credential=private-provider-material",
+        },
+        "Fallback"
+      )
+    ).toBe("Passkey registration was cancelled.")
+    expect(
+      securityMutationErrorMessage(
+        { code: "UNKNOWN", message: "token=private-provider-material" },
+        "Fallback"
+      )
+    ).toBe("Fallback")
   })
 })

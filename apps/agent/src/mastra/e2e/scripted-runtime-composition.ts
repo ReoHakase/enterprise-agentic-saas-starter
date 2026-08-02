@@ -2,7 +2,6 @@ import {
   createProductAgent,
   createProductAgentMemory,
 } from "../agents/product-agent"
-import { createThreadTitleAgent } from "../agents/thread-title-agent"
 import { createProductRuntime } from "../composition/create-runtime"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import { createAgentStorage } from "../storage"
@@ -14,7 +13,6 @@ import {
   createApprovedIssueActionResumeRuntime,
   createApprovedIssueActionWorkflow,
 } from "../workflows/approved-issue-action"
-import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
 
 const reusableAssetIdForFilename = (prompt: string, filename: string) =>
   [
@@ -28,8 +26,6 @@ export const createScriptedAgentRuntimeComposition = (
   environment: AgentStorageEnvironment,
   runtimeOptions: {
     executionRegistry?: ProductAgentExecutionRegistry
-    onMemoryCommitBeforeSave?: () => Promise<void>
-    onMemoryCommitSave?: () => Promise<void>
     onProductModelCall?: (prompt: string) => void
     revocationGate?: Promise<void>
   } = {}
@@ -481,40 +477,30 @@ export const createScriptedAgentRuntimeComposition = (
       }
     }, executionRegistry.resolve),
   })
-  const threadTitleAgent = createThreadTitleAgent(
-    createScriptedModel(
-      [{ parts: [{ type: "text", text: "Scripted Agent conversation" }] }],
-      { modelId: "scripted-thread-title", repeat: true }
-    )
-  )
   const approvedIssueActionExecutionRegistry =
     new ApprovedIssueActionExecutionRegistry()
   const approvedIssueActionWorkflow = createApprovedIssueActionWorkflow(
     approvedIssueActionExecutionRegistry
   )
-  const memoryCommitWorkflow = createMemoryCommitWorkflow({
-    saveMessages: async (input) => {
-      await runtimeOptions.onMemoryCommitBeforeSave?.()
-      const result = await memory.saveMessages(input)
-      await runtimeOptions.onMemoryCommitSave?.()
-      return result
-    },
-  })
   return {
     approvedIssueActionExecutionRegistry,
     approvedIssueActionWorkflow,
-    createApprovalResumeRuntime: () =>
-      createApprovedIssueActionResumeRuntime(storage),
-    memoryCommitWorkflow,
+    createApprovalResumeRuntime: () => {
+      const resumeStorage = createAgentStorage(
+        environment,
+        "scripted-runtime-resume"
+      )
+      return {
+        initialize: () => createApprovedIssueActionResumeRuntime(resumeStorage),
+        storage: resumeStorage,
+      }
+    },
     executionRegistry,
     mastra: createProductRuntime({
       approvedIssueActionWorkflow,
-      memoryCommitWorkflow,
       productAgent,
       storage,
-      threadTitleAgent,
     }),
     storage,
-    threadTitleAgent,
   }
 }

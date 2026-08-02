@@ -2,12 +2,11 @@
 title: 日本語技術文書の用語・表記基準
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 applies_to:
   - AGENTS.md
   - docs/**/*.md
   - .agents/local-skills/**/*.md
-  - .codex/agents/*.toml
 ---
 
 # 日本語技術文書の用語・表記基準
@@ -57,7 +56,6 @@ P2の指摘を例外承認する場合は、承認者と有効期限を必須に
 - `AGENTS.md`
 - `docs/**/*.md`
 - `.agents/local-skills/**/*.md`
-- `.codex/agents/*.toml`内の日本語説明
 - PR、GitHub issue、レビューコメントの日本語技術説明
 
 適用対象外:
@@ -160,7 +158,7 @@ VitestのBrowser Modeを使う。
 | `light`            | テーマ値やプロジェクト名と対応する                  | `light`テーマ                                                   |
 | `dark`             | テーマ値やプロジェクト名と対応する                  | `dark`テーマ                                                    |
 | `dialog`           | ARIA `role`、コンポーネント名、ロケーターと対応する | `dialog` roleまたは`Dialog`コンポーネント                       |
-| `hook`             | Reactの`hook`、Codexの`hook`、設定名と対応する      | 対象製品の正式な`hook`概念                                      |
+| `hook`             | Reactの`hook`、設定名と対応する                     | 対象製品の正式な`hook`概念                                      |
 | `play`             | Storybookの`play`関数を指す                         | story上で実行する操作テスト                                     |
 | `query`            | TanStack Queryの概念や識別子を指す                  | 取得処理としての`query`                                         |
 | `mutation`         | TanStack Queryの概念や識別子を指す                  | 更新処理としての`mutation`                                      |
@@ -466,18 +464,15 @@ VitestではAgent factoryへ直接注入し、全構成E2Eではテスト専用�
 
 ### Codexと文書運用
 
-| 避ける文章                                  | 推奨文章                                           |
-| ------------------------------------------- | -------------------------------------------------- |
-| implementationとreviewを別contextへ分離する | 実装とレビューを別のコンテキストへ分離する         |
-| deterministic gateを通す                    | 決定的な必須検査を通す                             |
-| fresh read-only reviewersを起動する         | 新しい読み取り専用セッションでレビュアーを起動する |
-| findingをseverity順にまとめる               | 指摘を重大度順にまとめる                           |
-| P2だけwaiver可能                            | P2だけ例外承認できる                               |
-| compensating testまたはmonitoringを要求する | 代替テストまたは監視を要求する                     |
-| current diffをreviewする                    | 現在の差分をレビューする                           |
-| review evidenceをplanへ残す                 | レビュー実行証跡を実行計画へ残す                   |
-| sole-writer policyを採用する                | 書き込み担当を一つに限定する規則を採用する         |
-| command policyをrulesへ置く                 | コマンド実行規則を`.codex/rules/`へ置く            |
+| 避ける文章                                  | 推奨文章                                   |
+| ------------------------------------------- | ------------------------------------------ |
+| implementationとreviewを別contextへ分離する | 実装とレビューを別のコンテキストへ分離する |
+| deterministic gateを通す                    | 決定的な必須検査を通す                     |
+| findingをseverity順にまとめる               | 指摘を重大度順にまとめる                   |
+| P2だけwaiver可能                            | P2だけ例外承認できる                       |
+| compensating testまたはmonitoringを要求する | 代替テストまたは監視を要求する             |
+| current diffをreviewする                    | 現在の差分をレビューする                   |
+| review evidenceをplanへ残す                 | レビュー実行証跡を実行計画へ残す           |
 
 ### コード構成
 

@@ -34,7 +34,7 @@ export default defineConfig({
     {
       files: ["src/modules/organizations/deletion-access.test.ts"],
       rules: {
-        // thrown AppErrorのpublic fieldと秘密値非漏洩を同じcatchで検証する。
+        // thrown HttpErrorの公開fieldと秘密値非漏洩を同じcatchで検証する。
         "jest/no-conditional-expect": "off",
         "vitest/no-conditional-expect": "off",
       },

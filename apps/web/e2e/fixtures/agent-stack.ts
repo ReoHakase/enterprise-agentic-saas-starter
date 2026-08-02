@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import {
   agentE2EWorkerEntrypoint,
   createAgentE2EEnvironment,
+  createAgentE2ETelemetryVariables,
   removeAgentE2EStackArtifacts,
 } from "./agent-e2e-environment"
 
@@ -102,6 +103,10 @@ const main = async () => {
   const scriptedAgent = process.env.AGENT_E2E_SCRIPTED === "1"
   const environment = createAgentE2EEnvironment(
     process.env.AGENT_E2E_RUN_ID ?? ""
+  )
+  const telemetryVariables = createAgentE2ETelemetryVariables(
+    environment,
+    process.env.AGENT_E2E_OBSERVABILITY === "1"
   )
   const openRouterApiKey = scriptedAgent
     ? null
@@ -206,6 +211,7 @@ const main = async () => {
       images: { binding: "IMAGES" },
       observability: { enabled: false },
       vars: {
+        ...telemetryVariables,
         NODE_ENV: "development",
         PORT: String(environment.apiPort),
         APP_NAME: "Enterprise Agentic SaaS Agent E2E",
@@ -225,7 +231,7 @@ const main = async () => {
         MAILPIT_URL: "",
         GITHUB_CLIENT_ID: "unused-in-emulator",
         GITHUB_CLIENT_SECRET: "unused-in-emulator",
-        GITHUB_OAUTH_EMULATOR_URL: environment.githubOrigin,
+        GITHUB_OAUTH_EMULATOR_URL: `${environment.githubOrigin}/emulate/github`,
         GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
         GITHUB_OAUTH_EMULATOR_CLIENT_SECRET:
           "enterprise-agentic-saas-local-secret",
@@ -251,6 +257,7 @@ const main = async () => {
         : { secrets: { required: ["OPENROUTER_API_KEY"] } }),
       observability: { enabled: false },
       vars: {
+        ...telemetryVariables,
         NODE_ENV: "development",
         AGENT_RUNS_ENABLED: "1",
         AGENT_VISION_ENABLED: "1",

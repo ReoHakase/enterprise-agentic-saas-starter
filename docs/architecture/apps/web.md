@@ -440,9 +440,9 @@ Issuesを先行利用者とし、Organizations、Members、Invitations、Session
 
 表のURL keyはgeneric factoryから作り、logical keyを変えず、prefixなしを既定とします。同じ画面に複数の
 表を置く場合だけcallerが`org_q`のようなprefixを指定します。Issuesは共有済みURLとの互換のため
-`statuses`、`assignees`、`labels`を単数URL keyへ明示的にaliasします。旧`priority`は新しいrange keyが
-両方ない場合だけ同値の下限・上限へ変換します。表が所有しない`agentThread`はprefix対象にせず、
-filter、sort、priority範囲の変更時は旧`priority`を削除し、表が所有しない`agentThread`などは維持します。
+`statuses`、`assignees`、`labels`を単数URL keyへ明示的にaliasします。優先度は`priorityFrom`と
+`priorityTo`だけ、期日は`dueFromOffset`と`dueToOffset`だけを読みます。廃止済みの単一値キーは移行せず、
+次の正規URL更新で削除します。表が所有しない`agentThread`はprefix対象にせず維持します。
 assigneeは50件、labelは20件を上限とし、重複除去と決定的sortの後に切り詰めてAPI modelと一致させます。
 文字検索はreplace history、filter、sort、page、
 page sizeの離散操作はpush historyを使います。
@@ -479,8 +479,7 @@ triggerのaccessible descriptionから同じ値を通知します。期日の表
 消去します。popoverはviewport margin内の最大幅・高さと内部scrollを持ち、close時にdraftを1回だけ適用して
 triggerへfocusを戻します。
 APIへは`dueFrom`当日開始と`dueTo`翌日開始の各local boundaryで別々に計算したoffsetを送り、DSTをまたぐ範囲や
-現在と異なる季節を選んでも表示日界とUTC instantを一致させます。旧`dueOffset`は両境界のfallbackとして読み、
-次のcanonical URL更新で2つのoffsetへ移行して削除します。Calendarは日付順の範囲を返し、外部URLの逆転範囲は
+現在と異なる季節を選んでも表示日界とUTC instantを一致させます。Calendarは日付順の範囲を返し、外部URLの逆転範囲は
 offsetと日付の対応を復元できないため、日付・offsetを消去して空範囲へ戻します。
 
 query key変更中はTanStack Queryの`keepPreviousData`で直前の行と件数を維持し、table region右上の

@@ -13,7 +13,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken } from "../crypto"
 import {
@@ -23,7 +23,6 @@ import {
 } from "./auth-repository"
 import {
   CONNECTION_TICKET_TTL_MS,
-  preserveAgentError,
   toThreadDto,
   type AgentThreadDto,
   type AgentTransaction,
@@ -33,31 +32,26 @@ import {
 export const listAgentThreadsForSession = async (
   db: Db,
   input: { sessionId: string; userId: string; now?: Date }
-): Promise<AgentThreadDto[]> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const current = await requireLiveSession(tx, {
-        ...input,
-        now: input.now ?? new Date(),
-      })
-      await requireActiveMembership(tx, current)
-      const rows = await tx
-        .select()
-        .from(agentThreads)
-        .where(
-          and(
-            eq(agentThreads.organizationId, current.activeOrganizationId),
-            eq(agentThreads.ownerUserId, input.userId),
-            eq(agentThreads.status, "active")
-          )
-        )
-        .orderBy(desc(agentThreads.createdAt), desc(agentThreads.id))
-      return rows.map(toThreadDto)
+): Promise<AgentThreadDto[]> =>
+  await db.transaction(async (tx) => {
+    const current = await requireLiveSession(tx, {
+      ...input,
+      now: input.now ?? new Date(),
     })
-  } catch (cause) {
-    return preserveAgentError(cause, "listAgentThreadsForSession")
-  }
-}
+    await requireActiveMembership(tx, current)
+    const rows = await tx
+      .select()
+      .from(agentThreads)
+      .where(
+        and(
+          eq(agentThreads.organizationId, current.activeOrganizationId),
+          eq(agentThreads.ownerUserId, input.userId),
+          eq(agentThreads.status, "active")
+        )
+      )
+      .orderBy(desc(agentThreads.createdAt), desc(agentThreads.id))
+    return rows.map(toThreadDto)
+  })
 
 export const createAgentThreadForSession = async (
   db: Db,
@@ -68,175 +62,163 @@ export const createAgentThreadForSession = async (
     permissionMode?: AgentThreadPermissionMode
     now?: Date
   }
-): Promise<AgentThreadDto> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const context = await ensureAgentSessionContextInTransaction(tx, {
-        sessionId: input.sessionId,
-        userId: input.userId,
-        now,
-      })
-      const rows = await tx
-        .insert(agentThreads)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: current.activeOrganizationId,
-          ownerUserId: input.userId,
-          createdAt: now,
-        })
-        .returning()
-      const thread = rows[0]
-      if (!thread) throw new Error("Agent thread insert returned no row")
-      await tx.insert(agentThreadPermissions).values({
+): Promise<AgentThreadDto> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireLiveSession(tx, { ...input, now })
+    await requireActiveMembership(tx, current)
+    const context = await ensureAgentSessionContextInTransaction(tx, {
+      sessionId: input.sessionId,
+      userId: input.userId,
+      now,
+    })
+    const rows = await tx
+      .insert(agentThreads)
+      .values({
         id: crypto.randomUUID(),
         organizationId: current.activeOrganizationId,
-        threadId: thread.id,
-        sessionId: input.sessionId,
-        userId: input.userId,
-        contextEpoch: context.contextEpoch,
-        mode: input.permissionMode ?? "ask_always",
+        ownerUserId: input.userId,
         createdAt: now,
-        updatedAt: now,
       })
-      return toThreadDto(thread)
+      .returning()
+    const thread = rows[0]
+    if (!thread) throw new Error("Agent thread insert returned no row")
+    await tx.insert(agentThreadPermissions).values({
+      id: crypto.randomUUID(),
+      organizationId: current.activeOrganizationId,
+      threadId: thread.id,
+      sessionId: input.sessionId,
+      userId: input.userId,
+      contextEpoch: context.contextEpoch,
+      mode: input.permissionMode ?? "ask_always",
+      createdAt: now,
+      updatedAt: now,
     })
-  } catch (cause) {
-    return preserveAgentError(cause, "createAgentThreadForSession")
-  }
-}
+    return toThreadDto(thread)
+  })
 
 export const archiveAgentThreadForSession = async (
   db: Db,
   input: { sessionId: string; userId: string; threadId: string; now?: Date }
-): Promise<AgentThreadDto> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      const thread = await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-        requireActive: false,
-      })
-      if (thread.status === "archived") return toThreadDto(thread)
-
-      const rows = await tx
-        .update(agentThreads)
-        .set({ archivedAt: now, status: "archived" })
-        .where(
-          and(
-            eq(agentThreads.id, thread.id),
-            eq(agentThreads.organizationId, thread.organizationId),
-            eq(agentThreads.ownerUserId, input.userId),
-            eq(agentThreads.status, "active")
-          )
-        )
-        .returning()
-      const archived = rows[0]
-      if (!archived) {
-        throw publicErrors.notFound("Agent thread not found", {
-          resource: "agent_thread",
-        })
-      }
-      await tx
-        .update(agentConnectionTickets)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentConnectionTickets.organizationId, thread.organizationId),
-            eq(agentConnectionTickets.threadId, thread.id),
-            isNull(agentConnectionTickets.consumedAt),
-            isNull(agentConnectionTickets.revokedAt)
-          )
-        )
-      await tx
-        .update(agentGrants)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentGrants.organizationId, thread.organizationId),
-            eq(agentGrants.threadId, thread.id),
-            isNull(agentGrants.revokedAt)
-          )
-        )
-      await tx
-        .update(agentRuns)
-        .set({ status: "canceled", finishedAt: now })
-        .where(
-          and(
-            eq(agentRuns.organizationId, thread.organizationId),
-            eq(agentRuns.threadId, thread.id),
-            inArray(agentRuns.status, ["running", "waiting_approval"])
-          )
-        )
-      await tx
-        .update(agentResumeTickets)
-        .set({ revokedAt: now })
-        .where(
-          and(
-            eq(agentResumeTickets.organizationId, thread.organizationId),
-            eq(agentResumeTickets.threadId, thread.id),
-            isNull(agentResumeTickets.consumedAt),
-            isNull(agentResumeTickets.revokedAt)
-          )
-        )
-      await tx
-        .update(agentActions)
-        .set({ status: "canceled", completedAt: now, updatedAt: now })
-        .where(
-          and(
-            eq(agentActions.organizationId, thread.organizationId),
-            eq(agentActions.threadId, thread.id),
-            inArray(agentActions.status, ["pending", "approved"])
-          )
-        )
-      await tx
-        .update(agentApprovalPolicies)
-        .set({ revokedAt: now, updatedAt: now })
-        .where(
-          and(
-            eq(agentApprovalPolicies.organizationId, thread.organizationId),
-            eq(agentApprovalPolicies.threadId, thread.id),
-            isNull(agentApprovalPolicies.revokedAt)
-          )
-        )
-      await tx
-        .delete(agentThreadPermissions)
-        .where(
-          and(
-            eq(agentThreadPermissions.organizationId, thread.organizationId),
-            eq(agentThreadPermissions.threadId, thread.id)
-          )
-        )
-      const threadActionIds = tx
-        .select({ id: agentActions.id })
-        .from(agentActions)
-        .where(
-          and(
-            eq(agentActions.organizationId, thread.organizationId),
-            eq(agentActions.threadId, thread.id)
-          )
-        )
-      await tx
-        .update(agentActionAssets)
-        .set({ releasedAt: now })
-        .where(
-          and(
-            inArray(agentActionAssets.actionId, threadActionIds),
-            isNull(agentActionAssets.releasedAt)
-          )
-        )
-      return toThreadDto(archived)
+): Promise<AgentThreadDto> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireLiveSession(tx, { ...input, now })
+    await requireActiveMembership(tx, current)
+    const thread = await requireOwnedThread(tx, {
+      threadId: input.threadId,
+      userId: input.userId,
+      activeOrganizationId: current.activeOrganizationId,
+      requireActive: false,
     })
-  } catch (cause) {
-    return preserveAgentError(cause, "archiveAgentThreadForSession")
-  }
-}
+    if (thread.status === "archived") return toThreadDto(thread)
+
+    const rows = await tx
+      .update(agentThreads)
+      .set({ archivedAt: now, status: "archived" })
+      .where(
+        and(
+          eq(agentThreads.id, thread.id),
+          eq(agentThreads.organizationId, thread.organizationId),
+          eq(agentThreads.ownerUserId, input.userId),
+          eq(agentThreads.status, "active")
+        )
+      )
+      .returning()
+    const archived = rows[0]
+    if (!archived) {
+      throw new HttpError({ code: "not_found" })
+    }
+    await tx
+      .update(agentConnectionTickets)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(agentConnectionTickets.organizationId, thread.organizationId),
+          eq(agentConnectionTickets.threadId, thread.id),
+          isNull(agentConnectionTickets.consumedAt),
+          isNull(agentConnectionTickets.revokedAt)
+        )
+      )
+    await tx
+      .update(agentGrants)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(agentGrants.organizationId, thread.organizationId),
+          eq(agentGrants.threadId, thread.id),
+          isNull(agentGrants.revokedAt)
+        )
+      )
+    await tx
+      .update(agentRuns)
+      .set({ status: "canceled", finishedAt: now })
+      .where(
+        and(
+          eq(agentRuns.organizationId, thread.organizationId),
+          eq(agentRuns.threadId, thread.id),
+          inArray(agentRuns.status, ["running", "waiting_approval"])
+        )
+      )
+    await tx
+      .update(agentResumeTickets)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(agentResumeTickets.organizationId, thread.organizationId),
+          eq(agentResumeTickets.threadId, thread.id),
+          isNull(agentResumeTickets.consumedAt),
+          isNull(agentResumeTickets.revokedAt)
+        )
+      )
+    await tx
+      .update(agentActions)
+      .set({ status: "canceled", completedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(agentActions.organizationId, thread.organizationId),
+          eq(agentActions.threadId, thread.id),
+          inArray(agentActions.status, ["pending", "approved"])
+        )
+      )
+    await tx
+      .update(agentApprovalPolicies)
+      .set({ revokedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(agentApprovalPolicies.organizationId, thread.organizationId),
+          eq(agentApprovalPolicies.threadId, thread.id),
+          isNull(agentApprovalPolicies.revokedAt)
+        )
+      )
+    await tx
+      .delete(agentThreadPermissions)
+      .where(
+        and(
+          eq(agentThreadPermissions.organizationId, thread.organizationId),
+          eq(agentThreadPermissions.threadId, thread.id)
+        )
+      )
+    const threadActionIds = tx
+      .select({ id: agentActions.id })
+      .from(agentActions)
+      .where(
+        and(
+          eq(agentActions.organizationId, thread.organizationId),
+          eq(agentActions.threadId, thread.id)
+        )
+      )
+    await tx
+      .update(agentActionAssets)
+      .set({ releasedAt: now })
+      .where(
+        and(
+          inArray(agentActionAssets.actionId, threadActionIds),
+          isNull(agentActionAssets.releasedAt)
+        )
+      )
+    return toThreadDto(archived)
+  })
 
 export const issueConnectionTicketInTransaction = async (
   tx: AgentTransaction,
@@ -276,26 +258,22 @@ export const issueAgentConnectionTicket = async (
   input: { sessionId: string; userId: string; threadId: string; now?: Date }
 ) => {
   const credential = await createAgentToken()
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const current = await requireLiveSession(tx, { ...input, now })
-      await requireActiveMembership(tx, current)
-      await requireOwnedThread(tx, {
-        threadId: input.threadId,
-        userId: input.userId,
-        activeOrganizationId: current.activeOrganizationId,
-      })
-      return issueConnectionTicketInTransaction(tx, {
-        credential,
-        current,
-        now,
-        sessionId: input.sessionId,
-        threadId: input.threadId,
-        userId: input.userId,
-      })
+  return await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const current = await requireLiveSession(tx, { ...input, now })
+    await requireActiveMembership(tx, current)
+    await requireOwnedThread(tx, {
+      threadId: input.threadId,
+      userId: input.userId,
+      activeOrganizationId: current.activeOrganizationId,
     })
-  } catch (cause) {
-    return preserveAgentError(cause, "issueAgentConnectionTicket")
-  }
+    return issueConnectionTicketInTransaction(tx, {
+      credential,
+      current,
+      now,
+      sessionId: input.sessionId,
+      threadId: input.threadId,
+      userId: input.userId,
+    })
+  })
 }

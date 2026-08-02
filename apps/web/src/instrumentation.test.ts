@@ -17,6 +17,7 @@ const telemetry = vi.hoisted(() => {
       return { start }
     }),
     start,
+    reportObservedError: vi.fn<(...args: unknown[]) => void>(),
     traceExport,
     traceExporter: vi.fn<(options: unknown) => object>(
       function traceExporter() {
@@ -41,6 +42,9 @@ vi.mock("@opentelemetry/sdk-logs", () => ({
 }))
 vi.mock("@opentelemetry/sdk-node", () => ({
   NodeSDK: telemetry.sdk,
+}))
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError: telemetry.reportObservedError,
 }))
 
 beforeEach(() => {
@@ -93,5 +97,32 @@ describe("Next.js server OpenTelemetry registration", () => {
 
     expect(registerServerObservability()).toBe(false)
     expect(telemetry.sdk).not.toHaveBeenCalled()
+  })
+
+  it("forwards the original request error with bounded Next.js context", async () => {
+    const { onRequestError } = await import("./instrumentation")
+    const error = new Error("server render failed")
+
+    await onRequestError(
+      error,
+      {
+        headers: { "x-request-id": "request-1" },
+        method: "POST",
+        path: "/organization/acme/settings?private=not-forwarded",
+      },
+      {
+        revalidateReason: undefined,
+        routePath: "/organization/[organizationSlug]/settings",
+        routerKind: "App Router",
+        routeType: "render",
+      }
+    )
+
+    expect(telemetry.reportObservedError).toHaveBeenCalledWith(error, {
+      httpMethod: "POST",
+      httpRoute: "/organization/[organizationSlug]/settings",
+      operation: "next.request",
+      requestId: "request-1",
+    })
   })
 })

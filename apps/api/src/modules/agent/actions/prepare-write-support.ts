@@ -8,7 +8,7 @@ import {
 import { and, eq } from "drizzle-orm"
 
 import type { AgentIssueActionPreview } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import {
   validateGrantInTransaction,
@@ -37,10 +37,7 @@ export const validatePrepareGrant = async (
     context.runScope !== "chat" ||
     !context.runStatus
   ) {
-    throw publicErrors.conflict("Agent run cannot prepare another action", {
-      reason: "invalid_run_scope",
-      resource: "agent_run",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   return context
 }
@@ -67,10 +64,7 @@ export const persistPreparedAction = async (
     )
   )
   if (expiresAt.getTime() <= input.now.getTime()) {
-    throw publicErrors.conflict("Agent attachment expired", {
-      reason: "asset_expired",
-      resource: "agent_asset",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   const policy = await findApplicablePolicy(tx, input.context, input.now)
   const status = policy ? "approved" : "pending"

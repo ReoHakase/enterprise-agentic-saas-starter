@@ -5,29 +5,14 @@ import type {
   TextFilePreviewDto,
 } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console"
-
 export type { FileOwnerType }
 
-type EdenResult<T> = {
-  data: T | null | undefined
-  error: unknown
-  status: number
-}
+type EdenResult<T> =
+  | { data: T; error: null; status: number }
+  | { data: null; error: object; status: number }
 
 const unwrap = <T>(result: EdenResult<T>): T => {
-  if (result.error) {
-    throw toConsoleApiError(result.error, result.status)
-  }
-
-  if (result.data === null || result.data === undefined) {
-    throw new ConsoleApiError({
-      code: "invalid_response",
-      message: "API response did not include data",
-      status: result.status,
-    })
-  }
-
+  if (result.error) throw result.error
   return result.data
 }
 
@@ -64,7 +49,7 @@ export const deleteFile = async (
       fileId: input.fileId,
     })
     .delete()
-  if (result.error) throw toConsoleApiError(result.error, result.status)
+  if (result.error) throw result.error
 }
 
 export const getTextFilePreview = async (

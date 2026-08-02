@@ -1,24 +1,43 @@
+import {
+  agentUiMessagePartSchema,
+  canonicalizePublicHttpUrl,
+  type AgentUiMessagePart,
+} from "@enterprise-agentic-saas/agent-contracts"
 import { MessageList } from "@mastra/core/agent/message-list"
 import type { Mastra } from "@mastra/core/mastra"
 import { Memory } from "@mastra/memory"
+import * as v from "valibot"
 
+import type { AgentFailureCode } from "../adapters/telemetry/capture"
+import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import { toLiveConnectionGrant } from "../core/policy/grant"
-import {
-  hasPendingMemoryCommits,
-  reconcilePendingMemoryCommitsForThreads,
-} from "../workflows/memory-commit"
 import type { AgentControlPlanePort } from "./ports"
 import { readBoundedPrivateJson } from "./request"
 
-type MemoryRouteEnvironment = { AGENT_INTERNAL_API: unknown }
+type MemoryRouteEnvironment = {
+  AGENT_INTERNAL_API: unknown
+  AGENT_EVAL_ALLOWED_TOOLS?: string
+  DEV_SESSION_ID?: string
+  DEV_WORKTREE_ID?: string
+  NODE_ENV?: string
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string
+}
 type MemoryRouteDependencies = {
+  captureFailure?: (code: AgentFailureCode) => void
   createControlPlane(
     binding: unknown
-  ): Pick<
-    AgentControlPlanePort,
-    "consumeConnectionTicket" | "settleMemoryCommit"
-  >
+  ): Pick<AgentControlPlanePort, "consumeConnectionTicket">
   mastra: Mastra
+}
+
+const reportMemoryFailure = (
+  environment: MemoryRouteEnvironment,
+  dependencies: MemoryRouteDependencies,
+  operation: "memory-history" | "memory-threads",
+  cause: unknown
+) => {
+  reportDevelopmentCauseChain(environment, operation, cause)
+  dependencies.captureFailure?.("memory_failed")
 }
 
 const fixedResponse = (status: number, body: string): Response =>
@@ -33,33 +52,6 @@ const fixedResponse = (status: number, body: string): Response =>
 const invalidRequest = (): Response =>
   fixedResponse(400, "Invalid agent request")
 const unavailable = (): Response => fixedResponse(503, "Agent unavailable")
-const MEMORY_RECONCILIATION_WAIT_MS = 1_000
-const waitForMemoryReconciliation = async (
-  mastra: Mastra,
-  api: Pick<AgentControlPlanePort, "settleMemoryCommit">,
-  threadIds: readonly string[]
-) => {
-  let deadline: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([
-      reconcilePendingMemoryCommitsForThreads(mastra, api, threadIds),
-      new Promise<void>((resolve) => {
-        deadline = setTimeout(resolve, MEMORY_RECONCILIATION_WAIT_MS)
-      }),
-    ])
-  } finally {
-    if (deadline) clearTimeout(deadline)
-  }
-}
-const requireSettledMemory = async (
-  mastra: Mastra,
-  threadIds: readonly string[]
-) => {
-  if (await hasPendingMemoryCommits(mastra, threadIds)) {
-    throw new Error("Agent memory is still committing")
-  }
-}
-
 type MemoryThreadsInput = {
   registryThreadIds: string[]
   ticket: string
@@ -147,15 +139,9 @@ const projectNativeApproval = (value: unknown) => {
   const approval = Object.fromEntries(Object.entries(value))
   if (
     typeof approval.id !== "string" ||
-    !/^[A-Za-z0-9_-]{1,128}$/u.test(approval.id) ||
-    (approval.approved !== undefined &&
-      typeof approval.approved !== "boolean") ||
-    (approval.reason !== undefined &&
-      (typeof approval.reason !== "string" ||
-        approval.reason.length > 500 ||
-        /(?:https?:\/\/|authorization|bearer|password|secret|token|api[_ -]?key)/iu.test(
-          approval.reason
-        )))
+    approval.id.length < 1 ||
+    approval.id.length > 512 ||
+    (approval.approved !== undefined && typeof approval.approved !== "boolean")
   ) {
     return
   }
@@ -164,38 +150,53 @@ const projectNativeApproval = (value: unknown) => {
     ...(typeof approval.approved === "boolean"
       ? { approved: approval.approved }
       : {}),
-    ...(typeof approval.reason === "string" ? { reason: approval.reason } : {}),
   }
+}
+
+const validatedHistoryPart = (
+  candidate: unknown
+): AgentUiMessagePart | undefined => {
+  const parsed = v.safeParse(agentUiMessagePartSchema, candidate)
+  return parsed.success ? parsed.output : undefined
 }
 
 const projectNativeHistoryPart = (
   value: unknown
-): Record<string, unknown> | undefined => {
+): AgentUiMessagePart | undefined => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined
   }
   const part = Object.fromEntries(Object.entries(value))
-  if (part.type === "reasoning") return undefined
+  if (part.type === "reasoning" && typeof part.text === "string") {
+    return validatedHistoryPart({
+      type: "reasoning",
+      text: part.text,
+      state: "done",
+    })
+  }
   if (part.type === "text" && typeof part.text === "string") {
-    return { type: "text", text: part.text }
+    return validatedHistoryPart({ type: "text", text: part.text })
   }
   if (
     (part.type === "data-agent-assets" ||
-      part.type === "data-context-reference" ||
-      part.type === "data-activity") &&
+      part.type === "data-context-reference") &&
     "data" in part
   ) {
-    return { type: part.type, data: part.data }
+    return validatedHistoryPart({ type: part.type, data: part.data })
   }
   if (part.type === "source-url") {
-    return {
+    const url = canonicalizePublicHttpUrl(part.url)
+    if (!url) return undefined
+    return validatedHistoryPart({
       type: "source-url",
       sourceId: part.sourceId,
-      url: part.url,
+      url,
       ...(typeof part.title === "string" ? { title: part.title } : {}),
-    }
+    })
   }
-  if (part.type === "step-start") return { type: "step-start" }
+  if (part.type === "step-start") {
+    return validatedHistoryPart({ type: "step-start" })
+  }
   const toolType =
     part.type === "dynamic-tool" && typeof part.toolName === "string"
       ? `tool-${part.toolName}`
@@ -204,17 +205,21 @@ const projectNativeHistoryPart = (
         : undefined
   if (!toolType) return undefined
   const safeApproval = projectNativeApproval(part.approval)
-  return {
+  return validatedHistoryPart({
     type: toolType,
     toolCallId: part.toolCallId,
     state: part.state,
     ...("input" in part ? { input: part.input } : {}),
-    ...("output" in part ? { output: part.output } : {}),
+    ...("output" in part
+      ? {
+          output: toolType === "tool-skill" ? { activated: true } : part.output,
+        }
+      : {}),
     ...(safeApproval ? { approval: safeApproval } : {}),
     ...(typeof part.errorText === "string"
-      ? { errorText: part.errorText }
+      ? { errorText: "Agent tool execution failed." }
       : {}),
-  }
+  })
 }
 
 export const handleMemoryHistory = async (
@@ -262,13 +267,9 @@ export const handleMemoryHistory = async (
 
   const api = dependencies.createControlPlane(environment.AGENT_INTERNAL_API)
   try {
-    const memoryThreadIds = [threadId]
-    await waitForMemoryReconciliation(dependencies.mastra, api, memoryThreadIds)
-    await requireSettledMemory(dependencies.mastra, memoryThreadIds)
     const connection = await api.consumeConnectionTicket({ ticket, threadId })
     const liveGrant = toLiveConnectionGrant(connection, threadId)
     if (!liveGrant) return unavailable()
-    await requireSettledMemory(dependencies.mastra, memoryThreadIds)
     const productAgent = dependencies.mastra.getAgentById("product-agent")
     const memory = await productAgent.getMemory()
     if (!(memory instanceof Memory)) return unavailable()
@@ -304,6 +305,7 @@ export const handleMemoryHistory = async (
           .map((part) => projectNativeHistoryPart(part))
           .filter((part) => part !== undefined),
       }))
+      .filter(({ parts }) => parts.length > 0)
     return Response.json(
       {
         hasMore: recalled.hasMore,
@@ -314,7 +316,8 @@ export const handleMemoryHistory = async (
       },
       { headers: { "cache-control": "private, no-store" } }
     )
-  } catch {
+  } catch (cause) {
+    reportMemoryFailure(environment, dependencies, "memory-history", cause)
     return unavailable()
   }
 }
@@ -330,14 +333,8 @@ export const handleMemoryThreads = async (
 
   const api = dependencies.createControlPlane(environment.AGENT_INTERNAL_API)
   try {
-    const memoryThreadIds = registryThreadIds.includes(threadId)
-      ? registryThreadIds
-      : [...registryThreadIds, threadId]
-    await waitForMemoryReconciliation(dependencies.mastra, api, memoryThreadIds)
-    await requireSettledMemory(dependencies.mastra, memoryThreadIds)
     const connection = await api.consumeConnectionTicket({ ticket, threadId })
     if (!toLiveConnectionGrant(connection, threadId)) return unavailable()
-    await requireSettledMemory(dependencies.mastra, memoryThreadIds)
     const memory = await dependencies.mastra
       .getAgentById("product-agent")
       .getMemory()
@@ -352,7 +349,8 @@ export const handleMemoryThreads = async (
           headers: { "cache-control": "private, no-store" },
         })
       : unavailable()
-  } catch {
+  } catch (cause) {
+    reportMemoryFailure(environment, dependencies, "memory-threads", cause)
     return unavailable()
   }
 }

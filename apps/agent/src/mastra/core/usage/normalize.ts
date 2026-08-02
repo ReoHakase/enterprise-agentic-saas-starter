@@ -1,5 +1,7 @@
 import type { AgentUsageRecordInput } from "@enterprise-agentic-saas/agent-contracts"
 
+import { AGENT_MODEL_PROFILE } from "../model-profile"
+
 type UsageLike = {
   inputTokens?: number
   inputTokenDetails?: {
@@ -105,8 +107,8 @@ export const normalizeAgentUsage = (input: {
     stepProviderMetadata: input.stepProviderMetadata ?? [],
   })
   return {
-    provider: "openrouter",
-    model: "qwen/qwen3.6-flash",
+    provider: AGENT_MODEL_PROFILE.provider,
+    model: AGENT_MODEL_PROFILE.model,
     inputTokenCount,
     inputNoCacheTokenCount,
     cacheReadTokenCount,

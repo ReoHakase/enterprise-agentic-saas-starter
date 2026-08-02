@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn } from "storybook/test"
+import { expect, fn, userEvent, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -8,6 +8,7 @@ import {
   fictionalAgentIdentity,
   fictionalAgentMessages,
   fictionalPendingAction,
+  fictionalPrimaryAgentThread,
 } from "../../test-support/fixtures"
 import { AgentMessage } from "./agent-message"
 
@@ -21,6 +22,7 @@ const meta = preview.meta({
     onPendingChange: fn(),
     organizationId: fictionalAgentIdentity.organizationId,
     organizationSlug: fictionalAgentIdentity.organizationSlug,
+    threadId: fictionalPrimaryAgentThread.id,
   },
 })
 
@@ -40,6 +42,17 @@ export const UserMessage = meta.story({
 
 export const RichAssistantMessage = meta.story({
   tags: ["theme-sensitive"],
+  beforeEach() {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard")
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: fn().mockResolvedValue(undefined) },
+    })
+    return () => {
+      if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor)
+      else Reflect.deleteProperty(navigator, "clipboard")
+    }
+  },
   play: async ({ canvas, step }) => {
     await step(
       "Render Markdown, code, table, CJK, math, and Mermaid",
@@ -49,6 +62,12 @@ export const RichAssistantMessage = meta.story({
         ).toBeVisible()
         await expect(canvas.getByRole("table")).toBeVisible()
         await expect(canvas.getByText(/日本語と English/)).toBeVisible()
+        await userEvent.click(
+          canvas.getByRole("button", { name: "Copy response" })
+        )
+        await expect(
+          canvas.getByRole("button", { name: "Response copied" })
+        ).toBeVisible()
       }
     )
   },
@@ -57,6 +76,11 @@ export const RichAssistantMessage = meta.story({
 export const Source = meta.story({
   args: { message: fictionalAgentMessages.reasoningAndSources },
   play: async ({ canvas, step }) => {
+    await step("Read the collapsed reasoning summary", async () => {
+      await expect(
+        canvas.getByRole("button", { name: /Reasoning complete/u })
+      ).toHaveTextContent("Check the active organization")
+    })
     await step("Expose the source", async () => {
       await expect(
         canvas.getByRole("link", {
@@ -75,12 +99,15 @@ export const ToolResult = meta.story({
   play: async ({ canvas, step }) => {
     await step("Inspect a completed tool call", async () => {
       await expect(canvas.getByRole("status")).toHaveTextContent(
-        "get issue · completed"
+        "View Issue #184Done"
       )
       await expect(canvas.queryByText(/"number": 184/u)).not.toBeInTheDocument()
       await expect(
         canvas.getByRole("link", { name: "#184 Review tenant access" })
-      ).toHaveAttribute("href", "/organization/acme-cloud/issues/184")
+      ).toHaveAttribute(
+        "href",
+        `/organization/acme-cloud/issues/184?agentThread=${fictionalPrimaryAgentThread.id}`
+      )
     })
   },
 })
@@ -102,7 +129,7 @@ export const ServerToolRunning = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "web search · running"
+      "Search the webRunning"
     )
   },
 })
@@ -125,7 +152,7 @@ export const FailedTool = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "get issue · failed"
+      "View IssueFailed"
     )
   },
 })
@@ -152,7 +179,7 @@ export const ApprovalDeclined = meta.story({
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("status")).toHaveTextContent(
-      "update issue · denied"
+      "Update IssueDenied"
     )
   },
 })
@@ -205,11 +232,18 @@ export const ApprovalRequired = meta.story({
   },
   play: async ({ canvas, step }) => {
     await step("Render the canonical approval preview", async () => {
+      const approval = await canvas.findByRole("region", {
+        name: "Issue change approval",
+      })
       await expect(
-        await canvas.findByText("Approve Issue change?")
+        await within(approval).findByText("Approve Issue change?")
       ).toBeVisible()
-      await expect(canvas.getByRole("button", { name: "Yes" })).toBeEnabled()
-      await expect(canvas.getByText("tenant-policy.png")).toBeVisible()
+      await expect(
+        within(approval).getByRole("button", { name: "Yes" })
+      ).toBeEnabled()
+      await expect(
+        within(approval).getByText("tenant-policy.png")
+      ).toBeVisible()
     })
   },
 })

@@ -2,7 +2,7 @@
 title: apps/emulateの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - apps/emulate/**
 ---
@@ -11,76 +11,41 @@ applies_to:
 
 ## 責務
 
-GitHub、Google、Slack、Apple、Microsoft、Okta、Stripeを再現するlocal/E2E test
-infrastructureです。production application codeではありません。
+GitHub OAuthを再現するlocal/E2E test infrastructureです。production application codeでは
+ありません。Next.js applicationとして実行し、`@emulators/adapter-next`の標準Route Handlerを
+`/emulate/github/**`へ公開します。
 
-`vercel-labs/emulate`のプログラム用APIに対するrepo所有のlauncherとして、次を所有します。
-
-- 明示的なサービス選択と許可一覧
-- サービスごとの既定portとreadiness endpoint
-- loopbackに限定した公開用URL
-- 1 processにつき1サービスの起動とgraceful shutdown
-- GitHub OAuth用のstrict client、secret、callback、fixture user
-
-Google、Slack、Apple、Microsoft、Okta、Stripeの製品接続や独自fixtureは所有しません。
-これらは固定した`emulate` versionの既定fixtureを使用します。
-
-## 目標構造
+## 構造
 
 ```text
-apps/emulate/src/
-  index.ts
-  adapters/
-  config/
-  fixtures/
-  protocol/
-  server/
-  services/
-  state/
-  test-support/
+apps/emulate/
+  app/emulate/[...path]/route.ts
+  next.config.mjs
+  package.json
 ```
 
-## 依存関係
+Route Handlerは`nodejs` runtimeを使い、`@emulators/github`だけを登録します。fixtureは並列E1で
+分離して使える`oauth-alice`と`oauth-bob`の2ユーザーです。
 
-許可:
+## 所有しないもの
 
-```text
-@enterprise-agentic-saas/auth/github-oauth
-emulate
-valibot
-```
+- GitHub以外のservice registry
+- 独自HTTP listener、readiness poll、graceful shutdown
+- 独自config validatorとlauncher
+- production credentialとproduction product接続
 
-Web、API、Agent、DB、Email、UIへ依存しません。production appからemulatorをimportしません。
-Auth packageも`github-oauth` entrypoint以外はdeep importしません。fixtureとtest supportを
-public runtime entrypointから再exportしません。
-
-## 実行境界
-
-通常のroot開発起動は既存機能が利用するGitHubだけを起動します。その他のサービスは
-`dev:service <service>`または`dev:http <service>`で明示的に選択します。
-
-公開用URL、GitHub callback、listener portはlocal環境だけを許可します。
-`NODE_ENV=production`とdebug flagは起動前に拒否し、実プロバイダーのcredentialを読みません。
-SDKのlistenerがhostを指定できないため、local machine以外から到達できないnetwork境界でだけ
-実行します。
+origin、port、worktree namespaceは既存の`portless-topology`が所有します。rootの公開入口は
+引き続き`bun run dev`であり、`apps/emulate#dev`の内部だけをNext.js標準起動にします。
 
 ## 理由
 
-独立してHTTPを待ち受ける実行系なので`packages/emulate`ではなく`apps/emulate`に置きます。
-1つの共通launcherへlocal安全境界を集約しながら、製品packageへtest infrastructureを
-混入させないためです。
+外部serviceを待ち受ける実行系なので`packages`ではなく`apps`に置きます。adapterが所有する
+route、seed、request lifecycleへ委譲し、repository固有の保守対象を増やしません。
 
-## テスト
+## テストと受入条件
 
-service registryと環境変数をEMU1、7サービスの実HTTP listenerとreadinessをEMU2、
-製品が実際に利用するGitHub OAuthとのprovider contractをEMU3で検証します。
-実browser journeyは`bun run test:e2e`へ置きます。
-
-## 受入条件
-
-- 対応する7サービス以外を起動できない
-- 1 processにつき1サービスだけを起動する
-- root開発起動はGitHubだけを自動起動する
-- Authの`github-oauth` entrypoint以外をdeep importしない
-- remote URL、production credential、debug flagを受け付けない
-- GitHub以外の未実装製品接続を保証済みと扱わない
+- `/emulate/github/meta`とOAuth user chooserへ到達できる
+- 2ユーザーが決定的に選べる
+- GitHub以外を公開しない
+- `bun run --cwd apps/emulate lint/typecheck/test/build`が通る
+- root `bun run dev`とPortless hostnameを変更しない

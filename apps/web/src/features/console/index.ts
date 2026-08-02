@@ -1,4 +1,4 @@
-export { ConsoleApiError, createConsoleApi, toConsoleApiError } from "./api"
+export { createConsoleApi } from "./api"
 export { ConsoleRouteErrorBoundary } from "./components/console-route-error-boundary/client"
 export { ConsoleShellError } from "./components/console-route-error-boundary/view"
 export { ConsoleShellSkeleton } from "./components/console-route-suspense/console-route-suspense"
@@ -20,6 +20,7 @@ export {
   getConsoleApiFieldErrors,
   getConsoleApiErrorText,
   hasConsoleApiFieldError,
+  isHttpErrorStatus,
   isStepUpRequiredError,
   shouldRetryConsoleQuery,
 } from "./error"

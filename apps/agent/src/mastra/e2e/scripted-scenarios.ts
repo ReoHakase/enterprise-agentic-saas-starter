@@ -6,7 +6,6 @@ import { createProductRuntime } from "../composition/create-runtime"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import { createScriptedModel } from "../test-support/scripted-model"
 import { createWebSearchTool } from "../tools/web-search/tool"
-import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
 import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
 const scriptedComposition = createScriptedAgentRuntimeComposition({
@@ -15,7 +14,6 @@ const scriptedComposition = createScriptedAgentRuntimeComposition({
 })
 export const {
   createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
-  threadTitleAgent: scriptedThreadTitleAgent,
 } = scriptedComposition
 
 const { storage } = scriptedComposition
@@ -43,8 +41,6 @@ const scriptedSseProductAgent = createProductAgent({
 })
 export const scriptedSseMastra = createProductRuntime({
   approvedIssueActionWorkflow: scriptedComposition.approvedIssueActionWorkflow,
-  memoryCommitWorkflow: createMemoryCommitWorkflow(scriptedSseMemory),
   productAgent: scriptedSseProductAgent,
   storage,
-  threadTitleAgent: scriptedThreadTitleAgent,
 })

@@ -31,7 +31,9 @@ const hasConsistentChatState = (input: AgentRuntimeChatInput): boolean => {
         (part) =>
           part.type.startsWith("tool-ui_") &&
           "state" in part &&
-          (part.state === "output-available" || part.state === "output-error")
+          (part.state === "output-available" ||
+            part.state === "output-error") &&
+          (part.state !== "output-error" || part.input !== undefined)
       )
     )
   }
@@ -82,8 +84,8 @@ export const readBoundedPrivateJson = async (
   }
   try {
     return JSON.parse(text)
-  } catch {
-    throw new Error("Invalid private Agent request")
+  } catch (cause) {
+    throw new Error("Invalid private Agent request", { cause })
   }
 }
 

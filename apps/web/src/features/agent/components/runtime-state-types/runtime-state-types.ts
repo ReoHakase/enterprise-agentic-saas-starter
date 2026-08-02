@@ -120,19 +120,16 @@ export const maximumImageBytes = 10_000_000
 export const maximumImagesTotalBytes = 20_000_000
 export const maximumImagesPerMessage = 4
 
-export const toAgentImageUploadError = (error: unknown): Error => {
-  if (!(error instanceof FileUploadError)) {
-    return error instanceof Error ? error : new Error("Image upload failed.")
-  }
+export const getAgentImageUploadErrorText = (error: unknown): string => {
+  if (!(error instanceof FileUploadError)) return "Image upload failed."
   if (error.code === "feature_not_enabled") {
-    return new Error(
-      "Image attachments are disabled in this environment. Enable Agent image uploads and try again."
-    )
+    return "Image attachments are disabled in this environment. Enable Agent image uploads and try again."
   }
   if (error.status === 503 || error.status === 0) {
-    return new Error(
-      "The image upload service is temporarily unavailable. Try again after the API is ready."
-    )
+    return "The image upload service is temporarily unavailable. Try again after the API is ready."
   }
-  return error
+  const message = error.message.trim()
+  return message.length > 0 && message.length <= 500
+    ? message
+    : "Image upload failed."
 }

@@ -15,9 +15,11 @@ import type {
   OrganizationRole,
 } from "@/features/organizations"
 import { browserConsoleApi } from "@/lib/browser/console-api"
+import { clientEnv } from "@/lib/env.client"
 
+import { sendOrganizationInvitation } from "../../api"
 import type {
-  BulkInvitationInput,
+  InvitationInput,
   OrganizationInvitation,
   OrganizationMember,
 } from "../../schema"
@@ -34,20 +36,24 @@ type MemberMutationInput =
   | {
       type: "role"
       memberId: string
-      role: Exclude<OrganizationRole, "super_admin">
+      role: Exclude<OrganizationRole, "owner">
     }
   | { type: "transfer"; memberId: string; confirmation: string }
-  | { type: "invite"; emails: string[]; role: "admin" | "member" }
+  | { type: "invite"; email: string; role: "admin" | "member" }
   | { type: "remove"; memberId: string; confirmation: string }
   | { type: "cancel-invitation"; invitationId: string }
-  | { type: "resend-invitation"; invitationId: string }
+  | {
+      type: "resend-invitation"
+      email: string
+      role: "admin" | "member"
+    }
 
 type MemberMutationOutcome =
-  | { type: "invite"; queuedCount: number }
+  | { type: "invite" }
   | {
       type: "role" | "transfer" | "remove" | "cancel-invitation"
     }
-  | { type: "resend-invitation"; revived: boolean }
+  | { type: "resend-invitation" }
 
 type MembersPanelProps = {
   organization: OrganizationDetail
@@ -71,18 +77,20 @@ const runMemberMutation = async (
     return { type: "role" }
   }
   if (input.type === "transfer") {
-    await browserConsoleApi.transferSuperAdmin(organizationId, {
+    await browserConsoleApi.transferOwnership(organizationId, {
       memberId: input.memberId,
       confirmation: input.confirmation,
     })
     return { type: "transfer" }
   }
   if (input.type === "invite") {
-    const result = await browserConsoleApi.createInvitations(organizationId, {
-      emails: input.emails,
+    await sendOrganizationInvitation({
+      apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+      email: input.email,
+      organizationId,
       role: input.role,
     })
-    return { type: "invite", queuedCount: result.queuedCount }
+    return { type: "invite" }
   }
   if (input.type === "remove") {
     await browserConsoleApi.removeMember(
@@ -93,11 +101,14 @@ const runMemberMutation = async (
     return { type: "remove" }
   }
   if (input.type === "resend-invitation") {
-    const result = await browserConsoleApi.resendInvitation(
+    await sendOrganizationInvitation({
+      apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+      email: input.email,
       organizationId,
-      input.invitationId
-    )
-    return { type: "resend-invitation", revived: result.revived }
+      resend: true,
+      role: input.role,
+    })
+    return { type: "resend-invitation" }
   }
   await browserConsoleApi.cancelInvitation(organizationId, input.invitationId)
   return { type: "cancel-invitation" }
@@ -105,21 +116,19 @@ const runMemberMutation = async (
 
 const mutationSuccessMessage = (outcome: MemberMutationOutcome) => {
   if (outcome.type === "invite") {
-    return `${outcome.queuedCount} ${outcome.queuedCount === 1 ? "invitation" : "invitations"} queued`
+    return "Invitation sent"
   }
   if (outcome.type === "cancel-invitation") {
     return "Invitation canceled"
   }
   if (outcome.type === "resend-invitation") {
-    return outcome.revived
-      ? "Invitation renewed and queued"
-      : "Invitation email queued again"
+    return "Invitation resent"
   }
   if (outcome.type === "remove") {
     return "Member removed"
   }
   if (outcome.type === "transfer") {
-    return "Super Admin transferred"
+    return "Ownership transferred"
   }
   return "Role updated"
 }
@@ -134,7 +143,7 @@ export const MembersPanel = ({
 }: MembersPanelProps) => {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [pendingSuperAdminTransfer, setPendingSuperAdminTransfer] =
+  const [pendingOwnershipTransfer, setPendingOwnershipTransfer] =
     useState<OrganizationMember | null>(null)
   const [pendingMemberRemoval, setPendingMemberRemoval] =
     useState<OrganizationMember | null>(null)
@@ -142,7 +151,7 @@ export const MembersPanel = ({
   const canInvite = organization.permissions.canInviteMembers
   const canManageMembers = organization.permissions.canManageMembers
   const canManageRoles = organization.permissions.canManageAdmins
-  const canTransferSuperAdmin = organization.permissions.canTransferSuperAdmin
+  const canTransferOwnership = organization.permissions.canTransferOwnership
   const mutationFn = useCallback(
     (input: MemberMutationInput) => runMemberMutation(organization.id, input),
     [organization.id]
@@ -150,16 +159,7 @@ export const MembersPanel = ({
   const handleMutationError = useCallback(
     (error: unknown, input: MemberMutationInput) => {
       if (isStepUpRequiredError(error)) {
-        setStepUpRequest({
-          action:
-            typeof error.context.action === "string"
-              ? error.context.action
-              : undefined,
-          maxAgeSeconds:
-            typeof error.context.maxAgeSeconds === "number"
-              ? error.context.maxAgeSeconds
-              : undefined,
-        })
+        setStepUpRequest({})
         return
       }
 
@@ -210,11 +210,10 @@ export const MembersPanel = ({
     variables: mutationVariables,
   } = memberMutation
   const inviteMember = useCallback(
-    (value: BulkInvitationInput) =>
-      mutateMemberAsync({ type: "invite", ...value }),
+    (value: InvitationInput) => mutateMemberAsync({ type: "invite", ...value }),
     [mutateMemberAsync]
   )
-  const confirmSuperAdminTransfer = useCallback(
+  const confirmOwnershipTransfer = useCallback(
     (member: OrganizationMember, confirmation: string) =>
       mutateMemberAsync({
         type: "transfer",
@@ -241,7 +240,8 @@ export const MembersPanel = ({
     (invitation: OrganizationInvitation) =>
       mutateMember({
         type: "resend-invitation",
-        invitationId: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
       }),
     [mutateMember]
   )
@@ -249,7 +249,11 @@ export const MembersPanel = ({
     mutationPending &&
     (mutationVariables?.type === "cancel-invitation" ||
       mutationVariables?.type === "resend-invitation")
-      ? mutationVariables.invitationId
+      ? mutationVariables.type === "cancel-invitation"
+        ? mutationVariables.invitationId
+        : invitations.find(
+            (invitation) => invitation.email === mutationVariables.email
+          )?.id
       : undefined
   const requestMemberRemoval = useCallback(
     (member: OrganizationMember) => setPendingMemberRemoval(member),
@@ -259,8 +263,8 @@ export const MembersPanel = ({
     () => setPendingMemberRemoval(null),
     []
   )
-  const closeSuperAdminTransfer = useCallback(
-    () => setPendingSuperAdminTransfer(null),
+  const closeOwnershipTransfer = useCallback(
+    () => setPendingOwnershipTransfer(null),
     []
   )
   const closeStepUp = useCallback(() => setStepUpRequest(null), [])
@@ -269,8 +273,8 @@ export const MembersPanel = ({
       if (nextRole === member.role) {
         return
       }
-      if (nextRole === "super_admin") {
-        setPendingSuperAdminTransfer(member)
+      if (nextRole === "owner") {
+        setPendingOwnershipTransfer(member)
         return
       }
       mutateMember({ type: "role", memberId: member.id, role: nextRole })
@@ -304,7 +308,7 @@ export const MembersPanel = ({
         </div>
         {!canManageRoles ? (
           <p className="text-sm text-muted-foreground">
-            Only the Super Admin can change organization roles.
+            Only the Owner can change organization roles.
           </p>
         ) : null}
         <MembersTable
@@ -314,7 +318,7 @@ export const MembersPanel = ({
           pending={mutationPending}
           canManageMembers={canManageMembers}
           canManageRoles={canManageRoles}
-          canTransferSuperAdmin={canTransferSuperAdmin}
+          canTransferOwnership={canTransferOwnership}
           onChangeRole={changeRole}
           onRequestRemove={requestMemberRemoval}
         />
@@ -337,14 +341,14 @@ export const MembersPanel = ({
         />
       ) : null}
 
-      {pendingSuperAdminTransfer ? (
+      {pendingOwnershipTransfer ? (
         <MemberConfirmationDialog
-          key={`transfer-${pendingSuperAdminTransfer.id}`}
+          key={`transfer-${pendingOwnershipTransfer.id}`}
           action="transfer"
-          member={pendingSuperAdminTransfer}
+          member={pendingOwnershipTransfer}
           pending={mutationPending}
-          onClose={closeSuperAdminTransfer}
-          onConfirm={confirmSuperAdminTransfer}
+          onClose={closeOwnershipTransfer}
+          onConfirm={confirmOwnershipTransfer}
         />
       ) : null}
       {pendingMemberRemoval ? (

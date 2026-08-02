@@ -1,4 +1,4 @@
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { env } from "../../platform/env"
 
 export type SessionUser = {
@@ -45,7 +45,7 @@ export const getSessionContext = async (
   }
 
   if (!request.headers.get("cookie")) {
-    throw publicErrors.unauthorized()
+    throw new HttpError({ code: "unauthorized" })
   }
 
   const { auth } = await import("@enterprise-agentic-saas/auth")
@@ -54,7 +54,7 @@ export const getSessionContext = async (
   })
 
   if (!session?.user) {
-    throw publicErrors.unauthorized()
+    throw new HttpError({ code: "unauthorized" })
   }
 
   return {

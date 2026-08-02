@@ -4,43 +4,31 @@ import userEvent from "@testing-library/user-event"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console"
 import type {
   OrganizationDetail,
   OrganizationRole,
 } from "@/features/organizations"
+import { httpError } from "@/test-support/http-error"
 
-import type {
-  BulkInvitationInput,
-  OrganizationInvitation,
-  OrganizationMember,
-} from "../../schema"
+import type { OrganizationInvitation, OrganizationMember } from "../../schema"
 import { MembersPanel } from "./members-panel"
-
-type BulkInvitationResponse = {
-  invitations: OrganizationInvitation[]
-  queuedCount: number
-  delivery: "queued"
-}
-type ResendInvitationResponse = {
-  invitation: OrganizationInvitation
-  delivery: "queued"
-  revived: boolean
-}
 
 type UpdateMemberRole = (
   organizationId: string,
   memberId: string,
-  role: Exclude<OrganizationRole, "super_admin">
+  role: Exclude<OrganizationRole, "owner">
 ) => Promise<unknown>
-type TransferSuperAdmin = (
+type TransferOwnership = (
   organizationId: string,
   input: { memberId: string; confirmation: string }
 ) => Promise<unknown>
-type CreateInvitations = (
-  organizationId: string,
-  input: BulkInvitationInput
-) => Promise<BulkInvitationResponse>
+type SendOrganizationInvitation = (input: {
+  apiBaseUrl: string
+  email: string
+  organizationId: string
+  resend?: boolean
+  role: "admin" | "member"
+}) => Promise<unknown>
 type RemoveMember = (
   organizationId: string,
   memberId: string,
@@ -50,32 +38,28 @@ type CancelInvitation = (
   organizationId: string,
   invitationId: string
 ) => Promise<unknown>
-type ResendInvitation = (
-  organizationId: string,
-  invitationId: string
-) => Promise<ResendInvitationResponse>
-
 const mocks = vi.hoisted(() => ({
   cancelInvitation: vi.fn<CancelInvitation>(),
-  createInvitations: vi.fn<CreateInvitations>(),
   refresh: vi.fn<() => void>(),
   removeMember: vi.fn<RemoveMember>(),
-  resendInvitation: vi.fn<ResendInvitation>(),
+  sendOrganizationInvitation: vi.fn<SendOrganizationInvitation>(),
   toastError: vi.fn<(message: string, options?: unknown) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
-  transferSuperAdmin: vi.fn<TransferSuperAdmin>(),
+  transferOwnership: vi.fn<TransferOwnership>(),
   updateMemberRole: vi.fn<UpdateMemberRole>(),
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: {
     cancelInvitation: mocks.cancelInvitation,
-    createInvitations: mocks.createInvitations,
     removeMember: mocks.removeMember,
-    resendInvitation: mocks.resendInvitation,
-    transferSuperAdmin: mocks.transferSuperAdmin,
+    transferOwnership: mocks.transferOwnership,
     updateMemberRole: mocks.updateMemberRole,
   },
+}))
+
+vi.mock("../../api", () => ({
+  sendOrganizationInvitation: mocks.sendOrganizationInvitation,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -94,7 +78,7 @@ const organization: OrganizationDetail = {
   name: "Acme",
   slug: "acme",
   profileImage: null,
-  role: "super_admin",
+  role: "owner",
   active: true,
   createdAt: "2026-07-14T00:00:00.000Z",
   invitationCount: 1,
@@ -105,7 +89,7 @@ const organization: OrganizationDetail = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
 }
 
@@ -118,7 +102,7 @@ const members: OrganizationMember[] = [
     profileImage: null,
     githubLinked: true,
     passkeyLinked: true,
-    role: "super_admin",
+    role: "owner",
     createdAt: "2026-07-01T00:00:00.000Z",
   },
   {
@@ -270,43 +254,6 @@ const getInvitationEmailOrder = (table: HTMLElement) =>
         )?.email
     )
 
-const bulkInvitationResult = (
-  emails: string[],
-  role: "admin" | "member" = "member"
-): BulkInvitationResponse => ({
-  invitations: emails.map((email, index) => ({
-    id: `created-invitation-${index + 1}`,
-    email,
-    role,
-    status: "pending",
-    organizationId: organization.id,
-    inviterId: "user-owner",
-    inviter: {
-      id: "user-owner",
-      name: "Current Owner",
-      email: "owner@example.com",
-      profileImage: null,
-    },
-    expiresAt: "2026-07-21T00:00:00.000Z",
-    createdAt: "2026-07-14T00:00:00.000Z",
-  })),
-  queuedCount: emails.length,
-  delivery: "queued",
-})
-
-const resendInvitationResult = (
-  invitation: OrganizationInvitation,
-  revived: boolean
-): ResendInvitationResponse => ({
-  invitation: {
-    ...invitation,
-    status: "pending",
-    expiresAt: "2026-07-23T00:00:00.000Z",
-  },
-  delivery: "queued",
-  revived,
-})
-
 const renderMembers = (
   value: OrganizationDetail = organization,
   memberValues = members,
@@ -346,14 +293,9 @@ describe("MembersPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.cancelInvitation.mockResolvedValue({})
-    mocks.createInvitations.mockResolvedValue(
-      bulkInvitationResult(["new@example.com"])
-    )
     mocks.removeMember.mockResolvedValue({})
-    mocks.resendInvitation.mockResolvedValue(
-      resendInvitationResult(pendingInvitation, false)
-    )
-    mocks.transferSuperAdmin.mockResolvedValue(members)
+    mocks.sendOrganizationInvitation.mockResolvedValue({})
+    mocks.transferOwnership.mockResolvedValue(members)
     mocks.updateMemberRole.mockResolvedValue(members)
   })
 
@@ -487,7 +429,7 @@ describe("MembersPanel", () => {
         canInviteMembers: false,
         canManageMembers: false,
         canManageAdmins: false,
-        canTransferSuperAdmin: false,
+        canTransferOwnership: false,
       },
     })
 
@@ -530,7 +472,7 @@ describe("MembersPanel", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("prevents admins from removing admins or the Super Admin", async () => {
+  it("prevents admins from removing admins or the Owner", async () => {
     const user = userEvent.setup()
     renderMembers({
       ...organization,
@@ -539,7 +481,7 @@ describe("MembersPanel", () => {
         ...organization.permissions,
         canEditOrganization: false,
         canManageAdmins: false,
-        canTransferSuperAdmin: false,
+        canTransferOwnership: false,
       },
     })
 
@@ -562,34 +504,33 @@ describe("MembersPanel", () => {
     await expectRemovalDisabled("Current Owner")
   })
 
-  it("resends pending invitations and renews expired invitations", async () => {
+  it("resends pending and expired invitations through Better Auth", async () => {
     const user = userEvent.setup()
-    mocks.resendInvitation
-      .mockResolvedValueOnce(resendInvitationResult(pendingInvitation, false))
-      .mockResolvedValueOnce(resendInvitationResult(expiredInvitation, true))
     renderMembers()
 
     await user.click(screen.getByRole("button", { name: "Resend" }))
     await waitFor(() => {
-      expect(mocks.resendInvitation).toHaveBeenCalledWith(
-        organization.id,
-        "invitation-1"
-      )
+      expect(mocks.sendOrganizationInvitation).toHaveBeenCalledWith({
+        apiBaseUrl: expect.any(String),
+        email: "pending@example.com",
+        organizationId: organization.id,
+        resend: true,
+        role: "member",
+      })
     })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      "Invitation email queued again"
-    )
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Invitation resent")
 
     await user.click(screen.getByRole("button", { name: "Renew & resend" }))
     await waitFor(() => {
-      expect(mocks.resendInvitation).toHaveBeenCalledWith(
-        organization.id,
-        "invitation-expired"
-      )
+      expect(mocks.sendOrganizationInvitation).toHaveBeenCalledWith({
+        apiBaseUrl: expect.any(String),
+        email: "expired@example.com",
+        organizationId: organization.id,
+        resend: true,
+        role: "member",
+      })
     })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      "Invitation renewed and queued"
-    )
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Invitation resent")
   })
 
   it("does not offer renewal when the recipient already has an active invitation", () => {
@@ -617,12 +558,8 @@ describe("MembersPanel", () => {
 
   it("shows a safe resend failure toast and keeps the action available", async () => {
     const user = userEvent.setup()
-    mocks.resendInvitation.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "invitation_not_resendable",
-        message: "Invitation is no longer resendable",
-        status: 409,
-      })
+    mocks.sendOrganizationInvitation.mockRejectedValueOnce(
+      httpError(409, "conflict")
     )
     renderMembers()
 
@@ -630,186 +567,71 @@ describe("MembersPanel", () => {
 
     await waitFor(() => {
       expect(mocks.toastError).toHaveBeenCalledWith(
-        "Invitation is no longer resendable",
+        "The invitation could not be resent.",
         undefined
       )
     })
     expect(screen.getByRole("button", { name: "Resend" })).toBeEnabled()
   })
 
-  it("normalizes comma and newline separated emails, removes duplicates, and reports the queued count", async () => {
+  it("sends one normalized invitation through Better Auth", async () => {
     const user = userEvent.setup()
-    mocks.createInvitations.mockResolvedValueOnce(
-      bulkInvitationResult(["first@example.com", "second@example.com"])
-    )
     renderMembers()
 
-    await user.click(screen.getByRole("button", { name: "Invite members" }))
-    await user.type(
-      screen.getByRole("textbox", { name: "Email addresses" }),
-      "First@Example.com, second@example.com\nfirst@example.com"
-    )
-    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+    await user.click(screen.getByRole("button", { name: "Invite member" }))
+    const email = screen.getByRole("textbox", { name: "Email address" })
+    await user.type(email, " First@Example.com ")
+    await user.click(screen.getByRole("button", { name: "Send invitation" }))
 
     await waitFor(() => {
-      expect(mocks.createInvitations).toHaveBeenCalledWith(organization.id, {
-        emails: ["first@example.com", "second@example.com"],
+      expect(mocks.sendOrganizationInvitation).toHaveBeenCalledWith({
+        apiBaseUrl: expect.any(String),
+        email: "first@example.com",
+        organizationId: organization.id,
         role: "member",
       })
     })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("2 invitations queued")
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Invitation sent")
     expect(
-      screen.queryByRole("dialog", { name: "Invite members" })
+      screen.queryByRole("dialog", { name: "Invite member" })
     ).not.toBeInTheDocument()
   })
 
-  it("blocks malformed bulk email input without making a request", async () => {
+  it("blocks malformed email input without making a request", async () => {
     const user = userEvent.setup()
     renderMembers()
 
-    await user.click(screen.getByRole("button", { name: "Invite members" }))
-    const emails = screen.getByRole("textbox", { name: "Email addresses" })
-    await user.type(emails, "valid@example.com, not-an-email")
-    await user.click(screen.getByRole("button", { name: "Send invitations" }))
+    await user.click(screen.getByRole("button", { name: "Invite member" }))
+    const email = screen.getByRole("textbox", { name: "Email address" })
+    await user.type(email, "not-an-email")
+    await user.click(screen.getByRole("button", { name: "Send invitation" }))
 
     expect(
-      await screen.findByText(
-        "Enter valid email addresses separated by commas or new lines."
-      )
-    ).toBeInTheDocument()
-    expect(emails).toHaveAttribute("aria-invalid", "true")
-    expect(emails).toHaveAttribute(
-      "aria-describedby",
-      expect.stringContaining("invitation-emails-local-error")
-    )
-    expect(emails).toHaveValue("valid@example.com, not-an-email")
-    expect(mocks.createInvitations).not.toHaveBeenCalled()
-  })
-
-  it("keeps invitation values and renders a safe 409 field error", async () => {
-    const user = userEvent.setup()
-    mocks.createInvitations.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "invitation_exists",
-        fieldErrors: { emails: ["An address already has an invitation."] },
-        message: "Invitation could not be created",
-        status: 409,
-      })
-    )
-    renderMembers()
-
-    await user.click(screen.getByRole("button", { name: "Invite members" }))
-    const emails = screen.getByRole("textbox", { name: "Email addresses" })
-    await user.type(emails, "pending@example.com, next@example.com")
-    await user.click(screen.getByRole("button", { name: "Send invitations" }))
-
-    expect(
-      await screen.findByText("An address already has an invitation.")
-    ).toBeInTheDocument()
-    expect(emails).toHaveAttribute("aria-invalid", "true")
-    expect(emails).toHaveValue("pending@example.com, next@example.com")
-    expect(mocks.createInvitations).toHaveBeenCalledWith(organization.id, {
-      emails: ["pending@example.com", "next@example.com"],
-      role: "member",
-    })
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it("keeps bulk input after a safe 429 response and clears the error on edit", async () => {
-    const user = userEvent.setup()
-    mocks.createInvitations.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "rate_limited",
-        context: { retryAfter: 30 },
-        message: "Too many invitation requests",
-        status: 429,
-      })
-    )
-    renderMembers()
-
-    await user.click(screen.getByRole("button", { name: "Invite members" }))
-    const emails = screen.getByRole("textbox", { name: "Email addresses" })
-    await user.type(emails, "first@example.com\nsecond@example.com")
-    await user.click(screen.getByRole("button", { name: "Send invitations" }))
-
-    expect(
-      await screen.findByText(
-        "Too many invitation requests Try again in 30 seconds."
-      )
-    ).toBeInTheDocument()
-    expect(emails).toHaveValue("first@example.com\nsecond@example.com")
-    expect(emails).toHaveAttribute("aria-invalid", "false")
-    expect(mocks.toastError).not.toHaveBeenCalled()
-
-    await user.type(emails, ", third@example.com")
-    expect(
-      screen.queryByText(
-        "Too many invitation requests Try again in 30 seconds."
-      )
-    ).not.toBeInTheDocument()
-  })
-
-  it("keeps bulk input while step-up is handled only by the confirmation dialog", async () => {
-    const user = userEvent.setup()
-    mocks.createInvitations.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "step_up_required",
-        context: {
-          action: "organization.invite_members",
-          maxAgeSeconds: 600,
-        },
-        message: "Recent authentication required",
-        status: 403,
-      })
-    )
-    renderMembers()
-
-    await user.click(screen.getByRole("button", { name: "Invite members" }))
-    const emails = screen.getByRole("textbox", { name: "Email addresses" })
-    await user.type(emails, "first@example.com, second@example.com")
-    await user.click(screen.getByRole("button", { name: "Send invitations" }))
-
-    expect(
-      await screen.findByRole("heading", { name: "Confirm it is really you" })
-    ).toBeInTheDocument()
-    expect(emails).toHaveValue("first@example.com, second@example.com")
-    expect(
-      screen.queryByText("Recent authentication required")
-    ).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "Not now" }))
-    expect(emails).toHaveValue("first@example.com, second@example.com")
+      await screen.findByText("Enter a valid email address.")
+    ).toBeVisible()
+    expect(email).toHaveAttribute("aria-invalid", "true")
+    expect(mocks.sendOrganizationInvitation).not.toHaveBeenCalled()
   })
 
   it("retains the ownership confirmation across a step-up challenge", async () => {
     const user = userEvent.setup()
-    mocks.transferSuperAdmin.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "step_up_required",
-        context: {
-          action: "organization.transfer_super_admin",
-          maxAgeSeconds: 600,
-        },
-        message: "Recent authentication required",
-        status: 403,
-      })
+    mocks.transferOwnership.mockRejectedValueOnce(
+      httpError(403, "step_up_required")
     )
     renderMembers()
 
-    await chooseRole(user, "Target Admin", "Super Admin")
+    await chooseRole(user, "Target Admin", "Owner")
     const confirmation = screen.getByRole("textbox", {
       name: "Member email",
     })
     await user.type(confirmation, "admin@example.com")
-    await user.click(
-      screen.getByRole("button", { name: "Transfer Super Admin" })
-    )
+    await user.click(screen.getByRole("button", { name: "Transfer ownership" }))
 
     expect(
       await screen.findByRole("heading", { name: "Confirm it is really you" })
     ).toBeInTheDocument()
     expect(confirmation).toHaveValue("admin@example.com")
-    expect(mocks.transferSuperAdmin).toHaveBeenCalledWith(organization.id, {
+    expect(mocks.transferOwnership).toHaveBeenCalledWith(organization.id, {
       memberId: "member-admin",
       confirmation: "admin@example.com",
     })
@@ -818,15 +640,10 @@ describe("MembersPanel", () => {
     expect(confirmation).toHaveValue("admin@example.com")
   })
 
-  it("validates removal locally and shows server field errors below the input", async () => {
+  it("validates removal locally and shows fixed server failure copy", async () => {
     const user = userEvent.setup()
     mocks.removeMember.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "confirmation_mismatch",
-        fieldErrors: { confirmation: ["Confirmation is no longer valid."] },
-        message: "Confirmation mismatch",
-        status: 400,
-      })
+      httpError(400, "confirmation_required")
     )
     renderMembers()
 
@@ -852,8 +669,8 @@ describe("MembersPanel", () => {
     await user.click(screen.getByRole("button", { name: "Remove member" }))
 
     expect(
-      await screen.findByText("Confirmation is no longer valid.")
-    ).toBeInTheDocument()
+      await screen.findByText("The member could not be removed.")
+    ).toBeVisible()
     expect(confirmation).toHaveValue("member@example.com")
     expect(mocks.removeMember).toHaveBeenCalledWith(
       organization.id,

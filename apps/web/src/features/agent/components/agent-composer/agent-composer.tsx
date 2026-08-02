@@ -3,6 +3,7 @@
 import type { JSONContent } from "@tiptap/core"
 import { Mention } from "@tiptap/extension-mention"
 import { Placeholder } from "@tiptap/extension-placeholder"
+import { splitBlock } from "@tiptap/pm/commands"
 import {
   EditorContent,
   NodeViewWrapper,
@@ -197,16 +198,27 @@ export const AgentComposer = forwardRef<
     draftText: string
     initialSnapshot?: AgentComposerSnapshot
     onDraftTextChange: (value: string) => void
+    onSubmit: () => void
   }
 >(
   (
-    { candidates, disabled, draftText, initialSnapshot, onDraftTextChange },
+    {
+      candidates,
+      disabled,
+      draftText,
+      initialSnapshot,
+      onDraftTextChange,
+      onSubmit,
+    },
     ref
   ) => {
     const candidatesRef = useRef(candidates)
+    const mentionOpenRef = useRef(false)
     const onDraftTextChangeRef = useRef(onDraftTextChange)
+    const onSubmitRef = useRef(onSubmit)
     candidatesRef.current = candidates
     onDraftTextChangeRef.current = onDraftTextChange
+    onSubmitRef.current = onSubmit
     const extensions = useMemo(
       () => [
         StarterKit.configure({ heading: false, codeBlock: false }),
@@ -239,6 +251,7 @@ export const AgentComposer = forwardRef<
               }
               return {
                 onStart: (props) => {
+                  mentionOpenRef.current = true
                   renderer = new ReactRenderer(MentionList, {
                     editor: props.editor,
                     props,
@@ -255,6 +268,7 @@ export const AgentComposer = forwardRef<
                 },
                 onKeyDown: (props) => renderer?.ref?.onKeyDown(props) ?? false,
                 onExit: () => {
+                  mentionOpenRef.current = false
                   renderer?.destroy()
                   popup?.remove()
                 },
@@ -282,6 +296,19 @@ export const AgentComposer = forwardRef<
             placeholder:
               "Describe the issue, or attach screenshots for analysis.",
             role: "textbox",
+          },
+          handleKeyDown: (_view, event) => {
+            if (event.key !== "Enter" || event.isComposing) {
+              return false
+            }
+            if (event.shiftKey) {
+              event.preventDefault()
+              return splitBlock(_view.state, _view.dispatch)
+            }
+            if (mentionOpenRef.current) return false
+            event.preventDefault()
+            onSubmitRef.current()
+            return true
           },
         },
         onUpdate: ({ editor: current }) =>

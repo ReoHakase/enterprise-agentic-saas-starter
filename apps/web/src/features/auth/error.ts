@@ -5,6 +5,7 @@ const publicAuthErrorCodes = [
   "AUTH_CANCELLED",
   "EMAIL_NOT_VERIFIED",
   "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION",
+  "EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION",
   "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
   "ERROR_CEREMONY_ABORTED",
   "FAILED_TO_UNLINK_LAST_ACCOUNT",
@@ -13,6 +14,7 @@ const publicAuthErrorCodes = [
   "INVALID_PASSWORD",
   "INVALID_TOKEN",
   "INVITATION_NOT_FOUND",
+  "INVITATION_LIMIT_REACHED",
   "LINKED_ACCOUNT_ALREADY_EXISTS",
   "PASSKEY_NOT_FOUND",
   "PASSWORD_TOO_LONG",
@@ -25,11 +27,15 @@ const publicAuthErrorCodes = [
   "TOKEN_EXPIRED",
   "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
   "USER_ALREADY_EXISTS",
+  "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
+  "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
   "USER_NOT_FOUND",
+  "YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION",
+  "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
   "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
 ] as const
 
-export type PublicAuthErrorCode = (typeof publicAuthErrorCodes)[number]
+type PublicAuthErrorCode = (typeof publicAuthErrorCodes)[number]
 
 const publicErrorMessages = {
   AUTHENTICATION_FAILED: "Authentication failed. Try again.",
@@ -37,6 +43,8 @@ const publicErrorMessages = {
   EMAIL_NOT_VERIFIED: "Verify your email address before signing in.",
   EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION:
     "Verify your email address before responding to this invitation.",
+  EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION:
+    "Verify your email address before viewing invitations.",
   FAILED_TO_UNLINK_LAST_ACCOUNT:
     "Connect another sign-in method before removing this one.",
   INVALID_EMAIL: "Enter a valid email address.",
@@ -44,6 +52,8 @@ const publicErrorMessages = {
   INVALID_PASSWORD: "The email or password is incorrect.",
   INVALID_TOKEN: "This link is invalid. Request a new one.",
   INVITATION_NOT_FOUND: "This invitation is no longer available.",
+  INVITATION_LIMIT_REACHED:
+    "This organization has reached its pending invitation limit.",
   LINKED_ACCOUNT_ALREADY_EXISTS: "That account is already linked.",
   ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED:
     "That passkey is already registered.",
@@ -60,7 +70,15 @@ const publicErrorMessages = {
   USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
     "An account already exists for this email address.",
   USER_ALREADY_EXISTS: "An account already exists for this email address.",
+  USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION:
+    "This person is already a member of the organization.",
+  USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION:
+    "An invitation is already pending for this email address.",
   USER_NOT_FOUND: "We could not complete that request.",
+  YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
+    "You do not have permission to invite members.",
+  YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE:
+    "You do not have permission to invite a member with this role.",
   YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION:
     "This invitation belongs to another account.",
 } satisfies Readonly<Record<PublicAuthErrorCode, string>>
@@ -88,7 +106,7 @@ type SafeAuthError = {
   message: string
 }
 
-export const parseSafeAuthError = (
+const parseSafeAuthError = (
   error: unknown,
   fallback: string
 ): SafeAuthError => {

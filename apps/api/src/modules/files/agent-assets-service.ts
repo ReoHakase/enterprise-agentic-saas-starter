@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError, httpStatusFor } from "../../errors/http-error"
 import type { AgentAssetWithStorage } from "./agent-assets-domain"
 import {
   agentAssetBodyObject as bodyObject,
@@ -20,25 +20,15 @@ import type {
 } from "./runtime"
 
 const agentAssetUploadDisabled = () =>
-  new AppError({
+  new HttpError({
     code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    publicContext: {
-      reason: "feature_disabled",
-      resource: "agent_asset",
-      retryAfter: 30,
-    },
-    privateContext: {
-      feature: "agent_asset_upload",
-      module: "agent-assets",
-      operation: "uploadAgentAsset",
-    },
+    retryAfter: 30,
   })
 
 const normalizeFilename = (value: string) => {
   const filename = value.trim()
   if (filename.length < 1 || filename.length > 255) {
-    throw publicErrors.validation("Invalid filename", { field: "file" })
+    throw new HttpError({ code: "validation_error" })
   }
   return filename
 }
@@ -61,17 +51,11 @@ const requireSupportedAgentImage = async (
     detected !== "webp" &&
     detected !== "gif"
   ) {
-    throw publicErrors.validation("Only JPEG, PNG, WebP, or GIF is allowed", {
-      field: "file",
-      reason: "unsupported_image",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   const declaredContentType = file.type.trim().toLowerCase()
   if (declaredContentType !== imageContentTypes[detected]) {
-    throw publicErrors.validation("Image content type does not match", {
-      field: "file",
-      reason: "content_type_mismatch",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   return { declaredContentType, detectedImageFormat: detected }
 }
@@ -199,21 +183,18 @@ const assertUploadContentMatches = async (
   let source: FileR2ObjectBody | null
   try {
     source = bodyObject(await runtime.bucket.get(value.storage.objectKey))
-  } catch {
-    throw providerUnavailable("r2", "readAgentAssetRetry")
+  } catch (cause) {
+    throw providerUnavailable("r2", "readAgentAssetRetry", cause)
   }
   if (!source) throw providerUnavailable("r2", "readAgentAssetRetry")
   let matches: boolean
   try {
     matches = await streamsEqual(upload.stream(), source.body)
-  } catch {
-    throw providerUnavailable("r2", "compareAgentAssetRetry")
+  } catch (cause) {
+    throw providerUnavailable("r2", "compareAgentAssetRetry", cause)
   }
   if (!matches) {
-    throw publicErrors.conflict("Upload id is already in use", {
-      reason: "upload_id_mismatch",
-      resource: "agent_asset",
-    })
+    throw new HttpError({ code: "conflict" })
   }
 }
 
@@ -241,18 +222,15 @@ const readImageMetadata = async (
   let source: FileR2ObjectBody | null
   try {
     source = bodyObject(await runtime.bucket.get(value.storage.objectKey))
-  } catch {
-    throw providerUnavailable("r2", "readAgentAssetInfo")
+  } catch (cause) {
+    throw providerUnavailable("r2", "readAgentAssetInfo", cause)
   }
   if (!source) throw providerUnavailable("r2", "readAgentAssetInfo")
   try {
     const info = await runtime.images.info(source.body)
     const format = normalizeImagesFormat(info.format)
     if (format !== value.storage.detectedImageFormat) {
-      throw publicErrors.validation("Image signature does not match", {
-        field: "file",
-        reason: "image_signature_mismatch",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
     if (
       typeof info.width !== "number" ||
@@ -269,10 +247,7 @@ const readImageMetadata = async (
       info.height > AGENT_ASSET_MAX_DIMENSION ||
       info.width * info.height > AGENT_ASSET_MAX_PIXELS
     ) {
-      throw publicErrors.validation("Image dimensions are too large", {
-        field: "file",
-        reason: "image_dimensions_exceeded",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
     if (
       info.fileSize !== undefined &&
@@ -282,8 +257,8 @@ const readImageMetadata = async (
     }
     return { imageHeight: info.height, imageWidth: info.width }
   } catch (cause) {
-    if (cause instanceof AppError) throw cause
-    throw providerUnavailable("images", "readAgentAssetInfo")
+    if (cause instanceof HttpError) throw cause
+    throw providerUnavailable("images", "readAgentAssetInfo", cause)
   }
 }
 
@@ -317,8 +292,8 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
     let object: FileR2Object | null
     try {
       object = await runtime.bucket.head(input.value.storage.objectKey)
-    } catch {
-      throw providerUnavailable("r2", "headPendingAgentAsset")
+    } catch (cause) {
+      throw providerUnavailable("r2", "headPendingAgentAsset", cause)
     }
     if (!object || !metadataMatches(object, input.value)) {
       throw providerUnavailable("r2", "verifyPendingAgentAsset")
@@ -335,7 +310,7 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
     try {
       dimensions = await readImageMetadata(runtime, input.value)
     } catch (cause) {
-      if (cause instanceof AppError && cause.statusCode < 500) {
+      if (cause instanceof HttpError && httpStatusFor(cause.code) < 500) {
         return cleanupRejectedUpload(ports, input.value, cause)
       }
       throw cause
@@ -349,7 +324,7 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
         organizationId: input.value.asset.organizationId,
       })
     } catch (cause) {
-      if (cause instanceof AppError && cause.statusCode < 500) {
+      if (cause instanceof HttpError && httpStatusFor(cause.code) < 500) {
         return cleanupRejectedUpload(ports, input.value, cause)
       }
       throw cause
@@ -374,9 +349,7 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
       input.file.size < 1 ||
       input.file.size > AGENT_ASSET_MAX_BYTES
     ) {
-      throw publicErrors.validation("File size does not match", {
-        field: "fileSize",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
     const filename = normalizeFilename(input.file.name)
     const image = await requireSupportedAgentImage(ports, input.file)
@@ -411,10 +384,7 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
         uploaderId: input.actorUserId,
       })
     ) {
-      throw publicErrors.conflict("Upload id is already in use", {
-        reason: "upload_id_mismatch",
-        resource: "agent_asset",
-      })
+      throw new HttpError({ code: "conflict" })
     }
 
     if (reservation.value.asset.status === "ready") {
@@ -424,8 +394,8 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
       let object: FileR2Object | null
       try {
         object = await runtime.bucket.head(reservation.value.storage.objectKey)
-      } catch {
-        throw providerUnavailable("r2", "headAgentAssetRetry")
+      } catch (cause) {
+        throw providerUnavailable("r2", "headAgentAssetRetry", cause)
       }
       if (!object || !metadataMatches(object, reservation.value)) {
         throw providerUnavailable("r2", "verifyAgentAssetRetry")
@@ -440,10 +410,7 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
       return { created: false, dto: ports.toAgentAssetDto(ready) }
     }
     if (reservation.value.asset.status !== "pending") {
-      throw publicErrors.conflict("Upload id is no longer reusable", {
-        reason: "upload_expired",
-        resource: "agent_asset",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     if (!reservation.value.storage.objectKey) {
       throw providerUnavailable("r2", "putAgentAsset")
@@ -474,8 +441,8 @@ export const createAgentAssetService = (ports: AgentAssetServicePorts) => {
           putObject ??
           (await runtime.bucket.head(reservation.value.storage.objectKey))
       }
-    } catch {
-      throw providerUnavailable("r2", "putAgentAsset")
+    } catch (cause) {
+      throw providerUnavailable("r2", "putAgentAsset", cause)
     }
     if (!object || !metadataMatches(object, reservation.value)) {
       throw providerUnavailable("r2", "verifyAgentAssetObject")

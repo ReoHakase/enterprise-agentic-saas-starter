@@ -4,24 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run dev:service github",
-    "dev:service": "bun run src/index.ts --portless",
-    "dev:http": "bun run src/index.ts",
+    "build": "next build",
+    "dev": "portless-topology run github.emulate.enterprise-agentic-saas -- next dev --turbopack",
+    "dev:http": "next dev --hostname 127.0.0.1",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@enterprise-agentic-saas/auth": "workspace:*",
-    "emulate": "catalog:",
-    "valibot": "catalog:"
+    "@emulators/adapter-next": "catalog:",
+    "@emulators/github": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
-    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

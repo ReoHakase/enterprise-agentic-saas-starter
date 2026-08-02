@@ -191,11 +191,7 @@ const buildMembershipRows = (
         organizationId,
         userId,
         role:
-          memberIndex === 0
-            ? "super_admin"
-            : memberIndex === 1
-              ? "admin"
-              : "member",
+          memberIndex === 0 ? "owner" : memberIndex === 1 ? "admin" : "member",
         createdAt: referenceDate,
       })
     }

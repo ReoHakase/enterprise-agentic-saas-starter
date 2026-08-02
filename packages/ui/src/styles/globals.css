@@ -137,3 +137,8 @@
     @apply font-sans;
   }
 }
+@keyframes agent-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

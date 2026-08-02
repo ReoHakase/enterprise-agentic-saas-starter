@@ -11,14 +11,12 @@ const meta = preview.meta({
   args: { role: "member" },
 })
 
-export const SuperAdmin = meta.story({
+export const Owner = meta.story({
   tags: ["theme-sensitive"],
-  args: { role: "super_admin" },
+  args: { role: "owner" },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("Super Admin")).toBeVisible()
-    await expect(
-      canvas.getByTestId("organization-role-super_admin")
-    ).toBeVisible()
+    await expect(canvas.getByText("Owner")).toBeVisible()
+    await expect(canvas.getByTestId("organization-role-owner")).toBeVisible()
   },
 })
 

@@ -13,7 +13,6 @@ import {
   requireOwnedThread,
   type AgentTransaction,
 } from "../threads/repository"
-import { preserveAgentActionError } from "./repository-support"
 
 const policyPermissions = (
   mode: AgentThreadPermissionMode
@@ -46,71 +45,52 @@ const requirePolicyScope = async (
 export const getAgentApprovalPolicyForSession = async (
   db: Db,
   input: { sessionId: string; userId: string; threadId: string; now?: Date }
-): Promise<AgentApprovalPolicy> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const { context, live } = await requirePolicyScope(tx, { ...input, now })
-      const rows = await tx
-        .select()
-        .from(agentThreadPermissions)
-        .where(
-          and(
-            eq(
-              agentThreadPermissions.organizationId,
-              live.activeOrganizationId
-            ),
-            eq(agentThreadPermissions.threadId, input.threadId),
-            eq(agentThreadPermissions.sessionId, input.sessionId),
-            eq(agentThreadPermissions.userId, input.userId),
-            eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
-          )
+): Promise<AgentApprovalPolicy> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const { context, live } = await requirePolicyScope(tx, { ...input, now })
+    const rows = await tx
+      .select()
+      .from(agentThreadPermissions)
+      .where(
+        and(
+          eq(agentThreadPermissions.organizationId, live.activeOrganizationId),
+          eq(agentThreadPermissions.threadId, input.threadId),
+          eq(agentThreadPermissions.sessionId, input.sessionId),
+          eq(agentThreadPermissions.userId, input.userId),
+          eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
         )
-        .limit(1)
-      const policy = rows[0]
-      if (!policy) return defaultPolicy()
-      return {
-        mode: policy.mode,
-        permissions: policyPermissions(policy.mode),
-      }
-    })
-  } catch (cause) {
-    return preserveAgentActionError(cause, "getAgentApprovalPolicyForSession")
-  }
-}
+      )
+      .limit(1)
+    const policy = rows[0]
+    if (!policy) return defaultPolicy()
+    return {
+      mode: policy.mode,
+      permissions: policyPermissions(policy.mode),
+    }
+  })
 
 /** @internal */
 export const deleteAgentApprovalPolicyForSession = async (
   db: Db,
   input: { sessionId: string; userId: string; threadId: string; now?: Date }
-): Promise<AgentApprovalPolicy> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const { context, live } = await requirePolicyScope(tx, { ...input, now })
-      await tx
-        .delete(agentThreadPermissions)
-        .where(
-          and(
-            eq(
-              agentThreadPermissions.organizationId,
-              live.activeOrganizationId
-            ),
-            eq(agentThreadPermissions.threadId, input.threadId),
-            eq(agentThreadPermissions.sessionId, input.sessionId),
-            eq(agentThreadPermissions.userId, input.userId),
-            eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
-          )
+): Promise<AgentApprovalPolicy> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const { context, live } = await requirePolicyScope(tx, { ...input, now })
+    await tx
+      .delete(agentThreadPermissions)
+      .where(
+        and(
+          eq(agentThreadPermissions.organizationId, live.activeOrganizationId),
+          eq(agentThreadPermissions.threadId, input.threadId),
+          eq(agentThreadPermissions.sessionId, input.sessionId),
+          eq(agentThreadPermissions.userId, input.userId),
+          eq(agentThreadPermissions.contextEpoch, context.contextEpoch)
         )
-      return defaultPolicy()
-    })
-  } catch (cause) {
-    return preserveAgentActionError(
-      cause,
-      "deleteAgentApprovalPolicyForSession"
-    )
-  }
-}
+      )
+    return defaultPolicy()
+  })
 
 export const putAgentApprovalPolicyForSession = async (
   db: Db,
@@ -121,41 +101,33 @@ export const putAgentApprovalPolicyForSession = async (
     mode: AgentThreadPermissionMode
     now?: Date
   }
-): Promise<AgentApprovalPolicy> => {
-  try {
-    return await db.transaction(async (tx) => {
-      const now = input.now ?? new Date()
-      const { context, live } = await requirePolicyScope(tx, { ...input, now })
-      await tx
-        .delete(agentThreadPermissions)
-        .where(
-          and(
-            eq(
-              agentThreadPermissions.organizationId,
-              live.activeOrganizationId
-            ),
-            eq(agentThreadPermissions.threadId, input.threadId),
-            eq(agentThreadPermissions.sessionId, input.sessionId),
-            eq(agentThreadPermissions.userId, input.userId)
-          )
+): Promise<AgentApprovalPolicy> =>
+  await db.transaction(async (tx) => {
+    const now = input.now ?? new Date()
+    const { context, live } = await requirePolicyScope(tx, { ...input, now })
+    await tx
+      .delete(agentThreadPermissions)
+      .where(
+        and(
+          eq(agentThreadPermissions.organizationId, live.activeOrganizationId),
+          eq(agentThreadPermissions.threadId, input.threadId),
+          eq(agentThreadPermissions.sessionId, input.sessionId),
+          eq(agentThreadPermissions.userId, input.userId)
         )
-      await tx.insert(agentThreadPermissions).values({
-        id: crypto.randomUUID(),
-        organizationId: live.activeOrganizationId,
-        threadId: input.threadId,
-        sessionId: input.sessionId,
-        userId: input.userId,
-        contextEpoch: context.contextEpoch,
-        mode: input.mode,
-        createdAt: now,
-        updatedAt: now,
-      })
-      return {
-        mode: input.mode,
-        permissions: policyPermissions(input.mode),
-      }
+      )
+    await tx.insert(agentThreadPermissions).values({
+      id: crypto.randomUUID(),
+      organizationId: live.activeOrganizationId,
+      threadId: input.threadId,
+      sessionId: input.sessionId,
+      userId: input.userId,
+      contextEpoch: context.contextEpoch,
+      mode: input.mode,
+      createdAt: now,
+      updatedAt: now,
     })
-  } catch (cause) {
-    return preserveAgentActionError(cause, "putAgentApprovalPolicyForSession")
-  }
-}
+    return {
+      mode: input.mode,
+      permissions: policyPermissions(input.mode),
+    }
+  })

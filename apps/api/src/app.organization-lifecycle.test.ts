@@ -158,12 +158,7 @@ describe("organization context, creation, and deletion guards", () => {
       })
     )
     expect(duplicateCreate.status).toBe(409)
-    expect(await duplicateCreate.json()).toMatchObject({
-      error: {
-        code: "conflict",
-        context: { constraint: "unique", field: "slug" },
-      },
-    })
+    expect(await duplicateCreate.json()).toMatchObject({ error: "conflict" })
 
     const duplicateUpdate = await app.handle(
       jsonRequest("/organizations/org_1", {
@@ -191,12 +186,7 @@ describe("organization context, creation, and deletion guards", () => {
       })
     )
     expect(admin.status).toBe(403)
-    expect(await admin.json()).toMatchObject({
-      error: {
-        code: "forbidden",
-        context: { action: "organization.delete" },
-      },
-    })
+    expect(await admin.json()).toMatchObject({ error: "forbidden" })
 
     const stale = await app.handle(
       jsonRequest("/organizations/org_1", {
@@ -207,12 +197,7 @@ describe("organization context, creation, and deletion guards", () => {
       })
     )
     expect(stale.status).toBe(403)
-    expect(await stale.json()).toMatchObject({
-      error: {
-        code: "step_up_required",
-        context: { action: "organization.delete", maxAgeSeconds: 900 },
-      },
-    })
+    expect(await stale.json()).toMatchObject({ error: "step_up_required" })
 
     const wrongSlug = await app.handle(
       jsonRequest("/organizations/org_1", {
@@ -224,11 +209,7 @@ describe("organization context, creation, and deletion guards", () => {
     )
     expect(wrongSlug.status).toBe(400)
     expect(await wrongSlug.json()).toMatchObject({
-      error: {
-        code: "confirmation_required",
-        context: { action: "organization.delete", field: "slug" },
-        fieldErrors: { slug: ["Confirmation does not match"] },
-      },
+      error: "confirmation_required",
     })
 
     const invalidBodies = [
@@ -252,18 +233,8 @@ describe("organization context, creation, and deletion guards", () => {
     const [invalidConfirmation, invalidKey] = await Promise.all(
       invalidResponses.map((response) => response.json())
     )
-    expect(invalidConfirmation).toMatchObject({
-      error: {
-        code: "validation_error",
-        fieldErrors: { confirmation: ["Invalid value"] },
-      },
-    })
-    expect(invalidKey).toMatchObject({
-      error: {
-        code: "validation_error",
-        fieldErrors: { idempotencyKey: ["Invalid value"] },
-      },
-    })
+    expect(invalidConfirmation).toMatchObject({ error: "validation_error" })
+    expect(invalidKey).toMatchObject({ error: "validation_error" })
 
     const otherTenant = await app.handle(
       jsonRequest("/organizations/org_2", {
@@ -274,9 +245,7 @@ describe("organization context, creation, and deletion guards", () => {
       })
     )
     expect(otherTenant.status).toBe(404)
-    expect(await otherTenant.json()).toMatchObject({
-      error: { code: "not_found", context: { resource: "organization" } },
-    })
+    expect(await otherTenant.json()).toMatchObject({ error: "not_found" })
   })
 
   it("keeps organization deletion authorization defensive in the service", async () => {
@@ -299,10 +268,7 @@ describe("organization context, creation, and deletion guards", () => {
         userId: "user_3",
         session: freshSession,
       })
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      publicContext: { action: "organization.delete" },
-    })
+    ).rejects.toMatchObject({ code: "forbidden" })
     await expect(
       deleteOrganization(db, {
         ...input,
@@ -318,10 +284,7 @@ describe("organization context, creation, and deletion guards", () => {
         userId: "user_1",
         session: { ...freshSession, createdAt: new Date(0) },
       })
-    ).rejects.toMatchObject({
-      code: "step_up_required",
-      publicContext: { action: "organization.delete" },
-    })
+    ).rejects.toMatchObject({ code: "step_up_required" })
     await expect(
       deleteOrganization(db, {
         ...input,
@@ -329,10 +292,7 @@ describe("organization context, creation, and deletion guards", () => {
         session: freshSession,
         confirmation: "delete",
       })
-    ).rejects.toMatchObject({
-      code: "confirmation_required",
-      publicContext: { field: "confirmation" },
-    })
+    ).rejects.toMatchObject({ code: "confirmation_required" })
     await expect(
       deleteOrganization(db, {
         ...input,
@@ -340,10 +300,7 @@ describe("organization context, creation, and deletion guards", () => {
         session: freshSession,
         slug: "org-two",
       })
-    ).rejects.toMatchObject({
-      code: "confirmation_required",
-      publicContext: { field: "slug" },
-    })
+    ).rejects.toMatchObject({ code: "confirmation_required" })
 
     await db
       .update(schema.member)
@@ -355,13 +312,10 @@ describe("organization context, creation, and deletion guards", () => {
         userId: "user_1",
         session: freshSession,
       })
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      publicContext: { action: "organization.delete" },
-    })
+    ).rejects.toMatchObject({ code: "forbidden" })
     await db
       .update(schema.member)
-      .set({ role: "super_admin" })
+      .set({ role: "owner" })
       .where(eq(schema.member.id, "member_1"))
 
     await db

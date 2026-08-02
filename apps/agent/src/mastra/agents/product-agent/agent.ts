@@ -12,6 +12,7 @@ import {
 } from "../../runtime/request-context"
 import type { createWebSearchTool } from "../../tools/web-search/tool"
 import { productAgentInstructions } from "./instructions"
+import { productMemoryPersistenceGuard } from "./memory-persistence-guard"
 import {
   coreSkill,
   issueTriageSkill,
@@ -63,13 +64,19 @@ export const createProductAgent = ({
           return resolved
         }
         const execution = resolveExecution(requestContext)
-        return withRunLiveness(resolved, () =>
-          execution.api.readActiveOrganization({
-            grant: execution.runGrant,
-          })
-        )
+        return withRunLiveness(resolved, async () => {
+          try {
+            await execution.api.readActiveOrganization({
+              grant: execution.runGrant,
+            })
+          } catch (cause) {
+            execution.onRevoked(cause)
+            throw cause
+          }
+        })
       },
       name: "Product Agent",
+      outputProcessors: [productMemoryPersistenceGuard],
       skills: [
         coreSkill,
         issueTriageSkill,

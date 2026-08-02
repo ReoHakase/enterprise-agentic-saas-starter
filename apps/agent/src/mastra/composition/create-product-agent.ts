@@ -1,13 +1,15 @@
 import type { MastraCompositeStore } from "@mastra/core/storage"
 
-import { createAgentModel } from "../adapters/model/openrouter"
+import {
+  createAgentAuxiliaryModel,
+  createAgentModel,
+} from "../adapters/model/openrouter"
 import { createDirectOpenRouterWebSearch } from "../adapters/model/openrouter-web-search"
 import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import {
   createProductAgent,
   createProductAgentMemory,
 } from "../agents/product-agent"
-import { createThreadTitleAgent } from "../agents/thread-title-agent"
 import { ProductAgentExecutionRegistry } from "../runtime/request-context"
 import type { AgentStorageEnvironment } from "../storage"
 import { createWebSearchTool } from "../tools/web-search/tool"
@@ -33,7 +35,10 @@ export const createProductAgentComposition = (
       environment.OPENROUTER_API_KEY,
       environment.OPENROUTER_BASE_URL
     )
-  const threadTitleAgent = createThreadTitleAgent(model)
+  const titleModel = createAgentAuxiliaryModel(
+    environment.OPENROUTER_API_KEY,
+    environment.OPENROUTER_BASE_URL
+  )
   const executionRegistry = new ProductAgentExecutionRegistry()
   const productWebSearchTool = createWebSearchTool(
     createDirectOpenRouterWebSearch(
@@ -46,7 +51,7 @@ export const createProductAgentComposition = (
         reportDevelopmentCauseChain(environment, "web-search-provider", cause),
     }
   )
-  const memory = createProductAgentMemory(storage)
+  const memory = createProductAgentMemory(storage, titleModel)
   const productAgent = createProductAgent({
     allowUnscopedModel: unscopedModelEnabled,
     memory: unscopedModelEnabled ? undefined : memory,
@@ -59,6 +64,5 @@ export const createProductAgentComposition = (
     memory,
     productAgent,
     productWebSearchTool,
-    threadTitleAgent,
   }
 }

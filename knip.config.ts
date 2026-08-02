@@ -9,17 +9,8 @@ const config: KnipConfig = {
   treatConfigHintsAsErrors: true,
   workspaces: {
     ".": {
-      entry: [
-        ".codex/hooks/**/*.ts",
-        "*.config.{js,mjs,ts}",
-        "scripts/**/*.ts",
-      ],
-      project: [
-        ".codex/**/*.ts",
-        ".github/**/*.ts",
-        "*.config.{js,mjs,ts}",
-        "scripts/**/*.ts",
-      ],
+      entry: ["*.config.{js,mjs,ts}", "scripts/**/*.ts"],
+      project: [".github/**/*.ts", "*.config.{js,mjs,ts}", "scripts/**/*.ts"],
       // Issue: Knip's Bun plugin only parses bunfig.toml `test.preload` and does
       // not recognize `install.security.scanner`. Owner: CI/quality maintainers.
       // Reason: Bun dynamically loads this scanner during install. Remove when
@@ -80,11 +71,7 @@ const config: KnipConfig = {
       },
     },
     "apps/emulate": {
-      project: ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/test-support/**!"],
-      // Issue: Portless #372. Owner: developer-environment maintainers.
-      // Bun.spawn invokes this package's bin by name. Remove with the temporary
-      // topology package after upstream Portless preserves linked-worktree aliases.
-      ignoreDependencies: ["@enterprise-agentic-saas/portless-topology"],
+      project: ["app/**/*.ts!", "!app/**/*.test.ts!"],
     },
     "apps/web": {
       entry: [

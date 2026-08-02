@@ -9,23 +9,33 @@ type LocalTelemetryEnvironment = {
 }
 
 export type AgentFailureCode =
+  | "connection_failed"
   | "image_failed"
-  | "memory_commit_deferred"
+  | "memory_failed"
   | "model_failed"
+  | "response_stream_failed"
   | "resume_failed"
+  | "resume_storage_close_failed"
+  | "run_finalization_failed"
   | "run_grant_invalid"
+  | "run_settlement_failed"
   | "run_start_failed"
-  | "title_failed"
+  | "telemetry_flush_failed"
   | "usage_record_failed"
 
 const failureMessages: Record<AgentFailureCode, string> = {
+  connection_failed: "Agent connection failed",
   image_failed: "Agent image preparation failed",
-  memory_commit_deferred: "Agent memory commit deferred",
+  memory_failed: "Agent memory operation failed",
   model_failed: "Agent model response failed",
+  response_stream_failed: "Agent response stream failed",
   resume_failed: "Agent action resume failed",
+  resume_storage_close_failed: "Agent resume storage cleanup failed",
+  run_finalization_failed: "Agent run finalization failed",
   run_grant_invalid: "Agent run grant validation failed",
+  run_settlement_failed: "Agent run settlement failed",
   run_start_failed: "Agent run start failed",
-  title_failed: "Agent thread title generation failed",
+  telemetry_flush_failed: "Agent telemetry flush failed",
   usage_record_failed: "Agent usage recording failed",
 }
 
@@ -45,32 +55,53 @@ export const createAgentFailureCapture = (
           "service.name": "enterprise-agentic-saas-agent",
         }
       : undefined
-  return (code: AgentFailureCode, error?: unknown): void => {
+  return (code: AgentFailureCode): void => {
+    let span: ReturnType<typeof trace.getActiveSpan>
+    try {
+      span = trace.getActiveSpan()
+    } catch {
+      span = undefined
+    }
+    try {
+      span?.setAttribute("app.error.code", code)
+    } catch {
+      // Telemetry must not replace the application failure being reported.
+    }
+    try {
+      span?.setStatus({ code: SpanStatusCode.ERROR })
+    } catch {
+      // Telemetry must not replace the application failure being reported.
+    }
     if (!resource) return
-    const recorded =
-      error instanceof Error
-        ? error
-        : new Error(
-            error === undefined
-              ? failureMessages[code]
-              : typeof error === "string"
-                ? error
-                : JSON.stringify(error)
-          )
-    const span = trace.getActiveSpan()
-    span?.recordException(recorded)
-    span?.setStatus({ code: SpanStatusCode.ERROR, message: code })
-    logs.getLogger("enterprise-agentic-saas-agent").emit({
-      attributes: {
-        ...resource,
-        component: "agent-worker",
-        "error.code": code,
-        "exception.message": recorded.message,
-        "exception.stacktrace": recorded.stack ?? "",
-      },
-      body: failureMessages[code],
-      severityNumber: SeverityNumber.ERROR,
-      severityText: "ERROR",
-    })
+    let correlation: Record<string, string> = {}
+    try {
+      const spanContext = span?.spanContext()
+      if (spanContext) {
+        correlation = {
+          span_id: spanContext.spanId,
+          trace_id: spanContext.traceId,
+        }
+      }
+    } catch {
+      correlation = {}
+    }
+    try {
+      logs.getLogger("enterprise-agentic-saas-agent").emit({
+        attributes: {
+          ...resource,
+          ...correlation,
+          "app.error.code": code,
+          "app.operation": "agent.runtime",
+          "app.outcome": "failure",
+          "event.name": "agent.runtime.failed",
+          "logger.scope": "runtime.failure",
+        },
+        body: failureMessages[code],
+        severityNumber: SeverityNumber.ERROR,
+        severityText: "ERROR",
+      })
+    } catch {
+      // A local OTLP failure must not replace the application failure.
+    }
   }
 }

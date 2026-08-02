@@ -12,10 +12,6 @@ import {
   type Context,
   type Span,
 } from "@opentelemetry/api"
-import {
-  logs,
-  type LoggerProvider as OtelLoggerProvider,
-} from "@opentelemetry/api-logs"
 import { WorkerEntrypoint } from "cloudflare:workers"
 
 import {
@@ -23,81 +19,18 @@ import {
   toAgentControlFailure,
 } from "./adapters/control-plane/client"
 import { createAgentFailureCapture } from "./adapters/telemetry/capture"
+import { reportDevelopmentCauseChain } from "./adapters/telemetry/development-error"
+import {
+  AGENT_SERVICE_NAME,
+  connectMastraLoggerProvider,
+  LOCAL_OTLP_HTTP_ENDPOINT,
+  resolveLocalTelemetryResource,
+} from "./adapters/telemetry/mastra-logger-bridge"
 import type { AgentRuntimeEnv } from "./composition/environment"
 import { getAgentIsolateComposition } from "./composition/isolate-composition"
 import { handleAgentRuntimeRequest } from "./runtime/run-agent"
 
 export { IssueAssistant } from "./legacy/issue-assistant"
-
-let mastraLoggerProviderConnected = false
-const LOCAL_OTLP_HTTP_ENDPOINT = "http://127.0.0.1:4318"
-const AGENT_SERVICE_NAME = "enterprise-agentic-saas-agent"
-const LOCAL_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u
-
-const localRequestIdentity = (request?: Request) => {
-  const sessionId = request?.headers.get("x-dev-session-id")?.trim()
-  const worktreeId = request?.headers.get("x-dev-worktree-id")?.trim()
-  return sessionId &&
-    worktreeId &&
-    LOCAL_ID_PATTERN.test(sessionId) &&
-    LOCAL_ID_PATTERN.test(worktreeId)
-    ? { sessionId, worktreeId }
-    : undefined
-}
-
-const resolveLocalTelemetryResource = (
-  environment: AgentRuntimeEnv,
-  request?: Request
-) => {
-  const requestIdentity = localRequestIdentity(request)
-  const sessionId =
-    requestIdentity?.sessionId ?? environment.DEV_SESSION_ID?.trim()
-  const worktreeId =
-    requestIdentity?.worktreeId ?? environment.DEV_WORKTREE_ID?.trim()
-  if (
-    environment.NODE_ENV !== "development" ||
-    environment.OTEL_EXPORTER_OTLP_ENDPOINT !== LOCAL_OTLP_HTTP_ENDPOINT ||
-    !sessionId ||
-    !worktreeId
-  )
-    return undefined
-  return {
-    "dev.session.id": sessionId,
-    "dev.worktree.id": worktreeId,
-    "service.name": AGENT_SERVICE_NAME,
-  }
-}
-
-const connectMastraLoggerProvider = (environment: AgentRuntimeEnv) => {
-  if (mastraLoggerProviderConnected) return
-  const provider: OtelLoggerProvider = {
-    getLogger(name) {
-      const scope = `mastra.${name}`
-      const logger = getLogger(`${AGENT_SERVICE_NAME}.${scope}`)
-      const resource = resolveLocalTelemetryResource(environment)
-      if (resource) logger.setProperties(resource)
-      return {
-        enabled: () => true,
-        emit(record) {
-          logger.emit({
-            attributes: {
-              ...record.attributes,
-              "logger.scope": scope,
-            },
-            body:
-              typeof record.body === "string" ||
-              (record.body !== null && typeof record.body === "object")
-                ? record.body
-                : String(record.body ?? ""),
-            severityText: record.severityText,
-          })
-        },
-      }
-    },
-  }
-  logs.setGlobalLoggerProvider(provider)
-  mastraLoggerProviderConnected = true
-}
 
 type AgentHttpTelemetryAttributes = Record<
   string,
@@ -194,7 +127,6 @@ const createAgentLogger = (
       "event.name": message,
       "logger.scope": scope,
     })
-    trace.getActiveSpan()?.addEvent(message, eventAttributes)
     const logger = getLogger(`${AGENT_SERVICE_NAME}.${scope}`)
     logger.setProperties(resource)
     logger[level](message, eventAttributes)
@@ -204,6 +136,7 @@ const createAgentLogger = (
 const flushAgentTelemetry = async (input: {
   attributes: AgentHttpTelemetryAttributes
   composition: ReturnType<typeof getAgentIsolateComposition>
+  environment: AgentRuntimeEnv
   logger: AgentLogger
   operation: AgentRuntimeOperation
   pending: Set<Promise<unknown>>
@@ -260,12 +193,13 @@ const flushAgentTelemetry = async (input: {
         duration_ms: Number((completedAt - input.startedAt).toFixed(2)),
       })
     })
-  } catch {
+  } catch (cause) {
+    input.streamSpan?.setAttribute("app.error.code", "response_stream_failed")
     input.streamSpan?.setStatus({
       code: SpanStatusCode.ERROR,
-      message: "Agent response stream failed",
     })
     otelContext.with(input.requestContext, () => {
+      reportDevelopmentCauseChain(input.environment, "response-stream", cause)
       input.logger.log("error", `${input.operation.name} stream failed`, {
         ...input.attributes,
         "app.outcome": "failure",
@@ -277,8 +211,16 @@ const flushAgentTelemetry = async (input: {
     input.streamSpan?.end()
   }
   await Promise.allSettled(input.pending)
+  const flush = input.composition.mastra.observability
+    .flush()
+    .catch((cause) => {
+      otelContext.with(input.requestContext, () => {
+        createAgentFailureCapture(input.environment)("telemetry_flush_failed")
+        reportDevelopmentCauseChain(input.environment, "telemetry-flush", cause)
+      })
+    })
   await Promise.race([
-    input.composition.mastra.observability.flush().catch(() => undefined),
+    flush,
     new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
   ])
 }
@@ -334,19 +276,19 @@ const agentRuntimeHandler = {
         observedContext,
         {
           captureFailure: createAgentFailureCapture(environment),
+          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           createControlPlane: createAgentInternalGateway,
           executionRegistry: composition.executionRegistry,
-          createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
           mastra: composition.mastra,
           requireModelCredential: true,
-          threadTitleAgent: composition.threadTitleAgent,
           toControlFailure: toAgentControlFailure,
         }
       )
     } catch (error) {
-      trace
-        .getActiveSpan()
-        ?.recordException(new Error("Agent request handler failed"))
+      const span = trace.getActiveSpan()
+      span?.setAttribute("app.error.code", "internal_error")
+      span?.setStatus({ code: SpanStatusCode.ERROR })
+      reportDevelopmentCauseChain(environment, "agent-request", error)
       logger.log("error", "Agent request failed", {
         duration_ms: Number((performance.now() - requestStartedAt).toFixed(2)),
         "http.request.method": request.method,
@@ -385,6 +327,7 @@ const agentRuntimeHandler = {
         flushAgentTelemetry({
           attributes: responseAttributes,
           composition,
+          environment,
           logger: runtimeLogger,
           operation,
           pending,
@@ -414,6 +357,7 @@ const agentRuntimeHandler = {
       flushAgentTelemetry({
         attributes: responseAttributes,
         composition,
+        environment,
         logger: runtimeLogger,
         operation,
         pending,

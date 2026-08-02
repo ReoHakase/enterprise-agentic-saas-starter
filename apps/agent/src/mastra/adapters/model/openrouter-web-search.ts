@@ -1,5 +1,9 @@
 import { generateText } from "ai"
 
+import {
+  AGENT_MODEL_PROFILE,
+  AUXILIARY_AGENT_REASONING,
+} from "../../core/model-profile"
 import { createAgentOpenRouter } from "./openrouter"
 
 const openRouterWebSearchOptions = {
@@ -13,10 +17,10 @@ export const createDirectOpenRouterWebSearch = (
   baseURL?: string
 ) => {
   const provider = createAgentOpenRouter(apiKey, baseURL)
-  const model = provider.chat("qwen/qwen3.6-flash", {
+  const model = provider.chat(AGENT_MODEL_PROFILE.model, {
     parallelToolCalls: false,
     plugins: [openRouterWebSearchOptions],
-    reasoning: { effort: "none", enabled: false, exclude: true },
+    reasoning: AUXILIARY_AGENT_REASONING,
     usage: { include: true },
   })
   return async (query: string, abortSignal?: AbortSignal) => {

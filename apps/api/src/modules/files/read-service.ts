@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { OrganizationRole } from "../authorization/public"
 import {
   FILE_PREVIEW_WIDTHS,
@@ -46,8 +46,7 @@ export const createFileReadService = (ports: FileReadPorts) => {
     organizationId: string
   }) => {
     const file = await ports.findReadyFileById(input)
-    if (!file)
-      throw publicErrors.notFound("File not found", { resource: "file" })
+    if (!file) throw new HttpError({ code: "not_found" })
     await ports.assertOwnerReadable({
       actorUserId: input.actorUserId,
       organizationId: input.organizationId,
@@ -85,8 +84,8 @@ export const createFileReadService = (ports: FileReadPorts) => {
       if (!source) throw providerUnavailable("r2", "readTextPreviewObject")
       bytes = await readBoundedBody(source.body, requestedLength)
     } catch (error) {
-      if (error instanceof AppError) throw error
-      throw providerUnavailable("r2", "readTextPreviewObject")
+      if (error instanceof HttpError) throw error
+      throw providerUnavailable("r2", "readTextPreviewObject", error)
     }
 
     const previewByteLength = textPreviewByteLength(bytes)
@@ -147,8 +146,8 @@ export const createFileReadService = (ports: FileReadPorts) => {
           range ? { onlyIf, range } : { onlyIf }
         )
       )
-    } catch {
-      throw providerUnavailable("r2", "downloadObject")
+    } catch (cause) {
+      throw providerUnavailable("r2", "downloadObject", cause)
     }
     if (!source) throw providerUnavailable("r2", "downloadObject")
     headers.set(
@@ -176,15 +175,11 @@ export const createFileReadService = (ports: FileReadPorts) => {
       (candidate) => String(candidate) === input.width
     )
     if (width === undefined) {
-      throw publicErrors.validation("Unsupported preview width", {
-        field: "width",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
     const file = await requireReadyFile(input)
     if (!isPreviewableImageFormat(file.stored.detectedImageFormat)) {
-      throw publicErrors.notFound("File preview not found", {
-        resource: "file_preview",
-      })
+      throw new HttpError({ code: "not_found" })
     }
     if (!file.stored.etag) {
       throw providerUnavailable("r2", "readPreviewMetadata")
@@ -225,8 +220,8 @@ export const createFileReadService = (ports: FileReadPorts) => {
         throw providerUnavailable("images", "transformPreview")
       }
     } catch (error) {
-      if (error instanceof AppError) throw error
-      throw providerUnavailable("images", "transformPreview")
+      if (error instanceof HttpError) throw error
+      throw providerUnavailable("images", "transformPreview", error)
     }
 
     if (runtime.cache) {
@@ -257,16 +252,13 @@ export const createFileReadService = (ports: FileReadPorts) => {
       file.stored.uploaderId !== input.actorUserId &&
       input.actorRole === "member"
     ) {
-      throw publicErrors.forbidden("Only the uploader or an admin can delete", {
-        action: "file.delete",
-      })
+      throw new HttpError({ code: "forbidden" })
     }
     const deleted = await ports.deleteReadyFile({
       actorUserId: input.actorUserId,
       file: file.stored,
     })
-    if (!deleted)
-      throw publicErrors.notFound("File not found", { resource: "file" })
+    if (!deleted) throw new HttpError({ code: "not_found" })
   }
 
   return { downloadFile, listFiles, previewFile, previewTextFile, removeFile }

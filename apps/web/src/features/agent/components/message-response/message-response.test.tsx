@@ -5,6 +5,22 @@ import { describe, expect, it, vi } from "vitest"
 import { MessageResponse } from "./message-response"
 
 describe("MessageResponse", () => {
+  it("renders app-relative Markdown links with Next Link semantics", () => {
+    render(
+      <MessageResponse>
+        {"Open [Issue #10](/organization/acme/issues/10)."}
+      </MessageResponse>
+    )
+
+    expect(screen.getByRole("link", { name: "Issue #10" })).toHaveAttribute(
+      "href",
+      "/organization/acme/issues/10"
+    )
+    expect(
+      screen.queryByRole("button", { name: "Issue #10" })
+    ).not.toBeInTheDocument()
+  })
+
   it("portals the link safety dialog outside the Markdown paragraph", async () => {
     const user = userEvent.setup()
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null)

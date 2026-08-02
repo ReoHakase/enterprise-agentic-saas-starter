@@ -321,7 +321,7 @@ describe("Agent asset private image and file lifecycle", () => {
           ...candidate,
           grant: run.grant,
         })
-      ).rejects.toMatchObject({ code: "not_found", statusCode: 404 })
+      ).rejects.toMatchObject({ code: "not_found" })
     }
 
     const visionBuckets = await db
@@ -340,7 +340,7 @@ describe("Agent asset private image and file lifecycle", () => {
         grant: run.grant,
         issueId: "asset-issue-a",
       })
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("records a minimal file.uploaded audit inside zero-copy promotion", async () => {
@@ -597,7 +597,7 @@ describe("Agent asset private image and file lifecycle", () => {
       assetRequest({ assetId, method: "DELETE" })
     )
     expect(blocked.status).toBe(409)
-    expect(await blocked.json()).toMatchObject({ error: { code: "conflict" } })
+    expect(await blocked.json()).toMatchObject({ error: "conflict" })
     expect(await db.select().from(schema.storageObjectCleanupJobs)).toEqual([])
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([
       expect.objectContaining({ temporaryBytes: 16, usedBytes: 16 }),

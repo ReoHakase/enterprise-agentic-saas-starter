@@ -1,4 +1,4 @@
-import { AppError } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { FILE_TEXT_PREVIEW_MAX_BYTES, type FilePreviewWidth } from "./constants"
 import { providerUnavailable } from "./service-runtime"
 
@@ -56,10 +56,8 @@ export const privateFileHeaders = () =>
   })
 
 export const unsupportedTextPreview = () =>
-  new AppError({
+  new HttpError({
     code: "unsupported_media_type",
-    publicMessage: "File cannot be previewed as text",
-    publicContext: { resource: "file_preview" },
   })
 
 export const readBoundedBody = async (

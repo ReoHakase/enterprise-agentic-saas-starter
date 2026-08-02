@@ -103,6 +103,11 @@ export const fictionalAgentMessages = {
     role: "assistant",
     parts: [
       {
+        type: "reasoning",
+        text: "Check the active organization before reading the Issue.",
+        state: "done",
+      },
+      {
         type: "text",
         text: "The requested read is scoped to Acme Cloud.",
       },

@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { NuqsAdapter } from "nuqs/adapters/next/app"
 import type { ReactNode } from "react"
@@ -20,9 +26,9 @@ import {
   agentConversationTurns,
 } from "./test-support/fixtures"
 
-const conversationTurns = [...agentConversationTurns]
 const organizationId = "organization-1"
 const timestamp = "2026-07-25T09:00:00.000Z"
+const browserConversationTurns = [...agentConversationTurns]
 const toolFailureThread = {
   id: "thread-tool-failure",
   title: "Tool failure",
@@ -313,11 +319,9 @@ describe("Agent chat browser integration", () => {
     )
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "get issue · failed"
+      "View IssueFailed"
     )
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "update issue · denied"
-    )
+    expect(screen.getByRole("status")).toHaveTextContent("Update IssueDenied")
     const composer = screen.getByRole("textbox", { name: "Agent message" })
     await actor.click(composer)
     const typeCommittedText = async (
@@ -358,6 +362,7 @@ describe("Agent chat browser integration", () => {
         message={attachmentReceiptMessage}
         organizationId={organizationId}
         organizationSlug="acme"
+        threadId="thread-attachment-receipt"
         onPendingChange={onPendingChange}
       />
     )
@@ -367,7 +372,7 @@ describe("Agent chat browser integration", () => {
     )
     expect(screen.getByRole("link", { name: "Issue #184" })).toHaveAttribute(
       "href",
-      "/organization/acme/issues/184"
+      "/organization/acme/issues/184?agentThread=thread-attachment-receipt"
     )
     expect(screen.queryByText(/private-file-id|private-issue-id/u)).toBeNull()
   })
@@ -379,6 +384,7 @@ describe("Agent chat browser integration", () => {
         message={canonicalWebSearchMessage}
         organizationId={organizationId}
         organizationSlug="acme"
+        threadId="thread-web-search"
         onPendingChange={vi.fn<(id: string, pending: boolean) => void>()}
       />
     )
@@ -478,8 +484,11 @@ describe("Agent chat browser integration", () => {
       />
     )
 
-    await screen.findByText(`Approval ${actionId}`)
-    await actor.click(screen.getByRole("button", { name: "Yes" }))
+    const approval = await screen.findByRole("region", {
+      name: "Issue change approval",
+    })
+    await within(approval).findByText(`Approval ${actionId}`)
+    await actor.click(within(approval).getByRole("button", { name: "Yes" }))
 
     await expect
       .element(await screen.findByRole("link", { name: "Open Issue #42" }))
@@ -513,8 +522,11 @@ describe("Agent chat browser integration", () => {
       />
     )
 
-    await screen.findByText(`Approval ${actionId}`)
-    await actor.click(screen.getByRole("button", { name: "No" }))
+    const approval = await screen.findByRole("region", {
+      name: "Issue change approval",
+    })
+    await within(approval).findByText(`Approval ${actionId}`)
+    await actor.click(within(approval).getByRole("button", { name: "No" }))
 
     await expect.element(await screen.findByText("rejected")).toBeVisible()
     await waitFor(() =>
@@ -548,11 +560,10 @@ describe("Agent chat browser integration", () => {
     )
   })
 
-  it("jumps between real scroll regions from the conversation minimap", async () => {
-    const actor = userEvent.setup()
+  it("renders the centered auto-follow conversation with its turn minimap", () => {
     render(
       <div className="flex h-80 min-w-0">
-        <AgentConversationViewport enabled turns={conversationTurns}>
+        <AgentConversationViewport enabled turns={browserConversationTurns}>
           {agentConversationTurns.map((turn) => (
             <article
               key={turn.id}
@@ -568,13 +579,17 @@ describe("Agent chat browser integration", () => {
     )
 
     const viewport = screen.getByTestId("agent-conversation-viewport")
-    const before = viewport.scrollTop
-    await actor.click(
-      screen.getByRole("button", {
-        name: /Jump to turn 1: Review the organization access policy/u,
-      })
+    const content = screen.getByTestId("agent-conversation-content")
+    const viewportRect = viewport.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    expect(contentRect.width).toBeLessThanOrEqual(768)
+    expect(contentRect.left + contentRect.width / 2).toBeCloseTo(
+      viewportRect.left + viewportRect.width / 2,
+      0
     )
-    expect(viewport.scrollTop).toBeLessThanOrEqual(before)
+    expect(
+      screen.getByRole("navigation", { name: "Conversation turns" })
+    ).toBeVisible()
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth
     )

@@ -64,7 +64,7 @@ const seedIdentity = async (db: TestDatabase, now: Date) => {
     id: "search-taint-member",
     organizationId: "search-taint-org",
     userId: "search-taint-user",
-    role: "super_admin",
+    role: "owner",
     createdAt: now,
   })
   await db.insert(schema.session).values({
@@ -151,18 +151,15 @@ describe("Agent Web search prompt-injection boundary", () => {
       expect(publicBody).toContain('"status":"pending"')
       expect(publicBody).not.toContain("FORBIDDEN_SEARCH_INJECTED_WRITE")
       expect(publicBody).not.toContain("succeeded")
-      expect(
-        await fetch(`${host.url}/__g4/drain`, { method: "POST" }).then(
-          ({ status }) => status
-        )
-      ).toBe(200)
-      expect(
-        await fetch(`${host.url}/__g4/metrics`).then((item) => item.json())
-      ).toMatchObject({
-        cancelRunCalls: 0,
-        finishRunCalls: 0,
-        prepareCreateIssueCalls: 1,
-        releaseCalls: 1,
+      await vi.waitFor(async () => {
+        expect(
+          await fetch(`${host.url}/__g4/metrics`).then((item) => item.json())
+        ).toMatchObject({
+          cancelRunCalls: 0,
+          finishRunCalls: 0,
+          prepareCreateIssueCalls: 1,
+          releaseCalls: 1,
+        })
       })
 
       const [run] = await db

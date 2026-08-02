@@ -5,6 +5,7 @@ import { getConsoleApiErrorText } from "@/features/console"
 import { MembersPage as MembersPageContent } from "@/features/members"
 import type { OrganizationInvitation } from "@/features/members"
 import { OrganizationActivationGate } from "@/features/organizations"
+import { reportObservedError } from "@/lib/report-observed-error"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
 type MembersPageProps = {
@@ -43,13 +44,18 @@ export default async function MembersPage({ params }: MembersPageProps) {
     ? api
         .listInvitations(organizationSummary.id)
         .then((data) => ({ data, error: undefined }))
-        .catch((error: unknown) => ({
-          data: undefined,
-          error: getConsoleApiErrorText(
-            error,
-            "Invitations could not be loaded."
-          ),
-        }))
+        .catch((error: unknown) => {
+          reportObservedError(error, {
+            operation: "organization.invitation.list",
+          })
+          return {
+            data: undefined,
+            error: getConsoleApiErrorText(
+              error,
+              "Invitations could not be loaded."
+            ),
+          }
+        })
     : Promise.resolve({ data: noInvitations, error: undefined })
   const [organization, members, invitations] = await Promise.all([
     api.getOrganization(organizationSummary.id),

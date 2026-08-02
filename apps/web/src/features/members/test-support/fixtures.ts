@@ -7,7 +7,7 @@ export const fictionalMemberOrganization = {
   name: "Acme Cloud",
   slug: "acme",
   profileImage: null,
-  role: "super_admin",
+  role: "owner",
   active: true,
   createdAt: "2026-07-14T00:00:00.000Z",
   invitationCount: 5,
@@ -18,7 +18,7 @@ export const fictionalMemberOrganization = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
 } satisfies OrganizationDetail
 
@@ -30,7 +30,7 @@ const fictionalOwner = {
   profileImage: null,
   githubLinked: true,
   passkeyLinked: true,
-  role: "super_admin",
+  role: "owner",
   createdAt: "2026-07-01T00:00:00.000Z",
 } satisfies OrganizationMember
 

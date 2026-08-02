@@ -35,7 +35,7 @@ const issueQuerySchema = v.strictObject({
   status: v.optional(v.picklist(["all", "open", "in_progress", "closed"])),
 })
 
-export const agentClientToolValueSchemas = {
+const agentClientToolValueSchemas = {
   navigate: v.strictObject({
     page: v.picklist(["dashboard", "issues", "agent", "members"]),
   }),
@@ -53,33 +53,6 @@ export const agentClientToolValueSchemas = {
   }),
   readFormDraft: v.strictObject(formTarget),
   setIssueQuery: v.strictObject({ query: issueQuerySchema }),
-}
-
-const agentFormSnapshotSchema = v.strictObject({
-  dirtyFields: v.pipe(
-    v.array(v.picklist(["title", "description"])),
-    v.maxLength(2)
-  ),
-  epoch: formIdentifier,
-  formId: formIdentifier,
-  resource: v.literal("issue"),
-  resourceId: v.optional(formIdentifier),
-  revision: issueRevision,
-  values: v.strictObject({
-    description: v.optional(v.pipe(v.string(), v.maxLength(50_000))),
-    title: v.optional(v.pipe(v.string(), v.maxLength(200))),
-  }),
-})
-
-export const agentClientToolOutputValueSchemas = {
-  navigate: v.strictObject({ ok: v.literal(true) }),
-  openIssue: v.strictObject({ ok: v.literal(true) }),
-  patchFormDraft: agentFormSnapshotSchema,
-  readFormDraft: agentFormSnapshotSchema,
-  setIssueQuery: v.strictObject({
-    ok: v.literal(true),
-    query: issueQuerySchema,
-  }),
 }
 
 export const agentClientToolSchemas = {

@@ -9,15 +9,10 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt } from "drizzle-orm"
 
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { ProfileImageSubject } from "./constants"
 
 export type StoredProfileImage = typeof profileImages.$inferSelect
-
-export const preserveAppError = (cause: unknown, operation: string): never => {
-  if (cause instanceof AppError) throw cause
-  throw publicErrors.internal(cause, { module: "profile-images", operation })
-}
 
 const errorDiagnostic = (cause: unknown) => {
   const messages: string[] = []
@@ -93,37 +88,29 @@ export const findProfileImageByUploadId = async (
   db: Db,
   input: { subject: ProfileImageSubject; uploadId: string }
 ): Promise<StoredProfileImage | null> => {
-  try {
-    const rows = await db
-      .select()
-      .from(profileImages)
-      .where(
-        and(
-          subjectConditions(input.subject),
-          eq(profileImages.uploadId, input.uploadId)
-        )
+  const rows = await db
+    .select()
+    .from(profileImages)
+    .where(
+      and(
+        subjectConditions(input.subject),
+        eq(profileImages.uploadId, input.uploadId)
       )
-      .limit(1)
-    return rows[0] ?? null
-  } catch (cause) {
-    return preserveAppError(cause, "findProfileImageByUploadId")
-  }
+    )
+    .limit(1)
+  return rows[0] ?? null
 }
 
 export const findReadyProfileImage = async (
   db: Db,
   subject: ProfileImageSubject
 ): Promise<StoredProfileImage | null> => {
-  try {
-    const rows = await db
-      .select()
-      .from(profileImages)
-      .where(and(subjectConditions(subject), eq(profileImages.status, "ready")))
-      .limit(1)
-    return rows[0] ?? null
-  } catch (cause) {
-    return preserveAppError(cause, "findReadyProfileImage")
-  }
+  const rows = await db
+    .select()
+    .from(profileImages)
+    .where(and(subjectConditions(subject), eq(profileImages.status, "ready")))
+    .limit(1)
+  return rows[0] ?? null
 }
 
 export const findSubjectFallback = async (
@@ -176,12 +163,10 @@ export const assertOrganizationMutationAuthorized = async (
     .limit(1)
   const membership = memberships[0]
   if (!membership) {
-    throw publicErrors.notFound("Organization not found", {
-      resource: "organization",
-    })
+    throw new HttpError({ code: "not_found" })
   }
   if (!input.sessionId) {
-    throw publicErrors.activeOrganizationMismatch()
+    throw new HttpError({ code: "active_organization_mismatch" })
   }
   const activeSessions = await tx
     .select({ id: session.id })
@@ -196,11 +181,9 @@ export const assertOrganizationMutationAuthorized = async (
     )
     .limit(1)
   if (!activeSessions[0]) {
-    throw publicErrors.activeOrganizationMismatch()
+    throw new HttpError({ code: "active_organization_mismatch" })
   }
-  if (membership.role !== "super_admin") {
-    throw publicErrors.forbidden("You are not allowed to perform this action", {
-      action: input.action,
-    })
+  if (membership.role !== "owner") {
+    throw new HttpError({ code: "forbidden" })
   }
 }

@@ -24,7 +24,7 @@ const activeOrganization = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: false,
+    canTransferOwnership: false,
   },
 } satisfies OrganizationSummary
 

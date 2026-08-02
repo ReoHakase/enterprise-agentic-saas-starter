@@ -18,12 +18,10 @@ vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: {
     activateOrganization: mocks.noop,
     cancelInvitation: mocks.noop,
-    createInvitations: mocks.noop,
     listInvitations: mocks.listInvitations,
     listMembers: mocks.listMembers,
     removeMember: mocks.noop,
-    resendInvitation: mocks.noop,
-    transferSuperAdmin: mocks.noop,
+    transferOwnership: mocks.noop,
     updateMemberRole: mocks.noop,
   },
 }))
@@ -40,7 +38,7 @@ const organization = {
   id: "org-acme",
   name: "Acme",
   slug: "acme",
-  role: "super_admin" as const,
+  role: "owner" as const,
   active: true,
   profileImage: null,
   memberCount: 1,
@@ -50,7 +48,7 @@ const organization = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
   createdAt: "2026-07-01T00:00:00.000Z",
   invitationCount: 1,
@@ -64,7 +62,7 @@ const member = {
   profileImage: null,
   githubLinked: true,
   passkeyLinked: true,
-  role: "super_admin" as const,
+  role: "owner" as const,
   createdAt: "2026-07-01T00:00:00.000Z",
 }
 
@@ -165,7 +163,7 @@ describe("MembersPage", () => {
         userId: `user-${number}`,
         name: `Member ${number}`,
         email: `member-${number}@example.com`,
-        role: index === 0 ? ("super_admin" as const) : ("member" as const),
+        role: index === 0 ? ("owner" as const) : ("member" as const),
       }
     })
     const manyInvitations = Array.from({ length: 21 }, (_, index) => {

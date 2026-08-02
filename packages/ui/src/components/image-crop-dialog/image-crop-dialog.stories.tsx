@@ -40,8 +40,10 @@ export const Circular = meta.story({
     const body = within(canvasElement.ownerDocument.body)
     const dialog = await body.findByRole("dialog", { name: "Crop image" })
     await expect(dialog).toHaveAttribute("data-motion", "fade")
-    await expect(dialog).toHaveClass("max-h-[calc(100dvh-2rem)]")
     await waitFor(() => expect(dialog).toBeVisible())
+    expect(dialog.getBoundingClientRect().height).toBeLessThanOrEqual(
+      (canvasElement.ownerDocument.defaultView?.innerHeight ?? 0) - 32 + 1
+    )
     const slider = body.getByRole("slider", { name: "Zoom" })
     await expect(slider).toBeEnabled()
     const cropArea = await body.findByRole("group", {
@@ -77,7 +79,7 @@ export const RoundedSquare = meta.story({
       name: "Image crop area",
     })
     await expect(cropArea).toBeVisible()
-    await expect(cropArea).toHaveClass("!rounded-[22%]")
+    expect(getComputedStyle(cropArea).borderTopLeftRadius).toBe("22%")
     await waitFor(() =>
       expect(body.getByRole("button", { name: "Use image" })).toBeEnabled()
     )

@@ -74,8 +74,8 @@ export const ExternalLinkConfirmation = meta.story({
     children:
       "[Open the external runbook](https://runbook.example.test/tenant-access)",
   },
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Confirm an external destination before opening", async () => {
       await userEvent.click(

@@ -9,7 +9,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, lt, lte, or, sql } from "drizzle-orm"
 
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { OrganizationRole } from "../authorization/public"
 import {
   ORGANIZATION_FILE_QUOTA_BYTES,
@@ -85,11 +85,6 @@ const baseFileQuery = (db: Pick<Db, "select">) =>
     )
     .leftJoin(user, eq(user.id, member.userId))
 
-const preserveAppError = (cause: unknown, operation: string): never => {
-  if (cause instanceof AppError) throw cause
-  throw publicErrors.internal(cause, { module: "files", operation })
-}
-
 const errorDiagnostic = (cause: unknown) => {
   const messages: string[] = []
   let current = cause
@@ -121,20 +116,16 @@ export const findFileByUploadId = async (
   db: Db,
   input: { organizationId: string; uploadId: string }
 ): Promise<FileWithOwner | null> => {
-  try {
-    const rows = await baseFileQuery(db)
-      .where(
-        and(
-          eq(files.organizationId, input.organizationId),
-          eq(files.uploadId, input.uploadId)
-        )
+  const rows = await baseFileQuery(db)
+    .where(
+      and(
+        eq(files.organizationId, input.organizationId),
+        eq(files.uploadId, input.uploadId)
       )
-      .limit(1)
-    const row = rows[0]
-    return row ? { ...row.stored, ownerId: row.ownerId } : null
-  } catch (cause) {
-    return preserveAppError(cause, "findFileByUploadId")
-  }
+    )
+    .limit(1)
+  const row = rows[0]
+  return row ? { ...row.stored, ownerId: row.ownerId } : null
 }
 
 export const findReadyFileById = async (
@@ -146,29 +137,25 @@ export const findReadyFileById = async (
     organizationId: string
   }
 ): Promise<{ dto: FileDto; stored: FileWithOwner } | null> => {
-  try {
-    const rows = await baseFileQuery(db)
-      .where(
-        and(
-          eq(files.id, input.fileId),
-          eq(files.organizationId, input.organizationId),
-          eq(files.status, "ready")
-        )
+  const rows = await baseFileQuery(db)
+    .where(
+      and(
+        eq(files.id, input.fileId),
+        eq(files.organizationId, input.organizationId),
+        eq(files.status, "ready")
       )
-      .limit(1)
-    const row = rows[0]
-    return row
-      ? {
-          dto: toFileDto(row, {
-            role: input.actorRole,
-            userId: input.actorUserId,
-          }),
-          stored: { ...row.stored, ownerId: row.ownerId },
-        }
-      : null
-  } catch (cause) {
-    return preserveAppError(cause, "findReadyFileById")
-  }
+    )
+    .limit(1)
+  const row = rows[0]
+  return row
+    ? {
+        dto: toFileDto(row, {
+          role: input.actorRole,
+          userId: input.actorUserId,
+        }),
+        stored: { ...row.stored, ownerId: row.ownerId },
+      }
+    : null
 }
 
 export const listReadyFilesByOwner = async (
@@ -183,56 +170,50 @@ export const listReadyFilesByOwner = async (
     ownerType: FileOwnerType
   }
 ): Promise<FileListDto> => {
-  try {
-    let cursor: ReturnType<typeof decodeFileCursor> | undefined
-    if (input.cursor) {
-      try {
-        cursor = decodeFileCursor(input.cursor)
-      } catch {
-        throw publicErrors.validation("Invalid file cursor", {
-          field: "cursor",
-        })
-      }
+  let cursor: ReturnType<typeof decodeFileCursor> | undefined
+  if (input.cursor) {
+    try {
+      cursor = decodeFileCursor(input.cursor)
+    } catch (cause) {
+      throw new HttpError({ code: "validation_error", cause })
     }
+  }
 
-    const conditions = [
-      eq(files.organizationId, input.organizationId),
-      eq(files.ownerType, input.ownerType),
-      eq(issueFileOwners.issueId, input.ownerId),
-      eq(files.status, "ready"),
-    ]
-    if (cursor) {
-      const cursorCondition = or(
-        lt(files.createdAt, cursor.createdAt),
-        and(eq(files.createdAt, cursor.createdAt), lt(files.id, cursor.id))
-      )
-      if (cursorCondition) conditions.push(cursorCondition)
-    }
+  const conditions = [
+    eq(files.organizationId, input.organizationId),
+    eq(files.ownerType, input.ownerType),
+    eq(issueFileOwners.issueId, input.ownerId),
+    eq(files.status, "ready"),
+  ]
+  if (cursor) {
+    const cursorCondition = or(
+      lt(files.createdAt, cursor.createdAt),
+      and(eq(files.createdAt, cursor.createdAt), lt(files.id, cursor.id))
+    )
+    if (cursorCondition) conditions.push(cursorCondition)
+  }
 
-    const rows = await baseFileQuery(db)
-      .where(and(...conditions))
-      .orderBy(desc(files.createdAt), desc(files.id))
-      .limit(input.limit + 1)
-    const hasMore = rows.length > input.limit
-    const page = rows.slice(0, input.limit)
-    const oldest = page.at(-1)
-    return {
-      items: page.map((row) =>
-        toFileDto(row, {
-          role: input.actorRole,
-          userId: input.actorUserId,
-        })
-      ),
-      nextCursor:
-        hasMore && oldest
-          ? encodeFileCursor({
-              createdAt: oldest.stored.createdAt,
-              id: oldest.stored.id,
-            })
-          : null,
-    }
-  } catch (cause) {
-    return preserveAppError(cause, "listReadyFilesByOwner")
+  const rows = await baseFileQuery(db)
+    .where(and(...conditions))
+    .orderBy(desc(files.createdAt), desc(files.id))
+    .limit(input.limit + 1)
+  const hasMore = rows.length > input.limit
+  const page = rows.slice(0, input.limit)
+  const oldest = page.at(-1)
+  return {
+    items: page.map((row) =>
+      toFileDto(row, {
+        role: input.actorRole,
+        userId: input.actorUserId,
+      })
+    ),
+    nextCursor:
+      hasMore && oldest
+        ? encodeFileCursor({
+            createdAt: oldest.stored.createdAt,
+            id: oldest.stored.id,
+          })
+        : null,
   }
 }
 
@@ -301,10 +282,7 @@ export const reservePendingFile = async (
           })
           .returning({ usedBytes: organizationFileUsage.usedBytes })
         if (!usageRows[0]) {
-          throw publicErrors.conflict("Organization file quota exceeded", {
-            reason: "quota_exceeded",
-            resource: "file",
-          })
+          throw new HttpError({ code: "conflict" })
         }
 
         const insertedRows = await tx
@@ -351,13 +329,10 @@ export const reservePendingFile = async (
         })
         if (existing) return { created: false, file: existing }
       }
-      return preserveAppError(cause, "reservePendingFile")
+      throw cause
     }
   }
-  throw publicErrors.internal(undefined, {
-    module: "files",
-    operation: "reservePendingFile",
-  })
+  throw new Error("File reservation retries exhausted")
 }
 
 export const finalizePendingFile = async (
@@ -370,78 +345,69 @@ export const finalizePendingFile = async (
     imageWidth: number | null
   }
 ): Promise<void> => {
-  try {
-    await db.transaction(async (tx) => {
-      const readyAt = new Date()
-      const rows = await tx
-        .update(files)
-        .set({
-          etag: input.etag,
-          imageHeight: input.imageHeight,
-          imageWidth: input.imageWidth,
-          status: "ready",
-          updatedAt: readyAt,
-        })
+  await db.transaction(async (tx) => {
+    const readyAt = new Date()
+    const rows = await tx
+      .update(files)
+      .set({
+        etag: input.etag,
+        imageHeight: input.imageHeight,
+        imageWidth: input.imageWidth,
+        status: "ready",
+        updatedAt: readyAt,
+      })
+      .where(
+        and(
+          eq(files.id, input.file.id),
+          eq(files.organizationId, input.file.organizationId),
+          eq(files.status, "pending")
+        )
+      )
+      .returning({ id: files.id })
+    if (!rows[0]) {
+      const ready = await tx
+        .select({ id: files.id })
+        .from(files)
         .where(
           and(
             eq(files.id, input.file.id),
             eq(files.organizationId, input.file.organizationId),
-            eq(files.status, "pending")
+            eq(files.status, "ready")
           )
         )
-        .returning({ id: files.id })
-      if (!rows[0]) {
-        const ready = await tx
-          .select({ id: files.id })
-          .from(files)
-          .where(
-            and(
-              eq(files.id, input.file.id),
-              eq(files.organizationId, input.file.organizationId),
-              eq(files.status, "ready")
-            )
-          )
-          .limit(1)
-        if (ready[0]) return
-        throw new Error("Pending file no longer exists")
-      }
-      await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
-        actorUserId: input.actorUserId,
-        fileId: input.file.id,
-        filename: input.file.filename,
-        kind: "file_added",
-        occurredAt: readyAt,
-        organizationId: input.file.organizationId,
-        ownerId: input.file.ownerId,
-      })
-      await tx.insert(auditLogs).values({
-        id: crypto.randomUUID(),
-        organizationId: input.file.organizationId,
-        actorUserId: input.actorUserId,
-        action: "file.uploaded",
-        targetType: "file",
-        targetId: input.file.id,
-        metadata: {},
-      })
+        .limit(1)
+      if (ready[0]) return
+      throw new Error("Pending file no longer exists")
+    }
+    await getFileOwnerAdapter(input.file.ownerType).recordActivity(tx, {
+      actorUserId: input.actorUserId,
+      fileId: input.file.id,
+      filename: input.file.filename,
+      kind: "file_added",
+      occurredAt: readyAt,
+      organizationId: input.file.organizationId,
+      ownerId: input.file.ownerId,
     })
-  } catch (cause) {
-    preserveAppError(cause, "finalizePendingFile")
-  }
+    await tx.insert(auditLogs).values({
+      id: crypto.randomUUID(),
+      organizationId: input.file.organizationId,
+      actorUserId: input.actorUserId,
+      action: "file.uploaded",
+      targetType: "file",
+      targetId: input.file.id,
+      metadata: {},
+    })
+  })
 }
 
 export const deleteReadyFile = async (
   db: Db,
   input: { actorUserId: string; file: FileWithOwner }
-): Promise<boolean> => {
-  try {
-    return await db.transaction((tx) =>
-      deleteReadyFilesInTransaction(tx, {
-        actorUserId: input.actorUserId,
-        files: [input.file],
-        now: new Date(),
-      })
-    )
-  } catch (cause) {
-    return preserveAppError(cause, "deleteReadyFile")
-  }
-}
+): Promise<boolean> =>
+  db.transaction((tx) =>
+    deleteReadyFilesInTransaction(tx, {
+      actorUserId: input.actorUserId,
+      files: [input.file],
+      now: new Date(),
+    })
+  )

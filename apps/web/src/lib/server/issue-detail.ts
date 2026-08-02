@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 
-import { ConsoleApiError } from "@/features/console"
+import { isHttpErrorStatus } from "@/features/console"
 import {
   getIssueByNumber,
   getIssueTimeline,
@@ -42,7 +42,7 @@ export const loadIssueDetail = async (
       number: issueNumber,
     })
   } catch (error) {
-    if (error instanceof ConsoleApiError && error.status === 404) notFound()
+    if (isHttpErrorStatus(error, 404)) notFound()
     throw error
   }
   const [timeline, members, issues] = await Promise.all([

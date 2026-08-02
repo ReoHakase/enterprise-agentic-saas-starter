@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-02
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -11,7 +11,6 @@ applies_to:
   - .jscpd.json
   - lefthook.yml
   - vitest.config.ts
-  - .codex/**/*.test.ts
   - .github/**/*.test.ts
   - .github/workflows/**
 ---
@@ -262,19 +261,20 @@ Browser/E2E/paid testをpre-pushへ入れません。長時間化による`--no-
 必須job:
 
 ```text
-nix
-quality
-static-quality
-browser
-free-e2e
-cloudflare-dry-run
+Nix
+Static analysis
+Quality
+Browser
+Free E2E
+Cloudflare dry-run
 ```
 
-- `quality`: format、typecheck、`bun run test`、build
-- `static-quality`: Oxlint、Knip full/strict、jscpd
-- `browser`: Storybook/Browser Mode
-- `free-e2e`: E1のfull free suite
-- `cloudflare-dry-run`: Web/API/Agent production bundle
+- `Static analysis`: format、Oxlint、Knip full/strict、jscpd、DB履歴とschema drift
+- `Quality`: typecheck、unit・integration test、workspace buildを独立laneで並列実行して集約する
+- `Browser`: Storybookのlight/dark、Browser Mode、static build、UI components、Next.js integrationを
+  独立laneで実行して集約する
+- `Free E2E`: Agent profileを3ワーカー、OAuth・WebAuthnを含むAuth profileを1ワーカーで実行して集約する
+- `Cloudflare dry-run`: Web/API/Agent production bundle
 
 Paid testはfork PRへsecretを渡さず、通常PRのrequired checkにも含めません。maintainerの明示実行、
 nightly、release candidateだけで実行します。
@@ -305,7 +305,7 @@ Temporary waiverはmainへmergeしません。全変更をbudgetへ適合させ�
 - budgetへ合わせるだけの不自然な分割が起こり得る
 - Knip/jscpdのfalse positive調査が必要
 
-Ruleを目的ではなく責務境界のsignalとして扱い、意味のないhelper抽出はreviewerが拒否します。
+Ruleを目的ではなく責務境界のsignalとして扱い、意味のないhelper抽出は差分レビューで拒否します。
 
 ## 受入条件
 

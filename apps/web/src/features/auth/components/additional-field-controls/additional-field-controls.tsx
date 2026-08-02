@@ -47,6 +47,8 @@ import {
 } from "react"
 import { toast } from "sonner"
 
+import { reportObservedError } from "@/lib/report-observed-error"
+
 import type { AdditionalFieldProps } from "../additional-field/additional-field"
 
 const emptyOptions: NonNullable<AdditionalFieldConfig["options"]> = []
@@ -68,7 +70,8 @@ const CopyButton = ({
       await navigator.clipboard.writeText(value)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
+    } catch (error) {
+      reportObservedError(error, { operation: "auth.field.copy" })
       toast.error("The value could not be copied.")
     }
   }, [getValue])

@@ -235,7 +235,7 @@ const createDatabase = async () => {
       id: "member-1",
       organizationId: "org-1",
       userId: "user-1",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {
@@ -256,7 +256,7 @@ const createDatabase = async () => {
       id: "member-4",
       organizationId: "org-2",
       userId: "user-3",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
   ])
@@ -416,7 +416,7 @@ describe("profile image routes", () => {
     })
   })
 
-  it("enforces active super-admin mutation and membership-only reads", async () => {
+  it("enforces active owner mutation and membership-only reads", async () => {
     const app = createApp(await createDatabase())
     const forbidden = await app.handle(
       uploadRequest("/files/profile-images/organizations/org-1", {

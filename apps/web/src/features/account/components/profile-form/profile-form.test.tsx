@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console"
+import { httpError } from "@/test-support/http-error"
 
 import { ProfileForm } from "./profile-form"
 
@@ -65,14 +65,12 @@ describe("ProfileForm", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile updated")
   })
 
-  it("keeps input and displays a safe server field error", async () => {
+  it("keeps input and displays the public field error", async () => {
     const actor = userEvent.setup()
     mocks.updateMe.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "validation_failed",
-        fieldErrors: { name: ["Use a recognizable display name."] },
-        message: "Fix the highlighted field.",
-        status: 400,
+      httpError(400, "validation_error", {
+        fieldErrors: { name: ["Choose another display name."] },
+        message: "Check the highlighted fields.",
       })
     )
     renderProfile()
@@ -83,25 +81,17 @@ describe("ProfileForm", () => {
     await actor.click(screen.getByRole("button", { name: "Save profile" }))
 
     expect(
-      await screen.findByText("Use a recognizable display name.")
-    ).toBeInTheDocument()
+      await screen.findByText("Choose another display name.")
+    ).toBeVisible()
     expect(name).toHaveValue("Draft name")
-    expect(name).toHaveAccessibleDescription(
-      /Use a recognizable display name\./u
-    )
-    expect(
-      screen.queryByText("Fix the highlighted field.")
-    ).not.toBeInTheDocument()
+    expect(name).toHaveAttribute("aria-invalid", "true")
 
     await actor.type(name, " updated")
 
     expect(
-      screen.queryByText("Use a recognizable display name.")
+      screen.queryByText("Choose another display name.")
     ).not.toBeInTheDocument()
     expect(name).toHaveAttribute("aria-invalid", "false")
-    expect(name).not.toHaveAccessibleDescription(
-      /Use a recognizable display name\./u
-    )
   })
 
   it("keeps an unknown failure at form level without exposing its message", async () => {
@@ -117,9 +107,7 @@ describe("ProfileForm", () => {
     await actor.click(screen.getByRole("button", { name: "Save profile" }))
 
     expect(
-      await screen.findByText(
-        "The profile was not saved. Check your connection and try again."
-      )
+      await screen.findByText("The profile was not saved.")
     ).toBeInTheDocument()
     expect(screen.queryByText(/secret-token/u)).not.toBeInTheDocument()
     expect(name).toHaveAttribute("aria-invalid", "false")

@@ -126,14 +126,14 @@ const seed = async () => {
         createdAt: now,
         id: identity.memberId,
         organizationId: identity.organizationId,
-        role: "super_admin",
+        role: "owner",
         userId: identity.userId,
       })
       await tx.insert(member).values({
         createdAt: now,
         id: `eval_decoy_member_${identity.memberId.slice(-24)}`,
         organizationId: identity.decoyOrganizationId,
-        role: "super_admin",
+        role: "owner",
         userId: identity.decoyUserId,
       })
       await tx.insert(session).values({

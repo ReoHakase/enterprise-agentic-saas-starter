@@ -3,7 +3,12 @@
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import { Toaster } from "@enterprise-agentic-saas/ui/components/sonner"
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query"
 import { Provider as JotaiProvider } from "jotai"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -14,6 +19,7 @@ import { ThemeProvider } from "@/components/theme-provider/theme-provider"
 import { AuthProvider, magicLinkPlugin } from "@/features/auth"
 import { shouldRetryConsoleQuery } from "@/features/console"
 import { clientEnv } from "@/lib/env.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 const authBasePaths = {
   auth: "/auth",
@@ -27,6 +33,12 @@ const authPlugins = [magicLinkPlugin()]
 
 const createQueryClient = () =>
   new QueryClient({
+    mutationCache: new MutationCache({
+      onError: (error) => reportObservedError(error),
+    }),
+    queryCache: new QueryCache({
+      onError: (error) => reportObservedError(error),
+    }),
     defaultOptions: {
       queries: {
         retry: shouldRetryConsoleQuery,

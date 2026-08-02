@@ -52,8 +52,8 @@ const safeRead = async <Result>(
 ): Promise<Result> => {
   try {
     return await operation()
-  } catch {
-    throw new Error("Agent read capability is unavailable")
+  } catch (cause) {
+    throw new Error("Agent read capability is unavailable", { cause })
   }
 }
 
@@ -159,7 +159,10 @@ export const createAgentReadHandlers = (
         boundedIssue(await api.getIssue({ grant: runGrant, ...input }), 20_000)
       ),
     readAccountContext: () =>
-      invoke(() => api.readAccountContext({ grant: runGrant })),
+      invoke(async () => {
+        const account = await api.readAccountContext({ grant: runGrant })
+        return { name: account.name, profileImage: null }
+      }),
     readActiveOrganization: () =>
       invoke(() => api.readActiveOrganization({ grant: runGrant })),
     searchIssueLabels: (input: LabelSearchToolInput) =>
@@ -180,12 +183,18 @@ export const createAgentReadHandlers = (
         return issues.map((issue) => boundedIssue(issue, 2_000))
       }),
     searchOrganizationMembers: (input: MemberSearchToolInput) =>
-      invoke(() =>
-        api.searchOrganizationMembers({
+      invoke(async () => {
+        const members = await api.searchOrganizationMembers({
           grant: runGrant,
           limit: input.limit,
           query: input.query,
         })
-      ),
+        return members.map(({ id, name, role }) => ({
+          id,
+          name,
+          profileImage: null,
+          role,
+        }))
+      }),
   }
 }

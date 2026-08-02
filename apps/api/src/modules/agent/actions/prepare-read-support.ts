@@ -15,7 +15,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm"
 
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { type AgentTransaction, type ValidGrant } from "../threads/repository"
 import {
   MAX_ROOT_WRITE_ACTIONS,
@@ -60,10 +60,7 @@ export const canonicalizeLabels = async (
     const match = existing.get(key)
     if (!match) return requested
     if (Number(match.variantCount) !== 1) {
-      throw publicErrors.conflict("Issue label is ambiguous", {
-        reason: "label_case_ambiguous",
-        resource: "issue_label",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return match.canonical
   })
@@ -88,10 +85,7 @@ export const resolveAssigneeName = async (
     )
     .limit(1)
   if (!rows[0]) {
-    throw publicErrors.validation(
-      "Assignee must be a member of the organization",
-      { field: "assigneeId", reason: "not_a_member" }
-    )
+    throw new HttpError({ code: "validation_error" })
   }
   return rows[0].name
 }
@@ -253,10 +247,7 @@ export const findExistingPreparedAction = async (
     existing.kind !== input.kind ||
     existing.idempotencyKey !== input.idempotencyKey
   ) {
-    throw publicErrors.conflict("Agent action idempotency conflict", {
-      reason: "idempotency_conflict",
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   const storedFingerprint =
     existing.kind === "create_issue"
@@ -274,10 +265,7 @@ export const findExistingPreparedAction = async (
             existing.normalizedPayload
           ).requestFingerprint
   if (storedFingerprint !== input.requestFingerprint) {
-    throw publicErrors.conflict("Agent action idempotency conflict", {
-      reason: "idempotency_conflict",
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   return existing
 }
@@ -301,7 +289,7 @@ export const getActionAssetSnapshots = async (
 ): Promise<AssetSnapshot[]> => {
   if (input.assetIds.length === 0) return []
   if (!input.context.runId) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   const rows = await tx
     .select({
@@ -367,10 +355,7 @@ export const getActionAssetSnapshots = async (
       row.claimHolderType !== "agent_asset" ||
       row.claimHolderId !== assetId
     ) {
-      throw publicErrors.conflict("Agent attachment changed", {
-        reason: "asset_snapshot_changed",
-        resource: "agent_asset",
-      })
+      throw new HttpError({ code: "conflict" })
     }
     return {
       assetId,
@@ -388,7 +373,7 @@ export const reserveRootWrite = async (
   context: ValidGrant
 ) => {
   if (!context.rootRunId) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
   const rows = await tx
     .update(agentRuns)
@@ -402,9 +387,6 @@ export const reserveRootWrite = async (
     )
     .returning({ id: agentRuns.id })
   if (!rows[0]) {
-    throw publicErrors.conflict("Agent write limit reached", {
-      reason: "write_limit_reached",
-      resource: "agent_run",
-    })
+    throw new HttpError({ code: "conflict" })
   }
 }

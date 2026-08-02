@@ -65,7 +65,7 @@ describe("database migrations: legacy issue upgrades", () => {
           labels: "[]",
         },
       ])
-      expect(members.rows).toMatchObject([{ role: "super_admin" }])
+      expect(members.rows).toMatchObject([{ role: "owner" }])
     } finally {
       client.close()
     }

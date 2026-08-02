@@ -10,7 +10,7 @@ import type {
   AgentResumeTicket,
 } from "../../agent-client"
 
-export type AgentThreadPermissionMode = "ask_always" | "full_access"
+type AgentThreadPermissionMode = "ask_always" | "full_access"
 
 type AgentThreadDto = {
   createdAt: string

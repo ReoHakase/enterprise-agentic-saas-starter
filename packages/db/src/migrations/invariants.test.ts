@@ -7,7 +7,11 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
-import { applyBaselineSchema, migrationsFolder } from "./helpers"
+import {
+  applyBaselineSchema,
+  createMigrationPrefix,
+  migrationsFolder,
+} from "./helpers"
 
 describe("database migrations: invariants", () => {
   it("repairs legacy membership invariants deterministically and safely replays", async () => {
@@ -146,13 +150,13 @@ describe("database migrations: invariants", () => {
           id: "dedupe-a-stable",
           organizationId: "org-dedupe",
           userId: "dedupe-user",
-          role: "super_admin",
+          role: "owner",
         },
         {
           id: "multi-a-canonical",
           organizationId: "org-multi",
           userId: "multi-a-user",
-          role: "super_admin",
+          role: "owner",
         },
         {
           id: "multi-z-demoted",
@@ -170,7 +174,7 @@ describe("database migrations: invariants", () => {
           id: "zero-z-admin",
           organizationId: "org-zero",
           userId: "zero-admin-user",
-          role: "super_admin",
+          role: "owner",
         },
       ])
 
@@ -178,17 +182,17 @@ describe("database migrations: invariants", () => {
         `select
           organization.id,
           count(member.id) as memberCount,
-          sum(case when member.role = 'super_admin' then 1 else 0 end) as superAdminCount
+          sum(case when member.role = 'owner' then 1 else 0 end) as ownerCount
         from organization
         left join member on member.organization_id = organization.id
         group by organization.id
         order by organization.id`
       )
       expect(organizationRoles.rows).toMatchObject([
-        { id: "org-dedupe", memberCount: 1, superAdminCount: 1 },
-        { id: "org-empty", memberCount: 0, superAdminCount: 0 },
-        { id: "org-multi", memberCount: 2, superAdminCount: 1 },
-        { id: "org-zero", memberCount: 2, superAdminCount: 1 },
+        { id: "org-dedupe", memberCount: 1, ownerCount: 1 },
+        { id: "org-empty", memberCount: 0, ownerCount: 0 },
+        { id: "org-multi", memberCount: 2, ownerCount: 1 },
+        { id: "org-zero", memberCount: 2, ownerCount: 1 },
       ])
 
       await migrate(db, { migrationsFolder })
@@ -211,7 +215,7 @@ describe("database migrations: invariants", () => {
       ).rejects.toThrow(/unique/i)
       await expect(
         client.execute(
-          "update member set role = 'super_admin' where id = 'multi-z-demoted'"
+          "update member set role = 'owner' where id = 'multi-z-demoted'"
         )
       ).rejects.toThrow(/unique/i)
     } finally {
@@ -435,7 +439,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
     }
   })
 
-  it("allows only one pending invitation per tenant and normalized email", async () => {
+  it("allows expired pending history alongside a new active invitation", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle(client)
 
@@ -458,11 +462,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
         {
           sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
           args: [
-            "invitation-1",
+            "invitation-expired-by-time",
             "org-a",
             "member@example.com",
             "pending",
-            now + 60_000,
+            now - 1,
             now,
             "user-1",
           ],
@@ -473,7 +477,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
         client.execute({
           sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
           args: [
-            "invitation-duplicate",
+            "invitation-active",
             "org-a",
             "MEMBER@EXAMPLE.COM",
             "pending",
@@ -482,42 +486,102 @@ describe("database migrations: tenant and concurrency invariants", () => {
             "user-1",
           ],
         })
-      ).rejects.toThrow(/unique/i)
+      ).resolves.toBeDefined()
 
       await expect(
-        client.batch([
-          {
-            sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
-            args: [
-              "invitation-expired",
-              "org-a",
-              "member@example.com",
-              "expired",
-              now - 1,
-              now,
-              "user-1",
-            ],
-          },
-          {
-            sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
-            args: [
-              "invitation-other-tenant",
-              "org-b",
-              "member@example.com",
-              "pending",
-              now + 60_000,
-              now,
-              "user-1",
-            ],
-          },
-        ])
+        client.execute({
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "invitation-other-tenant",
+            "org-b",
+            "member@example.com",
+            "pending",
+            now + 60_000,
+            now,
+            "user-1",
+          ],
+        })
       ).resolves.toBeDefined()
+
+      const invitations = await client.execute(
+        "select id, status from invitation where organization_id = 'org-a' order by id"
+      )
+      expect(invitations.rows).toMatchObject([
+        { id: "invitation-active", status: "pending" },
+        { id: "invitation-expired-by-time", status: "pending" },
+      ])
+      const indexes = await client.execute("pragma index_list('invitation')")
+      expect(indexes.rows.map((row) => row.name)).not.toContain(
+        "invitation_pending_organization_email_uidx"
+      )
     } finally {
       client.close()
     }
   })
 
-  it("keeps one super admin membership under concurrent insert attempts", async () => {
+  it("drops the pending invitation index without changing existing rows", async () => {
+    const client = createClient({ url: "file::memory:" })
+    const db = drizzle(client)
+    const previousMigrations = await createMigrationPrefix({
+      through: "0027_nostalgic_sugar_man",
+    })
+
+    try {
+      await migrate(db, { migrationsFolder: previousMigrations })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["upgrade-user", "Owner", "owner@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["upgrade-org", "Upgrade Org", "upgrade-org", now],
+        },
+        {
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-expired",
+            "upgrade-org",
+            "member@example.com",
+            "pending",
+            now - 1,
+            now,
+            "upgrade-user",
+          ],
+        },
+      ])
+
+      await migrate(db, { migrationsFolder })
+      await expect(
+        client.execute({
+          sql: "insert into invitation(id,organization_id,email,status,expires_at,created_at,inviter_id) values(?,?,?,?,?,?,?)",
+          args: [
+            "upgrade-active",
+            "upgrade-org",
+            "member@example.com",
+            "pending",
+            now + 60_000,
+            now + 1,
+            "upgrade-user",
+          ],
+        })
+      ).resolves.toBeDefined()
+
+      const invitations = await client.execute(
+        "select id, status from invitation order by id"
+      )
+      expect(invitations.rows).toMatchObject([
+        { id: "upgrade-active", status: "pending" },
+        { id: "upgrade-expired", status: "pending" },
+      ])
+    } finally {
+      client.close()
+      await rm(previousMigrations, { recursive: true, force: true })
+    }
+  })
+
+  it("keeps one owner membership under concurrent insert attempts", async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "enterprise-saas-membership-concurrency-")
     )
@@ -548,23 +612,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
       const attempts = await Promise.allSettled([
         contenderA.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "membership-a",
-            "org-concurrent",
-            "user-a",
-            "super_admin",
-            now,
-          ],
+          args: ["membership-a", "org-concurrent", "user-a", "owner", now],
         }),
         contenderB.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "membership-b",
-            "org-concurrent",
-            "user-a",
-            "super_admin",
-            now,
-          ],
+          args: ["membership-b", "org-concurrent", "user-a", "owner", now],
         }),
       ])
       expect(
@@ -574,13 +626,11 @@ describe("database migrations: tenant and concurrency invariants", () => {
       const invariant = await bootstrapClient.execute(
         `select
           count(*) as memberCount,
-          sum(case when role = 'super_admin' then 1 else 0 end) as superAdminCount
+          sum(case when role = 'owner' then 1 else 0 end) as ownerCount
         from member
         where organization_id = 'org-concurrent'`
       )
-      expect(invariant.rows).toMatchObject([
-        { memberCount: 1, superAdminCount: 1 },
-      ])
+      expect(invariant.rows).toMatchObject([{ memberCount: 1, ownerCount: 1 }])
 
       await expect(
         bootstrapClient.execute({
@@ -598,10 +648,10 @@ describe("database migrations: tenant and concurrency invariants", () => {
         bootstrapClient.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
           args: [
-            "membership-second-super-admin",
+            "membership-second-owner",
             "org-concurrent",
             "user-b",
-            "super_admin",
+            "owner",
             now + 1,
           ],
         })

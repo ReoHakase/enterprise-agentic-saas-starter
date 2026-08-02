@@ -280,7 +280,7 @@ const createDatabase = async (): Promise<Db> => {
     id: "member-1",
     organizationId: "org-1",
     userId: "user-1",
-    role: "super_admin",
+    role: "owner",
     createdAt: now,
   })
   await db.insert(session).values({
@@ -367,7 +367,7 @@ describe("profile image service", () => {
         subject: { type: "user", id: "user-1" },
         uploadId: "upload-1",
       })
-    ).rejects.toMatchObject({ statusCode: 409 })
+    ).rejects.toMatchObject({ code: "conflict" })
   })
 
   it("materializes the Images response as a bounded Blob before R2 PUT", async () => {
@@ -463,7 +463,7 @@ describe("profile image service", () => {
         actorUserId: "user-1",
         subject: { type: "user", id: "user-1" },
       })
-    ).rejects.toMatchObject({ statusCode: 404 })
+    ).rejects.toMatchObject({ code: "not_found" })
 
     const replayedFile = pngFile(2)
     await expect(
@@ -475,8 +475,7 @@ describe("profile image service", () => {
         uploadId: "upload-2",
       })
     ).rejects.toMatchObject({
-      publicContext: { reason: "upload_superseded" },
-      statusCode: 409,
+      code: "conflict",
     })
     await expect(
       database.select({ image: user.image }).from(user)
@@ -651,7 +650,7 @@ describe("profile image service", () => {
         subject: { type: "organization", id: "org-1" },
         uploadId: "upload-role-race",
       })
-    ).rejects.toMatchObject({ statusCode: 403 })
+    ).rejects.toMatchObject({ code: "forbidden" })
     await expect(database.select().from(profileImages)).resolves.toMatchObject([
       { status: "superseded", uploadId: "upload-role-race" },
     ])
@@ -685,7 +684,7 @@ describe("profile image service", () => {
         sessionId: "profile-session",
         subject: { type: "organization", id: "org-1" },
       })
-    ).rejects.toMatchObject({ statusCode: 409 })
+    ).rejects.toMatchObject({ code: "active_organization_mismatch" })
     await expect(database.select().from(profileImages)).resolves.toMatchObject([
       { status: "ready", uploadId: "upload-before-session-change" },
     ])
@@ -760,7 +759,7 @@ describe("profile image service", () => {
         subject: { type: "user", id: "user-1" },
         uploadId: "upload-invalid",
       })
-    ).rejects.toMatchObject({ statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
     await expect(database.select().from(profileImages)).resolves.toHaveLength(0)
   })
 
@@ -783,7 +782,7 @@ describe("profile image service", () => {
         subject: { type: "user", id: "user-1" },
         uploadId: "upload-invalid-magic",
       })
-    ).rejects.toMatchObject({ statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
     expect(storage.info).not.toHaveBeenCalled()
     await expect(database.select().from(profileImages)).resolves.toHaveLength(0)
   })
@@ -809,7 +808,7 @@ describe("profile image service", () => {
         subject: { type: "user", id: "user-1" },
         uploadId: "upload-missing-content-type",
       })
-    ).rejects.toMatchObject({ statusCode: 503 })
+    ).rejects.toMatchObject({ code: "service_unavailable" })
     expect(storage.runtime.bucket.put).not.toHaveBeenCalled()
     await expect(database.select().from(profileImages)).resolves.toMatchObject([
       { status: "pending", uploadId: "upload-missing-content-type" },
@@ -843,21 +842,15 @@ describe("profile image service", () => {
         uploadId: "upload-oversized-output",
       })
     ).rejects.toMatchObject({
-      privateContext: {
-        module: "profile-images",
-        operation: "validateTransformedProfileImage",
-        provider: "images",
-      },
-      statusCode: 503,
+      code: "service_unavailable",
     })
     expect(storage.runtime.bucket.put).not.toHaveBeenCalled()
   })
 
-  it("redacts provider errors and leaves no metadata before reservation", async () => {
+  it("preserves provider errors and leaves no metadata before reservation", async () => {
     const storage = createRuntime()
-    storage.info.mockRejectedValue(
-      new Error("provider token and private image details")
-    )
+    const raw = new Error("provider token and private image details")
+    storage.info.mockRejectedValue(raw)
     configureFileStorageRuntime(storage.runtime)
     const file = pngFile()
 
@@ -869,9 +862,9 @@ describe("profile image service", () => {
       uploadId: "upload-provider-failure",
     }).catch((cause: unknown) => cause)
     expect(error).toMatchObject({
-      statusCode: 503,
-      publicMessage: "Service temporarily unavailable",
+      code: "service_unavailable",
     })
+    expect(error).toHaveProperty("cause", raw)
     expect(JSON.stringify(error)).not.toContain("provider token")
     await expect(database.select().from(profileImages)).resolves.toHaveLength(0)
   })

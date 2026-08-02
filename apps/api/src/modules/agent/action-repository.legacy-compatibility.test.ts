@@ -126,7 +126,6 @@ describe("Agent legacy update action compatibility", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "idempotency_conflict" },
     })
 
     const pendingResponse = await fixture.app.handle(

@@ -101,7 +101,13 @@ export const HistoryFailure = meta.story({
   beforeEach({ msw }) {
     msw.use(
       http.get("*/agent/threads/:threadId/messages", () =>
-        HttpResponse.json({ message: "Unavailable" }, { status: 503 })
+        HttpResponse.json(
+          {
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
+          },
+          { status: 503 }
+        )
       )
     )
   },

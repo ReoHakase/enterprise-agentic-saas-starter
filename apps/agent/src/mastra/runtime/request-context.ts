@@ -1,4 +1,4 @@
-import type { RequestContext } from "@mastra/core/request-context"
+import { RequestContext } from "@mastra/core/request-context"
 
 import type { AgentToolBudget } from "../core/budget/tool"
 import type { AgentVisionBudget } from "../core/budget/vision"
@@ -26,9 +26,18 @@ export type ProductAgentRequestContext = {
   runtime?: ProductAgentRequestState
 }
 
+export const createProductRequestContext = (
+  runtime: ProductAgentRequestContext["runtime"]
+): RequestContext<ProductAgentRequestContext> => {
+  const requestContext = new RequestContext<ProductAgentRequestContext>()
+  requestContext.set("runtime", runtime)
+  return requestContext
+}
+
 export type ProductAgentExecution = {
   api: AgentControlPlanePort
   budget: AgentToolBudget
+  onRevoked: (cause: unknown) => void
   rootRunId: string
   runGrant: string
   settlement: RunSettlement

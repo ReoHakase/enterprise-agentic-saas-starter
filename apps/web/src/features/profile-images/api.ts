@@ -1,10 +1,8 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { toConsoleApiError } from "@/features/console"
-
 export const deleteUserProfileImage = async (client: ApiClient) => {
   const result = await client.files["profile-images"].users.me.delete()
-  if (result.error) throw toConsoleApiError(result.error, result.status)
+  if (result.error) throw result.error
 }
 
 export const deleteOrganizationProfileImage = async (
@@ -16,5 +14,5 @@ export const deleteOrganizationProfileImage = async (
       organizationId,
     })
     .delete()
-  if (result.error) throw toConsoleApiError(result.error, result.status)
+  if (result.error) throw result.error
 }

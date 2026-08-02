@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   passkey: vi.fn<(input: unknown) => Promise<void>>(),
   push: vi.fn<(to: string) => void>(),
   refresh: vi.fn<() => void>(),
+  reportObservedError: vi.fn<(error: unknown) => void>(),
   signOut: vi.fn<() => void>(),
   socialSignIn: vi.fn<(input: unknown) => void>(),
   toastError: vi.fn<(message: string) => void>(),
@@ -36,6 +37,10 @@ const providerSecretError: AuthError = {
 
 vi.mock("sonner", () => ({
   toast: { error: mocks.toastError },
+}))
+
+vi.mock("@/lib/report-observed-error", () => ({
+  reportObservedError: mocks.reportObservedError,
 }))
 
 vi.mock("next/navigation", () => ({
@@ -147,6 +152,10 @@ describe("authentication action errors", () => {
       mocks.passkey.mock.invocationCallOrder[0] ?? 0
     )
     expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.reportObservedError).toHaveBeenCalledWith(
+      providerSecretError.error
+    )
+    expect(mocks.reportObservedError).toHaveBeenCalledTimes(2)
   })
 
   it("returns a successful passkey sign-in to the scoped invitation", async () => {

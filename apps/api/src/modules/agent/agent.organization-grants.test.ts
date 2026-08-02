@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
 import {
-  transferSuperAdminById,
+  transferOwnershipById,
   updateMemberRoleById,
 } from "../organizations/public"
 import { createFixture, request } from "./agent.test-support"
@@ -133,7 +133,7 @@ describe("Agent organization projections and grant revocation", () => {
     expect(account).not.toHaveProperty("email")
     expect(activeOrganization).toMatchObject({
       slug: "agent-org-a",
-      role: "super_admin",
+      role: "owner",
       permissions: { canDeleteAnyIssue: true },
     })
     expect(members).toHaveLength(2)
@@ -324,7 +324,7 @@ describe("Agent organization projections and grant revocation", () => {
     ).rejects.toMatchObject({ code: "unauthorized" })
   })
 
-  it("revokes both promoted and demoted users during super-admin transfer", async () => {
+  it("revokes both promoted and demoted users during ownership transfer", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApi(db)
     const createRun = async (input: {
@@ -363,16 +363,16 @@ describe("Agent organization projections and grant revocation", () => {
     })
 
     await expect(
-      transferSuperAdminById(db, {
+      transferOwnershipById(db, {
         actorMemberId: "agent-member-a-1",
         actorUserId: "agent-user-b",
         organizationId: "agent-org-a",
         targetMemberId: "agent-member-a-2",
       })
-    ).resolves.toBe("actor_not_super_admin")
+    ).resolves.toBe("actor_not_owner")
 
     await expect(
-      transferSuperAdminById(db, {
+      transferOwnershipById(db, {
         actorMemberId: "agent-member-a-1",
         actorUserId: "agent-user-a",
         organizationId: "agent-org-a",

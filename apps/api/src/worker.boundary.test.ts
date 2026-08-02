@@ -6,7 +6,6 @@ const boundarySpies = vi.hoisted(() => ({
   fileCleanup: vi.fn<() => void>(),
   fileRuntime: vi.fn<() => void>(),
   internalApi: vi.fn<() => void>(),
-  invitationJobs: vi.fn<() => void>(),
   otlpExporter: vi.fn<(options: unknown) => void>(),
   organizationDeletion: vi.fn<() => void>(),
   profileImageCleanup: vi.fn<() => void>(),
@@ -102,9 +101,6 @@ vi.mock("./modules/files/worker-runtime", () => ({
 vi.mock("./modules/organizations/deletion-jobs", () => ({
   processOrganizationDeletionJobs: boundarySpies.organizationDeletion,
 }))
-vi.mock("./modules/organizations/invitation-email-jobs", () => ({
-  processInvitationEmailJobs: boundarySpies.invitationJobs,
-}))
 vi.mock("./modules/profile-images/cleanup-jobs", () => ({
   processProfileImageCleanupJobs: boundarySpies.profileImageCleanup,
 }))
@@ -132,7 +128,12 @@ describe("Worker maintenance executable boundaries", () => {
     )
 
     expect(response.status).toBe(503)
-    expect(await response.text()).toBe("Agent maintenance in progress")
+    expect(await response.json()).toEqual({
+      error: "service_unavailable",
+      message: "Agent maintenance is in progress.",
+    })
+    expect(response.headers.get("retry-after")).toBe("300")
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/)
     expect(boundarySpies.fileRuntime).not.toHaveBeenCalled()
     expect(boundarySpies.internalApi).not.toHaveBeenCalled()
   })
@@ -155,7 +156,6 @@ describe("Worker maintenance executable boundaries", () => {
     expect(boundarySpies.agentActionSweep).not.toHaveBeenCalled()
     expect(boundarySpies.agentAssetLifecycle).not.toHaveBeenCalled()
     expect(boundarySpies.fileCleanup).not.toHaveBeenCalled()
-    expect(boundarySpies.invitationJobs).not.toHaveBeenCalled()
     expect(boundarySpies.organizationDeletion).not.toHaveBeenCalled()
     expect(boundarySpies.profileImageCleanup).not.toHaveBeenCalled()
   })
@@ -215,6 +215,18 @@ describe("Worker maintenance executable boundaries", () => {
 
   it("keeps API exporters disabled for production, remote, or incomplete identities", () => {
     for (const environment of [
+      {
+        DEV_SESSION_ID: "session-1",
+        DEV_WORKTREE_ID: "feature-auth",
+        NODE_ENV: "test",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+      },
+      {
+        DEV_SESSION_ID: "session-1",
+        DEV_WORKTREE_ID: "feature-auth",
+        NODE_ENV: "development",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318/",
+      },
       {
         DEV_SESSION_ID: "session-1",
         DEV_WORKTREE_ID: "feature-auth",

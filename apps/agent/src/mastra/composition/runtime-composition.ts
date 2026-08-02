@@ -1,13 +1,13 @@
 import { Observability } from "@mastra/observability"
 import { OtelBridge } from "@mastra/otel-bridge"
 
+import { AgentTraceErrorNormalizer } from "../adapters/telemetry/trace-error-normalizer"
 import { createAgentStorage } from "../storage"
 import {
   ApprovedIssueActionExecutionRegistry,
   createApprovedIssueActionResumeRuntime,
   createApprovedIssueActionWorkflow,
 } from "../workflows/approved-issue-action"
-import { createMemoryCommitWorkflow } from "../workflows/memory-commit"
 import { createProductAgentComposition } from "./create-product-agent"
 import { createProductRuntime } from "./create-runtime"
 import type { PortableAgentRuntimeEnv } from "./environment"
@@ -29,7 +29,6 @@ export const createAgentRuntimeComposition = (
   const approvedIssueActionWorkflow = createApprovedIssueActionWorkflow(
     approvedIssueActionExecutionRegistry
   )
-  const memoryCommitWorkflow = createMemoryCommitWorkflow(agents.memory)
   const sessionId = environment.DEV_SESSION_ID?.trim()
   const worktreeId = environment.DEV_WORKTREE_ID?.trim()
   const observability =
@@ -41,7 +40,9 @@ export const createAgentRuntimeComposition = (
           configs: {
             default: {
               bridge: new OtelBridge(),
+              logging: { enabled: false },
               serviceName: "enterprise-agentic-saas-agent",
+              spanOutputProcessors: [new AgentTraceErrorNormalizer()],
             },
           },
           sensitiveDataFilter: {
@@ -73,13 +74,16 @@ export const createAgentRuntimeComposition = (
     ...agents,
     approvedIssueActionExecutionRegistry,
     approvedIssueActionWorkflow,
-    createApprovalResumeRuntime: () =>
-      createApprovedIssueActionResumeRuntime(storage),
-    memoryCommitWorkflow,
+    createApprovalResumeRuntime: () => {
+      const resumeStorage = createAgentStorage(environment)
+      return {
+        initialize: () => createApprovedIssueActionResumeRuntime(resumeStorage),
+        storage: resumeStorage,
+      }
+    },
     mastra: createProductRuntime({
       ...agents,
       approvedIssueActionWorkflow,
-      memoryCommitWorkflow,
       observability,
       storage,
     }),

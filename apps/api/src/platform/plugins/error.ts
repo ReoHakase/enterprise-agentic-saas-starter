@@ -1,15 +1,20 @@
 import { Elysia, ValidationError } from "elysia"
 
-import { AppError, sanitizePublicErrorContext } from "../../errors/app-error"
-import { errorDefinition } from "../../errors/error-registry"
+import {
+  HttpError,
+  type HttpErrorCode,
+  type HttpFieldErrors,
+  httpMessageByErrorCode,
+  httpStatusFor,
+} from "../../errors/http-error"
 import {
   captureObservedException,
   recordObservedHttpStatus,
 } from "../observability/runtime"
 
-const isAppError = (value: unknown): value is AppError => {
+const isHttpError = (value: unknown): value is HttpError => {
   try {
-    return value instanceof AppError
+    return value instanceof HttpError
   } catch {
     return false
   }
@@ -26,266 +31,195 @@ const isValidationError = (value: unknown): value is ValidationError => {
 const isResponseValidationError = (code: string, error: unknown) =>
   code === "VALIDATION" && isValidationError(error) && error.type === "response"
 
-const statusCodeFor = (code: string, error: unknown) => {
-  if (isAppError(error)) {
-    return error.statusCode
+type ErrorProjection = {
+  body: {
+    error: HttpErrorCode
+    fieldErrors?: Record<string, string[]>
+    message: string
   }
-
-  if (code === "NOT_FOUND") {
-    return 404
-  }
-
-  if (isResponseValidationError(code, error)) {
-    return 500
-  }
-
-  if (code === "VALIDATION") {
-    return 400
-  }
-
-  return 500
+  capture: { value: unknown } | undefined
+  httpStatus: number
+  retryAfter: number | undefined
 }
 
-const attributeCodeFor = (elysiaCode: string, error: unknown): string => {
-  if (isAppError(error)) {
-    return error.code
-  }
+const fallbackProjection = (error: unknown): ErrorProjection => ({
+  body: {
+    error: "internal_error",
+    message: httpMessageByErrorCode.internal_error,
+  },
+  capture: { value: error },
+  httpStatus: 500,
+  retryAfter: undefined,
+})
 
-  if (elysiaCode === "NOT_FOUND") {
-    return "not_found"
-  }
-
-  if (isResponseValidationError(elysiaCode, error)) {
-    return "internal_error"
-  }
-
-  if (elysiaCode === "VALIDATION") {
-    return "validation_error"
-  }
-
-  return "internal_error"
-}
-
-type FieldErrors = Record<string, string[]>
-
-const unsafeFieldNames = new Set(["__proto__", "constructor", "prototype"])
 const fieldSegmentPattern = /^[A-Za-z0-9_-]{1,64}$/
+const unsafeFieldNames = new Set(["__proto__", "constructor", "prototype"])
 
-const fieldPathFrom = (path: unknown): string | null => {
-  if (!Array.isArray(path) || path.length === 0 || path.length > 8) {
-    return null
-  }
+const publicFieldPath = (path: unknown): string | undefined => {
+  try {
+    if (path === undefined || path === null) return undefined
+    const rawSegments = Array.isArray(path) ? path : String(path).split(".")
+    if (rawSegments.length === 0 || rawSegments.length > 8) return undefined
 
-  const segments: string[] = []
-  for (const item of path) {
-    const key =
-      item && typeof item === "object" && "key" in item
-        ? Reflect.get(item, "key")
-        : item
-    if (typeof key !== "string" && typeof key !== "number") {
-      return null
+    const segments: string[] = []
+    for (const item of rawSegments) {
+      const key =
+        item && typeof item === "object" && "key" in item
+          ? Reflect.get(item, "key")
+          : item
+      const segment = typeof key === "number" ? String(key) : key
+      if (
+        typeof segment !== "string" ||
+        unsafeFieldNames.has(segment) ||
+        !fieldSegmentPattern.test(segment)
+      ) {
+        return undefined
+      }
+      segments.push(segment)
     }
-    const segment = String(key)
-    if (unsafeFieldNames.has(segment) || !fieldSegmentPattern.test(segment)) {
-      return null
-    }
-    segments.push(segment)
+    return segments[0] && !/^\d+$/.test(segments[0])
+      ? segments.join(".")
+      : undefined
+  } catch {
+    return undefined
   }
-
-  return typeof segments[0] === "string" && !/^\d+$/.test(segments[0])
-    ? segments.join(".")
-    : null
 }
 
-const standardIssuesFrom = (error: ValidationError): unknown[] => {
-  const validator = error.validator
-  if (!validator || typeof validator !== "object") {
-    return []
-  }
+const publicText = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined
+  const text = value.trim()
+  return text.length > 0 && text.length <= 500 ? text : undefined
+}
 
-  const nestedSchema = Reflect.get(validator, "schema")
-  const schema =
-    "~standard" in validator
-      ? validator
-      : nestedSchema && typeof nestedSchema === "object"
-        ? nestedSchema
-        : null
-  if (!schema || !("~standard" in schema)) {
-    return []
-  }
+const publicFieldErrors = (
+  value: HttpFieldErrors | undefined
+): Record<string, string[]> | undefined => {
+  if (!value || typeof value !== "object") return undefined
 
-  const standard = schema["~standard"]
-  if (!standard || typeof standard.validate !== "function") {
-    return []
-  }
-
+  const result: Record<string, string[]> = {}
   try {
-    const result = standard.validate(error.value)
-    if (result instanceof Promise || !result.issues) {
-      return []
+    for (const [rawField, rawMessages] of Object.entries(value).slice(0, 20)) {
+      const field = publicFieldPath(rawField)
+      if (!field || !Array.isArray(rawMessages)) continue
+      const messages = rawMessages
+        .slice(0, 20)
+        .map(publicText)
+        .filter((message): message is string => message !== undefined)
+      if (messages.length > 0) result[field] = messages
     }
-    return [...result.issues]
+  } catch {
+    return undefined
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+const standardIssues = (error: ValidationError): unknown[] => {
+  try {
+    const validator = error.validator
+    if (!validator || typeof validator !== "object") return []
+    const nestedSchema = Reflect.get(validator, "schema")
+    const schema =
+      "~standard" in validator
+        ? validator
+        : nestedSchema && typeof nestedSchema === "object"
+          ? nestedSchema
+          : undefined
+    if (!schema || !("~standard" in schema)) return []
+    const standard = schema["~standard"]
+    if (!standard || typeof standard.validate !== "function") return []
+    const result = standard.validate(error.value)
+    return result instanceof Promise || !result.issues ? [] : [...result.issues]
   } catch {
     return []
   }
 }
 
-const fieldErrorsFor = (
-  code: string,
-  error: unknown
-): FieldErrors | undefined => {
-  if (isAppError(error)) {
-    const field = error.publicContext.field
-    if (typeof field !== "string") {
-      return undefined
+const validationFieldErrors = (
+  error: ValidationError
+): Record<string, string[]> | undefined => {
+  const fieldErrors: Record<string, string[]> = {}
+  try {
+    for (const issue of standardIssues(error).slice(0, 20)) {
+      if (!issue || typeof issue !== "object") continue
+      const field = publicFieldPath(Reflect.get(issue, "path"))
+      if (field && !fieldErrors[field]) fieldErrors[field] = ["Invalid value."]
     }
-    const safeField = fieldPathFrom([field])
-    return safeField ? { [safeField]: [error.publicMessage] } : undefined
-  }
-
-  if (
-    code !== "VALIDATION" ||
-    !isValidationError(error) ||
-    error.type === "response"
-  ) {
+  } catch {
     return undefined
   }
-
-  const fieldErrors: FieldErrors = {}
-  for (const issue of standardIssuesFrom(error).slice(0, 20)) {
-    if (!issue || typeof issue !== "object") {
-      continue
-    }
-    const field = fieldPathFrom(Reflect.get(issue, "path"))
-    if (field && !fieldErrors[field]) {
-      fieldErrors[field] = ["Invalid value"]
-    }
-  }
-
   return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined
 }
 
-const recordError = (
-  httpStatus: number,
-  elysiaCode: string,
-  error: unknown,
-  request: Request,
-  requestId: string,
-  route: string
-) => {
-  const appCode = attributeCodeFor(elysiaCode, error)
-  recordObservedHttpStatus(httpStatus, appCode)
-
-  const shouldCapture = isAppError(error)
-    ? errorDefinition(error.code).capture
-    : httpStatus >= 500
-  if (shouldCapture && requestId) {
-    captureObservedException(error, {
-      errorCode: appCode,
-      method: request.method,
-      requestId,
-      route: route || "unmatched",
-      statusCode: httpStatus,
-    })
-  }
-}
-
-const responseBody = (code: string, error: unknown, requestId: string) => {
-  const fieldErrors = fieldErrorsFor(code, error)
-
-  if (isResponseValidationError(code, error)) {
-    return {
-      error: {
-        code: "internal_error",
-        message: "Internal server error",
-        requestId,
-      },
-    }
-  }
-
-  if (isAppError(error)) {
-    const context = sanitizePublicErrorContext(error.publicContext)
-    return {
-      error: {
-        code: error.code,
-        message: error.publicMessage,
-        ...(Object.keys(context).length > 0 ? { context } : {}),
-        ...(fieldErrors ? { fieldErrors } : {}),
-        requestId,
-      },
-    }
-  }
-
-  if (code === "NOT_FOUND") {
-    return {
-      error: {
-        code: "not_found",
-        message: "Not found",
-        requestId,
-      },
-    }
-  }
-
-  if (code === "VALIDATION") {
-    return {
-      error: {
-        code: "validation_error",
-        message: "Invalid request",
-        ...(fieldErrors ? { fieldErrors } : {}),
-        requestId,
-      },
-    }
-  }
-
-  return {
-    error: {
-      code: "internal_error",
-      message: "Internal server error",
-      requestId,
-    },
-  }
-}
-
-const internalErrorBody = (requestId: string) => ({
-  error: {
-    code: "internal_error",
-    message: "Internal server error",
-    requestId,
-  },
+const responseBody = (
+  errorCode: HttpErrorCode,
+  publicMessage?: unknown,
+  fieldErrors?: Record<string, string[]>
+): ErrorProjection["body"] => ({
+  error: errorCode,
+  message: publicText(publicMessage) ?? httpMessageByErrorCode[errorCode],
+  ...(fieldErrors ? { fieldErrors } : {}),
 })
 
 /** @internal */
 export const projectErrorForResponse = (
   code: string,
-  error: unknown,
-  requestId: string
-) => {
-  let httpStatus = 500
-  let body = internalErrorBody(requestId)
-  let retryAfter: number | undefined
-
+  error: unknown
+): ErrorProjection => {
   try {
-    httpStatus = statusCodeFor(code, error)
-    body = responseBody(code, error, requestId)
-
-    if (isAppError(error)) {
-      const definition = errorDefinition(error.code)
-      if (
-        definition.retryable &&
-        typeof error.publicContext.retryAfter === "number"
-      ) {
-        retryAfter = error.publicContext.retryAfter
+    if (isHttpError(error)) {
+      const httpStatus = httpStatusFor(error.code)
+      return {
+        body: responseBody(
+          error.code,
+          httpStatus < 500 ? error.publicMessage : undefined,
+          httpStatus < 500 ? publicFieldErrors(error.fieldErrors) : undefined
+        ),
+        capture:
+          httpStatus >= 500
+            ? {
+                value: error.cause === undefined ? error : error.cause,
+              }
+            : undefined,
+        httpStatus,
+        retryAfter: error.retryAfter,
       }
     }
-  } catch {
-    httpStatus = 500
-    body = internalErrorBody(requestId)
-  }
 
-  return { body, httpStatus, retryAfter }
+    if (code === "NOT_FOUND") {
+      return {
+        body: responseBody("not_found"),
+        capture: undefined,
+        httpStatus: 404,
+        retryAfter: undefined,
+      }
+    }
+
+    if (
+      code === "PARSE" ||
+      code === "INVALID_COOKIE_SIGNATURE" ||
+      (code === "VALIDATION" && !isResponseValidationError(code, error))
+    ) {
+      return {
+        body: responseBody(
+          "validation_error",
+          undefined,
+          isValidationError(error) ? validationFieldErrors(error) : undefined
+        ),
+        capture: undefined,
+        httpStatus: 400,
+        retryAfter: undefined,
+      }
+    }
+
+    return fallbackProjection(error)
+  } catch {
+    return fallbackProjection(error)
+  }
 }
 
 export const errorPlugin = new Elysia({ name: "error" })
+  .error({ HttpError })
   .onError(({ code, error, request, route, set }) => {
     const responseRequestId = set.headers["x-request-id"]
     const requestId =
@@ -293,35 +227,26 @@ export const errorPlugin = new Elysia({ name: "error" })
         ? responseRequestId
         : crypto.randomUUID()
     set.headers["x-request-id"] = requestId
-
-    const errorCode = String(code)
-    const { body, httpStatus, retryAfter } = projectErrorForResponse(
-      errorCode,
-      error,
-      requestId
-    )
-
     set.headers["cache-control"] = "no-store"
 
-    if (retryAfter !== undefined) {
-      set.headers["retry-after"] = String(retryAfter)
+    const projection = projectErrorForResponse(String(code), error)
+    if (projection.retryAfter !== undefined) {
+      set.headers["retry-after"] = String(projection.retryAfter)
     }
 
-    try {
-      recordError(httpStatus, errorCode, error, request, requestId, route)
-    } catch {
-      recordObservedHttpStatus(500, "internal_error")
-      captureObservedException(error, {
-        errorCode: "internal_error",
+    const errorCode = projection.body.error
+    recordObservedHttpStatus(projection.httpStatus, errorCode)
+    if (projection.capture !== undefined) {
+      captureObservedException(projection.capture.value, {
+        errorCode,
         method: request.method,
         requestId,
         route: route || "unmatched",
-        statusCode: 500,
+        statusCode: projection.httpStatus,
       })
     }
 
-    set.status = httpStatus
-
-    return body
+    set.status = projection.httpStatus
+    return projection.body
   })
   .as("global")

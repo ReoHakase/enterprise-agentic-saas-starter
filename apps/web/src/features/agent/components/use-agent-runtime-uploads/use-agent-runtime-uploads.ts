@@ -3,6 +3,7 @@ import { useCallback, useRef } from "react"
 
 import { apiClient } from "@/lib/api-client"
 import { clientEnv } from "@/lib/env.client"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { deleteAgentAsset } from "../../api"
 import {
@@ -10,7 +11,6 @@ import {
   maximumImageBytes,
   maximumImagesPerMessage,
   maximumImagesTotalBytes,
-  toAgentImageUploadError,
   type AgentThreadDraft,
   type RegisteredUpload,
 } from "../runtime-state-types/runtime-state-types"
@@ -113,7 +113,11 @@ export const useAgentRuntimeUploads = ({
               await deleteAgentAsset(apiClient, {
                 organizationId,
                 assetId: asset.id,
-              }).catch(() => undefined)
+              }).catch((error: unknown) => {
+                reportObservedError(error, {
+                  operation: "agent.asset.cleanup",
+                })
+              })
               return
             }
             const staged = { asset, file, blobUrl: URL.createObjectURL(file) }
@@ -122,7 +126,7 @@ export const useAgentRuntimeUploads = ({
               stagedAssets: [...current.stagedAssets, staged],
             }))
           } catch (error) {
-            if (!controller.signal.aborted) throw toAgentImageUploadError(error)
+            if (!controller.signal.aborted) throw error
           } finally {
             uploadsRef.current.delete(controller)
             if (

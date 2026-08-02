@@ -3,7 +3,7 @@ import { issueActivityEvents, issues } from "@enterprise-agentic-saas/db/schema"
 import type { issueFileOwners } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import { fileOwnerPrefix, type FileOwnerType } from "./constants"
 
 type FileTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
@@ -39,28 +39,18 @@ type FileOwnerAdapter = {
 const issueOwnerAdapter: FileOwnerAdapter = {
   type: "issue",
   async assertExists(db, input) {
-    try {
-      const rows = await db
-        .select({ id: issues.id })
-        .from(issues)
-        .where(
-          and(
-            eq(issues.id, input.ownerId),
-            eq(issues.organizationId, input.organizationId)
-          )
+    const rows = await db
+      .select({ id: issues.id })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.id, input.ownerId),
+          eq(issues.organizationId, input.organizationId)
         )
-        .limit(1)
-      if (!rows[0]) {
-        throw publicErrors.notFound("File owner not found", {
-          resource: "file_owner",
-        })
-      }
-    } catch (cause) {
-      if (cause instanceof AppError) throw cause
-      throw publicErrors.internal(cause, {
-        module: "files",
-        operation: "assertIssueOwnerExists",
-      })
+      )
+      .limit(1)
+    if (!rows[0]) {
+      throw new HttpError({ code: "not_found" })
     }
   },
   ownerRow: ({ fileId, organizationId, ownerId }) => ({

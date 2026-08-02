@@ -150,9 +150,9 @@ export const member = sqliteTable(
       table.organizationId,
       table.userId
     ),
-    uniqueIndex("member_organization_super_admin_uidx")
+    uniqueIndex("member_organization_owner_uidx")
       .on(table.organizationId)
-      .where(sql`${table.role} = 'super_admin'`),
+      .where(sql`${table.role} = 'owner'`),
   ]
 )
 
@@ -177,9 +177,6 @@ export const invitation = sqliteTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
-    uniqueIndex("invitation_pending_organization_email_uidx")
-      .on(table.organizationId, sql`lower(${table.email})`)
-      .where(sql`${table.status} = 'pending'`),
   ]
 )
 

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ConsoleApiError } from "@/features/console"
+import { httpError } from "@/test-support/http-error"
 
 import type { OrganizationDetail } from "../../schema"
 import { OrganizationDangerZone } from "./organization-danger-zone"
@@ -54,7 +54,7 @@ const organization: OrganizationDetail = {
   name: "Acme",
   slug: "acme",
   profileImage: null,
-  role: "super_admin",
+  role: "owner",
   active: true,
   createdAt: "2026-07-14T00:00:00.000Z",
   invitationCount: 0,
@@ -65,7 +65,7 @@ const organization: OrganizationDetail = {
     canInviteMembers: true,
     canManageMembers: true,
     canManageAdmins: true,
-    canTransferSuperAdmin: true,
+    canTransferOwnership: true,
   },
 }
 
@@ -123,32 +123,27 @@ describe("OrganizationDangerZone", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization deleted")
   })
 
-  it("does not expose organization deletion to non-Super Admins", () => {
+  it("does not expose organization deletion to non-Owners", () => {
     renderDangerZone({
       ...organization,
       role: "admin",
       permissions: {
         ...organization.permissions,
         canManageAdmins: false,
-        canTransferSuperAdmin: false,
+        canTransferOwnership: false,
       },
     })
 
     expect(
       screen.queryByRole("button", { name: "Delete organization" })
     ).not.toBeInTheDocument()
-    expect(screen.getByText(/Only the Super Admin/u)).toBeInTheDocument()
+    expect(screen.getByText(/Only the Owner/u)).toBeInTheDocument()
   })
 
   it("keeps confirmations and offers reauthentication when the session is stale", async () => {
     const user = userEvent.setup()
     mocks.deleteOrganization.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "step_up_required",
-        context: { action: "organization.delete", maxAgeSeconds: 600 },
-        message: "Recent authentication required",
-        status: 403,
-      })
+      httpError(403, "step_up_required")
     )
     renderDangerZone()
 
@@ -178,12 +173,7 @@ describe("OrganizationDangerZone", () => {
   it("owns a server failure in the destructive dialog without a duplicate toast", async () => {
     const user = userEvent.setup()
     mocks.deleteOrganization.mockRejectedValueOnce(
-      new ConsoleApiError({
-        code: "internal_error",
-        message: "Internal server error",
-        requestId: "req_delete_01",
-        status: 500,
-      })
+      httpError(500, "internal_error")
     )
     renderDangerZone()
 
@@ -196,7 +186,7 @@ describe("OrganizationDangerZone", () => {
 
     expect(
       await screen.findByText(
-        "The organization could not be deleted. Try again. If the problem continues, contact support. Reference ID: req_delete_01"
+        "The organization could not be deleted. Try again. If the problem continues, contact support."
       )
     ).toBeInTheDocument()
     expect(mocks.toastError).not.toHaveBeenCalled()

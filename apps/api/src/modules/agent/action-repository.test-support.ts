@@ -81,7 +81,7 @@ export const createFixture = async () => {
       id: "action-member-a",
       organizationId: "action-org-a",
       userId: "action-user-a",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {
@@ -95,7 +95,7 @@ export const createFixture = async () => {
       id: "action-member-other",
       organizationId: "action-org-b",
       userId: "action-user-a",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
   ])

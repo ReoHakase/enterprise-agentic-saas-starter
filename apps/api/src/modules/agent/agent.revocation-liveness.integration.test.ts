@@ -65,7 +65,7 @@ const seedIdentity = async (db: TestDatabase, now: Date) => {
     id: "revocation-member",
     organizationId: "revocation-org",
     userId: "revocation-user",
-    role: "super_admin",
+    role: "owner",
     createdAt: now,
   })
   await db.insert(schema.session).values({
@@ -136,8 +136,8 @@ const readProductModelCalls = async (
 }
 
 describe("Agent external revocation liveness", () => {
-  it.each(["survive", "crash", "tool-race"] as const)(
-    "cuts off late output and keeps canonical Memory user-only when the host %s",
+  it.each(["survive", "restart", "tool-race"] as const)(
+    "cuts off late output and keeps Memory free of revoked data when the host %s",
     async (hostOutcome) => {
       const directory = await mkdtemp(join(tmpdir(), "agent-revocation-g4-"))
       const applicationPath = join(directory, "application.db")
@@ -231,22 +231,31 @@ describe("Agent external revocation liveness", () => {
 
         let survivalEvidence: unknown = null
         if (hostOutcome === "survive") {
-          survivalEvidence = {
-            drainStatus: await fetch(`${host.url}/__g4/drain`, {
-              method: "POST",
-            }).then(({ status }) => status),
-            metrics: await fetch(`${host.url}/__g4/metrics`).then((item) =>
-              item.json()
-            ),
-            reopenStatus: await fetch(`${host.url}/__g4/reopen`, {
-              method: "POST",
-            }).then(({ status }) => status),
-            runs: await db
-              .select({ status: schema.agentRuns.status })
-              .from(schema.agentRuns)
-              .where(eq(schema.agentRuns.threadId, thread.id)),
-          }
-        } else if (hostOutcome === "crash") {
+          await vi.waitUntil(async () => {
+            survivalEvidence = {
+              metrics: await fetch(`${host.url}/__g4/metrics`).then((item) =>
+                item.json()
+              ),
+              runs: await db
+                .select({ status: schema.agentRuns.status })
+                .from(schema.agentRuns)
+                .where(eq(schema.agentRuns.threadId, thread.id)),
+            }
+            return (
+              JSON.stringify(survivalEvidence) ===
+              JSON.stringify({
+                metrics: {
+                  cancelRunCalls: 0,
+                  finishRunCalls: 1,
+                  livenessRejections: 1,
+                  prepareCreateIssueCalls: 0,
+                  releaseCalls: 1,
+                },
+                runs: [{ status: "canceled" }],
+              })
+            )
+          })
+        } else if (hostOutcome === "restart") {
           await stopChild(host.child)
           agentHost = undefined
           const reopened = await startAgentHost({
@@ -256,9 +265,6 @@ describe("Agent external revocation liveness", () => {
           agentHost = reopened.child
           host.child = reopened.child
           host.url = reopened.url
-        } else {
-          await fetch(`${host.url}/__g4/drain`, { method: "POST" })
-          await fetch(`${host.url}/__g4/reopen`, { method: "POST" })
         }
         const providerCalls =
           hostOutcome === "tool-race"
@@ -279,15 +285,13 @@ describe("Agent external revocation liveness", () => {
         expect(survivalEvidence).toEqual(
           hostOutcome === "survive"
             ? {
-                drainStatus: 200,
                 metrics: {
                   cancelRunCalls: 0,
                   finishRunCalls: 1,
-                  livenessRejections: 2,
+                  livenessRejections: 1,
                   prepareCreateIssueCalls: 0,
                   releaseCalls: 1,
                 },
-                reopenStatus: 200,
                 runs: [{ status: "canceled" }],
               }
             : null
@@ -316,14 +320,19 @@ describe("Agent external revocation liveness", () => {
           }),
         })
         expect(history.status).toBe(200)
-        const historyText = await history.text()
+        const historyBody: {
+          messages: Array<{ id: string; role: string }>
+        } = await history.json()
+        const historyText = JSON.stringify(historyBody)
         expect(historyText).toContain(
           hostOutcome === "tool-race"
             ? "message_g4_revocation_tool"
             : "message_g4_revocation"
         )
         expect(historyText).toContain('"role":"user"')
-        expect(historyText).not.toContain('"role":"assistant"')
+        expect(historyBody.messages.map(({ role }) => role)).toEqual(
+          hostOutcome === "tool-race" ? ["user", "assistant"] : ["user"]
+        )
         for (const forbidden of [
           "BEFORE_REVOKE",
           "AFTER_REVOKE",
@@ -334,23 +343,30 @@ describe("Agent external revocation liveness", () => {
         ]) {
           expect(historyText).not.toContain(forbidden)
         }
-        expect(
-          await fetch(
-            `${host.url}/__g4/inspect-revocation?threadId=${encodeURIComponent(thread.id)}`
-          ).then((item) => item.json())
-        ).toMatchObject({
-          messages: [
-            {
-              id:
-                hostOutcome === "tool-race"
-                  ? "message_g4_revocation_tool"
-                  : "message_g4_revocation",
-              role: "user",
-            },
-          ],
+        const inspected: {
+          messages: Array<{ id: string; role: string }>
+          threadId: string
+          title: string
+        } = await fetch(
+          `${host.url}/__g4/inspect-revocation?threadId=${encodeURIComponent(thread.id)}`
+        ).then((item) => item.json())
+        expect(inspected).toMatchObject({
           threadId: thread.id,
-          title: "New conversation",
+          title: "",
         })
+        expect(
+          inspected.messages.map(({ id, role }) => ({
+            id: role === "assistant" ? "generated" : id,
+            role,
+          }))
+        ).toEqual(
+          hostOutcome === "tool-race"
+            ? [
+                { id: "message_g4_revocation_tool", role: "user" },
+                { id: "generated", role: "assistant" },
+              ]
+            : [{ id: "message_g4_revocation", role: "user" }]
+        )
       } finally {
         if (agentHost) await stopChild(agentHost)
         if (internalServer) await closeServer(internalServer)

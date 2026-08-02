@@ -27,17 +27,6 @@ type DeleteOrganizationResult =
   | { kind: "not_found" }
   | { kind: "slug_mismatch" }
 
-type ResendInvitationResult =
-  | { kind: "actor_forbidden" }
-  | { kind: "actor_not_member" }
-  | { kind: "not_found" }
-  | { kind: "not_resendable" }
-  | {
-      invitation: OrganizationInvitation
-      kind: "resent"
-      revived: boolean
-    }
-
 type CancelInvitationResult =
   | { kind: "not_found" }
   | { kind: "not_pending" }
@@ -47,7 +36,7 @@ type CancelInvitationResult =
     }
 
 export type OrganizationsPorts = {
-  countSuperAdmins(organizationId: string): Promise<number>
+  countOwners(organizationId: string): Promise<number>
   deleteMemberById(input: {
     actorUserId: string
     confirmation: string
@@ -73,7 +62,7 @@ export type OrganizationsPorts = {
     organizationId: string
     userId: string
   }): Promise<OrganizationDetail | null>
-  insertOrganizationWithSuperAdmin(input: {
+  insertOrganizationWithOwner(input: {
     activate: boolean
     name: string
     sessionId: string
@@ -97,14 +86,14 @@ export type OrganizationsPorts = {
     organizationId: string
     userId: string
   }): Promise<OrganizationMembership>
-  transferSuperAdminById(input: {
+  transferOwnershipById(input: {
     actorMemberId: string
     actorUserId: string
     organizationId: string
     targetMemberId: string
   }): Promise<
-    | "actor_not_super_admin"
-    | "invalid_super_admin_count"
+    | "actor_not_owner"
+    | "invalid_owner_count"
     | "target_not_found"
     | "transferred"
   >
@@ -136,22 +125,6 @@ export type InvitationPorts = {
     invitationId: string
     organizationId: string
   }): Promise<CancelInvitationResult>
-  dispatchInvitationEmailJobs(): Promise<void>
-  findInvitationForResend(input: {
-    invitationId: string
-    organizationId: string
-  }): Promise<{
-    expiresAt: Date
-    id: string
-    role: string | null
-    status: string
-  } | null>
-  insertInvitations(input: {
-    emails: readonly string[]
-    inviterId: string
-    organizationId: string
-    role: Exclude<OrganizationRole, "super_admin">
-  }): Promise<OrganizationInvitation[]>
   listInvitationsByOrganization(
     organizationId: string
   ): Promise<OrganizationInvitation[]>
@@ -161,16 +134,6 @@ export type InvitationPorts = {
     organizationId: string
     userId: string
   }): Promise<OrganizationMembership>
-  reserveInvitationQuota(input: {
-    actorUserId: string
-    organizationId: string
-    recipientCount: number
-  }): Promise<void>
-  resendInvitationById(input: {
-    actorUserId: string
-    invitationId: string
-    organizationId: string
-  }): Promise<ResendInvitationResult>
 }
 
 export type OrganizationDeletionAccessPorts = {

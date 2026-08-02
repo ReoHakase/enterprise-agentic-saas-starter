@@ -48,9 +48,7 @@ const issueDetail = (description = "description"): AgentIssueDetail => ({
   attachments: { items: [], nextCursor: null },
 })
 
-const apiHarness = (
-  options: { failAccount?: boolean; issueDescription?: string } = {}
-) => {
+const apiHarness = (options: { issueDescription?: string } = {}) => {
   const grants: string[] = []
   const api: AgentReadApi = {
     getIssue: (input) => {
@@ -59,10 +57,10 @@ const apiHarness = (
     },
     readAccountContext: (input) => {
       grants.push(input.grant)
-      if (options.failAccount) {
-        return Promise.reject(new Error(`private error ${RUN_GRANT}`))
-      }
-      return Promise.resolve({ name: "User", profileImage: null })
+      return Promise.resolve({
+        name: "User",
+        profileImage: "https://private.example.test/account.png?token=secret",
+      })
     },
     readActiveOrganization: (input) => {
       grants.push(input.grant)
@@ -90,7 +88,12 @@ const apiHarness = (
     searchOrganizationMembers: (input) => {
       grants.push(input.grant)
       return Promise.resolve([
-        { id: "member_1", name: "Member", profileImage: null, role: "member" },
+        {
+          id: "member_1",
+          name: "Member",
+          profileImage: "https://private.example.test/member.png?token=secret",
+          role: "member",
+        },
       ])
     },
   }
@@ -127,6 +130,11 @@ describe("createAgentReadHandlers", () => {
 
     expect(test.grants).toEqual(Array.from({ length: 6 }, () => RUN_GRANT))
     expect(JSON.stringify(results)).not.toContain(RUN_GRANT)
+    expect(results[0]).toEqual({ name: "User", profileImage: null })
+    expect(results[2]).toEqual([
+      { id: "member_1", name: "Member", profileImage: null, role: "member" },
+    ])
+    expect(JSON.stringify(results)).not.toContain("private.example.test")
   })
 
   it("connects the production get_issue registry to runtime capability injection", async () => {
@@ -135,6 +143,7 @@ describe("createAgentReadHandlers", () => {
     const issueReadTools = createIssueReadTools(() => ({
       api: Object.assign(JSON.parse("{}"), test.api),
       budget: createAgentToolBudget(),
+      onRevoked: () => undefined,
       rootRunId: "root_test",
       runGrant: RUN_GRANT,
       settlement: JSON.parse("{}"),
@@ -200,13 +209,20 @@ describe("createAgentReadHandlers", () => {
   })
 
   it("replaces private HTTP errors with a fixed tool error", async () => {
-    const test = apiHarness({ failAccount: true })
+    const cause = new Error(`private error ${RUN_GRANT}`)
+    const test = apiHarness()
+    test.api.readAccountContext = () => Promise.reject(cause)
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 
-    await expect(handlers.readAccountContext()).rejects.toThrow(
-      "Agent read capability is unavailable"
+    const failure = await handlers.readAccountContext().then(
+      () => undefined,
+      (error: unknown) => error
     )
-    await expect(handlers.readAccountContext()).rejects.not.toThrow(RUN_GRANT)
+    expect(failure).toBeInstanceOf(Error)
+    if (!(failure instanceof Error)) throw new Error("Expected read error")
+    expect(failure.message).toBe("Agent read capability is unavailable")
+    expect(failure.cause).toBe(cause)
+    expect(String(failure)).not.toContain(RUN_GRANT)
   })
 })
 

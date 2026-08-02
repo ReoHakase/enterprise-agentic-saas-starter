@@ -48,10 +48,10 @@ jobs:
       - name: Flake check
         run: nix flake check
 
-  quality:
-    name: Quality
+  static-analysis:
+    name: Static analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - name: Checkout full history
@@ -63,19 +63,48 @@ jobs:
       - name: Check formatting
         run: bun run format:check
 
-      - name: Typecheck
-        run: bun run typecheck
+      - name: Run lint, dead-code, and duplicate gates
+        run: bun run check:static
 
-      - name: Run unit and integration tests
-        run: bun run test
+      - name: Check migration history and schema drift
+        run: bun run --cwd packages/db db:check
 
-      - name: Build applications
-        run: bun run build
+  quality-checks:
+    name: Quality · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Typecheck
+            command: bun run typecheck
+            node_env: test
+            coverage: false
+          - name: Unit and integration tests
+            command: bun run test
+            node_env: test
+            coverage: true
+          - name: Application builds
+            command: bun run build
+            node_env: production
+            coverage: false
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Run ${{ matrix.name }}
+        run: ${{ matrix.command }}
         env:
-          NODE_ENV: production
+          NODE_ENV: ${{ matrix.node_env }}
 
       - name: Upload Vitest coverage
-        if: ${{ !cancelled() }}
+        if: ${{ matrix.coverage && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vitest-coverage
@@ -85,8 +114,68 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  static-quality:
-    name: Static quality
+  quality:
+    name: Quality
+    if: ${{ always() }}
+    needs:
+      - quality-checks
+      - static-analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify quality lanes
+        env:
+          QUALITY_CHECKS: ${{ needs.quality-checks.result }}
+          STATIC_ANALYSIS: ${{ needs.static-analysis.result }}
+        run: |
+          test "$STATIC_ANALYSIS" = success
+          test "$QUALITY_CHECKS" = success
+
+  browser-web-component-tests:
+    name: Browser · Web components · ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Storybook light
+            script: test:browser:storybook:light
+            artifact: storybook-light
+          - name: Storybook dark
+            script: test:browser:storybook:dark
+            artifact: storybook-dark
+          - name: Browser Mode
+            script: test:browser:mode
+            artifact: browser-mode
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run ${{ matrix.name }}
+        run: bun run --cwd apps/web ${{ matrix.script }}
+
+      - name: Upload Web component failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-web-component-${{ matrix.artifact }}-failures
+          path: apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-web-storybook-build:
+    name: Browser · Web components · Storybook build
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -97,16 +186,40 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-bun
 
-      - name: Run lint, dead-code, and duplicate gates
-        run: bun run check:static
+      - name: Build Web Storybook
+        run: bun run --cwd apps/web build:storybook
 
-      - name: Check migration history and schema drift
-        run: bun run --cwd packages/db db:check
+      - name: Upload Web Storybook
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: storybook-web-static
+          path: apps/web/storybook-static
+          if-no-files-found: warn
+          retention-days: 7
 
-  browser:
-    name: Browser
+  browser-web-components:
+    name: Browser · Web components
+    if: ${{ always() }}
+    needs:
+      - browser-web-component-tests
+      - browser-web-storybook-build
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify Web component lanes
+        env:
+          STORYBOOK_BUILD: ${{ needs.browser-web-storybook-build.result }}
+          WEB_COMPONENT_TESTS: ${{ needs.browser-web-component-tests.result }}
+        run: |
+          test "$WEB_COMPONENT_TESTS" = success
+          test "$STORYBOOK_BUILD" = success
+
+  browser-ui-components:
+    name: Browser · UI components
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout full history
@@ -115,33 +228,104 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup-bun
 
-      - name: Install browser-suite browsers
-        working-directory: apps/web
-        run: bunx playwright install --with-deps chromium webkit
+      - name: Install Chromium
+        working-directory: packages/ui
+        run: bunx playwright install --with-deps chromium
 
-      - name: Run Storybook and Browser Mode tests
-        run: bun run test:browser
+      - name: Run UI Storybook tests
+        run: bun run --cwd packages/ui test:browser
 
-      - name: Build Storybook
-        run: bun run build:storybook
+      - name: Build UI Storybook
+        run: bun run --cwd packages/ui build:storybook
 
-      - name: Upload Storybook
+      - name: Upload UI Storybook
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: storybook-static
-          path: |
-            apps/web/storybook-static
-            packages/ui/storybook-static
+          name: storybook-ui-static
+          path: packages/ui/storybook-static
           if-no-files-found: warn
           retention-days: 7
 
-  free-e2e:
-    name: Free E2E
-    # Playwright WebKit 26 loses its network process on Linux hosted runners
-    # before the first navigation; run the full cross-browser suite on macOS.
-    runs-on: macos-14
+      - name: Upload UI component failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-ui-component-failures
+          path: packages/ui/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser-nextjs-integration:
+    name: Browser · Next.js integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-bun
+
+      - name: Install Chromium and WebKit
+        working-directory: apps/web
+        run: bunx playwright install --with-deps chromium webkit
+
+      - name: Build Next.js integration application
+        run: bun run --cwd apps/web build:test:browser:app
+
+      - name: Run Next.js integration in Chromium
+        run: bun run --cwd apps/web test:browser:app:chromium
+
+      - name: Run representative Next.js integration in WebKit
+        run: bun run --cwd apps/web test:browser:app:webkit
+
+      - name: Upload Next.js integration failures
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-nextjs-integration-failures
+          path: |
+            apps/web/playwright-report/app-integration
+            apps/web/test-results/app-integration
+          if-no-files-found: ignore
+          retention-days: 7
+
+  browser:
+    name: Browser
+    if: ${{ always() }}
+    needs:
+      - browser-web-components
+      - browser-ui-components
+      - browser-nextjs-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify browser lanes
+        env:
+          UI_COMPONENTS: ${{ needs.browser-ui-components.result }}
+          NEXTJS_INTEGRATION: ${{ needs.browser-nextjs-integration.result }}
+          WEB_COMPONENTS: ${{ needs.browser-web-components.result }}
+        run: |
+          test "$WEB_COMPONENTS" = success
+          test "$UI_COMPONENTS" = success
+          test "$NEXTJS_INTEGRATION" = success
+
+  free-e2e-profiles:
+    name: Free E2E · ${{ matrix.name }}
+    runs-on: ubuntu-latest
     timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Agent workflows
+            profile: agent
+          - name: Authentication
+            profile: auth
 
     steps:
       - name: Checkout full history
@@ -154,25 +338,41 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Install free-suite browsers
+      - name: Install Chromium
         working-directory: apps/web
-        run: bunx playwright install chromium webkit
+        run: bunx playwright install --with-deps chromium
 
-      - name: Run the full free E2E suite
+      - name: Run the ${{ matrix.name }} free E2E profile
         run: >-
           nix develop --command env -u NO_COLOR
           bun run test:e2e
+        env:
+          DETERMINISTIC_E2E_PROFILE: ${{ matrix.profile }}
 
       - name: Upload Playwright artifacts
-        if: ${{ !cancelled() }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-free-e2e
+          name: playwright-free-e2e-${{ matrix.profile }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
           if-no-files-found: warn
           retention-days: 7
+
+  free-e2e:
+    name: Free E2E
+    if: ${{ always() }}
+    needs:
+      - free-e2e-profiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify free E2E profiles
+        env:
+          FREE_E2E_PROFILES: ${{ needs.free-e2e-profiles.result }}
+        run: test "$FREE_E2E_PROFILES" = success
 
   cloudflare-dry-run:
     name: Cloudflare dry-run · ${{ matrix.name }}

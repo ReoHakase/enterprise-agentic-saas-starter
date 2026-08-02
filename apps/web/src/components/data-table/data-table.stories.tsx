@@ -202,16 +202,15 @@ export const InteractiveCells = meta.story({
     const select = canvas.getByRole("combobox", {
       name: "Status for Billing webhook",
     })
-    await expect(select).toHaveAttribute("aria-expanded", "true")
+    await expect(
+      await ownerBody.findByRole("option", { name: "Ready" })
+    ).toBeVisible()
     await userEvent.keyboard("{Escape}")
     await waitFor(() => expect(select).toHaveFocus())
     await userEvent.keyboard("{Tab}{Enter}")
     const actions = canvas.getByRole("button", {
       name: "Actions for Billing webhook",
     })
-    await waitFor(() =>
-      expect(actions).toHaveAttribute("aria-expanded", "true")
-    )
     const menu = await ownerBody.findByRole("menu")
     await waitFor(() => expect(menu).toBeVisible())
     await userEvent.keyboard("{Escape}")

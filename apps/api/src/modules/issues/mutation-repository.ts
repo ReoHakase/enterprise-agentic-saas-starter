@@ -10,7 +10,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, max, sql } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
 import {
   issueAuditMetadata,
   toIssueDto,
@@ -25,50 +24,36 @@ export const findIssueById = async (
   db: IssueReadDatabase,
   input: { id: string; organizationId: string }
 ): Promise<IssueDto | null> => {
-  try {
-    const rows = await db
-      .select()
-      .from(issues)
-      .where(
-        and(
-          eq(issues.id, input.id),
-          eq(issues.organizationId, input.organizationId)
-        )
+  const rows = await db
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.id, input.id),
+        eq(issues.organizationId, input.organizationId)
       )
-      .limit(1)
+    )
+    .limit(1)
 
-    return rows[0] ? toIssueDto(rows[0]) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "findIssueById",
-    })
-  }
+  return rows[0] ? toIssueDto(rows[0]) : null
 }
 
 export const findIssueByNumber = async (
   db: IssueReadDatabase,
   input: { number: number; organizationId: string }
 ): Promise<IssueDto | null> => {
-  try {
-    const rows = await db
-      .select()
-      .from(issues)
-      .where(
-        and(
-          eq(issues.number, input.number),
-          eq(issues.organizationId, input.organizationId)
-        )
+  const rows = await db
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.number, input.number),
+        eq(issues.organizationId, input.organizationId)
       )
-      .limit(1)
+    )
+    .limit(1)
 
-    return rows[0] ? toIssueDto(rows[0]) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "findIssueByNumber",
-    })
-  }
+  return rows[0] ? toIssueDto(rows[0]) : null
 }
 
 const issueNumberQueues = new Map<string, Promise<void>>()
@@ -174,37 +159,29 @@ export const insertIssueInTransaction = async (
 export const insertIssue = async (
   db: Db,
   input: InsertIssueInput
-): Promise<IssueDto> => {
-  try {
-    return await withIssueNumberLock(input.organizationId, async () => {
-      const createWithRetry = async (attempt: number): Promise<IssueDto> => {
-        try {
-          const issue = await db.transaction((tx) =>
-            insertIssueInTransaction(tx, input)
-          )
+): Promise<IssueDto> =>
+  withIssueNumberLock(input.organizationId, async () => {
+    const createWithRetry = async (attempt: number): Promise<IssueDto> => {
+      try {
+        const issue = await db.transaction((tx) =>
+          insertIssueInTransaction(tx, input)
+        )
 
-          return toIssueDto(issue)
-        } catch (cause) {
-          const message = cause instanceof Error ? cause.message : ""
-          const numberConflict =
-            message.includes("issues_organization_number_uidx") ||
-            message.includes("issues.organization_id, issues.number")
-          if (!numberConflict || attempt >= 3) {
-            throw cause
-          }
-          return createWithRetry(attempt + 1)
+        return toIssueDto(issue)
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : ""
+        const numberConflict =
+          message.includes("issues_organization_number_uidx") ||
+          message.includes("issues.organization_id, issues.number")
+        if (!numberConflict || attempt >= 3) {
+          throw cause
         }
+        return createWithRetry(attempt + 1)
       }
+    }
 
-      return createWithRetry(1)
-    })
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "insertIssue",
-    })
-  }
-}
+    return createWithRetry(1)
+  })
 
 export type UpdateIssueInput = {
   id: string
@@ -342,15 +319,6 @@ export const updateIssueById = async (
   db: Db,
   input: UpdateIssueInput
 ): Promise<IssueDto | null> => {
-  try {
-    const row = await db.transaction((tx) =>
-      updateIssueInTransaction(tx, input)
-    )
-    return row ? toIssueDto(row) : null
-  } catch (cause) {
-    throw publicErrors.internal(cause, {
-      module: "issues",
-      operation: "updateIssueById",
-    })
-  }
+  const row = await db.transaction((tx) => updateIssueInTransaction(tx, input))
+  return row ? toIssueDto(row) : null
 }

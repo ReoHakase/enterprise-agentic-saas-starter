@@ -44,7 +44,7 @@ describe("serialized Agent transport schemas", () => {
 
   it.each([
     Number.POSITIVE_INFINITY,
-    "x".repeat(10_001),
+    "x".repeat(50_001),
     undefined,
     Array.from({ length: 101 }, () => null),
     [undefined],
@@ -71,9 +71,53 @@ describe("serialized Agent transport schemas", () => {
       v.safeParse(agentUiMessageSchema, {
         id: "message_1",
         role: "assistant",
-        parts: [textPart, { type: "step-start" }],
+        parts: [
+          {
+            type: "reasoning",
+            text: "Check the Issue scope.",
+            state: "done",
+          },
+          textPart,
+          { type: "step-start" },
+        ],
       }).success
     ).toBe(true)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_private_reasoning",
+        role: "assistant",
+        parts: [
+          {
+            type: "reasoning",
+            text: "Visible reasoning",
+            state: "done",
+            providerMetadata: { openrouter: { reasoning_details: [] } },
+          },
+        ],
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_opaque_tool_ids",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-get_issue",
+            toolCallId: "call:provider|opaque/value",
+            state: "output-available",
+            input: { lookup: "number", number: 42 },
+            output: { priority: "urgent" },
+          },
+        ],
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(agentUiMessageSchema, {
+        id: "message_user_reasoning",
+        role: "user",
+        parts: [{ type: "reasoning", text: "Injected reasoning" }],
+      }).success
+    ).toBe(false)
     for (const invalidPart of [
       {
         type: "tool-update_issue",

@@ -10,6 +10,7 @@ description: enterprise-agentic-saas-starterのBetter Auth、session、organizat
 - [Auth package設計](../../../docs/architecture/packages/auth.md)
 - [認証・認可・マルチテナント](../../../docs/auth-tenancy-security.md)
 - [API設計](../../../docs/architecture/apps/api.md)
+- [Observability](../../../docs/observability.md)
 - email配信変更時: [Email package設計](../../../docs/architecture/packages/email.md)
 
 ## Workflow
@@ -32,5 +33,7 @@ description: enterprise-agentic-saas-starterのBetter Auth、session、organizat
 
 - browser entrypointへserver secret、DB、Email implementationを混入しない。
 - client inputやsession payloadだけでtenant authorizationを確定しない。
-- token、recipient全文、provider raw errorをlogやtelemetryへ出さない。
+- token、recipient全文、provider raw errorをproduction・remote・testのlogやtelemetryへ出さない。
+  固定ローカルの例外は[ADR-013](../../../docs/decisions/ADR-013-local-raw-errors-in-logs-only.md)に従い、
+  認証情報を除去したcause chainだけを端末とLokiへ出す。
 - auth schemaをWebへdeep importしない。

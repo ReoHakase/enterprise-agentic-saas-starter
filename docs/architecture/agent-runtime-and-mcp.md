@@ -49,8 +49,8 @@ Mastra 1系、Node.js 24以上です。tool定義はMastra `createTool`、browse
 委譲します。独自tool DSL、独自UIMessage codec、stream末尾を検出するための
 `TransformStream`は追加しません。
 
-Mastra出力からUIMessage streamへの変換は`@mastra/ai-sdk`の`toAISdkStream`を使います。現在の
-adapterが要求する`version: "v6"`はUIMessage互換contractの指定であり、ApplicationのAI SDK 6
+MastraのMemory付き生成とUIMessage streamへの接続は`@mastra/ai-sdk`の`handleChatStream`を使います。
+現在のadapterが要求する`version: "v6"`はUIMessage互換contractの指定であり、ApplicationのAI SDK 6
 依存を意味しません。adapterを迂回する手書き変換は作らず、Mastra側のAI SDK 7対応が公開された
 場合は同じboundary内で更新します。
 
@@ -223,10 +223,6 @@ apps/agent/src/mastra/
       processors/
       scorers/
 
-    thread-title-agent/
-      agent.ts
-      instructions.ts
-
   workflows/
     approved-issue-action/
       workflow.ts
@@ -251,7 +247,6 @@ export const mastra = new Mastra({
   observability,
   agents: {
     productAgent,
-    threadTitleAgent,
   },
   workflows: {
     approvedIssueActionWorkflow,
@@ -297,39 +292,41 @@ Mastra Storageは完全なthread metadataとmessage履歴の正本です。Mastr
 利用して、直近履歴、working memory、semantic recallなどモデルへ渡す文脈を構成します。Memoryを
 認可台帳、全履歴の別正本、thread横断の共有状態として扱いません。
 
-production、Studio、testは同じstorage factoryを利用し、process内では1つのinstanceを再利用します。
-requestごとに`LibSQLStore`を生成しません。productionではAgent DB URLがApplication DB URLと同一なら
-起動を拒否します。
+production、Studio、testは同じstorage factoryを利用し、chat、Memory、通常のWorkflowでは
+isolate内の1 instanceを再利用します。例外は別requestで承認Workflowをresumeする経路です。
+Cloudflareのrequest scopeを越えて元のMastra実行objectを再利用せず、同じAgent DBへ接続する標準
+`LibSQLStore`とMastraをresume request内で生成します。APIがcaller signalと50秒のdeadlineを所有し、
+Agentはticket消費前とbusiness write直前に同じsignalを検査します。timeout時の公開応答は
+`service_unavailable`と`Retry-After: 30`です。request専用Storageのcloseはresponseと分離して
+`waitUntil`へ渡し、2秒で打ち切ります。rejectまたはtimeoutはraw causeを記録せず、固定code
+`resume_storage_close_failed`だけで観測します。既存storage instanceを別のMastraへ渡すと
+`storage.__registerMastra()`が所有者を差し替えるため共有しません。productionではAgent DB URLが
+Application DB URLと同一なら起動を拒否します。
 
 ### Application DBとの最小同期
 
-Agent応答の正本と回復journalはMastra Storageが所有します。Application DBとの同期点を次に限定します。
+message履歴とtitleはMastra標準Memoryが所有します。Application DBとの同期点を次に限定します。
 
 - run開始時のticket consume、authorization、quota reservation
 - business toolごとの認可済みtransaction
 - main model usageの冪等記録
-- `completed`応答をMemoryへ保存した後のrun settlement 1回
+- runのusageとterminal settlement
 
-`waiting_approval`はbusiness action transactionがrunを遷移させるため、Memory commit専用の
-Application DB callを追加しません。thread title、message count、last message、commit状態の
-projectionも作りません。
+`waiting_approval`はbusiness action transactionがrunを遷移させます。Memory commit専用のAPI、
+Application DB message副本、thread title、message count、last message、commit状態のprojectionは
+作りません。
 
-`memory-commit` workflowへのdurable stageを生成済み応答の線形化点にします。以後は
-`Memory.saveMessages`、completed run settlement、snapshot削除の順で進めます。settlementは
-`applicationRunId`だけを受け、running runをcompletedへCASし、missingまたはterminal runを
-状態変更なしでacknowledgeします。stage後のmembership、context epoch、thread、expiry変更を理由に
-messageをdiscardせず、read時のApplication registry認可で公開をfail closedにします。
+Memoryの読込、保存、title生成はMastra標準機能へ委譲します。streamは独自commit barrierを待たず、
+Worker eviction、OOM、`SIGKILL`時の未保存messageはbest-effortです。独自Workflow stage、
+reconciliation、drainでMastra Memoryと同じ状態を再実装しません。公開可否は各readでApplication
+registryを検証してfail closedにします。
 
-Worker eviction、deploy、CPU limit、OOM、`SIGKILL`相当は任意のawait間で起きるものとして扱います。
-suspended、running、success snapshotを新しいisolateからreconcileし、Memory保存とApp settlementを
-それぞれ冪等に再実行します。通常streamもcommit完了を待ち、`waitUntil`だけを正しさの根拠にしません。
-
-historyとthread listは、Application registryが許可した対象threadすべてについてpending snapshotを
-reconcileしてから一回限りのconnection ticketをconsumeします。ticket consume直後にもpending有無を
-再確認して競合をfail closedにします。最初の確認が1秒以内に収束しない場合やpendingが残る場合は、
-部分的な履歴を返さずticket未消費の503にします。consumeとの競合で直後の再確認が失敗した場合も
-503にします。このread barrierは既存のrun settlementを再実行するだけで、Application DBへ
-message projectionや新しい同期点を追加しません。
+標準`MessageHistory`には、有効なreasoning本文、ツール入力・出力、approval、`skill`本文を保持します。
+message全体を独自スキーマへ写し替える全面的なsecurity projectionは置きません。
+`memory-persistence-guard`は、現在のmodel turnで使った生のメディアが
+`providerMetadata.mastra.modelOutput`へ複製された副本だけを保存前に除去します。reasoning detailを含む
+provider metadata、検証失敗を含むツール入力・出力、`file`・`source`類、live streamは変更しません。
+ブラウザーへ返すhistoryは別の薄い公開projectionとし、Memoryへ逆流させません。
 
 ### 将来のComposite Storage
 
@@ -392,11 +389,8 @@ GET /agent/threads
 archive済みthreadがAgent DBへ残っていても、Application DBの認可台帳で除外します。
 
 初期公開contractから`messageCount`を外してよいものとします。message countを必須にする場合は、Mastra Storageから取得する専用readを追加し、Application DBへ同期projectionを作らないことを優先します。
-title生成はmain responseを待たせないbest-effort処理です。失敗時は`New conversation`を維持し、
-製品品質へ影響しない低優先度の補助modelとして扱います。
-successful runはmain usage、Mastra workflow stage、Memory保存、Application run settlementを先に完了し、
-run/concurrencyを解放してからtitle taskを開始します。title usageは`title_<attempt>`の別eventとして、
-失効済みterminal run grantを許可するusage専用の冪等APIへ記録し、business capabilityへ再利用しません。
+title生成はMastra Memoryの`generateTitle`へ委譲するbest-effort処理です。main responseは完了を待たず、
+失敗時は既定titleを維持します。補助modelの厳密usage課金や独自Title Agentは持ちません。
 
 ### 履歴
 
@@ -466,7 +460,7 @@ server toolとclient toolを分離します。
 
 ```text
 Stop
-  → streamを開いたままtransient data-runでopaque run IDを受け取る
+  → streamを開いたままAI SDKのmessage metadataでopaque run IDを受け取る
   → run IDを使って認可済みexplicit cancel commandを送る
   → runを冪等にcanceledへ遷移
   → quota reservationとgrantを解放
@@ -478,8 +472,8 @@ Stop
 ```
 
 network disconnectとprovider errorだけを同一submission IDでretry可能にします。
-Stop時のpartial assistant outputと`data-run`はsession-local UIだけに残し、Mastra Storageへ保存しません。
-canonical reloadは停止したuser messageだけを返します。cancelは未使用のgrant、concurrency reservation、
+Stop時のpartial assistant outputとrun ID metadataはsession-local UIだけに残し、Mastra Storageへ保存しません。
+履歴の再読込は停止したuser messageだけを返します。cancelは未使用のgrant、concurrency reservation、
 leaseを解放しますが、既に消費したmodel、Web検索、vision quotaを払い戻しません。
 
 `enable_request_signal`とAPIの`request_signal_passthrough`は本番Workerの防御層です。Stopの正本は
@@ -488,16 +482,21 @@ browser abortと認可済みexplicit cancelの組み合わせであり、network
 決定的に観測できなかったため、E1はexplicit cancel、G3/G4はAgentへ直接渡した`Request.signal`の
 abort分類とcancel先行settlementを検査します。
 
-`data-run`は表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
+run IDのmessage metadataは表示とcancel用の一時情報であり、Mastra Memoryへ保存しません。browserの自動継続は、
 最終stepに完了済みの`ui_*` toolだけが存在する場合に限定し、server tool完了では開始しません。
 
 ## Reasoning
 
-production UIへraw reasoning partを送信、保存、表示しません。`sendReasoning: false`を既定にし、boundedなstatusだけ表示します。
+Product AgentはAI SDK標準reasoning partを`sendReasoning: true`で送信し、本文をMastra Memoryへ保存して
+再表示します。OpenRouter `reasoning_details`を含むprovider metadataは次turnへ再送しますが、
+reasoning detailとprovider metadataはserver外へ出しません。存在しない非公開
+chain-of-thoughtを別modelで生成しません。
 
-- Product Agentとtitle Agentのreasoningは`none`
+- Product Agentは`openrouter-gpt-5.6-luna-xhigh` profileを使い、reasoning `xhigh`、最大出力4,096 tokenとする
+- Mastra Memoryのtitle補助と直接Web検索補助は同じLunaのreasoning `none`
 - title生成はmain stream開始を妨げない
-- text、tool call、tool resultが一定時間ないreasoning-only状態をtimeoutする
+- liveness再検証はmodel境界1か所に限定し、native streamで重複させない
+- reasoning/text/toolを独自watchdogで分類せず、reasoning-onlyでも270秒のrun全体上限を延長しない
 - tool side effect後の自動model retryは禁止する
 
 ## Web検索
@@ -515,16 +514,16 @@ Product Agent
 公開queryの完全一致、PIIとprivate情報拒否、quota、source URL検証は維持します。外側の空白だけを
 除いた2〜200文字のqueryを検証し、その同じ文字列をOpenRouterのJSON promptへ変更せず渡します。
 provider内の検索engineが内部で使うquery文字列までは保証しません。検索は25秒、`maxRetries: 0`、
-reasoningなしです。Phase 2はOpenRouterへQwenとExa `web` plugin
+reasoningなしです。現在はOpenRouterへLunaとExa `web` plugin
 （`max_results: 3`）を持つ1 requestだけを送り、検索結果は本文とURLのbounded projectionだけを返し、
 provider固有payloadを保存しません。
 
-Phase 2のlive compatibility確認では同じQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
+Phase 2のlive compatibility確認では当時のQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
 非推奨予定のpluginを一時利用します。provider SDKまたはroute更新後にserver toolを再検証し、
 exact query、1 request、public source projection、timeout、G5 3/3を維持できた時点で置き換えます。
 どちらの経路でも別Agentを挟みません。
 
-Agent、Memory projection、API client、Webは`agent-contracts`の同じpublic URL canonicalizerを使います。
+ツールexecutor、公開history、API client、Webは`agent-contracts`の同じpublic URL canonicalizerを使います。
 tool resultのsourceはcanonical `source-url` partへ昇格し、既存sourceとcanonical URL単位で重複排除します。
 provider由来queryとfragmentは名前に依存せず全体を除去し、userinfo、private/reserved hostは拒否します。
 
@@ -619,7 +618,6 @@ APIはlogical routeと利用可否だけをgrantへ含めます。
 ```text
 product-standard
 product-premium
-thread-title
 web-search-summary
 memory-observer
 ```
@@ -749,7 +747,7 @@ DB migration historyはappend-onlyを維持し、新しいdestructive migration�
 - API側message repositoryが存在しない
 - native tool stateがbrowserへ届く
 - Stop直後に同じthreadで次turnを開始できる
-- reasoning-only timeoutがfatal lockを残さない
+- model境界のliveness再検証と270秒のrun全体timeoutがfatal lockを残さず、stream層に重複したliveness wrapperを置かない
 - Web検索がnested Agentなしで動く
 - Issue attachmentの追加、削除、読取がtoolから可能
 - MCPが`apps/agent`へ依存せず全business toolを公開する

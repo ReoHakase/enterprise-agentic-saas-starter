@@ -2,10 +2,13 @@ import type { UseChatHelpers } from "@ai-sdk/react"
 import { useCallback, type ChangeEvent } from "react"
 import { toast } from "sonner"
 
+import { reportObservedError } from "@/lib/report-observed-error"
+
 import type {
   AgentComposerHandle,
   AgentComposerSnapshot,
 } from "../components/agent-composer/agent-composer"
+import { getAgentImageUploadErrorText } from "../components/runtime-state-types/runtime-state-types"
 import type { useAgentThreadRuntimeState } from "../components/runtime-state/runtime-state"
 import type { AgentChatMessage } from "../schema"
 import {
@@ -28,7 +31,6 @@ export const useAgentSubmission = ({
   runtime,
   sendMessage,
   setSendingAssetIds,
-  setTransientStatus,
 }: {
   beginTurn: () => void
   busyRef: { current: boolean }
@@ -42,7 +44,6 @@ export const useAgentSubmission = ({
   runtime: AgentThreadRuntime
   sendMessage: UseChatHelpers<AgentChatMessage>["sendMessage"]
   setSendingAssetIds: (assetIds: string[]) => void
-  setTransientStatus: (status?: string) => void
 }) => {
   const submitMessage = useCallback(
     async (event: AgentSubmitEvent) => {
@@ -106,8 +107,8 @@ export const useAgentSubmission = ({
           ],
           messageId: submission.retrying ? submission.id : undefined,
         })
-      } catch {
-        setTransientStatus(undefined)
+      } catch (error) {
+        reportObservedError(error)
         setSendingAssetIds([])
         const current = composerRef.current?.snapshot()
         if (current && !hasComposerContent(current)) {
@@ -127,7 +128,6 @@ export const useAgentSubmission = ({
       runtime,
       sendMessage,
       setSendingAssetIds,
-      setTransientStatus,
     ]
   )
   const attachImages = useCallback(
@@ -136,9 +136,8 @@ export const useAgentSubmission = ({
       event.target.value = ""
       if (files.length === 0) return
       void runtime.uploadImages(files).catch((error: unknown) => {
-        toast.error(
-          error instanceof Error ? error.message : "Image upload failed."
-        )
+        reportObservedError(error)
+        toast.error(getAgentImageUploadErrorText(error))
       })
     },
     [runtime]

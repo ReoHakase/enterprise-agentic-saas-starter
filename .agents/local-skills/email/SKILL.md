@@ -9,6 +9,7 @@ description: enterprise-agentic-saas-starterのReact Email template、email cont
 
 - [Email package設計](../../../docs/architecture/packages/email.md)
 - [Cloudflareデプロイと運用](../../../docs/deployment-operations.md)
+- [Observability](../../../docs/observability.md)
 - auth emailの場合: [認証・認可・マルチテナント](../../../docs/auth-tenancy-security.md)
 
 ## Workflow
@@ -28,7 +29,9 @@ description: enterprise-agentic-saas-starterのReact Email template、email cont
 
 ## 禁止事項
 
-- provider raw error、token、URL、recipient全文、本文をlogやtelemetryへ出さない。
+- provider raw error、token、URL、recipient全文、本文をproduction・remote・testのlogやtelemetryへ出さない。
+  固定ローカルの例外は[ADR-013](../../../docs/decisions/ADR-013-local-raw-errors-in-logs-only.md)に従い、
+  認証情報を除去したcause chainだけを端末とLokiへ出す。
 - browserからproviderやserver runtimeをimportしない。
 - production deliveryをconsole、SMTP、HTTP APIへ暗黙fallbackしない。
 - templateからDBやAuth implementationへ依存しない。

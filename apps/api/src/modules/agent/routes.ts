@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 
 import {
   authenticatedErrorResponses,
+  errorResponseModel,
   tenantErrorResponses,
 } from "../../models/api"
 import type { AccessControlFactory } from "../authorization/public"
@@ -24,6 +25,16 @@ import { createAgentConversationRoutes } from "./routes/conversation"
 import { agentContextRevocationModel } from "./runtime-schema"
 import type { AgentService } from "./service"
 
+const agentErrorResponses = {
+  ...tenantErrorResponses,
+  503: errorResponseModel,
+} as const
+
+const agentAuthenticatedErrorResponses = {
+  ...authenticatedErrorResponses,
+  503: errorResponseModel,
+} as const
+
 export const createAgentRoutes = (
   service: AgentService,
   createAccessControl: AccessControlFactory
@@ -43,7 +54,7 @@ export const createAgentRoutes = (
       {
         authenticated: true,
         query: agentUsageQueryModel,
-        response: { 200: agentMonthlyUsageModel, ...tenantErrorResponses },
+        response: { 200: agentMonthlyUsageModel, ...agentErrorResponses },
         detail: {
           operationId: "getMyAgentMonthlyUsage",
           summary: "Retrieve personal monthly Agent usage",
@@ -71,13 +82,13 @@ export const createAgentRoutes = (
         query: agentUsageQueryModel,
         response: {
           200: agentOrganizationUsageModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "getOrganizationAgentUsage",
           summary: "Retrieve organization Agent usage",
           description:
-            "Returns monthly Agent usage and calculated cost grouped by user and model from daily projections. Only an administrator or super administrator of the active organization may read it.",
+            "Returns monthly Agent usage and calculated cost grouped by user and model from daily projections. Only an owner or administrator of the active organization may read it.",
           tags: ["Agent"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -98,7 +109,7 @@ export const createAgentRoutes = (
       {
         authenticated: true,
         params: agentActionParamsModel,
-        response: { 200: agentIssueActionModel, ...tenantErrorResponses },
+        response: { 200: agentIssueActionModel, ...agentErrorResponses },
         detail: {
           operationId: "getAgentIssueAction",
           summary: "Retrieve an Agent Issue action preview",
@@ -127,7 +138,7 @@ export const createAgentRoutes = (
         authenticated: true,
         params: agentActionParamsModel,
         body: decideAgentActionBodyModel,
-        response: { 200: agentIssueActionModel, ...tenantErrorResponses },
+        response: { 200: agentIssueActionModel, ...agentErrorResponses },
         detail: {
           operationId: "decideAgentIssueAction",
           summary: "Decide an Agent Issue action",
@@ -142,13 +153,16 @@ export const createAgentRoutes = (
     )
     .post(
       "/agent/actions/:actionId/resume",
-      async ({ authContext: { session, user }, params, set }) => {
+      async ({ authContext: { session, user }, params, request, set }) => {
         set.headers["cache-control"] = "private, no-store"
-        return service.resumeAgentAction({
-          actionId: params.actionId,
-          sessionId: session.id,
-          userId: user.id,
-        })
+        return service.resumeAgentAction(
+          {
+            actionId: params.actionId,
+            sessionId: session.id,
+            userId: user.id,
+          },
+          request.signal
+        )
       },
       {
         authenticated: true,
@@ -156,7 +170,7 @@ export const createAgentRoutes = (
         body: resumeAgentActionBodyModel,
         response: {
           200: agentActionExecutionResultModel,
-          ...tenantErrorResponses,
+          ...agentErrorResponses,
         },
         detail: {
           operationId: "resumeAgentIssueAction",
@@ -183,7 +197,7 @@ export const createAgentRoutes = (
       {
         authenticated: true,
         params: agentThreadParamsModel,
-        response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
+        response: { 200: agentApprovalPolicyModel, ...agentErrorResponses },
         detail: {
           operationId: "getAgentThreadPermission",
           summary: "Retrieve an Agent thread permission",
@@ -211,7 +225,7 @@ export const createAgentRoutes = (
         authenticated: true,
         params: agentThreadParamsModel,
         body: putAgentApprovalPolicyBodyModel,
-        response: { 200: agentApprovalPolicyModel, ...tenantErrorResponses },
+        response: { 200: agentApprovalPolicyModel, ...agentErrorResponses },
         detail: {
           operationId: "putAgentThreadPermission",
           summary: "Set an Agent thread permission",
@@ -235,7 +249,7 @@ export const createAgentRoutes = (
         authenticated: true,
         response: {
           200: agentContextRevocationModel,
-          ...authenticatedErrorResponses,
+          ...agentAuthenticatedErrorResponses,
         },
         detail: {
           operationId: "revokeAgentContext",

@@ -2,7 +2,7 @@
 title: Product Agentテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -44,7 +44,6 @@ apps/agent/src/mastra/
 
   agents/
     product-agent/
-    thread-title-agent/
 
   adapters/
     model/
@@ -153,6 +152,15 @@ scripted modelは、次をscenario IDごとに決定的に返します。
 
 自然言語全文をassertしません。tool名、input、順序、approval、stream marker、usage、finish reasonをassertします。
 
+実Product Agentと標準Memoryを組み合わせ、独自の保存処理へ差し替えずに次も確認します。
+
+- 標準`MessageHistory`が有効なreasoning、ツール入力・出力、approval、`skill`本文を保持する
+- `memory-persistence-guard`が`mastra.modelOutput`の生のメディア副本だけを除去する
+- 検証失敗を含むツール入力・出力、provider metadata、`file`・`source`類、live streamを変更しない
+- 公開historyがprovider metadata、`skill`本文、生のツールerrorを返さず、Memoryへ逆流しない
+- 標準Memoryの保存失敗後も生成済みstreamを完了し、`memory_failed`のtraceを残す
+- provider起動失敗の生causeを固定ローカルの専用reporterへ1回だけ渡す
+
 ## G4: Agent制御面統合テスト
 
 G4はbrowser、実LLM、Cloud Tursoを使いません。APIとAgentのprivate boundaryを最も安価に保証する層です。
@@ -163,6 +171,10 @@ G4はbrowser、実LLM、Cloud Tursoを使いません。APIとAgentのprivate bo
 - suite単位でapp factoryを再利用する
 - fixtureを小さくする
 - unrelated Agent scenarioをG3へ下げる
+
+`bun run --cwd apps/agent storage:smoke`は既存のローカルTurso起動経路を使い、標準
+`LibSQLStore.init()`の3並行呼び出しと同一instanceの反復呼び出しを確認します。専用launcherは
+追加せず、`localhost`、`127.0.0.1`またはPortlessの`*.localhost`以外へは接続しません。
 
 ## G5: Agent実モデル挙動統合評価
 

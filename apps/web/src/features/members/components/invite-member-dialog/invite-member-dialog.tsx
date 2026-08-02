@@ -17,6 +17,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@enterprise-agentic-saas/ui/components/field"
+import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -25,11 +26,11 @@ import {
   SelectTrigger,
 } from "@enterprise-agentic-saas/ui/components/select"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { MailPlusIcon } from "lucide-react"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 
+import { safeAuthErrorMessage } from "@/features/auth"
 import {
   isStepUpRequiredError,
   getConsoleApiErrorText,
@@ -39,8 +40,8 @@ import { OrganizationRoleBadge } from "@/features/organizations"
 
 import {
   invitationFormSchema,
-  normalizeInvitationEmails,
-  type BulkInvitationInput,
+  normalizeInvitationEmail,
+  type InvitationInput,
   type InvitationFormValues,
 } from "../../schema"
 
@@ -53,7 +54,7 @@ const invitationRoleOptions = [
 }>
 
 const invitationDefaultValues: InvitationFormValues = {
-  emails: "",
+  email: "",
   role: "member",
 }
 
@@ -77,7 +78,7 @@ export const InviteMemberDialog = ({
 }: {
   canInviteAdmins: boolean
   pending: boolean
-  onInvite: (value: BulkInvitationInput) => Promise<unknown>
+  onInvite: (value: InvitationInput) => Promise<unknown>
 }) => {
   const [open, setOpen] = useState(false)
   const [emailError, setEmailError] = useState<string>()
@@ -90,7 +91,7 @@ export const InviteMemberDialog = ({
       setSubmitError(undefined)
       try {
         await onInvite({
-          emails: normalizeInvitationEmails(value.emails),
+          email: normalizeInvitationEmail(value.email),
           role: value.role,
         })
         form.reset()
@@ -98,12 +99,14 @@ export const InviteMemberDialog = ({
       } catch (error) {
         if (isStepUpRequiredError(error)) return
 
-        const fieldError = getConsoleApiFieldError(error, "emails")
+        const fieldError = getConsoleApiFieldError(error, "email")
         setEmailError(fieldError)
         if (!fieldError) {
-          setSubmitError(
-            getConsoleApiErrorText(error, "The invitation could not be sent.")
+          const fallback = getConsoleApiErrorText(
+            error,
+            "The invitation could not be sent."
           )
+          setSubmitError(safeAuthErrorMessage(error, fallback))
         }
       }
     },
@@ -142,20 +145,19 @@ export const InviteMemberDialog = ({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={inviteMemberTrigger} disabled={pending}>
         <MailPlusIcon data-icon="inline-start" aria-hidden="true" />
-        Invite members
+        Invite member
       </DialogTrigger>
       <DialogContent>
-        <form onSubmit={handleSubmit}>
+        <form noValidate onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Invite members</DialogTitle>
+            <DialogTitle>Invite member</DialogTitle>
             <DialogDescription>
-              Queue invitations for up to 20 people with one shared role. Super
-              Admin is transferred from the member table after additional
-              confirmation.
+              Send an invitation to one email address. Ownership is transferred
+              from the member table after additional confirmation.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-5">
-            <form.Field name="emails">
+            <form.Field name="email">
               {(field) => (
                 <InvitationEmailsField
                   field={field}
@@ -193,7 +195,7 @@ export const InviteMemberDialog = ({
                   ) : (
                     <MailPlusIcon data-icon="inline-start" aria-hidden="true" />
                   )}
-                  Send invitations
+                  Send invitation
                 </Button>
               )}
             </form.Subscribe>
@@ -229,7 +231,7 @@ const InvitationEmailsField = ({
     .join(" ")
   const value = typeof field.state.value === "string" ? field.state.value : ""
   const handleChange = useCallback(
-    (event: ChangeEvent<HTMLTextAreaElement>) => {
+    (event: ChangeEvent<HTMLInputElement>) => {
       onEdit()
       field.handleChange(event.target.value)
     },
@@ -238,23 +240,23 @@ const InvitationEmailsField = ({
 
   return (
     <Field data-invalid={invalid}>
-      <FieldLabel htmlFor="invitation-emails">Email addresses</FieldLabel>
-      <Textarea
-        id="invitation-emails"
+      <FieldLabel htmlFor="invitation-email">Email address</FieldLabel>
+      <Input
+        id="invitation-email"
+        type="email"
         name={field.name}
         value={value}
         onBlur={field.handleBlur}
         onChange={handleChange}
         aria-describedby={describedBy}
         aria-invalid={invalid}
-        className="min-h-32 resize-y"
         autoCapitalize="none"
-        autoComplete="off"
-        placeholder={"alex@example.com, sam@example.com\nteam@example.com"}
+        autoComplete="email"
+        placeholder="alex@example.com"
         spellCheck={false}
       />
       <FieldDescription id={descriptionId}>
-        Separate addresses with commas or new lines. Duplicates are removed.
+        The invitation is sent immediately without automatic retry.
       </FieldDescription>
       {locallyInvalid ? (
         <FieldError id={localErrorId} errors={field.state.meta.errors} />
@@ -324,7 +326,7 @@ const InvitationRoleField = ({
       </Select>
       {!canInviteAdmins ? (
         <FieldDescription id={descriptionId}>
-          Only the Super Admin can invite another Admin.
+          Only the Owner can invite another Admin.
         </FieldDescription>
       ) : null}
     </Field>

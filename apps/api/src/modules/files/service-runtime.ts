@@ -1,4 +1,4 @@
-import { AppError } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   getFileStorageRuntime,
   type FileR2Object,
@@ -7,21 +7,21 @@ import {
 } from "./runtime"
 
 export const providerUnavailable = (
-  provider: "images" | "r2" | "runtime",
-  operation: string
+  _provider: "images" | "r2" | "runtime",
+  _operation: string,
+  cause?: unknown
 ) =>
-  new AppError({
+  new HttpError({
+    cause,
     code: "service_unavailable",
-    publicMessage: "Service temporarily unavailable",
-    publicContext: { retryAfter: 30 },
-    privateContext: { module: "files", operation, provider },
+    retryAfter: 30,
   })
 
 export const getRuntime = (): FileStorageRuntime => {
   try {
     return getFileStorageRuntime()
-  } catch {
-    throw providerUnavailable("runtime", "getFileStorageRuntime")
+  } catch (cause) {
+    throw providerUnavailable("runtime", "getFileStorageRuntime", cause)
   }
 }
 

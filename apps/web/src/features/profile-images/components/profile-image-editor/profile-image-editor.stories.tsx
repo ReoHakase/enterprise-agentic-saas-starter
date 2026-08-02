@@ -105,7 +105,13 @@ export const RemovalFailure = meta.story({
     msw.use(
       http.get("*/files/profile-images/users/:userId", profileImageResponse),
       http.delete("*/files/profile-images/users/me", () =>
-        HttpResponse.json({ message: "Private detail" }, { status: 503 })
+        HttpResponse.json(
+          {
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
+          },
+          { status: 503 }
+        )
       )
     )
   },
@@ -125,10 +131,12 @@ export const RemovalFailure = meta.story({
         await userEvent.click(
           body.getByRole("button", { name: "Remove image" })
         )
-        const error = await body.findByText(
-          "The profile image could not be removed. Try again."
+        const error = await body.findByRole("alert")
+        await waitFor(() =>
+          expect(error).toHaveTextContent(
+            "The profile image could not be removed. Try again. Try again. If the problem continues, contact support."
+          )
         )
-        await waitFor(() => expect(error).toBeVisible())
         await expect(
           body.getByRole("alertdialog", { name: "Remove profile image?" })
         ).toBeInTheDocument()

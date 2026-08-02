@@ -26,6 +26,7 @@ import { AgentPolicyControl } from "../agent-policy-control/agent-policy-control
 import { AgentSamplePrompts } from "../agent-sample-prompts/agent-sample-prompts"
 import { AgentStagedAsset } from "../agent-staged-asset/agent-staged-asset"
 import { AgentTurnStatus } from "../agent-turn-status/agent-turn-status"
+import { getAgentWaitingState } from "./agent-waiting-state"
 
 const attachmentButtonRender = <span />
 
@@ -142,6 +143,14 @@ const AgentChatSession = ({
       conversationGroups.flatMap((group) => (group.turn ? [group.turn] : [])),
     [conversationGroups]
   )
+  const lastAssistantId = chat.messages.findLast(
+    (message) => message.role === "assistant"
+  )?.id
+  const waitingState = getAgentWaitingState(chat.status, chat.messages)
+  const submitFromComposer = useCallback(
+    () => session.composerFormRef.current?.requestSubmit(),
+    [session.composerFormRef]
+  )
   useEffect(() => {
     if (!initialComposerSnapshot) return
     const frame = requestAnimationFrame(() =>
@@ -163,13 +172,6 @@ const AgentChatSession = ({
           presentation === "shell" ? "px-3 pb-3" : "pb-4"
         )}
       >
-        <AgentTurnStatus
-          busy={session.busy}
-          cancelState={session.cancelState}
-          error={chat.error}
-          transientStatus={session.transientStatus}
-          turnStopped={session.turnStopped}
-        />
         <AgentConversationViewport
           enabled={presentation === "shell"}
           turns={turnPreviews}
@@ -189,17 +191,28 @@ const AgentChatSession = ({
                   message={message}
                   organizationId={organizationId}
                   organizationSlug={organizationSlug}
+                  threadId={thread.id}
                   frozen={runtime.frozen || disabled || session.busy}
+                  isStreaming={
+                    chat.status === "streaming" &&
+                    message.id === lastAssistantId
+                  }
                   onPendingChange={session.reportApprovalState}
                 />
               ))}
             </div>
           ))}
+          <AgentTurnStatus
+            cancelState={session.cancelState}
+            error={chat.error}
+            turnStopped={session.turnStopped}
+            waitingState={waitingState}
+          />
         </AgentConversationViewport>
 
         <form
           ref={session.composerFormRef}
-          className="relative flex min-w-0 shrink-0 flex-col gap-2 rounded-2xl border bg-card p-3 shadow-sm"
+          className="sticky bottom-0 mx-auto flex w-full max-w-3xl min-w-0 shrink-0 flex-col gap-2 rounded-3xl border bg-card p-3 shadow-lg"
           onSubmit={session.submitMessage}
         >
           <AgentComposer
@@ -209,6 +222,7 @@ const AgentChatSession = ({
             draftText={runtime.composer}
             initialSnapshot={initialComposerSnapshot}
             onDraftTextChange={runtime.setComposer}
+            onSubmit={submitFromComposer}
           />
           {runtime.stagedAssets.some(
             (item) => !session.sendingAssetIds.includes(item.asset.id)
@@ -236,6 +250,7 @@ const AgentChatSession = ({
               <Input
                 className="sr-only"
                 type="file"
+                aria-label="Attach images"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
                 disabled={

@@ -3,6 +3,7 @@ import { db } from "@enterprise-agentic-saas/db"
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import {
   renderMagicLinkEmail,
+  renderOrganizationInvitationEmail,
   renderVerificationEmail,
   type SendEmail,
 } from "@enterprise-agentic-saas/email"
@@ -13,13 +14,11 @@ import {
 import { APIError, betterAuth, type BetterAuthPlugin } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import {
-  createAccessControl,
   genericOAuth,
   magicLink,
   multiSession,
   openAPI,
   organization,
-  role,
 } from "better-auth/plugins"
 
 import { createSessionOrganizationDatabaseHooks } from "./callbacks/session-organization"
@@ -59,31 +58,8 @@ const githubSocialProviders =
       }
     : {}
 
-const organizationAccessControl = createAccessControl({
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"],
-  team: ["create", "update", "delete"],
-  ac: ["create", "read", "update", "delete"],
-} as const)
-
-const superAdmin = organizationAccessControl.newRole({
-  organization: ["update", "delete"],
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"],
-  team: ["create", "update", "delete"],
-  ac: ["create", "read", "update", "delete"],
-})
-
-const admin = organizationAccessControl.newRole({
-  member: ["create", "update", "delete"],
-  invitation: ["create", "cancel"],
-})
-
-const member = role({})
-
 // apps/api is the only organization management surface. Better Auth retains
-// only the invitation-recipient endpoints needed before organization access.
+// the native single-recipient invitation endpoint and the recipient endpoints.
 export const blockedOrganizationPluginEndpoints = [
   { method: "POST", path: "/organization/create" },
   { method: "POST", path: "/organization/check-slug" },
@@ -92,7 +68,6 @@ export const blockedOrganizationPluginEndpoints = [
   { method: "GET", path: "/organization/get-full-organization" },
   { method: "POST", path: "/organization/set-active" },
   { method: "GET", path: "/organization/list" },
-  { method: "POST", path: "/organization/invite-member" },
   { method: "POST", path: "/organization/cancel-invitation" },
   { method: "GET", path: "/organization/list-invitations" },
   { method: "POST", path: "/organization/update-member-role" },
@@ -118,18 +93,29 @@ export const blockedOrganizationPluginEndpoints = [
   { method: "POST", path: "/organization/has-permission" },
 ] as const
 
+const requireInvitableOrganizationRole = (role: string | null | undefined) => {
+  if (role !== "admin" && role !== "member") {
+    throw APIError.from("BAD_REQUEST", {
+      code: "INVALID_ORGANIZATION_INVITATION_ROLE",
+      message: "Invitation role is not allowed",
+    })
+  }
+}
+
 export const organizationSecurityHooks = {
+  async beforeCreateInvitation({
+    invitation,
+  }: {
+    invitation: { role?: string | null }
+  }) {
+    requireInvitableOrganizationRole(invitation.role)
+  },
   async beforeAcceptInvitation({
     invitation,
   }: {
     invitation: { role?: string | null }
   }) {
-    if (invitation.role !== "admin" && invitation.role !== "member") {
-      throw APIError.from("BAD_REQUEST", {
-        code: "INVALID_ORGANIZATION_INVITATION_ROLE",
-        message: "Invitation role is not allowed",
-      })
-    }
+    requireInvitableOrganizationRole(invitation.role)
   },
 }
 
@@ -183,13 +169,28 @@ const commonAuthPlugins = defineAuthPlugins(
     path: "/reference",
   }),
   organization({
-    ac: organizationAccessControl,
-    creatorRole: "super_admin",
+    creatorRole: "owner",
     organizationHooks: organizationSecurityHooks,
-    roles: {
-      super_admin: superAdmin,
-      admin,
-      member,
+    async sendInvitationEmail({
+      email,
+      id,
+      inviter,
+      organization: invitedOrganization,
+    }) {
+      try {
+        const rendered = await renderOrganizationInvitationEmail({
+          appName: env.APP_NAME,
+          invitationUrl: new URL(
+            `/invitations/${encodeURIComponent(id)}`,
+            webAppOrigin
+          ).toString(),
+          inviterName: inviter.user.name.trim() || undefined,
+          organizationName: invitedOrganization.name,
+        })
+        await sendEmail({ to: email, ...rendered })
+      } catch {
+        authLogger.log("error", "Organization invitation email delivery failed")
+      }
     },
   })
 )

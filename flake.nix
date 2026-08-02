@@ -175,7 +175,14 @@
           # MCP: Cursor は Claude Code 互換の stdio type を付ける。
           stdioMcpServers = lib.mapAttrs (_: server: server // { type = "stdio"; }) mcpServers;
 
-          # MCP: Cursorだけmoduleが出力できないためmkConfigで生成する。
+          # MCP: moduleが出力しないCodexとCursorの設定をmkConfigで生成する。
+          codexMcpConfig = mcp-servers-nix.lib.mkConfig pkgs {
+            flavor = "codex";
+            format = "toml-inline";
+            fileName = "config.toml";
+            settings.servers = mcpServers;
+          };
+
           cursorMcpConfig = mcp-servers-nix.lib.mkConfig pkgs {
             flavor = "claude-code";
             fileName = "mcp.json";
@@ -192,15 +199,20 @@
 
               root="''${AGENT_CONFIG_ROOT:-$PWD}"
 
+              for configDirectory in "$root/.codex" "$root/.cursor" "$root/.vscode"; do
+                if [ -L "$configDirectory" ]; then
+                  echo "agent-config: refusing symlink config directory: $configDirectory" >&2
+                  exit 1
+                fi
+              done
+
+              mkdir -p -- "$root/.codex" "$root/.cursor" "$root/.vscode"
+
               AGENT_SKILLS_ROOT="$root" ${syncSkills}/bin/skills-install-local
 
-              (
-                cd "$root"
-                ${config.mcp-servers.shellHook}
-              )
-
-              mkdir -p "$root/.cursor"
-              ln -sfn ${lib.escapeShellArg "${cursorMcpConfig}"} "$root/.cursor/mcp.json"
+              ln -sfnT -- ${lib.escapeShellArg "${codexMcpConfig}"} "$root/.codex/config.toml"
+              ln -sfnT -- ${lib.escapeShellArg "${config.mcp-servers.configs.vscode-workspace}"} "$root/.vscode/mcp.json"
+              ln -sfnT -- ${lib.escapeShellArg "${cursorMcpConfig}"} "$root/.cursor/mcp.json"
 
               echo "agent-config: synced skills and MCP config"
             '';

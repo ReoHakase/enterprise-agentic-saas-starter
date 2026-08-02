@@ -195,7 +195,6 @@ describe("Agent Issue manual approval execution", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "idempotency_conflict" },
     })
 
     const publicResponse = await app.handle(
@@ -420,7 +419,6 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
       })
     ).rejects.toMatchObject({
       code: "conflict",
-      publicContext: { reason: "stale_revision" },
     })
     const [action] = await db
       .select({
@@ -551,7 +549,7 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         sessionId: "action-session-a",
         userId: "action-user-a",
       })
-    ).rejects.toMatchObject({ code: "conflict", statusCode: 409 })
+    ).rejects.toMatchObject({ code: "conflict" })
 
     const second = await createRun(db, { clientMessageId: "reject-second" })
     const pending = await second.internal.prepareUpdateIssue({
@@ -572,10 +570,7 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
     )
     expect(collision.status).toBe(409)
     expect(await collision.json()).toMatchObject({
-      error: {
-        code: "conflict",
-        context: { reason: "idempotency_conflict" },
-      },
+      error: "conflict",
     })
     const [issue] = await db
       .select({ revision: schema.issues.revision, title: schema.issues.title })

@@ -34,8 +34,8 @@ const meta = preview.meta({
 
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, step }) => {
-    const body = within(document.body)
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Search, filter, and sort both tables", async () => {
       const membersTable = canvas.getByRole("table", {
@@ -170,7 +170,7 @@ export const Ready = meta.story({
       roleTrigger.focus()
       await userEvent.keyboard("{Enter}")
       await waitFor(() => {
-        for (const roleName of ["Member", "Admin", "Super Admin"]) {
+        for (const roleName of ["Member", "Admin", "Owner"]) {
           const visibleOption = body
             .getAllByRole("option", { name: roleName })
             .find((option) => option.getBoundingClientRect().width > 0)
@@ -178,14 +178,14 @@ export const Ready = meta.story({
         }
       })
       await expect(
-        within(roleTrigger).getByTestId("organization-role-super_admin")
+        within(roleTrigger).getByTestId("organization-role-owner")
       ).toBeVisible()
       await Promise.all(
         (
           [
             ["Member", "organization-role-member"],
             ["Admin", "organization-role-admin"],
-            ["Super Admin", "organization-role-super_admin"],
+            ["Owner", "organization-role-owner"],
           ] as const
         ).map(async ([roleName, testId]) => {
           const visibleOption = body
@@ -240,29 +240,25 @@ export const Ready = meta.story({
 
     await step("Open the invitation workflow and validate input", async () => {
       await userEvent.click(
-        canvas.getByRole("button", { name: "Invite members" })
+        canvas.getByRole("button", { name: "Invite member" })
       )
       await waitFor(() =>
         expect(
-          body.getByRole("dialog", { name: "Invite members" })
+          body.getByRole("dialog", { name: "Invite member" })
         ).toBeVisible()
       )
       await userEvent.type(
-        body.getByRole("textbox", { name: "Email addresses" }),
+        body.getByRole("textbox", { name: "Email address" }),
         "not-an-email"
       )
       await userEvent.click(
-        body.getByRole("button", { name: "Send invitations" })
+        body.getByRole("button", { name: "Send invitation" })
       )
-      await expect(
-        body.getByText(
-          "Enter valid email addresses separated by commas or new lines."
-        )
-      ).toBeVisible()
+      await expect(body.getByText("Enter a valid email address.")).toBeVisible()
       await userEvent.click(body.getByRole("button", { name: "Cancel" }))
       await waitFor(() =>
         expect(
-          body.queryByRole("dialog", { name: "Invite members" })
+          body.queryByRole("dialog", { name: "Invite member" })
         ).not.toBeInTheDocument()
       )
     })
@@ -287,10 +283,8 @@ export const InvitationsError = meta.story({
       http.get("*/organizations/:organizationId/invitations", () =>
         HttpResponse.json(
           {
-            error: {
-              code: "invitations_unavailable",
-              message: "Invitations unavailable.",
-            },
+            error: "validation_error",
+            message: "Invitations unavailable.",
           },
           { status: 400 }
         )
@@ -318,13 +312,13 @@ export const PermissionLimited = meta.story({
         canInviteMembers: false,
         canManageMembers: false,
         canManageAdmins: false,
-        canTransferSuperAdmin: false,
+        canTransferOwnership: false,
       },
     },
   },
   play: async ({ canvas }) => {
     await expect(
-      canvas.queryByRole("button", { name: "Invite members" })
+      canvas.queryByRole("button", { name: "Invite member" })
     ).not.toBeInTheDocument()
   },
 })

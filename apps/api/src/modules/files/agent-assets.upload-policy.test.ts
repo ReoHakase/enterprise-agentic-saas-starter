@@ -185,7 +185,7 @@ describe("Agent asset upload policy and scope", () => {
 
     await expect(
       uploadDirect(db, pngFile(), "rate-limited-upload")
-    ).rejects.toMatchObject({ code: "rate_limited", statusCode: 429 })
+    ).rejects.toMatchObject({ code: "rate_limited" })
     expect(storage.put).not.toHaveBeenCalled()
     expect(await db.select().from(schema.storageObjects)).toEqual([])
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([])
@@ -263,12 +263,12 @@ describe("Agent asset upload policy and scope", () => {
     storage.setInfo({ format: "jpeg" })
     await expect(
       uploadDirect(db, pngFile("format.png"), "images-format-mismatch")
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
 
     storage.setInfo({ format: "png", width: AGENT_ASSET_MAX_DIMENSION + 1 })
     await expect(
       uploadDirect(db, pngFile("dimensions.png"), "images-dimensions")
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
 
     expect(storage.put).toHaveBeenCalledTimes(2)
     const assets = await db.select().from(schema.agentAssets)
@@ -349,7 +349,7 @@ describe("Agent asset upload policy and scope", () => {
     const switched = await app.handle(assetRequest({ assetId }))
     expect(switched.status).toBe(409)
     expect(await switched.json()).toMatchObject({
-      error: { code: "active_organization_mismatch" },
+      error: "active_organization_mismatch",
     })
 
     await db
@@ -421,7 +421,7 @@ describe("Agent asset upload policy and scope", () => {
         grant: run.grant,
         assetId: uploadedAssetId,
       })
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
 
     storage.setOutput({
       bytes: new Uint8Array([1]),
@@ -432,7 +432,7 @@ describe("Agent asset upload policy and scope", () => {
         grant: run.grant,
         assetId: uploadedAssetId,
       })
-    ).rejects.toMatchObject({ code: "service_unavailable", statusCode: 503 })
+    ).rejects.toMatchObject({ code: "service_unavailable" })
     const visionBuckets = await db
       .select({ count: schema.agentResourceUsageBuckets.count })
       .from(schema.agentResourceUsageBuckets)
@@ -456,7 +456,7 @@ describe("Agent asset upload policy and scope", () => {
         clientMessageId: "too-many-assets",
         assetIds: seededIds,
       })
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
 
     const largeIds: string[] = []
     for (let index = 0; index < 3; index += 1) {
@@ -474,7 +474,7 @@ describe("Agent asset upload policy and scope", () => {
         clientMessageId: "too-many-bytes",
         assetIds: largeIds,
       })
-    ).rejects.toMatchObject({ code: "validation_error", statusCode: 400 })
+    ).rejects.toMatchObject({ code: "validation_error" })
     const failedRuns = await db
       .select()
       .from(schema.agentRuns)
@@ -518,7 +518,6 @@ describe("Agent reusable asset boundaries", () => {
 
       await expect(prepare()).rejects.toMatchObject({
         code: "validation_error",
-        statusCode: 400,
       })
       expect(await db.select().from(schema.agentActions)).toEqual([])
       expect(await db.select().from(schema.agentActionAssets)).toEqual([])

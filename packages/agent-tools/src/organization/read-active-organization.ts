@@ -55,8 +55,8 @@ export const createReadActiveOrganizationTool = <RequestContextData = unknown>(
             }
           )
         )
-      } catch {
-        throw new Error("Agent tool execution failed")
+      } catch (cause) {
+        throw new Error("Agent tool execution failed", { cause })
       }
     },
   })

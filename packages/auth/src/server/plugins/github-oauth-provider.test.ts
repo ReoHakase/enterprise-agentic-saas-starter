@@ -4,7 +4,7 @@ import { createGithubOAuthEmulatorProvider } from "./github-oauth-provider"
 
 const environment = {
   mode: "emulator" as const,
-  emulatorUrl: "http://github.emulate.localhost:4001",
+  emulatorUrl: "http://github.emulate.localhost:4001/emulate/github",
   clientId: "local-client",
   clientSecret: "local-secret",
 }
@@ -18,8 +18,9 @@ describe("GitHub OAuth emulator provider", () => {
       clientId: "local-client",
       clientSecret: "local-secret",
       authorizationUrl:
-        "http://github.emulate.localhost:4001/login/oauth/authorize",
-      tokenUrl: "http://github.emulate.localhost:4001/login/oauth/access_token",
+        "http://github.emulate.localhost:4001/emulate/github/login/oauth/authorize",
+      tokenUrl:
+        "http://github.emulate.localhost:4001/emulate/github/login/oauth/access_token",
       scopes: ["read:user", "user:email"],
       authentication: "post",
       pkce: true,
@@ -58,8 +59,8 @@ describe("GitHub OAuth emulator provider", () => {
       image: "https://avatars.example.test/local.png",
     })
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      "http://github.emulate.localhost:4001/user",
-      "http://github.emulate.localhost:4001/user/emails",
+      "http://github.emulate.localhost:4001/emulate/github/user",
+      "http://github.emulate.localhost:4001/emulate/github/user/emails",
     ])
   })
 })

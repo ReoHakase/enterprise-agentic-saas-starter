@@ -1,8 +1,9 @@
-import { delay, http, HttpResponse } from "msw"
+import { http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor } from "storybook/test"
 
 import preview from "#storybook/preview"
 
+import { createDeferred } from "../../../../../test-support/storybook/deferred"
 import {
   authApiBaseUrl,
   authNavigate,
@@ -126,12 +127,14 @@ export const Success = meta.story({
 
 export const Submitting = meta.story({
   beforeEach({ msw }) {
+    const responseGate = createDeferred<void>()
     msw.use(
       http.post(`${authApiBaseUrl}/auth/sign-in/email`, async () => {
-        await delay("infinite")
+        await responseGate.promise
         return HttpResponse.json(successResponse)
       })
     )
+    return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, step }) => {
     await step("Disable the form while the request is pending", async () => {

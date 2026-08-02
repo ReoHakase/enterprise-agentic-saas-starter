@@ -1,7 +1,8 @@
-import { createApiClient } from "@enterprise-agentic-saas/api/client"
+import {
+  createApiClient,
+  EdenFetchError,
+} from "@enterprise-agentic-saas/api/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-
-import { ConsoleApiError } from "@/features/console"
 
 import {
   createIssue,
@@ -135,9 +136,7 @@ describe("issues Eden API", () => {
     fetchMock.mockResolvedValueOnce(Response.json(null))
     const client = createApiClient("https://api.example.test")
 
-    await expect(listIssues(client, "org-1")).rejects.toThrow(
-      "API response did not include data"
-    )
+    await expect(listIssues(client, "org-1")).rejects.toThrow("Invalid type")
   })
 
   it("forwards AbortSignal to stale Issue label requests", async () => {
@@ -268,28 +267,17 @@ describe("issues Eden API", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
   })
 
-  it("normalizes Eden errors and keeps safe field errors", async () => {
+  it("keeps the native Eden error", async () => {
     fetchMock.mockResolvedValueOnce(
-      Response.json(
-        {
-          error: {
-            code: "validation_failed",
-            message: "Fix the highlighted fields",
-            fieldErrors: { title: ["Enter an issue title."] },
-          },
-        },
-        { status: 400 }
-      )
+      Response.json({ error: "validation_error" }, { status: 400 })
     )
     const client = createApiClient("https://api.example.test")
 
     const request = listIssues(client, "org-1")
-    await expect(request).rejects.toBeInstanceOf(ConsoleApiError)
+    await expect(request).rejects.toBeInstanceOf(EdenFetchError)
     await expect(request).rejects.toMatchObject({
-      code: "validation_failed",
-      fieldErrors: { title: ["Enter an issue title."] },
-      message: "Fix the highlighted fields",
       status: 400,
+      value: { error: "validation_error" },
     })
   })
 })

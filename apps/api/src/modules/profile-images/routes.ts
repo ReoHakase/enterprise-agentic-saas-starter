@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import * as v from "valibot"
 
-import { apiErrorModel, tenantErrorResponses } from "../../models/api"
+import { errorResponseModel, tenantErrorResponses } from "../../models/api"
 import type { AccessControlFactory } from "../authorization/public"
 import {
   organizationProfileImageParamsModel,
@@ -13,7 +13,7 @@ import type { ProfileImageService } from "./service"
 
 const profileImageErrorResponses = {
   ...tenantErrorResponses,
-  503: apiErrorModel,
+  503: errorResponseModel,
 } as const
 
 const binaryResponseModel = v.any()
@@ -132,7 +132,7 @@ export const createProfileImageRoutes = (
       {
         organizationAccess: {
           action: "organization.profile_image.update",
-          allow: ["super_admin"],
+          allow: ["owner"],
           source: "params",
         },
         parse: "multipart/form-data",
@@ -147,7 +147,7 @@ export const createProfileImageRoutes = (
           operationId: "uploadOrganizationProfileImage",
           summary: "Upload an organization profile image",
           description:
-            "Allows only a super administrator of the active organization to replace its canonical profile image after validating and normalizing the uploaded PNG.",
+            "Allows only the owner of the active organization to replace its canonical profile image after validating and normalizing the uploaded PNG.",
           tags: ["Profile images"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
@@ -168,7 +168,7 @@ export const createProfileImageRoutes = (
       {
         organizationAccess: {
           action: "organization.profile_image.delete",
-          allow: ["super_admin"],
+          allow: ["owner"],
           source: "params",
         },
         params: organizationProfileImageParamsModel,
@@ -180,7 +180,7 @@ export const createProfileImageRoutes = (
           operationId: "deleteOrganizationProfileImage",
           summary: "Delete an organization profile image",
           description:
-            "Allows only a super administrator of the active organization to remove its canonical private image, enqueue durable cleanup, and restore the fallback image.",
+            "Allows only the owner of the active organization to remove its canonical private image, enqueue durable cleanup, and restore the fallback image.",
           tags: ["Profile images"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",

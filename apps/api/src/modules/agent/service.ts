@@ -5,7 +5,7 @@ import type {
   AgentRuntimeChatInput,
   AgentRuntimeResumeInput,
 } from "../../agent-client"
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   createObservedLogger,
   injectObservedRequestHeaders,
@@ -13,49 +13,24 @@ import {
 } from "../../platform/observability/runtime"
 import { agentActionExecutionResultModel } from "./action-schema"
 import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
-import type { AgentServicePorts, AgentThreadPermissionMode } from "./ports"
+import type { AgentServicePorts } from "./ports"
+import {
+  type AgentRuntimeSpanCompletion,
+  observeAgentRuntimeStream,
+} from "./runtime-stream"
 
 const DEFAULT_THREAD_TITLE = "New conversation"
+const AGENT_ACTION_RESUME_TIMEOUT_MS = 50_000
 const logger = createObservedLogger("agent").child("runtime")
 const messageLogger = createObservedLogger("agent").child("messages")
 const permissionLogger = createObservedLogger("agent").child("permission")
 const threadLogger = createObservedLogger("agent").child("threads")
 
-const agentRuntimeHeaders = (): Headers => {
+const agentRuntimeHeaders = (requestId?: string): Headers => {
   const headers = new Headers({ "content-type": "application/json" })
+  if (requestId) headers.set("x-request-id", requestId)
   injectObservedRequestHeaders(headers)
   return headers
-}
-
-type AgentRuntimeSpanCompletion = {
-  promise: Promise<void>
-  reject(reason?: unknown): void
-  resolve(value?: void | PromiseLike<void>): void
-}
-
-const observeAgentRuntimeStream = (
-  spanCompletion: AgentRuntimeSpanCompletion,
-  body: ReadableStream<Uint8Array>
-) => {
-  const observedStream = new TransformStream<Uint8Array, Uint8Array>()
-  const completion = body.pipeTo(observedStream.writable).then(
-    () => {
-      logger.info("Agent runtime response stream completed", {
-        "agent.runtime.route": "/chat",
-      })
-      spanCompletion.resolve()
-      return undefined
-    },
-    (cause) => {
-      logger.error("Agent runtime response stream failed", {
-        "agent.runtime.route": "/chat",
-      })
-      spanCompletion.reject(cause)
-      throw cause
-    }
-  )
-  void completion.catch(() => undefined)
-  return observedStream.readable
 }
 
 const boundedRetryAfter = (value: string | null): number => {
@@ -71,8 +46,8 @@ const normalizeAgentTimezone = (value: string): string => {
     return new Intl.DateTimeFormat("en-US", {
       timeZone: value,
     }).resolvedOptions().timeZone
-  } catch {
-    throw publicErrors.validation("Invalid agent timezone")
+  } catch (cause) {
+    throw new HttpError({ code: "validation_error", cause })
   }
 }
 
@@ -113,7 +88,11 @@ const listAgentThreadsWithMemory = async (
     return []
   }
   if (registryThreads.length > 1_000) {
-    throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: new Error("Agent thread list unavailable"),
+      retryAfter: 30,
+    })
   }
   const capability = await ports.issueAgentConnectionTicket({
     ...input,
@@ -133,17 +112,29 @@ const listAgentThreadsWithMemory = async (
       })
     )
   } catch (cause) {
-    throw publicErrors.unavailable(cause)
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: cause,
+      retryAfter: 30,
+    })
   }
   if (response.status !== 200) {
     await response.body?.cancel().catch(() => undefined)
-    throw publicErrors.unavailable(new Error("Agent thread list unavailable"))
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: new Error("Agent thread list unavailable"),
+      retryAfter: 30,
+    })
   }
   let memoryThreads: v.InferOutput<typeof agentMemoryThreadListModel>
   try {
     memoryThreads = v.parse(agentMemoryThreadListModel, await response.json())
   } catch (cause) {
-    throw publicErrors.unavailable(cause)
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: cause,
+      retryAfter: 30,
+    })
   }
   const byId = new Map(memoryThreads.map((thread) => [thread.id, thread]))
   const memoryMatchCount = registryThreads.filter((thread) =>
@@ -199,11 +190,19 @@ const listAgentMessagesFromMemory = async (
       })
     )
   } catch (cause) {
-    throw publicErrors.unavailable(cause)
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: cause,
+      retryAfter: 30,
+    })
   }
   if (response.status !== 200) {
     await response.body?.cancel().catch(() => undefined)
-    throw publicErrors.unavailable(new Error("Agent history unavailable"))
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: new Error("Agent history unavailable"),
+      retryAfter: 30,
+    })
   }
   try {
     const result = v.parse(agentMessagePageModel, await response.json())
@@ -218,7 +217,11 @@ const listAgentMessagesFromMemory = async (
     })
     return result
   } catch (cause) {
-    throw publicErrors.unavailable(cause)
+    throw new HttpError({
+      code: "service_unavailable",
+      cause: cause,
+      retryAfter: 30,
+    })
   }
 }
 
@@ -268,62 +271,9 @@ export const createAgentService = (ports: AgentServicePorts) => {
       title: DEFAULT_THREAD_TITLE,
     })
 
-  const archiveAgentThread = (input: {
-    sessionId: string
-    userId: string
-    threadId: string
-  }) => ports.archiveAgentThreadForSession(input)
-
-  const cancelAgentRun = async (
+  const cancelAgentRun = (
     input: Parameters<AgentServicePorts["cancelAgentRunForSession"]>[0]
-  ) => {
-    const result = await ports.cancelAgentRunForSession(input)
-    const abortController = new AbortController()
-    const abortDeadline = setTimeout(
-      () =>
-        abortController.abort(
-          new DOMException("Agent abort timed out", "TimeoutError")
-        ),
-      1_000
-    )
-    try {
-      const response = await Promise.race([
-        ports.fetchAgentRuntime(
-          new Request(
-            `https://agent.internal/runs/${encodeURIComponent(input.runId)}/cancel`,
-            {
-              method: "POST",
-              headers: agentRuntimeHeaders(),
-              signal: abortController.signal,
-            }
-          )
-        ),
-        new Promise<never>((_resolve, reject) => {
-          abortController.signal.addEventListener(
-            "abort",
-            () => reject(abortController.signal.reason),
-            { once: true }
-          )
-        }),
-      ])
-      await response.body?.cancel().catch(() => undefined)
-    } catch {
-      // The database cancellation remains authoritative and idempotent.
-    } finally {
-      clearTimeout(abortDeadline)
-    }
-    return result
-  }
-
-  const prepareAgentChat = (
-    input: Parameters<AgentServicePorts["prepareAgentChatForSession"]>[0]
-  ) => ports.prepareAgentChatForSession(input)
-
-  const prepareAgentClientToolContinuation = (
-    input: Parameters<
-      AgentServicePorts["prepareAgentClientToolContinuationForSession"]
-    >[0]
-  ) => ports.prepareAgentClientToolContinuationForSession(input)
+  ) => ports.cancelAgentRunForSession(input)
 
   const listAgentMessages = (
     input: AgentSessionIdentity & {
@@ -333,19 +283,10 @@ export const createAgentService = (ports: AgentServicePorts) => {
     }
   ) => listAgentMessagesFromMemory(ports, input)
 
-  const getAgentMonthlyUsage = (
-    input: Parameters<AgentServicePorts["getAgentMonthlyUsageForSession"]>[0]
-  ) => ports.getAgentMonthlyUsageForSession(input)
-
-  const getAgentOrganizationUsage = (
-    input: Parameters<
-      AgentServicePorts["getAgentOrganizationUsageForSession"]
-    >[0]
-  ) => ports.getAgentOrganizationUsageForSession(input)
-
   const forwardAgentChat = async (
     input: AgentRuntimeChatInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    requestId: string = crypto.randomUUID()
   ): Promise<Response> =>
     observeAgentRuntimeChat(input, async (spanCompletion) => {
       let response: Response
@@ -353,7 +294,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
         response = await ports.fetchAgentRuntime(
           new Request("https://agent.internal/chat", {
             method: "POST",
-            headers: agentRuntimeHeaders(),
+            headers: agentRuntimeHeaders(requestId),
             body: JSON.stringify(input),
             signal,
           })
@@ -362,7 +303,11 @@ export const createAgentService = (ports: AgentServicePorts) => {
         logger.error("Agent runtime request failed", {
           "agent.runtime.route": "/chat",
         })
-        throw publicErrors.unavailable(cause)
+        throw new HttpError({
+          code: "service_unavailable",
+          cause: cause,
+          retryAfter: 30,
+        })
       }
 
       const contentType = response.headers.get("content-type") ?? "missing"
@@ -383,30 +328,25 @@ export const createAgentService = (ports: AgentServicePorts) => {
         const retryAfter =
           status === 429
             ? boundedRetryAfter(response.headers.get("retry-after"))
-            : null
+            : status >= 500
+              ? 30
+              : null
         await response.body?.cancel().catch(() => undefined)
-        spanCompletion.resolve()
-        const publicStatus =
-          status === 400 || status === 409 || status === 429 ? status : 503
-        return new Response(
-          publicStatus === 400
-            ? "Invalid agent request"
-            : publicStatus === 409
-              ? "Agent run already in progress"
-              : publicStatus === 429
-                ? "Agent capacity temporarily limited"
-                : "Agent unavailable",
-          {
-            status: publicStatus,
-            headers: {
-              "cache-control": "private, no-store",
-              "content-type": "text/plain; charset=utf-8",
-              ...(retryAfter === null
-                ? {}
-                : { "retry-after": String(retryAfter) }),
-            },
-          }
-        )
+        throw new HttpError({
+          code:
+            status === 400
+              ? "validation_error"
+              : status === 409
+                ? "conflict"
+                : status === 429
+                  ? "rate_limited"
+                  : "service_unavailable",
+          cause:
+            status >= 500
+              ? new Error(`Agent runtime returned HTTP ${status}`)
+              : undefined,
+          retryAfter: retryAfter ?? undefined,
+        })
       }
 
       if (
@@ -414,14 +354,17 @@ export const createAgentService = (ports: AgentServicePorts) => {
         !contentType.startsWith("text/event-stream")
       ) {
         await response.body?.cancel().catch(() => undefined)
-        throw publicErrors.unavailable(
-          new Error("Invalid Agent runtime response")
-        )
+        throw new HttpError({
+          code: "service_unavailable",
+          cause: new Error("Invalid Agent runtime response"),
+          retryAfter: 30,
+        })
       }
 
       const clientBody = observeAgentRuntimeStream(
         spanCompletion,
-        response.body
+        response.body,
+        requestId
       )
 
       return new Response(clientBody, {
@@ -436,91 +379,91 @@ export const createAgentService = (ports: AgentServicePorts) => {
     })
 
   const forwardAgentActionResume = async (
-    input: AgentRuntimeResumeInput
+    input: AgentRuntimeResumeInput,
+    signal?: AbortSignal
   ): Promise<AgentActionExecutionResult> => {
     let response: Response
     try {
+      const timeoutSignal = AbortSignal.timeout(AGENT_ACTION_RESUME_TIMEOUT_MS)
       response = await ports.fetchAgentRuntime(
         new Request("https://agent.internal/actions/resume", {
           method: "POST",
           headers: agentRuntimeHeaders(),
           body: JSON.stringify(input),
+          signal: signal
+            ? AbortSignal.any([signal, timeoutSignal])
+            : timeoutSignal,
         })
       )
     } catch (cause) {
-      throw publicErrors.unavailable(cause)
+      throw new HttpError({
+        code: "service_unavailable",
+        cause: cause,
+        retryAfter: 30,
+      })
     }
 
     if (response.status !== 200) {
       await response.body?.cancel().catch(() => undefined)
-      throw publicErrors.unavailable(new Error("Agent action resume failed"))
+      throw new HttpError({
+        code: "service_unavailable",
+        cause: new Error("Agent action resume failed"),
+        retryAfter: 30,
+      })
     }
 
     try {
       return v.parse(agentActionExecutionResultModel, await response.json())
     } catch (cause) {
-      throw publicErrors.unavailable(cause)
+      throw new HttpError({
+        code: "service_unavailable",
+        cause: cause,
+        retryAfter: 30,
+      })
     }
   }
 
-  const revokeAgentContext = (input: { sessionId: string; userId: string }) =>
-    ports.revokeCurrentAgentContext(input)
-
-  const getAgentAction = (input: {
-    actionId: string
-    sessionId: string
-    userId: string
-  }) => ports.getAgentActionForSession(input)
-
-  const decideAgentAction = (input: {
-    actionId: string
-    decision: "yes" | "no"
-    idempotencyKey: string
-    sessionId: string
-    userId: string
-  }) => ports.decideAgentActionForSession(input)
-
-  const resumeAgentAction = async (input: {
-    actionId: string
-    sessionId: string
-    userId: string
-  }): Promise<AgentActionExecutionResult> => {
+  const resumeAgentAction = async (
+    input: {
+      actionId: string
+      sessionId: string
+      userId: string
+    },
+    signal?: AbortSignal
+  ): Promise<AgentActionExecutionResult> => {
     const preparation = await ports.prepareAgentActionResumeForSession(input)
     if (preparation.kind === "receipt") return preparation.result
-    return forwardAgentActionResume({
-      actionId: input.actionId,
-      resumeTicket: preparation.resume.ticket,
-    })
+    return forwardAgentActionResume(
+      {
+        actionId: input.actionId,
+        resumeTicket: preparation.resume.ticket,
+      },
+      signal
+    )
   }
 
   const getAgentApprovalPolicy = (input: AgentApprovalPolicyInput) =>
     getAgentApprovalPolicyForSession(ports, input)
 
-  const putAgentApprovalPolicy = (input: {
-    sessionId: string
-    userId: string
-    threadId: string
-    mode: AgentThreadPermissionMode
-  }) => ports.putAgentApprovalPolicyForSession(input)
-
   return {
     cancelAgentRun,
-    archiveAgentThread,
+    archiveAgentThread: ports.archiveAgentThreadForSession,
     createAgentThread,
-    decideAgentAction,
+    decideAgentAction: ports.decideAgentActionForSession,
     forwardAgentChat,
-    getAgentAction,
+    getAgentAction: ports.getAgentActionForSession,
     getAgentApprovalPolicy,
-    getAgentMonthlyUsage,
-    getAgentOrganizationUsage,
+    getAgentMonthlyUsage: ports.getAgentMonthlyUsageForSession,
+    getAgentOrganizationUsage: ports.getAgentOrganizationUsageForSession,
     listAgentMessages,
     listAgentThreads,
     normalizeAgentTimezone,
-    prepareAgentChat,
-    prepareAgentClientToolContinuation,
-    putAgentApprovalPolicy,
+    prepareAgentChat: ports.prepareAgentChatForSession,
+    prepareAgentClientToolContinuation:
+      ports.prepareAgentClientToolContinuationForSession,
+    putAgentApprovalPolicy: ports.putAgentApprovalPolicyForSession,
     resumeAgentAction,
-    revokeAgentContext,
+    revokeAgentContext: ports.revokeCurrentAgentContext,
   }
 }
 

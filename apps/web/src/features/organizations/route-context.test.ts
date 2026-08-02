@@ -9,7 +9,7 @@ const permissions = {
   canInviteMembers: false,
   canManageAdmins: false,
   canManageMembers: false,
-  canTransferSuperAdmin: false,
+  canTransferOwnership: false,
 }
 
 const organizations: OrganizationSummary[] = [

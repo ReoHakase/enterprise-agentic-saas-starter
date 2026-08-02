@@ -9,6 +9,7 @@ import {
   hasOrganizationSwitchRisks,
   type OrganizationSwitchRisks,
 } from "@/features/agent"
+import { reportObservedError } from "@/lib/report-observed-error"
 
 import { navigateAfterAccountSwitch } from "../account-switch-navigation"
 import {
@@ -91,7 +92,10 @@ export const useDeviceAccountsController = ({
           await queryClient.cancelQueries()
           try {
             await lifecycle.onComplete?.()
-          } catch {
+          } catch (error) {
+            reportObservedError(error, {
+              operation: "account.identity.cleanup",
+            })
             // The active identity changed during removal. Navigation remains
             // the final cleanup boundary even if local teardown is incomplete.
           }

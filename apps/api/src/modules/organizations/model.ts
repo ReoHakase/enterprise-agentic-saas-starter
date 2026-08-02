@@ -12,7 +12,7 @@ const permissionsModel = v.object({
   canInviteMembers: v.boolean(),
   canManageMembers: v.boolean(),
   canManageAdmins: v.boolean(),
-  canTransferSuperAdmin: v.boolean(),
+  canTransferOwnership: v.boolean(),
 })
 
 const organizationSummaryEntries = {
@@ -74,18 +74,6 @@ const invitationModel = v.object({
 })
 
 export const invitationListModel = v.array(invitationModel)
-
-export const invitationBatchModel = v.object({
-  invitations: invitationListModel,
-  queuedCount: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
-  delivery: v.literal("queued"),
-})
-
-export const resendInvitationResponseModel = v.object({
-  invitation: invitationModel,
-  delivery: v.literal("queued"),
-  revived: v.boolean(),
-})
 
 const manageableRoleModel = v.picklist(["admin", "member"])
 
@@ -160,7 +148,7 @@ export const updateMemberRoleBodyModel = v.object({
   role: manageableRoleModel,
 })
 
-export const transferSuperAdminBodyModel = v.object({
+export const transferOwnershipBodyModel = v.object({
   memberId: nonEmptyStringModel,
   confirmation: destructiveConfirmationModel,
 })
@@ -170,15 +158,6 @@ export const removeMemberBodyModel = v.object({
 })
 
 export const idResponseModel = v.object({ id: v.string() })
-
-export const createInvitationBodyModel = v.object({
-  emails: v.pipe(
-    v.array(v.pipe(v.string(), v.trim(), v.email())),
-    v.minLength(1),
-    v.maxLength(20)
-  ),
-  role: manageableRoleModel,
-})
 
 export const organizationInvitationParamsModel = v.object({
   organizationId: nonEmptyStringModel,

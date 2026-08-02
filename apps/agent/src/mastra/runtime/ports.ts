@@ -10,8 +10,6 @@ import type {
   AgentIssueAction,
   AgentIssueDetail,
   AgentIssueLabel,
-  AgentMemoryCommitSettlement,
-  AgentMemoryCommitSettlementInput,
   AgentMember,
   AgentOrganizationContext,
   AgentRunGrant,
@@ -26,9 +24,6 @@ import type {
 type BearerInput = { grant: string }
 
 export type AgentControlPlanePort = {
-  settleMemoryCommit(
-    input: AgentMemoryCommitSettlementInput
-  ): Promise<AgentMemoryCommitSettlement>
   consumeConnectionTicket(input: {
     ticket: string
     threadId: string

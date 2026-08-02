@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { createDataTableUrlKeys } from "@/components/data-table/data-table-url-state"
 
-export const memberTableRoles = ["super_admin", "admin", "member"] as const
+export const memberTableRoles = ["owner", "admin", "member"] as const
 const memberLoginMethods = ["github", "passkey"] as const
 const memberTableSorts = ["user", "joined", "role"] as const
 export const invitationTableRoles = ["admin", "member"] as const

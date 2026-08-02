@@ -53,7 +53,7 @@ export const MembersTable = ({
   pending,
   canManageMembers,
   canManageRoles,
-  canTransferSuperAdmin,
+  canTransferOwnership,
   onChangeRole,
   onRequestRemove,
 }: {
@@ -63,7 +63,7 @@ export const MembersTable = ({
   pending: boolean
   canManageMembers: boolean
   canManageRoles: boolean
-  canTransferSuperAdmin: boolean
+  canTransferOwnership: boolean
   onChangeRole: (member: OrganizationMember, role: OrganizationRole) => void
   onRequestRemove: (member: OrganizationMember) => void
 }) => {
@@ -119,7 +119,7 @@ export const MembersTable = ({
     members,
     canManageMembers,
     canManageRoles,
-    canTransferSuperAdmin,
+    canTransferOwnership,
     onChangeRole,
     onRequestRemove,
   })

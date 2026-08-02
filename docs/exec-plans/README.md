@@ -2,7 +2,7 @@
 title: exec plan運用
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 ---
 
 # exec plan運用
@@ -42,10 +42,16 @@ last_reviewed: 2026-07-26
 ### 実行中
 
 - [Mastra-native Agentリファクタとremote MCP導入](active/agent-refactor-and-mcp.md)
+- [Issue-first DataTableとURL同期](active/issue-first-data-table.md)
 
 ### 完了
 
+- [Next devエラー可視化とBetter Auth招待再送修正](completed/PLAN-2026-032-development-error-and-invitation-resend.md)
+- [CIクリティカルパス短縮](completed/PLAN-2026-031-ci-critical-path-optimization.md)
+- [coding agent設定のNix集約](completed/nix-managed-agent-config.md)
 - [Emulate対応サービス拡張](completed/emulate-expansion.md)
+- [GPT-5.6 Luna有料E2Eの強化](completed/PLAN-2026-030-luna-paid-e2e-hardening.md)
+- [標準機能優先のAgent・エラー・可観測性・ブラウザーテスト整理](completed/PLAN-2026-029-standard-library-observability-browser-hardening.md)
 - [文書、source構成、品質ゲート、テスト、Codex harnessの全面移行](completed/one-shot-harness-migration.md)
 
 ## template

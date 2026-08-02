@@ -119,5 +119,17 @@ describe("authentication form schemas", () => {
         "fallback"
       )
     ).toBe("That passkey is already registered.")
+    expect(
+      safeAuthErrorMessage(
+        {
+          status: 400,
+          error: {
+            code: "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
+            message: "provider-owned invitation detail",
+          },
+        },
+        "fallback"
+      )
+    ).toBe("An invitation is already pending for this email address.")
   })
 })

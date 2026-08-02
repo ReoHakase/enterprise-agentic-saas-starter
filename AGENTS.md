@@ -16,11 +16,11 @@
 ## 作業手順
 
 1. active exec planと変更領域のskillを読む。
-2. `test_planner`でinvariant、必要なtest layer、paid testの要否を決める。
-3. production/test codeをwriteするagentは`implementer`一体に限定する。
-4. 最小のdeterministic checkから実装し、planのrequired commandまで広げる。
-5. current diffをread-onlyのcorrectness、security、tests reviewerへ渡す。
-6. findingを修正して検証とreviewを繰り返し、P0/P1または必須check失敗を残さない。
+2. 不変条件、必要なテスト層、有料テストの要否を変更前に決める。
+3. 既存変更を保持し、依頼された範囲だけを実装する。
+4. 最小の決定的な検査から始め、planの必須commandまで広げる。
+5. 現在の差分を仕様、security、テストの観点でレビューする。
+6. 指摘を修正して検証とレビューを繰り返し、P0/P1または必須検査失敗を残さない。
 
 ## source境界
 
@@ -47,8 +47,10 @@
 - `drizzle-kit push`を使わず、`main`に存在するmigrationを変更しない。
 - `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
 - AgentからDB、Auth、Email、Webを直接importしない。
-- reviewerからfileをwriteしない。
-- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、
-  telemetry、Memory、trace、test artifactへ出さない。maintainerが明示承認した
-  `NODE_ENV=development`のAgent local consoleに限り、provider raw `Error`とbounded cause chainを
-  調査用に出してよい。出力は機密として扱い、保存、共有、外部送信しない。
+- secret、token、email本文、private URL、provider raw errorをproduction log、公開response、trace、
+  remote telemetry、test・evalの出力やartifactへ出さない。標準`MessageHistory`はADR-012に従って
+  利用者が入力した会話を保存するが、アプリとtoolが認証情報、private URL、生のprovider errorを
+  Memoryへ追加しない。ADR-013の固定条件を満たす
+  `NODE_ENV=development`のAPI・Agent・Webに限り、認証情報を除去したbounded cause chainを端末・
+  ブラウザーconsoleとlocal Lokiへ出してよい。local Lokiは機密development dataとして扱い、共有・
+  export・artifact添付をしない。

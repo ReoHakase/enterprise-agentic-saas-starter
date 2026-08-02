@@ -101,7 +101,6 @@ describe("Agent Web search server guard", () => {
       first.guard({ grant: first.grant, query: "Bun runtime current limits" })
     ).rejects.toMatchObject({
       code: "validation_error",
-      publicMessage: "Web search query requires a public-only restatement",
     })
   })
 
@@ -142,7 +141,6 @@ describe("Agent Web search server guard", () => {
       })
     ).rejects.toMatchObject({
       code: "validation_error",
-      publicMessage: "Web search query requires a public-only restatement",
     })
   })
 
@@ -168,7 +166,6 @@ describe("Agent Web search server guard", () => {
       guard({ grant, query: "Cloudflare R2 current limits" })
     ).rejects.toMatchObject({
       code: "validation_error",
-      publicMessage: "Web search private context is too large",
     })
   })
 })

@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import * as v from "valibot"
 
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { sessionCookieSecurity } from "../../../models/api"
 import type { GetSessionContext } from "../../auth/public"
 import type { OrganizationDeletionAccessService } from "../deletion-access-service"
@@ -9,11 +9,11 @@ import { organizationDeletionIdempotencyKeyModel } from "../model"
 
 const requiredString = (container: unknown, field: string) => {
   if (!container || typeof container !== "object") {
-    throw publicErrors.validation(`${field} is required`, { field })
+    throw new HttpError({ code: "validation_error" })
   }
   const value = Reflect.get(container, field)
   if (typeof value !== "string" || !value) {
-    throw publicErrors.validation(`${field} is required`, { field })
+    throw new HttpError({ code: "validation_error" })
   }
   return value
 }
@@ -22,9 +22,7 @@ const requiredString = (container: unknown, field: string) => {
 export const parseOrganizationDeletionIdempotencyKey = (value: unknown) => {
   const parsedKey = v.safeParse(organizationDeletionIdempotencyKeyModel, value)
   if (!parsedKey.success) {
-    throw publicErrors.validation("Invalid idempotency key", {
-      field: "idempotencyKey",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
 
   return parsedKey.output

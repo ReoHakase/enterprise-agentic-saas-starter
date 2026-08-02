@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   decideInvitation,
   getInvitationContext,
-  InvitationAuthenticationError,
+  sendOrganizationInvitation,
 } from "./api"
 
 type InvitationDecisionResult = {
@@ -26,10 +26,22 @@ type GetInvitation = (input: {
     headers?: { cookie: string }
   }
 }) => Promise<InvitationDecisionResult>
+type InviteMember = (input: {
+  email: string
+  organizationId: string
+  resend: boolean
+  role: "admin" | "member"
+  fetchOptions: {
+    credentials: "include"
+    headers?: { cookie: string }
+    throw: true
+  }
+}) => Promise<unknown>
 type MockAuthClient = {
   organization: {
     acceptInvitation: DecideInvitation
     getInvitation: GetInvitation
+    inviteMember: InviteMember
     rejectInvitation: DecideInvitation
   }
 }
@@ -38,6 +50,7 @@ const mocks = vi.hoisted(() => ({
   acceptInvitation: vi.fn<DecideInvitation>(),
   createAuthClientForBaseUrl: vi.fn<(baseUrl: string) => MockAuthClient>(),
   getInvitation: vi.fn<GetInvitation>(),
+  inviteMember: vi.fn<InviteMember>(),
   rejectInvitation: vi.fn<DecideInvitation>(),
 }))
 
@@ -52,6 +65,7 @@ describe("invitation decision API", () => {
       organization: {
         acceptInvitation: mocks.acceptInvitation,
         getInvitation: mocks.getInvitation,
+        inviteMember: mocks.inviteMember,
         rejectInvitation: mocks.rejectInvitation,
       },
     })
@@ -71,6 +85,7 @@ describe("invitation decision API", () => {
       error: null,
     })
     mocks.rejectInvitation.mockResolvedValue({ data: {}, error: null })
+    mocks.inviteMember.mockResolvedValue({ id: "invitation-1" })
   })
 
   it("loads and normalizes the invitation only for the active recipient", async () => {
@@ -98,6 +113,32 @@ describe("invitation decision API", () => {
       }),
     })
   })
+
+  it.each([false, true])(
+    "uses Better Auth's single-recipient invitation contract with resend=%s",
+    async (resend) => {
+      await sendOrganizationInvitation({
+        apiBaseUrl: "https://api.example.test",
+        cookie: "session=owner",
+        email: "member@example.com",
+        organizationId: "org-1",
+        resend,
+        role: "member",
+      })
+
+      expect(mocks.inviteMember).toHaveBeenCalledWith({
+        email: "member@example.com",
+        organizationId: "org-1",
+        resend,
+        role: "member",
+        fetchOptions: {
+          credentials: "include",
+          headers: { cookie: "session=owner" },
+          throw: true,
+        },
+      })
+    }
+  )
 
   it.each([
     [{ status: 403 }, "recipient_mismatch"],
@@ -133,7 +174,7 @@ describe("invitation decision API", () => {
       data: {
         id: "invitation-1",
         organizationName: "Acme",
-        role: "super_admin",
+        role: "owner",
       },
       error: null,
     })
@@ -175,13 +216,14 @@ describe("invitation decision API", () => {
     }
   )
 
-  it("surfaces an allowlisted Better Auth error code", async () => {
+  it("preserves a returned Better Auth decision error", async () => {
+    const error = {
+      code: "INVITATION_NOT_FOUND",
+      message: "SELECT token FROM invitation",
+    }
     mocks.acceptInvitation.mockResolvedValueOnce({
       data: null,
-      error: {
-        code: "INVITATION_NOT_FOUND",
-        message: "SELECT token FROM invitation",
-      },
+      error,
     })
 
     await expect(
@@ -190,7 +232,7 @@ describe("invitation decision API", () => {
         apiBaseUrl: "https://api.example.test",
         invitationId: "invitation-1",
       })
-    ).rejects.toThrow("This invitation is no longer available.")
+    ).rejects.toBe(error)
   })
 
   it.each([{ status: 401 }, { statusCode: 401 }, { code: "SESSION_EXPIRED" }])(
@@ -207,18 +249,17 @@ describe("invitation decision API", () => {
           apiBaseUrl: "https://api.example.test",
           invitationId: "invitation-1",
         })
-      ).rejects.toBeInstanceOf(InvitationAuthenticationError)
+      ).rejects.toBe(error)
     }
   )
 
   it.each(["accept", "reject"] as const)(
-    "hides unknown provider details when an invitation cannot be %sed",
+    "preserves a rejected provider error when an invitation cannot be %sed",
     async (action) => {
       const request =
         action === "accept" ? mocks.acceptInvitation : mocks.rejectInvitation
-      request.mockRejectedValueOnce(
-        new Error("BETTER_AUTH_SECRET=provider-secret")
-      )
+      const error = new Error("BETTER_AUTH_SECRET=provider-secret")
+      request.mockRejectedValueOnce(error)
 
       await expect(
         decideInvitation({
@@ -226,21 +267,18 @@ describe("invitation decision API", () => {
           apiBaseUrl: "https://api.example.test",
           invitationId: "invitation-1",
         })
-      ).rejects.toThrow(
-        action === "accept"
-          ? "Invitation could not be accepted. Try again."
-          : "Invitation could not be rejected. Try again."
-      )
+      ).rejects.toBe(error)
     }
   )
 
-  it("uses an operation fallback for an unknown returned error code", async () => {
+  it("preserves an unknown returned error", async () => {
+    const error = {
+      code: "INTERNAL_ERROR",
+      message: "TURSO_AUTH_TOKEN=provider-secret",
+    }
     mocks.acceptInvitation.mockResolvedValueOnce({
       data: null,
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "TURSO_AUTH_TOKEN=provider-secret",
-      },
+      error,
     })
 
     await expect(
@@ -249,6 +287,6 @@ describe("invitation decision API", () => {
         apiBaseUrl: "https://api.example.test",
         invitationId: "invitation-1",
       })
-    ).rejects.toThrow("Invitation could not be accepted. Try again.")
+    ).rejects.toBe(error)
   })
 })

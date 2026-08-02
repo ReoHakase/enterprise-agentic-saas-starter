@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { AgentAssetWithStorage } from "./agent-assets-domain"
 import {
   agentAssetBodyObject as bodyObject,
@@ -93,8 +93,8 @@ const transformAgentImage = async (
     }
     return response
   } catch (cause) {
-    if (cause instanceof AppError) throw cause
-    throw providerUnavailable("images", "transformAgentAsset")
+    if (cause instanceof HttpError) throw cause
+    throw providerUnavailable("images", "transformAgentAsset", cause)
   }
 }
 
@@ -113,9 +113,7 @@ export const createAgentAssetPreviewService = (
       (candidate) => String(candidate) === input.width
     )
     if (width === undefined) {
-      throw publicErrors.validation("Unsupported preview width", {
-        field: "width",
-      })
+      throw new HttpError({ code: "validation_error" })
     }
     const value = await ports.findPreviewableAgentAssetForSession({
       assetId: input.assetId,
@@ -207,9 +205,7 @@ export const createAgentAssetPreviewService = (
       userId: input.actorUserId,
     })
     if (!deleted) {
-      throw publicErrors.notFound("Agent asset not found", {
-        resource: "agent_asset",
-      })
+      throw new HttpError({ code: "not_found" })
     }
   }
 

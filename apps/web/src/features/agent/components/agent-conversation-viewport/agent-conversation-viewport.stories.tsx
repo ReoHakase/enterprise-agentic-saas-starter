@@ -34,20 +34,29 @@ const meta = preview.meta({
   args: {
     children: null,
     enabled: true,
-    turns: conversationTurns,
   },
 })
 
-export const WithMinimap = meta.story({
+export const CenteredConversation = meta.story({
   render: () => <ConversationFixture />,
   play: async ({ canvas }) => {
     const viewport = canvas.getByTestId("agent-conversation-viewport")
     await expect(viewport).toBeVisible()
-    await userEvent.click(
-      canvas.getByRole("button", {
-        name: /Jump to turn 1: Review the organization access policy/u,
-      })
+    const content = canvas.getByTestId("agent-conversation-content")
+    const viewportRect = viewport.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    expect(contentRect.width).toBeLessThanOrEqual(768)
+    expect(contentRect.left + contentRect.width / 2).toBeCloseTo(
+      viewportRect.left + viewportRect.width / 2,
+      0
     )
-    await expect(viewport).toHaveProperty("scrollTop", 0)
+    await expect(
+      canvas.queryByRole("navigation", { name: "Conversation turns" })
+    ).toBeVisible()
+    const firstTurn = canvas.getByRole("button", {
+      name: /Jump to turn 1: Review the organization access policy/u,
+    })
+    await userEvent.click(firstTurn)
+    await expect(firstTurn).toHaveAttribute("aria-current", "location")
   },
 })

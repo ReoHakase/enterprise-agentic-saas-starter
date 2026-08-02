@@ -36,7 +36,6 @@ import {
   processOrganizationDeletionJobs,
   type OrganizationFilesBucket,
 } from "./modules/organizations/deletion-jobs"
-import { processInvitationEmailJobs } from "./modules/organizations/invitation-email-jobs"
 import { processProfileImageCleanupJobs } from "./modules/profile-images/cleanup-jobs"
 import {
   createOtelObservabilityRuntime,
@@ -49,6 +48,7 @@ import { corsPlugin } from "./platform/plugins/cors"
 import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
 type WorkerObservabilityEnv = {
+  AGENT_E2E_RUN_ID?: string
   AGENT_RUNTIME?: AgentRuntimeBinding
   AGENT_ASSET_UPLOAD_ENABLED?: string
   AGENT_MAINTENANCE_MODE?: string
@@ -151,7 +151,8 @@ const configureWorkerObservability = (workerEnv: WorkerObservabilityEnv) => {
   )
   const runtime = createOtelObservabilityRuntime(
     "enterprise-agentic-saas-api",
-    resource
+    resource,
+    !workerEnv.AGENT_E2E_RUN_ID
   )
   configureObservability(
     resource
@@ -195,7 +196,7 @@ const instrumentedAgentInternalApi = instrument(
     ): Promise<Response> | Response {
       configureWorkerObservability(workerEnv)
       if (isAgentMaintenanceMode(workerEnv.AGENT_MAINTENANCE_MODE)) {
-        return agentMaintenanceResponse()
+        return agentMaintenanceResponse(request)
       }
       // named entrypointはdefault/public Workerとは別isolateになり得るため、
       // asset prepare/execute/model imageの全経路でbindingを初期化する。
@@ -361,31 +362,6 @@ const workerWithScheduled = {
       })
       return result
     })
-    const invitationJobs = processInvitationEmailJobs({
-      database: db,
-      onFailure: ({ attempts, errorCode, retryable }) => {
-        logScheduledFailure("invitation-email", errorCode, {
-          attempts,
-          retryable,
-        })
-        console.error({
-          attempts,
-          component: "invitation-email",
-          errorCode,
-          event: "delivery_job_failed",
-          level: "error",
-          retryable,
-        })
-      },
-    }).then((result) => {
-      console.info({
-        component: "invitation-email",
-        event: "delivery_batch_completed",
-        level: "info",
-        ...result,
-      })
-      return result
-    })
     const agentActionSweep = sweepAgentActions(db).then((result) => {
       console.info({
         component: "agent-action-sweep",
@@ -403,7 +379,6 @@ const workerWithScheduled = {
         fileCleanupJobs,
         profileImageCleanupJobs,
         agentAssetLifecycle,
-        invitationJobs,
       ]).then(() => undefined)
     )
   },

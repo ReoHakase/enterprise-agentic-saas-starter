@@ -13,10 +13,6 @@ import {
 let currentSearchParams = new URLSearchParams()
 const { agentThread: _agentThread, ...tableDefaults } = defaultIssueSearchState
 
-vi.mock("next/navigation", () => ({
-  useSearchParams: () => currentSearchParams,
-}))
-
 const Probe = () => {
   const { state, setDiscrete } = useIssueSearchState()
   const setPriorityRange = useCallback(
@@ -25,10 +21,6 @@ const Probe = () => {
   )
   const resetQuery = useCallback(
     () => void setDiscrete(tableDefaults),
-    [setDiscrete]
-  )
-  const setStatus = useCallback(
-    () => void setDiscrete({ statuses: ["open"] }),
     [setDiscrete]
   )
   const clearSearch = useCallback(
@@ -46,9 +38,6 @@ const Probe = () => {
       <button type="button" onClick={resetQuery}>
         Reset query
       </button>
-      <button type="button" onClick={setStatus}>
-        Set status
-      </button>
       <button type="button" onClick={clearSearch}>
         Clear search
       </button>
@@ -57,12 +46,10 @@ const Probe = () => {
 }
 
 describe("useIssueSearchState", () => {
-  it("migrates and clears the managed legacy priority without removing non-table params", async () => {
+  it("updates canonical priority range keys while preserving the Agent thread", async () => {
     const user = userEvent.setup()
     const updates: UrlUpdateEvent[] = []
-    currentSearchParams = new URLSearchParams(
-      "priority=urgent&agentThread=thread-x"
-    )
+    currentSearchParams = new URLSearchParams("agentThread=thread-x")
     const onUrlUpdate = vi.fn<(event: UrlUpdateEvent) => void>(
       (event: UrlUpdateEvent) => {
         updates.push(event)
@@ -80,13 +67,15 @@ describe("useIssueSearchState", () => {
     )
 
     expect(screen.getByLabelText("request")).toHaveTextContent(
-      '"priorityFrom":"urgent","priorityTo":"urgent"'
+      '"organizationId":"org-1"'
+    )
+    expect(screen.getByLabelText("request")).not.toHaveTextContent(
+      '"priorityFrom"'
     )
 
     await user.click(screen.getByRole("button", { name: "Set priority range" }))
     await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled())
     const changed = updates.at(-1)?.searchParams
-    expect(changed?.get("priority")).toBeNull()
     expect(changed?.get("priorityFrom")).toBe("high")
     expect(changed?.get("priorityTo")).toBeNull()
     expect(changed?.get("agentThread")).toBe("thread-x")
@@ -99,7 +88,6 @@ describe("useIssueSearchState", () => {
     await user.click(screen.getByRole("button", { name: "Reset query" }))
     await waitFor(() => expect(updates).toHaveLength(2))
     const reset = updates.at(-1)?.searchParams
-    expect(reset?.get("priority")).toBeNull()
     expect(reset?.get("priorityFrom")).toBeNull()
     expect(reset?.get("priorityTo")).toBeNull()
     expect(reset?.get("agentThread")).toBe("thread-x")
@@ -110,42 +98,6 @@ describe("useIssueSearchState", () => {
       expect(request.priorityFrom).toBeUndefined()
       expect(request.priorityTo).toBeUndefined()
     })
-  })
-
-  it("migrates the legacy due offset to both canonical boundary offsets", async () => {
-    const user = userEvent.setup()
-    const updates: UrlUpdateEvent[] = []
-    currentSearchParams = new URLSearchParams(
-      "dueFrom=2026-03-07&dueTo=2026-03-13&dueOffset=300"
-    )
-    const onUrlUpdate = vi.fn<(event: UrlUpdateEvent) => void>(
-      (event: UrlUpdateEvent) => {
-        updates.push(event)
-        currentSearchParams = new URLSearchParams(event.searchParams)
-      }
-    )
-    render(
-      <NuqsTestingAdapter
-        searchParams={currentSearchParams}
-        hasMemory
-        onUrlUpdate={onUrlUpdate}
-      >
-        <Probe />
-      </NuqsTestingAdapter>
-    )
-
-    expect(screen.getByLabelText("request")).toHaveTextContent(
-      '"dueDateFromOffsetMinutes":300'
-    )
-    expect(screen.getByLabelText("request")).toHaveTextContent(
-      '"dueDateToExclusiveOffsetMinutes":300'
-    )
-    await user.click(screen.getByRole("button", { name: "Set status" }))
-    await waitFor(() => expect(onUrlUpdate).toHaveBeenCalled())
-    const changed = updates.at(-1)?.searchParams
-    expect(changed?.get("dueOffset")).toBeNull()
-    expect(changed?.get("dueFromOffset")).toBe("300")
-    expect(changed?.get("dueToOffset")).toBe("300")
   })
 
   it("clears only search and page in one nuqs update", async () => {

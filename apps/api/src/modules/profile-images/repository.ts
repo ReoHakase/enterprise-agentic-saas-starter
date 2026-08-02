@@ -7,7 +7,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, gt, lt, lte, max } from "drizzle-orm"
 
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { ProfileImageSubject } from "./constants"
 import {
   assertOrganizationMutationAuthorized,
@@ -17,7 +17,6 @@ import {
   isReservationConflict,
   isReservationLockContention,
   normalizeFallbackUrl,
-  preserveAppError,
   subjectConditions,
   waitForReservationRetry,
   type StoredProfileImage,
@@ -57,12 +56,7 @@ export const reservePendingProfileImage = async (
 
         const subjectRow = await findSubjectFallback(tx, input.subject)
         if (!subjectRow) {
-          throw publicErrors.notFound(
-            input.subject.type === "user"
-              ? "User not found"
-              : "Organization not found",
-            { resource: input.subject.type }
-          )
+          throw new HttpError({ code: "not_found" })
         }
 
         const readyRows = await tx
@@ -105,7 +99,7 @@ export const reservePendingProfileImage = async (
         return { created: true, image }
       })
     } catch (cause) {
-      if (cause instanceof AppError) throw cause
+      if (cause instanceof HttpError) throw cause
       if (isReservationConflict(cause)) {
         // oxlint-disable-next-line no-await-in-loop -- committed winnerをretryごとに再確認する。
         const existing = await findProfileImageByUploadId(db, {
@@ -120,13 +114,10 @@ export const reservePendingProfileImage = async (
         await waitForReservationRetry(attempt)
         continue
       }
-      return preserveAppError(cause, "reservePendingProfileImage")
+      throw cause
     }
   }
-  throw publicErrors.internal(undefined, {
-    module: "profile-images",
-    operation: "reservePendingProfileImage",
-  })
+  throw new Error("Profile image reservation retries exhausted")
 }
 
 export type FinalizeProfileImageResult =
@@ -144,117 +135,44 @@ export const finalizePendingProfileImage = async (
     sessionId?: string
     subject: ProfileImageSubject
   }
-): Promise<FinalizeProfileImageResult> => {
-  try {
-    return await db.transaction(async (tx) => {
-      await assertOrganizationMutationAuthorized(tx, {
-        ...input,
-        action: "organization.profile_image.update",
-      })
+): Promise<FinalizeProfileImageResult> =>
+  db.transaction(async (tx) => {
+    await assertOrganizationMutationAuthorized(tx, {
+      ...input,
+      action: "organization.profile_image.update",
+    })
 
-      const rows = await tx
-        .select()
-        .from(profileImages)
-        .where(
-          and(eq(profileImages.id, input.id), subjectConditions(input.subject))
+    const rows = await tx
+      .select()
+      .from(profileImages)
+      .where(
+        and(eq(profileImages.id, input.id), subjectConditions(input.subject))
+      )
+      .limit(1)
+    const image = rows[0]
+    if (!image) return { kind: "missing" as const }
+    if (image.status === "ready") {
+      return { kind: "ready" as const, image }
+    }
+    if (image.status === "superseded") {
+      return { kind: "superseded" as const }
+    }
+
+    const newerRows = await tx
+      .select({ id: profileImages.id })
+      .from(profileImages)
+      .where(
+        and(
+          subjectConditions(input.subject),
+          gt(profileImages.version, image.version)
         )
-        .limit(1)
-      const image = rows[0]
-      if (!image) return { kind: "missing" as const }
-      if (image.status === "ready") {
-        return { kind: "ready" as const, image }
-      }
-      if (image.status === "superseded") {
-        return { kind: "superseded" as const }
-      }
-
-      const newerRows = await tx
-        .select({ id: profileImages.id })
-        .from(profileImages)
-        .where(
-          and(
-            subjectConditions(input.subject),
-            gt(profileImages.version, image.version)
-          )
-        )
-        .orderBy(desc(profileImages.version))
-        .limit(1)
-      if (newerRows[0]) {
-        const supersededRows = await tx
-          .update(profileImages)
-          .set({ status: "superseded", updatedAt: new Date() })
-          .where(
-            and(
-              eq(profileImages.id, image.id),
-              eq(profileImages.status, "pending")
-            )
-          )
-          .returning()
-        if (supersededRows[0]) {
-          await enqueueCleanup(tx, supersededRows[0])
-        }
-        return { kind: "superseded" as const }
-      }
-
-      const olderPendingRows = await tx
-        .select()
-        .from(profileImages)
-        .where(
-          and(
-            subjectConditions(input.subject),
-            eq(profileImages.status, "pending"),
-            lt(profileImages.version, image.version)
-          )
-        )
-      for (const olderPending of olderPendingRows) {
-        // oxlint-disable-next-line no-await-in-loop -- idempotency tombstoneとcleanup enqueueを同じtransactionへ保存する。
-        const supersededRows = await tx
-          .update(profileImages)
-          .set({ status: "superseded", updatedAt: new Date() })
-          .where(
-            and(
-              eq(profileImages.id, olderPending.id),
-              eq(profileImages.status, "pending")
-            )
-          )
-          .returning()
-        const superseded = supersededRows[0]
-        if (!superseded) continue
-        // oxlint-disable-next-line no-await-in-loop -- cleanup jobのdurabilityを各objectへ保証する。
-        await enqueueCleanup(tx, superseded)
-      }
-
-      const readyRows = await tx
-        .select()
-        .from(profileImages)
-        .where(
-          and(
-            subjectConditions(input.subject),
-            eq(profileImages.status, "ready")
-          )
-        )
-        .limit(1)
-      const previous = readyRows[0]
-      if (previous) {
-        const supersededRows = await tx
-          .update(profileImages)
-          .set({ status: "superseded", updatedAt: new Date() })
-          .where(
-            and(
-              eq(profileImages.id, previous.id),
-              eq(profileImages.status, "ready")
-            )
-          )
-          .returning()
-        if (supersededRows[0]) {
-          await enqueueCleanup(tx, supersededRows[0])
-        }
-      }
-
-      const updatedAt = new Date()
-      const updatedRows = await tx
+      )
+      .orderBy(desc(profileImages.version))
+      .limit(1)
+    if (newerRows[0]) {
+      const supersededRows = await tx
         .update(profileImages)
-        .set({ etag: input.etag, status: "ready", updatedAt })
+        .set({ status: "superseded", updatedAt: new Date() })
         .where(
           and(
             eq(profileImages.id, image.id),
@@ -262,42 +180,104 @@ export const finalizePendingProfileImage = async (
           )
         )
         .returning()
-      const updated = updatedRows[0]
-      if (!updated) return { kind: "missing" as const }
-
-      if (input.subject.type === "user") {
-        const subjectRows = await tx
-          .update(user)
-          .set({ image: input.profileImagePath, updatedAt })
-          .where(eq(user.id, input.subject.id))
-          .returning({ id: user.id })
-        if (!subjectRows[0]) throw new Error("Profile image user disappeared")
-      } else {
-        const subjectRows = await tx
-          .update(organization)
-          .set({ logo: input.profileImagePath })
-          .where(eq(organization.id, input.subject.id))
-          .returning({ id: organization.id })
-        if (!subjectRows[0]) {
-          throw new Error("Profile image organization disappeared")
-        }
-        await tx.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          organizationId: input.subject.id,
-          actorUserId: input.actorUserId,
-          action: "organization.profile_image.updated",
-          targetType: "organization",
-          targetId: input.subject.id,
-          metadata: {},
-        })
+      if (supersededRows[0]) {
+        await enqueueCleanup(tx, supersededRows[0])
       }
+      return { kind: "superseded" as const }
+    }
 
-      return { kind: "ready" as const, image: updated }
-    })
-  } catch (cause) {
-    return preserveAppError(cause, "finalizePendingProfileImage")
-  }
-}
+    const olderPendingRows = await tx
+      .select()
+      .from(profileImages)
+      .where(
+        and(
+          subjectConditions(input.subject),
+          eq(profileImages.status, "pending"),
+          lt(profileImages.version, image.version)
+        )
+      )
+    for (const olderPending of olderPendingRows) {
+      // oxlint-disable-next-line no-await-in-loop -- idempotency tombstoneとcleanup enqueueを同じtransactionへ保存する。
+      const supersededRows = await tx
+        .update(profileImages)
+        .set({ status: "superseded", updatedAt: new Date() })
+        .where(
+          and(
+            eq(profileImages.id, olderPending.id),
+            eq(profileImages.status, "pending")
+          )
+        )
+        .returning()
+      const superseded = supersededRows[0]
+      if (!superseded) continue
+      // oxlint-disable-next-line no-await-in-loop -- cleanup jobのdurabilityを各objectへ保証する。
+      await enqueueCleanup(tx, superseded)
+    }
+
+    const readyRows = await tx
+      .select()
+      .from(profileImages)
+      .where(
+        and(subjectConditions(input.subject), eq(profileImages.status, "ready"))
+      )
+      .limit(1)
+    const previous = readyRows[0]
+    if (previous) {
+      const supersededRows = await tx
+        .update(profileImages)
+        .set({ status: "superseded", updatedAt: new Date() })
+        .where(
+          and(
+            eq(profileImages.id, previous.id),
+            eq(profileImages.status, "ready")
+          )
+        )
+        .returning()
+      if (supersededRows[0]) {
+        await enqueueCleanup(tx, supersededRows[0])
+      }
+    }
+
+    const updatedAt = new Date()
+    const updatedRows = await tx
+      .update(profileImages)
+      .set({ etag: input.etag, status: "ready", updatedAt })
+      .where(
+        and(eq(profileImages.id, image.id), eq(profileImages.status, "pending"))
+      )
+      .returning()
+    const updated = updatedRows[0]
+    if (!updated) return { kind: "missing" as const }
+
+    if (input.subject.type === "user") {
+      const subjectRows = await tx
+        .update(user)
+        .set({ image: input.profileImagePath, updatedAt })
+        .where(eq(user.id, input.subject.id))
+        .returning({ id: user.id })
+      if (!subjectRows[0]) throw new Error("Profile image user disappeared")
+    } else {
+      const subjectRows = await tx
+        .update(organization)
+        .set({ logo: input.profileImagePath })
+        .where(eq(organization.id, input.subject.id))
+        .returning({ id: organization.id })
+      if (!subjectRows[0]) {
+        throw new Error("Profile image organization disappeared")
+      }
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.subject.id,
+        actorUserId: input.actorUserId,
+        action: "organization.profile_image.updated",
+        targetType: "organization",
+        targetId: input.subject.id,
+        metadata: {},
+      })
+    }
+
+    return { kind: "ready" as const, image: updated }
+  })
 
 export const deleteProfileImage = async (
   db: Db,
@@ -306,160 +286,139 @@ export const deleteProfileImage = async (
     sessionId?: string
     subject: ProfileImageSubject
   }
-): Promise<boolean> => {
-  try {
-    return await db.transaction(async (tx) => {
-      await assertOrganizationMutationAuthorized(tx, {
-        ...input,
-        action: "organization.profile_image.delete",
-      })
-
-      const rows = await tx
-        .select()
-        .from(profileImages)
-        .where(subjectConditions(input.subject))
-      const currentRows = rows.filter((image) => image.status !== "superseded")
-      if (currentRows.length === 0) return false
-      const ready = currentRows.find((image) => image.status === "ready")
-      const fallbackUrl =
-        ready?.fallbackUrl ??
-        currentRows.toSorted((left, right) => right.version - left.version)[0]
-          ?.fallbackUrl ??
-        null
-
-      await tx
-        .update(profileImages)
-        .set({ status: "superseded", updatedAt: new Date() })
-        .where(
-          and(
-            subjectConditions(input.subject),
-            eq(profileImages.status, "pending")
-          )
-        )
-      await tx
-        .update(profileImages)
-        .set({ status: "superseded", updatedAt: new Date() })
-        .where(
-          and(
-            subjectConditions(input.subject),
-            eq(profileImages.status, "ready")
-          )
-        )
-      for (const image of currentRows) {
-        // oxlint-disable-next-line no-await-in-loop -- 1 transaction内でcleanup jobを順序付けて保存する。
-        await enqueueCleanup(tx, image)
-      }
-
-      if (input.subject.type === "user") {
-        const subjectRows = await tx
-          .update(user)
-          .set({ image: fallbackUrl, updatedAt: new Date() })
-          .where(eq(user.id, input.subject.id))
-          .returning({ id: user.id })
-        if (!subjectRows[0]) throw new Error("Profile image user disappeared")
-      } else {
-        const subjectRows = await tx
-          .update(organization)
-          .set({ logo: fallbackUrl })
-          .where(eq(organization.id, input.subject.id))
-          .returning({ id: organization.id })
-        if (!subjectRows[0]) {
-          throw new Error("Profile image organization disappeared")
-        }
-        await tx.insert(auditLogs).values({
-          id: crypto.randomUUID(),
-          organizationId: input.subject.id,
-          actorUserId: input.actorUserId,
-          action: "organization.profile_image.deleted",
-          targetType: "organization",
-          targetId: input.subject.id,
-          metadata: {},
-        })
-      }
-      return true
+): Promise<boolean> =>
+  db.transaction(async (tx) => {
+    await assertOrganizationMutationAuthorized(tx, {
+      ...input,
+      action: "organization.profile_image.delete",
     })
-  } catch (cause) {
-    return preserveAppError(cause, "deleteProfileImage")
-  }
-}
+
+    const rows = await tx
+      .select()
+      .from(profileImages)
+      .where(subjectConditions(input.subject))
+    const currentRows = rows.filter((image) => image.status !== "superseded")
+    if (currentRows.length === 0) return false
+    const ready = currentRows.find((image) => image.status === "ready")
+    const fallbackUrl =
+      ready?.fallbackUrl ??
+      currentRows.toSorted((left, right) => right.version - left.version)[0]
+        ?.fallbackUrl ??
+      null
+
+    await tx
+      .update(profileImages)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(
+        and(
+          subjectConditions(input.subject),
+          eq(profileImages.status, "pending")
+        )
+      )
+    await tx
+      .update(profileImages)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(
+        and(subjectConditions(input.subject), eq(profileImages.status, "ready"))
+      )
+    for (const image of currentRows) {
+      // oxlint-disable-next-line no-await-in-loop -- 1 transaction内でcleanup jobを順序付けて保存する。
+      await enqueueCleanup(tx, image)
+    }
+
+    if (input.subject.type === "user") {
+      const subjectRows = await tx
+        .update(user)
+        .set({ image: fallbackUrl, updatedAt: new Date() })
+        .where(eq(user.id, input.subject.id))
+        .returning({ id: user.id })
+      if (!subjectRows[0]) throw new Error("Profile image user disappeared")
+    } else {
+      const subjectRows = await tx
+        .update(organization)
+        .set({ logo: fallbackUrl })
+        .where(eq(organization.id, input.subject.id))
+        .returning({ id: organization.id })
+      if (!subjectRows[0]) {
+        throw new Error("Profile image organization disappeared")
+      }
+      await tx.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        organizationId: input.subject.id,
+        actorUserId: input.actorUserId,
+        action: "organization.profile_image.deleted",
+        targetType: "organization",
+        targetId: input.subject.id,
+        metadata: {},
+      })
+    }
+    return true
+  })
 
 export const supersedePendingProfileImage = async (
   db: Db,
   image: StoredProfileImage
-) => {
-  try {
-    return await db.transaction(async (tx) => {
+) =>
+  db.transaction(async (tx) => {
+    const updatedRows = await tx
+      .update(profileImages)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(
+        and(eq(profileImages.id, image.id), eq(profileImages.status, "pending"))
+      )
+      .returning()
+    if (updatedRows[0]) {
+      await enqueueCleanup(tx, updatedRows[0])
+      return true
+    }
+
+    const rows = await tx
+      .select({ status: profileImages.status })
+      .from(profileImages)
+      .where(eq(profileImages.id, image.id))
+      .limit(1)
+    if (rows[0]) return false
+
+    await enqueueCleanup(tx, image)
+    return true
+  })
+
+export const expireStalePendingProfileImages = async (
+  db: Db,
+  input: { cutoff: Date; limit?: number }
+) =>
+  db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(profileImages)
+      .where(
+        and(
+          eq(profileImages.status, "pending"),
+          lte(profileImages.updatedAt, input.cutoff)
+        )
+      )
+      .orderBy(profileImages.updatedAt)
+      .limit(input.limit ?? 25)
+
+    let expired = 0
+    for (const image of rows) {
+      // oxlint-disable-next-line no-await-in-loop -- stale tombstoneとcleanup jobを同じtransactionへ保存する。
       const updatedRows = await tx
         .update(profileImages)
         .set({ status: "superseded", updatedAt: new Date() })
         .where(
           and(
             eq(profileImages.id, image.id),
-            eq(profileImages.status, "pending")
-          )
-        )
-        .returning()
-      if (updatedRows[0]) {
-        await enqueueCleanup(tx, updatedRows[0])
-        return true
-      }
-
-      const rows = await tx
-        .select({ status: profileImages.status })
-        .from(profileImages)
-        .where(eq(profileImages.id, image.id))
-        .limit(1)
-      if (rows[0]) return false
-
-      await enqueueCleanup(tx, image)
-      return true
-    })
-  } catch (cause) {
-    return preserveAppError(cause, "supersedePendingProfileImage")
-  }
-}
-
-export const expireStalePendingProfileImages = async (
-  db: Db,
-  input: { cutoff: Date; limit?: number }
-) => {
-  try {
-    return await db.transaction(async (tx) => {
-      const rows = await tx
-        .select()
-        .from(profileImages)
-        .where(
-          and(
             eq(profileImages.status, "pending"),
             lte(profileImages.updatedAt, input.cutoff)
           )
         )
-        .orderBy(profileImages.updatedAt)
-        .limit(input.limit ?? 25)
-
-      let expired = 0
-      for (const image of rows) {
-        // oxlint-disable-next-line no-await-in-loop -- stale tombstoneとcleanup jobを同じtransactionへ保存する。
-        const updatedRows = await tx
-          .update(profileImages)
-          .set({ status: "superseded", updatedAt: new Date() })
-          .where(
-            and(
-              eq(profileImages.id, image.id),
-              eq(profileImages.status, "pending"),
-              lte(profileImages.updatedAt, input.cutoff)
-            )
-          )
-          .returning()
-        const updated = updatedRows[0]
-        if (!updated) continue
-        // oxlint-disable-next-line no-await-in-loop -- cleanup jobのdurabilityを各objectへ保証する。
-        await enqueueCleanup(tx, updated)
-        expired += 1
-      }
-      return expired
-    })
-  } catch (cause) {
-    return preserveAppError(cause, "expireStalePendingProfileImages")
-  }
-}
+        .returning()
+      const updated = updatedRows[0]
+      if (!updated) continue
+      // oxlint-disable-next-line no-await-in-loop -- cleanup jobのdurabilityを各objectへ保証する。
+      await enqueueCleanup(tx, updated)
+      expired += 1
+    }
+    return expired
+  })

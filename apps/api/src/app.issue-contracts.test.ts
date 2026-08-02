@@ -16,7 +16,7 @@ import {
   testDb,
 } from "./app.test-support"
 import { createApiClient } from "./client"
-import { publicErrors } from "./errors/app-error"
+import { HttpError } from "./errors/http-error"
 import { issueTimelinePageModel } from "./modules/issues/model"
 
 const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
@@ -170,11 +170,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     )
     expect(malformed.status).toBe(400)
     expect(await malformed.json()).toMatchObject({
-      error: {
-        code: "validation_error",
-        message: "Invalid timeline cursor",
-        context: { field: "cursor" },
-      },
+      error: "validation_error",
     })
   })
 
@@ -205,7 +201,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     }
   })
 
-  it("returns safe field errors without reflecting invalid input", async () => {
+  it("returns a fixed validation code without reflecting invalid input", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest("/issues", {
@@ -222,14 +218,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
 
     expect(response.status).toBe(400)
     expect(body).toMatchObject({
-      error: {
-        code: "validation_error",
-        message: "Invalid request",
-        fieldErrors: {
-          title: ["Invalid value"],
-          dueDate: ["Invalid value"],
-        },
-      },
+      error: "validation_error",
     })
     expect(JSON.stringify(body)).not.toContain(
       "private-value-that-must-not-be-reflected"
@@ -247,12 +236,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
       })
     )
     expect(await serviceValidation.json()).toMatchObject({
-      error: {
-        code: "validation_error",
-        fieldErrors: {
-          assigneeId: ["Assignee must be a member of the organization"],
-        },
-      },
+      error: "validation_error",
     })
   })
 
@@ -290,10 +274,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
       })
     )
     expect(response.status).toBe(404)
-    expect((await response.json()).error).toMatchObject({
-      code: "not_found",
-      context: { resource: "issue" },
-    })
+    expect((await response.json()).error).toBe("not_found")
     expect(await db.select().from(schema.issueComments)).toHaveLength(0)
   })
 
@@ -336,19 +317,19 @@ describe("Issue transport, pagination, and tenant contracts", () => {
         headers: { "x-request-id": "req_test" },
       })
     )
-    const body = await response.text()
+    const body = await response.json()
     expect(response.status).toBe(500)
-    expect(body).toContain("Internal server error")
-    expect(body).toContain("req_test")
-    expect(body).not.toContain("super-secret-value")
+    expect(body).toEqual({
+      error: "internal_error",
+      message: "An unexpected error occurred.",
+    })
+    expect(response.headers.get("x-request-id")).toBe("req_test")
+    expect(JSON.stringify(body)).not.toContain("super-secret-value")
   })
 
-  it("filters AppError context again at the HTTP boundary", async () => {
-    const error = publicErrors.validation("Choose a valid email", {
-      action: "invitation.create",
-      field: "email",
-    })
-    Object.defineProperty(error, "publicContext", {
+  it("keeps untrusted HttpError detail out of the HTTP response", async () => {
+    const error = new HttpError({ code: "validation_error" })
+    Object.defineProperty(error, "detail", {
       value: {
         action: "invitation.create",
         field: "email",
@@ -368,14 +349,11 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     const body = await response.json()
 
     expect(response.status).toBe(400)
-    expect(body).toMatchObject({
-      error: {
-        code: "validation_error",
-        context: { action: "invitation.create", field: "email" },
-        fieldErrors: { email: ["Choose a valid email"] },
-      },
+    expect(body).toEqual({
+      error: "validation_error",
+      message: "The request is invalid.",
     })
-    expect(body.error.requestId).toBe(response.headers.get("x-request-id"))
+    expect(response.headers.get("x-request-id")).toBeTruthy()
     expect(JSON.stringify(body)).not.toMatch(
       /org_private|super-secret-message|super-secret-value|organizationId/
     )

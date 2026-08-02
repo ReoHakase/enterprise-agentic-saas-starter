@@ -2,7 +2,7 @@
 title: apps/agentの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 applies_to:
   - apps/agent/**
 ---
@@ -59,9 +59,13 @@ apps/agent/src/
       create-runtime.ts
 
     agents/
-      product-agent.ts
-      title-agent.ts
-      public-web-research-agent.ts
+      product-agent/
+        agent.ts
+        instructions.ts
+        memory.ts
+        memory-persistence-guard.ts
+        tools.ts
+        skills/
 
     core/
       messages/
@@ -102,6 +106,10 @@ apps/agent/src/
 ```
 
 `index.ts`はMastra Studioのentrypoint、`worker.ts`はproduction Cloudflare Worker entrypointです。
+`memory-persistence-guard.ts`は標準`MessageHistory`を公開形式へ変換する層ではありません。toolの
+`toModelOutput`で現在のturnへ渡した生のメディアが`providerMetadata.mastra.modelOutput`へ複製された
+場合に、その副本だけを保存前に除去します。それ以外のprovider metadata、ツール入力・出力、
+`file`・`source`類、live streamは変更しません。
 
 ## 依存方向
 

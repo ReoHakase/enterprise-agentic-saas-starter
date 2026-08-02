@@ -98,7 +98,11 @@ export const AgentApprovalCard = ({
   }, [action, actionId, onPendingChange])
   if (actionQuery.isPending) {
     return (
-      <Card className="border-amber-500/50 bg-amber-500/5 p-4">
+      <Card
+        role="region"
+        aria-label="Issue change approval"
+        className="border-amber-500/50 bg-amber-500/5 p-4"
+      >
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           Loading approval details…
         </div>
@@ -107,7 +111,11 @@ export const AgentApprovalCard = ({
   }
   if (actionQuery.isError || !action) {
     return (
-      <Card className="border-destructive/50 p-4">
+      <Card
+        role="region"
+        aria-label="Issue change approval"
+        className="border-destructive/50 p-4"
+      >
         <p role="alert" className="text-sm text-destructive">
           Approval details could not be loaded.
         </p>
@@ -120,7 +128,11 @@ export const AgentApprovalCard = ({
   const pending = action.status === "pending"
 
   return (
-    <Card className="border-amber-500/50 bg-amber-500/5">
+    <Card
+      role="region"
+      aria-label="Issue change approval"
+      className="border-amber-500/50 bg-amber-500/5"
+    >
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Approve Issue change?</CardTitle>

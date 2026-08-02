@@ -77,24 +77,26 @@ bun run --cwd packages/db db:migrate
 
 破壊的な列削除はexpand/contractで分割します。先に新旧両方を読めるcodeをdeployし、backfill後に古い列を削除してください。
 
-`db:seed` は本番provisioningに使いません。migration後、最初の実ユーザーが通常の認証とorganization作成フローを通り、transaction内で最初の `super_admin` membershipを得る経路を使います。
+`db:seed` は本番provisioningに使いません。migration後、最初の実ユーザーが通常の認証とorganization作成フローを通り、Better Authの標準処理で最初の`owner` membershipを得る経路を使います。
 
 ## Tenant整合性
 
 - Issue番号はorganization単位でunique。
 - commentとactivityは `(issue_id, organization_id)` の複合外部キーでparentと同じtenantに固定。
 - membershipは `(organization_id, user_id)` をuniqueにし、同じuserのduplicate roleを作らない。
-- memberがいるorganizationはexactly one `super_admin` とする。migrationはduplicateをrepairし、`role='super_admin'` のpartial unique indexがat-most-oneを保証する。at-least-oneはownership transferなどのapp transactionで維持する。
+- memberがいるorganizationはexactly one `owner` とする。`0027_nostalgic_sugar_man`はlegacyの`super_admin`を`owner`へ変換し、`role='owner'`のpartial unique indexがat-most-oneを保証する。at-least-oneはownership transferなどのapp transactionで維持する。
 - memberがいないlegacy organizationはmigrationで架空membershipを作らず、認証・認可をfail closedにする。復旧は監査可能な運用手順で実ユーザーを割り当てる。
 - pending invitationは `admin` / `member` roleだけを許可し、legacyの `owner` / `super_admin` / null /未知roleはmigrationでexpiredにする。
+- `0028_chubby_blackheart`はpending invitationのorganization・email partial unique indexを削除する。期限切れ時点でもstatusがpendingの履歴rowと、新しいactive pending rowの併存を許し、作成・再送の時間判定はBetter Auth native endpointへ委ねる。招待一覧はread時にstatusを変更せず期限切れを投影し、件数は`status = pending`かつ`expires_at > now`だけを数える。
 - repository queryも `id + organization_id` を条件にする。
 - migration testで異なるtenantのcomment挿入が失敗することを確認する。
 
-## Invitation email job
+## Organization招待メール
 
-`invitation_email_jobs`は各invitationに最大1件だけ存在し、`invitation_id`へ`ON DELETE CASCADE`するdurable outboxです。invitation・audit・jobは同じtransactionで作成します。job自体にはemail、token、URL、organization/user IDを保存せず、status、attempt、lease、next retry、allowlist済みerror codeだけを置きます。
-
-schema変更時は`db:generate`でmigrationとsnapshotを生成し、migration testで列allowlist、unique invitation、cascade、status/attempt/error code check、claim indexを確認します。emailの取消・期限切れやinvitation削除後にorphan jobを残さず、retry可能な失敗だけをscheduled processorが再claimします。
+organization招待はBetter Authの標準invitation rowと`sendInvitationEmail`コールバックを使います。
+`invitation_email_jobs`、配送attempt、lease、自動再試行は所有しません。メール送信はbest-effortで、失敗しても
+invitation rowは維持します。migration testではlegacy `outbox`が削除され、invitation rowとrole変換が
+保たれることを確認します。
 
 ## Organization削除job
 

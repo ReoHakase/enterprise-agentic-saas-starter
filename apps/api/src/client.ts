@@ -34,6 +34,8 @@ import {
   type ProfileImageDto,
 } from "./modules/profile-images/model"
 
+export { EdenFetchError } from "@elysia/eden"
+
 export {
   FILE_PREVIEW_WIDTHS,
   agentAttachmentMutationReceiptSchema,
@@ -59,7 +61,10 @@ export type {
 
 type TreatyOptions = NonNullable<Parameters<typeof treaty<App>>[1]>
 
-export type CreateApiClientOptions = Omit<TreatyOptions, "parseDate">
+export type CreateApiClientOptions = Omit<
+  TreatyOptions,
+  "parseDate" | "throwHttpError"
+>
 
 export const createApiClient = (
   baseUrl: string,
@@ -68,6 +73,7 @@ export const createApiClient = (
   treaty<App>(baseUrl, {
     ...options,
     parseDate: false,
+    throwHttpError: true,
   })
 
 export type ApiClient = ReturnType<typeof createApiClient>
@@ -181,15 +187,20 @@ export class FileUploadError extends Error {
 
 const uploadErrorDetails = (value: unknown) => {
   if (!value || typeof value !== "object") return {}
-  const error = Reflect.get(value, "error")
-  if (!error || typeof error !== "object") return {}
-  const message = Reflect.get(error, "message")
-  const code = Reflect.get(error, "code")
-  const requestId = Reflect.get(error, "requestId")
-  return {
-    message: typeof message === "string" ? message : undefined,
-    code: typeof code === "string" ? code : undefined,
-    requestId: typeof requestId === "string" ? requestId : undefined,
+  try {
+    const error = Reflect.get(value, "error")
+    const message = Reflect.get(value, "message")
+    return {
+      code: typeof error === "string" ? error : undefined,
+      message:
+        typeof message === "string" &&
+        message.trim().length > 0 &&
+        message.length <= 500
+          ? message.trim()
+          : undefined,
+    }
+  } catch {
+    return {}
   }
 }
 
@@ -263,10 +274,13 @@ const uploadWithProgress = <Output>({
       const details = uploadErrorDetails(xhr.response)
       reject(
         new FileUploadError({
-          message: details.message ?? failureMessage,
+          message:
+            xhr.status >= 400 && xhr.status < 500
+              ? (details.message ?? failureMessage)
+              : failureMessage,
           status: xhr.status,
           code: details.code,
-          requestId: details.requestId,
+          requestId: xhr.getResponseHeader("x-request-id") ?? undefined,
         })
       )
     })

@@ -25,12 +25,15 @@ const githubOAuthEmulatorUrlSchema = v.pipe(
       isLoopbackHostname(url.hostname) &&
       url.username === "" &&
       url.password === "" &&
-      url.pathname === "/" &&
+      url.pathname === "/emulate/github" &&
       url.search === "" &&
       url.hash === ""
     )
-  }, "GitHub OAuth emulator URL must be a credential-free loopback root URL"),
-  v.transform((input) => new URL(input).origin)
+  }, "GitHub OAuth emulator URL must be a credential-free loopback /emulate/github base URL"),
+  v.transform((input) => {
+    const url = new URL(input)
+    return `${url.origin}/emulate/github`
+  })
 )
 
 const optionalCredentialSchema = v.pipe(
@@ -82,7 +85,7 @@ export const resolveGithubOAuthEnvironment = ({
     : undefined
   if (emulatorUrlResult && !emulatorUrlResult.success) {
     throw new Error(
-      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback root URL"
+      "GITHUB_OAUTH_EMULATOR_URL must be a credential-free loopback /emulate/github base URL"
     )
   }
   const parsedEmulatorUrl = emulatorUrlResult?.output

@@ -36,6 +36,30 @@ PR CIと`main`は全無料suiteを実行します。affected / changedによる�
 
 VRTは方針だけをacceptedとし、実装を延期します。
 
+### ブラウザーテストの安定性契約
+
+StorybookとPlaywrightでは、利用者が観測できる状態を同期条件にします。
+
+- ロケーターはARIA roleと`accessible name`、label、名前付き領域内の表示文字列、alt・placeholderの
+  順に選ぶ。DOM構造やCSS classへの依存は、描画領域の寸法とNext.jsのルート遷移を検証する
+  専用ヘルパーだけに閉じる。
+- ポータルはstoryの`canvasElement.ownerDocument.body`から検索し、表示中の`dialog`やmenuを
+  document全体から名前で特定する。
+- 固定時間の待機、`networkidle`、private focus guardを完了条件にしない。リクエスト、DOM、
+  フォーカス、コールバックなど、利用者またはテストが観測できる状態を待つ。
+- 非同期処理を止めるStorybook storyとW6の`mock` APIは、テストが明示的に解除できる遅延処理を
+  使い、`finally`で全て解除する。自動的に解決しないPromiseをstoryへ残さない。
+- Storybookの`light`テーマと`dark`テーマはそれぞれ1ワーカーで実行する。ローカルの全件scriptは
+  テーマを順次実行し、CIはテーマ、通常のBrowser Mode、static buildを独立jobとして並列実行する。
+- E1は内部profileを`agent`と`auth`へ分ける。Agent profileはワーカーごとの認証利用者、
+  organization、thread、保存状態へ分離し、`--workers=3 --repeat-each=3`で競合がないことを
+  確認してから3ワーカーを通常値にする。2ユーザーの初回作成はPlaywrightのsetup projectで直列実行し、
+  各workerは既存userへログインして独立したsessionとstorage stateを持つ。共有runtimeのstream切断を
+  検証するcancel scenarioは、他の3 scenarioを3ワーカーで完了した後に1ワーカーの依存projectとして実行する。
+  OAuthとWebAuthnを含むAuth profileは1ワーカーで直列実行する。
+- OAuthとWebAuthn、有料E2Eは直列実行を維持する。有料テストは明示承認なしに実行しない。
+- 不安定なテストを再試行やタイムアウト延長で成功扱いにせず、CIは不安定判定を失敗にする。
+
 ## 理由
 
 各workspaceが自身の公開契約と実行環境を所有し、最も小さく決定的な層へ回帰を置けます。ブラウザー、実Next.js、全workspace、実モデルという費用境界を明示すると、日常検証から有料testを分離しながら、release時の最終配線も維持できます。
@@ -56,6 +80,9 @@ workspaceごとのtest名は増えますが、利用者がrootで覚えるcomman
 - package exports、TypeScript、Oxlint、Knip、build、package所有test
 - root scriptとTurborepo taskの公開契約
 - Playwright deterministic/full configの分離
+- ブラウザーテスト記述規約とStorybook・Playwright向けOxlint rule
+- Storybookテーマ内の1ワーカー実行とCI job間の並列実行、W6の独立したChromium・代表WebKit検査、
+  E1のprofile別実行とワーカー別状態
 - 通常PRと`main`で全無料suiteを実行するCI job
 - fork codeへpaid secretを渡さないrelease workflow
 
@@ -65,6 +92,9 @@ workspaceごとのtest名は増えますが、利用者がrootで覚えるcomman
 - `bun run check`
 - `bun run test:browser`
 - `bun run test:e2e`
+- Storybookを1ワーカーでshuffle seed 17、83、101により反復する確認
+- W6の`--repeat-each=3`、Agent E1の`--workers=3 --repeat-each=3`、Auth E1の
+  `--workers=1 --repeat-each=3`
 - StorybookとCloudflare build
 - `nix flake check`
 - command、配置、import、CSF Next、文書linkの静的検査

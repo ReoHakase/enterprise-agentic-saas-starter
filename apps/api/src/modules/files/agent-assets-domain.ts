@@ -1,4 +1,4 @@
-import { AppError, publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import type { AgentAssetDto } from "./model"
 
 export type AgentAssetWithStorage = {
@@ -45,17 +45,6 @@ export type AgentAssetWithStorage = {
   }
 }
 
-export const preserveAgentAssetError = (
-  cause: unknown,
-  operation: string
-): never => {
-  if (cause instanceof AppError) throw cause
-  throw publicErrors.internal(cause, {
-    module: "agent-assets",
-    operation,
-  })
-}
-
 const errorDiagnostic = (cause: unknown) => {
   const messages: string[] = []
   let current = cause
@@ -84,37 +73,21 @@ export const isDatabaseWriteContention = (cause: unknown) => {
   )
 }
 
-export const assetNotFound = () =>
-  publicErrors.notFound("Agent asset not found", { resource: "agent_asset" })
+export const assetNotFound = () => new HttpError({ code: "not_found" })
 
-export const assetConflict = (reason: string) =>
-  publicErrors.conflict("Agent asset changed", {
-    reason,
-    resource: "agent_asset",
-  })
+export const assetConflict = (_reason: string) =>
+  new HttpError({ code: "conflict" })
 
 export const quotaExceeded = () =>
-  new AppError({
+  new HttpError({
     code: "rate_limited",
-    publicMessage: "Organization image quota exceeded",
-    publicContext: {
-      constraint: "organization_storage_bytes",
-      reason: "quota_exceeded",
-      resource: "agent_asset",
-      retryAfter: 60,
-    },
+    retryAfter: 60,
   })
 
-export const agentAssetLimitExceeded = (constraint: string) =>
-  new AppError({
+export const agentAssetLimitExceeded = (_constraint: string) =>
+  new HttpError({
     code: "rate_limited",
-    publicMessage: "Too many temporary images. Try again later",
-    publicContext: {
-      constraint,
-      reason: "quota_exceeded",
-      resource: "agent_asset",
-      retryAfter: 60,
-    },
+    retryAfter: 60,
   })
 
 export const assertAgentAssetClaim = (value: AgentAssetWithStorage) => {

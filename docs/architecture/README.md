@@ -2,7 +2,7 @@
 title: 設計仕様の目次
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-01
 ---
 
 # 設計仕様の目次
@@ -14,7 +14,7 @@ last_reviewed: 2026-07-26
 - [命名とlayer](naming-and-layers.md)
 - [システム境界](system-boundaries.md)
 - [品質強制](quality-enforcement.md)
-- [Codex harness](codex-harness.md)
+- [coding agentの作業手順](coding-agent-workflow.md)
 
 ## apps
 

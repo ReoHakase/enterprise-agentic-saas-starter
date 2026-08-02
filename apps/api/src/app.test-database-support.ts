@@ -19,7 +19,6 @@ const resetTestDb = async (db: TestDb) => {
       "agent_threads",
       "agent_session_contexts",
       "organization_deletion_jobs",
-      "invitation_email_jobs",
       "issue_activity_events",
       "issue_comments",
       "issue_thumbnail_selections",
@@ -129,9 +128,9 @@ const createIdentityAndIssueTables = async (db: TestDb) => {
     on member (organization_id, user_id)
   `)
   await db.run(sql`
-    create unique index member_super_admin_organization_uidx
+    create unique index member_organization_owner_uidx
     on member (organization_id)
-    where role = 'super_admin'
+    where role = 'owner'
   `)
   await db.run(sql`
     create table invitation (
@@ -144,20 +143,6 @@ const createIdentityAndIssueTables = async (db: TestDb) => {
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
       inviter_id text not null,
       foreign key (organization_id) references organization(id) on delete cascade
-    )
-  `)
-  await db.run(sql`
-    create table invitation_email_jobs (
-      id text primary key,
-      invitation_id text not null unique,
-      status text not null default 'pending',
-      attempts integer not null default 0,
-      last_error_code text,
-      locked_at integer,
-      next_attempt_at integer,
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      completed_at integer,
-      foreign key (invitation_id) references invitation(id) on delete cascade
     )
   `)
   await db.run(sql`
@@ -399,14 +384,14 @@ const seedTestRows = async (db: TestDb) => {
       id: "member_1",
       userId: "user_1",
       organizationId: "org_1",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {
       id: "member_2",
       userId: "user_2",
       organizationId: "org_2",
-      role: "super_admin",
+      role: "owner",
       createdAt: now,
     },
     {

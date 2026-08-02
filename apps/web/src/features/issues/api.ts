@@ -1,7 +1,5 @@
 import type { ApiClient } from "@enterprise-agentic-saas/api/client"
 
-import { ConsoleApiError, toConsoleApiError } from "@/features/console"
-
 import {
   parseIssue,
   parseIssueComment,
@@ -27,18 +25,7 @@ type EdenResult = {
 }
 
 const unwrap = (result: EdenResult): unknown => {
-  if (result.error) {
-    throw toConsoleApiError(result.error, result.status)
-  }
-
-  if (result.data === null || result.data === undefined) {
-    throw new ConsoleApiError({
-      code: "invalid_response",
-      message: "API response did not include data",
-      status: result.status,
-    })
-  }
-
+  if (result.error) throw result.error
   return result.data
 }
 

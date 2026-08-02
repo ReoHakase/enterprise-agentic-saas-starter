@@ -1,10 +1,11 @@
-import { delay, http, HttpResponse } from "msw"
+import { http, HttpResponse } from "msw"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 import { AgentFormRegistryProvider } from "@/features/agent"
 
+import { createDeferred } from "../../../../../test-support/storybook/deferred"
 import type { IssueListItem } from "../../schema"
 import {
   fictionalIssue,
@@ -23,6 +24,12 @@ const filteredIssue = {
 }
 let issueQueryRequests: string[] = []
 let labelQueryRequests: string[] = []
+type Deferred<Value> = ReturnType<typeof createDeferred<Value>>
+let filteredIssueRequestStarted: Deferred<void>
+let filteredIssueResponseGate: Deferred<void>
+let staleLabelRequestStarted: Deferred<void>
+let staleLabelResponseGate: Deferred<void>
+let staleLabelResponseReturned: Deferred<void>
 const members = [
   {
     id: "member_01K1JORDAN000000000000",
@@ -168,9 +175,6 @@ export const Ready = meta.story({
           name: `Actions for ${issueTitle}`,
         })
         await userEvent.click(actions)
-        await waitFor(() =>
-          expect(actions).toHaveAttribute("aria-expanded", "true")
-        )
         const menu = await body.findByRole(
           "menu",
           {
@@ -194,13 +198,6 @@ export const Ready = meta.story({
             })
           ).not.toBeInTheDocument()
         )
-        await waitFor(
-          () =>
-            expect(
-              ownerBody.querySelector("[data-base-ui-focus-guard]")
-            ).not.toBeInTheDocument(),
-          { timeout: 3_000 }
-        )
       }
     )
 
@@ -209,12 +206,11 @@ export const Ready = meta.story({
         name: `Actions for ${issueTitle}`,
       })
       await userEvent.click(actions)
-      await waitFor(() =>
-        expect(actions).toHaveAttribute("aria-expanded", "true")
-      )
       const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
+      await waitFor(() => expect(menu).toBeVisible())
+      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.click(
         within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
@@ -235,13 +231,6 @@ export const Ready = meta.story({
           body.queryByRole("alertdialog", { name: "Delete this issue?" })
         ).not.toBeInTheDocument()
       )
-      await waitFor(
-        () =>
-          expect(
-            ownerBody.querySelector("[data-base-ui-focus-guard]")
-          ).not.toBeInTheDocument(),
-        { timeout: 3_000 }
-      )
     })
   },
 })
@@ -256,17 +245,23 @@ export const QueryIntegrationContract = meta.story({
   beforeEach({ msw }) {
     issueQueryRequests = []
     labelQueryRequests = []
+    filteredIssueRequestStarted = createDeferred<void>()
+    filteredIssueResponseGate = createDeferred<void>()
+    staleLabelRequestStarted = createDeferred<void>()
+    staleLabelResponseGate = createDeferred<void>()
+    staleLabelResponseReturned = createDeferred<void>()
     msw.use(
       http.get("*/issues/labels", async ({ request }) => {
         const url = new URL(request.url)
         labelQueryRequests.push(url.toString())
         const search = url.searchParams.get("search") ?? ""
         if (search === "b") {
-          await delay(300)
+          staleLabelRequestStarted.resolve(undefined)
+          await staleLabelResponseGate.promise
+          staleLabelResponseReturned.resolve(undefined)
           return HttpResponse.json({ items: ["obsolete"] })
         }
         if (search === "bi") {
-          await delay(20)
           return HttpResponse.json({ items: ["billing-new"] })
         }
         return HttpResponse.json({ items: ["billing", "incident"] })
@@ -275,7 +270,8 @@ export const QueryIntegrationContract = meta.story({
         const url = new URL(request.url)
         issueQueryRequests.push(url.toString())
         if (url.searchParams.getAll("statuses").includes("in_progress")) {
-          await delay(300)
+          filteredIssueRequestStarted.resolve(undefined)
+          await filteredIssueResponseGate.promise
           return HttpResponse.json({
             items: [filteredIssue],
             page: 1,
@@ -294,6 +290,10 @@ export const QueryIntegrationContract = meta.story({
         HttpResponse.json(members)
       )
     )
+    return () => {
+      filteredIssueResponseGate.resolve(undefined)
+      staleLabelResponseGate.resolve(undefined)
+    }
   },
   play: async ({ canvas, canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
@@ -301,6 +301,7 @@ export const QueryIntegrationContract = meta.story({
     expect(issueQueryRequests).toHaveLength(1)
 
     await userEvent.click(canvas.getByRole("combobox", { name: "Status" }))
+    const statusListbox = await body.findByRole("listbox")
     await userEvent.click(
       await body.findByRole("option", { name: "In progress" })
     )
@@ -308,7 +309,9 @@ export const QueryIntegrationContract = meta.story({
     await expect(canvas.getByText(issueTitle)).toBeVisible()
 
     await userEvent.keyboard("{Escape}")
-    await waitFor(() => expect(issueQueryRequests).toHaveLength(2))
+    await waitFor(() => expect(statusListbox).not.toBeVisible())
+    await filteredIssueRequestStarted.promise
+    expect(issueQueryRequests).toHaveLength(2)
     expect(
       new URL(
         issueQueryRequests[1] ?? "https://invalid.test"
@@ -321,28 +324,37 @@ export const QueryIntegrationContract = meta.story({
     await expect(
       canvas.getByRole("button", { name: `Actions for ${issueTitle}` })
     ).toBeDisabled()
+    filteredIssueResponseGate.resolve(undefined)
     await expect(await canvas.findByText(filteredIssue.title)).toBeVisible()
 
-    await userEvent.click(canvas.getByRole("button", { name: "Labels" }))
+    const labelsTrigger = canvas.getByRole("button", { name: "Labels" })
+    await userEvent.click(labelsTrigger)
     const search = await body.findByRole("combobox", {
       name: "Search labels",
     })
     await userEvent.type(search, "b")
-    await waitFor(() =>
-      expect(
-        labelQueryRequests.some(
-          (request) => new URL(request).searchParams.get("search") === "b"
-        )
-      ).toBe(true)
-    )
+    await staleLabelRequestStarted.promise
+    expect(
+      labelQueryRequests.some(
+        (request) => new URL(request).searchParams.get("search") === "b"
+      )
+    ).toBe(true)
     await userEvent.type(search, "i")
     await expect(
       await body.findByRole("option", { name: "billing-new" })
     ).toBeVisible()
-    await delay(350)
-    expect(
-      body.queryByRole("option", { name: "obsolete" })
-    ).not.toBeInTheDocument()
+    staleLabelResponseGate.resolve(undefined)
+    await staleLabelResponseReturned.promise
+    await waitFor(() => {
+      expect(
+        body.queryByRole("option", { name: "obsolete" })
+      ).not.toBeInTheDocument()
+      expect(body.getByRole("option", { name: "billing-new" })).toBeVisible()
+    })
+    const labelsListbox = body.getByRole("listbox")
+    await userEvent.keyboard("{Escape}")
+    await waitFor(() => expect(labelsTrigger).toHaveFocus())
+    await waitFor(() => expect(labelsListbox).not.toBeVisible())
   },
 })
 
@@ -355,10 +367,8 @@ export const RetrySuccess = meta.story({
         return attempt === 1
           ? HttpResponse.json(
               {
-                error: {
-                  code: "issue_list_unavailable",
-                  message: "Issue list unavailable.",
-                },
+                error: "validation_error",
+                message: "Issue list unavailable.",
               },
               { status: 400 }
             )
@@ -391,10 +401,8 @@ export const CreateFailure = meta.story({
       http.post("*/issues", () =>
         HttpResponse.json(
           {
-            error: {
-              code: "internal_error",
-              message: "Request failed.",
-            },
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
           },
           { status: 503 }
         )
@@ -429,10 +437,8 @@ export const UpdateFailure = meta.story({
       http.patch("*/issues/:issueId", () =>
         HttpResponse.json(
           {
-            error: {
-              code: "internal_error",
-              message: "Request failed.",
-            },
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
           },
           { status: 503 }
         )
@@ -445,30 +451,30 @@ export const UpdateFailure = meta.story({
 
     await step("Report an update failure without losing the row", async () => {
       await canvas.findByText(issueTitle)
-      const actions = canvas.getByRole("button", {
+      const getActions = () =>
+        canvas.getByRole("button", {
+          name: `Actions for ${issueTitle}`,
+        })
+      await waitFor(() => expect(getActions()).toBeEnabled())
+      await userEvent.click(getActions())
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-expanded", "true")
+      )
+      const menu = body.getByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
-      actions.click()
-      const menu = await body.findByRole("menu", {
-        name: `Actions for ${issueTitle}`,
-      })
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "View details" })
-        ).toHaveFocus()
+      await waitFor(() => expect(menu).toBeVisible())
+      await waitFor(() => expect(menu).toHaveFocus())
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Close issue" })
       )
-      await userEvent.keyboard("{ArrowDown}")
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "Close issue" })
-        ).toHaveFocus()
-      )
-      await userEvent.keyboard("{Enter}")
       await expect(
         await body.findByText(/Issue update failed/)
       ).toBeInTheDocument()
       await expect(canvas.getByText(issueTitle)).toBeVisible()
-      await waitFor(() => expect(actions).toHaveAttribute("aria-busy", "false"))
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-busy", "false")
+      )
     })
   },
 })
@@ -479,10 +485,8 @@ export const DeleteFailure = meta.story({
       http.delete("*/issues/:issueId", () =>
         HttpResponse.json(
           {
-            error: {
-              code: "internal_error",
-              message: "Request failed.",
-            },
+            error: "service_unavailable",
+            message: "The service is temporarily unavailable.",
           },
           { status: 503 }
         )
@@ -496,25 +500,23 @@ export const DeleteFailure = meta.story({
 
     await step("Report a deletion failure without losing the row", async () => {
       await canvas.findByText(issueTitle)
-      const actions = canvas.getByRole("button", {
+      const getActions = () =>
+        canvas.getByRole("button", {
+          name: `Actions for ${issueTitle}`,
+        })
+      await waitFor(() => expect(getActions()).toBeEnabled())
+      await userEvent.click(getActions())
+      await waitFor(() =>
+        expect(getActions()).toHaveAttribute("aria-expanded", "true")
+      )
+      const menu = body.getByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
-      actions.click()
-      const menu = await body.findByRole("menu", {
-        name: `Actions for ${issueTitle}`,
-      })
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "View details" })
-        ).toHaveFocus()
+      await waitFor(() => expect(menu).toBeVisible())
+      await waitFor(() => expect(menu).toHaveFocus())
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
-      await userEvent.keyboard("{ArrowDown}{ArrowDown}")
-      await waitFor(() =>
-        expect(
-          within(menu).getByRole("menuitem", { name: "Delete issue" })
-        ).toHaveFocus()
-      )
-      await userEvent.keyboard("{Enter}")
       const dialog = await body.findByRole(
         "alertdialog",
         {
@@ -528,18 +530,7 @@ export const DeleteFailure = meta.story({
       await expect(
         await body.findByText(/Issue deletion failed/)
       ).toBeInTheDocument()
-      await waitFor(() =>
-        expect(
-          body.queryByRole("alertdialog", { name: "Delete this issue?" })
-        ).not.toBeInTheDocument()
-      )
-      await waitFor(
-        () =>
-          expect(
-            ownerBody.querySelector("[data-base-ui-focus-guard]")
-          ).not.toBeInTheDocument(),
-        { timeout: 3_000 }
-      )
+      await waitFor(() => expect(dialog).not.toBeVisible())
       await expect(canvas.getByText(issueTitle)).toBeVisible()
     })
   },

@@ -149,9 +149,32 @@ it("keeps the root collector config limited to LGTM wiring and local filtering",
     'set(resource.attributes["dev.session.id"], attributes["dev.session.id"])'
   )
   expect(config).toContain("endpoint: http://127.0.0.1:4418")
+  expect(config).toContain("transform/remove-trace-error-details:")
+  expect(config).toContain("filter/drop-trace-exceptions:")
+  expect(config).toContain('set(status.message, "")')
+  expect(config).toContain(
+    [
+      "        - transform/redact-auth",
+      "        - transform/remove-trace-error-details",
+      "        - filter/drop-trace-exceptions",
+      "        - batch",
+    ].join("\n")
+  )
   expect(config).toContain("processors: [transform/redact-auth, batch]")
+  expect(config).toContain("(?:^|[._-])(?:authorization|proxy")
+  expect(config).toContain("(?:cookie|set[._-]?cookie)")
+  expect(config).toContain("\\\\beyJ[A-Za-z0-9_-]*\\\\.")
   expect(config).toContain("x-amz-")
+  expect(config).toContain("oauth_token|refresh_token|state|signature")
   expect(config).not.toContain("flatten(body)")
   expect(config).not.toContain("|key|")
   expect(config).not.toContain('delete_matching_keys(attributes, "(?i)^url')
+})
+
+it("keeps all local Loki streams for seven days before compactor deletion", async () => {
+  const compose = await readFile(COMPOSE_FILE, "utf8")
+
+  expect(compose).toContain("--compactor.retention-enabled=true")
+  expect(compose).toContain("--compactor.delete-request-store=filesystem")
+  expect(compose).toContain("--store.retention=168h")
 })

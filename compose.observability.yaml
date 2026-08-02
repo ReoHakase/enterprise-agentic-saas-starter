@@ -5,6 +5,11 @@ services:
     image: grafana/otel-lgtm:0.27.1
     container_name: enterprise-agentic-saas-observability
     restart: unless-stopped
+    environment:
+      LOKI_EXTRA_ARGS: >-
+        --compactor.retention-enabled=true
+        --compactor.delete-request-store=filesystem
+        --store.retention=168h
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:4317:4317"

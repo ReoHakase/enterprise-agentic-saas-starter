@@ -35,7 +35,7 @@ describe("Product Agent composition", () => {
 
     try {
       await expect(studio.productAgent.getModel()).resolves.toMatchObject({
-        modelId: "qwen/qwen3.6-flash",
+        modelId: "openai/gpt-5.6-luna",
         provider: "openrouter",
       })
       await expect(studio.productAgent.getMemory()).resolves.toBeUndefined()

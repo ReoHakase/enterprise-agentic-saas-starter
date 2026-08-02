@@ -9,7 +9,7 @@ import type {
   AgentActionExecutionResult,
   AgentIssueAction,
 } from "../../../agent-client"
-import { AppError, publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import { agentIssueActionPreviewModel } from "../action-schema"
 import { hashAgentToken } from "../crypto"
 
@@ -187,14 +187,6 @@ const storedReceiptModel = v.strictObject({
   deleted: v.boolean(),
   attachmentMutation: v.optional(storedAttachmentMutationModel),
 })
-
-export const preserveAgentActionError = (
-  cause: unknown,
-  operation: string
-): never => {
-  if (cause instanceof AppError) throw cause
-  throw publicErrors.internal(cause, { module: "agent_action", operation })
-}
 
 const databaseDiagnostic = (cause: unknown) => {
   const messages: string[] = []
@@ -406,9 +398,7 @@ export const normalizeDueDate = (value: string | null | undefined) => {
   if (value === undefined || value === null) return value
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    throw publicErrors.validation("Invalid due date and time", {
-      field: "dueDate",
-    })
+    throw new HttpError({ code: "validation_error" })
   }
   return date.toISOString()
 }

@@ -2,7 +2,7 @@
 title: 製品Agentのthreadとcontext
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 ---
 
 # Threadとcontext
@@ -27,29 +27,38 @@ Mastra Storageのthread metadataの積集合を`updatedAt DESC, id DESC`で返�
 
 Mastra Storageがthread metadataとmessage履歴の正本です。Mastra Memoryは同じStorage上のthreadから
 model文脈を構成し、Application DBのregistryがauthorizationの正本です。API側へmessage副本を
-作りません。transient `data-activity`、`data-run`、raw reasoning、provider metadata、credential、
-raw imageは保存しません。
+作りません。有効なreasoning本文、ツール入力・出力、approval、`skill`本文を標準`MessageHistory`へ保存し、
+次turnへ再送します。`memory-persistence-guard`は、現在のturnで使った生のメディアをMastraが
+`providerMetadata.mastra.modelOutput`へ複製した副本だけを保存前に除去します。それ以外のprovider
+metadata、検証失敗を含むツール入力・出力、`file`、`source`、`source-document`は標準形式を維持します。
+history APIはさらに公開スキーマへ薄く投影し、暗号化detail、signature、provider metadata、`skill`本文、
+credential、生の画像やツールerrorをブラウザー、log、traceへ出しません。
 
 ## 自動title
 
-最初の有意なuser messageではmain responseと独立したbest-effort title taskを開始します。main streamは
-title完了を待ちません。専用title Agentはtoolを持たず、reasoning `none`、temperature 0、10秒timeout、
-最大96 output tokenで1〜80文字のtitleを生成します。Mastra Storageの現在titleが既定値のときだけ
-更新し、失敗時は`New conversation`を維持して通常応答を継続します。titleは低優先度の補助modelで、
-raw input/outputをtraceへ残しません。
-
-main usage、Mastra workflow stage、Memory保存、Application run settlementを先に終え、title taskは
-解放後のbackground処理として待ちます。title model usageは`title_<attempt>`の独立eventで、terminal
-runに対するusage専用の冪等記録契約を使います。title失敗やusage重複でmain responseを失わせません。
+最初の有意なuser messageからのtitle生成はMastra Memoryの`generateTitle`へ委譲します。main streamは
+title完了を待たず、失敗時は既定titleを維持します。独自Title Agent、独自CAS、補助modelの厳密usage
+課金、独自sanitizerは持ちません。利用者がcredentialを本文へ入力するとtitleへ復唱される残余riskがあり、
+title用modelのraw input/outputと生成titleをlog、trace、テスト成果物へ残しません。
 
 ## Model profile snapshot
 
-各runはprofile/modelとcontext設定をsnapshotします。Qwen3.6 Flash profileは次です。
+各runはprofile/modelとcontext設定をsnapshotします。Product AgentのLuna profileは次です。
 
-- provider model: `qwen/qwen3.6-flash`
-- context window: 1,000,000 token
-- reasoning effort: none
+- profile: `openrouter-gpt-5.6-luna-xhigh`
+- provider model: `openai/gpt-5.6-luna`
+- context window: 1,050,000 token
+- max input: 1,045,904 token
+- reasoning effort: `xhigh`
 - max output: 4,096 token
+
+title生成と直接Web検索補助も同じLunaを使いますが、補助処理はreasoning `none`です。既存runのprofile snapshotはmigrationで書き換えません。
+
+[OpenRouterのreasoning token契約](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)では、
+`low`は`max_tokens`の一部をreasoningへ割り当て、reasoningもoutput tokenへ数えます。transportは
+`effort: "xhigh"`と4,096 tokenの出力上限を送信しますが、応答にreasoning tokenが含まれることは
+要求しません。1,045,904 tokenは1,050,000 tokenのcontext windowから4,096 tokenを予約した
+事前入力上限です。
 
 modelの将来設定変更で過去runの解釈を変えないため、run rowへprofile、context window、事前推定input、reserved outputを保持します。
 
@@ -79,7 +88,7 @@ compaction後も安全に収まらない場合、現在のthreadへ送信せず�
 ## Failure behavior
 
 - 履歴取得失敗: conversationを捏造せずretry UIを表示
-- title CAS競合: 現在titleを維持し通常応答を継続
+- title生成失敗: 既定titleを維持し通常応答を継続
 - compaction保存失敗: runをfail closedにし、全文を無制限送信しない
 - provider cancel/fail: 観測済みusageとstream partを可能な範囲で保存し、local draftを保持
 - archived/missing thread: 同じnot-found projection。local stale selectionを解除

@@ -2,7 +2,7 @@
 title: 認証・認可・multi-tenant
 status: accepted
 implementation: active
-last_reviewed: 2026-07-27
+last_reviewed: 2026-08-01
 ---
 
 # 認証・認可・マルチテナント
@@ -14,7 +14,7 @@ Better Auth sessionが有効でも、任意のorganizationを操作できるわ�
 1. session cookieを検証する。
 2. requestのorganization IDを決定する。
 3. membershipをDBから検証する。
-4. roleを既知の `super_admin | admin | member` に正規化する。未知roleは許可しない。
+4. roleをBetter Auth標準の`owner | admin | member`に正規化する。未知roleは許可しない。
 5. actionごとのpermissionをguard/macroで検証する。
 6. service/repositoryへ検証済みuser/organizationを渡す。
 7. 成功した重要mutationをtenant auditへ、拒否をrequest ID付きoperational logへ記録する。
@@ -23,13 +23,13 @@ Client UIの非表示やredirectはUXであり、認可境界ではありませ�
 
 ## Role
 
-- `super_admin`: organization identity、admin role、ownership transferを管理できる。
+- `owner`: organization identity、admin role、ownership transferを管理できる。
 - `admin`: member/invitationと通常のworkspace運用を管理できる。
 - `member`: tenant内の通常操作のみ。organization設定や権限昇格は不可。
 
-legacy `owner` はmigrationで `super_admin` へ変換します。最後のsuper adminをremove/demoteする操作は拒否します。
+legacy `super_admin`はmigrationで`owner`へ変換します。最後のownerをremove/demoteする操作は拒否します。
 
-DBは `(organization_id, user_id)` のmembership重複と、同じorganizationの複数 `super_admin` を一意indexで拒否します。migrationは重複membershipの最強roleを保存し、複数super adminをcanonical memberへ集約し、memberがいるのにsuper adminがいないorganizationでは決定的に1人を昇格します。memberが1人もいないorphan organizationはuserを捏造せず、運用者の修復対象として残します。
+DBは`(organization_id, user_id)`のmembership重複と、同じorganizationの複数`owner`を一意indexで拒否します。過去のmigrationが重複membershipとowner不在を修復した後、`0027_nostalgic_sugar_man`が`super_admin`を`owner`へ変換します。memberが1人もいないorphan organizationはuserを捏造せず、運用者の修復対象として残します。
 
 ## Organization切り替え
 
@@ -49,9 +49,9 @@ Agent機能が有効なsessionでは、`active_organization_id`変更とAgent co
 
 人が開くorganization管理URLは `/organization/:organizationSlug/members|settings` とし、UUIDを公開URLへ使いません。Server Componentはsession userが所属するorganization一覧からslugを解決し、見つからないslugを404にしてから、内部APIへ検証済みorganization IDを渡します。slug変更後は新slugのURLへ置換します。
 
-Better Auth organization pluginの管理・参照APIは直接公開しません。`/auth/organization/*` はdeny-by-defaultとし、招待recipient本人に必要な `get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation` の4 pathだけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths` で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
+Better Auth organization pluginの管理・参照APIは原則として直接公開しません。`/auth/organization/*`はdeny-by-defaultとし、送信者向けの`invite-member`と、招待recipient本人に必要な`get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation`だけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths`で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
 
-招待accept直前にも `organizationHooks.beforeAcceptInvitation` でroleを `admin | member` に限定します。legacy `owner`、`super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
+招待作成前とaccept直前の`organizationHooks`でroleを`admin | member`に限定します。`owner`、legacy `super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
 
 招待リンクは`/invitations/:invitationId`を正規URLとし、未ログインでもlanding pageを開けます。organization名、inviter、recipientなどの招待詳細はBetter Authの`get-invitation`が現在のsession emailとrecipient emailの一致を確認した後だけ表示します。未ログインには招待URLを`redirectTo`へ保持した新規登録/ログインを示し、別emailのsessionにはaccept actionを出さず、multi-sessionのswitch/add accountを促します。account切替では旧sessionのqueryをcancelし、cookie切替後に認証済みTanStack Query cacheを破棄して、Next/React treeをhard reloadします。通常は`/dashboard`、招待中は検証済みの同一origin `/invitations/:id`を明示的な戻り先とし、account境界のためにworkflow contextを失わないよう同じ招待検証をやり直します。外部origin、protocol-relative path、backslash、control文字を含む戻り先は`/dashboard`へfail closedします。明確なnot-foundだけをterminal表示にし、5xx、network、schema不一致はprovider詳細を出さない再試行表示にします。
 
@@ -59,31 +59,29 @@ Better Auth organization pluginの管理・参照APIは直接公開しません�
 
 招待メールの送信者表示には認証済みsession userの表示名を使います。内部user IDを人向けの`inviterName`へ流用せず、表示名が空の場合だけtemplateの一般的なfallback文言へ倒します。
 
-### Atomic bulk invitation
+### Organization招待
 
-`POST /organizations/:organizationId/invitations`は、1〜20件のemailと全件共通の`admin | member` roleを受け取ります。emailはtrim・lowercase化して大小文字を無視して重複排除します。`admin`は`member`だけを招待でき、`super_admin`が`admin`を付与するときはfresh sessionが必要です。
+WebはBetter Auth clientの`organization.inviteMember`へ1回につき1つのemailと`admin | member` roleを渡します。再送と期限切れ招待の更新も同じAPIの`resend: true`を使い、独自の一括作成・再送routeを持ちません。期限内のactive invitationは同じIDと期限を更新し、期限切れ後は古いrowを履歴として残して新しいIDを作ります。その後の再送は新しいactive IDを更新します。
 
-既存memberまたは期限内pending invitationが1件でも含まれる場合、全件を同じ409で拒否し、どのaddressが該当したかはresponseへ反映しません。全invitation、各audit event、各email jobは同じDB transactionで作るため、一部だけが保存・送信される状態はありません。actor+organizationは30 recipient/時、organization全体は100 recipient/時です。quotaは競合したbatchも消費し、生のuser/organization IDを保存しないhash keyでTursoへ永続化します。
+Better Authの標準permission、時間判定を含むinvitation重複判定、rate limitをserver境界として使います。Elysiaはtenant-scopedな招待一覧と取消を引き続き所有しますが、作成・再送の状態機械を重ねません。一覧は期限切れpending rowを`expired`として投影するだけでread時にDBを更新せず、organizationの招待件数は期限内pendingだけを数えます。
 
-APIはjobをqueueした時点で201を返します。local BunではprocessorをawaitしてMailpitへ直ちに反映し、Cloudflare Workersでは`waitUntil`と毎分cronで処理します。配送失敗は招待をrollbackせず、安全なerror codeとbackoffだけをjobへ保存します。取消・期限切れは未送信/retry jobをterminalな`canceled`へ移します。providerが受け付けた直後にWorkerが停止した場合は同じメールが再送される可能性があるため、配送保証はexactly-onceではなくat-least-onceです。
-
-`POST /organizations/:organizationId/invitations/:invitationId/resend`はpendingまたは期限切れ招待だけを同じIDで48時間延長し、元の`createdAt`を保持します。accepted/rejected/canceled、他tenant、不明role、既存member、同じrecipientの別pending招待はfail closedにします。member招待はadmin以上、admin招待はfresh sessionのsuper adminだけが再送でき、quotaは1 recipientとして数えます。transaction内でactor membershipを再確認し、inviterを現在のactorへ更新し、auditと既存outboxの再queueを同時に保存します。
+`sendInvitationEmail`コールバックは既存email packageを呼びます。配送は自動再試行のないbest-effortで、失敗してもinvitation rowをrollbackしません。provider raw error、recipient、URLをlogやtraceへ出さず、固定eventだけを記録します。
 
 ## Destructive / privilege transfer
 
 - role変更、member削除、ownership transferは確認dialogを使う。
 - ownership transferの確認文字列は移管先memberのemail。
-- ownership transferは1 transaction内で旧super adminを先にadminへ降格し、移管先をsuper adminへ昇格してからexactly-oneを再検証する。
+- ownership transferは1 transaction内で旧ownerを先にadminへ降格し、移管先をownerへ昇格してからexactly-oneを再検証する。
 - 高権限操作はfresh session/step-upを要求し、有効期間は900秒。
 - UIはAPIの `step_up_required` を受け、追加認証後に元操作を再実行する。
 - 成功した操作のactor、tenant、target、action、resultをaudit logへ残す。拒否はrequest ID付きoperational logへ残す。tokenやsecretはどちらにも入れない。
-- invitation cancelは期限内pendingだけに許可する。accepted/rejected/cancelled/expiredは409 `invitation_not_pending`、期限を過ぎたpendingは一覧取得時にexpiredへ遷移する。
+- invitation cancelは期限内pendingだけに許可する。accepted/rejected/cancelled/expiredは409 `invitation_not_pending`、期限を過ぎたpendingは一覧で`expired`と投影し、取消を試みた場合だけDB statusもexpiredへ更新する。
 
 ### Organization即時削除
 
-`DELETE /organizations/:organizationId`は汎用tenant guardとは別の専用guardを使います。通常requestはmembership、active organization、`super_admin`、900秒以内のfresh sessionを要求し、bodyのslug完全一致、`confirmation: "DELETE"`、16〜128文字のopaqueな`idempotencyKey`がすべて必要です。route guardに加えてserviceでもrole/fresh/確認値を再検証します。
+`DELETE /organizations/:organizationId`は汎用tenant guardとは別の専用guardを使います。通常requestはmembership、active organization、`owner`、900秒以内のfresh sessionを要求し、bodyのslug完全一致、`confirmation: "DELETE"`、16〜128文字のopaqueな`idempotencyKey`がすべて必要です。route guardに加えてserviceでもrole/fresh/確認値を再検証します。
 
-削除transactionでは、同じactorとkeyのcleanup jobを最初に確認します。同じorganizationなら既存receiptを返し、別organizationで使われたkeyなら409にします。新規削除はactorが現在も`super_admin`であること、request sessionが未失効かつ対象organizationをactiveにしていること、organizationとslugが一致することをmutation直前に再確認します。その後slug/emailを持たないjobを作成し、対象organizationをactiveにしている全sessionをnullへ戻してからorganizationをhard deleteします。member、invitation、issue、comment、activity、audit等のtenant rowはDBの`ON DELETE CASCADE`でも即時削除します。
+削除transactionでは、同じactorとkeyのcleanup jobを最初に確認します。同じorganizationなら既存receiptを返し、別organizationで使われたkeyなら409にします。新規削除はactorが現在も`owner`であること、request sessionが未失効かつ対象organizationをactiveにしていること、organizationとslugが一致することをmutation直前に再確認します。その後slug/emailを持たないjobを作成し、対象organizationをactiveにしている全sessionをnullへ戻してからorganizationをhard deleteします。member、invitation、issue、comment、activity、audit等のtenant rowはDBの`ON DELETE CASCADE`でも即時削除します。
 
 削除成功後はmembership自体がなくなるため、同じHTTP requestのretryだけを限定的に許可します。専用guardがmembership 404時に `(actor user id, organization id, idempotency key)` の完全一致jobを確認し、fresh sessionを再要求してactive organization検証だけをskipします。別actor・別organization・別keyは404のままです。疑似membershipは作らず、replay handlerは削除serviceを再実行せず同じreceiptを返します。
 

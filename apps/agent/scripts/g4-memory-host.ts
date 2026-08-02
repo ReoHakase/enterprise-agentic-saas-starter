@@ -15,7 +15,6 @@ const requireEnvironment = (name: string): string => {
 
 const storageUrl = requireEnvironment("AGENT_G4_STORAGE_URL")
 const internalApiUrl = requireEnvironment("AGENT_G4_INTERNAL_API_URL")
-const crashWindow = process.env.AGENT_G4_CRASH_WINDOW
 const environment: PortableAgentRuntimeEnv = {
   AGENT_INTERNAL_API: {
     fetch(input, init) {
@@ -74,42 +73,11 @@ let releaseToolCommit: () => void = () => undefined
 const toolCommitGate = new Promise<void>((resolve) => {
   releaseToolCommit = resolve
 })
-let markCrashWindowReached: () => void = () => undefined
-const crashWindowReached = new Promise<void>((resolve) => {
-  markCrashWindowReached = resolve
+const composition = createScriptedAgentRuntimeComposition(environment, {
+  executionRegistry,
+  onProductModelCall: (prompt) => productModelPrompts.push(prompt),
+  revocationGate,
 })
-const crashBarrier = new Promise<void>(() => undefined)
-const createComposition = () => {
-  const next = createScriptedAgentRuntimeComposition(environment, {
-    executionRegistry,
-    onMemoryCommitBeforeSave:
-      crashWindow === "before-memory-save"
-        ? async () => {
-            markCrashWindowReached()
-            await crashBarrier
-          }
-        : undefined,
-    onMemoryCommitSave:
-      crashWindow === "after-memory-save"
-        ? async () => {
-            markCrashWindowReached()
-            await crashBarrier
-          }
-        : undefined,
-    onProductModelCall: (prompt) => productModelPrompts.push(prompt),
-    revocationGate,
-  })
-  return next
-}
-let composition = createComposition()
-const pending = new Set<Promise<unknown>>()
-
-const drainPending = async (): Promise<void> => {
-  const current = [...pending]
-  if (current.length === 0) return
-  await Promise.all(current)
-  await drainPending()
-}
 
 const trackedControlPlane: typeof createAgentInternalGateway = (binding) => {
   const gateway = createAgentInternalGateway(binding)
@@ -140,14 +108,6 @@ const trackedControlPlane: typeof createAgentInternalGateway = (binding) => {
         throw cause
       }
     },
-    settleMemoryCommit: async (input) => {
-      const settlement = await gateway.settleMemoryCommit(input)
-      if (crashWindow === "after-run-settlement") {
-        markCrashWindowReached()
-        await crashBarrier
-      }
-      return settlement
-    },
   }
 }
 
@@ -158,7 +118,6 @@ const runtimeDependencies = () => ({
   executionRegistry: composition.executionRegistry,
   mastra: composition.mastra,
   requireModelCredential: false,
-  threadTitleAgent: composition.threadTitleAgent,
   toControlFailure: toAgentControlFailure,
 })
 
@@ -210,16 +169,6 @@ const server = Bun.serve({
   port: 0,
   async fetch(request) {
     const url = new URL(request.url)
-    if (request.method === "POST" && url.pathname === "/__g4/drain") {
-      await drainPending()
-      return Response.json({ drained: true })
-    }
-    if (request.method === "POST" && url.pathname === "/__g4/reopen") {
-      await drainPending()
-      await composition.storage.close()
-      composition = createComposition()
-      return Response.json({ reopened: true })
-    }
     if (
       request.method === "POST" &&
       url.pathname === "/__g4/release-revocation"
@@ -240,10 +189,6 @@ const server = Bun.serve({
     }
     if (request.method === "GET" && url.pathname === "/__g4/metrics") {
       return Response.json(metrics)
-    }
-    if (request.method === "GET" && url.pathname === "/__g4/wait-crash") {
-      await crashWindowReached
-      return Response.json({ crashWindow })
     }
     if (request.method === "GET" && url.pathname === "/__g4/model-calls") {
       return Response.json({
@@ -268,10 +213,7 @@ const server = Bun.serve({
       runtimeRequest,
       environment,
       {
-        waitUntil: (promise) => {
-          pending.add(promise)
-          void promise.finally(() => pending.delete(promise))
-        },
+        waitUntil: (promise) => void promise.catch(() => undefined),
       },
       runtimeDependencies()
     )

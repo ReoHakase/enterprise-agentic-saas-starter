@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import { createAgentModel } from "../adapters/model/openrouter"
-import { reportDevelopmentCauseChain } from "../adapters/telemetry/development-error"
 import { parseAgentEvalDataset, type AgentEvalCase } from "./dataset"
 import { classifyAgentEvalFailure } from "./failure"
 import {
@@ -92,7 +91,6 @@ process.once("SIGTERM", requestShutdown)
 try {
   await main(shutdown.signal)
 } catch (cause) {
-  reportDevelopmentCauseChain(process.env, "Agent eval", cause)
   console.error(
     JSON.stringify({
       failureCode: classifyAgentEvalFailure(cause),

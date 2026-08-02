@@ -52,8 +52,8 @@ export const Ready = meta.story({
       )
     )
   },
-  play: async ({ step }) => {
-    const body = within(document.body)
+  play: async ({ canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
 
     await step("Cancel removal of a device account", async () => {
       await userEvent.click(
@@ -79,10 +79,10 @@ export const Ready = meta.story({
 })
 
 export const Empty = meta.story({
-  play: async () => {
-    const emptyState = await within(document.body).findByText(
-      "No additional accounts"
-    )
+  play: async ({ canvasElement }) => {
+    const emptyState = await within(
+      canvasElement.ownerDocument.body
+    ).findByText("No additional accounts")
     await waitFor(() => expect(emptyState).toBeVisible())
   },
 })
@@ -95,10 +95,10 @@ export const ApiFailure = meta.story({
       )
     )
   },
-  play: async () => {
-    const errorState = await within(document.body).findByText(
-      "Accounts could not be loaded"
-    )
+  play: async ({ canvasElement }) => {
+    const errorState = await within(
+      canvasElement.ownerDocument.body
+    ).findByText("Accounts could not be loaded")
     await waitFor(() => expect(errorState).toBeVisible())
   },
 })

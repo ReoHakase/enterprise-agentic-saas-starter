@@ -3,7 +3,6 @@
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import { useHotkeys } from "@tanstack/react-hotkeys"
 import { ImagePlusIcon, SendIcon } from "lucide-react"
 import {
   useCallback,
@@ -14,7 +13,6 @@ import {
 } from "react"
 
 import { useAgentMentionCandidates } from "../../hooks/use-agent-mention-candidates"
-import { isAgentHotkeyAllowed } from "../../hotkey-scope"
 import {
   AgentComposer,
   type AgentComposerHandle,
@@ -59,6 +57,10 @@ export const AgentNewThreadComposer = ({
     useState<AgentPermissionMode>("ask_always")
   const formRef = useRef<HTMLFormElement>(null)
   const composerRef = useRef<AgentComposerHandle>(null)
+  const submitFromComposer = useCallback(
+    () => formRef.current?.requestSubmit(),
+    []
+  )
   const mentionCandidates = useAgentMentionCandidates(organizationId)
   const choosePrompt = useCallback((prompt: string) => setComposer(prompt), [])
   const submit = useCallback(
@@ -94,22 +96,6 @@ export const AgentNewThreadComposer = ({
     },
     [composer, creating, disabled, onCreate, permissionMode]
   )
-  useHotkeys(
-    [
-      {
-        hotkey: "Mod+Enter",
-        callback: (event) => {
-          if (isAgentHotkeyAllowed(event)) formRef.current?.requestSubmit()
-        },
-        options: { enabled: !disabled && !creating, ignoreInputs: false },
-      },
-    ],
-    {
-      conflictBehavior: "allow",
-      meta: { name: "New Agent thread", description: "Send first message" },
-    }
-  )
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <div className="min-h-72 flex-1 overflow-y-auto">
@@ -126,6 +112,7 @@ export const AgentNewThreadComposer = ({
           disabled={disabled || creating}
           draftText={composer}
           onDraftTextChange={setComposer}
+          onSubmit={submitFromComposer}
         />
         <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
           <label className="inline-flex" htmlFor="agent-new-thread-images">
@@ -133,6 +120,7 @@ export const AgentNewThreadComposer = ({
               id="agent-new-thread-images"
               className="sr-only"
               type="file"
+              aria-label="Attach images"
               accept="image/jpeg,image/png,image/webp,image/gif"
               multiple
               disabled={disabled || creating}

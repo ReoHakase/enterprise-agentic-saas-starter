@@ -1,8 +1,6 @@
 import type { AgentRuntimeChatInput } from "@enterprise-agentic-saas/agent-contracts"
-import type {
-  AIV5Type,
-  MessageListInput,
-} from "@mastra/core/agent/message-list"
+import { handleChatStream } from "@mastra/ai-sdk"
+import type { AIV5Type } from "@mastra/core/agent/message-list"
 import type { RequestContext } from "@mastra/core/request-context"
 
 import { filterAgentTools } from "../agents/product-agent"
@@ -12,7 +10,9 @@ import {
   createCurrentMessageImageContext,
   loadCurrentMessageImages,
 } from "../core/messages/chat-input"
+import { AGENT_MODEL_PROFILE } from "../core/model-profile"
 import { stopOnPendingIssueAction } from "../core/stop-conditions"
+import type { normalizeAgentUsage } from "../core/usage/normalize"
 import { createAgentClientTools } from "../tools/client/tool"
 import { waitForAbortable } from "./chat-lifecycle"
 import type { AgentControlPlanePort } from "./ports"
@@ -21,9 +21,19 @@ import type { ProductAgentRequestContext } from "./request-context"
 
 export class AgentImageInputError extends Error {}
 
-type RuntimeProductAgent = Awaited<
-  ReturnType<ReturnType<typeof createProductRuntime>["getAgentById"]>
->
+type MastraV6Message = Parameters<
+  typeof handleChatStream
+>[0]["params"]["messages"][number]
+
+const isMastraV6Message = (
+  message: AgentRuntimeChatInput["message"]
+): message is AgentRuntimeChatInput["message"] & MastraV6Message =>
+  message.parts.every(
+    (part) =>
+      !("state" in part) ||
+      part.state !== "output-error" ||
+      part.input !== undefined
+  )
 
 export const startProductOutput = async ({
   abortSignal,
@@ -31,31 +41,39 @@ export const startProductOutput = async ({
   budget,
   input,
   memoryResourceId,
-  modelMessages,
-  productAgent,
+  mastra,
   requestContext,
   runGrant,
+  runtimeRunId,
   toolAllowlist,
   transientContext,
   onAbort,
   onError,
   onFinish,
+  onTitleGenerated,
 }: {
   abortSignal: AbortSignal
   api: AgentControlPlanePort
   budget: AgentToolBudget
   input: AgentRuntimeChatInput
   memoryResourceId: string
-  modelMessages: MessageListInput
-  productAgent: RuntimeProductAgent
+  mastra: ReturnType<typeof createProductRuntime>
   requestContext: RequestContext<ProductAgentRequestContext>
   runGrant: string
+  runtimeRunId: string
   toolAllowlist: readonly string[] | undefined
   transientContext: AIV5Type.ModelMessage[]
   onAbort(): void
   onError(event: unknown): void
-  onFinish(): void
+  onFinish(event: {
+    steps: readonly { providerMetadata?: unknown }[]
+    totalUsage: Parameters<typeof normalizeAgentUsage>[0]["usage"]
+  }): void | Promise<void>
+  onTitleGenerated?: (title: string) => void | Promise<void>
 }) => {
+  if (!isMastraV6Message(input.message)) {
+    throw new Error("Invalid AI SDK message")
+  }
   if (input.assetIds.length > 0) {
     try {
       const images = await waitForAbortable(
@@ -71,8 +89,13 @@ export const startProductOutput = async ({
     }
   }
   return waitForAbortable(
-    Promise.resolve(
-      productAgent.stream(modelMessages, {
+    handleChatStream({
+      agentId: "product-agent",
+      mastra,
+      messageMetadata: () => ({ runId: runtimeRunId }),
+      onError: () => "Model response failed.",
+      params: {
+        messages: [input.message],
         abortSignal,
         clientTools: filterAgentTools(
           createAgentClientTools(budget),
@@ -81,14 +104,16 @@ export const startProductOutput = async ({
         maxSteps: 8,
         context: transientContext,
         memory: {
-          options: { readOnly: true },
           resource: memoryResourceId,
           thread: input.threadId,
+          onTitleGenerated,
         },
-        modelSettings: { maxOutputTokens: 4_096, temperature: 0.2 },
+        modelSettings: {
+          maxOutputTokens: AGENT_MODEL_PROFILE.reservedOutputTokens,
+        },
         ...productGenerationWebSearchOptions([input.message], toolAllowlist),
         onAbort,
-        onError,
+        onError: ({ error }) => onError(error),
         onFinish,
         requestContext,
         tracingOptions: {
@@ -98,8 +123,12 @@ export const startProductOutput = async ({
         stopWhen: stopOnPendingIssueAction,
         // Keep tool reservations and writes serial for deterministic ordering.
         toolCallConcurrency: 1,
-      })
-    ),
+      },
+      sendReasoning: true,
+      sendSources: true,
+      sendStart: false,
+      version: "v6",
+    }),
     abortSignal
   )
 }

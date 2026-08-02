@@ -2,7 +2,7 @@
 title: 製品AgentのChat UI/UX
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-01
 ---
 
 # Chat UI/UX
@@ -32,28 +32,33 @@ permissionは新規draftでは`Ask always`をlocal既定値とし、thread作成
 
 conversation全体とcomposerを1枚の大きなCardで囲みません。conversationは平面、composerは独立した下部surfaceです。assistantは枠なし全幅、userだけを右寄せbubbleにし、各messageの`You` / `Issue agent`表示は省略してaccessible nameだけを保持します。approvalをabsolute/fixed layerやmessage末尾の別listへ移動せず、part順序を履歴の正本にします。
 
-| part                       | 表示                                              |
-| -------------------------- | ------------------------------------------------- |
-| `text`                     | Markdown対応response                              |
-| `reasoning`                | productionでは送信、保存、表示しない              |
-| transient `data-activity`  | 現在turnの「応答を生成中」だけ。履歴へ保存しない  |
-| tool part                  | tool名とstate、安全なschema検証済みprojectionだけ |
-| pending action tool output | そのtool位置のinline approval card                |
-| `source-url`               | 外部link                                          |
-| `data-context-budget`      | messageではなくcontext meterへ反映                |
-| `data-thread-title`        | title更新通知とselector再取得                     |
+| part                       | 表示                                                |
+| -------------------------- | --------------------------------------------------- |
+| `text`                     | Markdown対応response                                |
+| `reasoning`                | providerが返した標準本文をstream、保存、再表示      |
+| tool part                  | tool名とstate、公開スキーマで検証したprojectionだけ |
+| pending action tool output | そのtool位置のinline approval card                  |
+| `source-url`               | 外部link                                            |
+| `data-context-budget`      | messageではなくcontext meterへ反映                  |
+| `data-thread-title`        | title更新通知とselector再取得                       |
 
-thinkingは「transient UI status」「provider reasoning」「canonical tool part」を混同しません。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。provider非公開chain-of-thoughtを推測生成せず、raw reasoning partをproduction stream、Storage、UIへ出しません。statusはfinish、error、abort、disconnectで必ず消し、reload後へ残しません。
+thinkingは「`useChat`のstatus」「providerの標準reasoning」「canonical tool part」を混同しません。送信後から最初の`stream part`を受け取るまでと、tool完了後から次のreasoningまたはtext partを受け取るまでは、conversation末尾にspinnerを表示します。reasoningまたは実行中のtoolが表示されている間は、それぞれの状態表示へ引き継ぎます。toolのRunning/Completed別行を作らず、同じtool partのstate更新だけを表示します。存在しない非公開chain-of-thoughtを別modelで推測生成しません。標準reasoningは各partをtoolと同じcanonical順序で表示し、stream中に自動展開して`思考中…`を表示し、完了後に閉じます。閉じた状態でもMarkdown記号を除いた先頭の有効な1行、完了状態、live runで計測できた所要時間を表示し、展開時は保存済み本文をMarkdownとして読めます。
 
-toolのraw input/outputは折りたたみdetailsを含めてchat UIへ表示しません。各tool固有schemaで検証した公開projectionだけを表示し、tenant識別子、credential、provider payload、private URL、内部errorを汎用rendererへ渡しません。
+Mastra標準Memoryは、次turnのmodel文脈に必要な有効なツール入力・出力、reasoning、approval、`skill`本文を
+保持します。一方、公開historyとchat UIはそのmessageを薄く投影し、生のtool input/outputを
+折りたたみdetailsを含めて表示しません。各tool固有スキーマで検証した公開projectionから、対象Issue番号、
+検索条件、結果件数、確認済みIssueへのlinkを表示します。Mastra標準の`skill` toolは`core`などの公開名と
+読込結果だけを表示し、skill本文は公開しません。tenant識別子、credential、provider payload、
+private URL、内部errorを汎用rendererへ渡しません。
 
-### Scroll追従とminimap
+Memory保存前の`memory-persistence-guard`は、toolの`toModelOutput`で現在のturnへ渡した生のメディアが
+`providerMetadata.mastra.modelOutput`へ複製された場合に、その副本だけを除去します。provider metadata、
+検証失敗を含むツール入力・出力、`file`・`source`類、live streamは表示用形式へ書き換えません。
+ブラウザーへ返すhistoryとstreamの公開projectionは別境界に置き、Memoryへ逆流させません。
 
-desktop Agent paneとmobile full-screen sheetのconversationは、thread表示時に末尾から開始します。末尾との距離が96px以内なら追従中とみなし、message追加、streaming、画像読込、composerを含む周辺layoutのresizeで高さが変わったときも、次のanimation frameで末尾へ即時移動します。ただし利用者が上方向へscrollした時点で、96px以内でも追従を即時解除します。下方向へ末尾付近へ戻したときだけ再開し、履歴閲覧中の位置を新しいresponseで上書きしません。smooth scrollは使いません。
+### Scroll追従
 
-minimapはuser messageから次のuser message直前までを1 turnとして、2 turn以上あるshell conversationの右端中央へcompactなoverlayとして表示します。専用Agent pageには表示しません。markerはturn順に等間隔で並べ、conversation全高に比例した余白やmessage側の専用paddingを取りません。現在turnはviewport上端から1/3の位置を基準にし、markerは右端を起点として通常16px、現在・hover・focus時は1.5倍の24pxへ150msのtransform transitionで伸ばします。reduced motionでは即時切り替え、native scrollbarは残します。
-
-各markerはturn番号とuser promptをaccessible nameに持ち、現在位置には`aria-current="location"`を付けます。hover/focus previewはmarkerの左側へ開き、user prompt、直後のassistant本文、画像・context・tool件数を保存済みmessage partからローカル生成します。添付だけのturnにもfallback labelを与えます。clickまたはEnterはturn先頭へ即時移動します。preview幅はmobile viewport内へ収め、dark themeでも同じ情報階層を維持します。
+conversationは中央寄せの`max-w-3xl`とし、初期表示と末尾付近ではmessage追加、streaming、画像読込、resizeへ自動追従します。利用者が上へscrollした場合は読書位置を維持し、画面下部の`最新のメッセージへ移動`ボタンで末尾へ戻せます。Agent paneでは2 turn以上のとき右端にturn minimapを表示し、promptと回答のpreviewから対象turnへ移動できます。
 
 ## Composer
 
@@ -66,7 +71,7 @@ permissionはicon付きselectとしてcomposer footerに置きます。表示専
 
 時間制限や削除確認文字列はUI契約に含めません。権限はserver正本で、session、organization、context epoch、threadへ束縛し、Jotaiへ正本を置きません。
 
-Tiptap editorだけを内容に応じて最大`40vh`まで拡張し、それ以上は内部scrollにします。attachment、permission、円形context meter、Stop/Sendはdesktopで原則1行に置き、常にviewport内へ残します。狭幅だけ折り返します。chat composerにmonthly costは表示しません。Enterは改行、Mod+Enterだけが送信です。
+Tiptap editorだけを内容に応じて最大`40vh`まで拡張し、それ以上は内部scrollにします。attachment、permission、円形context meter、Stop/Sendはdesktopで原則1行に置き、常にviewport内へ残します。狭幅だけ折り返します。chat composerにmonthly costは表示しません。`Enter`は送信、`Shift+Enter`は改行です。IME composition中とmention候補表示中の`Enter`は送信に使いません。
 
 ## Keyboard shortcuts
 
@@ -75,13 +80,14 @@ Tiptap editorだけを内容に応じて最大`40vh`まで拡張し、それ以�
 | shortcut           | 動作                     |
 | ------------------ | ------------------------ |
 | `Mod+K`            | Agent pane切替           |
-| `Mod+Enter`        | 送信                     |
+| `Enter`            | 送信                     |
+| `Shift+Enter`      | 改行                     |
 | `Mod+Shift+N`      | 新規thread draft         |
 | `Mod+.`            | 実行停止                 |
 | `Alt+ArrowUp/Down` | 更新順の前後threadへ移動 |
 | `Mod+/`            | shortcut一覧             |
 
-IME composition中は発火しません。送信shortcutはinputを無視しない設定でTiptap editor内から使えますが、upload中、modal、frozen context、active responseとの競合時は無効です。既存shortcutと同時利用が必要なscopeだけ`allow`し、dialogは自身のkeyboard scopeを優先します。
+IME composition中は発火しません。送信はTiptap editor自身が処理し、upload中、modal、frozen context、active responseとの競合時は無効です。既存shortcutと同時利用が必要なscopeだけ`allow`し、dialogは自身のkeyboard scopeを優先します。
 
 ## Responsiveとaccessibility
 

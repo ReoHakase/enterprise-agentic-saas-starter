@@ -6,7 +6,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm"
 
 import type { AgentActionExecutionResult } from "../../../agent-client"
-import { publicErrors } from "../../../errors/app-error"
+import { HttpError } from "../../../errors/http-error"
 import {
   deleteReadyFilesInTransaction,
   promoteAgentAssetToIssueFileInTransaction,
@@ -72,10 +72,7 @@ const validateExecutionScope: (
   context: ValidGrant
 ) => asserts action is ApprovedAction = (action, context) => {
   if (action.status !== "approved") {
-    throw publicErrors.conflict("Agent action is not approved", {
-      reason: "action_not_approved",
-      resource: "agent_action",
-    })
+    throw new HttpError({ code: "conflict" })
   }
   if (
     action.decisionProvenance !== "manual" &&
@@ -89,7 +86,7 @@ const validateExecutionScope: (
         context.resumedActionId === action.id
       : context.runScope === "chat" && context.runId === action.runId
   if (!correctRun) {
-    throw publicErrors.unauthorized("Agent capability is invalid")
+    throw new HttpError({ code: "unauthorized" })
   }
 }
 

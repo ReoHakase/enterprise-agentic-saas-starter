@@ -25,7 +25,7 @@ const insertActionFixture = async (client: ReturnType<typeof createClient>) => {
     },
     {
       sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-      args: ["action-member", "action-org", "action-user", "super_admin", now],
+      args: ["action-member", "action-org", "action-user", "owner", now],
     },
     {
       sql: "insert into session(id,expires_at,token,created_at,updated_at,user_id,active_organization_id) values(?,?,?,?,?,?,?)",

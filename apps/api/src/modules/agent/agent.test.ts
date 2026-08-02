@@ -140,10 +140,7 @@ describe("Agent public control plane", () => {
 
     expect(response.status).toBe(403)
     expect(await response.json()).toMatchObject({
-      error: {
-        code: "csrf_origin_forbidden",
-        context: { reason: "missing_origin" },
-      },
+      error: "csrf_origin_forbidden",
     })
     expect(inputs).toEqual([])
   })
@@ -186,8 +183,13 @@ describe("Agent public control plane", () => {
       { status: 409, retryAfter: "99999" },
       { status: 429, retryAfter: "37" },
     ]
+    const runtimeRequestIds: string[] = []
     configureAgentRuntime({
-      fetch: () => {
+      fetch: (input) => {
+        if (!(input instanceof Request)) {
+          throw new TypeError("Expected an Agent runtime Request")
+        }
+        runtimeRequestIds.push(input.headers.get("x-request-id") ?? "")
         const response = runtimeResponses.shift()
         if (!response) throw new Error("Missing runtime response fixture")
         return Promise.resolve(
@@ -212,9 +214,13 @@ describe("Agent public control plane", () => {
       })
     )
     expect(conflict.status).toBe(409)
+    expect(runtimeRequestIds[0]).toBe(conflict.headers.get("x-request-id"))
     expect(conflict.headers.get("retry-after")).toBeNull()
-    const conflictText = await conflict.text()
-    expect(conflictText).toBe("Agent run already in progress")
+    const conflictBody = await conflict.json()
+    expect(conflictBody).toEqual({
+      error: "conflict",
+      message: "The request conflicts with the current state.",
+    })
 
     const limited = await app.handle(
       request("/agent/chat", {
@@ -231,10 +237,16 @@ describe("Agent public control plane", () => {
       })
     )
     expect(limited.status).toBe(429)
+    expect(runtimeRequestIds[1]).toBe(limited.headers.get("x-request-id"))
     expect(limited.headers.get("retry-after")).toBe("37")
-    const limitedText = await limited.text()
-    expect(limitedText).toBe("Agent capacity temporarily limited")
-    expect(`${conflictText} ${limitedText}`).not.toContain(privateBody)
+    const limitedBody = await limited.json()
+    expect(limitedBody).toEqual({
+      error: "rate_limited",
+      message: "Too many requests. Try again later.",
+    })
+    expect(JSON.stringify([conflictBody, limitedBody])).not.toContain(
+      privateBody
+    )
   })
 
   it("returns the same not-found response for other-owner and other-tenant threads", async () => {
@@ -270,7 +282,7 @@ describe("Agent public control plane", () => {
     )
     expect(inactiveTenantResponse.status).toBe(404)
     expect(await inactiveTenantResponse.json()).toMatchObject({
-      error: { code: "not_found" },
+      error: "not_found",
     })
 
     const archivedResponse = await app.handle(

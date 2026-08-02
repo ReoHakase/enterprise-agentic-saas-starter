@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import * as v from "valibot"
 
-import { apiErrorModel, tenantErrorResponses } from "../../models/api"
+import { errorResponseModel, tenantErrorResponses } from "../../models/api"
 import type { AccessControlFactory } from "../authorization/public"
 import type { AgentAssetPreviewService } from "./agent-assets-preview-service"
 import type { AgentAssetService } from "./agent-assets-service"
@@ -30,12 +30,12 @@ type FilesRouteService = AgentAssetPreviewService &
 
 const fileErrorResponses = {
   ...tenantErrorResponses,
-  503: apiErrorModel,
+  503: errorResponseModel,
 } as const
 
 const agentAssetErrorResponses = {
   ...fileErrorResponses,
-  429: apiErrorModel,
+  429: errorResponseModel,
 } as const
 
 const binaryResponseModel = v.any()
@@ -288,7 +288,7 @@ export const createFilesRoutes = (
         params: fileParamsModel,
         response: {
           200: textFilePreviewDtoModel,
-          415: apiErrorModel,
+          415: errorResponseModel,
           ...fileErrorResponses,
         },
         detail: {

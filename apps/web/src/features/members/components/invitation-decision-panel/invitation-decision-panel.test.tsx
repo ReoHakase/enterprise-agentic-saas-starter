@@ -6,10 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { clientEnv } from "@/lib/env.client"
 
-import {
-  InvitationAuthenticationError,
-  type InvitationContext,
-} from "../../api"
+import { type InvitationContext } from "../../api"
 import { InvitationDecisionPanel } from "./invitation-decision-panel"
 
 const mocks = vi.hoisted(() => ({
@@ -29,8 +26,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../api", () => ({
   decideInvitation: mocks.decideInvitation,
-  InvitationAuthenticationError: class extends Error {},
-  InvitationDecisionError: class InvitationDecisionError extends Error {},
+  isInvitationAuthenticationError: (error: unknown) =>
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    error.status === 401,
   invitationFallbacks: {
     accept: "Invitation could not be accepted. Try again.",
     reject: "Invitation could not be rejected. Try again.",
@@ -210,7 +210,7 @@ describe("InvitationDecisionPanel", () => {
   it("returns to sign-in with the invitation path when the session expires during acceptance", async () => {
     const actor = userEvent.setup()
     mocks.decideInvitation.mockRejectedValueOnce(
-      new InvitationAuthenticationError()
+      Object.assign(new Error("session expired"), { status: 401 })
     )
     renderPanel(
       <InvitationDecisionPanel

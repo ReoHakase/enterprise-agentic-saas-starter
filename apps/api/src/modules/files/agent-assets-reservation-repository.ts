@@ -10,7 +10,7 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt, lte, sql } from "drizzle-orm"
 
-import { publicErrors } from "../../errors/app-error"
+import { HttpError } from "../../errors/http-error"
 import {
   AGENT_USAGE_DAY_MS,
   AGENT_USAGE_HOUR_MS,
@@ -23,7 +23,6 @@ import {
   agentAssetLimitExceeded,
   isDatabaseWriteContention,
   isUploadIdUniqueConflict,
-  preserveAgentAssetError,
   quotaExceeded,
   type AgentAssetWithStorage,
 } from "./agent-assets-domain"
@@ -76,9 +75,9 @@ export const requireLiveUploadScope = async (
     )
     .limit(1)
   const liveSession = sessionRows[0]
-  if (!liveSession) throw publicErrors.unauthorized()
+  if (!liveSession) throw new HttpError({ code: "unauthorized" })
   if (liveSession.activeOrganizationId !== input.organizationId) {
-    throw publicErrors.activeOrganizationMismatch()
+    throw new HttpError({ code: "active_organization_mismatch" })
   }
 
   const membershipRows = await tx
@@ -92,9 +91,7 @@ export const requireLiveUploadScope = async (
     )
     .limit(1)
   if (!membershipRows[0]) {
-    throw publicErrors.notFound("Organization not found", {
-      resource: "organization",
-    })
+    throw new HttpError({ code: "not_found" })
   }
 
   const threadRows = await tx
@@ -110,9 +107,7 @@ export const requireLiveUploadScope = async (
     )
     .limit(1)
   if (!threadRows[0]) {
-    throw publicErrors.notFound("Agent thread not found", {
-      resource: "agent_thread",
-    })
+    throw new HttpError({ code: "not_found" })
   }
 
   const context = await ensureAgentSessionContextInTransaction(tx, {
@@ -124,7 +119,7 @@ export const requireLiveUploadScope = async (
     input.expectedContextEpoch !== undefined &&
     context.contextEpoch !== input.expectedContextEpoch
   ) {
-    throw publicErrors.unauthorized("Agent context is no longer active")
+    throw new HttpError({ code: "unauthorized" })
   }
   return context.contextEpoch
 }
@@ -167,13 +162,7 @@ const selectAgentAssetByUploadId = async <TDatabase extends Pick<Db, "select">>(
 const findAgentAssetByUploadId = async (
   db: Db,
   input: { organizationId: string; uploadId: string }
-) => {
-  try {
-    return await selectAgentAssetByUploadId(db, input)
-  } catch (cause) {
-    return preserveAgentAssetError(cause, "findAgentAssetByUploadId")
-  }
-}
+) => selectAgentAssetByUploadId(db, input)
 
 export const reservePendingAgentAsset = async (
   db: Db,
@@ -205,10 +194,7 @@ export const reservePendingAgentAsset = async (
               existing.asset.status !== "ready") ||
             existing.asset.expiresAt.getTime() <= now.getTime()
           ) {
-            throw publicErrors.conflict("Upload id is no longer reusable", {
-              reason: "upload_expired",
-              resource: "agent_asset",
-            })
+            throw new HttpError({ code: "conflict" })
           }
           await requireLiveUploadScope(tx, {
             organizationId: input.organizationId,
@@ -385,16 +371,10 @@ export const reservePendingAgentAsset = async (
         // oxlint-disable-next-line no-await-in-loop -- committed winnerをtenant scopeで取得する。
         const existing = await findAgentAssetByUploadId(db, input)
         if (existing) return { created: false, value: existing }
-        throw publicErrors.conflict("Upload id is no longer reusable", {
-          reason: "upload_expired",
-          resource: "agent_asset",
-        })
+        throw new HttpError({ code: "conflict", cause })
       }
-      return preserveAgentAssetError(cause, "reservePendingAgentAsset")
+      throw cause
     }
   }
-  throw publicErrors.internal(undefined, {
-    module: "agent-assets",
-    operation: "reservePendingAgentAsset",
-  })
+  throw new Error("Agent asset reservation retries exhausted")
 }

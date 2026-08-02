@@ -34,7 +34,7 @@ export const agentPositiveIntegerSchema = v.pipe(
   v.maxValue(Number.MAX_SAFE_INTEGER)
 )
 
-export const agentRoleSchema = v.picklist(["super_admin", "admin", "member"])
+export const agentRoleSchema = v.picklist(["owner", "admin", "member"])
 export const agentIssueStatusSchema = v.picklist([
   "open",
   "in_progress",

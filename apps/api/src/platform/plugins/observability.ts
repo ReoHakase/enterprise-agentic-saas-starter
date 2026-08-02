@@ -54,13 +54,15 @@ export const observabilityPlugin = new Elysia({
       statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "debug"
 
     logObservedResponse(level, {
+      "app.operation": `${request.method} ${route || "unmatched"}`,
+      "app.outcome": statusCode >= 400 ? "failure" : "success",
       duration_ms:
         started === undefined
           ? undefined
           : Number((performance.now() - started).toFixed(2)),
-      http_method: request.method,
-      http_route: route || "unmatched",
-      http_status_code: statusCode,
+      "http.request.method": request.method,
+      "http.response.status_code": statusCode,
+      "http.route": route || "unmatched",
       request_id: requestId,
     })
   })

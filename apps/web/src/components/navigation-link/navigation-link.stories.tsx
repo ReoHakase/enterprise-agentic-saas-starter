@@ -62,7 +62,11 @@ export const MenuAndSidebar = meta.story({
       )
       await expect(account).toHaveAttribute("href", "/settings/account")
       await userEvent.keyboard("{Escape}")
-      await waitFor(() => expect(trigger).toHaveFocus())
+      const body = within(canvasElement.ownerDocument.body)
+      await waitFor(() =>
+        expect(body.queryByRole("menu")).not.toBeInTheDocument()
+      )
+      await expect(trigger).toHaveFocus()
     })
   },
 })

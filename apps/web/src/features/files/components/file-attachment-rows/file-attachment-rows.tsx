@@ -103,7 +103,7 @@ const FileRow = ({
 }: {
   file: FileDto
   organizationId: string
-  onRequestDelete: (file: FileDto) => void
+  onRequestDelete: (file: FileDto, trigger: HTMLButtonElement) => void
   onRequestPreview: (file: FileDto, trigger: HTMLButtonElement) => void
   onSelectThumbnail: (fileId: string) => void
   thumbnailGroupName: string
@@ -112,7 +112,8 @@ const FileRow = ({
   thumbnailSelected: boolean
 }) => {
   const requestDelete = useCallback(
-    () => onRequestDelete(file),
+    (event: MouseEvent<HTMLButtonElement>) =>
+      onRequestDelete(file, event.currentTarget),
     [file, onRequestDelete]
   )
   const requestPreview = useCallback(

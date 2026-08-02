@@ -47,20 +47,9 @@ export const createMultiSessionCapabilities = (
   }
 }
 
-const unwrapAuthResult = (result: unknown, fallback: string): unknown => {
-  if (isRecord(result) && result.error) throw new Error(fallback)
+const unwrapAuthResult = (result: unknown): unknown => {
+  if (isRecord(result) && result.error) throw result.error
   return isRecord(result) && "data" in result ? result.data : result
-}
-
-const settleAuthRequest = async (
-  request: Promise<unknown>,
-  fallback: string
-) => {
-  try {
-    return await request
-  } catch {
-    throw new Error(fallback)
-  }
 }
 
 export const createDeviceAccountsQueryFn =
@@ -71,21 +60,12 @@ export const createDeviceAccountsQueryFn =
       throw new Error("Account switching is not available")
     }
     return parseDeviceAccounts(
-      unwrapAuthResult(
-        await settleAuthRequest(
-          listDeviceSessions(),
-          "Accounts could not be loaded. Try again."
-        ),
-        "Accounts could not be loaded. Try again."
-      ) ?? []
+      unwrapAuthResult(await listDeviceSessions()) ?? []
     )
   }
 
-export const completeMultiSessionAction = async (
-  result: Promise<unknown>,
-  fallback: string
-) => {
-  unwrapAuthResult(await settleAuthRequest(result, fallback), fallback)
+export const completeMultiSessionAction = async (result: Promise<unknown>) => {
+  unwrapAuthResult(await result)
 }
 
 export const readFreshCurrentDeviceSession = async (
@@ -97,13 +77,7 @@ export const readFreshCurrentDeviceSession = async (
     )
   }
 
-  const result = unwrapAuthResult(
-    await settleAuthRequest(
-      multiSession.getSession(),
-      "Account state could not be verified. Reload and try again."
-    ),
-    "Account state could not be verified. Reload and try again."
-  )
+  const result = unwrapAuthResult(await multiSession.getSession())
   return result === null || result === undefined
     ? undefined
     : parseCurrentDeviceSession(result)
@@ -120,10 +94,7 @@ export const readFreshDeviceAccountState = async (
 
   const [currentSession, accountsResult] = await Promise.all([
     readFreshCurrentDeviceSession(multiSession),
-    settleAuthRequest(
-      multiSession.listDeviceSessions(),
-      "Account state could not be verified. Reload and try again."
-    ),
+    multiSession.listDeviceSessions(),
   ])
   if (!currentSession) {
     throw new Error(
@@ -132,12 +103,7 @@ export const readFreshDeviceAccountState = async (
   }
 
   return {
-    accounts: parseDeviceAccounts(
-      unwrapAuthResult(
-        accountsResult,
-        "Account state could not be verified. Reload and try again."
-      ) ?? []
-    ),
+    accounts: parseDeviceAccounts(unwrapAuthResult(accountsResult) ?? []),
     currentSession,
   }
 }

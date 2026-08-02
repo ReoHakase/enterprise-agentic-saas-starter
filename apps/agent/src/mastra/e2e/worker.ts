@@ -21,12 +21,11 @@ class AgentRuntime extends WorkerEntrypoint<AgentRuntimeEnv> {
     const composition = getScriptedAgentIsolateComposition(this.env)
     return handleAgentRuntimeRequest(request, this.env, this.ctx, {
       captureFailure: () => undefined,
+      createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
       createControlPlane: createAgentInternalGateway,
       executionRegistry: composition.executionRegistry,
-      createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
       mastra: composition.mastra,
       requireModelCredential: false,
-      threadTitleAgent: composition.threadTitleAgent,
       toControlFailure: toAgentControlFailure,
     })
   }

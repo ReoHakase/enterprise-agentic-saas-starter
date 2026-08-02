@@ -16,10 +16,13 @@ const isRemoteDatabaseUrl = (value: string): boolean =>
 const requiresSerializedInitialization = (value: string): boolean => {
   try {
     const url = new URL(value)
+    const isLocalHostname =
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]" ||
+      url.hostname === "localhost" ||
+      url.hostname.endsWith(".localhost")
     return (
-      url.protocol === "http:" ||
-      (url.protocol === "https:" &&
-        (url.hostname === "localhost" || url.hostname.endsWith(".localhost")))
+      isLocalHostname && (url.protocol === "http:" || url.protocol === "https:")
     )
   } catch {
     return false
@@ -36,12 +39,8 @@ class AgentLibSQLStore extends LibSQLStore {
   }
 
   override init(): Promise<void> {
-    if (!this.#serializeInitialization) {
-      return super.init()
-    }
-    if (this.#serializedInitialization) {
-      return this.#serializedInitialization
-    }
+    if (!this.#serializeInitialization) return super.init()
+    if (this.#serializedInitialization) return this.#serializedInitialization
 
     const attempt = this.#initializeDomainsSequentially()
     const wrapped = attempt.catch((cause: unknown) => {
@@ -56,7 +55,7 @@ class AgentLibSQLStore extends LibSQLStore {
 
   async #initializeDomainsSequentially(): Promise<void> {
     for (const store of Object.values(this.stores)) {
-      // oxlint-disable-next-line no-await-in-loop -- concurrent local HTTP domain initialization invalidates libSQL statements.
+      // oxlint-disable-next-line no-await-in-loop -- local HTTP libSQL invalidates concurrent schema statements.
       await store?.init()
     }
   }
@@ -93,10 +92,7 @@ export const createAgentStorage = (
 ): LibSQLStore => {
   const config = resolveAgentStorageConfig(environment)
   return new AgentLibSQLStore(
-    {
-      id,
-      ...config,
-    },
+    { id, ...config },
     requiresSerializedInitialization(config.url)
   )
 }
