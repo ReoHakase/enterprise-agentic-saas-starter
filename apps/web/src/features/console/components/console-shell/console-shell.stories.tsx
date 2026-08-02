@@ -555,13 +555,21 @@ export const OrganizationPendingShape = meta.story({
     const expandedRoundedXlRadius =
       getComputedStyle(roundedXlIdentity).borderRadius
 
-    const organizationTrigger = canvas.getByRole("button", {
-      name: /Acme Cloud/u,
-    })
-    await userEvent.click(organizationTrigger)
-    const organizationMenu = await findVisibleMenu(
-      canvasElement.ownerDocument.body
+    const getOrganizationTrigger = () =>
+      canvas.getByRole("button", {
+        name: /Acme Cloud/u,
+      })
+    await userEvent.click(getOrganizationTrigger())
+    await waitFor(() =>
+      expect(getOrganizationTrigger()).toHaveAttribute("aria-expanded", "true")
     )
+    const body = within(canvasElement.ownerDocument.body)
+    let organizationMenu: HTMLElement | undefined
+    await waitFor(() => {
+      organizationMenu = body.getByRole("menu", { name: /Acme Cloud/u })
+      expect(organizationMenu).toBeVisible()
+    })
+    if (!organizationMenu) throw new Error("Organization menu was not rendered")
     await userEvent.click(
       within(organizationMenu).getByRole("menuitem", {
         name: /Secondary Workspace/u,
