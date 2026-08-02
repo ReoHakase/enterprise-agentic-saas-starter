@@ -559,21 +559,13 @@ export const OrganizationPendingShape = meta.story({
       canvas.getByRole("button", {
         name: /Acme Cloud/u,
       })
-    getOrganizationTrigger().focus()
-    await expect(getOrganizationTrigger()).toHaveFocus()
-    await userEvent.keyboard("{Enter}")
+    getOrganizationTrigger().click()
     const body = within(canvasElement.ownerDocument.body)
-    let organizationMenu: HTMLElement | undefined
-    await waitFor(() => {
-      organizationMenu = body.getByRole("menu", { name: /Acme Cloud/u })
-      expect(organizationMenu).toBeVisible()
+    const secondaryOrganizationItem = await body.findByRole("menuitem", {
+      name: /Secondary Workspace/u,
     })
-    if (!organizationMenu) throw new Error("Organization menu was not rendered")
-    await userEvent.click(
-      within(organizationMenu).getByRole("menuitem", {
-        name: /Secondary Workspace/u,
-      })
-    )
+    await waitFor(() => expect(secondaryOrganizationItem).toBeVisible())
+    await userEvent.click(secondaryOrganizationItem)
 
     const pendingIdentity = await waitForVisible(
       await within(sidebar).findByRole("status")

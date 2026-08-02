@@ -78,6 +78,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | 2026-08-02 | 2ユーザーの初回作成をsetup projectで直列実行する     | 3 workerが同じ新規userを同時作成するとBetter Authの一意制約と競合するため |
 | 2026-08-02 | Web Storybookのfontを固定system stackへ分離する      | dependencyを変えず、static buildをGoogle Fontsの可用性から分離するため    |
 | 2026-08-02 | menu起動をfocusとEnterで検証する                     | storyの目的と無関係なpointer geometryへの依存を除くため                   |
+| 2026-08-02 | native activation後のvisible menuitemへ同期する      | pointer座標、global document、派生menu名、animation中間状態を除くため     |
 
 ## 検証証跡
 
@@ -103,6 +104,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | CI run `30754423942` attempt 2            | 修正 | Google Fonts取得失敗。固定system stackへ置換して再計測する           |
 | CI run `30755342091`                      | 修正 | menuのpointer起動が不安定。focusとEnterによるsemantic操作へ置換する  |
 | CI run `30755777092` attempts 1・2・3     | 成功 | 同一head `e43339c`で全jobが3回連続成功                               |
+| CI run `30756356090`                      | 修正 | menuをnative起動し、visible itemへ同期                               |
 
 計測対象はqueue時間を除いた各jobの`started_at`から`completed_at`までです。
 
