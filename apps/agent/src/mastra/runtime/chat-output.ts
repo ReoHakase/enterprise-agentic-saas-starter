@@ -50,6 +50,7 @@ export const startProductOutput = async ({
   onAbort,
   onError,
   onFinish,
+  onTitleGenerated,
 }: {
   abortSignal: AbortSignal
   api: AgentControlPlanePort
@@ -68,6 +69,7 @@ export const startProductOutput = async ({
     steps: readonly { providerMetadata?: unknown }[]
     totalUsage: Parameters<typeof normalizeAgentUsage>[0]["usage"]
   }): void | Promise<void>
+  onTitleGenerated?: (title: string) => void | Promise<void>
 }) => {
   if (!isMastraV6Message(input.message)) {
     throw new Error("Invalid AI SDK message")
@@ -101,7 +103,11 @@ export const startProductOutput = async ({
         ),
         maxSteps: 8,
         context: transientContext,
-        memory: { resource: memoryResourceId, thread: input.threadId },
+        memory: {
+          resource: memoryResourceId,
+          thread: input.threadId,
+          onTitleGenerated,
+        },
         modelSettings: {
           maxOutputTokens: AGENT_MODEL_PROFILE.reservedOutputTokens,
         },

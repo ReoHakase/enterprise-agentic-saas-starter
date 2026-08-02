@@ -25,10 +25,15 @@ afterEach(() => {
 })
 
 const createFakeMastra = (
-  stream: unknown
+  stream: unknown,
+  memory?: {
+    getThreadById(input: {
+      threadId: string
+    }): Promise<{ title?: string } | undefined>
+  }
 ): AgentRuntimeDependencies["mastra"] =>
   Object.assign(JSON.parse("{}"), {
-    getAgentById: () => ({ getMemory: () => undefined, stream }),
+    getAgentById: () => ({ getMemory: () => memory, stream }),
     getWorkflow: () => ({
       listWorkflowRuns: () => Promise.resolve({ runs: [], total: 0 }),
     }),
@@ -134,6 +139,68 @@ const assertReasoningToTextCompletes = async () => {
 }
 
 describe("native runtime SSE privacy", () => {
+  it("keeps Mastra title persistence alive without delaying the response stream", async () => {
+    let forwardedTitleCallback:
+      | ((title: string) => void | Promise<void>)
+      | undefined
+    const streamFailure = new Error("scripted stream stop")
+    const stream = vi.fn<
+      (
+        messages: unknown,
+        options: {
+          memory?: {
+            onTitleGenerated?: (title: string) => void | Promise<void>
+          }
+        }
+      ) => Promise<never>
+    >(
+      (
+        _messages: unknown,
+        options: {
+          memory?: {
+            onTitleGenerated?: (title: string) => void | Promise<void>
+          }
+        }
+      ) => {
+        const onTitleGenerated = options.memory?.onTitleGenerated
+        expect(onTitleGenerated).toBeTypeOf("function")
+        forwardedTitleCallback = onTitleGenerated
+        void onTitleGenerated?.("Review Issue attachments")
+        return Promise.reject(streamFailure)
+      }
+    )
+    const mastra = createFakeMastra(stream, {
+      getThreadById: () => Promise.resolve({ title: "" }),
+    })
+    const controlPlane = createControlPlane()
+    const startRun = controlPlane.startRun
+    controlPlane.startRun = async (input) => ({
+      ...(await startRun(input)),
+      shouldGenerateTitle: true,
+    })
+    const pending: Promise<unknown>[] = []
+
+    const response = await handleAgentRuntimeRequest(
+      chatRequest(),
+      runtimeEnvironment,
+      { waitUntil: (promise) => pending.push(promise) },
+      {
+        captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
+        createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
+        createControlPlane: () => controlPlane,
+        executionRegistry: new ProductAgentExecutionRegistry(),
+        mastra,
+        requireModelCredential: false,
+        toControlFailure: () => null,
+      }
+    )
+
+    expect(response).toBeInstanceOf(Response)
+    await response.text()
+    await Promise.all(pending)
+    expect(forwardedTitleCallback).toBeTypeOf("function")
+  })
+
   it("reports a provider startup failure to the local raw boundary exactly once", async () => {
     const providerFailure = new Error("MODEL_START_EXACTLY_ONCE")
     const executionRegistry = new ProductAgentExecutionRegistry()

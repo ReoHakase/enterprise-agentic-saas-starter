@@ -4,7 +4,6 @@ import type {
 } from "@enterprise-agentic-saas/agent-contracts"
 import { type AIV5Type } from "@mastra/core/agent/message-list"
 import type { Mastra } from "@mastra/core/mastra"
-import { RequestContext } from "@mastra/core/request-context"
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai"
 
 import type { AgentFailureCode } from "../adapters/telemetry/capture"
@@ -35,12 +34,11 @@ import {
   parseAgentRuntimeResumeInput,
   readBoundedPrivateJson,
 } from "./request"
-import type {
-  ProductAgentExecutionRegistry,
-  ProductAgentRequestContext,
-} from "./request-context"
+import type { ProductAgentExecutionRegistry } from "./request-context"
+import { createProductRequestContext } from "./request-context"
 import { resumeIssueAction } from "./resume-action"
 import { createRunSettlement } from "./settlement"
+import { createThreadTitleLifecycle } from "./thread-title-lifecycle"
 
 const stepProviderMetadata = (
   steps: readonly { providerMetadata?: unknown }[]
@@ -172,14 +170,6 @@ const scheduleApprovalResumeStorageClose = (
   context.waitUntil(closeApprovalResumeStorage(runtime.storage, captureFailure))
 }
 
-const createProductRequestContext = (
-  runtime: ProductAgentRequestContext["runtime"]
-): RequestContext<ProductAgentRequestContext> => {
-  const requestContext = new RequestContext<ProductAgentRequestContext>()
-  requestContext.set("runtime", runtime)
-  return requestContext
-}
-
 const createResolvedPageContext = (
   input: AgentRuntimeChatInput
 ): AIV5Type.ModelMessage[] =>
@@ -288,6 +278,15 @@ const handleChat = async (
     resourceId: memoryResourceId,
     threadId: input.threadId,
   })
+  const threadTitleLifecycle = await createThreadTitleLifecycle({
+    captureFailure: dependencies.captureFailure,
+    context,
+    environment,
+    readMemory: () =>
+      dependencies.mastra.getAgentById("product-agent").getMemory(),
+    shouldGenerateTitle: run.shouldGenerateTitle,
+    threadId: input.threadId,
+  })
 
   try {
     const transientContext = [
@@ -345,8 +344,12 @@ const handleChat = async (
           runtimeRunId: run.runId,
           toolAllowlist,
           transientContext,
-          onAbort: () => finalizer.schedule(finalizer.outcomeFor("error")),
+          onAbort: () => {
+            threadTitleLifecycle?.settle()
+            finalizer.schedule(finalizer.outcomeFor("error"))
+          },
           onError: (event) => {
+            threadTitleLifecycle?.settle()
             reportDevelopmentCauseChain(
               environment,
               "product-model-stream",
@@ -356,8 +359,10 @@ const handleChat = async (
           },
           onFinish: (event) =>
             finalizer.finish(() => recordObservedUsage(event)),
+          onTitleGenerated: threadTitleLifecycle?.onTitleGenerated,
         })
       } catch (cause) {
+        threadTitleLifecycle?.settle()
         outputFailureLabel = "product-model-start"
         if (cause instanceof AgentImageInputError) setupFailure = "image_failed"
         throw cause
@@ -409,6 +414,7 @@ const handleChat = async (
       },
     })
   } catch (cause) {
+    threadTitleLifecycle?.settle()
     reportDevelopmentCauseChain(environment, "chat-runtime", cause)
     abortLifecycle.close()
     execution.release()

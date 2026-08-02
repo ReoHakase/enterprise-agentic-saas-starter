@@ -3,7 +3,7 @@
 import { useChat, type UseChatHelpers } from "@ai-sdk/react"
 import { agentClientToolNames } from "@enterprise-agentic-saas/api/client"
 import { useHotkeys } from "@tanstack/react-hotkeys"
-import { useQueryClient } from "@tanstack/react-query"
+import { type QueryClient, useQueryClient } from "@tanstack/react-query"
 import type { ChatOnFinishCallback, ChatOnToolCallCallback } from "ai"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -36,12 +36,80 @@ import { useAgentStopLifecycle } from "./use-agent-stop-lifecycle"
 import { useAgentSubmission } from "./use-agent-submission"
 
 const closeHttpChatSession = () => undefined
+const DEFAULT_AGENT_THREAD_TITLE = "New conversation"
+const THREAD_TITLE_REFRESH_DELAYS_MS = [500, 1_500, 3_000, 5_000, 10_000]
 
 type AgentThreadRuntime = ReturnType<typeof useAgentThreadRuntimeState>
 type AgentClientToolName = (typeof agentClientToolNames)[number]
 
 const isAgentClientToolName = (value: string): value is AgentClientToolName =>
   agentClientToolNames.some((name) => name === value)
+
+const waitForThreadTitleRefresh = (
+  delayMs: number,
+  signal: AbortSignal
+): Promise<boolean> => {
+  if (signal.aborted) return Promise.resolve(false)
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  let onAbort: (() => void) | undefined
+  const delay = new Promise<true>((resolve) => {
+    timeout = setTimeout(() => resolve(true), delayMs)
+  })
+  const abort = new Promise<false>((resolve) => {
+    onAbort = () => resolve(false)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
+  return Promise.race([delay, abort]).finally(() => {
+    if (timeout !== undefined) clearTimeout(timeout)
+    if (onAbort) signal.removeEventListener("abort", onAbort)
+  })
+}
+
+const useAgentThreadTitleRefresh = ({
+  organizationId,
+  queryClient,
+  thread,
+}: {
+  organizationId: string
+  queryClient: QueryClient
+  thread: AgentThread
+}) => {
+  const refreshControllerRef = useRef<AbortController | undefined>(undefined)
+  useEffect(
+    () => () => {
+      refreshControllerRef.current?.abort()
+    },
+    [thread.id]
+  )
+  return useCallback(() => {
+    if (thread.title !== DEFAULT_AGENT_THREAD_TITLE) return
+    refreshControllerRef.current?.abort()
+    const refreshController = new AbortController()
+    refreshControllerRef.current = refreshController
+    const queryKey = agentKeys.threads(organizationId)
+    void (async () => {
+      for (const delayMs of THREAD_TITLE_REFRESH_DELAYS_MS) {
+        const currentThreads = queryClient.getQueryData<AgentThread[]>(queryKey)
+        const currentThread = currentThreads?.find(
+          (candidate) => candidate.id === thread.id
+        )
+        if (
+          !currentThread ||
+          currentThread.title !== DEFAULT_AGENT_THREAD_TITLE
+        )
+          return
+        // oxlint-disable-next-line no-await-in-loop -- Title generation is asynchronous and retries are bounded.
+        const ready = await waitForThreadTitleRefresh(
+          delayMs,
+          refreshController.signal
+        )
+        if (!ready) return
+        // oxlint-disable-next-line no-await-in-loop -- Each refetch observes the previous title state.
+        await queryClient.invalidateQueries({ queryKey })
+      }
+    })()
+  }, [organizationId, queryClient, thread.id, thread.title])
+}
 
 const useAgentToolCall = ({
   disabled,
@@ -113,6 +181,7 @@ const useAgentChatFinish = ({
   pendingComposerSnapshotRef,
   pendingSubmissionRef,
   queryClient,
+  refreshThreadTitle,
   runtime,
   setSendingAssetIds,
   threadId,
@@ -124,6 +193,7 @@ const useAgentChatFinish = ({
   }
   pendingSubmissionRef: { current: AgentThreadRuntime["pendingSubmission"] }
   queryClient: ReturnType<typeof useQueryClient>
+  refreshThreadTitle: () => void
   runtime: AgentThreadRuntime
   setSendingAssetIds: (assetIds: string[]) => void
   threadId: string
@@ -167,7 +237,7 @@ const useAgentChatFinish = ({
         queryClient.invalidateQueries({
           queryKey: issueKeys.all,
         }),
-      ])
+      ]).then(refreshThreadTitle)
     },
     [
       composerRef,
@@ -175,6 +245,7 @@ const useAgentChatFinish = ({
       pendingComposerSnapshotRef,
       pendingSubmissionRef,
       queryClient,
+      refreshThreadTitle,
       runtime,
       setSendingAssetIds,
       threadId,
@@ -236,6 +307,11 @@ export const useAgentController = ({
   )
   const pendingSubmissionRef = useRef(runtime.pendingSubmission)
   pendingSubmissionRef.current = runtime.pendingSubmission
+  const refreshThreadTitle = useAgentThreadTitleRefresh({
+    organizationId,
+    queryClient,
+    thread,
+  })
   const { addToolOutputRef, handleToolCall } = useAgentToolCall({
     disabled,
     formRegistry,
@@ -251,6 +327,7 @@ export const useAgentController = ({
     pendingComposerSnapshotRef,
     pendingSubmissionRef,
     queryClient,
+    refreshThreadTitle,
     runtime,
     setSendingAssetIds,
     threadId: thread.id,

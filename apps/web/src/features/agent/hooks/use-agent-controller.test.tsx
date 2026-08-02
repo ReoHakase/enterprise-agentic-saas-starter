@@ -187,7 +187,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   </QueryClientProvider>
 )
 
-const renderController = () =>
+const renderController = (threadTitle = "Thread") =>
   renderHook(
     () =>
       useAgentController({
@@ -199,7 +199,7 @@ const renderController = () =>
         organizationSlug: "acme",
         thread: {
           id: "thread_1",
-          title: "Thread",
+          title: threadTitle,
           status: "active",
           createdAt: "2026-07-28T00:00:00.000Z",
           updatedAt: "2026-07-28T00:00:00.000Z",
@@ -943,5 +943,44 @@ describe("useAgentController Stop submission recovery", () => {
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["issues"] })
     invalidate.mockRestore()
+  })
+
+  it("refreshes a new thread title until Mastra persists it", async () => {
+    vi.useFakeTimers()
+    let title = "New conversation"
+    const invalidate = vi
+      .spyOn(QueryClient.prototype, "invalidateQueries")
+      .mockResolvedValue(undefined)
+    const getQueryData = vi
+      .spyOn(QueryClient.prototype, "getQueryData")
+      .mockImplementation(() => [
+        {
+          id: "thread_1",
+          title,
+          status: "active",
+          createdAt: "2026-07-28T00:00:00.000Z",
+          updatedAt: "2026-07-28T00:00:00.000Z",
+        },
+      ])
+    try {
+      renderController("New conversation")
+
+      await act(async () => {
+        await mocks.chatOptions?.onFinish?.(finishEvent())
+        await Promise.resolve()
+      })
+      expect(invalidate).toHaveBeenCalledTimes(3)
+
+      await act(() => vi.advanceTimersByTimeAsync(500))
+      expect(invalidate).toHaveBeenCalledTimes(4)
+
+      title = "Review Issue attachments"
+      await act(() => vi.advanceTimersByTimeAsync(20_000))
+      expect(invalidate).toHaveBeenCalledTimes(5)
+    } finally {
+      invalidate.mockRestore()
+      getQueryData.mockRestore()
+      vi.useRealTimers()
+    }
   })
 })

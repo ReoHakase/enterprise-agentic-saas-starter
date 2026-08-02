@@ -31,6 +31,7 @@ const developmentErrorCodes: Record<string, string> = {
   "run-settlement": "run_settlement_failed",
   "run-start": "run_start_failed",
   "telemetry-flush": "telemetry_flush_failed",
+  "thread-title-state": "memory_failed",
   "usage-record": "usage_record_failed",
   "web-search-provider": "tool_failed",
 }
