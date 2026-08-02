@@ -77,6 +77,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | 2026-08-02 | Agentのcancel scenarioを依存projectへ分ける          | Linux workerdで他scenarioと同時にstreamを切断するとWranglerが終了したため |
 | 2026-08-02 | 2ユーザーの初回作成をsetup projectで直列実行する     | 3 workerが同じ新規userを同時作成するとBetter Authの一意制約と競合するため |
 | 2026-08-02 | Web Storybookのfontを固定system stackへ分離する      | dependencyを変えず、static buildをGoogle Fontsの可用性から分離するため    |
+| 2026-08-02 | menu起動をfocusとEnterで検証する                     | storyの目的と無関係なpointer geometryへの依存を除くため                   |
 
 ## 検証証跡
 
@@ -84,6 +85,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | ----------------------------------------- | ---- | -------------------------------------------------------------------- |
 | profile別`--list`                         | 成功 | `all` 7件、`agent` 5件、`auth` 2件。未知profileは即時失敗            |
 | Storybook light/dark、seed 17・83・101    | 成功 | 各seedでlight 205件、dark 76件                                       |
+| Console Shell light、seed 17・83・101     | 成功 | semantic menu操作へ変更後、各seedで7件                               |
 | Agent E1並列project `--repeat-each=3`     | 成功 | setup 1件とwrite、search、attachment 9件を3ワーカーで54.3秒          |
 | Agent E1 cancel project `--repeat-each=3` | 成功 | setup、並列3件、1ワーカーのcancel 3件で計7件、42.7秒                 |
 | Agent E1通常profile                       | 成功 | setup、並列3件、cancelの計5件、37.7秒                                |
@@ -99,6 +101,7 @@ Actionsのジョブへ分け、PRで結果を待つ時間を短縮します。
 | CI run `30752916540`                      | 修正 | cancelとの同時実行でLinux workerdが終了。依存project化後に再計測する |
 | CI run `30753696597`                      | 修正 | 共有userの初回作成が競合。setup projectで直列認証して再計測する      |
 | CI run `30754423942` attempt 2            | 修正 | Google Fonts取得失敗。固定system stackへ置換して再計測する           |
+| CI run `30755342091`                      | 修正 | menuのpointer起動が不安定。focusとEnterによるsemantic操作へ置換する  |
 
 ## リスクとrollback
 

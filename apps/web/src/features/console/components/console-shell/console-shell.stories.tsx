@@ -559,10 +559,9 @@ export const OrganizationPendingShape = meta.story({
       canvas.getByRole("button", {
         name: /Acme Cloud/u,
       })
-    await userEvent.click(getOrganizationTrigger())
-    await waitFor(() =>
-      expect(getOrganizationTrigger()).toHaveAttribute("aria-expanded", "true")
-    )
+    getOrganizationTrigger().focus()
+    await expect(getOrganizationTrigger()).toHaveFocus()
+    await userEvent.keyboard("{Enter}")
     const body = within(canvasElement.ownerDocument.body)
     let organizationMenu: HTMLElement | undefined
     await waitFor(() => {
