@@ -154,6 +154,15 @@ describe("MCP business tools", () => {
         properties: { assetIds: { uniqueItems: true } },
       },
     })
+    expect(tools.find(({ name }) => name === "search_issues")).toMatchObject({
+      outputSchema: {
+        type: "object",
+        properties: { items: { type: "array" } },
+      },
+    })
+    expect(tools.find(({ name }) => name === "get_issue")).toMatchObject({
+      inputSchema: { type: "object" },
+    })
   })
 
   it("filters the explicit catalog by the credential scopes", async () => {

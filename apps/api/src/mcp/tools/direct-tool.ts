@@ -32,6 +32,34 @@ const toMcpJsonSchema = (schema: DirectToolSchema<unknown>) =>
         : undefined,
   })
 
+const toMcpInputJsonSchema = (schema: DirectToolSchema<unknown>) => {
+  const jsonSchema = toMcpJsonSchema(schema)
+  return jsonSchema.type === "object"
+    ? jsonSchema
+    : { ...jsonSchema, type: "object" as const }
+}
+
+const toMcpOutput = (schema: DirectToolSchema<unknown>) => {
+  const jsonSchema = toMcpJsonSchema(schema)
+  if (jsonSchema.type === "object") {
+    return { jsonSchema, wrap: (value: unknown) => value }
+  }
+  if (jsonSchema.type !== "array") {
+    throw new Error("MCP tool output schema must describe an object or array")
+  }
+  const { $schema, ...items } = jsonSchema
+  return {
+    jsonSchema: {
+      $schema,
+      type: "object" as const,
+      properties: { items },
+      required: ["items"],
+      additionalProperties: false,
+    },
+    wrap: (value: unknown) => ({ items: value }),
+  }
+}
+
 export const createMcpDirectTool = <Input, Output>(options: {
   annotations: DirectToolAnnotations
   description: string
@@ -39,17 +67,21 @@ export const createMcpDirectTool = <Input, Output>(options: {
   id: string
   inputSchema: DirectToolSchema<Input>
   outputSchema: DirectToolSchema<Output>
-}) =>
-  createTool({
+}) => {
+  const output = toMcpOutput(options.outputSchema)
+  return createTool({
     id: options.id,
     description: options.description,
-    inputSchema: toMcpJsonSchema(options.inputSchema),
-    outputSchema: toMcpJsonSchema(options.outputSchema),
+    inputSchema: toMcpInputJsonSchema(options.inputSchema),
+    outputSchema: output.jsonSchema,
     strict: true,
     mcp: { annotations: options.annotations },
     execute: async (input) =>
-      parseToolValue(
-        options.outputSchema,
-        await options.execute(parseToolValue(options.inputSchema, input))
+      output.wrap(
+        parseToolValue(
+          options.outputSchema,
+          await options.execute(parseToolValue(options.inputSchema, input))
+        )
       ),
   })
+}
