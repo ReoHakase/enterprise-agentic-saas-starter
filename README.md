@@ -17,6 +17,7 @@
 - 🏢 組織を境界とするIssue, メンバー, 添付ファイル, 監査
 - 🤖 非公開のMastra Agent Workerと、ストリーミング対応のAgent UI
 - 🛠️ 読み取りツール, 明示的な承認を伴うIssue書き込み, Web検索, 画像入力
+- 🔌 OAuth認証付きremote MCPと、業務ツール, prompt, resource, MCP Inspector
 - 💬 Agentの会話, メンション, ページコンテキスト, 使用量, コンテキスト上限の表示
 - 🗄️ Cloudflare R2, Images, Cacheを使う認証付きファイル配信
 - ✉️ React Email, Mailpit, Cloudflare Email Sendingによるメール配送
@@ -149,6 +150,7 @@ APIとDBの`TURSO_DATABASE_URL`は同じ値にします。Bunはコマンドを�
 | Agent Worker（内部接続用） | `https://agent.enterprise-agentic-saas.localhost`          |
 | Agent storage              | `https://agent-storage.enterprise-agentic-saas.localhost`  |
 | Mastra Studio              | `https://mastra-studio.enterprise-agentic-saas.localhost`  |
+| MCP Inspector              | `https://mcp-inspector.enterprise-agentic-saas.localhost`  |
 | Mailpit                    | `https://mailpit.enterprise-agentic-saas.localhost`        |
 | React Email                | `https://email.enterprise-agentic-saas.localhost`          |
 | Emulate（GitHub）          | `https://github.emulate.enterprise-agentic-saas.localhost` |
@@ -190,8 +192,8 @@ bun run portless proxy start
 bun run dev
 ```
 
-このコマンドはWeb, API Worker, Agent Worker, Turso, マイグレーション, Drizzle Studio,
-永続化したローカルR2, Mailpit, React Email, EmulateのGitHub serviceを起動します。
+このコマンドはWeb, API Worker, Agent Worker, MCP Inspector, Turso, マイグレーション,
+Drizzle Studio, 永続化したローカルR2, Mailpit, React Email, EmulateのGitHub serviceを起動します。
 開発用初期データの投入, R2フィクスチャの同期, テストは実行しません。初回はDBタスクが
 マイグレーションを完了してからWebを開いてください。
 
@@ -226,6 +228,42 @@ bun run dev:agent:studio
 
 Studio用に別のAgent定義や固定認証情報を作らず、本番Workerと同じMastra構成を読み込みます。
 Agentの機能, 承認, 会話, 使用量, 運用は[製品Agent仕様](docs/agent/README.md)から参照できます。
+
+### 5. 🔌 MCPを検証する
+
+通常の`bun run dev`でMCP Inspectorも起動します。単独で起動する場合は次を実行し、
+`bun run portless-topology resolve mcp-inspector.enterprise-agentic-saas`の出力を開きます。
+
+```sh
+bun run dev:mcp-inspector
+```
+
+Inspectorには同じworktreeの`<API_PUBLIC_URL>/mcp`が設定済みです。Web版InspectorのOAuth
+callbackはInspector自身のoriginにある`/oauth/callback`です。callback URLをAPI originや
+固定loopback URLへ置き換えません。
+
+Codexからlocal MCPへ接続する場合は、worktreeの実効URLを解決してuser設定へ登録します。
+Nix生成の`.codex/config.toml`は手編集しません。
+
+```sh
+MCP_URL="$(bun run --silent portless-topology resolve api.enterprise-agentic-saas)/mcp"
+
+codex mcp add enterprise-agentic-saas-local \
+  --url "$MCP_URL" \
+  --oauth-resource "$MCP_URL"
+
+codex mcp login enterprise-agentic-saas-local \
+  --scopes "offline_access,account:read,organization:read,members:read,issues:read,issues:create,issues:update,issues:delete,files:read,files:write"
+```
+
+CodexはDynamic Client Registrationでloopback callbackを登録するため、OAuth client ID、
+callback URL、Bearer tokenを設定ファイルへ書きません。`codex mcp list`とCodex内の`/mcp`で
+接続状態と公開機能を確認します。別worktreeへ切り替える場合は
+`codex mcp remove enterprise-agentic-saas-local`を実行し、新しい実効URLで登録し直します。
+
+認証, 組織境界, scope, tool catalog, Inspectorと各clientの詳細は
+[remote MCP連携](docs/agent/mcp-integration.md)を参照してください。内部Agent Skillsと公開MCPの
+prompt/resourceは別に管理し、内部skillやsystem instructionをMCPへ公開しません。
 
 ## ✅ 検証
 

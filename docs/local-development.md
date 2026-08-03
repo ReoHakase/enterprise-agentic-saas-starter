@@ -49,6 +49,7 @@ APIとDBの `TURSO_DATABASE_URL` は同じ値にします。標準のhostは次�
 - Agent Worker: `https://agent.enterprise-agentic-saas.localhost`
 - Agent storage: `https://agent-storage.enterprise-agentic-saas.localhost`
 - Mastra Studio: `https://mastra-studio.enterprise-agentic-saas.localhost`
+- MCP Inspector: `https://mcp-inspector.enterprise-agentic-saas.localhost`
 - DB: `https://db.enterprise-agentic-saas.localhost`
 - Mailpit inbox: `https://mailpit.enterprise-agentic-saas.localhost`
 - React Email preview: `https://email.enterprise-agentic-saas.localhost`
@@ -65,6 +66,7 @@ branch名を独自加工しません。実効URLは次のcommandで確認しま�
 ```sh
 bun run portless-topology resolve enterprise-agentic-saas
 bun run portless-topology resolve api.enterprise-agentic-saas
+bun run portless-topology resolve mcp-inspector.enterprise-agentic-saas
 bun run portless-topology resolve storybook.ui.enterprise-agentic-saas
 ```
 
@@ -102,14 +104,15 @@ EMAIL_FROM=noreply@example.test
 
 ## 開発コマンド
 
-日常の公開導線は次の4つです。production用seed commandは作りません。
+日常の公開導線は次の5つです。production用seed commandは作りません。
 
-| command                | 用途                                                                    |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `bun run dev`          | Web、両Storybook、API、DB、R2、Mailpit等を起動し、migrationまで適用する |
-| `bun run dev:db`       | local Turso、migration、Drizzle Studioだけを起動する                    |
-| `bun run dev:db:reset` | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する                |
-| `bun run dev:db:seed`  | full devの有無にかかわらず任意のDB/R2 fixtureを投入する                 |
+| command                     | 用途                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `bun run dev`               | Web、両Storybook、API、MCP Inspector、DB、R2等を起動し、migrationまで適用する |
+| `bun run dev:mcp-inspector` | 同じworktreeのlocal MCPへ接続するMCP Inspectorだけを起動する                  |
+| `bun run dev:db`            | local Turso、migration、Drizzle Studioだけを起動する                          |
+| `bun run dev:db:reset`      | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する                      |
+| `bun run dev:db:seed`       | full devの有無にかかわらず任意のDB/R2 fixtureを投入する                       |
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 
@@ -139,13 +142,29 @@ DB-only taskとroot `bun run dev`は同時に起動しません。同じportとl
 bun run dev
 ```
 
-この1commandでWeb、Web Storybook、UI Storybook、local Wrangler API Worker、永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、GitHub EmulateのNext.js applicationを起動します。DB seed、R2 fixture reconcile、testは実行しません。
+この1commandでWeb、Web Storybook、UI Storybook、local Wrangler API Worker、MCP Inspector、
+永続化local R2、local Turso、migration、Drizzle Studio、Mailpit、React Email preview、GitHub
+EmulateのNext.js applicationを起動します。DB seed、R2 fixture reconcile、testは実行しません。
 
 Storybookだけを起動する場合は、次の公開commandを使います。
 
 ```sh
 bun run dev:storybook
 ```
+
+MCP Inspectorだけを起動する場合は、次の公開commandを使います。InspectorはPortlessが割り当てた
+固定process portを使い、browser originを厳密なallowlistへ設定します。session tokenはInspectorが
+生成します。Inspectorがtokenを表示する通常stdoutは破棄し、Portlessの公開URLとInspectorのstderrは
+維持します。認証を無効化する`DANGEROUSLY_OMIT_AUTH`は使用しません。
+
+```sh
+bun run dev:mcp-inspector
+```
+
+Inspectorには同じworktreeの`<API_PUBLIC_URL>/mcp`をStreamable HTTP serverとして設定します。
+Web版のOAuth callbackは
+`<MCP_INSPECTOR_PUBLIC_URL>/oauth/callback`です。local credential stateは
+`~/.mcp-inspector/storage`へ保存され、repository、test artifact、remote telemetryへ含めません。
 
 `bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、
 linked worktreeでは`bun run portless-topology resolve`の出力を正本にします。
@@ -271,6 +290,8 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 - `turso dev` が起動しない: Turso CLIだけでなく `sqld` が `PATH` にあるか確認する。
 - Wranglerがinspector port競合で起動しない: APIが`src/dev.ts` supervisor、Agentが`apps/agent/scripts/wrangler-portless.ts`を使っていることを確認する。通常は`WRANGLER_INSPECTOR_PORT`を設定せずOS割り当てにし、固定値を複数processで共有しない。
 - `.localhost` HTTPSで証明書エラー: `~/.portless/ca.pem` と `NODE_EXTRA_CA_CERTS` を確認する。
+- MCP Inspectorが開かない: `bun run portless-topology resolve mcp-inspector.enterprise-agentic-saas`の出力を開き、`CLIENT_PORT`を固定値へ上書きしていないことを確認する。raw loopback URLではなくPortless URLを使う。
+- MCP InspectorのOAuth callbackが拒否される: Web版はInspectorの実効originと`/oauth/callback`を完全一致させる。Codexのloopback callbackやCLI/TUI既定callbackと混同しない。
 - envが読まれない: Bunはcommandのcwdにある `.env*` を読む。rootへsecretを集約しない。
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。
 - Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `bun run portless-topology resolve mailpit.enterprise-agentic-saas` の出力を開く。APIだけをpackage単体で起動するときは、Mailpit dependencyを先に起動するか明示的なlocal `MAILPIT_URL`を渡す。

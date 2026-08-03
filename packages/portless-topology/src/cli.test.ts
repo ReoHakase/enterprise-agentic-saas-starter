@@ -18,6 +18,7 @@ const publicServices = [
   ["agent.enterprise-agentic-saas", "agent."],
   ["agent-storage.enterprise-agentic-saas", "agent-storage."],
   ["mastra-studio.enterprise-agentic-saas", "mastra-studio."],
+  ["mcp-inspector.enterprise-agentic-saas", "mcp-inspector."],
   ["db.enterprise-agentic-saas", "db."],
   ["mailpit.enterprise-agentic-saas", "mailpit."],
   ["email.enterprise-agentic-saas", "email."],

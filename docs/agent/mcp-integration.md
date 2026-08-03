@@ -272,6 +272,26 @@ MCPに独立したskill primitiveはありません。
 
 公開endpointは`<API_PUBLIC_URL>/mcp`です。`<API_PUBLIC_URL>`はbrowserから到達できるHTTPS originへ置き換えます。OAuthでは同じURLをresource indicatorとして使い、organizationとscopeはbrowserのconsent画面で確定します。
 
+### MCP Inspector
+
+local開発では通常の`bun run dev`と一緒にWeb版MCP Inspectorを起動します。Inspectorだけを起動する
+場合は次を実行し、表示URLは`portless-topology resolve`で確認します。
+
+```sh
+bun run dev:mcp-inspector
+bun run portless-topology resolve mcp-inspector.enterprise-agentic-saas
+```
+
+Inspectorには同じworktreeの`<API_PUBLIC_URL>/mcp`とStreamable HTTP transportが設定済みです。
+Web版のcallbackはInspectorの実効originにある`/oauth/callback`であり、main checkoutでは
+`https://mcp-inspector.enterprise-agentic-saas.localhost/oauth/callback`です。linked worktreeや
+Portlessのportが異なる場合は、表示中のInspector originをそのまま使います。
+
+Inspector backendはloopbackへbindし、browser originを厳密なallowlistへ設定します。Inspector自身の
+session tokenを維持します。tokenを表示するInspectorの通常stdoutは破棄し、
+`DANGEROUSLY_OMIT_AUTH`や全interface bindは使用しません。credential stateは
+`~/.mcp-inspector/storage`へ保存し、repositoryへ追加しません。
+
 ### ChatGPT
 
 full MCPのwrite actionを使う場合は、ChatGPT webのBusinessまたはEnterprise/Edu workspaceでdeveloper modeを有効にします。`Settings > Apps > Create`またはworkspaceの`Apps > Create`からendpointへ`<API_PUBLIC_URL>/mcp`を指定し、認証方式にOAuthを選択して`Scan Tools`を実行します。browserでlogin、organization選択、consentを完了するとdraft appとして検査できます。公開前に管理者がtool差分とwrite actionを確認します。
@@ -280,17 +300,34 @@ full MCPのwrite actionを使う場合は、ChatGPT webのBusinessまたはEnter
 
 ### Codex
 
-Codex CLI、IDE extension、ChatGPT desktop appは同じCodex hostのMCP設定を共有します。CLIでは次のようにStreamable HTTP serverを追加してOAuth loginを開始します。
+Codex CLI、IDE extension、ChatGPT desktop appは同じCodex hostのMCP設定を共有します。local開発では
+Portlessの実効API URLを解決し、Codexのuser設定へStreamable HTTP serverを追加してOAuth loginを
+開始します。
 
 ```bash
-codex mcp add enterprise-agentic-saas \
-  --url "<API_PUBLIC_URL>/mcp" \
-  --oauth-resource "<API_PUBLIC_URL>/mcp"
-codex mcp login enterprise-agentic-saas \
+MCP_URL="$(bun run --silent portless-topology resolve api.enterprise-agentic-saas)/mcp"
+
+codex mcp add enterprise-agentic-saas-local \
+  --url "$MCP_URL" \
+  --oauth-resource "$MCP_URL"
+codex mcp login enterprise-agentic-saas-local \
   --scopes "offline_access,account:read,organization:read,members:read,issues:read,issues:create,issues:update,issues:delete,files:read,files:write"
 ```
 
-`codex mcp list`で接続状態を、Codex内の`/mcp`で公開toolを確認します。設定項目とOAuth操作は[Codex公式MCP文書](https://developers.openai.com/codex/mcp)を正本とします。
+CodexはDynamic Client Registrationで実行時のloopback callbackを登録します。OAuth client ID、callback
+URL、Bearer tokenを設定へ書きません。手書きする場合のuser設定は次と等価ですが、このrepositoryの
+Nix生成`.codex/config.toml`は手編集しません。`url`と`oauth_resource`には同じ実効MCP URLを指定します。
+
+```toml
+[mcp_servers.enterprise-agentic-saas-local]
+url = "https://api.<worktree>.enterprise-agentic-saas.localhost:<port>/mcp"
+oauth_resource = "https://api.<worktree>.enterprise-agentic-saas.localhost:<port>/mcp"
+```
+
+別worktreeへ切り替える場合は`codex mcp remove enterprise-agentic-saas-local`で古いURLを削除し、
+再度`add`と`login`を実行します。`codex mcp list`で接続状態を、Codex内の`/mcp`で公開tool、prompt、
+resourceを確認します。設定項目とOAuth操作は
+[Codex公式MCP文書](https://developers.openai.com/codex/mcp)を正本とします。
 
 ### Claude Code
 
