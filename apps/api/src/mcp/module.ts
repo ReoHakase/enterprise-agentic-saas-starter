@@ -89,7 +89,13 @@ export const createMcpModule = (
     )
     .all(
       MCP_HTTP_PATH,
-      async ({ body, request }) => {
+      async ({ body, request, set }) => {
+        if (request.method !== "POST") {
+          return new Response(null, {
+            status: 405,
+            headers: { allow: "POST" },
+          })
+        }
         const principal = await authenticateMcpRequest({
           authorization,
           request,
@@ -97,11 +103,15 @@ export const createMcpModule = (
           verifyAccessToken,
         })
         if (!principal) return unauthorizedResponse(resource)
-
-        return handleMcpRequest(
+        const response = await handleMcpRequest(
           createProductionMcpServer(createMcpTools(db, principal)),
           reconstructMcpRequest(request, body)
         )
+        set.status = response.status
+        for (const [name, value] of response.headers) {
+          set.headers[name] = value
+        }
+        return response
       },
       { detail: { hide: true } }
     )

@@ -2,7 +2,7 @@
 title: AgentリファクタとMCP導入テスト戦略
 status: proposed
 implementation: planned
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-03
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -298,18 +298,22 @@ approval後の別request resumeやasset claim/promotionまでの統合を回帰�
 #### MCP OAuth journey
 
 ```text
-OAuth login
-→ organization consent
+OAuth protected resource metadataとclient登録
+→ Authorization Code + PKCE
+→ browser login、organization選択、consent
+→ token exchange
+→ prompts/listとprompts/get
+→ resources/listとresources/read
 → tools/list
 → read tool
 → create/update/delete Issue
-→ upload session
+→ upload sessionと実byte upload
 → attachment add/remove
-→ membership変更後に拒否
+→ organization削除によるmembership消失後にtools/listとtools/callを拒否
 → revoke後に401
 ```
 
-実ChatGPTは使わず、標準MCP clientとOAuth test clientを使います。
+実ChatGPTは使わず、`@modelcontextprotocol/sdk`の`Client`と`StreamableHTTPClientTransport`、実browser、実Application DB、local R2を使います。OAuth credentialをtest artifactへ保存せず、traceとvideoは無効化します。実行対象は`e1-mcp-oauth-chromium`であり、rootの`bun run test:e2e`へ含めます。
 
 #### PAT journey
 

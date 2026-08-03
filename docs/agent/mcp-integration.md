@@ -1,8 +1,8 @@
 ---
 title: remote MCP、OAuth、PAT連携
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-28
+status: accepted
+implementation: active
+last_reviewed: 2026-08-03
 applies_to:
   - apps/api/src/mcp/**
   - packages/auth/**
@@ -18,23 +18,23 @@ related:
 
 ## 目的
 
-ChatGPT、Codex、Claude Code、OpenClaw、HermesなどからSaaSのbusiness toolsと公開skillsを利用できるremote MCP serverを提供します。MCP serverは製品Agentをsubagentとして呼ばず、認証済みprincipalでAPIのapplication serviceを直接実行します。
+ChatGPT、Codex、Claude CodeなどからSaaSのbusiness toolsと公開prompt、公開resourceを利用できるremote MCP serverを提供します。MCP serverは製品Agentをsubagentとして呼ばず、認証済みprincipalでAPIのapplication serviceを直接実行します。
 
 ## 配置
 
 ```text
 apps/api/src/mcp/
-  route.ts
+  module.ts
   server.ts
   authentication.ts
   principal.ts
-  authorization.ts
-  protected-resource-metadata.ts
+  transport.ts
+  tools/
   prompts/
   resources/
 ```
 
-`apps/api`は`packages/agent-tools`へ依存しますが、`apps/agent`へ依存しません。
+`apps/api`は`packages/agent-contracts`のValibot schemaを再利用し、API内のapplication serviceを直接実行します。`packages/agent-tools`と`apps/agent`へ依存しません。
 
 ## Mastra MCPServer
 
@@ -47,7 +47,8 @@ Mastra `MCPServer`を利用し、次の独自実装を避けます。
 - prompts
 - resources
 - Streamable HTTP protocol
-- tool schema変換
+
+Cloudflare WorkersではMCP SDKの`CfWorkerJsonSchemaValidator`を使います。toolのValibot検証を維持したまま、MCPへ公開するJSON Schemaだけを事前生成し、実行時の動的コード生成を避けます。
 
 登録するもの:
 
@@ -78,12 +79,13 @@ MCP client
   → credentialをMcpPrincipalへ解決
   → scopeとcurrent permissionからtool registryを構成
   → MCPServer
-  → local AgentToolExecutor
   → API application service
   → Application DB / R2
 ```
 
 `apps/agent`とAgent DBは通りません。
+
+serverless transportは`POST /mcp`だけを受け付けます。標準clientが初期化後に試す任意のSSE購読用`GET /mcp`には`405 Allow: POST`を返し、clientはstateless Streamable HTTPを継続します。MCP responseのstatusとheaderはElysiaのresponseへ明示的に転記し、Cloudflare adapter通過後も`application/json`を維持します。
 
 ## Principal
 
@@ -256,15 +258,50 @@ upload reservation、temporary quota、storage objectはD1で管理し、期限�
 exact-key cleanup jobへ移します。ready assetをIssueへ追加すると、同じtransactionでfile claimへ移し、
 temporary quotaだけを解除します。
 
-## Public skills
+## 公開promptとresource
 
 MCPに独立したskill primitiveはありません。
 
-- userが選択する手順はprompt
-- 読み取り専用ガイドはresource
-- prompts/resources非対応client向けに必要ならread-only `get_skill` tool
+- `triage_issue`: 利用者の依頼を最大4,000文字で受け取り、organization確認、重複検索、最新revision、冪等キー、秘密情報非入力を案内するprompt
+- `guide://enterprise-agentic-saas/issues`: Issueの検索、作成、更新、削除を案内する読み取り専用resource
+- `guide://enterprise-agentic-saas/attachments`: upload session、実byte upload、status確認、attachment追加・削除を案内する読み取り専用resource
 
-内部Agent skillをそのまま公開しません。system policy、private endpoint、internal tool routingを除いた外部用projectionを作ります。
+内部Agent skill、system instruction、private endpoint、内部tool routingは公開しません。prompts/resources非対応client向けの独自`get_skill` toolも追加せず、business tool catalogを増やしません。
+
+## client設定
+
+公開endpointは`<API_PUBLIC_URL>/mcp`です。`<API_PUBLIC_URL>`はbrowserから到達できるHTTPS originへ置き換えます。OAuthでは同じURLをresource indicatorとして使い、organizationとscopeはbrowserのconsent画面で確定します。
+
+### ChatGPT
+
+full MCPのwrite actionを使う場合は、ChatGPT webのBusinessまたはEnterprise/Edu workspaceでdeveloper modeを有効にします。`Settings > Apps > Create`またはworkspaceの`Apps > Create`からendpointへ`<API_PUBLIC_URL>/mcp`を指定し、認証方式にOAuthを選択して`Scan Tools`を実行します。browserでlogin、organization選択、consentを完了するとdraft appとして検査できます。公開前に管理者がtool差分とwrite actionを確認します。
+
+現行の利用条件と画面経路は[OpenAI公式のdeveloper modeとMCP apps](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)を正本とします。ChatGPTはlocal endpointへ直接接続しないため、production deploy前のlocal検証にはこの手順を使いません。
+
+### Codex
+
+Codex CLI、IDE extension、ChatGPT desktop appは同じCodex hostのMCP設定を共有します。CLIでは次のようにStreamable HTTP serverを追加してOAuth loginを開始します。
+
+```bash
+codex mcp add enterprise-agentic-saas \
+  --url "<API_PUBLIC_URL>/mcp" \
+  --oauth-resource "<API_PUBLIC_URL>/mcp"
+codex mcp login enterprise-agentic-saas \
+  --scopes "offline_access,account:read,organization:read,members:read,issues:read,issues:create,issues:update,issues:delete,files:read,files:write"
+```
+
+`codex mcp list`で接続状態を、Codex内の`/mcp`で公開toolを確認します。設定項目とOAuth操作は[Codex公式MCP文書](https://developers.openai.com/codex/mcp)を正本とします。
+
+### Claude Code
+
+remote HTTP serverを追加し、Claude Code内の`/mcp`からOAuth認証を開始します。
+
+```bash
+claude mcp add --transport http --scope user \
+  enterprise-agentic-saas "<API_PUBLIC_URL>/mcp"
+```
+
+browserが自動で開かない場合は、`/mcp`が表示するURLをbrowserへコピーします。tokenはClaude Codeが保存・refreshします。現在のcommandとOAuth操作は[Claude Code公式MCP文書](https://code.claude.com/docs/en/mcp)を正本とします。
 
 ## Error contract
 

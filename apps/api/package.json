@@ -30,6 +30,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cfworker/json-schema": "catalog:",
     "@elysia/cors": "catalog:",
     "@elysia/eden": "catalog:",
     "@elysia/openapi": "catalog:",
@@ -42,6 +43,7 @@
     "@inference-net/otel-cf-workers": "2.5.0",
     "@mastra/core": "catalog:",
     "@mastra/mcp": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
     "@opentelemetry/api": "1.9.1",
     "@valibot/to-json-schema": "catalog:",
     "drizzle-orm": "catalog:",

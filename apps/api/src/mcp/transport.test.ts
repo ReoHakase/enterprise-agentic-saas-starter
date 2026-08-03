@@ -59,7 +59,7 @@ describe("Mastra MCP serverless transport", () => {
     expect(response.headers.get("content-type")).toBeNull()
   })
 
-  it("handles initialize, tools/list, and tools/call without a session", async () => {
+  it("handles tools, prompts, and resources without a session", async () => {
     const server = createMcpServer({ tools: { test_echo: echoTool } })
 
     const initialized = await callMcp(server, {
@@ -104,6 +104,72 @@ describe("Mastra MCP serverless transport", () => {
       result: {
         content: [{ type: "text", text: '{"value":"hello"}' }],
         isError: false,
+      },
+    })
+
+    const prompts = await callMcp(server, {
+      jsonrpc: "2.0",
+      id: 4,
+      method: "prompts/list",
+      params: {},
+    })
+    expect(prompts).toMatchObject({
+      id: 4,
+      result: { prompts: [{ name: "triage_issue" }] },
+    })
+
+    const prompt = await callMcp(server, {
+      jsonrpc: "2.0",
+      id: 5,
+      method: "prompts/get",
+      params: {
+        name: "triage_issue",
+        arguments: { request: "Triage the reported regression." },
+      },
+    })
+    expect(prompt).toMatchObject({
+      id: 5,
+      result: {
+        messages: [
+          {
+            role: "user",
+            content: { type: "text", text: expect.any(String) },
+          },
+        ],
+      },
+    })
+
+    const resources = await callMcp(server, {
+      jsonrpc: "2.0",
+      id: 6,
+      method: "resources/list",
+      params: {},
+    })
+    expect(resources).toMatchObject({
+      id: 6,
+      result: {
+        resources: [
+          { uri: "guide://enterprise-agentic-saas/issues" },
+          { uri: "guide://enterprise-agentic-saas/attachments" },
+        ],
+      },
+    })
+
+    const resource = await callMcp(server, {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "resources/read",
+      params: { uri: "guide://enterprise-agentic-saas/issues" },
+    })
+    expect(resource).toMatchObject({
+      id: 7,
+      result: {
+        contents: [
+          {
+            uri: "guide://enterprise-agentic-saas/issues",
+            text: expect.any(String),
+          },
+        ],
       },
     })
   })

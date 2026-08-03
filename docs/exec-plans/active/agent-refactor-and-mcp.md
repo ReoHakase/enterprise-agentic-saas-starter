@@ -363,7 +363,7 @@ PATはこのphaseへ含めません。
 - [x] Mastra `createTool`をAPIのlocal executorへ接続する
 - [x] `apps/api -> apps/agent`依存がないことを固定する
 - [x] Agent、Workflow、samplingを登録しない
-- [ ] promptsとresourcesへ公開skillsを追加する
+- [x] promptsとresourcesへ公開手順を追加する
 
 ### 4.2 OAuth
 
@@ -389,11 +389,11 @@ PATはこのphaseへ含めません。
 
 ### Phase 4 exit criteria
 
-- [ ] OAuth MCP E1 journeyがread/writeを一巡する
+- [x] OAuth MCP E1 journeyがread/writeを一巡する
 - [x] MCP requestがAgent Workerを経由しない
 - [x] AgentとWorkflowがMCP registryにない
 - [x] membership変更とrevokeが即時反映される
-- [ ] ChatGPT、Codex、Claude Code相当client configを文書化する
+- [x] ChatGPT、Codex、Claude Code相当client configを文書化する
 
 # Phase 5 PAT形式のMCP個人アクセストークン
 

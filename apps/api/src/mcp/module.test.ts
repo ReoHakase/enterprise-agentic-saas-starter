@@ -121,6 +121,7 @@ describe("OAuth-protected MCP routes", () => {
     )
     const text = await response.text()
     expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toContain("application/json")
     const body: unknown = JSON.parse(text)
     expect(body).toMatchObject({
       id: 1,
@@ -132,6 +133,17 @@ describe("OAuth-protected MCP routes", () => {
         },
       },
     })
+  })
+
+  it("declines the optional SSE subscription for stateless transport", async () => {
+    const response = await createTestModule().handle(
+      new Request("https://api.example.test/mcp", {
+        headers: { authorization: "Bearer mcp_at_secret" },
+      })
+    )
+
+    expect(response.status).toBe(405)
+    expect(response.headers.get("allow")).toBe("POST")
   })
 
   it("lists only tools allowed by the current credential scope", async () => {
