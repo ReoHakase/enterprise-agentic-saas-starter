@@ -12,6 +12,8 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { Building2Icon, KeyRoundIcon } from "lucide-react"
 import { useCallback } from "react"
 
+import { useIsHydrated } from "@/hooks/use-is-hydrated"
+
 import type { McpOAuthScopeSummary } from "../../query"
 
 export type McpOAuthOrganizationOption = {
@@ -31,6 +33,7 @@ const McpOAuthOrganizationButton = ({
   organization: McpOAuthOrganizationOption
   pending: boolean
 }) => {
+  const hydrated = useIsHydrated()
   const selectOrganization = useCallback(
     () => onSelect(organization.id),
     [onSelect, organization.id]
@@ -40,7 +43,7 @@ const McpOAuthOrganizationButton = ({
     <Button
       variant="outline"
       className="h-auto justify-between py-3"
-      disabled={disabled}
+      disabled={disabled || !hydrated}
       onClick={selectOrganization}
     >
       <span className="min-w-0 truncate">{organization.name}</span>
@@ -102,6 +105,7 @@ export const McpOAuthConsentView = ({
   scopes: readonly McpOAuthScopeSummary[] | null
   onDecision: (accept: boolean) => void
 }) => {
+  const hydrated = useIsHydrated()
   const deny = useCallback(() => onDecision(false), [onDecision])
   const allow = useCallback(() => onDecision(true), [onDecision])
 
@@ -136,10 +140,14 @@ export const McpOAuthConsentView = ({
       </CardContent>
       {scopes ? (
         <CardFooter className="grid grid-cols-2 gap-2">
-          <Button variant="outline" disabled={pending} onClick={deny}>
+          <Button
+            variant="outline"
+            disabled={pending || !hydrated}
+            onClick={deny}
+          >
             Deny
           </Button>
-          <Button disabled={pending} onClick={allow}>
+          <Button disabled={pending || !hydrated} onClick={allow}>
             {pending ? <Spinner data-icon="inline-start" /> : null}
             Allow
           </Button>
