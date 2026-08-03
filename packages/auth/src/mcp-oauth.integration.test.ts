@@ -36,7 +36,7 @@ beforeAll(async () => {
   await migrate(db, {
     migrationsFolder: new URL("../../db/drizzle", import.meta.url).pathname,
   })
-})
+}, 30_000)
 
 describe("MCP OAuth opaque credentials", () => {
   it("verifies and immediately revokes an organization credential", async () => {
