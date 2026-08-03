@@ -43,7 +43,7 @@ import {
 } from "./platform/observability/otel-adapter"
 import { configureObservability } from "./platform/observability/runtime"
 import { withStructuredConsole } from "./platform/observability/structured-console"
-import { authPlugin } from "./platform/plugins/auth"
+import { authPlugin, mcpAuth } from "./platform/plugins/auth"
 import { corsPlugin } from "./platform/plugins/cors"
 import { serverTimingPlugin } from "./platform/plugins/server-timing"
 
@@ -175,7 +175,7 @@ const logScheduledFailure = (
 
 // OpenTelemetry SDKはWorker request境界で初期化し、application portを維持する。
 const worker = new Elysia({ adapter: CloudflareAdapter })
-  .use(createApp(db))
+  .use(createApp(db, { mcp: mcpAuth }))
   .use(authPlugin)
   .use(corsPlugin)
   .use(serverTimingPlugin)

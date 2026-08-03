@@ -15,6 +15,7 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 ## Schemaとmigration
 
 - `src/schema/auth.generated.ts`: Better Auth CLI生成を起点とするauth schema
+- `src/schema/oauth-provider.ts`: Better Auth OAuth Provider CLI出力と照合する4つのOAuth table。既存tenant固有indexを保持するため生成fileから分離する
 - `src/schema/app.ts`: Issue/comment/file/profile image/auditなどapp schema
 - `fixtures/files/`: local R2へ投入する決定的なfile fixture
 - `drizzle/`: commitするSQL、snapshot、journal
@@ -24,13 +25,13 @@ auth plugin変更時:
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.generated.ts \
+  --output /tmp/enterprise-agentic-saas-auth.generated.ts \
   --yes
 bun run --cwd packages/db db:generate
-git diff -- packages/db/src/schema/auth.generated.ts packages/db/drizzle
+git diff -- packages/db/src/schema/oauth-provider.ts packages/db/drizzle
 ```
 
-repo固有のindex/defaultがgenerator差分で消えていないことを確認します。開発中も `drizzle-kit push` は使いません。
+OAuth Providerのtable contractをCLI出力と照合し、repo固有のindex/defaultがmigration差分で消えていないことを確認します。CLI出力で`auth.generated.ts`を直接上書きしません。開発中も`drizzle-kit push`は使いません。
 
 ## Env
 

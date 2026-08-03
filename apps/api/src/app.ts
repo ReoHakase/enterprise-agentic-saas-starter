@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm"
 import { Elysia } from "elysia"
 
 import { HttpError } from "./errors/http-error"
+import { createMcpModule, type McpModuleOptions } from "./mcp"
 import {
   errorResponseModel,
   healthResponseModel,
@@ -23,7 +24,22 @@ import { observabilityPlugin } from "./platform/plugins/observability"
 import { openApiPlugin } from "./platform/plugins/openapi"
 import { requestIdPlugin } from "./platform/plugins/request-id"
 
-export const createApp = (db: Db) => {
+const disabledMcp: McpModuleOptions = {
+  getProtectedResourceMetadata: async () => ({
+    authorization_servers: [],
+    resource: "http://localhost/mcp",
+    scopes_supported: [],
+  }),
+  handleAuthorizationServerMetadata: async () =>
+    new Response(null, { status: 404 }),
+  resource: "http://localhost/mcp",
+  verifyAccessToken: async () => null,
+}
+
+export const createApp = (
+  db: Db,
+  { mcp = disabledMcp }: { mcp?: McpModuleOptions } = {}
+) => {
   const authorization = createAuthorizationModule(db)
 
   return new Elysia()
@@ -127,6 +143,7 @@ export const createApp = (db: Db) => {
     )
     .use(createProfileImagesModule(db, authorization.createAccessControl))
     .use(createAuditModule(db, authorization.createAccessControl))
+    .use(createMcpModule(authorization.authorization, mcp))
     .use(openApiPlugin)
 }
 

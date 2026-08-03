@@ -83,7 +83,7 @@ vi.mock("./modules/agent/internal-api", async () => {
 })
 vi.mock("./platform/plugins/auth", async () => {
   const { Elysia } = await import("elysia")
-  return { authPlugin: new Elysia() }
+  return { authPlugin: new Elysia(), mcpAuth: {} }
 })
 
 vi.mock("./modules/agent/actions/repository", () => ({

@@ -1,3 +1,4 @@
+import { oauthProviderClient } from "@better-auth/oauth-provider/client"
 import { passkeyClient } from "@better-auth/passkey/client"
 import {
   magicLinkClient,
@@ -15,5 +16,6 @@ export const createAuthClientForBaseUrl = (baseURL: string) =>
       magicLinkClient(),
       multiSessionClient(),
       organizationClient(),
+      oauthProviderClient(),
     ],
   })

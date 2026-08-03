@@ -132,6 +132,8 @@ type McpPrincipal =
 
 ChatGPT、Codex、Claude Codeなど対話型clientの標準経路です。
 
+現在のOAuth実装はBetter Auth OAuth Providerを使い、`/mcp`を唯一のresource indicatorとしてauthorization requestとtoken requestの両方で必須にします。access tokenはhash保存するopaque tokenであり、access token revokeはrow削除、refresh token revokeは同じrefresh familyのaccess token削除として即時反映します。APIはtoken保存状態に加えて現在のmembershipをrequestごとに確認します。
+
 ## Organization binding
 
 1 credentialは1 organizationへ固定します。

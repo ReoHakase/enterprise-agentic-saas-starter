@@ -367,13 +367,13 @@ PATはこのphaseへ含めません。
 
 ### 4.2 OAuth
 
-- [ ] Better Auth OAuth Providerを追加する
-- [ ] protected resource metadataを追加する
-- [ ] Authorization Code + PKCEを実装する
-- [ ] login、organization選択、consent、callbackを実装する
-- [ ] access token、refresh token、revokeを実装する
-- [ ] credentialを1 organizationへ固定する
-- [ ] resource audienceを検証する
+- [x] Better Auth OAuth Providerを追加する
+- [x] protected resource metadataを追加する
+- [x] Authorization Code + PKCEを実装する
+- [x] login、organization選択、consent、callbackを実装する
+- [x] access token、refresh token、revokeを実装する
+- [x] credentialを1 organizationへ固定する
+- [x] resource audienceを検証する
 
 ### 4.3 Scopesと全tool
 

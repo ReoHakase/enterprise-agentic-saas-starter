@@ -1,3 +1,5 @@
+import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider"
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 import { passkey } from "@better-auth/passkey"
 import { db } from "@enterprise-agentic-saas/db"
 import * as schema from "@enterprise-agentic-saas/db/schema"
@@ -13,6 +15,7 @@ import {
 } from "@enterprise-agentic-saas/email/runtime"
 import { APIError, betterAuth, type BetterAuthPlugin } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { createAuthMiddleware } from "better-auth/api"
 import {
   genericOAuth,
   magicLink,
@@ -20,9 +23,18 @@ import {
   openAPI,
   organization,
 } from "better-auth/plugins"
+import { and, eq, gt, isNull, or } from "drizzle-orm"
 
 import { createSessionOrganizationDatabaseHooks } from "./callbacks/session-organization"
 import { env, githubOAuthEnvironment } from "./env"
+import {
+  createMcpOAuthProvider,
+  hashMcpOAuthToken,
+  type McpOAuthAccessToken,
+  MCP_OAUTH_ACCESS_TOKEN_PREFIX,
+  MCP_OAUTH_SCOPES,
+  MCP_PERMISSION_SCOPES,
+} from "./mcp-oauth"
 import { createGithubOAuthEmulatorProvider } from "./plugins/github-oauth-provider"
 
 const sendEmail: SendEmail = createRuntimeEmailSender({
@@ -47,6 +59,25 @@ if (!authCookieDomain) {
   throw new Error("AUTH_COOKIE_DOMAIN is required outside local development")
 }
 const useSecureCookies = new URL(env.BETTER_AUTH_URL).protocol === "https:"
+export const mcpOAuthResource = new URL("/mcp", env.BETTER_AUTH_URL).toString()
+export const mcpOAuthIssuer = new URL("/auth", env.BETTER_AUTH_URL).toString()
+
+const hasMcpMembership = async (input: {
+  organizationId: string
+  userId: string
+}) => {
+  const rows = await db
+    .select({ id: schema.member.id })
+    .from(schema.member)
+    .where(
+      and(
+        eq(schema.member.organizationId, input.organizationId),
+        eq(schema.member.userId, input.userId)
+      )
+    )
+    .limit(1)
+  return rows.length === 1
+}
 
 const githubSocialProviders =
   githubOAuthEnvironment.mode === "github"
@@ -164,6 +195,11 @@ const commonAuthPlugins = defineAuthPlugins(
   multiSession({
     maximumSessions: 5,
   }),
+  createMcpOAuthProvider({
+    hasMembership: hasMcpMembership,
+    resource: mcpOAuthResource,
+    webAppOrigin,
+  }),
   openAPI({
     disableDefaultReference: true,
     path: "/reference",
@@ -243,6 +279,30 @@ export const auth = betterAuth({
     },
   },
   socialProviders: githubSocialProviders,
+  hooks: {
+    before: createAuthMiddleware(async (context) => {
+      if (
+        context.path !== "/oauth2/authorize" &&
+        context.path !== "/oauth2/token"
+      ) {
+        return
+      }
+
+      const requestedResource =
+        context.path === "/oauth2/authorize"
+          ? context.query?.resource
+          : context.body?.resource
+      const resources = Array.isArray(requestedResource)
+        ? requestedResource
+        : [requestedResource]
+      if (resources.length !== 1 || resources[0] !== mcpOAuthResource) {
+        throw APIError.from("BAD_REQUEST", {
+          code: "MCP_RESOURCE_REQUIRED",
+          message: "The MCP resource is required",
+        })
+      }
+    }),
+  },
   account: {
     accountLinking: {
       enabled: true,
@@ -270,3 +330,84 @@ export const auth = betterAuth({
   },
   plugins: authPlugins,
 })
+
+export const verifyMcpOAuthAccessToken = async (
+  presentedToken: string
+): Promise<McpOAuthAccessToken | null> => {
+  if (!presentedToken.startsWith(MCP_OAUTH_ACCESS_TOKEN_PREFIX)) {
+    return null
+  }
+
+  const token = presentedToken.slice(MCP_OAUTH_ACCESS_TOKEN_PREFIX.length)
+  if (!token) {
+    return null
+  }
+
+  const now = new Date()
+  const rows = await db
+    .select({
+      clientDisabled: schema.oauthClient.disabled,
+      clientId: schema.oauthAccessToken.clientId,
+      createdAt: schema.oauthAccessToken.createdAt,
+      expiresAt: schema.oauthAccessToken.expiresAt,
+      organizationId: schema.oauthAccessToken.referenceId,
+      scopes: schema.oauthAccessToken.scopes,
+      userId: schema.oauthAccessToken.userId,
+    })
+    .from(schema.oauthAccessToken)
+    .innerJoin(
+      schema.oauthClient,
+      eq(schema.oauthClient.clientId, schema.oauthAccessToken.clientId)
+    )
+    .where(
+      and(
+        eq(schema.oauthAccessToken.token, await hashMcpOAuthToken(token)),
+        gt(schema.oauthAccessToken.expiresAt, now),
+        or(
+          isNull(schema.oauthClient.disabled),
+          eq(schema.oauthClient.disabled, false)
+        )
+      )
+    )
+    .limit(1)
+  const credential = rows[0]
+  if (
+    !credential?.clientId ||
+    credential.clientDisabled === true ||
+    !credential.createdAt ||
+    !credential.expiresAt ||
+    !credential.organizationId ||
+    !credential.userId ||
+    !Array.isArray(credential.scopes) ||
+    !credential.scopes.every(
+      (scope): scope is string => typeof scope === "string"
+    )
+  ) {
+    return null
+  }
+
+  return {
+    audience: mcpOAuthResource,
+    clientId: credential.clientId,
+    expiresAt: credential.expiresAt,
+    issuedAt: credential.createdAt,
+    organizationId: credential.organizationId,
+    scopes: credential.scopes,
+    userId: credential.userId,
+  }
+}
+
+const mcpOAuthResourceActions = oauthProviderResourceClient(auth).getActions()
+
+export const getMcpProtectedResourceMetadata = () =>
+  mcpOAuthResourceActions.getProtectedResourceMetadata({
+    resource: mcpOAuthResource,
+    authorization_servers: [mcpOAuthIssuer],
+    scopes_supported: [...MCP_PERMISSION_SCOPES],
+    bearer_methods_supported: ["header"],
+  })
+
+export const handleMcpOAuthServerMetadata =
+  oauthProviderAuthServerMetadata(auth)
+
+export { MCP_OAUTH_SCOPES, MCP_PERMISSION_SCOPES }

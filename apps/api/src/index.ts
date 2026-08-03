@@ -2,7 +2,7 @@ const [
   { db },
   { createApp },
   { env },
-  { authPlugin },
+  { authPlugin, mcpAuth },
   { corsPlugin },
   { serverTimingPlugin },
 ] = await Promise.all([
@@ -14,7 +14,7 @@ const [
   import("./platform/plugins/server-timing"),
 ])
 
-const app = createApp(db)
+const app = createApp(db, { mcp: mcpAuth })
   .use(authPlugin)
   .use(corsPlugin)
   .use(serverTimingPlugin)
