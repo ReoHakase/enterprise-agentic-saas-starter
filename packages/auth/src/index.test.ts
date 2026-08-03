@@ -934,6 +934,37 @@ describe("MCP OAuth provider", () => {
     })
   })
 
+  it("accepts repeated references to the configured MCP resource", async () => {
+    const authorizeUrl = new URL(
+      "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
+    )
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+
+    const response = await auth.handler(new Request(authorizeUrl))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get("location")).toContain("error=invalid_client")
+  })
+
+  it("rejects a different resource mixed with the configured MCP resource", async () => {
+    const authorizeUrl = new URL(
+      "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
+    )
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+    authorizeUrl.searchParams.append(
+      "resource",
+      "https://other.example.test/mcp"
+    )
+
+    const response = await auth.handler(new Request(authorizeUrl))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      code: "MCP_RESOURCE_REQUIRED",
+    })
+  })
+
   it("registers public PKCE clients without returning a client secret", async () => {
     const response = await auth.handler(
       new Request("http://api.localhost/auth/oauth2/register", {

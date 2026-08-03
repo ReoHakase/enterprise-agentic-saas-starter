@@ -299,7 +299,10 @@ export const auth = betterAuth({
       const resources = Array.isArray(requestedResource)
         ? requestedResource
         : [requestedResource]
-      if (resources.length !== 1 || resources[0] !== mcpOAuthResource) {
+      if (
+        resources.length === 0 ||
+        resources.some((resource) => resource !== mcpOAuthResource)
+      ) {
         throw APIError.from("BAD_REQUEST", {
           code: "MCP_RESOURCE_REQUIRED",
           message: "The MCP resource is required",
