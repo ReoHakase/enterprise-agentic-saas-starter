@@ -281,15 +281,18 @@ export const auth = betterAuth({
   socialProviders: githubSocialProviders,
   hooks: {
     before: createAuthMiddleware(async (context) => {
+      const requestPath = context.request
+        ? new URL(context.request.url).pathname
+        : undefined
       if (
-        context.path !== "/oauth2/authorize" &&
-        context.path !== "/oauth2/token"
+        requestPath !== "/auth/oauth2/authorize" &&
+        requestPath !== "/auth/oauth2/token"
       ) {
         return
       }
 
       const requestedResource =
-        context.path === "/oauth2/authorize"
+        requestPath === "/auth/oauth2/authorize"
           ? context.query?.resource
           : context.body?.resource
       const resources = Array.isArray(requestedResource)
