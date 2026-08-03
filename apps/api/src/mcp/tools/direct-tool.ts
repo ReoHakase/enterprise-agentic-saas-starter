@@ -1,5 +1,5 @@
 import { createTool } from "@mastra/core/tools"
-import { toStandardJsonSchema } from "@valibot/to-json-schema"
+import { toJsonSchema } from "@valibot/to-json-schema"
 import * as v from "valibot"
 
 type DirectToolSchema<Output> = v.BaseSchema<
@@ -24,6 +24,14 @@ const parseToolValue = <Output>(
   return parsed.output
 }
 
+const toMcpJsonSchema = (schema: DirectToolSchema<unknown>) =>
+  toJsonSchema(schema, {
+    overrideAction: ({ jsonSchema, valibotAction }) =>
+      valibotAction.type === "check_items"
+        ? { ...jsonSchema, uniqueItems: true }
+        : undefined,
+  })
+
 export const createMcpDirectTool = <Input, Output>(options: {
   annotations: DirectToolAnnotations
   description: string
@@ -35,8 +43,8 @@ export const createMcpDirectTool = <Input, Output>(options: {
   createTool({
     id: options.id,
     description: options.description,
-    inputSchema: toStandardJsonSchema(options.inputSchema),
-    outputSchema: toStandardJsonSchema(options.outputSchema),
+    inputSchema: toMcpJsonSchema(options.inputSchema),
+    outputSchema: toMcpJsonSchema(options.outputSchema),
     strict: true,
     mcp: { annotations: options.annotations },
     execute: async (input) =>

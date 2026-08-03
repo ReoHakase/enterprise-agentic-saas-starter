@@ -19,6 +19,7 @@ import {
   resetFileStorageRuntimeForTest,
 } from "../../modules/files/public"
 import type { McpPrincipal } from "../principal"
+import { createMcpServer } from "../server"
 import { createMcpTools } from "./catalog"
 import { createMcpReadApplication } from "./read-application"
 import { uploadMcpAttachment } from "./upload-application"
@@ -140,6 +141,21 @@ const createFixture = async () => {
 }
 
 describe("MCP business tools", () => {
+  it("registers the complete catalog with JSON Schema uniqueness", async () => {
+    const { db } = await createFixture()
+    const server = createMcpServer({ tools: createMcpTools(db, principal()) })
+    const { tools } = await server.getToolListInfo()
+
+    expect(tools).toHaveLength(14)
+    expect(
+      tools.find(({ name }) => name === "add_issue_attachments")
+    ).toMatchObject({
+      inputSchema: {
+        properties: { assetIds: { uniqueItems: true } },
+      },
+    })
+  })
+
   it("filters the explicit catalog by the credential scopes", async () => {
     const { db } = await createFixture()
     expect(
