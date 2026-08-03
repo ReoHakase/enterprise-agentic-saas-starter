@@ -46,6 +46,31 @@ export const MCP_OAUTH_SCOPES = [
   ...MCP_PERMISSION_SCOPES,
 ] as const
 
+const mcpOAuthScopes = new Set<string>(MCP_OAUTH_SCOPES)
+
+export const parseMcpOAuthStoredScopes = (value: unknown): string[] | null => {
+  let candidate = value
+  if (typeof candidate === "string") {
+    if (candidate.length > 4096) return null
+    try {
+      candidate = JSON.parse(candidate)
+    } catch {
+      return null
+    }
+  }
+  if (
+    !Array.isArray(candidate) ||
+    candidate.length > MCP_OAUTH_SCOPES.length ||
+    !candidate.every(
+      (scope): scope is string =>
+        typeof scope === "string" && mcpOAuthScopes.has(scope)
+    )
+  ) {
+    return null
+  }
+  return candidate
+}
+
 type CreateMcpOAuthProviderOptions = {
   hasMembership: (input: {
     organizationId: string

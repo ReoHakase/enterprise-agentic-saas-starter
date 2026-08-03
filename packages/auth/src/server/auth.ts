@@ -34,6 +34,7 @@ import {
   MCP_OAUTH_ACCESS_TOKEN_PREFIX,
   MCP_OAUTH_SCOPES,
   MCP_PERMISSION_SCOPES,
+  parseMcpOAuthStoredScopes,
 } from "./mcp-oauth"
 import { createGithubOAuthEmulatorProvider } from "./plugins/github-oauth-provider"
 
@@ -374,6 +375,7 @@ export const verifyMcpOAuthAccessToken = async (
     )
     .limit(1)
   const credential = rows[0]
+  const scopes = parseMcpOAuthStoredScopes(credential?.scopes)
   if (
     !credential?.clientId ||
     credential.clientDisabled === true ||
@@ -381,10 +383,7 @@ export const verifyMcpOAuthAccessToken = async (
     !credential.expiresAt ||
     !credential.organizationId ||
     !credential.userId ||
-    !Array.isArray(credential.scopes) ||
-    !credential.scopes.every(
-      (scope): scope is string => typeof scope === "string"
-    )
+    !scopes
   ) {
     return null
   }
@@ -395,7 +394,7 @@ export const verifyMcpOAuthAccessToken = async (
     expiresAt: credential.expiresAt,
     issuedAt: credential.createdAt,
     organizationId: credential.organizationId,
-    scopes: credential.scopes,
+    scopes,
     userId: credential.userId,
   }
 }
