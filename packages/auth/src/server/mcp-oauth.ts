@@ -93,7 +93,17 @@ export const createMcpOAuthProvider = ({
     },
     postLogin: {
       page: new URL("/oauth/organization", webAppOrigin).toString(),
-      shouldRedirect: ({ scopes }) => hasMcpPermissionScope(scopes),
+      shouldRedirect: async ({ session, scopes }) => {
+        const organizationId =
+          typeof session.activeOrganizationId === "string"
+            ? session.activeOrganizationId
+            : undefined
+        return (
+          hasMcpPermissionScope(scopes) &&
+          (!organizationId ||
+            !(await hasMembership({ organizationId, userId: session.userId })))
+        )
+      },
       consentReferenceId: async ({ session, scopes }) => {
         const organizationId =
           typeof session.activeOrganizationId === "string"
