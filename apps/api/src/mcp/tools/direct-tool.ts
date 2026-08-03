@@ -1,5 +1,5 @@
 import { createTool } from "@mastra/core/tools"
-import { toJsonSchema } from "@valibot/to-json-schema"
+import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import * as v from "valibot"
 
 type DirectToolSchema<Output> = v.BaseSchema<
@@ -32,30 +32,46 @@ const toMcpJsonSchema = (schema: DirectToolSchema<unknown>) =>
         : undefined,
   })
 
+const withMcpJsonSchema = (
+  schema: DirectToolSchema<unknown>,
+  jsonSchema: ReturnType<typeof toJsonSchema>
+) => {
+  const standardSchema = toStandardJsonSchema(schema)
+  return {
+    "~standard": {
+      ...standardSchema["~standard"],
+      jsonSchema: {
+        input: () => ({ ...jsonSchema }),
+        output: () => ({ ...jsonSchema }),
+      },
+    },
+  }
+}
+
 const toMcpInputJsonSchema = (schema: DirectToolSchema<unknown>) => {
   const jsonSchema = toMcpJsonSchema(schema)
-  return jsonSchema.type === "object"
-    ? jsonSchema
-    : { ...jsonSchema, type: "object" as const }
+  return withMcpJsonSchema(
+    schema,
+    jsonSchema.type === "object"
+      ? jsonSchema
+      : { ...jsonSchema, type: "object" as const }
+  )
 }
 
 const toMcpOutput = (schema: DirectToolSchema<unknown>) => {
   const jsonSchema = toMcpJsonSchema(schema)
   if (jsonSchema.type === "object") {
-    return { jsonSchema, wrap: (value: unknown) => value }
+    return {
+      schema: withMcpJsonSchema(schema, jsonSchema),
+      wrap: (value: unknown) => value,
+    }
   }
   if (jsonSchema.type !== "array") {
     throw new Error("MCP tool output schema must describe an object or array")
   }
-  const { $schema, ...items } = jsonSchema
+  const wrappedSchema = v.strictObject({ items: schema })
   return {
-    jsonSchema: {
-      $schema,
-      type: "object" as const,
-      properties: { items },
-      required: ["items"],
-      additionalProperties: false,
-    },
+    schema: withMcpJsonSchema(wrappedSchema, toMcpJsonSchema(wrappedSchema)),
     wrap: (value: unknown) => ({ items: value }),
   }
 }
@@ -73,7 +89,7 @@ export const createMcpDirectTool = <Input, Output>(options: {
     id: options.id,
     description: options.description,
     inputSchema: toMcpInputJsonSchema(options.inputSchema),
-    outputSchema: output.jsonSchema,
+    outputSchema: output.schema,
     strict: true,
     mcp: { annotations: options.annotations },
     execute: async (input) =>
