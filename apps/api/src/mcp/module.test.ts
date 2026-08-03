@@ -1,5 +1,7 @@
 import type { McpOAuthAccessToken } from "@enterprise-agentic-saas/auth/mcp-oauth"
+import { drizzle } from "drizzle-orm/libsql"
 import { Elysia } from "elysia"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
 import { createAuthorizationService } from "../modules/authorization/service"
@@ -7,6 +9,12 @@ import { createMcpModule } from "./module"
 
 const mcpOAuthIssuer = "https://api.example.test/auth"
 const mcpOAuthResource = "https://api.example.test/mcp"
+
+const toolListResponseSchema = v.object({
+  result: v.object({
+    tools: v.array(v.object({ name: v.string() })),
+  }),
+})
 
 const activeCredential: McpOAuthAccessToken = {
   audience: mcpOAuthResource,
@@ -28,23 +36,39 @@ const createTestModule = (input?: {
   })
 
   return new Elysia().use(
-    createMcpModule(authorization, {
-      getProtectedResourceMetadata: async () => ({
-        authorization_servers: [mcpOAuthIssuer],
-        bearer_methods_supported: ["header"],
+    createMcpModule(
+      drizzle({ connection: { url: ":memory:" } }),
+      authorization,
+      {
+        getProtectedResourceMetadata: async () => ({
+          authorization_servers: [mcpOAuthIssuer],
+          bearer_methods_supported: ["header"],
+          resource: mcpOAuthResource,
+          scopes_supported: ["issues:read"],
+        }),
+        handleAuthorizationServerMetadata: async () =>
+          Response.json({ issuer: mcpOAuthIssuer }),
         resource: mcpOAuthResource,
-        scopes_supported: ["issues:read"],
-      }),
-      handleAuthorizationServerMetadata: async () =>
-        Response.json({ issuer: mcpOAuthIssuer }),
-      resource: mcpOAuthResource,
-      verifyAccessToken:
-        input?.verifyAccessToken ?? (async () => activeCredential),
-    })
+        verifyAccessToken:
+          input?.verifyAccessToken ?? (async () => activeCredential),
+      }
+    )
   )
 }
 
-const mcpRequest = (authorization?: string) =>
+const mcpRequest = (
+  authorization?: string,
+  message: Record<string, unknown> = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "oauth-mcp-test", version: "1.0.0" },
+    },
+  }
+) =>
   new Request("https://api.example.test/mcp", {
     method: "POST",
     headers: {
@@ -53,16 +77,7 @@ const mcpRequest = (authorization?: string) =>
       host: "api.example.test",
       ...(authorization ? { authorization } : {}),
     },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "oauth-mcp-test", version: "1.0.0" },
-      },
-    }),
+    body: JSON.stringify(message),
   })
 
 describe("OAuth-protected MCP routes", () => {
@@ -117,6 +132,22 @@ describe("OAuth-protected MCP routes", () => {
         },
       },
     })
+  })
+
+  it("lists only tools allowed by the current credential scope", async () => {
+    const response = await createTestModule().handle(
+      mcpRequest("Bearer mcp_at_secret", {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/list",
+        params: {},
+      })
+    )
+    expect(response.status).toBe(200)
+    const body = v.parse(toolListResponseSchema, await response.json())
+    expect(body.result.tools.map(({ name }) => name).toSorted()).toEqual(
+      ["get_issue", "search_issue_labels", "search_issues"].toSorted()
+    )
   })
 
   it.each([

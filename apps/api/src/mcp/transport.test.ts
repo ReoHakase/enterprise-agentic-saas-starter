@@ -109,7 +109,7 @@ describe("Mastra MCP serverless transport", () => {
   })
 
   it("keeps the production registry empty until authorization is available", async () => {
-    const server = createProductionMcpServer()
+    const server = createProductionMcpServer({})
     expect(await server.getToolListInfo()).toEqual({ tools: [] })
   })
 })

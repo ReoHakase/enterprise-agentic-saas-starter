@@ -12,6 +12,9 @@ const csrfExemptProtocolPaths = new Set([
   "/mcp",
 ])
 
+const isCsrfExemptProtocolPath = (pathname: string) =>
+  csrfExemptProtocolPaths.has(pathname) || pathname.startsWith("/mcp/uploads/")
+
 const normalizeOrigin = (value: string) => {
   try {
     return new URL(value).origin
@@ -32,7 +35,7 @@ export const csrfPlugin = new Elysia({ name: "csrf" })
       return
     }
 
-    if (csrfExemptProtocolPaths.has(new URL(request.url).pathname)) {
+    if (isCsrfExemptProtocolPath(new URL(request.url).pathname)) {
       return
     }
 

@@ -630,12 +630,11 @@ MCP serverは`apps/api`へ置きます。
 
 ```text
 apps/api/src/mcp/
-  route.ts
+  module.ts
   server.ts
   authentication.ts
   principal.ts
-  authorization.ts
-  protected-resource-metadata.ts
+  tools/
   prompts/
   resources/
 ```
@@ -679,6 +678,10 @@ client側の確認UIへsecurityを依存させません。
 JSON-RPC request IDはtransport上の相関値であり、業務冪等キーに使いません。write toolはclientが
 明示した業務冪等キーをschemaで受け取り、principal、organization、tool、正規化payload digestと
 組み合わせてreservationします。同じJSON-RPC IDで別操作が来ても同一業務とみなしません。
+
+添付binaryはtool inputへ含めません。`create_attachment_upload_session`が返すOAuth保護済みの短命URLへ
+exact sizeとcontent typeを固定してPUTし、readyになったopaque asset IDだけをIssue mutationへ渡します。
+staging objectからfile claimへの移行、Issue revision、quota、audit、receiptは同じDB transactionで確定します。
 
 ## OAuthとPAT
 

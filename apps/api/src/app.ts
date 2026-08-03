@@ -143,7 +143,7 @@ export const createApp = (
     )
     .use(createProfileImagesModule(db, authorization.createAccessControl))
     .use(createAuditModule(db, authorization.createAccessControl))
-    .use(createMcpModule(authorization.authorization, mcp))
+    .use(createMcpModule(db, authorization.authorization, mcp))
     .use(openApiPlugin)
 }
 

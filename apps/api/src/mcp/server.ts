@@ -19,4 +19,5 @@ export const createMcpServer = ({ tools = {} }: CreateMcpServerOptions = {}) =>
     tools,
   })
 
-export const createProductionMcpServer = () => createMcpServer()
+export const createProductionMcpServer = (tools: ToolsInput) =>
+  createMcpServer({ tools })

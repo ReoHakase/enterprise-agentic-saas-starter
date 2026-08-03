@@ -229,8 +229,9 @@ digestへ束縛します。同じJSON-RPC request IDで異なるpayloadが来て
 clientId
 principalId
 organizationId
-jsonRpcRequestId
 toolName
+idempotencyKey
+normalizedPayloadDigest
 ```
 
 同じidentityと同じpayloadは既存receiptへ収束します。異なるpayloadはconflictです。
@@ -251,6 +252,9 @@ create_attachment_upload_session
 ```
 
 upload URLは短命、single-use、organization固定です。R2 keyを返しません。
+upload reservation、temporary quota、storage objectはD1で管理し、期限切れreservationは次のsession作成時に
+exact-key cleanup jobへ移します。ready assetをIssueへ追加すると、同じtransactionでfile claimへ移し、
+temporary quotaだけを解除します。
 
 ## Public skills
 

@@ -78,7 +78,7 @@ const metadataMatches = (object: FileR2Object, file: FileWithOwner) => {
   )
 }
 
-const streamsEqual = async (
+export const streamsEqual = async (
   left: ReadableStream<Uint8Array>,
   right: ReadableStream<Uint8Array>
 ) => {

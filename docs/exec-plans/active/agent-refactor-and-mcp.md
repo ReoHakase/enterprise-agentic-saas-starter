@@ -287,7 +287,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] thumbnail整合を保つ
 - [x] WebとAgentで同じshared contractを利用する
 - [x] shared contractをPhase 4のMCP tool登録から再利用できる境界へ置く
-- [ ] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
+- [x] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
 
 ### 2.6 Mastra-owned durable commit（PLAN-2026-029へ移管済みの実装履歴）
 
@@ -360,7 +360,7 @@ PATはこのphaseへ含めません。
 - [x] `apps/api/src/mcp`を追加する
 - [x] Mastra `MCPServer`を追加する
 - [x] Cloudflare serverless transportへ接続する
-- [ ] `packages/agent-tools`をlocal executorへ接続する
+- [x] Mastra `createTool`をAPIのlocal executorへ接続する
 - [x] `apps/api -> apps/agent`依存がないことを固定する
 - [x] Agent、Workflow、samplingを登録しない
 - [ ] promptsとresourcesへ公開skillsを追加する
@@ -377,22 +377,22 @@ PATはこのphaseへ含めません。
 
 ### 4.3 Scopesと全tool
 
-- [ ] account、organization、member、Issue、file scopeを定義する
-- [ ] read toolsを登録する
-- [ ] create、update、deleteを登録する
-- [ ] attachment add/remove/readを登録する
-- [ ] upload sessionとstatusを登録する
-- [ ] `tools/list`をscopeとcurrent permissionで絞る
-- [ ] `tools/call`でcurrent permissionを再検証する
-- [ ] writeを直接実行する
-- [ ] expected revision、idempotency、auditを適用する
+- [x] account、organization、member、Issue、file scopeを定義する
+- [x] read toolsを登録する
+- [x] create、update、deleteを登録する
+- [x] attachment add/remove/readを登録する
+- [x] upload sessionとstatusを登録する
+- [x] `tools/list`をscopeとcurrent permissionで絞る
+- [x] `tools/call`でcurrent permissionを再検証する
+- [x] writeを直接実行する
+- [x] expected revision、idempotency、auditを適用する
 
 ### Phase 4 exit criteria
 
 - [ ] OAuth MCP E1 journeyがread/writeを一巡する
-- [ ] MCP requestがAgent Workerを経由しない
-- [ ] AgentとWorkflowがMCP registryにない
-- [ ] membership変更とrevokeが即時反映される
+- [x] MCP requestがAgent Workerを経由しない
+- [x] AgentとWorkflowがMCP registryにない
+- [x] membership変更とrevokeが即時反映される
 - [ ] ChatGPT、Codex、Claude Code相当client configを文書化する
 
 # Phase 5 PAT形式のMCP個人アクセストークン

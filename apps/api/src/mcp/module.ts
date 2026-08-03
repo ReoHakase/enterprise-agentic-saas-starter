@@ -1,3 +1,4 @@
+import type { Db } from "@enterprise-agentic-saas/db"
 import { Elysia } from "elysia"
 
 import type { AuthorizationService } from "../modules/authorization/public"
@@ -6,12 +7,15 @@ import {
   type VerifyMcpOAuthAccessToken,
 } from "./authentication"
 import { createProductionMcpServer } from "./server"
+import { createMcpTools } from "./tools/catalog"
+import { uploadMcpAttachment } from "./tools/upload-application"
 import { MCP_HTTP_PATH, handleMcpRequest } from "./transport"
 
 const protectedResourceMetadataPath =
   "/.well-known/oauth-protected-resource/mcp"
 const authorizationServerMetadataPath =
   "/.well-known/oauth-authorization-server/auth"
+const mcpUploadPath = "/mcp/uploads/:uploadId"
 
 const unauthorizedResponse = (resource: string) =>
   Response.json(
@@ -45,6 +49,7 @@ export type McpModuleOptions = {
 }
 
 export const createMcpModule = (
+  db: Db,
   authorization: AuthorizationService,
   {
     getProtectedResourceMetadata,
@@ -94,9 +99,28 @@ export const createMcpModule = (
         if (!principal) return unauthorizedResponse(resource)
 
         return handleMcpRequest(
-          createProductionMcpServer(),
+          createProductionMcpServer(createMcpTools(db, principal)),
           reconstructMcpRequest(request, body)
         )
+      },
+      { detail: { hide: true } }
+    )
+    .all(
+      mcpUploadPath,
+      async ({ params, request }) => {
+        const principal = await authenticateMcpRequest({
+          authorization,
+          request,
+          resource,
+          verifyAccessToken,
+        })
+        if (!principal) return unauthorizedResponse(resource)
+        return uploadMcpAttachment({
+          db,
+          principal,
+          request,
+          uploadId: params.uploadId,
+        })
       },
       { detail: { hide: true } }
     )

@@ -20,6 +20,8 @@ export { getFileOwnerAdapter } from "./owner-adapters"
 export { listReadyFilesByOwner } from "./repository"
 export { deleteReadyFilesInTransaction } from "./repository"
 export type { FileWithOwner } from "./repository"
+export { streamsEqual } from "./service"
+export { bodyObject } from "./service-runtime"
 /** @internal */
 export {
   configureFileStorageRuntime,
