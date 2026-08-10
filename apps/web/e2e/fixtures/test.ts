@@ -97,10 +97,14 @@ export const test = base.extend<ClientDiagnosticsFixtures, AgentWorkerFixtures>(
           await page.goto(
             "/auth/sign-in?redirectTo=%2Fsettings%2Forganizations"
           )
-          await page.getByRole("button", { name: "GitHub" }).click()
-          await page
-            .getByRole("button", { name: new RegExp(oauthUserLogin, "u") })
-            .click()
+          const githubButton = page.getByRole("button", { name: "GitHub" })
+          await expect(githubButton).toBeEnabled()
+          await githubButton.click()
+          const oauthButton = page.getByRole("button", {
+            name: new RegExp(oauthUserLogin, "u"),
+          })
+          await expect(oauthButton).toBeEnabled()
+          await oauthButton.click()
           await expect(page).toHaveURL(/\/settings\/organizations$/u)
           await use({
             oauthUserLogin,
