@@ -1,7 +1,11 @@
 import { MCP_PERMISSION_SCOPES } from "@enterprise-agentic-saas/auth/client"
 import { describe, expect, it } from "vitest"
 
-import { parseMcpOAuthScopes, resolveMcpOAuthLoginRedirect } from "./query"
+import {
+  createMcpOAuthRoutePath,
+  parseMcpOAuthScopes,
+  resolveMcpOAuthLoginRedirect,
+} from "./query"
 
 describe("MCP OAuth scope query", () => {
   it("projects allowlisted scopes into public descriptions", () => {
@@ -38,6 +42,17 @@ describe("MCP OAuth scope query", () => {
 })
 
 describe("MCP OAuth login redirect", () => {
+  it("preserves repeated query values for a local OAuth route", () => {
+    expect(
+      createMcpOAuthRoutePath("/oauth/organization", {
+        ba_param: ["client_id", "state"],
+        client_id: "client_1",
+      })
+    ).toBe(
+      "/oauth/organization?ba_param=client_id&ba_param=state&client_id=client_1"
+    )
+  })
+
   it("preserves a signed authorization query on the local organization page", () => {
     const redirect = resolveMcpOAuthLoginRedirect({
       client_id: "client_1",

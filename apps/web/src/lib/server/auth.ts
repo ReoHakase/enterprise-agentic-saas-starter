@@ -31,11 +31,18 @@ export const getSession = cache(async (): Promise<Session | null> => {
   return parseSession(session)
 })
 
-export const verifySession = async () => {
+export const verifySession = async (redirectTo?: string) => {
   const session = await getSession()
 
   if (!session) {
-    redirect("/auth/sign-in")
+    const safeRedirectTo =
+      redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+        ? redirectTo
+        : undefined
+    const signInPath = safeRedirectTo
+      ? `/auth/sign-in?${new URLSearchParams({ redirectTo: safeRedirectTo }).toString()}`
+      : "/auth/sign-in"
+    redirect(signInPath)
   }
 
   return session

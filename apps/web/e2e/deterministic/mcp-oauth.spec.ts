@@ -66,7 +66,27 @@ const cookieHeader = async (context: BrowserContext) =>
     .join("; ")
 
 const signInWithLocalGitHub = async (page: Page) => {
-  await page.getByRole("button", { name: "GitHub" }).click()
+  const githubButton = page.getByRole("button", { name: "GitHub" })
+  await expect(githubButton).toBeEnabled()
+  const socialSignIn = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/auth/sign-in/social" &&
+      response.request().method() === "POST",
+    { timeout: 30_000 }
+  )
+  await githubButton.click()
+  const socialResponse = await socialSignIn
+  if (!socialResponse.ok()) {
+    const body: unknown = await socialResponse.json()
+    const code = isRecord(body)
+      ? (Reflect.get(body, "code") ?? Reflect.get(body, "error"))
+      : undefined
+    throw new Error(
+      `MCP OAuth E1 social sign-in failed (${socialResponse.status()}${
+        typeof code === "string" ? `: ${code}` : ""
+      })`
+    )
+  }
   await page.getByRole("button", { name: /oauth-carol/u }).click()
 }
 
@@ -209,6 +229,36 @@ const authorizeClient = async (input: {
   await expect(input.page).toHaveURL(/\/auth\/sign-in/u)
   await signInWithLocalGitHub(input.page)
   await expect(input.page).toHaveURL(/\/oauth\/organization/u)
+  const organizationUrl = new URL(input.page.url())
+  const organizationPath = `${organizationUrl.pathname}${organizationUrl.search}`
+  const sessionCookieNames = (await input.page.context().cookies())
+    .filter(({ name }) => name.includes("session_token"))
+    .map(({ name }) => name)
+  await Promise.all(
+    sessionCookieNames.map((name) =>
+      input.page.context().clearCookies({ name })
+    )
+  )
+  const browserContext = input.page.context()
+  await input.page.close()
+  input.page = await browserContext.newPage()
+  await input.page.route(callbackPattern, (route) =>
+    route.fulfill({
+      body: "<!doctype html><title>MCP OAuth callback</title>",
+      contentType: "text/html",
+      status: 200,
+    })
+  )
+  await input.page.goto(organizationUrl.toString())
+  await expect(input.page).toHaveURL(/\/auth\/sign-in\?redirectTo=/u)
+  expect(new URL(input.page.url()).searchParams.get("redirectTo")).toBe(
+    organizationPath
+  )
+  await signInWithLocalGitHub(input.page)
+  await expect(input.page).toHaveURL(/\/oauth\/organization\?/u)
+  expect(
+    `${new URL(input.page.url()).pathname}${new URL(input.page.url()).search}`
+  ).toBe(organizationPath)
   const continuation = input.page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/auth/oauth2/continue" &&

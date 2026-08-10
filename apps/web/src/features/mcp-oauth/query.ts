@@ -24,9 +24,29 @@ const mcpPermissionScopes = new Set<string>(MCP_PERMISSION_SCOPES)
 const isMcpPermissionScope = (scope: string): scope is McpPermissionScope =>
   mcpPermissionScopes.has(scope)
 
-type SearchParams = Record<string, string | string[] | undefined>
+export type McpOAuthSearchParams = Record<string, string | string[] | undefined>
 
-export const resolveMcpOAuthLoginRedirect = (query: SearchParams) => {
+const serializeMcpOAuthSearchParams = (query: McpOAuthSearchParams) => {
+  const searchParams = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === "string") {
+      searchParams.append(key, value)
+    } else if (Array.isArray(value)) {
+      for (const item of value) searchParams.append(key, item)
+    }
+  }
+  return searchParams
+}
+
+export const createMcpOAuthRoutePath = (
+  pathname: "/oauth/consent" | "/oauth/organization",
+  query: McpOAuthSearchParams
+) => {
+  const search = serializeMcpOAuthSearchParams(query).toString()
+  return search ? `${pathname}?${search}` : pathname
+}
+
+export const resolveMcpOAuthLoginRedirect = (query: McpOAuthSearchParams) => {
   if (
     query.response_type !== "code" ||
     typeof query.client_id !== "string" ||
@@ -37,15 +57,7 @@ export const resolveMcpOAuthLoginRedirect = (query: SearchParams) => {
     return null
   }
 
-  const signedQuery = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) {
-    if (typeof value === "string") {
-      signedQuery.append(key, value)
-    } else if (Array.isArray(value)) {
-      for (const item of value) signedQuery.append(key, item)
-    }
-  }
-  return `/oauth/organization?${signedQuery.toString()}`
+  return createMcpOAuthRoutePath("/oauth/organization", query)
 }
 
 export type McpOAuthScopeSummary = {

@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import { AuthRouteFrame } from "@/components/public-route-frame/public-route-frame"
 import {
+  createMcpOAuthRoutePath,
   McpOAuthConsentController,
   parseMcpOAuthScopes,
 } from "@/features/mcp-oauth"
@@ -17,7 +18,8 @@ export default async function McpOAuthConsentPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const [, query] = await Promise.all([verifySession(), searchParams])
+  const query = await searchParams
+  await verifySession(createMcpOAuthRoutePath("/oauth/consent", query))
   const scopes = parseMcpOAuthScopes(query.scope)
 
   return (
