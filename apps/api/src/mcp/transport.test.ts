@@ -46,6 +46,19 @@ const echoTool = createTool({
 })
 
 describe("Mastra MCP serverless transport", () => {
+  it("rejects non-POST requests before starting the serverless listener", async () => {
+    const response = await handleMcpRequest(
+      createMcpServer(),
+      new Request(`https://api.example.test${MCP_HTTP_PATH}`, {
+        method: "GET",
+      })
+    )
+
+    expect(response.status).toBe(405)
+    expect(response.headers.get("allow")).toBe("POST")
+    expect(response.headers.get("content-type")).toBeNull()
+  })
+
   it("handles initialize, tools/list, and tools/call without a session", async () => {
     const server = createMcpServer({ tools: { test_echo: echoTool } })
 
