@@ -65,6 +65,7 @@
         "@elysia/openapi": "catalog:",
         "@elysiajs/server-timing": "catalog:",
         "@enterprise-agentic-saas/agent-contracts": "workspace:*",
+        "@enterprise-agentic-saas/agent-tools": "workspace:*",
         "@enterprise-agentic-saas/auth": "workspace:*",
         "@enterprise-agentic-saas/db": "workspace:*",
         "@enterprise-agentic-saas/email": "workspace:*",

@@ -35,6 +35,9 @@ export const createMcpAttachmentUploadSession = async (
     filename: input.filename.trim(),
     sizeBytes: input.sizeBytes,
   }
+  if (!payload.filename || !payload.declaredContentType) {
+    throw new HttpError({ code: "validation_error" })
+  }
   return runIdempotently({
     db,
     principal,

@@ -8,19 +8,25 @@ import { createMcpIssueWriteApplication } from "./issue-write-application"
 import { createMcpAttachmentUploadSession } from "./upload-session-application"
 
 export const toMcpToolError = (cause: unknown): McpToolError => {
-  if (cause instanceof McpToolError) return cause
-  if (cause instanceof HttpError) {
-    if (
-      cause.code === "conflict" ||
-      cause.code === "forbidden" ||
-      cause.code === "not_found" ||
-      cause.code === "validation_error"
-    ) {
-      return new McpToolError(cause.code)
+  let current: unknown = cause
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (current instanceof McpToolError) return current
+    if (current instanceof HttpError) {
+      if (
+        current.code === "conflict" ||
+        current.code === "forbidden" ||
+        current.code === "not_found" ||
+        current.code === "rate_limited" ||
+        current.code === "validation_error"
+      ) {
+        return new McpToolError(current.code)
+      }
+      if (current.code === "unauthorized") {
+        return new McpToolError("forbidden")
+      }
     }
-    if (cause.code === "unauthorized") {
-      return new McpToolError("forbidden")
-    }
+    if (typeof current !== "object") break
+    current = Reflect.get(current, "cause")
   }
   return new McpToolError("retryable_internal")
 }

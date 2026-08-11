@@ -172,6 +172,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   "agent-tools": ["@enterprise-agentic-saas/agent-contracts"],
   api: [
     "@enterprise-agentic-saas/agent-contracts",
+    "@enterprise-agentic-saas/agent-tools",
     "@enterprise-agentic-saas/auth",
     "@enterprise-agentic-saas/auth/*",
     "@enterprise-agentic-saas/db",

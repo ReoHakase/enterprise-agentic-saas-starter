@@ -1,43 +1,15 @@
 import { HttpError } from "../../errors/http-error"
 import { createObservedLogger } from "../../platform/observability/runtime"
 import type { IssuePriority, IssueStatus, ListIssuesInput } from "./domain"
+import {
+  normalizeIssueLabels,
+  normalizeIssueRequiredText,
+  parseIssueDueDate,
+} from "./normalizers"
 import type { IssuesPorts } from "./ports"
 import { decodeIssueTimelineCursor } from "./timeline-cursor"
 
 const issueListLogger = createObservedLogger("issues").child("list")
-
-const normalizeRequired = (value: string, field: string) => {
-  const normalized = value.trim()
-  if (!normalized) {
-    const message = `${field} is required.`
-    throw new HttpError({
-      code: "validation_error",
-      fieldErrors: { [field]: [message] },
-      publicMessage: message,
-    })
-  }
-  return normalized
-}
-
-const normalizeLabels = (labels: string[]) => {
-  const normalized = labels.map((label) => label.trim()).filter(Boolean)
-  return [...new Set(normalized)]
-}
-
-const parseDueDate = (value: string | null | undefined) => {
-  if (value === undefined) return undefined
-  if (value === null) return null
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime()) || date.toISOString() !== value) {
-    throw new HttpError({
-      code: "validation_error",
-      fieldErrors: { dueDate: ["Enter a valid date and time."] },
-      publicMessage: "Enter a valid due date and time.",
-    })
-  }
-  return date
-}
 
 const createIssueReadService = (ports: IssuesPorts) => {
   const assertAssigneeMembership = async (input: {
@@ -215,13 +187,13 @@ const createIssueMutationService = (
     return ports.insertIssue({
       organizationId: input.organizationId,
       creatorId: input.userId,
-      title: normalizeRequired(input.title, "title"),
+      title: normalizeIssueRequiredText(input.title, "title"),
       description: input.description?.trim() ?? "",
       status: input.status ?? "open",
       priority: input.priority ?? "no_priority",
       assigneeId: input.assigneeId ?? null,
-      labels: normalizeLabels(input.labels ?? []),
-      dueDate: parseDueDate(input.dueDate) ?? null,
+      labels: normalizeIssueLabels(input.labels ?? []),
+      dueDate: parseIssueDueDate(input.dueDate) ?? null,
     })
   }
 
@@ -263,14 +235,16 @@ const createIssueMutationService = (
       title:
         input.title === undefined
           ? undefined
-          : normalizeRequired(input.title, "title"),
+          : normalizeIssueRequiredText(input.title, "title"),
       description: input.description?.trim(),
       status: input.status,
       priority: input.priority,
       assigneeId: input.assigneeId,
       labels:
-        input.labels === undefined ? undefined : normalizeLabels(input.labels),
-      dueDate: parseDueDate(input.dueDate),
+        input.labels === undefined
+          ? undefined
+          : normalizeIssueLabels(input.labels),
+      dueDate: parseIssueDueDate(input.dueDate),
     })
 
     if (!issue) {
@@ -332,7 +306,7 @@ const createIssueMutationService = (
       organizationId: input.organizationId,
       issueId: input.issueId,
       authorId: input.userId,
-      body: normalizeRequired(input.body, "body"),
+      body: normalizeIssueRequiredText(input.body, "body"),
     })
   }
 
@@ -357,7 +331,7 @@ const createIssueMutationService = (
       issueId: input.issueId,
       commentId: input.commentId,
       actorUserId: input.userId,
-      body: normalizeRequired(input.body, "body"),
+      body: normalizeIssueRequiredText(input.body, "body"),
     })
     if (!comment) {
       throw new HttpError({ code: "not_found" })

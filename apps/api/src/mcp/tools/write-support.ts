@@ -4,18 +4,16 @@ import { issues, member } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 
 import { HttpError } from "../../errors/http-error"
+import {
+  normalizeIssueLabels,
+  parseIssueDueDate,
+} from "../../modules/issues/public"
 
 export type McpTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
 export const normalizedLabels = (labels: readonly string[] | undefined) => {
   if (labels === undefined) return undefined
-  const distinct = new Map<string, string>()
-  for (const label of labels) {
-    const trimmed = label.trim()
-    const key = trimmed.toLocaleLowerCase("en-US")
-    if (!distinct.has(key)) distinct.set(key, trimmed)
-  }
-  return [...distinct.values()]
+  return normalizeIssueLabels(labels)
 }
 
 export const canonicalizeLabels = async (
@@ -71,14 +69,8 @@ export const requireAssignee = async (
   if (!rows[0]) throw new HttpError({ code: "validation_error" })
 }
 
-export const parseDueDate = (value: string | null | undefined) => {
-  if (value === undefined || value === null) return value
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    throw new HttpError({ code: "validation_error" })
-  }
-  return parsed
-}
+export const parseDueDate = (value: string | null | undefined) =>
+  parseIssueDueDate(value)
 
 export const issueReceipt = (input: {
   attachmentMutation?: McpIssueWriteReceipt["issue"]["attachmentMutation"]

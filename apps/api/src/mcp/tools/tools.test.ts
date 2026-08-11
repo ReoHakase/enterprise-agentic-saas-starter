@@ -10,6 +10,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { HttpError } from "../../errors/http-error"
 import {
   createRuntime,
   pngBytes,
@@ -23,7 +24,7 @@ import { createMcpServer } from "../server"
 import { createMcpTools } from "./catalog"
 import { createMcpReadApplication } from "./read-application"
 import { uploadMcpAttachment } from "./upload-application"
-import { createMcpWriteApplication } from "./write-application"
+import { createMcpWriteApplication, toMcpToolError } from "./write-application"
 
 const migrationsFolder = new URL(
   "../../../../../packages/db/drizzle",
@@ -207,6 +208,7 @@ describe("MCP business tools", () => {
     const write = createMcpWriteApplication(db, principal())
     const input = {
       idempotencyKey: "create_issue_request_0001",
+      description: "  MCP description  ",
       title: "  MCP Issue  ",
       labels: ["MCP", "mcp"],
     }
@@ -219,6 +221,22 @@ describe("MCP business tools", () => {
 
     expect(first).toMatchObject({ replayed: false, issue: { revision: 1 } })
     expect(replay).toEqual({ ...first, replayed: true })
+    await expect(
+      db
+        .select({
+          description: schema.issues.description,
+          labels: schema.issues.labels,
+          title: schema.issues.title,
+        })
+        .from(schema.issues)
+        .where(eq(schema.issues.id, first?.issue.id ?? ""))
+    ).resolves.toEqual([
+      {
+        description: "MCP description",
+        labels: ["MCP"],
+        title: "MCP Issue",
+      },
+    ])
     await expect(db.select().from(schema.issues)).resolves.toHaveLength(2)
     await expect(
       db.select().from(schema.mcpToolOperations)
@@ -243,6 +261,103 @@ describe("MCP business tools", () => {
     ).rejects.toMatchObject({ code: "not_found" })
   })
 
+  it("rejects blank upload metadata and preserves retryable errors", async () => {
+    const { db } = await createFixture()
+    const write = createMcpWriteApplication(db, principal())
+
+    await expect(
+      write.createAttachmentUploadSession({
+        declaredContentType: "image/png",
+        filename: "   ",
+        idempotencyKey: "upload_session_blank_filename_0001",
+        sizeBytes: 32,
+      })
+    ).rejects.toMatchObject({ code: "validation_error" })
+    await expect(
+      write.createAttachmentUploadSession({
+        declaredContentType: "   ",
+        filename: "attachment.png",
+        idempotencyKey: "upload_session_blank_content_type_0001",
+        sizeBytes: 32,
+      })
+    ).rejects.toMatchObject({ code: "validation_error" })
+    expect(
+      toMcpToolError(new HttpError({ code: "rate_limited" }))
+    ).toMatchObject({ code: "rate_limited" })
+  })
+
+  it("rechecks current membership before replaying a destructive operation", async () => {
+    const { db } = await createFixture()
+    await db
+      .update(schema.member)
+      .set({ role: "member" })
+      .where(eq(schema.member.id, "mcp-member-a"))
+    await db.insert(schema.issues).values({
+      id: "member-owned-by-another-user",
+      organizationId: "mcp-org-a",
+      number: 2,
+      title: "Another user's Issue",
+      creatorId: "mcp-user-b",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    await expect(
+      createMcpWriteApplication(db, principal()).deleteIssue({
+        expectedRevision: 1,
+        idempotencyKey: "delete_after_membership_downgrade_0001",
+        issueId: "member-owned-by-another-user",
+      })
+    ).rejects.toMatchObject({ code: "forbidden" })
+  })
+
+  it("rejects a different body when another uploader wins the only-if race", async () => {
+    const { db } = await createFixture()
+    const activePrincipal = principal()
+    const write = createMcpWriteApplication(db, activePrincipal)
+    const bytes = pngBytes()
+    const session = await write.createAttachmentUploadSession({
+      declaredContentType: "image/png",
+      filename: "race.png",
+      idempotencyKey: "upload_session_race_0001",
+      sizeBytes: bytes.byteLength,
+    })
+    const runtime = createRuntime()
+    configureFileStorageRuntime(runtime.runtime)
+    const winnerBytes = Uint8Array.from(bytes)
+    const lastIndex = winnerBytes.length - 1
+    if (lastIndex < 0) throw new Error("test fixture bytes are empty")
+    winnerBytes[lastIndex] = (winnerBytes[lastIndex] ?? 0) ^ 1
+    const originalPut = runtime.put.getMockImplementation()
+    if (!originalPut)
+      throw new Error("test runtime put implementation is missing")
+    runtime.put.mockImplementationOnce(async (key, _value, options) => {
+      await originalPut(key, new Blob([winnerBytes]).stream(), options)
+      return null
+    })
+
+    await expect(
+      uploadMcpAttachment({
+        db,
+        principal: activePrincipal,
+        uploadId: session.uploadId,
+        request: new Request(session.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "content-length": String(bytes.byteLength),
+            "content-type": "image/png",
+          },
+          body: bytes,
+        }),
+      })
+    ).rejects.toMatchObject({ code: "conflict" })
+    await expect(
+      createMcpReadApplication(db, activePrincipal).getAttachmentUploadStatus({
+        uploadId: session.uploadId,
+      })
+    ).resolves.toMatchObject({ status: "pending" })
+  })
+
   it("uploads privately, promotes once, and keeps Issue revision and quota atomic", async () => {
     const { db } = await createFixture()
     const activePrincipal = principal()
@@ -260,6 +375,21 @@ describe("MCP business tools", () => {
     })
     const runtime = createRuntime()
     configureFileStorageRuntime(runtime.runtime)
+    await expect(
+      uploadMcpAttachment({
+        db,
+        principal: principal(["files:read"]),
+        uploadId: session.uploadId,
+        request: new Request(session.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "content-length": String(bytes.byteLength),
+            "content-type": "image/png",
+          },
+          body: bytes,
+        }),
+      })
+    ).rejects.toMatchObject({ code: "forbidden" })
     const uploadResponse = await uploadMcpAttachment({
       db,
       principal: activePrincipal,

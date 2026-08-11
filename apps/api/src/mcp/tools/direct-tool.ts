@@ -1,6 +1,12 @@
-import { createTool } from "@mastra/core/tools"
+import {
+  createTool,
+  type ToolAction,
+  type ToolExecutionContext,
+} from "@mastra/core/tools"
 import { toJsonSchema, toStandardJsonSchema } from "@valibot/to-json-schema"
 import * as v from "valibot"
+
+import { toMcpToolError } from "./write-application"
 
 type DirectToolSchema<Output> = v.BaseSchema<
   unknown,
@@ -94,10 +100,26 @@ export const createMcpDirectTool = <Input, Output>(options: {
     mcp: { annotations: options.annotations },
     execute: async (input) =>
       output.wrap(
-        parseToolValue(
-          options.outputSchema,
-          await options.execute(parseToolValue(options.inputSchema, input))
-        )
+        await options.execute(parseToolValue(options.inputSchema, input))
       ),
   })
+}
+
+export const createMcpSharedTool = <
+  Input,
+  Output,
+  Context extends ToolExecutionContext = ToolExecutionContext,
+>(
+  tool: ToolAction<Input, Output, unknown, unknown, Context>
+) => {
+  const execute = tool.execute
+  if (!execute) throw new Error(`MCP tool ${tool.id} has no executor`)
+  tool.execute = async (input, context) => {
+    try {
+      return await execute(input, context)
+    } catch (cause) {
+      throw toMcpToolError(cause)
+    }
+  }
+  return tool
 }

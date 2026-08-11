@@ -6,11 +6,15 @@ import {
   type McpUpdateIssueToolInput,
 } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
+import { issues, member } from "@enterprise-agentic-saas/db/schema"
+import { and, eq } from "drizzle-orm"
 
 import { HttpError } from "../../errors/http-error"
+import { normalizeOrganizationRole } from "../../modules/authorization/public"
 import {
   deleteIssueInTransaction,
   insertIssueInTransaction,
+  normalizeIssueRequiredText,
   updateIssueInTransaction,
 } from "../../modules/issues/public"
 import type { McpPrincipal } from "../principal"
@@ -23,11 +27,12 @@ import {
   parseDueDate,
   requireAssignee,
   requireIssueRevision,
+  type McpTransaction,
 } from "./write-support"
 
 const normalizedCreateInput = (input: McpCreateIssueToolInput) => ({
-  title: input.title.trim(),
-  description: input.description ?? "",
+  title: normalizeIssueRequiredText(input.title, "title"),
+  description: input.description?.trim() ?? "",
   status: input.status ?? ("open" as const),
   priority: input.priority ?? ("no_priority" as const),
   assigneeId:
@@ -55,9 +60,16 @@ const normalizedUpdateInput = (input: McpUpdateIssueToolInput) => {
   return {
     issueId: input.issueId.trim(),
     expectedRevision: input.expectedRevision,
-    ...(Object.hasOwn(input, "title") ? { title: input.title?.trim() } : {}),
+    ...(Object.hasOwn(input, "title")
+      ? {
+          title:
+            input.title === undefined
+              ? undefined
+              : normalizeIssueRequiredText(input.title, "title"),
+        }
+      : {}),
     ...(Object.hasOwn(input, "description")
-      ? { description: input.description }
+      ? { description: input.description?.trim() }
       : {}),
     ...(Object.hasOwn(input, "status") ? { status: input.status } : {}),
     ...(Object.hasOwn(input, "priority") ? { priority: input.priority } : {}),
@@ -74,6 +86,44 @@ const normalizedUpdateInput = (input: McpUpdateIssueToolInput) => {
       : {}),
     ...(Object.hasOwn(input, "dueDate") ? { dueDate: input.dueDate } : {}),
   }
+}
+
+const requireCurrentDeletePermission = async (
+  tx: McpTransaction,
+  principal: McpPrincipal,
+  issueId: string
+) => {
+  const memberships = await tx
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, principal.organizationId),
+        eq(member.userId, principal.userId)
+      )
+    )
+    .limit(1)
+  const membership = memberships[0]
+  if (!membership) throw new HttpError({ code: "forbidden" })
+  const role = normalizeOrganizationRole(membership.role)
+  if (role !== "member") return role
+
+  const rows = await tx
+    .select({ creatorId: issues.creatorId })
+    .from(issues)
+    .where(
+      and(
+        eq(issues.id, issueId),
+        eq(issues.organizationId, principal.organizationId)
+      )
+    )
+    .limit(1)
+  const issue = rows[0]
+  if (!issue) throw new HttpError({ code: "not_found" })
+  if (issue.creatorId !== principal.userId) {
+    throw new HttpError({ code: "forbidden" })
+  }
+  return role
 }
 
 export const createMcpIssueWriteApplication = (
@@ -210,6 +260,9 @@ export const createMcpIssueWriteApplication = (
       expectedRevision: input.expectedRevision,
     }
     return runIdempotently({
+      authorize: async (tx) => {
+        await requireCurrentDeletePermission(tx, principal, payload.issueId)
+      },
       db,
       principal,
       idempotencyKey: input.idempotencyKey,
@@ -217,15 +270,17 @@ export const createMcpIssueWriteApplication = (
       schema: mcpIssueWriteReceiptSchema,
       toolName: "delete_issue",
       mutate: async (tx, operationId) => {
+        const role = await requireCurrentDeletePermission(
+          tx,
+          principal,
+          payload.issueId
+        )
         const current = await requireIssueRevision(tx, {
           expectedRevision: payload.expectedRevision,
           issueId: payload.issueId,
           organizationId: principal.organizationId,
         })
-        if (
-          principal.role === "member" &&
-          current.creatorId !== principal.userId
-        ) {
+        if (role === "member" && current.creatorId !== principal.userId) {
           throw new HttpError({ code: "forbidden" })
         }
         const deleted = await deleteIssueInTransaction(tx, {

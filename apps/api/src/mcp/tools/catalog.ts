@@ -1,7 +1,5 @@
 import {
-  agentGetIssueToolOutputSchema,
   emptyToolInputSchema,
-  getIssueToolInputSchema,
   issueSearchToolInputSchema,
   issueSearchToolOutputSchema,
   labelSearchToolInputSchema,
@@ -19,15 +17,18 @@ import {
   mcpUpdateIssueToolInputSchema,
   memberSearchToolInputSchema,
   memberSearchToolOutputSchema,
-  readAccountContextToolOutputSchema,
   readIssueAttachmentImageToolInputSchema,
   readIssueAttachmentImageToolResultSchema,
 } from "@enterprise-agentic-saas/agent-contracts"
+import {
+  createGetIssueTool,
+  createReadAccountContextTool,
+} from "@enterprise-agentic-saas/agent-tools"
 import type { Db } from "@enterprise-agentic-saas/db"
 import type { ToolsInput } from "@mastra/core/agent"
 
 import type { McpPrincipal } from "../principal"
-import { createMcpDirectTool } from "./direct-tool"
+import { createMcpDirectTool, createMcpSharedTool } from "./direct-tool"
 import { createMcpReadApplication } from "./read-application"
 import { createMcpWriteApplication, toMcpToolError } from "./write-application"
 
@@ -61,14 +62,9 @@ export const createMcpTools = (db: Db, principal: McpPrincipal): ToolsInput => {
   const tools: ToolsInput = {}
 
   if (principal.scopes.has("account:read")) {
-    tools.read_account_context = createMcpDirectTool({
-      id: "read_account_context",
-      description: "Read the current account context.",
-      annotations: readOnly,
-      inputSchema: emptyToolInputSchema,
-      outputSchema: readAccountContextToolOutputSchema,
-      execute: safe(read.readAccountContext),
-    })
+    tools.read_account_context = createMcpSharedTool(
+      createReadAccountContextTool(async () => read.readAccountContext())
+    )
   }
   if (principal.scopes.has("organization:read")) {
     tools.read_active_organization = createMcpDirectTool({
@@ -107,14 +103,9 @@ export const createMcpTools = (db: Db, principal: McpPrincipal): ToolsInput => {
       outputSchema: issueSearchToolOutputSchema,
       execute: safe(read.searchIssues),
     })
-    tools.get_issue = createMcpDirectTool({
-      id: "get_issue",
-      description: "Read one Issue and its attachment metadata.",
-      annotations: readOnly,
-      inputSchema: getIssueToolInputSchema,
-      outputSchema: agentGetIssueToolOutputSchema,
-      execute: safe(read.getIssue),
-    })
+    tools.get_issue = createMcpSharedTool(
+      createGetIssueTool(async (input) => read.getIssue(input))
+    )
   }
   if (
     principal.scopes.has("issues:read") &&

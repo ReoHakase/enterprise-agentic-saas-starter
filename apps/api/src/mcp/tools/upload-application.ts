@@ -159,6 +159,9 @@ export const uploadMcpAttachment = async (input: {
   if (input.request.method !== "PUT") {
     return new Response(null, { status: 405, headers: { allow: "PUT" } })
   }
+  if (!input.principal.scopes.has("files:write")) {
+    throw new HttpError({ code: "forbidden" })
+  }
   const rows = await input.db
     .select({ upload: mcpAttachmentUploads, storage: storageObjects })
     .from(mcpAttachmentUploads)
@@ -200,6 +203,7 @@ export const uploadMcpAttachment = async (input: {
   const detectedImageFormat = await detectImageFormat(file)
   const runtime = getFileStorageRuntime()
   let object: FileR2Object | null
+  let wroteObject = false
   try {
     object = await runtime.bucket.head(row.storage.objectKey)
     if (!object) {
@@ -212,6 +216,7 @@ export const uploadMcpAttachment = async (input: {
           uploadId: row.upload.id,
         },
       })
+      wroteObject = object !== null
       object ??= await runtime.bucket.head(row.storage.objectKey)
     } else {
       const source = bodyObject(await runtime.bucket.get(row.storage.objectKey))
@@ -236,6 +241,21 @@ export const uploadMcpAttachment = async (input: {
     object.etag.length > 128
   ) {
     throw new HttpError({ code: "service_unavailable", retryAfter: 5 })
+  }
+
+  if (!wroteObject) {
+    try {
+      const source = bodyObject(await runtime.bucket.get(row.storage.objectKey))
+      if (!source) {
+        throw new HttpError({ code: "service_unavailable", retryAfter: 5 })
+      }
+      if (!(await streamsEqual(file.stream(), source.body))) {
+        throw new HttpError({ code: "conflict" })
+      }
+    } catch (cause) {
+      if (cause instanceof HttpError) throw cause
+      throw new HttpError({ code: "service_unavailable", cause, retryAfter: 5 })
+    }
   }
 
   await input.db.transaction(async (tx) => {

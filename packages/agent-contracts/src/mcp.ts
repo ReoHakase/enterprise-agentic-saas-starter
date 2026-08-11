@@ -11,6 +11,7 @@ export const mcpToolErrorCodes = [
   "conflict",
   "forbidden",
   "not_found",
+  "rate_limited",
   "retryable_internal",
   "validation_error",
 ] as const

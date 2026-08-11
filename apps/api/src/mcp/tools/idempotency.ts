@@ -71,6 +71,7 @@ const receiptRecord = (receipt: unknown): Record<string, unknown> => {
 }
 
 export const runIdempotently = async <Output>(input: {
+  authorize?: (tx: McpTransaction) => Promise<void>
   db: Db
   idempotencyKey: string
   payload: unknown
@@ -83,6 +84,7 @@ export const runIdempotently = async <Output>(input: {
   const attempt = async (number: number): Promise<Output> => {
     try {
       return await input.db.transaction(async (tx) => {
+        await input.authorize?.(tx)
         const rows = await tx
           .select({
             payloadDigest: mcpToolOperations.payloadDigest,
