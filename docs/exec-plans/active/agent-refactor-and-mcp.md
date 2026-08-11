@@ -394,6 +394,8 @@ PATはこのphaseへ含めません。
 - [x] AgentとWorkflowがMCP registryにない
 - [x] membership変更とrevokeが即時反映される
 - [x] ChatGPT、Codex、Claude Code相当client configを文書化する
+- [ ] MCP InspectorでOAuth callbackとtool catalogを実際のWeb画面から確認する
+- [ ] Codex local登録でOAuth login、tools、prompts、resourcesを実際に確認する
 
 # Phase 5 PAT形式のMCP個人アクセストークン
 
@@ -447,6 +449,7 @@ PATはこのphaseへ含めません。
 - [ ] Lunaの複数user turn間`reasoning_details`再送を観測する専用live probeを追加し、明示承認後に実行する
 - [ ] Phase 3を実装した
 - [ ] Phase 4を実装した
+- [ ] Phase 4のInspector/Codex手動確認を完了した
 - [ ] Phase 5を実装した
 - [ ] 全受入条件と証跡を確認した
 

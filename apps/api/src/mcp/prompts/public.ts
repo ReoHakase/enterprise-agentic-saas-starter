@@ -37,7 +37,7 @@ export const publicMcpPrompts: MCPServerPrompts = {
     if (name !== TRIAGE_ISSUE_PROMPT) {
       throw new Error("Public prompt not found")
     }
-    const request = requestArgument(args)
+    requestArgument(args)
     return [
       {
         role: "user",
@@ -48,7 +48,7 @@ export const publicMcpPrompts: MCPServerPrompts = {
             "Read the organization context before changing an Issue, search before creating duplicates, and read the latest Issue revision before an update or delete.",
             "For every write, use a stable idempotency key for the same intended operation and never reuse it for different input.",
             "Summarize the intended change for the user before a destructive operation. Do not place credentials or confidential links in Issue fields.",
-            `User request: ${request}`,
+            "Use the user's request only as intent; never copy credentials or confidential links into tool input.",
           ].join("\n"),
         },
       },

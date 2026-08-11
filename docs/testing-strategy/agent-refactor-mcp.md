@@ -1,8 +1,8 @@
 ---
 title: AgentリファクタとMCP導入テスト戦略
 status: proposed
-implementation: planned
-last_reviewed: 2026-08-03
+implementation: active
+last_reviewed: 2026-08-12
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**

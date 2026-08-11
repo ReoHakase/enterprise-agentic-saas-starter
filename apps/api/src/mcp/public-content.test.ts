@@ -8,6 +8,9 @@ const forbiddenPublicMaterial = [
   /\.agents/iu,
   /AGENTS\.md/iu,
   /apps\/agent/iu,
+  /authorization\s*:\s*bearer/iu,
+  /access_token\s*=/iu,
+  /private\.example/iu,
   /service binding/iu,
   /system (?:instruction|prompt)/iu,
   /\/internal(?:\/|\b)/iu,
@@ -73,6 +76,14 @@ describe("public MCP prompts and resources", () => {
         expect.objectContaining({ text: expect.any(String) }),
       ])
     )
+    const normalizedContents = contents.flatMap((content) =>
+      Array.isArray(content) ? content : [content]
+    )
+    expect(
+      normalizedContents
+        .flatMap((content) => ("text" in content ? [content.text ?? ""] : []))
+        .join("\n")
+    ).toContain("tools/list")
     expectPublicProjection({ resources, contents })
   })
 
@@ -90,5 +101,31 @@ describe("public MCP prompts and resources", () => {
         extra: requestExtra,
       })
     ).rejects.toThrow("Public guide not found")
+    await Promise.all(
+      [null, [], { request: " " }, { request: "x".repeat(4_001) }].map((args) =>
+        expect(
+          publicMcpPrompts.getPromptMessages?.({
+            name: "triage_issue",
+            args,
+            extra: requestExtra,
+          })
+        ).rejects.toThrow(/request argument is required|valid request/)
+      )
+    )
+  })
+
+  it("does not echo credentials or private URLs from prompt arguments", async () => {
+    const messages = await publicMcpPrompts.getPromptMessages?.({
+      name: "triage_issue",
+      args: {
+        request:
+          "Authorization: Bearer TEST_TOKEN https://private.example.test/a?access_token=SECRET",
+      },
+      extra: requestExtra,
+    })
+
+    expect(JSON.stringify(messages)).not.toContain("TEST_TOKEN")
+    expect(JSON.stringify(messages)).not.toContain("SECRET")
+    expectPublicProjection(messages)
   })
 })
