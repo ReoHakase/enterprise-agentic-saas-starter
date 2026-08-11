@@ -28,10 +28,12 @@ const request = (authorization?: string) =>
     method: "POST",
   })
 
-const authorization = (membership = true) =>
+const authorization = (
+  membership = true,
+  role: "owner" | "admin" | "member" = "admin"
+) =>
   createAuthorizationService({
-    findMembership: async () =>
-      membership ? { id: "member_1", role: "admin" } : null,
+    findMembership: async () => (membership ? { id: "member_1", role } : null),
   })
 
 describe("MCP OAuth authentication", () => {
@@ -54,6 +56,20 @@ describe("MCP OAuth authentication", () => {
     if (!principal) throw new Error("Expected an MCP principal")
     expect([...principal.scopes]).toEqual(["issues:read"])
   })
+
+  it.each(["owner", "admin", "member"] as const)(
+    "keeps the current membership role in the MCP principal (%s)",
+    async (role) => {
+      const principal = await authenticateMcpRequest({
+        authorization: authorization(true, role),
+        request: request("Bearer mcp_at_secret"),
+        resource: mcpOAuthResource,
+        verifyAccessToken: async () => credential(),
+      })
+
+      expect(principal).toMatchObject({ role })
+    }
+  )
 
   it.each([
     undefined,

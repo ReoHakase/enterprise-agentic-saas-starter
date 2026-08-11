@@ -203,6 +203,59 @@ describe("MCP business tools", () => {
     ).rejects.toMatchObject({ code: "forbidden" })
   })
 
+  it.each([
+    { allowed: true, creatorId: "mcp-user-b", role: "owner" },
+    { allowed: true, creatorId: "mcp-user-b", role: "admin" },
+    { allowed: true, creatorId: "mcp-user-a", role: "member" },
+    { allowed: false, creatorId: "mcp-user-b", role: "member" },
+  ] as const)(
+    "enforces the current $role role for deleting a $creatorId Issue",
+    async ({ allowed, creatorId, role }) => {
+      const { db } = await createFixture()
+      await db
+        .update(schema.member)
+        .set({ role })
+        .where(eq(schema.member.id, "mcp-member-a"))
+      await db.insert(schema.issues).values({
+        id: `role-delete-${role}-${creatorId}`,
+        organizationId: "mcp-org-a",
+        number: 1,
+        title: "Role authorization target",
+        creatorId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+
+      expect(createMcpTools(db, principal(["issues:delete"]))).toHaveProperty(
+        "delete_issue"
+      )
+      const write = createMcpWriteApplication(db, principal(["issues:delete"]))
+      const deletion = write.deleteIssue({
+        expectedRevision: 1,
+        idempotencyKey: `role-delete-${role}-${creatorId}-0001`,
+        issueId: `role-delete-${role}-${creatorId}`,
+      })
+      const outcome = await deletion.then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason) => ({ reason, status: "rejected" as const })
+      )
+
+      expect(outcome).toMatchObject(
+        allowed
+          ? {
+              status: "fulfilled",
+              value: {
+                issue: {
+                  deleted: true,
+                  id: `role-delete-${role}-${creatorId}`,
+                },
+              },
+            }
+          : { reason: { code: "forbidden" }, status: "rejected" }
+      )
+    }
+  )
+
   it("executes direct Issue writes once and replays only the same payload", async () => {
     const { db } = await createFixture()
     const write = createMcpWriteApplication(db, principal())
@@ -288,6 +341,7 @@ describe("MCP business tools", () => {
 
   it("rechecks current membership before replaying a destructive operation", async () => {
     const { db } = await createFixture()
+    expect(createMcpTools(db, principal())).toHaveProperty("delete_issue")
     await db
       .update(schema.member)
       .set({ role: "member" })
