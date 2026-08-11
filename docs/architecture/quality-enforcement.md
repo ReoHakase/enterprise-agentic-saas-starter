@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-11
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -247,6 +247,7 @@ thresholdを超える場合は同じ変更内でrefactorします。baseline比�
 ### pre-commit
 
 - commit message
+- staged source変更に対するworkspace別のVitest `related --run`。Vitest config、package manifest、setup、削除fileはunit suiteへ縮退する
 - staged Oxfmt
 - lint可能なstaged fileがある場合のrootと全workspaceのOxlint
 

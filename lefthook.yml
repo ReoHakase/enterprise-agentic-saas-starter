@@ -12,6 +12,9 @@ pre-commit:
       glob: "*"
       run: bun run format -- --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
+    vitest-related:
+      glob: "*"
+      run: bun scripts/test-related.ts {staged_files}
     oxlint:
       glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint
