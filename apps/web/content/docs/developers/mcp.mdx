@@ -1,0 +1,60 @@
+---
+title: MCP specification
+description: The public remote MCP contract for Enterprise SaaS integrations.
+---
+
+## Endpoint and transport
+
+The public MCP endpoint is `<API_PUBLIC_URL>/mcp`. It uses stateless Streamable HTTP with `POST /mcp` for protocol requests. A `GET /mcp` request is not a protocol session and returns `405 Method Not Allowed` with `Allow: POST`.
+
+The public server executes the API application services directly. It does not route requests through the product Agent, Agent Worker, Agent DB, or an internal workflow runtime.
+
+## OAuth and organization binding
+
+Clients use OAuth Authorization Code with PKCE. The issued credential is bound to one organization; a client cannot switch organizations through a tool argument or request header.
+
+Every request is evaluated against the credential, the current organization membership, the current permission, and the target resource. Losing membership or permission takes effect for both tool discovery and tool calls.
+
+## Scopes
+
+The public scope set is:
+
+- `account:read`
+- `organization:read`
+- `members:read`
+- `issues:read`
+- `issues:create`
+- `issues:update`
+- `issues:delete`
+- `files:read`
+- `files:write`
+
+The effective tool catalog is the intersection of the credential scopes and the current authorization state. Clients should treat `tools/list` as a capability discovery response, not as a replacement for authorization checks at call time.
+
+## Tools and resources
+
+Read tools cover account context, active organization, members, labels, issues, and readable image attachments. Write tools cover issue creation, update, deletion, attachment operations, and the short-lived upload-session flow.
+
+Public guide resources are read-only:
+
+- `guide://enterprise-agentic-saas/issues`
+- `guide://enterprise-agentic-saas/attachments`
+
+The public prompt `triage_issue` describes an issue triage workflow. Clients should search before creating, fetch the latest revision before updating or deleting, use a stable idempotency key for writes, and summarize destructive operations before executing them.
+
+## Write and upload safety
+
+Writes require the matching scope, current permission, a valid organization and resource, and the expected revision where applicable. Write requests use an idempotency key between 16 and 128 characters and are applied through the API transaction and audit boundary.
+
+Attachments use this sequence:
+
+1. Create a short-lived upload session.
+2. Upload bytes to the single-use upload URL.
+3. Check the upload status.
+4. Attach the ready asset to the issue.
+
+The upload flow accepts bytes through the session and does not use base64-encoded file data. The maximum upload size is 20 MB.
+
+## Public boundary
+
+Internal Agent skills, system instructions, private endpoints, internal tool routing, workflows, sampling, and UI-only tools are not part of the public MCP catalog. Do not assume that a private internal instruction can be retrieved through MCP.
