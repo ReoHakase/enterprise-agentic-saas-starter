@@ -1,3 +1,4 @@
+import { MCP_PERMISSION_SCOPES } from "@enterprise-agentic-saas/auth/client"
 import { describe, expect, it } from "vitest"
 
 import { parseMcpOAuthScopes, resolveMcpOAuthLoginRedirect } from "./query"
@@ -13,6 +14,18 @@ describe("MCP OAuth scope query", () => {
         description: "Keep access after the client is closed",
         scope: "offline_access",
       },
+    ])
+  })
+
+  it("keeps the public scope labels aligned with the OAuth contract", () => {
+    const summaries = parseMcpOAuthScopes(
+      [...MCP_PERMISSION_SCOPES, "offline_access"].join(" ")
+    )
+
+    expect(summaries).toHaveLength(MCP_PERMISSION_SCOPES.length + 1)
+    expect(summaries?.map(({ scope }) => scope)).toEqual([
+      ...MCP_PERMISSION_SCOPES,
+      "offline_access",
     ])
   })
 

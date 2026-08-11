@@ -1,25 +1,23 @@
 import { oauthProvider } from "@better-auth/oauth-provider"
 import { APIError } from "better-auth"
 
+import {
+  MCP_OAUTH_SCOPES,
+  MCP_PERMISSION_SCOPES,
+  type McpPermissionScope,
+} from "../mcp-oauth-contract"
+
+export {
+  MCP_OAUTH_SCOPES,
+  MCP_PERMISSION_SCOPES,
+  type McpPermissionScope,
+} from "../mcp-oauth-contract"
+
 export const MCP_OAUTH_ORGANIZATION_CLAIM =
   "https://enterprise-agentic-saas.example/organization_id"
 
 export const MCP_OAUTH_ACCESS_TOKEN_PREFIX = "mcp_at_"
 export const MCP_OAUTH_REFRESH_TOKEN_PREFIX = "mcp_rt_"
-
-export const MCP_PERMISSION_SCOPES = [
-  "account:read",
-  "organization:read",
-  "members:read",
-  "issues:read",
-  "issues:create",
-  "issues:update",
-  "issues:delete",
-  "files:read",
-  "files:write",
-] as const
-
-export type McpPermissionScope = (typeof MCP_PERMISSION_SCOPES)[number]
 
 export type McpOAuthAccessToken = {
   audience: string
@@ -40,11 +38,6 @@ const MCP_READ_SCOPES = [
 ] as const satisfies readonly McpPermissionScope[]
 
 const mcpPermissionScopes = new Set<string>(MCP_PERMISSION_SCOPES)
-
-export const MCP_OAUTH_SCOPES = [
-  "offline_access",
-  ...MCP_PERMISSION_SCOPES,
-] as const
 
 const mcpOAuthScopes = new Set<string>(MCP_OAUTH_SCOPES)
 
@@ -83,6 +76,15 @@ type CreateMcpOAuthProviderOptions = {
 const hasMcpPermissionScope = (scopes: readonly string[]) =>
   scopes.some((scope) => mcpPermissionScopes.has(scope))
 
+const requireMcpPermissionScope = (scopes: readonly string[]) => {
+  if (!hasMcpPermissionScope(scopes)) {
+    throw APIError.from("BAD_REQUEST", {
+      code: "invalid_scope",
+      message: "At least one MCP permission scope is required",
+    })
+  }
+}
+
 export const hashMcpOAuthToken = async (token: string) => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -119,28 +121,28 @@ export const createMcpOAuthProvider = ({
     postLogin: {
       page: new URL("/oauth/organization", webAppOrigin).toString(),
       shouldRedirect: async ({ session, scopes }) => {
+        requireMcpPermissionScope(scopes)
         const organizationId =
           typeof session.activeOrganizationId === "string"
             ? session.activeOrganizationId
             : undefined
         return (
-          hasMcpPermissionScope(scopes) &&
-          (!organizationId ||
-            !(await hasMembership({ organizationId, userId: session.userId })))
+          !organizationId ||
+          !(await hasMembership({ organizationId, userId: session.userId }))
         )
       },
       consentReferenceId: async ({ session, scopes }) => {
+        requireMcpPermissionScope(scopes)
         const organizationId =
           typeof session.activeOrganizationId === "string"
             ? session.activeOrganizationId
             : undefined
         if (
-          hasMcpPermissionScope(scopes) &&
-          (!organizationId ||
-            !(await hasMembership({
-              organizationId,
-              userId: session.userId,
-            })))
+          !organizationId ||
+          !(await hasMembership({
+            organizationId,
+            userId: session.userId,
+          }))
         ) {
           throw APIError.from("BAD_REQUEST", {
             code: "MCP_ORGANIZATION_REQUIRED",
@@ -150,7 +152,13 @@ export const createMcpOAuthProvider = ({
         return organizationId ?? undefined
       },
     },
-    async customAccessTokenClaims({ referenceId, resource: audience, user }) {
+    async customAccessTokenClaims({
+      referenceId,
+      resource: audience,
+      scopes,
+      user,
+    }) {
+      requireMcpPermissionScope(scopes)
       if (
         audience !== resource ||
         !referenceId ||

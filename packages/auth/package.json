@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./github-oauth": "./src/github-oauth.ts",
+    "./mcp-oauth-contract": "./src/mcp-oauth-contract.ts",
     "./mcp-oauth": "./src/server/mcp-oauth.ts"
   },
   "scripts": {

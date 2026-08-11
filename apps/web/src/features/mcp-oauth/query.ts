@@ -1,3 +1,8 @@
+import {
+  MCP_PERMISSION_SCOPES,
+  type McpPermissionScope,
+} from "@enterprise-agentic-saas/auth/client"
+
 const scopeLabels = {
   "account:read": "Read your account profile",
   "organization:read": "Read organization details",
@@ -10,10 +15,14 @@ const scopeLabels = {
   "files:write": "Upload and manage Issue files",
 } as const
 
-type McpPermissionScope = keyof typeof scopeLabels
+const mcpPermissionScopeLabels = scopeLabels satisfies Record<
+  McpPermissionScope,
+  string
+>
+const mcpPermissionScopes = new Set<string>(MCP_PERMISSION_SCOPES)
 
 const isMcpPermissionScope = (scope: string): scope is McpPermissionScope =>
-  Object.hasOwn(scopeLabels, scope)
+  mcpPermissionScopes.has(scope)
 
 type SearchParams = Record<string, string | string[] | undefined>
 
@@ -60,7 +69,7 @@ export const parseMcpOAuthScopes = (
         scope,
       })
     } else if (isMcpPermissionScope(scope)) {
-      summaries.push({ description: scopeLabels[scope], scope })
+      summaries.push({ description: mcpPermissionScopeLabels[scope], scope })
     } else {
       return null
     }
