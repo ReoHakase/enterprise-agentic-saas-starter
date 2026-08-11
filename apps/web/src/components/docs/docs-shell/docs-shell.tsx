@@ -2,6 +2,7 @@ import Link from "fumadocs-core/link"
 import type { Root } from "fumadocs-core/page-tree"
 import type { ReactNode } from "react"
 
+import { DocsSearch } from "../docs-search/docs-search"
 import { DocsSidebar } from "../docs-sidebar/docs-sidebar"
 
 export const DocsShell = ({
@@ -23,6 +24,7 @@ export const DocsShell = ({
           </span>
           <span className="truncate">Enterprise SaaS Documentation</span>
         </Link>
+        <DocsSearch />
       </div>
     </header>
     <div className="mx-auto flex w-full max-w-7xl items-start px-4 sm:px-6 lg:px-8">
