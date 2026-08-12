@@ -1,0 +1,33 @@
+---
+title: Skills Specification
+description: The public boundary for reusable integration guidance.
+icon: Sparkles
+---
+
+## Purpose
+
+A Skill is a bounded, task-oriented set of guidance that helps an integration follow a supported workflow. Public Skills describe the intended inputs, safety constraints, and observable result of a workflow; they do not expose private implementation instructions.
+
+## Public publishing rules
+
+Published guidance must:
+
+- name the supported workflow and required context;
+- describe the authorization and organization boundary;
+- require confirmation before destructive actions;
+- avoid credentials, private URLs, confidential links, and raw provider errors;
+- point to public MCP prompts or read-only resources when a client needs machine-readable guidance.
+
+## Relationship to MCP
+
+MCP is the public protocol surface. MCP prompts and resources are the supported way for an MCP client to discover published workflow guidance. A client should use the named public prompt or resource and then call only the tools available through its current scope and authorization.
+
+There is no public catch-all `get_skill` fallback. Internal Agent Skills are not automatically published as MCP Skills.
+
+## Private implementation boundary
+
+Internal Skill files, system instructions, Agent routing, private endpoints, workflow internals, and tool implementation details remain private. This boundary keeps public integration behavior stable while allowing internal guidance to evolve independently.
+
+## Client responsibilities
+
+Clients should treat public Skills as guidance rather than an authorization grant. Re-check the active organization, target resource, revision, and write scope immediately before a mutation, and never include secrets in prompts, resources, tool arguments, or attachments.

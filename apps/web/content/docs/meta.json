@@ -1,0 +1,6 @@
+{
+  "title": "Documentation",
+  "icon": "BookOpen",
+  "defaultOpen": true,
+  "pages": ["index", "manual", "developers", "privacy"]
+}

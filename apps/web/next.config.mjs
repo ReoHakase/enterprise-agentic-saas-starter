@@ -1,4 +1,5 @@
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare"
+import { createMDX } from "fumadocs-mdx/next"
 
 const safeOrigin = (value) => {
   if (!value) return undefined
@@ -40,6 +41,14 @@ const nextConfig = {
       },
     ]
   },
+  async rewrites() {
+    return [
+      {
+        source: "/docs/:path*.md",
+        destination: "/llms.mdx/docs/:path*",
+      },
+    ]
+  },
   async headers() {
     return [
       {
@@ -56,7 +65,13 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+const withMDX = createMDX({
+  macro: {
+    include: ["**/src/lib/docs/source.ts"],
+  },
+})
+
+export default withMDX(nextConfig)
 
 if (process.env.NODE_ENV === "development") {
   initOpenNextCloudflareForDev()

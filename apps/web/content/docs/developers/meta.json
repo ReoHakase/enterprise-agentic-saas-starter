@@ -1,0 +1,7 @@
+{
+  "title": "Developers",
+  "icon": "Code",
+  "defaultOpen": true,
+  "pagesIndex": "index",
+  "pages": ["mcp", "skills"]
+}

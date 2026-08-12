@@ -1,0 +1,151 @@
+---
+title: MCP Specification
+description: The public remote MCP contract for Enterprise SaaS integrations.
+icon: Network
+---
+
+import { Code2Icon, TerminalIcon } from "lucide-react"
+
+## Endpoint and transport
+
+The public MCP endpoint is `<API_PUBLIC_URL>/mcp`. It uses stateless Streamable HTTP with `POST /mcp` for protocol requests. A `GET /mcp` request is not a protocol session and returns `405 Method Not Allowed` with `Allow: POST`.
+
+The public server executes the API application services directly. It does not route requests through the product Agent, Agent Worker, Agent DB, or an internal workflow runtime.
+
+## OAuth and organization binding
+
+Clients use OAuth Authorization Code with PKCE. The issued credential is bound to one organization; a client cannot switch organizations through a tool argument or request header.
+
+Every request is evaluated against the credential, the current organization membership, the current permission, and the target resource. Losing membership or permission takes effect for both tool discovery and tool calls.
+
+## Scopes
+
+The public scope set is:
+
+- `account:read`
+- `organization:read`
+- `members:read`
+- `issues:read`
+- `issues:create`
+- `issues:update`
+- `issues:delete`
+- `files:read`
+- `files:write`
+
+The effective tool catalog is the intersection of the credential scopes and the current authorization state. Clients should treat `tools/list` as a capability discovery response, not as a replacement for authorization checks at call time.
+
+## Tools and resources
+
+Read tools cover account context, active organization, members, labels, issues, and readable image attachments. Write tools cover issue creation, update, deletion, attachment operations, and the short-lived upload-session flow.
+
+Public guide resources are read-only:
+
+- `guide://enterprise-agentic-saas/issues`
+- `guide://enterprise-agentic-saas/attachments`
+
+The public prompt `triage_issue` describes an issue triage workflow. Clients should search before creating, fetch the latest revision before updating or deleting, use a stable idempotency key for writes, and summarize destructive operations before executing them.
+
+<Files>
+  <Folder name="mcp-client" defaultOpen>
+    <File name="client.ts" />
+    <File name="oauth.ts" />
+  </Folder>
+  <File name="package.json" />
+</Files>
+
+## Write and upload safety
+
+Writes require the matching scope, current permission, a valid organization and resource, and the expected revision where applicable. Write requests use an idempotency key between 16 and 128 characters and are applied through the API transaction and audit boundary.
+
+Attachments use this sequence:
+
+1. Create a short-lived upload session.
+2. Upload bytes to the single-use upload URL.
+3. Check the upload status.
+4. Attach the ready asset to the issue.
+
+The upload flow accepts bytes through the session and does not use base64-encoded file data. The maximum upload size is 20 MB.
+
+<Steps>
+  <Step>
+    ### Discover capabilities
+
+    Call `tools/list` with the current OAuth credential and use only the returned catalog.
+
+  </Step>
+  <Step>
+    ### Read the latest revision
+
+    Fetch the target resource immediately before a revision-protected mutation.
+
+  </Step>
+  <Step>
+    ### Write idempotently
+
+    Reuse one stable idempotency key when retrying the same intended mutation.
+
+  </Step>
+</Steps>
+
+<TypeTable
+  type={{
+    organizationId: {
+      description: "The organization bound to the OAuth credential.",
+      required: true,
+      type: "string",
+    },
+    idempotencyKey: {
+      description:
+        "A stable key between 16 and 128 characters for a write attempt.",
+      required: true,
+      type: "string",
+    },
+    revision: {
+      description: "The expected current revision for protected mutations.",
+      type: "number",
+    },
+  }}
+/>
+
+## Public boundary
+
+Internal Agent skills, system instructions, private endpoints, internal tool routing, workflows, sampling, and UI-only tools are not part of the public MCP catalog. Do not assume that a private internal instruction can be retrieved through MCP.
+
+## Markdown examples
+
+This developer page intentionally demonstrates the public Markdown surface used by the docs site.
+
+> Public documentation describes the stable integration boundary. It does not expose internal runtime instructions.
+
+- [x] Discover capabilities with `tools/list`.
+- [x] Confirm the organization and scope before a write.
+- [ ] Treat an old revision as safe to overwrite.
+
+The intentionally ~~implicit~~ explicit flow is: discover, authorize, read the revision, then write with an idempotency key. See https://modelcontextprotocol.io for the upstream protocol reference, or return to the [MCP contract](/docs/developers/mcp).
+
+| Operation                           | Required scope  | Revision | Result                     |
+| ----------------------------------- | --------------- | :------: | -------------------------- |
+| `issues/list`                       | `issues:read`   |    No    | Current authorized issues  |
+| `issues/update`                     | `issues:update` |   Yes    | Idempotent mutation        |
+| `attachments/create-upload-session` | `files:write`   |    No    | Short-lived upload session |
+
+### Client examples
+
+The tab labels below contain MDX, including Lucide icons. Each tab is the same request represented for a different client.
+
+```ts title="TypeScript client" tab="<Code2Icon /> TypeScript" tab-group="mcp-client"
+const response = await mcp.callTool("issues/list", {
+  organizationId: "org_public",
+})
+```
+
+```bash title="cURL client" tab="<TerminalIcon /> cURL" tab-group="mcp-client"
+curl -X POST "$API_PUBLIC_URL/mcp" \\
+  -H "Authorization: Bearer $ACCESS_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  --data '{"method":"tools/list"}'
+```
+
+The checklist above is a contract reminder[^gfm], not an authorization shortcut.
+
+[^gfm]: GitHub-Flavored Markdown (GFM) is rendered here to make tables, task lists, autolinks, strikethrough, and footnotes easy to verify.

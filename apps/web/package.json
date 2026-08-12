@@ -77,8 +77,11 @@
     "better-auth": "catalog:",
     "bowser": "catalog:",
     "date-fns": "catalog:",
+    "fumadocs-core": "catalog:",
+    "fumadocs-mdx": "catalog:",
     "jotai": "catalog:",
     "lucide-react": "catalog:",
+    "marked": "catalog:",
     "next": "catalog:",
     "next-themes": "catalog:",
     "nuqs": "catalog:",
@@ -87,7 +90,8 @@
     "server-only": "catalog:",
     "sonner": "catalog:",
     "streamdown": "catalog:",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/portless-topology": "workspace:*",
@@ -106,6 +110,7 @@
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",
     "@types/bun": "catalog:",
+    "@types/mdx": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

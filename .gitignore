@@ -38,6 +38,7 @@ test-results/
 
 # Build Outputs
 .open-next/
+.source/
 .mastra/
 .wrangler/
 storybook-static/
