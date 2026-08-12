@@ -169,6 +169,20 @@ test.describe("public documentation", () => {
       page.locator("[data-docs-search-highlight]").first()
     ).toHaveClass(/bg-yellow-200/u)
 
+    const searchStatus = page.locator(
+      'p[aria-live="polite"][aria-atomic="true"]'
+    )
+    await expect(searchStatus).toHaveText(/\d+ documentation results found\./u)
+    const results = page.locator("[data-docs-search-result]")
+    await expect(results.nth(1)).toBeVisible()
+    await input.press("ArrowDown")
+    await expect(results.nth(1)).toHaveAttribute("data-active", "true")
+    await input.press("End")
+    await expect(results.last()).toHaveAttribute("data-active", "true")
+    await expect(results.last()).toBeInViewport()
+    await input.press("Home")
+    await expect(results.first()).toHaveAttribute("data-active", "true")
+
     const result = page.getByRole("option", { name: /MCP/i }).first()
     await expect(result).toBeVisible()
     await result.click()
@@ -183,16 +197,6 @@ test.describe("public documentation", () => {
     await expect(
       page.locator("[data-docs-search-result-content] code").first()
     ).toBeVisible()
-    await input.fill("MCP")
-    const results = page.locator("[data-docs-search-result]")
-    await expect(results.nth(1)).toBeVisible()
-    await input.press("ArrowDown")
-    await expect(results.nth(1)).toHaveAttribute("data-active", "true")
-    await input.press("End")
-    await expect(results.last()).toHaveAttribute("data-active", "true")
-    await expect(results.last()).toBeInViewport()
-    await input.press("Home")
-    await expect(results.first()).toHaveAttribute("data-active", "true")
     await input.fill("Privacy Policy")
     await expect(results.first()).toContainText("Privacy Policy")
     await input.press("Enter")
