@@ -147,7 +147,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "bun run lint:root && turbo run lint",
-    "lint:root": "oxlint --deny-warnings .github scripts commitlint.config.ts knip.config.ts oxfmt.config.ts oxlint.config.ts vitest.config.ts vitest.related.config.ts",
+    "lint:root": "oxlint --deny-warnings .github scripts commitlint.config.ts knip.config.ts oxfmt.config.ts oxlint.config.ts vitest.config.ts",
     "observability:check": "bun run scripts/observability.ts check",
     "observability:down": "bun run scripts/observability.ts down",
     "observability:up": "bun run scripts/observability.ts up",

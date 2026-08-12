@@ -7,6 +7,7 @@ import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
+const relatedMode = process.env.VITEST_RELATED === "1"
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
 const nodeCoverageIncludes = [
@@ -56,6 +57,21 @@ const browserAliases = {
   ),
   "server-only": path.join(dirname, "test-support/storybook/server-only.ts"),
 }
+const unitAliases = {
+  "next/link": browserAliases["next/link"],
+}
+const unitTest = (name: string) => ({
+  name,
+  environment: "happy-dom",
+  include: [
+    "*.test.{ts,tsx}",
+    "src/instrumentation*.test.ts",
+    "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
+    "testing/**/*.test.{ts,tsx}",
+  ],
+  exclude: ["**/*.browser.test.{ts,tsx}"],
+  setupFiles: ["./vitest.setup.ts"],
+})
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
   define: {
@@ -84,10 +100,12 @@ const storybookProject = (theme: "light" | "dark") => ({
 })
 
 export default defineConfig({
+  root: dirname,
   plugins: [react()],
   resolve: {
     alias: {
       "@": path.join(dirname, "src"),
+      ...(relatedMode ? unitAliases : {}),
     },
   },
   test: {
@@ -113,31 +131,39 @@ export default defineConfig({
             },
           }),
     },
-    projects: [
-      "./vitest.unit.config.ts",
-      storybookProject("light"),
-      storybookProject("dark"),
-      {
-        extends: true,
-        define: {
-          "process.env": "{}",
-        },
-        resolve: { alias: browserAliases },
-        test: {
-          name: "browser",
-          include: [
-            "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
-            "testing/**/*.browser.test.{ts,tsx}",
+    ...(relatedMode
+      ? unitTest("web-unit")
+      : {
+          projects: [
+            {
+              extends: true,
+              resolve: { alias: unitAliases },
+              test: unitTest("unit"),
+            },
+            storybookProject("light"),
+            storybookProject("dark"),
+            {
+              extends: true,
+              define: {
+                "process.env": "{}",
+              },
+              resolve: { alias: browserAliases },
+              test: {
+                name: "browser",
+                include: [
+                  "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
+                  "testing/**/*.browser.test.{ts,tsx}",
+                ],
+                setupFiles: ["./vitest.browser.setup.ts"],
+                browser: {
+                  enabled: true,
+                  provider: playwright({}),
+                  headless: true,
+                  instances: [{ browser: "chromium" }],
+                },
+              },
+            },
           ],
-          setupFiles: ["./vitest.browser.setup.ts"],
-          browser: {
-            enabled: true,
-            provider: playwright({}),
-            headless: true,
-            instances: [{ browser: "chromium" }],
-          },
-        },
-      },
-    ],
+        }),
   },
 })

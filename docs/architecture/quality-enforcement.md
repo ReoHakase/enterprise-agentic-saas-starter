@@ -11,7 +11,6 @@ applies_to:
   - .jscpd.json
   - lefthook.yml
   - vitest.config.ts
-  - vitest.related.config.ts
   - .github/**/*.test.ts
   - .github/workflows/**
 ---
@@ -249,7 +248,7 @@ thresholdを超える場合は同じ変更内でrefactorします。baseline比�
 
 - commit message
 - staged source変更に対するリポジトリルートのVitest `related --run`。
-  `vitest.related.config.ts`のTest Projectsが
+  `VITEST_RELATED=1`で切り替えた既存の`vitest.config.ts`のTest Projectsが
   ワークスペースをまたぐ静的`import`を追跡し、1つのVitestプロセスで関連する単体・統合テストを実行する。
   設定、マニフェスト、setup、`tsconfig.json`、DBトリガーは`forceRerunTriggers`で全Nodeテストへ
   縮退し、削除ファイルはリポジトリルートの単体・統合テストへ縮退する

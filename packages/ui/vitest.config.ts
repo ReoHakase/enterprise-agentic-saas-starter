@@ -6,6 +6,7 @@ import { playwright } from "@vitest/browser-playwright"
 import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
+const relatedMode = process.env.VITEST_RELATED === "1"
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
 const nodeCoverageIncludes = [
@@ -26,6 +27,12 @@ const coverageExcludes = [
   "**/*.browser.test.{ts,tsx}",
   "**/test-support/**",
 ]
+const unitTest = (name: string) => ({
+  name,
+  environment: "happy-dom",
+  include: ["src/**/*.test.{ts,tsx}"],
+  setupFiles: ["./vitest.setup.ts"],
+})
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -50,6 +57,7 @@ const storybookProject = (theme: "light" | "dark") => ({
 })
 
 export default defineConfig({
+  root: dirname,
   optimizeDeps: {
     include: [
       "@base-ui/react/alert-dialog",
@@ -81,10 +89,16 @@ export default defineConfig({
             },
           }),
     },
-    projects: [
-      "./vitest.unit.config.ts",
-      storybookProject("light"),
-      storybookProject("dark"),
-    ],
+    ...(relatedMode
+      ? unitTest("ui-unit")
+      : {
+          projects: [
+            {
+              test: unitTest("unit"),
+            },
+            storybookProject("light"),
+            storybookProject("dark"),
+          ],
+        }),
   },
 })

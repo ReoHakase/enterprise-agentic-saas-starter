@@ -22,10 +22,10 @@ pre-commitはコミットメッセージ、整形、静的検査を短時間で�
 ## 決定
 
 pre-commitに限り、`lefthook.yml`の単一コマンドが`{staged_files}`をリポジトリルートの
-`vitest related --config vitest.related.config.ts --run --coverage=false`へ渡す。
-`vitest.related.config.ts`はVitest標準のTest Projectsでリポジトリルート、各Nodeワークスペース、
-Web/UIの`unit` projectを1つのVitestプロセスへ登録する。Browser Mode、Storybook、E2E、
-有料モデルテストは登録しない。
+`VITEST_RELATED=1 vitest related --config vitest.config.ts --run --coverage=false`へ渡す。既存の
+`vitest.config.ts`は`VITEST_RELATED=1`のときだけVitest標準のTest Projectsでリポジトリルート、
+各Nodeワークスペース、Web/UIの`unit` projectを1つのVitestプロセスへ登録する。Browser Mode、
+Storybook、E2E、有料モデルテストは登録しない。
 
 リポジトリルートの選択用設定にある`forceRerunTriggers`へマニフェスト、Vitest/Vite設定、setup、
 `tsconfig.json`、DBマイグレーション、スキーマ、Drizzle設定を明示する。これらの変更ではTest Projectsに
@@ -41,8 +41,8 @@ pre-pushの`bun run check`、PR、`main`の全件テスト、リポジトリル�
 - Vitestの`related`が各Test ProjectのVite依存グラフを使うため、共有パッケージから利用側のテストまで
   ワークスペースをまたいで選択できる。
 - 全staged fileを1つのVitestプロセスへ渡すため、Lefthookコマンドごとの重複起動と重複選択を作らない。
-- Web/UIの`unit`設定をproject設定ファイルとして通常実行と選択実行から共有し、alias、setup、
-  `include`をリポジトリルートへ複製しない。
+- Web/UIの既存設定内で`unit` projectの定義を通常実行と選択実行から共有し、alias、setup、`include`を
+  リポジトリルートへ複製しない。
 - 部分テストへカバレッジ閾値を適用すると全体閾値を満たせないため、カバレッジを無効にする。
   カバレッジはpre-push、PR、`main`の全件テストで維持する。
 - 選択の不確実性をリポジトリルートの`forceRerunTriggers`と削除ファイル専用の全件実行で扱い、
@@ -73,8 +73,9 @@ pre-pushの`bun run check`、PR、`main`の全件テスト、リポジトリル�
 ## 強制方法
 
 - `lefthook.yml`のpre-commitからリポジトリルートの選択用設定を使う単一の`vitest related`を呼ぶ。
-- `vitest.related.config.ts`のTest Projectsと`forceRerunTriggers`、Web/UIの共有`unit` project設定、
-  削除ファイル用の`git diff --diff-filter=D`で境界を固定する。
+- 既存の`vitest.config.ts`を`VITEST_RELATED=1`でTest Projectsへ切り替え、rootの
+  `forceRerunTriggers`、Web/UIの共有`unit` project定義、削除ファイル用の
+  `git diff --diff-filter=D`で境界を固定する。
 - `docs/architecture/quality-enforcement.md`と`docs/testing-strategy/common/ci-execution.md`でlocal hookと
   PR・`main`の全件testの境界を説明する。
 - `bun run check`とCIのquality laneは全件test契約を維持する。
