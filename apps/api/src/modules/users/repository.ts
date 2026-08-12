@@ -155,6 +155,10 @@ export const resolveAndPersistActiveOrganizationId = async (
           : null
     }
 
+    if (resolvedOrganizationId === (input.activeOrganizationId ?? null)) {
+      return resolvedOrganizationId
+    }
+
     if (input.sessionId !== "test_session") {
       const now = new Date()
       await ensureAgentSessionContextInTransaction(tx, {
