@@ -46,4 +46,4 @@ last_reviewed: 2026-08-12
 - [ADR-011 coding agentのskillとMCP設定をNixで管理する](ADR-011-nix-managed-agent-config.md)
 - [ADR-012 Mastra MemoryとBetter Authの標準機能を独自耐久化より優先する](ADR-012-standard-memory-and-auth-delivery.md)
 - [ADR-013 固定ローカル環境の生エラーをLogsだけへ保存する](ADR-013-local-raw-errors-in-logs-only.md)
-- [ADR-014 pre-commitのworkspace別Vitest related選択](ADR-014-local-related-vitest-hook.md)
+- [ADR-014 pre-commitのVitest Test Projects選択](ADR-014-local-related-vitest-hook.md)

@@ -6,6 +6,7 @@ last_reviewed: 2026-08-12
 applies_to:
   - package.json
   - turbo.json
+  - vitest.related.config.ts
   - .github/workflows/**
   - apps/**/package.json
   - packages/**/package.json
@@ -19,10 +20,14 @@ applies_to:
 
 通常PRと`main`では無料テストを全件実行し、変更選択による見落としを作りません。
 
-rootの公開scriptとPR・`main`のtestは全件実行を維持します。ローカルのpre-commitだけは、
-ADR-014に従ってLefthookのworkspace別commandからstaged fileをVitest `related --run`へ渡します。
-config、manifest、setup、tsconfig、DB triggerはVitestの`forceRerunTriggers`でworkspaceのunit suiteへ
-縮退し、削除fileはrootのunit・integration suiteへ縮退します。browser、E2E、paid testは対象にしません。
+リポジトリルートの公開テストスクリプトとPR・`main`のテストは全件実行を維持します。ローカルの
+pre-commitだけは、ADR-014に従ってLefthookの単一コマンドからstaged fileをリポジトリルートの
+Vitest `related --run`へ渡します。
+`vitest.related.config.ts`は各ワークスペースのNode用設定とWeb/UIの`unit` projectをTest Projectsとして
+登録し、各projectの依存グラフからワークスペースをまたぐ静的`import`を追跡します。設定、マニフェスト、
+setup、`tsconfig.json`、DBトリガーはリポジトリルートの`forceRerunTriggers`で全Nodeテストへ縮退し、
+削除ファイルはリポジトリルートの単体・統合テストへ縮退します。Browser Mode、E2E、有料テストは
+対象にしません。
 
 ## 公開スクリプト
 

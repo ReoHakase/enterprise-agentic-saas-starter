@@ -1,6 +1,6 @@
 ---
 id: ADR-014
-title: pre-commitのworkspace別Vitest related選択
+title: pre-commitのVitest Test Projects選択
 status: accepted
 date: 2026-08-12
 owners:
@@ -9,71 +9,80 @@ related:
   - ADR-007-workspace-testing-strategy.md
 ---
 
-# ADR-014 pre-commitのworkspace別Vitest related選択
+# ADR-014 pre-commitのVitest Test Projects選択
 
 ## 背景
 
-pre-commitはcommit message、format、lintを短時間で検査し、testはpre-pushの`bun run check`と
-PR・`main`の全件testで実行している。workspaceごとにVitest config、unit project、coverage閾値が
-分かれているため、rootから単一のVitest commandへstaged fileを渡すとworkspaceのtest境界を
-正しく扱えない。一方、commitごとに全workspaceのunit・integration testを実行すると、変更と無関係な
-testの起動が開発フィードバックを遅くする。
+pre-commitはコミットメッセージ、整形、静的検査を短時間で検査し、テストはpre-pushの
+`bun run check`とPR・`main`で全件実行している。ワークスペースごとにVitest設定、`unit` project、
+カバレッジ閾値が分かれているが、ワークスペース単位で`related`を実行すると、共有パッケージの変更から
+そのパッケージを使うアプリケーションのテストへ至る静的`import`を追跡できない。複数ワークスペースを
+同時に変更した場合はVitestプロセスも重複し、同じテストを複数回選択する可能性がある。
 
 ## 決定
 
-pre-commitに限り、`lefthook.yml`のworkspace別commandが`{staged_files}`を各workspaceのcwdへ渡し、
-Vitest標準の`related --run --coverage=false`を実行する。root test、Nodeのunit・integration test、
-Web/UIの`unit` projectを対象にし、browser、E2E、paid model testは対象にしない。
+pre-commitに限り、`lefthook.yml`の単一コマンドが`{staged_files}`をリポジトリルートの
+`vitest related --config vitest.related.config.ts --run --coverage=false`へ渡す。
+`vitest.related.config.ts`はVitest標準のTest Projectsでリポジトリルート、各Nodeワークスペース、
+Web/UIの`unit` projectを1つのVitestプロセスへ登録する。Browser Mode、Storybook、E2E、
+有料モデルテストは登録しない。
 
-各Vitest configの`forceRerunTriggers`へmanifest、Vitest/Vite config、tsconfigを明示し、DB configには
-migration、schema、Drizzle configを追加する。これらの変更ではVitest自身がworkspace全体を実行する。
-削除fileはpre-commit command内の`git diff --cached --diff-filter=D`で検出し、rootの`bun run test`へ縮退する。docs、workflow、lockfileなど
-testと静的な関連がないfileだけの変更では、test commandを起動しない。
+リポジトリルートの選択用設定にある`forceRerunTriggers`へマニフェスト、Vitest/Vite設定、setup、
+`tsconfig.json`、DBマイグレーション、スキーマ、Drizzle設定を明示する。これらの変更ではTest Projectsに
+登録した全Nodeテストを実行する。削除ファイルはpre-commitコマンド内の
+`git diff --cached --diff-filter=D`で検出し、リポジトリルートの`bun run test`へ縮退する。文書、
+ワークフロー、lockfileなどテストと静的な関係がないファイルだけの変更では、テストコマンドを起動しない。
 
-pre-pushの`bun run check`、PR、`main`の全件test、rootの公開test scriptは変更しない。commit-msgの
-commitlintもcommit message検査に限定する。
+pre-pushの`bun run check`、PR、`main`の全件テスト、リポジトリルートの公開テストスクリプトは
+変更しない。commit-msgのcommitlintもコミットメッセージ検査に限定する。
 
 ## 理由
 
-- Vitestのrelated commandが静的importを基準に関連testを選べるため、staged変更へ直接対応できる。
-- workspaceごとのconfigとunit projectをそのworkspaceのcwdで実行することで、alias、setup、test includeを
-  root configへ複製しない。
-- subset testへcoverage閾値を適用すると、選択されたtestだけでは全体thresholdを満たせないため、coverageを
-  無効にする。coverageはpre-push、PR、`main`の全件testで維持する。
-- selectorの不確実性をVitestの標準triggerと削除file専用のfull suite fallbackで扱い、testを黙って省略しない。
+- Vitestの`related`が各Test ProjectのVite依存グラフを使うため、共有パッケージから利用側のテストまで
+  ワークスペースをまたいで選択できる。
+- 全staged fileを1つのVitestプロセスへ渡すため、Lefthookコマンドごとの重複起動と重複選択を作らない。
+- Web/UIの`unit`設定をproject設定ファイルとして通常実行と選択実行から共有し、alias、setup、
+  `include`をリポジトリルートへ複製しない。
+- 部分テストへカバレッジ閾値を適用すると全体閾値を満たせないため、カバレッジを無効にする。
+  カバレッジはpre-push、PR、`main`の全件テストで維持する。
+- 選択の不確実性をリポジトリルートの`forceRerunTriggers`と削除ファイル専用の全件実行で扱い、
+  テストを黙って省略しない。
 
 ## 検討した代替案
 
-- rootから単一の`vitest related`を実行する: workspace別config、Web/UIのproject、transform設定を正しく
-  継承できないため採用しない。
-- pre-commitでrootの`bun run test`を全件実行する: 安全だが無関係なworkspaceの起動時間を毎回負担するため
-  採用しない。pre-pushとPR・`main`の全件testは維持する。
-- rootの内部scriptでworkspace groupingを実装する: VitestとLefthookが持つrelated選択、cwd、staged file
-  filteringを再実装するため採用しない。
+- Lefthookからワークスペース別に`vitest related`を実行する: 共有パッケージから利用側への依存を
+  追跡できず、複数変更でVitestプロセスとテスト選択が重複するため採用しない。
+- pre-commitでリポジトリルートの`bun run test`を全件実行する: 安全だが無関係なワークスペースの
+  起動時間を毎回負担するため採用しない。pre-pushとPR・`main`の全件テストは維持する。
+- リポジトリルートの内部スクリプトでワークスペースを分類する: Vitestが持つTest Projectsと
+  依存グラフを再実装するため
+  採用しない。
 - `vitest run --changed`だけを使う: staged fileだけでなくunstaged fileも選択するため、pre-commitの
   staged-only契約に合わず採用しない。
-- browser、E2E、paid testもrelated選択する: 実行環境、費用、起動条件がunit・integration testと異なり、
+- Browser Mode、E2E、有料テストも`related`で選択する: 実行環境、費用、起動条件が単体・統合テストと異なり、
   pre-commitの短時間契約を壊すため採用しない。
 
 ## 結果
 
-通常のcommitでは変更に関係するtestだけが先に実行され、trigger変更ではVitest自身がworkspace全体のunit
-suiteを、削除ではrootのunit・integration suiteを安全側へ選択する。静的importで追跡できないdynamic
-importや実browser・全構成の回帰はrelated選択の保証外だが、pre-push、PR、`main`の全件testが検出経路として
-残る。subset testでcoverage artifactを生成しないため、coverage reportの正本は全件testに限定される。
+通常のコミットでは変更に関係するテストを全Test Projectsから1回だけ選択し、トリガー変更では全Node
+テストを、削除ではリポジトリルートの単体・統合テストを安全側へ選択する。静的`import`で追跡できない
+`import(filepath)`や実ブラウザー・全構成の回帰は`related`選択の保証外だが、pre-push、PR、`main`の全件テストが
+検出経路として残る。部分テストでカバレッジ成果物を生成しないため、カバレッジ報告の正本は全件テストに
+限定される。
 
 ## 強制方法
 
-- `lefthook.yml`のpre-commitからworkspace別に`bun vitest related --run --coverage=false {staged_files}`を呼ぶ。
-- Vitest configの`forceRerunTriggers`、Web/UIの`--project=unit`、削除file用の`git diff --diff-filter=D`
-  commandで境界を固定する。
+- `lefthook.yml`のpre-commitからリポジトリルートの選択用設定を使う単一の`vitest related`を呼ぶ。
+- `vitest.related.config.ts`のTest Projectsと`forceRerunTriggers`、Web/UIの共有`unit` project設定、
+  削除ファイル用の`git diff --diff-filter=D`で境界を固定する。
 - `docs/architecture/quality-enforcement.md`と`docs/testing-strategy/common/ci-execution.md`でlocal hookと
   PR・`main`の全件testの境界を説明する。
 - `bun run check`とCIのquality laneは全件test契約を維持する。
 
 ## 検証
 
-- root、API、Web、UIの代表source fileからworkspace別related command
-- config、manifest、setup、tsconfig、DBのforce-rerun trigger、削除fileのfull suite fallback
-- browser-only、E2E、docs、workflow、lockfileの非対象判定
+- 共有パッケージの代表ソースコードから利用側を含むTest Projectsの`related`選択
+- 複数ワークスペース変更でテストファイルとVitestプロセスが重複しないこと
+- 設定、マニフェスト、setup、`tsconfig.json`、DBの`forceRerunTriggers`、削除ファイルの全件実行
+- Browser Mode、Storybook、E2E、文書、ワークフロー、lockfileの非対象判定
 - `bun run check`

@@ -59,13 +59,6 @@ export default defineConfig({
     ],
   },
   test: {
-    forceRerunTriggers: [
-      "**/package.json",
-      "**/{vitest,vite}.config.*",
-      "**/vitest.setup.*",
-      "**/vitest.browser.setup.*",
-      "**/tsconfig.json",
-    ],
     coverage: {
       enabled: unitCoverageEnabled || browserCoverageEnabled,
       provider: "v8",
@@ -89,14 +82,7 @@ export default defineConfig({
           }),
     },
     projects: [
-      {
-        test: {
-          name: "unit",
-          environment: "happy-dom",
-          include: ["src/**/*.test.{ts,tsx}"],
-          setupFiles: ["./vitest.setup.ts"],
-        },
-      },
+      "./vitest.unit.config.ts",
       storybookProject("light"),
       storybookProject("dark"),
     ],

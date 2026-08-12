@@ -56,10 +56,6 @@ const browserAliases = {
   ),
   "server-only": path.join(dirname, "test-support/storybook/server-only.ts"),
 }
-const unitAliases = {
-  "next/link": browserAliases["next/link"],
-}
-
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
   define: {
@@ -95,13 +91,6 @@ export default defineConfig({
     },
   },
   test: {
-    forceRerunTriggers: [
-      "**/package.json",
-      "**/{vitest,vite}.config.*",
-      "**/vitest.setup.*",
-      "**/vitest.browser.setup.*",
-      "**/tsconfig.json",
-    ],
     coverage: {
       enabled: unitCoverageEnabled || browserCoverageEnabled,
       provider: "v8",
@@ -125,22 +114,7 @@ export default defineConfig({
           }),
     },
     projects: [
-      {
-        extends: true,
-        resolve: { alias: unitAliases },
-        test: {
-          name: "unit",
-          environment: "happy-dom",
-          include: [
-            "*.test.{ts,tsx}",
-            "src/instrumentation*.test.ts",
-            "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
-            "testing/**/*.test.{ts,tsx}",
-          ],
-          exclude: ["**/*.browser.test.{ts,tsx}"],
-          setupFiles: ["./vitest.setup.ts"],
-        },
-      },
+      "./vitest.unit.config.ts",
       storybookProject("light"),
       storybookProject("dark"),
       {
