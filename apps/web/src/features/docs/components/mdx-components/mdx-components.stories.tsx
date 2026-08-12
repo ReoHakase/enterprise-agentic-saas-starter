@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -98,8 +98,10 @@ export const ComponentSet = meta.story({
         name: "Zoom documentation image",
       })
     )
-    await expect(
-      within(canvasElement.ownerDocument.body).getByRole("dialog")
-    ).toBeVisible()
+    await waitFor(() =>
+      expect(
+        within(canvasElement.ownerDocument.body).getByRole("dialog")
+      ).toBeVisible()
+    )
   },
 })
