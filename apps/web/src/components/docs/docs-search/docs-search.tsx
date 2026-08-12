@@ -16,6 +16,7 @@ import { fetchClient } from "fumadocs-core/search/client/fetch"
 import { SearchIcon } from "lucide-react"
 import {
   type ChangeEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -25,10 +26,15 @@ import {
 
 const searchClient = fetchClient()
 const searchTrigger = (
-  <Button type="button" variant="outline" aria-label="Search documentation" />
+  <Button
+    type="button"
+    variant="outline"
+    className="w-full justify-start gap-2"
+    aria-label="Search Documentation"
+    aria-keyshortcuts="Meta+K Control+K"
+    data-docs-search-trigger
+  />
 )
-const stripSearchHighlights = (content: string) =>
-  content.replaceAll(/<\/?mark>/gu, "")
 
 export const DocsSearch = () => {
   const [open, setOpen] = useState(false)
@@ -37,6 +43,18 @@ export const DocsSearch = () => {
   const { search, setSearch, query } = useDocsSearch({
     client: searchClient,
   })
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault()
+        setOpen(true)
+      }
+    }
+
+    window.addEventListener("keydown", handleShortcut)
+    return () => window.removeEventListener("keydown", handleShortcut)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -52,7 +70,14 @@ export const DocsSearch = () => {
     (nextOpen: boolean) => {
       setOpen(nextOpen)
 
-      if (!nextOpen) setSearch("")
+      if (!nextOpen) {
+        setSearch("")
+        queueMicrotask(() =>
+          document
+            .querySelector<HTMLButtonElement>("[data-docs-search-trigger]")
+            ?.focus()
+        )
+      }
     },
     [setSearch]
   )
@@ -80,26 +105,29 @@ export const DocsSearch = () => {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={searchTrigger}>
-        <SearchIcon />
-        <span className="hidden sm:inline">Search</span>
+        <SearchIcon aria-hidden="true" />
+        <span>Search Documentation</span>
+        <kbd className="ml-auto hidden rounded-md border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+          ⌘K
+        </kbd>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Search documentation</DialogTitle>
+          <DialogTitle>Search Documentation</DialogTitle>
           <DialogDescription>
             Search the public manual and developer documentation.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <label htmlFor={inputId} className="sr-only">
-            Search documentation
+            Search Documentation
           </label>
           <Input
             ref={inputRef}
             id={inputId}
             value={search}
             onChange={handleSearchChange}
-            placeholder="Search documentation"
+            placeholder="Search Documentation"
             autoComplete="off"
           />
           <div aria-live="polite" aria-atomic="true">
@@ -128,7 +156,7 @@ export const DocsSearch = () => {
                       className="block rounded-2xl border p-3 transition-colors hover:bg-muted focus-visible:bg-muted"
                     >
                       <span className="block font-medium text-foreground">
-                        {stripSearchHighlights(result.content)}
+                        {renderSearchContent(result.content)}
                       </span>
                       {result.breadcrumbs?.length ? (
                         <span className="mt-1 block text-xs text-muted-foreground">
@@ -146,3 +174,16 @@ export const DocsSearch = () => {
     </Dialog>
   )
 }
+
+const renderSearchContent = (content: string): ReactNode =>
+  content.split(/(<mark>[\s\S]*?<\/mark>)/gu).map((part) => {
+    const match = /^<mark>([\s\S]*)<\/mark>$/u.exec(part)
+
+    return match ? (
+      <mark key={part} data-docs-search-highlight>
+        {match[1]}
+      </mark>
+    ) : (
+      part
+    )
+  })

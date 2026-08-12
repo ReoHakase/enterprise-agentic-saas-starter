@@ -20,11 +20,30 @@ test.describe("public documentation", () => {
     ).toBeVisible()
     await expect(page.locator("[data-console-shell]")).toHaveCount(0)
     await expect(
-      page.getByRole("link", { name: "Manual", exact: true })
+      page.locator("[data-docs-sidebar]").getByRole("link", {
+        name: "Manual",
+        exact: true,
+      })
     ).toBeVisible()
     await expect(
-      page.getByRole("link", { name: "Developer documentation", exact: true })
+      page.getByRole("link", { name: "Developers", exact: true }).first()
     ).toBeVisible()
+    await expect(
+      page.getByRole("link", { name: "Privacy Policy", exact: true })
+    ).toBeVisible()
+    await expect(page.locator("[data-docs-sidebar]")).toContainText(
+      "Documentation"
+    )
+    await expect(
+      page.getByRole("button", {
+        name: "Search Documentation",
+        exact: true,
+      })
+    ).toBeVisible()
+    await expect(
+      page.getByRole("link", { name: "Open App", exact: true })
+    ).toHaveAttribute("href", "/dashboard")
+    await expect(page.locator("[data-docs-card]")).toHaveCount(3)
   })
 
   test("serves the manual, public specifications, and privacy draft", async ({
@@ -37,11 +56,52 @@ test.describe("public documentation", () => {
 
     await page.goto("/docs/developers/mcp")
     await expect(
-      page.getByRole("heading", { name: "MCP specification", exact: true })
+      page.getByRole("heading", { name: "MCP Specification", exact: true })
     ).toBeVisible()
     await expect(
       page.getByText("guide://enterprise-agentic-saas/issues", { exact: true })
     ).toBeVisible()
+    await expect(page.locator("[data-doc-last-updated]")).toContainText(
+      "Last updated"
+    )
+  })
+
+  test("shows the table of contents and heading link controls", async ({
+    page,
+  }) => {
+    await page.goto("/docs/developers/mcp")
+
+    await expect(
+      page.getByText("On This Page", { exact: true }).first()
+    ).toBeVisible()
+    await expect(
+      page.locator('a[href="#endpoint-and-transport"]').first()
+    ).toBeVisible()
+
+    const copyButton = page.getByRole("button", {
+      name: "Copy link to Endpoint and transport",
+      exact: true,
+    })
+    await expect(copyButton).toBeVisible()
+    await copyButton.click()
+    await expect(
+      page.getByRole("button", { name: "Link copied", exact: true })
+    ).toBeVisible()
+  })
+
+  test("uses the docs Open Graph fallback metadata", async ({ page }) => {
+    await page.goto("/docs/developers/mcp")
+
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      "content",
+      /\/docs\/opengraph-image(?:-[^/]+)?\.png(?:\?.*)?$/u
+    )
+    await expect(
+      page.locator('meta[property="og:image:width"]')
+    ).toHaveAttribute("content", "1774")
+    await expect(
+      page.locator('meta[property="og:image:height"]')
+    ).toHaveAttribute("content", "887")
   })
 
   test("returns the public docs not-found page", async ({ page }) => {
@@ -61,17 +121,21 @@ test.describe("public documentation", () => {
     await page.goto("/docs")
 
     const trigger = page.getByRole("button", {
-      name: "Search documentation",
+      name: "Search Documentation",
       exact: true,
     })
     await trigger.click()
 
     const input = page.getByRole("textbox", {
-      name: "Search documentation",
+      name: "Search Documentation",
       exact: true,
     })
     await expect(input).toBeFocused()
     await input.fill("MCP")
+
+    await expect(
+      page.locator("[data-docs-search-highlight]").first()
+    ).toBeVisible()
 
     const result = page.getByRole("link", { name: /MCP/i }).first()
     await expect(result).toBeVisible()
@@ -79,20 +143,24 @@ test.describe("public documentation", () => {
 
     await expect(page).toHaveURL(/\/docs\/developers\/mcp$/)
     await expect(
-      page.getByRole("heading", { name: "MCP specification", exact: true })
+      page.getByRole("heading", { name: "MCP Specification", exact: true })
     ).toBeVisible()
 
     await trigger.click()
     await expect(input).toBeFocused()
     await page.keyboard.press("Escape")
     await expect(trigger).toBeFocused()
+
+    await page.keyboard.press("Control+k")
+    await expect(input).toBeFocused()
+    await page.keyboard.press("Escape")
   })
 
   test("shows an empty search state", async ({ page }) => {
     await page.goto("/docs")
-    await page.getByRole("button", { name: "Search documentation" }).click()
+    await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search documentation" })
+      .getByRole("textbox", { name: "Search Documentation" })
       .fill("not-a-real-documentation-term")
 
     await expect(
@@ -111,9 +179,9 @@ test.describe("public documentation", () => {
       await route.continue()
     })
     await page.goto("/docs")
-    await page.getByRole("button", { name: "Search documentation" }).click()
+    await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search documentation" })
+      .getByRole("textbox", { name: "Search Documentation" })
       .fill("MCP")
 
     const status = page.getByRole("status")
@@ -131,9 +199,9 @@ test.describe("public documentation", () => {
       })
     })
     await page.goto("/docs")
-    await page.getByRole("button", { name: "Search documentation" }).click()
+    await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search documentation" })
+      .getByRole("textbox", { name: "Search Documentation" })
       .fill("MCP")
 
     await expect(page.locator('p[role="alert"]')).toHaveText(

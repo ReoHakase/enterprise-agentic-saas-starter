@@ -1,68 +1,171 @@
-import Link from "fumadocs-core/link"
+"use client"
+
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@enterprise-agentic-saas/ui/components/sidebar"
 import type { Node, Root } from "fumadocs-core/page-tree"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import type { ComponentProps, ReactNode } from "react"
 
-export const DocsSidebar = ({ tree }: { tree: Root }) => (
-  <nav aria-label="Documentation navigation" className="text-sm">
-    <ul className="space-y-1">
-      {tree.children.map((node) => (
-        <DocsSidebarNode key={node.$id ?? getNodeKey(node)} node={node} />
-      ))}
-    </ul>
-  </nav>
-)
+import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
 
-const DocsSidebarNode = ({ node }: { node: Node }) => {
+type DocsNavigationLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
+  href?: ComponentProps<typeof Link>["href"]
+}
+
+const DocsNavigationLink = ({ href, ...props }: DocsNavigationLinkProps) => {
+  if (!href) throw new Error("DocsNavigationLink requires an href")
+  return <Link href={href} {...props} />
+}
+
+const nextLinkRender = <DocsNavigationLink />
+
+export const DocsSidebar = ({ tree }: { tree: Root }) => {
+  const pathname = usePathname()
+
+  return (
+    <nav aria-label="Documentation navigation" data-docs-sidebar>
+      <SidebarGroup className="pt-0">
+        <SidebarGroupLabel>Documentation</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {tree.children.map((node) => (
+              <DocsSidebarNode
+                key={node.$id ?? getNodeKey(node)}
+                node={node}
+                pathname={pathname}
+              />
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </nav>
+  )
+}
+
+const DocsSidebarNode = ({
+  node,
+  pathname,
+}: {
+  node: Node
+  pathname: string
+}) => {
   if (node.type === "page") {
     return (
-      <li>
-        <Link
+      <SidebarMenuItem>
+        <SidebarMenuLinkButton
           href={node.url}
-          external={node.external}
-          className="block rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          isActive={pathname === node.url}
+          tooltip={String(node.name)}
+          aria-current={pathname === node.url ? "page" : undefined}
         >
-          {node.name}
-        </Link>
-      </li>
+          <NodeIcon icon={node.icon} />
+          <span>{node.name}</span>
+        </SidebarMenuLinkButton>
+      </SidebarMenuItem>
+    )
+  }
+
+  if (node.type === "separator") {
+    return <SidebarGroupLabel>{node.name}</SidebarGroupLabel>
+  }
+
+  const children = node.children
+  const indexUrl = node.index?.url
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuLinkButton
+        href={indexUrl ?? "/docs"}
+        isActive={indexUrl === pathname}
+        tooltip={String(node.name)}
+        aria-current={pathname === indexUrl ? "page" : undefined}
+      >
+        <NodeIcon icon={node.icon} />
+        <span>{node.name}</span>
+      </SidebarMenuLinkButton>
+      <SidebarMenuSub>
+        {children.map((child) => (
+          <DocsSidebarSubNode
+            key={child.$id ?? getNodeKey(child)}
+            node={child}
+            pathname={pathname}
+          />
+        ))}
+      </SidebarMenuSub>
+    </SidebarMenuItem>
+  )
+}
+
+const DocsSidebarSubNode = ({
+  node,
+  pathname,
+}: {
+  node: Node
+  pathname: string
+}) => {
+  if (node.type === "page") {
+    const isActive = pathname === node.url
+
+    return (
+      <SidebarMenuSubItem>
+        <SidebarMenuSubButton
+          render={nextLinkRender}
+          href={node.url}
+          isActive={isActive}
+          aria-current={isActive ? "page" : undefined}
+        >
+          <NodeIcon icon={node.icon} />
+          <span>{node.name}</span>
+        </SidebarMenuSubButton>
+      </SidebarMenuSubItem>
     )
   }
 
   if (node.type === "separator") {
     return (
-      <li className="px-3 pt-5 pb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {node.name}
-      </li>
+      <li className="px-3 py-1 text-xs text-muted-foreground">{node.name}</li>
     )
   }
 
-  const children = node.index ? [node.index, ...node.children] : node.children
-  const content = (
-    <ul className="mt-1 space-y-1 border-l pl-3">
-      {children.map((child) => (
-        <DocsSidebarNode key={child.$id ?? getNodeKey(child)} node={child} />
-      ))}
-    </ul>
-  )
-
-  if (node.collapsible === false) {
-    return (
-      <li>
-        <p className="px-3 py-2 font-medium text-foreground">{node.name}</p>
-        {content}
-      </li>
-    )
-  }
+  const children = node.children
 
   return (
-    <li>
-      <details open={node.defaultOpen ?? node.root}>
-        <summary className="cursor-pointer rounded-lg px-3 py-2 font-medium text-foreground hover:bg-muted">
-          {node.name}
-        </summary>
-        {content}
-      </details>
-    </li>
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        render={nextLinkRender}
+        href={node.index?.url}
+        isActive={node.index?.url === pathname}
+      >
+        <NodeIcon icon={node.icon} />
+        <span>{node.name}</span>
+      </SidebarMenuSubButton>
+      <SidebarMenuSub>
+        {children.map((child) => (
+          <DocsSidebarSubNode
+            key={child.$id ?? getNodeKey(child)}
+            node={child}
+            pathname={pathname}
+          />
+        ))}
+      </SidebarMenuSub>
+    </SidebarMenuSubItem>
   )
 }
+
+const NodeIcon = ({ icon }: { icon?: ReactNode }) => (
+  <span className="flex size-4 shrink-0 items-center justify-center [&>svg]:size-4">
+    {icon}
+  </span>
+)
 
 const getNodeKey = (node: Node): string => {
   if (node.type === "page") return node.url

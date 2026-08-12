@@ -89,7 +89,8 @@
     "server-only": "catalog:",
     "sonner": "catalog:",
     "streamdown": "catalog:",
-    "valibot": "catalog:"
+    "valibot": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@enterprise-agentic-saas/portless-topology": "workspace:*",

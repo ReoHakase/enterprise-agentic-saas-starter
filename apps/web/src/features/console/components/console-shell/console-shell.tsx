@@ -26,7 +26,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { BlocksIcon } from "lucide-react"
+import { BlocksIcon, BookOpenIcon } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Suspense,
@@ -269,6 +269,16 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
         <SidebarSeparator />
         <SidebarFooter>
           <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuLinkButton
+                href="/docs"
+                tooltip="Documentation"
+                data-console-documentation-link
+              >
+                <BookOpenIcon aria-hidden="true" />
+                <span>Documentation</span>
+              </SidebarMenuLinkButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <UserMenu
                 user={me.user}

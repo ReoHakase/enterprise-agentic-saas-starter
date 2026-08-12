@@ -274,6 +274,23 @@ const readLoadedDashboardGeometry = async (page: Page) => {
   return geometry
 }
 
+test("console sidebarから公開Documentationを開ける", async ({
+  context,
+  page,
+}) => {
+  await useAdminSession(context)
+  await page.goto("/dashboard")
+
+  const documentationLink = page.getByRole("link", {
+    name: "Documentation",
+    exact: true,
+  })
+  await expect(documentationLink).toHaveAttribute("href", "/docs")
+  await documentationLink.click()
+  await expect(page).toHaveURL(/\/docs$/u)
+  await expect(page.locator("[data-console-shell]")).toHaveCount(0)
+})
+
 test("console loadingは実画面と同じshell geometryを維持する", async ({
   context,
   createRequestGate,

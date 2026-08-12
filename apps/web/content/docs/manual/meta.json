@@ -1,4 +1,7 @@
 {
   "title": "Manual",
-  "pages": ["index", "getting-started"]
+  "icon": "BookOpen",
+  "defaultOpen": true,
+  "pagesIndex": "index",
+  "pages": ["getting-started"]
 }

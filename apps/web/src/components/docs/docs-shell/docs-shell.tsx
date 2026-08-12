@@ -1,6 +1,21 @@
-import Link from "fumadocs-core/link"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarSeparator,
+  SidebarTrigger,
+  SidebarInset,
+} from "@enterprise-agentic-saas/ui/components/sidebar"
+import FumaLink from "fumadocs-core/link"
 import type { Root } from "fumadocs-core/page-tree"
+import { BookOpenIcon, LayoutDashboardIcon } from "lucide-react"
 import type { ReactNode } from "react"
+
+import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
 
 import { DocsSearch } from "../docs-search/docs-search"
 import { DocsSidebar } from "../docs-sidebar/docs-sidebar"
@@ -12,26 +27,67 @@ export const DocsShell = ({
   children: ReactNode
   tree: Root
 }) => (
-  <div className="min-h-svh bg-background">
-    <header className="border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex min-h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link
-          href="/docs"
-          className="flex min-w-0 items-center gap-3 font-semibold text-foreground"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-sm text-primary-foreground">
-            E
-          </span>
-          <span className="truncate">Enterprise SaaS Documentation</span>
-        </Link>
-        <DocsSearch />
-      </div>
-    </header>
-    <div className="mx-auto flex w-full max-w-7xl items-start px-4 sm:px-6 lg:px-8">
-      <aside className="sticky top-0 hidden h-svh w-64 shrink-0 overflow-y-auto py-8 pr-8 lg:block">
+  <SidebarProvider open data-docs-shell="true">
+    <Sidebar collapsible="offcanvas" variant="inset">
+      <SidebarHeader className="gap-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuLinkButton
+              href="/docs"
+              size="lg"
+              tooltip="Documentation"
+            >
+              <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+                <BookOpenIcon aria-hidden="true" />
+              </span>
+              <span className="grid min-w-0 flex-1 text-left">
+                <span className="truncate font-semibold">Documentation</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  Enterprise SaaS
+                </span>
+              </span>
+            </SidebarMenuLinkButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <DocsSearch />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarSeparator />
+      <SidebarContent>
         <DocsSidebar tree={tree} />
-      </aside>
-      <main className="min-w-0 flex-1 py-8 lg:pl-8">{children}</main>
-    </div>
-  </div>
+      </SidebarContent>
+      <SidebarSeparator />
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuLinkButton
+              href="/dashboard"
+              tooltip="Open App"
+              data-docs-open-app
+            >
+              <LayoutDashboardIcon aria-hidden="true" />
+              <span>Open App</span>
+            </SidebarMenuLinkButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+
+    <SidebarInset>
+      <header className="sticky top-0 z-10 flex min-h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur md:px-6">
+        <SidebarTrigger className="md:hidden" />
+        <FumaLink
+          href="/docs"
+          className="truncate text-sm font-semibold text-foreground md:hidden"
+        >
+          Documentation
+        </FumaLink>
+      </header>
+      <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-10">
+        {children}
+      </main>
+    </SidebarInset>
+  </SidebarProvider>
 )
