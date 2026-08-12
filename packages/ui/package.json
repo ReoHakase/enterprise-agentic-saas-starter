@@ -61,10 +61,10 @@
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "storybook": "portless-topology run storybook.ui.enterprise-agentic-saas -- storybook dev --no-open --exact-port",
-    "test": "vitest run --project=unit",
-    "test:browser": "vitest run --project=storybook-light && vitest run --project=storybook-dark",
-    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --project=storybook-light && env BROWSER_COVERAGE=1 vitest run --project=storybook-dark",
-    "test:storybook": "vitest run --project=storybook-light && vitest run --project=storybook-dark",
+    "test": "vitest run --config ../../vitest.config.ts --project=ui-unit",
+    "test:browser": "vitest run --config ../../vitest.config.ts --project=ui-storybook-light && vitest run --config ../../vitest.config.ts --project=ui-storybook-dark",
+    "test:browser:coverage": "env BROWSER_COVERAGE=1 vitest run --config ../../vitest.config.ts --project=ui-storybook-light && env BROWSER_COVERAGE=1 vitest run --config ../../vitest.config.ts --project=ui-storybook-dark",
+    "test:storybook": "vitest run --config ../../vitest.config.ts --project=ui-storybook-light && vitest run --config ../../vitest.config.ts --project=ui-storybook-dark",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

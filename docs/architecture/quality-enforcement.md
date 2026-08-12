@@ -248,11 +248,13 @@ thresholdを超える場合は同じ変更内でrefactorします。baseline比�
 
 - commit message
 - staged source変更に対するリポジトリルートのVitest `related --run`。
-  既存の`vitest.config.ts`へ自己完結して常時定義したTest Projectsがワークスペースをまたぐ静的
-  `import`を追跡し、1つのVitestプロセスで関連する単体・統合テストを実行する。root configは
-  `apps/**`と`packages/**`のVitest configをimportまたは参照しない
-  設定、マニフェスト、setup、`tsconfig.json`、DBトリガーは`forceRerunTriggers`で全Nodeテストへ
-  縮退する。削除pathはVitestへそのまま渡し、shellによる検出や全件fallbackは設けない
+  root `vitest.config.ts`だけが`defineConfig`でTest Projects、global coverage、Browser Mode、Storybook、
+  `forceRerunTriggers`を定義する。各workspace configは単一の`*-unit` projectを`defineProject`で定義し、
+  rootがconfig pathとして登録する。各scriptはroot configとproject名を明示し、cwdによるconfig探索へ
+  依存しない。LefthookはVitestの`--project='*-unit'`で単体・統合テストだけを選び、ワークスペースを
+  またぐ静的`import`を1つのVitestプロセスで追跡する。設定、マニフェスト、setup、`tsconfig.json`、
+  DBトリガーは`forceRerunTriggers`で全`*-unit` projectへ縮退する。削除pathはVitestへそのまま渡し、
+  shellによる検出や全件fallbackは設けない
 - staged Oxfmt
 - lint可能なstaged fileがある場合のrootと全workspaceのOxlint
 

@@ -18,54 +18,59 @@ pre-commitはコミットメッセージ、整形、静的検査を短時間で�
 パッケージの変更から利用側アプリケーションのテストへ至る静的`import`を追跡できない。複数
 ワークスペースを同時に変更した場合はVitestプロセスも重複し、同じテストを複数回選択する可能性がある。
 
-root configが各ワークスペースのVitest configをimportまたはconfig pathとして参照すると、関連テスト選択が
-Browser Modeや各ワークスペース固有pluginの依存と初期化へ結合する。関連テスト選択のgraphはrootが所有し、
-ワークスペース固有の全件・coverage・browser設定から独立させる必要がある。
+Vitestの公式[Test Projects](https://vitest.dev/guide/projects)契約では、root configが`defineConfig`で
+`test.projects`を定義し、そのprojectとして読み込むconfig fileは`defineProject`で定義する。rootと
+workspaceの双方が同じprojectを`defineConfig`で定義すると、設定の責務が重複し、current working
+directory（cwd）によって読み込むconfigとproject名が変わる。
 
 ## 決定
 
 `lefthook.yml`の単一コマンドが`{staged_files}`をリポジトリルートの
-`vitest related --config vitest.config.ts --run --coverage=false`へ渡す。コマンド内で`git diff`、`jq`、
-独自selector、workspace別Vitest起動を使わない。Lefthook側でも対象workspaceやtest種別を`glob`と
-`exclude`で分類せず、全staged pathに対する選択をVitestへ委ねる。
+`vitest related --config vitest.config.ts --project='*-unit' --run --coverage=false`へ渡す。コマンド内で
+`git diff`、`jq`、独自selector、workspace別Vitest起動を使わない。Lefthook側でも対象workspaceや
+test種別を`glob`と`exclude`で分類せず、全staged pathに対する選択をVitestへ委ねる。
 
-既存のroot `vitest.config.ts`をVitest標準のTest Projectsとして常時使い、リポジトリルート、各Node
-ワークスペース、Web/UIの単体テストprojectを自己完結して定義する。root configは`apps/**`または
-`packages/**`のconfig moduleをimportせず、config pathとしても登録しない。関連選択に必要なproject root、
-test名、Web/UIのinclude、setup、alias、JSX変換だけをrootで所有する。各ワークスペースの既存configは
-通常の全件テスト、coverage、Browser Modeの正本として独立して維持する。新しいconfigファイルや選択
-scriptは追加しない。
+既存のroot `vitest.config.ts`を唯一の`defineConfig`とし、Vitest標準のTest Projectsとして常時使う。
+`apps/*/vitest.config.ts`と`packages/*/vitest.config.ts`はconfig pathとして登録し、各fileは単一の
+単体テストprojectを`defineProject`で定義する。Web/UIのBrowser ModeとStorybook project、projectでは
+定義できないglobal coverage、`forceRerunTriggers`はrootが所有する。新しいconfigファイルや選択scriptは
+追加しない。
+
+各workspaceのテストscriptは`--config ../../vitest.config.ts`と一意な`--project`を明示する。rootからでも
+workspaceからでも同じroot configとproject graphを使い、cwdによるconfig探索へ依存しない。単体テストの
+project名は`*-unit`へ統一し、Browser ModeとStorybookは別名にする。LefthookはVitestのproject wildcardで
+`*-unit`だけを選ぶ。
 
 rootの`forceRerunTriggers`へマニフェスト、Vitest/Vite設定、setup、`tsconfig.json`、DB
-マイグレーション、スキーマ、Drizzle設定を明示する。これらの変更ではTest Projectsに登録した全Node
-テストを実行する。Browser Mode、Storybook、E2E、有料モデルテストは登録しない。
+マイグレーション、スキーマ、Drizzle設定を明示する。これらの変更ではLefthookが選択した全`*-unit`
+projectを実行する。Browser Mode、Storybook、E2E、有料モデルテストは選択しない。
 
 削除ファイルを検出する別処理や全件fallbackは設けず、他のstaged fileと同じく削除後のpathをVitestへ
 渡す。現在ツリーに存在しないmoduleはVitestの静的依存graphから関連付けできず、関連テストが0件になる
 場合がある。この制約はpre-pushの`bun run check`、PR、`main`の全件テストで補完する。
 
 リポジトリルートの`bun run test`はroot Test Projectだけを明示選択した後、Turbo経由で各workspaceの
-テストを実行する。これにより、workspaceごとのcoverage設定と閾値を維持したまま全件テストを続ける。
-commit-msgのcommitlintはコミットメッセージ検査に限定する。
+テストを実行する。workspace scriptは一度に1 projectを選び、rootのglobal coverageがそのprojectの既存
+includeと閾値を適用する。commit-msgのcommitlintはコミットメッセージ検査に限定する。
 
 ## 理由
 
 - Vitestの`related`が1つのTest Projects graphを使うため、共有パッケージから利用側のテストまで
   ワークスペースをまたいで選択できる。
 - 全staged fileを1つのVitestプロセスへ渡すため、Lefthookコマンドごとの重複起動と重複選択を作らない。
-- rootが関連選択用projectを自己完結して所有するため、workspace configのexport、plugin、coverage、
-  Browser Modeをrootの起動契約へ持ち込まない。
-- Test Projectではprojectごとのcoverage設定を持てないため、全件テストはTurbo経由のworkspace別実行を
-  維持し、既存のcoverage閾値を変えない。
+- rootの`defineConfig`と各workspaceの`defineProject`へ責務を分け、公式Test Projectsの型と探索規則に
+  合わせる。
+- Test Projectではprojectごとのcoverage設定を持てないため、全件テストはTurbo経由で1 projectずつ
+  実行し、rootのglobal coverageへ選択projectの既存閾値を適用する。
 - 部分テストへカバレッジ閾値を適用すると全体閾値を満たせないため、関連実行ではカバレッジを無効にする。
 - 設定変更の不確実性はVitest標準の`forceRerunTriggers`で扱い、選択ロジックをshellへ複製しない。
 
 ## 検討した代替案
 
-- rootから各workspaceのVitest configまたはproject factoryをimportする: rootの関連選択がworkspace固有の
-  pluginとconfig初期化へ依存し、所有方向が逆転するため採用しない。
-- rootのTest Projectsへworkspace config pathを登録する: Web/UIのBrowser Mode、Storybookを含む通常設定を
-  関連実行へ混ぜ、test fileを重複登録するため採用しない。
+- rootへ全workspaceの単体テスト設定をinlineで複製する: workspace側の通常実行設定と責務が重複し、
+  `defineProject`を使う公式構成から外れるため採用しない。
+- 各workspace configを独立した`defineConfig`として維持する: cwdによってrootとworkspaceの異なるconfigを
+  読み込み、project graphと名前が変わるため採用しない。
 - Lefthookからworkspace別に`vitest related`を実行する: 共有パッケージから利用側への依存を追跡できず、
   複数変更でVitestプロセスとテスト選択が重複するため採用しない。
 - shellまたは内部scriptで削除、workspace、fallbackを分類する: Vitestが持つTest Projectsと依存graphの
@@ -85,8 +90,10 @@ commit-msgのcommitlintはコミットメッセージ検査に限定する。
 ## 強制方法
 
 - `lefthook.yml`からroot configを使う単一の`vitest related`だけを呼ぶ。
-- root `vitest.config.ts`で自己完結したTest Projectsと`forceRerunTriggers`を定義する。
-- root configから`apps/**`と`packages/**`のconfig moduleをimportまたは参照しない。
+- root `vitest.config.ts`だけが`defineConfig`、global coverage、Browser/Storybook project、
+  `forceRerunTriggers`を定義する。
+- `apps/**`と`packages/**`のVitest configは単一の単体テストprojectを`defineProject`で定義する。
+- 全Vitest scriptはroot configと一意なproject名を明示する。
 - `docs/architecture/quality-enforcement.md`と`docs/testing-strategy/common/ci-execution.md`でlocal hookと
   PR・`main`の全件testの境界を説明する。
 - `bun run check`とCIのquality laneは全件test契約を維持する。
@@ -98,7 +105,8 @@ commit-msgのcommitlintはコミットメッセージ検査に限定する。
 - Web/UIの代表sourceに対する単体テスト選択
 - マニフェスト、設定、setup、`tsconfig.json`、DBの`forceRerunTriggers`
 - 存在しないpathがVitest標準の0件成功になること
-- root configにworkspace configのimportまたは参照がないこと
+- root以外のVitest configが`defineProject`だけを使うこと
+- rootとworkspaceからの起動が同じprojectを選択すること
 - Lefthookの関連テストcommandに`git diff`、`jq`、独自scriptがないこと
 - Lefthookに関連テスト用のworkspace `glob`または`exclude`がないこと
 - `bun run check`

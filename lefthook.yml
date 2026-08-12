@@ -13,7 +13,7 @@ pre-commit:
       run: bun run format -- --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     vitest-related:
-      run: bun vitest related --config vitest.config.ts --run --coverage=false {staged_files}
+      run: bun vitest related --config vitest.config.ts --project='*-unit' --run --coverage=false {staged_files}
     oxlint:
       glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint

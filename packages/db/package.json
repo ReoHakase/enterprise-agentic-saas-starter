@@ -30,8 +30,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "test": "vitest run",
-    "test:migration:behaviour": "vitest run src/migrations",
+    "test": "vitest run --config ../../vitest.config.ts --project=db-unit",
+    "test:migration:behaviour": "vitest run --config ../../vitest.config.ts --project=db-unit src/migrations",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

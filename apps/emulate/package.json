@@ -10,7 +10,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.config.ts --project=emulate-unit",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
