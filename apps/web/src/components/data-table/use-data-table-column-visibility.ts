@@ -1,7 +1,7 @@
 "use client"
 
 import type { OnChangeFn, VisibilityState } from "@tanstack/react-table"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   getDataTableStorageKey,
@@ -29,9 +29,10 @@ export const useDataTableColumnVisibility = ({
   )
   const [columnVisibility, setColumnVisibility] =
     useState<VisibilityState>(defaultVisibility)
+  const columnVisibilityRef = useRef(columnVisibility)
 
   useEffect(() => {
-    setColumnVisibility({
+    const next = {
       ...defaultVisibility,
       ...readColumnVisibility(
         window.localStorage,
@@ -39,24 +40,29 @@ export const useDataTableColumnVisibility = ({
         columnIds,
         nonHideableColumnIds
       ),
-    })
+    }
+    columnVisibilityRef.current = next
+    setColumnVisibility(next)
   }, [columnIds, defaultVisibility, nonHideableColumnIds, storageKey])
 
   const onColumnVisibilityChange = useCallback<OnChangeFn<VisibilityState>>(
     (updater) => {
-      setColumnVisibility((current) => {
-        const next = typeof updater === "function" ? updater(current) : updater
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(next))
-        } catch {
-          // Column visibility remains usable when preference storage is blocked.
-        }
-        return next
-      })
+      const next =
+        typeof updater === "function"
+          ? updater(columnVisibilityRef.current)
+          : updater
+      columnVisibilityRef.current = next
+      setColumnVisibility(next)
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {
+        // preference storageが利用できない場合も、column visibilityは利用可能な状態を維持する。
+      }
     },
     [storageKey]
   )
   const resetColumnVisibility = useCallback(() => {
+    columnVisibilityRef.current = defaultVisibility
     setColumnVisibility(defaultVisibility)
     try {
       window.localStorage.removeItem(storageKey)

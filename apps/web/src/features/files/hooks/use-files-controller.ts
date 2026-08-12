@@ -47,8 +47,7 @@ export const useFilesController = ({
   onCanceled,
 }: UploadOptions) => {
   const [uploads, setUploads] = useState<PendingFileUpload[]>([])
-  const uploadsRef = useRef(uploads)
-  uploadsRef.current = uploads
+  const uploadsRef = useRef<PendingFileUpload[]>([])
   const queueRef = useRef<PendingFileUpload[]>([])
   const activeRef = useRef(new Map<string, AbortController>())
   const canceledRef = useRef(new Set<string>())
@@ -56,8 +55,6 @@ export const useFilesController = ({
   const pumpRef = useRef<() => void>(() => undefined)
   const onUploadedRef = useRef(onUploaded)
   const onCanceledRef = useRef(onCanceled)
-  onUploadedRef.current = onUploaded
-  onCanceledRef.current = onCanceled
 
   const updateUpload = useCallback(
     (id: string, update: Partial<PendingFileUpload>) => {
@@ -145,7 +142,12 @@ export const useFilesController = ({
         })
     }
   }, [organizationId, ownerId, ownerType, removeUpload, updateUpload])
-  pumpRef.current = pump
+  useEffect(() => {
+    uploadsRef.current = uploads
+    onUploadedRef.current = onUploaded
+    onCanceledRef.current = onCanceled
+    pumpRef.current = pump
+  }, [onCanceled, onUploaded, pump, uploads])
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const additions = Array.from(

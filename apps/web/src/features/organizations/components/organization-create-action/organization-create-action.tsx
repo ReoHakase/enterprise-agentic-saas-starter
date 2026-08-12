@@ -23,7 +23,13 @@ import { useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { PlusIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useCallback,
+  useRef,
+  useState,
+} from "react"
 import { toast } from "sonner"
 
 import {
@@ -54,7 +60,7 @@ const OrganizationCreateAction = () => {
   const [open, setOpen] = useState(false)
   const [submitError, setSubmitError] = useState<string>()
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
-  const [slugEdited, setSlugEdited] = useState(false)
+  const slugEditedRef = useRef(false)
   const createMutation = useMutation({
     mutationFn: (input: { name: string; slug: string }) =>
       browserConsoleApi.createOrganization(input),
@@ -63,6 +69,7 @@ const OrganizationCreateAction = () => {
         queryKey: consoleKeys.organizations(),
       })
       setOpen(false)
+      slugEditedRef.current = false
       router.refresh()
       toast.success("Organization created")
     },
@@ -76,7 +83,7 @@ const OrganizationCreateAction = () => {
       try {
         await createMutation.mutateAsync(value)
         form.reset()
-        setSlugEdited(false)
+        slugEditedRef.current = false
       } catch (error) {
         const nextFieldErrors = getConsoleApiFieldErrors(error)
         setFieldErrors(nextFieldErrors)
@@ -96,7 +103,7 @@ const OrganizationCreateAction = () => {
       setOpen(nextOpen)
       if (!nextOpen && !form.state.isSubmitting) {
         form.reset()
-        setSlugEdited(false)
+        slugEditedRef.current = false
         setSubmitError(undefined)
         setFieldErrors({})
       }
@@ -116,23 +123,23 @@ const OrganizationCreateAction = () => {
   )
   const syncSlugFromName = useCallback(
     (name: string) => {
-      if (!slugEdited) {
+      if (!slugEditedRef.current) {
         form.setFieldValue("slug", toOrganizationSlug(name))
       }
     },
-    [form, slugEdited]
+    [form]
   )
   const editOrganizationName = useCallback(() => {
     setFieldErrors((current) => {
       const withoutName = clearConsoleApiFieldError(current, "name")
-      return slugEdited
+      return slugEditedRef.current
         ? withoutName
         : clearConsoleApiFieldError(withoutName, "slug")
     })
     setSubmitError(undefined)
-  }, [slugEdited])
+  }, [])
   const editOrganizationSlug = useCallback(() => {
-    setSlugEdited(true)
+    slugEditedRef.current = true
     setFieldErrors((current) => clearConsoleApiFieldError(current, "slug"))
     setSubmitError(undefined)
   }, [])

@@ -77,6 +77,8 @@ export const AgentToolPart = ({
     webSearchLinks.length > 0
   const [open, setOpen] = useState(hasSafeDetails)
   useEffect(() => {
+    // tool outputは初回render後に届くことがあるため、details panelを開く。
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     if (hasSafeDetails) setOpen(true)
   }, [hasSafeDetails])
 

@@ -143,7 +143,7 @@ export const DueDateFilter = ({
           numberOfMonths={1}
           selected={selected}
           onSelect={handleCalendarSelect}
-          defaultMonth={parsedFrom ?? parsedTo ?? new Date()}
+          defaultMonth={parsedFrom ?? parsedTo}
         />
       </PopoverContent>
     </Popover>

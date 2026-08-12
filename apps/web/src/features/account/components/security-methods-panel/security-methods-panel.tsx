@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useMemo } from "react"
 import { toast } from "sonner"
 
+import { LocalDate } from "@/components/local-date/local-date"
 import { createAuthCallbackURL } from "@/features/auth"
 
 import {
@@ -57,9 +58,6 @@ type SecurityMutation =
   | { type: "link-github" }
   | { type: "unlink-github"; accountId?: string }
   | { type: "delete-passkey"; passkeyId: string }
-
-const formatSecurityDate = (value?: string | Date | null) =>
-  value ? new Date(value).toLocaleString() : "Unknown"
 
 const GitHubMarkIcon = () => (
   <svg
@@ -296,9 +294,25 @@ const GithubMethod = ({
           </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          {account
-            ? `Linked ${formatSecurityDate(account.createdAt)}`
-            : "Connect GitHub for OAuth sign-in and account recovery."}
+          {account ? (
+            <>
+              Linked{" "}
+              {account.createdAt ? (
+                <LocalDate
+                  value={
+                    account.createdAt instanceof Date
+                      ? account.createdAt.toISOString()
+                      : account.createdAt
+                  }
+                  includeTime
+                />
+              ) : (
+                "Unknown"
+              )}
+            </>
+          ) : (
+            "Connect GitHub for OAuth sign-in and account recovery."
+          )}
         </p>
       </div>
     </div>
@@ -369,7 +383,18 @@ const PasskeyRow = ({
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {passkey.deviceType ?? "Unknown device"} · Created{" "}
-          {formatSecurityDate(passkey.createdAt)}
+          {passkey.createdAt ? (
+            <LocalDate
+              value={
+                passkey.createdAt instanceof Date
+                  ? passkey.createdAt.toISOString()
+                  : passkey.createdAt
+              }
+              includeTime
+            />
+          ) : (
+            "Unknown"
+          )}
         </p>
       </div>
       <AlertDialog>

@@ -42,8 +42,8 @@ export default async function DashboardPage({
 }: {
   params: Promise<{ organizationSlug: string }>
 }) {
-  const { organizationSlug } = await params
-  const [{ me }, cookie] = await Promise.all([
+  const [{ organizationSlug }, { me }, cookie] = await Promise.all([
+    params,
     getConsoleContext(),
     getCookieHeader(),
   ])

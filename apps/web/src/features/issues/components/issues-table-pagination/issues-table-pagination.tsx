@@ -17,7 +17,7 @@ import {
 import { RowsPerPage } from "../issues-table-toolbar/issues-table-toolbar"
 import type { IssueUiItem } from "../types/types"
 
-export const issuesTablePagination = ({
+export const IssuesTablePagination = ({
   table,
   searchState,
   total,

@@ -46,7 +46,7 @@ const getDueDateValue = (date: Date | null) => date?.toISOString() ?? null
 const normalizeDueDateValue = (value: string | null) =>
   value ? getDueDateValue(new Date(value)) : null
 
-export const issueDueDateTimeControl = ({
+export const IssueDueDateTimeControl = ({
   value,
   onValueChange,
   ariaLabel,
@@ -64,7 +64,7 @@ export const issueDueDateTimeControl = ({
   )
   const openRef = useRef(false)
   const draftDateRef = useRef<Date | null>(draftDate)
-  const initialValueRef = useRef<string | null>(normalizeDueDateValue(value))
+  const initialValueRef = useRef<string | null>(null)
   const [timeZone, setTimeZone] = useState<string>()
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone)

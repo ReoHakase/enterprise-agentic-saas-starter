@@ -329,8 +329,9 @@ const StatusFilter = ({
     [values]
   )
   const summaryLabel = useMemo(() => {
+    const selectedValues = new Set(values)
     const selected = issueStatusOptions.filter((option) =>
-      values.includes(option.value)
+      selectedValues.has(option.value)
     )
     return `Selected statuses: ${selected
       .map((option) => option.label)
@@ -371,8 +372,9 @@ const StatusFilterSummary = ({
 }: {
   values: IssueSearchState["statuses"]
 }) => {
+  const selectedValues = new Set(values)
   const ordered = issueStatusOptions.filter((option) =>
-    values.includes(option.value)
+    selectedValues.has(option.value)
   )
   return (
     <span className="inline-flex items-center gap-1">

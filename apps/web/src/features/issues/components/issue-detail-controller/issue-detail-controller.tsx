@@ -132,7 +132,7 @@ export const IssueDetailController = ({
   const [pendingUpdateCounts, setPendingUpdateCounts] = useState<
     Partial<Record<IssueUpdateField, number>>
   >({})
-  const updateQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const updateQueueRef = useRef<Promise<void> | null>(null)
   const timelineRefreshIdRef = useRef(0)
 
   const refreshTimeline = useCallback(async () => {
@@ -160,7 +160,7 @@ export const IssueDetailController = ({
   }, [issue.id, organizationId, queryClient, refreshTimeline])
   const updateMutation = useMutation({
     mutationFn: (update: IssueUpdate) => {
-      const request = updateQueueRef.current.then(() =>
+      const request = (updateQueueRef.current ?? Promise.resolve()).then(() =>
         updateIssue(apiClient, { id: issue.id, organizationId, ...update })
       )
       updateQueueRef.current = request.then(
@@ -280,6 +280,8 @@ export const IssueDetailController = ({
       ])
     },
   })
+  // このmutationはpaginated readであり、success handlerがlocal timeline stateへ追加する。
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const loadOlderMutation = useMutation({
     mutationFn: (cursor: string) =>
       getIssueTimeline(apiClient, {

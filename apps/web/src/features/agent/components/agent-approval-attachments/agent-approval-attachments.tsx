@@ -51,6 +51,7 @@ export const AgentApprovalAttachments = ({
           >
             {attachment.source === "asset" ? (
               // This authenticated private image must bypass the Next optimizer.
+              // oxlint-disable react-doctor/nextjs-no-img-element
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 className="max-h-64 w-full object-contain"
@@ -65,7 +66,8 @@ export const AgentApprovalAttachments = ({
                 alt={`Attachment preview: ${attachment.filename}`}
                 loading="lazy"
               />
-            ) : null}
+            ) : // oxlint-enable react-doctor/nextjs-no-img-element
+            null}
             <figcaption className="border-t px-2 py-1.5 text-xs">
               <span className="block truncate">{attachment.filename}</span>
               <span className="text-muted-foreground">

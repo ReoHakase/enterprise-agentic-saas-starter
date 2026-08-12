@@ -14,7 +14,7 @@ import {
 
 import { issueDescriptionFormSchema } from "../../schema"
 import type { StringFieldApi, SubmitSelection } from "../form-types/form-types"
-import { descriptionEditorField as DescriptionEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
+import { DescriptionEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
 import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import { getActionErrorMessage } from "../issue-utils/issue-utils"
 import type { IssueUiItem } from "../types/types"
@@ -60,6 +60,8 @@ export const useIssueDescriptionForm = ({
   })
   useEffect(() => {
     if (!editing && !form.state.isDirty) {
+      // form resetではissue変更後のfield state更新を意図的にbatchする。
+      // oxlint-disable-next-line react-doctor/no-chain-state-updates
       form.reset({ description: issue.description })
     }
   }, [editing, form, issue.description])

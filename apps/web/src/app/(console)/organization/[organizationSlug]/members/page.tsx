@@ -15,8 +15,10 @@ type MembersPageProps = {
 const noInvitations: OrganizationInvitation[] = []
 
 export default async function MembersPage({ params }: MembersPageProps) {
-  const { organizationSlug } = await params
-  const api = await createServerConsoleApi()
+  const [{ organizationSlug }, api] = await Promise.all([
+    params,
+    createServerConsoleApi(),
+  ])
   const organizations = await api.listOrganizations()
   const organizationSummary = organizations.find(
     (organization) => organization.slug === organizationSlug

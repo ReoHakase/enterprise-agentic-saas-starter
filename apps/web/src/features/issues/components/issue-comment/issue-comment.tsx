@@ -127,6 +127,8 @@ export const IssueComment = ({
 
   useEffect(() => {
     if (editing && editForm.state.isDirty) return
+    // form resetではcomment変更後のfield state更新を意図的にbatchする。
+    // oxlint-disable-next-line react-doctor/no-chain-state-updates
     editForm.reset({ body: comment.body })
   }, [comment.body, editForm, editing])
   const toggleEditing = useCallback(() => {

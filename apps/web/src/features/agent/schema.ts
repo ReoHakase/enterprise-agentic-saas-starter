@@ -175,6 +175,8 @@ export type AgentIssueAction = v.InferOutput<typeof agentIssueActionSchema>
 export const parseAgentThreads = (value: unknown) =>
   v.parse(agentThreadListSchema, value)
 const parseAgentMessages = (value: unknown): AgentChatMessage[] => {
+  // transport schemaはJSON-safeなpartを保証し、このcloneではgeneric payloadもUIMessageに絞り込む。
+  // oxlint-disable-next-line react-doctor/no-json-parse-stringify-clone
   const messages: AgentChatMessage[] = JSON.parse(
     JSON.stringify(v.parse(agentUiMessageListSchema, value))
   )

@@ -80,7 +80,7 @@ export const AgentConversationMinimap = ({
   turns: AgentConversationTurnPreview[]
 }) => {
   const { scrollRef, stopScroll } = useConversation()
-  const [activeTurnId, setActiveTurnId] = useState(turns.at(-1)?.id)
+  const [activeTurnId, setActiveTurnId] = useState(() => turns.at(-1)?.id)
   const measure = useCallback(() => {
     const viewport = scrollRef.current
     if (!viewport) return

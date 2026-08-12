@@ -18,8 +18,6 @@ type AddPasskey = NonNullable<
 
 export const securityMethodsKey = ["account", "security-methods"] as const
 
-const passkeyReauthenticationHref =
-  "/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account"
 const pendingSecurityActionKey = "enterprise-saas:pending-security-action"
 const pendingPasskeyAction = "account.passkey.add"
 const passkeyRegistrationFallback =
@@ -83,7 +81,9 @@ export const useAccountController = (addPasskey: AddPasskey | undefined) => {
   const continueReauthentication = useCallback(() => {
     markPasskeyReauthenticationPending()
     setReauthenticationOpen(false)
-    router.push(passkeyReauthenticationHref)
+    router.push(
+      `/auth/sign-in?reauth=1&action=${pendingPasskeyAction}&redirectTo=/settings/account`
+    )
   }, [router])
   const handleReauthenticationOpenChange = useCallback((open: boolean) => {
     setReauthenticationOpen(open)

@@ -48,7 +48,21 @@ const toIssuePageSize = (value: number): IssueSearchState["pageSize"] => {
   return "20"
 }
 
-const filterState = (state: IssueSearchState): IssueSearchPatch => ({
+const filterState = (
+  state: Pick<
+    IssueSearchState,
+    | "statuses"
+    | "priorityFrom"
+    | "priorityTo"
+    | "assignees"
+    | "labels"
+    | "labelMode"
+    | "dueFrom"
+    | "dueTo"
+    | "dueFromOffset"
+    | "dueToOffset"
+  >
+): IssueSearchPatch => ({
   statuses: state.statuses,
   priorityFrom: state.priorityFrom,
   priorityTo: state.priorityTo,
@@ -78,17 +92,51 @@ export const useIssuesTableFilters = ({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchTimeoutRef = useRef<number | undefined>(undefined)
   const skipSearchDebounceRef = useRef(false)
-  const synchronizedFilterState = filterState(searchState)
-  const synchronizedFilterStateKey = JSON.stringify(synchronizedFilterState)
-  const synchronizedFilterStateRef = useRef(synchronizedFilterState)
-  synchronizedFilterStateRef.current = synchronizedFilterState
+  const {
+    assignees,
+    dueFrom,
+    dueFromOffset,
+    dueTo,
+    dueToOffset,
+    labelMode,
+    labels,
+    priorityFrom,
+    priorityTo,
+    statuses,
+  } = searchState
+  const synchronizedFilterState = useMemo(
+    () =>
+      filterState({
+        assignees,
+        dueFrom,
+        dueFromOffset,
+        dueTo,
+        dueToOffset,
+        labelMode,
+        labels,
+        priorityFrom,
+        priorityTo,
+        statuses,
+      }),
+    [
+      assignees,
+      dueFrom,
+      dueFromOffset,
+      dueTo,
+      dueToOffset,
+      labelMode,
+      labels,
+      priorityFrom,
+      priorityTo,
+      statuses,
+    ]
+  )
   const draftKey = JSON.stringify(draft)
 
+  // URL更新をdebounceしつつinputの応答性を保つため、local draftを保持する。
+  // oxlint-disable-next-line react-doctor/no-derived-state, react-doctor/no-derived-state-effect
   useEffect(() => setSearchDraft(searchState.q), [searchState.q])
-  useEffect(
-    () => setDraft(synchronizedFilterStateRef.current),
-    [synchronizedFilterStateKey]
-  )
+  useEffect(() => setDraft(synchronizedFilterState), [synchronizedFilterState])
   useEffect(() => {
     if (searchTimeoutRef.current !== undefined) {
       window.clearTimeout(searchTimeoutRef.current)
@@ -228,15 +276,15 @@ export const useIssuesTableModel = ({
   })
 
   useEffect(() => {
-    setRowSelection((current) => {
-      const next =
-        previousSelectionScope.current === selectionScope
-          ? pruneRowSelection(current, visibleRowIds)
-          : {}
-      previousSelectionScope.current = selectionScope
-      return JSON.stringify(current) === JSON.stringify(next) ? current : next
-    })
-  }, [selectionScope, visibleRowIds])
+    const next =
+      previousSelectionScope.current === selectionScope
+        ? pruneRowSelection(rowSelection, visibleRowIds)
+        : {}
+    previousSelectionScope.current = selectionScope
+    if (JSON.stringify(rowSelection) !== JSON.stringify(next)) {
+      setRowSelection(next)
+    }
+  }, [rowSelection, selectionScope, visibleRowIds])
 
   const handleSortingChange = useCallback(
     (

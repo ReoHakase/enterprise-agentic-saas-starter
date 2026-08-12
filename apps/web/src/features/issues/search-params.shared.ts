@@ -71,10 +71,11 @@ const canonicalValues = (
   maximumCount?: number
 ) => {
   const unique = new Map<string, string>()
+  const orderSet = order ? new Set(order) : undefined
   for (const value of values) {
     const trimmed = value.trim()
     if (!trimmed || trimmed.length > maximumLength) continue
-    if (order && !order.includes(trimmed)) continue
+    if (orderSet && !orderSet.has(trimmed)) continue
     const key = trimmed.toLocaleLowerCase("en-US")
     if (!unique.has(key)) unique.set(key, trimmed)
   }

@@ -93,7 +93,9 @@ export const AgentApprovalCard = ({
     () => void refetchAction(),
     [refetchAction]
   )
+  // このeffectは非同期のapproval stateを親のaction controllerへ通知する。
   useEffect(() => {
+    // oxlint-disable-next-line react-doctor/no-pass-live-state-to-parent, react-doctor/no-prop-callback-in-effect, react-doctor/no-pass-data-to-parent
     if (action) onPendingChange(actionId, action.status === "pending")
   }, [action, actionId, onPendingChange])
   if (actionQuery.isPending) {

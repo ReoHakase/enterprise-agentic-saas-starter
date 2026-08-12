@@ -17,7 +17,7 @@ import {
   type StringFieldApi,
   type SubmitSelection,
 } from "../form-types/form-types"
-import { titleEditorField as TitleEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
+import { TitleEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
 import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
 import { getActionErrorMessage } from "../issue-utils/issue-utils"
 import type { IssueUiItem } from "../types/types"
@@ -65,6 +65,8 @@ export const useIssueTitleForm = ({
   })
   useEffect(() => {
     if (!editing && !form.state.isDirty) {
+      // form resetではissue変更後のfield state更新を意図的にbatchする。
+      // oxlint-disable-next-line react-doctor/no-chain-state-updates
       form.reset({ title: issue.title })
     }
   }, [editing, form, issue.title])
