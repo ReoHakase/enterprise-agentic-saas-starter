@@ -5,6 +5,7 @@ import {
   parseUserProfile,
   parseUserSessions,
 } from "@/features/account"
+import { parseMcpOAuthCredentials } from "@/features/mcp-oauth/schema"
 import { parseInvitations, parseMembers } from "@/features/members"
 import {
   parseOrganizationDeletionReceipt,
@@ -59,6 +60,12 @@ export const createConsoleApi = ({ baseUrl, cookie }: ConsoleApiOptions) => {
     revokeSession: async (sessionId: string) =>
       unwrap(await client.me.sessions({ sessionId }).delete()),
     revokeOtherSessions: async () => unwrap(await client.me.sessions.delete()),
+    listMcpOAuthSessions: async (signal?: AbortSignal) =>
+      parseMcpOAuthCredentials(
+        unwrap(await client.me["mcp-oauth"].sessions.get({ fetch: { signal } }))
+      ),
+    revokeMcpOAuthSession: async (credentialId: string) =>
+      unwrap(await client.me["mcp-oauth"].sessions({ credentialId }).delete()),
     listOrganizations: async (signal?: AbortSignal) =>
       parseOrganizations(
         unwrap(await client.organizations.get({ fetch: { signal } }))

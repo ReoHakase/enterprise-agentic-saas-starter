@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import { AuthRouteFrame } from "@/components/public-route-frame/public-route-frame"
 import {
+  createMcpOAuthAddAccountHref,
   createMcpOAuthRoutePath,
   McpOAuthOrganizationController,
 } from "@/features/mcp-oauth"
@@ -18,13 +19,17 @@ export default async function McpOAuthOrganizationPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const query = await searchParams
-  const { me } = await getConsoleContext(
-    createMcpOAuthRoutePath("/oauth/organization", query)
-  )
+  const returnTo = createMcpOAuthRoutePath("/oauth/organization", query)
+  const { me } = await getConsoleContext(returnTo)
 
   return (
-    <AuthRouteFrame>
-      <McpOAuthOrganizationController organizations={me.organizations} />
+    <AuthRouteFrame size="oauth">
+      <McpOAuthOrganizationController
+        addAccountHref={createMcpOAuthAddAccountHref(returnTo)}
+        currentUser={me.user}
+        organizations={me.organizations}
+        returnTo={returnTo}
+      />
     </AuthRouteFrame>
   )
 }

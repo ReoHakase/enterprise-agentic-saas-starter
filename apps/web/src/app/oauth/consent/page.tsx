@@ -2,11 +2,12 @@ import type { Metadata } from "next"
 
 import { AuthRouteFrame } from "@/components/public-route-frame/public-route-frame"
 import {
+  createMcpOAuthAddAccountHref,
   createMcpOAuthRoutePath,
   McpOAuthConsentController,
   parseMcpOAuthScopes,
 } from "@/features/mcp-oauth"
-import { verifySession } from "@/lib/server/auth"
+import { getConsoleContext } from "@/lib/server/console-context"
 
 export const metadata: Metadata = {
   title: "Authorize MCP access",
@@ -19,12 +20,22 @@ export default async function McpOAuthConsentPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const query = await searchParams
-  await verifySession(createMcpOAuthRoutePath("/oauth/consent", query))
+  const returnTo = createMcpOAuthRoutePath("/oauth/consent", query)
+  const { me } = await getConsoleContext(returnTo)
   const scopes = parseMcpOAuthScopes(query.scope)
+  const activeOrganization = me.organizations.find(
+    ({ id }) => id === me.activeOrganizationId
+  )
 
   return (
-    <AuthRouteFrame>
-      <McpOAuthConsentController scopes={scopes} />
+    <AuthRouteFrame size="oauth">
+      <McpOAuthConsentController
+        addAccountHref={createMcpOAuthAddAccountHref(returnTo)}
+        currentUser={me.user}
+        organization={activeOrganization}
+        returnTo={returnTo}
+        scopes={scopes}
+      />
     </AuthRouteFrame>
   )
 }

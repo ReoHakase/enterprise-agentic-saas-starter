@@ -697,6 +697,12 @@ staging objectからfile claimへの移行、Issue revision、quota、audit、re
 - revoke
 - scopeとcurrent permissionの積
 
+Webの認可画面は既存の組織選択表示を再利用し、組織アイコン、member avatar、member count、roleを同じ
+projectionから表示します。scope consentは要求されたscopeの部分集合を表形式で選択し、対象行・操作列の
+一括操作を許可します。`offline_access`は業務権限から分離し、permission scopeが1つ以上ない同意は
+発行しません。アカウント設定ではraw tokenを表示せず、client、組織、role、scope、期限だけを一覧し、
+credential family単位でrevokeします。
+
 ### PAT
 
 最後のphaseで追加します。

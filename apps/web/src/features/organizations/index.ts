@@ -4,14 +4,17 @@ export {
   queueOrganizationSwitchFlash,
 } from "./organization-switch-flash"
 export { OrganizationActivationGate } from "./components/organization-activation-gate/organization-activation-gate"
-export { OrganizationProfileImage } from "./components/organization-identity/organization-identity"
+export {
+  OrganizationIdentity,
+  OrganizationProfileImage,
+} from "./components/organization-identity/organization-identity"
 export { OrganizationRoleBadge } from "./components/organization-role-badge/organization-role-badge"
+export { OrganizationsTable } from "./components/organizations-table/organizations-table"
 export { OrganizationSettingsForm } from "./components/organization-settings-form/organization-settings-form"
 export { OrganizationsPage } from "./components/organizations-page/organizations-page"
 export { resolveOrganizationRouteContext } from "./route-context"
 export {
   organizationRoleSchema,
-  organizationSummarySchema,
   parseOrganization,
   parseOrganizationDeletionReceipt,
   parseOrganizations,

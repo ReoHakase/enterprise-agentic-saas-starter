@@ -13,6 +13,7 @@ export const consoleKeys = {
   invitations: (organizationId: string) =>
     [...consoleKeys.organization(organizationId), "invitations"] as const,
   sessions: () => [...consoleKeys.all, "sessions"] as const,
+  mcpOAuthSessions: () => [...consoleKeys.all, "mcp-oauth-sessions"] as const,
 }
 
 export const organizationsQueryOptions = () =>

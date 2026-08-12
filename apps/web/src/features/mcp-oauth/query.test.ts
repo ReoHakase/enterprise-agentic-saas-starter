@@ -2,7 +2,9 @@ import { MCP_PERMISSION_SCOPES } from "@enterprise-agentic-saas/auth/client"
 import { describe, expect, it } from "vitest"
 
 import {
+  createMcpOAuthAddAccountHref,
   createMcpOAuthRoutePath,
+  mcpOAuthScopeMatrixRows,
   parseMcpOAuthScopes,
   resolveMcpOAuthLoginRedirect,
 } from "./query"
@@ -33,6 +35,15 @@ describe("MCP OAuth scope query", () => {
     ])
   })
 
+  it("derives every matrix cell from the OAuth permission contract", () => {
+    const matrixScopes = mcpOAuthScopeMatrixRows.flatMap(({ scopes }) =>
+      Object.values(scopes)
+    )
+
+    expect(matrixScopes).toHaveLength(MCP_PERMISSION_SCOPES.length)
+    expect(new Set(matrixScopes)).toEqual(new Set(MCP_PERMISSION_SCOPES))
+  })
+
   it.each([undefined, [], ["issues:read"], "", "issues:read private:raw"])(
     "rejects missing, repeated-query, empty, and unknown input",
     (input) => {
@@ -42,6 +53,16 @@ describe("MCP OAuth scope query", () => {
 })
 
 describe("MCP OAuth login redirect", () => {
+  it("preserves the signed OAuth route when another account is added", () => {
+    expect(
+      createMcpOAuthAddAccountHref(
+        "/oauth/organization?client_id=client_1&sig=signed-query"
+      )
+    ).toBe(
+      "/auth/sign-in?redirectTo=%2Foauth%2Forganization%3Fclient_id%3Dclient_1%26sig%3Dsigned-query&add_account=1"
+    )
+  })
+
   it("preserves repeated query values for a local OAuth route", () => {
     expect(
       createMcpOAuthRoutePath("/oauth/organization", {

@@ -101,7 +101,7 @@ export const createMcpOAuthProvider = ({
   webAppOrigin,
 }: CreateMcpOAuthProviderOptions) =>
   oauthProvider({
-    loginPage: new URL("/auth/sign-in", webAppOrigin).toString(),
+    loginPage: new URL("/oauth/organization", webAppOrigin).toString(),
     consentPage: new URL("/oauth/consent", webAppOrigin).toString(),
     scopes: [...MCP_OAUTH_SCOPES],
     validAudiences: [resource],

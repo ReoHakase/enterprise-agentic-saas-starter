@@ -386,6 +386,9 @@ PATはこのphaseへ含めません。
 - [x] `tools/call`でcurrent permissionを再検証する
 - [x] writeを直接実行する
 - [x] expected revision、idempotency、auditを適用する
+- [x] OAuth consentでpermission scopeの部分集合と`offline_access`を選択できる
+- [x] OAuthで未ログイン復帰、複数account切替、通常のorganization一覧と同じidentity/table表示を使う
+- [x] アカウント設定でMCP OAuth credentialを組織、role、scope付きで一覧し、family単位でrevokeする
 
 ### Phase 4 exit criteria
 
@@ -448,7 +451,7 @@ PATはこのphaseへ含めません。
 - [x] Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移管した
 - [ ] Lunaの複数user turn間`reasoning_details`再送を観測する専用live probeを追加し、明示承認後に実行する
 - [ ] Phase 3を実装した
-- [ ] Phase 4を実装した
+- [x] Phase 4を実装した
 - [ ] Phase 4のInspector/Codex手動確認を完了した
 - [ ] Phase 5を実装した
 - [ ] 全受入条件と証跡を確認した

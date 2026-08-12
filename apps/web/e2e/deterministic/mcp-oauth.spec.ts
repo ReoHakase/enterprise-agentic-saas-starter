@@ -57,7 +57,14 @@ const runNamespace = (testInfo: TestInfo) => {
   if (typeof runId !== "number" || !Number.isSafeInteger(runId)) {
     throw new Error("MCP OAuth E1 run metadata is invalid")
   }
-  return `mcp-e1-${runId}-${testInfo.retry}-${testInfo.repeatEachIndex}`
+  let hash = 2_166_136_261
+  for (const character of testInfo.testId) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return `mcp-e1-${runId}-${testInfo.retry}-${testInfo.repeatEachIndex}-${(
+    hash >>> 0
+  ).toString(36)}`
 }
 
 const cookieHeader = async (context: BrowserContext) =>
@@ -65,7 +72,10 @@ const cookieHeader = async (context: BrowserContext) =>
     .map(({ name, value }) => `${name}=${value}`)
     .join("; ")
 
-const signInWithLocalGitHub = async (page: Page) => {
+const signInWithLocalGitHub = async (
+  page: Page,
+  accountName = "oauth-carol"
+) => {
   const githubButton = page.getByRole("button", { name: "GitHub" })
   await expect(githubButton).toBeEnabled()
   const socialSignIn = page.waitForResponse(
@@ -87,7 +97,19 @@ const signInWithLocalGitHub = async (page: Page) => {
       })`
     )
   }
-  await page.getByRole("button", { name: /oauth-carol/u }).click()
+  await page.getByRole("button", { name: new RegExp(accountName, "u") }).click()
+}
+
+const expectDesktopTableFitsViewport = async (page: Page, name: string) => {
+  const table = page.getByRole("table", { name })
+  await expect(table).toBeVisible()
+  const box = await table.boundingBox()
+  const viewport = page.viewportSize()
+  expect(box).not.toBeNull()
+  expect(viewport).not.toBeNull()
+  if (!box || !viewport) return
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
 }
 
 const provisionOrganization = async (input: {
@@ -201,6 +223,8 @@ const authorizeClient = async (input: {
   resource: string
   scope: string
   state: string
+  grantScope?: string
+  verifyAccountSwitching?: boolean
 }) => {
   const authorizationUrl = new URL(
     "/auth/oauth2/authorize",
@@ -228,8 +252,11 @@ const authorizeClient = async (input: {
   await input.page.goto(authorizationUrl.toString())
   await expect(input.page).toHaveURL(/\/auth\/sign-in/u)
   await signInWithLocalGitHub(input.page)
+  const postLoginUrl = new URL(input.page.url())
+  const organizationUrl = new URL("/oauth/organization", postLoginUrl.origin)
+  organizationUrl.search = postLoginUrl.search
   await expect(input.page).toHaveURL(/\/oauth\/organization/u)
-  const organizationUrl = new URL(input.page.url())
+  expect(postLoginUrl.pathname).toBe(organizationUrl.pathname)
   const organizationPath = `${organizationUrl.pathname}${organizationUrl.search}`
   const sessionCookieNames = (await input.page.context().cookies())
     .filter(({ name }) => name.includes("session_token"))
@@ -239,9 +266,6 @@ const authorizeClient = async (input: {
       input.page.context().clearCookies({ name })
     )
   )
-  const browserContext = input.page.context()
-  await input.page.close()
-  input.page = await browserContext.newPage()
   await input.page.route(callbackPattern, (route) =>
     route.fulfill({
       body: "<!doctype html><title>MCP OAuth callback</title>",
@@ -259,6 +283,42 @@ const authorizeClient = async (input: {
   expect(
     `${new URL(input.page.url()).pathname}${new URL(input.page.url()).search}`
   ).toBe(organizationPath)
+  await expectDesktopTableFitsViewport(
+    input.page,
+    "Organizations available for this MCP credential"
+  )
+  await expect(
+    input.page.getByRole("region", { name: "Current account" })
+  ).toContainText("oauth-carol")
+
+  if (input.verifyAccountSwitching) {
+    await input.page.getByRole("button", { name: "Switch account" }).click()
+    let dialog = input.page.getByRole("dialog", { name: "Switch account" })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole("link", { name: "Add account" }).click()
+    await expect(input.page).toHaveURL(/\/auth\/sign-in\?.*add_account=1/u)
+    expect(new URL(input.page.url()).searchParams.get("redirectTo")).toBe(
+      organizationPath
+    )
+    await signInWithLocalGitHub(input.page, "oauth-alice")
+    await expect(input.page).toHaveURL(/\/oauth\/organization\?/u)
+    await expect(
+      input.page.getByRole("region", { name: "Current account" })
+    ).toContainText("oauth-alice")
+
+    await input.page.getByRole("button", { name: "Switch account" }).click()
+    dialog = input.page.getByRole("dialog", { name: "Switch account" })
+    const carolAccount = dialog.getByRole("group", { name: /oauth-carol/u })
+    await expect(carolAccount).toBeVisible()
+    await expect(
+      carolAccount.getByRole("button", { name: /Remove/u })
+    ).toHaveCount(0)
+    await carolAccount.getByRole("button", { name: "Switch" }).click()
+    await expect(input.page).toHaveURL(/\/oauth\/organization\?/u)
+    await expect(
+      input.page.getByRole("region", { name: "Current account" })
+    ).toContainText("oauth-carol")
+  }
   const continuation = input.page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/auth/oauth2/continue" &&
@@ -266,9 +326,9 @@ const authorizeClient = async (input: {
     { timeout: 30_000 }
   )
   await input.page
-    .getByRole("button")
-    .filter({
-      has: input.page.getByText(input.organizationName, { exact: true }),
+    .getByRole("button", {
+      exact: true,
+      name: `Continue with ${input.organizationName}`,
     })
     .click()
   const continuationResponse = await continuation
@@ -283,8 +343,50 @@ const authorizeClient = async (input: {
   }
   await expect(input.page).toHaveURL(/\/oauth\/consent/u)
   await expect(
-    input.page.getByRole("list", { name: "Requested access" })
+    input.page.getByRole("table", { name: "Requested access" })
   ).toBeVisible()
+  await expect(
+    input.page.getByRole("region", { name: "Current account" })
+  ).toBeVisible()
+  await expect(
+    input.page.getByRole("button", { name: "Switch account" })
+  ).toBeVisible()
+  await expectDesktopTableFitsViewport(input.page, "Requested access")
+  if (input.grantScope) {
+    const granted = new Set(input.grantScope.split(" ").filter(Boolean))
+    const labels: Record<string, RegExp> = {
+      "account:read": /Account Read access/u,
+      "organization:read": /Organization Read access/u,
+      "members:read": /Members Read access/u,
+      "issues:read": /Issues Read access/u,
+      "issues:create": /Issues Create access/u,
+      "issues:update": /Issues Update access/u,
+      "issues:delete": /Issues Delete access/u,
+      "files:read": /Files Read access/u,
+      "files:write": /Files Write access/u,
+    }
+    const deselectScope = async (requested: string) => {
+      if (granted.has(requested)) return
+      const label = labels[requested]
+      if (label) {
+        const checkbox = input.page.getByRole("checkbox", { name: label })
+        await expect(checkbox).toBeEnabled()
+        await checkbox.click()
+        await expect(checkbox).not.toBeChecked()
+      } else if (requested === "offline_access") {
+        const checkbox = input.page.getByRole("checkbox", {
+          name: /Keep access after the client is closed/u,
+        })
+        await expect(checkbox).toBeEnabled()
+        await checkbox.click()
+        await expect(checkbox).not.toBeChecked()
+      }
+    }
+    for (const requested of input.scope.split(" ").filter(Boolean)) {
+      // oxlint-disable-next-line no-await-in-loop -- selection state must settle before the next checkbox.
+      await deselectScope(requested)
+    }
+  }
   const consent = input.page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/auth/oauth2/consent" &&
@@ -338,6 +440,7 @@ const exchangeCode = async (input: {
         redirect_uri: input.redirectUri,
         resource: input.resource,
       },
+      headers: { origin: new URL(input.redirectUri).origin },
     }
   )
   if (!response.ok()) {
@@ -457,8 +560,12 @@ test("OAuth MCPで公開contextとIssue attachment lifecycleを認可できる",
     resource,
     scope,
     state,
+    verifyAccountSwitching: true,
   })
-  const organizationAdminCookie = await cookieHeader(context)
+  const organizationAdminCookies = await context.cookies()
+  const organizationAdminCookie = organizationAdminCookies
+    .map(({ name, value }) => `${name}=${value}`)
+    .join("; ")
   await context.clearCookies()
   const accessToken = await exchangeCode({
     apiOrigin,
@@ -659,17 +766,36 @@ test("OAuth MCPで公開contextとIssue attachment lifecycleを認可できる",
     request: context.request,
   })
 
-  const revocation = await context.request.post(
-    `${apiOrigin}/auth/oauth2/revoke`,
-    {
-      form: {
-        client_id: clientId,
-        token: accessToken,
-        token_type_hint: "access_token",
+  await context.addCookies(organizationAdminCookies)
+  await page.goto("/settings/account")
+  await expect(
+    page.getByRole("heading", { name: "MCP OAuth access" })
+  ).toBeVisible()
+  await expect(page.getByText(`MCP E1 client ${namespace}`)).toBeVisible()
+  await expect(
+    page.getByText("Organization membership no longer available")
+  ).toBeVisible()
+  await page
+    .getByLabel("MCP OAuth access")
+    .getByRole("button", { name: "Revoke", exact: true })
+    .click()
+  await page.getByRole("button", { name: "Revoke access" }).click()
+  await expect(page.getByText(`MCP E1 client ${namespace}`)).toHaveCount(0)
+  await rejectMcpMethod({
+    accessToken,
+    apiOrigin,
+    message: {
+      jsonrpc: "2.0",
+      id: 94,
+      method: "initialize",
+      params: {
+        capabilities: {},
+        clientInfo: { name: "ui-revoked-e1", version: "1.0.0" },
+        protocolVersion: "2025-06-18",
       },
-    }
-  )
-  expect(revocation.status()).toBe(200)
+    },
+    request: context.request,
+  })
   await rejectMcpMethod({
     accessToken,
     apiOrigin,
@@ -685,4 +811,98 @@ test("OAuth MCPで公開contextとIssue attachment lifecycleを認可できる",
     },
     request: context.request,
   })
+})
+
+test("OAuth MCP consentは選択したscopeの部分集合だけを発行する", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  const apiOrigin = metadataString(testInfo, "agentE2EApiOrigin")
+  const apiPublicOrigin = metadataString(testInfo, "mcpE2EApiPublicOrigin")
+  const webOrigin = String(testInfo.project.use.baseURL)
+  const namespace = runNamespace(testInfo)
+  const organizationName = `MCP subset ${namespace}`
+  const organizationSlug = `${namespace}-subset`
+  const organizationId = await provisionOrganization({
+    apiOrigin,
+    browser,
+    name: organizationName,
+    slug: organizationSlug,
+    webOrigin,
+  })
+  const redirectUri = new URL("/oauth/client-callback", webOrigin).toString()
+  const resource = new URL("/mcp", apiPublicOrigin).toString()
+  const scope = "offline_access issues:read issues:create"
+  const clientId = await registerClient({
+    apiOrigin,
+    clientName: `MCP subset client ${namespace}`,
+    redirectUri,
+    request: context.request,
+    scope,
+  })
+  const pkce = await createPkce()
+  const code = await authorizeClient({
+    apiPublicOrigin,
+    challenge: pkce.challenge,
+    clientId,
+    grantScope: "offline_access issues:read",
+    organizationName,
+    page,
+    redirectUri,
+    resource,
+    scope,
+    state: crypto.randomUUID(),
+  })
+  const accessToken = await exchangeCode({
+    apiOrigin,
+    clientId,
+    code,
+    redirectUri,
+    request: context.request,
+    resource,
+    verifier: pkce.verifier,
+  })
+  const organizationAdminCookie = await cookieHeader(context)
+  const client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
+  const tools = await client.listTools()
+  const toolNames = tools.tools.map(({ name }) => name)
+  expect(toolNames).toContain("search_issues")
+  expect(toolNames).not.toContain("create_issue")
+  await client.close()
+  const sessionsResponse = await context.request.get(
+    `${apiOrigin}/me/mcp-oauth/sessions`,
+    { headers: { cookie: organizationAdminCookie, origin: webOrigin } }
+  )
+  expect(sessionsResponse.status()).toBe(200)
+  const sessions: unknown = await sessionsResponse.json()
+  if (!Array.isArray(sessions)) {
+    throw new Error("MCP OAuth E1 session list is invalid")
+  }
+  const session = sessions.find(
+    (candidate) =>
+      isRecord(candidate) &&
+      Reflect.get(candidate, "clientName") === `MCP subset client ${namespace}`
+  )
+  if (!isRecord(session)) {
+    throw new Error("MCP OAuth E1 subset session is missing")
+  }
+  const credentialId = requiredString(session, "credentialId")
+  const revokeResponse = await context.request.delete(
+    `${apiOrigin}/me/mcp-oauth/sessions/${encodeURIComponent(credentialId)}`,
+    { headers: { cookie: organizationAdminCookie, origin: webOrigin } }
+  )
+  expect(revokeResponse.status()).toBe(200)
+  const removal = await context.request.delete(
+    `${apiOrigin}/organizations/${organizationId}`,
+    {
+      data: {
+        confirmation: "DELETE",
+        idempotencyKey: `${namespace}.delete.organization`,
+        slug: organizationSlug,
+      },
+      headers: { cookie: organizationAdminCookie, origin: webOrigin },
+    }
+  )
+  expect(removal.status()).toBe(200)
 })

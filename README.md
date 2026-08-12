@@ -263,7 +263,8 @@ callback URL、Bearer tokenを設定ファイルへ書きません。`codex mcp 
 
 認証, 組織境界, scope, tool catalog, Inspectorと各clientの詳細は
 [remote MCP連携](docs/agent/mcp-integration.md)を参照してください。内部Agent Skillsと公開MCPの
-prompt/resourceは別に管理し、内部skillやsystem instructionをMCPへ公開しません。
+prompt/resourceは別に管理し、内部skillやsystem instructionをMCPへ公開しません。発行済みMCP OAuthの
+組織、role、scope確認とrevokeはWebのAccount settingsにあるMCP OAuth accessから行えます。
 
 ## ✅ 検証
 

@@ -136,6 +136,10 @@ ChatGPT、Codex、Claude Codeなど対話型clientの標準経路です。
 
 現在のOAuth実装はBetter Auth OAuth Providerを使い、`/mcp`を唯一のresource indicatorとしてauthorization requestとtoken requestの両方で必須にします。access tokenはhash保存するopaque tokenであり、access token revokeはrow削除、refresh token revokeは同じrefresh familyのaccess token削除として即時反映します。APIはtoken保存状態に加えて現在のmembershipをrequestごとに確認します。
 
+認可画面では、未ログインの場合に署名済みauthorization queryを`redirectTo`へ保持してsign-inへ送り、ログイン後に同じ要求へ戻します。端末に複数のログイン済みaccountがある場合は、organization選択とconsentの両方でBetter Auth multi-sessionの既存account switcherからaccountを選び直せます。OAuth画面からdevice sessionのrevokeは行わず、accountを追加または切り替えた後も現在の署名済みOAuth URLを維持します。
+
+未ログインから開始したauthorizationでは、sign-in後にorganization選択を必ず経ます。organization選択は通常のorganization一覧と同じTanStack Table rendererとidentity componentを使います。organization icon、メンバーavatar stack、member count、現在のroleを表示し、credentialは選択した1 organizationへ固定します。consent画面は要求されたscopeだけを対象に、対象を行、操作を列とする同じDataTable rendererの表を表示します。セル単位の選択に加えて、対象行と操作列のlabelまたはcheckboxによる一括選択を提供し、`offline_access`は権限scopeと分けて表示します。許可時は選択後のscope集合だけをBetter Authへ渡し、`offline_access`だけの発行は拒否します。有効なactive organizationを持つログイン済みaccountから開始した場合は、Better Authの標準`postLogin.shouldRedirect`に従ってorganization選択を省略できます。
+
 ## Organization binding
 
 1 credentialは1 organizationへ固定します。
@@ -162,6 +166,25 @@ type McpScope =
   | "files:read"
   | "files:write"
 ```
+
+`offline_access`は更新用tokenを要求する補助scopeであり、業務権限ではありません。Issueでは`create`、
+`update`、`delete`を分けます。Filesでは現在の業務tool契約が`files:read`と`files:write`であり、
+`files:write`がupload session、status、attachment管理を表すため、Filesだけにcreate/update/deleteを
+増やしません。名称を増やすより、既存tool catalogとcurrent permissionの境界をそのまま表にします。
+
+利用者はアカウント設定のMCP OAuth accessで、credential familyごとのclient名、紐付いた組織と現在のrole、
+scope、作成日時、期限を確認できます。raw access token、refresh token、token hashは返しません。組織membershipが
+失われたcredentialは組織情報を表示せず、APIのcurrent permission検査で利用も拒否します。revokeはrefresh
+family全体またはaccess-only credentialを即時無効化します。
+
+管理APIはfirst-party session cookieだけを受け付けます。
+
+```text
+GET    /me/mcp-oauth/sessions
+DELETE /me/mcp-oauth/sessions/:credentialId
+```
+
+この一覧はMCP bearer tokenの管理APIではなく、Webアカウント設定専用の安全な投影です。
 
 ## Tool catalog
 

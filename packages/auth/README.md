@@ -4,12 +4,14 @@ Better Auth による認証・認可パッケージ。
 
 ## Entrypoints
 
-| import                                       | 内容                                                                                         |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `@enterprise-agentic-saas/auth`              | singleton `auth` インスタンス（server-only）                                                 |
-| `@enterprise-agentic-saas/auth/client`       | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
-| `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
-| `@enterprise-agentic-saas/auth/mcp-oauth`    | MCP OAuthのbrowser-safeなscope、prefix、型                                                   |
+| import                                                | 内容                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@enterprise-agentic-saas/auth`                       | singleton `auth` インスタンス（server-only）                                                 |
+| `@enterprise-agentic-saas/auth/client`                | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
+| `@enterprise-agentic-saas/auth/github-oauth`          | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
+| `@enterprise-agentic-saas/auth/mcp-oauth-contract`    | MCP OAuthのbrowser-safeなscope、prefix、型                                                   |
+| `@enterprise-agentic-saas/auth/mcp-oauth`             | MCP OAuth providerとaccess token検証（server-only）                                          |
+| `@enterprise-agentic-saas/auth/mcp-oauth-credentials` | MCP OAuth credentialの一覧・revoke helper（server-only）                                     |
 
 ## Plugin 構成
 

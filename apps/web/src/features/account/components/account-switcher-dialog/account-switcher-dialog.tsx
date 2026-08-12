@@ -40,6 +40,7 @@ import type { DeviceAccount, Me } from "../../schema"
 
 type AccountSwitcherDialogProps = {
   addAccountHref?: string
+  allowRemove?: boolean
   currentUser: Me["user"]
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -52,6 +53,7 @@ type AccountSwitcherDialogProps = {
 
 export const AccountSwitcherDialog = ({
   addAccountHref = "/auth/sign-in?add_account=1",
+  allowRemove = true,
   currentUser,
   open,
   onOpenChange,
@@ -154,7 +156,7 @@ export const AccountSwitcherDialog = ({
                     pending={pendingToken === account.session.token}
                     mutationsPending={actionMutation.isPending}
                     onSwitch={requestSwitch}
-                    onRequestRevoke={requestRemove}
+                    onRequestRevoke={allowRemove ? requestRemove : undefined}
                   />
                 ))
               : null}
@@ -175,7 +177,7 @@ export const AccountSwitcherDialog = ({
         handleSwitchDialogOpenChange={handleRiskDialogOpenChange}
         revokeAccount={confirmRemove}
         revokePending={actionMutation.isPending}
-        revokeTarget={removeTarget}
+        revokeTarget={allowRemove ? removeTarget : undefined}
         switchTarget={switchTarget}
       />
     </>
@@ -266,19 +268,23 @@ const DeviceAccountRow = ({
   pending: boolean
   mutationsPending: boolean
   onSwitch: (account: DeviceAccount) => void
-  onRequestRevoke: (account: DeviceAccount) => void
+  onRequestRevoke?: (account: DeviceAccount) => void
 }) => {
   const switchAccount = useCallback(
     () => onSwitch(account),
     [account, onSwitch]
   )
   const requestRevocation = useCallback(
-    () => onRequestRevoke(account),
+    () => onRequestRevoke?.(account),
     [account, onRequestRevoke]
   )
 
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl border p-3">
+    <div
+      role="group"
+      aria-label={`Account ${account.user.email}`}
+      className="flex min-w-0 items-center gap-3 rounded-xl border p-3"
+    >
       <UserProfileImage user={account.user} className="size-10" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -300,15 +306,17 @@ const DeviceAccountRow = ({
             {pending ? <Spinner data-icon="inline-start" /> : null}
             Switch
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={mutationsPending}
-            aria-label={`Remove ${account.user.email} from this device`}
-            onClick={requestRevocation}
-          >
-            <LogOutIcon aria-hidden="true" />
-          </Button>
+          {onRequestRevoke ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={mutationsPending}
+              aria-label={`Remove ${account.user.email} from this device`}
+              onClick={requestRevocation}
+            >
+              <LogOutIcon aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
       )}
     </div>

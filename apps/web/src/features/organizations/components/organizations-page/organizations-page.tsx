@@ -9,7 +9,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@enterprise-agentic-saas/ui/components/alert-dialog"
-import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Empty,
@@ -19,31 +18,14 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
-import { TableCaption } from "@enterprise-agentic-saas/ui/components/table"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table"
-import {
-  Building2Icon,
-  CheckIcon,
-  SettingsIcon,
-  UsersRoundIcon,
-} from "lucide-react"
+import { Building2Icon, SettingsIcon, UsersRoundIcon } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import {
-  DataTableBody,
-  DataTableHeader,
-  DataTableRoot,
-} from "@/components/data-table/data-table"
 import { LinkButton } from "@/components/link-button/link-button"
 import { PageShell } from "@/components/page-shell/page-shell"
-import { UserProfileImage } from "@/components/user-identity/user-identity"
 import {
   hasOrganizationSwitchRisks,
   useAgentRuntimeState,
@@ -60,11 +42,7 @@ import { prepareOrganizationSwitch } from "../../cache"
 import { navigateAfterOrganizationSwitch } from "../../organization-switch-flash"
 import type { OrganizationSummary } from "../../schema"
 import { organizationCreateAction as OrganizationCreateAction } from "../organization-create-action/organization-create-action"
-import { OrganizationProfileImage } from "../organization-identity/organization-identity"
-import { OrganizationRoleBadge } from "../organization-role-badge/organization-role-badge"
-
-const getOrganizationRowId = (organization: OrganizationSummary) =>
-  organization.id
+import { OrganizationsTable } from "../organizations-table/organizations-table"
 
 export const OrganizationsPage = ({
   initialOrganizations,
@@ -145,64 +123,16 @@ export const OrganizationsPage = ({
     },
     [cancelPendingOrganizationSwitch]
   )
-  const columns = useMemo<ColumnDef<OrganizationSummary>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: "Organization",
-        cell: ({ row }) => <OrganizationIdentity organization={row.original} />,
-      },
-      {
-        accessorKey: "slug",
-        header: "Slug",
-        meta: {
-          headerClassName: "min-w-44",
-          cellClassName: "min-w-44",
-        },
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {row.original.slug}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "memberCount",
-        header: "Members",
-        meta: {
-          headerClassName: "min-w-24",
-          cellClassName: "min-w-24",
-        },
-        cell: ({ row }) => `${row.original.memberCount}`,
-      },
-      {
-        accessorKey: "role",
-        header: "Your role",
-        meta: {
-          headerClassName: "min-w-32",
-          cellClassName: "min-w-32",
-        },
-        cell: ({ row }) => <OrganizationRoleBadge role={row.original.role} />,
-      },
-      {
-        id: "actions",
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => (
-          <OrganizationActions
-            organization={row.original}
-            pending={activatePending}
-            onActivate={activate}
-          />
-        ),
-      },
-    ],
+  const renderOrganizationActions = useCallback(
+    (organization: OrganizationSummary) => (
+      <OrganizationActions
+        organization={organization}
+        pending={activatePending}
+        onActivate={activate}
+      />
+    ),
     [activate, activatePending]
   )
-  const table = useReactTable({
-    data: organizationsQuery.data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: getOrganizationRowId,
-  })
   return (
     <>
       <PageShell
@@ -239,17 +169,11 @@ export const OrganizationsPage = ({
             </EmptyHeader>
           </Empty>
         ) : (
-          <DataTableRoot
-            className="rounded-2xl"
-            tableClassName="min-w-208"
-            scrollLabel="Organizations attached to your account"
-          >
-            <TableCaption className="sr-only">
-              Organizations attached to your account
-            </TableCaption>
-            <DataTableHeader table={table} />
-            <DataTableBody table={table} />
-          </DataTableRoot>
+          <OrganizationsTable
+            caption="Organizations attached to your account"
+            organizations={organizationsQuery.data}
+            renderActions={renderOrganizationActions}
+          />
         )}
       </PageShell>
       <AlertDialog
@@ -279,38 +203,6 @@ export const OrganizationsPage = ({
     </>
   )
 }
-
-const OrganizationIdentity = ({
-  organization,
-}: {
-  organization: OrganizationSummary
-}) => (
-  <div className="flex min-w-52 items-center gap-3">
-    <OrganizationProfileImage organization={organization} className="size-10" />
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <p className="truncate font-medium">{organization.name}</p>
-        {organization.active ? (
-          <Badge variant="outline">
-            <CheckIcon aria-hidden="true" /> Active
-          </Badge>
-        ) : null}
-      </div>
-      <div className="mt-1 flex items-center gap-1">
-        {organization.memberProfileImages.slice(0, 3).map((member) => (
-          <UserProfileImage
-            key={member.userId}
-            user={member}
-            className="size-6 border-2 border-background"
-          />
-        ))}
-        <span className="text-xs text-muted-foreground sm:hidden">
-          {organization.memberCount} members
-        </span>
-      </div>
-    </div>
-  </div>
-)
 
 const OrganizationActions = ({
   organization,

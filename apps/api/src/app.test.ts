@@ -229,6 +229,24 @@ describe("createApp security and OpenAPI", () => {
       spec.paths["/organizations/{organizationId}/ownership-transfer"].post
         .security
     ).toEqual([{ sessionCookie: [] }])
+    expect(spec.paths["/me/mcp-oauth/sessions"].get).toMatchObject({
+      operationId: "listCurrentUserMcpOAuthCredentials",
+      security: [{ sessionCookie: [] }],
+      responses: { 200: expect.any(Object) },
+    })
+    expect(
+      spec.paths["/me/mcp-oauth/sessions/{credentialId}"].delete
+    ).toMatchObject({
+      operationId: "revokeCurrentUserMcpOAuthCredential",
+      security: [{ sessionCookie: [] }],
+      parameters: expect.arrayContaining([
+        expect.objectContaining({
+          in: "path",
+          name: "credentialId",
+          required: true,
+        }),
+      ]),
+    })
     expect(spec.paths["/issues/{id}"].get.operationId).toBe("getIssue")
     expect(spec.paths["/issues/by-number/{number}"].get.operationId).toBe(
       "getIssueByNumber"

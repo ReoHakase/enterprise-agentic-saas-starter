@@ -11,10 +11,15 @@ import { usePathname, useSearchParams } from "next/navigation"
 import {
   AuthRouteFrame,
   InvitationRouteFrame,
+  type AuthRouteFrameSize,
 } from "@/components/public-route-frame/public-route-frame"
 import { ConsoleShellSkeleton } from "@/features/console"
 
-export const AuthRouteLoading = () => {
+export const AuthRouteLoading = ({
+  frameSize = "default",
+}: {
+  frameSize?: AuthRouteFrameSize
+} = {}) => {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const creatingAccount = pathname === "/auth/sign-up"
@@ -29,7 +34,7 @@ export const AuthRouteLoading = () => {
     ) : undefined
 
   return (
-    <AuthRouteFrame status={status}>
+    <AuthRouteFrame status={status} size={frameSize}>
       <Card
         data-boundary-state="loading"
         aria-busy="true"

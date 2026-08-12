@@ -75,6 +75,11 @@ export const openApiPlugin = new Elysia({ name: "openapi" }).use(
             "Lists and revokes authenticated user sessions across devices.",
         },
         {
+          name: "MCP OAuth",
+          description:
+            "Lists and revokes MCP OAuth credential families without exposing token values.",
+        },
+        {
           name: "Organizations",
           description:
             "Creates, reads, updates, deletes, and activates tenant organizations.",
