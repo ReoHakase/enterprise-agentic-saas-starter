@@ -73,6 +73,7 @@ const McpOAuthCurrentAccount = ({
   currentUser: Me["user"]
   returnTo: string
 }) => {
+  const hydrated = useIsHydrated()
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false)
   const openAccountSwitcher = useCallback(() => {
     setAccountSwitcherOpen(true)
@@ -90,7 +91,11 @@ const McpOAuthCurrentAccount = ({
           </p>
           <UserIdentity user={currentUser} />
         </div>
-        <Button variant="outline" onClick={openAccountSwitcher}>
+        <Button
+          variant="outline"
+          disabled={!hydrated}
+          onClick={openAccountSwitcher}
+        >
           <Repeat2Icon data-icon="inline-start" aria-hidden="true" />
           Switch account
         </Button>
