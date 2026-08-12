@@ -39,3 +39,18 @@ export const userSessionParamsModel = v.object({
 })
 
 export const revokedSessionResponseModel = v.object({ id: v.string() })
+
+const mcpOAuthCredentialModel = v.object({
+  clientName: v.string(),
+  createdAt: v.nullable(isoTimestampModel),
+  credentialId: nonEmptyStringModel,
+  expiresAt: v.nullable(isoTimestampModel),
+  organization: v.nullable(organizationSummaryModel),
+  refreshable: v.boolean(),
+  scopes: v.array(nonEmptyStringModel),
+})
+
+export const mcpOAuthCredentialListModel = v.array(mcpOAuthCredentialModel)
+export const mcpOAuthCredentialParamsModel = v.object({
+  credentialId: nonEmptyStringModel,
+})

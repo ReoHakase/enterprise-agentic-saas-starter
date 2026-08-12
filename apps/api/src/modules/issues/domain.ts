@@ -52,11 +52,16 @@ export type IssueListItemDto = IssueDto & {
   thumbnail: IssueThumbnailFileDto | null
 }
 
-export type IssueMutationAuditContext = {
-  actionId: string
-  approvalMode: "auto_policy" | "manual"
-  source: "agent"
-}
+export type IssueMutationAuditContext =
+  | {
+      actionId: string
+      approvalMode: "auto_policy" | "manual"
+      source: "agent"
+    }
+  | {
+      actionId: string
+      source: "mcp"
+    }
 
 export type IssueCommentDto = {
   author: {

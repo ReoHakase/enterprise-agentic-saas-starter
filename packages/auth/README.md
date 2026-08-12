@@ -4,11 +4,14 @@ Better Auth による認証・認可パッケージ。
 
 ## Entrypoints
 
-| import                                       | 内容                                                                                         |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `@enterprise-agentic-saas/auth`              | singleton `auth` インスタンス（server-only）                                                 |
-| `@enterprise-agentic-saas/auth/client`       | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
-| `@enterprise-agentic-saas/auth/github-oauth` | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
+| import                                                | 内容                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `@enterprise-agentic-saas/auth`                       | singleton `auth` インスタンス（server-only）                                                 |
+| `@enterprise-agentic-saas/auth/client`                | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
+| `@enterprise-agentic-saas/auth/github-oauth`          | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
+| `@enterprise-agentic-saas/auth/mcp-oauth-contract`    | MCP OAuthのbrowser-safeなscope、prefix、型                                                   |
+| `@enterprise-agentic-saas/auth/mcp-oauth`             | MCP OAuth providerとaccess token検証（server-only）                                          |
+| `@enterprise-agentic-saas/auth/mcp-oauth-credentials` | MCP OAuth credentialの一覧・revoke helper（server-only）                                     |
 
 ## Plugin 構成
 
@@ -17,6 +20,7 @@ Better Auth による認証・認可パッケージ。
 - `organization` — マルチテナント組織管理
 - `multiSession` — 同一browserで最大5 accountを保持し、再ログインなしで切り替える
 - `openAPI` — auth OpenAPI schemaを`/auth/open-api/generate-schema`から生成する。既定reference pageは無効化し、`apps/api`のScalarから独立した仕様として参照する
+- `oauthProvider` — MCP専用OAuth 2.1 Authorization Code + PKCE、dynamic public client登録、organization固定consent、opaque access token、refresh、即時revoke
 - `socialProviders.github` — productionおよびemulator未使用時のGitHub OAuth sign-in / account linking
 - `genericOAuth` — development/testで明示したlocal emulatorだけをGitHub providerとして登録
 
@@ -83,16 +87,21 @@ emulator providerは `read:user` / `user:email`、PKCE、POST client authenticat
 
 ## Auth Schema
 
-`packages/db/src/schema/auth.generated.ts` に Better Auth CLI で生成する（**手書き禁止**）。
+core、passkey、organizationのschemaは`packages/db/src/schema/auth.generated.ts`にBetter Auth CLIで生成する（**手書き禁止**）。MCP OAuth Providerの4 tableは、CLIの全体再生成が既存のtenant固有複合・部分一意indexを除去するため、CLI出力と照合した`packages/db/src/schema/oauth-provider.ts`へ分離する。
 
 plugin 構成を変更したら再生成する:
 
 ```sh
 bunx @better-auth/cli generate \
   --config packages/auth/src/index.ts \
-  --output packages/db/src/schema/auth.generated.ts \
+  --output /tmp/enterprise-agentic-saas-auth.generated.ts \
   --yes
+rg -n '^export const oauth' \
+  /tmp/enterprise-agentic-saas-auth.generated.ts \
+  packages/db/src/schema/oauth-provider.ts
 ```
+
+OAuth Providerのtable/field/index/FK差分だけを確認し、`auth.generated.ts`の既存tenant制約を上書きしない。schema変更後はappend-only migrationを生成し、fresh、upgrade、schema driftを検証する。
 
 ## apps/api での mount
 

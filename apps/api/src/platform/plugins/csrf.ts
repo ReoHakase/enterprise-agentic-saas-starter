@@ -4,6 +4,16 @@ import { HttpError } from "../../errors/http-error"
 import { env } from "../env"
 
 const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"])
+const csrfExemptProtocolPaths = new Set([
+  "/auth/oauth2/introspect",
+  "/auth/oauth2/register",
+  "/auth/oauth2/revoke",
+  "/auth/oauth2/token",
+  "/mcp",
+])
+
+const isCsrfExemptProtocolPath = (pathname: string) =>
+  csrfExemptProtocolPaths.has(pathname) || pathname.startsWith("/mcp/uploads/")
 
 const normalizeOrigin = (value: string) => {
   try {
@@ -22,6 +32,10 @@ const allowedOrigins = new Set(
 export const csrfPlugin = new Elysia({ name: "csrf" })
   .onBeforeHandle({ as: "global" }, ({ request }) => {
     if (!unsafeMethods.has(request.method)) {
+      return
+    }
+
+    if (isCsrfExemptProtocolPath(new URL(request.url).pathname)) {
       return
     }
 

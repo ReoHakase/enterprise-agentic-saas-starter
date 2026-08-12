@@ -1,8 +1,8 @@
 ---
 title: remote MCP、OAuth、PAT連携
-status: proposed
-implementation: planned
-last_reviewed: 2026-07-28
+status: accepted
+implementation: active
+last_reviewed: 2026-08-03
 applies_to:
   - apps/api/src/mcp/**
   - packages/auth/**
@@ -18,23 +18,23 @@ related:
 
 ## 目的
 
-ChatGPT、Codex、Claude Code、OpenClaw、HermesなどからSaaSのbusiness toolsと公開skillsを利用できるremote MCP serverを提供します。MCP serverは製品Agentをsubagentとして呼ばず、認証済みprincipalでAPIのapplication serviceを直接実行します。
+ChatGPT、Codex、Claude CodeなどからSaaSのbusiness toolsと公開prompt、公開resourceを利用できるremote MCP serverを提供します。MCP serverは製品Agentをsubagentとして呼ばず、認証済みprincipalでAPIのapplication serviceを直接実行します。
 
 ## 配置
 
 ```text
 apps/api/src/mcp/
-  route.ts
+  module.ts
   server.ts
   authentication.ts
   principal.ts
-  authorization.ts
-  protected-resource-metadata.ts
+  transport.ts
+  tools/
   prompts/
   resources/
 ```
 
-`apps/api`は`packages/agent-tools`へ依存しますが、`apps/agent`へ依存しません。
+`apps/api`は`packages/agent-contracts`のValibot schemaを再利用し、API内のapplication serviceを直接実行します。`packages/agent-tools`と`apps/agent`へ依存しません。
 
 ## Mastra MCPServer
 
@@ -47,7 +47,8 @@ Mastra `MCPServer`を利用し、次の独自実装を避けます。
 - prompts
 - resources
 - Streamable HTTP protocol
-- tool schema変換
+
+Cloudflare WorkersではMCP SDKの`CfWorkerJsonSchemaValidator`を使います。toolのValibot検証を維持したまま、MCPへ公開するJSON Schemaだけを事前生成し、実行時の動的コード生成を避けます。
 
 登録するもの:
 
@@ -78,12 +79,13 @@ MCP client
   → credentialをMcpPrincipalへ解決
   → scopeとcurrent permissionからtool registryを構成
   → MCPServer
-  → local AgentToolExecutor
   → API application service
   → Application DB / R2
 ```
 
 `apps/agent`とAgent DBは通りません。
+
+serverless transportは`POST /mcp`だけを受け付けます。標準clientが初期化後に試す任意のSSE購読用`GET /mcp`には`405 Allow: POST`を返し、clientはstateless Streamable HTTPを継続します。MCP responseのstatusとheaderはElysiaのresponseへ明示的に転記し、Cloudflare adapter通過後も`application/json`を維持します。
 
 ## Principal
 
@@ -132,6 +134,12 @@ type McpPrincipal =
 
 ChatGPT、Codex、Claude Codeなど対話型clientの標準経路です。
 
+現在のOAuth実装はBetter Auth OAuth Providerを使い、`/mcp`を唯一のresource indicatorとしてauthorization requestとtoken requestの両方で必須にします。access tokenはhash保存するopaque tokenであり、access token revokeはrow削除、refresh token revokeは同じrefresh familyのaccess token削除として即時反映します。APIはtoken保存状態に加えて現在のmembershipをrequestごとに確認します。
+
+認可画面では、未ログインの場合に署名済みauthorization queryを`redirectTo`へ保持してsign-inへ送り、ログイン後に同じ要求へ戻します。端末に複数のログイン済みaccountがある場合は、organization選択とconsentの両方でBetter Auth multi-sessionの既存account switcherからaccountを選び直せます。OAuth画面からdevice sessionのrevokeは行わず、accountを追加または切り替えた後も現在の署名済みOAuth URLを維持します。
+
+未ログインから開始したauthorizationでは、sign-in後にorganization選択を必ず経ます。organization選択は通常のorganization一覧と同じTanStack Table rendererとidentity componentを使います。organization icon、メンバーavatar stack、member count、現在のroleを表示し、credentialは選択した1 organizationへ固定します。consent画面は要求されたscopeだけを対象に、対象を行、操作を列とする同じDataTable rendererの表を表示します。セル単位の選択に加えて、対象行と操作列のlabelまたはcheckboxによる一括選択を提供し、`offline_access`は権限scopeと分けて表示します。許可時は選択後のscope集合だけをBetter Authへ渡し、`offline_access`だけの発行は拒否します。有効なactive organizationを持つログイン済みaccountから開始した場合は、Better Authの標準`postLogin.shouldRedirect`に従ってorganization選択を省略できます。
+
 ## Organization binding
 
 1 credentialは1 organizationへ固定します。
@@ -158,6 +166,25 @@ type McpScope =
   | "files:read"
   | "files:write"
 ```
+
+`offline_access`は更新用tokenを要求する補助scopeであり、業務権限ではありません。Issueでは`create`、
+`update`、`delete`を分けます。Filesでは現在の業務tool契約が`files:read`と`files:write`であり、
+`files:write`がupload session、status、attachment管理を表すため、Filesだけにcreate/update/deleteを
+増やしません。名称を増やすより、既存tool catalogとcurrent permissionの境界をそのまま表にします。
+
+利用者はアカウント設定のMCP OAuth accessで、credential familyごとのclient名、紐付いた組織と現在のrole、
+scope、作成日時、期限を確認できます。raw access token、refresh token、token hashは返しません。組織membershipが
+失われたcredentialは組織情報を表示せず、APIのcurrent permission検査で利用も拒否します。revokeはrefresh
+family全体またはaccess-only credentialを即時無効化します。
+
+管理APIはfirst-party session cookieだけを受け付けます。
+
+```text
+GET    /me/mcp-oauth/sessions
+DELETE /me/mcp-oauth/sessions/:credentialId
+```
+
+この一覧はMCP bearer tokenの管理APIではなく、Webアカウント設定専用の安全な投影です。
 
 ## Tool catalog
 
@@ -227,8 +254,9 @@ digestへ束縛します。同じJSON-RPC request IDで異なるpayloadが来て
 clientId
 principalId
 organizationId
-jsonRpcRequestId
 toolName
+idempotencyKey
+normalizedPayloadDigest
 ```
 
 同じidentityと同じpayloadは既存receiptへ収束します。異なるpayloadはconflictです。
@@ -249,16 +277,91 @@ create_attachment_upload_session
 ```
 
 upload URLは短命、single-use、organization固定です。R2 keyを返しません。
+upload reservation、temporary quota、storage objectはD1で管理し、期限切れreservationは次のsession作成時に
+exact-key cleanup jobへ移します。ready assetをIssueへ追加すると、同じtransactionでfile claimへ移し、
+temporary quotaだけを解除します。
 
-## Public skills
+## 公開promptとresource
 
 MCPに独立したskill primitiveはありません。
 
-- userが選択する手順はprompt
-- 読み取り専用ガイドはresource
-- prompts/resources非対応client向けに必要ならread-only `get_skill` tool
+- `triage_issue`: 利用者の依頼を最大4,000文字で受け取り、organization確認、重複検索、最新revision、冪等キー、秘密情報非入力を案内するprompt
+- `guide://enterprise-agentic-saas/issues`: Issueの検索、作成、更新、削除を案内する読み取り専用resource
+- `guide://enterprise-agentic-saas/attachments`: upload session、実byte upload、status確認、attachment追加・削除を案内する読み取り専用resource
 
-内部Agent skillをそのまま公開しません。system policy、private endpoint、internal tool routingを除いた外部用projectionを作ります。
+内部Agent skill、system instruction、private endpoint、内部tool routingは公開しません。prompts/resources非対応client向けの独自`get_skill` toolも追加せず、business tool catalogを増やしません。
+
+## client設定
+
+公開endpointは`<API_PUBLIC_URL>/mcp`です。`<API_PUBLIC_URL>`はbrowserから到達できるHTTPS originへ置き換えます。OAuthでは同じURLをresource indicatorとして使い、organizationとscopeはbrowserのconsent画面で確定します。
+
+### MCP Inspector
+
+local開発では通常の`bun run dev`と一緒にWeb版MCP Inspectorを起動します。Inspectorだけを起動する
+場合は次を実行し、表示URLは`portless-topology resolve`で確認します。
+
+```sh
+bun run dev:mcp-inspector
+bun run portless-topology resolve mcp-inspector.enterprise-agentic-saas
+```
+
+Inspectorには同じworktreeの`<API_PUBLIC_URL>/mcp`とStreamable HTTP transportが設定済みです。
+Web版のcallbackはInspectorの実効originにある`/oauth/callback`であり、main checkoutでは
+`https://mcp-inspector.enterprise-agentic-saas.localhost/oauth/callback`です。linked worktreeや
+Portlessのportが異なる場合は、表示中のInspector originをそのまま使います。
+
+Inspector backendはloopbackへbindし、browser originを厳密なallowlistへ設定します。Inspector自身の
+session tokenを維持します。tokenを表示するInspectorの通常stdoutは破棄し、
+`DANGEROUSLY_OMIT_AUTH`や全interface bindは使用しません。credential stateは
+`~/.mcp-inspector/storage`へ保存し、repositoryへ追加しません。
+
+### ChatGPT
+
+full MCPのwrite actionを使う場合は、ChatGPT webのBusinessまたはEnterprise/Edu workspaceでdeveloper modeを有効にします。`Settings > Apps > Create`またはworkspaceの`Apps > Create`からendpointへ`<API_PUBLIC_URL>/mcp`を指定し、認証方式にOAuthを選択して`Scan Tools`を実行します。browserでlogin、organization選択、consentを完了するとdraft appとして検査できます。公開前に管理者がtool差分とwrite actionを確認します。
+
+現行の利用条件と画面経路は[OpenAI公式のdeveloper modeとMCP apps](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)を正本とします。ChatGPTはlocal endpointへ直接接続しないため、production deploy前のlocal検証にはこの手順を使いません。
+
+### Codex
+
+Codex CLI、IDE extension、ChatGPT desktop appは同じCodex hostのMCP設定を共有します。local開発では
+Portlessの実効API URLを解決し、Codexのuser設定へStreamable HTTP serverを追加してOAuth loginを
+開始します。
+
+```bash
+MCP_URL="$(bun run --silent portless-topology resolve api.enterprise-agentic-saas)/mcp"
+
+codex mcp add enterprise-agentic-saas-local \
+  --url "$MCP_URL" \
+  --oauth-resource "$MCP_URL"
+codex mcp login enterprise-agentic-saas-local \
+  --scopes "offline_access,account:read,organization:read,members:read,issues:read,issues:create,issues:update,issues:delete,files:read,files:write"
+```
+
+CodexはDynamic Client Registrationで実行時のloopback callbackを登録します。OAuth client ID、callback
+URL、Bearer tokenを設定へ書きません。手書きする場合のuser設定は次と等価ですが、このrepositoryの
+Nix生成`.codex/config.toml`は手編集しません。`url`と`oauth_resource`には同じ実効MCP URLを指定します。
+
+```toml
+[mcp_servers.enterprise-agentic-saas-local]
+url = "https://api.<worktree>.enterprise-agentic-saas.localhost:<port>/mcp"
+oauth_resource = "https://api.<worktree>.enterprise-agentic-saas.localhost:<port>/mcp"
+```
+
+別worktreeへ切り替える場合は`codex mcp remove enterprise-agentic-saas-local`で古いURLを削除し、
+再度`add`と`login`を実行します。`codex mcp list`で接続状態を、Codex内の`/mcp`で公開tool、prompt、
+resourceを確認します。設定項目とOAuth操作は
+[Codex公式MCP文書](https://developers.openai.com/codex/mcp)を正本とします。
+
+### Claude Code
+
+remote HTTP serverを追加し、Claude Code内の`/mcp`からOAuth認証を開始します。
+
+```bash
+claude mcp add --transport http --scope user \
+  enterprise-agentic-saas "<API_PUBLIC_URL>/mcp"
+```
+
+browserが自動で開かない場合は、`/mcp`が表示するURLをbrowserへコピーします。tokenはClaude Codeが保存・refreshします。現在のcommandとOAuth操作は[Claude Code公式MCP文書](https://code.claude.com/docs/en/mcp)を正本とします。
 
 ## Error contract
 

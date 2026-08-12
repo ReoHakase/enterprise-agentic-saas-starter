@@ -24,7 +24,7 @@ describe("GitHub Next.js emulator route", () => {
     await expect(unsupported.text()).resolves.toBe("Unknown service: google")
   })
 
-  it("並列E1用の2ユーザーをOAuth選択画面へseedする", async () => {
+  it("並列E1用の3ユーザーをOAuth選択画面へseedする", async () => {
     const response = await request(
       "/emulate/github/login/oauth/authorize?client_id=local&redirect_uri=http%3A%2F%2Flocalhost%2Fcallback&state=test"
     )
@@ -35,5 +35,7 @@ describe("GitHub Next.js emulator route", () => {
     expect(body).toContain("oauth-alice@example.test")
     expect(body).toContain("oauth-bob")
     expect(body).toContain("oauth-bob@example.test")
+    expect(body).toContain("oauth-carol")
+    expect(body).toContain("oauth-carol@example.test")
   })
 })

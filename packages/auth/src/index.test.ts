@@ -9,7 +9,13 @@ import { eq } from "drizzle-orm"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
-import type { auth as Auth } from "./index"
+import type {
+  auth as Auth,
+  getMcpProtectedResourceMetadata as GetMcpProtectedResourceMetadata,
+  handleMcpOAuthServerMetadata as HandleMcpOAuthServerMetadata,
+  mcpOAuthIssuer as McpOAuthIssuer,
+  mcpOAuthResource as McpOAuthResource,
+} from "./index"
 
 type EmailRuntimeModule = {
   backgroundTaskHandler: typeof BackgroundTaskHandler
@@ -34,6 +40,10 @@ const readActiveOrganizationId = (result: AuthSessionResult) =>
   result.session.activeOrganizationId
 
 let auth: AuthInstance
+let getMcpProtectedResourceMetadata: typeof GetMcpProtectedResourceMetadata
+let handleMcpOAuthServerMetadata: typeof HandleMcpOAuthServerMetadata
+let mcpOAuthIssuer: typeof McpOAuthIssuer
+let mcpOAuthResource: typeof McpOAuthResource
 let blockedOrganizationPluginEndpoints: ReadonlyArray<{
   method: "GET" | "POST"
   path: string
@@ -95,6 +105,10 @@ beforeAll(async () => {
   })
   const authModule = await import("./index")
   auth = authModule.auth
+  getMcpProtectedResourceMetadata = authModule.getMcpProtectedResourceMetadata
+  handleMcpOAuthServerMetadata = authModule.handleMcpOAuthServerMetadata
+  mcpOAuthIssuer = authModule.mcpOAuthIssuer
+  mcpOAuthResource = authModule.mcpOAuthResource
   blockedOrganizationPluginEndpoints =
     authModule.blockedOrganizationPluginEndpoints
   organizationSecurityHooks = authModule.organizationSecurityHooks
@@ -859,6 +873,124 @@ describe("app-owned organization boundary", () => {
       paths: expect.any(Object),
     })
     expect(Object.keys(schema.paths)).toContain("/organization/invite-member")
+  })
+})
+
+describe("MCP OAuth provider", () => {
+  it("publishes authorization and protected resource metadata", async () => {
+    const authorizationResponse = await handleMcpOAuthServerMetadata(
+      new Request(
+        "http://api.localhost/.well-known/oauth-authorization-server/auth"
+      )
+    )
+    const authorizationMetadata = await authorizationResponse.json()
+    expect(authorizationResponse.status).toBe(200)
+    expect(authorizationMetadata).toMatchObject({
+      authorization_endpoint: "http://api.localhost/auth/oauth2/authorize",
+      code_challenge_methods_supported: ["S256"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      issuer: mcpOAuthIssuer,
+      registration_endpoint: "http://api.localhost/auth/oauth2/register",
+      revocation_endpoint: "http://api.localhost/auth/oauth2/revoke",
+      token_endpoint: "http://api.localhost/auth/oauth2/token",
+    })
+
+    await expect(getMcpProtectedResourceMetadata()).resolves.toMatchObject({
+      authorization_servers: [mcpOAuthIssuer],
+      bearer_methods_supported: ["header"],
+      resource: mcpOAuthResource,
+      scopes_supported: expect.arrayContaining([
+        "account:read",
+        "issues:read",
+        "issues:create",
+        "files:read",
+        "files:write",
+      ]),
+    })
+  })
+
+  it("requires the MCP resource on authorization and token requests", async () => {
+    const authorize = await auth.handler(
+      new Request(
+        "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
+      )
+    )
+    expect(authorize.status).toBe(400)
+
+    const token = await auth.handler(
+      new Request("http://api.localhost/auth/oauth2/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: "not-a-token",
+          resource: "https://other.example.test/mcp",
+        }),
+      })
+    )
+    expect(token.status).toBe(400)
+    await expect(token.json()).resolves.toMatchObject({
+      code: "MCP_RESOURCE_REQUIRED",
+    })
+  })
+
+  it("accepts repeated references to the configured MCP resource", async () => {
+    const authorizeUrl = new URL(
+      "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
+    )
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+
+    const response = await auth.handler(new Request(authorizeUrl))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get("location")).toContain("error=invalid_client")
+  })
+
+  it("rejects a different resource mixed with the configured MCP resource", async () => {
+    const authorizeUrl = new URL(
+      "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
+    )
+    authorizeUrl.searchParams.append("resource", mcpOAuthResource)
+    authorizeUrl.searchParams.append(
+      "resource",
+      "https://other.example.test/mcp"
+    )
+
+    const response = await auth.handler(new Request(authorizeUrl))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      code: "MCP_RESOURCE_REQUIRED",
+    })
+  })
+
+  it("registers public PKCE clients without returning a client secret", async () => {
+    const response = await auth.handler(
+      new Request("http://api.localhost/auth/oauth2/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          client_name: "MCP Test Client",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: ["http://127.0.0.1/callback"],
+          response_types: ["code"],
+          scope: "issues:read offline_access",
+          token_endpoint_auth_method: "none",
+        }),
+      })
+    )
+    const client = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(client).toMatchObject({
+      client_name: "MCP Test Client",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["http://127.0.0.1/callback"],
+      token_endpoint_auth_method: "none",
+    })
+    expect(client).toHaveProperty("client_id")
+    expect(client).not.toHaveProperty("client_secret")
   })
 })
 

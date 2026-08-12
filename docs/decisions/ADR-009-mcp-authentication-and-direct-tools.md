@@ -1,7 +1,7 @@
 ---
 id: ADR-009
 title: MCPをAPIへ配置しOAuth認証でbusiness toolを直接実行する
-status: proposed
+status: accepted
 date: 2026-07-28
 owners:
   - repository-maintainers
@@ -38,6 +38,8 @@ MCP serverを`apps/agent`へ置く、または`apps/api`から`apps/agent`へpro
 - expected revision、idempotency、transaction、auditをAPIで必須にする
 - PAT形式のMCP個人アクセストークンはOAuth完成後の最後のphaseに追加する
 - PATからWeb sessionを作らない
+- OAuth access tokenは即時revokeを成立させるため、Better Auth OAuth Providerのopaque tokenを使う
+- OAuth authorization requestとtoken requestはMCP resource indicatorを必須にし、credentialのaudienceをMCPへ固定する
 
 ## 理由
 
@@ -56,6 +58,8 @@ initialize、tools/list、tools/call、schema、prompts、resources、Streamable
 ### OAuthを標準にする
 
 対話型clientではorganizationとscopeをbrowserで確認でき、short-lived access token、refresh、revokeを利用できます。長期secretをclient configへ直接保存する必要がありません。
+
+Better AuthのJWT access tokenはrevoke後も期限までlocal検証できるため、MCPではprovider標準のopaque access tokenを選びます。providerがhash保存、refresh rotation、access token削除、refresh family失効を担い、APIは保存済みtoken、固定resource、現在のmembershipをrequestごとに確認します。
 
 ### PATを最後に分離する
 
@@ -105,6 +109,7 @@ headless環境にはPATが有用ですが、OAuth、scope、principal、tool aut
 
 - `apps/api`がMastra MCP dependencyを持つ
 - OAuth metadata、consent、token lifecycleを実装する必要がある
+- OAuth Providerのtable定義はBetter Auth CLI出力と照合しつつ、既存tenant固有indexを持つ`auth.generated.ts`から分離して維持する必要がある
 - `tools/list`と`tools/call`の両方でpermissionを確認する必要がある
 - MCP writeはclient側確認UIの有無に関係なく実行されるため、scope管理が重要になる
 

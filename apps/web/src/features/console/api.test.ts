@@ -73,6 +73,33 @@ describe("console Eden API", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
   })
 
+  it("lists and revokes MCP OAuth credential families through the user API", async () => {
+    fetchMock
+      .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(Response.json({ id: "r_refresh_1" }))
+    const api = createConsoleApi({ baseUrl: "https://api.example.test" })
+    const controller = new AbortController()
+
+    await expect(api.listMcpOAuthSessions(controller.signal)).resolves.toEqual(
+      []
+    )
+    await expect(api.revokeMcpOAuthSession("r_refresh_1")).resolves.toEqual({
+      id: "r_refresh_1",
+    })
+
+    const listCall = fetchMock.mock.calls[0]
+    const revokeCall = fetchMock.mock.calls[1]
+    if (!listCall || !revokeCall) throw new Error("Expected Eden requests")
+    expect(requestFrom(...listCall).url).toBe(
+      "https://api.example.test/me/mcp-oauth/sessions"
+    )
+    expect(listCall[1]?.signal).toBe(controller.signal)
+    expect(requestFrom(...revokeCall).url).toBe(
+      "https://api.example.test/me/mcp-oauth/sessions/r_refresh_1"
+    )
+    expect(requestFrom(...revokeCall).method).toBe("DELETE")
+  })
+
   it("throws the native Eden error without converting it", async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json({ error: "confirmation_required" }, { status: 400 })

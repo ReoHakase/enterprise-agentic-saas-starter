@@ -151,6 +151,59 @@ describe("createApp security and OpenAPI", () => {
     expect(trusted.status).toBe(200)
   })
 
+  it("allows bearer protocol endpoints to reach their own authentication", async () => {
+    const app = createApp(testDb())
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      headers: {
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        host: "localhost",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "csrf-test", version: "1.0.0" },
+        },
+      }),
+    })
+    const bearerHeaders = new Headers(request.headers)
+    bearerHeaders.set("authorization", "Bearer mcp_at_disabled")
+    const bearerRequest = new Request(request.clone(), {
+      headers: bearerHeaders,
+    })
+    const response = await app.handle(request)
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get("www-authenticate")).toContain(
+      "/.well-known/oauth-protected-resource/mcp"
+    )
+
+    expect((await app.handle(bearerRequest)).status).toBe(401)
+    expect(
+      (
+        await app.handle(
+          new Request(
+            "http://localhost/.well-known/oauth-protected-resource/mcp"
+          )
+        )
+      ).status
+    ).toBe(200)
+    expect(
+      (
+        await app.handle(
+          new Request(
+            "http://localhost/.well-known/oauth-authorization-server/auth"
+          )
+        )
+      ).status
+    ).toBe(404)
+  })
+
   it("serves health and an app-owned OpenAPI document", async () => {
     const app = createApp(testDb())
     const health = await app.handle(new Request("http://localhost/health"))
@@ -176,6 +229,24 @@ describe("createApp security and OpenAPI", () => {
       spec.paths["/organizations/{organizationId}/ownership-transfer"].post
         .security
     ).toEqual([{ sessionCookie: [] }])
+    expect(spec.paths["/me/mcp-oauth/sessions"].get).toMatchObject({
+      operationId: "listCurrentUserMcpOAuthCredentials",
+      security: [{ sessionCookie: [] }],
+      responses: { 200: expect.any(Object) },
+    })
+    expect(
+      spec.paths["/me/mcp-oauth/sessions/{credentialId}"].delete
+    ).toMatchObject({
+      operationId: "revokeCurrentUserMcpOAuthCredential",
+      security: [{ sessionCookie: [] }],
+      parameters: expect.arrayContaining([
+        expect.objectContaining({
+          in: "path",
+          name: "credentialId",
+          required: true,
+        }),
+      ]),
+    })
     expect(spec.paths["/issues/{id}"].get.operationId).toBe("getIssue")
     expect(spec.paths["/issues/by-number/{number}"].get.operationId).toBe(
       "getIssueByNumber"

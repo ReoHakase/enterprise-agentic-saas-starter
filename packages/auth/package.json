@@ -6,7 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./github-oauth": "./src/github-oauth.ts"
+    "./github-oauth": "./src/github-oauth.ts",
+    "./mcp-oauth-contract": "./src/mcp-oauth-contract.ts",
+    "./mcp-oauth-credentials": "./src/server/mcp-oauth-credentials.ts",
+    "./mcp-oauth": "./src/server/mcp-oauth.ts"
   },
   "scripts": {
     "format": "oxfmt",
@@ -16,6 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/oauth-provider": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@enterprise-agentic-saas/db": "workspace:*",
     "@enterprise-agentic-saas/email": "workspace:*",

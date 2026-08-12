@@ -47,6 +47,28 @@ export const createUsersService = (ports: UsersPorts) => {
     currentSessionId: string
   }) => ports.listSessions(input)
 
+  const listMcpOAuthCredentials = async (input: { userId: string }) => {
+    const [credentials, organizations] = await Promise.all([
+      ports.listMcpOAuthCredentials(input.userId),
+      ports.listOrganizations({ userId: input.userId }),
+    ])
+    const organizationsById = new Map(
+      organizations.map((organization) => [organization.id, organization])
+    )
+
+    return credentials.map((credential) => ({
+      clientName: credential.clientName,
+      createdAt: credential.createdAt?.toISOString() ?? null,
+      credentialId: credential.credentialId,
+      expiresAt: credential.expiresAt?.toISOString() ?? null,
+      organization: credential.organizationId
+        ? (organizationsById.get(credential.organizationId) ?? null)
+        : null,
+      refreshable: credential.refreshable,
+      scopes: credential.scopes,
+    }))
+  }
+
   const revokeUserSession = async (input: {
     userId: string
     currentSessionId: string
@@ -72,9 +94,20 @@ export const createUsersService = (ports: UsersPorts) => {
     currentSessionId: string
   }) => ports.deleteOtherSessions(input)
 
+  const revokeMcpOAuthCredential = async (input: {
+    credentialId: string
+    userId: string
+  }) => {
+    const revoked = await ports.revokeMcpOAuthCredential(input)
+    if (!revoked) throw new HttpError({ code: "not_found" })
+    return { id: input.credentialId }
+  }
+
   return {
     getMe,
+    listMcpOAuthCredentials,
     listUserSessions,
+    revokeMcpOAuthCredential,
     revokeOtherUserSessions,
     revokeUserSession,
     updateMe,

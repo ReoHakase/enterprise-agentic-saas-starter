@@ -87,6 +87,20 @@ const createAgentProfile = () => {
       },
     },
     {
+      name: "e1-mcp-oauth-chromium",
+      dependencies: ["e1-scripted-agent-auth-setup"],
+      testMatch: "mcp-oauth.spec.ts",
+      workers: 1,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: environment.webOrigin,
+        screenshot: "only-on-failure",
+        trace: "off",
+        viewport: { width: 1280, height: 720 },
+        video: "off",
+      },
+    },
+    {
       name: "e1-scripted-agent-chromium",
       dependencies: ["e1-scripted-agent-auth-setup"],
       testMatch: "scripted-agent-*.spec.ts",
@@ -154,6 +168,7 @@ const createAgentProfile = () => {
     metadata: {
       agentE2ERunId: environment.runId,
       agentE2EApiOrigin: environment.apiLoopbackOrigin,
+      mcpE2EApiPublicOrigin: environment.apiOrigin,
       agentE2EMode: "scripted",
     },
     projects,

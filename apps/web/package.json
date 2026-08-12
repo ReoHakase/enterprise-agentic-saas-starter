@@ -96,6 +96,7 @@
   "devDependencies": {
     "@enterprise-agentic-saas/portless-topology": "workspace:*",
     "@enterprise-agentic-saas/typescript-config": "workspace:*",
+    "@modelcontextprotocol/sdk": "catalog:",
     "@opennextjs/cloudflare": "catalog:",
     "@playwright/test": "catalog:",
     "@storybook/addon-a11y": "catalog:",

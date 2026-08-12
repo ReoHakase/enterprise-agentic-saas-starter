@@ -26,6 +26,49 @@ describe("local Worker development configuration", () => {
     )
   })
 
+  it("binds MCP Inspector to the protected Portless browser origin", async () => {
+    const packageJson: unknown = JSON.parse(
+      await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8")
+    )
+    if (typeof packageJson !== "object" || packageJson === null) {
+      throw new TypeError("apps/api/package.json must contain an object")
+    }
+    const scripts = Reflect.get(packageJson, "scripts")
+    if (typeof scripts !== "object" || scripts === null) {
+      throw new TypeError("apps/api/package.json scripts must be an object")
+    }
+    const inspectorScript = Reflect.get(scripts, "dev:inspector")
+
+    expect(inspectorScript).toBeTypeOf("string")
+    expect(inspectorScript).toContain(
+      "portless-topology run mcp-inspector.enterprise-agentic-saas"
+    )
+    expect(inspectorScript).toContain('CLIENT_PORT="$PORT"')
+    expect(inspectorScript).toContain('ALLOWED_ORIGINS="$PORTLESS_URL"')
+    expect(inspectorScript).toContain("MCP_AUTO_OPEN_ENABLED=false")
+    expect(inspectorScript).toContain('--server-url "$API_PUBLIC_URL/mcp"')
+    expect(inspectorScript).toContain("--transport http")
+    expect(inspectorScript).toContain("> /dev/null")
+    expect(inspectorScript).not.toContain("DANGEROUSLY_OMIT_AUTH")
+
+    const rootPackageJson: unknown = JSON.parse(
+      await readFile(
+        resolve(import.meta.dirname, "../../../../package.json"),
+        "utf8"
+      )
+    )
+    if (typeof rootPackageJson !== "object" || rootPackageJson === null) {
+      throw new TypeError("root package.json must contain an object")
+    }
+    const rootScripts = Reflect.get(rootPackageJson, "scripts")
+    if (typeof rootScripts !== "object" || rootScripts === null) {
+      throw new TypeError("root package.json scripts must be an object")
+    }
+    expect(Reflect.get(rootScripts, "dev:mcp-inspector")).toContain(
+      "portless-topology exec -- turbo run dev:inspector"
+    )
+  })
+
   it("lets the OS allocate an inspector port unless explicitly overridden", () => {
     expect(resolveWranglerInspectorPort({})).toBe("0")
     expect(

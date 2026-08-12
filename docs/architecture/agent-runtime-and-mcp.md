@@ -630,12 +630,11 @@ MCP serverは`apps/api`へ置きます。
 
 ```text
 apps/api/src/mcp/
-  route.ts
+  module.ts
   server.ts
   authentication.ts
   principal.ts
-  authorization.ts
-  protected-resource-metadata.ts
+  tools/
   prompts/
   resources/
 ```
@@ -680,6 +679,10 @@ JSON-RPC request IDはtransport上の相関値であり、業務冪等キーに�
 明示した業務冪等キーをschemaで受け取り、principal、organization、tool、正規化payload digestと
 組み合わせてreservationします。同じJSON-RPC IDで別操作が来ても同一業務とみなしません。
 
+添付binaryはtool inputへ含めません。`create_attachment_upload_session`が返すOAuth保護済みの短命URLへ
+exact sizeとcontent typeを固定してPUTし、readyになったopaque asset IDだけをIssue mutationへ渡します。
+staging objectからfile claimへの移行、Issue revision、quota、audit、receiptは同じDB transactionで確定します。
+
 ## OAuthとPAT
 
 ### OAuth
@@ -693,6 +696,12 @@ JSON-RPC request IDはtransport上の相関値であり、業務冪等キーに�
 - refresh token
 - revoke
 - scopeとcurrent permissionの積
+
+Webの認可画面は既存の組織選択表示を再利用し、組織アイコン、member avatar、member count、roleを同じ
+projectionから表示します。scope consentは要求されたscopeの部分集合を表形式で選択し、対象行・操作列の
+一括操作を許可します。`offline_access`は業務権限から分離し、permission scopeが1つ以上ない同意は
+発行しません。アカウント設定ではraw tokenを表示せず、client、組織、role、scope、期限だけを一覧し、
+credential family単位でrevokeします。
 
 ### PAT
 

@@ -108,6 +108,19 @@ describe("organization context, creation, and deletion guards", () => {
         activeOrganizationId: null,
       })
     ).resolves.toBeNull()
+
+    const [ambiguousSession] = await db
+      .select({ updatedAt: schema.session.updatedAt })
+      .from(schema.session)
+      .where(eq(schema.session.id, "session_user5_ambiguous"))
+    const ambiguousAgentContexts = await db
+      .select({ sessionId: schema.agentSessionContexts.sessionId })
+      .from(schema.agentSessionContexts)
+      .where(
+        eq(schema.agentSessionContexts.sessionId, "session_user5_ambiguous")
+      )
+    expect(ambiguousSession?.updatedAt).toEqual(now)
+    expect(ambiguousAgentContexts).toEqual([])
   })
 
   it("validates normalized organization slugs and maps collisions to 409", async () => {

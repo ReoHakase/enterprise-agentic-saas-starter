@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 
 import { AuthRouteFrame } from "@/components/public-route-frame/public-route-frame"
 import { Auth, AuthRouteScope, sanitizeAuthRedirectTo } from "@/features/auth"
+import { resolveMcpOAuthLoginRedirect } from "@/features/mcp-oauth"
 
 type AuthPageProps = {
   params: Promise<{
@@ -24,9 +25,9 @@ export default async function AuthPage({
   const [{ path }, query] = await Promise.all([params, searchParams])
   const addingAccount = query.add_account === "1"
   const reauthenticating = query.reauth === "1"
-  const requestedRedirect = Array.isArray(query.redirectTo)
-    ? query.redirectTo[0]
-    : query.redirectTo
+  const requestedRedirect =
+    resolveMcpOAuthLoginRedirect(query) ??
+    (Array.isArray(query.redirectTo) ? query.redirectTo[0] : query.redirectTo)
   const safeRedirect = sanitizeAuthRedirectTo(requestedRedirect)
 
   if (requestedRedirect) {

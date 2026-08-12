@@ -10,6 +10,7 @@ import { type ComponentProps, useCallback } from "react"
 import { toast } from "sonner"
 
 import { safeAuthErrorMessage } from "@/features/auth"
+import { useIsHydrated } from "@/hooks/use-is-hydrated"
 
 import { createAuthCallbackURL } from "../../callback-url"
 import { useAuthRouteState } from "../auth-route-scope/auth-route-scope"
@@ -33,6 +34,7 @@ export function ProviderButton({
 }: ProviderButtonProps) {
   const { authClient, localization, redirectTo: defaultRedirectTo } = useAuth()
   const authRoute = useAuthRouteState()
+  const hydrated = useIsHydrated()
   const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
 
   const callbackURL = createAuthCallbackURL(redirectTo)
@@ -67,7 +69,7 @@ export function ProviderButton({
     <Button
       type="button"
       variant={variant}
-      disabled={isPending}
+      disabled={isPending || !hydrated}
       onClick={handleSignIn}
       {...props}
       aria-label={getProviderName(provider)}

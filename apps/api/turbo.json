@@ -2,7 +2,10 @@
   "extends": ["//"],
   "tasks": {
     "dev": {
-      "with": ["@enterprise-agentic-saas/emulate#dev"]
+      "with": [
+        "@enterprise-agentic-saas/api#dev:inspector",
+        "@enterprise-agentic-saas/emulate#dev"
+      ]
     },
     "build": {
       "outputs": ["dist/**"]

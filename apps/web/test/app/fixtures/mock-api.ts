@@ -375,6 +375,7 @@ const handleConsoleRequest = (url: URL) => {
       },
     ])
   }
+  if (url.pathname === "/me/mcp-oauth/sessions") return json([])
   if (url.pathname === "/organizations") return json([organization])
   if (url.pathname === `/organizations/${organization.id}`) {
     return json(organizationDetail)

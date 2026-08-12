@@ -180,6 +180,10 @@
       "cache": false,
       "persistent": true
     },
+    "dev:inspector": {
+      "cache": false,
+      "persistent": true
+    },
     "storage:dev": {
       "cache": false,
       "persistent": true

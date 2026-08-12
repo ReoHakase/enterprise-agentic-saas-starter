@@ -45,6 +45,7 @@ const config: KnipConfig = {
         "src/**/*.test.ts",
         "src/dev.ts",
         "src/index.ts!",
+        "src/mcp/index.ts!",
         "src/smoke/upload-memory/worker.ts!",
       ],
       // Knip strict implies production mode. Keep the production graph explicit
@@ -65,7 +66,13 @@ const config: KnipConfig = {
         "!src/smoke/upload-memory/metrics.ts!",
         "!src/test/**/*.ts!",
       ],
-      ignoreDependencies: cloudflareRuntimeBuiltin,
+      ignoreDependencies: [
+        ...cloudflareRuntimeBuiltin,
+        // MCP Inspector runs through a nested Portless shell so `$PORT` and
+        // `$PORTLESS_URL` expand only after Portless assigns the browser origin.
+        // Remove when the launcher no longer needs child-process expansion.
+        "@modelcontextprotocol/inspector",
+      ],
       wrangler: {
         config: ["wrangler*.jsonc", "src/**/wrangler*.jsonc"],
       },

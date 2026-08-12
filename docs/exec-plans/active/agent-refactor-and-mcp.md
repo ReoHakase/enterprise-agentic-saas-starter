@@ -287,7 +287,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] thumbnail整合を保つ
 - [x] WebとAgentで同じshared contractを利用する
 - [x] shared contractをPhase 4のMCP tool登録から再利用できる境界へ置く
-- [ ] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
+- [x] Phase 4でattachment toolをMCPへ登録し、同じcontractを利用する
 
 ### 2.6 Mastra-owned durable commit（PLAN-2026-029へ移管済みの実装履歴）
 
@@ -357,43 +357,48 @@ PATはこのphaseへ含めません。
 
 ### 4.1 MCP server
 
-- [ ] `apps/api/src/mcp`を追加する
-- [ ] Mastra `MCPServer`を追加する
-- [ ] Cloudflare serverless transportへ接続する
-- [ ] `packages/agent-tools`をlocal executorへ接続する
-- [ ] `apps/api -> apps/agent`依存がないことを固定する
-- [ ] Agent、Workflow、samplingを登録しない
-- [ ] promptsとresourcesへ公開skillsを追加する
+- [x] `apps/api/src/mcp`を追加する
+- [x] Mastra `MCPServer`を追加する
+- [x] Cloudflare serverless transportへ接続する
+- [x] Mastra `createTool`をAPIのlocal executorへ接続する
+- [x] `apps/api -> apps/agent`依存がないことを固定する
+- [x] Agent、Workflow、samplingを登録しない
+- [x] promptsとresourcesへ公開手順を追加する
 
 ### 4.2 OAuth
 
-- [ ] Better Auth OAuth Providerを追加する
-- [ ] protected resource metadataを追加する
-- [ ] Authorization Code + PKCEを実装する
-- [ ] login、organization選択、consent、callbackを実装する
-- [ ] access token、refresh token、revokeを実装する
-- [ ] credentialを1 organizationへ固定する
-- [ ] resource audienceを検証する
+- [x] Better Auth OAuth Providerを追加する
+- [x] protected resource metadataを追加する
+- [x] Authorization Code + PKCEを実装する
+- [x] login、organization選択、consent、callbackを実装する
+- [x] access token、refresh token、revokeを実装する
+- [x] credentialを1 organizationへ固定する
+- [x] resource audienceを検証する
 
 ### 4.3 Scopesと全tool
 
-- [ ] account、organization、member、Issue、file scopeを定義する
-- [ ] read toolsを登録する
-- [ ] create、update、deleteを登録する
-- [ ] attachment add/remove/readを登録する
-- [ ] upload sessionとstatusを登録する
-- [ ] `tools/list`をscopeとcurrent permissionで絞る
-- [ ] `tools/call`でcurrent permissionを再検証する
-- [ ] writeを直接実行する
-- [ ] expected revision、idempotency、auditを適用する
+- [x] account、organization、member、Issue、file scopeを定義する
+- [x] read toolsを登録する
+- [x] create、update、deleteを登録する
+- [x] attachment add/remove/readを登録する
+- [x] upload sessionとstatusを登録する
+- [x] `tools/list`をscopeとcurrent permissionで絞る
+- [x] `tools/call`でcurrent permissionを再検証する
+- [x] writeを直接実行する
+- [x] expected revision、idempotency、auditを適用する
+- [x] OAuth consentでpermission scopeの部分集合と`offline_access`を選択できる
+- [x] OAuthで未ログイン復帰、複数account切替、通常のorganization一覧と同じidentity/table表示を使う
+- [x] アカウント設定でMCP OAuth credentialを組織、role、scope付きで一覧し、family単位でrevokeする
 
 ### Phase 4 exit criteria
 
-- [ ] OAuth MCP E1 journeyがread/writeを一巡する
-- [ ] MCP requestがAgent Workerを経由しない
-- [ ] AgentとWorkflowがMCP registryにない
-- [ ] membership変更とrevokeが即時反映される
-- [ ] ChatGPT、Codex、Claude Code相当client configを文書化する
+- [x] OAuth MCP E1 journeyがread/writeを一巡する
+- [x] MCP requestがAgent Workerを経由しない
+- [x] AgentとWorkflowがMCP registryにない
+- [x] membership変更とrevokeが即時反映される
+- [x] ChatGPT、Codex、Claude Code相当client configを文書化する
+- [ ] MCP InspectorでOAuth callbackとtool catalogを実際のWeb画面から確認する
+- [ ] Codex local登録でOAuth login、tools、prompts、resourcesを実際に確認する
 
 # Phase 5 PAT形式のMCP個人アクセストークン
 
@@ -446,7 +451,8 @@ PATはこのphaseへ含めません。
 - [x] Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移管した
 - [ ] Lunaの複数user turn間`reasoning_details`再送を観測する専用live probeを追加し、明示承認後に実行する
 - [ ] Phase 3を実装した
-- [ ] Phase 4を実装した
+- [x] Phase 4を実装した
+- [ ] Phase 4のInspector/Codex手動確認を完了した
 - [ ] Phase 5を実装した
 - [ ] 全受入条件と証跡を確認した
 

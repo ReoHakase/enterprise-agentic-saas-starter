@@ -7,6 +7,8 @@ import {
 import type { AccessControlFactory } from "../authorization/public"
 import {
   currentUserModel,
+  mcpOAuthCredentialListModel,
+  mcpOAuthCredentialParamsModel,
   revokedSessionResponseModel,
   revokedSessionsResponseModel,
   updateUserBodyModel,
@@ -145,6 +147,55 @@ export const createUsersRoutes = (
           description:
             "Revokes one session owned by the authenticated user. The current session must use the sign-out flow, and an identifier owned by another user is projected as not found.",
           tags: ["Sessions"],
+          "x-route-status": "enabled",
+          "x-auth-context": "session-cookie",
+          "x-audience": "first-party-web",
+        },
+      }
+    )
+    .get(
+      "/me/mcp-oauth/sessions",
+      ({ authContext: { user } }) =>
+        service.listMcpOAuthCredentials({ userId: user.id }),
+      {
+        authenticated: true,
+        response: {
+          200: mcpOAuthCredentialListModel,
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "listCurrentUserMcpOAuthCredentials",
+          summary: "List the current user's MCP OAuth credentials",
+          description:
+            "Lists active MCP OAuth credential families without exposing bearer or refresh token values. Organization details are projected only for current memberships.",
+          tags: ["MCP OAuth"],
+          "x-route-status": "enabled",
+          "x-auth-context": "session-cookie",
+          "x-audience": "first-party-web",
+        },
+      }
+    )
+    .delete(
+      "/me/mcp-oauth/sessions/:credentialId",
+      ({ authContext: { user }, params }) =>
+        service.revokeMcpOAuthCredential({
+          credentialId: params.credentialId,
+          userId: user.id,
+        }),
+      {
+        authenticated: true,
+        params: mcpOAuthCredentialParamsModel,
+        response: {
+          200: revokedSessionResponseModel,
+          404: tenantErrorResponses[404],
+          ...authenticatedErrorResponses,
+        },
+        detail: {
+          operationId: "revokeCurrentUserMcpOAuthCredential",
+          summary: "Revoke an MCP OAuth credential",
+          description:
+            "Revokes the selected MCP OAuth credential family owned by the authenticated user. Token values are never accepted or returned by this route.",
+          tags: ["MCP OAuth"],
           "x-route-status": "enabled",
           "x-auth-context": "session-cookie",
           "x-audience": "first-party-web",

@@ -101,8 +101,10 @@ export const issueAuditMetadata = (
   ...(context
     ? {
         source: context.source,
-        approvalMode: context.approvalMode,
         actionId: context.actionId,
+        ...(context.source === "agent"
+          ? { approvalMode: context.approvalMode }
+          : {}),
       }
     : {}),
 })

@@ -19,6 +19,11 @@ export const { GET, POST, PUT, PATCH, DELETE } = createEmulateHandler({
             name: "OAuth Bob",
             email: "oauth-bob@example.test",
           },
+          {
+            login: "oauth-carol",
+            name: "OAuth Carol",
+            email: "oauth-carol@example.test",
+          },
         ],
       },
     },
