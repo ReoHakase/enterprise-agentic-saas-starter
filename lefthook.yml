@@ -13,32 +13,7 @@ pre-commit:
       run: bun run format -- --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     vitest-related:
-      glob:
-        - "{package.json,tsconfig.json,vitest*.config.ts}"
-        - ".github/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - ".github/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - "scripts/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - "apps/{agent,api,emulate,web}/{package.json,tsconfig.json,vitest*.config.ts}"
-        - "apps/{agent,api,emulate,web}/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - "packages/{agent-contracts,agent-tools,auth,db,email,portless-topology,ui}/{package.json,tsconfig.json,vitest*.config.ts}"
-        - "packages/{agent-contracts,agent-tools,auth,db,email,portless-topology,ui}/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
-        - "packages/db/drizzle/{*,**/*}.sql"
-      exclude:
-        - "apps/web/e2e/*"
-        - "apps/web/e2e/**/*"
-        - "apps/web/test/app/*"
-        - "apps/web/test/app/**/*"
-        - "apps/web/**/*.browser.test.{ts,tsx}"
-        - "apps/web/**/*.stories.{ts,tsx}"
-        - "packages/ui/**/*.stories.{ts,tsx}"
-      run: |
-        if git diff --cached --name-only --diff-filter=D -- |
-          rg -q '^(package\.json|tsconfig\.json|vitest.*\.config\.ts|\.github/.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)|scripts/.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)|apps/(agent|api|emulate|web)/(package\.json|tsconfig\.json|vitest.*\.config\.ts|.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts))|packages/(agent-contracts|agent-tools|auth|db|email|portless-topology|ui)/(package\.json|tsconfig\.json|vitest.*\.config\.ts|.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts|sql)))$'; then
-          bun run test
-        else
-          bun vitest related --config vitest.config.ts --run --coverage=false {staged_files}
-        fi
+      run: bun vitest related --config vitest.config.ts --run --coverage=false {staged_files}
     oxlint:
       glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint

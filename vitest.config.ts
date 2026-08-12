@@ -1,7 +1,6 @@
-import { defineConfig } from "vitest/config"
+import path from "node:path"
 
-import { createWebUnitProject } from "./apps/web/vitest.config"
-import { createUiUnitProject } from "./packages/ui/vitest.config"
+import { defineConfig } from "vitest/config"
 
 export default defineConfig({
   test: {
@@ -25,17 +24,87 @@ export default defineConfig({
           include: [".github/**/*.test.ts", "scripts/**/*.test.ts"],
         },
       },
-      "apps/agent/vitest.config.ts",
-      "apps/api/vitest.config.ts",
-      "apps/emulate/vitest.config.ts",
-      createWebUnitProject("web-unit"),
-      "packages/agent-contracts/vitest.config.ts",
-      "packages/agent-tools/vitest.config.ts",
-      "packages/auth/vitest.config.ts",
-      "packages/db/vitest.config.ts",
-      "packages/email/vitest.config.ts",
-      "packages/portless-topology/vitest.config.ts",
-      createUiUnitProject("ui-unit"),
+      {
+        root: "apps/agent",
+        test: { name: "@enterprise-agentic-saas/agent" },
+      },
+      {
+        root: "apps/api",
+        test: { name: "@enterprise-agentic-saas/api" },
+      },
+      {
+        root: "apps/emulate",
+        test: { name: "@enterprise-agentic-saas/emulate" },
+      },
+      {
+        root: "apps/web",
+        oxc: {
+          jsx: {
+            runtime: "automatic",
+          },
+        },
+        resolve: {
+          alias: {
+            "@": path.resolve("apps/web/src"),
+            "next/link": path.resolve(
+              "apps/web/test-support/storybook/next-link.tsx"
+            ),
+          },
+        },
+        test: {
+          name: "web-unit",
+          environment: "happy-dom",
+          include: [
+            "*.test.{ts,tsx}",
+            "src/instrumentation*.test.ts",
+            "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
+            "testing/**/*.test.{ts,tsx}",
+          ],
+          exclude: ["**/*.browser.test.{ts,tsx}"],
+          setupFiles: [path.resolve("apps/web/vitest.setup.ts")],
+        },
+      },
+      {
+        root: "packages/agent-contracts",
+        test: { name: "@enterprise-agentic-saas/agent-contracts" },
+      },
+      {
+        root: "packages/agent-tools",
+        test: { name: "@enterprise-agentic-saas/agent-tools" },
+      },
+      {
+        root: "packages/auth",
+        test: { name: "@enterprise-agentic-saas/auth" },
+      },
+      {
+        root: "packages/db",
+        test: { name: "@enterprise-agentic-saas/db" },
+      },
+      {
+        root: "packages/email",
+        test: { name: "@enterprise-agentic-saas/email" },
+      },
+      {
+        root: "packages/portless-topology",
+        test: { name: "@enterprise-agentic-saas/portless-topology" },
+      },
+      {
+        root: "packages/ui",
+        optimizeDeps: {
+          include: [
+            "@base-ui/react/alert-dialog",
+            "@base-ui/react/drawer",
+            "@base-ui/react/toggle",
+            "@base-ui/react/toggle-group",
+          ],
+        },
+        test: {
+          name: "ui-unit",
+          environment: "happy-dom",
+          include: ["src/**/*.test.{ts,tsx}"],
+          setupFiles: [path.resolve("packages/ui/vitest.setup.ts")],
+        },
+      },
     ],
   },
 })

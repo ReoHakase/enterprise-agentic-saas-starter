@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin"
 import { playwright } from "@vitest/browser-playwright"
-import { defineConfig, defineProject } from "vitest/config"
+import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
@@ -26,26 +26,6 @@ const coverageExcludes = [
   "**/*.browser.test.{ts,tsx}",
   "**/test-support/**",
 ]
-const unitTest = (name: string) => ({
-  name,
-  environment: "happy-dom",
-  include: ["src/**/*.test.{ts,tsx}"],
-  setupFiles: [path.join(dirname, "vitest.setup.ts")],
-})
-const optimizeDeps = {
-  include: [
-    "@base-ui/react/alert-dialog",
-    "@base-ui/react/drawer",
-    "@base-ui/react/toggle",
-    "@base-ui/react/toggle-group",
-  ],
-}
-export const createUiUnitProject = (name: string) =>
-  defineProject({
-    root: dirname,
-    optimizeDeps,
-    test: unitTest(name),
-  })
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -71,7 +51,14 @@ const storybookProject = (theme: "light" | "dark") => ({
 
 export default defineConfig({
   root: dirname,
-  optimizeDeps,
+  optimizeDeps: {
+    include: [
+      "@base-ui/react/alert-dialog",
+      "@base-ui/react/drawer",
+      "@base-ui/react/toggle",
+      "@base-ui/react/toggle-group",
+    ],
+  },
   test: {
     coverage: {
       enabled: unitCoverageEnabled || browserCoverageEnabled,
@@ -96,7 +83,14 @@ export default defineConfig({
           }),
     },
     projects: [
-      createUiUnitProject("unit"),
+      {
+        test: {
+          name: "unit",
+          environment: "happy-dom",
+          include: ["src/**/*.test.{ts,tsx}"],
+          setupFiles: ["./vitest.setup.ts"],
+        },
+      },
       storybookProject("light"),
       storybookProject("dark"),
     ],

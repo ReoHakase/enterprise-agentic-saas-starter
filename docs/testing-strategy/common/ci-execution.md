@@ -2,7 +2,7 @@
 title: CIとテスト実行契約
 status: accepted
 implementation: active
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-13
 applies_to:
   - package.json
   - turbo.json
@@ -23,19 +23,23 @@ applies_to:
 リポジトリルートの公開テストスクリプトとPR・`main`のテストは全件実行を維持します。ローカルの
 pre-commitだけは、ADR-014に従ってLefthookの単一コマンドからstaged fileをリポジトリルートの
 Vitest `related --run`へ渡します。
-既存の`vitest.config.ts`は常時Test Projectsを定義し、各ワークスペースのNode用設定とWeb/UIの
-`unit` projectを登録します。Web/UIの単体テストprojectは各既存configから再利用し、新しいconfigや
-選択scriptを追加しません。各projectの依存グラフからワークスペースをまたぐ静的`import`を追跡します。
+既存のroot `vitest.config.ts`は自己完結したTest Projectsを常時定義し、各NodeワークスペースとWeb/UIの
+単体テストを登録します。root configは`apps/**`と`packages/**`のVitest configをimportまたは参照せず、
+各workspaceの通常の全件・coverage・browser設定から独立します。新しいconfigや選択scriptは追加しません。
+各projectの依存グラフからワークスペースをまたぐ静的`import`を追跡します。
 設定、マニフェスト、setup、`tsconfig.json`、DBトリガーはリポジトリルートの
-`forceRerunTriggers`で全Nodeテストへ縮退し、削除ファイルはリポジトリルートの単体・統合テストへ
-縮退します。Browser Mode、E2E、有料テストは対象にしません。
+`forceRerunTriggers`で全Nodeテストへ縮退します。Lefthookの関連テストcommandはVitestだけを実行し、
+`git diff`、`jq`、独自selector、workspace `glob`、削除専用fallbackを使いません。全staged pathを
+Vitestへ渡し、対象外pathではテストを0件とします。削除後のpathは現在ツリーの静的graphへ
+接続できず0件になる場合があるため、pre-push、PR、`main`の全件テストで補完します。Browser Mode、
+E2E、有料テストは対象にしません。
 
 ## 公開スクリプト
 
 ```json
 {
   "scripts": {
-    "test": "vitest run --config vitest.config.ts && turbo run test",
+    "test": "vitest run --config vitest.config.ts --project=root-unit && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",

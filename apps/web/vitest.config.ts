@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url"
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin"
 import react from "@vitejs/plugin-react"
 import { playwright } from "@vitest/browser-playwright"
-import { defineConfig, defineProject } from "vitest/config"
+import { defineConfig } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 const unitCoverageEnabled = process.argv.includes("--project=unit")
@@ -59,30 +59,6 @@ const browserAliases = {
 const unitAliases = {
   "next/link": browserAliases["next/link"],
 }
-const unitTest = (name: string) => ({
-  name,
-  environment: "happy-dom",
-  include: [
-    "*.test.{ts,tsx}",
-    "src/instrumentation*.test.ts",
-    "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
-    "testing/**/*.test.{ts,tsx}",
-  ],
-  exclude: ["**/*.browser.test.{ts,tsx}"],
-  setupFiles: [path.join(dirname, "vitest.setup.ts")],
-})
-export const createWebUnitProject = (name: string) =>
-  defineProject({
-    root: dirname,
-    plugins: [react()],
-    resolve: {
-      alias: {
-        "@": path.join(dirname, "src"),
-        ...unitAliases,
-      },
-    },
-    test: unitTest(name),
-  })
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -143,7 +119,22 @@ export default defineConfig({
           }),
     },
     projects: [
-      createWebUnitProject("unit"),
+      {
+        extends: true,
+        resolve: { alias: unitAliases },
+        test: {
+          name: "unit",
+          environment: "happy-dom",
+          include: [
+            "*.test.{ts,tsx}",
+            "src/instrumentation*.test.ts",
+            "src/{components,features,hooks,lib}/**/*.test.{ts,tsx}",
+            "testing/**/*.test.{ts,tsx}",
+          ],
+          exclude: ["**/*.browser.test.{ts,tsx}"],
+          setupFiles: ["./vitest.setup.ts"],
+        },
+      },
       storybookProject("light"),
       storybookProject("dark"),
       {
