@@ -12,9 +12,97 @@ pre-commit:
       glob: "*"
       run: bun run format -- --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
-    vitest-related:
-      glob: "*"
-      run: bun scripts/test-related.ts {staged_files}
+    vitest-deleted:
+      run: |
+        if ! git diff --cached --name-only --diff-filter=D -- |
+          rg -q '^(package\.json|tsconfig\.json|vitest\.config\.ts|\.github/.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)|scripts/.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)|apps/(agent|api|emulate|web)/(package\.json|tsconfig\.json|.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts))|packages/(agent-contracts|agent-tools|auth|db|email|portless-topology|ui)/(package\.json|tsconfig\.json|.*\.(js|jsx|mjs|cjs|ts|tsx|mts|cts|sql)))$'; then
+          exit 0
+        fi
+        bun run test
+    vitest-root-related:
+      glob:
+        - "{package.json,tsconfig.json,vitest.config.ts}"
+        - ".github/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+        - ".github/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+        - "scripts/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+        - "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-agent-related:
+      root: apps/agent
+      glob:
+        - "apps/agent/{package.json,tsconfig.json}"
+        - "apps/agent/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-api-related:
+      root: apps/api
+      glob:
+        - "apps/api/{package.json,tsconfig.json}"
+        - "apps/api/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-emulate-related:
+      root: apps/emulate
+      glob:
+        - "apps/emulate/{package.json,tsconfig.json}"
+        - "apps/emulate/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-web-related:
+      root: apps/web
+      glob:
+        - "apps/web/{package.json,tsconfig.json}"
+        - "apps/web/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      exclude:
+        - "apps/web/e2e/*"
+        - "apps/web/e2e/**/*"
+        - "apps/web/test/app/*"
+        - "apps/web/test/app/**/*"
+        - "apps/web/**/*.browser.test.{ts,tsx}"
+        - "apps/web/**/*.stories.{ts,tsx}"
+      run: bun vitest related --run --coverage=false --project=unit {staged_files}
+    vitest-agent-contracts-related:
+      root: packages/agent-contracts
+      glob:
+        - "packages/agent-contracts/{package.json,tsconfig.json}"
+        - "packages/agent-contracts/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-agent-tools-related:
+      root: packages/agent-tools
+      glob:
+        - "packages/agent-tools/{package.json,tsconfig.json}"
+        - "packages/agent-tools/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-auth-related:
+      root: packages/auth
+      glob:
+        - "packages/auth/{package.json,tsconfig.json}"
+        - "packages/auth/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-db-related:
+      root: packages/db
+      glob:
+        - "packages/db/{package.json,tsconfig.json}"
+        - "packages/db/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+        - "packages/db/drizzle/{*,**/*}.sql"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-email-related:
+      root: packages/email
+      glob:
+        - "packages/email/{package.json,tsconfig.json}"
+        - "packages/email/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-portless-topology-related:
+      root: packages/portless-topology
+      glob:
+        - "packages/portless-topology/{package.json,tsconfig.json}"
+        - "packages/portless-topology/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      run: bun vitest related --run --coverage=false {staged_files}
+    vitest-ui-related:
+      root: packages/ui
+      glob:
+        - "packages/ui/{package.json,tsconfig.json}"
+        - "packages/ui/{*,**/*}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
+      exclude:
+        - "packages/ui/**/*.stories.{ts,tsx}"
+      run: bun vitest related --run --coverage=false --project=unit {staged_files}
     oxlint:
       glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
       run: bun run lint

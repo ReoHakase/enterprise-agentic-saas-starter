@@ -2,7 +2,7 @@
 title: CIとテスト実行契約
 status: accepted
 implementation: active
-last_reviewed: 2026-08-11
+last_reviewed: 2026-08-12
 applies_to:
   - package.json
   - turbo.json
@@ -20,9 +20,9 @@ applies_to:
 通常PRと`main`では無料テストを全件実行し、変更選択による見落としを作りません。
 
 rootの公開scriptとPR・`main`のtestは全件実行を維持します。ローカルのpre-commitだけは、
-ADR-014に従って内部scriptからstaged fileをworkspace別のVitest `related --run`へ渡します。
-selectorで安全に判定できないconfig、manifest、setup、削除fileはworkspaceのunit suiteへ縮退し、
-browser、E2E、paid testは対象にしません。
+ADR-014に従ってLefthookのworkspace別commandからstaged fileをVitest `related --run`へ渡します。
+config、manifest、setup、tsconfig、DB triggerはVitestの`forceRerunTriggers`でworkspaceのunit suiteへ
+縮退し、削除fileはrootのunit・integration suiteへ縮退します。browser、E2E、paid testは対象にしません。
 
 ## 公開スクリプト
 

@@ -2,7 +2,7 @@
 title: ADR運用
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-08-11
+last_reviewed: 2026-08-12
 ---
 
 # ADR運用
