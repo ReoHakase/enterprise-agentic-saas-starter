@@ -77,6 +77,8 @@ export const AgentToolPart = ({
     webSearchLinks.length > 0
   const [open, setOpen] = useState(hasSafeDetails)
   useEffect(() => {
+    // Tool output can arrive after the initial render and should open the details panel.
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     if (hasSafeDetails) setOpen(true)
   }, [hasSafeDetails])
 

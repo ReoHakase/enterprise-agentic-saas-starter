@@ -122,6 +122,8 @@ const MentionList = forwardRef<
     [choose]
   )
 
+  // Reset selection when the filtered candidate list changes.
+  // oxlint-disable-next-line react-doctor/no-reset-all-state-on-prop-change, react-doctor/no-adjust-state-on-prop-change
   useEffect(() => setSelectedIndex(0), [items])
   useImperativeHandle(
     ref,
@@ -216,9 +218,11 @@ export const AgentComposer = forwardRef<
     const mentionOpenRef = useRef(false)
     const onDraftTextChangeRef = useRef(onDraftTextChange)
     const onSubmitRef = useRef(onSubmit)
-    candidatesRef.current = candidates
-    onDraftTextChangeRef.current = onDraftTextChange
-    onSubmitRef.current = onSubmit
+    useEffect(() => {
+      candidatesRef.current = candidates
+      onDraftTextChangeRef.current = onDraftTextChange
+      onSubmitRef.current = onSubmit
+    }, [candidates, onDraftTextChange, onSubmit])
     const extensions = useMemo(
       () => [
         StarterKit.configure({ heading: false, codeBlock: false }),

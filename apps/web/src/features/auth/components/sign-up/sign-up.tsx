@@ -144,10 +144,13 @@ const useSignUpController = ({
       const formData = new FormData(element)
       let additionalFieldEntries: [string, unknown][]
       try {
-        additionalFieldEntries = await Promise.all(
-          (additionalFields ?? [])
-            .filter((field) => field.signUp && !field.readOnly)
-            .map(async (field): Promise<[string, unknown] | undefined> => {
+        const additionalFieldChecks: Array<
+          Promise<[string, unknown] | undefined>
+        > = []
+        for (const field of additionalFields ?? []) {
+          if (!field.signUp || field.readOnly) continue
+          additionalFieldChecks.push(
+            (async (): Promise<[string, unknown] | undefined> => {
               const additionalValue = parseAdditionalFieldValue(
                 field,
                 formDataString(formData, field.name)
@@ -156,11 +159,14 @@ const useSignUpController = ({
               return additionalValue === undefined
                 ? undefined
                 : [field.name, additionalValue]
-            })
-        ).then((entries) =>
-          entries.filter(
-            (entry): entry is [string, unknown] => entry !== undefined
+            })()
           )
+        }
+        additionalFieldEntries = await Promise.all(additionalFieldChecks).then(
+          (entries) =>
+            entries.filter(
+              (entry): entry is [string, unknown] => entry !== undefined
+            )
         )
       } catch (error) {
         reportObservedError(error, { operation: "auth.signup.validate" })

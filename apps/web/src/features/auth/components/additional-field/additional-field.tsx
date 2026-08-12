@@ -169,7 +169,9 @@ function DateInput({ name, field, isPending }: AdditionalFieldProps) {
   const inputType = resolveInputType(field)
   const isDateTime = inputType === "datetime"
 
-  const [date, setDate] = useState<Date | undefined>(toDate(field.defaultValue))
+  const [date, setDate] = useState<Date | undefined>(() =>
+    toDate(field.defaultValue)
+  )
   const [time, setTime] = useState<string>(
     isDateTime && date ? formatTime(date) : ""
   )

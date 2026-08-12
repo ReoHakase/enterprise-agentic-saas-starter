@@ -20,7 +20,7 @@ import type { ControlStateProps } from "../issue-metadata-control-types/issue-me
 
 const labelKey = (label: string) => label.trim().toLocaleLowerCase()
 
-export const issueLabelsControl = ({
+export const IssueLabelsControl = ({
   value,
   suggestions,
   onValueChange,

@@ -32,7 +32,7 @@ import type {
   IssueStatus,
 } from "../types/types"
 
-export const issueStatusControl = ({
+export const IssueStatusControl = ({
   value,
   onValueChange,
   includeAll = false,
@@ -96,7 +96,7 @@ export const issueStatusControl = ({
   )
 }
 
-export const issuePriorityControl = ({
+export const IssuePriorityControl = ({
   value,
   onValueChange,
   includeAll = false,
@@ -160,7 +160,7 @@ export const issuePriorityControl = ({
   )
 }
 
-export const issueAssigneeControl = ({
+export const IssueAssigneeControl = ({
   value,
   assignees,
   onValueChange,

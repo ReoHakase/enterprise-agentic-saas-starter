@@ -41,6 +41,7 @@ export const AuthenticatedFileImage = ({
   return (
     // The authenticated source must bypass the Next optimizer because it does
     // not forward the session cookie to the API Worker.
+    // oxlint-disable react-doctor/nextjs-no-img-element
     // eslint-disable-next-line @next/next/no-img-element
     <img
       {...props}
@@ -51,5 +52,6 @@ export const AuthenticatedFileImage = ({
       width={file.imageWidth ?? undefined}
       height={file.imageHeight ?? undefined}
     />
+    // oxlint-enable react-doctor/nextjs-no-img-element
   )
 }

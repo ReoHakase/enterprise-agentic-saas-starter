@@ -24,15 +24,16 @@ export default async function IssuesPage({
   params: Promise<{ organizationSlug: string }>
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const [{ organizationSlug }, issueSearchState] = await Promise.all([
-    params,
-    issueSearchParamsCache.parse(searchParams),
-  ])
-  const [{ me }, cookie] = await Promise.all([
-    getConsoleContext(),
-    getCookieHeader(),
-  ])
+  const [{ organizationSlug }, issueSearchState, { me }, cookie] =
+    await Promise.all([
+      params,
+      issueSearchParamsCache.parse(searchParams),
+      getConsoleContext(),
+      getCookieHeader(),
+    ])
   const apiClient = createServerApiClient(cookie)
+  // This QueryClient is request-scoped for server prefetching and must not be shared.
+  // oxlint-disable-next-line react-doctor/query-stable-query-client
   const queryClient = new QueryClient()
   const activeOrganization = me.organizations.find(
     (organization) => organization.slug === organizationSlug

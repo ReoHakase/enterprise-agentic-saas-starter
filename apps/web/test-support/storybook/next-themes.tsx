@@ -27,15 +27,28 @@ const ThemeContext = createContext<ThemeValue>({
 })
 
 const resolveSystemTheme = () =>
-  window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light"
 
 export const ThemeProvider = ({
   children,
   defaultTheme = "system",
 }: PropsWithChildren<{ defaultTheme?: string }>) => {
   const [theme, setTheme] = useState(() => {
-    if (document.documentElement.classList.contains("dark")) return "dark"
-    if (document.documentElement.classList.contains("light")) return "light"
+    if (
+      typeof document !== "undefined" &&
+      document.documentElement.classList.contains("dark")
+    ) {
+      return "dark"
+    }
+    if (
+      typeof document !== "undefined" &&
+      document.documentElement.classList.contains("light")
+    ) {
+      return "light"
+    }
     return defaultTheme
   })
   const systemTheme = resolveSystemTheme()

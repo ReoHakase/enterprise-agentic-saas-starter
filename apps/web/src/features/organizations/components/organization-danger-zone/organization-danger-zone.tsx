@@ -124,6 +124,8 @@ export const OrganizationDangerZone = ({
     () => createOrganizationDeletionFormSchema(organization.slug),
     [organization.slug]
   )
+  // The submit flow removes and invalidates organization queries after success.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const deleteMutation = useMutation({
     mutationFn: (input: {
       slug: string

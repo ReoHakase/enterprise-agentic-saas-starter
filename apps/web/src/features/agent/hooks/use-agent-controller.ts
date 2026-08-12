@@ -306,7 +306,9 @@ export const useAgentController = ({
     [thread.id]
   )
   const pendingSubmissionRef = useRef(runtime.pendingSubmission)
-  pendingSubmissionRef.current = runtime.pendingSubmission
+  useEffect(() => {
+    pendingSubmissionRef.current = runtime.pendingSubmission
+  }, [runtime.pendingSubmission])
   const refreshThreadTitle = useAgentThreadTitleRefresh({
     organizationId,
     queryClient,
@@ -363,26 +365,32 @@ export const useAgentController = ({
   })
   stopLifecycle.bindChat(chat)
   useEffect(() => {
+    addToolOutputRef.current = chat.addToolOutput
+  }, [addToolOutputRef, chat.addToolOutput])
+  // Message observation reports the latest chat state to the controller boundary.
+  useEffect(() => {
+    // oxlint-disable-next-line react-doctor/no-pass-data-to-parent
     observeMessages(chat.messages)
   }, [chat.messages, observeMessages])
   useEffect(() => {
     if (stopLifecycle.turnStopped && chat.error) chat.clearError()
   }, [chat, stopLifecycle.turnStopped])
-  addToolOutputRef.current = chat.addToolOutput
   const actionIds = useMemo(
     () => extractPendingActionIds(chat.messages),
     [chat.messages]
   )
   const approvalsRef = useRef(false)
   const approvalStatesRef = useRef(new Map<string, boolean>())
-  for (const actionId of approvalStatesRef.current.keys()) {
-    if (!actionIds.includes(actionId))
-      approvalStatesRef.current.delete(actionId)
-  }
-  busyRef.current = chat.status === "streaming" || chat.status === "submitted"
-  approvalsRef.current = actionIds.some(
-    (actionId) => approvalStatesRef.current.get(actionId) ?? true
-  )
+  const actionIdSet = useMemo(() => new Set(actionIds), [actionIds])
+  useEffect(() => {
+    for (const actionId of approvalStatesRef.current.keys()) {
+      if (!actionIdSet.has(actionId)) approvalStatesRef.current.delete(actionId)
+    }
+    busyRef.current = chat.status === "streaming" || chat.status === "submitted"
+    approvalsRef.current = actionIds.some(
+      (actionId) => approvalStatesRef.current.get(actionId) ?? true
+    )
+  }, [actionIdSet, actionIds, chat.status])
   const reportApprovalState = useCallback(
     (actionId: string, pending: boolean) => {
       approvalStatesRef.current.set(actionId, pending)

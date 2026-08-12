@@ -253,6 +253,8 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
   const inputRef = useRef<HTMLInputElement>(null)
   const uploadControllerRef = useRef<AbortController | null>(null)
   const unregisterUploadRef = useRef<(() => boolean) | null>(null)
+  const subject = props.subject
+  const organizationId = subject === "organization" ? props.organizationId : ""
   const [source, setSource] = useState<File>()
   const [preparedUpload, setPreparedUpload] =
     useState<PreparedProfileImageUpload>()
@@ -263,7 +265,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
 
   const refreshProfileImages = useCallback(async () => {
     try {
-      if (props.subject === "user") {
+      if (subject === "user") {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: consoleKeys.all }),
           queryClient.invalidateQueries({
@@ -275,7 +277,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       } else {
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: consoleKeys.organization(props.organizationId),
+            queryKey: consoleKeys.organization(organizationId),
           }),
           queryClient.invalidateQueries({
             queryKey: consoleKeys.organizations(),
@@ -286,13 +288,15 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
     } finally {
       router.refresh()
     }
-  }, [props, queryClient, router])
+  }, [organizationId, queryClient, router, subject])
 
+  // The refresh callback invalidates all affected queries after this mutation.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const removeMutation = useMutation({
     mutationFn: () =>
-      props.subject === "user"
+      subject === "user"
         ? deleteUserProfileImage(apiClient)
-        : deleteOrganizationProfileImage(apiClient, props.organizationId),
+        : deleteOrganizationProfileImage(apiClient, organizationId),
     onSuccess: async () => {
       setRemoveOpen(false)
       setUploadError(undefined)
@@ -342,7 +346,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       })
 
       try {
-        if (props.subject === "user") {
+        if (subject === "user") {
           await uploadUserProfileImageWithProgress({
             baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
             uploadId: prepared.uploadId,
@@ -353,7 +357,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         } else {
           await uploadOrganizationProfileImageWithProgress({
             baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
-            organizationId: props.organizationId,
+            organizationId,
             uploadId: prepared.uploadId,
             file,
             signal: controller.signal,
@@ -383,7 +387,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         releaseUpload()
       }
     },
-    [props, refreshProfileImages, releaseUpload]
+    [organizationId, refreshProfileImages, releaseUpload, subject]
   )
 
   const openPicker = useCallback(() => inputRef.current?.click(), [])

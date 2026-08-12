@@ -1,4 +1,9 @@
 import { defineConfig } from "oxlint"
+import {
+  NEXTJS_RULES,
+  RECOMMENDED_RULES,
+  TANSTACK_QUERY_RULES,
+} from "oxlint-plugin-react-doctor"
 
 import rootConfig, {
   createBudgetOverrides,
@@ -24,6 +29,7 @@ export default defineConfig({
   ],
   jsPlugins: [
     "oxlint-tailwindcss",
+    { name: "react-doctor", specifier: "oxlint-plugin-react-doctor" },
     { name: "query", specifier: "@tanstack/eslint-plugin-query" },
     { name: "storybook", specifier: "eslint-plugin-storybook" },
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
@@ -31,6 +37,11 @@ export default defineConfig({
   ],
   rules: {
     ...workspaceBoundaryRule("web"),
+    ...RECOMMENDED_RULES,
+    ...NEXTJS_RULES,
+    ...TANSTACK_QUERY_RULES,
+    // React Compilerは導入しないため、手動memo化の整理を要求する提案ruleは適用しない。
+    "react-doctor/react-compiler-no-manual-memoization": "off",
     // Feature public barrels make every exported surface visible to the import graph.
     // Keep direct-cycle detection while component composition is routed through index.ts.
     "import/no-cycle": [
@@ -73,6 +84,25 @@ export default defineConfig({
       rules: {
         // TanStack Tableのmemoized column cell/header rendererをnested componentと誤認する。
         "react/no-unstable-nested-components": "off",
+      },
+    },
+    {
+      files: [
+        "src/components/public-route-suspense/public-route-suspense.tsx",
+        "src/features/console/components/console-shell-navigation/console-shell-navigation.tsx",
+        "src/features/issues/components/issues-table-content/issues-table-content.tsx",
+        "src/features/members/components/members-table/member-table-columns.tsx",
+      ],
+      rules: {
+        // These files intentionally colocate small renderers with their composition root.
+        "react-doctor/no-multi-comp": "off",
+      },
+    },
+    {
+      files: ["src/features/auth/components/sign-up/sign-up.tsx"],
+      rules: {
+        // Better Auth UI keeps its controller result as one composition boundary.
+        "react-doctor/no-many-boolean-props": "off",
       },
     },
     {

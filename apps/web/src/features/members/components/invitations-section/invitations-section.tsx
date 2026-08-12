@@ -129,15 +129,15 @@ export const InvitationsSection = ({
     () => ({ busyInvitationId, pending: mutationPending }),
     [busyInvitationId, mutationPending]
   )
-  const activeRecipientEmails = useMemo(
-    () =>
-      new Set(
-        invitations
-          .filter((invitation) => invitation.status === "pending")
-          .map((invitation) => invitation.email.toLowerCase())
-      ),
-    [invitations]
-  )
+  const activeRecipientEmails = useMemo(() => {
+    const emails = new Set<string>()
+    for (const invitation of invitations) {
+      if (invitation.status === "pending") {
+        emails.add(invitation.email.toLowerCase())
+      }
+    }
+    return emails
+  }, [invitations])
   const columns = useInvitationTableColumns({
     activeRecipientEmails,
     canCancel,

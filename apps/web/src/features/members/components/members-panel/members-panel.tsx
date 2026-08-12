@@ -194,6 +194,8 @@ export const MembersPanel = ({
     },
     [organization.id, queryClient, router]
   )
+  // The success callback invalidates the member and invitation query families.
+  // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const memberMutation = useMutation<
     MemberMutationOutcome,
     unknown,

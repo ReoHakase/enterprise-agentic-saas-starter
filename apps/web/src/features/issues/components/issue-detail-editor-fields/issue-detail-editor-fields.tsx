@@ -17,7 +17,7 @@ import {
 
 import type { StringFieldApi } from "../form-types/form-types"
 
-export const titleEditorField = ({
+export const TitleEditorField = ({
   field,
   serverError,
   formError,
@@ -72,7 +72,7 @@ export const titleEditorField = ({
   )
 }
 
-export const descriptionEditorField = ({
+export const DescriptionEditorField = ({
   field,
   serverError,
   formError,

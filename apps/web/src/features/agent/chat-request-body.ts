@@ -1,4 +1,9 @@
-import { getToolName, isToolUIPart } from "ai"
+import {
+  getToolName,
+  isToolUIPart,
+  type DynamicToolUIPart,
+  type ToolUIPart,
+} from "ai"
 import * as v from "valibot"
 
 import type { AgentChatMessage } from "./schema"
@@ -154,8 +159,15 @@ const prepareClientToolContinuationBody = (
   )
   const finalToolParts = message.parts
     .slice(lastStepStart + 1)
-    .filter(isToolUIPart)
-    .map((part) => ({ part, toolName: getToolName(part) }))
+    .reduce<Array<{ part: ToolUIPart | DynamicToolUIPart; toolName: string }>>(
+      (parts, part) => {
+        if (isToolUIPart(part)) {
+          parts.push({ part, toolName: getToolName(part) })
+        }
+        return parts
+      },
+      []
+    )
 
   if (finalToolParts.some(({ part }) => part.state !== "output-available")) {
     throw new Error("Agent client tool output is incomplete.")

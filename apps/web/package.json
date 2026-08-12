@@ -118,6 +118,7 @@
     "happy-dom": "catalog:",
     "msw": "catalog:",
     "msw-storybook-addon": "catalog:",
+    "oxlint-plugin-react-doctor": "catalog:",
     "oxlint-tailwindcss": "catalog:",
     "storybook": "catalog:",
     "typescript": "catalog:",

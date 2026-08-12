@@ -134,6 +134,13 @@ const AgentChatSession = ({
     onAutoSubmit,
   })
   const { chat, runtime } = session
+  const sendingAssetIds = useMemo(
+    () => new Set(session.sendingAssetIds),
+    [session.sendingAssetIds]
+  )
+  const unsentStagedAssets = runtime.stagedAssets.filter(
+    (item) => !sendingAssetIds.has(item.asset.id)
+  )
   const conversationGroups = useMemo(
     () => buildAgentConversationGroups(chat.messages),
     [chat.messages]
@@ -224,25 +231,19 @@ const AgentChatSession = ({
             onDraftTextChange={runtime.setComposer}
             onSubmit={submitFromComposer}
           />
-          {runtime.stagedAssets.some(
-            (item) => !session.sendingAssetIds.includes(item.asset.id)
-          ) ? (
+          {unsentStagedAssets.length > 0 ? (
             <div
               className="flex flex-wrap gap-2"
               aria-label="Images ready to send"
             >
-              {runtime.stagedAssets
-                .filter(
-                  (item) => !session.sendingAssetIds.includes(item.asset.id)
-                )
-                .map((item) => (
-                  <AgentStagedAsset
-                    key={item.asset.id}
-                    item={item}
-                    disabled={session.busy || disabled || runtime.frozen}
-                    onRemove={runtime.removeStagedAsset}
-                  />
-                ))}
+              {unsentStagedAssets.map((item) => (
+                <AgentStagedAsset
+                  key={item.asset.id}
+                  item={item}
+                  disabled={session.busy || disabled || runtime.frozen}
+                  onRemove={runtime.removeStagedAsset}
+                />
+              ))}
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
