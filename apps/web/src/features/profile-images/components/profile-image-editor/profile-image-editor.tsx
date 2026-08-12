@@ -290,7 +290,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
     }
   }, [organizationId, queryClient, router, subject])
 
-  // The refresh callback invalidates all affected queries after this mutation.
+  // refresh callbackでmutation後に影響を受ける全queryをinvalidateする。
   // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const removeMutation = useMutation({
     mutationFn: () =>

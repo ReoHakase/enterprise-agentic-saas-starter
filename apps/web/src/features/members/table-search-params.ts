@@ -140,10 +140,10 @@ export const useTableSearchDraft = (
   const [draft, setDraft] = useState(query)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Keep a local draft so URL updates remain debounced while the input stays responsive.
+  // URL更新をdebounceしつつinputの応答性を保つため、local draftを保持する。
   // oxlint-disable-next-line react-doctor/no-derived-state, react-doctor/no-derived-state-effect
   useEffect(() => {
-    // The URL query is canonical while this local value remains a debounced draft.
+    // URL queryをcanonicalとし、local valueはdebounced draftとして保持する。
     // oxlint-disable-next-line react-doctor/no-derived-state
     setDraft(query)
   }, [query])

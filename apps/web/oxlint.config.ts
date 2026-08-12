@@ -94,14 +94,14 @@ export default defineConfig({
         "src/features/members/components/members-table/member-table-columns.tsx",
       ],
       rules: {
-        // These files intentionally colocate small renderers with their composition root.
+        // これらのファイルでは、小さなrendererをcomposition rootと意図的に同じ場所へ配置する。
         "react-doctor/no-multi-comp": "off",
       },
     },
     {
       files: ["src/features/auth/components/sign-up/sign-up.tsx"],
       rules: {
-        // Better Auth UI keeps its controller result as one composition boundary.
+        // Better Auth UIでは、controllerの結果を1つのcomposition boundaryとして保持する。
         "react-doctor/no-many-boolean-props": "off",
       },
     },

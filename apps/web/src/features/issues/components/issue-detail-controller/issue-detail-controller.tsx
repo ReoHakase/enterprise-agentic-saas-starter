@@ -280,7 +280,7 @@ export const IssueDetailController = ({
       ])
     },
   })
-  // This mutation is a paginated read whose success handler appends local timeline state.
+  // このmutationはpaginated readであり、success handlerがlocal timeline stateへ追加する。
   // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation
   const loadOlderMutation = useMutation({
     mutationFn: (cursor: string) =>

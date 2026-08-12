@@ -122,7 +122,7 @@ const MentionList = forwardRef<
     [choose]
   )
 
-  // Reset selection when the filtered candidate list changes.
+  // filtered candidate listが変わったときにselectionをresetする。
   // oxlint-disable-next-line react-doctor/no-reset-all-state-on-prop-change, react-doctor/no-adjust-state-on-prop-change
   useEffect(() => setSelectedIndex(0), [items])
   useImperativeHandle(

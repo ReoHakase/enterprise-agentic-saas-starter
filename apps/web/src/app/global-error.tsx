@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 
-// Next error boundaries are client entrypoints even though the framework renders them from the server.
+// Nextのerror boundaryはframeworkがserverからrenderする場合でもclient entrypointである。
 // oxlint-disable-next-line react-doctor/react-router-no-client-module-in-server-render
 import { StandaloneRouteError } from "@/components/public-route-error-boundary.client/public-route-error-boundary.client"
 import { reportObservedError } from "@/lib/report-observed-error"

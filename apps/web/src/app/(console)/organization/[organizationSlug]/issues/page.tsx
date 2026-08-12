@@ -32,7 +32,7 @@ export default async function IssuesPage({
       getCookieHeader(),
     ])
   const apiClient = createServerApiClient(cookie)
-  // This QueryClient is request-scoped for server prefetching and must not be shared.
+  // このQueryClientはserver prefetch用のrequest-scopedなインスタンスであり、共有してはならない。
   // oxlint-disable-next-line react-doctor/query-stable-query-client
   const queryClient = new QueryClient()
   const activeOrganization = me.organizations.find(

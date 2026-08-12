@@ -56,7 +56,7 @@ export const useDataTableColumnVisibility = ({
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(next))
       } catch {
-        // Column visibility remains usable when preference storage is blocked.
+        // preference storageが利用できない場合も、column visibilityは利用可能な状態を維持する。
       }
     },
     [storageKey]

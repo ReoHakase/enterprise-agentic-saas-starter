@@ -198,7 +198,7 @@ export const AgentShell = ({
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={handleSheetOpenChange}>
-        {/* SheetContent animates only transform and opacity. */}
+        {/* SheetContentはtransformとopacityだけをanimation対象にする。 */}
         {/* oxlint-disable-next-line react-doctor/no-transition-all */}
         <SheetContent
           id={agentPaneId}

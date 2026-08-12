@@ -65,7 +65,7 @@ export const useIssueTitleForm = ({
   })
   useEffect(() => {
     if (!editing && !form.state.isDirty) {
-      // Form reset intentionally batches the field state after the issue changes.
+      // form resetではissue変更後のfield state更新を意図的にbatchする。
       // oxlint-disable-next-line react-doctor/no-chain-state-updates
       form.reset({ title: issue.title })
     }

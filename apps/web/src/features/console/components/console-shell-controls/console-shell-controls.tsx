@@ -177,7 +177,7 @@ const ThemeSelector = () => {
   const [mounted, setMounted] = useState(false)
   const displayTheme = mounted ? theme : "system"
 
-  // next-themes resolves the client theme after hydration; mounted prevents an icon mismatch.
+  // next-themesはhydration後にclient themeを解決するため、mountedでicon mismatchを防ぐ。
   // oxlint-disable-next-line react-doctor/rendering-hydration-no-flicker
   useEffect(() => {
     // oxlint-disable-next-line react-doctor/no-initialize-state

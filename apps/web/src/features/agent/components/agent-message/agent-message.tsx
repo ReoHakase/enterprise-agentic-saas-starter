@@ -128,7 +128,7 @@ export const AgentMessage = ({
       <MessageContent className="space-y-2">
         {message.parts.map((part, index) => {
           const key = `${part.type}:${index}`
-          // AI SDK parts are ordered and append-only; this index preserves each part's identity while streaming.
+          // AI SDKのpartは順序を持ち追加のみであるため、このindexでstreaming中も各partのidentityを保持する。
           // oxlint-disable react-doctor/no-array-index-as-key
           if (part.type === "reasoning") {
             const reasoningIsStreaming =

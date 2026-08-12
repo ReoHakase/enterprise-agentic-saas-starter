@@ -133,7 +133,7 @@ export const useIssuesTableFilters = ({
   )
   const draftKey = JSON.stringify(draft)
 
-  // Keep a local draft so URL updates remain debounced while the input stays responsive.
+  // URL更新をdebounceしつつinputの応答性を保つため、local draftを保持する。
   // oxlint-disable-next-line react-doctor/no-derived-state, react-doctor/no-derived-state-effect
   useEffect(() => setSearchDraft(searchState.q), [searchState.q])
   useEffect(() => setDraft(synchronizedFilterState), [synchronizedFilterState])

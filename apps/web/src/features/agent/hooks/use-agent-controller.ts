@@ -367,7 +367,7 @@ export const useAgentController = ({
   useEffect(() => {
     addToolOutputRef.current = chat.addToolOutput
   }, [addToolOutputRef, chat.addToolOutput])
-  // Message observation reports the latest chat state to the controller boundary.
+  // messageの監視結果を最新のchat stateとしてcontroller boundaryへ通知する。
   useEffect(() => {
     // oxlint-disable-next-line react-doctor/no-pass-data-to-parent
     observeMessages(chat.messages)
