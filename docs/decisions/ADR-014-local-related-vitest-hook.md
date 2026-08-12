@@ -21,11 +21,11 @@ pre-commitはコミットメッセージ、整形、静的検査を短時間で�
 
 ## 決定
 
-pre-commitに限り、`lefthook.yml`の単一コマンドが`{staged_files}`をリポジトリルートの
-`VITEST_RELATED=1 vitest related --config vitest.config.ts --run --coverage=false`へ渡す。既存の
-`vitest.config.ts`は`VITEST_RELATED=1`のときだけVitest標準のTest Projectsでリポジトリルート、
-各Nodeワークスペース、Web/UIの`unit` projectを1つのVitestプロセスへ登録する。Browser Mode、
-Storybook、E2E、有料モデルテストは登録しない。
+`lefthook.yml`の単一コマンドが`{staged_files}`をリポジトリルートの
+`vitest related --config vitest.config.ts --run --coverage=false`へ渡す。既存の`vitest.config.ts`を
+Vitest標準のTest Projectsへ統一し、リポジトリルート、各Nodeワークスペース、Web/UIの`unit` projectを
+常時登録する。Web/UIの既存configから単体テストproject factoryをexportしてrootでも再利用し、新しい
+configファイルや選択scriptは追加しない。Browser Mode、Storybook、E2E、有料モデルテストは登録しない。
 
 リポジトリルートの選択用設定にある`forceRerunTriggers`へマニフェスト、Vitest/Vite設定、setup、
 `tsconfig.json`、DBマイグレーション、スキーマ、Drizzle設定を明示する。これらの変更ではTest Projectsに
@@ -33,16 +33,20 @@ Storybook、E2E、有料モデルテストは登録しない。
 `git diff --cached --diff-filter=D`で検出し、リポジトリルートの`bun run test`へ縮退する。文書、
 ワークフロー、lockfileなどテストと静的な関係がないファイルだけの変更では、テストコマンドを起動しない。
 
-pre-pushの`bun run check`、PR、`main`の全件テスト、リポジトリルートの公開テストスクリプトは
-変更しない。commit-msgのcommitlintもコミットメッセージ検査に限定する。
+リポジトリルートの`bun run test`はroot Test Projectだけを明示選択した後、Turbo経由で各workspaceの
+テストを実行する。これにより、workspaceごとのcoverage設定と閾値を維持したまま、pre-pushの
+`bun run check`、PR、`main`では全件テストを続ける。commit-msgのcommitlintもコミットメッセージ検査に
+限定する。
 
 ## 理由
 
 - Vitestの`related`が各Test ProjectのVite依存グラフを使うため、共有パッケージから利用側のテストまで
   ワークスペースをまたいで選択できる。
 - 全staged fileを1つのVitestプロセスへ渡すため、Lefthookコマンドごとの重複起動と重複選択を作らない。
-- Web/UIの既存設定内で`unit` projectの定義を通常実行と選択実行から共有し、alias、setup、`include`を
-  リポジトリルートへ複製しない。
+- rootを常時Test Projectsにするため、実行モードを環境変数で切り替えない。Web/UIの既存設定内で
+  `unit` project factoryを通常実行と選択実行から共有し、alias、setup、`include`を複製しない。
+- Test Projectではprojectごとのcoverage設定を持てないため、全件テストはTurbo経由のworkspace別実行を
+  維持し、既存のcoverage閾値を変えない。
 - 部分テストへカバレッジ閾値を適用すると全体閾値を満たせないため、カバレッジを無効にする。
   カバレッジはpre-push、PR、`main`の全件テストで維持する。
 - 選択の不確実性をリポジトリルートの`forceRerunTriggers`と削除ファイル専用の全件実行で扱い、
@@ -73,8 +77,8 @@ pre-pushの`bun run check`、PR、`main`の全件テスト、リポジトリル�
 ## 強制方法
 
 - `lefthook.yml`のpre-commitからリポジトリルートの選択用設定を使う単一の`vitest related`を呼ぶ。
-- 既存の`vitest.config.ts`を`VITEST_RELATED=1`でTest Projectsへ切り替え、rootの
-  `forceRerunTriggers`、Web/UIの共有`unit` project定義、削除ファイル用の
+- 既存の`vitest.config.ts`を常時Test Projectsとして使い、rootの`forceRerunTriggers`、Web/UIの共有
+  `unit` project factory、削除ファイル用の
   `git diff --diff-filter=D`で境界を固定する。
 - `docs/architecture/quality-enforcement.md`と`docs/testing-strategy/common/ci-execution.md`でlocal hookと
   PR・`main`の全件testの境界を説明する。

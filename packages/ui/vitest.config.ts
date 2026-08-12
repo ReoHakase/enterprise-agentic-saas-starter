@@ -3,10 +3,9 @@ import { fileURLToPath } from "node:url"
 
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin"
 import { playwright } from "@vitest/browser-playwright"
-import { defineConfig } from "vitest/config"
+import { defineConfig, defineProject } from "vitest/config"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
-const relatedMode = process.env.VITEST_RELATED === "1"
 const unitCoverageEnabled = process.argv.includes("--project=unit")
 const browserCoverageEnabled = process.env.BROWSER_COVERAGE === "1"
 const nodeCoverageIncludes = [
@@ -31,8 +30,22 @@ const unitTest = (name: string) => ({
   name,
   environment: "happy-dom",
   include: ["src/**/*.test.{ts,tsx}"],
-  setupFiles: ["./vitest.setup.ts"],
+  setupFiles: [path.join(dirname, "vitest.setup.ts")],
 })
+const optimizeDeps = {
+  include: [
+    "@base-ui/react/alert-dialog",
+    "@base-ui/react/drawer",
+    "@base-ui/react/toggle",
+    "@base-ui/react/toggle-group",
+  ],
+}
+export const createUiUnitProject = (name: string) =>
+  defineProject({
+    root: dirname,
+    optimizeDeps,
+    test: unitTest(name),
+  })
 
 const storybookProject = (theme: "light" | "dark") => ({
   extends: true as const,
@@ -58,14 +71,7 @@ const storybookProject = (theme: "light" | "dark") => ({
 
 export default defineConfig({
   root: dirname,
-  optimizeDeps: {
-    include: [
-      "@base-ui/react/alert-dialog",
-      "@base-ui/react/drawer",
-      "@base-ui/react/toggle",
-      "@base-ui/react/toggle-group",
-    ],
-  },
+  optimizeDeps,
   test: {
     coverage: {
       enabled: unitCoverageEnabled || browserCoverageEnabled,
@@ -89,16 +95,10 @@ export default defineConfig({
             },
           }),
     },
-    ...(relatedMode
-      ? unitTest("ui-unit")
-      : {
-          projects: [
-            {
-              test: unitTest("unit"),
-            },
-            storybookProject("light"),
-            storybookProject("dark"),
-          ],
-        }),
+    projects: [
+      createUiUnitProject("unit"),
+      storybookProject("light"),
+      storybookProject("dark"),
+    ],
   },
 })

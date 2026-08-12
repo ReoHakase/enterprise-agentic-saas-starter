@@ -23,9 +23,10 @@ applies_to:
 リポジトリルートの公開テストスクリプトとPR・`main`のテストは全件実行を維持します。ローカルの
 pre-commitだけは、ADR-014に従ってLefthookの単一コマンドからstaged fileをリポジトリルートの
 Vitest `related --run`へ渡します。
-`VITEST_RELATED=1`で切り替えた既存の`vitest.config.ts`は、各ワークスペースのNode用設定とWeb/UIの
-`unit` projectをTest Projectsとして登録し、各projectの依存グラフからワークスペースをまたぐ静的
-`import`を追跡します。設定、マニフェスト、setup、`tsconfig.json`、DBトリガーはリポジトリルートの
+既存の`vitest.config.ts`は常時Test Projectsを定義し、各ワークスペースのNode用設定とWeb/UIの
+`unit` projectを登録します。Web/UIの単体テストprojectは各既存configから再利用し、新しいconfigや
+選択scriptを追加しません。各projectの依存グラフからワークスペースをまたぐ静的`import`を追跡します。
+設定、マニフェスト、setup、`tsconfig.json`、DBトリガーはリポジトリルートの
 `forceRerunTriggers`で全Nodeテストへ縮退し、削除ファイルはリポジトリルートの単体・統合テストへ
 縮退します。Browser Mode、E2E、有料テストは対象にしません。
 

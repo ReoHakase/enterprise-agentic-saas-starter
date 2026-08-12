@@ -248,7 +248,7 @@ thresholdを超える場合は同じ変更内でrefactorします。baseline比�
 
 - commit message
 - staged source変更に対するリポジトリルートのVitest `related --run`。
-  `VITEST_RELATED=1`で切り替えた既存の`vitest.config.ts`のTest Projectsが
+  既存の`vitest.config.ts`へ常時定義したTest Projectsが
   ワークスペースをまたぐ静的`import`を追跡し、1つのVitestプロセスで関連する単体・統合テストを実行する。
   設定、マニフェスト、setup、`tsconfig.json`、DBトリガーは`forceRerunTriggers`で全Nodeテストへ
   縮退し、削除ファイルはリポジトリルートの単体・統合テストへ縮退する
