@@ -27,7 +27,7 @@
     "lint": "oxlint --deny-warnings",
     "start": "NODE_ENV=production bun ./dist/index.js",
     "smoke:upload-memory": "bun run src/smoke/upload-memory/run.ts",
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.config.ts --project=api-unit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

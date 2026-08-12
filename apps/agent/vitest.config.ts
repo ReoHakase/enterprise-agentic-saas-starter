@@ -1,34 +1,8 @@
-import { defineConfig } from "vitest/config"
+import { defineProject } from "vitest/config"
 
-export default defineConfig({
+export default defineProject({
+  root: import.meta.dirname,
   test: {
-    coverage: {
-      enabled: true,
-      provider: "v8",
-      reporter: ["text", "json-summary", "lcov", "html"],
-      reportsDirectory: "./coverage/node",
-      include: [
-        "src/mastra/core/budget/context.ts",
-        "src/mastra/core/budget/tool.ts",
-        "src/mastra/core/messages/chat-input.ts",
-        "src/mastra/core/policy/feature-flags.ts",
-        "src/mastra/core/policy/grant.ts",
-        "src/mastra/core/stop-conditions/index.ts",
-        "src/mastra/core/usage/normalize.ts",
-        "src/mastra/runtime/request.ts",
-        "src/mastra/runtime/native-stream.ts",
-        "src/mastra/runtime/resume-action.ts",
-        "src/mastra/runtime/settlement.ts",
-        "src/mastra/tools/client/tool.ts",
-        "src/mastra/tools/issues/read/execute.ts",
-        "src/mastra/tools/issues/write/execute.ts",
-      ],
-      thresholds: {
-        statements: 97,
-        branches: 92,
-        functions: 100,
-        lines: 98,
-      },
-    },
+    name: "agent-unit",
   },
 })

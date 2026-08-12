@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-13
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -63,7 +63,7 @@ root script:
     "check": "bun run check:static && bun run format:check && bun run typecheck && bun run test",
     "check:static": "bun run lint && knip && knip --strict && jscpd --config .jscpd.json",
     "lint": "bun run lint:root && turbo run lint",
-    "test": "vitest run --config vitest.config.ts && turbo run test",
+    "test": "vitest run --config vitest.config.ts --project=root-unit && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",
@@ -247,6 +247,14 @@ thresholdを超える場合は同じ変更内でrefactorします。baseline比�
 ### pre-commit
 
 - commit message
+- staged source変更に対するリポジトリルートのVitest `related --run`。
+  root `vitest.config.ts`だけが`defineConfig`でTest Projects、global coverage、Browser Mode、Storybook、
+  `forceRerunTriggers`を定義する。各workspace configは単一の`*-unit` projectを`defineProject`で定義し、
+  rootがconfig pathとして登録する。各scriptはroot configとproject名を明示し、cwdによるconfig探索へ
+  依存しない。LefthookはVitestの`--project='*-unit'`で単体・統合テストだけを選び、ワークスペースを
+  またぐ静的`import`を1つのVitestプロセスで追跡する。設定、マニフェスト、setup、`tsconfig.json`、
+  DBトリガーは`forceRerunTriggers`で全`*-unit` projectへ縮退する。削除pathはVitestへそのまま渡し、
+  shellによる検出や全件fallbackは設けない
 - staged Oxfmt
 - lint可能なstaged fileがある場合のrootと全workspaceのOxlint
 

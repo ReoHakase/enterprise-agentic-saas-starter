@@ -278,13 +278,13 @@ Web固有の判断:
 ```json
 {
   "scripts": {
-    "test": "vitest run --project=unit",
-    "test:browser": "vitest run --project=storybook-light && vitest run --project=storybook-dark && vitest run --project=browser && bun run build:test:browser:app && bun run test:browser:app:chromium && bun run test:browser:app:webkit"
+    "test": "vitest run --config ../../vitest.config.ts --project=web-unit",
+    "test:browser": "vitest run --config ../../vitest.config.ts --project=web-storybook-light && vitest run --config ../../vitest.config.ts --project=web-storybook-dark && vitest run --config ../../vitest.config.ts --project=web-browser && bun run build:test:browser:app && bun run test:browser:app:chromium && bun run test:browser:app:webkit"
   }
 }
 ```
 
-project名は導入順に合わせます。存在しないprojectを先にscriptへ指定しません。
+project名はroot Test Projectsで一意にし、全scriptがroot configと対象projectを明示します。
 
 ## 受入条件
 

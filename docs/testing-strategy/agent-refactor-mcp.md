@@ -359,7 +359,7 @@ reasoning tokenを検証値にしません。API本文は安全な真偽値と�
 ```json
 {
   "scripts": {
-    "test": "vitest run --config vitest.config.ts && turbo run test",
+    "test": "vitest run --config vitest.config.ts --project=root-unit && turbo run test",
     "test:browser": "turbo run test:browser",
     "test:e2e": "turbo run test:e2e --filter=@enterprise-agentic-saas/web",
     "test:eval:agent": "turbo run test:eval:agent --filter=@enterprise-agentic-saas/agent",

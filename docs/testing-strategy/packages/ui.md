@@ -178,8 +178,8 @@ Web側でUI primitiveの全variantを再検査しません。featureに必要な
 ```json
 {
   "scripts": {
-    "test": "vitest run --project=unit",
-    "test:browser": "vitest run --project=storybook-light --project=storybook-dark"
+    "test": "vitest run --config ../../vitest.config.ts --project=ui-unit",
+    "test:browser": "vitest run --config ../../vitest.config.ts --project=ui-storybook-light && vitest run --config ../../vitest.config.ts --project=ui-storybook-dark"
   }
 }
 ```

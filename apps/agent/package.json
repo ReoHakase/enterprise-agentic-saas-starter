@@ -20,7 +20,7 @@
     "storage:dev:serve": "mkdir -p .local/mastra && turso dev --db-file .local/mastra/dev.db --port ${PORT:-8080}",
     "storage:reset": "bun run scripts/reset-storage.ts",
     "storage:smoke": "portless-topology exec -- bun run scripts/storage-smoke.ts",
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.config.ts --project=agent-unit",
     "test:eval:agent": "bun run src/mastra/evals/run.ts",
     "typecheck": "tsc --noEmit"
   },

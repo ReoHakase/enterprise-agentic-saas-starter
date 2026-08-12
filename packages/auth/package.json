@@ -15,7 +15,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --config ../../vitest.config.ts --project=auth-unit --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

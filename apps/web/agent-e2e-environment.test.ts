@@ -19,6 +19,8 @@ import {
   selectFullE2EPlaywrightArguments,
 } from "./e2e/fixtures/run-full-e2e"
 
+const webWorkspace = import.meta.dirname
+
 describe("Agent E2E environment", () => {
   it("derives an isolated loopback topology from the run identifier", () => {
     const environment = createAgentE2EEnvironment(321)
@@ -102,14 +104,14 @@ describe("Agent E2E environment", () => {
   it("removes the full runner root and its workspace-local Next build", async () => {
     const runId = process.pid * 10_000 + 322
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(process.cwd(), environment.nextDistDirectory)
+    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
 
     await Promise.all([
       mkdir(environment.stackRoot, { recursive: true }),
       mkdir(nextDistPath, { recursive: true }),
     ])
     try {
-      await removeFullE2EArtifacts(runId, process.cwd())
+      await removeFullE2EArtifacts(runId, webWorkspace)
 
       await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
         code: "ENOENT",
@@ -128,7 +130,7 @@ describe("Agent E2E environment", () => {
   it("waits for Playwright to stop its servers before full cleanup", async () => {
     const runId = process.pid * 10_000 + 323
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(process.cwd(), environment.nextDistDirectory)
+    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
     let finishPlaywright: (() => void) | undefined
     let markPlaywrightStarted: (() => void) | undefined
     const playwrightStarted = new Promise<void>((resolveStarted) => {
@@ -145,7 +147,7 @@ describe("Agent E2E environment", () => {
     try {
       const command = runFullE2ECommand({
         runId,
-        webWorkspace: process.cwd(),
+        webWorkspace,
         runPlaywright: async () => {
           markPlaywrightStarted?.()
           await playwrightFinished
@@ -176,8 +178,8 @@ describe("Agent E2E environment", () => {
 
   it("keeps all three Luna canaries in the blocking full E2E suite", async () => {
     const [runnerSource, specSource] = await Promise.all([
-      readFile(resolve(process.cwd(), "e2e/fixtures/run-full-e2e.ts"), "utf8"),
-      readFile(resolve(process.cwd(), "e2e/full/real-agent.spec.ts"), "utf8"),
+      readFile(resolve(webWorkspace, "e2e/fixtures/run-full-e2e.ts"), "utf8"),
+      readFile(resolve(webWorkspace, "e2e/full/real-agent.spec.ts"), "utf8"),
     ])
     const canaryCount = [...specSource.matchAll(/test\("agent-canary-/gu)]
       .length
@@ -246,7 +248,7 @@ describe("Agent E2E environment", () => {
   it("propagates a blocking Playwright failure after full cleanup", async () => {
     const runId = process.pid * 10_000 + 324
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(process.cwd(), environment.nextDistDirectory)
+    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
 
     await Promise.all([
       mkdir(environment.stackRoot, { recursive: true }),
@@ -254,7 +256,7 @@ describe("Agent E2E environment", () => {
     ])
     const command = runFullE2ECommand({
       runId,
-      webWorkspace: process.cwd(),
+      webWorkspace,
       runPlaywright: async () => 7,
     })
 
