@@ -24,6 +24,9 @@ const docs: MacroDocsCollection<DocsPageData, FumadocsMetaData, DocsExtras> =
     dir: "content/docs",
     docs: {
       lastModified: true,
+      postprocess: {
+        includeProcessedMarkdown: true,
+      },
       schema: pageSchema.extend({
         opengraphImage: z.string().optional(),
       }),

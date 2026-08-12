@@ -226,4 +226,47 @@ test.describe("public documentation", () => {
       )
     ).toBe(true)
   })
+
+  test("serves the public documentation as LLM-friendly text", async ({
+    request,
+  }) => {
+    const indexResponse = await request.get("/llms.txt")
+    expect(indexResponse.ok()).toBe(true)
+    expect(indexResponse.headers()["content-type"]).toContain("text/plain")
+    const index = await indexResponse.text()
+
+    expect(index).toContain("# Documentation")
+    expect(index).toContain("/docs/developers/mcp")
+    expect(index).not.toContain("/api/")
+
+    const fullResponse = await request.get("/llms-full.txt")
+    expect(fullResponse.ok()).toBe(true)
+    expect(fullResponse.headers()["content-type"]).toContain("text/plain")
+    const full = await fullResponse.text()
+
+    expect(full).toContain("# MCP Specification (/docs/developers/mcp)")
+    expect(full).toContain("OAuth Authorization Code with PKCE")
+    expect(full).not.toContain("<html")
+  })
+
+  test("serves an explicit Markdown representation without Accept negotiation", async ({
+    request,
+  }) => {
+    const markdownResponse = await request.get("/docs/developers/mcp.md")
+
+    expect(markdownResponse.ok()).toBe(true)
+    expect(markdownResponse.headers()["content-type"]).toContain(
+      "text/markdown"
+    )
+    const markdown = await markdownResponse.text()
+    expect(markdown).toContain("# MCP Specification (/docs/developers/mcp)")
+    expect(markdown).toContain("## Endpoint and transport")
+    expect(markdown).not.toContain("<html")
+
+    const htmlResponse = await request.get("/docs/developers/mcp", {
+      headers: { Accept: "text/markdown" },
+    })
+    expect(htmlResponse.ok()).toBe(true)
+    expect(htmlResponse.headers()["content-type"]).toContain("text/html")
+  })
 })
