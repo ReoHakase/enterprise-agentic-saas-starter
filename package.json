@@ -95,6 +95,7 @@
       "knip": "6.23.0",
       "lefthook": "2.1.10",
       "lucide-react": "1.26.0",
+      "marked": "15.0.12",
       "mastra": "1.20.2",
       "msw": "2.15.0",
       "msw-storybook-addon": "3.0.0",

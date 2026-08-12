@@ -61,6 +61,11 @@ test.describe("public documentation", () => {
     await expect(
       page.getByText("guide://enterprise-agentic-saas/issues", { exact: true })
     ).toBeVisible()
+    await expect(page.locator("[data-docs-page-header]")).toBeVisible()
+    await expect(page.locator("[data-docs-page-icon] svg")).toBeVisible()
+    await expect(page.locator("[data-docs-breadcrumb]")).toContainText(
+      "Developers"
+    )
     await expect(page.locator("[data-doc-last-updated]")).toContainText(
       "Last updated"
     )
@@ -71,6 +76,12 @@ test.describe("public documentation", () => {
   }) => {
     await page.goto("/docs/developers/mcp")
 
+    await expect(page.locator('[data-docs-toc="desktop"]')).toBeVisible()
+    await expect(page.locator('[data-docs-toc="desktop"]')).toHaveCSS(
+      "position",
+      "sticky"
+    )
+    await expect(page.locator('[data-docs-toc="mobile"]')).toBeHidden()
     await expect(
       page.getByText("On This Page", { exact: true }).first()
     ).toBeVisible()
@@ -131,11 +142,18 @@ test.describe("public documentation", () => {
       exact: true,
     })
     await expect(input).toBeFocused()
+    await expect(page.getByRole("dialog")).toHaveCSS("max-width", "896px")
     await input.fill("MCP")
 
     await expect(
       page.locator("[data-docs-search-highlight]").first()
     ).toBeVisible()
+    await expect(
+      page.locator("[data-docs-search-location]").first()
+    ).toContainText("MCP Specification")
+    await expect(
+      page.locator("[data-docs-search-location]").first()
+    ).toContainText("/docs/developers/mcp")
 
     const result = page.getByRole("link", { name: /MCP/i }).first()
     await expect(result).toBeVisible()
@@ -145,6 +163,21 @@ test.describe("public documentation", () => {
     await expect(
       page.getByRole("heading", { name: "MCP Specification", exact: true })
     ).toBeVisible()
+
+    await trigger.click()
+    await input.fill("tools/list")
+    await expect(
+      page.locator("[data-docs-search-result-content] code").first()
+    ).toBeVisible()
+    await input.fill("MCP")
+    const results = page.locator("[data-docs-search-result]")
+    await expect(results.nth(1)).toBeVisible()
+    await input.press("ArrowDown")
+    await expect(results.nth(1)).toHaveAttribute("data-active", "true")
+    await input.press("Home")
+    await expect(results.first()).toHaveAttribute("data-active", "true")
+    await input.press("Enter")
+    await expect(page).toHaveURL(/\/docs\/developers\/mcp$/u)
 
     await trigger.click()
     await expect(input).toBeFocused()
@@ -166,6 +199,30 @@ test.describe("public documentation", () => {
     await expect(
       page.getByText("No documentation results found.", { exact: true })
     ).toBeVisible()
+  })
+
+  test("renders GFM and MDX tab groups in developer documentation", async ({
+    page,
+  }) => {
+    await page.goto("/docs/developers/mcp")
+
+    await expect(page.locator("table")).toBeVisible()
+    await expect(page.locator("del")).toHaveText("implicit")
+    await expect(page.locator('input[type="checkbox"]').first()).toBeVisible()
+    await expect(page.getByRole("tab", { name: /TypeScript/u })).toBeVisible()
+
+    await page.getByRole("tab", { name: /cURL/u }).click()
+    await expect(
+      page.locator("[data-docs-tab-panel]:not([hidden])")
+    ).toContainText("curl")
+  })
+
+  test("uses the expandable table of contents on mobile", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto("/docs/developers/mcp")
+
+    await expect(page.locator('[data-docs-toc="desktop"]')).toBeHidden()
+    await expect(page.locator('[data-docs-toc="mobile"]')).toBeVisible()
   })
 
   test("shows the search loading state", async ({ page }) => {

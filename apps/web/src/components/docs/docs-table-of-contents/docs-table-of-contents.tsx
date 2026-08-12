@@ -9,14 +9,15 @@ export const DocsTableOfContents = ({ toc }: { toc: TOCItemType[] }) => {
     <>
       <aside
         aria-label="On This Page"
-        className="sticky top-20 hidden max-h-[calc(100svh-6rem)] self-start overflow-y-auto xl:block"
+        className="sticky top-20 hidden max-h-[calc(100svh-6rem)] self-start overflow-y-auto border-l pl-5 lg:block"
+        data-docs-toc="desktop"
       >
         <p className="mb-3 text-sm font-semibold text-foreground">
           On This Page
         </p>
         <TOCList toc={toc} />
       </aside>
-      <details className="rounded-2xl border xl:hidden">
+      <details className="rounded-2xl border lg:hidden" data-docs-toc="mobile">
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
           On This Page
         </summary>

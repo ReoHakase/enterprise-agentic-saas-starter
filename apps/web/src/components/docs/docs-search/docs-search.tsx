@@ -13,16 +13,27 @@ import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import FumaLink from "fumadocs-core/link"
 import { useDocsSearch } from "fumadocs-core/search/client"
 import { fetchClient } from "fumadocs-core/search/client/fetch"
-import { SearchIcon } from "lucide-react"
+import { ChevronRightIcon, SearchIcon } from "lucide-react"
+import { marked, Renderer } from "marked"
 import {
   type ChangeEvent,
-  type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react"
+
+import { DocsIcon } from "../docs-icon/docs-icon"
+
+export type DocsSearchPage = {
+  icon?: string
+  title: string
+  url: string
+}
 
 const searchClient = fetchClient()
 const searchTrigger = (
@@ -36,10 +47,19 @@ const searchTrigger = (
   />
 )
 
-export const DocsSearch = () => {
+const searchMarkdownRenderer = new Renderer()
+searchMarkdownRenderer.html = ({ raw }) => {
+  if (raw === "<mark>") return '<mark data-docs-search-highlight="true">'
+  if (raw === "</mark>") return "</mark>"
+  return ""
+}
+
+export const DocsSearch = ({ pages }: { pages: DocsSearchPage[] }) => {
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = useId()
+  const resultIdPrefix = useId().replace(/:/gu, "")
   const { search, setSearch, query } = useDocsSearch({
     client: searchClient,
   })
@@ -72,6 +92,7 @@ export const DocsSearch = () => {
 
       if (!nextOpen) {
         setSearch("")
+        setActiveIndex(0)
         queueMicrotask(() =>
           document
             .querySelector<HTMLButtonElement>("[data-docs-search-trigger]")
@@ -93,7 +114,10 @@ export const DocsSearch = () => {
     [setSearch]
   )
 
-  const results = Array.isArray(query.data) ? query.data : []
+  const results = useMemo(
+    () => (Array.isArray(query.data) ? query.data : []),
+    [query.data]
+  )
   const hasSearch = search.trim().length > 0
   const hasResults = results.length > 0
   const isEmpty =
@@ -101,6 +125,69 @@ export const DocsSearch = () => {
     !query.isLoading &&
     !query.error &&
     (query.data === "empty" || results.length === 0)
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [query.data, search])
+
+  const renderedResults = useMemo(
+    () =>
+      results.map((result) => ({
+        ...result,
+        searchContentHtml: {
+          __html: renderSearchContent(result.content),
+        },
+      })),
+    [results]
+  )
+
+  const handleResultMouseEnter = useCallback(
+    (event: ReactMouseEvent<HTMLAnchorElement>) => {
+      const index = Number(event.currentTarget.dataset.resultIndex)
+      if (Number.isInteger(index)) setActiveIndex(index)
+    },
+    []
+  )
+
+  const handleSearchKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (!hasResults) return
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault()
+        setActiveIndex((index) => Math.min(index + 1, results.length - 1))
+        return
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault()
+        setActiveIndex((index) => Math.max(index - 1, 0))
+        return
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault()
+        setActiveIndex(0)
+        return
+      }
+
+      if (event.key === "End") {
+        event.preventDefault()
+        setActiveIndex(results.length - 1)
+        return
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault()
+        document.getElementById(`${resultIdPrefix}-${activeIndex}`)?.click()
+      }
+    },
+    [activeIndex, hasResults, resultIdPrefix, results.length]
+  )
+
+  const activeResultId = hasResults
+    ? `${resultIdPrefix}-${activeIndex}`
+    : undefined
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -111,7 +198,7 @@ export const DocsSearch = () => {
           ⌘K
         </kbd>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[calc(100%-1.5rem)] max-w-4xl sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Search Documentation</DialogTitle>
           <DialogDescription>
@@ -127,8 +214,12 @@ export const DocsSearch = () => {
             id={inputId}
             value={search}
             onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Search Documentation"
             autoComplete="off"
+            aria-activedescendant={activeResultId}
+            aria-controls={hasResults ? "docs-search-results" : undefined}
+            aria-keyshortcuts="ArrowDown ArrowUp Home End Enter"
           />
           <div aria-live="polite" aria-atomic="true">
             {query.isLoading && hasSearch ? (
@@ -147,25 +238,65 @@ export const DocsSearch = () => {
               </p>
             ) : null}
             {hasResults ? (
-              <ul className="max-h-80 space-y-2 overflow-y-auto">
-                {results.map((result) => (
-                  <li key={result.id}>
-                    <FumaLink
-                      href={result.url}
-                      onClick={handleResultSelect}
-                      className="block rounded-2xl border p-3 transition-colors hover:bg-muted focus-visible:bg-muted"
-                    >
-                      <span className="block font-medium text-foreground">
-                        {renderSearchContent(result.content)}
-                      </span>
-                      {result.breadcrumbs?.length ? (
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {result.breadcrumbs.join(" / ")}
+              <ul
+                id="docs-search-results"
+                className="max-h-[min(60svh,32rem)] space-y-2 overflow-y-auto pr-1"
+              >
+                {renderedResults.map((result, index) => {
+                  const page = pages.find(
+                    (candidate) => candidate.url === getPageUrl(result.url)
+                  )
+                  const isActive = index === activeIndex
+
+                  return (
+                    <li key={result.id}>
+                      <FumaLink
+                        id={`${resultIdPrefix}-${index}`}
+                        href={result.url}
+                        onClick={handleResultSelect}
+                        onMouseEnter={handleResultMouseEnter}
+                        aria-label={`${page?.title ?? "Documentation"}: ${result.url}`}
+                        className="block rounded-2xl border p-4 transition-colors hover:bg-muted focus-visible:bg-muted data-[active=true]:border-primary/50 data-[active=true]:bg-muted/60"
+                        data-active={isActive}
+                        data-docs-search-result
+                        data-result-index={index}
+                        tabIndex={isActive ? 0 : -1}
+                      >
+                        <span
+                          className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+                          data-docs-search-location
+                        >
+                          <DocsIcon
+                            icon={page?.icon}
+                            className="size-3.5 shrink-0"
+                          />
+                          <span className="min-w-0 truncate">
+                            {page?.title ?? "Documentation"}
+                          </span>
+                          {result.breadcrumbs?.length ? (
+                            <>
+                              <ChevronRightIcon
+                                aria-hidden="true"
+                                className="size-3 shrink-0"
+                              />
+                              <span className="min-w-0 truncate">
+                                {result.breadcrumbs.join(" / ")}
+                              </span>
+                            </>
+                          ) : null}
+                          <span className="w-full font-mono text-[10px] break-all sm:ml-auto sm:w-auto sm:shrink-0">
+                            {result.url}
+                          </span>
                         </span>
-                      ) : null}
-                    </FumaLink>
-                  </li>
-                ))}
+                        <span
+                          className="mt-2 block text-sm leading-6 text-foreground [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_del]:text-muted-foreground [&_mark]:rounded [&_mark]:bg-primary/20 [&_mark]:px-0.5"
+                          data-docs-search-result-content
+                          dangerouslySetInnerHTML={result.searchContentHtml}
+                        />
+                      </FumaLink>
+                    </li>
+                  )
+                })}
               </ul>
             ) : null}
           </div>
@@ -175,15 +306,11 @@ export const DocsSearch = () => {
   )
 }
 
-const renderSearchContent = (content: string): ReactNode =>
-  content.split(/(<mark>[\s\S]*?<\/mark>)/gu).map((part) => {
-    const match = /^<mark>([\s\S]*)<\/mark>$/u.exec(part)
+const getPageUrl = (url: string): string => url.split("#", 1)[0] ?? url
 
-    return match ? (
-      <mark key={part} data-docs-search-highlight>
-        {match[1]}
-      </mark>
-    ) : (
-      part
-    )
+const renderSearchContent = (content: string): string =>
+  marked.parseInline(content, {
+    async: false,
+    gfm: true,
+    renderer: searchMarkdownRenderer,
   })

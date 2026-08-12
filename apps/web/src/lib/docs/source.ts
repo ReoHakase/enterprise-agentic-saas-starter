@@ -3,10 +3,10 @@ import type {
   MetaData as FumadocsMetaData,
   PageData as FumadocsPageData,
 } from "fumadocs-core/source"
+import { lucideIconsPlugin } from "fumadocs-core/source/plugins/lucide-icons"
 import { pageSchema } from "fumadocs-core/source/schema"
 import { defineDocs } from "fumadocs-mdx/macro"
 import type { MacroDocsCollection } from "fumadocs-mdx/runtime/macro"
-import { icons } from "lucide-react"
 import { createElement, type ReactNode } from "react"
 import { z } from "zod"
 
@@ -33,15 +33,16 @@ const docs: MacroDocsCollection<DocsPageData, FumadocsMetaData, DocsExtras> =
     },
   })
 
-const resolveIcon = (icon: string | undefined): ReactNode => {
-  if (!icon) return undefined
+const emojiPattern = /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u
 
-  const Icon = Object.entries(icons).find(([name]) => name === icon)?.[1]
-  return Icon ? createElement(Icon) : icon
-}
+const resolveEmojiIcon = (icon: string | undefined): ReactNode =>
+  icon && emojiPattern.test(icon)
+    ? createElement("span", { "aria-hidden": true }, icon)
+    : undefined
 
 export const source = loader({
   baseUrl: "/docs",
   source: docs.toFumadocsSource(),
-  icon: resolveIcon,
+  icon: resolveEmojiIcon,
+  plugins: [lucideIconsPlugin()],
 })

@@ -4,6 +4,8 @@ description: The public remote MCP contract for Enterprise SaaS integrations.
 icon: Network
 ---
 
+import { Code2Icon, TerminalIcon } from "lucide-react"
+
 ## Endpoint and transport
 
 The public MCP endpoint is `<API_PUBLIC_URL>/mcp`. It uses stateless Streamable HTTP with `POST /mcp` for protocol requests. A `GET /mcp` request is not a protocol session and returns `405 Method Not Allowed` with `Allow: POST`.
@@ -59,3 +61,42 @@ The upload flow accepts bytes through the session and does not use base64-encode
 ## Public boundary
 
 Internal Agent skills, system instructions, private endpoints, internal tool routing, workflows, sampling, and UI-only tools are not part of the public MCP catalog. Do not assume that a private internal instruction can be retrieved through MCP.
+
+## Markdown examples
+
+This developer page intentionally demonstrates the public Markdown surface used by the docs site.
+
+> Public documentation describes the stable integration boundary. It does not expose internal runtime instructions.
+
+- [x] Discover capabilities with `tools/list`.
+- [x] Confirm the organization and scope before a write.
+- [ ] Treat an old revision as safe to overwrite.
+
+The intentionally ~~implicit~~ explicit flow is: discover, authorize, read the revision, then write with an idempotency key. See https://modelcontextprotocol.io for the upstream protocol reference, or return to the [MCP contract](/docs/developers/mcp).
+
+| Operation                           | Required scope  | Revision | Result                     |
+| ----------------------------------- | --------------- | :------: | -------------------------- |
+| `issues/list`                       | `issues:read`   |    No    | Current authorized issues  |
+| `issues/update`                     | `issues:update` |   Yes    | Idempotent mutation        |
+| `attachments/create-upload-session` | `files:write`   |    No    | Short-lived upload session |
+
+### Client examples
+
+The tab labels below contain MDX, including Lucide icons. Each tab is the same request represented for a different client.
+
+```ts tab="<Code2Icon /> TypeScript" tab-group="mcp-client"
+const response = await mcp.callTool("issues/list", {
+  organizationId: "org_public",
+})
+```
+
+```bash tab="<TerminalIcon /> cURL" tab-group="mcp-client"
+curl -X POST "$API_PUBLIC_URL/mcp" \\
+  -H "Authorization: Bearer $ACCESS_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  --data '{"method":"tools/list"}'
+```
+
+The checklist above is a contract reminder[^gfm], not an authorization shortcut.
+
+[^gfm]: GitHub-Flavored Markdown (GFM) is rendered here to make tables, task lists, autolinks, strikethrough, and footnotes easy to verify.

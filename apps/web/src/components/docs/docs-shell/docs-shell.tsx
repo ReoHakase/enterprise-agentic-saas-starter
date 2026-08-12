@@ -17,14 +17,16 @@ import type { ReactNode } from "react"
 
 import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
 
-import { DocsSearch } from "../docs-search/docs-search"
+import { DocsSearch, type DocsSearchPage } from "../docs-search/docs-search"
 import { DocsSidebar } from "../docs-sidebar/docs-sidebar"
 
 export const DocsShell = ({
   children,
+  pages,
   tree,
 }: {
   children: ReactNode
+  pages: DocsSearchPage[]
   tree: Root
 }) => (
   <SidebarProvider open data-docs-shell="true">
@@ -49,7 +51,7 @@ export const DocsShell = ({
             </SidebarMenuLinkButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <DocsSearch />
+            <DocsSearch pages={pages} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
