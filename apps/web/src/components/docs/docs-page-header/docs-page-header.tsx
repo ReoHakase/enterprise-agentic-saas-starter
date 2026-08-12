@@ -42,10 +42,12 @@ export const DocsPageHeader = ({
   </header>
 )
 
+const lastModifiedFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+  year: "numeric",
+})
+
 const formatLastModified = (date: Date): string =>
-  new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  }).format(date)
+  lastModifiedFormatter.format(date)
