@@ -42,6 +42,7 @@
     "./components/spinner": "./src/components/spinner/spinner.tsx",
     "./components/switch": "./src/components/switch/switch.tsx",
     "./components/table": "./src/components/table/table.tsx",
+    "./components/tabs": "./src/components/tabs/tabs.tsx",
     "./components/textarea": "./src/components/textarea/textarea.tsx",
     "./components/toggle-group": "./src/components/toggle-group/toggle-group.tsx",
     "./components/tooltip": "./src/components/tooltip/tooltip.tsx",

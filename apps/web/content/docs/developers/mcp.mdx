@@ -45,6 +45,14 @@ Public guide resources are read-only:
 
 The public prompt `triage_issue` describes an issue triage workflow. Clients should search before creating, fetch the latest revision before updating or deleting, use a stable idempotency key for writes, and summarize destructive operations before executing them.
 
+<Files>
+  <Folder name="mcp-client" defaultOpen>
+    <File name="client.ts" />
+    <File name="oauth.ts" />
+  </Folder>
+  <File name="package.json" />
+</Files>
+
 ## Write and upload safety
 
 Writes require the matching scope, current permission, a valid organization and resource, and the expected revision where applicable. Write requests use an idempotency key between 16 and 128 characters and are applied through the API transaction and audit boundary.
@@ -57,6 +65,47 @@ Attachments use this sequence:
 4. Attach the ready asset to the issue.
 
 The upload flow accepts bytes through the session and does not use base64-encoded file data. The maximum upload size is 20 MB.
+
+<Steps>
+  <Step>
+    ### Discover capabilities
+
+    Call `tools/list` with the current OAuth credential and use only the returned catalog.
+
+  </Step>
+  <Step>
+    ### Read the latest revision
+
+    Fetch the target resource immediately before a revision-protected mutation.
+
+  </Step>
+  <Step>
+    ### Write idempotently
+
+    Reuse one stable idempotency key when retrying the same intended mutation.
+
+  </Step>
+</Steps>
+
+<TypeTable
+  type={{
+    organizationId: {
+      description: "The organization bound to the OAuth credential.",
+      required: true,
+      type: "string",
+    },
+    idempotencyKey: {
+      description:
+        "A stable key between 16 and 128 characters for a write attempt.",
+      required: true,
+      type: "string",
+    },
+    revision: {
+      description: "The expected current revision for protected mutations.",
+      type: "number",
+    },
+  }}
+/>
 
 ## Public boundary
 
@@ -84,13 +133,13 @@ The intentionally ~~implicit~~ explicit flow is: discover, authorize, read the r
 
 The tab labels below contain MDX, including Lucide icons. Each tab is the same request represented for a different client.
 
-```ts tab="<Code2Icon /> TypeScript" tab-group="mcp-client"
+```ts title="TypeScript client" tab="<Code2Icon /> TypeScript" tab-group="mcp-client"
 const response = await mcp.callTool("issues/list", {
   organizationId: "org_public",
 })
 ```
 
-```bash tab="<TerminalIcon /> cURL" tab-group="mcp-client"
+```bash title="cURL client" tab="<TerminalIcon /> cURL" tab-group="mcp-client"
 curl -X POST "$API_PUBLIC_URL/mcp" \\
   -H "Authorization: Bearer $ACCESS_TOKEN" \\
   -H "Content-Type: application/json" \\

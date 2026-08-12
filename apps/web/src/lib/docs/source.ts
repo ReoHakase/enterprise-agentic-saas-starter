@@ -35,14 +35,14 @@ const docs: MacroDocsCollection<DocsPageData, FumadocsMetaData, DocsExtras> =
 
 const emojiPattern = /[\p{Extended_Pictographic}\p{Emoji_Presentation}]/u
 
-const resolveEmojiIcon = (icon: string | undefined): ReactNode =>
+const resolveIcon = (icon: string | undefined): ReactNode =>
   icon && emojiPattern.test(icon)
     ? createElement("span", { "aria-hidden": true }, icon)
-    : undefined
+    : icon
 
 export const source = loader({
   baseUrl: "/docs",
   source: docs.toFumadocsSource(),
-  icon: resolveEmojiIcon,
+  icon: resolveIcon,
   plugins: [lucideIconsPlugin()],
 })

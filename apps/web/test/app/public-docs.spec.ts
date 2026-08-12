@@ -31,6 +31,16 @@ test.describe("public documentation", () => {
     await expect(
       page.getByRole("link", { name: "Privacy Policy", exact: true })
     ).toBeVisible()
+    await Promise.all(
+      ["Manual", "Developers", "Privacy Policy"].map((name) =>
+        expect(
+          page
+            .locator("[data-docs-sidebar]")
+            .getByRole("link", { name, exact: true })
+            .locator("svg")
+        ).toBeVisible()
+      )
+    )
     await expect(page.locator("[data-docs-sidebar]")).toContainText(
       "Documentation"
     )
@@ -82,11 +92,12 @@ test.describe("public documentation", () => {
       "sticky"
     )
     await expect(page.locator('[data-docs-toc="mobile"]')).toBeHidden()
+    const desktopToc = page.locator('[data-docs-toc="desktop"]')
     await expect(
-      page.getByText("On This Page", { exact: true }).first()
+      desktopToc.getByText("On This Page", { exact: true })
     ).toBeVisible()
     await expect(
-      page.locator('a[href="#endpoint-and-transport"]').first()
+      desktopToc.locator('a[href="#endpoint-and-transport"]')
     ).toBeVisible()
 
     const copyButton = page.getByRole("button", {
@@ -137,7 +148,7 @@ test.describe("public documentation", () => {
     })
     await trigger.click()
 
-    const input = page.getByRole("textbox", {
+    const input = page.getByRole("combobox", {
       name: "Search Documentation",
       exact: true,
     })
@@ -153,9 +164,12 @@ test.describe("public documentation", () => {
     ).toContainText("MCP Specification")
     await expect(
       page.locator("[data-docs-search-location]").first()
-    ).toContainText("/docs/developers/mcp")
+    ).not.toContainText("/docs/developers/mcp")
+    await expect(
+      page.locator("[data-docs-search-highlight]").first()
+    ).toHaveClass(/bg-yellow-200/u)
 
-    const result = page.getByRole("link", { name: /MCP/i }).first()
+    const result = page.getByRole("option", { name: /MCP/i }).first()
     await expect(result).toBeVisible()
     await result.click()
 
@@ -174,10 +188,15 @@ test.describe("public documentation", () => {
     await expect(results.nth(1)).toBeVisible()
     await input.press("ArrowDown")
     await expect(results.nth(1)).toHaveAttribute("data-active", "true")
+    await input.press("End")
+    await expect(results.last()).toHaveAttribute("data-active", "true")
+    await expect(results.last()).toBeInViewport()
     await input.press("Home")
     await expect(results.first()).toHaveAttribute("data-active", "true")
+    await input.fill("Privacy Policy")
+    await expect(results.first()).toContainText("Privacy Policy")
     await input.press("Enter")
-    await expect(page).toHaveURL(/\/docs\/developers\/mcp$/u)
+    await expect(page).toHaveURL(/\/docs\/privacy$/u)
 
     await trigger.click()
     await expect(input).toBeFocused()
@@ -193,7 +212,7 @@ test.describe("public documentation", () => {
     await page.goto("/docs")
     await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search Documentation" })
+      .getByRole("combobox", { name: "Search Documentation" })
       .fill("not-a-real-documentation-term")
 
     await expect(
@@ -206,15 +225,63 @@ test.describe("public documentation", () => {
   }) => {
     await page.goto("/docs/developers/mcp")
 
-    await expect(page.locator("table")).toBeVisible()
+    await expect(page.locator("[data-docs-table]")).toBeVisible()
     await expect(page.locator("del")).toHaveText("implicit")
     await expect(page.locator('input[type="checkbox"]').first()).toBeVisible()
     await expect(page.getByRole("tab", { name: /TypeScript/u })).toBeVisible()
 
-    await page.getByRole("tab", { name: /cURL/u }).click()
+    const typescriptTab = page.getByRole("tab", { name: /TypeScript/u })
+    await typescriptTab.focus()
+    await typescriptTab.press("ArrowRight")
+    await expect(page.getByRole("tab", { name: /cURL/u })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    )
     await expect(
       page.locator("[data-docs-tab-panel]:not([hidden])")
     ).toContainText("curl")
+  })
+
+  test("renders the self-hosted documentation components", async ({ page }) => {
+    await page.goto("/docs/developers/mcp")
+
+    const coverTrigger = page.getByRole("button", {
+      name: "Zoom documentation image",
+      exact: true,
+    })
+    await expect(page.locator("[data-docs-cover] img")).toHaveAttribute(
+      "src",
+      /opengraph-image/u
+    )
+    await expect(page.locator("[data-docs-cover] img")).not.toHaveAttribute(
+      "loading",
+      "lazy"
+    )
+    await coverTrigger.click()
+    await expect(page.locator("[data-docs-zoom-dialog]")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(coverTrigger).toBeFocused()
+
+    const codeBlock = page.locator("[data-docs-code-block]").first()
+    await expect(codeBlock).toContainText("TypeScript client")
+    await expect(codeBlock.locator("figcaption svg")).toBeVisible()
+    await expect(
+      codeBlock.getByRole("button", { name: "Copy code" })
+    ).toBeVisible()
+    const syntaxColorCount = await codeBlock
+      .locator("span[style*='--shiki-light']")
+      .evaluateAll(
+        (tokens) =>
+          new Set(tokens.map((token) => getComputedStyle(token).color)).size
+      )
+    expect(syntaxColorCount).toBeGreaterThan(1)
+
+    await expect(page.locator("[data-docs-files]")).toContainText("client.ts")
+    await expect(page.locator("ol[data-docs-steps]")).toBeVisible()
+    await expect(page.locator("li[data-docs-step]")).toHaveCount(3)
+    await expect(page.locator("[data-docs-type-table]")).toContainText(
+      "organizationId"
+    )
   })
 
   test("uses the expandable table of contents on mobile", async ({ page }) => {
@@ -222,7 +289,16 @@ test.describe("public documentation", () => {
     await page.goto("/docs/developers/mcp")
 
     await expect(page.locator('[data-docs-toc="desktop"]')).toBeHidden()
-    await expect(page.locator('[data-docs-toc="mobile"]')).toBeVisible()
+    const mobileToc = page.locator('[data-docs-toc="mobile"]')
+    await expect(mobileToc).toBeVisible()
+    await expect(
+      page.locator("[data-docs-page-header] + [data-docs-toc='mobile']")
+    ).toHaveCount(1)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth
+      )
+    ).toBe(true)
   })
 
   test("shows the search loading state", async ({ page }) => {
@@ -238,7 +314,7 @@ test.describe("public documentation", () => {
     await page.goto("/docs")
     await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search Documentation" })
+      .getByRole("combobox", { name: "Search Documentation" })
       .fill("MCP")
 
     const status = page.getByRole("status")
@@ -258,7 +334,7 @@ test.describe("public documentation", () => {
     await page.goto("/docs")
     await page.getByRole("button", { name: "Search Documentation" }).click()
     await page
-      .getByRole("textbox", { name: "Search Documentation" })
+      .getByRole("combobox", { name: "Search Documentation" })
       .fill("MCP")
 
     await expect(page.locator('p[role="alert"]')).toHaveText(
