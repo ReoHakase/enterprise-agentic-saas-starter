@@ -8,12 +8,12 @@
   "upload_source_maps": true,
   "workers_dev": false,
   "preview_urls": false,
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["IssueAssistant"],
+  "exports": {
+    "IssueAssistant": {
+      "type": "durable-object",
+      "state": "deleted",
     },
-  ],
+  },
   "services": [
     {
       "binding": "AGENT_INTERNAL_API",

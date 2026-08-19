@@ -2,6 +2,11 @@ import { readdir, readFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
 const SCRIPTED_MODEL_SENTINEL = "ENTERPRISE_AGENT_SCRIPTED_MODEL_SENTINEL_v1"
+const FORBIDDEN_PRODUCTION_MARKERS = [
+  SCRIPTED_MODEL_SENTINEL,
+  "IssueAssistant",
+  "Legacy Agent session retired",
+] as const
 const outputDirectory = resolve(
   import.meta.dirname,
   process.argv[2] ?? "../dist/worker"
@@ -31,19 +36,22 @@ if (files.length === 0) {
   throw new Error("Production Worker dry-run did not emit JavaScript")
 }
 
-const leakedFiles = (
-  await Promise.all(
-    files.map(async (file) => ({
-      file,
-      source: await readFile(file, "utf8"),
-    }))
-  )
-).filter(({ source }) => source.includes(SCRIPTED_MODEL_SENTINEL))
+const bundledSources = await Promise.all(
+  files.map(async (file) => ({
+    file,
+    source: await readFile(file, "utf8"),
+  }))
+)
+const leakedMarkers = FORBIDDEN_PRODUCTION_MARKERS.flatMap((marker) =>
+  bundledSources
+    .filter(({ source }) => source.includes(marker))
+    .map(({ file }) => ({ file, marker }))
+)
 
-if (leakedFiles.length > 0) {
+if (leakedMarkers.length > 0) {
   throw new Error(
-    `Scripted model leaked into production bundle: ${leakedFiles
-      .map(({ file }) => file)
+    `Forbidden marker leaked into production bundle: ${leakedMarkers
+      .map(({ file, marker }) => `${marker} in ${file}`)
       .join(", ")}`
   )
 }

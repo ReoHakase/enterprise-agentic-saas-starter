@@ -21,7 +21,7 @@ Generated Cloudflare型を除くhand-written Agent runtimeを`apps/agent/src/mas
 framework-independent codeも`src/mastra/core/**`へ置き、dependency ruleでMastra/providerから
 隔離します。production/Studioは同じcompositionを使います。Vitestはfactoryへscripted modelを
 直接注入でき、Worker境界を通すfree E2Eだけは別E2E entrypointを使います。
-物理構造とlegacy retentionは[apps/agentの設計](../architecture/apps/agent.md)に定義します。
+物理構造は[apps/agentの設計](../architecture/apps/agent.md)に定義します。
 
 ## 理由
 
@@ -35,8 +35,7 @@ Mastra固有のownershipを一つのrootへ閉じ、legacy zoneをgate対象外�
 ## 結果
 
 Path変更が大きくなり、一度の全面refactorが必要です。`src/mastra/core`でframework-independent codeを保ちます。
-旧`IssueAssistant`は`src/mastra/legacy/issue-assistant.ts`へ隔離し、class exportと既存
-`new_sqlite_classes`を保持します。別retention判断まで`deleted_classes`を追加しません。
+旧runtimeのclass、export、設定を現行の構造へ残しません。
 
 ## 強制方法
 
