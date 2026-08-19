@@ -1,11 +1,11 @@
-import type { IssueUpdateField } from "../../issue-update-state"
-import type { IssueTimelineItem } from "../../schema"
+import type { IssueUpdateField } from "../issue-update-state"
+import type { IssueTimelineItem } from "../schema"
 import type {
   AsyncAction,
   IssueAssigneeOption,
   IssueUiItem,
   IssueUpdate,
-} from "../types/types"
+} from "./types"
 
 export type ImmediateField =
   | "status"

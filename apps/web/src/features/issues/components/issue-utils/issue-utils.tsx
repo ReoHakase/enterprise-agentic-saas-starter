@@ -18,7 +18,7 @@ import type {
   IssuePriority,
   IssueStatus,
   IssueUiItem,
-} from "../types/types"
+} from "../types"
 
 export const statusOptions = [
   { label: "All issues", value: "all" },

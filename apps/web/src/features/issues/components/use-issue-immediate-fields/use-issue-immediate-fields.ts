@@ -5,11 +5,8 @@ import { useCallback, useState } from "react"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { IssueUpdateField } from "../../issue-update-state"
-import type {
-  ImmediateField,
-  IssueDetailProps,
-} from "../issue-detail-types/issue-detail-types"
-import type { IssueUiItem, IssueUpdate } from "../types/types"
+import type { ImmediateField, IssueDetailProps } from "../issue-detail-types"
+import type { IssueUiItem, IssueUpdate } from "../types"
 
 export const useIssueImmediateFields = ({
   issue,

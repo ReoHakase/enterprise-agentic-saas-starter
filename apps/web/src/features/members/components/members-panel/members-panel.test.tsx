@@ -50,12 +50,12 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  browserConsoleApi: {
+  getBrowserConsoleApi: () => ({
     cancelInvitation: mocks.cancelInvitation,
     removeMember: mocks.removeMember,
     transferOwnership: mocks.transferOwnership,
     updateMemberRole: mocks.updateMemberRole,
-  },
+  }),
 }))
 
 vi.mock("../../api", () => ({

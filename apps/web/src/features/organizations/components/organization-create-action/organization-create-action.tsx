@@ -39,7 +39,7 @@ import {
   getConsoleApiFieldErrors,
   hasConsoleApiFieldError,
 } from "@/features/console"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import { organizationFormSchema, toOrganizationSlug } from "../../schema"
 
@@ -63,7 +63,7 @@ const OrganizationCreateAction = () => {
   const slugEditedRef = useRef(false)
   const createMutation = useMutation({
     mutationFn: (input: { name: string; slug: string }) =>
-      browserConsoleApi.createOrganization(input),
+      getBrowserConsoleApi().createOrganization(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: consoleKeys.organizations(),

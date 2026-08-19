@@ -51,7 +51,7 @@ import {
   getConsoleApiErrorText,
   sessionsQueryOptions,
 } from "@/features/console"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import type { UserSession } from "../../schema"
 import { describeSessionClient } from "../../user-agent"
@@ -65,8 +65,8 @@ export const SessionsPanel = () => {
   const revokeMutation = useMutation<unknown, Error, UserSession | "others">({
     mutationFn: (target: UserSession | "others") =>
       target === "others"
-        ? browserConsoleApi.revokeOtherSessions()
-        : browserConsoleApi.revokeSession(target.id),
+        ? getBrowserConsoleApi().revokeOtherSessions()
+        : getBrowserConsoleApi().revokeSession(target.id),
     onSuccess: async (_, target) => {
       setRevokeTarget(undefined)
       await queryClient.invalidateQueries({ queryKey: consoleKeys.sessions() })

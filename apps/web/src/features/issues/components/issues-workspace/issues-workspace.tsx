@@ -2,7 +2,7 @@
 
 import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
 import { IssuesTable } from "../issues-table/issues-table"
-import type { IssuesWorkspaceProps } from "../types/types"
+import type { IssuesWorkspaceProps } from "../types"
 
 const emptyLabelOptions: string[] = []
 const ignoreLabelSearch = () => undefined

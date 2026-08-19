@@ -13,11 +13,11 @@ import {
 } from "@/features/console"
 
 import { issueDescriptionFormSchema } from "../../schema"
-import type { StringFieldApi, SubmitSelection } from "../form-types/form-types"
+import type { StringFieldApi, SubmitSelection } from "../form-types"
 import { DescriptionEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
-import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types"
 import { getActionErrorMessage } from "../issue-utils/issue-utils"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 export const useIssueDescriptionForm = ({
   issue,

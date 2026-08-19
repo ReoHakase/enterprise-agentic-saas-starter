@@ -13,7 +13,7 @@ import {
 import { Textarea } from "@enterprise-agentic-saas/ui/components/textarea"
 import { useCallback, type ChangeEvent } from "react"
 
-import type { StringFieldApi } from "../form-types/form-types"
+import type { StringFieldApi } from "../form-types"
 
 const describedByIds = (...ids: Array<string | undefined>) =>
   ids.filter((id): id is string => Boolean(id)).join(" ") || undefined

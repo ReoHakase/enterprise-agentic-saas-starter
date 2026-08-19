@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { IssueListItem } from "../../schema"
-import type { IssueUiItem, IssuesWorkspaceProps } from "../types/types"
+import type { IssueUiItem, IssuesWorkspaceProps } from "../types"
 import { IssuesDashboard } from "./client"
 
 type MutationOptions = {

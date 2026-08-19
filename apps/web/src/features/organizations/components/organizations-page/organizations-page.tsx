@@ -36,7 +36,7 @@ import {
   showConsoleApiErrorToast,
   organizationsQueryOptions,
 } from "@/features/console"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import { prepareOrganizationSwitch } from "../../cache"
 import { navigateAfterOrganizationSwitch } from "../../organization-switch-flash"
@@ -64,7 +64,7 @@ export const OrganizationsPage = ({
   })
   const activateMutation = useMutation({
     mutationFn: (input: { organizationId: string; redirectTo?: string }) =>
-      browserConsoleApi.activateOrganization(input.organizationId),
+      getBrowserConsoleApi().activateOrganization(input.organizationId),
     onSuccess: async (_, input) => {
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, input.organizationId)

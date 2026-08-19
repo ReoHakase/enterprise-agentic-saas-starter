@@ -23,7 +23,7 @@ import {
   hasConsoleApiFieldError,
 } from "@/features/console"
 import { ProfileImageEditor } from "@/features/profile-images"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import {
   organizationFormSchema,
@@ -46,7 +46,7 @@ export const OrganizationSettingsForm = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({})
   const updateMutation = useMutation({
     mutationFn: (value: { name: string; slug: string }) =>
-      browserConsoleApi.updateOrganization(organization.id, value),
+      getBrowserConsoleApi().updateOrganization(organization.id, value),
     onSuccess: async (updated) => {
       await queryClient.invalidateQueries({
         queryKey: consoleKeys.organization(organization.id),

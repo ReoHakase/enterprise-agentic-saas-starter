@@ -102,6 +102,10 @@ Client Component、Skeleton、error表示を含め、必ず`components/`配下�
 componentは`components/<screen-name>/`へまとめます。全featureへ同じ空directoryや雛形fileを
 生成しません。
 
+型またはre-exportだけを置く補助fileは、利用箇所に近いfeature rootまたは`components/`直下へ置き、
+専用の1-file directoryを作りません。component本体、test、story、非公開subcomponentをまとめる
+directoryは、表示と検証の意味ある配置境界として維持します。
+
 ## app directory
 
 `src/app/`はNext.js routeとfeatureの公開componentを組み合わせる場所です。

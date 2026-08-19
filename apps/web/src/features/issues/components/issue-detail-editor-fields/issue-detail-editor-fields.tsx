@@ -15,7 +15,7 @@ import {
   type KeyboardEvent,
 } from "react"
 
-import type { StringFieldApi } from "../form-types/form-types"
+import type { StringFieldApi } from "../form-types"
 
 export const TitleEditorField = ({
   field,

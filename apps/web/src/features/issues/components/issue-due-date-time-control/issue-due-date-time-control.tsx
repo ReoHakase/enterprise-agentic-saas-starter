@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { LocalDate } from "@/components/local-date/local-date"
 
-import type { ControlStateProps } from "../issue-metadata-control-types/issue-metadata-control-types"
+import type { ControlStateProps } from "../issue-metadata-control-types"
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => {
   const value = hour.toString().padStart(2, "0")

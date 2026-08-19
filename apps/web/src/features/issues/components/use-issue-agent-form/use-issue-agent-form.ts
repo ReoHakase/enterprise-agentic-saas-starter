@@ -5,7 +5,7 @@ import * as v from "valibot"
 
 import { useRegisterAgentForm } from "@/features/agent"
 
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 import type { IssueDescriptionFormState } from "../use-issue-description-form/use-issue-description-form"
 import type { IssueTitleFormState } from "../use-issue-title-form/use-issue-title-form"
 

@@ -12,7 +12,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/alert-dialog"
 import { Trash2Icon } from "lucide-react"
 
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 export const issueDeleteDialog = ({
   target,

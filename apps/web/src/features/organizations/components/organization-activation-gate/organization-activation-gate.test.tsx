@@ -52,9 +52,9 @@ vi.mock("../../cache", () => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  browserConsoleApi: {
+  getBrowserConsoleApi: () => ({
     activateOrganization: mocks.activateOrganization,
-  },
+  }),
 }))
 
 const createWrapper = () => {

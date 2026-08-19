@@ -27,13 +27,13 @@ import {
   selectSubmitState,
   type StringFieldApi,
   type SubmitSelection,
-} from "../form-types/form-types"
+} from "../form-types"
 import {
   getActionErrorMessage,
   getActionFieldError,
 } from "../issue-utils/issue-utils"
 import { CreateIssueTitleField } from "../text-form-fields/text-form-fields"
-import type { AsyncAction } from "../types/types"
+import type { AsyncAction } from "../types"
 
 const createIssueTrigger = <Button />
 

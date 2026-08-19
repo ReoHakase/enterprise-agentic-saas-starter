@@ -7,7 +7,7 @@ export {
 export { IssueDetailController } from "./components/issue-detail-controller/issue-detail-controller"
 export { IssueDetailRouteSkeleton } from "./components/issue-detail-route-skeleton/issue-detail-route-skeleton"
 export { IssuesDashboard } from "./components/issues-dashboard/client"
-export type { IssueAssigneeOption } from "./components/types/types"
+export type { IssueAssigneeOption } from "./components/types"
 export { deriveIssueLabelSuggestions } from "./label-suggestions"
 export {
   issueKeys,

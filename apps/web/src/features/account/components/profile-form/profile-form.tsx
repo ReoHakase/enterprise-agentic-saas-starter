@@ -23,7 +23,7 @@ import {
   getConsoleApiFieldError,
 } from "@/features/console"
 import { ProfileImageEditor } from "@/features/profile-images"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import { profileFormSchema, type UserProfile } from "../../schema"
 
@@ -43,7 +43,8 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
   const [submitError, setSubmitError] = useState<string>()
   const [nameError, setNameError] = useState<string>()
   const updateMutation = useMutation({
-    mutationFn: (input: { name: string }) => browserConsoleApi.updateMe(input),
+    mutationFn: (input: { name: string }) =>
+      getBrowserConsoleApi().updateMe(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: consoleKeys.me() })
       router.refresh()

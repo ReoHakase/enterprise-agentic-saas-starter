@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  browserConsoleApi: {
+  getBrowserConsoleApi: () => ({
     activateOrganization: mocks.noop,
     cancelInvitation: mocks.noop,
     listInvitations: mocks.listInvitations,
@@ -23,7 +23,7 @@ vi.mock("@/lib/browser/console-api", () => ({
     removeMember: mocks.noop,
     transferOwnership: mocks.noop,
     updateMemberRole: mocks.noop,
-  },
+  }),
 }))
 
 vi.mock("next/navigation", () => ({

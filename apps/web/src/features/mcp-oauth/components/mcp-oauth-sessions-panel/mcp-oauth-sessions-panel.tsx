@@ -36,7 +36,7 @@ import {
   OrganizationIdentity,
   OrganizationRoleBadge,
 } from "@/features/organizations"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import { mcpOAuthSessionsQueryOptions } from "../../queries"
 import { parseMcpOAuthScopes } from "../../query"
@@ -57,7 +57,7 @@ export const McpOAuthSessionsPanel = () => {
   >()
   const { isPending: revokePending, mutate: revoke } = useMutation({
     mutationFn: (target: McpOAuthCredential) =>
-      browserConsoleApi.revokeMcpOAuthSession(target.credentialId),
+      getBrowserConsoleApi().revokeMcpOAuthSession(target.credentialId),
     onSuccess: async () => {
       setRevokeTarget(undefined)
       await queryClient.invalidateQueries({

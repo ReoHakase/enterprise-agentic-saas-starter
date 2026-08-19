@@ -27,7 +27,7 @@ import {
   PriorityBadge,
   StatusBadge,
 } from "../issue-utils/issue-utils"
-import type { IssueAssigneeOption } from "../types/types"
+import type { IssueAssigneeOption } from "../types"
 
 const fieldLabels: Record<NonNullable<IssueActivity["field"]>, string> = {
   title: "title",

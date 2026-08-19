@@ -19,7 +19,7 @@ import {
 } from "@/components/data-table/data-table"
 
 import { IssueMutationContext } from "../issue-table-state/issue-table-state"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 const IssuesLoadError = ({
   error,

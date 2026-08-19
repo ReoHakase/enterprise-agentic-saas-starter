@@ -4,7 +4,7 @@ import { issueDetailContent as IssueDetailContent } from "../issue-detail-conten
 import {
   emptyPendingFields,
   type IssueDetailProps,
-} from "../issue-detail-types/issue-detail-types"
+} from "../issue-detail-types"
 import { issueDiscardDialog as IssueDiscardDialog } from "../issue-discard-dialog/issue-discard-dialog"
 import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
 import { useIssueAgentForm } from "../use-issue-agent-form/use-issue-agent-form"

@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query"
 
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 export const consoleKeys = {
   all: ["console"] as const,
@@ -19,7 +19,7 @@ export const consoleKeys = {
 export const organizationsQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.organizations(),
-    queryFn: ({ signal }) => browserConsoleApi.listOrganizations(signal),
+    queryFn: ({ signal }) => getBrowserConsoleApi().listOrganizations(signal),
   })
 
 export const membersQueryOptions = (
@@ -31,7 +31,7 @@ export const membersQueryOptions = (
       ? [...consoleKeys.members(organizationId), scope]
       : consoleKeys.members(organizationId),
     queryFn: ({ signal }) =>
-      browserConsoleApi.listMembers(organizationId, signal),
+      getBrowserConsoleApi().listMembers(organizationId, signal),
     enabled: organizationId.length > 0,
   })
 
@@ -42,12 +42,12 @@ export const invitationsQueryOptions = (
   queryOptions({
     queryKey: consoleKeys.invitations(organizationId),
     queryFn: ({ signal }) =>
-      browserConsoleApi.listInvitations(organizationId, signal),
+      getBrowserConsoleApi().listInvitations(organizationId, signal),
     enabled: organizationId.length > 0 && enabled,
   })
 
 export const sessionsQueryOptions = () =>
   queryOptions({
     queryKey: consoleKeys.sessions(),
-    queryFn: ({ signal }) => browserConsoleApi.listSessions(signal),
+    queryFn: ({ signal }) => getBrowserConsoleApi().listSessions(signal),
   })

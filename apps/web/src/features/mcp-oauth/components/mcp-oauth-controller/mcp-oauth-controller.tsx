@@ -6,7 +6,7 @@ import { useCallback } from "react"
 import { toast } from "sonner"
 
 import type { Me } from "@/features/account"
-import { browserConsoleApi } from "@/lib/browser/console-api"
+import { getBrowserConsoleApi } from "@/lib/browser/console-api"
 
 import { continueMcpOAuth, decideMcpOAuthConsent } from "../../client"
 import type { McpOAuthGrantedScope, McpOAuthScopeSummary } from "../../query"
@@ -30,7 +30,7 @@ export const McpOAuthOrganizationController = ({
   const { authClient } = useAuth()
   const mutation = useMutation({
     mutationFn: async (organizationId: string) => {
-      await browserConsoleApi.activateOrganization(organizationId)
+      await getBrowserConsoleApi().activateOrganization(organizationId)
       await continueMcpOAuth(authClient)
     },
     onError: () => {

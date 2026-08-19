@@ -10,8 +10,8 @@ import { safelyRunAction } from "../issue-utils/issue-utils"
 import { issuesTableContent as IssuesTableContent } from "../issues-table-content/issues-table-content"
 import { IssuesTablePagination } from "../issues-table-pagination/issues-table-pagination"
 import { issuesTableToolbar as IssuesTableToolbar } from "../issues-table-toolbar/issues-table-toolbar"
-import type { IssuesTableProps } from "../issues-table-types/issues-table-types"
-import type { IssueUiItem } from "../types/types"
+import type { IssuesTableProps } from "../issues-table-types"
+import type { IssueUiItem } from "../types"
 import {
   useIssuesTableFilters,
   useIssuesTableModel,

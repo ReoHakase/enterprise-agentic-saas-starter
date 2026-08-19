@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { issueKeys } from "../../queries"
 import type { Issue, IssueTimelinePage } from "../../schema"
-import type { IssueAssigneeOption } from "../types/types"
+import type { IssueAssigneeOption } from "../types"
 
 const mocks = vi.hoisted(() => ({
   back: vi.fn<() => void>(),
