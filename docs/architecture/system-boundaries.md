@@ -2,7 +2,7 @@
 title: システム境界とworkspace依存
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-20
 ---
 
 # システム境界とworkspace依存
@@ -34,6 +34,7 @@ workspace間のdependency directionを固定し、private implementationの移�
 
 ```text
 apps/web
+  -> @enterprise-agentic-saas/agent-contracts
   -> @enterprise-agentic-saas/api/client
   -> @enterprise-agentic-saas/auth/client
   -> @enterprise-agentic-saas/ui/*
@@ -96,20 +97,20 @@ manifestのdevelopment dependencyとbare executableだけを利用し、source�
 
 ## 禁止する依存
 
-| importer                     | 禁止                                                                              |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| `apps/web`                   | DB、Email、Agent runtime、Emulate、`api/client`以外のAPI、`auth/client`以外のAuth |
-| `apps/api`                   | Web、Agent runtime、UI、Emulate                                                   |
-| `apps/agent`                 | API、DB、Auth、Email、Web、UI、Emulate                                            |
-| `apps/emulate`               | Web、API、Agent、DB、Email、UI                                                    |
-| `packages/auth`              | app、API、UI                                                                      |
-| `packages/db`                | 他の全workspace                                                                   |
-| `packages/email`             | app、Auth、DB、UI、API                                                            |
-| `packages/portless-topology` | 全workspaceのruntime/test source                                                  |
-| `packages/ui`                | app、API、Auth、DB、Email、Agent                                                  |
-| `packages/typescript-config` | runtime sourceと全workspace dependency                                            |
-| `packages/agent-contracts`   | app、DB、Auth、Email、UI                                                          |
-| `packages/agent-tools`       | app、DB、Auth、Email、UI                                                          |
+| importer                     | 禁止                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                   | DB、Email、Agent runtime、Emulate、`agent-contracts`以外のAgent package、`api/client`以外のAPI、`auth/client`以外のAuth |
+| `apps/api`                   | Web、Agent runtime、UI、Emulate                                                                                         |
+| `apps/agent`                 | API、DB、Auth、Email、Web、UI、Emulate                                                                                  |
+| `apps/emulate`               | Web、API、Agent、DB、Email、UI                                                                                          |
+| `packages/auth`              | app、API、UI                                                                                                            |
+| `packages/db`                | 他の全workspace                                                                                                         |
+| `packages/email`             | app、Auth、DB、UI、API                                                                                                  |
+| `packages/portless-topology` | 全workspaceのruntime/test source                                                                                        |
+| `packages/ui`                | app、API、Auth、DB、Email、Agent                                                                                        |
+| `packages/typescript-config` | runtime sourceと全workspace dependency                                                                                  |
+| `packages/agent-contracts`   | app、DB、Auth、Email、UI                                                                                                |
+| `packages/agent-tools`       | app、DB、Auth、Email、UI                                                                                                |
 
 ## 公開entrypoint
 

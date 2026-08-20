@@ -192,6 +192,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   "portless-topology": [],
   ui: ["@enterprise-agentic-saas/ui/*"],
   web: [
+    "@enterprise-agentic-saas/agent-contracts",
     "@enterprise-agentic-saas/api/client",
     "@enterprise-agentic-saas/auth/client",
     "@enterprise-agentic-saas/ui/*",

@@ -1,3 +1,10 @@
+import type {
+  AgentUiContextReference,
+  AgentUiMessage,
+  AgentContentSegment,
+  AgentContextReferenceInput,
+  AgentResolvedContextReference,
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   files,
@@ -7,13 +14,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
-import type {
-  AgentUiContextReference,
-  AgentUiMessage,
-  AgentContentSegment,
-  AgentContextReferenceInput,
-  AgentResolvedContextReference,
-} from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
 import { listReusableAgentAssetsInTransaction } from "../../files/public"

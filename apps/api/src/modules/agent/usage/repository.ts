@@ -1,3 +1,7 @@
+import type {
+  AgentUsageRecordInput,
+  AgentUsageRecordResult,
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentModelPrices,
@@ -7,10 +11,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm"
 
-import type {
-  AgentUsageRecordInput,
-  AgentUsageRecordResult,
-} from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import {

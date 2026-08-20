@@ -41,12 +41,16 @@ connection ticketは一回限り、60秒以内です。run grantは5分以内と
 
 ```text
 apps/web ──> @enterprise-agentic-saas/api/client
-apps/agent ──> @enterprise-agentic-saas/api/agent-client
+         └─> @enterprise-agentic-saas/agent-contracts
+apps/agent ──> @enterprise-agentic-saas/agent-contracts
+           └─> @enterprise-agentic-saas/agent-tools
+           └─> Service Binding ──> apps/api private entrypoint
 apps/api ──> @enterprise-agentic-saas/db
+         └─> @enterprise-agentic-saas/agent-contracts
 packages/ui ──> domain非依存UI
 ```
 
-WebからAPI schemaやrepositoryをdeep importしません。Agentからpublic API、DB、Webをimportしません。APIのprivate Agent appをpublic Elysia appへmountしません。restricted-import ruleとpackage exportでこの方向を固定します。
+WebからAPI schemaやrepositoryをdeep importせず、Agent公開responseは`agent-contracts`から直接importします。Agentからpublic API、DB、Webをimportしません。APIのprivate Agent appをpublic Elysia appへmountしません。restricted-import ruleとpackage exportでこの方向を固定します。
 
 ## Source layout
 

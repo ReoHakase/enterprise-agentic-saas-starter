@@ -1,3 +1,4 @@
+import type { AgentWebSearchReservation } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentRuns,
@@ -8,7 +9,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
-import type { AgentWebSearchReservation } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import { validateGrantInTransaction } from "../threads/repository"

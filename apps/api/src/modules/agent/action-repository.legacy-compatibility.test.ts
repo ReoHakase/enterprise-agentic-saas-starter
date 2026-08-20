@@ -1,3 +1,7 @@
+import {
+  agentActionExecutionResultSchema,
+  agentIssueActionSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 import * as v from "valibot"
@@ -8,10 +12,6 @@ import {
   createRun,
   request,
 } from "./action-repository.test-support"
-import {
-  agentActionExecutionResultModel,
-  agentIssueActionModel,
-} from "./action-schema"
 import { sweepAgentActions } from "./actions/execution-repository"
 import { issueAgentActionResumeTicket } from "./actions/repository"
 import {
@@ -24,6 +24,12 @@ const legacyIssueInput = {
   expectedRevision: 1,
   title: "Legacy updated title",
 }
+const publicLegacyAttachment = {
+  assetId: "legacy-asset",
+  filename: "legacy.png",
+  sizeBytes: 4,
+  source: "asset",
+} as const
 
 const insertLegacyPendingUpdate = async (
   fixture: Awaited<ReturnType<typeof createFixture>>,
@@ -52,9 +58,18 @@ const insertLegacyPendingUpdate = async (
         field: "title",
         before: "Original title",
         after: legacyIssueInput.title,
+        serverValue: "private-field-state",
       },
     ],
-    attachments: [],
+    attachments: [
+      {
+        assetId: publicLegacyAttachment.assetId,
+        filename: publicLegacyAttachment.filename,
+        objectKey: "private-object-key",
+        sizeBytes: publicLegacyAttachment.sizeBytes,
+      },
+    ],
+    serverContext: { organizationId: "legacy-private-org" },
   }
   await fixture.db.insert(schema.agentActions).values({
     id: "legacy-update-action",
@@ -114,7 +129,7 @@ describe("Agent legacy update action compatibility", () => {
       status: "pending",
       preview: {
         attachmentOperation: null,
-        attachments: [],
+        attachments: [publicLegacyAttachment],
       },
     })
     await expect(
@@ -132,11 +147,17 @@ describe("Agent legacy update action compatibility", () => {
       request("/agent/actions/legacy-update-action")
     )
     expect(pendingResponse.status).toBe(200)
-    const pending = v.parse(agentIssueActionModel, await pendingResponse.json())
+    const pending = v.parse(
+      agentIssueActionSchema,
+      await pendingResponse.json()
+    )
     expect(pending.preview).toMatchObject({
       attachmentOperation: null,
-      attachments: [],
+      attachments: [publicLegacyAttachment],
     })
+    expect(pending.preview).not.toHaveProperty("serverContext")
+    expect(pending.preview?.fields[0]).not.toHaveProperty("serverValue")
+    expect(pending.preview?.attachments[0]).not.toHaveProperty("objectKey")
 
     const decisionResponse = await fixture.app.handle(
       request("/agent/actions/legacy-update-action/decision", {
@@ -149,7 +170,7 @@ describe("Agent legacy update action compatibility", () => {
     )
     expect(decisionResponse.status).toBe(200)
     expect(
-      v.parse(agentIssueActionModel, await decisionResponse.json())
+      v.parse(agentIssueActionSchema, await decisionResponse.json())
     ).toMatchObject({
       id: "legacy-update-action",
       status: "approved",
@@ -195,20 +216,20 @@ describe("Agent legacy update action compatibility", () => {
     )
     expect(terminalResponse.status).toBe(200)
     expect(
-      v.parse(agentActionExecutionResultModel, await terminalResponse.json())
+      v.parse(agentActionExecutionResultSchema, await terminalResponse.json())
     ).toEqual(result)
     const terminalActionResponse = await fixture.app.handle(
       request("/agent/actions/legacy-update-action")
     )
     expect(terminalActionResponse.status).toBe(200)
     expect(
-      v.parse(agentIssueActionModel, await terminalActionResponse.json())
+      v.parse(agentIssueActionSchema, await terminalActionResponse.json())
     ).toMatchObject({
       id: "legacy-update-action",
       status: "succeeded",
       preview: {
         attachmentOperation: null,
-        attachments: [],
+        attachments: [publicLegacyAttachment],
       },
       previewState: "available",
     })
@@ -253,7 +274,7 @@ describe("Agent legacy update action compatibility", () => {
     )
     expect(scrubbedResponse.status).toBe(200)
     expect(
-      v.parse(agentIssueActionModel, await scrubbedResponse.json())
+      v.parse(agentIssueActionSchema, await scrubbedResponse.json())
     ).toMatchObject({
       id: "legacy-update-action",
       status: "succeeded",

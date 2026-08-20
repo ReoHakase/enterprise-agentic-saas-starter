@@ -1,3 +1,8 @@
+import type {
+  AgentActionExecutionResult,
+  AgentIssueAction,
+  AgentResumeTicket,
+} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   AGENT_RESUME_TICKET_MAX_LIFETIME_MS,
@@ -8,11 +13,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray, isNull } from "drizzle-orm"
 
-import type {
-  AgentActionExecutionResult,
-  AgentIssueAction,
-  AgentResumeTicket,
-} from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken, hashAgentToken } from "../crypto"

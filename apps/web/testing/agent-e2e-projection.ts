@@ -1,4 +1,4 @@
-import { canonicalizePublicHttpUrl } from "@enterprise-agentic-saas/api/client"
+import { canonicalizePublicHttpUrl } from "@enterprise-agentic-saas/agent-contracts"
 
 import { redactDevelopmentErrorText } from "../src/lib/development-error"
 

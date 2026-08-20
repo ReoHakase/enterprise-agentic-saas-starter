@@ -5,9 +5,10 @@ Next.js App RouterによるマルチテナントSaaS consoleです。production�
 ## 境界
 
 - DBを直接importせず、Server Component/browserともfirst-party Elysia routeは`@enterprise-agentic-saas/api/client`のEden clientで呼ぶ。feature内にraw `fetch` wrapperを作らない。
+- Agentの公開response schema、tool名、URL canonicalizerは`@enterprise-agentic-saas/agent-contracts`から直接importし、API clientのproxy exportを作らない。
 - Better Auth固有endpointは`@enterprise-agentic-saas/auth/client`、server session確認はserver-only auth helperへ分離する。
 - server prefetchとbrowserのGET/mutationはTanStack Queryへ集約し、Web-local Valibot schemaをUI runtime境界として維持する。
-- formはTanStack Form + Valibot、Issue/member tableはTanStack Tableを使う。Jotaiはdialog選択など再取得不要な一時UI状態だけに限定する。
+- Web固有projectionはValibotでUI runtime境界を検査する。formはTanStack Form + Valibot、Issue/member tableはTanStack Tableを使う。Jotaiはdialog選択など再取得不要な一時UI状態だけに限定する。
 - auth必須pageはserverでsessionを検証する。
 - active organizationはsidebar switcherを唯一のscope selectorにする。
 - shared primitiveは `packages/ui`、page/feature compositionはこのworkspaceに置く。

@@ -1,18 +1,20 @@
+import {
+  AGENT_THREAD_LIST_MAX_COUNT,
+  agentActionExecutionResultSchema,
+  agentMessagePageSchema,
+  type AgentActionExecutionResult,
+  type AgentRuntimeChatInput,
+  type AgentRuntimeResumeInput,
+} from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
-import type {
-  AgentActionExecutionResult,
-  AgentRuntimeChatInput,
-  AgentRuntimeResumeInput,
-} from "../../agent-client"
 import { HttpError } from "../../errors/http-error"
 import {
   createObservedLogger,
   injectObservedRequestHeaders,
   withObservedSpan,
 } from "../../platform/observability/runtime"
-import { agentActionExecutionResultModel } from "./action-schema"
-import { agentMemoryThreadListModel, agentMessagePageModel } from "./model"
+import { agentMemoryThreadListModel } from "./model"
 import type { AgentServicePorts } from "./ports"
 import {
   type AgentRuntimeSpanCompletion,
@@ -87,7 +89,7 @@ const listAgentThreadsWithMemory = async (
     })
     return []
   }
-  if (registryThreads.length > 1_000) {
+  if (registryThreads.length > AGENT_THREAD_LIST_MAX_COUNT) {
     throw new HttpError({
       code: "service_unavailable",
       cause: new Error("Agent thread list unavailable"),
@@ -205,7 +207,7 @@ const listAgentMessagesFromMemory = async (
     })
   }
   try {
-    const result = v.parse(agentMessagePageModel, await response.json())
+    const result = v.parse(agentMessagePageSchema, await response.json())
     messageLogger.info("Agent message history loaded", {
       "app.operation": "listAgentThreadMessages",
       "app.outcome": "success",
@@ -413,7 +415,7 @@ export const createAgentService = (ports: AgentServicePorts) => {
     }
 
     try {
-      return v.parse(agentActionExecutionResultModel, await response.json())
+      return v.parse(agentActionExecutionResultSchema, await response.json())
     } catch (cause) {
       throw new HttpError({
         code: "service_unavailable",

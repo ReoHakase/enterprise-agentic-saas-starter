@@ -6,6 +6,7 @@ import { createElement, type ReactElement, type ReactNode } from "react"
 import { AgentFormRegistryProvider } from "../components/form-registry/form-registry"
 import { AgentRuntimeProvider } from "../components/runtime-state/runtime-state"
 import type { AgentChatMessage, AgentIssueAction, AgentThread } from "../schema"
+import { createPendingActionToolOutput } from "./pending-action-fixture"
 
 export const fictionalAgentIdentity = {
   organizationId: "org_01K1ACMECLOUD0000000000",
@@ -73,6 +74,9 @@ flowchart LR
 \`\`\`
 
 [Review the external runbook](https://runbook.example.test/tenant-access).`
+
+const fictionalPendingActionToolOutput =
+  createPendingActionToolOutput("action-pending")
 
 export const fictionalAgentMessages = {
   user: {
@@ -147,10 +151,7 @@ export const fictionalAgentMessages = {
         toolCallId: "tool_call_01K1UPDATEISSUE000",
         state: "output-available",
         input: { issueNumber: 184, priority: "high" },
-        output: {
-          status: "pending",
-          actionId: "action-pending",
-        },
+        output: fictionalPendingActionToolOutput,
       },
     ],
   },
@@ -176,31 +177,9 @@ export const fictionalPendingAction = {
   status: "pending",
   approvalMode: "manual",
   requiresApproval: true,
-  preview: {
-    kind: "update_issue",
-    destructive: false,
-    attachmentOperation: "add",
-    title: "Update Issue #184 priority",
-    issueNumber: 184,
-    issueRevision: 7,
-    fields: [
-      {
-        field: "priority",
-        before: "medium",
-        after: "high",
-      },
-    ],
-    attachments: [
-      {
-        source: "asset",
-        assetId: "asset_01K1TENANTPOLICY000000",
-        filename: "tenant-policy.png",
-        sizeBytes: 2_048,
-      },
-    ],
-  },
+  preview: fictionalPendingActionToolOutput.preview,
   previewState: "available",
-  expiresAt: "2026-07-26T10:00:00.000Z",
+  expiresAt: fictionalPendingActionToolOutput.expiresAt,
   completedAt: null,
 } satisfies AgentIssueAction
 

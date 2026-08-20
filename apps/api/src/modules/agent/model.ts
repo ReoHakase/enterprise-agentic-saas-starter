@@ -1,9 +1,12 @@
+import {
+  AGENT_MESSAGE_PAGE_MAX_COUNT,
+  AGENT_THREAD_LIST_MAX_COUNT,
+  agentJsonValueSchema,
+  agentNonNegativeIntegerSchema,
+  agentPositiveIntegerSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
-import {
-  agentJsonValueSchema,
-  agentUiMessageListSchema,
-} from "../../agent-client"
 import { isoTimestampModel } from "../../models/common"
 
 export const identifierModel = v.pipe(
@@ -18,28 +21,25 @@ export const agentRunParamsModel = v.strictObject({
   runId: identifierModel,
 })
 
-const agentUiMessageListModel = v.pipe(
-  agentUiMessageListSchema,
-  v.maxLength(100)
-)
-export const agentMessagePageModel = v.strictObject({
-  messages: agentUiMessageListModel,
-  total: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  page: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  perPage: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
-  hasMore: v.boolean(),
-})
 export const agentMessagePageQueryModel = v.strictObject({
   page: v.optional(
-    v.pipe(v.string(), v.regex(/^[0-9]+$/), v.transform(Number)),
+    v.pipe(
+      v.string(),
+      v.maxLength(String(Number.MAX_SAFE_INTEGER).length),
+      v.regex(/^[0-9]+$/),
+      v.transform(Number),
+      agentNonNegativeIntegerSchema
+    ),
     "0"
   ),
   perPage: v.optional(
     v.pipe(
       v.string(),
+      v.maxLength(String(AGENT_MESSAGE_PAGE_MAX_COUNT).length),
       v.regex(/^[1-9][0-9]*$/),
       v.transform(Number),
-      v.maxValue(100)
+      agentPositiveIntegerSchema,
+      v.maxValue(AGENT_MESSAGE_PAGE_MAX_COUNT)
     ),
     "40"
   ),
@@ -149,7 +149,7 @@ const clientToolFormOutputModel = v.strictObject({
   formId: identifierModel,
   resource: v.literal("issue"),
   resourceId: v.optional(identifierModel),
-  revision: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  revision: v.optional(agentPositiveIntegerSchema),
   epoch: identifierModel,
   values: v.strictObject({
     title: v.optional(v.pipe(v.string(), v.maxLength(200))),
@@ -230,16 +230,6 @@ export const limitModel = v.optional(
   20
 )
 
-export const agentThreadModel = v.object({
-  id: identifierModel,
-  title: titleModel,
-  status: v.picklist(["active", "archived"]),
-  createdAt: isoTimestampModel,
-  updatedAt: isoTimestampModel,
-})
-
-export const agentThreadListModel = v.array(agentThreadModel)
-
 export const agentMemoryThreadListModel = v.pipe(
   v.array(
     v.strictObject({
@@ -248,7 +238,7 @@ export const agentMemoryThreadListModel = v.pipe(
       updatedAt: isoTimestampModel,
     })
   ),
-  v.maxLength(1_000)
+  v.maxLength(AGENT_THREAD_LIST_MAX_COUNT)
 )
 
 export const agentThreadPermissionModeModel = v.picklist([

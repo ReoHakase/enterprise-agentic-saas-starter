@@ -6,20 +6,16 @@ import {
   parseAgentMessagePage,
   pendingActionToolOutputSchema,
 } from "./schema"
+import { createPendingActionToolOutput } from "./test-support/pending-action-fixture"
 
 describe("agent public schemas", () => {
   it("accepts only canonical pending action outputs", () => {
-    expect(
-      v.parse(pendingActionToolOutputSchema, {
-        status: "pending",
-        actionId: "action-1",
-        preview: { untrusted: true },
-      })
-    ).toMatchObject({ status: "pending", actionId: "action-1" })
+    const pending = createPendingActionToolOutput("action-1")
+    expect(v.parse(pendingActionToolOutputSchema, pending)).toEqual(pending)
     expect(
       v.safeParse(pendingActionToolOutputSchema, {
-        status: "approved",
-        actionId: "action-1",
+        ...pending,
+        serverContext: { organizationId: "private-org" },
       }).success
     ).toBe(false)
   })
@@ -28,7 +24,6 @@ describe("agent public schemas", () => {
     expect(
       parseAgentApprovalPolicy({
         mode: "full_access",
-        expiresAt: "2026-07-22T01:00:00.000Z",
         permissions: {
           createIssue: true,
           updateIssue: true,
@@ -39,6 +34,17 @@ describe("agent public schemas", () => {
       mode: "full_access",
       permissions: { deleteIssue: false },
     })
+    expect(() =>
+      parseAgentApprovalPolicy({
+        mode: "full_access",
+        expiresAt: "2026-07-22T01:00:00.000Z",
+        permissions: {
+          createIssue: true,
+          updateIssue: true,
+          deleteIssue: false,
+        },
+      })
+    ).toThrow(/Invalid key/)
   })
 
   it("restores metadata-only Issue image tool traces after reload", () => {

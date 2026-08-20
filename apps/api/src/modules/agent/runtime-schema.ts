@@ -1,4 +1,7 @@
-import { AGENT_MAX_ESTIMATED_INPUT_TOKENS } from "@enterprise-agentic-saas/agent-contracts"
+import {
+  AGENT_MAX_ESTIMATED_INPUT_TOKENS,
+  agentPositiveIntegerSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
 import {
   issuePriorities,
   issueStatuses,
@@ -7,10 +10,6 @@ import * as v from "valibot"
 
 import { FILE_LIST_DEFAULT_LIMIT, FILE_LIST_MAX_LIMIT } from "../files/public"
 import { boundedSearchModel, identifierModel, limitModel } from "./model"
-
-export const agentContextRevocationModel = v.object({
-  contextEpoch: v.pipe(v.number(), v.integer(), v.minValue(1)),
-})
 
 export const agentTokenModel = v.pipe(
   v.string(),
@@ -189,7 +188,7 @@ export const getAgentIssueInputModel = v.variant("lookup", [
   v.strictObject({
     grant: agentTokenModel,
     lookup: v.literal("number"),
-    number: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    number: agentPositiveIntegerSchema,
     attachmentCursor: v.optional(
       v.pipe(v.string(), v.minLength(1), v.maxLength(1024))
     ),
