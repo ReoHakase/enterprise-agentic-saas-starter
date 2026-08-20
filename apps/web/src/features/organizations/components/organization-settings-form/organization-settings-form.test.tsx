@@ -111,6 +111,37 @@ describe("OrganizationSettingsForm", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("presents a server-reserved slug as an API field error", async () => {
+    const actor = userEvent.setup()
+    mocks.updateOrganization.mockRejectedValueOnce(
+      httpError(400, "validation_error", {
+        fieldErrors: { slug: ["Choose another slug."] },
+        message: "This organization slug is reserved.",
+      })
+    )
+    renderSettings()
+
+    const slug = screen.getByLabelText("Slug")
+    await actor.clear(slug)
+    await actor.type(slug, "auth")
+    await actor.click(screen.getByRole("button", { name: "Save changes" }))
+
+    await waitFor(() => {
+      expect(mocks.updateOrganization).toHaveBeenCalledWith(organization.id, {
+        name: organization.name,
+        slug: "auth",
+      })
+    })
+    expect(await screen.findByText("Choose another slug.")).toBeVisible()
+    expect(slug).toHaveAttribute("aria-invalid", "true")
+    expect(
+      screen.queryByText("The organization could not be updated.")
+    ).not.toBeInTheDocument()
+
+    await actor.type(slug, "-team")
+    expect(screen.queryByText("Choose another slug.")).not.toBeInTheDocument()
+  })
+
   it("replaces the settings URL after a slug change", async () => {
     const actor = userEvent.setup()
     mocks.updateOrganization.mockResolvedValueOnce({

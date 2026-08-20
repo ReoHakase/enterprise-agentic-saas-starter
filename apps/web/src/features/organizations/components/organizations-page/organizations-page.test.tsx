@@ -308,6 +308,42 @@ describe("OrganizationsPage", () => {
     ).not.toBeInTheDocument()
   })
 
+  it("presents a server-reserved slug as an API field error", async () => {
+    const actor = userEvent.setup()
+    mocks.createOrganization.mockRejectedValueOnce(
+      httpError(400, "validation_error", {
+        fieldErrors: { slug: ["Choose another slug."] },
+        message: "This organization slug is reserved.",
+      })
+    )
+    renderOrganizations()
+
+    await actor.click(
+      screen.getByRole("button", { name: "Create organization" })
+    )
+    await actor.type(screen.getByLabelText("Name"), "Auth")
+    const slug = screen.getByLabelText("Slug")
+    expect(slug).toHaveValue("auth")
+    await actor.click(
+      screen.getByRole("button", { name: "Create organization" })
+    )
+
+    await waitFor(() => {
+      expect(mocks.createOrganization).toHaveBeenCalledWith({
+        name: "Auth",
+        slug: "auth",
+      })
+    })
+    expect(await screen.findByText("Choose another slug.")).toBeVisible()
+    expect(slug).toHaveAttribute("aria-invalid", "true")
+    expect(
+      screen.queryByText("The organization could not be created.")
+    ).not.toBeInTheDocument()
+
+    await actor.type(slug, "-team")
+    expect(screen.queryByText("Choose another slug.")).not.toBeInTheDocument()
+  })
+
   it("shows fixed recovery copy when switching fails", async () => {
     const actor = userEvent.setup()
     mocks.activateOrganization.mockRejectedValueOnce(
