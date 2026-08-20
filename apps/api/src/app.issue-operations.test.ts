@@ -1,44 +1,9 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import type {
-  OrganizationInvitationEmailProps,
-  RenderedEmail,
-  SendEmail,
-} from "@enterprise-agentic-saas/email"
 import { eq, sql } from "drizzle-orm"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { createApp } from "./app"
 import { createSeededDb, jsonRequest } from "./app.test-support"
-
-const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
-  invitationEmailRenderSpy: vi.fn<
-    (
-      props: OrganizationInvitationEmailProps
-    ) => Promise<RenderedEmail<OrganizationInvitationEmailProps>>
-  >(async (props) => ({
-    template: "organization_invitation",
-    subject: "Organization invitation",
-    html: "<p>Organization invitation</p>",
-    text: "Organization invitation",
-    renderProps: props,
-  })),
-  invitationEmailSendSpy: vi.fn<SendEmail>(async () => undefined),
-}))
-
-vi.mock(import("@enterprise-agentic-saas/email"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  renderOrganizationInvitationEmail: invitationEmailRenderSpy,
-}))
-vi.mock("@enterprise-agentic-saas/email/runtime", () => ({
-  backgroundTaskHandler: undefined,
-  createRuntimeEmailSender: () => invitationEmailSendSpy,
-}))
-
-beforeEach(() => {
-  invitationEmailRenderSpy.mockClear()
-  invitationEmailSendSpy.mockReset()
-  invitationEmailSendSpy.mockResolvedValue(undefined)
-})
 
 describe("Issue queries, mutations, and profile images", () => {
   it("returns stable server-filtered Issue pages with a caller-selected size", async () => {
