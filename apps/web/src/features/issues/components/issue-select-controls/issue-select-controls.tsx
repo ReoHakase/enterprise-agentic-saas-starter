@@ -13,7 +13,7 @@ import { useCallback, useMemo } from "react"
 
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 
-import type { ControlStateProps } from "../issue-metadata-control-types/issue-metadata-control-types"
+import type { ControlStateProps } from "../issue-metadata-control-types"
 import {
   AllIssuePrioritiesBadge,
   AllIssueStatusesBadge,
@@ -26,11 +26,7 @@ import {
   statusOptions,
   StatusBadge,
 } from "../issue-utils/issue-utils"
-import type {
-  IssueAssigneeOption,
-  IssuePriority,
-  IssueStatus,
-} from "../types/types"
+import type { IssueAssigneeOption, IssuePriority, IssueStatus } from "../types"
 
 export const IssueStatusControl = ({
   value,

@@ -4,12 +4,12 @@ import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { HistoryIcon } from "lucide-react"
 
 import type { IssueTimelineItem } from "../../schema"
-import { selectSubmitState } from "../form-types/form-types"
+import { selectSubmitState } from "../form-types"
 import { IssueActivityItem } from "../issue-activity/issue-activity"
 import { IssueComment } from "../issue-comment/issue-comment"
-import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
+import type { IssueDetailProps } from "../issue-detail-types"
 import { CommentBodyFormField } from "../text-form-fields/text-form-fields"
-import type { IssueAssigneeOption, IssueUiItem } from "../types/types"
+import type { IssueAssigneeOption, IssueUiItem } from "../types"
 import type { IssueCommentFormState } from "../use-issue-comment-form/use-issue-comment-form"
 
 const IssueTimeline = ({

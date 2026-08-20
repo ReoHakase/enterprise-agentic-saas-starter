@@ -7,7 +7,7 @@ import {
   defaultIssueSearchState,
   type IssueSearchState,
 } from "../../search-params"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 import { useIssuesTableFilters } from "../use-issues-table-state/use-issues-table-state"
 import { IssuesWorkspace } from "./issues-workspace"
 

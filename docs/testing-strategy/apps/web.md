@@ -2,7 +2,7 @@
 title: Webテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-20
 applies_to:
   - apps/web/**
 related:
@@ -73,6 +73,10 @@ app
   → app-wide components
   → lib/server
 
+browserとserverの合成処理
+  → feature api.ts
+  → データだけのschema.ts
+
 feature client composition
   → controller hook
   → View
@@ -101,7 +105,12 @@ model
 - feature rootへ本番`.tsx`を置く
 - Web modelからReact、Next.js、Query、notificationをimport
 
-`index.ts`はbrowser-safeな公開面、`server.ts`は先頭で`server-only`をimportするserver専用公開面です。別featureからはこの二入口だけを使います。component-localな表示用hookだけはcomponent directory内へ置けます。
+`index.ts`はbrowser-safeな公開面、`server.ts`は先頭で`server-only`をimportするserver専用公開面です。
+別featureのUIとServer Componentはこの二入口を使います。例外として、実行時検証だけを共有する`adapter`は
+データだけの`schema.ts`を、`src/lib/browser/**`と`src/lib/server/**`の合成処理はクライアント生成用の
+`api.ts`を利用できます。`schema.ts`と`api.ts`はコンポーネント、Query、router、ブラウザー固有または
+サーバー固有のモジュールへ依存させず、この例外を非公開コンポーネントや補助関数へ広げません。
+コンポーネント内だけで使う表示用hookはコンポーネントのdirectory内へ置けます。
 
 ## テスト層
 

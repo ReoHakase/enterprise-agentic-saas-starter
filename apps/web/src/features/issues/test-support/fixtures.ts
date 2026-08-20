@@ -2,7 +2,7 @@ import type {
   IssueAssigneeOption,
   IssueCommentUiItem,
   IssueUiItem,
-} from "../components/types/types"
+} from "../components/types"
 import type {
   Issue,
   IssueActivity,

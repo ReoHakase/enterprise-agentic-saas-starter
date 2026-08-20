@@ -26,7 +26,7 @@ import {
   type IssueAssigneeOption,
   type IssueUiItem,
   type IssueUpdate,
-} from "../types/types"
+} from "../types"
 
 type IssuesDashboardProps = {
   organizationId: string

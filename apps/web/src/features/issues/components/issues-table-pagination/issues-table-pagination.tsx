@@ -15,7 +15,7 @@ import {
   type IssueSearchState,
 } from "../../search-params"
 import { RowsPerPage } from "../issues-table-toolbar/issues-table-toolbar"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 export const IssuesTablePagination = ({
   table,

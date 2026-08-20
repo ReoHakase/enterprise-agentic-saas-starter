@@ -39,18 +39,14 @@ import {
   selectSubmitState,
   type StringFieldApi,
   type SubmitSelection,
-} from "../form-types/form-types"
+} from "../form-types"
 import {
   getActionErrorMessage,
   getActionFieldError,
   safelyRunAction,
 } from "../issue-utils/issue-utils"
 import { CommentBodyFormField } from "../text-form-fields/text-form-fields"
-import type {
-  AsyncAction,
-  IssueCommentUiItem,
-  IssueUiItem,
-} from "../types/types"
+import type { AsyncAction, IssueCommentUiItem, IssueUiItem } from "../types"
 
 const deleteCommentTrigger = <Button variant="ghost" size="xs" />
 const selectIsDirty = (state: { isDirty: boolean }) => state.isDirty

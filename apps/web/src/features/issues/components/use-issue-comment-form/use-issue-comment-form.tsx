@@ -7,13 +7,13 @@ import { SendIcon } from "lucide-react"
 import { useCallback, useState, type FormEvent } from "react"
 
 import { commentFormSchema } from "../../schema"
-import type { SubmitSelection } from "../form-types/form-types"
-import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
+import type { SubmitSelection } from "../form-types"
+import type { IssueDetailProps } from "../issue-detail-types"
 import {
   getActionErrorMessage,
   getActionFieldError,
 } from "../issue-utils/issue-utils"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 export const useIssueCommentForm = ({
   issue,

@@ -71,6 +71,10 @@ describe("console Eden API", () => {
     await api.listOrganizations(controller.signal)
 
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include")
+    expect(
+      new Headers(fetchMock.mock.calls[0]?.[1]?.headers).has("cookie")
+    ).toBe(false)
   })
 
   it("lists and revokes MCP OAuth credential families through the user API", async () => {

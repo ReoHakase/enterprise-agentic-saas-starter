@@ -56,11 +56,7 @@ import {
   StatusBadge,
 } from "../issue-utils/issue-utils"
 import { IssuesTableSortControls } from "../issues-table-sort-controls/issues-table-sort-controls"
-import type {
-  AsyncAction,
-  IssueAssigneeOption,
-  IssueUiItem,
-} from "../types/types"
+import type { AsyncAction, IssueAssigneeOption, IssueUiItem } from "../types"
 import {
   IssueAssigneeFilter,
   IssueLabelFilter,

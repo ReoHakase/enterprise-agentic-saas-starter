@@ -18,12 +18,12 @@ import {
   type IssueSearchState,
 } from "../../search-params"
 import { useIssueColumns } from "../issue-table-columns/issue-table-columns"
-import type { IssuesTableProps } from "../issues-table-types/issues-table-types"
+import type { IssuesTableProps } from "../issues-table-types"
 import {
   getIssueRowId,
   isTableSort,
 } from "../issues-table-utils/issues-table-utils"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 const ISSUE_FILTER_DEBOUNCE_MS = 300
 const issueColumnIds = [

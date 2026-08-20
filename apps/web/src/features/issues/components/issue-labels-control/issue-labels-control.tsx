@@ -16,7 +16,7 @@ import {
 import { PlusIcon } from "lucide-react"
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react"
 
-import type { ControlStateProps } from "../issue-metadata-control-types/issue-metadata-control-types"
+import type { ControlStateProps } from "../issue-metadata-control-types"
 
 const labelKey = (label: string) => label.trim().toLocaleLowerCase()
 

@@ -14,10 +14,6 @@ export { OrganizationSettingsForm } from "./components/organization-settings-for
 export { OrganizationsPage } from "./components/organizations-page/organizations-page"
 export { resolveOrganizationRouteContext } from "./route-context"
 export {
-  organizationRoleSchema,
-  parseOrganization,
-  parseOrganizationDeletionReceipt,
-  parseOrganizations,
   roleLabel,
   type OrganizationDetail,
   type OrganizationRole,

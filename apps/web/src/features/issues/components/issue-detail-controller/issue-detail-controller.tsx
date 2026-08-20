@@ -24,11 +24,7 @@ import {
 import { issueKeys } from "../../queries"
 import type { Issue, IssueTimelinePage, IssueTimelineItem } from "../../schema"
 import { IssueDetailPage } from "../issue-detail-page/issue-detail-page"
-import type {
-  IssueAssigneeOption,
-  IssueUiItem,
-  IssueUpdate,
-} from "../types/types"
+import type { IssueAssigneeOption, IssueUiItem, IssueUpdate } from "../types"
 
 const emptyLabelSuggestions: string[] = []
 

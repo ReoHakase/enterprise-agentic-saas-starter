@@ -7,7 +7,7 @@ import {
   IssuePriorityControl,
   IssueStatusControl,
 } from "../issue-metadata-controls/issue-metadata-controls"
-import type { IssueAssigneeOption, IssueUiItem } from "../types/types"
+import type { IssueAssigneeOption, IssueUiItem } from "../types"
 import type { IssueImmediateFieldsState } from "../use-issue-immediate-fields/use-issue-immediate-fields"
 
 const MetadataField = ({

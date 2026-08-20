@@ -10,8 +10,8 @@ import { PencilIcon, XIcon } from "lucide-react"
 
 import { LocalDate } from "@/components/local-date/local-date"
 
-import { selectSubmitState } from "../form-types/form-types"
-import type { IssueUiItem } from "../types/types"
+import { selectSubmitState } from "../form-types"
+import type { IssueUiItem } from "../types"
 import type { IssueDescriptionFormState } from "../use-issue-description-form/use-issue-description-form"
 
 const IssueDescriptionBody = ({ issue }: { issue: IssueUiItem }) => (

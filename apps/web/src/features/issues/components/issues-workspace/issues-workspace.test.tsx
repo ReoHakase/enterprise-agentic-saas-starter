@@ -8,7 +8,7 @@ import {
   type IssueSearchState,
 } from "../../search-params"
 import { IssueDetailPage } from "../issue-detail-page/issue-detail-page"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 import { IssuesWorkspace } from "./issues-workspace"
 
 const billingIssue: IssueUiItem = {

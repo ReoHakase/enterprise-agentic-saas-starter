@@ -1,5 +1,5 @@
 import type { IssueSearchState } from "../../search-params"
-import type { IssueUiItem } from "../types/types"
+import type { IssueUiItem } from "../types"
 
 export const getIssueRowId = (issue: IssueUiItem) => issue.id
 

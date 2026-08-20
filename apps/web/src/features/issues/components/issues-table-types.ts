@@ -1,10 +1,10 @@
-import type { IssueSearchState, SetIssueSearchState } from "../../search-params"
+import type { IssueSearchState, SetIssueSearchState } from "../search-params"
 import type {
   AsyncAction,
   IssueAssigneeOption,
   IssueUiItem,
   IssueUpdate,
-} from "../types/types"
+} from "./types"
 
 export type IssuesTableProps = {
   organizationId: string

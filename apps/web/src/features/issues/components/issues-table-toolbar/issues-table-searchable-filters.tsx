@@ -29,7 +29,7 @@ import {
 } from "@/components/user-identity/user-identity"
 
 import type { IssueSearchPatch, IssueSearchState } from "../../search-params"
-import type { IssueAssigneeOption } from "../types/types"
+import type { IssueAssigneeOption } from "../types"
 
 const assigneeFilterIcon = <UserRoundIcon aria-hidden="true" />
 const labelFilterIcon = <TagsIcon aria-hidden="true" />

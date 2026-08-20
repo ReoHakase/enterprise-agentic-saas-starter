@@ -39,7 +39,7 @@ import type {
   IssueAssigneeOption,
   IssueUiItem,
   IssueUpdate,
-} from "../types/types"
+} from "../types"
 
 const issueActionsTrigger = <Button variant="ghost" size="icon-sm" />
 

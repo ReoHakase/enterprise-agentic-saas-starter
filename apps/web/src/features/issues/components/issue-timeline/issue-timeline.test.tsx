@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { IssueActivity } from "../../schema"
 import { IssueActivityItem } from "../issue-activity/issue-activity"
 import { IssueComment } from "../issue-comment/issue-comment"
-import type { IssueCommentUiItem, IssueUiItem } from "../types/types"
+import type { IssueCommentUiItem, IssueUiItem } from "../types"
 
 const issue: IssueUiItem = {
   id: "issue-1",

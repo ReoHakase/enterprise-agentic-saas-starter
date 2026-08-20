@@ -5,8 +5,8 @@ import type {
   IssuePriority,
   IssueStatus,
   UpdateIssueFormValues,
-} from "../../schema"
-import type { IssueSearchState, SetIssueSearchState } from "../../search-params"
+} from "../schema"
+import type { IssueSearchState, SetIssueSearchState } from "../search-params"
 
 export type { IssuePriority, IssueStatus }
 

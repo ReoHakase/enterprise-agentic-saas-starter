@@ -9,8 +9,8 @@ import {
   issueDetailHeader as IssueDetailHeader,
 } from "../issue-detail-header/issue-detail-header"
 import { issueDetailMetadata as IssueDetailMetadata } from "../issue-detail-metadata/issue-detail-metadata"
-import type { IssueDetailProps } from "../issue-detail-types/issue-detail-types"
-import type { IssueAssigneeOption } from "../types/types"
+import type { IssueDetailProps } from "../issue-detail-types"
+import type { IssueAssigneeOption } from "../types"
 import type { IssueCommentFormState } from "../use-issue-comment-form/use-issue-comment-form"
 import type { IssueDescriptionFormState } from "../use-issue-description-form/use-issue-description-form"
 import type { IssueDetailNavigationState } from "../use-issue-detail-navigation/use-issue-detail-navigation"

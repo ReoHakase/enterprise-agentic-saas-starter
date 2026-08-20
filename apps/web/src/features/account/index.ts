@@ -7,10 +7,4 @@ export { ProfileForm } from "./components/profile-form/profile-form"
 export { SecurityMethodsPanel } from "./components/security-methods-panel/security-methods-panel"
 export { SessionsPanel } from "./components/sessions-panel/sessions-panel"
 export { accountKeys } from "./queries"
-export {
-  parseMe,
-  parseUserProfile,
-  parseUserSessions,
-  type DeviceAccount,
-  type Me,
-} from "./schema"
+export { type DeviceAccount, type Me } from "./schema"

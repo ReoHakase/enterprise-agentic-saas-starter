@@ -24,7 +24,7 @@ import type {
   IssueAssigneeOption,
   IssueUiItem,
   IssueUpdate,
-} from "../types/types"
+} from "../types"
 
 const issueSelectionColumn = createDataTableSelectionColumn<IssueUiItem>({
   getRowLabel: (issue) => `issue ${issue.number}`,
