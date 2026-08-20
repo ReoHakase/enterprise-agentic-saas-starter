@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker",
+    "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker && wrangler deploy --dry-run --config wrangler.bootstrap.jsonc --outdir ./dist/worker-bootstrap",
     "cf:typegen": "wrangler types --env-file .dev.vars.example --strict-vars=false --include-runtime=false --env-interface CloudflareEnv src/cloudflare-env.d.ts && oxfmt src/cloudflare-env.d.ts",
     "dev": "portless-topology run api.enterprise-agentic-saas -- bun run src/dev.ts",
     "dev:inspector": "portless-topology run mcp-inspector.enterprise-agentic-saas -- sh -c 'exec env CLIENT_PORT=\"$PORT\" ALLOWED_ORIGINS=\"$PORTLESS_URL\" MCP_AUTO_OPEN_ENABLED=false mcp-inspector --web --server-url \"$API_PUBLIC_URL/mcp\" --transport http > /dev/null'",

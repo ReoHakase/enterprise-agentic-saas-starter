@@ -2,7 +2,7 @@
 title: Cloudflare deploymentと運用
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-20
 ---
 
 # Cloudflareデプロイと運用
@@ -30,7 +30,7 @@ Custom DomainはCloudflare dashboardまたはIaCで初回に登録し、DNSとTL
 
 Agent Workerの`AGENT_INTERNAL_API`はAPI Worker `enterprise-agentic-saas-api`のnamed `WorkerEntrypoint` `AgentInternalApi`へのService Bindingです。named entrypointの`fetch`内だけでprivate Elysia `/internal/agent/*`を処理し、public API appやOpenAPIへmountしません。AgentはEden custom fetcherからbindingを呼び、public HTTP fallbackを持ちません。逆方向のAPI `AGENT_RUNTIME`はAgent named `AgentRuntime`だけを指します。fork時は両方の`services[].service`と`entrypoint`を同時に変更します。AgentへTurso、R2、Better Auth、Email bindingを渡しません。
 
-`enterprise-agentic-saas-attachments` は物理bucket名だけを互換性のため維持し、Worker bindingは汎用名`FILES`を使います。bucketはprivateのままにし、public accessと`r2.dev`を有効化しません。API WorkerにはCloudflare Imagesの`IMAGES` bindingとWorkers Cacheも必要です。設定と障害復旧は[認証付きfile storage](./file-storage-r2.md)を参照してください。
+`enterprise-agentic-saas-attachments` は物理bucket名だけを互換性のため維持し、Worker bindingは汎用名`FILES`を使います。bucketはprivateのままにし、public accessと`r2.dev`を有効化しません。API WorkerにはCloudflare Imagesの`IMAGES` bindingと、認可後にだけ使うCache APIが必要です。最上位のWorkers Cachingは本番用と互換デプロイ用の両設定で無効にします。設定と障害復旧は[認証付きfile storage](./file-storage-r2.md)を参照してください。
 
 Cloudflare dashboardまたはIaCでAPI Workerへ次を設定します。
 
@@ -42,6 +42,17 @@ Agent Workerへはvarsとして`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`
 Web buildには`API_PUBLIC_URL`と`NEXT_PUBLIC_API_BASE_URL`を同じAPI originとして渡します。`NEXT_PUBLIC_AGENT_BASE_URL`は設定しません。file preview/download/Agent chatはBetter Auth cookieを使うAPI routeなので、Web/APIは同じregistrable domain配下に置き、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、credential付き`CORS_ORIGIN`を揃えます。R2、Images、Agent専用domainは不要です。
 
 `keep_vars: true`は既存のdashboard varsを残しますが、GitHub ActionsのdeployはreleaseとAgent feature flagを毎回明示します。環境ごとの全設定一覧はIaC/secret managerでも管理し、dashboardだけを唯一の記録にしません。
+
+## API Workerのキャッシュ境界
+
+`apps/api/wrangler.jsonc`と`apps/api/wrangler.bootstrap.jsonc`は`cache.enabled=false`を明示し、API
+Workerの既定入口へ到達するすべてのリクエストでElysia、Better Auth、テナント認可を実行します。画像
+previewの変換結果だけは認可後にCache APIへ保存し、内部キャッシュキー、ETag、304、ブラウザー向けの
+`private, no-cache`を維持します。
+
+Workers Cachingの無効化は、その時点からキャッシュの参照と追加を止めますが、既存項目を削除しません。
+この変更を本番へ初めて反映するときは、設定反映後に既存項目の削除要否を確認します。即時削除が必要な
+場合も、通常のデプロイやPRから自動実行せず、対象を確定した別の明示承認付き運用として実施します。
 
 ## Agent feature flag
 
@@ -148,7 +159,7 @@ namespaceはロールバックやTrashから復元できません。reconciliati
 - magic link / OAuth callbackのredirect originがproduction値。
 - 新規userが最初のorganizationを作成できる。
 - tenant Aからtenant BのIssueが取得できない。
-- tenant Aからtenant Bのfile metadata、preview、downloadが取得できず、membership取消後もcache経由で表示されない。
+- 同じURLを反復しても未認証、別テナント、組織への所属取消後のリクエストでAPIハンドラーと認可が毎回実行され、別テナントのfile metadata、preview、downloadがキャッシュ経由で表示されない。
 - 4つの許可幅だけがpreviewでき、original downloadがattachment、Range/conditional response、`nosniff`を満たす。
 - user/org profile imageが512x512 WebPとしてprivate R2から配信され、ETag/304、`private, no-cache`、`nosniff`、same-site CORPを満たす。userは円、organizationは角丸四角で表示される。
 - memberがorganization設定やrole elevationを実行できない。

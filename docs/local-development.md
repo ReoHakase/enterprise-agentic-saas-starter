@@ -177,7 +177,7 @@ linked worktreeでは`bun run portless-topology resolve`の出力を正本にし
 
 Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
-Wranglerを既定経路にすることで、Elysia routeを編集しながら`FILES` R2、`IMAGES`、Workers Cache、`EMAIL` bindingを同じWorker runtimeで利用できます。通常のapplication emailはdevelopment providerのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdはPortlessの開発CAを信頼しないため、browserはPortless HTTPS、WorkerからMailpitへの送信だけはprivate sessionで渡すdirect loopback HTTPに分けます。API supervisorはsessionを読み、Mailpit `/api/v1/info` のreadinessを確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけlocal `EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
+Wranglerを既定経路にすることで、Elysiaのルートを編集しながら`FILES` R2、`IMAGES`、認可後に使うCache API、`EMAIL` bindingを同じWorkerランタイムで利用できます。最上位のWorkers Cachingはローカルでも無効です。通常のアプリケーションメールは開発用プロバイダーのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdはPortlessの開発CAを信頼しないため、ブラウザーはPortless HTTPS、WorkerからMailpitへの送信だけは非公開セッションで渡す直接loopback HTTPに分けます。APIの監督処理はセッションを読み、Mailpit `/api/v1/info` の準備完了を確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけローカル`EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
 
 APIはMailpitとDBのreadinessを扱う`src/dev.ts` supervisor、Agentは
 `apps/agent/scripts/wrangler-portless.ts`から`wrangler dev`を起動します。Agentのlauncherは

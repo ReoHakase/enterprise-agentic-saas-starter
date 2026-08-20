@@ -2,7 +2,7 @@
 title: 認証付きfile storage運用
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-20
 ---
 
 # 認証付きfile storage運用
@@ -43,6 +43,21 @@ API Workerのbindingは次の二つです。
 
 R2 public access、`r2.dev`、presigned URL、R2/Images専用domainは設定しません。必要なhostnameはAPI Workerだけです。
 
+## キャッシュ境界
+
+`apps/api/wrangler.jsonc`と`apps/api/wrangler.bootstrap.jsonc`は最上位の
+`cache.enabled=false`を明示します。Workers CachingをAPI Workerの既定入口へ適用せず、同じURLへの
+反復リクエストでもElysia、Better Auth、テナント認可を毎回実行します。
+
+この設定と、Worker内部で明示的に使うCache APIは独立しています。画像previewは認証、組織への所属、
+対象fileの確認後にだけ`caches.default`を参照し、外部へ公開しない内部キャッシュキーで変換結果を
+再利用します。ブラウザーへ返すレスポンスの`private, no-cache`、ETag、304は維持します。未認証、別
+テナント、所属取消後のリクエストはCache APIを参照する前に拒否します。
+
+Workers Cachingを無効にする設定変更は既存のキャッシュ項目を削除しません。本番へ初めて反映するときは
+無効化後に既存項目の削除要否を別途判断し、必要な削除は明示承認した運用として実施します。PR、
+Cloudflare dry-run、通常のデプロイから自動削除しません。
+
 productionではWebとAPIを同じregistrable domain配下、例えば`app.example.com`と`api.example.com`へ配置します。`AUTH_COOKIE_DOMAIN=.example.com`、Web originを含む`TRUSTED_ORIGINS` / `CORS_ORIGIN`、Web側の`API_PUBLIC_URL` / `NEXT_PUBLIC_API_BASE_URL`を同じAPI originへ揃えてください。別の親domainへ分離するとcredential付きsession cookieを共有できません。
 
 ## 制限と保存形式
@@ -63,7 +78,7 @@ previewはR2へ保存したraw imageからImages bindingでWebPへ変換しま�
 
 AVIFはmagic bytesで形式だけを検出し、Cloudflare Imagesの`info()`へ渡しません。v1では常に`previewable: false`、`imageWidth: null`、`imageHeight: null`としてdownloadだけを提供します。local/remote Images実装差へ依存してAVIFのmetadataを確定しません。
 
-UTF-8 textは認証付き`/files/organizations/:organizationId/:fileId/text-preview`からJSONとして取得し、Webの全画面viewerがescaped textとして表示します。`text/*`（HTMLを除く）、JSON系、閉じたsource-text拡張子だけを対象とし、HTML/SVG拡張子、invalid UTF-8、NULを含む内容はpreviewしません。R2から読むのは先頭`1,000,000` bytesとUTF-8境界確認分だけで、超過時はviewerからoriginal downloadを案内します。text responseはbrowser/Workers Cacheへ保存しません。
+UTF-8 textは認証付き`/files/organizations/:organizationId/:fileId/text-preview`からJSONとして取得し、Webの全画面viewerがescaped textとして表示します。`text/*`（HTMLを除く）、JSON系、閉じたsource-text拡張子だけを対象とし、HTML/SVG拡張子、invalid UTF-8、NULを含む内容はpreviewしません。R2から読むのは先頭`1,000,000` bytesとUTF-8境界確認分だけで、超過時はviewerからoriginal downloadを案内します。text responseはブラウザーまたはCloudflareのキャッシュへ保存しません。
 
 Issue詳細の全画面ページにviewport viewerを表示します。画像は既存の認証付き`srcset`、textはEdenとテナント単位のTanStack Queryを使い、ブラウザーのFullscreen APIや公開URLは使いません。
 
