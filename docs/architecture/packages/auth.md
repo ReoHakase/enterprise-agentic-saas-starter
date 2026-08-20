@@ -32,12 +32,13 @@ packages/auth/src/
 
 - `@enterprise-agentic-saas/auth`
 - `@enterprise-agentic-saas/auth/client`
-- `@enterprise-agentic-saas/auth/github-oauth`
+- `@enterprise-agentic-saas/auth/mcp-oauth`
+- `@enterprise-agentic-saas/auth/mcp-oauth-credentials`
 
 `client.ts`からDB、Email、Node builtin、`process.env`、`server-only`、server codeをimportしません。
-`github-oauth.ts`はemulatorとserverが共有するprotocol/schemaだけを公開し、Better Auth server
-factory、instance/callback、DB/Email adapter、runtime env、credentialをimportまたは再exportしません。
-`server/**`だけがDB/Emailへ依存できます。
+`github-oauth.ts`と`mcp-oauth-contract.ts`はpackage内部のcontractとして維持し、重複する
+subpath exportを作りません。Emulateは`@emulators/github`を直接利用し、Authのsourceや公開entrypointを
+importしません。`server/**`だけがDB/Emailへ依存できます。
 
 ## 依存関係
 
@@ -55,7 +56,8 @@ Knip、Web buildとpackage testで検査します。
 
 ## 理由
 
-Auth serverとbrowser clientを同一packageで提供しながら、entrypoint単位でruntimeを分離します。EmulateのGitHub serviceにはOAuth contractだけを公開します。
+Auth serverとbrowser clientを同一packageで提供しながら、entrypoint単位でruntimeを分離します。
+GitHub OAuth emulatorとはHTTP protocolで接続し、source contractを共有しません。
 
 ## 受入条件
 

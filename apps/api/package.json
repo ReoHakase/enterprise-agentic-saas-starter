@@ -14,18 +14,11 @@
     }
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --target bun --outdir ./dist --production",
     "build:cloudflare": "wrangler deploy --dry-run --outdir ./dist/worker",
     "cf:typegen": "wrangler types --env-file .dev.vars.example --strict-vars=false --include-runtime=false --env-interface CloudflareEnv src/cloudflare-env.d.ts && oxfmt src/cloudflare-env.d.ts",
-    "deploy": "bun run build:cloudflare && wrangler deploy ./dist/worker/worker.js --no-bundle",
     "dev": "portless-topology run api.enterprise-agentic-saas -- bun run src/dev.ts",
     "dev:inspector": "portless-topology run mcp-inspector.enterprise-agentic-saas -- sh -c 'exec env CLIENT_PORT=\"$PORT\" ALLOWED_ORIGINS=\"$PORTLESS_URL\" MCP_AUTO_OPEN_ENABLED=false mcp-inspector --web --server-url \"$API_PUBLIC_URL/mcp\" --transport http > /dev/null'",
-    "dev:portless": "bun run dev",
-    "dev:worker": "wrangler dev",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
-    "start": "NODE_ENV=production bun ./dist/index.js",
     "smoke:upload-memory": "bun run src/smoke/upload-memory/run.ts",
     "test": "vitest run --config ../../vitest.config.ts --project=api-unit",
     "typecheck": "tsc --noEmit"

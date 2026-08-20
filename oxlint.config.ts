@@ -187,7 +187,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   ],
   db: [],
   email: [],
-  emulate: ["@enterprise-agentic-saas/auth/github-oauth"],
+  emulate: [],
   "portless-topology": [],
   ui: ["@enterprise-agentic-saas/ui/*"],
   web: [

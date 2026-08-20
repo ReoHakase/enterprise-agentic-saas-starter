@@ -48,9 +48,6 @@ apps/api
 apps/agent
   -> @enterprise-agentic-saas/agent-contracts
 
-apps/emulate
-  -> @enterprise-agentic-saas/auth/github-oauth
-
 packages/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email

@@ -38,13 +38,6 @@ jobs:
       CORS_ORIGIN: ${{ vars.APP_BASE_URL }}
       EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER }}
       EMAIL_FROM: ${{ vars.EMAIL_FROM }}
-      SENTRY_ENVIRONMENT: production
-      NEXT_PUBLIC_SENTRY_ENVIRONMENT: production
-      SENTRY_RELEASE: ${{ github.sha }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_API_PROJECT: ${{ vars.SENTRY_API_PROJECT }}
-      SENTRY_AGENT_PROJECT: ${{ vars.SENTRY_AGENT_PROJECT }}
-      SENTRY_WEB_PROJECT: ${{ vars.SENTRY_WEB_PROJECT }}
       API_WORKER_NAME: enterprise-agentic-saas-api
       AGENT_WORKER_NAME: enterprise-agentic-saas-agent
 
@@ -70,10 +63,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MASTRA_STORAGE_AUTH_TOKEN: ${{ secrets.MASTRA_STORAGE_AUTH_TOKEN }}
           MASTRA_STORAGE_URL: ${{ secrets.MASTRA_STORAGE_URL }}
-          SENTRY_AGENT_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
-          SENTRY_API_DSN: ${{ secrets.SENTRY_API_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_WEB_DSN: ${{ secrets.SENTRY_WEB_DSN }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
         run: |
@@ -154,14 +143,6 @@ jobs:
             "OPENROUTER_API_KEY",
             "MASTRA_STORAGE_AUTH_TOKEN",
             "MASTRA_STORAGE_URL",
-            "SENTRY_AGENT_DSN",
-            "SENTRY_API_DSN",
-            "SENTRY_AUTH_TOKEN",
-            "SENTRY_ORG",
-            "SENTRY_AGENT_PROJECT",
-            "SENTRY_API_PROJECT",
-            "SENTRY_WEB_DSN",
-            "SENTRY_WEB_PROJECT",
             "TURSO_AUTH_TOKEN",
             "TURSO_DATABASE_URL",
           ]) {
@@ -248,13 +229,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Build API Worker and upload source maps
-        run: |
-          bun run --cwd apps/api build:cloudflare
-          bun run --cwd apps/api sentry:sourcemaps
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_PROJECT: ${{ env.SENTRY_API_PROJECT }}
+      - name: Build API Worker
+        run: bun run --cwd apps/api build:cloudflare
 
       - name: Inspect migration rollout state
         id: file-activity-rollout
@@ -341,7 +317,6 @@ jobs:
               "BETTER_AUTH_SECRET",
               "GITHUB_CLIENT_ID",
               "GITHUB_CLIENT_SECRET",
-              "SENTRY_DSN",
               "TURSO_AUTH_TOKEN",
               "TURSO_DATABASE_URL",
             ]
@@ -356,8 +331,6 @@ jobs:
             --no-bundle \
             --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
             --var "AGENT_MAINTENANCE_MODE:1" \
-            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
             --domain "$API_HOST" \
             --strict \
             --secrets-file "$api_secrets"
@@ -367,7 +340,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-          SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
@@ -532,19 +504,8 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
-      - name: Build Agent Worker and upload source maps
-        run: |
-          bun run --cwd apps/agent build:cloudflare
-          apps/api/node_modules/.bin/sentry-cli sourcemaps inject apps/agent/dist/worker
-          apps/api/node_modules/.bin/sentry-cli sourcemaps upload \
-            --release "$SENTRY_RELEASE" \
-            --validate \
-            --strict \
-            --wait \
-            apps/agent/dist/worker
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_PROJECT: ${{ env.SENTRY_AGENT_PROJECT }}
+      - name: Build Agent Worker
+        run: bun run --cwd apps/agent build:cloudflare
 
       - name: Deploy Agent Worker
         run: |
@@ -556,7 +517,6 @@ jobs:
               "MASTRA_STORAGE_AUTH_TOKEN",
               "MASTRA_STORAGE_URL",
               "OPENROUTER_API_KEY",
-              "SENTRY_DSN",
             ]
             await Bun.write(
               process.env.SECRETS_FILE,
@@ -570,8 +530,6 @@ jobs:
             --var "AGENT_VISION_ENABLED:$AGENT_VISION_ENABLED" \
             --var "AGENT_WRITES_ENABLED:$AGENT_WRITES_ENABLED" \
             --var "NODE_ENV:production" \
-            --var "SENTRY_ENVIRONMENT:production" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
             --strict \
             --secrets-file "$agent_secrets"
         env:
@@ -580,7 +538,6 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MASTRA_STORAGE_AUTH_TOKEN: ${{ secrets.MASTRA_STORAGE_AUTH_TOKEN }}
           MASTRA_STORAGE_URL: ${{ secrets.MASTRA_STORAGE_URL }}
-          SENTRY_DSN: ${{ secrets.SENTRY_AGENT_DSN }}
 
       - name: Deploy final API Worker
         run: |
@@ -592,7 +549,6 @@ jobs:
               "BETTER_AUTH_SECRET",
               "GITHUB_CLIENT_ID",
               "GITHUB_CLIENT_SECRET",
-              "SENTRY_DSN",
               "TURSO_AUTH_TOKEN",
               "TURSO_DATABASE_URL",
             ]
@@ -607,8 +563,6 @@ jobs:
             --no-bundle \
             --var "AGENT_ASSET_UPLOAD_ENABLED:$AGENT_ASSET_UPLOAD_ENABLED" \
             --var "AGENT_MAINTENANCE_MODE:0" \
-            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
             --domain "$API_HOST" \
             --strict \
             --secrets-file "$api_secrets"
@@ -618,7 +572,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
           GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-          SENTRY_DSN: ${{ secrets.SENTRY_API_DSN }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
 
@@ -659,43 +612,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Build Web Worker and upload source maps
-        run: |
-          bun run --cwd apps/web build:cloudflare
-          OPEN_NEXT_DEPLOY=true apps/web/node_modules/.bin/wrangler deploy \
-            --config apps/web/wrangler.jsonc \
-            --dry-run \
-            --outdir "$RUNNER_TEMP/web-worker" \
-            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE"
-        env:
-          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
-          SENTRY_PROJECT: ${{ env.SENTRY_WEB_PROJECT }}
+      - name: Build Web Worker
+        run: bun run --cwd apps/web build:cloudflare
 
       - name: Deploy Web Worker
-        run: |
-          umask 077
-          web_secrets="$(mktemp)"
-          trap 'rm -f "$web_secrets"' EXIT
-          SECRETS_FILE="$web_secrets" bun -e '
-            const keys = ["SENTRY_DSN"]
-            await Bun.write(
-              process.env.SECRETS_FILE,
-              JSON.stringify(Object.fromEntries(keys.map((key) => [key, process.env[key]])))
-            )
-          '
-          bun run --cwd apps/web deploy -- \
-            --var "SENTRY_ENVIRONMENT:$SENTRY_ENVIRONMENT" \
-            --var "SENTRY_RELEASE:$SENTRY_RELEASE" \
-            --domain "$APP_HOST" \
-            --strict \
-            --secrets-file "$web_secrets"
+        run: bun run --cwd apps/web deploy -- --domain "$APP_HOST" --strict
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          SENTRY_DSN: ${{ secrets.SENTRY_WEB_DSN }}
 
       - name: Smoke Web Worker
         run: |

@@ -53,7 +53,7 @@ scripted modelのsentinelがbundleへ混入していないことまで検査し�
 bun run test
 bun run typecheck
 bun run lint
-bun run format:check
+bun run --cwd ../.. format:check
 bun run build:cloudflare
 ```
 

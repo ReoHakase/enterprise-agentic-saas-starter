@@ -23,7 +23,7 @@ Base UIを標準とし、iconはdecorativeなら `aria-hidden`、icon-only actio
 bun run --cwd packages/ui storybook
 bun run --cwd packages/ui test
 bun run --cwd packages/ui build:storybook
-bun run --cwd packages/ui test:storybook
+bun run --cwd packages/ui test:browser
 ```
 
 - component interactionはTesting Libraryまたはstoryの `play` で検証する。

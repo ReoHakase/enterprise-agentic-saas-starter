@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-08-13
+last_reviewed: 2026-08-20
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -202,6 +202,17 @@ full modeはtest、Storybook、configを含む全codeを解析します。`--str
 - generated `.agents/skills`、build output、migration snapshotは解析対象外
 
 findingは同じ変更で全て解消し、baselineをcommitしません。
+
+### 未使用項目の削除
+
+Knipまたは`rg`で呼び出し元が0件でも、それだけでscript、task、設定、patch、package exportを
+削除しません。manifest、package export、CI、Nix、Lefthook、文書、動的command、linked
+`worktree`、利用者が直接実行する公開commandを同じ監査対象にします。削除後は同じ受け入れ経路を
+標準CLI、標準設定または既存実装で再現できることを確認します。
+
+リポジトリ固有の起動処理が環境変数の投影、ローカル認証情報の除去、証明書、signal転送、永続stateを
+所有する場合は、標準CLIだけで同じ契約を満たせるまで維持します。formatはリポジトリルートの
+`format`と`format:check`が全ワークスペースを所有し、個別ワークスペースへ同じaliasを置きません。
 
 ## jscpd
 

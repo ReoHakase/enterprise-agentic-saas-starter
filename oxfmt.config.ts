@@ -17,12 +17,6 @@ export default defineConfig({
   ignorePatterns: [
     ".next/**",
     "**/.next/**",
-    ".next-e2e/**",
-    "**/.next-e2e/**",
-    ".next-e2e-oauth/**",
-    "**/.next-e2e-oauth/**",
-    ".next-e2e-scripted-agent/**",
-    "**/.next-e2e-scripted-agent/**",
     ".open-next/**",
     "**/.open-next/**",
     ".agents/skills/**",

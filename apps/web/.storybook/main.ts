@@ -53,10 +53,6 @@ export default defineMain({
       resolve: {
         alias: {
           "@": path.join(workspace, "src"),
-          "@sentry/nextjs": path.join(
-            workspace,
-            "test-support/storybook/sentry-nextjs.ts"
-          ),
           "next/link": path.join(
             workspace,
             "test-support/storybook/next-link.tsx"

@@ -28,6 +28,10 @@ applies_to:
 
 `apps/api`はpublic HTTP、private Agent control plane、authorization、transaction、business repository、OpenAPI、R2 adapter、observabilityを所有します。
 
+本番とローカル開発はCloudflare Workerの`worker.ts`を正本にし、`dist/index.js`を生成する
+build/start/deploy経路は持ちません。`index.ts`のBun `listen`は、分離した`file:` DBで実行する
+deterministic OAuth E2E fixture専用です。
+
 ## 目標構造
 
 ```text

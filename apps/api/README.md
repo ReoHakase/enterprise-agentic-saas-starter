@@ -48,6 +48,8 @@ local Workerは`@inference-net/otel-cf-workers`を使い、固定loopback OTLP e
 
 rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` supervisorが`src/worker.ts`をmainにした`wrangler dev --local`を起動する。Wranglerはimport graphをwatchし、Elysiaや依存sourceの保存時にrebundleしてWorker isolateを再起動する。Bunの状態保持型HMRではないためmemory stateは引き継がないが、Tursoと`--persist-to .wrangler/state`のR2 dataはreload後も残る。supervisorまたは起動時envを変えた場合はdev processを再起動する。
 
+`src/index.ts`のBun `listen`は、分離した`file:` DBを使うdeterministic OAuth E2E fixtureだけが起動する。rootのpublic developmentやproduction deployには使わない。
+
 この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。workerdはPortlessの開発CAを信頼しないため、browser用Portless HTTPSではなく、token-fencedなsessionで受け取った同じMailpit instanceのdirect loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
 
 fixture投入の公開入口はrootの`bun run dev:db:seed`だけにする。healthyなAPI dev sessionがあればそのWorkerを再利用し、なければlocal Tursoが停止中の場合だけ一時起動したうえで、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動する。migration、DB seed、R2 reconcileの後はcommand自身が起動したprocessだけを停止し、既存のdev processには触れない。production/remote seedとrootの`seed` aliasは作らない。

@@ -46,6 +46,15 @@ runtime、environment、Cloudflare binding、Node APIをimportせず、concrete 
 environmentとadapterを選びます。
 test-supportとdevelopment Mailpitをproduction public entrypointから再exportしません。
 
+## 公開entrypoint
+
+- `@enterprise-agentic-saas/email`: template、render helper、provider contract
+- `@enterprise-agentic-saas/email/config`: environment非依存の設定解決
+- `@enterprise-agentic-saas/email/runtime`: runtime別のsender
+- `@enterprise-agentic-saas/email/development`: 開発process専用のMailpit session helper
+
+root entrypointと同じtemplateを返す`./templates` subpathは公開しません。
+
 ## テスト
 
 - template render

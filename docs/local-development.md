@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-20
 ---
 
 # ローカル開発
@@ -113,6 +113,12 @@ EMAIL_FROM=noreply@example.test
 | `bun run dev:db`            | local Turso、migration、Drizzle Studioだけを起動する                          |
 | `bun run dev:db:reset`      | 停止中にlocal Tursoと対応するWrangler/R2 stateを削除する                      |
 | `bun run dev:db:seed`       | full devの有無にかかわらず任意のDB/R2 fixtureを投入する                       |
+
+各ワークスペースは公開`dev` commandだけを持ち、同じ処理を指すaliasや、必要なsupervisorを
+迂回するraw Worker入口を公開しません。リポジトリ固有のlauncherを削除するときは、
+呼び出し元の検索に加え、main checkoutとlinked `worktree`で環境変数、Portless URL、Cookie、
+Agent storage、ローカルCA、signalと終了コードが標準CLIまたは残る公開commandで一致することを
+確認します。
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 

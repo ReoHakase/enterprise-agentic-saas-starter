@@ -9,7 +9,6 @@
   "path": [
     "apps/agent/src/mastra",
     "apps/api/src",
-    "apps/github-emulator/src",
     "apps/web/src",
     "packages/auth/src",
     "packages/db/src",

@@ -7,9 +7,6 @@
         "@enterprise-agentic-saas/emulate#dev"
       ]
     },
-    "build": {
-      "outputs": ["dist/**"]
-    },
     "build:cloudflare": {
       "outputs": ["dist/worker/**"]
     }
