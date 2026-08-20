@@ -1,6 +1,12 @@
 import * as v from "valibot"
 
-import { agentIdentifierSchema } from "./schemas"
+import {
+  agentIdentifierSchema,
+  agentIsoTimestampSchema,
+  agentNonNegativeIntegerSchema,
+  agentPositiveIntegerSchema,
+  agentThreadTitleSchema,
+} from "./schemas"
 
 export type AgentJsonValue =
   | boolean
@@ -224,7 +230,38 @@ export const agentUiMessageSchema = v.pipe(
     )
   }, "Invalid parts for Agent UI message role")
 )
-export const agentUiMessageListSchema = v.array(agentUiMessageSchema)
+export const AGENT_THREAD_LIST_MAX_COUNT = 1_000
+export const AGENT_MESSAGE_PAGE_MAX_COUNT = 100
+
+export const agentUiMessageListSchema = v.pipe(
+  v.array(agentUiMessageSchema),
+  v.maxLength(AGENT_MESSAGE_PAGE_MAX_COUNT)
+)
+
+export const agentThreadStatusSchema = v.picklist(["active", "archived"])
+export const agentThreadSchema = v.strictObject({
+  id: agentIdentifierSchema,
+  title: agentThreadTitleSchema,
+  status: agentThreadStatusSchema,
+  createdAt: agentIsoTimestampSchema,
+  updatedAt: agentIsoTimestampSchema,
+})
+export const agentThreadListSchema = v.pipe(
+  v.array(agentThreadSchema),
+  v.maxLength(AGENT_THREAD_LIST_MAX_COUNT)
+)
+export const agentMessagePageSchema = v.strictObject({
+  messages: agentUiMessageListSchema,
+  total: agentNonNegativeIntegerSchema,
+  page: agentNonNegativeIntegerSchema,
+  perPage: v.pipe(
+    agentPositiveIntegerSchema,
+    v.maxValue(AGENT_MESSAGE_PAGE_MAX_COUNT)
+  ),
+  hasMore: v.boolean(),
+})
 
 export type AgentUiMessage = v.InferOutput<typeof agentUiMessageSchema>
 export type AgentUiMessagePart = v.InferOutput<typeof agentUiMessagePartSchema>
+export type AgentThread = v.InferOutput<typeof agentThreadSchema>
+export type AgentMessagePage = v.InferOutput<typeof agentMessagePageSchema>

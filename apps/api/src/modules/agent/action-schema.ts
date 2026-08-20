@@ -1,3 +1,4 @@
+import { agentPositiveIntegerSchema } from "@enterprise-agentic-saas/agent-contracts"
 import {
   issuePriorities,
   issueStatuses,
@@ -27,7 +28,7 @@ const issueLabelsModel = v.pipe(
   v.array(v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40))),
   v.maxLength(20)
 )
-const expectedRevisionModel = v.pipe(v.number(), v.integer(), v.minValue(1))
+const expectedRevisionModel = agentPositiveIntegerSchema
 
 export const createIssueActionPayloadModel = v.strictObject({
   title: issueTitleModel,
@@ -137,72 +138,6 @@ export const agentInternalAuthorizationModel = v.strictObject({
   ),
 })
 
-const actionPreviewValueModel = v.union([
-  v.string(),
-  v.array(v.string()),
-  v.null(),
-])
-
-export const agentIssueActionPreviewModel = v.object({
-  kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
-  destructive: v.boolean(),
-  attachmentOperation: v.nullable(v.picklist(["add", "remove"])),
-  title: v.string(),
-  issueNumber: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  issueRevision: v.nullable(expectedRevisionModel),
-  fields: v.array(
-    v.object({
-      field: v.picklist([
-        "title",
-        "description",
-        "status",
-        "priority",
-        "assignee",
-        "labels",
-        "due_date",
-      ]),
-      before: actionPreviewValueModel,
-      after: actionPreviewValueModel,
-    })
-  ),
-  attachments: v.array(
-    v.variant("source", [
-      v.object({
-        source: v.literal("asset"),
-        assetId: identifierModel,
-        filename: v.string(),
-        sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
-      }),
-      v.object({
-        source: v.literal("file"),
-        fileId: identifierModel,
-        filename: v.string(),
-        sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
-      }),
-    ])
-  ),
-})
-
-export const agentIssueActionModel = v.object({
-  id: identifierModel,
-  kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
-  status: v.picklist([
-    "pending",
-    "approved",
-    "rejected",
-    "expired",
-    "canceled",
-    "succeeded",
-    "conflicted",
-  ]),
-  approvalMode: v.nullable(v.picklist(["manual", "full_access"])),
-  requiresApproval: v.boolean(),
-  preview: v.nullable(agentIssueActionPreviewModel),
-  previewState: v.picklist(["available", "expired"]),
-  expiresAt: isoTimestampModel,
-  completedAt: v.nullable(isoTimestampModel),
-})
-
 export const agentActionParamsModel = v.strictObject({
   actionId: identifierModel,
 })
@@ -214,54 +149,8 @@ export const decideAgentActionBodyModel = v.strictObject({
 
 export const resumeAgentActionBodyModel = v.strictObject({})
 
-const addedAttachmentFileIdsModel = v.pipe(
-  v.array(identifierModel),
-  v.minLength(1),
-  v.maxLength(4),
-  v.checkItems((item, index, array) => array.indexOf(item) === index)
-)
-const removedAttachmentFileIdsModel = v.pipe(
-  v.array(identifierModel),
-  v.minLength(1),
-  v.maxLength(20),
-  v.checkItems((item, index, array) => array.indexOf(item) === index)
-)
-const attachmentMutationModel = v.variant("operation", [
-  v.strictObject({
-    operation: v.literal("added"),
-    fileIds: addedAttachmentFileIdsModel,
-  }),
-  v.strictObject({
-    operation: v.literal("removed"),
-    fileIds: removedAttachmentFileIdsModel,
-  }),
-])
-
-export const agentActionExecutionResultModel = v.strictObject({
-  actionId: identifierModel,
-  kind: v.picklist(["create_issue", "update_issue", "delete_issue"]),
-  status: v.literal("succeeded"),
-  issue: v.strictObject({
-    id: identifierModel,
-    number: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    revision: expectedRevisionModel,
-    deleted: v.boolean(),
-    attachmentMutation: v.optional(attachmentMutationModel),
-  }),
-})
-
 const approvalPolicyModeModel = agentThreadPermissionModeModel
 
 export const putAgentApprovalPolicyBodyModel = v.strictObject({
   mode: approvalPolicyModeModel,
 })
-
-export const agentApprovalPolicyModel = v.object({
-  mode: approvalPolicyModeModel,
-  permissions: v.object({
-    createIssue: v.boolean(),
-    updateIssue: v.boolean(),
-    deleteIssue: v.boolean(),
-  }),
-})
-export const agentStreamResponseModel = v.any()

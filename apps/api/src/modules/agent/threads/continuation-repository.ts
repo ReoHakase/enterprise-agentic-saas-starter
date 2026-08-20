@@ -1,9 +1,9 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-
 import type {
   AgentUiMessage,
   AgentClientToolResult,
-} from "../../../agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { Db } from "@enterprise-agentic-saas/db"
+
 import { createAgentToken, hashAgentToken } from "../crypto"
 import {
   requireActiveMembership,

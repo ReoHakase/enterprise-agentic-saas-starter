@@ -26,6 +26,7 @@ vi.mock("../adapters/telemetry/development-error", () => ({
 import { createAgentRuntimeComposition } from "../composition/runtime-composition"
 import {
   approvedIssueActionExecutionRegistry,
+  approvedIssueActionWorkflow,
   executionRegistry,
   mastra,
 } from "../index"
@@ -164,6 +165,84 @@ const runtimeContext = () => {
 }
 
 describe("resumeIssueAction", () => {
+  it("converts strict Workflow input and resume schemas to Standard JSON Schema", async () => {
+    const resumeSchema =
+      approvedIssueActionWorkflow.steps["await-issue-action-approval"]
+        ?.resumeSchema
+    if (!resumeSchema) {
+      throw new Error("Workflow resume schema is unavailable")
+    }
+    for (const [schema, required, value] of [
+      [
+        approvedIssueActionWorkflow.inputSchema,
+        ["actionId"],
+        { actionId: "action_1" },
+      ],
+      [
+        resumeSchema,
+        ["actionId", "executionId"],
+        { actionId: "action_1", executionId: "execution_1" },
+      ],
+    ] as const) {
+      expect(
+        schema["~standard"].jsonSchema.input({ target: "draft-07" })
+      ).toMatchObject({
+        additionalProperties: false,
+        properties: {
+          actionId: {
+            maxLength: 128,
+            minLength: 1,
+            pattern: "^[A-Za-z0-9_-]+$",
+          },
+        },
+        required,
+        type: "object",
+      })
+      // Standard Schemaのvalidateが元のstrict Valibot schemaへ委譲することを検査する。
+      // eslint-disable-next-line no-await-in-loop
+      const invalid = await schema["~standard"].validate({
+        ...value,
+        privateContext: true,
+      })
+      expect(invalid).toHaveProperty("issues")
+    }
+  })
+
+  it("generates the canonical output shape and rejects duplicate attachment ids at runtime", async () => {
+    const outputSchema = approvedIssueActionWorkflow.outputSchema
+    expect(
+      outputSchema["~standard"].jsonSchema.output({ target: "draft-07" })
+    ).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        issue: {
+          additionalProperties: false,
+          properties: { attachmentMutation: expect.any(Object) },
+        },
+      },
+      type: "object",
+    })
+    const invalid = await outputSchema["~standard"].validate({
+      actionId: "action_1",
+      issue: {
+        attachmentMutation: {
+          fileIds: ["file_1", "file_1"],
+          operation: "added",
+        },
+        deleted: false,
+        id: "issue_1",
+        number: 1,
+        revision: 2,
+      },
+      kind: "update_issue",
+      status: "succeeded",
+    })
+
+    expect(invalid).toMatchObject({
+      issues: [{ message: "Workflow output is invalid" }],
+    })
+  })
+
   it("requires fail-closed run/write switches", async () => {
     const id = actionId()
     for (const features of [
@@ -608,6 +687,78 @@ describe("resumeIssueAction execution", () => {
     expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
     expect(JSON.stringify(receipt)).not.toContain(RESUME_TICKET)
     expect(JSON.stringify(receipt)).not.toContain(RUN_GRANT)
+  })
+
+  it("preserves a canonical attachment mutation through Workflow output validation", async () => {
+    const id = actionId()
+    const test = harness(id)
+    test.executeApprovedAction.mockResolvedValue({
+      actionId: id,
+      issue: {
+        attachmentMutation: {
+          fileIds: ["file_1"],
+          operation: "added",
+        },
+        deleted: false,
+        id: "issue_1",
+        number: 1,
+        revision: 2,
+      },
+      kind: "update_issue",
+      status: "succeeded",
+    })
+    await suspendApprovedIssueAction(mastra, id)
+
+    await expect(
+      resumeIssueAction(
+        { actionId: id, resumeTicket: RESUME_TICKET },
+        dependencies(test.api)
+      )
+    ).resolves.toMatchObject({
+      issue: {
+        attachmentMutation: {
+          fileIds: ["file_1"],
+          operation: "added",
+        },
+      },
+    })
+  })
+
+  it("rejects a noncanonical execution receipt before completing the run", async () => {
+    const id = actionId()
+    const test = harness(id)
+    test.executeApprovedAction.mockResolvedValue({
+      actionId: id,
+      issue: {
+        attachmentMutation: {
+          fileIds: ["file_1"],
+          // @ts-expect-error provider境界の不正なruntime値を再現する。
+          operation: "moved",
+        },
+        deleted: false,
+        id: "issue_1",
+        number: 1,
+        revision: 2,
+      },
+      kind: "update_issue",
+      status: "succeeded",
+    })
+    await suspendApprovedIssueAction(mastra, id)
+
+    await expect(
+      resumeIssueAction(
+        { actionId: id, resumeTicket: RESUME_TICKET },
+        dependencies(test.api)
+      )
+    ).rejects.toThrow("Issue action resume is unavailable")
+    expect(test.finishRun).toHaveBeenCalledWith({
+      grant: RUN_GRANT,
+      outcome: "failed",
+    })
+    expect(test.finishRun).not.toHaveBeenCalledWith({
+      grant: RUN_GRANT,
+      outcome: "completed",
+    })
   })
 
   it("stops before the approved side effect when the caller aborts during ticket consumption", async () => {

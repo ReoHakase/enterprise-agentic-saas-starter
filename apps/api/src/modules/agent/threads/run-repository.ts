@@ -1,3 +1,4 @@
+import type { AgentRunGrant } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentActions,
@@ -7,7 +8,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm"
 
-import type { AgentRunGrant } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { bindAgentAssetsToRunInTransaction } from "../../files/public"
 import { createAgentToken, hashAgentToken } from "../crypto"

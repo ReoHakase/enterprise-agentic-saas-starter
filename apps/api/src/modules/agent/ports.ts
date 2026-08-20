@@ -4,21 +4,15 @@ import type {
   AgentUiMessage,
   AgentClientToolResult,
   AgentContentSegment,
+  AgentContextRevocation,
   AgentIssueAction,
   AgentReusableAsset,
   AgentResolvedContextReference,
   AgentResumeTicket,
-} from "../../agent-client"
+  AgentThread,
+} from "@enterprise-agentic-saas/agent-contracts"
 
 type AgentThreadPermissionMode = "ask_always" | "full_access"
-
-type AgentThreadDto = {
-  createdAt: string
-  id: string
-  status: "active" | "archived"
-  title: string
-  updatedAt: string
-}
 
 type AgentPreparedChat = {
   assetIds: string[]
@@ -83,13 +77,13 @@ export type AgentServicePorts = {
     sessionId: string
     threadId: string
     userId: string
-  }): Promise<AgentThreadDto>
+  }): Promise<AgentThread>
   createAgentThreadForSession(input: {
     permissionMode: AgentThreadPermissionMode
     sessionId: string
     title: string
     userId: string
-  }): Promise<AgentThreadDto>
+  }): Promise<AgentThread>
   decideAgentActionForSession(input: {
     actionId: string
     decision: "yes" | "no"
@@ -126,7 +120,7 @@ export type AgentServicePorts = {
   listAgentThreadsForSession(input: {
     sessionId: string
     userId: string
-  }): Promise<AgentThreadDto[]>
+  }): Promise<AgentThread[]>
   prepareAgentActionResumeForSession(input: {
     actionId: string
     sessionId: string
@@ -161,5 +155,5 @@ export type AgentServicePorts = {
   revokeCurrentAgentContext(input: {
     sessionId: string
     userId: string
-  }): Promise<{ contextEpoch: number }>
+  }): Promise<AgentContextRevocation>
 }

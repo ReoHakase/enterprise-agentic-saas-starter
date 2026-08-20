@@ -28,7 +28,8 @@
 - Agentの手書きruntimeは`apps/agent/src/mastra/**`へ置く。
 - UI packageはdomain-independent UI、DB packageはschema・migration・client・development toolingだけを所有する。
 - workspace間importは`package.json#exports`で公開したentrypointだけを使う。
-- API route schemaは`apps/api`へ閉じ、Webは`@enterprise-agentic-saas/api/client`だけをimportする。
+- API route schemaは`apps/api`へ閉じる。WebはAPI clientを`@enterprise-agentic-saas/api/client`から、
+  Agent公開contractを`@enterprise-agentic-saas/agent-contracts`から直接importする。
 - tenant dataはrepository queryとDB制約の両方で`organization_id`を境界にする。
 
 ## 品質とtest

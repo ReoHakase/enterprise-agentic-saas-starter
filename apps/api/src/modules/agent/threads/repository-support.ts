@@ -1,11 +1,12 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-import type { agentThreads } from "@enterprise-agentic-saas/db/schema"
-
 import type {
   AgentIssue,
   AgentIssueAttachment,
   AgentOrganizationContext,
-} from "../../../agent-client"
+  AgentThread,
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { Db } from "@enterprise-agentic-saas/db"
+import type { agentThreads } from "@enterprise-agentic-saas/db/schema"
+
 import { normalizeOrganizationRole } from "../../authorization/public"
 import type { FileDto } from "../../files/public"
 import type { IssueDto } from "../../issues/public"
@@ -13,13 +14,7 @@ export * from "./domain"
 
 export type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
-export type AgentThreadDto = {
-  id: string
-  title: string
-  status: "active" | "archived"
-  createdAt: string
-  updatedAt: string
-}
+export type AgentThreadDto = AgentThread
 
 export const CONNECTION_TICKET_TTL_MS = 60_000
 export const AGENT_RUN_TTL_MS = 5 * 60_000

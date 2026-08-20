@@ -1,4 +1,4 @@
-import { agentClientToolNames } from "@enterprise-agentic-saas/api/client"
+import { agentClientToolNames } from "@enterprise-agentic-saas/agent-contracts"
 
 export type PendingChatSubmission = {
   id: string

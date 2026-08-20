@@ -14,6 +14,7 @@ import type {
 } from "../components/agent-composer/agent-composer"
 import type { AgentChatMessage } from "../schema"
 import type { PendingChatSubmission } from "../submission-identity"
+import { createPendingActionToolOutput } from "../test-support/pending-action-fixture"
 
 type AgentChatOptions = {
   onError?: ChatOnErrorCallback
@@ -427,7 +428,7 @@ describe("useAgentController Stop lifecycle", () => {
             toolCallId: "approval-call",
             state: "output-available",
             input: {},
-            output: { status: "pending", actionId: "approval-action" },
+            output: createPendingActionToolOutput("approval-action"),
           },
         ],
       },

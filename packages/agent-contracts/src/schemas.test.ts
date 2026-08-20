@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   agentConnectionSchema,
+  agentContextRevocationSchema,
   agentCreateIssueActionInputSchema,
   agentActionExecutionResultSchema,
+  agentApprovalPolicySchema,
   agentGetIssueInputSchema,
   agentGetIssueToolOutputSchema,
   agentGuardedWebSearchQuerySchema,
@@ -15,6 +17,7 @@ import {
   agentMemberListSchema,
   agentResumeTicketSchema,
   agentRunGrantSchema,
+  agentRunResultSchema,
   agentSearchIssuesInputSchema,
   agentUsageRecordResultSchema,
   agentUpdateIssueActionInputSchema,
@@ -480,6 +483,53 @@ describe("agent contract response schemas", () => {
       expect(
         v.safeParse(schema, { ...value, privateUrl: "https://private.invalid" })
           .success
+      ).toBe(false)
+    }
+  })
+
+  it("strictly validates public run, execution, and approval responses", () => {
+    const runResult = { runId: "run_1", status: "completed" } as const
+    const executionResult = {
+      actionId: "action_1",
+      issue: {
+        attachmentMutation: {
+          fileIds: ["file_1"],
+          operation: "added",
+        },
+        deleted: false,
+        id: "issue_1",
+        number: 1,
+        revision: 2,
+      },
+      kind: "update_issue",
+      status: "succeeded",
+    } as const
+    const approval = {
+      mode: "full_access",
+      permissions: {
+        createIssue: true,
+        deleteIssue: true,
+        updateIssue: true,
+      },
+    } as const
+    const revocation = { contextEpoch: 2 } as const
+
+    expect(v.parse(agentRunResultSchema, runResult)).toEqual(runResult)
+    expect(v.parse(agentActionExecutionResultSchema, executionResult)).toEqual(
+      executionResult
+    )
+    expect(v.parse(agentApprovalPolicySchema, approval)).toEqual(approval)
+    expect(v.parse(agentContextRevocationSchema, revocation)).toEqual(
+      revocation
+    )
+    for (const [schema, value] of [
+      [agentRunResultSchema, runResult],
+      [agentActionExecutionResultSchema, executionResult],
+      [agentApprovalPolicySchema, approval],
+      [agentContextRevocationSchema, revocation],
+    ] as const) {
+      expect(
+        v.safeParse(schema, { ...value, internalState: "private" }).success
       ).toBe(false)
     }
   })

@@ -1,3 +1,9 @@
+import type {
+  AgentCreateIssueActionInput,
+  AgentDeleteIssueActionInput,
+  AgentIssueActionPreview,
+  AgentUpdateIssueActionInput,
+} from "@enterprise-agentic-saas/agent-contracts"
 import {
   files,
   issueFileOwners,
@@ -5,12 +11,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray } from "drizzle-orm"
 
-import type {
-  AgentCreateIssueActionInput,
-  AgentDeleteIssueActionInput,
-  AgentIssueActionPreview,
-  AgentUpdateIssueActionInput,
-} from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import {
   createIssueActionPayloadModel,

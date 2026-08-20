@@ -11,6 +11,7 @@ export type {
   AgentAttachmentMutationReceipt,
   AgentApprovalPolicy,
   AgentConnection,
+  AgentContextRevocation,
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
   AgentGetIssueInput,

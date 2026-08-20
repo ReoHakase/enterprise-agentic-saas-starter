@@ -98,6 +98,7 @@ MCP requestは`apps/agent`へproxyしません。MCP client自身がLLMとagent 
 
 ```text
 apps/web
+  ├─ @enterprise-agentic-saas/agent-contracts
   └─ @enterprise-agentic-saas/api/client
 
 apps/agent
@@ -142,7 +143,7 @@ packages/agent-contracts/
 
 含めるもの:
 
-- chat requestとstreamに必要な公開schema
+- chat request、run、action、execution、approval、streamに必要な公開schema
 - internal control-plane requestとresponse
 - business tool inputとoutput
 - OAuth scope名とMCP principalの共有型

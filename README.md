@@ -88,14 +88,15 @@ packages/
 ワークスペースを越える`import`は`package.json#exports`の公開入口だけを使います。
 
 ```text
-apps/web   -> api/client, auth/client, ui
+apps/web   -> agent-contracts, api/client, auth/client, ui
 apps/api   -> auth, db, email
 apps/agent -> api/agent-client
 packages   -> appへ依存しない
 ```
 
-APIのルートスキーマは`apps/api`が所有し、Webは
-`@enterprise-agentic-saas/api/client`だけを利用します。Agentは
+APIのルートスキーマは`apps/api`が所有します。WebはAPI clientを
+`@enterprise-agentic-saas/api/client`、Agent公開contractを
+`@enterprise-agentic-saas/agent-contracts`から直接利用します。Agentは
 `@enterprise-agentic-saas/api/agent-client`以外のAPI入口やDB, Auth, Email, Webを
 直接`import`しません。完全な規則は
 [システム境界](docs/architecture/system-boundaries.md)を参照してください。
@@ -321,6 +322,7 @@ bun run build:cloudflare
 
 - `@enterprise-agentic-saas/api/client`: Web向けEdenクライアント
 - `@enterprise-agentic-saas/api/agent-client`: Agent向け非公開制御面クライアント
+- `@enterprise-agentic-saas/agent-contracts`: Agent、API、Webの共有Valibot contract
 - `@enterprise-agentic-saas/auth`: Better Authのサーバーファクトリ
 - `@enterprise-agentic-saas/auth/client`: Better Authのブラウザークライアント
 - `@enterprise-agentic-saas/db`: Drizzle/libSQLクライアントとスキーマ

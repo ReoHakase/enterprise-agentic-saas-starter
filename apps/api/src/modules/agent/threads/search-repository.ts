@@ -1,12 +1,3 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-import {
-  issues,
-  member,
-  organization,
-  user,
-} from "@enterprise-agentic-saas/db/schema"
-import { and, asc, eq, like, sql } from "drizzle-orm"
-
 import type {
   AgentAccountContext,
   AgentGetIssueInput,
@@ -16,7 +7,16 @@ import type {
   AgentMember,
   AgentOrganizationContext,
   AgentSearchIssuesInput,
-} from "../../../agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { Db } from "@enterprise-agentic-saas/db"
+import {
+  issues,
+  member,
+  organization,
+  user,
+} from "@enterprise-agentic-saas/db/schema"
+import { and, asc, eq, like, sql } from "drizzle-orm"
+
 import { HttpError } from "../../../errors/http-error"
 import { normalizeOrganizationRole } from "../../authorization/public"
 import {

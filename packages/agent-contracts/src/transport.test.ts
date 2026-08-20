@@ -2,7 +2,12 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
 import {
+  AGENT_MESSAGE_PAGE_MAX_COUNT,
+  AGENT_THREAD_LIST_MAX_COUNT,
   agentJsonValueSchema,
+  agentMessagePageSchema,
+  agentThreadListSchema,
+  agentThreadSchema,
   agentUiMessageSchema,
   agentUiToolNames,
 } from "./chat"
@@ -33,6 +38,71 @@ import {
 } from "./tools"
 
 const textPart = { text: "hello", type: "text" } as const
+
+describe("public Agent response schemas", () => {
+  it("strictly bounds public thread and message-page responses", () => {
+    const thread = {
+      createdAt: "2026-08-20T00:00:00.000Z",
+      id: "thread_1",
+      status: "active",
+      title: "Thread",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    } as const
+    const message = {
+      id: "message_1",
+      parts: [textPart],
+      role: "assistant",
+    } as const
+
+    expect(v.parse(agentThreadSchema, thread)).toEqual(thread)
+    expect(
+      v.safeParse(agentThreadSchema, { ...thread, organizationId: "org_1" })
+        .success
+    ).toBe(false)
+    expect(
+      v.safeParse(
+        agentThreadListSchema,
+        Array.from({ length: AGENT_THREAD_LIST_MAX_COUNT }, (_, index) => ({
+          ...thread,
+          id: `thread_${index}`,
+        }))
+      ).success
+    ).toBe(true)
+    expect(
+      v.safeParse(
+        agentThreadListSchema,
+        Array.from({ length: AGENT_THREAD_LIST_MAX_COUNT + 1 }, (_, index) => ({
+          ...thread,
+          id: `thread_${index}`,
+        }))
+      ).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentMessagePageSchema, {
+        hasMore: false,
+        messages: Array.from(
+          { length: AGENT_MESSAGE_PAGE_MAX_COUNT },
+          (_, index) => ({ ...message, id: `message_${index}` })
+        ),
+        page: 0,
+        perPage: AGENT_MESSAGE_PAGE_MAX_COUNT,
+        total: AGENT_MESSAGE_PAGE_MAX_COUNT,
+      }).success
+    ).toBe(true)
+    expect(
+      v.safeParse(agentMessagePageSchema, {
+        hasMore: true,
+        messages: Array.from(
+          { length: AGENT_MESSAGE_PAGE_MAX_COUNT + 1 },
+          (_, index) => ({ ...message, id: `message_${index}` })
+        ),
+        page: 0,
+        perPage: AGENT_MESSAGE_PAGE_MAX_COUNT,
+        total: AGENT_MESSAGE_PAGE_MAX_COUNT + 1,
+      }).success
+    ).toBe(false)
+  })
+})
 
 describe("serialized Agent transport schemas", () => {
   it.each([null, true, 1, "value", [1, "two"], { nested: { value: false } }])(

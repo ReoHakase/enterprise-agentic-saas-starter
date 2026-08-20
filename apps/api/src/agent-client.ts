@@ -3,8 +3,6 @@ import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-c
 
 import type { AgentInternalApp } from "./modules/agent/internal-api"
 
-export * from "@enterprise-agentic-saas/agent-contracts"
-
 /**
  * server-only private Service Binding client. Browserへ公開するpublic API clientと
  * 同じentry pointへ再exportせず、API内部の契約検査だけがこのfactoryを利用する。

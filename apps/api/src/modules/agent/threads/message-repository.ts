@@ -1,3 +1,4 @@
+import type { AgentConnection } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentConnectionTickets,
@@ -8,7 +9,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, gt, isNull } from "drizzle-orm"
 
-import type { AgentConnection } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { revokeAgentSessionContextInTransaction } from "../context/repository"
 import { createAgentToken, hashAgentToken } from "../crypto"
