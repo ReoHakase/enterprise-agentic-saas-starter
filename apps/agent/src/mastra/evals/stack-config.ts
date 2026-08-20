@@ -70,7 +70,6 @@ export const createAgentEvalConfigs = (input: {
     compatibility_date: "2026-07-22",
     compatibility_flags: ["nodejs_compat", "enable_request_signal"],
     main: resolve(agentWorkspace, "src/mastra/worker.ts"),
-    migrations: [{ new_sqlite_classes: ["IssueAssistant"], tag: "v1" }],
     name: input.agentName,
     observability: { enabled: false },
     preview_urls: false,

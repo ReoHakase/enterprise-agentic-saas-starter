@@ -1,3 +1,4 @@
+import type { AgentActionExecutionResult } from "@enterprise-agentic-saas/agent-contracts"
 import {
   files,
   issueFileOwners,
@@ -5,7 +6,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, inArray } from "drizzle-orm"
 
-import type { AgentActionExecutionResult } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import {
   deleteReadyFilesInTransaction,

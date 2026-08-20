@@ -14,7 +14,10 @@ Elysia on Bun の API app workspace。
 
 - `@enterprise-agentic-saas/api/client`: `createApiClient`, `ApiClient`, `FileDto`, `ProfileImageDto`, file/profile image URL・upload helper
 
-Webからimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だけです。`App`型はEden client内部で保持し、rootや`./types` entrypointは公開しません。
+WebからAPI workspaceについてimportしてよいentrypointは`@enterprise-agentic-saas/api/client`だけです。
+Agentの公開response schema、tool名、URL canonicalizerは再exportせず、Webは
+`@enterprise-agentic-saas/agent-contracts`から直接importします。`App`型はEden client内部で保持し、
+rootや`./types` entrypointは公開しません。
 
 ## 依存方向
 

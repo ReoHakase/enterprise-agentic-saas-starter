@@ -1,4 +1,6 @@
 import {
+  AGENT_MESSAGE_PAGE_MAX_COUNT,
+  AGENT_THREAD_LIST_MAX_COUNT,
   agentUiMessagePartSchema,
   canonicalizePublicHttpUrl,
   type AgentUiMessagePart,
@@ -57,6 +59,7 @@ type MemoryThreadsInput = {
   ticket: string
   threadId: string
 }
+const MEMORY_THREAD_SCAN_PAGE_SIZE = 100
 
 const isMemoryThreadId = (value: unknown): value is string =>
   typeof value === "string" &&
@@ -92,7 +95,7 @@ const readMemoryThreadsInput = async (
     !isMemoryThreadId(threadId) ||
     !Array.isArray(registryThreadIds) ||
     registryThreadIds.length < 1 ||
-    registryThreadIds.length > 1_000 ||
+    registryThreadIds.length > AGENT_THREAD_LIST_MAX_COUNT ||
     !registryThreadIds.every(isMemoryThreadId)
   ) {
     return undefined
@@ -116,7 +119,7 @@ const listAllowedMemoryThreads = async (
     // oxlint-disable-next-line no-await-in-loop -- Mastra storage pagination is sequential.
     const result = await memory.listThreads({
       page,
-      perPage: 100,
+      perPage: MEMORY_THREAD_SCAN_PAGE_SIZE,
       filter: { resourceId },
       orderBy: { field: "updatedAt", direction: "DESC" },
     })
@@ -258,7 +261,7 @@ export const handleMemoryHistory = async (
     typeof perPage !== "number" ||
     !Number.isInteger(perPage) ||
     perPage < 1 ||
-    perPage > 100 ||
+    perPage > AGENT_MESSAGE_PAGE_MAX_COUNT ||
     threadId.length < 1 ||
     threadId.length > 128
   ) {

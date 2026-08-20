@@ -4,8 +4,6 @@ Mastra の `product-agent` を実行するprivate Cloudflare Workerです。Brow
 
 APIはsession、active organization、membership、thread ownerを検証し、Application Tursoの6列のthread認可台帳からone-time run ticketを発行します。Agentは`AGENT_INTERNAL_API` Service Bindingだけでticket消費、bounded read tool、承認付きIssue CRUDを行い、native UIMessage履歴とWorkflow snapshotをAgent専用TursoのMastra Storageへ保存します。API認可後のthread listとhistoryもService Binding経由で取得し、archive済みregistryはAgent DBに履歴が残っていても公開しません。画像は現在のmessageに限ってAPI bindingからbounded WebPとして取得し、provider向けの一時contextへだけ追加します。
 
-旧Agents SDKの`IssueAssistant` SQLite Durable Objectはdata retentionのため`v1` migrationとclass exportだけを残し、runtime bindingとpublic routeを持ちません。旧messageのexport/backfillとretention判断が終わるまで`deleted_classes`を追加しないでください。
-
 ## ローカル起動
 
 ```bash

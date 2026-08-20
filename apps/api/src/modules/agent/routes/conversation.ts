@@ -1,6 +1,12 @@
+import {
+  agentMessagePageSchema,
+  agentRunResultSchema,
+  agentThreadListSchema,
+  agentThreadSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
 import { Elysia } from "elysia"
+import * as v from "valibot"
 
-import { agentRunResultSchema } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { errorResponseModel, tenantErrorResponses } from "../../../models/api"
 import {
@@ -8,13 +14,9 @@ import {
   withObservedSpan,
 } from "../../../platform/observability/runtime"
 import type { AccessControlFactory } from "../../authorization/public"
-import { agentStreamResponseModel } from "../action-schema"
 import {
-  agentMessagePageModel,
   agentMessagePageQueryModel,
   agentChatBodyModel,
-  agentThreadListModel,
-  agentThreadModel,
   agentThreadParamsModel,
   agentRunParamsModel,
   createAgentThreadBodyModel,
@@ -27,6 +29,10 @@ const agentErrorResponses = {
   ...tenantErrorResponses,
   503: errorResponseModel,
 } as const
+
+// SSEのResponse本体はElysiaのJSON response schemaでは検査できない。stream内の
+// UIMessage契約はagent-contractsで検査し、ここではtransportだけを宣言する。
+const agentStreamResponseModel = v.any()
 
 export const createAgentConversationRoutes = (
   service: AgentService,
@@ -44,7 +50,7 @@ export const createAgentConversationRoutes = (
       {
         authenticated: true,
         response: {
-          200: agentThreadListModel,
+          200: agentThreadListSchema,
           ...agentErrorResponses,
         },
         detail: {
@@ -74,7 +80,7 @@ export const createAgentConversationRoutes = (
         authenticated: true,
         body: createAgentThreadBodyModel,
         response: {
-          201: agentThreadModel,
+          201: agentThreadSchema,
           ...agentErrorResponses,
         },
         detail: {
@@ -101,7 +107,7 @@ export const createAgentConversationRoutes = (
         authenticated: true,
         params: agentThreadParamsModel,
         response: {
-          200: agentThreadModel,
+          200: agentThreadSchema,
           ...agentErrorResponses,
         },
         detail: {
@@ -263,7 +269,7 @@ export const createAgentConversationRoutes = (
         params: agentThreadParamsModel,
         query: agentMessagePageQueryModel,
         response: {
-          200: agentMessagePageModel,
+          200: agentMessagePageSchema,
           ...agentErrorResponses,
         },
         detail: {

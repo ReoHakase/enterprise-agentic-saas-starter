@@ -152,8 +152,10 @@ feature rootの責務:
 | `index.ts`                       | browser-safeなfeature公開surface                         |
 | `server.ts`                      | `server-only`なfeature公開surface                        |
 
-Web-local schemaはAPI transport typeの代用品ではありません。untrusted responseをUIへ表示する
-直前のruntime validationに使います。
+Web-local schemaはAPI transport typeの代用品ではありません。Agentの公開thread、message page、run、
+action、execution、approval、context revocation、UIMessage streamは
+`@enterprise-agentic-saas/agent-contracts`のschemaを直接使います。Web-local schemaはcomposer draftや
+context switch state等、HTTP responseではないWeb固有projectionのruntime validationに限定します。
 
 `model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
 `fetch`、`useChat`、browser APIをimportしません。別featureのUIから利用できるのは`index.ts`が
@@ -367,6 +369,7 @@ production hookのmockは作らず、network/transport/portだけをfakeにし�
 
 ```text
 @enterprise-agentic-saas/api/client
+@enterprise-agentic-saas/agent-contracts
 @enterprise-agentic-saas/auth/client
 @enterprise-agentic-saas/ui/*
 @/features/<feature>/schema データだけの実行時検証契約
@@ -433,7 +436,7 @@ import { IssueLink } from "@/features/issues/components/issue-link"
 
 - controller/view分割にpropsが増える
 - Story、Skeleton、Error Boundary componentの保守対象が増える
-- Web-local schemaが追加される
+- UI固有projectionにはWeb-local schemaが追加される
 - feature public surfaceの設計が必要になる
 
 分割は条件付きにし、単純componentのceremonyを避けます。同じ外側のshellと予約領域を持つroute群は、

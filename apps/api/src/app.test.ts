@@ -1,11 +1,6 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import type {
-  OrganizationInvitationEmailProps,
-  RenderedEmail,
-  SendEmail,
-} from "@enterprise-agentic-saas/email"
 import { eq } from "drizzle-orm"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { createApp } from "./app"
 import {
@@ -17,36 +12,6 @@ import {
 import { resolveAndPersistActiveOrganizationId } from "./modules/users/repository"
 import { env } from "./platform/env"
 import { corsPlugin } from "./platform/plugins/cors"
-
-const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
-  invitationEmailRenderSpy: vi.fn<
-    (
-      props: OrganizationInvitationEmailProps
-    ) => Promise<RenderedEmail<OrganizationInvitationEmailProps>>
-  >(async (props) => ({
-    template: "organization_invitation",
-    subject: "Organization invitation",
-    html: "<p>Organization invitation</p>",
-    text: "Organization invitation",
-    renderProps: props,
-  })),
-  invitationEmailSendSpy: vi.fn<SendEmail>(async () => undefined),
-}))
-
-vi.mock(import("@enterprise-agentic-saas/email"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  renderOrganizationInvitationEmail: invitationEmailRenderSpy,
-}))
-vi.mock("@enterprise-agentic-saas/email/runtime", () => ({
-  backgroundTaskHandler: undefined,
-  createRuntimeEmailSender: () => invitationEmailSendSpy,
-}))
-
-beforeEach(() => {
-  invitationEmailRenderSpy.mockClear()
-  invitationEmailSendSpy.mockReset()
-  invitationEmailSendSpy.mockResolvedValue(undefined)
-})
 
 describe("createApp security and OpenAPI", () => {
   it("applies credentialed CORS to existing routes and mounted auth handlers", async () => {

@@ -2,7 +2,7 @@
 title: apps/agentの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-19
 applies_to:
   - apps/agent/**
 ---
@@ -101,8 +101,6 @@ apps/agent/src/
       worker.ts
       scripted-scenarios.ts
 
-    legacy/
-      issue-assistant.ts
 ```
 
 `index.ts`はMastra Studioのentrypoint、`worker.ts`はproduction Cloudflare Worker entrypointです。
@@ -205,13 +203,6 @@ Vitestはtest fileからtest-supportを直接importしてfactoryへ渡せます�
 - production dry-run bundleにscripted modelのsentinelが含まれない
 - CIの一時Service BindingだけがE2E Workerを参照する
 - production deploy configが`wrangler.e2e.jsonc`を参照しない
-
-## legacy retention
-
-旧`IssueAssistant`は`src/mastra/legacy/issue-assistant.ts`へ隔離し、通常runtimeから到達不能にします。
-既存のDurable Object class exportとWrangler migrationの`new_sqlite_classes`を保持し、旧endpointは
-`410 Gone`を返します。data export、backfill、件数、backup、retentionの別判断が完了するまで
-`deleted_classes`を追加しません。
 
 ## import boundary
 

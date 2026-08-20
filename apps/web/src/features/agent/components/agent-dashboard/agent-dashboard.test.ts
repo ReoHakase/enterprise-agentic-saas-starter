@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { extractPendingActionIds } from "../../pending-action-ids"
 import { parseAgentMessagePage } from "../../schema"
+import { createPendingActionToolOutput } from "../../test-support/pending-action-fixture"
 import { AgentApprovalAttachments } from "../agent-approval-attachments/agent-approval-attachments"
 import { AgentMessage } from "../agent-message/agent-message"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
@@ -58,7 +59,7 @@ describe("agent action projection", () => {
             toolCallId: "call-1",
             state: "output-available",
             input: {},
-            output: { status: "pending", actionId: "action-1" },
+            output: createPendingActionToolOutput("action-1"),
           },
           {
             type: "dynamic-tool",
@@ -66,7 +67,7 @@ describe("agent action projection", () => {
             toolCallId: "call-2",
             state: "output-available",
             input: {},
-            output: { status: "pending", actionId: "action-1" },
+            output: createPendingActionToolOutput("action-1"),
           },
           {
             type: "dynamic-tool",
@@ -95,7 +96,7 @@ describe("agent action projection", () => {
               toolCallId: "call-4",
               state: "output-available",
               input: { title: "Investigate screenshot" },
-              output: { status: "pending", actionId: "action-2" },
+              output: createPendingActionToolOutput("action-2"),
             },
           ],
         },

@@ -1,3 +1,4 @@
+import type { AgentIssueActionPreview } from "@enterprise-agentic-saas/agent-contracts"
 import {
   AGENT_ACTION_MAX_LIFETIME_MS,
   agentActionAssets,
@@ -7,7 +8,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
-import type { AgentIssueActionPreview } from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
 import { hashAgentToken } from "../crypto"
 import {

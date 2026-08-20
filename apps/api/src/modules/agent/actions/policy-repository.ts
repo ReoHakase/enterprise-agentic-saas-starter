@@ -1,3 +1,4 @@
+import type { AgentApprovalPolicy } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentThreadPermissions,
@@ -5,7 +6,6 @@ import {
 } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
 
-import type { AgentApprovalPolicy } from "../../../agent-client"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
 import {
   requireActiveMembership,

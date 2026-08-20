@@ -2,7 +2,7 @@
 title: APIテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-19
 applies_to:
   - apps/api/**
 related:
@@ -209,6 +209,10 @@ A5へ上げる判断:
 - template renderとprovider adapterはEmail package
 - どの業務条件でどのmail commandを発行するかはA2
 - APIからruntime adapterへ正しく接続されるかはA4/A5
+
+APIの`api-unit`では、配送内容を観測しないテストに限り、`vitest.setup.ts`から状態を持たない決定的な
+no-op Email `fake`を接続します。Email契約、`render`、配送引数、配送失敗を検証するテストは共通`fake`へ
+依存せず、対象専用の`fake`または実装を明示します。
 
 ## 実行
 

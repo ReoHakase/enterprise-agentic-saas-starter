@@ -1,3 +1,8 @@
+import {
+  agentIssueActionPreviewSchema,
+  type AgentActionExecutionResult,
+  type AgentIssueAction,
+} from "@enterprise-agentic-saas/agent-contracts"
 import type {
   agentActions,
   IssuePriority,
@@ -5,12 +10,7 @@ import type {
 } from "@enterprise-agentic-saas/db/schema"
 import * as v from "valibot"
 
-import type {
-  AgentActionExecutionResult,
-  AgentIssueAction,
-} from "../../../agent-client"
 import { HttpError } from "../../../errors/http-error"
-import { agentIssueActionPreviewModel } from "../action-schema"
 import { hashAgentToken } from "../crypto"
 
 export const ACTION_TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
@@ -321,31 +321,59 @@ export const safeStoredParse = <
   return result.output
 }
 
-const normalizeLegacyPreview = (input: unknown) => {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return input
-  const attachments = Reflect.get(input, "attachments")
+const isRecord = (input: unknown): input is Record<string, unknown> =>
+  Boolean(input) && typeof input === "object" && !Array.isArray(input)
+
+const projectLegacyPreviewAttachment = (input: unknown) => {
+  if (!isRecord(input)) return input
+  const source =
+    input.source ??
+    (typeof input.assetId === "string"
+      ? "asset"
+      : typeof input.fileId === "string"
+        ? "file"
+        : undefined)
+  if (source === "asset") {
+    return {
+      assetId: input.assetId,
+      filename: input.filename,
+      sizeBytes: input.sizeBytes,
+      source,
+    }
+  }
+  if (source === "file") {
+    return {
+      fileId: input.fileId,
+      filename: input.filename,
+      sizeBytes: input.sizeBytes,
+      source,
+    }
+  }
+  return { source }
+}
+
+const projectLegacyPreviewField = (input: unknown) =>
+  isRecord(input)
+    ? { after: input.after, before: input.before, field: input.field }
+    : input
+
+const projectLegacyPreview = (input: unknown) => {
+  if (!isRecord(input)) return input
+  const attachments = input.attachments
+  const fields = input.fields
   return {
-    ...input,
-    attachmentOperation: Reflect.get(input, "attachmentOperation") ?? null,
+    attachmentOperation: input.attachmentOperation ?? null,
     attachments: Array.isArray(attachments)
-      ? attachments.map((attachment) => {
-          if (
-            !attachment ||
-            typeof attachment !== "object" ||
-            Array.isArray(attachment) ||
-            Object.hasOwn(attachment, "source")
-          ) {
-            return attachment
-          }
-          if (typeof Reflect.get(attachment, "assetId") === "string") {
-            return { source: "asset", ...attachment }
-          }
-          if (typeof Reflect.get(attachment, "fileId") === "string") {
-            return { source: "file", ...attachment }
-          }
-          return attachment
-        })
+      ? attachments.map(projectLegacyPreviewAttachment)
       : attachments,
+    destructive: input.destructive,
+    fields: Array.isArray(fields)
+      ? fields.map(projectLegacyPreviewField)
+      : fields,
+    issueNumber: input.issueNumber,
+    issueRevision: input.issueRevision,
+    kind: input.kind,
+    title: input.title,
   }
 }
 
@@ -354,8 +382,9 @@ export const toActionDto = (action: ActionRow): AgentIssueAction => {
     action.canonicalPreview === null
       ? null
       : safeStoredParse(
-          agentIssueActionPreviewModel,
-          normalizeLegacyPreview(action.canonicalPreview)
+          agentIssueActionPreviewSchema,
+          // 旧rowだけは欠落fieldを補完し、nested値も公開表示fieldへ再帰的に投影する。
+          projectLegacyPreview(action.canonicalPreview)
         )
   return {
     id: action.id,

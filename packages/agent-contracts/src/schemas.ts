@@ -11,8 +11,9 @@ export const agentTitleSchema = v.pipe(
   v.minLength(1),
   v.maxLength(200)
 )
-const agentThreadTitleSchema = v.pipe(
+export const agentThreadTitleSchema = v.pipe(
   v.string(),
+  v.trim(),
   v.minLength(1),
   v.maxLength(80)
 )
@@ -237,6 +238,10 @@ export const agentRunResultSchema = v.strictObject({
     "canceled",
     "expired",
   ]),
+})
+
+export const agentContextRevocationSchema = v.strictObject({
+  contextEpoch: agentPositiveIntegerSchema,
 })
 
 export const agentWebSearchReservationSchema = v.strictObject({

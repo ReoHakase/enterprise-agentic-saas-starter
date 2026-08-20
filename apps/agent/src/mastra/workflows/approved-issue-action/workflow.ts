@@ -10,6 +10,7 @@ import {
   createWorkflow,
   createWorkflowStateReader,
 } from "@mastra/core/workflows"
+import { toStandardJsonSchema } from "@valibot/to-json-schema"
 import { jsonSchema } from "ai"
 import * as v from "valibot"
 
@@ -27,74 +28,29 @@ const actionResumeSchema = v.strictObject({
   actionId: agentIdentifierSchema,
   executionId: agentIdentifierSchema,
 })
-type ActionInput = v.InferOutput<typeof actionInputSchema>
-type ActionResume = v.InferOutput<typeof actionResumeSchema>
-const valibotValidator =
-  <TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
-    schema: TSchema
-  ) =>
-  (
-    value: unknown
-  ):
-    | { success: true; value: v.InferOutput<TSchema> }
-    | { success: false; error: Error } => {
-    const parsed = v.safeParse(schema, value)
-    return parsed.success
-      ? { success: true, value: parsed.output }
-      : { success: false, error: new Error("Workflow input is invalid") }
-  }
-const identifierJsonSchema = {
-  type: "string",
-  pattern: "^[A-Za-z0-9_-]{1,128}$",
-} as const
-const inputSchema = jsonSchema<ActionInput>(
-  {
-    type: "object",
-    additionalProperties: false,
-    required: ["actionId"],
-    properties: { actionId: identifierJsonSchema },
-  },
-  { validate: valibotValidator(actionInputSchema) }
-)
+const canonicalOutputValidator = (
+  value: unknown
+):
+  | { success: true; value: AgentActionExecutionResult }
+  | { success: false; error: Error } => {
+  const parsed = v.safeParse(agentActionExecutionResultSchema, value)
+  return parsed.success
+    ? { success: true, value: parsed.output }
+    : { success: false, error: new Error("Workflow output is invalid") }
+}
+const inputSchema = toStandardJsonSchema(actionInputSchema)
 const suspendedSchema = inputSchema
-const resumeSchema = jsonSchema<ActionResume>(
-  {
-    type: "object",
-    additionalProperties: false,
-    required: ["actionId", "executionId"],
-    properties: {
-      actionId: identifierJsonSchema,
-      executionId: identifierJsonSchema,
-    },
-  },
-  { validate: valibotValidator(actionResumeSchema) }
+const resumeSchema = toStandardJsonSchema(actionResumeSchema)
+const canonicalOutputStandardSchema = toStandardJsonSchema(
+  agentActionExecutionResultSchema
 )
 const outputSchema = jsonSchema<AgentActionExecutionResult>(
-  {
-    type: "object",
-    additionalProperties: false,
-    required: ["actionId", "kind", "status", "issue"],
-    properties: {
-      actionId: identifierJsonSchema,
-      kind: {
-        type: "string",
-        enum: ["create_issue", "update_issue", "delete_issue"],
-      },
-      status: { type: "string", const: "succeeded" },
-      issue: {
-        type: "object",
-        additionalProperties: false,
-        required: ["id", "number", "revision", "deleted"],
-        properties: {
-          id: identifierJsonSchema,
-          number: { type: "integer", minimum: 1 },
-          revision: { type: "integer", minimum: 1 },
-          deleted: { type: "boolean" },
-        },
-      },
-    },
-  },
-  { validate: valibotValidator(agentActionExecutionResultSchema) }
+  () =>
+    canonicalOutputStandardSchema["~standard"].jsonSchema.output({
+      target: "draft-07",
+      libraryOptions: { ignoreActions: ["check_items"] },
+    }),
+  { validate: canonicalOutputValidator }
 )
 
 export type ApprovedIssueActionRuntime = {
@@ -217,8 +173,10 @@ export const createApprovedIssueActionWorkflow = (
           }),
           { actionId: inputData.actionId }
         )
+        const validatedReceipt = canonicalOutputValidator(receipt)
+        if (!validatedReceipt.success) throw validatedReceipt.error
         await settlement.complete()
-        return receipt
+        return validatedReceipt.value
       } catch (cause) {
         reportRuntimeFailure(runtime, cause)
         try {

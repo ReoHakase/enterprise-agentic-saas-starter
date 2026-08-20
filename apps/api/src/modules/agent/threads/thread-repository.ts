@@ -1,3 +1,4 @@
+import { AGENT_THREAD_LIST_MAX_COUNT } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentActionAssets,
@@ -50,6 +51,7 @@ export const listAgentThreadsForSession = async (
         )
       )
       .orderBy(desc(agentThreads.createdAt), desc(agentThreads.id))
+      .limit(AGENT_THREAD_LIST_MAX_COUNT + 1)
     return rows.map(toThreadDto)
   })
 

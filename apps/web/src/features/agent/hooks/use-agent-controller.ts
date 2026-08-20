@@ -1,7 +1,7 @@
 "use client"
 
 import { useChat, type UseChatHelpers } from "@ai-sdk/react"
-import { agentClientToolNames } from "@enterprise-agentic-saas/api/client"
+import { agentClientToolNames } from "@enterprise-agentic-saas/agent-contracts"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import { type QueryClient, useQueryClient } from "@tanstack/react-query"
 import type { ChatOnFinishCallback, ChatOnToolCallCallback } from "ai"

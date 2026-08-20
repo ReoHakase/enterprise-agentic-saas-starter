@@ -10,8 +10,6 @@ import { handleAgentRuntimeRequest } from "../runtime/run-agent"
 import { SCRIPTED_MODEL_SENTINEL } from "../test-support/scripted-model"
 import { createScriptedAgentRuntimeComposition } from "./scripted-runtime-composition"
 
-export { IssueAssistant } from "../legacy/issue-assistant"
-
 const getScriptedAgentIsolateComposition = createAgentIsolateCompositionCache(
   createScriptedAgentRuntimeComposition
 )

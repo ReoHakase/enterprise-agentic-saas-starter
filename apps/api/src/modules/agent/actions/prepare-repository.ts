@@ -1,11 +1,11 @@
-import type { Db } from "@enterprise-agentic-saas/db"
-
 import type {
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
   AgentIssueAction,
   AgentUpdateIssueActionInput,
-} from "../../../agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { Db } from "@enterprise-agentic-saas/db"
+
 import { HttpError } from "../../../errors/http-error"
 import { bindReusableAgentAssetsToRunInTransaction } from "../../files/public"
 import { type AgentTransaction } from "../threads/repository"

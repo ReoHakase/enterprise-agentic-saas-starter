@@ -6,6 +6,7 @@ import type {
   agentApprovalPolicySchema,
   agentAttachmentMutationReceiptSchema,
   agentConnectionSchema,
+  agentContextRevocationSchema,
   agentCreateIssueActionInputSchema,
   agentDeleteIssueActionInputSchema,
   agentGetIssueInputSchema,
@@ -48,6 +49,9 @@ export type AgentAttachmentMutationReceipt = v.InferOutput<
   typeof agentAttachmentMutationReceiptSchema
 >
 export type AgentConnection = v.InferOutput<typeof agentConnectionSchema>
+export type AgentContextRevocation = v.InferOutput<
+  typeof agentContextRevocationSchema
+>
 export type AgentRunGrant = v.InferOutput<typeof agentRunGrantSchema>
 export type AgentRunResult = v.InferOutput<typeof agentRunResultSchema>
 export type AgentWebSearchReservation = v.InferOutput<

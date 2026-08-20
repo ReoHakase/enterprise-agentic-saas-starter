@@ -2,7 +2,7 @@
 title: 製品Agent仕様の入口
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-19
 ---
 
 # Agent仕様
@@ -57,4 +57,4 @@ release acceptanceを所有します。
 - model文面をapproval preview、authorization、Issue linkの根拠にする方式
 - API/Web/Agent間の旧interface互換layer
 
-公開API、内部module、schemaはrelease前のため新契約へ直接移行します。ただし既存DB行はmigrationで保持し、旧`IssueAssistant` SQLite namespaceは別retention判断まで不可逆削除しません。
+公開API、内部module、schemaはrelease前のため新契約へ直接移行します。

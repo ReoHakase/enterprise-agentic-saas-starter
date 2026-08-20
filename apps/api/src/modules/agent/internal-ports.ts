@@ -18,7 +18,7 @@ import type {
   AgentUsageRecordResult,
   AgentWebSearchReservation,
   AgentAccountContext,
-} from "../../agent-client"
+} from "@enterprise-agentic-saas/agent-contracts"
 
 type AgentGrantInput = { grant: string }
 

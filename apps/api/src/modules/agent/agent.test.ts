@@ -1,3 +1,4 @@
+import { agentThreadSchema } from "@enterprise-agentic-saas/agent-contracts"
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { sql } from "drizzle-orm"
 import * as v from "valibot"
@@ -9,10 +10,31 @@ import {
   headers,
   request,
 } from "./agent.test-support"
-import { agentThreadModel } from "./model"
 import { configureAgentRuntime } from "./runtime"
 
 describe("Agent public control plane", () => {
+  it("fails closed when the unpaginated thread list exceeds its public bound", async () => {
+    const { app, db } = await createFixture()
+    const now = new Date()
+    await db.insert(schema.agentThreads).values(
+      Array.from({ length: 1_001 }, (_, index) => ({
+        id: `agent-thread-${index}`,
+        organizationId: "agent-org-a",
+        ownerUserId: "agent-user-a",
+        createdAt: now,
+      }))
+    )
+
+    const response = await app.handle(request("/agent/threads"))
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get("retry-after")).toBe("30")
+    expect(await response.json()).toEqual({
+      error: "service_unavailable",
+      message: "The service is temporarily unavailable.",
+    })
+  })
+
   it("creates the initial thread permission in the thread transaction", async () => {
     const { app, db } = await createFixture()
     const fullAccessResponse = await app.handle(
@@ -23,7 +45,7 @@ describe("Agent public control plane", () => {
     )
     expect(fullAccessResponse.status).toBe(201)
     const fullAccessThread = v.parse(
-      agentThreadModel,
+      agentThreadSchema,
       await fullAccessResponse.json()
     )
     const defaultResponse = await app.handle(
@@ -31,7 +53,7 @@ describe("Agent public control plane", () => {
     )
     expect(defaultResponse.status).toBe(201)
     const defaultThread = v.parse(
-      agentThreadModel,
+      agentThreadSchema,
       await defaultResponse.json()
     )
     const otherSessionResponse = await app.handle(
@@ -44,7 +66,7 @@ describe("Agent public control plane", () => {
     )
     expect(otherSessionResponse.status).toBe(201)
     const otherSessionThread = v.parse(
-      agentThreadModel,
+      agentThreadSchema,
       await otherSessionResponse.json()
     )
 
@@ -122,7 +144,7 @@ describe("Agent public control plane", () => {
     const createdResponse = await app.handle(
       request("/agent/threads", { method: "POST", body: {} })
     )
-    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
     const { origin: _origin, ...headersWithoutOrigin } = headers()
     const response = await app.handle(
       new Request("http://localhost/agent/chat", {
@@ -151,7 +173,7 @@ describe("Agent public control plane", () => {
     const createdResponse = await app.handle(
       request("/agent/threads", { method: "POST", body: {} })
     )
-    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
     const response = await app.handle(
       request("/agent/chat", {
         method: "POST",
@@ -177,7 +199,7 @@ describe("Agent public control plane", () => {
     const createdResponse = await app.handle(
       request("/agent/threads", { method: "POST", body: {} })
     )
-    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
     const privateBody = "private database detail sk-secret-value"
     const runtimeResponses = [
       { status: 409, retryAfter: "99999" },
@@ -256,7 +278,7 @@ describe("Agent public control plane", () => {
       request("/agent/threads", { method: "POST", body: {} })
     )
     expect(createdResponse.status).toBe(201)
-    const created = v.parse(agentThreadModel, await createdResponse.json())
+    const created = v.parse(agentThreadSchema, await createdResponse.json())
     expect(created.title).toBe("New conversation")
 
     const otherOwnerResponse = await app.handle(
@@ -305,7 +327,7 @@ describe("Agent public control plane", () => {
     const createdResponse = await app.handle(
       request("/agent/threads", { method: "POST", body: {} })
     )
-    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
 
     const response = await app.handle(
       request("/agent/chat", {
@@ -429,7 +451,7 @@ describe("Agent public control plane", () => {
     const createdResponse = await app.handle(
       request("/agent/threads", { method: "POST", body: {} })
     )
-    const thread = v.parse(agentThreadModel, await createdResponse.json())
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
 
     const response = await app.handle(
       request("/agent/chat", {

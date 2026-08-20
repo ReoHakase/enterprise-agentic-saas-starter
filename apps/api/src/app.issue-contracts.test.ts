@@ -1,11 +1,6 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import type {
-  OrganizationInvitationEmailProps,
-  RenderedEmail,
-  SendEmail,
-} from "@enterprise-agentic-saas/email"
 import * as v from "valibot"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { createApp } from "./app"
 import {
@@ -18,36 +13,6 @@ import {
 import { createApiClient } from "./client"
 import { HttpError } from "./errors/http-error"
 import { issueTimelinePageModel } from "./modules/issues/model"
-
-const { invitationEmailRenderSpy, invitationEmailSendSpy } = vi.hoisted(() => ({
-  invitationEmailRenderSpy: vi.fn<
-    (
-      props: OrganizationInvitationEmailProps
-    ) => Promise<RenderedEmail<OrganizationInvitationEmailProps>>
-  >(async (props) => ({
-    template: "organization_invitation",
-    subject: "Organization invitation",
-    html: "<p>Organization invitation</p>",
-    text: "Organization invitation",
-    renderProps: props,
-  })),
-  invitationEmailSendSpy: vi.fn<SendEmail>(async () => undefined),
-}))
-
-vi.mock(import("@enterprise-agentic-saas/email"), async (importOriginal) => ({
-  ...(await importOriginal()),
-  renderOrganizationInvitationEmail: invitationEmailRenderSpy,
-}))
-vi.mock("@enterprise-agentic-saas/email/runtime", () => ({
-  backgroundTaskHandler: undefined,
-  createRuntimeEmailSender: () => invitationEmailSendSpy,
-}))
-
-beforeEach(() => {
-  invitationEmailRenderSpy.mockClear()
-  invitationEmailSendSpy.mockReset()
-  invitationEmailSendSpy.mockResolvedValue(undefined)
-})
 
 describe("Issue transport, pagination, and tenant contracts", () => {
   it("paginates equal-timestamp timeline items without gaps or duplicates", async () => {
