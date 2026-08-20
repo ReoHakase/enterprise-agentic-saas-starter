@@ -2,7 +2,7 @@
 title: Product Agentテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-19
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -58,7 +58,6 @@ apps/agent/src/mastra/
   evals/
   skills/
   workflows/
-  legacy/
   index.ts
   server.ts
   worker.ts

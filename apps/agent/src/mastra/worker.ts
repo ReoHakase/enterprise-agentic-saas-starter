@@ -30,8 +30,6 @@ import type { AgentRuntimeEnv } from "./composition/environment"
 import { getAgentIsolateComposition } from "./composition/isolate-composition"
 import { handleAgentRuntimeRequest } from "./runtime/run-agent"
 
-export { IssueAssistant } from "./legacy/issue-assistant"
-
 type AgentHttpTelemetryAttributes = Record<
   string,
   boolean | number | string | undefined

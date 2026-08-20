@@ -34,4 +34,3 @@ description: enterprise-agentic-saas-starterのAgent Worker、Mastra runtime、t
 - DB、Auth、Email、WebをAgentから直接importしない。
 - model output、label、opaque ID、Mastra Memoryを認可へ使わない。
 - production、test artifact、remote telemetryへsecret、private URL、raw bytes、provider raw responseを残さない。local rich telemetryは固定local endpointかつdevelopmentの場合だけ認証materialをredactして保持する。
-- `IssueAssistant`を削除するWrangler migrationをこの移行へ含めない。

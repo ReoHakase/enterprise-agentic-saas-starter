@@ -5,6 +5,8 @@ import { join, resolve } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
+import { createAgentEvalConfigs } from "./evals/stack-config"
+
 const repositoryRoot = resolve(import.meta.dirname, "../../../..")
 const wrapperPath = join(repositoryRoot, "scripts/wrangler-dev-portless.sh")
 const temporaryDirectories: string[] = []
@@ -211,23 +213,20 @@ describe("mutual Worker Service Binding deployment", () => {
         service: finalConfig.name,
       },
     ])
-    expect(agentConfig.migrations).toEqual([
-      {
-        new_sqlite_classes: ["IssueAssistant"],
-        tag: "v1",
+    expect(agentConfig.exports).toEqual({
+      IssueAssistant: {
+        state: "deleted",
+        type: "durable-object",
       },
-    ])
+    })
     expect(agentConfig.main).toBe("src/mastra/worker.ts")
-    expect(agentConfig).not.toHaveProperty("deleted_classes")
+    expect(agentConfig).not.toHaveProperty("migrations")
     expect(agentConfig).not.toHaveProperty("durable_objects")
     const generatedAgentTypes = await readFile(
       join(repositoryRoot, "apps/agent/src/cloudflare-env.d.ts"),
       "utf8"
     )
-    expect(generatedAgentTypes).toContain('durableNamespaces: "IssueAssistant"')
-    expect(generatedAgentTypes).not.toContain(
-      "IssueAssistant: DurableObjectNamespace"
-    )
+    expect(generatedAgentTypes).not.toContain("IssueAssistant")
   })
 
   it("isolates the scripted E2E entrypoint from production", async () => {
@@ -241,17 +240,39 @@ describe("mutual Worker Service Binding deployment", () => {
       join(repositoryRoot, "apps/agent/src/mastra/worker.ts"),
       "utf8"
     )
+    const e2eWorker = await readFile(
+      join(repositoryRoot, "apps/agent/src/mastra/e2e/worker.ts"),
+      "utf8"
+    )
 
     expect(e2eConfig.main).toBe("src/mastra/e2e/worker.ts")
-    expect(e2eConfig.migrations).toEqual(productionConfig.migrations)
-    expect(e2eConfig).not.toHaveProperty("deleted_classes")
+    expect(e2eConfig).not.toHaveProperty("exports")
+    expect(e2eConfig).not.toHaveProperty("migrations")
     expect(JSON.stringify(productionConfig)).not.toContain("wrangler.e2e.jsonc")
     expect(productionWorker).not.toContain("/e2e/")
     expect(productionWorker).not.toContain("/test-support/")
     expect(productionWorker).not.toContain("SCRIPTED_MODEL_SENTINEL")
+    expect(productionWorker).not.toContain("IssueAssistant")
+    expect(e2eWorker).not.toContain("IssueAssistant")
     expect(productionWorker).not.toMatch(
       /OPENROUTER_API_KEY.*(?:scripted|mock)/iu
     )
+  })
+
+  it("keeps the retired namespace out of local eval Worker configs", () => {
+    const configs = createAgentEvalConfigs({
+      agentDatabaseOrigin: "http://127.0.0.1:42001",
+      agentName: "agent-eval",
+      apiName: "api-eval",
+      apiOrigin: "http://127.0.0.1:42002",
+      availableTools: [],
+      databaseOrigin: "http://127.0.0.1:42003",
+      namespace: "worker-infrastructure-test",
+    })
+
+    expect(configs.agent).not.toHaveProperty("exports")
+    expect(configs.agent).not.toHaveProperty("migrations")
+    expect(JSON.stringify(configs.agent)).not.toContain("IssueAssistant")
   })
 
   it("deploys Agent before the final API and gates bootstrap on remote state", async () => {

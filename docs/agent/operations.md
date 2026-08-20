@@ -2,7 +2,7 @@
 title: 製品Agentの運用runbook
 status: accepted
 implementation: active
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-19
 ---
 
 # 運用runbook
@@ -65,7 +65,6 @@ API/Agent/Webのtypegenとdry-run/buildを先に完了します。production rem
 - minimal receipt/audit: audit policyに従う
 - ready chat asset: 既定72時間、hard max 7日
 - expired action/cardはstatus projectionを返し、汎用load errorにしない
-- old `IssueAssistant` SQLite: export/件数/backup/保持判断まで削除しない
 
 scheduled sweepとrequest時lazy sweepはtenant、claim、leaseを再確認し、exact R2 keyのcleanup jobだけを作ります。prefix deleteやbroad filesystem deleteを使いません。
 
