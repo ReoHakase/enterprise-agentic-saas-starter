@@ -48,6 +48,10 @@ export const Ready = meta.story({
   play: async ({ canvas, canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body)
     await expect(await canvas.findByText("Codex local")).toBeVisible()
+    await expect(
+      canvas.getByRole("checkbox", { name: "Issues Read access" })
+    ).toHaveAttribute("aria-disabled", "true")
+    await expect(canvas.getByRole("button", { name: "Issues" })).toBeDisabled()
     await userEvent.click(canvas.getByRole("button", { name: "Revoke" }))
     await expect(
       body.getByRole("alertdialog", { name: "Revoke MCP access?" })

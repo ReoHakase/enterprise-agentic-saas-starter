@@ -1,9 +1,12 @@
-import { dehydrate, QueryClient } from "@tanstack/react-query"
+import {
+  dehydrate,
+  HydrationBoundary,
+  QueryClient,
+} from "@tanstack/react-query"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { PageShell } from "@/components/page-shell/page-shell"
-import { QueryHydrationBoundary } from "@/components/query-hydration-boundary/query-hydration-boundary"
 import { IssuesDashboard, issuesQueryOptions } from "@/features/issues"
 import { issueSearchParamsCache } from "@/features/issues/server"
 import { OrganizationActivationGate } from "@/features/organizations"
@@ -73,13 +76,13 @@ export default async function IssuesPage({
       title="Issues"
       description={`Track work for ${activeOrganization.name}. Switch organizations from the sidebar.`}
     >
-      <QueryHydrationBoundary state={dehydrate(queryClient)}>
+      <HydrationBoundary state={dehydrate(queryClient)}>
         <IssuesDashboard
           organizationId={activeOrganization.id}
           organizationSlug={activeOrganization.slug}
           currentUserId={me.user.id}
         />
-      </QueryHydrationBoundary>
+      </HydrationBoundary>
     </PageShell>
   )
 }

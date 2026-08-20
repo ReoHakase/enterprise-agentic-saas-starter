@@ -2,7 +2,7 @@
 title: remote MCP、OAuth、PAT連携
 status: accepted
 implementation: active
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-20
 applies_to:
   - apps/api/src/mcp/**
   - packages/auth/**
@@ -138,7 +138,7 @@ ChatGPT、Codex、Claude Codeなど対話型clientの標準経路です。
 
 認可画面では、未ログインの場合に署名済みauthorization queryを`redirectTo`へ保持してsign-inへ送り、ログイン後に同じ要求へ戻します。端末に複数のログイン済みaccountがある場合は、organization選択とconsentの両方でBetter Auth multi-sessionの既存account switcherからaccountを選び直せます。OAuth画面からdevice sessionのrevokeは行わず、accountを追加または切り替えた後も現在の署名済みOAuth URLを維持します。
 
-未ログインから開始したauthorizationでは、sign-in後にorganization選択を必ず経ます。organization選択は通常のorganization一覧と同じTanStack Table rendererとidentity componentを使います。organization icon、メンバーavatar stack、member count、現在のroleを表示し、credentialは選択した1 organizationへ固定します。consent画面は要求されたscopeだけを対象に、対象を行、操作を列とする同じDataTable rendererの表を表示します。セル単位の選択に加えて、対象行と操作列のlabelまたはcheckboxによる一括選択を提供し、`offline_access`は権限scopeと分けて表示します。許可時は選択後のscope集合だけをBetter Authへ渡し、`offline_access`だけの発行は拒否します。有効なactive organizationを持つログイン済みaccountから開始した場合は、Better Authの標準`postLogin.shouldRedirect`に従ってorganization選択を省略できます。
+未ログインから開始したauthorizationでは、sign-in後にorganization選択を必ず経ます。organization選択は通常のorganization一覧と同じTanStack Table rendererとidentity componentを使います。organization icon、メンバーavatar stack、member count、現在のroleを表示し、credentialは選択した1 organizationへ固定します。consent画面は要求されたscopeだけを対象に、対象を行、操作を列とする固定5行×5列の表を表示します。sort、filter、paginationを持たないためTanStack Tableと共通DataTable rendererは使わず、既存の`Table` primitiveを直接組み合わせます。セル単位の選択に加えて、対象行と操作列のlabelまたはcheckboxによる一括選択を提供し、`offline_access`は権限scopeと分けて表示します。許可時は選択後のscope集合だけをBetter Authへ渡し、`offline_access`だけの発行は拒否します。有効なactive organizationを持つログイン済みaccountから開始した場合は、Better Authの標準`postLogin.shouldRedirect`に従ってorganization選択を省略できます。
 
 ## Organization binding
 

@@ -2,7 +2,7 @@
 title: AgentリファクタとMCP導入テスト戦略
 status: proposed
 implementation: active
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-20
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -316,7 +316,7 @@ OAuth protected resource metadataとclient登録
 下位テストでは、Authのcredential family一覧がaccess tokenとrefresh tokenを同じfamilyへまとめ、token値を
 投影しないこと、refresh family revokeが関連access rowも削除することを確認します。APIのユーザーサービスは
 現在のmembershipに対応する組織summaryとroleだけを付加し、membershipが消えた組織を`null`へ投影します。
-Webの単体テストとStorybookでは、通常の組織一覧とOAuth組織選択が同じtable rendererとidentity componentを使うこと、scopeのセル・行label・列label・補助scope選択、MCP access一覧、revoke確認ダイアログ、失敗時の再試行を固定します。browser E1ではこれに加えて、未ログインから署名済み要求を保持して復帰し、sign-in後に明示的な組織選択を経ること、複数のdevice accountを追加・選択して元の要求へ戻れること、desktop viewportで組織表と権限表が見切れないこと、選択したscopeの部分集合がtoken交換へ渡ること、アカウント設定から同じcredentialをrevokeできることを確認します。
+Webの単体テストとStorybookでは、通常の組織一覧とOAuth組織選択が同じtable rendererとidentity componentを使うこと、固定scope matrixが`Table` primitiveを直接組み合わせてセル・行label・列label・read-only・indeterminate・補助scope選択・mobile overflowを維持すること、MCP access一覧、revoke確認ダイアログ、失敗時の再試行を固定します。browser E1ではこれに加えて、未ログインから署名済み要求を保持して復帰し、sign-in後に明示的な組織選択を経ること、複数のdevice accountを追加・選択して元の要求へ戻れること、desktop viewportで組織表と権限表が見切れないこと、選択したscopeの部分集合がtoken交換へ渡ること、アカウント設定から同じcredentialをrevokeできることを確認します。
 
 実ChatGPTは使わず、`@modelcontextprotocol/sdk`の`Client`と`StreamableHTTPClientTransport`、実browser、実Application DB、local R2を使います。OAuth credentialをtest artifactへ保存せず、traceとvideoは無効化します。実行対象は`e1-mcp-oauth-chromium`であり、rootの`bun run test:e2e`へ含めます。
 

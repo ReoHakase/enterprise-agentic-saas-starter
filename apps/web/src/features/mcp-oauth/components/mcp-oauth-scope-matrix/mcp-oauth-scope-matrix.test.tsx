@@ -18,12 +18,6 @@ const selectedAfterCell = [
   "issues:create",
   "files:read",
 ] as const
-const selectedAfterRow = ["files:read", "offline_access"] as const
-const selectedAfterColumn = [
-  "offline_access",
-  "issues:read",
-  "files:read",
-] as const
 const selectedOfflineOnly = ["offline_access"] as const
 const requestedFilesRead = [
   { scope: "files:read", description: "Read" },
@@ -31,19 +25,23 @@ const requestedFilesRead = [
 const selectedFilesRead = ["files:read"] as const
 
 describe("McpOAuthScopeMatrix", () => {
-  it("supports cell, row, column, and offline access toggles", async () => {
+  it("renders the fixed matrix and toggles an individual scope", async () => {
     const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
     const actor = userEvent.setup()
-    const { rerender } = render(
+    render(
       <McpOAuthScopeMatrix
         onChange={onChange}
         requestedScopes={requestedScopes}
         selectedScopes={selectedInitial}
       />
     )
+    const table = screen.getByRole("table", { name: "Requested access" })
     const grantedPermissions = within(
       screen.getByRole("region", { name: "Permissions to grant" })
     )
+
+    expect(within(table).getAllByRole("row")).toHaveLength(6)
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(6)
     expect(grantedPermissions.getByText("offline_access")).toBeVisible()
     expect(grantedPermissions.getByText("issues:read")).toBeVisible()
     expect(grantedPermissions.queryByText("issues:create")).toBeNull()
@@ -57,46 +55,50 @@ describe("McpOAuthScopeMatrix", () => {
       "issues:create",
       "files:read",
     ])
-    rerender(
+  })
+
+  it("selects every requested scope in an indeterminate row", async () => {
+    const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
+    const actor = userEvent.setup()
+    render(
       <McpOAuthScopeMatrix
         onChange={onChange}
         requestedScopes={requestedScopes}
-        selectedScopes={selectedAfterCell}
+        selectedScopes={selectedInitial}
       />
     )
-    expect(grantedPermissions.getByText("issues:create")).toBeVisible()
+    const issuesToggle = screen.getByRole("checkbox", {
+      name: "Toggle all Issues access",
+    })
 
-    await actor.click(screen.getByRole("button", { name: "Issues" }))
-    expect(onChange).toHaveBeenLastCalledWith(["offline_access", "files:read"])
-    rerender(
+    expect(issuesToggle).toHaveAttribute("aria-checked", "mixed")
+    await actor.click(issuesToggle)
+    expect(onChange).toHaveBeenCalledWith([...selectedAfterCell])
+  })
+
+  it("clears every requested scope in an operation column", async () => {
+    const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
+    const actor = userEvent.setup()
+    render(
       <McpOAuthScopeMatrix
         onChange={onChange}
         requestedScopes={requestedScopes}
-        selectedScopes={selectedAfterRow}
+        selectedScopes={selectedInitial}
       />
     )
 
     await actor.click(screen.getByRole("button", { name: "Read" }))
-    expect(onChange).toHaveBeenLastCalledWith([
-      "offline_access",
-      "issues:read",
-      "files:read",
-    ])
-    rerender(
-      <McpOAuthScopeMatrix
-        onChange={onChange}
-        requestedScopes={requestedScopes}
-        selectedScopes={selectedAfterColumn}
-      />
-    )
+    expect(onChange).toHaveBeenCalledWith([...selectedOfflineOnly])
+  })
 
-    await actor.click(screen.getByRole("button", { name: "Read" }))
-    expect(onChange).toHaveBeenLastCalledWith(["offline_access"])
-    rerender(
+  it("toggles offline access separately from permission scopes", async () => {
+    const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
+    const actor = userEvent.setup()
+    render(
       <McpOAuthScopeMatrix
         onChange={onChange}
         requestedScopes={requestedScopes}
-        selectedScopes={selectedOfflineOnly}
+        selectedScopes={selectedInitial}
       />
     )
 
@@ -105,7 +107,7 @@ describe("McpOAuthScopeMatrix", () => {
         name: /Keep access after the client is closed/u,
       })
     )
-    expect(onChange).toHaveBeenLastCalledWith([])
+    expect(onChange).toHaveBeenCalledWith(["issues:read", "files:read"])
   })
 
   it("renders unavailable operations as non-interactive cells", () => {
@@ -120,6 +122,8 @@ describe("McpOAuthScopeMatrix", () => {
     expect(
       screen.getByRole("checkbox", { name: "Files Read access" })
     ).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("button", { name: "Files" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Read" })).toBeDisabled()
     expect(screen.getAllByText("—")).toHaveLength(24)
   })
 })
