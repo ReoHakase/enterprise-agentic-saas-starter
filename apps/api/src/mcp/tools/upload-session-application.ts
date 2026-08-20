@@ -1,8 +1,3 @@
-import {
-  mcpCreateAttachmentUploadSessionToolOutputSchema,
-  type McpCreateAttachmentUploadSessionToolInput,
-  type McpCreateAttachmentUploadSessionToolOutput,
-} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   mcpAttachmentUploads,
@@ -12,6 +7,11 @@ import {
 import { lte, sql } from "drizzle-orm"
 
 import { HttpError } from "../../errors/http-error"
+import {
+  mcpCreateAttachmentUploadSessionToolOutputSchema,
+  type McpCreateAttachmentUploadSessionToolInput,
+  type McpCreateAttachmentUploadSessionToolOutput,
+} from "../contracts"
 import type { McpPrincipal } from "../principal"
 import { runIdempotently } from "./idempotency"
 import { expireMcpAttachmentUploads } from "./upload-application"

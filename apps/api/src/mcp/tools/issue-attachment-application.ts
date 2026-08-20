@@ -1,9 +1,3 @@
-import {
-  mcpIssueWriteReceiptSchema,
-  type McpAddIssueAttachmentsToolInput,
-  type McpIssueWriteReceipt,
-  type McpRemoveIssueAttachmentsToolInput,
-} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   auditLogs,
@@ -23,6 +17,12 @@ import {
   type FileWithOwner,
 } from "../../modules/files/public"
 import { updateIssueInTransaction } from "../../modules/issues/public"
+import {
+  mcpIssueWriteReceiptSchema,
+  type McpAddIssueAttachmentsToolInput,
+  type McpIssueWriteReceipt,
+  type McpRemoveIssueAttachmentsToolInput,
+} from "../contracts"
 import type { McpPrincipal } from "../principal"
 import { runIdempotently } from "./idempotency"
 import {

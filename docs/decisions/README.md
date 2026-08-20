@@ -2,7 +2,7 @@
 title: ADR運用
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-20
 ---
 
 # ADR運用
@@ -40,10 +40,11 @@ last_reviewed: 2026-08-12
 - [ADR-005 Agent runtimeのsrc/mastra集約](ADR-005-agent-runtime-under-src-mastra.md)
 - [ADR-006 migration history append-only](ADR-006-migration-history-append-only.md)
 - [ADR-007 workspace別テスト戦略](ADR-007-workspace-testing-strategy.md)
-- [ADR-008 Mastra-native Agent runtimeと専用Storage（耐久確定処理の判断はADR-012で一部置換）](ADR-008-mastra-native-agent-runtime.md)
-- [ADR-009 MCPをAPIへ配置しOAuth認証でbusiness toolを直接実行する](ADR-009-mcp-authentication-and-direct-tools.md)
+- [ADR-008 Mastra-native Agent runtimeと専用Storage（耐久確定処理はADR-012、shared tool factoryはADR-015で一部置換）](ADR-008-mastra-native-agent-runtime.md)
+- [ADR-009 MCPをAPIへ配置しOAuth認証でbusiness toolを直接実行する（shared tool factoryはADR-015で一部置換）](ADR-009-mcp-authentication-and-direct-tools.md)
 - [ADR-010 local observabilityをOpenTelemetryと共有LGTMへ統一する（生エラーの保存面はADR-013で一部置換）](ADR-010-local-opentelemetry-lgtm.md)
 - [ADR-011 coding agentのskillとMCP設定をNixで管理する](ADR-011-nix-managed-agent-config.md)
 - [ADR-012 Mastra MemoryとBetter Authの標準機能を独自耐久化より優先する](ADR-012-standard-memory-and-auth-delivery.md)
 - [ADR-013 固定ローカル環境の生エラーをLogsだけへ保存する](ADR-013-local-raw-errors-in-logs-only.md)
 - [ADR-014 pre-commitのVitest Test Projects選択](ADR-014-local-related-vitest-hook.md)
+- [ADR-015 Agent toolとMCP toolを各runtimeが所有する](ADR-015-runtime-owned-agent-and-mcp-tools.md)

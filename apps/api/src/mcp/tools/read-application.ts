@@ -8,9 +8,6 @@ import type {
   GetIssueToolInput,
   IssueSearchToolInput,
   LabelSearchToolInput,
-  McpGetAttachmentUploadStatusToolInput,
-  McpGetAttachmentUploadStatusToolOutput,
-  McpOrganizationContext,
   MemberSearchToolInput,
   ReadIssueAttachmentImageToolInput,
   ReadIssueAttachmentImageToolResult,
@@ -40,6 +37,11 @@ import {
   listIssuesByOrganization,
   type IssueDto,
 } from "../../modules/issues/public"
+import type {
+  McpGetAttachmentUploadStatusToolInput,
+  McpGetAttachmentUploadStatusToolOutput,
+  McpOrganizationContext,
+} from "../contracts"
 import type { McpPrincipal } from "../principal"
 
 const toIssue = (issue: IssueDto): AgentIssue => ({

@@ -2,7 +2,7 @@
 title: 製品Agentのarchitectureとsecurity
 status: accepted
 implementation: active
-last_reviewed: 2026-08-19
+last_reviewed: 2026-08-20
 ---
 
 # Architectureとsecurity
@@ -43,7 +43,6 @@ connection ticketは一回限り、60秒以内です。run grantは5分以内と
 apps/web ──> @enterprise-agentic-saas/api/client
          └─> @enterprise-agentic-saas/agent-contracts
 apps/agent ──> @enterprise-agentic-saas/agent-contracts
-           └─> @enterprise-agentic-saas/agent-tools
            └─> Service Binding ──> apps/api private entrypoint
 apps/api ──> @enterprise-agentic-saas/db
          └─> @enterprise-agentic-saas/agent-contracts

@@ -2,14 +2,13 @@
 title: AgentリファクタとMCP導入テスト戦略
 status: proposed
 implementation: active
-last_reviewed: 2026-08-12
+last_reviewed: 2026-08-20
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
   - apps/api/src/mcp/**
   - apps/web/src/features/agent/**
   - packages/agent-contracts/**
-  - packages/agent-tools/**
   - packages/auth/**
   - packages/db/**
   - apps/web/e2e/**
@@ -32,9 +31,9 @@ related:
 - Authは`AUTH1`から`AUTH4`
 - E2Eは`E1`と`E2`
 
-`packages/agent-contracts`と`packages/agent-tools`に独自のテスト層番号は追加しません。package自身は
-静的検査とcolocatedな実行時契約テストを所有し、consumer固有のvalidationとcompositionは既存層でも
-検査します。
+`packages/agent-contracts`に独自のテスト層番号は追加しません。package自身は静的検査とcolocatedな
+schema契約テストを所有します。Agent tool factoryはG2、MCP toolはA1からA4でruntime固有のvalidationと
+compositionを検査します。
 
 ## Package検査
 
@@ -42,7 +41,6 @@ related:
 
 ```text
 packages/agent-contracts/**
-packages/agent-tools/**
 ```
 
 検査:
@@ -58,17 +56,16 @@ packages/agent-tools/**
 - 公開tool inputにorganization、user、session、grant、tokenがない
 - tool ID重複がない
 - Valibot schemaが未知field、上限超過、tenant/capability fieldを拒否する
-- Mastra `createTool` factoryがfake `AgentToolExecutor`へ検証済みinputを1回だけ渡す
 
 package testは新しい公開番号を持たず`bun run test`へ含めます。Valibot schemaのconsumer境界値はA1と
-G2、Agent compositionはG2、MCP登録はA4でも検査します。
+G2、Agent-local factoryはG2、MCP direct tool登録はA4でも検査します。
 
 ## Agent G1からG5
 
 | 名前                             | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 実物として使うもの                                                                       | 差し替えるもの                                        | 対象コード/ファイル                                                              | Test Runner                                | 実行速度           | CI時間課金以外の費用 | 量                     |
 | -------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------ | ------------------ | -------------------- | ---------------------- |
 | **Agent中核単体テスト G1**       | 単体                | <ul><li>abort、disconnect、provider error、timeoutを別状態へ分類する</li><li>Stopではsubmission IDを保持せず、disconnect/errorだけretry identityを保持する</li><li>run全体timeout、tool side effect後retry禁止を境界値で確認する</li><li>resource ID、thread ID、model route、tool allowlist、reasoning policyを確認する</li><li>usage normalisation、safe error、secret scrubを確認する</li></ul>                                                                                                                                                                            | pure function、Valibot schema、policy                                                    | clock、ID、pricing table                              | `apps/agent/src/mastra/core/**`、policy、usage、error                            | Vitest Node                                | 極めて速い         | なし                 | 非常に多い             |
-| **Agent tool実行単体テスト G2**  | 単体                | <ul><li>`packages/agent-contracts`のValibot schemaが未知fieldと過大inputを拒否する</li><li>`packages/agent-tools`のMastra toolがfake executorへ正しいinputを1回渡す</li><li>abort signal、timeout、safe error projectionを確認する</li><li>server toolとclient toolの分類を確認する</li><li>Web検索がnested Agentを呼ばずexact queryを変更しない</li><li>attachment add/removeがexpected revisionを必須にする</li><li>`transform`と`toModelOutput`がprivate URL、R2 key、raw bytesを除外する</li></ul>                                                                        | 実Mastra tool、実Valibot schema、fake executor                                           | API、DB、provider                                     | `packages/agent-tools/**`、`apps/agent/src/mastra/tools/**`                      | Vitest Node + fake executor                | 極めて速いから速い | なし                 | 多い                   |
+| **Agent tool実行単体テスト G2**  | 単体                | <ul><li>`packages/agent-contracts`のValibot schemaが未知fieldと過大inputを拒否する</li><li>Agent-localなMastra tool factoryがfake executorへ正しいinputを1回渡す</li><li>`RequestContext`、abort signal、timeout、`toolCallId`、safe error projectionを確認する</li><li>server toolとclient toolの分類を確認する</li><li>Web検索がnested Agentを呼ばずexact queryを変更しない</li><li>attachment add/removeがexpected revisionを必須にする</li><li>`transform`と`toModelOutput`がprivate URL、R2 key、raw bytesを除外する</li></ul>                                           | 実Mastra tool、実Valibot schema、fake executor                                           | API、DB、provider                                     | `apps/agent/src/mastra/tools/**`                                                 | Vitest Node + fake executor                | 極めて速いから速い | なし                 | 多い                   |
 | **Agent決定的loop統合テスト G3** | 統合                | <ul><li>実Mastra Agent、Memory、file-backed LibSQLStore、native AI SDK streamを接続する</li><li>text、server tool、client tool、multi-step、source、approvalを確認する</li><li>server toolがbrowser client tool callbackへ流れないcontractを確認する</li><li>Stop、disconnect、request abort、run全体timeout、provider error後に次turnを開始できる</li><li>Storageをcloseし、新しいruntime compositionからreloadして停止turnのpartial text、tool input、`data-run`がなくuserだけ残ることを確認する</li><li>suspended runを再発見し、approve/declineからresumeできる</li></ul> | Agent、Memory、LibSQLStore、tool、stream、scripted model                                 | modelはscripted、business side effectはrecording fake | `apps/agent/src/mastra/agents/**`、`runtime/**`、`storage.ts`、`test-support/**` | Vitest + scripted model + temporary libSQL | 速いから中         | なし                 | 厚くする               |
 | **Agent制御面統合テスト G4**     | 統合                | <ul><li>API thread registryとAgent Memoryが同じthread IDを使う</li><li>API認可後だけlist/recallでき、archive後はAgent dataが残っていても拒否する</li><li>ticket、grant、run quota、explicit cancel、Stop直後の次runを確認する</li><li>cancel、Agent abort、expiryが一つのterminal stateへ収束する</li><li>usage settlement、idempotency、current permission再検証を確認する</li><li>Web検索provider adapterとattachment transactionを確認する</li><li>Service Bindingの本番contractを接続する</li></ul>                                                                       | 実API app、実Agent runtime、Application libSQL、Agent libSQL、Service Binding相当adapter | modelはscripted、search/R2はcontrolled fake           | `apps/agent/**`、`apps/api/src/modules/agent/**`                                 | Vitest + Elysia + libSQL                   | 中から遅い         | なし                 | 必要な範囲で厚くする   |
 | **Agent実モデル挙動統合評価 G5** | 統合                | <ul><li>必要なtoolを選び禁止toolを選ばない</li><li>tool inputがValibot schemaを満たす</li><li>reasoningだけで終了せずtextまたはtoolへ進む</li><li>Web検索、画像読取、attachment mutationを正しく選択する</li><li>approval前にwriteしない</li><li>最大stepとtimeout内に終了する</li><li>Memoryから別thread情報を混同しない</li></ul>                                                                                                                                                                                                                                           | 実LLM、実instruction、実tool schema、実Memory設定                                        | business writeとDBはsynthetic                         | `apps/agent/src/mastra/evals/**`                                                 | Mastra evalまたはVitest                    | 遅い               | LLM料金あり          | 小さな評価データセット |
@@ -397,8 +394,8 @@ MCP専用root scriptを増やしません。
 - 公開layer番号が増えていない
 - A1からA5が対象範囲と速度の順序を維持する
 - G1からG5が決定的安全性と実model評価を分離する
-- `agent-contracts`と`agent-tools`に独自の公開layer番号がない
-- packageの実行時契約テストがcolocatedされ、root `test`から実行される
-- consumer固有のpackage実行時挙動がG2、A1、A4でも検査される
+- `agent-contracts`に独自の公開layer番号がない
+- packageのschema契約テストがcolocatedされ、root `test`から実行される
+- Agent/API固有のtool実行時挙動がG2、A1、A4で検査される
 - 既知不具合の回帰caseがW、G、A、E1へ配置される
 - MCP read/write、OAuth、最終phaseのPATが既存層に統合される

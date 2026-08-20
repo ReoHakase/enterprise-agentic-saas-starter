@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@enterprise-agentic-saas/agent-contracts": "workspace:*",
-    "@enterprise-agentic-saas/agent-tools": "workspace:*",
     "@inference-net/otel-cf-workers": "2.5.0",
     "@mastra/ai-sdk": "catalog:",
     "@mastra/core": "catalog:",

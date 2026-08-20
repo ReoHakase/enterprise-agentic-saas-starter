@@ -2,15 +2,15 @@
 title: remote MCP、OAuth、PAT連携
 status: accepted
 implementation: active
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-20
 applies_to:
   - apps/api/src/mcp/**
   - packages/auth/**
   - packages/agent-contracts/**
-  - packages/agent-tools/**
 related:
   - ../architecture/agent-runtime-and-mcp.md
   - ../decisions/ADR-009-mcp-authentication-and-direct-tools.md
+  - ../decisions/ADR-015-runtime-owned-agent-and-mcp-tools.md
   - ../testing-strategy/agent-refactor-mcp.md
 ---
 
@@ -34,7 +34,8 @@ apps/api/src/mcp/
   resources/
 ```
 
-`apps/api`は`packages/agent-contracts`のValibot schemaを再利用し、API内のapplication serviceを直接実行します。`packages/agent-tools`と`apps/agent`へ依存しません。
+`apps/api`は`packages/agent-contracts`のValibot schemaを再利用し、API-localなMCP toolからapplication
+serviceを直接実行します。Agentのtool factoryと`apps/agent`へ依存しません。
 
 ## Mastra MCPServer
 

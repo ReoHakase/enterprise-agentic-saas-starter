@@ -4,6 +4,19 @@ import {
   issueSearchToolOutputSchema,
   labelSearchToolInputSchema,
   labelSearchToolOutputSchema,
+  memberSearchToolInputSchema,
+  memberSearchToolOutputSchema,
+  agentGetIssueToolOutputSchema,
+  getIssueToolInputSchema,
+  readAccountContextToolOutputSchema,
+  readIssueAttachmentImageToolInputSchema,
+  readIssueAttachmentImageToolResultSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
+import type { Db } from "@enterprise-agentic-saas/db"
+import type { ToolsInput } from "@mastra/core/agent"
+import * as v from "valibot"
+
+import {
   mcpAddIssueAttachmentsToolInputSchema,
   mcpCreateAttachmentUploadSessionToolInputSchema,
   mcpCreateAttachmentUploadSessionToolOutputSchema,
@@ -11,26 +24,17 @@ import {
   mcpDeleteIssueToolInputSchema,
   mcpGetAttachmentUploadStatusToolInputSchema,
   mcpGetAttachmentUploadStatusToolOutputSchema,
+  mcpGetIssueProviderInputSchema,
   mcpIssueWriteReceiptSchema,
   mcpOrganizationContextSchema,
   mcpRemoveIssueAttachmentsToolInputSchema,
   mcpUpdateIssueToolInputSchema,
-  memberSearchToolInputSchema,
-  memberSearchToolOutputSchema,
-  readIssueAttachmentImageToolInputSchema,
-  readIssueAttachmentImageToolResultSchema,
-} from "@enterprise-agentic-saas/agent-contracts"
-import {
-  createGetIssueTool,
-  createReadAccountContextTool,
-} from "@enterprise-agentic-saas/agent-tools"
-import type { Db } from "@enterprise-agentic-saas/db"
-import type { ToolsInput } from "@mastra/core/agent"
-
+} from "../contracts"
 import type { McpPrincipal } from "../principal"
-import { createMcpDirectTool, createMcpSharedTool } from "./direct-tool"
+import { createMcpDirectTool } from "./direct-tool"
+import { toMcpToolError } from "./errors"
 import { createMcpReadApplication } from "./read-application"
-import { createMcpWriteApplication, toMcpToolError } from "./write-application"
+import { createMcpWriteApplication } from "./write-application"
 
 const readOnly = {
   destructiveHint: false,
@@ -56,15 +60,37 @@ const safe =
     }
   }
 
+const parseMcpBoundaryValue = <
+  const TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+>(
+  schema: TSchema,
+  value: unknown
+): v.InferOutput<TSchema> => {
+  const parsed = v.safeParse(schema, value)
+  if (!parsed.success) throw new Error("MCP tool execution failed")
+  return parsed.output
+}
+
 export const createMcpTools = (db: Db, principal: McpPrincipal): ToolsInput => {
   const read = createMcpReadApplication(db, principal)
   const write = createMcpWriteApplication(db, principal)
   const tools: ToolsInput = {}
 
   if (principal.scopes.has("account:read")) {
-    tools.read_account_context = createMcpSharedTool(
-      createReadAccountContextTool(async () => read.readAccountContext())
-    )
+    tools.read_account_context = createMcpDirectTool({
+      id: "read_account_context",
+      description:
+        "Read the current user's allowlisted display profile. This never returns credentials or account settings.",
+      annotations: readOnly,
+      inputSchema: emptyToolInputSchema,
+      outputSchema: readAccountContextToolOutputSchema,
+      execute: safe(async () =>
+        parseMcpBoundaryValue(
+          readAccountContextToolOutputSchema,
+          await read.readAccountContext()
+        )
+      ),
+    })
   }
   if (principal.scopes.has("organization:read")) {
     tools.read_active_organization = createMcpDirectTool({
@@ -103,9 +129,22 @@ export const createMcpTools = (db: Db, principal: McpPrincipal): ToolsInput => {
       outputSchema: issueSearchToolOutputSchema,
       execute: safe(read.searchIssues),
     })
-    tools.get_issue = createMcpSharedTool(
-      createGetIssueTool(async (input) => read.getIssue(input))
-    )
+    tools.get_issue = createMcpDirectTool({
+      id: "get_issue",
+      description:
+        'Read one Issue in the active organization. For Issue #N use {"lookup":"number","number":N}; for an opaque ID use {"lookup":"id","id":"..."}.',
+      annotations: readOnly,
+      inputSchema: mcpGetIssueProviderInputSchema,
+      outputSchema: agentGetIssueToolOutputSchema,
+      execute: safe(async (input) =>
+        parseMcpBoundaryValue(
+          agentGetIssueToolOutputSchema,
+          await read.getIssue(
+            parseMcpBoundaryValue(getIssueToolInputSchema, input)
+          )
+        )
+      ),
+    })
   }
   if (
     principal.scopes.has("issues:read") &&

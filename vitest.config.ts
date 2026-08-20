@@ -27,10 +27,13 @@ type CoverageThresholds = {
   lines: number
 }
 
+type CoverageThresholdConfig = CoverageThresholds &
+  Record<string, CoverageThresholds | number>
+
 type NodeCoverageProject = {
   workspace: string
   include: string[]
-  thresholds: CoverageThresholds
+  thresholds: CoverageThresholdConfig
   exclude?: string[]
 }
 
@@ -51,9 +54,29 @@ const nodeCoverageProjects: Record<string, NodeCoverageProject> = {
       "src/mastra/runtime/settlement.ts",
       "src/mastra/tools/client/tool.ts",
       "src/mastra/tools/issues/read/execute.ts",
+      "src/mastra/tools/issues/read/factories.ts",
+      "src/mastra/tools/issues/tool-runtime.ts",
       "src/mastra/tools/issues/write/execute.ts",
+      "src/mastra/tools/issues/write/factories.ts",
     ],
-    thresholds: { statements: 97, branches: 92, functions: 100, lines: 98 },
+    thresholds: {
+      statements: 97,
+      branches: 92,
+      functions: 100,
+      lines: 98,
+      "apps/agent/src/mastra/tools/issues/{read,write}/factories.ts": {
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
+      },
+      "apps/agent/src/mastra/tools/issues/tool-runtime.ts": {
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
+      },
+    },
   },
   "api-unit": {
     workspace: "apps/api",
@@ -105,17 +128,6 @@ const nodeCoverageProjects: Record<string, NodeCoverageProject> = {
       "src/runtime.ts",
       "src/schemas.ts",
       "src/tools.ts",
-    ],
-    thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
-  },
-  "agent-tools-unit": {
-    workspace: "packages/agent-tools",
-    include: [
-      "src/account/**/*.ts",
-      "src/executor.ts",
-      "src/issues/**/*.ts",
-      "src/organization/**/*.ts",
-      "src/validation.ts",
     ],
     thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
   },

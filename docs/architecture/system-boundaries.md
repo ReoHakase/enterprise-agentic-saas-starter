@@ -41,14 +41,12 @@ apps/web
 
 apps/api
   -> @enterprise-agentic-saas/agent-contracts
-  -> @enterprise-agentic-saas/agent-tools
   -> @enterprise-agentic-saas/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email
 
 apps/agent
   -> @enterprise-agentic-saas/agent-contracts
-  -> @enterprise-agentic-saas/agent-tools
 
 apps/emulate
   -> @enterprise-agentic-saas/auth/github-oauth
@@ -56,9 +54,6 @@ apps/emulate
 packages/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email
-
-packages/agent-tools
-  -> @enterprise-agentic-saas/agent-contracts
 
 packages/agent-contracts
 packages/db
@@ -110,7 +105,6 @@ manifestのdevelopment dependencyとbare executableだけを利用し、source�
 | `packages/ui`                | app、API、Auth、DB、Email、Agent                                                                                        |
 | `packages/typescript-config` | runtime sourceと全workspace dependency                                                                                  |
 | `packages/agent-contracts`   | app、DB、Auth、Email、UI                                                                                                |
-| `packages/agent-tools`       | app、DB、Auth、Email、UI                                                                                                |
 
 ## 公開entrypoint
 

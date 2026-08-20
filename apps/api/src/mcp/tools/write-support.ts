@@ -1,4 +1,3 @@
-import type { McpIssueWriteReceipt } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import { issues, member } from "@enterprise-agentic-saas/db/schema"
 import { and, eq, sql } from "drizzle-orm"
@@ -8,6 +7,7 @@ import {
   normalizeIssueLabels,
   parseIssueDueDate,
 } from "../../modules/issues/public"
+import type { McpIssueWriteReceipt } from "../contracts"
 
 export type McpTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0]
 
