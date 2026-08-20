@@ -17,9 +17,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  getBrowserConsoleApi: () => ({
-    updateOrganization: mocks.updateOrganization,
-  }),
+  browserConsoleApi: { updateOrganization: mocks.updateOrganization },
 }))
 
 vi.mock("next/navigation", () => ({

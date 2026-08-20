@@ -2,6 +2,11 @@ import { defineConfig, type OxlintConfig, type OxlintOverride } from "oxlint"
 
 type Rules = NonNullable<OxlintConfig["rules"]>
 
+type RestrictedImportPattern = {
+  group: string[]
+  message: string
+}
+
 type WorkspaceName =
   | "agent"
   | "agent-contracts"
@@ -201,7 +206,10 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
 const toAllowedWorkspacePattern = (entry: string) =>
   entry.endsWith("/*") ? `!${entry.slice(0, -1)}**` : `!${entry}`
 
-export const workspaceBoundaryRule = (workspace: WorkspaceName): Rules => ({
+export const workspaceBoundaryRule = (
+  workspace: WorkspaceName,
+  additionalPatterns: RestrictedImportPattern[] = []
+): Rules => ({
   "no-restricted-imports": [
     "error",
     {
@@ -214,6 +222,7 @@ export const workspaceBoundaryRule = (workspace: WorkspaceName): Rules => ({
           message:
             "Workspace imports must follow docs/architecture/system-boundaries.md and package.json exports.",
         },
+        ...additionalPatterns,
       ],
     },
   ],

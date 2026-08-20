@@ -34,7 +34,7 @@ import {
   hasConsoleApiFieldError,
   isStepUpRequiredError,
 } from "@/features/console"
-import { getBrowserConsoleApi } from "@/lib/browser/console-api"
+import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import {
   createOrganizationDeletionFormSchema,
@@ -131,7 +131,7 @@ export const OrganizationDangerZone = ({
       slug: string
       confirmation: "DELETE"
       idempotencyKey: string
-    }) => getBrowserConsoleApi().deleteOrganization(organization.id, input),
+    }) => browserConsoleApi.deleteOrganization(organization.id, input),
   })
   const form = useForm({
     defaultValues: { slug: "", confirmation: "" },

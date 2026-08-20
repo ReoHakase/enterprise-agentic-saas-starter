@@ -1,31 +1,27 @@
 import { describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => {
-  const state: { factory?: () => Promise<unknown> } = {}
-  const cached = vi.fn<() => void>()
+  const api = { listOrganizations: vi.fn<() => void>() }
   return {
-    cached,
+    api,
     createConsoleApi: vi.fn<
-      (options: { baseUrl: string; cookie?: string }) => {
-        listOrganizations: () => void
-      }
-    >(() => ({ listOrganizations: vi.fn<() => void>() })),
+      (options: { baseUrl: string; cookie?: string }) => typeof api
+    >(() => api),
     getCookieHeader: vi.fn<() => Promise<string>>(async () =>
       Promise.resolve("session=request-scoped")
     ),
-    reactCache: vi.fn<(factory: () => Promise<unknown>) => typeof cached>(
-      (factory) => {
-        state.factory = factory
-        return cached
-      }
-    ),
-    state,
+    reactCache: vi.fn<
+      (factory: () => Promise<unknown>) => () => Promise<unknown>
+    >((factory) => {
+      let result: Promise<unknown> | undefined
+      return () => (result ??= factory())
+    }),
   }
 })
 
 vi.mock("server-only", () => ({}))
 vi.mock("react", () => ({ cache: mocks.reactCache }))
-vi.mock("@/features/console", () => ({
+vi.mock("@/features/console/api", () => ({
   createConsoleApi: mocks.createConsoleApi,
 }))
 vi.mock("@/lib/env.server", () => ({
@@ -35,22 +31,24 @@ vi.mock("@/lib/server/auth", () => ({
   getCookieHeader: mocks.getCookieHeader,
 }))
 
-describe("server console API", () => {
-  it("keeps creation inside React cache and forwards the request cookie", async () => {
-    const { createServerConsoleApi } = await import("./console-api")
+import { createServerConsoleApi } from "./console-api"
 
+describe("server console API", () => {
+  it("creates the client inside React cache with the request cookie", async () => {
     expect(mocks.reactCache).toHaveBeenCalledOnce()
-    expect(createServerConsoleApi).toBe(mocks.cached)
+    expect(createServerConsoleApi).toBe(mocks.reactCache.mock.results[0]?.value)
     expect(mocks.getCookieHeader).not.toHaveBeenCalled()
 
-    const factory = mocks.state.factory
-    if (!factory) throw new Error("Expected React cache factory")
-    await factory()
+    const first = await createServerConsoleApi()
+    const second = await createServerConsoleApi()
 
     expect(mocks.getCookieHeader).toHaveBeenCalledOnce()
+    expect(mocks.createConsoleApi).toHaveBeenCalledOnce()
     expect(mocks.createConsoleApi).toHaveBeenCalledWith({
       baseUrl: "https://api.example.test",
       cookie: "session=request-scoped",
     })
+    expect(first).toBe(mocks.api)
+    expect(second).toBe(first)
   })
 })

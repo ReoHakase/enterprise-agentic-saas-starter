@@ -14,10 +14,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  getBrowserConsoleApi: () => ({
+  browserConsoleApi: {
     listMcpOAuthSessions: mocks.listMcpOAuthSessions,
     revokeMcpOAuthSession: mocks.revokeMcpOAuthSession,
-  }),
+  },
 }))
 
 vi.mock("sonner", () => ({

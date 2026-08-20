@@ -71,10 +71,7 @@ describe("console Eden API", () => {
     await api.listOrganizations(controller.signal)
 
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-      cache: "no-store",
-      credentials: "include",
-    })
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include")
     expect(
       new Headers(fetchMock.mock.calls[0]?.[1]?.headers).has("cookie")
     ).toBe(false)

@@ -1,17 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-const mocks = vi.hoisted(() => {
-  const api = { getMe: vi.fn<() => void>() }
-  return {
-    api,
-    createConsoleApi: vi.fn<(options: { baseUrl: string }) => typeof api>(
-      () => api
-    ),
-  }
-})
+const mocks = vi.hoisted(() => ({
+  createApiClient: vi.fn<
+    (
+      baseUrl: string,
+      options: {
+        fetch: { cache: string; credentials: string }
+        headers?: { cookie: string }
+      }
+    ) => object
+  >(() => ({})),
+}))
 
-vi.mock("@/features/console", () => ({
-  createConsoleApi: mocks.createConsoleApi,
+vi.mock("@enterprise-agentic-saas/api/client", () => ({
+  createApiClient: mocks.createApiClient,
 }))
 vi.mock("@/lib/env.client", () => ({
   clientEnv: {
@@ -19,25 +21,24 @@ vi.mock("@/lib/env.client", () => ({
   },
 }))
 
-beforeEach(() => {
-  vi.resetModules()
-  mocks.createConsoleApi.mockClear()
-})
+import { browserConsoleApi } from "./console-api"
 
 describe("browser console API", () => {
-  it("creates one stable client lazily from the public API URL", async () => {
-    const { getBrowserConsoleApi } = await import("./console-api")
-
-    expect(mocks.createConsoleApi).not.toHaveBeenCalled()
-
-    const first = getBrowserConsoleApi()
-    const second = getBrowserConsoleApi()
-
-    expect(mocks.createConsoleApi).toHaveBeenCalledOnce()
-    expect(mocks.createConsoleApi).toHaveBeenCalledWith({
-      baseUrl: "https://api.example.test",
+  it("creates one eager singleton through the cycle-free feature adapter", () => {
+    expect(mocks.createApiClient).toHaveBeenCalledOnce()
+    expect(mocks.createApiClient).toHaveBeenCalledWith(
+      "https://api.example.test",
+      {
+        fetch: {
+          cache: "no-store",
+          credentials: "include",
+        },
+        headers: undefined,
+      }
+    )
+    expect(browserConsoleApi).toMatchObject({
+      getMe: expect.any(Function),
+      listOrganizations: expect.any(Function),
     })
-    expect(first).toBe(mocks.api)
-    expect(second).toBe(first)
   })
 })

@@ -35,11 +35,11 @@ vi.mock("@/features/agent", () => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  getBrowserConsoleApi: () => ({
+  browserConsoleApi: {
     activateOrganization: mocks.activateOrganization,
     createOrganization: mocks.createOrganization,
     listOrganizations: mocks.listOrganizations,
-  }),
+  },
 }))
 
 vi.mock("../../organization-switch-flash", () => ({

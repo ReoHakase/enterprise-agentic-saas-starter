@@ -11,6 +11,14 @@ import rootConfig, {
   workspaceBoundaryRule,
 } from "../../oxlint.config.ts"
 
+const featureApiBoundary = [
+  {
+    group: ["@/features/*/api"],
+    message:
+      "Feature API entrypoints are limited to browser and server client composition.",
+  },
+]
+
 export default defineConfig({
   extends: [rootConfig],
   ignorePatterns: [...lintIgnorePatterns],
@@ -36,7 +44,7 @@ export default defineConfig({
     { name: "playwright", specifier: "eslint-plugin-playwright" },
   ],
   rules: {
-    ...workspaceBoundaryRule("web"),
+    ...workspaceBoundaryRule("web", featureApiBoundary),
     ...RECOMMENDED_RULES,
     ...NEXTJS_RULES,
     ...TANSTACK_QUERY_RULES,
@@ -75,6 +83,12 @@ export default defineConfig({
     "tailwindcss/no-unnecessary-whitespace": "error",
   },
   overrides: [
+    {
+      files: ["src/lib/browser/**/*.{ts,tsx}", "src/lib/server/**/*.{ts,tsx}"],
+      rules: {
+        ...workspaceBoundaryRule("web"),
+      },
+    },
     {
       files: [
         "src/features/members/components/invitations-section/invitations-section.tsx",

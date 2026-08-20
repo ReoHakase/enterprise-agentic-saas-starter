@@ -2,7 +2,7 @@
 title: apps/webの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-20
 applies_to:
   - apps/web/**
 ---
@@ -156,9 +156,13 @@ Web-local schemaはAPI transport typeの代用品ではありません。untrust
 直前のruntime validationに使います。
 
 `model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
-`fetch`、`useChat`、browser APIをimportしません。別featureから利用できるのは`index.ts`が
-明示exportしたbrowser-safe contractと`server.ts`が公開したserver-only contractだけで、
-`components/`、`queries.ts`、`api.ts`を公開面へ流しません。
+`fetch`、`useChat`、browser APIをimportしません。別featureのUIから利用できるのは`index.ts`が
+明示exportしたブラウザー用契約、サーバーの合成処理から利用できるのは`server.ts`が公開した
+サーバー専用契約です。実行時検証だけが必要な`adapter`は、feature rootの`schema.ts`をデータだけの
+公開entrypointとして利用できます。`src/lib/browser/**`と`src/lib/server/**`の合成処理は、
+UIを含む`index.ts`を評価せずfeatureのクライアント`adapter`を生成するために、feature rootの`api.ts`を
+直接importできます。公開する`schema.ts`と`api.ts`はコンポーネント、Query、router、toast、ブラウザー固有
+またはサーバー固有のモジュールをimportせず、`components/`と`queries.ts`は公開面へ流しません。
 
 ### Browserのserver state
 
@@ -365,6 +369,8 @@ production hookのmockは作らず、network/transport/portだけをfakeにし�
 @enterprise-agentic-saas/api/client
 @enterprise-agentic-saas/auth/client
 @enterprise-agentic-saas/ui/*
+@/features/<feature>/schema データだけの実行時検証契約
+@/features/<feature>/api src/lib/browserまたはsrc/lib/serverの合成処理だけ
 ```
 
 禁止:
@@ -373,11 +379,12 @@ production hookのmockは作らず、network/transport/portだけをfakeにし�
 @enterprise-agentic-saas/db/**
 @enterprise-agentic-saas/email/**
 @enterprise-agentic-saas/api/* ただし client を除く
-@/features/<other-feature>/* private path
+@/features/<other-feature>/* 上記の公開entrypoint以外の非公開パス
 @/app/**
 ```
 
-同じfeature内部はrelative importを使い、別featureは`@/features/<feature>`からimportします。
+同じfeature内部はrelative importを使い、別featureのUI契約は`@/features/<feature>`からimportします。
+`schema.ts`と`api.ts`の例外を、コンポーネントや補助関数の非公開パスへ広げません。
 
 追加のlayer規則:
 
@@ -394,6 +401,9 @@ import { reduceDraft } from "../model"
 
 // cross feature: allowed
 import { IssueLink } from "@/features/issues"
+
+// data-only cross feature contract: allowed
+import { parseOrganization } from "@/features/organizations/schema"
 
 // cross feature private path: forbidden
 import { IssueLink } from "@/features/issues/components/issue-link"

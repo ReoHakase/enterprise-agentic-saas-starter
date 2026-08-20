@@ -63,7 +63,7 @@ import {
   resolveOrganizationRouteContext,
   roleLabel,
 } from "@/features/organizations"
-import { getBrowserConsoleApi } from "@/lib/browser/console-api"
+import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import { showConsoleApiErrorToast } from "../../error-toast"
 import { rewriteOrganizationSwitchPathname } from "../../organization-switch-route"
@@ -132,7 +132,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
 
   const organizationMutation = useMutation({
     mutationFn: (organizationId: string) =>
-      getBrowserConsoleApi().activateOrganization(organizationId),
+      browserConsoleApi.activateOrganization(organizationId),
     onSuccess: async (_, organizationId) => {
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)

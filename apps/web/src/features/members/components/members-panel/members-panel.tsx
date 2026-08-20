@@ -14,7 +14,7 @@ import type {
   OrganizationDetail,
   OrganizationRole,
 } from "@/features/organizations"
-import { getBrowserConsoleApi } from "@/lib/browser/console-api"
+import { browserConsoleApi } from "@/lib/browser/console-api"
 import { clientEnv } from "@/lib/env.client"
 
 import { sendOrganizationInvitation } from "../../api"
@@ -69,7 +69,7 @@ const runMemberMutation = async (
   input: MemberMutationInput
 ): Promise<MemberMutationOutcome> => {
   if (input.type === "role") {
-    await getBrowserConsoleApi().updateMemberRole(
+    await browserConsoleApi.updateMemberRole(
       organizationId,
       input.memberId,
       input.role
@@ -77,7 +77,7 @@ const runMemberMutation = async (
     return { type: "role" }
   }
   if (input.type === "transfer") {
-    await getBrowserConsoleApi().transferOwnership(organizationId, {
+    await browserConsoleApi.transferOwnership(organizationId, {
       memberId: input.memberId,
       confirmation: input.confirmation,
     })
@@ -93,7 +93,7 @@ const runMemberMutation = async (
     return { type: "invite" }
   }
   if (input.type === "remove") {
-    await getBrowserConsoleApi().removeMember(
+    await browserConsoleApi.removeMember(
       organizationId,
       input.memberId,
       input.confirmation
@@ -110,10 +110,7 @@ const runMemberMutation = async (
     })
     return { type: "resend-invitation" }
   }
-  await getBrowserConsoleApi().cancelInvitation(
-    organizationId,
-    input.invitationId
-  )
+  await browserConsoleApi.cancelInvitation(organizationId, input.invitationId)
   return { type: "cancel-invitation" }
 }
 

@@ -2,7 +2,7 @@
 title: 命名とlayer
 status: accepted
 implementation: active
-last_reviewed: 2026-07-25
+last_reviewed: 2026-08-20
 ---
 
 # 命名とlayer
@@ -304,6 +304,11 @@ public entrypointは利用者に必要な最小surfaceだけを明示exportし�
 `repository.ts`、test supportを再exportしません。packageの`exports`、feature/moduleの
 `index.ts`または`public.ts`、Oxlint、Knip、export-surface testは同じ境界を表し、一方を変えるPRでは
 残りも同時に更新します。
+
+Web featureでは、[apps/webの設計](apps/web.md#import-boundary)が定義するデータだけの`schema.ts`と、
+ブラウザーまたはサーバーの合成処理専用の`api.ts`も責務単位の公開entrypointにできます。これらは
+barrelではなく、UIを含む`index.ts`を評価せず実行時契約またはクライアント`adapter`へ到達するための入口です。
+コンポーネントや補助関数を個別公開する例外には使いません。
 
 ## directoryへ分ける基準
 

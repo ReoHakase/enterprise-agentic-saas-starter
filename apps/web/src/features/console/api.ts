@@ -4,15 +4,15 @@ import {
   parseMe,
   parseUserProfile,
   parseUserSessions,
-} from "@/features/account"
+} from "@/features/account/schema"
 import { parseMcpOAuthCredentials } from "@/features/mcp-oauth/schema"
-import { parseInvitations, parseMembers } from "@/features/members"
+import { parseInvitations, parseMembers } from "@/features/members/schema"
 import {
   parseOrganizationDeletionReceipt,
   parseOrganization,
   parseOrganizations,
   type OrganizationRole,
-} from "@/features/organizations"
+} from "@/features/organizations/schema"
 
 type ConsoleApiOptions = {
   baseUrl: string

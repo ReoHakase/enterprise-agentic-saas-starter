@@ -14,11 +14,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
-  getBrowserConsoleApi: () => ({
+  browserConsoleApi: {
     listSessions: mocks.listSessions,
     revokeOtherSessions: mocks.revokeOtherSessions,
     revokeSession: mocks.revokeSession,
-  }),
+  },
 }))
 
 vi.mock("sonner", () => ({
