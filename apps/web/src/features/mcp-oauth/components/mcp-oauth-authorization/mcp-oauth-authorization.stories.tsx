@@ -165,6 +165,9 @@ export const ScopeConsent = meta.story({
     await expect(
       canvas.getByRole("checkbox", { name: "Issues Delete access" })
     ).not.toBeChecked()
+    await expect(
+      canvas.getByRole("checkbox", { name: "Toggle all Issues access" })
+    ).toHaveAttribute("aria-checked", "mixed")
     await userEvent.click(canvas.getByRole("button", { name: "Allow" }))
     await expect(decide).toHaveBeenCalledWith(true, [
       "offline_access",

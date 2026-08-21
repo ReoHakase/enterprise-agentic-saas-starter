@@ -232,8 +232,8 @@ W5へ置くもの:
 - auth session response parser
 - redirect、not-found decision
 - slug解決
-- prefetch input
-- cache key、cache policy
+- prefetch inputとserver/browserで共有するquery key
+- cache key、cache policy、注入clientがquery keyへ入らないこと
 - serialisation boundary
 
 W6へ残すもの:
@@ -309,6 +309,9 @@ project名はroot Test Projectsで一意にし、全scriptがroot configと対�
 
 ## DataTableの検査層
 
+- 固定5行×5列のMCP OAuth scope matrixはW2でcell、行、操作列、read-only、indeterminate、captionを検査し、
+  親ViewのW3でmobile時に`Table` primitive内だけが横scrollすることを検査する。TanStack Tableの列stateや
+  共通DataTable rendererの内部contractはこの固定表の検査対象にしない
 - W1: prefixあり・なしのURL key、複数値URLの正規化、廃止済み単一値キーの非移行と削除、request/query key一致、
   assignee 50件・label 20件の上限、期日2境界のoffset、selection prune、pagination window、
   versioned localStorageの復元を純粋testで固定する

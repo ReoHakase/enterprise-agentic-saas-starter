@@ -173,6 +173,12 @@ stale time等の共通policyは`QueryClient`生成時に確定し、component mo
 componentごとの差分はquery optionsまたはmutation optionsへ明示し、global defaultの後付け変更による
 mount順依存を作りません。
 
+Server Componentでprefetchするrouteは、request単位の`QueryClient`を`dehydrate`し、TanStack Queryの
+`HydrationBoundary`を直接組み合わせます。`state`と`children`を横流しするWeb独自componentは置きません。
+serverとbrowserで同じresourceを読む場合はresource固有の`queryOptions`またはquery key factoryを正本とし、
+query keyにはorganization、resource、絞り込み等のcache scopeだけを含めます。Eden client等の注入実装は
+`queryFn`だけで使い、query keyへ含めません。
+
 ## serverとclient
 
 React Server Componentは、browserへJavaScriptを送らずserverで実行されるcomponentです。この文書では
@@ -454,6 +460,11 @@ Issuesを先行利用者とし、Organizations、Members、Invitations、Session
 移行します。各featureはsort、filter、列定義、空状態、mutation用Contextを引き続き所有します。列幅と
 配置はcolumn metaへ置き、table全体の最小幅と外枠の角丸はrootの任意classとして渡します。共通rendererは
 列IDやdomain固有のcellを判定しません。
+
+MCP OAuthのscope matrixは対象5行と操作5列が固定され、sort、filter、pagination、列表示stateを持たないため、
+TanStack Tableと共通DataTable rendererを使いません。`packages/ui`の`Table`、`TableHeader`、`TableBody`、
+`TableRow`、`TableHead`、`TableCell`を直接組み合わせ、scope定義、選択集合、一括選択だけをfeatureが所有します。
+横overflowとscroll regionは`Table` primitiveの標準containerへ委ねます。
 
 表のURL keyはgeneric factoryから作り、logical keyを変えず、prefixなしを既定とします。同じ画面に複数の
 表を置く場合だけcallerが`org_q`のようなprefixを指定します。Issuesは共有済みURLとの互換のため
