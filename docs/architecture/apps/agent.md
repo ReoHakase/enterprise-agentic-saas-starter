@@ -2,7 +2,7 @@
 title: apps/agentの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-19
+last_reviewed: 2026-08-20
 applies_to:
   - apps/agent/**
 ---
@@ -125,7 +125,10 @@ execute.ts
   -> core/ports
 
 tool.ts
-  -> execute.ts + Mastra createTool
+  -> factories.ts + execute.ts
+
+factories.ts
+  -> agent-contracts + Mastra createTool
 
 adapter
   -> port + provider SDK
@@ -134,21 +137,23 @@ core/ports
   -> Mastra、OpenRouter、API concrete clientを知らない
 ```
 
-`@enterprise-agentic-saas/api/agent-client`の具体clientをimportできるのはcontrol-plane adapterと
-compositionだけです。agent、runtime、tool executorはconsumer-owned portへ依存します。
+`apps/agent`は`@enterprise-agentic-saas/api/agent-client`をimportしません。control-plane adapterは
+`agent-contracts`の直列化contractとlocal portを使ってService Bindingへrequestを送り、agent、runtime、
+tool executorはconsumer-owned portへ依存します。
 
 ## tool構造
 
 - `schema.ts`: modelに公開するinput contract
 - `execute.ts`: Mastra非依存のapplication logic
-- `tool.ts`: `execute.ts`をMastra `createTool`へ接続するadapter
+- `factories.ts`: 共有Valibot schemaとexecutorをMastra `createTool`へ接続するAgent-local factory
+- `tool.ts`: runtime port、grant、budget、Approvalをfactoryへ接続するcomposition
 
 この分割により、tool safety、call order、quota、output projectionをreal LLMなしでtestできます。
 
 `execute.ts`はMastra、model provider、API concrete clientをimportしません。処理順序を
 `validate -> authorize -> reserve idempotency -> write -> record usage -> bounded projection`へ固定し、
-各境界をportで観測可能にします。`tool.ts`はschemaとexecutorを`createTool`へつなぐ薄いwrapperで、
-authorizationやbusiness ruleを持ちません。
+各境界をportで観測可能にします。`factories.ts`はschemaとexecutorを`createTool`へつなぎ、`tool.ts`は
+runtime contextとfactoryをcomposeします。API MCPはこのfactoryをimportしません。
 
 public Web research agent/toolはtenant data、write tool、private control-plane portへ依存しません。
 一般化済みqueryだけを受け取る別compositionとし、同じAgentに「promptで使わないよう指示した」
@@ -209,7 +214,7 @@ Vitestはtest fileからtest-supportを直接importしてfactoryへ渡せます�
 許可するworkspace import:
 
 ```text
-@enterprise-agentic-saas/api/agent-client
+@enterprise-agentic-saas/agent-contracts
 ```
 
 禁止:
@@ -230,7 +235,7 @@ apps/web/**
 
 - core/tool executor: `bun run test`
 - scripted model loop: `bun run test`
-- Agent-owned `agent-client` port contract: `bun run test`
+- Agent-owned control-plane port contract: `bun run test`
 - private API + temporary DB integrationはAPI-owned `bun run test`
 - real model dataset eval: `bun run test:eval:agent`
 - full paid browser canary: `bun run test:e2e:full`
@@ -259,4 +264,4 @@ apps/web/**
 - AgentからDB/Auth/Email importがない
 - tool executorがMastraなしでtest可能
 - scripted model integrationが`bun run test`で実行される
-- API private appをsource importせず、`agent-client`公開contractだけを使う
+- API packageとprivate appをsource importせず、`agent-contracts`とService Bindingだけを使う

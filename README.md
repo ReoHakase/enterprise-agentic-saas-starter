@@ -78,6 +78,7 @@ apps/
   emulate/             ローカルとE2E用の外部サービスemulator
 
 packages/
+  agent-contracts/     Agent, API, Webが共有するValibot業務contract
   auth/                Better Authのサーバー, ブラウザークライアント
   db/                  Drizzleスキーマ, マイグレーション, DBクライアント
   email/               React Emailテンプレート, 配送`adapter`
@@ -89,16 +90,16 @@ packages/
 
 ```text
 apps/web   -> agent-contracts, api/client, auth/client, ui
-apps/api   -> auth, db, email
-apps/agent -> api/agent-client
+apps/api   -> agent-contracts, auth, db, email
+apps/agent -> agent-contracts
 packages   -> appへ依存しない
 ```
 
 APIのルートスキーマは`apps/api`が所有します。WebはAPI clientを
 `@enterprise-agentic-saas/api/client`、Agent公開contractを
-`@enterprise-agentic-saas/agent-contracts`から直接利用します。Agentは
-`@enterprise-agentic-saas/api/agent-client`以外のAPI入口やDB, Auth, Email, Webを
-直接`import`しません。完全な規則は
+`@enterprise-agentic-saas/agent-contracts`から直接利用します。Agentがsource importするworkspaceは
+`agent-contracts`だけです。APIのprivate entrypointはAgent-local adapterからService Bindingで呼び、
+DB, Auth, Email, Webを直接`import`しません。完全な規則は
 [システム境界](docs/architecture/system-boundaries.md)を参照してください。
 
 ## 🚀 開発を始める
@@ -321,7 +322,7 @@ bun run build:cloudflare
 ## 📦 公開パッケージ入口
 
 - `@enterprise-agentic-saas/api/client`: Web向けEdenクライアント
-- `@enterprise-agentic-saas/api/agent-client`: Agent向け非公開制御面クライアント
+- `@enterprise-agentic-saas/api/agent-client`: API非公開制御面の型付きclient生成
 - `@enterprise-agentic-saas/agent-contracts`: Agent、API、Webの共有Valibot contract
 - `@enterprise-agentic-saas/auth`: Better Authのサーバーファクトリ
 - `@enterprise-agentic-saas/auth/client`: Better Authのブラウザークライアント

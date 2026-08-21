@@ -1,14 +1,4 @@
 import {
-  createGetIssueTool,
-  createReadIssueAttachmentImageTool,
-  createReadAccountContextTool,
-  createReadActiveOrganizationTool,
-  createSearchIssueLabelsTool,
-  createSearchIssuesTool,
-  createSearchOrganizationMembersTool,
-} from "@enterprise-agentic-saas/agent-tools"
-
-import {
   type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../../runtime/request-context"
@@ -17,6 +7,15 @@ import {
   createAgentReadHandlers,
   issueAttachmentImageToModelOutput,
 } from "./execute"
+import {
+  createGetIssueTool,
+  createReadIssueAttachmentImageTool,
+  createReadAccountContextTool,
+  createReadActiveOrganizationTool,
+  createSearchIssueLabelsTool,
+  createSearchIssuesTool,
+  createSearchOrganizationMembersTool,
+} from "./factories"
 
 export const createIssueReadTools = (
   resolveExecution: ProductAgentExecutionResolver

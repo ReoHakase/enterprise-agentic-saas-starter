@@ -1,10 +1,3 @@
-import {
-  mcpIssueWriteReceiptSchema,
-  type McpCreateIssueToolInput,
-  type McpDeleteIssueToolInput,
-  type McpIssueWriteReceipt,
-  type McpUpdateIssueToolInput,
-} from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import { issues, member } from "@enterprise-agentic-saas/db/schema"
 import { and, eq } from "drizzle-orm"
@@ -17,6 +10,13 @@ import {
   normalizeIssueRequiredText,
   updateIssueInTransaction,
 } from "../../modules/issues/public"
+import {
+  mcpIssueWriteReceiptSchema,
+  type McpCreateIssueToolInput,
+  type McpDeleteIssueToolInput,
+  type McpIssueWriteReceipt,
+  type McpUpdateIssueToolInput,
+} from "../contracts"
 import type { McpPrincipal } from "../principal"
 import { runIdempotently } from "./idempotency"
 import { promoteMcpUploads } from "./issue-attachment-application"

@@ -4,19 +4,19 @@ import type {
   IssueWriteToolOutput,
   RemoveAttachmentWriteToolOutput,
 } from "@enterprise-agentic-saas/agent-contracts"
-import {
-  createAddIssueAttachmentsTool,
-  createCreateIssueTool,
-  createDeleteIssueTool,
-  createRemoveIssueAttachmentsTool,
-  createUpdateIssueTool,
-} from "@enterprise-agentic-saas/agent-tools"
 
 import {
   type ProductAgentExecutionResolver,
   type ProductAgentRequestContext,
 } from "../../../runtime/request-context"
 import { createAgentWriteHandlers } from "./execute"
+import {
+  createAddIssueAttachmentsTool,
+  createCreateIssueTool,
+  createDeleteIssueTool,
+  createRemoveIssueAttachmentsTool,
+  createUpdateIssueTool,
+} from "./factories"
 
 const toAttachmentOutput = (
   result: IssueWriteToolOutput

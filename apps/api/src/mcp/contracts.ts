@@ -1,13 +1,18 @@
-import * as v from "valibot"
-
 import {
+  addIssueAttachmentsToolInputSchema,
   agentIdentifierSchema,
   agentNonNegativeIntegerSchema,
   agentOrganizationContextSchema,
   agentPositiveIntegerSchema,
-} from "./schemas"
+  createIssueToolInputSchema,
+  deleteIssueToolInputSchema,
+  getIssueToolInputSchema,
+  removeIssueAttachmentsToolInputSchema,
+  updateIssueToolInputSchema,
+} from "@enterprise-agentic-saas/agent-contracts"
+import * as v from "valibot"
 
-export const mcpToolErrorCodes = [
+const mcpToolErrorCodes = [
   "conflict",
   "forbidden",
   "not_found",
@@ -37,15 +42,16 @@ export const mcpOrganizationContextSchema = v.strictObject({
     canDeleteAnyIssue: v.boolean(),
   }),
 })
-import {
-  addIssueAttachmentsToolInputSchema,
-  createIssueToolInputSchema,
-  deleteIssueToolInputSchema,
-  removeIssueAttachmentsToolInputSchema,
-  updateIssueToolInputSchema,
-} from "./tools"
 
-export const mcpBusinessIdempotencyKeySchema = v.pipe(
+export const mcpGetIssueProviderInputSchema = v.strictObject({
+  lookup: v.picklist(["id", "number"]),
+  id: v.optional(getIssueToolInputSchema.options[0].entries.id),
+  number: v.optional(getIssueToolInputSchema.options[1].entries.number),
+  attachmentCursor: getIssueToolInputSchema.options[0].entries.attachmentCursor,
+  attachmentLimit: getIssueToolInputSchema.options[0].entries.attachmentLimit,
+})
+
+const mcpBusinessIdempotencyKeySchema = v.pipe(
   v.string(),
   v.minLength(16),
   v.maxLength(128),

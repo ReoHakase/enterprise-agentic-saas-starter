@@ -31,7 +31,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@enterprise-agentic-saas/agent-contracts": "workspace:*",
-        "@enterprise-agentic-saas/agent-tools": "workspace:*",
         "@inference-net/otel-cf-workers": "2.5.0",
         "@mastra/ai-sdk": "catalog:",
         "@mastra/core": "catalog:",
@@ -70,7 +69,6 @@
         "@elysia/openapi": "catalog:",
         "@elysiajs/server-timing": "catalog:",
         "@enterprise-agentic-saas/agent-contracts": "workspace:*",
-        "@enterprise-agentic-saas/agent-tools": "workspace:*",
         "@enterprise-agentic-saas/auth": "workspace:*",
         "@enterprise-agentic-saas/db": "workspace:*",
         "@enterprise-agentic-saas/email": "workspace:*",
@@ -223,23 +221,6 @@
       "name": "@enterprise-agentic-saas/agent-contracts",
       "version": "0.0.0",
       "dependencies": {
-        "valibot": "catalog:",
-      },
-      "devDependencies": {
-        "@enterprise-agentic-saas/typescript-config": "workspace:*",
-        "@types/node": "catalog:",
-        "@vitest/coverage-v8": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
-    "packages/agent-tools": {
-      "name": "@enterprise-agentic-saas/agent-tools",
-      "version": "0.0.0",
-      "dependencies": {
-        "@enterprise-agentic-saas/agent-contracts": "workspace:*",
-        "@mastra/core": "catalog:",
-        "@valibot/to-json-schema": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -868,8 +849,6 @@
     "@enterprise-agentic-saas/agent": ["@enterprise-agentic-saas/agent@workspace:apps/agent"],
 
     "@enterprise-agentic-saas/agent-contracts": ["@enterprise-agentic-saas/agent-contracts@workspace:packages/agent-contracts"],
-
-    "@enterprise-agentic-saas/agent-tools": ["@enterprise-agentic-saas/agent-tools@workspace:packages/agent-tools"],
 
     "@enterprise-agentic-saas/api": ["@enterprise-agentic-saas/api@workspace:apps/api"],
 

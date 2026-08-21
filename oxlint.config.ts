@@ -10,7 +10,6 @@ type RestrictedImportPattern = {
 type WorkspaceName =
   | "agent"
   | "agent-contracts"
-  | "agent-tools"
   | "api"
   | "auth"
   | "db"
@@ -169,15 +168,10 @@ export const createBudgetOverrides = ({
 }
 
 const workspaceAllowlist: Record<WorkspaceName, string[]> = {
-  agent: [
-    "@enterprise-agentic-saas/agent-contracts",
-    "@enterprise-agentic-saas/agent-tools",
-  ],
+  agent: ["@enterprise-agentic-saas/agent-contracts"],
   "agent-contracts": [],
-  "agent-tools": ["@enterprise-agentic-saas/agent-contracts"],
   api: [
     "@enterprise-agentic-saas/agent-contracts",
-    "@enterprise-agentic-saas/agent-tools",
     "@enterprise-agentic-saas/auth",
     "@enterprise-agentic-saas/auth/*",
     "@enterprise-agentic-saas/db",

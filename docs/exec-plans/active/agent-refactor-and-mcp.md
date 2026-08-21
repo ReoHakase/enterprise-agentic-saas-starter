@@ -18,6 +18,7 @@ linked_adrs:
   - ../../decisions/ADR-008-mastra-native-agent-runtime.md
   - ../../decisions/ADR-009-mcp-authentication-and-direct-tools.md
   - ../../decisions/ADR-012-standard-memory-and-auth-delivery.md
+  - ../../decisions/ADR-015-runtime-owned-agent-and-mcp-tools.md
 ---
 
 # Mastra-native Agentリファクタとremote MCP導入
@@ -43,6 +44,17 @@ Mastra標準`MessageHistory`を正本とし、有効なreasoning本文、ツー�
 除外し、Memory直前の独自allowlistは持ちません。
 PLAN-2026-029本文は当時の実装履歴として変更しません。
 
+## ADR-015へのtool所有権移管
+
+2026-08-20のIssue #44で、Agent/MCP共通factoryという本計画の前提をADR-015が部分置換しました。
+`packages/agent-tools`は削除し、12件のMastra factoryと実行時契約テストは`apps/agent`、14件のMCP
+direct tool、MCP専用contract、JSON Schema、error mappingは`apps/api`が所有します。
+`packages/agent-contracts`にはruntimeに依存しないValibot業務schemaだけを残します。
+
+以下のPhase 1 checklist、decision log、検証表に残る`agent-tools`の作成とpackage testは、当時の移行証跡
+です。現在の完了条件ではなく、G2のAgent-local factory testとA1からA4のMCP testが置き換えます。
+ADR-008のAgent Storage判断とADR-009のAPI内MCP・OAuth・直接実行判断は維持します。
+
 本計画は、approval Workflow、opaque resume ticket、Workers AI・AI Gateway、リモートMCP、OAuth、
 MCP個人アクセストークンを引き続き所有します。PLAN-2026-029はAPIの認可・トランザクションや
 approvalをMastra Memoryへ移しません。
@@ -66,8 +78,8 @@ approvalをMastra Memoryへ移しません。
 - release前のため破壊的なAgent contract変更を許容する
 - schemaはValibotへ統一する
 - file-based風directoryを採用するが、registrationはcode-based
-- `packages/agent-contracts`と`packages/agent-tools`は、静的検査に加えて公開schemaと薄い
-  `createTool` factoryの実行時契約テストを同じpackageに配置する
+- `packages/agent-contracts`は公開schemaの契約テスト、Agent/APIは各runtimeのtool実行時契約テストを
+  colocateする
 - Agent WorkerはApplication DBとR2へ直接接続しない
 - API WorkerはAgent DBへ直接接続しない
 - MCP writeはOAuth scopeとcurrent permissionで直接実行する
@@ -82,7 +94,6 @@ apps/api/src/modules/agent/**
 apps/api/src/mcp/**
 apps/web/src/features/agent/**
 packages/agent-contracts/**
-packages/agent-tools/**
 packages/auth/**
 packages/db/**
 docs/architecture/**
@@ -101,7 +112,6 @@ turbo.json
 ```text
 packages/
   agent-contracts/
-  agent-tools/
 
 apps/agent/src/mastra/
   index.ts
@@ -112,6 +122,10 @@ apps/agent/src/mastra/
   workflows/
     approved-issue-action/
   tools/
+    issues/
+      tool-runtime.ts
+      read/factories.ts
+      write/factories.ts
     web-search/
     thread/
     client/
@@ -123,6 +137,8 @@ apps/agent/src/mastra/
 apps/api/src/
   modules/agent/
   mcp/
+    contracts.ts
+    tools/
 ```
 
 ## 作業単位
@@ -137,9 +153,9 @@ apps/api/src/
 - [x] productionのserialized request、response、tool schemaをValibotへ移す
 - [x] productionのserialized contractにある手書き型をValibot推論型へ置き換える
 - [x] production runtimeのZod schemaを削除する
-- [x] `packages/agent-tools`を作成する
-- [x] shared business toolsをMastra `createTool` factoryとして移す
-- [x] 薄い`AgentToolExecutor`だけを定義する
+- [x] （移行履歴）`packages/agent-tools`を作成した。ADR-015でworkspaceごと削除済み
+- [x] （移行履歴）shared business toolsをMastra `createTool` factoryへ移した。現在はAgent/APIが別々に所有
+- [x] Agent-localな薄い`AgentToolExecutor`を`tool-runtime.ts`へ閉じる
 - [x] custom Capability DSL、registry、generic dispatcherを作らない
 - [x] `apps/agent -> apps/api/agent-client`のcompile dependencyを削除する
 - [x] restricted import、exports、knipを更新する
@@ -479,6 +495,7 @@ PATはこのphaseへ含めません。
 | 2026-08-01 | Lunaの標準reasoningをstream、保存、再送する                    | 独自CoT protocolを作らず、Mastra、AI SDK、OpenRouterの標準partを正本にする      |
 | 2026-08-01 | Agent UIにmodel headerとturn minimapを置かない                 | conversation、進行表示、composerの主要操作へ情報階層を集中する                  |
 | 2026-08-01 | Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移す      | 標準Memoryへの切替と耐久性変更を、MCP・approvalの残作業から分離するため         |
+| 2026-08-20 | tool factoryと実行時testをAgent/APIへ移管する                  | ADR-015に従い、runtime固有contextと公開契約の変更理由を所有appへ閉じる          |
 
 ## 検証証跡
 
@@ -490,9 +507,16 @@ PATはこのphaseへ含めません。
 | `bun run check:static`                                                                                                                                                                     | 成功 | lint、Knip full/strict、jscpd                                                                                                                                                    |
 | `bun run test`                                                                                                                                                                             | 成功 | root 42 tests、11 workspace tasks                                                                                                                                                |
 | `bun run --cwd packages/agent-contracts test`                                                                                                                                              | 成功 | 86 tests、coverage 100%                                                                                                                                                          |
-| `bun run --cwd packages/agent-tools test`                                                                                                                                                  | 成功 | 15 tests、coverage 100%                                                                                                                                                          |
+| （移行前）`bun run --cwd packages/agent-tools test`                                                                                                                                        | 成功 | 15 tests、coverage 100%。ADR-015で同等gateをAgent-local factory testへ移管                                                                                                       |
 | `bun run --cwd apps/agent test`                                                                                                                                                            | 成功 | 298 tests、coverage閾値内                                                                                                                                                        |
 | `bun run --cwd apps/api test`                                                                                                                                                              | 成功 | 357 tests、G4 3 testsを含む                                                                                                                                                      |
+| （Issue #44）`bun install --frozen-lockfile`                                                                                                                                               | 成功 | `agent-tools` workspace削除後のmanifestと`bun.lock`の整合を確認                                                                                                                  |
+| （Issue #44）`bun run --cwd apps/agent test`                                                                                                                                               | 成功 | 44 files、331 tests。`tool-runtime.ts`とread/write factoryはstatement、branch、function、lineが各100%                                                                            |
+| （Issue #44）`bun run --cwd apps/api test`                                                                                                                                                 | 成功 | 72 files、394 tests。MCP catalog、実行、JSON-RPC transport、error mappingを含む                                                                                                  |
+| （Issue #44）`bun run --cwd packages/agent-contracts test`                                                                                                                                 | 成功 | 3 files、86 tests、coverage 100%。runtime非依存の業務schemaだけを検証                                                                                                            |
+| （Issue #44）`bun run check:static && bun run format:check && bun run typecheck`                                                                                                           | 成功 | Oxlint、Knip full/strict、jscpd、1478 filesのformat、11 workspaceの型検査                                                                                                        |
+| （Issue #44）`bun run test`                                                                                                                                                                | 成功 | root 26 tests、11 workspace tasks。APIのloopback testはsandbox外の同一commandで実行                                                                                              |
+| （Issue #44）`bun run --cwd apps/agent build:cloudflare`、`bun run --cwd apps/api build:cloudflare`、`bun run build:cloudflare`                                                            | 成功 | Agent production/E2E、API、rootのWeb/API/Agent production dry-run bundle                                                                                                         |
 | `bun run --cwd packages/db db:check`                                                                                                                                                       | 成功 | migration history、Drizzle snapshot、schema drift                                                                                                                                |
 | `bun run test:browser`                                                                                                                                                                     | 成功 | UI 95、Web 256、browser 9、W6 Chromium 17 + WebKit 1 tests                                                                                                                       |
 | `bun run test:e2e`                                                                                                                                                                         | 成功 | E1 3 tests、6枚中最古の過去画像をAsk alwaysで承認してresume                                                                                                                      |

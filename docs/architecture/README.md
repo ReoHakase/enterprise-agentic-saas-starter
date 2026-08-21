@@ -2,7 +2,7 @@
 title: 設計仕様の目次
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-20
 ---
 
 # 設計仕様の目次
@@ -25,7 +25,7 @@ last_reviewed: 2026-08-01
 
 ## packages
 
-- [`packages/agent-contracts`と`packages/agent-tools`](packages/agent-contracts-and-tools.md)
+- [`packages/agent-contracts`](packages/agent-contracts.md)
 - [`packages/auth`](packages/auth.md)
 - [`packages/db`](packages/db.md)
 - [`packages/email`](packages/email.md)

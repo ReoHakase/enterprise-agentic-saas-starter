@@ -2,14 +2,13 @@
 title: Agent runtimeとMCPの目標architecture
 status: proposed
 implementation: planned
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-20
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
   - apps/api/src/mcp/**
   - apps/web/src/features/agent/**
   - packages/agent-contracts/**
-  - packages/agent-tools/**
   - packages/auth/**
   - packages/db/**
 related:
@@ -19,6 +18,7 @@ related:
   - ../testing-strategy/agent-refactor-mcp.md
   - ../decisions/ADR-008-mastra-native-agent-runtime.md
   - ../decisions/ADR-009-mcp-authentication-and-direct-tools.md
+  - ../decisions/ADR-015-runtime-owned-agent-and-mcp-tools.md
 ---
 
 # Agent runtimeとMCPの目標architecture
@@ -35,7 +35,7 @@ MastraをAgent定義だけでなく、Memory、Storage、Approval、Workflow、o
 - browser、API、Agent、MCPの実行主体と認可境界を分離する
 - Agent WorkerへApplication DBとR2のcredentialを渡さない
 - `apps/api`から`apps/agent`へのcompile-time dependencyを作らない
-- AgentとMCPで同じbusiness tool定義を再利用する
+- AgentとMCPで同じbusiness schemaを再利用し、tool実行面は各runtimeが所有する
 - tool inputへtenant ID、user ID、session ID、grant、access tokenを含めない
 - OAuthとMCP writeを初期MCP範囲に含める
 - PATはOAuth実装後の独立phaseにする
@@ -103,12 +103,10 @@ apps/web
 
 apps/agent
   ├─ @enterprise-agentic-saas/agent-contracts
-  ├─ @enterprise-agentic-saas/agent-tools
   └─ Service Binding → apps/api private entrypoint
 
 apps/api
   ├─ @enterprise-agentic-saas/agent-contracts
-  ├─ @enterprise-agentic-saas/agent-tools
   ├─ @enterprise-agentic-saas/auth
   ├─ @enterprise-agentic-saas/db
   └─ @mastra/mcp
@@ -125,7 +123,7 @@ apps/agent → Application Turso
 apps/agent → R2 binding
 ```
 
-## Package構成
+## 共有contractとruntime所有権
 
 ### `packages/agent-contracts`
 
@@ -134,10 +132,12 @@ Valibot schemaとそこから推論した型だけを所有します。
 ```text
 packages/agent-contracts/
   src/
-    chat/
-    control-plane/
-    tools/
-    mcp/
+    chat.ts
+    public-url.ts
+    runtime.ts
+    schemas.ts
+    schema-types.ts
+    tools.ts
     index.ts
 ```
 
@@ -146,8 +146,7 @@ packages/agent-contracts/
 - chat request、run、action、execution、approval、streamに必要な公開schema
 - internal control-plane requestとresponse
 - business tool inputとoutput
-- OAuth scope名とMCP principalの共有型
-- bounded error code
+- Agent、API、Webで意味が同じboundedな業務語彙
 
 含めないもの:
 
@@ -161,48 +160,59 @@ packages/agent-contracts/
 
 外部入力は原則として`v.strictObject`を使います。未知fieldを黙って削除せず拒否し、overpostingを検出します。
 
-### `packages/agent-tools`
-
-Mastraの`createTool`を直接使う薄いtool factoryとexecutor interfaceだけを置きます。独自Capability DSL、registry、generic dispatcherは作りません。
+### `apps/agent`のtool factory
 
 ```text
-packages/agent-tools/
-  src/
-    executor.ts
-    account/
-    organization/
-    issues/
-    files/
-    index.ts
+apps/agent/src/mastra/tools/issues/
+  tool-runtime.ts
+  read/
+    factories.ts
+    tool.ts
+  write/
+    factories.ts
+    tool.ts
 ```
 
-共有するtool:
+Agent runtimeは次を所有します。
 
-- accountとorganizationのread
-- memberとIssue labelのsearch
-- Issueのsearch、get、create、update、delete
-- Issue attachmentのmetadata read、画像read、追加、削除
-- MCP upload sessionに必要なfile操作
+- 12件のMastra `createTool` factory
+- `RequestContext`、run grant、budget、`toolCallId`
+- Approval、suspend、idempotency、usageの実行順
+- 画像のbounded metadataとAgent-local sidecar
+- 固定public errorとprovider errorのcause境界
 
-Agent専用として`apps/agent`へ残すもの:
+`web_search`、`rename_thread`、`ui_*`、Memory、Workflow、instructionも引き続きAgentだけが所有します。
 
-- `web_search`
-- `rename_thread`
-- `ui_*`
-- model selection
-- Memory
-- Workflow
-- Agent instructions
-- internal skills
+### `apps/api`のMCP tool
 
-### package自身が所有する検査
+```text
+apps/api/src/mcp/
+  contracts.ts
+  tools/
+    catalog.ts
+    direct-tool.ts
+    *-application.ts
+```
 
-`agent-contracts`と`agent-tools`はbusiness logicを持たせません。package自身はtypecheck、lint、exports、
-import boundary、cycle、Zod禁止に加え、公開Valibot schemaのstrict/bounded validationと薄い
-`createTool` factoryが`AgentToolExecutor`を1回だけ呼ぶ実行時契約テストを所有します。
+APIは14件のMCP toolを`createMcpDirectTool`で登録し、OAuth scope、現在のpermission、tenant、JSON
+Schema、array wrapping、idempotency、transaction、audit、`McpToolError`を所有します。Agent tool objectを
+importせず、`read_account_context`と`get_issue`もAPI-localに直接登録します。
+
+API専用として`apps/api`へ閉じるもの:
+
+- MCP principal、error codeとerror class
+- MCP writeのidempotency付きinputとreceipt
+- upload session input/output
+- MCP clientへ公開するdescription、annotation、JSON Schema
+
+### 検査の所有権
+
+`agent-contracts`はtypecheck、lint、exports、import boundary、cycle、公開Valibot schemaの
+strict/bounded validationを所有します。Agent factoryの実行時契約と100% coverage gateはG2、MCP direct
+toolのregistry、JSON Schema、scope、permission、error、idempotency、auditはA1からA4が所有します。
 
 consumer固有のValibot境界はA1とG2、Agent compositionはG2、MCP登録はA4でも検査します。
-package固有の公開テスト層や`AC1`、`AT1`は作りません。
+package固有の公開テスト層は作りません。
 
 ## file-based風directoryとcode registration
 
@@ -640,7 +650,8 @@ apps/api/src/mcp/
   resources/
 ```
 
-`apps/api`は`packages/agent-tools`をlocal executorへ接続します。`apps/agent`はimportしません。
+`apps/api`は共有Valibot schemaをAPI-local application serviceへ接続します。Agentのtool factoryと
+`apps/agent`はimportしません。
 
 Mastra `MCPServer`へ登録するもの:
 
