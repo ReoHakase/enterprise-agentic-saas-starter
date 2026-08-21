@@ -11,7 +11,7 @@ React Email template、render helper、provider adapterを持つworkspace。
 ## 公開entrypoint
 
 - `@enterprise-agentic-saas/email`: template、render helper、sender factory、型
-- `@enterprise-agentic-saas/email/templates`: template componentとtemplate専用render helper
+- `@enterprise-agentic-saas/email/config`: provider、sender、Mailpit URLの設定解決
 - `@enterprise-agentic-saas/email/runtime`: runtimeに応じたsender。Wranglerの`workerd` conditionではEmail binding、通常のBun/NodeではMailpit/console/noopを選ぶ
 - `@enterprise-agentic-saas/email/development`: Mailpit wrapperとAPI supervisor間のlocal session読取helper。development processだけで使う
 

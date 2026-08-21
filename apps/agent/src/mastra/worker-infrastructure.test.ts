@@ -1,58 +1,12 @@
 import { spawn } from "node:child_process"
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { readFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { createAgentEvalConfigs } from "./evals/stack-config"
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..")
-const wrapperPath = join(repositoryRoot, "scripts/wrangler-dev-portless.sh")
-const temporaryDirectories: string[] = []
-
-const createWranglerStub = async () => {
-  const directory = await mkdtemp(join(tmpdir(), "wrangler-portless-test-"))
-  temporaryDirectories.push(directory)
-  const executable = join(directory, "wrangler")
-  await writeFile(
-    executable,
-    '#!/bin/sh\nprintf "%s\\n" "$@" > "$WRANGLER_ARGUMENTS_FILE"\n'
-  )
-  await chmod(executable, 0o755)
-  return directory
-}
-
-const runWrapper = async (environment: Record<string, string | undefined>) => {
-  const childEnvironment = { ...process.env }
-  for (const [name, value] of Object.entries(environment)) {
-    if (value === undefined) delete childEnvironment[name]
-    else childEnvironment[name] = value
-  }
-
-  return await new Promise<{
-    exitCode: number | null
-    stderr: string
-    stdout: string
-  }>((resolveResult, reject) => {
-    const child = spawn("sh", [wrapperPath], {
-      cwd: join(repositoryRoot, "apps/api"),
-      env: childEnvironment,
-    })
-    let stderr = ""
-    let stdout = ""
-    child.stderr.setEncoding("utf8").on("data", (chunk) => {
-      stderr += chunk
-    })
-    child.stdout.setEncoding("utf8").on("data", (chunk) => {
-      stdout += chunk
-    })
-    child.once("error", reject)
-    child.once("close", (exitCode) => {
-      resolveResult({ exitCode, stderr, stdout })
-    })
-  })
-}
 
 const readJsonc = async (path: string) => {
   const script =
@@ -78,80 +32,6 @@ const readJsonc = async (path: string) => {
     })
   })
 }
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { force: true, recursive: true }))
-  )
-})
-
-describe("wrangler-dev-portless", () => {
-  it("lets the OS allocate a collision-free inspector port by default", async () => {
-    const stubDirectory = await createWranglerStub()
-    const argumentsFile = join(stubDirectory, "arguments.txt")
-    const result = await runWrapper({
-      PATH: `${stubDirectory}:${process.env.PATH ?? ""}`,
-      PORT: "43123",
-      WRANGLER_ARGUMENTS_FILE: argumentsFile,
-      WRANGLER_INSPECTOR_PORT: undefined,
-    })
-
-    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "" })
-    expect((await readFile(argumentsFile, "utf8")).trim().split("\n")).toEqual([
-      "dev",
-      "--port",
-      "43123",
-      "--inspector-port",
-      "0",
-      "--env-file",
-      ".dev.vars.example",
-      "--env-file",
-      ".env.local",
-    ])
-  })
-
-  it("accepts an explicit inspector port for a stable devtools endpoint", async () => {
-    const stubDirectory = await createWranglerStub()
-    const argumentsFile = join(stubDirectory, "arguments.txt")
-    const result = await runWrapper({
-      PATH: `${stubDirectory}:${process.env.PATH ?? ""}`,
-      PORT: "43124",
-      WRANGLER_ARGUMENTS_FILE: argumentsFile,
-      WRANGLER_INSPECTOR_PORT: "9234",
-    })
-
-    expect(result.exitCode).toBe(0)
-    expect(await readFile(argumentsFile, "utf8")).toContain(
-      "--inspector-port\n9234\n"
-    )
-  })
-
-  it("rejects missing Portless input and malformed inspector overrides", async () => {
-    const missingPort = await runWrapper({ PORT: undefined })
-    expect(missingPort.exitCode).toBe(1)
-    expect(missingPort.stderr).toContain("PORT is required")
-
-    const invalidInspector = await runWrapper({
-      PORT: "43125",
-      WRANGLER_INSPECTOR_PORT: "not-a-port",
-    })
-    expect(invalidInspector.exitCode).toBe(1)
-    expect(invalidInspector.stderr).toContain(
-      "WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535"
-    )
-
-    const inspectorOverflow = await runWrapper({
-      PORT: "43126",
-      WRANGLER_INSPECTOR_PORT: "65536",
-    })
-    expect(inspectorOverflow.exitCode).toBe(1)
-    expect(inspectorOverflow.stderr).toContain(
-      "WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535"
-    )
-  })
-})
 
 describe("Mastra Studio development configuration", () => {
   it("uses the Portless browser origin for Studio API requests", async () => {

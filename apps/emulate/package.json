@@ -7,8 +7,6 @@
     "build": "next build",
     "dev": "portless-topology run github.emulate.enterprise-agentic-saas -- next dev --turbopack",
     "dev:http": "next dev --hostname 127.0.0.1",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --config ../../vitest.config.ts --project=emulate-unit",
     "typecheck": "next typegen && tsc --noEmit"

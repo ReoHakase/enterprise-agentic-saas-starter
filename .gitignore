@@ -44,9 +44,6 @@ test-results/
 storybook-static/
 .next/
 .next-browser/
-.next-e2e/
-.next-e2e-deterministic-agent/
-.next-e2e-deterministic-oauth/
 .next-e2e-*/
 .next-e2e-full-*/
 .vitest-attachments/

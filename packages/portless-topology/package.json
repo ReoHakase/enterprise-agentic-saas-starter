@@ -7,8 +7,6 @@
   },
   "type": "module",
   "scripts": {
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --config ../../vitest.config.ts --project=portless-topology-unit",
     "typecheck": "tsc --noEmit"

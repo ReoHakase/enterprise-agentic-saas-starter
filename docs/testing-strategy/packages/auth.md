@@ -17,9 +17,11 @@ related:
 
 ## 目的
 
-`packages/auth`は、Better Auth server factory、browser client、GitHub OAuth contract、Auth OpenAPI、DBとEmail adapterのcompositionを所有します。
+`packages/auth`は、Better Auth server factory、browser client、package内部のGitHub OAuth contract、Auth OpenAPI、DBとEmail adapterのcompositionを所有します。
 
-認証はAPIだけの内部実装ではありません。serverはAPI、browser clientはWeb、OAuth contractはEmulateのGitHub serviceが利用するため、独立したpackage戦略を持ちます。
+認証はAPIだけの内部実装ではありません。serverはAPI、browser clientはWebが利用し、GitHub OAuthは
+EmulateのHTTP serviceと接続するため、独立したpackage戦略を持ちます。EmulateからAuth packageへの
+source依存は持ちません。
 
 ## コード構造との対応
 

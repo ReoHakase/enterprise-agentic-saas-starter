@@ -144,7 +144,7 @@
     "build:storybook": "turbo run build:storybook",
     "check": "bun run check:static && bun run format:check && bun run typecheck && bun run test",
     "check:static": "bun run lint && knip && knip --strict && jscpd --config .jscpd.json",
-    "dev": "bun run observability:check && bun run portless-topology exec -- turbo run dev --concurrency=13",
+    "dev": "bun run observability:check && bun run portless-topology exec -- turbo run dev --concurrency=14",
     "dev:db": "bun run portless-topology exec -- turbo run dev --filter=@enterprise-agentic-saas/db",
     "dev:db:reset": "bun run portless-topology exec -- bun run --cwd packages/db ../../scripts/reset-local-data.ts",
     "dev:db:seed": "NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-$HOME/.portless/ca.pem} bun run portless-topology exec -- bun run --cwd apps/api src/development/seed-command.ts",

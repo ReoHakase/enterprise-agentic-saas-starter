@@ -44,6 +44,7 @@ const config: KnipConfig = {
         "smoke/images/run.ts",
         "src/**/*.test.ts",
         "src/dev.ts",
+        // The deterministic OAuth E2E fixture starts this entry by file path.
         "src/index.ts!",
         "src/mcp/index.ts!",
         "src/smoke/upload-memory/worker.ts!",

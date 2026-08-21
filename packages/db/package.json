@@ -27,11 +27,8 @@
     "db:turso": "portless-topology run db.enterprise-agentic-saas -- bun run db:turso:serve",
     "db:turso:serve": "mkdir -p .local/turso && turso dev --db-file .local/turso/dev.db --port ${PORT:-8080}",
     "dev": "portless-topology exec -- sh -c 'bun run db:bootstrap && bun run db:studio'",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --config ../../vitest.config.ts --project=db-unit",
-    "test:migration:behaviour": "vitest run --config ../../vitest.config.ts --project=db-unit src/migrations",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

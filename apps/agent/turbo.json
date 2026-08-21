@@ -3,6 +3,9 @@
   "tasks": {
     "dev": {
       "with": ["@enterprise-agentic-saas/agent#dev:studio"]
+    },
+    "dev:studio": {
+      "with": ["@enterprise-agentic-saas/agent#storage:dev"]
     }
   }
 }

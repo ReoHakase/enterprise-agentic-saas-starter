@@ -72,12 +72,6 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts"],
       "outputs": []
     },
-    "format": {
-      "outputs": []
-    },
-    "format:check": {
-      "outputs": []
-    },
     "test": {
       "dependsOn": ["transit"],
       "env": [
@@ -135,11 +129,6 @@
       "dependsOn": ["transit"],
       "outputs": []
     },
-    "deploy": {
-      "dependsOn": ["build:cloudflare"],
-      "cache": false,
-      "passThroughEnv": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"]
-    },
     "storybook": {
       "cache": false,
       "persistent": true
@@ -172,10 +161,6 @@
       ],
       "passThroughEnv": ["MASTRA_STORAGE_AUTH_TOKEN", "MASTRA_STORAGE_URL"]
     },
-    "dev:portless": {
-      "cache": false,
-      "persistent": true
-    },
     "dev:studio": {
       "cache": false,
       "persistent": true
@@ -188,22 +173,12 @@
       "cache": false,
       "persistent": true
     },
-    "@enterprise-agentic-saas/agent#dev": {
-      "with": ["@enterprise-agentic-saas/agent#storage:dev"]
-    },
-    "@enterprise-agentic-saas/agent#dev:studio": {
-      "with": ["@enterprise-agentic-saas/agent#storage:dev"]
-    },
     "@enterprise-agentic-saas/db#dev": {
       "cache": false,
       "persistent": true,
       "with": ["@enterprise-agentic-saas/db#db:turso"]
     },
     "@enterprise-agentic-saas/db#db:turso": {
-      "cache": false,
-      "persistent": true
-    },
-    "@enterprise-agentic-saas/db#db:studio": {
       "cache": false,
       "persistent": true
     }

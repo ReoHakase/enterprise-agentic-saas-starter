@@ -10,8 +10,6 @@
     }
   },
   "scripts": {
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
     "lint": "oxlint --deny-warnings",
     "test": "vitest run --config ../../vitest.config.ts --project=agent-contracts-unit",
     "typecheck": "tsc --noEmit"

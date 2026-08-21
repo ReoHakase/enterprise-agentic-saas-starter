@@ -8,8 +8,6 @@ Better Auth による認証・認可パッケージ。
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `@enterprise-agentic-saas/auth`                       | singleton `auth` インスタンス（server-only）                                                 |
 | `@enterprise-agentic-saas/auth/client`                | `authClient`（passkey、magic link、organization、multi-sessionを含むフロントエンド用client） |
-| `@enterprise-agentic-saas/auth/github-oauth`          | local GitHub OAuth emulatorとAPIが共有するbrowser-safeな固定client credential                |
-| `@enterprise-agentic-saas/auth/mcp-oauth-contract`    | MCP OAuthのbrowser-safeなscope、prefix、型                                                   |
 | `@enterprise-agentic-saas/auth/mcp-oauth`             | MCP OAuth providerとaccess token検証（server-only）                                          |
 | `@enterprise-agentic-saas/auth/mcp-oauth-credentials` | MCP OAuth credentialの一覧・revoke helper（server-only）                                     |
 
@@ -81,7 +79,7 @@ Better Auth が `process.env` から自動読み込みする。`apps/api/.env` �
 | `EMAIL_FROM`                          | Production       | local/testは`noreply@example.test`、本番はCloudflare Email Sendingで検証済みdomainのsender address                                            |
 | `MAILPIT_URL`                         | No               | APIの`dev` scriptがPortlessのworktree-aware URLを注入。単体起動時はmain checkout URLへfallbackし、明示値もlocal HTTP(S)だけをsenderが許可     |
 
-emulator URL指定時は通常の `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` を意図的に無視し、本番credentialをseedやlocal requestへ流さない。emulator専用overrideがなければ `@enterprise-agentic-saas/auth/github-oauth` の公開固定値を使う。この値はlocal emulator識別用でありsecretではない。productionではemulator URLをfail-closedで拒否する。
+emulator URL指定時は通常の `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` を意図的に無視し、本番credentialをseedやlocal requestへ流さない。emulator専用overrideがなければpackage内部の固定値を使う。この値はlocal emulator識別用でありsecretではない。productionではemulator URLをfail-closedで拒否する。
 
 emulator providerは `read:user` / `user:email`、PKCE、POST client authenticationを使用し、`/user` と `/user/emails` をValibotで検証する。primaryかつverifiedなemailを優先し、verified emailがなければsign-inを拒否する。token、provider response、raw errorはloggerへ渡さない。
 
