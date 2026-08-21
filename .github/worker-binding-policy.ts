@@ -69,6 +69,20 @@ export const assertAgentRuntimeBindingAbsent = (
   }
 }
 
+export const assertImagePreviewBinding = (
+  inventory: readonly WorkerBindingInventoryEntry[]
+): void => {
+  const bindings = inventory.filter(({ name }) => name === "IMAGE_PREVIEWS")
+  if (
+    bindings.length !== 1 ||
+    bindings[0]?.type !== "service" ||
+    bindings[0].service !== "enterprise-agentic-saas-images" ||
+    bindings[0].entrypoint !== undefined
+  ) {
+    throw new Error("API does not expose the expected IMAGE_PREVIEWS binding")
+  }
+}
+
 export const assertAgentMaintenanceBindingEnabled = (
   inventory: readonly WorkerBindingInventoryEntry[]
 ): void => {
@@ -120,6 +134,7 @@ if (import.meta.main) {
   const inventory = parseWorkerBindingInventory(
     JSON.parse(await readFile(inventoryPath, "utf8"))
   )
+  assertImagePreviewBinding(inventory)
   if (mode === "compatibility") {
     assertAgentRuntimeBindingAbsent(inventory)
     assertAgentMaintenanceBindingEnabled(inventory)

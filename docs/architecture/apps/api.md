@@ -122,8 +122,13 @@ telemetry、clock等のapp-global contractに限り、moduleをimportしませ�
 
 - 本番用と互換デプロイ用のWrangler設定は最上位の`cache.enabled=false`を明示する
 - 既定入口と名前付き入口の`fetch()`では、Workers Cachingより前にレスポンスを再利用せず、API処理を毎回実行する
-- Cache APIは、各モジュールが認証、テナント認可、対象リソース確認を終えた後にだけ利用する
-- 画像previewの内部キャッシュキーを公開せず、ブラウザー向けの`private, no-cache`、ETag、304を維持する
+- 画像previewは、各モジュールが認証、テナント認可、対象リソース確認を終えた後にだけprivate
+  Images WorkerのService Bindingを呼ぶ
+- 認証済みfile/Agent asset previewのWorkers CachingとCloudflare Images変換は`apps/images`が
+  所有し、APIはそのpreviewにCache APIを利用しない
+- 内部requestへAuthorization、cookie、filenameを渡さず、R2 object keyはURLでなく内部headerだけへ置く
+- Images Workerのheaderをそのままbrowserへ転送せず、`private, no-cache`、ETag、304、security headerを
+  APIで再構築する
 - 設定変更から既存キャッシュ項目を自動削除せず、本番導入時に削除要否を別途判断する
 
 ## error

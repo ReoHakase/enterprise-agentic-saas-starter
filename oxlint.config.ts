@@ -15,6 +15,7 @@ type WorkspaceName =
   | "db"
   | "email"
   | "emulate"
+  | "images"
   | "portless-topology"
   | "ui"
   | "web"
@@ -188,6 +189,7 @@ const workspaceAllowlist: Record<WorkspaceName, string[]> = {
   db: [],
   email: [],
   emulate: [],
+  images: [],
   "portless-topology": [],
   ui: ["@enterprise-agentic-saas/ui/*"],
   web: [

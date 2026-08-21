@@ -11,6 +11,7 @@ import {
 const repositoryRoot = resolve(import.meta.dir, "../../../..")
 const apiWorkspace = resolve(repositoryRoot, "apps/api")
 const agentWorkspace = resolve(repositoryRoot, "apps/agent")
+const imagesWorkspace = resolve(repositoryRoot, "apps/images")
 const databaseWorkspace = resolve(repositoryRoot, "packages/db")
 const wranglerBinary = resolve(apiWorkspace, "node_modules/.bin/wrangler")
 
@@ -139,6 +140,10 @@ const main = async () => {
         mode: 0o700,
         recursive: true,
       }),
+      mkdir(resolve(environment.stackRoot, "images"), {
+        mode: 0o700,
+        recursive: true,
+      }),
     ])
     await chmod(environment.temporaryRoot, 0o700)
     if (stopping) return
@@ -197,6 +202,10 @@ const main = async () => {
       ],
       services: [
         {
+          binding: "IMAGE_PREVIEWS",
+          service: environment.imagesWorkerName,
+        },
+        {
           binding: "AGENT_RUNTIME",
           service: environment.agentWorkerName,
           entrypoint: "AgentRuntime",
@@ -238,6 +247,22 @@ const main = async () => {
         GITHUB_OAUTH_CALLBACK_URL: `${environment.apiOrigin}/auth/oauth2/callback/github`,
       },
     }
+    const imagesConfig = {
+      name: environment.imagesWorkerName,
+      main: resolve(imagesWorkspace, "src/worker.ts"),
+      compatibility_date: "2026-07-22",
+      workers_dev: false,
+      preview_urls: false,
+      r2_buckets: [
+        {
+          binding: "FILES",
+          bucket_name: `agent-e2e-files-${environment.runId}`,
+        },
+      ],
+      images: { binding: "IMAGES" },
+      cache: { enabled: true },
+      observability: { enabled: false },
+    }
     const agentConfig = {
       name: environment.agentWorkerName,
       main: resolve(agentWorkspace, agentE2EWorkerEntrypoint(scriptedAgent)),
@@ -276,6 +301,10 @@ const main = async () => {
         environment.agentConfigPath,
         `${JSON.stringify(agentConfig, null, 2)}\n`
       ),
+      writePrivateFile(
+        environment.imagesConfigPath,
+        `${JSON.stringify(imagesConfig, null, 2)}\n`
+      ),
       openRouterApiKey
         ? writePrivateFile(
             environment.agentDevVarsPath,
@@ -291,6 +320,8 @@ const main = async () => {
         "--local",
         "--config",
         environment.apiConfigPath,
+        "--config",
+        environment.imagesConfigPath,
         "--config",
         environment.agentConfigPath,
         "--persist-to",

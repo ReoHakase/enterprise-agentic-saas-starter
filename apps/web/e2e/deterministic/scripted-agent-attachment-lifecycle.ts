@@ -59,6 +59,19 @@ const sendAndApproveNextAction = async (
   await expect(agentShell.getByText("Approve Issue change?")).toHaveCount(
     approvalCount + 1
   )
+  const attachmentPreview = agentShell
+    .getByRole("img", { name: "Attachment preview: oldest-e1.png" })
+    .last()
+  await expect(attachmentPreview).toBeVisible()
+  await expect
+    .poll(() =>
+      attachmentPreview.evaluate((element) =>
+        element instanceof HTMLImageElement && element.complete
+          ? element.naturalWidth
+          : 0
+      )
+    )
+    .toBeGreaterThan(0)
   const resumeResponsePromise = page.waitForResponse(
     (response) =>
       /\/agent\/actions\/[^/]+\/resume$/u.test(

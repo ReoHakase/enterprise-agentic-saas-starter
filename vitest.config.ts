@@ -96,6 +96,11 @@ const nodeCoverageProjects: Record<string, NodeCoverageProject> = {
     include: ["app/**/route.ts"],
     thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
   },
+  "images-unit": {
+    workspace: "apps/images",
+    include: ["src/worker.ts"],
+    thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
+  },
   "web-unit": {
     workspace: "apps/web",
     include: [

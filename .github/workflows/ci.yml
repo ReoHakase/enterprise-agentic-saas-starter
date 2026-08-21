@@ -387,6 +387,8 @@ jobs:
             package: "@enterprise-agentic-saas/web"
           - name: API
             package: "@enterprise-agentic-saas/api"
+          - name: Images
+            package: "@enterprise-agentic-saas/images"
           - name: Agent
             package: "@enterprise-agentic-saas/agent"
 

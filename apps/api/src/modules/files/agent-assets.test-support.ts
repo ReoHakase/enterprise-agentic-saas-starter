@@ -11,13 +11,13 @@ import {
 } from "../agent/public"
 import { createAuthorizationModule } from "../authorization/public"
 import { pngBytes } from "./agent-assets.fixture-support"
-import { agentAssetObjectKey } from "./constants"
+import { agentAssetObjectKey, fileObjectKey } from "./constants"
 import { detectImageFormat } from "./file-domain"
 import { createFilesApplication } from "./module"
 import { finalizePendingFile, reservePendingFile } from "./repository"
 import {
-  type FileCache,
   type FileImagesBinding,
+  type FilePreviewBinding,
   type FileR2Bucket,
   type FileR2Object,
   type FileR2PutValue,
@@ -51,7 +51,6 @@ type ImagesInfoOverride = {
 
 export const createRuntime = () => {
   const objects = new Map<string, StoredObject>()
-  const cachedResponses = new Map<string, Response>()
   const deletedKeys: string[] = []
   let etagSequence = 0
   let infoOverride: ImagesInfoOverride = {}
@@ -141,31 +140,35 @@ export const createRuntime = () => {
     }
   })
   const images: FileImagesBinding = { info, input }
-  const cacheMatch = vi.fn<FileCache["match"]>(async (request) =>
-    cachedResponses.get(request.url)?.clone()
+  const previewFetch = vi.fn<FilePreviewBinding["fetch"]>(
+    async () =>
+      new Response(Uint8Array.from([0x57, 0x45, 0x42, 0x50]), {
+        headers: {
+          "Cache-Control": "public, max-age=259200, must-revalidate",
+          "Content-Length": "4",
+          "Content-Type": "image/webp",
+          ETag: `"${"b".repeat(64)}"`,
+          "Set-Cookie": "internal=secret",
+          "X-Internal-Cache": "hit",
+        },
+      })
   )
-  const cachePut = vi.fn<FileCache["put"]>(async (request, response) => {
-    cachedResponses.set(request.url, response.clone())
-  })
-  const cache: FileCache = { match: cacheMatch, put: cachePut }
   const runtime: FileStorageRuntime = {
     agentAssetUploadEnabled: true,
     bucket,
-    cache,
     images,
+    previews: { fetch: previewFetch },
   }
 
   return {
     bucket,
-    cache,
-    cacheMatch,
-    cachePut,
     deletedKeys,
     get,
     head,
     images: { info, input, output, transform },
     objects,
     put,
+    previewFetch,
     runtime,
     setInfo(override: ImagesInfoOverride) {
       infoOverride = { ...override }
@@ -455,7 +458,12 @@ export const seedReadyIssueAttachment = async (
   }
 ) => {
   const organizationId = input.organizationId ?? "asset-org-a"
-  const objectKey = `private/${organizationId}/files/${input.fileId}`
+  const objectKey = fileObjectKey({
+    fileId: input.fileId,
+    organizationId,
+    ownerId: input.issueId,
+    ownerType: "issue",
+  })
   const bytes = pngBytes()
   const reserved = await reservePendingFile(db, {
     declaredContentType:

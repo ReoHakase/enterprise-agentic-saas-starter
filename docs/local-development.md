@@ -175,9 +175,16 @@ Web版のOAuth callbackは
 `bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、
 linked worktreeでは`bun run portless-topology resolve`の出力を正本にします。
 
-Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`のmainである`src/worker.ts`を`wrangler dev --local --persist-to apps/api/.wrangler/state`で直接watchし、source変更時にWranglerがrebundleしてWorker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
+Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`をprimary、`../images/wrangler.jsonc`をauxiliaryにした`wrangler dev --local --persist-to apps/api/.wrangler/state`で両方のsourceを直接watchします。WranglerがService Bindingとlocal R2 stateを同じsessionへ合成し、source変更時に対象Worker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
 
-Wranglerを既定経路にすることで、Elysiaのルートを編集しながら`FILES` R2、`IMAGES`、認可後に使うCache API、`EMAIL` bindingを同じWorkerランタイムで利用できます。最上位のWorkers Cachingはローカルでも無効です。通常のアプリケーションメールは開発用プロバイダーのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdはPortlessの開発CAを信頼しないため、ブラウザーはPortless HTTPS、WorkerからMailpitへの送信だけは非公開セッションで渡す直接loopback HTTPに分けます。APIの監督処理はセッションを読み、Mailpit `/api/v1/info` の準備完了を確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけローカル`EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
+Wranglerを既定経路にすることで、Elysiaのルートを編集しながら`FILES` R2、`IMAGES`、
+`IMAGE_PREVIEWS`、`EMAIL` bindingを利用できます。APIのWorkers Cachingはローカルでも無効で、認可後に
+呼ぶprivate Images Workerだけがpreview cacheを所有します。通常のアプリケーションメールは開発用
+プロバイダーのMailpitへ送り、magic link、verification、invitationを受信箱で確認します。workerdは
+Portlessの開発CAを信頼しないため、ブラウザーはPortless HTTPS、WorkerからMailpitへの送信だけは非公開
+セッションで渡す直接loopback HTTPに分けます。APIの監督処理はセッションを読み、Mailpit `/api/v1/info`
+の準備完了を確認してからWranglerを起動します。`EMAIL_PROVIDER=cloudflare`を明示した場合だけローカル
+`EMAIL` binding simulationを通り、実配送はしません。共有設定に`remote: true`は置きません。
 
 APIはMailpitとDBのreadinessを扱う`src/dev.ts` supervisor、Agentは
 `apps/agent/scripts/wrangler-portless.ts`から`wrangler dev`を起動します。Agentのlauncherは
@@ -308,7 +315,10 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 - local upload/previewが再起動で消える: APIが`wrangler dev --local --persist-to apps/api/.wrangler/state`で起動しているか確認する。raw `wrangler dev`を別terminalで二重起動しない。
 - seed後に一時processが残る: `bun run dev:db:seed`は自身が起動したTurso/Wranglerだけを停止する。別terminalの既存dev processは停止しないため、残っているprocessのownerと起動commandを確認する。永続化したDB/R2 stateが残るのは正常。
 - R2 seedが拒否される: remote Turso、`NODE_ENV=production`、`wrangler --remote`を使っていないことを確認する。HTTP 5xxは同じfixtureで最大3回だけretryして終了するため、固定errorの原因を直して`bun run dev:db:seed`を明示再実行する。tokenやobject keyをlogへ出して回避しない。
-- local previewとproductionの変換差: local Imagesは低忠実度なので、API contract testとは別の資格情報付きremote Images smokeで確認する。
+- local previewとproductionの変換差: local Imagesは低忠実度。固定変換contractは`apps/images`のunit test、
+  bundle/configはCloudflare dry-runで確認する。既定のproduction workflowは認証付きpreviewを実行しないため、
+  production provider疎通が必要な場合だけ実入口を使う別の明示承認済みsmokeで確認する。独立remote fixture
+  Workerは起動しない。
 - `bun run dev`がobservability readinessで失敗する: Docker/OrbStackとPortless proxyを自分で起動し、`bun run observability:up`を実行する。`bun run dev`へ`sudo`やdesktop app起動権限を渡して回避しない。
 - Grafanaにsignalが出ない: `bun run portless-topology exec -- env`で`DEV_WORKTREE_ID`、`DEV_SESSION_ID`、固定OTLP endpointを確認し、Grafana queryへ同じID filterを指定する。
 - `bun install`がsecurity scannerの5xxで止まる: scannerは意図的にfail-closed。恒久的に無効化せず、まず再試行する。localの一時回避条件とreleaseで禁止する理由は`developer-environment` skillを参照する。

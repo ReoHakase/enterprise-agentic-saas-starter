@@ -64,16 +64,23 @@ describe("mutual Worker Service Binding deployment", () => {
       join(repositoryRoot, "apps/agent/wrangler.jsonc")
     )
     const { services, ...finalConfigWithoutServices } = finalConfig
+    const imagePreviewService = {
+      binding: "IMAGE_PREVIEWS",
+      service: "enterprise-agentic-saas-images",
+    }
 
     expect(services).toEqual([
+      imagePreviewService,
       {
         binding: "AGENT_RUNTIME",
         entrypoint: "AgentRuntime",
         service: "enterprise-agentic-saas-agent",
       },
     ])
-    expect(bootstrapConfig).toEqual(finalConfigWithoutServices)
-    expect(bootstrapConfig).not.toHaveProperty("services")
+    expect(bootstrapConfig).toEqual({
+      ...finalConfigWithoutServices,
+      services: [imagePreviewService],
+    })
     expect(finalConfig.compatibility_flags).toEqual([
       "nodejs_compat",
       "enable_request_signal",

@@ -15,7 +15,6 @@ import { createApp } from "../../app"
 import { HttpError } from "../../errors/http-error"
 import {
   FILE_MAX_BYTES,
-  FILE_PREVIEW_WIDTHS,
   FILE_TEXT_PREVIEW_MAX_BYTES,
   isTextPreviewableFile,
 } from "./constants"
@@ -25,8 +24,8 @@ import { reservePendingFile } from "./repository"
 import {
   configureFileStorageRuntime,
   resetFileStorageRuntimeForTest,
-  type FileCache,
   type FileImagesBinding,
+  type FilePreviewBinding,
   type FileR2Bucket,
   type FileR2Object,
   type FileR2PutValue,
@@ -34,7 +33,6 @@ import {
 } from "./runtime"
 import {
   downloadFile,
-  previewFile,
   previewTextFile,
   removeFile,
   uploadFile,
@@ -290,12 +288,25 @@ const createRuntime = () => {
       })),
     })),
   }
-  const cache: FileCache = {
-    match: vi.fn<FileCache["match"]>(async () => undefined),
-    put: vi.fn<FileCache["put"]>(async () => undefined),
+  const previewFetch = vi.fn<FilePreviewBinding["fetch"]>(
+    async () =>
+      new Response(new Uint8Array([0x57, 0x45, 0x42, 0x50]), {
+        headers: {
+          "Cache-Control": "public, max-age=2592000, must-revalidate",
+          "Content-Length": "4",
+          "Content-Type": "image/webp",
+          ETag: `"${"a".repeat(64)}"`,
+          "Set-Cookie": "internal=secret",
+          "X-Internal-Cache": "hit",
+        },
+      })
+  )
+  const runtime: FileStorageRuntime = {
+    bucket,
+    images,
+    previews: { fetch: previewFetch },
   }
-  const runtime: FileStorageRuntime = { bucket, cache, images }
-  return { objects, runtime }
+  return { objects, previewFetch, runtime }
 }
 
 const upload = (
@@ -916,59 +927,6 @@ describe("file service", () => {
       }),
     })
     expect(unsatisfiable.status).toBe(416)
-  })
-
-  it("accepts only four canonical widths and fails open when cache is unavailable", async () => {
-    const png = new File(
-      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
-      "image.png",
-      { type: "image/png" }
-    )
-    const result = await upload(database, png, "preview-1")
-    const cache = storage.runtime.cache
-    if (!cache) throw new Error("Test runtime cache is required")
-    vi.mocked(cache.match).mockRejectedValue(new Error("cache unavailable"))
-    vi.mocked(cache.put).mockRejectedValue(new Error("cache unavailable"))
-
-    for (const width of FILE_PREVIEW_WIDTHS) {
-      // oxlint-disable-next-line no-await-in-loop -- all allowed variants are individually asserted.
-      const response = await previewFile(database, {
-        actorRole: "member",
-        actorUserId: "user-1",
-        fileId: result.dto.id,
-        organizationId: "org-1",
-        request: new Request("https://api.example.test/preview"),
-        width: String(width),
-      })
-      expect(response.status).toBe(200)
-      expect(response.headers.get("content-type")).toBe("image/webp")
-      expect(response.headers.get("cache-control")).toBe("private, no-cache")
-    }
-
-    await expect(
-      previewFile(database, {
-        actorRole: "member",
-        actorUserId: "user-1",
-        fileId: result.dto.id,
-        organizationId: "org-1",
-        request: new Request("https://api.example.test/preview"),
-        width: "0360",
-      })
-    ).rejects.toMatchObject({ code: "validation_error" })
-  })
-
-  it("checks tenant/file authorization before consulting preview cache", async () => {
-    await expect(
-      previewFile(database, {
-        actorRole: "member",
-        actorUserId: "user-1",
-        fileId: "missing-file",
-        organizationId: "org-1",
-        request: new Request("https://api.example.test/preview"),
-        width: "360",
-      })
-    ).rejects.toMatchObject({ code: "not_found" })
-    expect(storage.runtime.cache?.match).not.toHaveBeenCalled()
   })
 
   it("enforces route 401/404/409 before owner list access", async () => {

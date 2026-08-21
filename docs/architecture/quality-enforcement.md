@@ -293,7 +293,7 @@ Cloudflare dry-run
 - `Browser`: Storybookのlight/dark、Browser Mode、static build、UI components、Next.js integrationを
   独立laneで実行して集約する
 - `Free E2E`: Agent profileを3ワーカー、OAuth・WebAuthnを含むAuth profileを1ワーカーで実行して集約する
-- `Cloudflare dry-run`: Web/API/Agent production bundle
+- `Cloudflare dry-run`: Web/API/Images/Agent production bundle
 
 Paid testはfork PRへsecretを渡さず、通常PRのrequired checkにも含めません。maintainerの明示実行、
 nightly、release candidateだけで実行します。

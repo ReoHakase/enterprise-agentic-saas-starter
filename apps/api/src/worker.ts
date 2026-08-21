@@ -29,6 +29,7 @@ import { processAgentAssetLifecycle } from "./modules/files/agent-assets-cleanup
 import { processFileCleanupJobs } from "./modules/files/cleanup-jobs"
 import {
   type FileImagesBinding,
+  type FilePreviewBinding,
   type FileR2Bucket,
 } from "./modules/files/runtime"
 import { configureFileStorageRuntimeFromWorkerEnvironment } from "./modules/files/worker-runtime"
@@ -56,6 +57,7 @@ type WorkerObservabilityEnv = {
   DEV_WORKTREE_ID?: string
   DEV_FILE_SEED_TOKEN?: string
   FILES: FileR2Bucket & OrganizationFilesBucket
+  IMAGE_PREVIEWS: FilePreviewBinding
   IMAGES: FileImagesBinding
   NODE_ENV?: string
   OTEL_EXPORTER_OTLP_ENDPOINT?: string

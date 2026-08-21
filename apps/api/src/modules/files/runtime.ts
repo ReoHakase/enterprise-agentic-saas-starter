@@ -63,9 +63,8 @@ export type FileImagesBinding = {
   }
 }
 
-export type FileCache = {
-  match(request: Request): Promise<Response | undefined>
-  put(request: Request, response: Response): Promise<void>
+export type FilePreviewBinding = {
+  fetch(request: Request): Promise<Response>
 }
 
 export type FileStorageRuntime = {
@@ -73,15 +72,14 @@ export type FileStorageRuntime = {
   agentAssetUploadEnabled?: boolean
   bucket: FileR2Bucket
   images: FileImagesBinding
-  cache?: FileCache
-  defer?: (promise: Promise<unknown>) => void
+  previews?: FilePreviewBinding
 }
 
 let runtime: FileStorageRuntime | undefined
 
 /**
  * createApp(db)をCloudflare bindingから独立させたまま、Worker entrypointだけが
- * R2 / Images / Cache capabilityを登録する。request固有の値は保持しない。
+ * R2 / Images / private preview Worker capabilityを登録する。request固有の値は保持しない。
  */
 export const configureFileStorageRuntime = (next: FileStorageRuntime) => {
   runtime = next

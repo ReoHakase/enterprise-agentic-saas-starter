@@ -1,7 +1,7 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
 import { eq, sql } from "drizzle-orm"
 import * as v from "valibot"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   finalizePendingAgentAsset,
@@ -134,38 +134,70 @@ describe("Agent staged image API and lifecycle", () => {
     expect(await db.select().from(schema.agentResourceUsageBuckets)).toEqual([])
   })
 
-  it("authorizes before serving a private preview cache and supports ETag revalidation", async () => {
-    const { app } = await createFixture()
+  it("authorizes before calling the private preview Worker and supports ETag revalidation", async () => {
+    const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
     const uploaded = await app.handle(
       uploadRequest({ file: pngFile(), uploadId: "preview-cache" })
     )
-    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+    const uploadedAsset = v.parse(agentAssetDtoModel, await uploaded.json())
+    const assetId = uploadedAsset.id
 
-    const first = await app.handle(assetRequest({ assetId }))
+    const unauthenticated = await app.handle(
+      new Request(
+        `http://localhost/files/organizations/asset-org-a/agent-assets/${assetId}/preview/720`
+      )
+    )
+    expect(unauthenticated.status).toBe(401)
+    expect(storage.previewFetch).not.toHaveBeenCalled()
+
+    const fixedNow = new Date(uploadedAsset.expiresAt).getTime() - 321_000
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(fixedNow)
+    const first = await (async () => {
+      try {
+        return await app.handle(assetRequest({ assetId }))
+      } finally {
+        dateNow.mockRestore()
+      }
+    })()
+
     expect(first.status).toBe(200)
     expect(first.headers.get("cache-control")).toBe("private, no-cache")
     expect(first.headers.get("content-type")).toBe("image/webp")
     const etag = first.headers.get("etag")
     expect(etag).toMatch(/^"[0-9a-f]{64}"$/u)
     if (!etag) throw new Error("Preview ETag is missing")
-    expect(storage.cacheMatch).toHaveBeenCalledTimes(1)
-    expect(storage.cachePut).toHaveBeenCalledTimes(1)
-    expect(storage.images.input).toHaveBeenCalledTimes(1)
+    expect(first.headers.get("set-cookie")).toBeNull()
+    expect(first.headers.get("x-internal-cache")).toBeNull()
+    expect(storage.previewFetch).toHaveBeenCalledTimes(1)
+    expect(storage.images.input).not.toHaveBeenCalled()
+
+    const internalRequest = storage.previewFetch.mock.calls[0]?.[0]
+    if (!internalRequest) throw new Error("Preview request is missing")
+    expect(internalRequest.url).toMatch(
+      new RegExp(
+        `^https://images\\.internal/v1/previews/agent-asset/asset-org-a/${assetId}/720\\?source=agent-etag-1&variant=webp%3Aq75%3Aanim0%3Av1$`,
+        "u"
+      )
+    )
+    expect(internalRequest.url).not.toContain("organizations/")
+    expect(internalRequest.headers.get("x-preview-object-key")).toMatch(
+      /^organizations\/asset-org-a\/storage-objects\/[0-9a-f-]{36}$/u
+    )
+    expect(internalRequest.headers.get("x-preview-cache-ttl")).toBe("321")
 
     const cached = await app.handle(assetRequest({ assetId }))
     expect(cached.status).toBe(200)
     expect(cached.headers.get("etag")).toBe(etag)
-    expect(storage.cacheMatch).toHaveBeenCalledTimes(2)
-    expect(storage.cachePut).toHaveBeenCalledTimes(1)
-    expect(storage.images.input).toHaveBeenCalledTimes(1)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(2)
+    expect(storage.images.input).not.toHaveBeenCalled()
 
     const revalidated = await app.handle(
       assetRequest({ assetId, ifNoneMatch: etag })
     )
     expect(revalidated.status).toBe(304)
-    expect(storage.cacheMatch).toHaveBeenCalledTimes(2)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
 
     const unauthorized = await app.handle(
       assetRequest({
@@ -175,7 +207,14 @@ describe("Agent staged image API and lifecycle", () => {
       })
     )
     expect(unauthorized.status).toBe(404)
-    expect(storage.cacheMatch).toHaveBeenCalledTimes(2)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
+
+    await db
+      .delete(schema.member)
+      .where(eq(schema.member.id, "asset-member-a-a"))
+    const membershipRevoked = await app.handle(assetRequest({ assetId }))
+    expect(membershipRevoked.status).toBe(404)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
   })
 
   it("converges an identical upload retry and conflicts changed bytes", async () => {

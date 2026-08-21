@@ -4,6 +4,7 @@ import {
   assertAgentMaintenanceBindingEnabled,
   assertAgentRuntimeBindingAbsent,
   assertFinalAgentBindings,
+  assertImagePreviewBinding,
   parseWorkerBindingInventory,
 } from "./worker-binding-policy"
 
@@ -15,6 +16,11 @@ describe("Worker binding inventory policy", () => {
         bindings: [
           { name: "FILES", type: "r2_bucket" },
           { name: "IMAGES", type: "images" },
+          {
+            name: "IMAGE_PREVIEWS",
+            service: "enterprise-agentic-saas-images",
+            type: "service",
+          },
           {
             name: "AGENT_MAINTENANCE_MODE",
             type: "plain_text",
@@ -28,6 +34,11 @@ describe("Worker binding inventory policy", () => {
       { name: "FILES", type: "r2_bucket" },
       { name: "IMAGES", type: "images" },
       {
+        name: "IMAGE_PREVIEWS",
+        service: "enterprise-agentic-saas-images",
+        type: "service",
+      },
+      {
         name: "AGENT_MAINTENANCE_MODE",
         type: "plain_text",
         text: "1",
@@ -35,6 +46,7 @@ describe("Worker binding inventory policy", () => {
     ])
     expect(() => assertAgentRuntimeBindingAbsent(inventory)).not.toThrow()
     expect(() => assertAgentMaintenanceBindingEnabled(inventory)).not.toThrow()
+    expect(() => assertImagePreviewBinding(inventory)).not.toThrow()
   })
 
   it("requires the runtime binding and disabled maintenance in the final API", () => {
@@ -144,5 +156,34 @@ describe("Worker binding inventory policy", () => {
         result: { bindings: [{}] },
       })
     ).toThrow("entry is invalid")
+  })
+
+  it.each([
+    { inventory: [], name: "missing" },
+    {
+      inventory: [
+        {
+          name: "IMAGE_PREVIEWS",
+          service: "wrong-images",
+          type: "service",
+        },
+      ],
+      name: "wrong service",
+    },
+    {
+      inventory: [
+        {
+          entrypoint: "ImagesEntrypoint",
+          name: "IMAGE_PREVIEWS",
+          service: "enterprise-agentic-saas-images",
+          type: "service",
+        },
+      ],
+      name: "custom entrypoint",
+    },
+  ])("rejects an invalid private Images binding: $name", ({ inventory }) => {
+    expect(() => assertImagePreviewBinding(inventory)).toThrow(
+      "expected IMAGE_PREVIEWS"
+    )
   })
 })

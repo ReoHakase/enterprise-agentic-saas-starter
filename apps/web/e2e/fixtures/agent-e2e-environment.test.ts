@@ -64,7 +64,16 @@ describe("Agent E2E environment", () => {
     expect(environment.nextDistDirectory).toBe(".next-e2e-full-321")
     expect(environment.telemetrySessionId).toBe("agent-e2e-321")
     expect(environment.telemetryWorktreeId).toBe("agent-e2e")
-    expect(environment.apiWorkerName).not.toBe(environment.agentWorkerName)
+    expect(
+      new Set([
+        environment.apiWorkerName,
+        environment.imagesWorkerName,
+        environment.agentWorkerName,
+      ]).size
+    ).toBe(3)
+    expect(environment.imagesConfigPath).toBe(
+      join(environment.stackRoot, "images", "wrangler.json")
+    )
     expect(createAgentE2ETelemetryVariables(environment, true)).toEqual({
       AGENT_E2E_RUN_ID: "321",
       DEV_SESSION_ID: "agent-e2e-321",

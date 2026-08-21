@@ -361,7 +361,7 @@ describe("Agent asset upload policy and scope", () => {
       .where(eq(schema.session.id, "asset-session-a"))
     const epochInvalidated = await app.handle(assetRequest({ assetId }))
     expect(epochInvalidated.status).toBe(401)
-    expect(storage.images.input).not.toHaveBeenCalled()
+    expect(storage.previewFetch).not.toHaveBeenCalled()
   })
 
   it("binds only the selected run assets and fences model image output at WebP 4 MiB", async () => {

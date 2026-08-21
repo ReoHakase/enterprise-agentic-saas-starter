@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
+import { authHeaders } from "../../app.test-support"
 import { createAgentInternalApi, createAgentInternalApp } from "../agent/public"
 import { processStorageObjectCleanupJobs } from "./agent-assets-cleanup"
 import { promoteAgentAssetToIssueFileInTransaction } from "./agent-assets-repository"
@@ -279,7 +280,7 @@ describe("Agent asset private image and file lifecycle", () => {
       quality: 75,
     })
     expect(storage.get).toHaveBeenLastCalledWith(
-      "private/asset-org-a/files/asset-issue-image",
+      "organizations/asset-org-a/files/issue/asset-issue-a/asset-issue-image",
       {
         onlyIf: new Headers({ "if-match": '"agent-etag-1"' }),
       }
@@ -526,6 +527,29 @@ describe("Agent asset private image and file lifecycle", () => {
     const promotedPreview = await app.handle(assetRequest({ assetId }))
     expect(promotedPreview.status).toBe(200)
     expect(promotedPreview.headers.get("content-type")).toBe("image/webp")
+    const promotedRequest = storage.previewFetch.mock.calls.at(-1)?.[0]
+    expect(promotedRequest?.headers.get("x-preview-cache-ttl")).toBe("259200")
+
+    const filePreview = await app.handle(
+      new Request(
+        `http://localhost/files/organizations/asset-org-a/${plannedFileId}/preview/360`,
+        {
+          headers: authHeaders("asset-user-a", {
+            activeOrganizationId: "asset-org-a",
+            json: false,
+            sessionId: "asset-session-a",
+          }),
+        }
+      )
+    )
+    expect(filePreview.status).toBe(200)
+    const filePreviewRequest = storage.previewFetch.mock.calls.at(-1)?.[0]
+    expect(filePreviewRequest?.url).toBe(
+      `https://images.internal/v1/previews/file/asset-org-a/${object.id}/360?source=${object.etag}&variant=webp%3Aq75%3Aanim0%3Av1`
+    )
+    expect(filePreviewRequest?.headers.get("x-preview-object-key")).toBe(
+      object.objectKey
+    )
 
     const unauthorizedPreview = await app.handle(
       assetRequest({
@@ -535,6 +559,7 @@ describe("Agent asset private image and file lifecycle", () => {
       })
     )
     expect(unauthorizedPreview.status).toBe(404)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(2)
   })
 
   it("blocks deletion under an active action lease, then releases quota and exact-deletes", async () => {
@@ -611,6 +636,9 @@ describe("Agent asset private image and file lifecycle", () => {
       assetRequest({ assetId, method: "DELETE" })
     )
     expect(removed.status).toBe(204)
+    const deletedPreview = await app.handle(assetRequest({ assetId }))
+    expect(deletedPreview.status).toBe(404)
+    expect(storage.previewFetch).not.toHaveBeenCalled()
     expect(storage.deletedKeys).toEqual([])
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([
       expect.objectContaining({ temporaryBytes: 0, usedBytes: 0 }),

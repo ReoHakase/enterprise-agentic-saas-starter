@@ -74,9 +74,11 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     agentStoragePath: join(stackRoot, "agent-storage.db"),
     wranglerStatePath: join(stackRoot, "wrangler-state"),
     apiConfigPath: join(stackRoot, "api", "wrangler.json"),
+    imagesConfigPath: join(stackRoot, "images", "wrangler.json"),
     agentConfigPath: join(stackRoot, "agent", "wrangler.json"),
     agentDevVarsPath: join(stackRoot, "agent", ".dev.vars"),
     apiWorkerName: `enterprise-agentic-saas-api-agent-e2e-${runId}`,
+    imagesWorkerName: `enterprise-agentic-saas-images-agent-e2e-${runId}`,
     agentWorkerName: `enterprise-agentic-saas-agent-e2e-${runId}`,
   }
 }
