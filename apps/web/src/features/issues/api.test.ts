@@ -35,6 +35,13 @@ const issue = {
   updatedAt: "2026-07-14T00:00:00.000Z",
 }
 
+const issueListItem = {
+  ...issue,
+  attachmentCount: 0,
+  commentCount: 0,
+  thumbnail: null,
+}
+
 const comment = {
   id: "comment-1",
   organizationId: "org-1",
@@ -61,10 +68,15 @@ describe("issues Eden API", () => {
     vi.unstubAllGlobals()
   })
 
-  it("parses issue and comment CRUD while preserving due date-times", async () => {
+  it("uses typed issue and comment responses while preserving due date-times", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        Response.json({ items: [issue], page: 1, pageSize: 20, total: 1 })
+        Response.json({
+          items: [issueListItem],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+        })
       )
       .mockResolvedValueOnce(Response.json(issue))
       .mockResolvedValueOnce(Response.json(issue))
@@ -74,14 +86,7 @@ describe("issues Eden API", () => {
       .mockResolvedValueOnce(Response.json(comment))
     const client = createApiClient("https://api.example.test")
 
-    await expect(listIssues(client, "org-1")).resolves.toEqual([
-      {
-        ...issue,
-        attachmentCount: 0,
-        commentCount: 0,
-        thumbnail: null,
-      },
-    ])
+    await expect(listIssues(client, "org-1")).resolves.toEqual([issueListItem])
     await expect(
       createIssue(client, {
         organizationId: "org-1",
@@ -130,13 +135,6 @@ describe("issues Eden API", () => {
     await expect(updateRequest.json()).resolves.toEqual(
       expect.objectContaining({ dueDate: "2026-07-21T09:30:00.000Z" })
     )
-  })
-
-  it("rejects a successful response without data", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json(null))
-    const client = createApiClient("https://api.example.test")
-
-    await expect(listIssues(client, "org-1")).rejects.toThrow("Invalid type")
   })
 
   it("forwards AbortSignal to stale Issue label requests", async () => {
@@ -257,7 +255,12 @@ describe("issues Eden API", () => {
 
   it("passes query cancellation through Eden to fetch", async () => {
     fetchMock.mockResolvedValueOnce(
-      Response.json({ items: [issue], page: 1, pageSize: 20, total: 1 })
+      Response.json({
+        items: [issueListItem],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      })
     )
     const client = createApiClient("https://api.example.test")
     const controller = new AbortController()

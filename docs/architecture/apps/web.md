@@ -2,7 +2,7 @@
 title: apps/webの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-21
 applies_to:
   - apps/web/**
 ---
@@ -155,6 +155,13 @@ Web-local schemaはAPI transport typeの代用品ではありません。Agent�
 action、execution、approval、context revocation、UIMessage streamは
 `@enterprise-agentic-saas/agent-contracts`のschemaを直接使います。Web-local schemaはcomposer draftや
 context switch state等、HTTP responseではないWeb固有projectionのruntime validationに限定します。
+
+同じrepositoryが所有するElysia APIの成功response型は
+`@enterprise-agentic-saas/api/client`の`ApiClient`とEden `Treaty.Data`から導出します。featureの
+`api.ts`は公開clientの`unwrapEdenResult`だけでTreaty resultを絞り込み、同じresponseをWeb側の
+Valibot schemaへ再宣言したり二重にparseしたりしません。このhelperは`error !== null`を判定し、
+成功値とnative Eden errorを変換せず返すかthrowします。form、URL/search parameter、browser storage、
+third-party response、XHR response、Agent cross-runtime contractのruntime validationは各所有境界に残します。
 
 `model.ts`、reducer、view-modelはReact、Next.js、TanStack Query、router、toast、API client、
 `fetch`、`useChat`、browser APIをimportしません。別featureのUIから利用できるのは`index.ts`が
@@ -410,8 +417,11 @@ import { reduceDraft } from "../model"
 // cross feature: allowed
 import { IssueLink } from "@/features/issues"
 
-// data-only cross feature contract: allowed
-import { parseOrganization } from "@/features/organizations/schema"
+// Eden-derived response type and Web-owned form schema: allowed
+import {
+  organizationFormSchema,
+  type OrganizationSummary,
+} from "@/features/organizations/schema"
 
 // cross feature private path: forbidden
 import { IssueLink } from "@/features/issues/components/issue-link"

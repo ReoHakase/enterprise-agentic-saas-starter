@@ -1,46 +1,5 @@
+import type { ApiClient, Treaty } from "@enterprise-agentic-saas/api/client"
 import * as v from "valibot"
-
-export const organizationRoleSchema = v.picklist(["owner", "admin", "member"])
-
-const organizationPermissionsSchema = v.object({
-  canEditOrganization: v.boolean(),
-  canInviteMembers: v.boolean(),
-  canManageMembers: v.boolean(),
-  canManageAdmins: v.boolean(),
-  canTransferOwnership: v.boolean(),
-})
-
-const memberProfileImageSchema = v.object({
-  userId: v.string(),
-  name: v.string(),
-  profileImage: v.nullable(v.string()),
-})
-
-export const organizationSummarySchema = v.object({
-  id: v.string(),
-  name: v.string(),
-  slug: v.string(),
-  role: organizationRoleSchema,
-  active: v.boolean(),
-  profileImage: v.nullable(v.string()),
-  memberCount: v.pipe(v.number(), v.integer()),
-  memberProfileImages: v.array(memberProfileImageSchema),
-  permissions: organizationPermissionsSchema,
-})
-
-const organizationDetailSchema = v.object({
-  ...organizationSummarySchema.entries,
-  createdAt: v.string(),
-  invitationCount: v.pipe(v.number(), v.integer()),
-})
-
-const organizationListSchema = v.array(organizationSummarySchema)
-
-const organizationDeletionReceiptSchema = v.object({
-  deletionId: v.string(),
-  organizationId: v.string(),
-  status: v.literal("deleted"),
-})
 
 export const organizationFormSchema = v.object({
   name: v.pipe(
@@ -74,18 +33,13 @@ export const createOrganizationDeletionFormSchema = (expectedSlug: string) =>
     confirmation: v.literal("DELETE", "Type DELETE exactly."),
   })
 
-export type OrganizationRole = v.InferOutput<typeof organizationRoleSchema>
-export type OrganizationSummary = v.InferOutput<
-  typeof organizationSummarySchema
->
-export type OrganizationDetail = v.InferOutput<typeof organizationDetailSchema>
+type OrganizationRoutes = ReturnType<ApiClient["organizations"]>
 
-export const parseOrganization = (value: unknown) =>
-  v.parse(organizationDetailSchema, value)
-export const parseOrganizations = (value: unknown) =>
-  v.parse(organizationListSchema, value)
-export const parseOrganizationDeletionReceipt = (value: unknown) =>
-  v.parse(organizationDeletionReceiptSchema, value)
+export type OrganizationSummary = Treaty.Data<
+  ApiClient["organizations"]["get"]
+>[number]
+export type OrganizationDetail = Treaty.Data<OrganizationRoutes["get"]>
+export type OrganizationRole = OrganizationSummary["role"]
 
 export const roleLabel = (role: OrganizationRole) => {
   if (role === "owner") {

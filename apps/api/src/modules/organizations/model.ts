@@ -6,6 +6,10 @@ import {
   organizationIdParamsModel,
   organizationRoleModel,
 } from "../../models/common"
+import {
+  organizationInvitationRoles,
+  organizationInvitationStatuses,
+} from "./domain"
 
 const permissionsModel = v.object({
   canEditOrganization: v.boolean(),
@@ -59,8 +63,8 @@ export const memberListModel = v.array(memberModel)
 const invitationModel = v.object({
   id: v.string(),
   email: v.string(),
-  role: organizationRoleModel,
-  status: v.string(),
+  role: v.picklist(organizationInvitationRoles),
+  status: v.picklist(organizationInvitationStatuses),
   organizationId: v.string(),
   inviterId: v.string(),
   inviter: v.object({
@@ -166,7 +170,7 @@ export const organizationInvitationParamsModel = v.object({
 
 export const canceledInvitationResponseModel = v.object({
   id: v.string(),
-  status: v.string(),
+  status: v.literal("canceled"),
 })
 
 export { organizationIdParamsModel }

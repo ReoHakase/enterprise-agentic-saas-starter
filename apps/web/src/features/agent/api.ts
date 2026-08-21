@@ -1,4 +1,7 @@
-import type { ApiClient } from "@enterprise-agentic-saas/api/client"
+import {
+  unwrapEdenResult,
+  type ApiClient,
+} from "@enterprise-agentic-saas/api/client"
 
 import {
   type AgentChatMessage,
@@ -12,29 +15,25 @@ import {
   parseAgentThreads,
 } from "./schema"
 
-type EdenResult = { data: unknown; error: unknown; status: number }
-const unwrap = (result: EdenResult) => {
-  if (result.error) throw result.error
-  return result.data
-}
-
 export const listAgentThreads = async (
   client: ApiClient,
   signal?: AbortSignal
 ) =>
   parseAgentThreads(
-    unwrap(await client.agent.threads.get({ fetch: { signal } }))
+    unwrapEdenResult(await client.agent.threads.get({ fetch: { signal } }))
   )
 
 export const createAgentThread = async (
   client: ApiClient,
   permissionMode: "ask_always" | "full_access"
 ) =>
-  parseAgentThread(unwrap(await client.agent.threads.post({ permissionMode })))
+  parseAgentThread(
+    unwrapEdenResult(await client.agent.threads.post({ permissionMode }))
+  )
 
 export const archiveAgentThread = async (client: ApiClient, threadId: string) =>
   parseAgentThread(
-    unwrap(await client.agent.threads({ threadId }).archive.post())
+    unwrapEdenResult(await client.agent.threads({ threadId }).archive.post())
   )
 
 export const cancelAgentRun = async (
@@ -42,7 +41,7 @@ export const cancelAgentRun = async (
   input: { runId: string; threadId: string }
 ) =>
   parseAgentRunResult(
-    unwrap(
+    unwrapEdenResult(
       await client.agent
         .threads({ threadId: input.threadId })
         .runs({ runId: input.runId })
@@ -59,7 +58,7 @@ export const listAgentMessages = async (
   for (let page = 0; page < 10_000; page += 1) {
     // History pagination is ordered and bounded, so requests stay sequential.
     const result = parseAgentMessagePage(
-      unwrap(
+      unwrapEdenResult(
         // eslint-disable-next-line no-await-in-loop
         await client.agent.threads({ threadId }).messages.get({
           query: { page, perPage: 100 },
@@ -79,7 +78,9 @@ export const getAgentAction = async (
   signal?: AbortSignal
 ) =>
   parseAgentIssueAction(
-    unwrap(await client.agent.actions({ actionId }).get({ fetch: { signal } }))
+    unwrapEdenResult(
+      await client.agent.actions({ actionId }).get({ fetch: { signal } })
+    )
   )
 
 export const decideAgentAction = async (
@@ -87,7 +88,7 @@ export const decideAgentAction = async (
   input: { actionId: string; decision: "yes" | "no"; idempotencyKey: string }
 ) =>
   parseAgentIssueAction(
-    unwrap(
+    unwrapEdenResult(
       await client.agent.actions({ actionId: input.actionId }).decision.post({
         decision: input.decision,
         idempotencyKey: input.idempotencyKey,
@@ -97,7 +98,7 @@ export const decideAgentAction = async (
 
 export const resumeAgentAction = async (client: ApiClient, actionId: string) =>
   parseAgentActionExecutionResult(
-    unwrap(await client.agent.actions({ actionId }).resume.post({}))
+    unwrapEdenResult(await client.agent.actions({ actionId }).resume.post({}))
   )
 
 export const getAgentApprovalPolicy = async (
@@ -106,7 +107,7 @@ export const getAgentApprovalPolicy = async (
   signal?: AbortSignal
 ) =>
   parseAgentApprovalPolicy(
-    unwrap(
+    unwrapEdenResult(
       await client.agent.threads({ threadId }).permission.get({
         fetch: { signal },
       })
@@ -121,7 +122,7 @@ export const putAgentApprovalPolicy = async (
   }
 ) =>
   parseAgentApprovalPolicy(
-    unwrap(
+    unwrapEdenResult(
       await client.agent
         .threads({ threadId: input.threadId })
         .permission.put({ mode: input.mode })
@@ -129,7 +130,9 @@ export const putAgentApprovalPolicy = async (
   )
 
 export const revokeAgentContext = async (client: ApiClient) =>
-  parseAgentContextRevocation(unwrap(await client.agent.context.revoke.post()))
+  parseAgentContextRevocation(
+    unwrapEdenResult(await client.agent.context.revoke.post())
+  )
 
 export const deleteAgentAsset = async (
   client: ApiClient,
@@ -138,8 +141,9 @@ export const deleteAgentAsset = async (
   const organizationFiles = client.files.organizations({
     organizationId: input.organizationId,
   })
-  const result = await organizationFiles["agent-assets"]({
-    assetId: input.assetId,
-  }).delete()
-  if (result.error) throw result.error
+  unwrapEdenResult(
+    await organizationFiles["agent-assets"]({
+      assetId: input.assetId,
+    }).delete()
+  )
 }

@@ -31,7 +31,7 @@ type CancelInvitationResult =
   | { kind: "not_found" }
   | { kind: "not_pending" }
   | {
-      invitation: { id: string; status: string }
+      invitation: { id: string; status: "canceled" }
       kind: "canceled"
     }
 

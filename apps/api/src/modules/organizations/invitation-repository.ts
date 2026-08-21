@@ -1,8 +1,17 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { invitation, user } from "@enterprise-agentic-saas/db/schema"
 import { eq } from "drizzle-orm"
+import * as v from "valibot"
 
-import { toOrganizationInvitation, type OrganizationInvitation } from "./domain"
+import {
+  organizationInvitationRoles,
+  organizationInvitationStatuses,
+  toOrganizationInvitation,
+  type OrganizationInvitation,
+} from "./domain"
+
+const invitationRoleModel = v.picklist(organizationInvitationRoles)
+const invitationStatusModel = v.picklist(organizationInvitationStatuses)
 
 export const listInvitationsByOrganization = async (
   db: Db,
@@ -23,7 +32,16 @@ export const listInvitationsByOrganization = async (
     .where(eq(invitation.organizationId, organizationId))
     .orderBy(invitation.createdAt)
 
-  return rows.map(({ invitation: row, inviter }) =>
-    toOrganizationInvitation(row, inviter)
-  )
+  return rows.flatMap(({ invitation: row, inviter }) => {
+    const role = v.safeParse(invitationRoleModel, row.role ?? "member")
+    const status = v.safeParse(invitationStatusModel, row.status)
+    if (!role.success || !status.success) return []
+
+    return [
+      toOrganizationInvitation(
+        { ...row, role: role.output, status: status.output },
+        inviter
+      ),
+    ]
+  })
 }
