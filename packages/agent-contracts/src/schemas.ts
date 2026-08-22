@@ -228,6 +228,17 @@ export const agentRunGrantSchema = v.strictObject({
   shouldGenerateTitle: v.boolean(),
 })
 
+export const agentChatRunSchema = v.strictObject({
+  memoryResourceId: agentIdentifierSchema,
+  user: agentAccountContextSchema,
+  organization: agentOrganizationContextSchema,
+  thread: v.strictObject({
+    id: agentIdentifierSchema,
+    title: agentThreadTitleSchema,
+  }),
+  run: agentRunGrantSchema,
+})
+
 export const agentRunResultSchema = v.strictObject({
   runId: agentIdentifierSchema,
   status: v.picklist([
@@ -244,13 +255,14 @@ export const agentContextRevocationSchema = v.strictObject({
   contextEpoch: agentPositiveIntegerSchema,
 })
 
-export const agentWebSearchReservationSchema = v.strictObject({
-  reserved: v.literal(true),
-  reused: v.boolean(),
+export const agentRunLivenessSchema = v.strictObject({
+  live: v.literal(true),
 })
 
-export const agentGuardedWebSearchQuerySchema = v.strictObject({
+export const agentWebSearchAuthorizationSchema = v.strictObject({
   query: v.pipe(v.string(), v.trim(), v.minLength(2), v.maxLength(200)),
+  reserved: v.literal(true),
+  reused: v.boolean(),
 })
 
 export const agentUsageRecordInputSchema = v.strictObject({
@@ -268,12 +280,6 @@ export const agentUsageRecordInputSchema = v.strictObject({
   providerCostMicros: v.optional(agentNonNegativeIntegerSchema),
   durationMs: agentNonNegativeIntegerSchema,
   runEventId: agentIdentifierSchema,
-})
-
-export const agentUsageRecordResultSchema = v.strictObject({
-  recorded: v.boolean(),
-  calculatedCostMicros: agentNonNegativeIntegerSchema,
-  pricingVersion: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
 })
 
 export const agentIssueActionKindSchema = v.picklist([

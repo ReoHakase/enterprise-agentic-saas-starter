@@ -12,6 +12,7 @@ import { createAgentInternalApi } from "./internal-api"
 import {
   createAgentThreadForSession,
   issueAgentConnectionTicket,
+  prepareAgentChatForSession,
 } from "./threads/repository"
 
 type FixtureDb = Awaited<ReturnType<typeof createFixture>>["db"]
@@ -100,7 +101,8 @@ const seedReadyAsset = async (
 
 const createAttachmentRun = async (
   db: FixtureDb,
-  assetIds: readonly string[]
+  assetIds: readonly string[],
+  webSearchQuery?: string
 ) => {
   const thread = await createAgentThreadForSession(db, {
     sessionId: "action-session-a",
@@ -115,20 +117,30 @@ const createAttachmentRun = async (
       threadId: thread.id,
     })
   }
-  const ticket = await issueAgentConnectionTicket(db, {
-    sessionId: "action-session-a",
-    userId: "action-user-a",
-    threadId: thread.id,
-  })
+  const clientMessageId = `attachments-${assetIds.join("-")}`
+  const ticket = webSearchQuery
+    ? await prepareAgentChatForSession(db, {
+        assetIds: [...assetIds],
+        contentSegments: [
+          { text: `Public-only Web query: ${webSearchQuery}`, type: "text" },
+        ],
+        messageId: clientMessageId,
+        sessionId: "action-session-a",
+        threadId: thread.id,
+        timezone: "Asia/Tokyo",
+        userId: "action-user-a",
+      })
+    : await issueAgentConnectionTicket(db, {
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        threadId: thread.id,
+      })
   const internal = createAgentInternalApi(db)
-  const connection = await internal.consumeConnectionTicket({
+  const chatRun = await internal.startChatRun({
+    clientMessageId,
+    assetIds: [...assetIds],
     ticket: ticket.ticket,
     threadId: thread.id,
-  })
-  const run = await internal.startRun({
-    grant: connection.grant,
-    clientMessageId: `attachments-${assetIds.join("-")}`,
-    assetIds: [...assetIds],
   })
   await putAgentApprovalPolicyForSession(db, {
     sessionId: "action-session-a",
@@ -136,7 +148,7 @@ const createAttachmentRun = async (
     threadId: thread.id,
     mode: "full_access",
   })
-  return { internal, run, thread }
+  return { internal, run: chatRun.run, thread }
 }
 
 describe("Agent Issue attachment action transactions", () => {
@@ -486,10 +498,12 @@ describe("Agent Issue attachment action transactions", () => {
   it("forces attachment add and remove selected after Web search to manual approval", async () => {
     const addFixture = await createFixture()
     const addAssetId = "attachment-asset-search-taint-add"
-    const addRun = await createAttachmentRun(addFixture.db, [addAssetId])
-    await addRun.internal.reserveWebSearch({
+    const query = "Cloudflare R2 current limits"
+    const addRun = await createAttachmentRun(addFixture.db, [addAssetId], query)
+    await addRun.internal.authorizeWebSearch({
       grant: addRun.run.grant,
       operationId: "search-before-attachment-add",
+      query,
     })
     await expect(
       addRun.internal.prepareUpdateIssue({
@@ -513,9 +527,11 @@ describe("Agent Issue attachment action transactions", () => {
 
     const removeFixture = await createFixture()
     const removeAssetId = "attachment-asset-search-taint-remove"
-    const removeRun = await createAttachmentRun(removeFixture.db, [
-      removeAssetId,
-    ])
+    const removeRun = await createAttachmentRun(
+      removeFixture.db,
+      [removeAssetId],
+      query
+    )
     const addedAction = await removeRun.internal.prepareUpdateIssue({
       grant: removeRun.run.grant,
       toolCallId: "tool-seed-attachment-before-web-search",
@@ -536,9 +552,10 @@ describe("Agent Issue attachment action transactions", () => {
     const auditsBeforeSearch = await removeFixture.db
       .select()
       .from(schema.auditLogs)
-    await removeRun.internal.reserveWebSearch({
+    await removeRun.internal.authorizeWebSearch({
       grant: removeRun.run.grant,
       operationId: "search-before-attachment-remove",
+      query,
     })
     await expect(
       removeRun.internal.prepareUpdateIssue({

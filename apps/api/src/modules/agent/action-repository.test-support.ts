@@ -14,6 +14,7 @@ import { createAgentInternalApi } from "./internal-api"
 import {
   createAgentThreadForSession,
   issueAgentConnectionTicket,
+  prepareAgentChatForSession,
 } from "./threads/repository"
 
 const migrationsFolder = new URL(
@@ -195,6 +196,7 @@ export const createRun = async (
     clientMessageId: string
     userId?: string
     sessionId?: string
+    webSearchQuery?: string
   }
 ) => {
   const userId = input.userId ?? "action-user-a"
@@ -204,19 +206,31 @@ export const createRun = async (
     userId,
     title: `Action ${input.clientMessageId}`,
   })
-  const ticket = await issueAgentConnectionTicket(db, {
-    sessionId,
-    userId,
-    threadId: thread.id,
-  })
+  const ticket = input.webSearchQuery
+    ? await prepareAgentChatForSession(db, {
+        assetIds: [],
+        contentSegments: [
+          {
+            text: `Public-only Web query: ${input.webSearchQuery}`,
+            type: "text",
+          },
+        ],
+        messageId: input.clientMessageId,
+        sessionId,
+        threadId: thread.id,
+        timezone: "Asia/Tokyo",
+        userId,
+      })
+    : await issueAgentConnectionTicket(db, {
+        sessionId,
+        userId,
+        threadId: thread.id,
+      })
   const internal = createAgentInternalApi(db)
-  const connection = await internal.consumeConnectionTicket({
+  const chatRun = await internal.startChatRun({
+    clientMessageId: input.clientMessageId,
     ticket: ticket.ticket,
     threadId: thread.id,
   })
-  const run = await internal.startRun({
-    grant: connection.grant,
-    clientMessageId: input.clientMessageId,
-  })
-  return { connection, internal, run, thread, ticket }
+  return { chatRun, internal, run: chatRun.run, thread, ticket }
 }

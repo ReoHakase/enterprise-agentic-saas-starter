@@ -2,7 +2,7 @@
 title: 製品Agentのarchitectureとsecurity
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-23
 ---
 
 # Architectureとsecurity
@@ -34,6 +34,26 @@ BrowserはAgent Workerを直接呼びません。Agent Workerは`workers.dev`、
 - Browser response、URL、production log、remote telemetry、auditへticket/grant/session値を出しません。
 
 connection ticketは一回限り、60秒以内です。run grantは5分以内とし、各internal callでlive session、active organization、epoch、membership、permission、thread owner、run ownerを再検証します。別tenant、非member、不存在resourceは同じnot-found projectionへ丸めます。
+
+AgentからAPIへの非公開`port`は18操作に限定します。
+
+- 接続とrun: `consumeConnectionTicket`、`startChatRun`、`assertRunLive`、`finalizeRun`
+- Web検索: `authorizeWebSearch`
+- 読み取り: account、active organization、member、label、Issue、2種類の画像
+- 書き込み: Issueのcreate、update、delete準備、承認済みactionのresumeとexecute
+
+chat開始では`startChatRun`がticket消費、現在の認可、runとquotaの作成、asset束縛、run grant発行を
+1つのトランザクションで行います。Memoryの読み取りではrunを作らないため、
+`consumeConnectionTicket`を維持します。モデル呼び出しはprovider開始前とストリーム完了時の
+`TransformStream.flush()`でだけ`assertRunLive`を実行し、断片ごとの再検証や時間制限付きleaseを
+追加しません。`finalizeRun`は任意のmain model usageとterminal状態をAgentからの1回の呼び出しで
+確定し、usage記録が失敗してもrunを`running`へ残しません。
+
+開始済みstreamは、途中でsessionやmembershipが失効しても、完了時の再検証まで現在のstream断片が
+browserへ届くことがあります。完了時の`assertRunLive`が成功した場合だけ最終結果を受理し、Memory保存と
+次のmodel/tool stepを許可します。失敗時は現在のstream断片を回収しませんが、Memory保存、次のmodel/tool
+step、業務副作用を拒否します。利用者のStopとrequest abortは即時に中断し、この失効露出時間はrun全体
+上限の270秒を超えません。
 
 ## 依存方向
 

@@ -36,7 +36,34 @@ const responseFor = (request: Request): Response => {
       user: { name: "User", profileImage: null },
     })
   }
-  if (path.endsWith("/runs") || path.endsWith("/resume")) {
+  if (path.endsWith("/runs/start")) {
+    return Response.json({
+      memoryResourceId: "resource_1",
+      organization: {
+        name: "Organization",
+        permissions: {
+          canCreateIssues: true,
+          canDeleteAnyIssue: true,
+          canDeleteOwnIssues: true,
+          canReadIssues: true,
+          canUpdateIssues: true,
+        },
+        role: "owner",
+        slug: "organization",
+      },
+      run: {
+        attempt: 1,
+        expiresAt: "2999-07-22T00:00:00.000Z",
+        grant: RUN_GRANT,
+        rootRunId: "root_1",
+        runId: "run_1",
+        shouldGenerateTitle: false,
+      },
+      thread: { id: "thread_1", title: "Thread" },
+      user: { name: "User", profileImage: null },
+    })
+  }
+  if (path.endsWith("/resume")) {
     return Response.json({
       attempt: 1,
       expiresAt: "2999-07-22T00:00:00.000Z",
@@ -45,6 +72,13 @@ const responseFor = (request: Request): Response => {
       runId: "run_1",
       shouldGenerateTitle: false,
     })
+  }
+  if (path.endsWith("/runs/live")) return Response.json({ live: true })
+  if (path.endsWith("/runs/web-search/authorize")) {
+    return Response.json({ query: "query", reserved: true, reused: false })
+  }
+  if (path.endsWith("/runs/finalize")) {
+    return Response.json({ runId: "run_1", status: "completed" })
   }
   if (path.endsWith("/model")) {
     return new Response(new Uint8Array([1, 2, 3]), {
@@ -86,16 +120,17 @@ const harness = () => {
 }
 
 describe("Agent internal HTTP gateway", () => {
-  it("uses ticket bodies only for consume/resume and bearer headers elsewhere", async () => {
+  it("uses ticket bodies only for connection/start/resume and bearer headers elsewhere", async () => {
     const test = harness()
 
     await test.gateway.consumeConnectionTicket({
       ticket: CONNECTION_TICKET,
       threadId: "thread_1",
     })
-    await test.gateway.startRun({
+    await test.gateway.startChatRun({
       clientMessageId: "message_1",
-      grant: CONNECTION_GRANT,
+      ticket: CONNECTION_TICKET,
+      threadId: "thread_1",
     })
     await test.gateway.searchIssues({
       grant: RUN_GRANT,
@@ -124,13 +159,13 @@ describe("Agent internal HTTP gateway", () => {
       ticket: CONNECTION_TICKET,
     })
 
-    expect(requests[1]?.headers.authorization).toBe(
-      `Bearer ${CONNECTION_GRANT}`
-    )
+    expect(requests[1]?.headers.authorization).toBeUndefined()
     expect(JSON.parse(requests[1]?.body ?? "null")).toEqual({
       assetIds: [],
       clientMessageId: "message_1",
       estimatedInputTokenCount: 0,
+      threadId: "thread_1",
+      ticket: CONNECTION_TICKET,
       trigger: "user_message",
     })
 
@@ -253,35 +288,32 @@ describe("Agent internal response contracts", () => {
         }),
     ],
     [
-      "run",
+      "chat run",
       (gateway: AgentInternalGateway) =>
-        gateway.startRun({
+        gateway.startChatRun({
           clientMessageId: "message_1",
-          grant: CONNECTION_GRANT,
+          ticket: CONNECTION_TICKET,
+          threadId: "thread_1",
         }),
     ],
     [
-      "Web search reservation",
+      "run liveness",
       (gateway: AgentInternalGateway) =>
-        gateway.reserveWebSearch({
+        gateway.assertRunLive({ grant: RUN_GRANT }),
+    ],
+    [
+      "Web search authorization",
+      (gateway: AgentInternalGateway) =>
+        gateway.authorizeWebSearch({
           grant: RUN_GRANT,
           operationId: "operation_1",
+          query: "query",
         }),
     ],
     [
-      "guarded Web search query",
+      "finalized run",
       (gateway: AgentInternalGateway) =>
-        gateway.guardWebSearch({ grant: RUN_GRANT, query: "query" }),
-    ],
-    [
-      "canceled run",
-      (gateway: AgentInternalGateway) =>
-        gateway.cancelRun({ grant: RUN_GRANT }),
-    ],
-    [
-      "finished run",
-      (gateway: AgentInternalGateway) =>
-        gateway.finishRun({ grant: RUN_GRANT, outcome: "completed" }),
+        gateway.finalizeRun({ grant: RUN_GRANT, outcome: "completed" }),
     ],
     [
       "Issue labels",
@@ -324,14 +356,6 @@ describe("Agent internal response contracts", () => {
         }),
     ],
     [
-      "approval",
-      (gateway: AgentInternalGateway) =>
-        gateway.getIssueActionDecision({
-          actionId: "action_1",
-          grant: RUN_GRANT,
-        }),
-    ],
-    [
       "action",
       (gateway: AgentInternalGateway) =>
         gateway.executeApprovedAction({
@@ -348,23 +372,26 @@ describe("Agent internal response contracts", () => {
         }),
     ],
     [
-      "usage",
+      "finalized run with usage",
       (gateway: AgentInternalGateway) =>
-        gateway.recordUsage({
+        gateway.finalizeRun({
           grant: RUN_GRANT,
-          provider: "openrouter",
-          model: "model",
-          inputTokenCount: 1,
-          inputNoCacheTokenCount: 1,
-          cacheReadTokenCount: 0,
-          cacheWriteTokenCount: 0,
-          outputTokenCount: 1,
-          textOutputTokenCount: 1,
-          reasoningTokenCount: 0,
-          totalTokenCount: 2,
-          imageInputCount: 0,
-          durationMs: 1,
-          runEventId: "event_1",
+          outcome: "completed",
+          usage: {
+            provider: "openrouter",
+            model: "model",
+            inputTokenCount: 1,
+            inputNoCacheTokenCount: 1,
+            cacheReadTokenCount: 0,
+            cacheWriteTokenCount: 0,
+            outputTokenCount: 1,
+            textOutputTokenCount: 1,
+            reasoningTokenCount: 0,
+            totalTokenCount: 2,
+            imageInputCount: 0,
+            durationMs: 1,
+            runEventId: "event_1",
+          },
         }),
     ],
   ])(
@@ -455,46 +482,59 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "run grant",
+      "chat run",
       (gateway: AgentInternalGateway) =>
-        gateway.startRun({
+        gateway.startChatRun({
           clientMessageId: "message_1",
-          grant: CONNECTION_GRANT,
+          ticket: CONNECTION_TICKET,
+          threadId: "thread_1",
         }),
       {
-        attempt: 1,
-        expiresAt: "2999-07-22T00:00:00.000Z",
-        grant: RUN_GRANT,
-        rootRunId: "root_1",
-        runId: "run_1",
-        shouldGenerateTitle: false,
+        memoryResourceId: "resource_1",
+        organization: {
+          name: "Organization",
+          permissions: {
+            canCreateIssues: true,
+            canDeleteAnyIssue: true,
+            canDeleteOwnIssues: true,
+            canReadIssues: true,
+            canUpdateIssues: true,
+          },
+          role: "owner",
+          slug: "organization",
+        },
+        run: {
+          attempt: 1,
+          expiresAt: "2999-07-22T00:00:00.000Z",
+          grant: RUN_GRANT,
+          rootRunId: "root_1",
+          runId: "run_1",
+          shouldGenerateTitle: false,
+        },
+        thread: { id: "thread_1", title: "Thread" },
+        user: { name: "User", profileImage: null },
       },
     ],
     [
-      "Web search reservation",
+      "run liveness",
       (gateway: AgentInternalGateway) =>
-        gateway.reserveWebSearch({
+        gateway.assertRunLive({ grant: RUN_GRANT }),
+      { live: true },
+    ],
+    [
+      "Web search authorization",
+      (gateway: AgentInternalGateway) =>
+        gateway.authorizeWebSearch({
           grant: RUN_GRANT,
           operationId: "operation_1",
+          query: "query",
         }),
-      { reserved: true, reused: false },
+      { query: "query", reserved: true, reused: false },
     ],
     [
-      "guarded Web search query",
+      "finalized run result",
       (gateway: AgentInternalGateway) =>
-        gateway.guardWebSearch({ grant: RUN_GRANT, query: "query" }),
-      { query: "query" },
-    ],
-    [
-      "run result",
-      (gateway: AgentInternalGateway) =>
-        gateway.cancelRun({ grant: RUN_GRANT }),
-      { runId: "run_1", status: "canceled" },
-    ],
-    [
-      "finished run result",
-      (gateway: AgentInternalGateway) =>
-        gateway.finishRun({ grant: RUN_GRANT, outcome: "completed" }),
+        gateway.finalizeRun({ grant: RUN_GRANT, outcome: "completed" }),
       { runId: "run_1", status: "completed" },
     ],
     [
@@ -549,25 +589,6 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "Issue action",
-      (gateway: AgentInternalGateway) =>
-        gateway.getIssueActionDecision({
-          actionId: "action_1",
-          grant: RUN_GRANT,
-        }),
-      {
-        approvalMode: "manual",
-        completedAt: null,
-        expiresAt: "2999-07-22T00:00:00.000Z",
-        id: "action_1",
-        kind: "delete_issue",
-        preview: null,
-        previewState: "available",
-        requiresApproval: true,
-        status: "pending",
-      },
-    ],
-    [
       "action execution",
       (gateway: AgentInternalGateway) =>
         gateway.executeApprovedAction({
@@ -582,29 +603,28 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "usage",
+      "finalized usage",
       (gateway: AgentInternalGateway) =>
-        gateway.recordUsage({
+        gateway.finalizeRun({
           grant: RUN_GRANT,
-          provider: "openrouter",
-          model: "model",
-          inputTokenCount: 1,
-          inputNoCacheTokenCount: 1,
-          cacheReadTokenCount: 0,
-          cacheWriteTokenCount: 0,
-          outputTokenCount: 1,
-          textOutputTokenCount: 1,
-          reasoningTokenCount: 0,
-          totalTokenCount: 2,
-          imageInputCount: 0,
-          durationMs: 1,
-          runEventId: "event_1",
+          outcome: "completed",
+          usage: {
+            provider: "openrouter",
+            model: "model",
+            inputTokenCount: 1,
+            inputNoCacheTokenCount: 1,
+            cacheReadTokenCount: 0,
+            cacheWriteTokenCount: 0,
+            outputTokenCount: 1,
+            textOutputTokenCount: 1,
+            reasoningTokenCount: 0,
+            totalTokenCount: 2,
+            imageInputCount: 0,
+            durationMs: 1,
+            runEventId: "event_1",
+          },
         }),
-      {
-        calculatedCostMicros: 1,
-        pricingVersion: "version",
-        recorded: true,
-      },
+      { runId: "run_1", status: "completed" },
     ],
   ])(
     "accepts the endpoint-specific %s response",
@@ -720,9 +740,10 @@ describe("Agent internal response bounds and control errors", () => {
 
       let caught: unknown
       try {
-        await gateway.startRun({
+        await gateway.startChatRun({
           clientMessageId: "message_control_error",
-          grant: CONNECTION_GRANT,
+          ticket: CONNECTION_TICKET,
+          threadId: "thread_1",
         })
       } catch (error) {
         caught = error

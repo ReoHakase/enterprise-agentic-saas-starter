@@ -31,8 +31,7 @@ export type BoundedPublicWebSearchResult = {
 
 type PublicWebSearchDependencies = {
   operationId: string
-  guard: (query: string) => Promise<{ query: string }>
-  reserve: (operationId: string) => Promise<unknown>
+  authorize: (query: string, operationId: string) => Promise<{ query: string }>
   search: (
     query: string,
     abortSignal?: AbortSignal
@@ -107,15 +106,17 @@ export const executePublicWebSearch = async (
     throw new Error("Web search accepts public information only")
   }
   dependencies.consumeBudget()
-  const guarded = v.safeParse(
-    publicWebSearchInputValueSchema,
-    await dependencies.guard(parsed.output.query)
+  const operationId = await normalizeOperationId(dependencies.operationId)
+  const authorization = await dependencies.authorize(
+    parsed.output.query,
+    operationId
   )
+  const guarded = v.safeParse(publicWebSearchInputValueSchema, {
+    query: authorization.query,
+  })
   if (!guarded.success) {
     throw new Error("Web search accepts public information only")
   }
-  const operationId = await normalizeOperationId(dependencies.operationId)
-  await dependencies.reserve(operationId)
   const result = await dependencies.search(
     guarded.output.query,
     dependencies.abortSignal

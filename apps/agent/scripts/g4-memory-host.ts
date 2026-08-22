@@ -39,11 +39,12 @@ const environment: PortableAgentRuntimeEnv = {
 }
 
 const metrics = {
-  cancelRunCalls: 0,
-  finishRunCalls: 0,
+  assertRunLiveCalls: 0,
+  finalizeRunCalls: 0,
   livenessRejections: 0,
   prepareCreateIssueCalls: 0,
   releaseCalls: 0,
+  startChatRunCalls: 0,
 }
 class CountingExecutionRegistry extends ProductAgentExecutionRegistry {
   override register(
@@ -83,13 +84,18 @@ const trackedControlPlane: typeof createAgentInternalGateway = (binding) => {
   const gateway = createAgentInternalGateway(binding)
   return {
     ...gateway,
-    cancelRun: (input) => {
-      metrics.cancelRunCalls += 1
-      return gateway.cancelRun(input)
+    assertRunLive: async (input) => {
+      metrics.assertRunLiveCalls += 1
+      try {
+        return await gateway.assertRunLive(input)
+      } catch (cause) {
+        metrics.livenessRejections += 1
+        throw cause
+      }
     },
-    finishRun: (input) => {
-      metrics.finishRunCalls += 1
-      return gateway.finishRun(input)
+    finalizeRun: (input) => {
+      metrics.finalizeRunCalls += 1
+      return gateway.finalizeRun(input)
     },
     prepareCreateIssue: async (input) => {
       metrics.prepareCreateIssueCalls += 1
@@ -100,13 +106,9 @@ const trackedControlPlane: typeof createAgentInternalGateway = (binding) => {
       }
       return action
     },
-    readActiveOrganization: async (input) => {
-      try {
-        return await gateway.readActiveOrganization(input)
-      } catch (cause) {
-        metrics.livenessRejections += 1
-        throw cause
-      }
+    startChatRun: (input) => {
+      metrics.startChatRunCalls += 1
+      return gateway.startChatRun(input)
     },
   }
 }

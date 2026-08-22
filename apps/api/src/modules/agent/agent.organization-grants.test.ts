@@ -99,14 +99,12 @@ describe("Agent organization projections and grant revocation", () => {
       threadId: thread.id,
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "message-read-tools",
       ticket: ticket.ticket,
       threadId: thread.id,
     })
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "message-read-tools",
-    })
+    const run = chatRun.run
 
     const [account, activeOrganization, members, labels, issues, issue] =
       await Promise.all([
@@ -195,7 +193,7 @@ describe("Agent organization projections and grant revocation", () => {
     ).rejects.toMatchObject({ code: "not_found" })
 
     await expect(
-      internal.finishRun({ grant: run.grant, outcome: "completed" })
+      internal.finalizeRun({ grant: run.grant, outcome: "completed" })
     ).resolves.toEqual({ runId: run.runId, status: "completed" })
     await expect(
       internal.readAccountContext({ grant: run.grant })
@@ -215,14 +213,12 @@ describe("Agent organization projections and grant revocation", () => {
       threadId: thread.id,
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "message-before-switch",
       ticket: ticket.ticket,
       threadId: thread.id,
     })
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "message-before-switch",
-    })
+    const run = chatRun.run
 
     const switched = await app.handle(
       request("/organizations/agent-org-b/activate", {
@@ -290,14 +286,12 @@ describe("Agent organization projections and grant revocation", () => {
       threadId: thread.id,
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "message-before-role-change",
       ticket: ticket.ticket,
       threadId: thread.id,
     })
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "message-before-role-change",
-    })
+    const run = chatRun.run
 
     await expect(
       updateMemberRoleById(db, {
@@ -342,14 +336,12 @@ describe("Agent organization projections and grant revocation", () => {
         userId: input.userId,
         threadId: thread.id,
       })
-      const connection = await internal.consumeConnectionTicket({
+      const chatRun = await internal.startChatRun({
+        clientMessageId: input.clientMessageId,
         ticket: ticket.ticket,
         threadId: thread.id,
       })
-      return internal.startRun({
-        grant: connection.grant,
-        clientMessageId: input.clientMessageId,
-      })
+      return chatRun.run
     }
     const actorRun = await createRun({
       clientMessageId: "message-transfer-actor",

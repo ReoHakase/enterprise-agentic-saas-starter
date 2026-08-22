@@ -56,7 +56,7 @@ const outputSchema = jsonSchema<AgentActionExecutionResult>(
 export type ApprovedIssueActionRuntime = {
   api: Pick<
     AgentControlPlanePort,
-    "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
+    "executeApprovedAction" | "finalizeRun" | "resumeApprovedAction"
   >
   captureSettlementFailure?: () => void
   features: AgentFeatureSwitches

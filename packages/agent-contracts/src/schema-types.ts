@@ -5,12 +5,12 @@ import type {
   agentActionExecutionResultSchema,
   agentApprovalPolicySchema,
   agentAttachmentMutationReceiptSchema,
+  agentChatRunSchema,
   agentConnectionSchema,
   agentContextRevocationSchema,
   agentCreateIssueActionInputSchema,
   agentDeleteIssueActionInputSchema,
   agentGetIssueInputSchema,
-  agentGuardedWebSearchQuerySchema,
   agentIssueActionKindSchema,
   agentIssueActionPreviewSchema,
   agentIssueActionSchema,
@@ -22,12 +22,12 @@ import type {
   agentOrganizationContextSchema,
   agentResumeTicketSchema,
   agentRunGrantSchema,
+  agentRunLivenessSchema,
   agentRunResultSchema,
   agentSearchIssuesInputSchema,
   agentUpdateIssueActionInputSchema,
   agentUsageRecordInputSchema,
-  agentUsageRecordResultSchema,
-  agentWebSearchReservationSchema,
+  agentWebSearchAuthorizationSchema,
   getIssueToolInputSchema,
 } from "./schemas"
 
@@ -49,22 +49,18 @@ export type AgentAttachmentMutationReceipt = v.InferOutput<
   typeof agentAttachmentMutationReceiptSchema
 >
 export type AgentConnection = v.InferOutput<typeof agentConnectionSchema>
+export type AgentChatRun = v.InferOutput<typeof agentChatRunSchema>
 export type AgentContextRevocation = v.InferOutput<
   typeof agentContextRevocationSchema
 >
 export type AgentRunGrant = v.InferOutput<typeof agentRunGrantSchema>
+export type AgentRunLiveness = v.InferOutput<typeof agentRunLivenessSchema>
 export type AgentRunResult = v.InferOutput<typeof agentRunResultSchema>
-export type AgentWebSearchReservation = v.InferOutput<
-  typeof agentWebSearchReservationSchema
->
-export type AgentGuardedWebSearchQuery = v.InferOutput<
-  typeof agentGuardedWebSearchQuerySchema
+export type AgentWebSearchAuthorization = v.InferOutput<
+  typeof agentWebSearchAuthorizationSchema
 >
 export type AgentUsageRecordInput = v.InferOutput<
   typeof agentUsageRecordInputSchema
->
-export type AgentUsageRecordResult = v.InferOutput<
-  typeof agentUsageRecordResultSchema
 >
 export type AgentIssueActionKind = v.InferOutput<
   typeof agentIssueActionKindSchema

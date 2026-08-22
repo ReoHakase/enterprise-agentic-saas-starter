@@ -2,7 +2,7 @@
 title: Agent runtimeとMCPの目標architecture
 status: proposed
 implementation: planned
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-23
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -318,10 +318,9 @@ Application DB URLと同一なら起動を拒否します。
 
 message履歴とtitleはMastra標準Memoryが所有します。Application DBとの同期点を次に限定します。
 
-- run開始時のticket consume、authorization、quota reservation
+- chat開始時のticket消費、認可、quota予約、run grant発行をまとめた`startChatRun`
 - business toolごとの認可済みtransaction
-- main model usageの冪等記録
-- runのusageとterminal settlement
+- main model usageとrunのterminal状態を1回で確定する`finalizeRun`
 
 `waiting_approval`はbusiness action transactionがrunを遷移させます。Memory commit専用のAPI、
 Application DB message副本、thread title、message count、last message、commit状態のprojectionは
@@ -506,7 +505,12 @@ chain-of-thoughtを別modelで生成しません。
 - Product Agentは`openrouter-gpt-5.6-luna-xhigh` profileを使い、reasoning `xhigh`、最大出力4,096 tokenとする
 - Mastra Memoryのtitle補助と直接Web検索補助は同じLunaのreasoning `none`
 - title生成はmain stream開始を妨げない
-- liveness再検証はmodel境界1か所に限定し、native streamで重複させない
+- liveness再検証はmodel境界1か所に限定し、provider開始前と`TransformStream.flush()`の2回だけ
+  `assertRunLive`を呼ぶ。stream断片ごとの再検証と時間制限付きleaseは置かない
+- 開始済みstreamの途中で認可が失効した場合、完了再検証までに生成済みの断片はbrowserへ届き得る。
+  完了再検証が成功した場合だけ最終結果、Memory保存、次のmodel/tool stepを受理する。失敗時も現在の
+  stream断片は回収せず、Memory保存、次のmodel/tool step、業務副作用を拒否する。Stopとrequest abortは
+  即時に中断する
 - reasoning/text/toolを独自watchdogで分類せず、reasoning-onlyでも270秒のrun全体上限を延長しない
 - tool side effect後の自動model retryは禁止する
 
@@ -517,7 +521,9 @@ nested research Agentを削除します。
 ```text
 Product Agent
   → web_search tool
-      → local/API query guard
+      → API authorizeWebSearch
+          → query guard
+          → idempotent quota reservation
       → direct public search provider
   → Product Agentが結果を要約
 ```
@@ -528,6 +534,10 @@ provider内の検索engineが内部で使うquery文字列までは保証しま�
 reasoningなしです。現在はOpenRouterへLunaとExa `web` plugin
 （`max_results: 3`）を持つ1 requestだけを送り、検索結果は本文とURLのbounded projectionだけを返し、
 provider固有payloadを保存しません。
+
+AgentからAPIへの呼び出しは`authorizeWebSearch`の1回です。APIはqueryを拒否した場合にquotaを予約せず、
+認可済みqueryだけを明示的なoperation IDで冪等予約します。guardと予約を別のAgent向け操作として
+公開しません。
 
 Phase 2のlive compatibility確認では当時のQwen向けbeta server tool requestがHTTP 500で完了しなかったため、
 非推奨予定のpluginを一時利用します。provider SDKまたはroute更新後にserver toolを再検証し、
@@ -588,7 +598,9 @@ Mastraはstep、tool call、timeoutの実行上限を扱います。model respon
 
 ### Usage
 
-AgentまたはAI Gatewayがprovider usageを観測し、APIへ1回settleします。APIはpricing、credit、planを適用してbillable ledgerを更新します。
+AgentまたはAI Gatewayがprovider usageを観測し、`finalizeRun`でterminal状態とともにAPIへ1回だけ
+渡します。APIはpricing、credit、planを適用してbillable ledgerを更新し、usage記録の失敗時も
+runを`running`へ残しません。
 
 Mastra observabilityはdebug、API usage ledgerは課金の正本です。
 

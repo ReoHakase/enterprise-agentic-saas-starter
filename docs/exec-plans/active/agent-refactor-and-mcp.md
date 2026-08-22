@@ -272,6 +272,9 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] cancel完了後に次turnを開始できる
 - [x] quota reservationとgrantが残らない
 - [x] 最終stepが完了済み`ui_*`だけの場合に限りclient tool結果を自動送信する
+- [x] chat開始を`startChatRun`へ集約し、ticket消費、認可、quota予約、run grant発行を1つのtransactionへ閉じる
+- [x] usageとterminal状態を`finalizeRun`の1回で確定し、usage失敗時もrunを`running`へ残さない
+- [x] AgentからAPIへの非公開`port`を18操作へ縮小し、旧互換操作を削除する
 
 ### 2.3 Reasoning
 
@@ -280,6 +283,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] Product Agentの最大出力とcontext予算に4,096 tokenを予約する
 - [x] title生成をmain stream開始前に待たない
 - [x] liveness再検証をmodel境界1か所へ集約し、native streamの重複wrapperを削除する
+- [x] liveness再検証をprovider開始前と`TransformStream.flush()`の2回へ固定する
 - [x] 独自useful-output watchdogを削除する
 - [x] 270秒のrun全体timeoutを明示する
 - [x] model responseの自動retryを禁止する
@@ -290,6 +294,7 @@ Phase 1完了後に同じ操作を再現します。構造切替で解消した�
 - [x] nested Public Web Research Agentを削除する
 - [x] direct search provider adapterへ置き換える
 - [x] exact query、PII/private guard、quotaを維持する
+- [x] query guardと冪等quota予約を`authorizeWebSearch`の1操作へ集約し、拒否を予約より先に行う
 - [x] source URL parserをprovider contractへ合わせる
 - [x] provider failureをtool-local errorへする
 - [x] success、timeout、invalid source、quota、guard failureを検査する
@@ -496,6 +501,7 @@ PATはこのphaseへ含めません。
 | 2026-08-01 | Agent UIにmodel headerとturn minimapを置かない                 | conversation、進行表示、composerの主要操作へ情報階層を集中する                  |
 | 2026-08-01 | Memoryと独自耐久確定処理の今後の変更をPLAN-2026-029へ移す      | 標準Memoryへの切替と耐久性変更を、MCP・approvalの残作業から分離するため         |
 | 2026-08-20 | tool factoryと実行時testをAgent/APIへ移管する                  | ADR-015に従い、runtime固有contextと公開契約の変更理由を所有appへ閉じる          |
+| 2026-08-23 | AgentからAPIへの非公開`port`を18操作へ縮小する                 | 認可とquotaを維持しつつ、同じrun境界の往復と失敗状態を減らす                    |
 
 ## 検証証跡
 
@@ -517,6 +523,15 @@ PATはこのphaseへ含めません。
 | （Issue #44）`bun run check:static && bun run format:check && bun run typecheck`                                                                                                           | 成功 | Oxlint、Knip full/strict、jscpd、1478 filesのformat、11 workspaceの型検査                                                                                                        |
 | （Issue #44）`bun run test`                                                                                                                                                                | 成功 | root 26 tests、11 workspace tasks。APIのloopback testはsandbox外の同一commandで実行                                                                                              |
 | （Issue #44）`bun run --cwd apps/agent build:cloudflare`、`bun run --cwd apps/api build:cloudflare`、`bun run build:cloudflare`                                                            | 成功 | Agent production/E2E、API、rootのWeb/API/Agent production dry-run bundle                                                                                                         |
+| （Issue #32）`bun install --frozen-lockfile`                                                                                                                                               | 成功 | 1878 installsを確認し、manifestと`bun.lock`に変更なし                                                                                                                            |
+| （Issue #32）`bun run --cwd packages/agent-contracts test`                                                                                                                                 | 成功 | 3 files、87 tests、coverage 100%。18操作の非公開contractを含む                                                                                                                   |
+| （Issue #32）`bun run --cwd apps/agent test`                                                                                                                                               | 成功 | 44 files、328 tests。toolなし成功runで`startChatRun` 1回、`assertRunLive` 2回、`finalizeRun` 1回を同じtestに固定                                                                 |
+| （Issue #32）`bun run --cwd apps/api test`                                                                                                                                                 | 成功 | 72 files、404 tests。開始transaction、Web検索再認可、終了精算、G4の失効・Memory・taint境界を含む                                                                                 |
+| （Issue #32）`bun run check`                                                                                                                                                               | 成功 | Oxlint、Knip full/strict、jscpd、format、11 workspaceの型検査とunit/integration                                                                                                  |
+| （Issue #32）`bun run test:browser`                                                                                                                                                        | 成功 | UI/Web Storybook light・dark、Browser Mode 9、Next.js Chromium 33、WebKit代表1                                                                                                   |
+| （Issue #32）`bun run test:e2e`                                                                                                                                                            | 成功 | 無料の決定的E2E 9 tests。scripted Agent、OAuth MCP、passkeyを含む                                                                                                                |
+| （Issue #32）`bun run build:cloudflare`                                                                                                                                                    | 成功 | Web、API、Agent productionとAgent E2Eのdry-run bundle                                                                                                                            |
+| （Issue #32）`nix flake check`                                                                                                                                                             | 成功 | aarch64-darwinのapp、skill、dev shellを検査                                                                                                                                      |
 | `bun run --cwd packages/db db:check`                                                                                                                                                       | 成功 | migration history、Drizzle snapshot、schema drift                                                                                                                                |
 | `bun run test:browser`                                                                                                                                                                     | 成功 | UI 95、Web 256、browser 9、W6 Chromium 17 + WebKit 1 tests                                                                                                                       |
 | `bun run test:e2e`                                                                                                                                                                         | 成功 | E1 3 tests、6枚中最古の過去画像をAsk alwaysで承認してresume                                                                                                                      |

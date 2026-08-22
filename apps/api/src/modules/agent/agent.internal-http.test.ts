@@ -90,36 +90,45 @@ describe("Agent private HTTP boundary", () => {
         })
       ).status
     ).toBe(400)
-    const consumed = await privateRequest(
-      app,
-      "/internal/agent/connections/consume",
-      { body: { threadId: thread.id, ticket: ticket.ticket } }
-    )
-    const connection: unknown = await consumed.json()
-    const grant =
-      connection && typeof connection === "object"
-        ? Reflect.get(connection, "grant")
-        : undefined
-    if (typeof grant !== "string") throw new Error("Missing connection grant")
     const body = {
       assetIds: [],
       clientMessageId: "message_http",
       estimatedInputTokenCount: 10,
+      threadId: thread.id,
+      ticket: ticket.ticket,
       trigger: "user_message",
     }
     expect(
       (
-        await privateRequest(app, "/internal/agent/runs", {
+        await privateRequest(app, "/internal/agent/runs/start", {
+          body: { ...body, grant: "overposted" },
+        })
+      ).status
+    ).toBe(400)
+    const started = await privateRequest(app, "/internal/agent/runs/start", {
+      body,
+    })
+    const chatRun: unknown = await started.json()
+    const run =
+      chatRun && typeof chatRun === "object"
+        ? Reflect.get(chatRun, "run")
+        : undefined
+    const grant =
+      run && typeof run === "object" ? Reflect.get(run, "grant") : undefined
+    if (typeof grant !== "string") throw new Error("Missing run grant")
+    expect(
+      (
+        await privateRequest(app, "/internal/agent/runs/live", {
           authorization: `bearer ${grant}`,
-          body,
+          body: {},
         })
       ).status
     ).toBe(401)
     expect(
       (
-        await privateRequest(app, "/internal/agent/runs", {
+        await privateRequest(app, "/internal/agent/runs/live", {
           authorization: `Bearer ${grant}`,
-          body: { ...body, grant },
+          body: { grant },
         })
       ).status
     ).toBe(400)
@@ -129,12 +138,9 @@ describe("Agent private HTTP boundary", () => {
     const { db } = await createFixture()
     const app = createAgentInternalApp(db)
     const requests = [
-      ["/internal/agent/runs", "POST", { clientMessageId: "message_1" }],
-      ["/internal/agent/runs/web-search/reserve", "POST", {}],
-      ["/internal/agent/runs/web-search/guard", "POST", {}],
-      ["/internal/agent/runs/cancel", "POST", {}],
-      ["/internal/agent/runs/finish", "POST", { outcome: "failed" }],
-      ["/internal/agent/runs/usage", "POST", {}],
+      ["/internal/agent/runs/live", "POST", {}],
+      ["/internal/agent/runs/web-search/authorize", "POST", {}],
+      ["/internal/agent/runs/finalize", "POST", { outcome: "failed" }],
       ["/internal/agent/context/account", "GET"],
       ["/internal/agent/context/organization", "GET"],
       ["/internal/agent/members?limit=20&query=x", "GET"],
@@ -144,7 +150,6 @@ describe("Agent private HTTP boundary", () => {
       ["/internal/agent/issues/agent-issue-a", "GET"],
       ["/internal/agent/issues/agent-issue-a/attachments/file_1/model", "GET"],
       ["/internal/agent/actions", "POST", {}],
-      ["/internal/agent/actions/action_1", "GET"],
       ["/internal/agent/actions/action_1/execute", "POST", {}],
       ["/internal/agent/assets/asset_1/model", "GET"],
     ] as const
@@ -155,6 +160,57 @@ describe("Agent private HTTP boundary", () => {
     )
     expect(responses.map(({ status }) => status)).toEqual(
       requests.map(() => 401)
+    )
+  })
+
+  it("does not expose superseded run and action endpoints", async () => {
+    const { db } = await createFixture()
+    const app = createAgentInternalApp(db)
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Dead internal surface",
+      userId: "agent-user-a",
+    })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const started = await privateRequest(app, "/internal/agent/runs/start", {
+      body: {
+        clientMessageId: "message_dead_surface",
+        threadId: thread.id,
+        ticket: ticket.ticket,
+      },
+    })
+    const chatRun: unknown = await started.json()
+    const run =
+      chatRun && typeof chatRun === "object"
+        ? Reflect.get(chatRun, "run")
+        : undefined
+    const grant =
+      run && typeof run === "object" ? Reflect.get(run, "grant") : undefined
+    if (typeof grant !== "string") throw new Error("Missing run grant")
+    const superseded = [
+      ["/internal/agent/runs", "POST", { clientMessageId: "message_1" }],
+      ["/internal/agent/runs/web-search/reserve", "POST", {}],
+      ["/internal/agent/runs/web-search/guard", "POST", {}],
+      ["/internal/agent/runs/cancel", "POST", {}],
+      ["/internal/agent/runs/finish", "POST", { outcome: "failed" }],
+      ["/internal/agent/runs/usage", "POST", {}],
+      ["/internal/agent/actions/action_1", "GET", undefined],
+    ] as const
+    const responses = await Promise.all(
+      superseded.map(([path, method, body]) =>
+        privateRequest(app, path, {
+          authorization: `Bearer ${grant}`,
+          body,
+          method,
+        })
+      )
+    )
+    expect(responses.map(({ status }) => status)).toEqual(
+      superseded.map(() => 404)
     )
   })
 })

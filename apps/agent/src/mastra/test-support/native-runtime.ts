@@ -20,7 +20,11 @@ const unavailable = () => Promise.reject(new Error("unused"))
 export const createNativeControlPlane = (
   lifecycle: Partial<AgentControlPlanePort> = {}
 ): AgentControlPlanePort => ({
-  cancelRun: lifecycle.cancelRun ?? unavailable,
+  assertRunLive:
+    lifecycle.assertRunLive ?? (() => Promise.resolve({ live: true })),
+  authorizeWebSearch:
+    lifecycle.authorizeWebSearch ??
+    (({ query }) => Promise.resolve({ query, reserved: true, reused: false })),
   consumeConnectionTicket: () =>
     Promise.resolve({
       expiresAt: future,
@@ -53,15 +57,16 @@ export const createNativeControlPlane = (
       kind: "create_issue",
       status: "succeeded",
     }),
-  finishRun:
-    lifecycle.finishRun ??
-    (() => Promise.resolve({ runId: "run_1", status: "completed" })),
+  finalizeRun:
+    lifecycle.finalizeRun ??
+    (({ outcome }) =>
+      Promise.resolve({
+        runId: "run_1",
+        status: outcome === "waiting_approval" ? outcome : outcome,
+      })),
   getAgentImageForModel: lifecycle.getAgentImageForModel ?? unavailable,
   getIssue: unavailable,
-  getIssueActionDecision: unavailable,
   getIssueAttachmentImageForModel: unavailable,
-  guardWebSearch:
-    lifecycle.guardWebSearch ?? (({ query }) => Promise.resolve({ query })),
   prepareCreateIssue: () =>
     Promise.resolve({
       approvalMode: "full_access",
@@ -90,30 +95,38 @@ export const createNativeControlPlane = (
       role: "member",
       slug: "organization",
     }),
-  recordUsage:
-    lifecycle.recordUsage ??
-    (() =>
-      Promise.resolve({
-        calculatedCostMicros: 0,
-        pricingVersion: "unpriced",
-        recorded: true,
-      })),
-  reserveWebSearch:
-    lifecycle.reserveWebSearch ??
-    (() => Promise.resolve({ reserved: true, reused: false })),
   resumeApprovedAction: unavailable,
   searchIssueLabels: unavailable,
   searchIssues: unavailable,
   searchOrganizationMembers: unavailable,
-  startRun: () =>
-    Promise.resolve({
-      attempt: 1,
-      expiresAt: future,
-      grant: TEST_RUN_GRANT,
-      rootRunId: "run_1",
-      runId: "run_1",
-      shouldGenerateTitle: false,
-    }),
+  startChatRun:
+    lifecycle.startChatRun ??
+    (() =>
+      Promise.resolve({
+        memoryResourceId: "resource_1",
+        organization: {
+          name: "Organization",
+          permissions: {
+            canCreateIssues: true,
+            canDeleteAnyIssue: false,
+            canDeleteOwnIssues: true,
+            canReadIssues: true,
+            canUpdateIssues: true,
+          },
+          role: "member",
+          slug: "organization",
+        },
+        run: {
+          attempt: 1,
+          expiresAt: future,
+          grant: TEST_RUN_GRANT,
+          rootRunId: "run_1",
+          runId: "run_1",
+          shouldGenerateTitle: false,
+        },
+        thread: { id: "thread_1", title: "Thread" },
+        user: { name: "User", profileImage: null },
+      })),
 })
 
 export const createNativeChatRequest = (

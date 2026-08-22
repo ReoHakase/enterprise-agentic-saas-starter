@@ -28,10 +28,9 @@ describe("Agent Issue manual approval execution", () => {
       },
     })
 
-    await expect(internal.cancelRun({ grant: run.grant })).resolves.toEqual({
-      runId: run.runId,
-      status: "canceled",
-    })
+    await expect(
+      internal.finalizeRun({ grant: run.grant, outcome: "canceled" })
+    ).resolves.toEqual({ runId: run.runId, status: "canceled" })
     const [storedAction] = await db
       .select({
         completedAt: schema.agentActions.completedAt,
@@ -506,14 +505,12 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
       threadId: first.thread.id,
       userId: "action-user-a",
     })
-    const retryConnection = await first.internal.consumeConnectionTicket({
+    const retryChatRun = await first.internal.startChatRun({
+      clientMessageId: "reject-first",
       threadId: first.thread.id,
       ticket: retryTicket.ticket,
     })
-    const retryRun = await first.internal.startRun({
-      clientMessageId: "reject-first",
-      grant: retryConnection.grant,
-    })
+    const retryRun = retryChatRun.run
     expect(retryRun).toMatchObject({
       attempt: 2,
       runId: first.run.runId,
@@ -542,7 +539,10 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         )
       )
     expect(liveRetryGrants).toHaveLength(1)
-    await first.internal.cancelRun({ grant: retryRun.grant })
+    await first.internal.finalizeRun({
+      grant: retryRun.grant,
+      outcome: "canceled",
+    })
     await expect(
       issueAgentActionResumeTicket(db, {
         actionId: rejected.id,

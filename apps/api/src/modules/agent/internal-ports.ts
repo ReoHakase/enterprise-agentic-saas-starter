@@ -1,9 +1,9 @@
 import type {
   AgentActionExecutionResult,
+  AgentChatRun,
   AgentConnection,
   AgentCreateIssueActionInput,
   AgentDeleteIssueActionInput,
-  AgentGuardedWebSearchQuery,
   AgentIssue,
   AgentIssueAction,
   AgentIssueDetail,
@@ -11,19 +11,24 @@ import type {
   AgentMember,
   AgentOrganizationContext,
   AgentRunGrant,
+  AgentRunLiveness,
   AgentRunResult,
   AgentSearchIssuesInput,
   AgentUpdateIssueActionInput,
   AgentUsageRecordInput,
-  AgentUsageRecordResult,
-  AgentWebSearchReservation,
+  AgentWebSearchAuthorization,
   AgentAccountContext,
 } from "@enterprise-agentic-saas/agent-contracts"
 
 type AgentGrantInput = { grant: string }
 
 export type AgentInternalPorts = {
-  cancelRun(input: AgentGrantInput): Promise<AgentRunResult>
+  assertRunLive(input: AgentGrantInput): Promise<AgentRunLiveness>
+  authorizeWebSearch(input: {
+    grant: string
+    operationId: string
+    query: string
+  }): Promise<AgentWebSearchAuthorization>
   consumeConnectionTicket(input: {
     threadId: string
     ticket: string
@@ -32,28 +37,21 @@ export type AgentInternalPorts = {
     actionId: string
     grant: string
   }): Promise<AgentActionExecutionResult>
-  finishRun(input: {
+  finalizeRun(input: {
     grant: string
-    outcome: "completed" | "failed"
+    outcome: "canceled" | "completed" | "failed" | "waiting_approval"
+    usage?: AgentUsageRecordInput
   }): Promise<AgentRunResult>
   getAgentImageForModel(input: {
     assetId: string
     grant: string
   }): Promise<Response>
   getIssue(input: AgentSearchIssueInput): Promise<AgentIssueDetail>
-  getIssueActionDecision(input: {
-    actionId: string
-    grant: string
-  }): Promise<AgentIssueAction>
   getIssueAttachmentImageForModel(input: {
     fileId: string
     grant: string
     issueId: string
   }): Promise<Response>
-  guardWebSearch(input: {
-    grant: string
-    query: string
-  }): Promise<AgentGuardedWebSearchQuery>
   prepareCreateIssue(
     input: AgentPrepareActionInput<AgentCreateIssueActionInput>
   ): Promise<AgentIssueAction>
@@ -67,13 +65,6 @@ export type AgentInternalPorts = {
   readActiveOrganization(
     input: AgentGrantInput
   ): Promise<AgentOrganizationContext>
-  recordUsage(
-    input: AgentUsageRecordInput & AgentGrantInput
-  ): Promise<AgentUsageRecordResult>
-  reserveWebSearch(input: {
-    grant: string
-    operationId: string
-  }): Promise<AgentWebSearchReservation>
   resumeApprovedAction(input: {
     actionId: string
     resumeTicket: string
@@ -89,13 +80,14 @@ export type AgentInternalPorts = {
     limit: number
     query: string
   }): Promise<AgentMember[]>
-  startRun(input: {
+  startChatRun(input: {
     assetIds: string[]
     clientMessageId: string
     estimatedInputTokenCount: number
-    grant: string
+    ticket: string
+    threadId: string
     trigger: "client_tool_result" | "user_message"
-  }): Promise<AgentRunGrant>
+  }): Promise<AgentChatRun>
 }
 
 type AgentPrepareActionInput<TIssue> = {

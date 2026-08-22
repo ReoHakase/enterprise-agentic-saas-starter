@@ -415,9 +415,7 @@ describe("Agent public API to private Memory boundary", () => {
         })
         .from(schema.agentGrants)
         .where(eq(schema.agentGrants.threadId, threadId))
-      expect(grants.map(({ kind }) => kind)).toEqual(
-        expect.arrayContaining(["connection", "run"])
-      )
+      expect(grants.map(({ kind }) => kind)).toEqual(["run"])
       expect(grants.every(({ revokedAt }) => revokedAt instanceof Date)).toBe(
         true
       )
@@ -460,6 +458,13 @@ describe("Agent public API to private Memory boundary", () => {
           { role: "assistant" },
         ],
       })
+      const memoryBoundaryGrants = await db
+        .select({ kind: schema.agentGrants.kind })
+        .from(schema.agentGrants)
+        .where(eq(schema.agentGrants.threadId, threadId))
+      expect(memoryBoundaryGrants.map(({ kind }) => kind)).toEqual(
+        expect.arrayContaining(["connection", "run"])
+      )
 
       expect(
         (

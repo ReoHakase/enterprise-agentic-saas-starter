@@ -62,16 +62,12 @@ afterEach(() => {
 
 type ResumeApi = Pick<
   AgentControlPlanePort,
-  "cancelRun" | "executeApprovedAction" | "finishRun" | "resumeApprovedAction"
+  "executeApprovedAction" | "finalizeRun" | "resumeApprovedAction"
 >
 
 const actionId = () => `action_${crypto.randomUUID().replaceAll("-", "")}`
 
 const harness = (id: string) => {
-  const cancelRun = vi.fn<ResumeApi["cancelRun"]>().mockResolvedValue({
-    runId: "run_2",
-    status: "canceled",
-  })
   const resumeApprovedAction = vi
     .fn<ResumeApi["resumeApprovedAction"]>()
     .mockResolvedValue({
@@ -90,19 +86,17 @@ const harness = (id: string) => {
       kind: "create_issue",
       status: "succeeded",
     })
-  const finishRun = vi.fn<ResumeApi["finishRun"]>().mockResolvedValue({
-    runId: "run_2",
-    status: "completed",
-  })
+  const finalizeRun = vi.fn<ResumeApi["finalizeRun"]>(({ outcome }) =>
+    Promise.resolve({ runId: "run_2", status: outcome })
+  )
   return {
     api: {
-      cancelRun,
       executeApprovedAction,
-      finishRun,
+      finalizeRun,
       resumeApprovedAction,
     },
     executeApprovedAction,
-    finishRun,
+    finalizeRun,
     resumeApprovedAction,
   }
 }
@@ -311,16 +305,12 @@ describe("resumeIssueAction", () => {
       `${secrets.privateUrl}:${secrets.clientMarker}:${secrets.functionMarker}`
     const reportFailure = vi.fn<(cause: unknown) => void>()
     const api = {
-      cancelRun: async () => ({
-        runId: secrets.functionMarker,
-        status: "canceled" as const,
-      }),
       executeApprovedAction: async () => {
         throw new Error(privateClient())
       },
-      finishRun: async () => ({
+      finalizeRun: async () => ({
         runId: secrets.grant,
-        status: "completed" as const,
+        status: "failed" as const,
       }),
       resumeApprovedAction: async () => ({
         attempt: 1,
@@ -443,7 +433,7 @@ describe("resumeIssueAction", () => {
 
         expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
         expect(test.executeApprovedAction).toHaveBeenCalledOnce()
-        expect(test.finishRun).toHaveBeenCalledOnce()
+        expect(test.finalizeRun).toHaveBeenCalledOnce()
         expect(receipt).toMatchObject({ actionId: id, status: "succeeded" })
       } finally {
         await resumeRuntimeLease.storage.close()
@@ -680,7 +670,7 @@ describe("resumeIssueAction execution", () => {
       actionId: id,
       grant: RUN_GRANT,
     })
-    expect(test.finishRun).toHaveBeenCalledWith({
+    expect(test.finalizeRun).toHaveBeenCalledWith({
       grant: RUN_GRANT,
       outcome: "completed",
     })
@@ -751,11 +741,11 @@ describe("resumeIssueAction execution", () => {
         dependencies(test.api)
       )
     ).rejects.toThrow("Issue action resume is unavailable")
-    expect(test.finishRun).toHaveBeenCalledWith({
+    expect(test.finalizeRun).toHaveBeenCalledWith({
       grant: RUN_GRANT,
       outcome: "failed",
     })
-    expect(test.finishRun).not.toHaveBeenCalledWith({
+    expect(test.finalizeRun).not.toHaveBeenCalledWith({
       grant: RUN_GRANT,
       outcome: "completed",
     })
@@ -787,7 +777,7 @@ describe("resumeIssueAction execution", () => {
 
     expect(test.resumeApprovedAction).toHaveBeenCalledOnce()
     expect(test.executeApprovedAction).not.toHaveBeenCalled()
-    expect(test.finishRun).toHaveBeenCalledWith({
+    expect(test.finalizeRun).toHaveBeenCalledWith({
       grant: RUN_GRANT,
       outcome: "failed",
     })
@@ -807,7 +797,7 @@ describe("resumeIssueAction execution", () => {
         dependencies(test.api)
       )
     ).rejects.toThrow("Issue action resume is unavailable")
-    expect(test.finishRun).toHaveBeenCalledWith({
+    expect(test.finalizeRun).toHaveBeenCalledWith({
       grant: RUN_GRANT,
       outcome: "failed",
     })

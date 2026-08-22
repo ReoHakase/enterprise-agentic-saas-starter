@@ -53,6 +53,11 @@ const readRemaining = async (
   )
 }
 
+const createFinalizeRun = () =>
+  vi.fn<AgentControlPlanePort["finalizeRun"]>(({ outcome }) =>
+    Promise.resolve({ runId: "run_1", status: outcome })
+  )
+
 const createReasoningToTextRuntime = () =>
   createModelRuntime([
     {
@@ -108,9 +113,14 @@ const createReasoningToTextRuntime = () =>
 const assertReasoningToTextCompletes = async () => {
   const { composition, executionRegistry, mastra } =
     createReasoningToTextRuntime()
-  const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-    Promise.resolve({ runId: "run_1", status: input.outcome })
+  const baseControlPlane = createControlPlane()
+  const startChatRun = vi.fn<AgentControlPlanePort["startChatRun"]>(
+    baseControlPlane.startChatRun
   )
+  const assertRunLive = vi.fn<AgentControlPlanePort["assertRunLive"]>(
+    baseControlPlane.assertRunLive
+  )
+  const finalizeRun = createFinalizeRun()
   const pending: Promise<unknown>[] = []
   const response = await handleAgentRuntimeRequest(
     chatRequest(),
@@ -119,7 +129,8 @@ const assertReasoningToTextCompletes = async () => {
     {
       captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
       createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-      createControlPlane: () => createControlPlane({ finishRun }),
+      createControlPlane: () =>
+        createControlPlane({ assertRunLive, finalizeRun, startChatRun }),
       executionRegistry,
       mastra,
       requireModelCredential: false,
@@ -132,9 +143,26 @@ const assertReasoningToTextCompletes = async () => {
   expect(body).toContain("reasoning-progress")
   expect(body).toContain("completed-after-reasoning")
   expect(body).not.toContain("Agent response timed out.")
-  expect(finishRun).toHaveBeenCalledWith({
+  expect(startChatRun).toHaveBeenCalledOnce()
+  expect(assertRunLive).toHaveBeenCalledTimes(2)
+  expect(finalizeRun).toHaveBeenCalledOnce()
+  expect(finalizeRun).toHaveBeenCalledWith({
     grant: GRANT,
     outcome: "completed",
+    usage: expect.objectContaining({
+      cacheReadTokenCount: 0,
+      cacheWriteTokenCount: 0,
+      imageInputCount: 0,
+      inputNoCacheTokenCount: 1,
+      inputTokenCount: 1,
+      model: "openai/gpt-5.6-luna",
+      outputTokenCount: 2,
+      provider: "openrouter",
+      reasoningTokenCount: 1,
+      runEventId: "attempt_1",
+      textOutputTokenCount: 1,
+      totalTokenCount: 3,
+    }),
   })
 }
 
@@ -173,11 +201,14 @@ describe("native runtime SSE privacy", () => {
       getThreadById: () => Promise.resolve({ title: "" }),
     })
     const controlPlane = createControlPlane()
-    const startRun = controlPlane.startRun
-    controlPlane.startRun = async (input) => ({
-      ...(await startRun(input)),
-      shouldGenerateTitle: true,
-    })
+    const startChatRun = controlPlane.startChatRun
+    controlPlane.startChatRun = async (input) => {
+      const chatRun = await startChatRun(input)
+      return {
+        ...chatRun,
+        run: { ...chatRun.run, shouldGenerateTitle: true },
+      }
+    }
     const pending: Promise<unknown>[] = []
 
     const response = await handleAgentRuntimeRequest(
@@ -282,17 +313,12 @@ describe("native runtime SSE privacy", () => {
     )
     const mastra = createFakeMastra(stream)
     const requestController = new AbortController()
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
+    const finalizeRun = createFinalizeRun()
     const pending: Promise<unknown>[] = []
     const dependencies = {
       captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
       createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
-      createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
+      createControlPlane: () => createControlPlane({ finalizeRun }),
       executionRegistry,
       mastra,
       requireModelCredential: false,
@@ -315,10 +341,14 @@ describe("native runtime SSE privacy", () => {
     body += await readRemaining(reader, decoder)
     await Promise.all(pending)
 
-    expect(cancelRun).toHaveBeenCalledWith({ grant: GRANT })
+    expect(finalizeRun).toHaveBeenCalledOnce()
+    expect(finalizeRun).toHaveBeenCalledWith({
+      grant: GRANT,
+      outcome: "canceled",
+      usage: undefined,
+    })
     expect(stream).toHaveBeenCalledOnce()
     expect(stream.mock.calls[0]?.[1].modelSettings.maxOutputTokens).toBe(4_096)
-    expect(finishRun).not.toHaveBeenCalled()
     expect(body).not.toContain('"type":"error"')
     expect(body).not.toContain("Model response failed")
   })
@@ -375,17 +405,9 @@ describe("native runtime SSE privacy", () => {
         createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
         createControlPlane: () =>
           createControlPlane({
-            cancelRun: async () => {
-              order.push("cancel")
-              return { runId: "run_1", status: "canceled" }
-            },
-            recordUsage: async () => {
-              order.push("usage")
-              return {
-                calculatedCostMicros: 0,
-                pricingVersion: "unpriced",
-                recorded: true,
-              }
+            finalizeRun: async ({ outcome }) => {
+              order.push(`finalize:${outcome}`)
+              return { runId: "run_1", status: outcome }
             },
           }),
         executionRegistry,
@@ -401,7 +423,7 @@ describe("native runtime SSE privacy", () => {
     await bodyPromise
     await Promise.all(pending)
 
-    expect(order).toEqual(["cancel", "release"])
+    expect(order).toEqual(["finalize:canceled", "release"])
   })
 
   it("bounds image-loading stalls behind the already-emitted run identity", async () => {
@@ -409,12 +431,7 @@ describe("native runtime SSE privacy", () => {
     const stream = vi.fn<() => void>()
     const mastra = createFakeMastra(stream)
     const requestController = new AbortController()
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
+    const finalizeRun = createFinalizeRun()
     const pending: Promise<unknown>[] = []
     const response = await handleAgentRuntimeRequest(
       chatRequest(requestController.signal, ["asset_1"]),
@@ -425,8 +442,7 @@ describe("native runtime SSE privacy", () => {
         createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
         createControlPlane: () =>
           createControlPlane({
-            cancelRun,
-            finishRun,
+            finalizeRun,
             getAgentImageForModel: () => new Promise(() => undefined),
           }),
         executionRegistry,
@@ -445,8 +461,12 @@ describe("native runtime SSE privacy", () => {
     body += await readRemaining(reader, new TextDecoder())
     await Promise.all(pending)
 
-    expect(cancelRun).toHaveBeenCalledWith({ grant: GRANT })
-    expect(finishRun).not.toHaveBeenCalled()
+    expect(finalizeRun).toHaveBeenCalledOnce()
+    expect(finalizeRun).toHaveBeenCalledWith({
+      grant: GRANT,
+      outcome: "canceled",
+      usage: undefined,
+    })
     expect(stream).not.toHaveBeenCalled()
     expect(body).not.toContain('"type":"error"')
   })
@@ -457,12 +477,7 @@ describe("native runtime SSE privacy", () => {
       () => new Promise(() => undefined)
     )
     const mastra = createFakeMastra(stream)
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
+    const finalizeRun = createFinalizeRun()
     const pending: Promise<unknown>[] = []
     vi.useFakeTimers()
     const response = await handleAgentRuntimeRequest(
@@ -472,7 +487,7 @@ describe("native runtime SSE privacy", () => {
       {
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
         createApprovalResumeRuntime: scriptedCreateApprovalResumeRuntime,
-        createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
+        createControlPlane: () => createControlPlane({ finalizeRun }),
         executionRegistry,
         mastra,
         requireModelCredential: false,
@@ -488,11 +503,12 @@ describe("native runtime SSE privacy", () => {
     expect(body).toContain('"messageMetadata":{"runId":"run_1"}')
     expect(body).toContain("Agent response timed out.")
     expect(body).not.toContain("Model response failed.")
-    expect(finishRun).toHaveBeenCalledWith({
+    expect(finalizeRun).toHaveBeenCalledOnce()
+    expect(finalizeRun).toHaveBeenCalledWith({
       grant: GRANT,
       outcome: "failed",
+      usage: undefined,
     })
-    expect(cancelRun).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -517,12 +533,7 @@ describe("native runtime SSE privacy", () => {
       },
     ])
     vi.useFakeTimers()
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
+    const finalizeRun = createFinalizeRun()
     const pending: Promise<unknown>[] = []
     const response = await handleAgentRuntimeRequest(
       chatRequest(),
@@ -531,7 +542,7 @@ describe("native runtime SSE privacy", () => {
       {
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
         createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-        createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
+        createControlPlane: () => createControlPlane({ finalizeRun }),
         executionRegistry,
         mastra,
         requireModelCredential: false,
@@ -547,11 +558,12 @@ describe("native runtime SSE privacy", () => {
 
     expect(body).toContain("progress-13")
     expect(body).toContain("Agent response timed out.")
-    expect(finishRun).toHaveBeenCalledWith({
+    expect(finalizeRun).toHaveBeenCalledOnce()
+    expect(finalizeRun).toHaveBeenCalledWith({
       grant: GRANT,
       outcome: "failed",
+      usage: undefined,
     })
-    expect(cancelRun).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -574,12 +586,7 @@ describe("native runtime SSE privacy", () => {
     ])
     vi.useFakeTimers()
     const requestController = new AbortController()
-    const finishRun = vi.fn<AgentControlPlanePort["finishRun"]>((input) =>
-      Promise.resolve({ runId: "run_1", status: input.outcome })
-    )
-    const cancelRun = vi.fn<AgentControlPlanePort["cancelRun"]>(() =>
-      Promise.resolve({ runId: "run_1", status: "canceled" })
-    )
+    const finalizeRun = createFinalizeRun()
     const pending: Promise<unknown>[] = []
     const response = await handleAgentRuntimeRequest(
       chatRequest(requestController.signal),
@@ -588,7 +595,7 @@ describe("native runtime SSE privacy", () => {
       {
         captureFailure: vi.fn<(code: AgentFailureCode) => void>(),
         createApprovalResumeRuntime: composition.createApprovalResumeRuntime,
-        createControlPlane: () => createControlPlane({ cancelRun, finishRun }),
+        createControlPlane: () => createControlPlane({ finalizeRun }),
         executionRegistry,
         mastra,
         requireModelCredential: false,
@@ -603,8 +610,12 @@ describe("native runtime SSE privacy", () => {
     await Promise.all(pending)
 
     expect(body).not.toContain("Agent response timed out.")
-    expect(cancelRun).toHaveBeenCalledWith({ grant: GRANT })
-    expect(finishRun).not.toHaveBeenCalled()
+    expect(finalizeRun).toHaveBeenCalledOnce()
+    expect(finalizeRun).toHaveBeenCalledWith({
+      grant: GRANT,
+      outcome: "canceled",
+      usage: undefined,
+    })
     expect(vi.getTimerCount()).toBe(0)
   })
 

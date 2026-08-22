@@ -15,12 +15,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm"
 
 import { HttpError } from "../../../errors/http-error"
 import { ensureAgentSessionContextInTransaction } from "../context/repository"
-import { createAgentToken, hashAgentToken } from "../crypto"
+import { createAgentToken } from "../crypto"
 import {
   requireActiveMembership,
   requireLiveSession,
   requireOwnedThread,
-  validateGrantInTransaction,
   type AgentTransaction,
   type ValidGrant,
 } from "../threads/repository"
@@ -56,22 +55,6 @@ export const requireActionForGrant = async (
     throw new HttpError({ code: "not_found" })
   }
   return action
-}
-
-export const getAgentIssueActionDecision = async (
-  db: Db,
-  input: { grant: string; actionId: string; now?: Date }
-): Promise<AgentIssueAction> => {
-  const action = await db.transaction(async (tx) => {
-    const now = input.now ?? new Date()
-    const context = await validateGrantInTransaction(tx, {
-      tokenHash: await hashAgentToken(input.grant),
-      kind: "run",
-      now,
-    })
-    return requireActionForGrant(tx, context, input.actionId)
-  })
-  return toActionDto(action)
 }
 
 const requirePublicAction = async (

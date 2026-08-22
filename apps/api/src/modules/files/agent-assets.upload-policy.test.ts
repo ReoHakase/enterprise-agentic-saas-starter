@@ -9,7 +9,7 @@ import {
   AGENT_USAGE_HOUR_MS,
   consumeAgentResourceLimitInTransaction,
   createAgentInternalApi,
-  startAgentRun,
+  issueAgentConnectionTicket,
   utcUsageWindow,
 } from "../agent/public"
 import { processAgentAssetLifecycle } from "./agent-assets-cleanup"
@@ -17,9 +17,9 @@ import {
   assetRequest,
   createFixture,
   createRuntime,
-  openConnection,
   pngFile,
   seedReadyAsset,
+  startAssetChatRun,
   uploadDirect,
   uploadRequest,
 } from "./agent-assets.test-support"
@@ -105,13 +105,16 @@ const createCombinedImageScenario = async ({
     prefix: `combined-${slug}-past`,
     sizes: reusableSizes,
   })
-  const priorConnection = await openConnection(db)
-  const priorRun = await internal.startRun({
-    assetIds: reusableAssetIds,
-    clientMessageId: `combined-${slug}-prior`,
-    grant: priorConnection.grant,
+  const priorRun = (
+    await startAssetChatRun(db, {
+      assetIds: reusableAssetIds,
+      clientMessageId: `combined-${slug}-prior`,
+    })
+  ).run
+  await internal.finalizeRun({
+    grant: priorRun.grant,
+    outcome: "completed",
   })
-  await internal.finishRun({ grant: priorRun.grant, outcome: "completed" })
   const currentAssetIds = await seedSizedAssets(db, {
     prefix: `combined-${slug}-current`,
     sizes: currentSizes,
@@ -131,12 +134,12 @@ const createCombinedImageScenario = async ({
     createdAt: now,
     updatedAt: now,
   })
-  const connection = await openConnection(db)
-  const run = await internal.startRun({
-    assetIds: currentAssetIds,
-    clientMessageId: `combined-${slug}-current`,
-    grant: connection.grant,
-  })
+  const run = (
+    await startAssetChatRun(db, {
+      assetIds: currentAssetIds,
+      clientMessageId: `combined-${slug}-current`,
+    })
+  ).run
   return {
     currentAssetIds,
     db,
@@ -373,13 +376,13 @@ describe("Agent asset upload policy and scope", () => {
       agentAssetDtoModel,
       await uploaded.json()
     ).id
-    const connection = await openConnection(db)
     const internal = await createAgentInternalApi(db)
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "model-image-run",
-      assetIds: [uploadedAssetId],
-    })
+    const run = (
+      await startAssetChatRun(db, {
+        clientMessageId: "model-image-run",
+        assetIds: [uploadedAssetId],
+      })
+    ).run
     const bindings = await db
       .select()
       .from(schema.agentRunAssets)
@@ -438,7 +441,7 @@ describe("Agent asset upload policy and scope", () => {
       .from(schema.agentResourceUsageBuckets)
       .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
     expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
-    await internal.finishRun({ grant: run.grant, outcome: "completed" })
+    await internal.finalizeRun({ grant: run.grant, outcome: "completed" })
 
     const seededIds: string[] = []
     for (let index = 0; index < 5; index += 1) {
@@ -449,12 +452,17 @@ describe("Agent asset upload policy and scope", () => {
       })
       seededIds.push(seededId)
     }
-    const countConnection = await openConnection(db)
+    const countTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "asset-session-a",
+      threadId: "asset-thread-a",
+      userId: "asset-user-a",
+    })
     await expect(
-      startAgentRun(db, {
-        grant: countConnection.grant,
+      internal.startChatRun({
         clientMessageId: "too-many-assets",
         assetIds: seededIds,
+        threadId: "asset-thread-a",
+        ticket: countTicket.ticket,
       })
     ).rejects.toMatchObject({ code: "validation_error" })
 
@@ -467,12 +475,17 @@ describe("Agent asset upload policy and scope", () => {
       })
       largeIds.push(seededId)
     }
-    const byteConnection = await openConnection(db)
+    const byteTicket = await issueAgentConnectionTicket(db, {
+      sessionId: "asset-session-a",
+      threadId: "asset-thread-a",
+      userId: "asset-user-a",
+    })
     await expect(
-      startAgentRun(db, {
-        grant: byteConnection.grant,
+      internal.startChatRun({
         clientMessageId: "too-many-bytes",
         assetIds: largeIds,
+        threadId: "asset-thread-a",
+        ticket: byteTicket.ticket,
       })
     ).rejects.toMatchObject({ code: "validation_error" })
     const failedRuns = await db
@@ -547,18 +560,23 @@ describe("Agent reusable asset boundaries", () => {
       },
       Promise.resolve([])
     )
-    for (const [index, assetId] of assetIds.entries()) {
-      // oxlint-disable-next-line no-await-in-loop -- each completed run establishes one ordered conversation reference.
-      const connection = await openConnection(db)
-      // oxlint-disable-next-line no-await-in-loop -- the fixture intentionally serializes runs for one private thread.
-      const run = await internal.startRun({
-        assetIds: [assetId],
-        clientMessageId: `conversation-message-${index}`,
-        grant: connection.grant,
-      })
-      // oxlint-disable-next-line no-await-in-loop -- the next message cannot start until this run is terminal.
-      await internal.finishRun({ grant: run.grant, outcome: "completed" })
-    }
+    await assetIds.reduce<Promise<void>>(
+      (previous, assetId, index) =>
+        previous.then(() =>
+          startAssetChatRun(db, {
+            assetIds: [assetId],
+            clientMessageId: `conversation-message-${index}`,
+          })
+            .then(({ run }) =>
+              internal.finalizeRun({
+                grant: run.grant,
+                outcome: "completed",
+              })
+            )
+            .then(() => undefined)
+        ),
+      Promise.resolve()
+    )
 
     const reusable = await db.transaction((tx) =>
       listReusableAgentAssetsInTransaction(tx, {
@@ -592,12 +610,12 @@ describe("Agent reusable asset boundaries", () => {
       createdAt: now,
       updatedAt: now,
     })
-    const connection = await openConnection(db)
-    const run = await internal.startRun({
-      assetIds: [],
-      clientMessageId: "conversation-reuse-message",
-      grant: connection.grant,
-    })
+    const run = (
+      await startAssetChatRun(db, {
+        assetIds: [],
+        clientMessageId: "conversation-reuse-message",
+      })
+    ).run
     const action = await internal.prepareUpdateIssue({
       grant: run.grant,
       idempotencyKey: "conversation-reuse-idempotency-key",
@@ -633,12 +651,12 @@ describe("Agent reusable asset boundaries", () => {
       })
     ).resolves.toMatchObject({ status: "rejected" })
 
-    const retryConnection = await openConnection(db)
-    const retryRun = await internal.startRun({
-      assetIds: [],
-      clientMessageId: "conversation-reuse-after-reject",
-      grant: retryConnection.grant,
-    })
+    const retryRun = (
+      await startAssetChatRun(db, {
+        assetIds: [],
+        clientMessageId: "conversation-reuse-after-reject",
+      })
+    ).run
     await expect(
       internal.prepareUpdateIssue({
         grant: retryRun.grant,

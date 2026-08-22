@@ -45,14 +45,13 @@ export const createWebSearchTool = (
       return executePublicWebSearch(input, {
         abortSignal: context.abortSignal,
         consumeBudget: () => runtime.budget.consume("read"),
-        guard: (query) =>
-          runtime.api.guardWebSearch({ grant: runtime.runGrant, query }),
-        operationId: context.agent.toolCallId,
-        reserve: (operationId) =>
-          runtime.api.reserveWebSearch({
+        authorize: (query, operationId) =>
+          runtime.api.authorizeWebSearch({
             grant: runtime.runGrant,
             operationId,
+            query,
           }),
+        operationId: context.agent.toolCallId,
         search: (query, abortSignal) =>
           searchWithTimeout(
             search,

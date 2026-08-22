@@ -39,16 +39,8 @@ export const issueAgentConnectionTicket = async (
   return issue(...args)
 }
 
-/** @internal */
-export const startAgentRun = async (
-  ...args: Parameters<typeof startAgentRunImplementation>
-) => {
-  const { startAgentRun: start } = await import("./threads/run-repository")
-  return start(...args)
-}
 import type {
   createAgentInternalApi as createAgentInternalApiImplementation,
   createAgentInternalApp as createAgentInternalAppImplementation,
 } from "./internal-api"
-import type { startAgentRun as startAgentRunImplementation } from "./threads/run-repository"
 import type { issueAgentConnectionTicket as issueAgentConnectionTicketImplementation } from "./threads/thread-repository"

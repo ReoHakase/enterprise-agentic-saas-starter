@@ -1,4 +1,5 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
+import { eq } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
 import { createFixture } from "./agent.test-support"
@@ -27,18 +28,20 @@ const createGuard = async (
     userId: "agent-user-a",
   })
   const internal = createAgentInternalApi(db)
-  const connection = await internal.consumeConnectionTicket({
-    threadId: thread.id,
-    ticket: prepared.ticket,
-  })
-  const run = await internal.startRun({
+  const chatRun = await internal.startChatRun({
     assetIds: [],
     clientMessageId: prepared.clientMessageId,
     estimatedInputTokenCount: 10,
-    grant: connection.grant,
+    threadId: thread.id,
+    ticket: prepared.ticket,
     trigger: "user_message",
   })
-  return { db, grant: run.grant, guard: internal.guardWebSearch, thread }
+  return {
+    authorize: internal.authorizeWebSearch,
+    db,
+    grant: chatRun.run.grant,
+    thread,
+  }
 }
 
 describe("Agent Web search server guard", () => {
@@ -52,24 +55,40 @@ describe("Agent Web search server guard", () => {
       "Cloudflare R2 current limits",
     ],
   ])("accepts the exact EN/JA attested query", async (line, query) => {
-    const { grant, guard } = await createGuard(line)
-    await expect(guard({ grant, query })).resolves.toEqual({ query })
+    const { authorize, grant } = await createGuard(line)
+    const input = { grant, operationId: "web_exact_query", query }
+    await expect(authorize(input)).resolves.toEqual({
+      query,
+      reserved: true,
+      reused: false,
+    })
+    await expect(authorize(input)).resolves.toEqual({
+      query,
+      reserved: true,
+      reused: true,
+    })
   })
 
-  it("rejects hidden Unicode and private tenant values", async () => {
-    const { grant, guard } = await createGuard()
-    for (const query of [
+  it("rejects hidden Unicode and private tenant values before reserving quota", async () => {
+    const { authorize, db, grant } = await createGuard()
+    const rejectedQueries = [
       "Cloudflare R2\u0000 current limits",
       "organization_id: org_\u2066privatevalue\u2069",
       "Agent Org A current limits",
       "Fix API boundary current limits",
       "agent-a@example.test public profile",
-    ]) {
+    ]
+    for (const [index, query] of rejectedQueries.entries()) {
       // oxlint-disable-next-line no-await-in-loop -- one libSQL fixture transaction is intentionally reused.
-      await expect(guard({ grant, query })).rejects.toMatchObject({
-        code: "validation_error",
-      })
+      await expect(
+        authorize({ grant, operationId: `rejected_web_${index}`, query })
+      ).rejects.toMatchObject({ code: "validation_error" })
     }
+    const reservations = await db
+      .select({ id: schema.agentResourceUsageBuckets.id })
+      .from(schema.agentResourceUsageBuckets)
+      .where(eq(schema.agentResourceUsageBuckets.kind, "web_search"))
+    expect(reservations).toEqual([])
   })
 
   it("binds authorization to the exact tenant thread message", async () => {
@@ -98,7 +117,11 @@ describe("Agent Web search server guard", () => {
     expect(secondPrepared.clientMessageId).toBe("message_other_guard")
 
     await expect(
-      first.guard({ grant: first.grant, query: "Bun runtime current limits" })
+      first.authorize({
+        grant: first.grant,
+        operationId: "wrong_thread_web",
+        query: "Bun runtime current limits",
+      })
     ).rejects.toMatchObject({
       code: "validation_error",
     })
@@ -122,21 +145,19 @@ describe("Agent Web search server guard", () => {
       userId: "agent-user-a",
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
-      threadId: thread.id,
-      ticket: prepared.ticket,
-    })
-    const run = await internal.startRun({
+    const chatRun = await internal.startChatRun({
       assetIds: [],
       clientMessageId: prepared.clientMessageId,
       estimatedInputTokenCount: 10,
-      grant: connection.grant,
+      threadId: thread.id,
+      ticket: prepared.ticket,
       trigger: "user_message",
     })
 
     await expect(
-      internal.guardWebSearch({
-        grant: run.grant,
+      internal.authorizeWebSearch({
+        grant: chatRun.run.grant,
+        operationId: "forged_digest_web",
         query: "Cloudflare R2 current limits",
       })
     ).rejects.toMatchObject({
@@ -145,7 +166,7 @@ describe("Agent Web search server guard", () => {
   })
 
   it("fails closed when tenant Issue context exceeds its bound", async () => {
-    const { db, grant, guard } = await createGuard()
+    const { authorize, db, grant } = await createGuard()
     const now = new Date()
     await db.insert(schema.issues).values(
       Array.from({ length: 200 }, (_, index) => ({
@@ -163,7 +184,11 @@ describe("Agent Web search server guard", () => {
       }))
     )
     await expect(
-      guard({ grant, query: "Cloudflare R2 current limits" })
+      authorize({
+        grant,
+        operationId: "oversized_context_web",
+        query: "Cloudflare R2 current limits",
+      })
     ).rejects.toMatchObject({
       code: "validation_error",
     })
