@@ -31,9 +31,11 @@ export const withRunLiveness = (
           ...result,
           stream: result.stream.pipeThrough(
             new TransformStream({
-              async transform(chunk, controller) {
-                await assertLive()
+              transform(chunk, controller) {
                 controller.enqueue(chunk)
+              },
+              async flush() {
+                await assertLive()
               },
             })
           ),

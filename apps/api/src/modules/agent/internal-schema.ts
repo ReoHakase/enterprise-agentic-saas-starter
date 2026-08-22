@@ -8,11 +8,9 @@ import {
   resumeApprovedActionInputModel,
 } from "./action-schema"
 import {
-  finishAgentRunInputModel,
-  guardAgentWebSearchInputModel,
-  recordAgentUsageObjectModel,
-  reserveAgentWebSearchInputModel,
-  startAgentRunInputModel,
+  authorizeAgentWebSearchInputModel,
+  finalizeAgentRunBodyModel,
+  startAgentChatRunInputModel,
 } from "./runtime-schema"
 
 const identifierModel = v.pipe(
@@ -36,18 +34,12 @@ const limitQueryModel = v.optional(
 )
 
 export const emptyBodyModel = v.strictObject({})
-export const startRunBodyModel = v.omit(startAgentRunInputModel, ["grant"])
-export const reserveWebSearchBodyModel = v.omit(
-  reserveAgentWebSearchInputModel,
+export const startChatRunBodyModel = startAgentChatRunInputModel
+export const authorizeWebSearchBodyModel = v.omit(
+  authorizeAgentWebSearchInputModel,
   ["grant"]
 )
-export const guardWebSearchBodyModel = v.omit(guardAgentWebSearchInputModel, [
-  "grant",
-])
-export const finishRunBodyModel = v.omit(finishAgentRunInputModel, ["grant"])
-export const recordUsageBodyModel = v.omit(recordAgentUsageObjectModel, [
-  "grant",
-])
+export const finalizeRunBodyModel = finalizeAgentRunBodyModel
 export const resumeApprovedActionBodyModel = v.omit(
   resumeApprovedActionInputModel,
   ["actionId"]

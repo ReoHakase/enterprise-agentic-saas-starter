@@ -4,7 +4,6 @@ import { HttpError } from "../../errors/http-error"
 import { createObservedLogger } from "../../platform/observability/runtime"
 import {
   executeApprovedActionInputModel,
-  getIssueActionDecisionInputModel,
   prepareCreateIssueInputModel,
   prepareDeleteIssueInputModel,
   prepareUpdateIssueInputModel,
@@ -13,18 +12,16 @@ import {
 import type { AgentInternalPorts } from "./internal-ports"
 import {
   agentGrantInputModel,
+  authorizeAgentWebSearchInputModel,
   consumeConnectionTicketInputModel,
-  finishAgentRunInputModel,
+  finalizeAgentRunInputModel,
   getAgentImageInputModel,
   getAgentIssueAttachmentImageInputModel,
   getAgentIssueInputModel,
-  guardAgentWebSearchInputModel,
-  recordAgentUsageInputModel,
-  reserveAgentWebSearchInputModel,
   searchAgentIssuesInputModel,
   searchAgentLabelsInputModel,
   searchAgentMembersInputModel,
-  startAgentRunInputModel,
+  startAgentChatRunInputModel,
 } from "./runtime-schema"
 
 const connectionLogger = createObservedLogger("agent").child("connection")
@@ -44,8 +41,15 @@ const parseInternalInput = <
 }
 
 export const createAgentInternalService = (ports: AgentInternalPorts) => ({
-  cancelRun(input: v.InferInput<typeof agentGrantInputModel>) {
-    return ports.cancelRun(parseInternalInput(agentGrantInputModel, input))
+  assertRunLive(input: v.InferInput<typeof agentGrantInputModel>) {
+    return ports.assertRunLive(parseInternalInput(agentGrantInputModel, input))
+  },
+  authorizeWebSearch(
+    input: v.InferInput<typeof authorizeAgentWebSearchInputModel>
+  ) {
+    return ports.authorizeWebSearch(
+      parseInternalInput(authorizeAgentWebSearchInputModel, input)
+    )
   },
   async consumeConnectionTicket(
     input: v.InferInput<typeof consumeConnectionTicketInputModel>
@@ -70,8 +74,10 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
       parseInternalInput(executeApprovedActionInputModel, input)
     )
   },
-  finishRun(input: v.InferInput<typeof finishAgentRunInputModel>) {
-    return ports.finishRun(parseInternalInput(finishAgentRunInputModel, input))
+  finalizeRun(input: v.InferInput<typeof finalizeAgentRunInputModel>) {
+    return ports.finalizeRun(
+      parseInternalInput(finalizeAgentRunInputModel, input)
+    )
   },
   getAgentImageForModel(input: v.InferInput<typeof getAgentImageInputModel>) {
     return ports.getAgentImageForModel(
@@ -81,23 +87,11 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
   getIssue(input: v.InferInput<typeof getAgentIssueInputModel>) {
     return ports.getIssue(parseInternalInput(getAgentIssueInputModel, input))
   },
-  getIssueActionDecision(
-    input: v.InferInput<typeof getIssueActionDecisionInputModel>
-  ) {
-    return ports.getIssueActionDecision(
-      parseInternalInput(getIssueActionDecisionInputModel, input)
-    )
-  },
   getIssueAttachmentImageForModel(
     input: v.InferInput<typeof getAgentIssueAttachmentImageInputModel>
   ) {
     return ports.getIssueAttachmentImageForModel(
       parseInternalInput(getAgentIssueAttachmentImageInputModel, input)
-    )
-  },
-  guardWebSearch(input: v.InferInput<typeof guardAgentWebSearchInputModel>) {
-    return ports.guardWebSearch(
-      parseInternalInput(guardAgentWebSearchInputModel, input)
     )
   },
   prepareCreateIssue(input: v.InferInput<typeof prepareCreateIssueInputModel>) {
@@ -125,18 +119,6 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
       parseInternalInput(agentGrantInputModel, input)
     )
   },
-  recordUsage(input: v.InferInput<typeof recordAgentUsageInputModel>) {
-    return ports.recordUsage(
-      parseInternalInput(recordAgentUsageInputModel, input)
-    )
-  },
-  reserveWebSearch(
-    input: v.InferInput<typeof reserveAgentWebSearchInputModel>
-  ) {
-    return ports.reserveWebSearch(
-      parseInternalInput(reserveAgentWebSearchInputModel, input)
-    )
-  },
   resumeApprovedAction(
     input: v.InferInput<typeof resumeApprovedActionInputModel>
   ) {
@@ -161,8 +143,19 @@ export const createAgentInternalService = (ports: AgentInternalPorts) => ({
       parseInternalInput(searchAgentMembersInputModel, input)
     )
   },
-  startRun(input: v.InferInput<typeof startAgentRunInputModel>) {
-    return ports.startRun(parseInternalInput(startAgentRunInputModel, input))
+  async startChatRun(input: v.InferInput<typeof startAgentChatRunInputModel>) {
+    const chatRun = await ports.startChatRun(
+      parseInternalInput(startAgentChatRunInputModel, input)
+    )
+    connectionLogger.info("Agent chat run started", {
+      "app.operation": "startAgentChatRun",
+      "app.outcome": "success",
+      "agent.connection.organization_role": chatRun.organization.role,
+      "agent.connection.allowed_action_count": Object.values(
+        chatRun.organization.permissions
+      ).filter(Boolean).length,
+    })
+    return chatRun
   },
 })
 

@@ -25,7 +25,7 @@ export const createRunFinalizer = ({
 }) => {
   let finalizationTask: Promise<void> | undefined
   let outcome: FinalizationOutcome | undefined
-  let recordUsage: (() => Promise<void>) | undefined
+  let readUsage: (() => Promise<AgentUsageRecordInput | undefined>) | undefined
 
   const outcomeFor = (fallback: FinalizationOutcome): FinalizationOutcome => {
     if (abort.getCause() === "user") return "abort"
@@ -39,13 +39,13 @@ export const createRunFinalizer = ({
     abort.close()
     finalizationTask = (async () => {
       try {
-        await recordUsage?.()
+        const usage = await readUsage?.()
         if (finalOutcome === "abort") {
-          await settlement.cancel()
+          await settlement.cancel(usage)
         } else if (finalOutcome === "error") {
-          await settlement.fail()
-        } else if (!settlement.isHeldForApproval()) {
-          await settlement.complete()
+          await settlement.fail(usage)
+        } else {
+          await settlement.complete(usage)
         }
       } catch (cause) {
         reportFailure(cause)
@@ -72,11 +72,14 @@ export const createRunFinalizer = ({
     isStarted: () => Boolean(finalizationTask),
     outcomeFor,
     schedule,
-    finish: async (nextRecordUsage: () => Promise<void>) => {
-      recordUsage = nextRecordUsage
+    finish: async (
+      nextReadUsage: () => Promise<AgentUsageRecordInput | undefined>
+    ) => {
+      readUsage = nextReadUsage
       schedule(outcomeFor("finish"))
       await finalize()
     },
     waitForStream: finalize,
   }
 }
+import type { AgentUsageRecordInput } from "@enterprise-agentic-saas/agent-contracts"

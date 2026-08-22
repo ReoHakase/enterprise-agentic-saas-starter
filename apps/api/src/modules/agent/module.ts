@@ -7,7 +7,6 @@ import {
   executeAgentApprovedAction,
   getAgentActionForSession,
   getAgentApprovalPolicyForSession,
-  getAgentIssueActionDecision,
   prepareAgentActionResumeForSession,
   prepareCreateIssueAction,
   prepareDeleteIssueAction,
@@ -18,19 +17,15 @@ import {
 import { createAgentInternalRoutes } from "./internal-routes"
 import { createAgentInternalService } from "./internal-service"
 import { createAgentRoutes } from "./routes"
-import {
-  guardAgentWebSearchQuery,
-  reserveAgentWebSearch,
-} from "./runs/web-search"
+import { finalizeAgentRun } from "./runs/finalize"
+import { authorizeAgentWebSearch } from "./runs/web-search"
 import { getAgentRuntime } from "./runtime"
 import { createAgentService } from "./service"
 import {
   archiveAgentThreadForSession,
-  cancelAgentRun,
   cancelAgentRunForSession,
   consumeAgentConnectionTicket,
   createAgentThreadForSession,
-  finishAgentRun,
   getAgentIssue,
   listAgentThreadsForSession,
   issueAgentConnectionTicket,
@@ -42,12 +37,12 @@ import {
   searchAgentIssueLabels,
   searchAgentIssues,
   searchAgentOrganizationMembers,
-  startAgentRun,
+  assertAgentRunLive,
+  startAgentChatRun,
 } from "./threads/repository"
 import {
   getAgentMonthlyUsageForSession,
   getAgentOrganizationUsageForSession,
-  recordAgentUsage,
 } from "./usage/repository"
 
 export const createAgentModule = (
@@ -96,29 +91,26 @@ export const createAgentInternalApi = (db: Db) => {
   const files = createFilesInternalApplication(db)
 
   return createAgentInternalService({
-    cancelRun: (input) => cancelAgentRun(db, input),
+    assertRunLive: (input) => assertAgentRunLive(db, input),
+    authorizeWebSearch: (input) => authorizeAgentWebSearch(db, input),
     consumeConnectionTicket: (input) => consumeAgentConnectionTicket(db, input),
     executeApprovedAction: (input) => executeAgentApprovedAction(db, input),
-    finishRun: (input) => finishAgentRun(db, input),
+    finalizeRun: (input) => finalizeAgentRun(db, input),
     getAgentImageForModel: (input) => files.getAgentImageForModel(input),
     getIssue: (input) => getAgentIssue(db, input),
-    getIssueActionDecision: (input) => getAgentIssueActionDecision(db, input),
     getIssueAttachmentImageForModel: (input) =>
       files.getIssueAttachmentImageForModel(input),
-    guardWebSearch: (input) => guardAgentWebSearchQuery(db, input),
     prepareCreateIssue: (input) => prepareCreateIssueAction(db, input),
     prepareDeleteIssue: (input) => prepareDeleteIssueAction(db, input),
     prepareUpdateIssue: (input) => prepareUpdateIssueAction(db, input),
     readAccountContext: (input) => readAgentAccountContext(db, input),
     readActiveOrganization: (input) => readAgentActiveOrganization(db, input),
-    recordUsage: (input) => recordAgentUsage(db, input),
-    reserveWebSearch: (input) => reserveAgentWebSearch(db, input),
     resumeApprovedAction: (input) => resumeAgentApprovedAction(db, input),
     searchIssueLabels: (input) => searchAgentIssueLabels(db, input),
     searchIssues: (input) => searchAgentIssues(db, input),
     searchOrganizationMembers: (input) =>
       searchAgentOrganizationMembers(db, input),
-    startRun: (input) => startAgentRun(db, input),
+    startChatRun: (input) => startAgentChatRun(db, input),
   })
 }
 

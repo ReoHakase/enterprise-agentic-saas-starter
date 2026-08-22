@@ -101,15 +101,13 @@ describe("Agent Issue action execution lifecycle", () => {
       .where(eq(schema.agentAssets.id, assetId))
 
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "attachment-create",
+      assetIds: [assetId],
       ticket: ticket.ticket,
       threadId: thread.id,
     })
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "attachment-create",
-      assetIds: [assetId],
-    })
+    const run = chatRun.run
     await putAgentApprovalPolicyForSession(db, {
       sessionId: "action-session-a",
       userId: "action-user-a",
@@ -369,7 +367,7 @@ describe("Agent Issue action execution lifecycle", () => {
 
   it("revokes approved actions, policies, resume tickets, and leases on organization switch", async () => {
     const { app, db } = await createFixture()
-    const { connection, internal, run, thread } = await createRun(db, {
+    const { internal, run, thread } = await createRun(db, {
       clientMessageId: "switch-action",
     })
     const unusedTicket = await issueAgentConnectionTicket(db, {
@@ -436,7 +434,7 @@ describe("Agent Issue action execution lifecycle", () => {
       .select({ revokedAt: schema.agentGrants.revokedAt })
       .from(schema.agentGrants)
       .where(eq(schema.agentGrants.sessionId, "action-session-a"))
-    expect(grants).toHaveLength(2)
+    expect(grants).toHaveLength(1)
     expect(grants.every((grant) => grant.revokedAt instanceof Date)).toBe(true)
     const [storedRun] = await db
       .select({ status: schema.agentRuns.status })
@@ -460,15 +458,10 @@ describe("Agent Issue action execution lifecycle", () => {
       .where(eq(schema.agentResumeTickets.actionId, prepared.id))
     expect(ticket?.revokedAt).toBeInstanceOf(Date)
     await expect(
-      internal.consumeConnectionTicket({
+      internal.startChatRun({
+        clientMessageId: "switch-replay",
         ticket: unusedTicket.ticket,
         threadId: thread.id,
-      })
-    ).rejects.toMatchObject({ code: "unauthorized" })
-    await expect(
-      internal.startRun({
-        grant: connection.grant,
-        clientMessageId: "switch-replay",
       })
     ).rejects.toMatchObject({ code: "unauthorized" })
     await expect(

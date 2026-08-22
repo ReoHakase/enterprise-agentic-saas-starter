@@ -269,7 +269,7 @@ describe("Agent Issue action protocol", () => {
       grant: first.run.grant,
       actionId: prepared.id,
     })
-    await first.internal.finishRun({
+    await first.internal.finalizeRun({
       grant: first.run.grant,
       outcome: "failed",
     })
@@ -279,14 +279,12 @@ describe("Agent Issue action protocol", () => {
       userId: "action-user-a",
       threadId: first.thread.id,
     })
-    const retryConnection = await first.internal.consumeConnectionTicket({
+    const retryChatRun = await first.internal.startChatRun({
+      clientMessageId: "retry-succeeded-write",
       ticket: retryTicket.ticket,
       threadId: first.thread.id,
     })
-    const retryRun = await first.internal.startRun({
-      grant: retryConnection.grant,
-      clientMessageId: "retry-succeeded-write",
-    })
+    const retryRun = retryChatRun.run
     expect(retryRun).toMatchObject({
       attempt: 2,
       rootRunId: first.run.rootRunId,

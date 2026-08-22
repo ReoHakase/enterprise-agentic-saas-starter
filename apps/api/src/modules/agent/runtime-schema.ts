@@ -23,8 +23,7 @@ export const consumeConnectionTicketInputModel = v.strictObject({
   threadId: identifierModel,
 })
 
-export const startAgentRunInputModel = v.strictObject({
-  grant: agentTokenModel,
+const agentRunStartEntries = {
   clientMessageId: identifierModel,
   estimatedInputTokenCount: v.optional(
     v.pipe(
@@ -47,20 +46,29 @@ export const startAgentRunInputModel = v.strictObject({
     v.picklist(["user_message", "client_tool_result"]),
     "user_message"
   ),
+} as const
+
+export const startAgentChatRunInputModel = v.strictObject({
+  ticket: agentTokenModel,
+  threadId: identifierModel,
+  ...agentRunStartEntries,
 })
 
 export const agentGrantInputModel = v.strictObject({
   grant: agentTokenModel,
 })
 
-export const reserveAgentWebSearchInputModel = v.strictObject({
+const agentWebSearchQueryModel = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(2),
+  v.maxLength(200)
+)
+
+export const authorizeAgentWebSearchInputModel = v.strictObject({
   grant: agentTokenModel,
   operationId: identifierModel,
-})
-
-export const guardAgentWebSearchInputModel = v.strictObject({
-  grant: agentTokenModel,
-  query: v.pipe(v.string(), v.trim(), v.minLength(2), v.maxLength(200)),
+  query: agentWebSearchQueryModel,
 })
 
 const usageCountModel = v.pipe(
@@ -70,8 +78,7 @@ const usageCountModel = v.pipe(
   v.maxValue(100_000_000)
 )
 
-export const recordAgentUsageObjectModel = v.strictObject({
-  grant: agentTokenModel,
+const agentUsageModel = v.strictObject({
   provider: v.literal("openrouter"),
   model: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(160)),
   inputTokenCount: usageCountModel,
@@ -98,17 +105,36 @@ export const recordAgentUsageObjectModel = v.strictObject({
   runEventId: identifierModel,
 })
 
-export const recordAgentUsageInputModel = v.pipe(
-  recordAgentUsageObjectModel,
+type AgentUsage = v.InferOutput<typeof agentUsageModel>
+
+const validOptionalAgentUsage = (usage: AgentUsage | undefined) =>
+  usage === undefined ||
+  (usage.inputNoCacheTokenCount +
+    usage.cacheReadTokenCount +
+    usage.cacheWriteTokenCount <=
+    usage.inputTokenCount &&
+    usage.textOutputTokenCount + usage.reasoningTokenCount <=
+      usage.outputTokenCount &&
+    usage.totalTokenCount === usage.inputTokenCount + usage.outputTokenCount)
+
+const finalizeAgentRunObjectModel = v.strictObject({
+  grant: agentTokenModel,
+  outcome: v.picklist(["canceled", "completed", "failed", "waiting_approval"]),
+  usage: v.optional(agentUsageModel),
+})
+
+export const finalizeAgentRunInputModel = v.pipe(
+  finalizeAgentRunObjectModel,
   v.check(
-    (usage) =>
-      usage.inputNoCacheTokenCount +
-        usage.cacheReadTokenCount +
-        usage.cacheWriteTokenCount <=
-        usage.inputTokenCount &&
-      usage.textOutputTokenCount + usage.reasoningTokenCount <=
-        usage.outputTokenCount &&
-      usage.totalTokenCount === usage.inputTokenCount + usage.outputTokenCount,
+    ({ usage }) => validOptionalAgentUsage(usage),
+    "Invalid usage token shape"
+  )
+)
+
+export const finalizeAgentRunBodyModel = v.pipe(
+  v.omit(finalizeAgentRunObjectModel, ["grant"]),
+  v.check(
+    ({ usage }) => validOptionalAgentUsage(usage),
     "Invalid usage token shape"
   )
 )
@@ -122,11 +148,6 @@ export const getAgentIssueAttachmentImageInputModel = v.strictObject({
   grant: agentTokenModel,
   issueId: identifierModel,
   fileId: identifierModel,
-})
-
-export const finishAgentRunInputModel = v.strictObject({
-  grant: agentTokenModel,
-  outcome: v.picklist(["completed", "failed"]),
 })
 
 export const searchAgentMembersInputModel = v.strictObject({

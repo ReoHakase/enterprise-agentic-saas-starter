@@ -112,11 +112,6 @@ export const prepareDeleteIssueInputModel = v.strictObject({
   issue: deleteIssueActionPayloadModel,
 })
 
-export const getIssueActionDecisionInputModel = v.strictObject({
-  grant: agentTokenModel,
-  actionId: identifierModel,
-})
-
 export const resumeApprovedActionInputModel = v.strictObject({
   actionId: identifierModel,
   resumeTicket: agentTokenModel,

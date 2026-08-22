@@ -9,9 +9,9 @@ import { agentInternalAuthorizationModel } from "./action-schema"
 import {
   actionIdParamsModel,
   assetIdParamsModel,
+  authorizeWebSearchBodyModel,
   emptyBodyModel,
-  finishRunBodyModel,
-  guardWebSearchBodyModel,
+  finalizeRunBodyModel,
   issueAttachmentParamsModel,
   issueAttachmentQueryModel,
   issueIdParamsModel,
@@ -20,10 +20,8 @@ import {
   labelSearchQueryModel,
   memberSearchQueryModel,
   prepareIssueActionBodyModel,
-  recordUsageBodyModel,
-  reserveWebSearchBodyModel,
   resumeApprovedActionBodyModel,
-  startRunBodyModel,
+  startChatRunBodyModel,
 } from "./internal-schema"
 import type { AgentInternalService } from "./internal-service"
 import { consumeConnectionTicketInputModel } from "./runtime-schema"
@@ -48,15 +46,16 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
     .onRequest(({ request, set }) => {
       set.headers["cache-control"] = "private, no-store"
       const url = new URL(request.url)
-      const isTicketConsume =
+      const isTicketRequest =
         request.method === "POST" &&
-        url.pathname === "/internal/agent/connections/consume"
+        (url.pathname === "/internal/agent/connections/consume" ||
+          url.pathname === "/internal/agent/runs/start")
       const isActionResume =
         request.method === "POST" &&
         /^\/internal\/agent\/actions\/[A-Za-z0-9_-]{1,128}\/resume$/u.test(
           url.pathname
         )
-      if (!isTicketConsume && !isActionResume) {
+      if (!isTicketRequest && !isActionResume) {
         bearerGrant(request)
       }
     })
@@ -67,46 +66,29 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
           ({ body }) => service.consumeConnectionTicket(body),
           { body: consumeConnectionTicketInputModel }
         )
+        .post("/runs/start", ({ body }) => service.startChatRun(body), {
+          body: startChatRunBodyModel,
+        })
         .post(
-          "/runs",
-          ({ body, request }) =>
-            service.startRun({ ...body, grant: bearerGrant(request) }),
-          { body: startRunBodyModel }
-        )
-        .post(
-          "/runs/web-search/reserve",
-          ({ body, request }) =>
-            service.reserveWebSearch({
-              ...body,
-              grant: bearerGrant(request),
-            }),
-          { body: reserveWebSearchBodyModel }
-        )
-        .post(
-          "/runs/web-search/guard",
-          ({ body, request }) =>
-            service.guardWebSearch({
-              ...body,
-              grant: bearerGrant(request),
-            }),
-          { body: guardWebSearchBodyModel }
-        )
-        .post(
-          "/runs/cancel",
-          ({ request }) => service.cancelRun({ grant: bearerGrant(request) }),
+          "/runs/live",
+          ({ request }) =>
+            service.assertRunLive({ grant: bearerGrant(request) }),
           { body: emptyBodyModel }
         )
         .post(
-          "/runs/finish",
+          "/runs/web-search/authorize",
           ({ body, request }) =>
-            service.finishRun({ ...body, grant: bearerGrant(request) }),
-          { body: finishRunBodyModel }
+            service.authorizeWebSearch({
+              ...body,
+              grant: bearerGrant(request),
+            }),
+          { body: authorizeWebSearchBodyModel }
         )
         .post(
-          "/runs/usage",
+          "/runs/finalize",
           ({ body, request }) =>
-            service.recordUsage({ ...body, grant: bearerGrant(request) }),
-          { body: recordUsageBodyModel }
+            service.finalizeRun({ ...body, grant: bearerGrant(request) }),
+          { body: finalizeRunBodyModel }
         )
         .get("/context/account", ({ request }) =>
           service.readAccountContext({ grant: bearerGrant(request) })
@@ -212,15 +194,6 @@ export const createAgentInternalRoutes = (service: AgentInternalService) =>
             }
           },
           { body: prepareIssueActionBodyModel }
-        )
-        .get(
-          "/actions/:actionId",
-          ({ params, request }) =>
-            service.getIssueActionDecision({
-              actionId: params.actionId,
-              grant: bearerGrant(request),
-            }),
-          { params: actionIdParamsModel }
         )
         .post(
           "/actions/:actionId/resume",

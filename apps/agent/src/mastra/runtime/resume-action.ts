@@ -12,7 +12,7 @@ import type { AgentControlPlanePort } from "./ports"
 
 type ResumeIssueActionApi = Pick<
   AgentControlPlanePort,
-  "executeApprovedAction" | "cancelRun" | "finishRun" | "resumeApprovedAction"
+  "executeApprovedAction" | "finalizeRun" | "resumeApprovedAction"
 >
 
 const resumeIssueActionSchema = v.strictObject({

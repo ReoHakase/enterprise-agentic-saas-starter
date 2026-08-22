@@ -277,13 +277,22 @@ export const reconcilePendingAgentAssetForTest = (
     createAuthorizationModule(db).authorization
   ).reconcilePendingAgentAsset(input)
 
-export const openConnection = async (db: Db) => {
+export const startAssetChatRun = async (
+  db: Db,
+  input: {
+    assetIds?: string[]
+    clientMessageId: string
+    estimatedInputTokenCount?: number
+    trigger?: "client_tool_result" | "user_message"
+  }
+) => {
   const ticket = await issueAgentConnectionTicket(db, {
     sessionId: "asset-session-a",
     threadId: "asset-thread-a",
     userId: "asset-user-a",
   })
-  return (await createAgentInternalApi(db)).consumeConnectionTicket({
+  return (await createAgentInternalApi(db)).startChatRun({
+    ...input,
     ticket: ticket.ticket,
     threadId: "asset-thread-a",
   })

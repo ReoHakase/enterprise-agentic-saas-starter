@@ -11,14 +11,12 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { createApp } from "../../app"
 import { env } from "../../platform/env"
-import { reserveAgentWebSearch } from "./runs/web-search"
+import { hashAgentToken } from "./crypto"
+import { createAgentInternalApi } from "./module"
 import { configureAgentRuntime, resetAgentRuntimeForTest } from "./runtime"
 import {
-  consumeAgentConnectionTicket,
   createAgentThreadForSession,
-  finishAgentRun,
   issueAgentConnectionTicket,
-  startAgentRun,
 } from "./threads/repository"
 import {
   AGENT_MODEL_RUN_ORGANIZATION_DAILY_LIMIT,
@@ -56,7 +54,7 @@ const createFixture = async () => {
   const db = drizzle(client, { schema })
   await migrate(db, { migrationsFolder })
 
-  const now = new Date("2026-07-22T00:15:00.000Z")
+  const now = new Date()
   const expiresAt = new Date(now.getTime() + 2 * AGENT_USAGE_HOUR_MS)
   await db.insert(schema.user).values([
     {
@@ -132,7 +130,7 @@ const createFixture = async () => {
 
 type FixtureDatabase = Awaited<ReturnType<typeof createFixture>>["db"]
 
-const createConnection = async (
+const createTicket = async (
   db: FixtureDatabase,
   input: {
     now: Date
@@ -157,12 +155,26 @@ const createConnection = async (
     threadId: thread.id,
     now: input.now,
   })
-  const connection = await consumeAgentConnectionTicket(db, {
-    ticket: ticket.ticket,
-    threadId: thread.id,
-    now: input.now,
+  return { thread, ticket }
+}
+
+const startChatRun = async (
+  db: FixtureDatabase,
+  input: {
+    assetIds?: string[]
+    clientMessageId: string
+    now: Date
+    threadId: string
+    ticket: string
+  }
+) => {
+  const chatRun = await createAgentInternalApi(db).startChatRun({
+    assetIds: input.assetIds,
+    clientMessageId: input.clientMessageId,
+    threadId: input.threadId,
+    ticket: input.ticket,
   })
-  return { connection, thread }
+  return chatRun.run
 }
 
 const seedFullBucket = async (
@@ -199,33 +211,47 @@ const seedFullBucket = async (
   })
 }
 
+const attestWebSearch = async (
+  db: FixtureDatabase,
+  input: { query: string; runId: string }
+) => {
+  await db
+    .update(schema.agentRuns)
+    .set({
+      webSearchQueryHash: await hashAgentToken(`web-query\u0000${input.query}`),
+    })
+    .where(eq(schema.agentRuns.id, input.runId))
+}
+
 describe("Agent billable resource reservations", () => {
   it("atomically permits only one parallel model run", async () => {
     const { db, now } = await createFixture()
-    const first = await createConnection(db, { now, organization: "a" })
-    const second = await createConnection(db, {
+    const first = await createTicket(db, { now, organization: "a" })
+    const second = await createTicket(db, {
       now,
       organization: "a",
       threadId: first.thread.id,
     })
 
     const results = await Promise.allSettled([
-      startAgentRun(db, {
-        grant: first.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_parallel_1",
         now,
+        threadId: first.thread.id,
+        ticket: first.ticket.ticket,
       }),
-      startAgentRun(db, {
-        grant: second.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_parallel_2",
         now,
+        threadId: second.thread.id,
+        ticket: second.ticket.ticket,
       }),
     ])
     const fulfilled = results.filter(
       (
         result
       ): result is PromiseFulfilledResult<
-        Awaited<ReturnType<typeof startAgentRun>>
+        Awaited<ReturnType<typeof startChatRun>>
       > => result.status === "fulfilled"
     )
     const rejected = results.filter(
@@ -247,53 +273,60 @@ describe("Agent billable resource reservations", () => {
 
   it("releases model concurrency after the active run expires", async () => {
     const { db, now } = await createFixture()
-    const first = await createConnection(db, { now, organization: "a" })
-    await startAgentRun(db, {
-      grant: first.connection.grant,
+    const first = await createTicket(db, { now, organization: "a" })
+    const firstRun = await startChatRun(db, {
       clientMessageId: "quota_before_expiry",
       now,
+      threadId: first.thread.id,
+      ticket: first.ticket.ticket,
     })
 
-    const afterExpiry = new Date(now.getTime() + 300_001)
-    const next = await createConnection(db, {
+    const afterExpiry = new Date()
+    await db
+      .update(schema.agentRuns)
+      .set({ expiresAt: new Date(afterExpiry.getTime() - 1) })
+      .where(eq(schema.agentRuns.id, firstRun.runId))
+    const next = await createTicket(db, {
       now: afterExpiry,
       organization: "a",
       threadId: first.thread.id,
     })
     await expect(
-      startAgentRun(db, {
-        grant: next.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_after_expiry",
         now: afterExpiry,
+        threadId: next.thread.id,
+        ticket: next.ticket.ticket,
       })
     ).resolves.toMatchObject({ attempt: 1 })
   })
 
   it("consumes model quota once for each same-run provider attempt", async () => {
     const { db, now } = await createFixture()
-    const first = await createConnection(db, { now, organization: "a" })
-    const run = await startAgentRun(db, {
-      grant: first.connection.grant,
+    const first = await createTicket(db, { now, organization: "a" })
+    const run = await startChatRun(db, {
       clientMessageId: "quota_retry",
       now,
+      threadId: first.thread.id,
+      ticket: first.ticket.ticket,
     })
-    await finishAgentRun(db, {
+    await createAgentInternalApi(db).finalizeRun({
       grant: run.grant,
       outcome: "failed",
-      now: new Date(now.getTime() + 1_000),
     })
 
-    const retriedAt = new Date(now.getTime() + 2_000)
-    const retry = await createConnection(db, {
+    const retriedAt = new Date()
+    const retry = await createTicket(db, {
       now: retriedAt,
       organization: "a",
       threadId: first.thread.id,
     })
     await expect(
-      startAgentRun(db, {
-        grant: retry.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_retry",
         now: retriedAt,
+        threadId: retry.thread.id,
+        ticket: retry.ticket.ticket,
       })
     ).resolves.toMatchObject({ attempt: 2, runId: run.runId })
 
@@ -314,17 +347,18 @@ describe("Agent billable resource reservations", () => {
       userId: "quota-user-a",
       ...userWindow,
     })
-    const connection = await createConnection(db, { now, organization: "a" })
+    const connection = await createTicket(db, { now, organization: "a" })
 
     await expect(
-      startAgentRun(db, {
-        grant: connection.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_user_limit",
         now,
+        threadId: connection.thread.id,
+        ticket: connection.ticket.ticket,
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      retryAfter: 2_700,
+      retryAfter: expect.any(Number),
     })
     const buckets = await db
       .select({
@@ -348,42 +382,47 @@ describe("Agent billable resource reservations", () => {
       userId: null,
       ...organizationWindow,
     })
-    const organizationA = await createConnection(db, {
+    const organizationA = await createTicket(db, {
       now,
       organization: "a",
     })
-    const organizationB = await createConnection(db, {
+    const organizationB = await createTicket(db, {
       now,
       organization: "b",
     })
 
     await expect(
-      startAgentRun(db, {
-        grant: organizationA.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_org_a_limited",
         now,
+        threadId: organizationA.thread.id,
+        ticket: organizationA.ticket.ticket,
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      retryAfter: 85_500,
+      retryAfter: expect.any(Number),
     })
     await expect(
-      startAgentRun(db, {
-        grant: organizationB.connection.grant,
+      startChatRun(db, {
         clientMessageId: "quota_org_b_allowed",
         now,
+        threadId: organizationB.thread.id,
+        ticket: organizationB.ticket.ticket,
       })
     ).resolves.toMatchObject({ attempt: 1 })
   })
 
   it("does not oversubscribe the final Web search slot under concurrency", async () => {
     const { db, now } = await createFixture()
-    const connection = await createConnection(db, { now, organization: "a" })
-    const run = await startAgentRun(db, {
-      grant: connection.connection.grant,
+    const connection = await createTicket(db, { now, organization: "a" })
+    const run = await startChatRun(db, {
       clientMessageId: "quota_web_parallel",
       now,
+      threadId: connection.thread.id,
+      ticket: connection.ticket.ticket,
     })
+    const query = "Cloudflare R2 current limits"
+    await attestWebSearch(db, { query, runId: run.runId })
     const userWindow = utcUsageWindow(now, AGENT_USAGE_HOUR_MS)
     const bucketId = "web-search-user-near-limit"
     await db.transaction(async (tx) => {
@@ -407,100 +446,119 @@ describe("Agent billable resource reservations", () => {
     })
 
     const results = await Promise.allSettled([
-      reserveAgentWebSearch(db, {
+      createAgentInternalApi(db).authorizeWebSearch({
         grant: run.grant,
         operationId: "web_search_parallel_1",
-        now,
+        query,
       }),
-      reserveAgentWebSearch(db, {
+      createAgentInternalApi(db).authorizeWebSearch({
         grant: run.grant,
         operationId: "web_search_parallel_2",
-        now,
+        query,
       }),
     ])
-    expect(results.filter(({ status }) => status === "fulfilled")).toHaveLength(
-      1
-    )
-    const rejected = results.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected"
-    )
-    expect(rejected?.reason).toMatchObject({
-      code: "rate_limited",
-      retryAfter: expect.any(Number),
-    })
     const bucket = await db
       .select({ count: schema.agentResourceUsageBuckets.count })
       .from(schema.agentResourceUsageBuckets)
       .where(eq(schema.agentResourceUsageBuckets.id, bucketId))
-    expect(bucket).toEqual([{ count: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT }])
+    expect({
+      bucket,
+      outcomes: results.map((result) =>
+        result.status === "fulfilled"
+          ? { status: result.status }
+          : {
+              code:
+                typeof result.reason === "object" && result.reason !== null
+                  ? Reflect.get(result.reason, "code")
+                  : undefined,
+              status: result.status,
+            }
+      ),
+    }).toEqual({
+      bucket: [{ count: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT }],
+      outcomes: expect.arrayContaining([
+        { status: "fulfilled" },
+        { code: "rate_limited", status: "rejected" },
+      ]),
+    })
   })
 
   it("reserves Web search idempotently, marks the run, and isolates tenant limits", async () => {
     const { db, now } = await createFixture()
-    const organizationA = await createConnection(db, {
+    const organizationA = await createTicket(db, {
       now,
       organization: "a",
     })
-    const organizationB = await createConnection(db, {
+    const organizationB = await createTicket(db, {
       now,
       organization: "b",
     })
-    const runA = await startAgentRun(db, {
-      grant: organizationA.connection.grant,
+    const runA = await startChatRun(db, {
       clientMessageId: "quota_web_a",
       now,
+      threadId: organizationA.thread.id,
+      ticket: organizationA.ticket.ticket,
     })
-    const runB = await startAgentRun(db, {
-      grant: organizationB.connection.grant,
+    const runB = await startChatRun(db, {
       clientMessageId: "quota_web_b",
       now,
+      threadId: organizationB.thread.id,
+      ticket: organizationB.ticket.ticket,
     })
+    const query = "Cloudflare R2 current limits"
+    await Promise.all([
+      attestWebSearch(db, { query, runId: runA.runId }),
+      attestWebSearch(db, { query, runId: runB.runId }),
+    ])
+    const internal = createAgentInternalApi(db)
 
     await expect(
-      reserveAgentWebSearch(db, {
+      internal.authorizeWebSearch({
         grant: runA.grant,
         operationId: "web_search_1",
-        now,
+        query,
       })
-    ).resolves.toEqual({ reserved: true, reused: false })
+    ).resolves.toEqual({ query, reserved: true, reused: false })
     await expect(
-      reserveAgentWebSearch(db, {
+      internal.authorizeWebSearch({
         grant: runA.grant,
         operationId: "web_search_1",
-        now,
+        query,
       })
-    ).resolves.toEqual({ reserved: true, reused: true })
+    ).resolves.toEqual({ query, reserved: true, reused: true })
     await Array.from(
       { length: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT - 1 },
       (_, index) => index + 2
     ).reduce<Promise<void>>(
       (previous, index) =>
         previous.then(() =>
-          reserveAgentWebSearch(db, {
-            grant: runA.grant,
-            operationId: `web_search_${index}`,
-            now,
-          }).then(() => undefined)
+          internal
+            .authorizeWebSearch({
+              grant: runA.grant,
+              operationId: `web_search_${index}`,
+              query,
+            })
+            .then(() => undefined)
         ),
       Promise.resolve()
     )
     await expect(
-      reserveAgentWebSearch(db, {
+      internal.authorizeWebSearch({
         grant: runA.grant,
         operationId: "web_search_over_limit",
-        now,
+        query,
       })
     ).rejects.toMatchObject({
       code: "rate_limited",
-      retryAfter: 2_700,
+      retryAfter: expect.any(Number),
     })
     await expect(
-      reserveAgentWebSearch(db, {
+      internal.authorizeWebSearch({
         grant: runB.grant,
         operationId: "web_search_1",
-        now,
+        query,
       })
-    ).resolves.toEqual({ reserved: true, reused: false })
+    ).resolves.toEqual({ query, reserved: true, reused: false })
 
     const buckets = await db
       .select({
@@ -531,8 +589,8 @@ describe("Agent billable resource reservations", () => {
       .from(schema.agentRuns)
     expect(markedRuns).toEqual(
       expect.arrayContaining([
-        { id: runA.runId, webSearchUsedAt: now },
-        { id: runB.runId, webSearchUsedAt: now },
+        { id: runA.runId, webSearchUsedAt: expect.any(Date) },
+        { id: runB.runId, webSearchUsedAt: expect.any(Date) },
       ])
     )
   })

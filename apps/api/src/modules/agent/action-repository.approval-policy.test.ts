@@ -20,6 +20,7 @@ describe("Agent Issue approval policies and full access", () => {
     const { app, db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-approval-fence",
+      webSearchQuery: "Cloudflare R2 current limits",
     })
     const policy = await app.handle(
       request(`/agent/threads/${actionRun.thread.id}/permission`, {
@@ -52,21 +53,31 @@ describe("Agent Issue approval policies and full access", () => {
     ).resolves.toMatchObject({ issue: { revision: 2 } })
 
     await expect(
-      actionRun.internal.reserveWebSearch({
+      actionRun.internal.authorizeWebSearch({
         grant: actionRun.run.grant,
         operationId: "tool-public-web-search",
+        query: "Cloudflare R2 current limits",
       })
-    ).resolves.toEqual({ reserved: true, reused: false })
+    ).resolves.toEqual({
+      query: "Cloudflare R2 current limits",
+      reserved: true,
+      reused: false,
+    })
     const [firstTaint] = await db
       .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
       .from(schema.agentRuns)
       .where(eq(schema.agentRuns.id, actionRun.run.runId))
     await expect(
-      actionRun.internal.reserveWebSearch({
+      actionRun.internal.authorizeWebSearch({
         grant: actionRun.run.grant,
         operationId: "tool-public-web-search-retry",
+        query: "Cloudflare R2 current limits",
       })
-    ).resolves.toEqual({ reserved: true, reused: false })
+    ).resolves.toEqual({
+      query: "Cloudflare R2 current limits",
+      reserved: true,
+      reused: false,
+    })
     const [retriedTaint] = await db
       .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
       .from(schema.agentRuns)
@@ -104,24 +115,24 @@ describe("Agent Issue approval policies and full access", () => {
       })
     ).resolves.toMatchObject({ mode: "full_access" })
 
-    await actionRun.internal.cancelRun({ grant: actionRun.run.grant })
+    await actionRun.internal.finalizeRun({
+      grant: actionRun.run.grant,
+      outcome: "canceled",
+    })
     const cleanTicket = await issueAgentConnectionTicket(db, {
       sessionId: "action-session-a",
       userId: "action-user-a",
       threadId: actionRun.thread.id,
     })
-    const cleanConnection = await actionRun.internal.consumeConnectionTicket({
+    const cleanChatRun = await actionRun.internal.startChatRun({
+      clientMessageId: "clean-run-after-web-search",
+      assetIds: [],
       ticket: cleanTicket.ticket,
       threadId: actionRun.thread.id,
     })
-    const cleanRun = await actionRun.internal.startRun({
-      grant: cleanConnection.grant,
-      clientMessageId: "clean-run-after-web-search",
-      assetIds: [],
-    })
     await expect(
       actionRun.internal.prepareUpdateIssue({
-        grant: cleanRun.grant,
+        grant: cleanChatRun.run.grant,
         toolCallId: "tool-clean-run-write",
         idempotencyKey: "prepare-clean-run-write",
         issue: {
@@ -167,6 +178,7 @@ describe("Agent Issue approval policies and full access", () => {
     const { db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-delete-fence",
+      webSearchQuery: "Cloudflare R2 current limits",
     })
     await putAgentApprovalPolicyForSession(db, {
       sessionId: "action-session-a",
@@ -174,9 +186,10 @@ describe("Agent Issue approval policies and full access", () => {
       threadId: actionRun.thread.id,
       mode: "full_access",
     })
-    await actionRun.internal.reserveWebSearch({
+    await actionRun.internal.authorizeWebSearch({
       grant: actionRun.run.grant,
       operationId: "tool-public-web-search-delete",
+      query: "Cloudflare R2 current limits",
     })
 
     await expect(
@@ -202,6 +215,7 @@ describe("Agent Issue approval policies and full access", () => {
     const { db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-create-fence",
+      webSearchQuery: "Cloudflare R2 current limits",
     })
     await putAgentApprovalPolicyForSession(db, {
       sessionId: "action-session-a",
@@ -209,9 +223,10 @@ describe("Agent Issue approval policies and full access", () => {
       threadId: actionRun.thread.id,
       mode: "full_access",
     })
-    await actionRun.internal.reserveWebSearch({
+    await actionRun.internal.authorizeWebSearch({
       grant: actionRun.run.grant,
       operationId: "tool-public-web-search-create",
+      query: "Cloudflare R2 current limits",
     })
 
     await expect(

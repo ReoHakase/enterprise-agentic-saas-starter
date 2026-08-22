@@ -21,7 +21,6 @@ describe("createRunFinalizer", () => {
         complete: () => Promise.reject(cause),
         fail,
         holdForApproval: vi.fn<() => void>(),
-        isHeldForApproval: () => false,
       },
     })
 

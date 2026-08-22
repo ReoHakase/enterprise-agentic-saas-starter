@@ -16,10 +16,7 @@ import { createAgentVisionBudget } from "../core/budget/vision"
 import { createReusableAgentAssetContext } from "../core/messages/chat-input"
 import { parseAgentEvalToolAllowlist } from "../core/policy/eval-tool-allowlist"
 import { readAgentFeatureSwitches } from "../core/policy/feature-flags"
-import {
-  isActiveOpaqueGrant,
-  toLiveConnectionGrant,
-} from "../core/policy/grant"
+import { isActiveOpaqueGrant } from "../core/policy/grant"
 import { normalizeAgentUsage } from "../core/usage/normalize"
 import type { ApprovedIssueActionExecutionRegistry } from "../workflows/approved-issue-action"
 import { suspendApprovedIssueAction } from "../workflows/approved-issue-action"
@@ -204,46 +201,34 @@ const handleChat = async (
   const contextBudget = createContextBudget(input)
   const api = dependencies.createControlPlane(environment.AGENT_INTERNAL_API)
 
-  let connectionGrant: string
-  let memoryResourceId: string
+  let chatRun
   try {
-    const connection = await api.consumeConnectionTicket({
-      ticket: input.ticket,
-      threadId: input.threadId,
-    })
-    const liveGrant = toLiveConnectionGrant(connection, input.threadId)
-    if (!liveGrant) return unavailable()
-    connectionGrant = liveGrant.grant
-    memoryResourceId = connection.memoryResourceId
-  } catch (cause) {
-    reportDevelopmentCauseChain(environment, "connection-ticket", cause)
-    dependencies.captureFailure("connection_failed")
-    return unavailable()
-  }
-
-  let run
-  try {
-    run = await api.startRun({
+    chatRun = await api.startChatRun({
       assetIds: input.assetIds,
       clientMessageId: input.clientMessageId,
       estimatedInputTokenCount: Math.min(
         contextBudget.estimated.total,
         contextBudget.contextWindowTokens - contextBudget.reservedOutputTokens
       ),
-      grant: connectionGrant,
+      ticket: input.ticket,
+      threadId: input.threadId,
       trigger: input.trigger,
     })
-    if (!isActiveOpaqueGrant(run.grant, run.expiresAt)) {
+    if (
+      chatRun.thread.id !== input.threadId ||
+      !isActiveOpaqueGrant(chatRun.run.grant, chatRun.run.expiresAt)
+    ) {
       dependencies.captureFailure("run_grant_invalid")
       return unavailable()
     }
   } catch (error) {
     const response = controlFailure(error, dependencies.toControlFailure)
     if (response) return response
-    reportDevelopmentCauseChain(environment, "run-start", error)
+    reportDevelopmentCauseChain(environment, "chat-run-start", error)
     dependencies.captureFailure("run_start_failed")
     return unavailable()
   }
+  const { memoryResourceId, run } = chatRun
 
   const settlement = createRunSettlement(api, run.grant, (cause) => {
     reportDevelopmentCauseChain(environment, "run-settlement", cause)
@@ -306,28 +291,19 @@ const handleChat = async (
     })
     const runStartedAt = Date.now()
     let setupFailure: AgentFailureCode = "model_failed"
-    let usageRecorded = false
-    const recordObservedUsage = async (event: {
+    let observedUsage: ReturnType<typeof normalizeAgentUsage> | undefined
+    const readObservedUsage = async (event: {
       steps: readonly { providerMetadata?: unknown }[]
       totalUsage: Parameters<typeof normalizeAgentUsage>[0]["usage"]
     }) => {
-      if (usageRecorded) return
-      try {
-        await api.recordUsage({
-          grant: run.grant,
-          ...normalizeAgentUsage({
-            usage: event.totalUsage,
-            stepProviderMetadata: stepProviderMetadata(event.steps),
-            imageInputCount: visionBudget.includedCount(),
-            durationMs: Date.now() - runStartedAt,
-            runEventId: `attempt_${run.attempt}`,
-          }),
-        })
-        usageRecorded = true
-      } catch (cause) {
-        reportDevelopmentCauseChain(environment, "usage-record", cause)
-        dependencies.captureFailure("usage_record_failed")
-      }
+      observedUsage ??= normalizeAgentUsage({
+        usage: event.totalUsage,
+        stepProviderMetadata: stepProviderMetadata(event.steps),
+        imageInputCount: visionBudget.includedCount(),
+        durationMs: Date.now() - runStartedAt,
+        runEventId: `attempt_${run.attempt}`,
+      })
+      return observedUsage
     }
     let outputFailureLabel = "product-output"
     const startOutput = async () => {
@@ -357,8 +333,7 @@ const handleChat = async (
             )
             finalizer.schedule(finalizer.outcomeFor("error"))
           },
-          onFinish: (event) =>
-            finalizer.finish(() => recordObservedUsage(event)),
+          onFinish: (event) => finalizer.finish(() => readObservedUsage(event)),
           onTitleGenerated: threadTitleLifecycle?.onTitleGenerated,
         })
       } catch (cause) {

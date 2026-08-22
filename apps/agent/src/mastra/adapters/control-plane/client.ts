@@ -2,8 +2,8 @@ import type { AgentInternalFetchBinding } from "@enterprise-agentic-saas/agent-c
 import {
   agentAccountContextSchema,
   agentActionExecutionResultSchema,
+  agentChatRunSchema,
   agentConnectionSchema,
-  agentGuardedWebSearchQuerySchema,
   agentIssueActionSchema,
   agentIssueDetailSchema,
   agentIssueLabelListSchema,
@@ -11,9 +11,9 @@ import {
   agentMemberListSchema,
   agentOrganizationContextSchema,
   agentRunGrantSchema,
+  agentRunLivenessSchema,
   agentRunResultSchema,
-  agentUsageRecordResultSchema,
-  agentWebSearchReservationSchema,
+  agentWebSearchAuthorizationSchema,
 } from "@enterprise-agentic-saas/agent-contracts"
 import * as v from "valibot"
 
@@ -212,19 +212,6 @@ const createIssueActionGateway = (binding: AgentInternalFetchBinding) => ({
       },
       agentIssueActionSchema
     ),
-  getIssueActionDecision: ({
-    actionId,
-    grant,
-  }: Parameters<AgentInternalGateway["getIssueActionDecision"]>[0]) =>
-    internalRequest(
-      binding,
-      {
-        grant,
-        method: "GET",
-        path: `/internal/agent/actions/${encodePath(actionId)}`,
-      },
-      agentIssueActionSchema
-    ),
   resumeApprovedAction: ({
     actionId,
     resumeTicket,
@@ -268,7 +255,7 @@ export const createAgentInternalGateway = (
       },
       agentConnectionSchema
     ),
-  startRun: ({ grant, ...body }) =>
+  startChatRun: (body) =>
     internalRequest(
       binding,
       {
@@ -278,66 +265,43 @@ export const createAgentInternalGateway = (
           estimatedInputTokenCount: body.estimatedInputTokenCount ?? 0,
           trigger: body.trigger ?? "user_message",
         },
-        grant,
         method: "POST",
-        path: "/internal/agent/runs",
+        path: "/internal/agent/runs/start",
       },
-      agentRunGrantSchema
+      agentChatRunSchema
     ),
-  reserveWebSearch: ({ grant, ...body }) =>
-    internalRequest(
-      binding,
-      {
-        body,
-        grant,
-        method: "POST",
-        path: "/internal/agent/runs/web-search/reserve",
-      },
-      agentWebSearchReservationSchema
-    ),
-  guardWebSearch: ({ grant, ...body }) =>
-    internalRequest(
-      binding,
-      {
-        body,
-        grant,
-        method: "POST",
-        path: "/internal/agent/runs/web-search/guard",
-      },
-      agentGuardedWebSearchQuerySchema
-    ),
-  cancelRun: ({ grant }) =>
+  assertRunLive: ({ grant }) =>
     internalRequest(
       binding,
       {
         body: {},
         grant,
         method: "POST",
-        path: "/internal/agent/runs/cancel",
+        path: "/internal/agent/runs/live",
       },
-      agentRunResultSchema
+      agentRunLivenessSchema
     ),
-  finishRun: ({ grant, ...body }) =>
+  authorizeWebSearch: ({ grant, ...body }) =>
     internalRequest(
       binding,
       {
         body,
         grant,
         method: "POST",
-        path: "/internal/agent/runs/finish",
+        path: "/internal/agent/runs/web-search/authorize",
       },
-      agentRunResultSchema
+      agentWebSearchAuthorizationSchema
     ),
-  recordUsage: ({ grant, ...body }) =>
+  finalizeRun: ({ grant, ...body }) =>
     internalRequest(
       binding,
       {
         body,
         grant,
         method: "POST",
-        path: "/internal/agent/runs/usage",
+        path: "/internal/agent/runs/finalize",
       },
-      agentUsageRecordResultSchema
+      agentRunResultSchema
     ),
   readAccountContext: ({ grant }) =>
     internalRequest(

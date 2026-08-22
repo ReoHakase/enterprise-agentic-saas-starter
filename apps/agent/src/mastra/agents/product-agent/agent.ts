@@ -66,7 +66,7 @@ export const createProductAgent = ({
         const execution = resolveExecution(requestContext)
         return withRunLiveness(resolved, async () => {
           try {
-            await execution.api.readActiveOrganization({
+            await execution.api.assertRunLive({
               grant: execution.runGrant,
             })
           } catch (cause) {

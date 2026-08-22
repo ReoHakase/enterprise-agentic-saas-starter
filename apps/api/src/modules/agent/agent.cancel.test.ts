@@ -24,14 +24,12 @@ describe("public Agent run cancellation", () => {
       userId: "agent-user-a",
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "request-signal-cancel",
       threadId: thread.id,
       ticket: ticket.ticket,
     })
-    const run = await internal.startRun({
-      clientMessageId: "request-signal-cancel",
-      grant: connection.grant,
-    })
+    const run = chatRun.run
     const action = await internal.prepareCreateIssue({
       grant: run.grant,
       toolCallId: "tool-request-signal-cancel",
@@ -83,16 +81,13 @@ describe("public Agent run cancellation", () => {
       threadId: thread.id,
       userId: "agent-user-a",
     })
-    const nextConnection = await internal.consumeConnectionTicket({
-      threadId: thread.id,
-      ticket: nextTicket.ticket,
-    })
     await expect(
-      internal.startRun({
+      internal.startChatRun({
         clientMessageId: "after-request-signal-cancel",
-        grant: nextConnection.grant,
+        threadId: thread.id,
+        ticket: nextTicket.ticket,
       })
-    ).resolves.toMatchObject({ attempt: 1 })
+    ).resolves.toMatchObject({ run: { attempt: 1 } })
   })
 
   it("converges a real finish-versus-cancel race to one terminal status and one usage event", async () => {
@@ -108,17 +103,34 @@ describe("public Agent run cancellation", () => {
       userId: "agent-user-a",
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "finish-cancel-race",
       threadId: thread.id,
       ticket: ticket.ticket,
     })
-    const run = await internal.startRun({
-      clientMessageId: "finish-cancel-race",
-      grant: connection.grant,
-    })
+    const run = chatRun.run
+    const usage = {
+      provider: "openrouter" as const,
+      model: "test/model",
+      inputTokenCount: 10,
+      inputNoCacheTokenCount: 10,
+      cacheReadTokenCount: 0,
+      cacheWriteTokenCount: 0,
+      outputTokenCount: 5,
+      textOutputTokenCount: 5,
+      reasoningTokenCount: 0,
+      totalTokenCount: 15,
+      imageInputCount: 0,
+      durationMs: 100,
+      runEventId: "race_attempt_1",
+    }
     const results = await Promise.allSettled([
-      internal.finishRun({ grant: run.grant, outcome: "completed" }),
-      internal.cancelRun({ grant: run.grant }),
+      internal.finalizeRun({
+        grant: run.grant,
+        outcome: "completed",
+        usage,
+      }),
+      internal.finalizeRun({ grant: run.grant, outcome: "canceled" }),
     ])
 
     expect(
@@ -143,28 +155,11 @@ describe("public Agent run cancellation", () => {
       )
     expect(liveGrants).toEqual([])
 
-    const usage = {
-      grant: run.grant,
-      provider: "openrouter" as const,
-      model: "test/model",
-      inputTokenCount: 10,
-      inputNoCacheTokenCount: 10,
-      cacheReadTokenCount: 0,
-      cacheWriteTokenCount: 0,
-      outputTokenCount: 5,
-      textOutputTokenCount: 5,
-      reasoningTokenCount: 0,
-      totalTokenCount: 15,
-      imageInputCount: 0,
-      durationMs: 100,
-      runEventId: "race_attempt_1",
-    }
-    await expect(internal.recordUsage(usage)).resolves.toMatchObject({
-      recorded: true,
-    })
-    await expect(internal.recordUsage(usage)).resolves.toMatchObject({
-      recorded: false,
-    })
+    const usageEvents = await db
+      .select({ id: schema.agentUsageEvents.id })
+      .from(schema.agentUsageEvents)
+      .where(eq(schema.agentUsageEvents.runId, run.runId))
+    expect(usageEvents).toHaveLength(1)
   })
 
   it("never downgrades completed or failed runs and replays canceled runs", async () => {
@@ -181,18 +176,19 @@ describe("public Agent run cancellation", () => {
         threadId: thread.id,
         userId: "agent-user-a",
       })
-      const connection = await internal.consumeConnectionTicket({
+      const chatRun = await internal.startChatRun({
+        clientMessageId,
         threadId: thread.id,
         ticket: ticket.ticket,
       })
-      return internal.startRun({ clientMessageId, grant: connection.grant })
+      return chatRun.run
     }
 
     for (const outcome of ["completed", "failed"] as const) {
       // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
       const run = await start(`terminal-${outcome}`)
       // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
-      await internal.finishRun({ grant: run.grant, outcome })
+      await internal.finalizeRun({ grant: run.grant, outcome })
       // oxlint-disable-next-line no-await-in-loop -- the public replay must observe the committed terminal status.
       const response = await app.handle(
         request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
@@ -206,7 +202,7 @@ describe("public Agent run cancellation", () => {
       })
       // oxlint-disable-next-line no-await-in-loop -- a different internal terminal transition must conflict.
       await expect(
-        internal.cancelRun({ grant: run.grant })
+        internal.finalizeRun({ grant: run.grant, outcome: "canceled" })
       ).rejects.toMatchObject({ code: "conflict" })
       // oxlint-disable-next-line no-await-in-loop -- verify the cancel request did not downgrade the row.
       const [stored] = await db
@@ -218,13 +214,13 @@ describe("public Agent run cancellation", () => {
 
     const canceled = await start("terminal-canceled")
     await expect(
-      internal.cancelRun({ grant: canceled.grant })
+      internal.finalizeRun({ grant: canceled.grant, outcome: "canceled" })
     ).resolves.toEqual({
       runId: canceled.runId,
       status: "canceled",
     })
     await expect(
-      internal.cancelRun({ grant: canceled.grant })
+      internal.finalizeRun({ grant: canceled.grant, outcome: "canceled" })
     ).resolves.toEqual({
       runId: canceled.runId,
       status: "canceled",
@@ -253,14 +249,12 @@ describe("public Agent run cancellation", () => {
       userId: "agent-user-a",
     })
     const internal = createAgentInternalApi(db)
-    const connection = await internal.consumeConnectionTicket({
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "cancel_message_1",
       threadId: thread.id,
       ticket: ticket.ticket,
     })
-    const run = await internal.startRun({
-      clientMessageId: "cancel_message_1",
-      grant: connection.grant,
-    })
+    const run = chatRun.run
     const path = `/agent/threads/${thread.id}/runs/${run.runId}/cancel`
 
     const denied = await app.handle(
@@ -299,28 +293,6 @@ describe("public Agent run cancellation", () => {
         )
       )
     expect(liveGrants).toEqual([])
-    const usageInput = {
-      grant: run.grant,
-      provider: "openrouter" as const,
-      model: "test/model",
-      inputTokenCount: 10,
-      inputNoCacheTokenCount: 10,
-      cacheReadTokenCount: 0,
-      cacheWriteTokenCount: 0,
-      outputTokenCount: 5,
-      textOutputTokenCount: 5,
-      reasoningTokenCount: 0,
-      totalTokenCount: 15,
-      imageInputCount: 0,
-      durationMs: 100,
-      runEventId: "attempt_1",
-    }
-    await expect(internal.recordUsage(usageInput)).resolves.toMatchObject({
-      recorded: true,
-    })
-    await expect(internal.recordUsage(usageInput)).resolves.toMatchObject({
-      recorded: false,
-    })
     const modelBuckets = await db
       .select({ count: schema.agentResourceUsageBuckets.count })
       .from(schema.agentResourceUsageBuckets)
@@ -332,15 +304,12 @@ describe("public Agent run cancellation", () => {
       threadId: thread.id,
       userId: "agent-user-a",
     })
-    const nextConnection = await internal.consumeConnectionTicket({
-      threadId: thread.id,
-      ticket: nextTicket.ticket,
-    })
     await expect(
-      internal.startRun({
+      internal.startChatRun({
         clientMessageId: "cancel_message_2",
-        grant: nextConnection.grant,
+        threadId: thread.id,
+        ticket: nextTicket.ticket,
       })
-    ).resolves.toMatchObject({ attempt: 1 })
+    ).resolves.toMatchObject({ run: { attempt: 1 } })
   })
 })

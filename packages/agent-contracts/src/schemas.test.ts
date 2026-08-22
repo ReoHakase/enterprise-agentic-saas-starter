@@ -9,18 +9,19 @@ import {
   agentApprovalPolicySchema,
   agentGetIssueInputSchema,
   agentGetIssueToolOutputSchema,
-  agentGuardedWebSearchQuerySchema,
   agentAttachmentMutationReceiptSchema,
+  agentChatRunSchema,
   agentIssueActionSchema,
   agentIssueDetailSchema,
   agentIssueSchema,
   agentMemberListSchema,
   agentResumeTicketSchema,
   agentRunGrantSchema,
+  agentRunLivenessSchema,
   agentRunResultSchema,
   agentSearchIssuesInputSchema,
-  agentUsageRecordResultSchema,
   agentUpdateIssueActionInputSchema,
+  agentWebSearchAuthorizationSchema,
   getIssueToolInputSchema,
 } from "./schemas"
 import {
@@ -461,14 +462,25 @@ describe("agent contract response schemas", () => {
 
     expect(v.parse(agentConnectionSchema, connection)).toEqual(connection)
     expect(v.parse(agentRunGrantSchema, run)).toEqual(run)
-    expect(v.parse(agentIssueActionSchema, action)).toEqual(action)
     expect(
-      v.parse(agentUsageRecordResultSchema, {
-        recorded: true,
-        calculatedCostMicros: 0,
-        pricingVersion: "unpriced",
+      v.parse(agentChatRunSchema, {
+        memoryResourceId: connection.memoryResourceId,
+        organization: connection.organization,
+        run,
+        thread: connection.thread,
+        user: connection.user,
       })
-    ).toBeDefined()
+    ).toEqual({
+      memoryResourceId: connection.memoryResourceId,
+      organization: connection.organization,
+      run,
+      thread: connection.thread,
+      user: connection.user,
+    })
+    expect(v.parse(agentRunLivenessSchema, { live: true })).toEqual({
+      live: true,
+    })
+    expect(v.parse(agentIssueActionSchema, action)).toEqual(action)
     expect(
       v.parse(agentIssueDetailSchema, {
         ...issue,
@@ -478,6 +490,17 @@ describe("agent contract response schemas", () => {
     for (const [schema, value] of [
       [agentConnectionSchema, connection],
       [agentRunGrantSchema, run],
+      [
+        agentChatRunSchema,
+        {
+          memoryResourceId: connection.memoryResourceId,
+          organization: connection.organization,
+          run,
+          thread: connection.thread,
+          user: connection.user,
+        },
+      ],
+      [agentRunLivenessSchema, { live: true }],
       [agentIssueActionSchema, action],
     ] as const) {
       expect(
@@ -631,8 +654,36 @@ describe("agent contract response schemas", () => {
     ["trimmed maximum", `  ${"x".repeat(200)}  `, "x".repeat(200)],
     ["trimmed max+1", `  ${"x".repeat(201)}  `, null],
   ])("validates guarded Web search query at %s", (_label, query, expected) => {
-    const result = v.safeParse(agentGuardedWebSearchQuerySchema, { query })
+    const result = v.safeParse(agentWebSearchAuthorizationSchema, {
+      query,
+      reserved: true,
+      reused: false,
+    })
     expect(result.success).toBe(expected !== null)
     expect(result.success ? result.output.query : null).toBe(expected)
+  })
+
+  it("strictly validates authorized Web search responses", () => {
+    const authorization = {
+      query: "release notes",
+      reserved: true,
+      reused: false,
+    } as const
+
+    expect(v.parse(agentWebSearchAuthorizationSchema, authorization)).toEqual(
+      authorization
+    )
+    expect(
+      v.safeParse(agentWebSearchAuthorizationSchema, {
+        ...authorization,
+        organizationId: "org_1",
+      }).success
+    ).toBe(false)
+    expect(
+      v.safeParse(agentWebSearchAuthorizationSchema, {
+        ...authorization,
+        reserved: false,
+      }).success
+    ).toBe(false)
   })
 })

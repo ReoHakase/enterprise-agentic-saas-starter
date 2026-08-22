@@ -155,10 +155,10 @@ describe("Agent Web search prompt-injection boundary", () => {
         expect(
           await fetch(`${host.url}/__g4/metrics`).then((item) => item.json())
         ).toMatchObject({
-          cancelRunCalls: 0,
-          finishRunCalls: 0,
+          finalizeRunCalls: 1,
           prepareCreateIssueCalls: 1,
           releaseCalls: 1,
+          startChatRunCalls: 1,
         })
       })
 

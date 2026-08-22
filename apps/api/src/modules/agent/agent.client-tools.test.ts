@@ -218,19 +218,17 @@ describe("Agent client tool continuation", () => {
     ) {
       throw new Error("Missing private continuation capability")
     }
-    const continuationConnection = await internal.consumeConnectionTicket({
+    await internal.startChatRun({
+      clientMessageId: syntheticMessageId,
       ticket: privateTicket,
       threadId: thread.id,
-    })
-    await internal.startRun({
-      grant: continuationConnection.grant,
-      clientMessageId: syntheticMessageId,
       trigger: "client_tool_result",
     })
     await expect(
-      internal.startRun({
-        grant: continuationConnection.grant,
+      internal.startChatRun({
         clientMessageId: syntheticMessageId,
+        ticket: privateTicket,
+        threadId: thread.id,
         trigger: "client_tool_result",
       })
     ).rejects.toMatchObject({ code: "unauthorized" })
@@ -250,14 +248,11 @@ describe("Agent client tool continuation", () => {
     if (typeof changedTicket !== "string") {
       throw new Error("Missing changed continuation capability")
     }
-    const changedConnection = await internal.consumeConnectionTicket({
-      ticket: changedTicket,
-      threadId: thread.id,
-    })
     await expect(
-      internal.startRun({
-        grant: changedConnection.grant,
+      internal.startChatRun({
         clientMessageId: syntheticMessageId,
+        ticket: changedTicket,
+        threadId: thread.id,
         trigger: "client_tool_result",
       })
     ).rejects.toMatchObject({ code: "conflict" })

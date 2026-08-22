@@ -1,7 +1,4 @@
-import type {
-  AgentUsageRecordInput,
-  AgentUsageRecordResult,
-} from "@enterprise-agentic-saas/agent-contracts"
+import type { AgentUsageRecordInput } from "@enterprise-agentic-saas/agent-contracts"
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
   agentModelPrices,
@@ -21,6 +18,12 @@ import {
 
 const pricedMicros = (tokens: number, microsPerMillion: number) =>
   Math.ceil((tokens * microsPerMillion) / 1_000_000)
+
+type AgentUsageRecordResult = {
+  calculatedCostMicros: number
+  pricingVersion: string
+  recorded: boolean
+}
 
 export const recordAgentUsage = async (
   db: Db,

@@ -10,11 +10,11 @@ import {
   assetRequest,
   createFixture,
   createRuntime,
-  openConnection,
   pngBytes,
   pngFile,
   seedReadyAsset,
   seedReadyIssueAttachment,
+  startAssetChatRun,
   uploadRequest,
 } from "./agent-assets.test-support"
 import { AGENT_ASSET_MODEL_MAX_BYTES } from "./constants"
@@ -40,12 +40,12 @@ describe("Agent asset Issue promotion and deletion", () => {
       updatedAt: now,
     })
     const internal = await createAgentInternalApi(db)
-    const firstConnection = await openConnection(db)
-    const firstRun = await internal.startRun({
-      grant: firstConnection.grant,
-      clientMessageId: "cancel-reusable-first",
-      assetIds: [assetId],
-    })
+    const firstRun = (
+      await startAssetChatRun(db, {
+        clientMessageId: "cancel-reusable-first",
+        assetIds: [assetId],
+      })
+    ).run
     const firstAction = await internal.prepareUpdateIssue({
       grant: firstRun.grant,
       toolCallId: "tool-cancel-reusable-first",
@@ -58,19 +58,22 @@ describe("Agent asset Issue promotion and deletion", () => {
       },
     })
 
-    await internal.cancelRun({ grant: firstRun.grant })
+    await internal.finalizeRun({
+      grant: firstRun.grant,
+      outcome: "canceled",
+    })
     const [releasedLease] = await db
       .select({ releasedAt: schema.agentActionAssets.releasedAt })
       .from(schema.agentActionAssets)
       .where(eq(schema.agentActionAssets.actionId, firstAction.id))
     expect(releasedLease?.releasedAt).toBeInstanceOf(Date)
 
-    const secondConnection = await openConnection(db)
-    const secondRun = await internal.startRun({
-      grant: secondConnection.grant,
-      clientMessageId: "cancel-reusable-second",
-      assetIds: [assetId],
-    })
+    const secondRun = (
+      await startAssetChatRun(db, {
+        clientMessageId: "cancel-reusable-second",
+        assetIds: [assetId],
+      })
+    ).run
     await expect(
       internal.prepareUpdateIssue({
         grant: secondRun.grant,
@@ -91,13 +94,11 @@ describe("Agent asset Issue promotion and deletion", () => {
 
   it("fails closed when an update action reaches succeeded without an exact attachment operation", async () => {
     const { db } = await createFixture()
-    const connection = await openConnection(db)
-    const run = await (
-      await createAgentInternalApi(db)
-    ).startRun({
-      grant: connection.grant,
-      clientMessageId: "malformed-update-operation",
-    })
+    const run = (
+      await startAssetChatRun(db, {
+        clientMessageId: "malformed-update-operation",
+      })
+    ).run
     const now = new Date()
     const issueId = "malformed-update-issue"
     await db.insert(schema.issues).values({
@@ -255,12 +256,10 @@ describe("Agent asset private image and file lifecycle", () => {
       organizationId: "asset-org-b",
     })
 
-    const connection = await openConnection(db)
     const internal = await createAgentInternalApi(db)
-    const run = await internal.startRun({
-      grant: connection.grant,
-      clientMessageId: "issue-image-run",
-    })
+    const run = (
+      await startAssetChatRun(db, { clientMessageId: "issue-image-run" })
+    ).run
     const modelImage = await internal.getIssueAttachmentImageForModel({
       fileId: "asset-issue-image",
       grant: run.grant,
@@ -374,14 +373,12 @@ describe("Agent asset private image and file lifecycle", () => {
       temporaryBytes: object.sizeBytes,
       updatedAt: new Date(),
     })
-    const connection = await openConnection(db)
-    const run = await (
-      await createAgentInternalApi(db)
-    ).startRun({
-      grant: connection.grant,
-      clientMessageId: "promotion-audit-run",
-      assetIds: [assetId],
-    })
+    const run = (
+      await startAssetChatRun(db, {
+        clientMessageId: "promotion-audit-run",
+        assetIds: [assetId],
+      })
+    ).run
     const now = new Date()
     const actionId = "promotion-audit-action"
     const issueId = "promotion-audit-issue"
@@ -552,14 +549,12 @@ describe("Agent asset private image and file lifecycle", () => {
     const [object] = await db.select().from(schema.storageObjects)
     expect(object?.objectKey).toBeTruthy()
 
-    const connection = await openConnection(db)
-    const run = await (
-      await createAgentInternalApi(db)
-    ).startRun({
-      grant: connection.grant,
-      clientMessageId: "lease-run",
-      assetIds: [assetId],
-    })
+    const run = (
+      await startAssetChatRun(db, {
+        clientMessageId: "lease-run",
+        assetIds: [assetId],
+      })
+    ).run
     const actionCreatedAt = new Date()
     const actionExpiresAt = new Date(actionCreatedAt.getTime() + 10 * 60_000)
     await db.insert(schema.agentActions).values({
