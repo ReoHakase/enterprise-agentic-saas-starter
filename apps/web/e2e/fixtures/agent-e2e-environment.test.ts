@@ -11,15 +11,15 @@ import {
   parseAgentE2ERunId,
   removeAgentE2EArtifacts,
   removeAgentE2EStackArtifacts,
-} from "./e2e/fixtures/agent-e2e-environment"
-import { removeFullE2EArtifacts } from "./e2e/fixtures/full-e2e-cleanup"
+} from "./agent-e2e-environment"
+import { removeFullE2EArtifacts } from "./full-e2e-cleanup"
 import {
   createFullE2EPlaywrightEnvironment,
   runFullE2ECommand,
   selectFullE2EPlaywrightArguments,
-} from "./e2e/fixtures/run-full-e2e"
+} from "./run-full-e2e"
 
-const webWorkspace = import.meta.dirname
+const webWorkspace = resolve(import.meta.dirname, "../..")
 
 describe("Agent E2E environment", () => {
   it("derives an isolated loopback topology from the run identifier", () => {
@@ -242,6 +242,7 @@ describe("Agent E2E environment", () => {
       PAID_E2E_APPROVED: "1",
       AGENT_E2E_OBSERVABILITY: "1",
       AGENT_E2E_RUN_ID: "4321",
+      WEB_PLAYWRIGHT_PROFILE: "full",
     })
   })
 

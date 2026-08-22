@@ -90,7 +90,6 @@ apps/web/
     instrumentation-client.ts
 
   e2e/
-  test/
 ```
 
 上のfileは全て必須ではありません。`model.ts`、`schema.ts`、`api.ts`、`queries.ts`、`hooks/`、

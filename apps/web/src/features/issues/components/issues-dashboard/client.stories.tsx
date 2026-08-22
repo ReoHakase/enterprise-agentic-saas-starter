@@ -5,7 +5,7 @@ import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 import { AgentFormRegistryProvider } from "@/features/agent"
 
-import { createDeferred } from "../../../../../test-support/storybook/deferred"
+import { createDeferred } from "../../../../test-support/storybook/deferred"
 import type { IssueListItem } from "../../schema"
 import {
   fictionalIssue,
@@ -475,6 +475,14 @@ export const UpdateFailure = meta.story({
       await waitFor(() =>
         expect(getActions()).toHaveAttribute("aria-busy", "false")
       )
+      await waitFor(() =>
+        expect(
+          body.queryByRole("menu", {
+            name: `Actions for ${issueTitle}`,
+          })
+        ).not.toBeInTheDocument()
+      )
+      await waitFor(() => expect(getActions()).toHaveFocus())
     })
   },
 })

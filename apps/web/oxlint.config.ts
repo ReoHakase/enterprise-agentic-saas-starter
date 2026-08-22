@@ -162,7 +162,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["e2e/**/*.ts", "test/app/**/*.spec.ts"],
+      files: ["e2e/**/*.ts"],
       rules: {
         "playwright/missing-playwright-await": "error",
         "playwright/no-element-handle": "error",

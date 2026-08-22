@@ -1,3 +1,4 @@
+import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -271,18 +272,23 @@ const coverageForSelectedProject = () => {
   return { enabled: false as const, provider: "v8" as const }
 }
 
-const webBrowserAliases = {
-  "next/link": path.join(webRoot, "test-support/storybook/next-link.tsx"),
-  "next/navigation": path.join(
+const webRequire = createRequire(path.join(webRoot, "package.json"))
+const webStorybookAliases = {
+  "next-themes": path.join(
     webRoot,
-    "test-support/storybook/next-navigation.ts"
+    "src/test-support/storybook/next-themes.tsx"
   ),
-  "next-themes": path.join(webRoot, "test-support/storybook/next-themes.tsx"),
   "nuqs/adapters/next/app": path.join(
     webRoot,
-    "test-support/storybook/nuqs-next-app.ts"
+    "src/test-support/storybook/nuqs-next-app.ts"
   ),
-  "server-only": path.join(webRoot, "test-support/storybook/server-only.ts"),
+}
+const webBrowserAliases = {
+  ...webStorybookAliases,
+  "next/link": webRequire.resolve("@storybook/nextjs-vite/link.mock"),
+  "next/navigation": webRequire.resolve(
+    "@storybook/nextjs-vite/navigation.mock"
+  ),
 }
 const uiOptimizeDeps = [
   "@base-ui/react/alert-dialog",
@@ -321,7 +327,7 @@ const storybookProject = ({
         resolve: {
           alias: {
             "@": path.join(webRoot, "src"),
-            ...webBrowserAliases,
+            ...webStorybookAliases,
           },
         },
       }
@@ -379,6 +385,12 @@ export default defineConfig({
       {
         root: webRoot,
         plugins: [react()],
+        optimizeDeps: {
+          include: [
+            "@storybook/nextjs-vite/link.mock",
+            "@storybook/nextjs-vite/navigation.mock",
+          ],
+        },
         define: { "process.env": "{}" },
         resolve: {
           alias: {
@@ -390,7 +402,6 @@ export default defineConfig({
           name: "web-browser",
           include: [
             "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
-            "testing/**/*.browser.test.{ts,tsx}",
           ],
           setupFiles: [path.join(webRoot, "vitest.browser.setup.ts")],
           browser: {

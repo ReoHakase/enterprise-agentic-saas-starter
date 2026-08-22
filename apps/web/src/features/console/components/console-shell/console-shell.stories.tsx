@@ -7,7 +7,7 @@ import { Providers } from "@/components/providers/providers"
 import { fictionalMe } from "@/features/account/test-support/fixtures"
 import { useRegisterAgentForm } from "@/features/agent"
 
-import { createDeferred } from "../../../../../test-support/storybook/deferred"
+import { createDeferred } from "../../../../test-support/storybook/deferred"
 import { ConsoleShell } from "./console-shell"
 
 const deviceAccountsResponse = [

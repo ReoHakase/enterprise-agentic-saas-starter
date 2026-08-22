@@ -1,6 +1,6 @@
 import { canonicalizePublicHttpUrl } from "@enterprise-agentic-saas/agent-contracts"
 
-import { redactDevelopmentErrorText } from "../src/lib/development-error"
+import { redactDevelopmentErrorText } from "../../src/lib/development-error"
 
 const MAX_HISTORY_VALUES = 20_000
 
