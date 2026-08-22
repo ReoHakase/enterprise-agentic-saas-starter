@@ -1,14 +1,15 @@
-import {
-  defineConfig,
-  devices,
-  type PlaywrightTestConfig,
-} from "@playwright/test"
+import { type PlaywrightTestConfig } from "@playwright/test"
 
 import {
   createAgentE2EEnvironment,
   parseAgentE2ERunId,
-} from "./e2e/fixtures/agent-e2e-environment"
-import { createOAuthDatabasePath } from "./e2e/fixtures/oauth-database"
+} from "./agent-e2e-environment"
+import { createOAuthDatabasePath } from "./oauth-database"
+import {
+  createAgentStackEnvironment,
+  createInheritedPlaywrightEnvironment,
+  desktopChromium,
+} from "./playwright-profile-environment"
 
 type DeterministicE2EProfile = "all" | "agent" | "auth"
 
@@ -24,65 +25,20 @@ const parseDeterministicE2EProfile = (
   )
 }
 
-const deterministicE2EProfile = parseDeterministicE2EProfile(
-  process.env.DETERMINISTIC_E2E_PROFILE
-)
-const reportDirectory =
-  deterministicE2EProfile === "all"
-    ? "deterministic"
-    : `deterministic-${deterministicE2EProfile}`
-const runId = parseAgentE2ERunId(process.env.AGENT_E2E_RUN_ID ?? process.pid)
-process.env.AGENT_E2E_RUN_ID = String(runId)
-delete process.env.OPENROUTER_API_KEY
-
-const inheritedEnvironment = Object.fromEntries(
-  [
-    "PATH",
-    "HOME",
-    "TMPDIR",
-    "USER",
-    "SHELL",
-    "LANG",
-    "LC_ALL",
-    "CI",
-    "TERM",
-  ].flatMap((name) => {
-    const value = process.env[name]
-    return value === undefined ? [] : [[name, value]]
-  })
-)
-
-const createAgentProfile = () => {
+const createAgentProfile = (runId: number) => {
   const environment = createAgentE2EEnvironment(runId)
-  const callbackUrl = `${environment.apiOrigin}/auth/oauth2/callback/github`
-  const stackEnvironment = {
-    ...inheritedEnvironment,
-    AGENT_E2E_OBSERVABILITY:
-      process.env.AGENT_E2E_OBSERVABILITY === "1" ? "1" : "0",
-    NODE_ENV: "development",
-    APP_NAME: "Enterprise Agentic SaaS Deterministic E2E",
-    APP_BASE_URL: environment.webOrigin,
-    API_PUBLIC_URL: environment.apiOrigin,
-    BETTER_AUTH_URL: environment.apiOrigin,
-    AUTH_COOKIE_DOMAIN: environment.cookieDomain,
-    TRUSTED_ORIGINS: environment.webOrigin,
-    CORS_ORIGIN: environment.webOrigin,
-    GITHUB_OAUTH_EMULATOR_URL: `${environment.githubOrigin}/emulate/github`,
-    GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
-    GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
-    GITHUB_OAUTH_CALLBACK_URL: callbackUrl,
-    NEXT_TELEMETRY_DISABLED: "1",
-    NEXT_PUBLIC_BROWSER_TEST: "true",
-  }
+  const stackEnvironment = createAgentStackEnvironment({
+    appName: "Enterprise Agentic SaaS Deterministic E2E",
+    environment,
+  })
   const projects = [
     {
       name: "e1-scripted-agent-auth-setup",
       testMatch: "agent-auth.setup.ts",
       workers: 1,
       use: {
-        ...devices["Desktop Chrome"],
+        ...desktopChromium,
         baseURL: environment.webOrigin,
-        viewport: { width: 1280, height: 720 },
         video: "off",
       },
     },
@@ -92,11 +48,10 @@ const createAgentProfile = () => {
       testMatch: "mcp-oauth.spec.ts",
       workers: 1,
       use: {
-        ...devices["Desktop Chrome"],
+        ...desktopChromium,
         baseURL: environment.webOrigin,
         screenshot: "only-on-failure",
         trace: "off",
-        viewport: { width: 1280, height: 720 },
         video: "off",
       },
     },
@@ -106,9 +61,8 @@ const createAgentProfile = () => {
       testMatch: "scripted-agent-*.spec.ts",
       testIgnore: "scripted-agent-cancel.spec.ts",
       use: {
-        ...devices["Desktop Chrome"],
+        ...desktopChromium,
         baseURL: environment.webOrigin,
-        viewport: { width: 1280, height: 720 },
         video: "off",
       },
     },
@@ -118,9 +72,8 @@ const createAgentProfile = () => {
       testMatch: "scripted-agent-cancel.spec.ts",
       workers: 1,
       use: {
-        ...devices["Desktop Chrome"],
+        ...desktopChromium,
         baseURL: environment.webOrigin,
-        viewport: { width: 1280, height: 720 },
         video: "off",
       },
     },
@@ -186,7 +139,7 @@ const createAuthProfile = () => {
   const databasePath = createOAuthDatabasePath(process.pid)
   const callbackUrl = `${apiOrigin}/auth/oauth2/callback/github`
   const stackEnvironment = {
-    ...inheritedEnvironment,
+    ...createInheritedPlaywrightEnvironment(),
     NODE_ENV: "development",
     APP_NAME: "Enterprise Agentic SaaS Deterministic OAuth E2E",
     APP_BASE_URL: webOrigin,
@@ -218,9 +171,8 @@ const createAuthProfile = () => {
       testMatch: "github-oauth.spec.ts",
       workers: 1,
       use: {
-        ...devices["Desktop Chrome"],
+        ...desktopChromium,
         baseURL: webOrigin,
-        viewport: { width: 1280, height: 720 },
         video: "on",
       },
     },
@@ -270,46 +222,62 @@ const createAuthProfile = () => {
   }
 }
 
-const agentProfile =
-  deterministicE2EProfile === "auth" ? undefined : createAgentProfile()
-const authProfile =
-  deterministicE2EProfile === "agent" ? undefined : createAuthProfile()
+export const createDeterministicPlaywrightProfile =
+  (): PlaywrightTestConfig => {
+    const deterministicE2EProfile = parseDeterministicE2EProfile(
+      process.env.DETERMINISTIC_E2E_PROFILE
+    )
+    const reportDirectory =
+      deterministicE2EProfile === "all"
+        ? "deterministic"
+        : `deterministic-${deterministicE2EProfile}`
+    const runId = parseAgentE2ERunId(
+      process.env.AGENT_E2E_RUN_ID ?? process.pid
+    )
+    process.env.AGENT_E2E_RUN_ID = String(runId)
+    delete process.env.OPENROUTER_API_KEY
 
-export default defineConfig({
-  testDir: "./e2e/deterministic",
-  outputDir: `./test-results/${reportDirectory}`,
-  globalTeardown: "./e2e/fixtures/deterministic-global-teardown.ts",
-  metadata: {
-    deterministicE2EProfile,
-    ...agentProfile?.metadata,
-    ...(authProfile ? { oauthDatabasePath: authProfile.databasePath } : {}),
-  },
-  fullyParallel: true,
-  failOnFlakyTests: true,
-  forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
-  workers:
-    deterministicE2EProfile === "agent"
-      ? 3
-      : deterministicE2EProfile === "auth"
-        ? 1
-        : 2,
-  timeout: 180_000,
-  expect: { timeout: 30_000 },
-  reporter: [
-    ["list"],
-    ["html", { outputFolder: `playwright-report/${reportDirectory}` }],
-  ],
-  use: {
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure",
-  },
-  projects: [
-    ...(agentProfile?.projects ?? []),
-    ...(authProfile?.projects ?? []),
-  ],
-  webServer: [
-    ...(agentProfile?.webServers ?? []),
-    ...(authProfile?.webServers ?? []),
-  ],
-})
+    const agentProfile =
+      deterministicE2EProfile === "auth" ? undefined : createAgentProfile(runId)
+    const authProfile =
+      deterministicE2EProfile === "agent" ? undefined : createAuthProfile()
+
+    return {
+      testDir: "./e2e/deterministic",
+      outputDir: `./test-results/${reportDirectory}`,
+      globalTeardown: "./e2e/fixtures/deterministic-global-teardown.ts",
+      metadata: {
+        deterministicE2EProfile,
+        ...agentProfile?.metadata,
+        ...(authProfile ? { oauthDatabasePath: authProfile.databasePath } : {}),
+      },
+      fullyParallel: true,
+      failOnFlakyTests: true,
+      forbidOnly: Boolean(process.env.CI),
+      retries: process.env.CI ? 2 : 0,
+      workers:
+        deterministicE2EProfile === "agent"
+          ? 3
+          : deterministicE2EProfile === "auth"
+            ? 1
+            : 2,
+      timeout: 180_000,
+      expect: { timeout: 30_000 },
+      reporter: [
+        ["list"],
+        ["html", { outputFolder: `playwright-report/${reportDirectory}` }],
+      ],
+      use: {
+        trace: "retain-on-failure",
+        screenshot: "only-on-failure",
+      },
+      projects: [
+        ...(agentProfile?.projects ?? []),
+        ...(authProfile?.projects ?? []),
+      ],
+      webServer: [
+        ...(agentProfile?.webServers ?? []),
+        ...(authProfile?.webServers ?? []),
+      ],
+    }
+  }

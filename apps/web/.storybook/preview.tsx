@@ -12,7 +12,7 @@ import { type ReactNode, useState } from "react"
 import "@enterprise-agentic-saas/ui/globals.css"
 import "./preview.css"
 
-import { storybookApiHandlers } from "../test-support/storybook/api-handlers"
+import { storybookApiHandlers } from "../src/test-support/storybook/api-handlers"
 
 const WithQueryClient = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
@@ -105,6 +105,9 @@ export default definePreview({
     layout: "fullscreen",
     nextjs: {
       appDirectory: true,
+      navigation: {
+        pathname: "/dashboard",
+      },
     },
   },
 })

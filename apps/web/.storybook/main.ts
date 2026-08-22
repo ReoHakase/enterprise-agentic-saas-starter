@@ -53,25 +53,13 @@ export default defineMain({
       resolve: {
         alias: {
           "@": path.join(workspace, "src"),
-          "next/link": path.join(
-            workspace,
-            "test-support/storybook/next-link.tsx"
-          ),
-          "next/navigation": path.join(
-            workspace,
-            "test-support/storybook/next-navigation.ts"
-          ),
           "next-themes": path.join(
             workspace,
-            "test-support/storybook/next-themes.tsx"
+            "src/test-support/storybook/next-themes.tsx"
           ),
           "nuqs/adapters/next/app": path.join(
             workspace,
-            "test-support/storybook/nuqs-next-app.ts"
-          ),
-          "server-only": path.join(
-            workspace,
-            "test-support/storybook/server-only.ts"
+            "src/test-support/storybook/nuqs-next-app.ts"
           ),
         },
       },

@@ -38,6 +38,7 @@ export const createFullE2EPlaywrightEnvironment = (
     })
   ),
   AGENT_E2E_RUN_ID: String(runId),
+  WEB_PLAYWRIGHT_PROFILE: "full",
 })
 
 export const selectFullE2EPlaywrightArguments = (
@@ -72,7 +73,7 @@ const runPlaywright = async (
       "node_modules/@playwright/test/cli.js",
       "test",
       "--config",
-      "playwright.full.config.ts",
+      "playwright.config.ts",
       ...arguments_,
     ],
     {

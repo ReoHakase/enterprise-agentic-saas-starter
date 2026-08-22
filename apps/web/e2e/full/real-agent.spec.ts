@@ -5,7 +5,7 @@ import type {
   Page,
 } from "@playwright/test"
 
-import { projectAgentE2EHistory } from "../../testing/agent-e2e-projection"
+import { projectAgentE2EHistory } from "../fixtures/agent-e2e-projection"
 import { expect, test } from "../fixtures/test"
 
 type CanaryHarness = {

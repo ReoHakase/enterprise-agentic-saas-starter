@@ -3,7 +3,7 @@ import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
-import { createDeferred } from "../../../../../test-support/storybook/deferred"
+import { createDeferred } from "../../../../test-support/storybook/deferred"
 import { authApiBaseUrl, AuthStoryScope } from "../../test-support/fixtures"
 import { ProviderButtons } from "./provider-buttons"
 

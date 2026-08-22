@@ -9,7 +9,7 @@ import {
   createOAuthDatabasePath,
   parseOAuthDatabaseUrl,
   removeOAuthDatabaseFiles,
-} from "../e2e/fixtures/oauth-database"
+} from "./oauth-database"
 
 const databasePath = createOAuthDatabasePath(process.pid)
 const databaseFiles = [
