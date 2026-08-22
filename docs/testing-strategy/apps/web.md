@@ -2,7 +2,7 @@
 title: Webテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-21
 applies_to:
   - apps/web/**
 related:
@@ -199,6 +199,10 @@ W4でもNext.js dev serverは起動しません。route lifecycleが必要なら
 ### MSWとEden型
 
 MSW response bodyはEden由来の成功型、status別error型を使います。fixtureを型安全にしてもURL、method、path parameterの正しさは自動では保証されないため、API A4/A5を契約の正本とします。
+同じElysia responseをWeb-local schemaで再検査するtestは置きません。Eden adapterではURL、query、
+`AbortSignal`、成功値を確認し、代表的なfeature adapterでnative `EdenFetchError`のidentity、status、
+valueを確認します。Treaty resultを絞り込む薄い公開client helperだけのtestは置かず、Eden自体の成功値と
+error処理を再検査しません。
 
 ### Agent UI
 

@@ -2,7 +2,7 @@
 title: API / OpenAPI
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-21
 ---
 
 # API / OpenAPI
@@ -168,8 +168,12 @@ snapshotや、変換処理専用のテストは作りません。
 ## Edenと日付
 
 Webは`@enterprise-agentic-saas/api/client`だけからEden clientを利用します。`parseDate: false`を固定し、
-ISO形式の文字列を暗黙に`Date`へ変換しません。Issueの期日はHTTPでISO timestampまたは`null`、DBでは
-`timestamp_ms`として扱い、リポジトリ境界で変換します。
+ISO形式の文字列を暗黙に`Date`へ変換しません。`throwHttpError: true`も固定し、非2xxはnative
+`EdenFetchError`のstatusとvalueを保ったままrejectします。公開clientの`unwrapEdenResult`は
+`error !== null`でTreaty resultを絞り込み、成功値の`null`、`undefined`、object identityを変えません。
+Webは同じElysia response schemaを再宣言せず、成功型を`ApiClient`とEden `Treaty.Data`から導出します。
+Issueの期日はHTTPでISO timestampまたは`null`、DBでは`timestamp_ms`として扱い、リポジトリ境界で
+変換します。
 
 ## ローカル確認
 

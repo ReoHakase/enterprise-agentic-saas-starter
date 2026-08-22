@@ -69,5 +69,8 @@ export const cancelInvitationById = async (
       metadata: {},
     })
 
-    return { kind: "canceled" as const, invitation: updated }
+    return {
+      kind: "canceled" as const,
+      invitation: { id: updated.id, status: "canceled" as const },
+    }
   })

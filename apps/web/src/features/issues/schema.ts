@@ -1,3 +1,4 @@
+import type { ApiClient, Treaty } from "@enterprise-agentic-saas/api/client"
 import * as v from "valibot"
 
 const issueStatusSchema = v.picklist(["open", "in_progress", "closed"])
@@ -11,121 +12,10 @@ const issuePrioritySchema = v.picklist([
 ])
 
 const nullableIdentifierSchema = v.nullable(v.string())
-const apiTimestampSchema = v.pipe(v.string(), v.isoTimestamp())
 const dueDateSchema = v.pipe(
   v.string(),
   v.isoTimestamp("Due date and time must be a valid ISO timestamp.")
 )
-
-const issueSchema = v.object({
-  id: v.string(),
-  organizationId: v.string(),
-  number: v.pipe(v.number(), v.integer()),
-  title: v.string(),
-  description: v.string(),
-  status: issueStatusSchema,
-  priority: issuePrioritySchema,
-  assigneeId: nullableIdentifierSchema,
-  creatorId: v.string(),
-  labels: v.array(v.string()),
-  dueDate: v.nullable(dueDateSchema),
-  revision: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  createdAt: apiTimestampSchema,
-  updatedAt: apiTimestampSchema,
-})
-
-const issueThumbnailFileSchema = v.object({
-  id: v.string(),
-  filename: v.string(),
-  imageWidth: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
-  imageHeight: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
-})
-
-const issueThumbnailSchema = v.object({
-  mode: v.picklist(["automatic", "selected"]),
-  file: v.nullable(issueThumbnailFileSchema),
-})
-
-const issueListItemSchema = v.object({
-  ...issueSchema.entries,
-  attachmentCount: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(0)),
-    0
-  ),
-  commentCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0)), 0),
-  thumbnail: v.optional(v.nullable(issueThumbnailFileSchema), null),
-})
-
-const issueCommentSchema = v.object({
-  id: v.string(),
-  organizationId: v.string(),
-  issueId: v.string(),
-  authorId: v.string(),
-  author: v.object({
-    id: v.string(),
-    name: v.string(),
-    profileImage: v.nullable(v.string()),
-  }),
-  body: v.string(),
-  createdAt: apiTimestampSchema,
-  updatedAt: apiTimestampSchema,
-})
-
-const issueListPageSchema = v.object({
-  items: v.array(issueListItemSchema),
-  page: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  pageSize: v.picklist([20, 50, 100]),
-  total: v.pipe(v.number(), v.integer(), v.minValue(0)),
-})
-const issueLabelListSchema = v.object({
-  items: v.pipe(v.array(v.string()), v.maxLength(50)),
-})
-const issueActivityValueSchema = v.union([
-  v.string(),
-  v.array(v.string()),
-  v.null(),
-])
-
-const issueActivitySchema = v.object({
-  type: v.literal("activity"),
-  id: v.string(),
-  kind: v.picklist([
-    "created",
-    "field_changed",
-    "legacy_updated",
-    "file_added",
-    "file_deleted",
-  ]),
-  field: v.nullable(
-    v.picklist([
-      "title",
-      "description",
-      "status",
-      "priority",
-      "assignee",
-      "labels",
-      "due_date",
-    ])
-  ),
-  fromValue: issueActivityValueSchema,
-  toValue: issueActivityValueSchema,
-  actor: v.object({
-    id: v.nullable(v.string()),
-    name: v.string(),
-    profileImage: v.nullable(v.string()),
-  }),
-  createdAt: apiTimestampSchema,
-})
-
-const issueTimelineCommentSchema = v.object({
-  type: v.literal("comment"),
-  ...issueCommentSchema.entries,
-})
-
-const issueTimelinePageSchema = v.object({
-  items: v.array(v.union([issueActivitySchema, issueTimelineCommentSchema])),
-  nextCursor: v.nullable(v.string()),
-})
 
 export const createIssueFormSchema = v.object({
   title: v.pipe(
@@ -179,27 +69,15 @@ export const commentFormSchema = v.object({
   ),
 })
 
-export type Issue = v.InferOutput<typeof issueSchema>
-export type IssueListItem = v.InferOutput<typeof issueListItemSchema>
-export type IssueListPage = v.InferOutput<typeof issueListPageSchema>
+type IssueRoutes = ReturnType<ApiClient["issues"]>
+
+export type Issue = Treaty.Data<ApiClient["issues"]["post"]>
+export type IssueListPage = Treaty.Data<ApiClient["issues"]["get"]>
+export type IssueListItem = IssueListPage["items"][number]
 export type IssueStatus = v.InferOutput<typeof issueStatusSchema>
 export type IssuePriority = v.InferOutput<typeof issuePrioritySchema>
-export type IssueComment = v.InferOutput<typeof issueCommentSchema>
-export type IssueActivity = v.InferOutput<typeof issueActivitySchema>
-export type IssueTimelineItem = v.InferOutput<
-  typeof issueTimelinePageSchema
->["items"][number]
-export type IssueTimelinePage = v.InferOutput<typeof issueTimelinePageSchema>
+export type IssueComment = Treaty.Data<IssueRoutes["comments"]["post"]>
+export type IssueTimelinePage = Treaty.Data<IssueRoutes["timeline"]["get"]>
+export type IssueTimelineItem = IssueTimelinePage["items"][number]
+export type IssueActivity = Extract<IssueTimelineItem, { type: "activity" }>
 export type UpdateIssueFormValues = v.InferOutput<typeof updateIssueFormSchema>
-
-export const parseIssue = (value: unknown) => v.parse(issueSchema, value)
-export const parseIssueThumbnail = (value: unknown) =>
-  v.parse(issueThumbnailSchema, value)
-export const parseIssueListPage = (value: unknown) =>
-  v.parse(issueListPageSchema, value)
-export const parseIssueLabelList = (value: unknown) =>
-  v.parse(issueLabelListSchema, value)
-export const parseIssueComment = (value: unknown) =>
-  v.parse(issueCommentSchema, value)
-export const parseIssueTimelinePage = (value: unknown) =>
-  v.parse(issueTimelinePageSchema, value)

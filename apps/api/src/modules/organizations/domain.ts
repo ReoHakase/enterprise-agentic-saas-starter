@@ -43,11 +43,24 @@ export type OrganizationMember = {
   createdAt: string
 }
 
+export const organizationInvitationRoles = ["admin", "member"] as const
+type OrganizationInvitationRole = (typeof organizationInvitationRoles)[number]
+
+export const organizationInvitationStatuses = [
+  "pending",
+  "accepted",
+  "rejected",
+  "canceled",
+  "expired",
+] as const
+type OrganizationInvitationStatus =
+  (typeof organizationInvitationStatuses)[number]
+
 export type OrganizationInvitation = {
   id: string
   email: string
-  role: OrganizationRole
-  status: string
+  role: OrganizationInvitationRole
+  status: OrganizationInvitationStatus
   organizationId: string
   inviterId: string
   inviter: {
@@ -73,8 +86,8 @@ export type InvitationRecord = {
   id: string
   inviterId: string
   organizationId: string
-  role: string | null
-  status: string
+  role: OrganizationInvitationRole
+  status: OrganizationInvitationStatus
 }
 
 export const toOrganizationInvitation = (
@@ -88,7 +101,7 @@ export const toOrganizationInvitation = (
 ): OrganizationInvitation => ({
   id: row.id,
   email: row.email,
-  role: normalizeOrganizationRole(row.role ?? "member"),
+  role: row.role,
   status:
     row.status === "pending" && row.expiresAt.getTime() <= Date.now()
       ? "expired"

@@ -40,7 +40,7 @@ import { browserConsoleApi } from "@/lib/browser/console-api"
 
 import { mcpOAuthSessionsQueryOptions } from "../../queries"
 import { parseMcpOAuthScopes } from "../../query"
-import type { McpOAuthCredential } from "../../schema"
+import type { McpOAuthCredential } from "../../types"
 import { McpOAuthScopeMatrix } from "../mcp-oauth-scope-matrix/mcp-oauth-scope-matrix"
 
 export const McpOAuthSessionsPanel = () => {
@@ -176,6 +176,10 @@ const McpOAuthCredentialCard = ({
     () => parseMcpOAuthScopes(credential.scopes.join(" ")) ?? [],
     [credential.scopes]
   )
+  const selectedScopes = useMemo(
+    () => scopeSummaries.map(({ scope }) => scope),
+    [scopeSummaries]
+  )
   const requestRevoke = useCallback(
     () => onRevoke(credential),
     [credential, onRevoke]
@@ -219,7 +223,7 @@ const McpOAuthCredentialCard = ({
       <McpOAuthScopeMatrix
         readOnly
         requestedScopes={scopeSummaries}
-        selectedScopes={credential.scopes}
+        selectedScopes={selectedScopes}
       />
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {credential.createdAt ? (

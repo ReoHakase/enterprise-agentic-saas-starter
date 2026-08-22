@@ -18,7 +18,7 @@ describe("console Eden API", () => {
     vi.unstubAllGlobals()
   })
 
-  it("sends an organization deletion through Eden and parses its receipt", async () => {
+  it("sends an organization deletion and returns its typed Eden response", async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json({
         deletionId: "deletion-1",

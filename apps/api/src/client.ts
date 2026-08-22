@@ -25,7 +25,7 @@ import {
   type ProfileImageDto,
 } from "./modules/profile-images/model"
 
-export { EdenFetchError } from "@elysia/eden"
+export { EdenFetchError, type Treaty } from "@elysia/eden"
 
 export {
   FILE_PREVIEW_WIDTHS,
@@ -61,6 +61,15 @@ export const createApiClient = (
   })
 
 export type ApiClient = ReturnType<typeof createApiClient>
+
+type EdenResult<Data> =
+  | { data: Data; error: null }
+  | { data: null; error: { status: unknown; value: unknown } }
+
+export const unwrapEdenResult = <Data>(result: EdenResult<Data>): Data => {
+  if (result.error !== null) throw result.error
+  return result.data
+}
 
 const fileUrl = (baseUrl: string, segments: string[]) => {
   const url = new URL(baseUrl)
