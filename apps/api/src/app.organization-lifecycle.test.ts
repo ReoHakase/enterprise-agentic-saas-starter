@@ -88,23 +88,32 @@ describe("organization context, creation, and deletion guards", () => {
     expect(ambiguousAgentContexts).toEqual([])
   })
 
-  it("validates normalized organization slugs and maps collisions to 409", async () => {
+  it("keeps organization slug and tenant rules server-owned", async () => {
     const app = createApp(await createSeededDb())
-
-    const invalidResponses = await Promise.all(
-      ["!!!", "auth", "x".repeat(101)].map((slug) =>
-        app.handle(
-          jsonRequest("/organizations", {
-            method: "POST",
-            userId: "user_1",
-            body: { name: "Invalid", slug },
-          })
-        )
+    const createWithSlug = (slug: string) =>
+      app.handle(
+        jsonRequest("/organizations", {
+          method: "POST",
+          userId: "user_1",
+          body: { name: "Invalid", slug },
+        })
       )
-    )
-    expect(invalidResponses.map((response) => response.status)).toEqual([
-      400, 400, 400,
-    ])
+
+    const [invalidCharacters, reservedCreate, excessiveLength] =
+      await Promise.all([
+        createWithSlug("!!!"),
+        createWithSlug("auth"),
+        createWithSlug("x".repeat(49)),
+      ])
+    expect([
+      invalidCharacters.status,
+      reservedCreate.status,
+      excessiveLength.status,
+    ]).toEqual([400, 400, 400])
+    expect(await reservedCreate.json()).toMatchObject({
+      error: "validation_error",
+      fieldErrors: { slug: ["Choose another slug."] },
+    })
 
     const formerlyReservedCreate = await app.handle(
       jsonRequest("/organizations", {
@@ -146,6 +155,29 @@ describe("organization context, creation, and deletion guards", () => {
       })
     )
     expect(duplicateUpdate.status).toBe(409)
+
+    const reservedUpdate = await app.handle(
+      jsonRequest("/organizations/org_1", {
+        method: "PATCH",
+        userId: "user_1",
+        body: { slug: "auth" },
+      })
+    )
+    expect(reservedUpdate.status).toBe(400)
+    expect(await reservedUpdate.json()).toMatchObject({
+      error: "validation_error",
+      fieldErrors: { slug: ["Choose another slug."] },
+    })
+
+    const otherTenantUpdate = await app.handle(
+      jsonRequest("/organizations/org_2", {
+        method: "PATCH",
+        userId: "user_1",
+        activeOrganizationId: "org_2",
+        body: { slug: "other-team" },
+      })
+    )
+    expect(otherTenantUpdate.status).toBe(404)
   })
 
   it("rejects unsafe organization deletion attempts with field-level recovery contracts", async () => {

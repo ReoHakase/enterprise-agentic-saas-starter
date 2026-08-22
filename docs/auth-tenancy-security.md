@@ -2,7 +2,7 @@
 title: 認証・認可・multi-tenant
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-20
 ---
 
 # 認証・認可・マルチテナント
@@ -48,6 +48,11 @@ clientのactivate成功直後に旧tenantのTanStack Queryを一括invalidateし
 Agent機能が有効なsessionでは、`active_organization_id`変更とAgent context失効も同じDB transactionです。migration `0015_agent_action_runtime`の`session_agent_context_rotate_organization` triggerがcontext epochを1増やし、旧epochのconnection ticket、grant、resume ticket、run、action、approval policyを失効します。これをclient-side cleanupの代わりにせず、切り替え後はAgent stream/uploadをabortし、Agent/files/issuesを含む旧tenant queryをcancelし、shell draft、thread、form registry、Blob URL、tenant query parameterをclearしてから`router.replace()`と`router.refresh()`を行います。route slugと新sessionのactive organizationが一致するまでAgent composerとclient toolは無効です。
 
 人が開くorganization管理URLは `/organization/:organizationSlug/members|settings` とし、UUIDを公開URLへ使いません。Server Componentはsession userが所属するorganization一覧からslugを解決し、見つからないslugを404にしてから、内部APIへ検証済みorganization IDを渡します。slug変更後は新slugのURLへ置換します。
+
+organizationの作成・更新で使う予約slug一覧と判定は、APIのorganizationモジュールだけが所有します。
+Webは文字種、長さ、`trim`等の入力直後の検証だけを行い、予約slugもAPIへ送信します。APIは予約slugを
+`400 validation_error`と`fieldErrors.slug`で拒否し、Webは既存の入力欄エラーとして表示します。
+予約語の共有パッケージ、Web側の複製一覧、互換判定は追加しません。
 
 Better Auth organization pluginの管理・参照APIは原則として直接公開しません。`/auth/organization/*`はdeny-by-defaultとし、送信者向けの`invite-member`と、招待recipient本人に必要な`get-invitation`、`list-user-invitations`、`accept-invitation`、`reject-invitation`だけを残します。それ以外のorganization/member/invitation/team/custom-role pathはtop-level `disabledPaths`で404にし、認可・tenant境界・audit・error契約を持つElysia feature routeへ集約します。
 

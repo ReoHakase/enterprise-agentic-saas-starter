@@ -36,20 +36,6 @@ const organizationDetailSchema = v.object({
 
 const organizationListSchema = v.array(organizationSummarySchema)
 
-const reservedOrganizationSlugs = new Set([
-  "admin",
-  "api",
-  "auth",
-  "create",
-  "dashboard",
-  "new",
-  "openapi",
-  "organization",
-  "organizations",
-  "settings",
-  "issues",
-])
-
 const organizationDeletionReceiptSchema = v.object({
   deletionId: v.string(),
   organizationId: v.string(),
@@ -71,10 +57,6 @@ export const organizationFormSchema = v.object({
     v.regex(
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
       "Use lowercase letters, numbers, and single hyphens."
-    ),
-    v.check(
-      (slug) => !reservedOrganizationSlugs.has(slug),
-      "Choose another slug. This value is reserved."
     )
   ),
 })
