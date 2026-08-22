@@ -2,7 +2,7 @@
 title: coding agentの作業手順
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-23
 applies_to:
   - AGENTS.md
   - flake.nix
@@ -68,12 +68,33 @@ project hooks、custom agents、Rules、専用harness testは配置しません�
 ブラウザー、E2E、有料テストは、変更した境界をより低い層で証明できない場合だけ実行します。
 必須検査の失敗、P0/P1の指摘、期限のない例外承認を残したまま完了としません。
 
+## GitHubへの提出
+
+利用者がIssueまたはPR単位の実装、修正、継続、次段階への進行を依頼した場合、その依頼は同じ
+リポジトリの対応ブランチへのGit push、Draft PRの作成・更新、現在のheadに対するCI確認までを含みます。
+ローカルコミットの完了後や各GitHub操作の直前に、同じ承認を繰り返し求めません。
+
+次の依頼はGitHubへの提出を含みません。
+
+- 説明、診断、監査、レビューなど、読み取りと報告だけを求める依頼
+- ローカル限定、コミットのみ、push禁止、PR作成禁止など、利用者が外部変更を明示的に除外した依頼
+- IssueまたはPRに対応しない試行や一時的な検証
+
+提出前にIssueの依存、Assignee、linked branch、open PRとリモートブランチを再取得します。別担当や
+別実装、未解決依存、意図しないPRがある場合は推測で上書きしません。履歴を書き換えていない
+`fast-forward`更新は通常のpushを使います。履歴を書き換えた場合は対象`ref`と観測したリモートSHAを
+完全一致で指定した`--force-with-lease`だけを使い、期待したSHAから変わっていれば停止します。
+
+Draft PRは対応Issueを正確に1件だけ閉じる本文、現在の確認結果、未実施項目、展開と戻し方を持たせます。
+pushまたはPR更新後はGitHubからhead、base、Draft状態、closing Issue、merge可能性、現在headのCIを再取得します。
+古いheadのCIを新しい差分の検証結果として扱いません。
+
 ## 安全境界
 
-production deploy、Git push、PR merge、remote DB変更は、利用者の明示承認なしに実行しません。
-生成物、lockfile、migrationは所有command以外で変更せず、機密情報をログ、応答、テレメトリー、
-テスト成果物へ出しません。詳細なsource、品質、security境界は`AGENTS.md`と変更領域の正本文書を
-優先します。
+PRのDraft解除、レビュー依頼、マージ、本番配備、リモートDB変更、外部サービスの破壊的変更、有料テストは
+利用者の明示承認なしに実行しません。生成物、lockfile、migrationは所有command以外で変更せず、
+機密情報をログ、応答、テレメトリー、テスト成果物へ出しません。詳細なソース、品質、セキュリティ境界は
+`AGENTS.md`と変更領域の正本文書を優先します。
 
 ## 検証
 

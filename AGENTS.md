@@ -46,9 +46,21 @@
 - Oxlint warning、Knip full/strict、jscpd findingをignoreやbaselineで隠さない。
 - Cloudflare構成変更は`bun run build:cloudflare`、DB変更は`generate + migrate`と`db:check`を通す。
 
+## GitHubへの提出
+
+- 利用者がIssueまたはPR単位の実装、修正、継続、次段階への進行を依頼した場合、同じリポジトリの
+  対応ブランチへのGit push、Draft PRの作成・更新、現在のheadに対するCI確認までを通常工程に含め、
+  操作ごとの承認を求めない。
+- 説明、診断、レビュー、読み取り専用、ローカル限定、commitのみ、push禁止など、利用者が指定した
+  狭い境界を優先する。
+- 履歴を書き換えたブランチはリモートの`ref`とSHAを再取得し、対象`ref`と期待SHAを固定した
+  `--force-with-lease`だけで更新する。別担当、別ブランチ、別PR、未解決依存、予期しないリモート更新が
+  あれば停止する。
+
 ## 禁止事項
 
-- 明示承認なしにproduction deploy、Git push、PR merge、remote DB変更を実行しない。
+- 明示承認なしにPRのDraft解除、レビュー依頼、マージ、本番配備、リモートDB変更、外部サービスの
+  破壊的変更、有料テストを実行しない。
 - `drizzle-kit push`を使わず、`main`に存在するmigrationを変更しない。
 - `.agents/skills/`、generated file、lockfileを所有command以外で手編集しない。
 - AgentからDB、Auth、Email、Webを直接importしない。
