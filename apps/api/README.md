@@ -50,7 +50,7 @@ rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` superviso
 
 `src/index.ts`のBun `listen`は、分離した`file:` DBを使うdeterministic OAuth E2E fixtureだけが起動する。rootのpublic developmentやproduction deployには使わない。
 
-この経路で`FILES`、`IMAGES`、Workers Cache、`EMAIL` bindingをlocalでも利用する。通常のdevelopment providerはMailpitであり、workerdから実際のapplication送信導線をlocal inboxへ流す。workerdはPortlessの開発CAを信頼しないため、browser用Portless HTTPSではなく、token-fencedなsessionで受け取った同じMailpit instanceのdirect loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのlocal Email binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
+この経路で`FILES`、`IMAGES`、認可後に使うCache API、`EMAIL` bindingをローカルでも利用する。最上位のWorkers Cachingは無効にし、すべてのAPIリクエストでElysia、Better Auth、テナント認可を実行する。通常の開発用プロバイダーはMailpitであり、workerdから実際のアプリケーション送信導線をローカル受信箱へ流す。workerdはPortlessの開発CAを信頼しないため、ブラウザー用Portless HTTPSではなく、トークンで保護したセッションから受け取る同じMailpit実体の直接loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのローカルEmail binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
 
 fixture投入の公開入口はrootの`bun run dev:db:seed`だけにする。healthyなAPI dev sessionがあればそのWorkerを再利用し、なければlocal Tursoが停止中の場合だけ一時起動したうえで、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動する。migration、DB seed、R2 reconcileの後はcommand自身が起動したprocessだけを停止し、既存のdev processには触れない。production/remote seedとrootの`seed` aliasは作らない。
 

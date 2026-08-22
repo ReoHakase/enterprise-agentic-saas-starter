@@ -2,7 +2,7 @@
 title: APIテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-19
+last_reviewed: 2026-08-20
 applies_to:
   - apps/api/**
 related:
@@ -190,6 +190,19 @@ A5へ上げる判断:
 - browserまたはEden runtimeとのserialisationを確認する必要がある
 - stream cancellationまたはmultipart boundaryを確認する必要がある
 - Worker binding固有のadapterを通す必要がある
+
+## API Worker設定契約
+
+Wrangler設定は静的契約テストで次を確認します。
+
+- 本番用と互換デプロイ用の両方で`cache.enabled`が`false`である
+- 互換デプロイ用設定は、本番用設定から`services`だけを除いた内容と一致する
+- `build:cloudflare`が両設定を別の出力先へdry-runし、設定スキーマとWorkerバンドルを検査する
+
+Cache API自体のキャッシュ命中、未命中、障害時の継続、認可前に参照しないことはfilesモジュールの
+A2/A4で検査します。
+Cloudflareが`cache.enabled=false`を実装する内部動作は再試験せず、プロジェクトが所有する設定と認可順序を
+固定します。
 
 ## packageとの責務分担
 

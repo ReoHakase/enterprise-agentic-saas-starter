@@ -8,7 +8,7 @@
       ]
     },
     "build:cloudflare": {
-      "outputs": ["dist/worker/**"]
+      "outputs": ["dist/worker/**", "dist/worker-bootstrap/**"]
     }
   }
 }

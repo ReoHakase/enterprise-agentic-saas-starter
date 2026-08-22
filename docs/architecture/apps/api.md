@@ -2,7 +2,7 @@
 title: apps/apiの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-20
 applies_to:
   - apps/api/**
 ---
@@ -15,6 +15,7 @@ applies_to:
 - [目標構造](#目標構造)
 - [module構造](#module構造)
 - [依存方向](#依存方向)
+- [Workerキャッシュ境界](#workerキャッシュ境界)
 - [error](#error)
 - [plugin](#plugin)
 - [OpenAPIとScalar](#openapiとscalar)
@@ -116,6 +117,14 @@ telemetry、clock等のapp-global contractに限り、moduleをimportしませ�
 | platform            | moduleのdomain/service/repository                           |
 
 `app.ts`と各moduleの`module.ts`だけがservice、repository、provider、transportを同時にimportできます。
+
+## Workerキャッシュ境界
+
+- 本番用と互換デプロイ用のWrangler設定は最上位の`cache.enabled=false`を明示する
+- 既定入口と名前付き入口の`fetch()`では、Workers Cachingより前にレスポンスを再利用せず、API処理を毎回実行する
+- Cache APIは、各モジュールが認証、テナント認可、対象リソース確認を終えた後にだけ利用する
+- 画像previewの内部キャッシュキーを公開せず、ブラウザー向けの`private, no-cache`、ETag、304を維持する
+- 設定変更から既存キャッシュ項目を自動削除せず、本番導入時に削除要否を別途判断する
 
 ## error
 
