@@ -3,16 +3,9 @@ import { readdir, readFile } from "node:fs/promises"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 
-type MigrationJournal = {
-  entries: Array<{
-    tag: string
-    when: number
-  }>
-}
-
 const packageDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 const repositoryDirectory = dirname(dirname(packageDirectory))
-const archivePath = "packages/db/drizzle"
+const legacyPath = "packages/db/drizzle"
 const v3Path = "packages/db/drizzle-v3"
 const requiredFiles = ["migration.sql", "snapshot.json"]
 
@@ -37,21 +30,21 @@ const diffFor = (path: string) =>
 const untrackedFor = (path: string) =>
   lines(runGit(["ls-files", "--others", "--exclude-standard", "--", path]))
 
-const archiveChanges = [
-  ...diffFor(archivePath),
-  ...untrackedFor(archivePath).map((path) => `A\t${path}`),
+const legacyFiles = [
+  ...lines(runGit(["ls-files", "--", legacyPath])),
+  ...untrackedFor(legacyPath),
 ]
-if (archiveChanges.length > 0) {
+if (legacyFiles.length > 0) {
   throw new Error(
-    `The legacy migration archive must match origin/main byte-for-byte:\n${archiveChanges.join("\n")}`
+    `The removed legacy migration directory must stay absent:\n${legacyFiles.join("\n")}`
   )
 }
 
-const baselineFiles = new Set(
+const committedFiles = new Set(
   lines(runGit(["ls-tree", "-r", "--name-only", "origin/main", "--", v3Path]))
 )
-const baselineDirectories = new Set(
-  [...baselineFiles].map((path) => dirname(path))
+const committedDirectories = new Set(
+  [...committedFiles].map((path) => dirname(path))
 )
 const changedV3 = new Map<string, string>()
 for (const line of diffFor(v3Path)) {
@@ -62,7 +55,7 @@ for (const path of untrackedFor(v3Path)) changedV3.set(path, "A")
 
 const forbiddenV3Changes = [...changedV3].filter(([path, status]) => {
   if (status !== "A") return true
-  return baselineDirectories.has(dirname(path))
+  return committedDirectories.has(dirname(path))
 })
 if (forbiddenV3Changes.length > 0) {
   throw new Error(
@@ -79,6 +72,15 @@ const migrationDirectories = (
   .filter((entry) => entry.isDirectory())
   .map(({ name }) => name)
   .toSorted()
+if (
+  committedDirectories.size === 0 &&
+  (migrationDirectories.length !== 1 ||
+    !migrationDirectories[0]?.endsWith("_baseline"))
+) {
+  throw new Error(
+    "The one-time v3 history reset must contain exactly one baseline directory."
+  )
+}
 for (const directory of migrationDirectories) {
   if (!/^\d{14}_[a-z0-9_]+$/.test(directory)) {
     throw new Error(`Invalid v3 migration directory name: ${directory}`)
@@ -106,45 +108,12 @@ await Promise.all(
   })
 )
 
-const formatTimestamp = (milliseconds: number) => {
-  const date = new Date(milliseconds)
-  const components = [
-    date.getUTCFullYear(),
-    date.getUTCMonth() + 1,
-    date.getUTCDate(),
-    date.getUTCHours(),
-    date.getUTCMinutes(),
-    date.getUTCSeconds(),
-  ]
-  return components
-    .map((component, index) =>
-      index === 0 ? String(component) : String(component).padStart(2, "0")
-    )
-    .join("")
-}
-
-const journal: MigrationJournal = JSON.parse(
-  await readFile(
-    join(repositoryDirectory, archivePath, "meta/_journal.json"),
-    "utf8"
-  )
-)
 await Promise.all(
-  journal.entries.map(async ({ tag, when }) => {
-    const directory = `${formatTimestamp(when)}_${tag.replace(/^\d{4}_/, "")}`
-    if (!migrationDirectories.includes(directory)) {
-      throw new Error(`Converted v3 migration is missing: ${directory}`)
-    }
-    const [legacySql, convertedSql, snapshot] = await Promise.all([
-      readFile(join(repositoryDirectory, archivePath, `${tag}.sql`)),
-      readFile(join(v3Directory, directory, "migration.sql")),
-      readFile(join(v3Directory, directory, "snapshot.json"), "utf8"),
-    ])
-    if (!legacySql.equals(convertedSql)) {
-      throw new Error(
-        `Converted SQL differs from the legacy archive: ${directory}`
-      )
-    }
+  migrationDirectories.map(async (directory) => {
+    const snapshot = await readFile(
+      join(v3Directory, directory, "snapshot.json"),
+      "utf8"
+    )
     JSON.parse(snapshot)
   })
 )

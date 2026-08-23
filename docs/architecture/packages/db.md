@@ -2,7 +2,7 @@
 title: packages/dbの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-08-24
 applies_to:
   - packages/db/**
 ---
@@ -17,8 +17,7 @@ Turso/libSQL client、Drizzle schema、migration、development DB tooling、DB t
 
 ```text
 packages/db/
-  drizzle/       # 旧形式の不変な証拠
-  drizzle-v3/    # ランタイムとツールが使う追記専用の正本
+  drizzle-v3/    # 単一の基準マイグレーションと将来の追記
   src/
     index.ts
     env.ts
@@ -28,8 +27,8 @@ packages/db/
     migrations/
       helpers.ts
       fresh.test.ts
-      upgrades.test.ts
       invariants.test.ts
+      concurrency.test.ts
       lifecycle.test.ts
     test-support/
 ```
@@ -59,20 +58,18 @@ use case ownerが不明になり、すべてのdomainが一つのinfrastructure 
 
 マイグレーション履歴は[ADR-006](../../decisions/ADR-006-migration-history-append-only.md)に従います。
 
-- `drizzle/**`は、Drizzle 0.xで作成した31件のSQL、スナップショット、ジャーナルを保存する
-  読み取り専用の証拠です。`origin/main`とバイト単位で一致させ、ランタイム、テスト、設定、
-  運用コマンドから参照しません。
-- `drizzle-v3/<YYYYMMDDHHmmss>_<tag>/{migration.sql,snapshot.json}`は、Drizzle v1の
-  ランタイムとツールが使う追記専用の正本です。既存ディレクトリを変更せず、スキーマ変更は
-  新しい完全なディレクトリとして追加します。
-- 旧形式からv3への変換は追跡対象外の一時コピーへ固定版`drizzle-kit up`を実行します。
-  変換元31件と変換後31件の時刻、意味名、SQL本文、`--> statement-breakpoint`を照合します。
-- 適用済みの旧履歴はDrizzle v1の標準マイグレーターが既存のマイグレーション台帳へ
-  `name`と`applied_at`を追加し、`name`を対応付けます。旧行の`applied_at`は`NULL`のまま保持します。
-  独自の読み込み処理、二重実行、別台帳を持ちません。
+- Drizzle v1更新を含む変更では、`drizzle-v3/20260823163505_baseline/`だけを実行対象にします。
+  基準マイグレーションは現在のテーブル、列、インデックス、外部キー、検査制約、リポジトリ所有の
+  トリガー、明示的にNULLを拒否するテキスト主キー、現在有効なLunaの料金行を一度で作成します。
+- 過去の履歴を適用済みのデータベースは支援しません。履歴変換、マイグレーション台帳の移行、既存
+  データ補完、マイグレーション接頭辞、二重実行、独自の読み込み処理を持ちません。
+- 基準マイグレーションが`main`へ取り込まれた時点から`drizzle-v3/**`を追記専用にします。以後の
+  スキーマ変更は`drizzle-v3/<YYYYMMDDHHmmss>_<tag>/{migration.sql,snapshot.json}`を完全な新規
+  ディレクトリとして追加します。
 
-履歴の不変性、新規データベース、途中状態からの更新、台帳の既存データ補完、スキーマ制約を
-別々に検証します。詳細は[DBテスト戦略](../../testing-strategy/packages/db.md)を参照します。
+新規データベースへの適用、現在の制約とトリガー、並行処理、リセットと任意の開発用初期データ投入を
+分けて検証します。詳細は
+[DBテスト戦略](../../testing-strategy/packages/db.md)を参照します。
 
 ## Drizzle v1とRelations v2
 
@@ -86,17 +83,19 @@ Drizzle v1のオブジェクト形式で作成し、`client`とRelations v2の`r
 
 ## テスト
 
-新規データベースへのマイグレーション、途中状態からの更新、制約、並行処理、開発用初期データ投入と
-リセットの安全性を`bun run test`で検証します。履歴とスキーマの不整合は`bun run db:check`で
-検出します。
+新規データベースへの基準マイグレーション、制約、トリガー、現在有効なLunaの料金行、並行処理、
+開発用初期データ投入とリセットの安全性を`bun run test`で検証します。履歴とスキーマの不整合は
+`bun run db:check`で検出します。
 
 ## 受入条件
 
 - 他ワークスペースから内部パスへの直接`import`がない
 - 業務リポジトリが存在しない
-- `drizzle/**`の利用箇所がなく、`origin/main`とバイト単位で一致する
-- `drizzle-v3/**`だけが実行対象で、既存履歴が追記専用である
-- 旧31件と変換後31件が1対1で対応する
-- Drizzle v1の標準マイグレーターが既存台帳を更新し、適用済みDDLを再実行しない
+- `drizzle/**`が存在せず、`drizzle-v3/**`だけが実行対象である
+- Drizzle v1更新を含む変更では、単一の基準マイグレーションから現在のスキーマ、トリガー、Lunaの
+  料金行を再現できる
+- 基準マイグレーションが`main`へ取り込まれた後は既存履歴を変更せず、新しい完全なディレクトリだけを
+  追加する
+- 過去のデータベース、マイグレーション台帳、既存データを移行する実装がない
 - マイグレーションテストが関心ごとに分割されている
 - 遠隔データベースへの開発用初期データ投入とリセットを拒否する

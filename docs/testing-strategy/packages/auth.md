@@ -2,7 +2,7 @@
 title: Authパッケージテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-08-24
 applies_to:
   - packages/auth/**
 related:
@@ -53,7 +53,7 @@ packages/auth/src/
 | **Auth契約単体テスト (AUTH1)**            | 単体                | <ul><li>callback URL、redirect target、state、nonce、scope、provider responseのparseを確認する</li><li>session result、public user、public organizationのschema変換を確認する</li><li>browser client optionとplugin contractがserver-only dependencyを含まないことを確認する</li><li>open redirect、invalid origin、expired token、unknown provider errorを拒否することを確認する</li></ul>                                                                            | pure contract、schema、URL parser、error mapper                                  | clock、random、ID generator                        | `client.ts`のpure config、`github-oauth.ts`、callback parser、public model                             | Vitest Node                    | 極めて速い | なし                 | 多い                 |
 | **Authサーバー統合テスト (AUTH2)**        | 統合                | <ul><li>Better Auth factoryがDrizzle adapter、plugin、callback、email commandを正しくcompositionすることを確認する</li><li>user、session、account、organizationの作成と取得を実DBで確認する</li><li>password、magic link、passkey、multi-sessionなど有効化した機能の代表contractを確認する</li><li>test-only utilityがproduction auth instanceへ混入しないことを確認する</li><li>DB failureとemail failureが安全な公開errorへ変換されることを確認する</li></ul>        | Better Auth、Drizzle adapter、実libSQL、Auth plugin、server callback             | external OAuth、email delivery、clock、OTP capture | `packages/auth/src/server/**`、`index.ts`、server factory、adapter composition、test-only auth factory | Vitest + Better Auth + libSQL  | 速いから中 | なし                 | 厚くする             |
 | **Auth HTTPプロトコル統合テスト (AUTH3)** | 統合                | <ul><li>Set-Cookie、cookie attributes、session refresh、sign-out、multiple sessionを実HTTPで確認する</li><li>CSRF、Origin、CORS、trusted origin、callback redirectを確認する</li><li>email verification、magic link、password reset、invitationなどのone-time token lifecycleを確認する</li><li>client disconnect、duplicate callback、expired session、revoked sessionを確認する</li><li>browser clientとserver endpointのruntime型が整合することを確認する</li></ul> | ephemeral HTTP server、Better Auth route、browser client、実cookie jar、実libSQL | email provider、OAuth provider、production domain  | Auth mount、HTTP handler、cookie/session plugin、browser client integration test                       | Vitest + ephemeral HTTP server | 中から遅い | なし                 | 必要な範囲で厚くする |
-| **Auth OAuth連携統合テスト (AUTH4)**      | 統合                | <ul><li>EmulateのGitHub serviceとauthorize、callback、token exchange、profile取得を一巡させる</li><li>state mismatch、scope不足、provider cancel、invalid code、expired codeを確認する</li><li>既存accountとのlink、duplicate email、provider identity conflictを確認する</li><li>GitHub本番credentialなしで決定的に実行できることを確認する</li></ul>                                                                                                                 | Auth OAuth adapter、EmulateのGitHub service、ephemeral HTTP、実libSQL            | GitHub本番、Web UI、production credential          | `packages/auth/src/github-oauth.ts`、OAuth callback、`apps/emulate/**`とのcontract                     | Vitest + emulator HTTP         | 遅い       | なし                 | 少数                 |
+| **Auth OAuth連携統合テスト (AUTH4)**      | 統合                | <ul><li>EmulateのGitHub serviceとauthorize、callback、token exchange、profile取得を一巡させる</li><li>state mismatch、scope不足、provider cancel、invalid code、expired codeを確認する</li><li>同じ利用者の再ログイン、duplicate email、provider identity conflictを確認する</li><li>GitHub本番credentialなしで決定的に実行できることを確認する</li></ul>                                                                                                              | Auth OAuth adapter、EmulateのGitHub service、ephemeral HTTP、実libSQL            | GitHub本番、Web UI、production credential          | `packages/auth/src/github-oauth.ts`、OAuth callback、`apps/emulate/**`とのcontract                     | Vitest + emulator HTTP         | 遅い       | なし                 | 少数                 |
 
 ## AUTH1: Auth契約単体テスト
 
@@ -104,9 +104,9 @@ API側A4/A5では、Auth packageをAPIへ正しくmountし、API middlewareやCO
 AUTH4はEmulateのGitHub serviceとのprovider contractを検査します。実browserによるlogin pageとnavigationはW6またはE1です。
 
 GitHub OAuthの成功シナリオでは、Better Auth 1.7が`account`行を`local:oauth:github`の`issuer`で
-作成、取得し、既存の`account`行へ正しく接続することも確認します。未知プロバイダーの既存データ
-補完や`(issuer, account_id)`の一意制約はDB3、ブラウザーを含むコールバックURLとログイン後の永続化は
-E1が所有します。
+作成、取得し、同じ利用者の再ログインで重複行を作らないことも確認します。
+`(issuer, account_id)`の一意制約はDB2とDB3、ブラウザーを含むコールバックURLとログイン後の永続化は
+E1が所有します。過去のアカウント行を補完するテストは持ちません。
 
 ```text
 AUTH4
@@ -133,8 +133,8 @@ E1
 | full login journeyとpersistence | E1                             |
 | 本番相当の最終疎通              | E2                             |
 
-`issuer`制約、既存データ補完、OAuthデータ保持はDB3、Relations v2の`adapter`と`credential`の
-`issuer`はAUTH2、GitHubの`issuer`はAUTH4とE1が所有します。
+`issuer`制約と新規データベースの最終AuthスキーマはDB2とDB3、Relations v2の`adapter`と
+`credential`の`issuer`はAUTH2、GitHubの`issuer`はAUTH4とE1が所有します。
 
 ## Better Auth 1.7更新の必須シナリオ
 
@@ -144,18 +144,16 @@ E1
   `issuer = 'local:credential'`で同じ利用者に結び付く。
 - Given GitHubエミュレーターの利用者、When OAuth認可とコールバックを一巡する、Then
   `issuer = 'local:oauth:github'`で`account`行を作成し、再ログイン時に重複させない。
-- Given 既存のOAuthクライアント、トークン、同意情報、コールバックURL、When DB3で移行したDBから
-  AUTH2とAUTH4を実行する、Then 既存設定を再登録せず代表的な認証経路が成功する。
 - Given OAuth Provider 1.7で追加されたresource管理ルート、When 未認証または認証済みsessionから
   作成、一覧、取得、更新、削除、クライアントとの関連付けを要求する、Then `disabledPaths`と
   exact segment-prefix guardにより全methodを404にし、Auth OpenAPIにも公開しない。
-- Given 1.7のresource関連行を持たない既存または新規OAuthクライアント、When 設定済みの単一MCP
+- Given resource管理ルートを公開しない構成で新しく動的登録したOAuthクライアント、When 設定済みの単一MCP
   resourceで認可を開始する、Then resource policyを通過し、`invalid_target`で拒否されない。
 - Given 有効期限内かつ必要なscopeを持つOAuth access token、When Better Authが`revoked`を設定する、
   Then MCP access token検証は無効として扱い、credential一覧にも表示しない。
 - Given API Workerのmoduleを評価する、When Auth route、session、MCP metadata、access token検証をまだ
   呼んでいない、Then `@enterprise-agentic-saas/auth`を読み込まず、Better Auth contextのresource登録を
-  global scopeで開始しない。各surfaceをrequestから呼ぶと同じ標準ES moduleを読み込み、既存の
+  global scopeで開始しない。各surfaceをrequestから呼ぶと同じ標準ES moduleを読み込み、
   singleton contextが完了するまで下流処理を開始せずに応答する。
 
 ライブラリ内部の全挙動を再テストせず、バージョン更新で変わった`adapter`、`relations`、
@@ -178,10 +176,10 @@ AUTH1からAUTH4は外部credentialなしで通常CIへ含めます。AUTH4がGi
 - `credential`とGitHubの`issuer`を代表経路で検査する
 - cookie、CSRF、redirectを実HTTPで検査する
 - OAuth providerをemulatorで決定的に検査する
-- OAuthクライアント、トークン、同意情報、コールバックURLを再登録せず既存データを利用できる
+- 単一の基準マイグレーションから作成したAuthスキーマで代表的な認証経路が成功する
 - OAuth resource管理ルートが認証済みsessionにも公開されない
 - Better Authが`revoked`を設定したOAuth access tokenを検証とcredential一覧の双方から除外する
-- 標準`resources`と単一resourceの互換設定で既存OAuthクライアントを継続利用できる
+- 標準`resources`と単一resourceの設定で新しく動的登録したOAuthクライアントを利用できる
 - API WorkerがBetter Auth singletonをrequest境界まで遅延importし、context完了後に各処理へ委譲する
 - test utilityがproduction auth configへ混入しない
 - API、Web、E2Eとの責務境界が明確である

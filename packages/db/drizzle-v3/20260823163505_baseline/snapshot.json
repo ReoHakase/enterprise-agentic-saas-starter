@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "09c32360-c063-49fc-a3ad-08c70fad8a05",
+  "id": "591ed163-0d3f-4c26-be68-84151cc50359",
   "prevIds": [
-    "fa4560d2-fce1-4df1-bc50-573e89cf7015"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -218,7 +218,7 @@
     },
     {
       "type": "text",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -5917,7 +5917,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "account_user_id_user_id_fk",
+      "name": "fk_account_user_id_user_id_fk",
       "entityType": "fks",
       "table": "account"
     },
@@ -5932,7 +5932,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "invitation_organization_id_organization_id_fk",
+      "name": "fk_invitation_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "invitation"
     },
@@ -5947,7 +5947,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "invitation_inviter_id_user_id_fk",
+      "name": "fk_invitation_inviter_id_user_id_fk",
       "entityType": "fks",
       "table": "invitation"
     },
@@ -5962,7 +5962,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "member_organization_id_organization_id_fk",
+      "name": "fk_member_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "member"
     },
@@ -5977,7 +5977,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "member_user_id_user_id_fk",
+      "name": "fk_member_user_id_user_id_fk",
       "entityType": "fks",
       "table": "member"
     },
@@ -5992,7 +5992,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "passkey_user_id_user_id_fk",
+      "name": "fk_passkey_user_id_user_id_fk",
       "entityType": "fks",
       "table": "passkey"
     },
@@ -6007,7 +6007,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "session_user_id_user_id_fk",
+      "name": "fk_session_user_id_user_id_fk",
       "entityType": "fks",
       "table": "session"
     },
@@ -6022,7 +6022,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "audit_logs_organization_id_organization_id_fk",
+      "name": "fk_audit_logs_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "audit_logs"
     },
@@ -6037,7 +6037,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "audit_logs_actor_user_id_user_id_fk",
+      "name": "fk_audit_logs_actor_user_id_user_id_fk",
       "entityType": "fks",
       "table": "audit_logs"
     },
@@ -6052,7 +6052,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "issue_activity_events_organization_id_organization_id_fk",
+      "name": "fk_issue_activity_events_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "issue_activity_events"
     },
@@ -6067,7 +6067,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "issue_activity_events_actor_user_id_user_id_fk",
+      "name": "fk_issue_activity_events_actor_user_id_user_id_fk",
       "entityType": "fks",
       "table": "issue_activity_events"
     },
@@ -6099,7 +6099,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "issue_comments_organization_id_organization_id_fk",
+      "name": "fk_issue_comments_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "issue_comments"
     },
@@ -6114,7 +6114,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
-      "name": "issue_comments_author_id_user_id_fk",
+      "name": "fk_issue_comments_author_id_user_id_fk",
       "entityType": "fks",
       "table": "issue_comments"
     },
@@ -6146,7 +6146,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "issues_organization_id_organization_id_fk",
+      "name": "fk_issues_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "issues"
     },
@@ -6161,7 +6161,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "issues_assignee_id_user_id_fk",
+      "name": "fk_issues_assignee_id_user_id_fk",
       "entityType": "fks",
       "table": "issues"
     },
@@ -6176,7 +6176,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
-      "name": "issues_creator_id_user_id_fk",
+      "name": "fk_issues_creator_id_user_id_fk",
       "entityType": "fks",
       "table": "issues"
     },
@@ -6191,7 +6191,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "files_organization_id_organization_id_fk",
+      "name": "fk_files_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "files"
     },
@@ -6206,7 +6206,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
-      "name": "files_uploader_id_user_id_fk",
+      "name": "fk_files_uploader_id_user_id_fk",
       "entityType": "fks",
       "table": "files"
     },
@@ -6238,7 +6238,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "organization_file_usage_organization_id_organization_id_fk",
+      "name": "fk_organization_file_usage_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "organization_file_usage"
     },
@@ -6270,7 +6270,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "storage_objects_organization_id_organization_id_fk",
+      "name": "fk_storage_objects_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "storage_objects"
     },
@@ -6285,7 +6285,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
-      "name": "storage_objects_uploader_id_user_id_fk",
+      "name": "fk_storage_objects_uploader_id_user_id_fk",
       "entityType": "fks",
       "table": "storage_objects"
     },
@@ -6372,7 +6372,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "profile_images_user_id_user_id_fk",
+      "name": "fk_profile_images_user_id_user_id_fk",
       "entityType": "fks",
       "table": "profile_images"
     },
@@ -6387,7 +6387,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "profile_images_organization_id_organization_id_fk",
+      "name": "fk_profile_images_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "profile_images"
     },
@@ -6402,7 +6402,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_session_contexts_session_id_session_id_fk",
+      "name": "fk_agent_session_contexts_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_session_contexts"
     },
@@ -6417,7 +6417,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_session_contexts_user_id_user_id_fk",
+      "name": "fk_agent_session_contexts_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_session_contexts"
     },
@@ -6432,7 +6432,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_threads_organization_id_organization_id_fk",
+      "name": "fk_agent_threads_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_threads"
     },
@@ -6447,7 +6447,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_threads_owner_user_id_user_id_fk",
+      "name": "fk_agent_threads_owner_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_threads"
     },
@@ -6462,7 +6462,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_connection_tickets_organization_id_organization_id_fk",
+      "name": "fk_agent_connection_tickets_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_connection_tickets"
     },
@@ -6477,7 +6477,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_connection_tickets_session_id_session_id_fk",
+      "name": "fk_agent_connection_tickets_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_connection_tickets"
     },
@@ -6492,7 +6492,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_connection_tickets_user_id_user_id_fk",
+      "name": "fk_agent_connection_tickets_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_connection_tickets"
     },
@@ -6524,7 +6524,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_grants_organization_id_organization_id_fk",
+      "name": "fk_agent_grants_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_grants"
     },
@@ -6539,7 +6539,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_grants_session_id_session_id_fk",
+      "name": "fk_agent_grants_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_grants"
     },
@@ -6554,7 +6554,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_grants_user_id_user_id_fk",
+      "name": "fk_agent_grants_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_grants"
     },
@@ -6603,7 +6603,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_runs_organization_id_organization_id_fk",
+      "name": "fk_agent_runs_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_runs"
     },
@@ -6618,7 +6618,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_runs_session_id_session_id_fk",
+      "name": "fk_agent_runs_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_runs"
     },
@@ -6633,7 +6633,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_runs_user_id_user_id_fk",
+      "name": "fk_agent_runs_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_runs"
     },
@@ -6699,7 +6699,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_approval_policies_organization_id_organization_id_fk",
+      "name": "fk_agent_approval_policies_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_approval_policies"
     },
@@ -6714,7 +6714,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_approval_policies_session_id_session_id_fk",
+      "name": "fk_agent_approval_policies_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_approval_policies"
     },
@@ -6729,7 +6729,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_approval_policies_user_id_user_id_fk",
+      "name": "fk_agent_approval_policies_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_approval_policies"
     },
@@ -6761,7 +6761,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_thread_permissions_organization_id_organization_id_fk",
+      "name": "fk_agent_thread_permissions_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_thread_permissions"
     },
@@ -6776,7 +6776,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_thread_permissions_session_id_session_id_fk",
+      "name": "fk_agent_thread_permissions_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_thread_permissions"
     },
@@ -6791,7 +6791,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_thread_permissions_user_id_user_id_fk",
+      "name": "fk_agent_thread_permissions_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_thread_permissions"
     },
@@ -6823,7 +6823,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_actions_organization_id_organization_id_fk",
+      "name": "fk_agent_actions_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_actions"
     },
@@ -6964,7 +6964,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_assets_organization_id_organization_id_fk",
+      "name": "fk_agent_assets_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_assets"
     },
@@ -6979,7 +6979,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "agent_assets_session_id_session_id_fk",
+      "name": "fk_agent_assets_session_id_session_id_fk",
       "entityType": "fks",
       "table": "agent_assets"
     },
@@ -6994,7 +6994,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
-      "name": "agent_assets_uploader_id_user_id_fk",
+      "name": "fk_agent_assets_uploader_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_assets"
     },
@@ -7111,7 +7111,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_resource_usage_buckets_organization_id_organization_id_fk",
+      "name": "fk_agent_resource_usage_buckets_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_resource_usage_buckets"
     },
@@ -7126,7 +7126,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_resource_usage_buckets_user_id_user_id_fk",
+      "name": "fk_agent_resource_usage_buckets_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_resource_usage_buckets"
     },
@@ -7158,7 +7158,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_usage_daily_organization_id_organization_id_fk",
+      "name": "fk_agent_usage_daily_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_usage_daily"
     },
@@ -7173,7 +7173,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_usage_daily_user_id_user_id_fk",
+      "name": "fk_agent_usage_daily_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_usage_daily"
     },
@@ -7188,7 +7188,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_usage_events_organization_id_organization_id_fk",
+      "name": "fk_agent_usage_events_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "agent_usage_events"
     },
@@ -7203,7 +7203,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "agent_usage_events_user_id_user_id_fk",
+      "name": "fk_agent_usage_events_user_id_user_id_fk",
       "entityType": "fks",
       "table": "agent_usage_events"
     },
@@ -7237,7 +7237,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_attachment_uploads_organization_id_organization_id_fk",
+      "name": "fk_mcp_attachment_uploads_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "mcp_attachment_uploads"
     },
@@ -7252,7 +7252,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_attachment_uploads_user_id_user_id_fk",
+      "name": "fk_mcp_attachment_uploads_user_id_user_id_fk",
       "entityType": "fks",
       "table": "mcp_attachment_uploads"
     },
@@ -7267,7 +7267,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_attachment_uploads_client_id_oauth_client_client_id_fk",
+      "name": "fk_mcp_attachment_uploads_client_id_oauth_client_client_id_fk",
       "entityType": "fks",
       "table": "mcp_attachment_uploads"
     },
@@ -7299,7 +7299,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_tool_operations_organization_id_organization_id_fk",
+      "name": "fk_mcp_tool_operations_organization_id_organization_id_fk",
       "entityType": "fks",
       "table": "mcp_tool_operations"
     },
@@ -7314,7 +7314,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_tool_operations_user_id_user_id_fk",
+      "name": "fk_mcp_tool_operations_user_id_user_id_fk",
       "entityType": "fks",
       "table": "mcp_tool_operations"
     },
@@ -7329,7 +7329,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "mcp_tool_operations_client_id_oauth_client_client_id_fk",
+      "name": "fk_mcp_tool_operations_client_id_oauth_client_client_id_fk",
       "entityType": "fks",
       "table": "mcp_tool_operations"
     },
@@ -7344,7 +7344,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_access_token_client_id_oauth_client_client_id_fk",
+      "name": "fk_oauth_access_token_client_id_oauth_client_client_id_fk",
       "entityType": "fks",
       "table": "oauth_access_token"
     },
@@ -7359,7 +7359,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "oauth_access_token_session_id_session_id_fk",
+      "name": "fk_oauth_access_token_session_id_session_id_fk",
       "entityType": "fks",
       "table": "oauth_access_token"
     },
@@ -7374,7 +7374,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_access_token_user_id_user_id_fk",
+      "name": "fk_oauth_access_token_user_id_user_id_fk",
       "entityType": "fks",
       "table": "oauth_access_token"
     },
@@ -7389,7 +7389,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_access_token_refresh_id_oauth_refresh_token_id_fk",
+      "name": "fk_oauth_access_token_refresh_id_oauth_refresh_token_id_fk",
       "entityType": "fks",
       "table": "oauth_access_token"
     },
@@ -7404,7 +7404,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_client_user_id_user_id_fk",
+      "name": "fk_oauth_client_user_id_user_id_fk",
       "entityType": "fks",
       "table": "oauth_client"
     },
@@ -7449,7 +7449,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_consent_client_id_oauth_client_client_id_fk",
+      "name": "fk_oauth_consent_client_id_oauth_client_client_id_fk",
       "entityType": "fks",
       "table": "oauth_consent"
     },
@@ -7464,7 +7464,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_consent_user_id_user_id_fk",
+      "name": "fk_oauth_consent_user_id_user_id_fk",
       "entityType": "fks",
       "table": "oauth_consent"
     },
@@ -7479,7 +7479,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_refresh_token_client_id_oauth_client_client_id_fk",
+      "name": "fk_oauth_refresh_token_client_id_oauth_client_client_id_fk",
       "entityType": "fks",
       "table": "oauth_refresh_token"
     },
@@ -7494,7 +7494,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
-      "name": "oauth_refresh_token_session_id_session_id_fk",
+      "name": "fk_oauth_refresh_token_session_id_session_id_fk",
       "entityType": "fks",
       "table": "oauth_refresh_token"
     },
@@ -7509,7 +7509,7 @@
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "oauth_refresh_token_user_id_user_id_fk",
+      "name": "fk_oauth_refresh_token_user_id_user_id_fk",
       "entityType": "fks",
       "table": "oauth_refresh_token"
     },
@@ -7966,6 +7966,24 @@
       "name": "oauth_resource_pk",
       "table": "oauth_resource",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "issuer",
+          "isExpression": false
+        },
+        {
+          "value": "account_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "account_issuer_accountId_uidx",
+      "entityType": "indexes",
+      "table": "account"
     },
     {
       "columns": [

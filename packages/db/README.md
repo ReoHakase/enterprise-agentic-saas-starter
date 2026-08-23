@@ -21,8 +21,7 @@ Turso/libSQLとDrizzle ORMの単一DBクライアント、スキーマ、マイ�
 - `src/schema/relations.ts`: 認証とOAuth Providerを統合したDrizzle Relations v2の正本
 - `src/schema/app.ts`: Issue/comment/file/profile image/auditなどapp schema
 - `fixtures/files/`: local R2へ投入する決定的なfile fixture
-- `drizzle/`: Drizzle 0.xで作成した31件の読み取り専用履歴。実行時には参照しない
-- `drizzle-v3/`: Drizzle v1が実行する追記専用のSQLとスナップショット
+- `drizzle-v3/`: Drizzle v1が実行する基準マイグレーションと将来の追記
 
 auth plugin変更時:
 
@@ -36,16 +35,14 @@ git diff -- packages/db/src/schema/auth.generated.ts \
   packages/db/src/schema/oauth-provider.ts \
   packages/db/src/schema/relations.ts \
   packages/db/drizzle-v3
-git diff --exit-code origin/main -- packages/db/drizzle
 ```
 
 OAuth Providerのtable contractをCLI出力と照合し、リポジトリ固有のindexとdefaultが
 マイグレーション差分で消えていないことを確認します。CLI出力で`auth.generated.ts`を直接上書き
-しません。新しいマイグレーションは`drizzle-v3/<timestamp>_<tag>/`へ追加し、既存のv3
-ディレクトリと旧履歴を変更しません。開発中も`drizzle-kit push`は使いません。
-
-旧形式からv3への変換が必要な場合だけ、追跡対象外の一時コピーへ固定版`drizzle-kit up`を実行します。
-リポジトリ内の`drizzle/**`へ直接実行しません。詳細は
+しません。Drizzle v1更新を含む変更では`drizzle-v3/20260823163505_baseline/`が現在のスキーマ、
+リポジトリ所有のトリガー、現在有効なLunaの料金行を一度で作成します。この基準マイグレーションが
+`main`へ取り込まれた後は、`drizzle-v3/<timestamp>_<tag>/`へ完全な新規ディレクトリだけを追加し、
+既存ディレクトリを変更しません。開発中も`drizzle-kit push`は使いません。詳細は
 [`../../docs/decisions/ADR-006-migration-history-append-only.md`](../../docs/decisions/ADR-006-migration-history-append-only.md)
 を参照してください。
 
@@ -86,13 +83,16 @@ CONFIRM_DB_RESET=reset-local-development \
   bun run --cwd packages/db db:reset
 ```
 
-開発用初期データ投入とリセットは`file:`またはlocalhost URLだけを許可します。リセットはさらに
-確認文字列を要求し、マイグレーション台帳を含むテーブルを削除、保存済みのv3マイグレーションを
-全適用してから開発用初期データを投入します。Cloud、ステージング、本番URLはどちらも拒否します。
+開発用初期データ投入とリセットは`file:`またはlocalhost URLだけを許可します。DB単体のリセットは
+さらに確認文字列を要求し、マイグレーション台帳を含むテーブルを削除して、保存済みのv3
+マイグレーションを適用してからDBの開発用初期データを投入します。R2 fixtureも含める場合はrootの
+`dev:db:reset`後に任意の`dev:db:seed`を使います。Cloud、ステージング、本番URLはどちらも拒否します。
 本番準備では`db:seed`を使わず、
 マイグレーション適用後に実ユーザーを通常の認証とorganization作成フローから初期管理者にします。
 
-fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
+新規データベースへの開発用初期データ投入は固定anchorと7件の`pending` file rowを作り、quotaには
+pending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。
+通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
 
 DBとlocal R2のfixtureが必要な場合は、rootから明示実行します。full devの起動前でも、起動中でも利用できます。
 
@@ -108,10 +108,11 @@ bun run dev:db:seed
 
 ## Test
 
-`src/migrations/{fresh,upgrades,invariants,lifecycle}.test.ts`と`src/files.test.ts`は、v3履歴からの
-新規DB構築、旧台帳からの標準v1更新とDDL非再実行、旧31件と変換後31件の対応、旧形式データ変換、
-Better Auth 1.7の`issuer`移行、OAuthデータ保持、所属関係と単一`owner`の不変条件、ファイル所有者の
-テナント外部キー、プロフィール画像の主体、準備完了状態、冪等性制約、容量と削除処理の制約、
-フィクスチャのダイジェスト、開発用初期データ投入のトランザクションロールバック、再現性、
-非破壊再実行、遠隔データベースへの投入拒否、実ファイルDBのリセットを検証します。
+`src/migrations/{fresh,invariants,concurrency,lifecycle}.test.ts`と`src/files.test.ts`は、単一の基準
+マイグレーションからの新規DB構築、マイグレーション台帳の1行、リポジトリ所有のトリガー、現在
+有効なLunaの料金行、Better Auth 1.7の最終スキーマ、所属関係と単一`owner`の
+不変条件、ファイル所有者のテナント外部キー、プロフィール画像の主体、準備完了状態、冪等性制約、
+容量と削除処理の制約、フィクスチャのダイジェスト、開発用初期データ投入のトランザクション
+ロールバック、再現性、非破壊再実行、遠隔データベースへの投入拒否、実ファイルDBのリセットを
+検証します。
 外部TursoやR2は必要ありません。

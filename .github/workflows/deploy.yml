@@ -243,13 +243,6 @@ jobs:
       - name: Build API Worker
         run: bun run --cwd apps/api build:cloudflare
 
-      - name: Inspect migration rollout state
-        id: file-activity-rollout
-        run: bun run packages/db/src/file-activity-rollout.ts >> "$GITHUB_OUTPUT"
-        env:
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-
       - name: Inspect cross-database Worker secret inventory
         id: worker-secrets
         run: |
@@ -297,7 +290,6 @@ jobs:
           compatibility_required="$(
             bun run .github/compatibility-rollout-policy.ts \
               "${{ steps.worker-state.outputs.bootstrap_required }}" \
-              "${{ steps.file-activity-rollout.outputs.compatibility_deploy }}" \
               "${{ steps.worker-secrets.outputs.stale_found }}"
           )"
           printf 'compatibility_required=%s\n' "$compatibility_required" >> "$GITHUB_OUTPUT"

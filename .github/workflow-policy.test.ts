@@ -54,7 +54,6 @@ describe("repository quality configuration", () => {
 
   test("isolates, drains, and removes stale secrets before destructive migrations", async () => {
     const workflow = await readFile(".github/workflows/deploy.yml", "utf8")
-    const inspectAt = workflow.indexOf("Inspect migration rollout state")
     const inventoryAt = workflow.indexOf(
       "Inspect cross-database Worker secret inventory"
     )
@@ -84,8 +83,7 @@ describe("repository quality configuration", () => {
     )
     const migrateAt = workflow.indexOf("Apply Turso migrations")
 
-    expect(inspectAt).toBeGreaterThan(-1)
-    expect(inventoryAt).toBeGreaterThan(inspectAt)
+    expect(inventoryAt).toBeGreaterThan(-1)
     expect(policyAt).toBeGreaterThan(inventoryAt)
     expect(killSwitchAt).toBeGreaterThan(policyAt)
     expect(deployAt).toBeGreaterThan(killSwitchAt)

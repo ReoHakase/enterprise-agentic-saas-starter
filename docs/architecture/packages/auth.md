@@ -2,7 +2,7 @@
 title: packages/authの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-08-24
 applies_to:
   - packages/auth/**
 ---
@@ -62,23 +62,16 @@ DBクライアントは、同じテーブルと統合済みの`relations`を受�
 
 ## アカウント識別子
 
-Better Auth 1.7はアカウントを`(issuer, account_id)`で識別します。`issuer`は`NOT NULL`、
-`(issuer, account_id)`は一意とし、CLIの最終スキーマと一致させます。
+Better Auth 1.7はアカウントを`(issuer, account_id)`で識別します。単一の基準マイグレーションが
+`issuer NOT NULL`と`(issuer, account_id)`の一意制約を含み、CLIの最終スキーマと一致させます。
 
-既存データは、現在の構成で信頼できる次の2種類だけを既存データ補完します。
+新しい認証情報アカウントは`issuer = 'local:credential'`、新しいGitHubアカウントは
+`issuer = 'local:oauth:github'`で作成します。過去のデータベースやアカウント行は移行せず、推測した
+`issuer`で利用者を別の`account`へ結び付ける処理を持ちません。
 
-- `provider_id = 'credential'`: `issuer = 'local:credential'`
-- `provider_id = 'github'`: `issuer = 'local:oauth:github'`
-
-未知のプロバイダー、`credential`の`account_id`と`user_id`の不一致、補完後の識別子重複は
-失敗時に拒否します。推測した`issuer`で利用者を別の`account`へ結び付けません。補完後に
-`NOT NULL`と一意制約を追加し、最終スキーマを有効にします。
-
-OAuth Provider 1.7で追加されたリソース、クライアントアサーション、トークン、同意情報の列は
-追記しますが、既存のOAuthクライアント、アクセストークン、更新トークン、同意情報、`public`、
-`type`、クライアントシークレット、コールバックURLを削除または再登録しません。既存クライアントの
-認証方式を補完できない場合も失敗時に拒否します。詳細な段階移行は
-[Database lifecycle](../../database-lifecycle.md)を正本にします。
+OAuth Provider 1.7のリソース、クライアントアサーション、トークン、同意情報を含む最終スキーマも、
+同じ基準マイグレーションで新規データベースへ作成します。段階的な列追加や既存OAuthデータの補完は
+行いません。詳細は[Database lifecycle](../../database-lifecycle.md)を正本にします。
 
 OAuth Provider 1.7で追加された`/admin/oauth2/resources`配下の管理ルートは公開しません。
 リソースはmigrationとサーバー構成が所有し、対象の作成、一覧、更新、削除、クライアントとの関連付けを
@@ -87,9 +80,9 @@ top-level `disabledPaths`へ追加して公開対象から除外します。動�
 認証済みsessionだけを根拠にresource管理を許可しません。
 
 MCPは環境ごとに決まる1つのresourceだけを`resources`へ登録し、request hookでもその完全一致を
-要求します。旧`validAudiences`は使いません。既存クライアントには1.7のresource関連行がなく、
-環境固有URLをSQLで安全に既存データ補完できないため、`enforcePerClientResources`を明示的に無効にし、
-既存クライアントを再登録せず同じresourceだけで利用できるようにします。
+要求します。旧`validAudiences`は使いません。resource管理ルートを公開せず、動的登録された
+クライアントへ個別のresource行を作成する導線も持たないため、`enforcePerClientResources`を明示的に
+無効にします。サーバーが設定した単一resourceとの完全一致は引き続き必須です。
 
 OAuth Provider 1.7はBetter Auth contextの初期化時に設定済みresourceをDBへ登録します。Cloudflare
 Workerは`@enterprise-agentic-saas/auth`のsingletonをglobal scopeで初期化せず、APIのAuth mount、
@@ -109,9 +102,9 @@ MCP resourceは`API_PUBLIC_URL`から組み立て、deploymentとlocal topology�
 - Relations v2 `adapter`と実libSQLの接続
 - `user`と`session`に認証とOAuth Provider双方の`relations`が残ること
 - CLI生成スキーマとアカウント識別子制約の一致
-- `credential`、GitHub、未知プロバイダー、識別子重複の移行境界
+- 新しい`credential`とGitHubアカウントの`issuer`、識別子重複の拒否
 - OAuth resource管理ルートがOpenAPIから除外され、全methodで404になること
-- 既存と新規のOAuthクライアントが設定済みの単一MCP resourceで`invalid_target`にならないこと
+- 新しく動的登録したOAuthクライアントが設定済みの単一MCP resourceで`invalid_target`にならないこと
 - `revoked`済みのOAuth access tokenをMCP検証とcredential一覧から除外すること
 - API Workerのglobal scopeでBetter Auth contextとresource登録を開始しないこと
 
@@ -126,11 +119,12 @@ GitHub OAuth emulatorとはHTTP protocolで接続し、source contractを共有�
 - generated Auth schemaとの整合testがある
 - Better Auth関連パッケージが`1.7.1`、Drizzle関連パッケージが`1.0.0-rc.4`へ完全固定されている
 - Relations v2の標準`adapter`を使い、旧`adapter`と互換実装がない
-- アカウント識別子が`(issuer, account_id)`で一意であり、未検証の`issuer`補完を拒否する
+- アカウント識別子が`(issuer, account_id)`で一意であり、新しい認証情報とGitHubアカウントへそれぞれ
+  固定した`issuer`を設定する
 - 認証とOAuth Providerの`relations`が同じ`user`、`session`で失われない
-- 既存のOAuthクライアント、トークン、同意情報、コールバックURLを破壊しない
+- OAuth Provider 1.7の最終スキーマを単一の基準マイグレーションから作成できる
 - OAuth resource管理ルートを認証済みsessionへ公開しない
-- 単一MCP resourceを標準`resources`へ登録し、既存OAuthクライアントの再登録を要求しない
+- 単一MCP resourceを標準`resources`へ登録し、新しく動的登録したクライアントから利用できる
 - API Workerではsingletonをrequest境界まで遅延importし、context完了後に委譲してglobal scopeまたは
   response完了後のDB I/Oを発生させない
 - Better Auth OpenAPIを結合または変換する独自entrypointがない

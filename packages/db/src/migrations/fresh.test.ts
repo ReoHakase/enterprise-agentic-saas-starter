@@ -5,6 +5,54 @@ import { describe, expect, it } from "vitest"
 
 import { migrationsFolder } from "./helpers"
 
+const baselineTriggerNames = [
+  "agent_action_assets_immutable_update",
+  "agent_action_assets_quota_classify_after",
+  "agent_action_assets_quota_classify_before",
+  "agent_action_assets_release_update",
+  "agent_action_assets_scope_insert",
+  "agent_actions_immutable_update",
+  "agent_actions_payload_scrub_update",
+  "agent_actions_scope_insert",
+  "agent_actions_state_update",
+  "agent_actions_terminal_release_assets",
+  "agent_approval_policies_immutable_update",
+  "agent_approval_policies_scope_insert",
+  "agent_assets_immutable_update",
+  "agent_assets_initial_state_insert",
+  "agent_assets_state_machine_update",
+  "agent_resource_usage_operations_apply",
+  "agent_resource_usage_operations_immutable",
+  "agent_resume_tickets_scope_insert",
+  "agent_resume_tickets_terminal_update",
+  "agent_run_assets_insert_limits",
+  "agent_run_assets_update_limits",
+  "agent_runs_required_identifiers_insert",
+  "agent_runs_required_identifiers_update",
+  "agent_runs_resume_action_scope_insert",
+  "agent_session_contexts_revoke_old_epoch",
+  "agent_session_contexts_rotation_guard",
+  "agent_update_attachment_success_integrity",
+  "files_before_delete_detach_promoted_asset",
+  "files_ready_physical_immutable",
+  "files_v2_initial_state_insert",
+  "files_v2_ready_update",
+  "issues_revision_auto_increment",
+  "issues_revision_guard",
+  "session_agent_context_rotate_organization",
+  "storage_object_claims_holder_insert",
+  "storage_object_claims_insert_live_object",
+  "storage_object_claims_promotion_update",
+  "storage_object_claims_update_live_object",
+  "storage_object_cleanup_jobs_insert_fence",
+  "storage_object_cleanup_jobs_update_fence_immutable",
+  "storage_objects_before_delete_clear_agent_action_assets",
+  "storage_objects_before_delete_clear_agent_run_assets",
+  "storage_objects_identity_immutable",
+  "storage_objects_update_cleanup_without_claim",
+  "storage_objects_update_state_machine",
+] as const
+
 describe("database migrations: fresh", () => {
   it("migrates a fresh database to the current schema", async () => {
     const client = createClient({ url: "file::memory:" })
@@ -13,13 +61,38 @@ describe("database migrations: fresh", () => {
     try {
       await migrate(db, { migrationsFolder })
 
-      const tables = await client.execute({
-        sql: "select name from sqlite_master where type = ? order by name",
-        args: ["table"],
-      })
-      const indexes = await client.execute(
-        "select name from sqlite_master where type = 'index' and tbl_name = 'member' order by name"
-      )
+      const [
+        tables,
+        indexes,
+        triggers,
+        ledger,
+        foreignKeys,
+        nullableTextPrimaryKeys,
+      ] = await Promise.all([
+        client.execute({
+          sql: "select name from sqlite_master where type = ? order by name",
+          args: ["table"],
+        }),
+        client.execute(
+          "select name from sqlite_master where type = 'index' and tbl_name = 'member' order by name"
+        ),
+        client.execute(
+          "select name from sqlite_master where type = 'trigger' order by name"
+        ),
+        client.execute(
+          "select name from __drizzle_migrations order by applied_at"
+        ),
+        client.execute("pragma foreign_key_check"),
+        client.execute(`
+            select schema.name as table_name, columns.name as column_name
+            from sqlite_schema as schema, pragma_table_info(schema.name) as columns
+            where schema.type = 'table'
+              and lower(columns.type) = 'text'
+              and columns.pk > 0
+              and columns."notnull" = 0
+            order by schema.name, columns.pk
+          `),
+      ])
       expect(tables.rows.map(({ name }) => name)).toEqual(
         expect.arrayContaining([
           "agent_assets",
@@ -58,6 +131,13 @@ describe("database migrations: fresh", () => {
           "member_organization_user_uidx",
         ])
       )
+      expect(triggers.rows.map(({ name }) => name)).toEqual(
+        baselineTriggerNames
+      )
+      expect(ledger.rows).toHaveLength(1)
+      expect(ledger.rows[0]?.name).toMatch(/_baseline$/)
+      expect(foreignKeys.rows).toEqual([])
+      expect(nullableTextPrimaryKeys.rows).toEqual([])
     } finally {
       client.close()
     }
@@ -358,22 +438,6 @@ describe("database migrations: fresh", () => {
       ])
       expect(images.rows).toHaveLength(0)
       expect(cleanup.rows).toHaveLength(1)
-    } finally {
-      client.close()
-    }
-  })
-
-  it("removes the legacy invitation delivery outbox", async () => {
-    const client = createClient({ url: "file::memory:" })
-
-    try {
-      await migrate(drizzle({ client }), { migrationsFolder })
-      const tables = await client.execute(
-        "select name from sqlite_master where type = 'table'"
-      )
-      expect(tables.rows.map(({ name }) => name)).not.toContain(
-        "invitation_email_jobs"
-      )
     } finally {
       client.close()
     }

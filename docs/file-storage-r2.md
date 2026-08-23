@@ -2,7 +2,7 @@
 title: 認証付きfile storage運用
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-24
 ---
 
 # 認証付きfile storage運用
@@ -129,7 +129,7 @@ bun run dev:db:seed
 bun run dev
 ```
 
-`dev:db:reset`は確認後にlocal Tursoと対応する`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。seedは任意なので、fixtureが不要ならそのまま`bun run dev`を起動します。続く`bun run dev`が行うのはmigrationまでで、fixture投入は自動実行しません。既存DBへmigrationだけを適用する場合はreset不要です。
+`dev:db:reset`は確認後にlocal Tursoと対応する`apps/api/.wrangler/state`、起動ごとのseed token/sessionを一緒に削除します。seedは任意なので、fixtureが不要ならそのまま`bun run dev`を起動します。続く`bun run dev`が行うのはmigrationまでで、fixture投入は自動実行しません。基準マイグレーションから作成済みのDBへ将来の追記マイグレーションだけを適用する場合はreset不要です。
 
 ## 障害復旧
 
@@ -143,7 +143,9 @@ profile imageの置換・削除もDBのcurrent metadataとBetter Auth列を先�
 
 Organizationの更新と削除はroute guardに加え、finalize/delete transaction内でもmembership、期限内sessionのactive organization、`owner` roleをこの順に再検証します。Images/R2処理中のrole降格やactive organization変更があってもauth列を更新しません。UserのGETは認証済みsessionから利用でき、OrganizationのGETは対象membershipがなければ404です。
 
-`file_added` / `file_deleted`を初めて導入する`0011_file_activity_backfill`は、旧APIとの切替中にfilename履歴を失わないよう特別なcompatibility deployを必要とします。production workflowは`0010`まで適用済みで`0011`が未適用の場合だけ新APIを先行deployし、その後にready fileをbackfillします。通常のmigration-first順序を手動で適用してこの判定を迂回しないでください。
+単一の基準マイグレーションがfile activityのテーブル、制約、トリガーを現在の形で作成します。過去の
+file rowからactivityを補完する処理や、マイグレーション専用の切替手順は持ちません。本番
+データベースはまだ作成されておらず、初回は空のデータベースへ基準マイグレーションを適用します。
 
 local seedのreconcileは次の動作です。
 

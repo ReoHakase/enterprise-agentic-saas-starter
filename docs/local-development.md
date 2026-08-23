@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-24
 ---
 
 # ローカル開発
@@ -122,6 +122,10 @@ Agent storage、ローカルCA、signalと終了コードが標準CLIまたは�
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 
+Drizzle v1の単一基準マイグレーションへ切り替えるときは、以前のマイグレーションを適用したローカル
+DBを引き継ぎません。全dev serverを停止して`bun run dev:db:reset`を一度実行し、fixtureが必要な
+場合だけ`bun run dev:db:seed`を実行します。本番DBはまだ存在しません。
+
 `dev:db:*`はlocal application dataの準備・破棄をまとめる公開command群です。`bun run dev:db:seed`はDB rowだけでなく、metadataと対応するR2 objectも同時にreconcileします。rootの`seed` aliasやproduction用seed commandは作りません。
 
 `bun run dev:db:seed`はhealthyなAPI dev sessionがあればそのWorkerを再利用します。full devが停止中ならlocal Tursoが停止中の場合だけ一時起動し、migrationを適用した後、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動します。DB seedとR2 reconcileの完了後はcommand自身が起動したprocessだけを停止し、既存processや永続化したDB/R2 stateには触れません。production、remote Turso、remote Workerは処理開始前に拒否します。
@@ -194,7 +198,9 @@ Workerへ渡しません。どちらもPortlessの`PORT`をHTTP listenerへ使�
 Wrangler既定の`9229`を奪い合いません。固定したDevTools endpointが必要な単独起動だけ、
 `WRANGLER_INSPECTOR_PORT=9234 bun run --cwd apps/agent dev`のように上書きできます。
 
-既存DBへmigrationだけを適用する場合はreset不要です。local dataとR2 stateを作り直す場合だけ、全dev serverを停止して次を実行します。
+単一基準マイグレーションへの切替時、またはlocal dataとR2 stateを作り直す場合は、全dev serverを
+停止して次を実行します。基準マイグレーションから作成済みのDBへ将来の追記マイグレーションだけを
+適用する場合はreset不要です。
 
 ```sh
 bun run dev:db:reset

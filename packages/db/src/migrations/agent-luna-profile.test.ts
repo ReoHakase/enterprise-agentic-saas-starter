@@ -19,21 +19,27 @@ describe("database migrations: Luna Agent profile", () => {
         context_window_token_count: "1050000",
         reserved_output_token_count: "4096",
       })
-      const lunaPrice = await client.execute(
-        "select provider,model,pricing_version,input_price_micros_per_million,cache_read_price_micros_per_million,cache_write_price_micros_per_million,output_price_micros_per_million,tier_threshold_token_count,tier_input_price_micros_per_million,tier_output_price_micros_per_million from agent_model_prices where id = 'price_openrouter_gpt_5_6_luna_2026_08_01'"
+      const modelPrices = await client.execute(
+        "select id,provider,model,pricing_version,effective_from,effective_to,input_price_micros_per_million,cache_read_price_micros_per_million,cache_write_price_micros_per_million,output_price_micros_per_million,tier_threshold_token_count,tier_input_price_micros_per_million,tier_cache_read_price_micros_per_million,tier_cache_write_price_micros_per_million,tier_output_price_micros_per_million,currency from agent_model_prices order by id"
       )
-      expect(lunaPrice.rows).toEqual([
+      expect(modelPrices.rows).toEqual([
         {
+          id: "price_openrouter_gpt_5_6_luna_2026_08_01",
           provider: "openrouter",
           model: "openai/gpt-5.6-luna",
           pricing_version: "openai-2026-08-01",
+          effective_from: 1_785_510_000_000,
+          effective_to: null,
           input_price_micros_per_million: 200_000,
           cache_read_price_micros_per_million: 20_000,
           cache_write_price_micros_per_million: 250_000,
           output_price_micros_per_million: 1_200_000,
           tier_threshold_token_count: 272_000,
           tier_input_price_micros_per_million: 400_000,
+          tier_cache_read_price_micros_per_million: 40_000,
+          tier_cache_write_price_micros_per_million: 500_000,
           tier_output_price_micros_per_million: 1_800_000,
+          currency: "USD",
         },
       ])
     } finally {

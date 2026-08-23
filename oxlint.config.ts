@@ -34,7 +34,6 @@ export const lintIgnorePatterns = [
   "**/generated/**",
   `**/*.generated.${executableExtensions}`,
   "**/cloudflare-env.d.ts",
-  "**/drizzle/**",
   "**/storybook-static/**",
   "**/playwright-report/**",
   "**/test-results/**",

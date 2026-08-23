@@ -27,9 +27,9 @@ Client UIの非表示やredirectはUXであり、認可境界ではありませ�
 - `admin`: member/invitationと通常のworkspace運用を管理できる。
 - `member`: tenant内の通常操作のみ。organization設定や権限昇格は不可。
 
-legacy `super_admin`はmigrationで`owner`へ変換します。最後のownerをremove/demoteする操作は拒否します。
+旧`super_admin`は現在のroleとして受け入れません。最後のownerをremove/demoteする操作は拒否します。
 
-DBは`(organization_id, user_id)`のmembership重複と、同じorganizationの複数`owner`を一意indexで拒否します。過去のmigrationが重複membershipとowner不在を修復した後、`0027_nostalgic_sugar_man`が`super_admin`を`owner`へ変換します。memberが1人もいないorphan organizationはuserを捏造せず、運用者の修復対象として残します。
+DBは`(organization_id, user_id)`のmembership重複と、同じorganizationの複数`owner`を一意indexで拒否します。単一の基準マイグレーションは現在の制約を最初から作成し、過去のmembershipやroleを修復しません。memberが1人もいないorphan organizationはuserを捏造せず、運用者の修復対象として残します。
 
 ## Organization切り替え
 
@@ -45,7 +45,7 @@ member削除時はmembership、auditだけでなく、対象userが削除organiz
 
 clientのactivate成功直後に旧tenantのTanStack Queryを一括invalidateしません。session contextだけが新tenantへ変わった状態で旧member/issue queryを再取得すると409/404になるため、in-flight queryをcancelし、route replaceまたはServer Component refreshで新tenantのquery keyを構築します。
 
-Agent機能が有効なsessionでは、`active_organization_id`変更とAgent context失効も同じDB transactionです。migration `0015_agent_action_runtime`の`session_agent_context_rotate_organization` triggerがcontext epochを1増やし、旧epochのconnection ticket、grant、resume ticket、run、action、approval policyを失効します。これをclient-side cleanupの代わりにせず、切り替え後はAgent stream/uploadをabortし、Agent/files/issuesを含む旧tenant queryをcancelし、shell draft、thread、form registry、Blob URL、tenant query parameterをclearしてから`router.replace()`と`router.refresh()`を行います。route slugと新sessionのactive organizationが一致するまでAgent composerとclient toolは無効です。
+Agent機能が有効なsessionでは、`active_organization_id`変更とAgent context失効も同じDB transactionです。基準マイグレーションに含まれる`session_agent_context_rotate_organization` triggerがcontext epochを1増やし、旧epochのconnection ticket、grant、resume ticket、run、action、approval policyを失効します。これをclient-side cleanupの代わりにせず、切り替え後はAgent stream/uploadをabortし、Agent/files/issuesを含む旧tenant queryをcancelし、shell draft、thread、form registry、Blob URL、tenant query parameterをclearしてから`router.replace()`と`router.refresh()`を行います。route slugと新sessionのactive organizationが一致するまでAgent composerとclient toolは無効です。
 
 人が開くorganization管理URLは `/organization/:organizationSlug/members|settings` とし、UUIDを公開URLへ使いません。Server Componentはsession userが所属するorganization一覧からslugを解決し、見つからないslugを404にしてから、内部APIへ検証済みorganization IDを渡します。slug変更後は新slugのURLへ置換します。
 
@@ -66,7 +66,7 @@ MCPは環境ごとに決まる1つのresourceだけをOAuth Providerの`resource
 単位resource制約は明示的に無効にします。許可resourceを増やさず、既存クライアントの再登録も
 要求しません。
 
-招待作成前とaccept直前の`organizationHooks`でroleを`admin | member`に限定します。`owner`、legacy `super_admin`、null、未知roleのpending invitationはmigrationでexpired化し、migration未適用DBでもhookがfail closedします。
+招待作成前とaccept直前の`organizationHooks`でroleを`admin | member`に限定します。`owner`、旧`super_admin`、null、未知roleは保存またはacceptの前に拒否します。招待一覧も許可外の生roleを公開せず、失敗時に拒否します。
 
 招待リンクは`/invitations/:invitationId`を正規URLとし、未ログインでもlanding pageを開けます。organization名、inviter、recipientなどの招待詳細はBetter Authの`get-invitation`が現在のsession emailとrecipient emailの一致を確認した後だけ表示します。未ログインには招待URLを`redirectTo`へ保持した新規登録/ログインを示し、別emailのsessionにはaccept actionを出さず、multi-sessionのswitch/add accountを促します。account切替では旧sessionのqueryをcancelし、cookie切替後に認証済みTanStack Query cacheを破棄して、Next/React treeをhard reloadします。通常は`/dashboard`、招待中は検証済みの同一origin `/invitations/:id`を明示的な戻り先とし、account境界のためにworkflow contextを失わないよう同じ招待検証をやり直します。外部origin、protocol-relative path、backslash、control文字を含む戻り先は`/dashboard`へfail closedします。明確なnot-foundだけをterminal表示にし、5xx、network、schema不一致はprovider詳細を出さない再試行表示にします。
 

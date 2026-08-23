@@ -27,7 +27,6 @@
     "**/*.config.*",
     "**/scripts/**",
     "**/generated/**",
-    "**/drizzle/**",
     "**/dist/**",
     "**/.next/**"
   ]
