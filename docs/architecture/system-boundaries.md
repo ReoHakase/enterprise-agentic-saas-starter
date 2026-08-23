@@ -48,6 +48,9 @@ apps/api
 apps/agent
   -> @enterprise-agentic-saas/agent-contracts
 
+apps/images
+  -> 他workspaceへ依存しない
+
 packages/auth
   -> @enterprise-agentic-saas/db
   -> @enterprise-agentic-saas/email
@@ -95,6 +98,7 @@ manifestのdevelopment dependencyとbare executableだけを利用し、source�
 | `apps/api`                   | Web、Agent runtime、UI、Emulate                                                                                         |
 | `apps/agent`                 | API、DB、Auth、Email、Web、UI、Emulate                                                                                  |
 | `apps/emulate`               | Web、API、Agent、DB、Email、UI                                                                                          |
+| `apps/images`                | 他の全workspace                                                                                                         |
 | `packages/auth`              | app、API、UI                                                                                                            |
 | `packages/db`                | 他の全workspace                                                                                                         |
 | `packages/email`             | app、Auth、DB、UI、API                                                                                                  |

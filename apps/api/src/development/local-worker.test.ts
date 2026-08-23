@@ -4,11 +4,19 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import {
+  localWorkerConfigPaths,
   resolveDevelopmentAgentAssetUploadFlag,
   resolveWranglerInspectorPort,
 } from "./local-worker"
 
 describe("local Worker development configuration", () => {
+  it("starts API and the private Images Worker in one Wrangler session", () => {
+    expect(localWorkerConfigPaths).toEqual([
+      "wrangler.jsonc",
+      "../images/wrangler.jsonc",
+    ])
+  })
+
   it("keeps the API supervisor in the dev path so Mailpit is injected", async () => {
     const packageJson: unknown = JSON.parse(
       await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8")

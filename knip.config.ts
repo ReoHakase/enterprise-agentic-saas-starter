@@ -1,7 +1,7 @@
 import type { KnipConfig } from "knip"
 
-// Tracking: one-shot harness migration §3.3. Owner: CI/quality maintainers.
 // Cloudflare's `cloudflare:workers` protocol is a runtime builtin, not an npm package.
+// Owner: CI/quality maintainers.
 // Remove this exception when Knip classifies that protocol without an unlisted dependency.
 const cloudflareRuntimeBuiltin = ["cloudflare"]
 
@@ -41,7 +41,6 @@ const config: KnipConfig = {
     },
     "apps/api": {
       entry: [
-        "smoke/images/run.ts",
         "src/**/*.test.ts",
         "src/dev.ts",
         // The deterministic OAuth E2E fixture starts this entry by file path.
@@ -52,11 +51,7 @@ const config: KnipConfig = {
       // Knip strict implies production mode. Keep the production graph explicit
       // while normal mode still audits every test/development support module.
       project: [
-        "smoke/**/*.ts!",
         "src/**/*.ts!",
-        "!smoke/images/client.ts!",
-        "!smoke/images/cloudflare-env.d.ts!",
-        "!smoke/**/*.test.ts!",
         "!src/**/*.fixture-support.ts!",
         "!src/**/*.test-support.ts!",
         "!src/**/*.test-database-support.ts!",
@@ -80,6 +75,12 @@ const config: KnipConfig = {
     },
     "apps/emulate": {
       project: ["app/**/*.ts!", "!app/**/*.test.ts!"],
+    },
+    "apps/images": {
+      project: ["src/**/*.ts!", "!src/**/*.test.ts!"],
+      wrangler: {
+        config: ["wrangler.jsonc"],
+      },
     },
     "apps/web": {
       entry: [

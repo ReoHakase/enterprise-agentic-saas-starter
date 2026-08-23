@@ -135,4 +135,23 @@ describe("repository quality configuration", () => {
     expect(finalInventory).toContain("for worker_kind in api agent")
     expect(workflow).not.toContain("cleanup_allowed=")
   })
+
+  test("deploys the private Images Worker before either API binding consumer", async () => {
+    const workflow = await readFile(".github/workflows/deploy.yml", "utf8")
+    const buildImagesAt = workflow.indexOf("Build private Images Worker")
+    const deployImagesAt = workflow.indexOf(
+      "Deploy private Images Worker before API bindings"
+    )
+    const compatibleApiAt = workflow.indexOf(
+      "Deploy compatible API Worker before migration"
+    )
+    const finalApiAt = workflow.indexOf("Deploy final API Worker")
+
+    expect(buildImagesAt).toBeGreaterThan(-1)
+    expect(deployImagesAt).toBeGreaterThan(buildImagesAt)
+    expect(compatibleApiAt).toBeGreaterThan(deployImagesAt)
+    expect(finalApiAt).toBeGreaterThan(deployImagesAt)
+    expect(workflow).toContain("bun run --cwd apps/images build:cloudflare")
+    expect(workflow).toContain("bun run --cwd apps/images deploy -- --strict")
+  })
 })

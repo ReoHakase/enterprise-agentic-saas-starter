@@ -9,7 +9,10 @@ last_reviewed: 2026-08-20
 
 ## 構成
 
-API Workerだけがprivate R2 bucketへアクセスします。browserはR2 URLを受け取らず、Better Auth cookie付きで`/files/*`のlist、upload、preview、download、deleteを呼びます。TursoにはURLではなくobject keyとmetadataを保存します。
+API Workerはprivate R2 bucketへのupload、download、metadata管理を所有し、private Images Workerは認証済み
+previewの変換時だけ同じbucketを読みます。browserはR2 URLを受け取らず、Better Auth cookie付きで
+`/files/*`のlist、upload、preview、download、deleteを呼びます。TursoにはURLではなくobject keyと
+metadataを保存します。
 
 v1のownerはIssueだけですが、API、DB、R2 key、client helperは汎用fileとして構成しています。1 fileは作成時から1 ownerへ固定され、未所属uploadやowner変更はできません。
 
@@ -36,10 +39,14 @@ browserは1:1にcropした512x512 PNGをuploadします。Workerはmagic bytes�
 bunx wrangler r2 bucket create enterprise-agentic-saas-attachments
 ```
 
-API Workerのbindingは次の二つです。
+API Workerのbindingは次の三つです。
 
 - `FILES`: private R2 bucket `enterprise-agentic-saas-attachments`
 - `IMAGES`: Cloudflare Images binding
+- `IMAGE_PREVIEWS`: private Images Worker `enterprise-agentic-saas-images`へのService Binding
+
+Images Workerは`FILES`と`IMAGES`だけを持ちます。`workers_dev=false`、`preview_urls=false`、routeなしで
+public hostnameを作りません。
 
 R2 public access、`r2.dev`、presigned URL、R2/Images専用domainは設定しません。必要なhostnameはAPI Workerだけです。
 
@@ -49,14 +56,24 @@ R2 public access、`r2.dev`、presigned URL、R2/Images専用domainは設定し�
 `cache.enabled=false`を明示します。Workers CachingをAPI Workerの既定入口へ適用せず、同じURLへの
 反復リクエストでもElysia、Better Auth、テナント認可を毎回実行します。
 
-この設定と、Worker内部で明示的に使うCache APIは独立しています。画像previewは認証、組織への所属、
-対象fileの確認後にだけ`caches.default`を参照し、外部へ公開しない内部キャッシュキーで変換結果を
-再利用します。ブラウザーへ返すレスポンスの`private, no-cache`、ETag、304は維持します。未認証、別
-テナント、所属取消後のリクエストはCache APIを参照する前に拒否します。
+`apps/images/wrangler.jsonc`だけは`cache.enabled=true`にします。画像previewはAPIが認証、組織への所属、
+対象fileまたはAgent assetのsessionと有効期限を確認した後にだけ`IMAGE_PREVIEWS`を呼びます。内部URLは
+opaqueなresource ID、幅、source ETag、変換versionだけで構成し、R2 object keyは内部headerで渡します。
+Authorization、cookie、filename、private URLを渡しません。未認証、別テナント、所属取消後のrequestは
+Service Bindingを呼ぶ前に拒否します。
 
-Workers Cachingを無効にする設定変更は既存のキャッシュ項目を削除しません。本番へ初めて反映するときは
-無効化後に既存項目の削除要否を別途判断し、必要な削除は明示承認した運用として実施します。PR、
-Cloudflare dry-run、通常のデプロイから自動削除しません。
+内部resource IDとR2 keyは同じ保存identityへ固定します。v1 generic fileはlogical file IDと
+`organizations/{organizationId}/files/.../{fileId}`を組にし、Agent assetからzero-copy昇格したv2 fileは
+storage object IDと`organizations/{organizationId}/storage-objects/{storageObjectId}`を組にします。
+Images Workerは組が一致しないrequestをR2 read前に拒否します。
+
+Images Workerは固定WebP変換へWorkers Cachingを適用します。generic fileは30日、promoted Agent assetは
+3日、temporary Agent assetは残り有効期限を1秒から3日の範囲へ制限したTTLを維持します。APIは内部
+responseのprovider/cache headerを転送せず、browser向けの`private, no-cache`、ETag、304、security
+headerを再構築します。
+
+旧API Cache APIの項目は新しい経路から参照しません。remote cacheの削除はこの変更へ含めず、既存TTLで
+失効させます。PRとCloudflare dry-runはremote stateを変更しません。
 
 productionではWebとAPIを同じregistrable domain配下、例えば`app.example.com`と`api.example.com`へ配置します。`AUTH_COOKIE_DOMAIN=.example.com`、Web originを含む`TRUSTED_ORIGINS` / `CORS_ORIGIN`、Web側の`API_PUBLIC_URL` / `NEXT_PUBLIC_API_BASE_URL`を同じAPI originへ揃えてください。別の親domainへ分離するとcredential付きsession cookieを共有できません。
 
@@ -90,7 +107,10 @@ Issue詳細の全画面ページにviewport viewerを表示します。画像は
 bun run dev
 ```
 
-このcommandはmigrationを適用し、Webを`next dev --turbopack`、APIを`src/worker.ts`がmainの`wrangler dev`でsource watchします。build済みartifactは使いません。DB seed、R2 fixture reconcile、testは日常のdev起動へ混ぜません。
+このcommandはmigrationを適用し、Webを`next dev --turbopack`、APIをprimary、Images Workerをauxiliaryと
+する1つの`wrangler dev` multi-config sessionでsource watchします。両Workerは同じlocal R2 stateとService
+Bindingを使います。build済みartifactは使いません。DB seed、R2 fixture reconcile、testは日常のdev起動へ
+混ぜません。
 
 fixtureが必要なときだけ、full devの起動前または起動中に次を明示実行します。
 
@@ -143,17 +163,18 @@ local seedのreconcileは次の動作です。
 ```sh
 bun run check
 bun run --cwd apps/api cf:typegen
+bun run --cwd apps/images cf:typegen
 bun run build:cloudflare
 bun run dev:db:seed
 bun run test:e2e
 ```
 
-local Images emulationはproductionと同じ変換忠実度を保証しません。Cloudflare credentialを明示したremote Images smokeは通常testから分離し、production bucketやTursoへseed/resetしない専用fixtureで実行してください。
+local Images emulationはproductionと同じ変換忠実度を保証しません。通常CIは固定変換contract、URL-keyedな
+test-only cache fake、Images WorkerのCloudflare dry-runを実行します。fakeは同じ内部URLの再利用とsource
+ETag変更時の再変換だけを示し、native Workers CachingのTTLやplatform hit/missは再現しません。既定の
+production workflowはImages→APIのdeploy順とhealth/readiness/OpenAPIを確認しますが、認証付き
+file preview smokeは実行しません。providerの実疎通が必要な場合だけ、実入口を使う別の明示承認済み
+smokeとして実行し、独立remote harness、共有token、remote fixture worker、偽の`CF-Cache-Status`を
+維持しません。
 
-Wranglerへloginした環境では次で実行します。credential、provider response、画像本文を出力しない独立harnessの詳細は[Cloudflare Images remote smoke](../apps/api/smoke/images/README.md)を参照してください。
-
-```sh
-bun run --cwd apps/api smoke/images/run.ts
-```
-
-production smokeでは、member以外の404、active organization不一致409、upload retry、Range download、4幅のpreview、membership取消後の404、file/Issue/organization削除後のcleanup jobに加え、user/org profile imageのWebP寸法、ETag/304、置換・削除後のfallbackとcleanupを確認します。
+任意のproduction smokeでは、member以外の404、active organization不一致409、upload retry、Range download、4幅のpreview、membership取消後の404、file/Issue/organization削除後のcleanup jobに加え、user/org profile imageのWebP寸法、ETag/304、置換・削除後のfallbackとcleanupを確認します。

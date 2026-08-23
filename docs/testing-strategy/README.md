@@ -37,6 +37,7 @@ API、Web、Agent、DB、認証、UI、メールでは、適切な実行環境�
 - Email: `MAIL1`から`MAIL4`
 - TypeScript config: `TS1`から`TS2`
 - Emulate: `EMU1`から`EMU3`
+- Images Worker: `IMG1`から`IMG3`
 - E2E: `E1`と`E2`
 
 Testing Trophy分類は、静的、単体、統合、E2Eという横断的な補助分類として併記します。
@@ -160,6 +161,7 @@ E2E
 
 - [Web](./apps/web.md)
 - [API](./apps/api.md)
+- [Images Worker](./apps/images.md)
 - [Product Agent](./apps/agent.md)
 - [Emulate](./apps/emulate.md)
 

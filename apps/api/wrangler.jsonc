@@ -23,6 +23,10 @@
   ],
   "services": [
     {
+      "binding": "IMAGE_PREVIEWS",
+      "service": "enterprise-agentic-saas-images",
+    },
+    {
       "binding": "AGENT_RUNTIME",
       "service": "enterprise-agentic-saas-agent",
       "entrypoint": "AgentRuntime",

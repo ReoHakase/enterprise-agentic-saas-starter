@@ -15,6 +15,12 @@
       "name": "EMAIL",
     },
   ],
+  "services": [
+    {
+      "binding": "IMAGE_PREVIEWS",
+      "service": "enterprise-agentic-saas-images",
+    },
+  ],
   "r2_buckets": [
     {
       "binding": "FILES",

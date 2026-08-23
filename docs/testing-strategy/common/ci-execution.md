@@ -50,13 +50,13 @@ E2E、有料テストは対象にしません。
 }
 ```
 
-| スクリプト        | 含めるもの                                               | 含めないもの                        |
-| ----------------- | -------------------------------------------------------- | ----------------------------------- |
-| `test`            | A1-A5、W1/W2/W5、G1-G4、DB、Auth、UI1/UI2、Email、GE、TS | 実browser、実LLM、E2E               |
-| `test:browser`    | W3、W4、W6、UI3、UI4、a11y                               | 全構成E2E、実LLM                    |
-| `test:e2e`        | E1決定的E2E                                              | 実LLM、production external provider |
-| `test:eval:agent` | G5                                                       | browser、full stack                 |
-| `test:e2e:full`   | E2完全E2E                                                | 通常PR実行                          |
+| スクリプト        | 含めるもの                                                          | 含めないもの                        |
+| ----------------- | ------------------------------------------------------------------- | ----------------------------------- |
+| `test`            | A1-A5、IMG1/IMG2、W1/W2/W5、G1-G4、DB、Auth、UI1/UI2、Email、GE、TS | 実browser、実LLM、E2E               |
+| `test:browser`    | W3、W4、W6、UI3、UI4、a11y                                          | 全構成E2E、実LLM                    |
+| `test:e2e`        | E1決定的E2E                                                         | 実LLM、production external provider |
+| `test:eval:agent` | G5                                                                  | browser、full stack                 |
+| `test:e2e:full`   | E2完全E2E                                                           | 通常PR実行                          |
 
 ## `check`
 
@@ -131,7 +131,7 @@ deploy target固有のCloudflare dry-runも別jobとして維持します。
 
 ### cloudflare-dry-run
 
-- Web、API、Agentのproduction bundle
+- Web、API、Images、Agentのproduction bundle
 - deployなし
 
 ### paid workflow

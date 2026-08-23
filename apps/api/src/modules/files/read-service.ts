@@ -10,15 +10,13 @@ import {
 import type { FileListDto, TextFilePreviewDto } from "./model"
 import type { FileReadPorts } from "./ports"
 import {
-  browserPreviewResponse,
-  cacheKey,
   downloadDisposition,
   httpEtag,
   matchesIfNoneMatch,
   parseRange,
-  previewVariantEtag,
   privateFileHeaders,
   readBoundedBody,
+  requestImagePreview,
   textPreviewByteLength,
   unsupportedTextPreview,
 } from "./read-support"
@@ -184,61 +182,24 @@ export const createFileReadService = (ports: FileReadPorts) => {
     if (!file.stored.etag) {
       throw providerUnavailable("r2", "readPreviewMetadata")
     }
-    const etag = await previewVariantEtag(file.stored.etag, width)
-    if (matchesIfNoneMatch(input.request.headers.get("if-none-match"), etag)) {
-      const headers = privateFileHeaders()
-      headers.set("ETag", etag)
-      return new Response(null, { status: 304, headers })
+    const resourceId =
+      file.stored.keyVersion === 2
+        ? file.stored.storageObjectId
+        : file.stored.id
+    if (!resourceId) {
+      throw providerUnavailable("r2", "readPreviewMetadata")
     }
-
     const runtime = ports.getRuntime()
-    const key = cacheKey(input.request, {
-      fileId: file.stored.id,
+    return requestImagePreview(runtime, {
+      browserRequest: input.request,
+      cacheTtlSeconds: 30 * 24 * 60 * 60,
+      objectKey: file.stored.objectKey,
       organizationId: input.organizationId,
+      resourceId,
+      resourceKind: "file",
       sourceEtag: file.stored.etag,
       width,
     })
-    if (runtime.cache) {
-      try {
-        const cached = await runtime.cache.match(key)
-        if (cached) return browserPreviewResponse(cached, etag)
-      } catch {
-        // Cache API障害時も認証済みrequestはR2 + Imagesへfail-openする。
-      }
-    }
-
-    let transformed: Response
-    try {
-      const source = bodyObject(await runtime.bucket.get(file.stored.objectKey))
-      if (!source) throw providerUnavailable("r2", "readPreviewObject")
-      const result = await runtime.images
-        .input(source.body)
-        .transform({ width, fit: "scale-down" })
-        .output({ format: "image/webp", quality: 75, anim: false })
-      transformed = result.response()
-      if (!transformed.ok) {
-        throw providerUnavailable("images", "transformPreview")
-      }
-    } catch (error) {
-      if (error instanceof HttpError) throw error
-      throw providerUnavailable("images", "transformPreview", error)
-    }
-
-    if (runtime.cache) {
-      const cacheHeaders = new Headers(transformed.headers)
-      cacheHeaders.delete("Set-Cookie")
-      cacheHeaders.set("Cache-Control", "public, max-age=2592000")
-      cacheHeaders.set("Content-Type", "image/webp")
-      cacheHeaders.set("ETag", etag)
-      const cacheResponse = new Response(transformed.clone().body, {
-        status: 200,
-        headers: cacheHeaders,
-      })
-      const write = runtime.cache.put(key, cacheResponse).catch(() => undefined)
-      if (runtime.defer) runtime.defer(write)
-      else await write
-    }
-    return browserPreviewResponse(transformed, etag)
   }
 
   const removeFile = async (input: {

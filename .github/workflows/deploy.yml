@@ -183,6 +183,7 @@ jobs:
       - name: Verify Cloudflare binding types
         run: |
           bun run --cwd apps/api cf:typegen
+          bun run --cwd apps/images cf:typegen
           bun run --cwd apps/agent cf:typegen
           apps/web/node_modules/.bin/wrangler types \
             --config apps/web/wrangler.jsonc \
@@ -191,8 +192,18 @@ jobs:
             "$RUNNER_TEMP/web-cloudflare-env.d.ts"
           git diff --exit-code -- \
             apps/api/src/cloudflare-env.d.ts \
+            apps/images/src/cloudflare-env.d.ts \
             apps/agent/src/cloudflare-env.d.ts
           test -s "$RUNNER_TEMP/web-cloudflare-env.d.ts"
+
+      - name: Build private Images Worker
+        run: bun run --cwd apps/images build:cloudflare
+
+      - name: Deploy private Images Worker before API bindings
+        run: bun run --cwd apps/images deploy -- --strict
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Detect mutual Service Binding bootstrap state
         id: worker-state

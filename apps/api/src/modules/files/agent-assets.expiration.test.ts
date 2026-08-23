@@ -26,7 +26,7 @@ describe("Agent asset expiration and deletion fences", () => {
       uploadRequest({ file: pngFile(), uploadId: "expiring-asset" })
     )
     expect(uploaded.status).toBe(201)
-    v.parse(agentAssetDtoModel, await uploaded.json())
+    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
     const [asset] = await db.select().from(schema.agentAssets)
     const expiry = asset?.expiresAt ?? new Date(0)
 
@@ -43,6 +43,9 @@ describe("Agent asset expiration and deletion fences", () => {
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([
       expect.objectContaining({ temporaryBytes: 0, usedBytes: 0 }),
     ])
+    const expiredPreview = await app.handle(assetRequest({ assetId }))
+    expect(expiredPreview.status).toBe(404)
+    expect(storage.previewFetch).not.toHaveBeenCalled()
 
     const second = await app.handle(
       uploadRequest({ file: pngFile(), uploadId: "tampered-cleanup" })

@@ -8,8 +8,14 @@ type WranglerConfig = {
   cache?: {
     enabled?: unknown
   }
-  services?: unknown
+  services?: ServiceBinding[]
   [key: string]: unknown
+}
+
+type ServiceBinding = {
+  binding?: unknown
+  entrypoint?: unknown
+  service?: unknown
 }
 
 const readConfig = async (fileName: string): Promise<WranglerConfig> => {
@@ -31,14 +37,37 @@ describe("API Worker Wrangler configuration", () => {
     expect(bootstrap.cache).toEqual({ enabled: false })
   })
 
-  it("keeps bootstrap identical except for outbound services", async () => {
+  it("binds the private Images Worker in both deployment phases", async () => {
     const [production, bootstrap] = await Promise.all([
       readConfig("wrangler.jsonc"),
       readConfig("wrangler.bootstrap.jsonc"),
     ])
-    const { services, ...productionWithoutServices } = production
+    const imagesBinding = {
+      binding: "IMAGE_PREVIEWS",
+      service: "enterprise-agentic-saas-images",
+    }
 
-    expect(services).toEqual(expect.any(Array))
-    expect(bootstrap).toEqual(productionWithoutServices)
+    expect(production.services).toContainEqual(imagesBinding)
+    expect(bootstrap.services).toEqual([imagesBinding])
+  })
+
+  it("keeps bootstrap identical except for the Agent RPC binding", async () => {
+    const [production, bootstrap] = await Promise.all([
+      readConfig("wrangler.jsonc"),
+      readConfig("wrangler.bootstrap.jsonc"),
+    ])
+    const withoutAgentRuntime = {
+      ...production,
+      services: production.services?.filter(
+        ({ binding }) => binding !== "AGENT_RUNTIME"
+      ),
+    }
+
+    expect(production.services).toContainEqual({
+      binding: "AGENT_RUNTIME",
+      service: "enterprise-agentic-saas-agent",
+      entrypoint: "AgentRuntime",
+    })
+    expect(bootstrap).toEqual(withoutAgentRuntime)
   })
 })

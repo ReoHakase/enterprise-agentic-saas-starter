@@ -20,6 +20,7 @@ last_reviewed: 2026-08-20
 
 - [`apps/web`](apps/web.md)
 - [`apps/api`](apps/api.md)
+- [`apps/images`](apps/images.md)
 - [`apps/agent`](apps/agent.md)
 - [`apps/emulate`](apps/emulate.md)
 

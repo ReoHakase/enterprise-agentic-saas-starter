@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "enterprise-agentic-saas-images",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-20",
+  "workers_dev": false,
+  "preview_urls": false,
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "enterprise-agentic-saas-attachments",
+    },
+  ],
+  "images": {
+    "binding": "IMAGES",
+  },
+  "cache": {
+    "enabled": true,
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false,
+    },
+    "traces": {
+      "enabled": false,
+    },
+  },
+}

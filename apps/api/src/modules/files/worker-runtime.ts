@@ -1,8 +1,8 @@
 import { resolveExplicitlyEnabledFlag } from "../../runtime-flags"
 import {
   configureFileStorageRuntime,
-  type FileCache,
   type FileImagesBinding,
+  type FilePreviewBinding,
   type FileR2Bucket,
   type FileStorageRuntime,
 } from "./runtime"
@@ -10,26 +10,13 @@ import {
 export type FileStorageWorkerEnvironment = {
   AGENT_ASSET_UPLOAD_ENABLED?: string
   FILES: FileR2Bucket
+  IMAGE_PREVIEWS: FilePreviewBinding
   IMAGES: FileImagesBinding
-}
-
-const isFileCache = (value: unknown): value is FileCache =>
-  value !== null &&
-  typeof value === "object" &&
-  typeof Reflect.get(value, "match") === "function" &&
-  typeof Reflect.get(value, "put") === "function"
-
-const cloudflareDefaultFileCache = (): FileCache | undefined => {
-  const cacheStorage = Reflect.get(globalThis, "caches")
-  if (!cacheStorage || typeof cacheStorage !== "object") return undefined
-  const defaultCache: unknown = Reflect.get(cacheStorage, "default")
-  return isFileCache(defaultCache) ? defaultCache : undefined
 }
 
 /** HTTP fetchとnamed RPCを同じcapability/flag設定へ収束させる。 */
 export const configureFileStorageRuntimeFromWorkerEnvironment = (
-  environment: FileStorageWorkerEnvironment,
-  cache = cloudflareDefaultFileCache()
+  environment: FileStorageWorkerEnvironment
 ): FileStorageRuntime => {
   const runtime: FileStorageRuntime = {
     agentAssetUploadEnabled: resolveExplicitlyEnabledFlag(
@@ -37,7 +24,7 @@ export const configureFileStorageRuntimeFromWorkerEnvironment = (
     ),
     bucket: environment.FILES,
     images: environment.IMAGES,
-    ...(cache ? { cache } : {}),
+    previews: environment.IMAGE_PREVIEWS,
   }
   configureFileStorageRuntime(runtime)
   return runtime

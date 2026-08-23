@@ -118,6 +118,20 @@
         "vitest": "catalog:",
       },
     },
+    "apps/images": {
+      "name": "@enterprise-agentic-saas/images",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@cloudflare/workers-types": "catalog:",
+        "@enterprise-agentic-saas/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "@vitest/coverage-v8": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+        "wrangler": "catalog:",
+      },
+    },
     "apps/web": {
       "name": "@enterprise-agentic-saas/web",
       "version": "0.0.1",
@@ -859,6 +873,8 @@
     "@enterprise-agentic-saas/email": ["@enterprise-agentic-saas/email@workspace:packages/email"],
 
     "@enterprise-agentic-saas/emulate": ["@enterprise-agentic-saas/emulate@workspace:apps/emulate"],
+
+    "@enterprise-agentic-saas/images": ["@enterprise-agentic-saas/images@workspace:apps/images"],
 
     "@enterprise-agentic-saas/portless-topology": ["@enterprise-agentic-saas/portless-topology@workspace:packages/portless-topology"],
 

@@ -7,7 +7,8 @@ Elysia on Bun の API app workspace。
 - `createApp(db)` で Elysia app を組み立てる（テスト可能な最小ファクトリ）。
 - `index.ts` は本番 plugin を合成して listen する。
 - `client.ts` は`parseDate: false`固定のEden client、file/profile image DTO・URL builder・XHR upload helperをexportする。
-- `worker.ts`はCloudflare request handler、private `FILES` R2/`IMAGES` binding、durable cleanup cronを合成する。
+- `worker.ts`はCloudflare request handler、private `FILES` R2/`IMAGES` binding、認可後の
+  `IMAGE_PREVIEWS` Service Binding、durable cleanup cronを合成する。
 - runtime固有の関心事（auth, cors, OpenTelemetry, structured logging, server-timing）は独立 plugin/runtime entrypointで合成する。
 
 ## 公開 entrypoint
@@ -50,7 +51,14 @@ rootの`bun run dev`ではbuild済み`dist`ではなく、`src/dev.ts` superviso
 
 `src/index.ts`のBun `listen`は、分離した`file:` DBを使うdeterministic OAuth E2E fixtureだけが起動する。rootのpublic developmentやproduction deployには使わない。
 
-この経路で`FILES`、`IMAGES`、認可後に使うCache API、`EMAIL` bindingをローカルでも利用する。最上位のWorkers Cachingは無効にし、すべてのAPIリクエストでElysia、Better Auth、テナント認可を実行する。通常の開発用プロバイダーはMailpitであり、workerdから実際のアプリケーション送信導線をローカル受信箱へ流す。workerdはPortlessの開発CAを信頼しないため、ブラウザー用Portless HTTPSではなく、トークンで保護したセッションから受け取る同じMailpit実体の直接loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのローカルEmail binding simulationを通る。共有設定では実配送する`remote: true`を使わない。
+APIとprivate Images Workerを一つのWrangler multi-config sessionで起動し、`FILES`、`IMAGES`、
+`IMAGE_PREVIEWS`、`EMAIL` bindingをローカルでも利用する。APIの最上位Workers Cachingは無効にし、
+すべてのAPIリクエストでElysia、Better Auth、テナント認可を実行する。preview変換後のWorkers Cachingは
+認可後に呼ばれるImages Workerだけが所有する。通常の開発用プロバイダーはMailpitであり、workerdから
+実際のアプリケーション送信導線をローカル受信箱へ流す。workerdはPortlessの開発CAを信頼しないため、
+ブラウザー用Portless HTTPSではなく、トークンで保護したセッションから受け取る同じMailpit実体の直接
+loopback HTTPへ接続する。`EMAIL_PROVIDER=cloudflare`を明示した場合だけWranglerのローカルEmail binding
+simulationを通る。共有設定では実配送する`remote: true`を使わない。
 
 fixture投入の公開入口はrootの`bun run dev:db:seed`だけにする。healthyなAPI dev sessionがあればそのWorkerを再利用し、なければlocal Tursoが停止中の場合だけ一時起動したうえで、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動する。migration、DB seed、R2 reconcileの後はcommand自身が起動したprocessだけを停止し、既存のdev processには触れない。production/remote seedとrootの`seed` aliasは作らない。
 
@@ -126,7 +134,7 @@ timelineは新しい順のtotal orderで返し、`nextCursor`は内部構造を�
 
 uploadは1 file/1 multipart request、decimal 20,000,000 bytes上限、organization 1 GiB quota、`uploadId`冪等性を持ちます。同じIDのretryはR2 objectとrequest bodyをstream比較し、別内容なら409にします。R2/Imagesのraw provider errorはpublic response、production log、remote telemetryへ渡しません。
 
-preview幅は`360 / 720 / 1200 / 2400`だけです。認証・tenant/file確認後に内部cacheを読み、Cloudflare ImagesでWebP quality 75、静止画、scale-downへ変換します。original downloadはoctet-stream attachment、single Range、ETag conditional requestを扱います。
+preview幅は`360 / 720 / 1200 / 2400`だけです。認証・tenant/file確認後に`IMAGE_PREVIEWS` Service Bindingを呼び、private Images WorkerがWorkers CachingとWebP quality 75、静止画、scale-downの固定変換を所有します。original downloadはoctet-stream attachment、single Range、ETag conditional requestを扱います。
 
 ## Profile image
 

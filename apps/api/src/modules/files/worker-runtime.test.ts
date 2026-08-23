@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   getFileStorageRuntime,
   resetFileStorageRuntimeForTest,
-  type FileCache,
   type FileImagesBinding,
+  type FilePreviewBinding,
   type FileR2Bucket,
 } from "./runtime"
 import { configureFileStorageRuntimeFromWorkerEnvironment } from "./worker-runtime"
@@ -29,22 +29,20 @@ const images = {
   })),
 } satisfies FileImagesBinding
 
-const cache = {
-  match: vi.fn<FileCache["match"]>(async () => undefined),
-  put: vi.fn<FileCache["put"]>(async () => undefined),
-} satisfies FileCache
+const previews = {
+  fetch: vi.fn<FilePreviewBinding["fetch"]>(async () => new Response()),
+} satisfies FilePreviewBinding
 
 afterEach(() => {
   resetFileStorageRuntimeForTest()
-  vi.unstubAllGlobals()
 })
 
 describe("Cloudflare file runtime wiring", () => {
-  it("configures a fresh named RPC isolate with R2, Images, Cache, and an explicit upload flag", () => {
-    vi.stubGlobal("caches", { default: cache })
+  it("configures a fresh named RPC isolate with R2, Images, preview Service Binding, and an explicit upload flag", () => {
     const configured = configureFileStorageRuntimeFromWorkerEnvironment({
       AGENT_ASSET_UPLOAD_ENABLED: " 1 ",
       FILES: bucket,
+      IMAGE_PREVIEWS: previews,
       IMAGES: images,
     })
 
@@ -52,8 +50,8 @@ describe("Cloudflare file runtime wiring", () => {
     expect(configured).toMatchObject({
       agentAssetUploadEnabled: true,
       bucket,
-      cache,
       images,
+      previews,
     })
   })
 
@@ -63,6 +61,7 @@ describe("Cloudflare file runtime wiring", () => {
       const configured = configureFileStorageRuntimeFromWorkerEnvironment({
         AGENT_ASSET_UPLOAD_ENABLED: value,
         FILES: bucket,
+        IMAGE_PREVIEWS: previews,
         IMAGES: images,
       })
 

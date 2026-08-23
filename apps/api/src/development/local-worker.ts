@@ -2,6 +2,11 @@ import { fileURLToPath } from "node:url"
 
 const apiRoot = fileURLToPath(new URL("../../", import.meta.url))
 
+export const localWorkerConfigPaths = [
+  "wrangler.jsonc",
+  "../images/wrangler.jsonc",
+] as const
+
 const forwardedEnvironmentKeys = [
   "NODE_ENV",
   "PORT",
@@ -92,6 +97,7 @@ export const spawnLocalWorker = ({
     [
       "wrangler",
       "dev",
+      ...localWorkerConfigPaths.flatMap((config) => ["--config", config]),
       "--local",
       "--persist-to",
       ".wrangler/state",

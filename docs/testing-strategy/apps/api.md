@@ -196,13 +196,14 @@ A5へ上げる判断:
 Wrangler設定は静的契約テストで次を確認します。
 
 - 本番用と互換デプロイ用の両方で`cache.enabled`が`false`である
-- 互換デプロイ用設定は、本番用設定から`services`だけを除いた内容と一致する
+- 両設定が`IMAGE_PREVIEWS`をprivate Images Workerへ接続する
+- 互換デプロイ用設定は、本番用設定から`AGENT_RUNTIME`だけを除いた内容と一致する
 - `build:cloudflare`が両設定を別の出力先へdry-runし、設定スキーマとWorkerバンドルを検査する
 
-Cache API自体のキャッシュ命中、未命中、障害時の継続、認可前に参照しないことはfilesモジュールの
-A2/A4で検査します。
-Cloudflareが`cache.enabled=false`を実装する内部動作は再試験せず、プロジェクトが所有する設定と認可順序を
-固定します。
+Workers Cachingの設定、cache key、R2条件付きread、固定変換は`apps/images`のIMG1-IMG3が所有します。
+APIのA2/A4は、認証、tenant、resource確認より前にService Bindingを呼ばないこと、object keyをURLへ
+含めないexact internal request、browser向けETag/304/`private, no-cache`、provider/cache headerの除去、
+binding failureの安全なerror mappingを検査します。Cloudflare内部のcache hit/miss実装は再試験しません。
 
 ## packageとの責務分担
 

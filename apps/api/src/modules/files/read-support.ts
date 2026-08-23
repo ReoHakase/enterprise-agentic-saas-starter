@@ -1,6 +1,12 @@
 import { HttpError } from "../../errors/http-error"
 import { FILE_TEXT_PREVIEW_MAX_BYTES, type FilePreviewWidth } from "./constants"
+import type { FileStorageRuntime } from "./runtime"
 import { providerUnavailable } from "./service-runtime"
+
+const IMAGE_PREVIEW_ORIGIN = "https://images.internal"
+const IMAGE_PREVIEW_TRANSFORM_VERSION = "webp:q75:anim0:v1"
+const IMAGE_PREVIEW_OBJECT_KEY_HEADER = "X-Preview-Object-Key"
+const IMAGE_PREVIEW_CACHE_TTL_HEADER = "X-Preview-Cache-Ttl"
 
 export const httpEtag = (etag: string) =>
   etag.startsWith('"') && etag.endsWith('"') ? etag : `"${etag}"`
@@ -111,43 +117,76 @@ export const textPreviewByteLength = (bytes: Uint8Array) => {
   return byteLength
 }
 
-export const previewVariantEtag = async (
-  sourceEtag: string,
-  width: FilePreviewWidth
-) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`${sourceEtag}:${width}:webp:q75:anim0:v1`)
-  )
-  const hex = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("")
-  return `"${hex}"`
-}
-
-export const cacheKey = (
-  request: Request,
-  input: {
-    fileId: string
-    organizationId: string
-    sourceEtag: string
-    width: FilePreviewWidth
-  }
-) => {
-  const url = new URL(request.url)
-  url.pathname = `/__file_preview_cache/organizations/${encodeURIComponent(input.organizationId)}/files/${encodeURIComponent(input.fileId)}/${input.width}`
-  url.search = new URLSearchParams({
-    source: input.sourceEtag,
-    variant: "webp:q75:anim0:v1",
-  }).toString()
-  return new Request(url, { method: "GET" })
-}
-
-export const browserPreviewResponse = (response: Response, etag: string) => {
+const browserPreviewHeaders = (response: Response, etag: string) => {
   const headers = privateFileHeaders()
   headers.set("Content-Type", "image/webp")
   headers.set("ETag", etag)
   const contentLength = response.headers.get("content-length")
-  if (contentLength) headers.set("Content-Length", contentLength)
+  if (contentLength && /^\d+$/u.test(contentLength)) {
+    headers.set("Content-Length", contentLength)
+  }
+  return headers
+}
+
+type PreviewResourceKind = "agent-asset" | "file"
+
+export const requestImagePreview = async (
+  runtime: Pick<FileStorageRuntime, "previews">,
+  input: {
+    browserRequest: Request
+    cacheTtlSeconds: number
+    objectKey: string
+    organizationId: string
+    resourceId: string
+    resourceKind: PreviewResourceKind
+    sourceEtag: string
+    width: FilePreviewWidth
+  }
+): Promise<Response> => {
+  if (!runtime.previews) {
+    throw providerUnavailable("images", "getPreviewBinding")
+  }
+
+  const url = new URL(
+    `/v1/previews/${input.resourceKind}/${encodeURIComponent(input.organizationId)}/${encodeURIComponent(input.resourceId)}/${input.width}`,
+    IMAGE_PREVIEW_ORIGIN
+  )
+  url.search = new URLSearchParams({
+    source: input.sourceEtag,
+    variant: IMAGE_PREVIEW_TRANSFORM_VERSION,
+  }).toString()
+  const request = new Request(url, {
+    headers: {
+      [IMAGE_PREVIEW_CACHE_TTL_HEADER]: String(input.cacheTtlSeconds),
+      [IMAGE_PREVIEW_OBJECT_KEY_HEADER]: input.objectKey,
+    },
+  })
+
+  let response: Response
+  try {
+    response = await runtime.previews.fetch(request)
+  } catch (cause) {
+    throw providerUnavailable("images", "requestPreview", cause)
+  }
+
+  const etag = response.headers.get("etag")
+  if (
+    response.status !== 200 ||
+    !response.body ||
+    response.headers.get("content-type") !== "image/webp" ||
+    !etag ||
+    !/^"[0-9a-f]{64}"$/u.test(etag)
+  ) {
+    await response.body?.cancel().catch(() => undefined)
+    throw providerUnavailable("images", "validatePreviewResponse")
+  }
+
+  const headers = browserPreviewHeaders(response, etag)
+  if (
+    matchesIfNoneMatch(input.browserRequest.headers.get("if-none-match"), etag)
+  ) {
+    await response.body.cancel().catch(() => undefined)
+    return new Response(null, { status: 304, headers })
+  }
   return new Response(response.body, { status: 200, headers })
 }
