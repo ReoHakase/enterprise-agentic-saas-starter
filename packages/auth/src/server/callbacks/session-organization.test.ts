@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createSessionOrganizationDatabaseHooks } from "./session-organization"
 
 const client = createClient({ url: "file::memory:" })
-const database: Db = drizzle(client, { schema })
+const database: Db = drizzle({ client, relations: schema.relations })
 const { member, session } = schema
 
 const now = new Date("2026-07-14T00:00:00.000Z")

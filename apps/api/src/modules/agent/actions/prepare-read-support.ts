@@ -19,7 +19,6 @@ import { HttpError } from "../../../errors/http-error"
 import { type AgentTransaction, type ValidGrant } from "../threads/repository"
 import {
   MAX_ROOT_WRITE_ACTIONS,
-  normalizeStoredUpdateIssuePayload,
   safeStoredParse,
   storedCreateIssuePayloadModel,
   storedDeleteIssuePayloadModel,
@@ -258,7 +257,7 @@ export const findExistingPreparedAction = async (
       : existing.kind === "update_issue"
         ? safeStoredParse(
             storedUpdateIssuePayloadModel,
-            normalizeStoredUpdateIssuePayload(existing.normalizedPayload)
+            existing.normalizedPayload
           ).requestFingerprint
         : safeStoredParse(
             storedDeleteIssuePayloadModel,

@@ -111,7 +111,6 @@ const config: KnipConfig = {
         "drizzle.config.ts",
         "scripts/*.ts",
         "src/agent-rollout-drain.ts!",
-        "src/file-activity-rollout.ts!",
       ],
       project: [
         "src/**/*.ts!",

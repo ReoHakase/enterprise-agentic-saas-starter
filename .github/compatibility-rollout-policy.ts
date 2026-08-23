@@ -1,13 +1,10 @@
 export const requiresCompatibilityRollout = ({
   bootstrapRequired,
-  migrationCompatibilityRequired,
   staleWorkerSecretsFound,
 }: {
   bootstrapRequired: boolean
-  migrationCompatibilityRequired: boolean
   staleWorkerSecretsFound: boolean
-}): boolean =>
-  bootstrapRequired || migrationCompatibilityRequired || staleWorkerSecretsFound
+}): boolean => bootstrapRequired || staleWorkerSecretsFound
 
 export const allowsMissingWorkerSecretInventory = ({
   inventoryStatus,
@@ -40,8 +37,7 @@ if (import.meta.main) {
     process.stdout.write(
       `${requiresCompatibilityRollout({
         bootstrapRequired: parseBoolean(commandOrBootstrap),
-        migrationCompatibilityRequired: parseBoolean(first),
-        staleWorkerSecretsFound: parseBoolean(second),
+        staleWorkerSecretsFound: parseBoolean(first),
       })}\n`
     )
   }

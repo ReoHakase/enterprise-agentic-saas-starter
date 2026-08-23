@@ -28,7 +28,16 @@ const otherAccount = {
   },
 } satisfies DeviceAccount
 
-const freshCapabilities = ({
+type SessionMutationInput = {
+  sessionToken: string
+  fetchOptions?: { throw?: boolean }
+}
+
+const unavailableSessionMutation = async (_input: SessionMutationInput) => {
+  throw new Error("Unexpected multi-session mutation")
+}
+
+const freshAuthClient = ({
   accounts = [currentAccount, otherAccount],
   current = currentAccount,
   revoke,
@@ -36,28 +45,27 @@ const freshCapabilities = ({
 }: {
   accounts?: DeviceAccount[]
   current?: DeviceAccount
-  revoke?: (input: { sessionToken: string }) => Promise<unknown>
-  setActive?: (input: { sessionToken: string }) => Promise<unknown>
+  revoke?: (input: SessionMutationInput) => Promise<unknown>
+  setActive?: (input: SessionMutationInput) => Promise<unknown>
 }) => ({
   getSession: async () => ({
-    data: {
-      session: { token: current.session.token },
-      user: { id: current.user.id },
-    },
+    session: { token: current.session.token },
+    user: { id: current.user.id },
   }),
-  listDeviceSessions: async () => ({
-    data: accounts.map((account) => ({
-      session: account.session,
-      user: {
-        id: account.user.id,
-        name: account.user.name,
-        email: account.user.email,
-        image: account.user.profileImage,
-      },
-    })),
-  }),
-  revoke,
-  setActive,
+  multiSession: {
+    listDeviceSessions: async () =>
+      accounts.map((account) => ({
+        session: account.session,
+        user: {
+          id: account.user.id,
+          name: account.user.name,
+          email: account.user.email,
+          image: account.user.profileImage,
+        },
+      })),
+    revoke: revoke ?? unavailableSessionMutation,
+    setActive: setActive ?? unavailableSessionMutation,
+  },
 })
 
 describe("device account actions", () => {
@@ -78,8 +86,7 @@ describe("device account actions", () => {
     const clear = vi.spyOn(queryClient, "clear")
     const abort = vi.fn<() => void>()
     const complete = vi.fn<() => Promise<void>>().mockResolvedValue()
-    const setActive =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const setActive = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     setActive.mockResolvedValue({ data: {} })
 
     await switchDeviceAccount({
@@ -87,7 +94,7 @@ describe("device account actions", () => {
       accounts: [currentAccount, otherAccount],
       currentUserId: currentAccount.user.id,
       lifecycle: { onAbort: abort, onComplete: complete },
-      multiSession: freshCapabilities({ setActive }),
+      authClient: freshAuthClient({ setActive }),
       queryClient,
     })
 
@@ -108,32 +115,35 @@ describe("device account actions", () => {
       clear.mock.invocationCallOrder[0] ?? 0
     )
     expect(queryClient.getQueryData(["private"])).toBeUndefined()
+    expect(setActive).toHaveBeenCalledWith({
+      sessionToken: otherAccount.session.token,
+      fetchOptions: { throw: true },
+    })
   })
 
   it("signs out only the uniquely resolved current session", async () => {
     const queryClient = new QueryClient()
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
 
     await signOutCurrentDeviceAccount({
       accounts: [currentAccount, otherAccount],
       currentUserId: currentAccount.user.id,
       lifecycle: {},
-      multiSession: freshCapabilities({ revoke }),
+      authClient: freshAuthClient({ revoke }),
       queryClient,
     })
 
     expect(revoke).toHaveBeenCalledOnce()
     expect(revoke).toHaveBeenCalledWith({
       sessionToken: currentAccount.session.token,
+      fetchOptions: { throw: true },
     })
   })
 
   it("fails closed when the current session token is ambiguous", async () => {
     const queryClient = new QueryClient()
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
     const duplicateCurrent = {
       ...currentAccount,
@@ -145,7 +155,7 @@ describe("device account actions", () => {
         accounts: [currentAccount, duplicateCurrent, otherAccount],
         currentUserId: currentAccount.user.id,
         lifecycle: {},
-        multiSession: freshCapabilities({ revoke }),
+        authClient: freshAuthClient({ revoke }),
         queryClient,
       })
     ).rejects.toThrow("Account state changed. Reload and try again.")
@@ -157,19 +167,19 @@ describe("device account actions", () => {
   it("does not clear identity state when removing a non-current account", async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(["private"], "current account")
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
 
     await removeDeviceAccount({
       account: otherAccount,
       accounts: [currentAccount, otherAccount],
       currentUserId: currentAccount.user.id,
-      multiSession: freshCapabilities({ revoke }),
+      authClient: freshAuthClient({ revoke }),
     })
 
     expect(revoke).toHaveBeenCalledWith({
       sessionToken: otherAccount.session.token,
+      fetchOptions: { throw: true },
     })
     expect(fetchAgent).not.toHaveBeenCalled()
     expect(queryClient.getQueryData(["private"])).toBe("current account")
@@ -179,8 +189,7 @@ describe("device account actions", () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(["private"], "old account")
     const complete = vi.fn<() => Promise<void>>().mockResolvedValue()
-    const setActive =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const setActive = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     const providerError = new Error("provider detail")
     setActive.mockRejectedValue(providerError)
 
@@ -190,7 +199,7 @@ describe("device account actions", () => {
         accounts: [currentAccount, otherAccount],
         currentUserId: currentAccount.user.id,
         lifecycle: { onComplete: complete },
-        multiSession: freshCapabilities({ setActive }),
+        authClient: freshAuthClient({ setActive }),
         queryClient,
       })
     ).rejects.toBe(providerError)
@@ -201,15 +210,14 @@ describe("device account actions", () => {
 
   it("rejects sign-out before Agent revoke when another tab changed the active session", async () => {
     const queryClient = new QueryClient()
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 
     await expect(
       signOutCurrentDeviceAccount({
         accounts: [currentAccount, otherAccount],
         currentUserId: currentAccount.user.id,
         lifecycle: {},
-        multiSession: freshCapabilities({
+        authClient: freshAuthClient({
           current: otherAccount,
           revoke,
         }),
@@ -222,15 +230,14 @@ describe("device account actions", () => {
   })
 
   it("never removes an account that became current in another tab", async () => {
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 
     await expect(
       removeDeviceAccount({
         account: otherAccount,
         accounts: [currentAccount, otherAccount],
         currentUserId: currentAccount.user.id,
-        multiSession: freshCapabilities({
+        authClient: freshAuthClient({
           current: otherAccount,
           revoke,
         }),
@@ -242,23 +249,18 @@ describe("device account actions", () => {
   })
 
   it("reports an identity change when the active token changes during removal", async () => {
-    const revoke =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
-    const capabilities = freshCapabilities({ revoke })
+    const authClient = freshAuthClient({ revoke })
     const getSession = vi
       .fn<() => Promise<unknown>>()
       .mockResolvedValueOnce({
-        data: {
-          session: { token: currentAccount.session.token },
-          user: { id: currentAccount.user.id },
-        },
+        session: { token: currentAccount.session.token },
+        user: { id: currentAccount.user.id },
       })
       .mockResolvedValueOnce({
-        data: {
-          session: { token: otherAccount.session.token },
-          user: { id: otherAccount.user.id },
-        },
+        session: { token: otherAccount.session.token },
+        user: { id: otherAccount.user.id },
       })
 
     await expect(
@@ -266,7 +268,7 @@ describe("device account actions", () => {
         account: otherAccount,
         accounts: [currentAccount, otherAccount],
         currentUserId: currentAccount.user.id,
-        multiSession: { ...capabilities, getSession },
+        authClient: { ...authClient, getSession },
       })
     ).resolves.toBe(true)
 
@@ -276,8 +278,7 @@ describe("device account actions", () => {
 
   it("rejects a stale switch target before revoking the old Agent context", async () => {
     const queryClient = new QueryClient()
-    const setActive =
-      vi.fn<(input: { sessionToken: string }) => Promise<unknown>>()
+    const setActive = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 
     await expect(
       switchDeviceAccount({
@@ -285,7 +286,7 @@ describe("device account actions", () => {
         accounts: [currentAccount, otherAccount],
         currentUserId: currentAccount.user.id,
         lifecycle: {},
-        multiSession: freshCapabilities({
+        authClient: freshAuthClient({
           accounts: [currentAccount],
           setActive,
         }),

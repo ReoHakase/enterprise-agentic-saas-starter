@@ -244,7 +244,7 @@ const main = async () => {
         GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
         GITHUB_OAUTH_EMULATOR_CLIENT_SECRET:
           "enterprise-agentic-saas-local-secret",
-        GITHUB_OAUTH_CALLBACK_URL: `${environment.apiOrigin}/auth/oauth2/callback/github`,
+        GITHUB_OAUTH_CALLBACK_URL: `${environment.apiOrigin}/auth/callback/github`,
       },
     }
     const imagesConfig = {

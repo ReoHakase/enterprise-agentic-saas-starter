@@ -24,6 +24,12 @@ export const storybookApiHandlers = [
     HttpResponse.json([])
   ),
   http.get("*/me/sessions", () => HttpResponse.json([])),
+  http.get("*/auth/get-session", () =>
+    HttpResponse.json({
+      session: { token: "session_storybook" },
+      user: { id: "user_storybook" },
+    })
+  ),
   http.get("*/auth/list-accounts", () => HttpResponse.json([])),
   http.get("*/auth/passkey/list-user-passkeys", () => HttpResponse.json([])),
   http.get("*/auth/multi-session/list-device-sessions", () =>

@@ -1,6 +1,10 @@
 "use client"
 
-import { useAuth, useRequestPasswordReset } from "@better-auth-ui/react"
+import {
+  useAuth,
+  useFetchOptions,
+  useRequestPasswordReset,
+} from "@better-auth-ui/react"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
@@ -23,7 +27,6 @@ import { toast } from "sonner"
 
 import { safeAuthErrorMessage, forgotPasswordFormSchema } from "@/features/auth"
 
-import { useFetchOptions } from "../../fetch-options"
 import { findCaptchaComponent } from "../../runtime-guards"
 import {
   AuthTextField,

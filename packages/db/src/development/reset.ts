@@ -7,7 +7,7 @@ import { seedDevelopmentDatabase, type DatabaseConnectionOptions } from "./seed"
 
 export const RESET_CONFIRMATION = "reset-local-development"
 
-const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../../drizzle-v3", import.meta.url).pathname
 
 export const assertLocalDatabase = (
   databaseUrl: string,
@@ -54,7 +54,7 @@ export const resetLocalDevelopmentDatabase = async (
     }
     await client.execute("PRAGMA foreign_keys=ON")
 
-    await migrate(drizzle(client), { migrationsFolder })
+    await migrate(drizzle({ client }), { migrationsFolder })
   } finally {
     client.close()
   }

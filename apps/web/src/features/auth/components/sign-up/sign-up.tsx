@@ -4,7 +4,7 @@ import {
   authMutationKeys,
   parseAdditionalFieldValue,
 } from "@better-auth-ui/core"
-import { useAuth, useSignUpEmail } from "@better-auth-ui/react"
+import { useAuth, useFetchOptions, useSignUpEmail } from "@better-auth-ui/react"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import {
   Card,
@@ -29,7 +29,6 @@ import { toast } from "sonner"
 import { safeAuthErrorMessage, createSignUpFormSchema } from "@/features/auth"
 import { reportObservedError } from "@/lib/report-observed-error"
 
-import { useFetchOptions } from "../../fetch-options"
 import { findCaptchaComponent, formDataString } from "../../runtime-guards"
 import { AdditionalField } from "../additional-field/additional-field"
 import {

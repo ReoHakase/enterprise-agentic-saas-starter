@@ -103,6 +103,14 @@ beforeAll(async () => {
     EMAIL_PROVIDER: "noop",
     EMAIL_FROM: "noreply@example.com",
   })
+  const [{ db }, schema] = await Promise.all([
+    import("@enterprise-agentic-saas/db"),
+    import("@enterprise-agentic-saas/db/schema"),
+  ])
+  await migrate(db, {
+    migrationsFolder: new URL("../../db/drizzle-v3", import.meta.url).pathname,
+  })
+
   const authModule = await import("./index")
   auth = authModule.auth
   getMcpProtectedResourceMetadata = authModule.getMcpProtectedResourceMetadata
@@ -112,14 +120,6 @@ beforeAll(async () => {
   blockedOrganizationPluginEndpoints =
     authModule.blockedOrganizationPluginEndpoints
   organizationSecurityHooks = authModule.organizationSecurityHooks
-
-  const [{ db }, schema] = await Promise.all([
-    import("@enterprise-agentic-saas/db"),
-    import("@enterprise-agentic-saas/db/schema"),
-  ])
-  await migrate(db, {
-    migrationsFolder: new URL("../../db/drizzle", import.meta.url).pathname,
-  })
 
   let sessionSequence = 0
   createPasskeySessionHeaders = async (ageInMilliseconds) => {
@@ -669,7 +669,7 @@ describe("multi-session current-account revocation", () => {
     const sessionResponse = await getAuthenticatedSession(cookieJar)
 
     expect(response.status).toBe(401)
-    expect(cookieAfterFailure).toBe(cookieBefore)
+    expect(decodeURIComponent(cookieAfterFailure)).toBe(cookieBefore)
     expect(await sessionExists(fixture.tokens[0] ?? "")).toBe(true)
     expect(await sessionExists(fixture.tokens[1] ?? "")).toBe(true)
     expect(await sessionResponse.json()).toMatchObject({
@@ -972,6 +972,7 @@ describe("MCP OAuth provider", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           client_name: "MCP Test Client",
+          application_type: "native",
           grant_types: ["authorization_code", "refresh_token"],
           redirect_uris: ["http://127.0.0.1/callback"],
           response_types: ["code"],
@@ -982,7 +983,7 @@ describe("MCP OAuth provider", () => {
     )
     const client = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(client).toMatchObject({
       client_name: "MCP Test Client",
       grant_types: ["authorization_code", "refresh_token"],

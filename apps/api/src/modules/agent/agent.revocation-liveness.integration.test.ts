@@ -44,7 +44,7 @@ vi.hoisted(() => {
   vi.stubEnv("GITHUB_OAUTH_EMULATOR_CLIENT_SECRET", "")
 })
 
-type TestDatabase = ReturnType<typeof drizzle<typeof schema>>
+type TestDatabase = ReturnType<typeof drizzle<typeof schema.relations>>
 
 const seedIdentity = async (db: TestDatabase, now: Date) => {
   await db.insert(schema.user).values({
@@ -143,7 +143,7 @@ describe("Agent external revocation liveness", () => {
       const applicationPath = join(directory, "application.db")
       const agentPath = join(directory, "agent.db")
       const client = createClient({ url: `file:${applicationPath}` })
-      const db = drizzle(client, { schema })
+      const db = drizzle({ client, relations: schema.relations })
       let internalServer:
         | Awaited<ReturnType<typeof startInternalApiServer>>["server"]
         | undefined

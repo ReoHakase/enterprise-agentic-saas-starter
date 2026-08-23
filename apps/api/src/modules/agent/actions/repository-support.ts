@@ -143,14 +143,6 @@ export const storedUpdateIssuePayloadModel = v.variant("operation", [
   }),
 ])
 
-export const normalizeStoredUpdateIssuePayload = (input: unknown) =>
-  input &&
-  typeof input === "object" &&
-  !Array.isArray(input) &&
-  !Object.hasOwn(input, "operation")
-    ? { operation: "fields", ...input }
-    : input
-
 export const storedDeleteIssuePayloadModel = v.strictObject({
   requestFingerprint: requestFingerprintModel,
   issueId: v.string(),
@@ -321,71 +313,11 @@ export const safeStoredParse = <
   return result.output
 }
 
-const isRecord = (input: unknown): input is Record<string, unknown> =>
-  Boolean(input) && typeof input === "object" && !Array.isArray(input)
-
-const projectLegacyPreviewAttachment = (input: unknown) => {
-  if (!isRecord(input)) return input
-  const source =
-    input.source ??
-    (typeof input.assetId === "string"
-      ? "asset"
-      : typeof input.fileId === "string"
-        ? "file"
-        : undefined)
-  if (source === "asset") {
-    return {
-      assetId: input.assetId,
-      filename: input.filename,
-      sizeBytes: input.sizeBytes,
-      source,
-    }
-  }
-  if (source === "file") {
-    return {
-      fileId: input.fileId,
-      filename: input.filename,
-      sizeBytes: input.sizeBytes,
-      source,
-    }
-  }
-  return { source }
-}
-
-const projectLegacyPreviewField = (input: unknown) =>
-  isRecord(input)
-    ? { after: input.after, before: input.before, field: input.field }
-    : input
-
-const projectLegacyPreview = (input: unknown) => {
-  if (!isRecord(input)) return input
-  const attachments = input.attachments
-  const fields = input.fields
-  return {
-    attachmentOperation: input.attachmentOperation ?? null,
-    attachments: Array.isArray(attachments)
-      ? attachments.map(projectLegacyPreviewAttachment)
-      : attachments,
-    destructive: input.destructive,
-    fields: Array.isArray(fields)
-      ? fields.map(projectLegacyPreviewField)
-      : fields,
-    issueNumber: input.issueNumber,
-    issueRevision: input.issueRevision,
-    kind: input.kind,
-    title: input.title,
-  }
-}
-
 export const toActionDto = (action: ActionRow): AgentIssueAction => {
   const preview =
     action.canonicalPreview === null
       ? null
-      : safeStoredParse(
-          agentIssueActionPreviewSchema,
-          // 旧rowだけは欠落fieldを補完し、nested値も公開表示fieldへ再帰的に投影する。
-          projectLegacyPreview(action.canonicalPreview)
-        )
+      : safeStoredParse(agentIssueActionPreviewSchema, action.canonicalPreview)
   return {
     id: action.id,
     kind: action.kind,

@@ -7,6 +7,7 @@ import { SecurityMethodsPanel } from "./security-methods-panel"
 
 const mocks = vi.hoisted(() => ({
   authClient: {
+    getSession: vi.fn<() => Promise<unknown>>(),
     listAccounts: vi.fn<() => Promise<unknown>>(),
     linkSocial: vi.fn<(input: unknown) => Promise<unknown>>(),
     unlinkAccount: vi.fn<(input: unknown) => Promise<unknown>>(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
       addPasskey: vi.fn<(input: unknown) => Promise<unknown>>(),
       deletePasskey: vi.fn<(input: unknown) => Promise<unknown>>(),
     },
+    signIn: { passkey: vi.fn<() => void>() },
   },
   refresh: vi.fn<() => void>(),
   push: vi.fn<(href: string) => void>(),
@@ -22,7 +24,8 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
 
-vi.mock("@better-auth-ui/react", () => ({
+vi.mock("@better-auth-ui/react", async (importOriginal) => ({
+  ...(await importOriginal()),
   useAuth: () => ({ authClient: mocks.authClient }),
 }))
 
@@ -52,22 +55,25 @@ describe("SecurityMethodsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.sessionStorage.clear()
-    mocks.authClient.listAccounts.mockResolvedValue({
-      data: [
-        {
-          id: "account-1",
-          accountId: "github-user-1",
-          providerId: "github",
-          createdAt: "2026-07-14T00:00:00.000Z",
-        },
-      ],
+    mocks.authClient.getSession.mockResolvedValue({
+      session: { token: "session-current" },
+      user: { id: "user-current" },
     })
-    mocks.authClient.passkey.listUserPasskeys.mockResolvedValue({
-      data: [{ id: "passkey-1", name: "MacBook", backedUp: true }],
-    })
-    mocks.authClient.unlinkAccount.mockResolvedValue({ data: {} })
-    mocks.authClient.passkey.deletePasskey.mockResolvedValue({ data: {} })
-    mocks.authClient.passkey.addPasskey.mockResolvedValue({ data: {} })
+    mocks.authClient.listAccounts.mockResolvedValue([
+      {
+        id: "account-1",
+        accountId: "github-user-1",
+        providerId: "github",
+        createdAt: "2026-07-14T00:00:00.000Z",
+      },
+    ])
+    mocks.authClient.passkey.listUserPasskeys.mockResolvedValue([
+      { id: "passkey-1", name: "MacBook", backedUp: true },
+    ])
+    mocks.authClient.linkSocial.mockResolvedValue({})
+    mocks.authClient.unlinkAccount.mockResolvedValue({})
+    mocks.authClient.passkey.deletePasskey.mockResolvedValue({})
+    mocks.authClient.passkey.addPasskey.mockResolvedValue({})
   })
 
   it("loads linked accounts and removes GitHub after confirmation", async () => {
@@ -81,11 +87,27 @@ describe("SecurityMethodsPanel", () => {
 
     await waitFor(() => {
       expect(mocks.authClient.unlinkAccount).toHaveBeenCalledWith({
-        providerId: "github",
         accountId: "github-user-1",
+        fetchOptions: { throw: true },
       })
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("GitHub account unlinked")
+  })
+
+  it("links GitHub through the standard social mutation", async () => {
+    const user = userEvent.setup()
+    mocks.authClient.listAccounts.mockResolvedValueOnce([])
+    renderPanel()
+
+    await user.click(await screen.findByRole("button", { name: "Link GitHub" }))
+
+    await waitFor(() => {
+      expect(mocks.authClient.linkSocial).toHaveBeenCalledWith({
+        provider: "github",
+        callbackURL: "http://localhost:3000/settings/account",
+        fetchOptions: { throw: true },
+      })
+    })
   })
 
   it("adds a passkey without restricting the authenticator type", async () => {
@@ -97,26 +119,37 @@ describe("SecurityMethodsPanel", () => {
     await waitFor(() => {
       expect(mocks.authClient.passkey.addPasskey).toHaveBeenCalledWith({
         name: "Enterprise Agentic SaaS",
+        fetchOptions: { throw: true },
       })
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey added")
   })
 
+  it("deletes a passkey through the standard passkey mutation", async () => {
+    const user = userEvent.setup()
+    renderPanel()
+
+    await user.click(await screen.findByRole("button", { name: "Delete" }))
+    await user.click(screen.getByRole("button", { name: "Delete passkey" }))
+
+    await waitFor(() => {
+      expect(mocks.authClient.passkey.deletePasskey).toHaveBeenCalledWith({
+        id: "passkey-1",
+        fetchOptions: { throw: true },
+      })
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey deleted")
+  })
+
   it("requires a fresh sign-in and resumes passkey setup after returning", async () => {
     const user = userEvent.setup()
-    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
-      data: null,
-      error: {
-        code: "SESSION_NOT_FRESH",
-        message: "session row and provider secret must stay private",
-      },
+    mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
+      code: "SESSION_NOT_FRESH",
+      message: "session row and provider secret must stay private",
     })
-    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
-      data: null,
-      error: {
-        code: "SESSION_NOT_FRESH",
-        message: "another private session timestamp",
-      },
+    mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
+      code: "SESSION_NOT_FRESH",
+      message: "another private session timestamp",
     })
     const firstRender = renderPanel()
 
@@ -148,7 +181,7 @@ describe("SecurityMethodsPanel", () => {
     )
 
     firstRender.unmount()
-    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({ data: {} })
+    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({})
     renderPanel()
 
     await waitFor(() => {
@@ -168,9 +201,9 @@ describe("SecurityMethodsPanel", () => {
     ],
   ])("maps %s to a fixed passkey message", async (code, message) => {
     const user = userEvent.setup()
-    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
-      data: null,
-      error: { code, message: "credential=private-provider-material" },
+    mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
+      code,
+      message: "credential=private-provider-material",
     })
     renderPanel()
 
@@ -186,12 +219,9 @@ describe("SecurityMethodsPanel", () => {
 
   it("falls back without exposing unknown passkey provider details", async () => {
     const user = userEvent.setup()
-    mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({
-      data: null,
-      error: {
-        code: "UNKNOWN_ERROR",
-        message: "BETTER_AUTH_SECRET=must-never-render",
-      },
+    mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
+      code: "UNKNOWN_ERROR",
+      message: "BETTER_AUTH_SECRET=must-never-render",
     })
     renderPanel()
 

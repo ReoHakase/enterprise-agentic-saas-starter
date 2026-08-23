@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-24
 ---
 
 # ローカル開発
@@ -122,6 +122,10 @@ Agent storage、ローカルCA、signalと終了コードが標準CLIまたは�
 
 初回は `bun run dev` だけでmigration済みの空DBから通常のsignupとorganization作成を開始できます。固定のサンプルtenant、Issue、file fixtureを最初から使う場合は、先に`bun run dev:db:seed`、続けて`bun run dev`を実行します。seedはアプリ起動の前提ではありません。
 
+Drizzle v1の単一基準マイグレーションへ切り替えるときは、以前のマイグレーションを適用したローカル
+DBを引き継ぎません。全dev serverを停止して`bun run dev:db:reset`を一度実行し、fixtureが必要な
+場合だけ`bun run dev:db:seed`を実行します。本番DBはまだ存在しません。
+
 `dev:db:*`はlocal application dataの準備・破棄をまとめる公開command群です。`bun run dev:db:seed`はDB rowだけでなく、metadataと対応するR2 objectも同時にreconcileします。rootの`seed` aliasやproduction用seed commandは作りません。
 
 `bun run dev:db:seed`はhealthyなAPI dev sessionがあればそのWorkerを再利用します。full devが停止中ならlocal Tursoが停止中の場合だけ一時起動し、migrationを適用した後、`apps/api/.wrangler/state`を使うloopback限定Wranglerを一時起動します。DB seedとR2 reconcileの完了後はcommand自身が起動したprocessだけを停止し、既存processや永続化したDB/R2 stateには触れません。production、remote Turso、remote Workerは処理開始前に拒否します。
@@ -194,7 +198,9 @@ Workerへ渡しません。どちらもPortlessの`PORT`をHTTP listenerへ使�
 Wrangler既定の`9229`を奪い合いません。固定したDevTools endpointが必要な単独起動だけ、
 `WRANGLER_INSPECTOR_PORT=9234 bun run --cwd apps/agent dev`のように上書きできます。
 
-既存DBへmigrationだけを適用する場合はreset不要です。local dataとR2 stateを作り直す場合だけ、全dev serverを停止して次を実行します。
+単一基準マイグレーションへの切替時、またはlocal dataとR2 stateを作り直す場合は、全dev serverを
+停止して次を実行します。基準マイグレーションから作成済みのDBへ将来の追記マイグレーションだけを
+適用する場合はreset不要です。
 
 ```sh
 bun run dev:db:reset
@@ -247,7 +253,11 @@ rootの`bun run dev`では、APIがworktree-awareなemulator URLを受け取り�
 
 実GitHubのclient ID/secretは不要です。local `.env`に実credentialが残っていてもemulator modeでは読みません。別fixture credentialを試す場合だけ、`GITHUB_OAUTH_EMULATOR_CLIENT_ID`と`GITHUB_OAUTH_EMULATOR_CLIENT_SECRET`の両方を設定します。
 
-Better Authでemulatorへ登録するcallbackは`/auth/oauth2/callback/github`です。production built-in providerの`/auth/callback/github`とは異なります。emulator base URLは`/emulate/github`までを含みます。stateはmemoryだけにあり、完全にresetするときはroot devを停止して再起動します。
+Better Auth 1.7.1でエミュレーターへ登録するコールバックは、組み込みGitHubプロバイダーと同じ標準
+`/auth/callback/github`です。本番の外部GitHub OAuth Appは従来からこの経路を登録しているため、
+登録値を変更しません。旧`/auth/oauth2/callback/github`の別名はありません。エミュレーターの
+ベースURLは`/emulate/github`までを含みます。状態はメモリーだけにあり、完全にリセットするときは
+リポジトリルートの開発サーバーを停止して再起動します。
 
 emulatorだけを調査するときは、callbackを解決できるAPI Portless aliasを先に用意してから次を実行します。
 
@@ -309,7 +319,13 @@ Storybookは標準のCLI launcherを使い、開発serverはPortlessが割り当
 - local起動で`EMAIL_FROM` validation errorになる: packageを最新化し、`NODE_ENV`が誤って`production`になっていないか確認する。local/testでは省略可能、本番では必須。
 - Mailpitが起動しない: `mailpit` が `PATH` にあるか確認する。Nix利用時はdev shellへ入り直し、main checkoutでは `https://mailpit.enterprise-agentic-saas.localhost`、linked worktreeでは `bun run portless-topology resolve mailpit.enterprise-agentic-saas` の出力を開く。APIだけをpackage単体で起動するときは、Mailpit dependencyを先に起動するか明示的なlocal `MAILPIT_URL`を渡す。
 - Mailpitにメールが届かない: `NODE_ENV=development`であること、APIのlocal envが既定値を`console`等で上書きしていないことを確認する。通常のroot/filtered Turbo起動では `packages/email/.local/mailpit-session.json` が存在し、API起動時にdirect loopback endpointのreadinessが通る。React Email previewにはapplicationから送ったメールは保存されない。
-- GitHub OAuth user pickerが開かない: `bun run portless-topology resolve`で`github.emulate.enterprise-agentic-saas`と`api.enterprise-agentic-saas`を確認し、APIをpackage単体ではなくrootまたはfiltered Turboから起動する。emulator URLは`/emulate/github`までを含み、callbackは`/auth/oauth2/callback/github`でなければならない。
+- GitHub OAuthの利用者選択が開かない: `bun run portless-topology resolve`で
+  `github.emulate.enterprise-agentic-saas`と`api.enterprise-agentic-saas`を確認し、APIをパッケージ
+  単体ではなくリポジトリルートまたは絞り込んだTurboから起動する。エミュレーターURLは
+  `/emulate/github`までを含み、コールバックは`/auth/callback/github`でなければならない。
+- Drizzle v1への更新でローカルDBの`credential`識別子不一致になる: 旧版の開発用初期データが原因の
+  場合は、開発サーバーを停止して`bun run dev:db:reset`を実行し、必要な場合だけ
+  `bun run dev:db:seed`でフィクスチャを作り直す。既存行を手動修復せず、遠隔DBにはresetを使わない。
 - schema変更が見えない: `db:generate` 後のmigrationをcommitし、対象DBへ `db:migrate` を実行する。`push` で迂回しない。
 - file fixtureが見えない: `bun run dev`はfixtureを作らない。`bun run dev:db:seed`を実行する。完全に作り直す必要がある場合だけ、dev停止後に`bun run dev:db:reset` → 任意の`bun run dev:db:seed` → `bun run dev`の順にする。
 - local upload/previewが再起動で消える: APIが`wrangler dev --local --persist-to apps/api/.wrangler/state`で起動しているか確認する。raw `wrangler dev`を別terminalで二重起動しない。

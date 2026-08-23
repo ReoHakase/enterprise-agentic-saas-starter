@@ -1,5 +1,6 @@
 import type {
   MagicLinkAuthClient,
+  MultiSessionAuthClient,
   PasskeyAuthClient,
 } from "@better-auth-ui/react"
 import type { ComponentType } from "react"
@@ -21,14 +22,32 @@ const nestedFunction = (value: unknown, path: readonly string[]) => {
 const isMagicLinkAuthClient = (value: unknown): value is MagicLinkAuthClient =>
   nestedFunction(value, ["signIn", "magicLink"])
 
+const isMultiSessionAuthClient = (
+  value: unknown
+): value is MultiSessionAuthClient =>
+  nestedFunction(value, ["getSession"]) &&
+  nestedFunction(value, ["multiSession", "listDeviceSessions"]) &&
+  nestedFunction(value, ["multiSession", "setActive"]) &&
+  nestedFunction(value, ["multiSession", "revoke"])
+
 const isPasskeyAuthClient = (value: unknown): value is PasskeyAuthClient =>
-  nestedFunction(value, ["signIn", "passkey"])
+  nestedFunction(value, ["signIn", "passkey"]) &&
+  nestedFunction(value, ["passkey", "listUserPasskeys"]) &&
+  nestedFunction(value, ["passkey", "addPasskey"]) &&
+  nestedFunction(value, ["passkey", "deletePasskey"])
 
 export const requireMagicLinkAuthClient = (
   value: unknown
 ): MagicLinkAuthClient => {
   if (isMagicLinkAuthClient(value)) return value
   throw new Error("Magic link authentication is not configured")
+}
+
+export const requireMultiSessionAuthClient = (
+  value: unknown
+): MultiSessionAuthClient => {
+  if (isMultiSessionAuthClient(value)) return value
+  throw new Error("Account switching is not configured")
 }
 
 export const requirePasskeyAuthClient = (value: unknown): PasskeyAuthClient => {

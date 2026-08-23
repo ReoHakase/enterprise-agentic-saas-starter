@@ -1,17 +1,24 @@
-import {
-  auth,
-  getMcpProtectedResourceMetadata,
-  handleMcpOAuthServerMetadata,
-  mcpOAuthResource,
-  verifyMcpOAuthAccessToken,
-} from "@enterprise-agentic-saas/auth"
 import { Elysia } from "elysia"
 
-export const authPlugin = new Elysia({ name: "auth" }).mount(auth.handler)
+import { env } from "../env"
+
+const loadAuth = async () => {
+  const authModule = await import("@enterprise-agentic-saas/auth")
+  await authModule.auth.$context
+  return authModule
+}
+const mcpOAuthResource = new URL("/mcp", env.API_PUBLIC_URL).toString()
+
+export const authPlugin = new Elysia({ name: "auth" }).mount(async (request) =>
+  (await loadAuth()).auth.handler(request)
+)
 
 export const mcpAuth = {
-  getProtectedResourceMetadata: getMcpProtectedResourceMetadata,
-  handleAuthorizationServerMetadata: handleMcpOAuthServerMetadata,
+  getProtectedResourceMetadata: async () =>
+    (await loadAuth()).getMcpProtectedResourceMetadata(),
+  handleAuthorizationServerMetadata: async (request: Request) =>
+    (await loadAuth()).handleMcpOAuthServerMetadata(request),
   resource: mcpOAuthResource,
-  verifyAccessToken: verifyMcpOAuthAccessToken,
+  verifyAccessToken: async (presentedToken: string) =>
+    (await loadAuth()).verifyMcpOAuthAccessToken(presentedToken),
 }

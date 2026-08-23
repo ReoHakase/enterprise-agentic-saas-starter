@@ -108,13 +108,13 @@ focused/disabled testの規則は緩めません。
 
 Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 
-| 順序 | profile                           | selector                                                                                                                                                                                                                                                                   |
-| ---: | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/drizzle/**`、`**/{storybook-static,playwright-report,test-results}/**` |
-|    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                                                |
-|    2 | React                             | `apps/web/src/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                                       |
-|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`src/lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                                               |
-|    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                                        |
+| 順序 | profile                           | selector                                                                                                                                                                                                                                                  |
+| ---: | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/{storybook-static,playwright-report,test-results}/**` |
+|    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                               |
+|    2 | React                             | `apps/web/src/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                      |
+|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`src/lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                              |
+|    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                       |
 
 `fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。root
 `oxlint.config.ts`は`lintIgnorePatterns`、`createBudgetOverrides`、`workspaceBoundaryRule`を
@@ -238,7 +238,6 @@ production TypeScript/TSXのcopy-pasteを検出します。
     "**/fixtures/**",
     "**/*.config.*",
     "**/scripts/**",
-    "**/drizzle/**",
     "**/generated/**",
     "**/dist/**",
     "**/.next/**"

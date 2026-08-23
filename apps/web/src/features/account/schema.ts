@@ -3,7 +3,7 @@ import * as v from "valibot"
 
 const linkedAccountSchema = v.object({
   id: v.optional(v.string()),
-  accountId: v.optional(v.string()),
+  accountId: v.string(),
   providerId: v.string(),
   createdAt: v.optional(v.nullable(v.union([v.string(), v.date()]))),
 })
@@ -16,10 +16,8 @@ const userPasskeySchema = v.object({
   backedUp: v.optional(v.nullable(v.boolean())),
 })
 
-const securityMethodsSchema = v.object({
-  accounts: v.array(linkedAccountSchema),
-  passkeys: v.array(userPasskeySchema),
-})
+const linkedAccountListSchema = v.array(linkedAccountSchema)
+const userPasskeyListSchema = v.array(userPasskeySchema)
 
 const deviceAccountSchema = v.pipe(
   v.object({
@@ -65,11 +63,12 @@ export type UserSession = Treaty.Data<
 >[number]
 export type LinkedAccount = v.InferOutput<typeof linkedAccountSchema>
 export type UserPasskey = v.InferOutput<typeof userPasskeySchema>
-export type SecurityMethods = v.InferOutput<typeof securityMethodsSchema>
 export type DeviceAccount = v.InferOutput<typeof deviceAccountSchema>
 
-export const parseSecurityMethods = (value: unknown) =>
-  v.parse(securityMethodsSchema, value)
+export const parseLinkedAccounts = (value: unknown) =>
+  v.parse(linkedAccountListSchema, value)
+export const parseUserPasskeys = (value: unknown) =>
+  v.parse(userPasskeyListSchema, value)
 export const parseDeviceAccounts = (value: unknown) =>
   v.parse(deviceAccountListSchema, value)
 export const parseCurrentDeviceSession = (value: unknown) =>

@@ -16,7 +16,7 @@ description: enterprise-agentic-saas-starterのTurso/libSQL、Drizzle schema、m
 
 1. schema ownership、tenant key、foreign key、indexとrollback影響を確認する。
 2. schema変更後にDrizzleで新しいmigrationとsnapshotを生成する。
-3. migration history、fresh DB、upgrade、schema driftを別々に検証する。
+3. migration history、fresh DB、schema driftを別々に検証し、baseline後のmigrationを追加した場合はupgradeも検証する。
 4. deterministic seedを再実行可能に保ち、production lifecycleへ混ぜない。
 5. `origin/main`に存在するmigrationが不変であることを確認する。
 
@@ -26,7 +26,7 @@ description: enterprise-agentic-saas-starterのTurso/libSQL、Drizzle schema、m
 - `bun run --cwd packages/db typecheck`
 - `bun run --cwd packages/db test`
 - `bun run --cwd packages/db db:check`
-- `git diff --exit-code origin/main -- packages/db/drizzle`
+- `bun run --cwd packages/db db:check:history`
 
 ## 禁止事項
 

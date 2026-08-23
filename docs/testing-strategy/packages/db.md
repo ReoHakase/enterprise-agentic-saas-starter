@@ -2,7 +2,7 @@
 title: DBパッケージテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-24
 applies_to:
   - packages/db/**
 related:
@@ -15,19 +15,23 @@ related:
 
 ## 目的
 
-`packages/db`は、libSQL client、Drizzle schema、committed migration、開発seedとreset、DB test supportを所有します。
+`packages/db`は、libSQLクライアント、Drizzleスキーマ、マイグレーション、開発用初期データ投入と
+リセット、DBテスト支援を所有します。
 
 業務serviceや業務repositoryは所有しません。それらは`apps/api`のmoduleが所有し、A3で検査します。
-
-DB packageでは、現在schemaの宣言だけでなく、fresh install、historical upgrade、data preservation、constraint、trigger、concurrency、seed/resetの安全性まで保証します。
+DB packageでは、現在のスキーマ、空のデータベースへ適用する単一の基準マイグレーション、制約、
+トリガー、並行処理、開発用初期データ投入とリセットの安全性を保証します。本番データベースは
+未作成であり、ローカル開発データベースはリセットするため、過去のデータベースからの更新は
+テスト契約に含めません。
 
 ## コード構造との対応
 
 ```text
 packages/db/
-  drizzle/
-    *.sql
-    meta/
+  drizzle-v3/
+    20260823163505_baseline/
+      migration.sql
+      snapshot.json
 
   src/
     index.ts
@@ -37,6 +41,9 @@ packages/db/
       auth.generated.ts
       app.ts
       index.ts
+      oauth-provider.ts
+      relations.test.ts
+      relations.ts
 
     development/
       seed.ts
@@ -46,7 +53,6 @@ packages/db/
     migrations/
       helpers.ts
       fresh.test.ts
-      upgrades.test.ts
       invariants.test.ts
       concurrency.test.ts
       lifecycle.test.ts
@@ -55,7 +61,8 @@ packages/db/
       create-test-database.ts
 ```
 
-このfile構成は推奨例です。テスト層を一つのtest fileと同一視しません。一つの層を複数fileへ分けてもよく、一つのfileに同じ層の複数scenarioを置いても構いません。
+このfile構成は推奨例です。テスト層を一つのtest fileと同一視しません。一つの層を複数fileへ分けても
+よく、一つのfileに同じ層の複数scenarioを置いても構いません。
 
 ## 正本
 
@@ -63,36 +70,42 @@ packages/db/
 packages/db/src/schema/**
   現在のdesired schema
 
-packages/db/drizzle/*.sql
-packages/db/drizzle/meta/**
-  migration historyとsnapshot
+packages/db/drizzle-v3/**
+  Drizzle v1が実行する基準マイグレーションと、main取り込み後に追加するマイグレーション
 
 DB2からDB5
-  constraint、data preservation、concurrency、lifecycleの振る舞い
+  constraint、trigger、concurrency、lifecycleの振る舞い
 ```
 
-schemaとmigrationが矛盾した場合、過去migrationを削除または書き換えて合わせません。append-onlyな新規migrationを生成し、upgrade testを追加します。
+Drizzle v1更新を含む変更では、`20260823163505_baseline`だけを実行対象にします。この基準
+マイグレーションが`main`へ取り込まれた時点から既存ディレクトリを不変にし、以後の変更は完全な
+新規ディレクトリとして追加します。過去の履歴、マイグレーション台帳、既存データを再現する
+フィクスチャや補助処理は持ちません。
 
 ## テスト層
 
-| 名前                                           | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 実物として使うもの                                                             | 差し替えるもの                                      | 対象コード/ファイル                                                                                | Test Runner                                   | 実行速度   | CI時間課金以外の費用 | 量         |
-| ---------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------- | -------------------- | ---------- |
-| **DB補助ロジック単体テスト (DB1)**             | 単体                | <ul><li>migration tag検索、fixture builder、seed plan、URL安全判定を確認する</li><li>同じseedから同じ値とrelationが生成されることを確認する</li><li>開始時刻と終了時刻、親子関係、unique keyなど複数field制約を確認する</li><li>remote URL、production mode、危険なreset targetの分類を確認する</li></ul>                                                                                                                                                                  | pure helper、builder、config parser、deterministic generator                   | clock、random seed、filesystem abstraction          | `packages/db/src/migrations/helpers.ts`の純粋部分、`development/**`のplan/guard、test data builder | Vitest Node                                   | 極めて速い | なし                 | 多い       |
-| **DBスキーマ・制約統合テスト (DB2)**           | 統合                | <ul><li>current schemaへ直接rowを作り、FK、unique、partial unique、check、cascadeが働くことを確認する</li><li>tenant composite FK、owner一意性、durable cleanup job、idempotency、privacy columnの不変条件を確認する</li><li>indexとtriggerが期待どおり存在し、query plan上必要なindexが欠落していないことを確認する</li><li>`pragma foreign_key_check`が空になることを確認する</li></ul>                                                                                  | current Drizzle schema、実libSQL、constraint、trigger、index                   | remote Turso、API repository、external provider     | `packages/db/src/schema/**`、schema-specific integration test、constraint fixture                  | Vitest + in-memory libSQL                     | 速い       | なし                 | 厚くする   |
-| **DBマイグレーション統合テスト (DB3)**         | 統合                | <ul><li>空DBへcommitted migrationを先頭から適用し、current schemaへ到達することを確認する</li><li>historical migration tagからcurrentへ更新し、legacy row、nullability、default、backfillを保持することを確認する</li><li>table rebuild後にtrigger、index、FK、dataが失われないことを確認する</li><li>migration再実行または途中失敗後の状態が安全であることを確認する</li><li>current repositoryの代表smoke operationがmigration後schemaで成功することを確認する</li></ul> | committed SQL、journal、snapshot、実libSQL、historical fixture                 | remote Turso、業務API、provider                     | `packages/db/drizzle/**`、`packages/db/src/migrations/**`、historical fixture                      | Vitest + in-memoryまたはtemporary-file libSQL | 速いから中 | なし                 | 厚くする   |
-| **DB並行実行・耐久性統合テスト (DB4)**         | 統合                | <ul><li>複数connectionから同時writeしてもunique、CAS、job claim、fencingが破られないことを確認する</li><li>transaction lock、busy、retry、rollback後の状態を確認する</li><li>WAL、SHM、file-backed DBを使うcaseでprocess間に近い競合を再現する</li><li>失敗したworkerがleaseを保持し続けないことを確認する</li></ul>                                                                                                                                                       | temporary file libSQL、複数client、実transaction、WAL                          | cloud network latency、remote Turso service         | DB concurrency fixture、job/outbox/lease schema、`test-support/create-test-database.ts`            | Vitest + temporary-file libSQL                | 中から遅い | なし                 | 必要な範囲 |
-| **DBライフサイクル・運用安全統合テスト (DB5)** | 統合                | <ul><li>local resetがmigration ledgerからDBを再構築し、廃止tableと古いstateを残さないことを確認する</li><li>seedが決定的で、再実行時に意図しない重複や破壊を起こさないことを確認する</li><li>persistent local DBとR2 fixtureの所有権、cleanup、途中失敗時の再開を確認する</li><li>remote URLとproduction modeでseed、reset、dangerous commandを拒否することを確認する</li><li>migration、seed、resetのcommand surfaceが誤ったtargetへ接続しないことを確認する</li></ul>    | local database lifecycle、migration command、seed、reset、temporary filesystem | production DB、remote cloud service、実利用者データ | `packages/db/src/development/**`、DB CLI command、lifecycle test、env guard                        | Vitest + subprocessまたはlocal libSQL         | 遅い       | なし                 | 少数       |
+| 名前                                           | Testing Trophy分類 | テスト内容                                                                                                                                                                                                                               | 実物として使うもの                                                             | 差し替えるもの                                      | Test Runner                                   | 量         |
+| ---------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------- | ---------- |
+| **DB補助ロジック単体テスト (DB1)**             | 単体               | 開発用初期データ投入計画、決定的生成、URL安全判定、リセット対象を確認する                                                                                                                                                                | pure helper、builder、config parser、deterministic generator                   | clock、random seed、filesystem abstraction          | Vitest Node                                   | 多い       |
+| **DBスキーマ・制約統合テスト (DB2)**           | 統合               | 現在のスキーマへ直接rowを作り、外部キー、一意制約、部分一意制約、検査制約、cascade、テナント境界、所有者一意性、durable cleanup job、index、triggerを確認する                                                                            | current Drizzle schema、実libSQL、constraint、trigger、index                   | remote Turso、API repository、external provider     | Vitest + in-memory libSQL                     | 厚くする   |
+| **DBマイグレーション統合テスト (DB3)**         | 統合               | 空のデータベースへ基準マイグレーションを適用し、現在のスキーマ、外部キー、明示的にNULLを拒否するテキスト主キー、リポジトリ所有のトリガー、現在有効なLunaの料金行へ到達することと、マイグレーション台帳が1行であることを確認する          | committed v3 SQL、snapshot、実libSQL                                           | remote Turso、業務API、provider                     | Vitest + in-memoryまたはtemporary-file libSQL | 厚くする   |
+| **DB並行実行・耐久性統合テスト (DB4)**         | 統合               | 複数connectionから同時writeしても一意制約、CAS、job claim、fencingが破られないこと、transaction lock、busy、retry、rollback後の状態、失敗したworkerのlease解放を確認する                                                                 | temporary file libSQL、複数client、実transaction、WAL                          | cloud network latency、remote Turso service         | Vitest + temporary-file libSQL                | 必要な範囲 |
+| **DBライフサイクル・運用安全統合テスト (DB5)** | 統合               | DB単体のリセットが基準マイグレーション適用後に開発用初期データを投入すること、rootのlocal data reset後はfixture投入を任意に選べること、DB/R2 fixtureの再開、遠隔URLとproductionでの拒否、所有していないprocessを停止しないことを確認する | local database lifecycle、migration command、seed、reset、temporary filesystem | production DB、remote cloud service、実利用者データ | Vitest + subprocessまたはlocal libSQL         | 少数       |
 
 ## DB固有の静的検査
 
 DB層の実行テストとは別に、共通S0で次を検査します。
 
-- journal、snapshot、SQLのhistory consistency
-- current schemaとgenerated migrationのdrift
-- base branchに存在したSQL、snapshot、journal entryのimmutability
-- 新規migrationと末尾journal entryの対応
-- schemaからdevelopment、seed、test-supportへの逆依存禁止
-- production sourceからdevelopment helperへのimport禁止
+- `packages/db/drizzle/**`が存在しないこと
+- Drizzle v1更新を含む変更では、`packages/db/drizzle-v3/**`が単一の完全な基準マイグレーションだけで
+  あること
+- 基準マイグレーションが`main`へ取り込まれた後は既存のv3ディレクトリの変更、削除、改名を拒否し、
+  完全な新規ディレクトリだけを許可すること
+- 現在のスキーマとv3マイグレーションの不整合がないこと
+- リポジトリ所有のトリガーと現在有効なLunaの料金行が基準マイグレーションに含まれること
+- 削除した履歴、移行補助処理、過去のデータベース用フィクスチャへの参照がないこと
+- schemaからdevelopment、seed、test-supportへの逆依存がないこと
+- production sourceからdevelopment helperへのimportがないこと
 
 ```sh
 bun --cwd packages/db run db:check
@@ -102,48 +115,45 @@ bun --cwd packages/db run db:check
 
 DB1はDB接続を必要としない規則へ限定します。
 
-例:
-
-- `createMigrationPrefix({ through })`がjournal tagを正しく解決する
-- 存在しないtagを早期失敗させる
 - seedのrelation graphが決定的である
 - production URL判定がfail-closedである
 - reset planが許可directory外を削除しない
+- fixture manifestのpathとdigestが決定的である
 
-DBを実際に開かなければ証明できないものをDB1へ置きません。
+過去のマイグレーション名を解釈する補助処理は所有しません。DBを実際に開かなければ証明できないものを
+DB1へ置きません。
 
 ## DB2: DBスキーマ・制約統合テスト
 
-DB2はcurrent schemaそのもののcontractを検査します。migration pathではなく、到達後のDB不変条件が対象です。
+DB2は現在のスキーマそのもののcontractを検査します。マイグレーション経路ではなく、到達後のDB
+不変条件が対象です。
 
-例:
-
-- organizationを越えるFKを作れない
+- organizationを越える外部キーを作れない
 - 複数ownerの作成を一意indexで拒否する
 - 同じidempotency keyを重複作成できない
 - cleanup jobが必要な再試行状態を失わない
 - cascadeの範囲が過大でない
+- リポジトリ所有のトリガーが意図した状態遷移と不変条件を強制する
+- `pragma foreign_key_check`が空になる
 
 ## DB3: DBマイグレーション統合テスト
 
-DB3はfreshとupgradeを同じ層として扱います。どちらもcommitted migration historyを実行し、desired schemaへ到達する契約だからです。
+DB3は空のデータベースから現在のスキーマへ到達する一つの経路を所有します。次のシナリオを必須に
+します。
 
-historical stateは原則としてmigration prefixで作ります。
+- Given 空のデータベース、When 基準マイグレーションを適用する、Then 現在のテーブル、列、
+  インデックス、外部キー、検査制約へ到達し、外部キー検査が成功する。
+- Given 空のデータベース、When 基準マイグレーションを適用する、Then すべてのテキスト主キーが
+  明示的な`NOT NULL`制約を持ち、SQLiteのrowid tableでもNULLを拒否する。
+- Given 空のデータベース、When 基準マイグレーションを適用する、Then リポジトリが所有する
+  トリガーが期待する名前で作成され、DB2が現在の状態遷移と不変条件を検査できる。
+- Given 空のデータベース、When 基準マイグレーションを適用する、Then 現在有効なLunaの料金行が
+  期待する識別子、model、単価、通貨、有効期間で1行だけ作成される。
+- Given 基準マイグレーション適用済みのデータベース、When 現在のDrizzle schemaで代表的なinsertと
+  queryを行う、Then Relations v2、Better Auth 1.7、テナント制約を含む代表操作が成功する。
 
-```ts
-createMigrationPrefix({
-  through: "0018_mysterious_sage",
-})
-```
-
-raw baseline SQLを許可する条件:
-
-- migration導入前のschemaを再現する
-- production historyに同等のledgerがない
-- test内に理由を記載する
-- 必要なmigration ledger stateを明示する
-
-一migration一test fileにはしません。migrationが増えるたびにfileとfixtureが分散し、全体upgrade pathと不変条件を見失うためです。
+追加のv3マイグレーションが`main`へ取り込まれた後は、その変更で初めて必要になるデータ移行と更新
+経路をDB3へ追加します。一マイグレーション一test fileにはせず、規則と観測結果でscenarioをまとめます。
 
 ## DB4: DB並行実行・耐久性統合テスト
 
@@ -163,6 +173,9 @@ flakyなsleepで競合を作らず、barrier、promise、transaction hookなど�
 
 DB5は通常のquery correctnessではなく、開発・運用commandが誤った環境を破壊しないことを検査します。
 
+- packageの`db:reset`は基準マイグレーションを適用してからDBの開発用初期データを投入する
+- rootの`dev:db:reset`はlocal TursoとR2 stateを削除し、開発用初期データ投入を自動実行しない
+- rootの`dev:db:seed`を明示実行すると、DB rowとR2 fixtureが決定的に作成される
 - local専用commandをproductionで起動できない
 - remote Tursoへresetまたはseedできない
 - lifecycle commandが所有していないprocessを停止しない
@@ -171,17 +184,19 @@ DB5は通常のquery correctnessではなく、開発・運用commandが誤っ�
 
 ## `apps/api`との責務分担
 
-| 保証                                                 | 所有者     |
-| ---------------------------------------------------- | ---------- |
-| table、column、FK、unique、check、trigger            | DB2        |
-| fresh/upgrade migration、backfill、data preservation | DB3        |
-| DB concurrency primitive                             | DB4        |
-| seed/reset/remote refusal                            | DB5        |
-| IssueRepositoryのtenant predicate                    | API A3     |
-| pagination、business query、DB error mapping         | API A3     |
-| transactionを使う業務順序                            | API A2、A3 |
+| 保証                                                             | 所有者     |
+| ---------------------------------------------------------------- | ---------- |
+| table、column、FK、unique、check、trigger                        | DB2        |
+| 新規DBへの基準マイグレーション、トリガー、現在有効なLunaの料金行 | DB3        |
+| DB concurrency primitive                                         | DB4        |
+| reset、任意seed、remote refusal                                  | DB5        |
+| IssueRepositoryのtenant predicate                                | API A3     |
+| pagination、business query、DB error mapping                     | API A3     |
+| transactionを使う業務順序                                        | API A2、A3 |
 
-API repository変更時には、API A3だけでなくDB packageのfull testも実行します。repositoryのSQL利用とDB constraintの両方を確認するためです。
+Relations v2の`adapter`接続はAuth AUTH2、GitHubの`issuer`はAuth AUTH4とE1が所有します。API repository
+変更時には、API A3だけでなくDB packageのfull testも実行します。repositoryのSQL利用とDB constraintの
+両方を確認するためです。
 
 ## 実行
 
@@ -196,9 +211,12 @@ migration、schema、repository、DB infrastructure変更ではfull suiteを実�
 
 - DB packageが業務repositoryを所有しない
 - schema、migration history、behaviour contractの正本が明確である
-- freshだけでなくhistorical upgradeを検査する
+- 空のデータベースから単一の基準マイグレーションだけで現在のスキーマへ到達する
+- 基準マイグレーションがリポジトリ所有のトリガーと現在有効なLunaの料金行を再現する
+- マイグレーション台帳が基準マイグレーションの1行だけを持つ
+- 過去のデータベース、マイグレーション台帳、既存データの移行処理とテストを持たない
 - constraint自体とAPI repository利用を区別する
 - concurrencyをtemporary file DBと複数connectionで検査する
-- seed、reset、remote refusalをDB5で検査する
-- migration historyがappend-onlyである
+- リセット、任意の開発用初期データ投入、遠隔DB拒否をDB5で検査する
+- 基準マイグレーションが`main`へ取り込まれた後はv3履歴を追記専用にする
 - test fileではなく責務でDB1からDB5を定義する

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
-const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../drizzle-v3", import.meta.url).pathname
 
 const insertActionFixture = async (client: ReturnType<typeof createClient>) => {
   const now = Date.now()
@@ -117,7 +117,7 @@ describe("Agent action runtime schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertActionFixture(client)
 
       await client.execute(
@@ -326,7 +326,7 @@ describe("Agent action runtime resource and asset invariants", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertActionFixture(client)
       await client.batch([
         {
@@ -408,7 +408,7 @@ describe("Agent action runtime resource and asset invariants", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertActionFixture(client)
       const objectKey = "organizations/action-org/storage-objects/action-object"
       await client.batch([

@@ -4,7 +4,10 @@ import { sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/libsql"
 
 export const testDb = () =>
-  drizzle(createClient({ url: "file::memory:?cache=shared" }), { schema })
+  drizzle({
+    client: createClient({ url: "file::memory:?cache=shared" }),
+    relations: schema.relations,
+  })
 
 type TestDb = ReturnType<typeof testDb>
 
@@ -66,6 +69,7 @@ const createIdentityAndIssueTables = async (db: TestDb) => {
   await db.run(sql`
     create table account (
       id text primary key,
+      issuer text not null,
       account_id text not null,
       provider_id text not null,
       user_id text not null,
@@ -78,7 +82,8 @@ const createIdentityAndIssueTables = async (db: TestDb) => {
       password text,
       created_at integer not null,
       updated_at integer not null,
-      foreign key (user_id) references user(id) on delete cascade
+      foreign key (user_id) references user(id) on delete cascade,
+      unique (issuer, account_id)
     )
   `)
   await db.run(sql`

@@ -9,17 +9,10 @@ describe("compatibility rollout policy", () => {
   it.each([
     {
       bootstrapRequired: true,
-      migrationCompatibilityRequired: false,
       staleWorkerSecretsFound: false,
     },
     {
       bootstrapRequired: false,
-      migrationCompatibilityRequired: true,
-      staleWorkerSecretsFound: false,
-    },
-    {
-      bootstrapRequired: false,
-      migrationCompatibilityRequired: false,
       staleWorkerSecretsFound: true,
     },
   ])("requires isolation and drain for $#", (input) => {
@@ -30,7 +23,6 @@ describe("compatibility rollout policy", () => {
     expect(
       requiresCompatibilityRollout({
         bootstrapRequired: false,
-        migrationCompatibilityRequired: false,
         staleWorkerSecretsFound: false,
       })
     ).toBe(false)
@@ -63,7 +55,6 @@ describe("compatibility rollout policy", () => {
     expect(
       requiresCompatibilityRollout({
         bootstrapRequired: true,
-        migrationCompatibilityRequired: false,
         staleWorkerSecretsFound: false,
       })
     ).toBe(true)

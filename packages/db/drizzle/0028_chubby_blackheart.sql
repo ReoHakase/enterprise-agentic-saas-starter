@@ -1,1 +1,0 @@
-DROP INDEX `invitation_pending_organization_email_uidx`;

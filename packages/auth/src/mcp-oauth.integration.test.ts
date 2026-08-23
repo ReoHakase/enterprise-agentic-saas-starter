@@ -39,6 +39,11 @@ beforeAll(async () => {
     EMAIL_PROVIDER: "noop",
     EMAIL_FROM: "noreply@example.com",
   })
+  const { db } = await import("@enterprise-agentic-saas/db")
+  await migrate(db, {
+    migrationsFolder: new URL("../../db/drizzle-v3", import.meta.url).pathname,
+  })
+
   const [authModule, credentialModule] = await Promise.all([
     import("./index"),
     import("./server/mcp-oauth-credentials"),
@@ -51,11 +56,6 @@ beforeAll(async () => {
   revokeMcpOAuthCredentialFamily =
     credentialModule.revokeMcpOAuthCredentialFamily
   verifyMcpOAuthAccessToken = authModule.verifyMcpOAuthAccessToken
-
-  const { db } = await import("@enterprise-agentic-saas/db")
-  await migrate(db, {
-    migrationsFolder: new URL("../../db/drizzle", import.meta.url).pathname,
-  })
 }, 30_000)
 
 afterAll(async () => {
@@ -63,6 +63,100 @@ afterAll(async () => {
 })
 
 describe("MCP OAuth opaque credentials", () => {
+  it("accepts only the configured resource on form-post authorization", async () => {
+    const authorize = (...resources: string[]) => {
+      const body = new URLSearchParams({
+        client_id: "missing-client",
+        response_type: "code",
+      })
+      for (const resource of resources) body.append("resource", resource)
+      return auth.handler(
+        new Request("http://api.localhost/auth/oauth2/authorize", {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body,
+        })
+      )
+    }
+
+    const valid = await authorize(mcpOAuthResource)
+    expect(valid.status).toBe(302)
+    expect(valid.headers.get("location")).toContain("error=invalid_client")
+
+    const missing = await authorize()
+    expect(missing.status).toBe(400)
+    await expect(missing.json()).resolves.toMatchObject({
+      code: "MCP_RESOURCE_REQUIRED",
+    })
+
+    const mixed = await authorize(
+      mcpOAuthResource,
+      "https://other.example.test/mcp"
+    )
+    expect(mixed.status).toBe(400)
+    await expect(mixed.json()).resolves.toMatchObject({
+      code: "MCP_RESOURCE_REQUIRED",
+    })
+  })
+
+  it("advances a registered client past the configured resource policy", async () => {
+    const redirectUri = "http://127.0.0.1/callback"
+    const registrationResponse = await auth.handler(
+      new Request("http://api.localhost/auth/oauth2/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          application_type: "native",
+          client_name: "MCP Resource Policy Client",
+          grant_types: ["authorization_code", "refresh_token"],
+          redirect_uris: [redirectUri],
+          response_types: ["code"],
+          scope: "issues:read offline_access",
+          token_endpoint_auth_method: "none",
+        }),
+      })
+    )
+    const registration: unknown = await registrationResponse.json()
+    if (
+      typeof registration !== "object" ||
+      registration === null ||
+      !("client_id" in registration) ||
+      typeof registration.client_id !== "string"
+    ) {
+      throw new Error("Expected dynamic registration to return a client ID")
+    }
+    const authorizeUrl = new URL("http://api.localhost/auth/oauth2/authorize")
+    authorizeUrl.search = new URLSearchParams({
+      client_id: registration.client_id,
+      code_challenge: "A".repeat(43),
+      code_challenge_method: "S256",
+      redirect_uri: redirectUri,
+      resource: mcpOAuthResource,
+      response_type: "code",
+      scope: "issues:read",
+      state: "resource-policy-state",
+    }).toString()
+
+    const authorizeResponse = await auth.handler(new Request(authorizeUrl))
+    const location = authorizeResponse.headers.get("location")
+    const oauthProviderPlugin = auth.options.plugins?.find(
+      ({ id }) => id === "oauth-provider"
+    )
+
+    expect(registrationResponse.status).toBe(201)
+    expect(authorizeResponse.status).toBe(302)
+    expect(location).not.toContain("error=invalid_target")
+    expect(new URL(location ?? "http://invalid.local")).toMatchObject({
+      origin: "http://app.localhost",
+      pathname: "/oauth/organization",
+    })
+    expect(oauthProviderPlugin?.options).toMatchObject({
+      enforcePerClientResources: false,
+      resources: [mcpOAuthResource],
+    })
+    expect(oauthProviderPlugin?.options).not.toHaveProperty("validAudiences")
+  })
+
   it("verifies and immediately revokes an organization credential", async () => {
     const [{ db }, schema] = await Promise.all([
       import("@enterprise-agentic-saas/db"),
@@ -129,6 +223,71 @@ describe("MCP OAuth opaque credentials", () => {
     await expect(
       verifyMcpOAuthAccessToken(`mcp_at_${accessToken}`)
     ).resolves.toBeNull()
+  })
+
+  it("stops accepting and listing Better Auth soft-revoked access tokens", async () => {
+    const [{ db }, schema] = await Promise.all([
+      import("@enterprise-agentic-saas/db"),
+      import("@enterprise-agentic-saas/db/schema"),
+    ])
+    const suffix = crypto.randomUUID()
+    const userId = `mcp-revoked-user-${suffix}`
+    const clientId = `mcp-revoked-client-${suffix}`
+    const accessToken = `revoked-${suffix}`
+    const now = new Date()
+
+    await db.insert(schema.user).values({
+      id: userId,
+      name: "Revoked MCP User",
+      email: `mcp-revoked-${suffix}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await db.insert(schema.oauthClient).values({
+      id: `oauth-revoked-client-row-${suffix}`,
+      clientId,
+      name: "Revoked MCP Client",
+      public: true,
+      redirectUris: ["http://127.0.0.1/callback"],
+      requirePKCE: true,
+      scopes: ["issues:read"],
+      tokenEndpointAuthMethod: "none",
+      userId,
+    })
+    await db.insert(schema.oauthAccessToken).values({
+      id: `oauth-revoked-access-row-${suffix}`,
+      token: await hashMcpOAuthToken(accessToken),
+      clientId,
+      userId,
+      referenceId: `organization-${suffix}`,
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + 60_000),
+      scopes: ["issues:read"],
+    })
+
+    await expect(
+      verifyMcpOAuthAccessToken(`mcp_at_${accessToken}`)
+    ).resolves.toMatchObject({ clientId, userId })
+    await expect(listMcpOAuthCredentialFamilies(db, userId)).resolves.toEqual([
+      expect.objectContaining({
+        credentialId: `a_oauth-revoked-access-row-${suffix}`,
+      }),
+    ])
+
+    await db
+      .update(schema.oauthAccessToken)
+      .set({ revoked: now })
+      .where(
+        eq(schema.oauthAccessToken.token, await hashMcpOAuthToken(accessToken))
+      )
+
+    await expect(
+      verifyMcpOAuthAccessToken(`mcp_at_${accessToken}`)
+    ).resolves.toBeNull()
+    await expect(listMcpOAuthCredentialFamilies(db, userId)).resolves.toEqual(
+      []
+    )
   })
 
   it("lists safe credential families and revokes their token rows", async () => {

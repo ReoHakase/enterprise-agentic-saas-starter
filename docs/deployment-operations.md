@@ -2,7 +2,7 @@
 title: Cloudflare deploymentと運用
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-08-24
 ---
 
 # Cloudflareデプロイと運用
@@ -71,7 +71,7 @@ cacheを削除しません。
 - `AGENT_VISION_ENABLED`: Agentの画像入力
 - `AGENT_WRITES_ENABLED`: AgentのIssue write tool
 
-初回rolloutは全て`0`で4 Workerとbindingをdeployし、API smoke後にasset upload、run、vision、writeの順で段階的に`1`へ進めます。`0011_file_activity_backfill`の互換deployが必要な場合も、migration完了までは4値を全て`0`に固定し、workflowは1つでも`1`ならWorkerを変更する前に停止します。障害時はまず該当flagを`0`に戻して再deployし、データを削除したりsecretを消したりして停止しません。
+初回rolloutは全て`0`で4 Workerとbindingをdeployし、API smoke後にasset upload、run、vision、writeの順で段階的に`1`へ進めます。障害時はまず該当flagを`0`に戻して再deployし、データを削除したりsecretを消したりして停止しません。
 
 Issue添付画像toolのrolloutでは、既存環境の`AGENT_VISION_ENABLED`を一時的に`0`へ戻します。DB migrationやpublic file routeは追加せず、添付metadataを返す互換API/Webを先行し、Agent Workerとprivate model routeのsmoke後に`1`へ戻します。`0`の間も`get_issue`の添付metadataは利用でき、画像toolだけを登録しません。
 
@@ -143,7 +143,7 @@ Cloudflare dry-runを通します。
 
 1. Turso backup/restore pointを確認する。
 2. public routeを持たないImages Workerをdeployし、APIが参照するService Binding targetを先に確定する。
-3. workflowがAPI/Agent Worker、migration ledger、API/Agentのcross-database secret inventoryをread-only確認する。destructive migration、stale secret、片側Worker欠損、または明示した旧protocol切替が1つでもあればcompatibility rolloutを必須にする。
+3. workflowがAPI/Agent WorkerとAPI/Agentのcross-database secret inventoryをread-only確認する。stale secret、片側Worker欠損、または明示した旧protocol切替が1つでもあればWorkerのcompatibility rolloutを必須にする。データベースのマイグレーション名や適用履歴からこの判定を行わない。
 4. 4つのAgent flagが全て`0`であることを確認し、`apps/api/wrangler.bootstrap.jsonc`で`IMAGE_PREVIEWS`を維持しつつ`AGENT_RUNTIME`だけを持たないAPIを`AGENT_MAINTENANCE_MODE=1`としてdeployする。maintenance中はpublic `/agent`、Agent thread/asset file route、named `AgentInternalApi`、scheduled jobを503または停止状態へ閉じる。
 5. API health/readiness/OpenAPIとmaintenance smokeを通し、Cloudflare Worker settingsのremote inventoryで`IMAGE_PREVIEWS`が期待するprivate Workerを指し、`AGENT_RUNTIME`が存在せず、`AGENT_MAINTENANCE_MODE`がplain textの`1`であることを確認する。
 6. Application DBの1つのaggregate queryでDB clock、live connection/resume ticket、unrevoked grant、`running` / `waiting_approval` runを同時に取得する。最大capability lifetimeを含むbounded deadline内で全件0がgrace window中継続するまでpollingし、途中で1件でも再発したらzero windowを最初から数え直す。partial schema、timeout、query errorでは停止する。
@@ -153,7 +153,7 @@ Cloudflare dry-runを通します。
 10. Web Workerをbuildしてからdeployし、custom domainのsign-in pageを自動smokeする。
 11. sign-in/org/Issue/API→Mastra stream/Agent→private `/internal/*` journeyを認証付きE2Eで確認する。
 
-compatibility rolloutはremote inventory、maintenance smoke、drainを伴うため、上記を手動commandへ分解せず`Deploy production` workflowを使います。destructive migrationもstale secretもないcompatible releaseだけがmigration-first順序を取れます。
+Workerのcompatibility rolloutはremote inventory、maintenance smoke、drainを伴うため、上記を手動commandへ分解せず`Deploy production` workflowを使います。Workerのbootstrapもstale secretも必要ないreleaseだけがmigration-first順序を取れます。
 
 これは順序の概要です。Service Bindingはtarget Workerが先に存在する必要があるため、Images Workerを
 APIより先に置きます。Agentの相互bindingを切り替えるcompatibility rolloutでは、bootstrap APIから
@@ -175,8 +175,6 @@ Agent Workerの`exports`には旧`IssueAssistant` namespaceを永久削除する
 適用し、Wranglerのreconciliation出力でnamespace削除とtombstoneの除去可能状態を確認します。削除済み
 namespaceはロールバックやTrashから復元できません。reconciliation完了後は#52でtombstoneとこの説明を
 除去します。
-
-`0011_file_activity_backfill`は、migration適用とAPI切替の間に旧Workerがfileを確定・削除するとactivityを復元できないため、compatibility rolloutを要求する既存triggerの1つです。workflowはmigration ledgerが`0010`適用済みかつ`0011`未適用なら、4つのAgent flagを全て`0`に固定し、旧schemaと互換なmaintenance API、remote binding確認、drain、secret inventory barrierを通してからbackfillへ進みます。この節は上記general compatibility rolloutを上書きしません。fresh/片側Worker欠損、旧protocol切替、将来のdestructive migrationも、それぞれの検出条件に該当すれば同じcompatibility順序を優先します。全triggerがないcompatible releaseだけがmigration-first順序を取れます。
 
 ## Smoke checklist
 

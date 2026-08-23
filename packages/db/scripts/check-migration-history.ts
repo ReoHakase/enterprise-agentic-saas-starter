@@ -1,18 +1,13 @@
 import { spawnSync } from "node:child_process"
-import { readFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { readdir, readFile } from "node:fs/promises"
+import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
-
-type MigrationJournal = {
-  dialect: string
-  entries: unknown[]
-  version: string
-}
 
 const packageDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 const repositoryDirectory = dirname(dirname(packageDirectory))
-const migrationPath = "packages/db/drizzle"
-const journalPath = `${migrationPath}/meta/_journal.json`
+const legacyPath = "packages/db/drizzle"
+const v3Path = "packages/db/drizzle-v3"
+const requiredFiles = ["migration.sql", "snapshot.json"]
 
 const runGit = (arguments_: string[]) => {
   const result = spawnSync("git", arguments_, {
@@ -27,49 +22,98 @@ const runGit = (arguments_: string[]) => {
   return result.stdout
 }
 
-const changedHistory = runGit([
-  "diff",
-  "--name-status",
-  "--no-renames",
-  "origin/main",
-  "--",
-  migrationPath,
-])
-  .trim()
-  .split("\n")
-  .filter(Boolean)
+const lines = (output: string) => output.trim().split("\n").filter(Boolean)
+const diffFor = (path: string) =>
+  lines(
+    runGit(["diff", "--name-status", "--no-renames", "origin/main", "--", path])
+  )
+const untrackedFor = (path: string) =>
+  lines(runGit(["ls-files", "--others", "--exclude-standard", "--", path]))
 
-const forbiddenChanges = changedHistory.filter((line) => {
-  const [status, path] = line.split("\t")
-  if (path === journalPath && status === "M") return false
-  return status !== "A"
-})
-
-if (forbiddenChanges.length > 0) {
+const legacyFiles = [
+  ...lines(runGit(["ls-files", "--", legacyPath])),
+  ...untrackedFor(legacyPath),
+]
+if (legacyFiles.length > 0) {
   throw new Error(
-    `Migration history on origin/main is immutable:\n${forbiddenChanges.join("\n")}`
+    `The removed legacy migration directory must stay absent:\n${legacyFiles.join("\n")}`
   )
 }
 
-const journalChange = changedHistory.find((line) =>
-  line.endsWith(`\t${journalPath}`)
+const committedFiles = new Set(
+  lines(runGit(["ls-tree", "-r", "--name-only", "origin/main", "--", v3Path]))
 )
-if (journalChange) {
-  const baseline: MigrationJournal = JSON.parse(
-    runGit(["show", `origin/main:${journalPath}`])
+const committedDirectories = new Set(
+  [...committedFiles].map((path) => dirname(path))
+)
+const changedV3 = new Map<string, string>()
+for (const line of diffFor(v3Path)) {
+  const [status, path] = line.split("\t")
+  if (status && path) changedV3.set(path, status)
+}
+for (const path of untrackedFor(v3Path)) changedV3.set(path, "A")
+
+const forbiddenV3Changes = [...changedV3].filter(([path, status]) => {
+  if (status !== "A") return true
+  return committedDirectories.has(dirname(path))
+})
+if (forbiddenV3Changes.length > 0) {
+  throw new Error(
+    `Existing v3 migration directories are immutable:\n${forbiddenV3Changes
+      .map(([path, status]) => `${status}\t${path}`)
+      .join("\n")}`
   )
-  const current: MigrationJournal = JSON.parse(
-    await readFile(join(repositoryDirectory, journalPath), "utf8")
+}
+
+const v3Directory = join(repositoryDirectory, v3Path)
+const migrationDirectories = (
+  await readdir(v3Directory, { withFileTypes: true })
+)
+  .filter((entry) => entry.isDirectory())
+  .map(({ name }) => name)
+  .toSorted()
+if (
+  committedDirectories.size === 0 &&
+  (migrationDirectories.length !== 1 ||
+    !migrationDirectories[0]?.endsWith("_baseline"))
+) {
+  throw new Error(
+    "The one-time v3 history reset must contain exactly one baseline directory."
   )
-  const currentPrefix = current.entries.slice(0, baseline.entries.length)
-  if (
-    current.version !== baseline.version ||
-    current.dialect !== baseline.dialect ||
-    current.entries.length < baseline.entries.length ||
-    JSON.stringify(currentPrefix) !== JSON.stringify(baseline.entries)
-  ) {
-    throw new Error(
-      "Migration journal may only append entries after the origin/main prefix."
-    )
+}
+for (const directory of migrationDirectories) {
+  if (!/^\d{14}_[a-z0-9_]+$/.test(directory)) {
+    throw new Error(`Invalid v3 migration directory name: ${directory}`)
   }
 }
+
+const newDirectories = new Set(
+  [...changedV3.keys()].map((path) =>
+    relative(v3Path, dirname(path)).replaceAll("\\", "/")
+  )
+)
+await Promise.all(
+  [...newDirectories].map(async (directory) => {
+    const files = (
+      await readdir(join(v3Directory, directory), { withFileTypes: true })
+    )
+      .filter((entry) => entry.isFile())
+      .map(({ name }) => name)
+      .toSorted()
+    if (JSON.stringify(files) !== JSON.stringify(requiredFiles)) {
+      throw new Error(
+        `New v3 migration directory ${directory} must contain only ${requiredFiles.join(", ")}.`
+      )
+    }
+  })
+)
+
+await Promise.all(
+  migrationDirectories.map(async (directory) => {
+    const snapshot = await readFile(
+      join(v3Directory, directory, "snapshot.json"),
+      "utf8"
+    )
+    JSON.parse(snapshot)
+  })
+)

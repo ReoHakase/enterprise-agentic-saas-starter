@@ -1,6 +1,7 @@
 # @enterprise-agentic-saas/db
 
-Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを提供します。
+Turso/libSQLとDrizzle ORMの単一DBクライアント、スキーマ、マイグレーション、開発用初期データ投入を
+提供します。
 
 ## Entrypoints
 
@@ -15,23 +16,35 @@ Turso/libSQL + Drizzle ORMのsingleton DB、schema、migration、開発seedを�
 ## Schemaとmigration
 
 - `src/schema/auth.generated.ts`: Better Auth CLI生成を起点とするauth schema
-- `src/schema/oauth-provider.ts`: Better Auth OAuth Provider CLI出力と照合する4つのOAuth table。既存tenant固有indexを保持するため生成fileから分離する
+- `src/schema/oauth-provider.ts`: Better Auth OAuth Provider CLI出力と照合するOAuthテーブル。既存の
+  テナント固有インデックスを保持するため生成ファイルから分離する
+- `src/schema/relations.ts`: 認証とOAuth Providerを統合したDrizzle Relations v2の正本
 - `src/schema/app.ts`: Issue/comment/file/profile image/auditなどapp schema
 - `fixtures/files/`: local R2へ投入する決定的なfile fixture
-- `drizzle/`: commitするSQL、snapshot、journal
+- `drizzle-v3/`: Drizzle v1が実行する基準マイグレーションと将来の追記
 
 auth plugin変更時:
 
 ```sh
-bunx @better-auth/cli generate \
+bunx auth@1.7.1 generate \
   --config packages/auth/src/index.ts \
   --output /tmp/enterprise-agentic-saas-auth.generated.ts \
   --yes
 bun run --cwd packages/db db:generate
-git diff -- packages/db/src/schema/oauth-provider.ts packages/db/drizzle
+git diff -- packages/db/src/schema/auth.generated.ts \
+  packages/db/src/schema/oauth-provider.ts \
+  packages/db/src/schema/relations.ts \
+  packages/db/drizzle-v3
 ```
 
-OAuth Providerのtable contractをCLI出力と照合し、repo固有のindex/defaultがmigration差分で消えていないことを確認します。CLI出力で`auth.generated.ts`を直接上書きしません。開発中も`drizzle-kit push`は使いません。
+OAuth Providerのtable contractをCLI出力と照合し、リポジトリ固有のindexとdefaultが
+マイグレーション差分で消えていないことを確認します。CLI出力で`auth.generated.ts`を直接上書き
+しません。Drizzle v1更新を含む変更では`drizzle-v3/20260823163505_baseline/`が現在のスキーマ、
+リポジトリ所有のトリガー、現在有効なLunaの料金行を一度で作成します。この基準マイグレーションが
+`main`へ取り込まれた後は、`drizzle-v3/<timestamp>_<tag>/`へ完全な新規ディレクトリだけを追加し、
+既存ディレクトリを変更しません。開発中も`drizzle-kit push`は使いません。詳細は
+[`../../docs/decisions/ADR-006-migration-history-append-only.md`](../../docs/decisions/ADR-006-migration-history-append-only.md)
+を参照してください。
 
 ## Env
 
@@ -70,9 +83,16 @@ CONFIRM_DB_RESET=reset-local-development \
   bun run --cwd packages/db db:reset
 ```
 
-seedとresetは `file:` またはlocalhost URLだけを許可します。resetはさらに確認文字列を要求し、migration ledgerを含むtableを削除、保存済みmigrationを全適用してからseedします。Cloud/staging/production URLはどちらも拒否します。本番provisioningでは `db:seed` を使わず、migration適用後に実ユーザーを通常の認証・organization作成フローから初期管理者にします。
+開発用初期データ投入とリセットは`file:`またはlocalhost URLだけを許可します。DB単体のリセットは
+さらに確認文字列を要求し、マイグレーション台帳を含むテーブルを削除して、保存済みのv3
+マイグレーションを適用してからDBの開発用初期データを投入します。R2 fixtureも含める場合はrootの
+`dev:db:reset`後に任意の`dev:db:seed`を使います。Cloud、ステージング、本番URLはどちらも拒否します。
+本番準備では`db:seed`を使わず、
+マイグレーション適用後に実ユーザーを通常の認証とorganization作成フローから初期管理者にします。
 
-fresh seedは固定anchorと7件の `pending` file rowを作り、quotaにはpending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
+新規データベースへの開発用初期データ投入は固定anchorと7件の`pending` file rowを作り、quotaには
+pending bytesも含めます。R2 objectとimage metadataの確定はAPIのlocal reconcileが担当します。
+通常の再実行は既存userがあればskipするため、利用者が削除したfixture rowを復活させません。
 
 DBとlocal R2のfixtureが必要な場合は、rootから明示実行します。full devの起動前でも、起動中でも利用できます。
 
@@ -88,4 +108,11 @@ bun run dev:db:seed
 
 ## Test
 
-`src/migrations/{fresh,upgrades,invariants,lifecycle}.test.ts`と`src/files.test.ts`はin-memory/fresh DB、legacy data変換、membershipと単一`owner`の不変条件、file owner tenant FK、profile image subject/ready/idempotency制約、quota/cleanup制約、fixture digest、seedのtransaction rollback・再現性・非破壊再実行、remote seed拒否、実file DB resetを検証します。外部TursoやR2は必要ありません。
+`src/migrations/{fresh,invariants,concurrency,lifecycle}.test.ts`と`src/files.test.ts`は、単一の基準
+マイグレーションからの新規DB構築、マイグレーション台帳の1行、リポジトリ所有のトリガー、現在
+有効なLunaの料金行、Better Auth 1.7の最終スキーマ、所属関係と単一`owner`の
+不変条件、ファイル所有者のテナント外部キー、プロフィール画像の主体、準備完了状態、冪等性制約、
+容量と削除処理の制約、フィクスチャのダイジェスト、開発用初期データ投入のトランザクション
+ロールバック、再現性、非破壊再実行、遠隔データベースへの投入拒否、実ファイルDBのリセットを
+検証します。
+外部TursoやR2は必要ありません。

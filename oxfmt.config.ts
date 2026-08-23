@@ -29,6 +29,7 @@ export default defineConfig({
     "**/dist/**",
     "node_modules/**",
     "**/node_modules/**",
+    "packages/db/drizzle-v3/**",
     "apps/web/.storybook/public/mockServiceWorker.js",
     "storybook-static/**",
     "**/storybook-static/**",

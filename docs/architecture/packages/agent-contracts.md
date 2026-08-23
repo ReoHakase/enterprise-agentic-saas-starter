@@ -17,8 +17,8 @@ approval、Issue action、toolの業務入出力など、transportやruntimeに�
 Agentのthread、message page、run、Issue action、execution receipt、approval policy、context revocation、
 UIMessage streamで公開する値とschemaはこのpackageを唯一の正本にします。APIはroute responseとprivate
 Agent responseを同じschemaで検査し、WebもAPI client経由の再exportではなくpackageから直接importします。
-旧DB rowのpreviewを読む場合だけAPI内のloose projectionで公開fieldへ絞り、その後のHTTP responseを
-strict schemaで検査します。
+APIは現在形式のDB rowを公開fieldへ絞り、その後のHTTP responseをstrict schemaで検査します。旧形式の
+永続データをloose projectionで補完する互換経路は持ちません。
 
 ```text
 apps/web   ─┐

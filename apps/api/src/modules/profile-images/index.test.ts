@@ -197,7 +197,7 @@ const createDatabase = async () => {
     );
     pragma foreign_keys = on;
   `)
-  const database = drizzle(client, { schema })
+  const database = drizzle({ client, relations: schema.relations })
   const now = new Date("2026-07-22T00:00:00.000Z")
   await database.insert(schema.user).values([
     {

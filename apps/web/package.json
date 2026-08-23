@@ -39,6 +39,7 @@
     "@ai-sdk/react": "catalog:",
     "@better-auth-ui/core": "catalog:",
     "@better-auth-ui/react": "catalog:",
+    "@better-auth/api-key": "catalog:",
     "@enterprise-agentic-saas/agent-contracts": "workspace:*",
     "@enterprise-agentic-saas/api": "workspace:*",
     "@enterprise-agentic-saas/auth": "workspace:*",

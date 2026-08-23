@@ -33,7 +33,8 @@ const authClient = {
   },
 }
 
-vi.mock("@better-auth-ui/react", () => ({
+vi.mock("@better-auth-ui/react", async (importOriginal) => ({
+  ...(await importOriginal()),
   useAuth: () => ({ authClient }),
 }))
 
@@ -149,15 +150,13 @@ describe("AccountSwitcherDialog", () => {
     vi.clearAllMocks()
     mocks.fetchAgent.mockResolvedValue(Response.json({ contextEpoch: 2 }))
     vi.stubGlobal("fetch", mocks.fetchAgent)
-    mocks.listDeviceSessions.mockResolvedValue({ data: deviceAccounts })
+    mocks.listDeviceSessions.mockResolvedValue(deviceAccounts)
     mocks.getSession.mockResolvedValue({
-      data: {
-        session: { token: "session-current" },
-        user: { id: "user-current" },
-      },
+      session: { token: "session-current" },
+      user: { id: "user-current" },
     })
-    mocks.revoke.mockResolvedValue({ data: {} })
-    mocks.setActive.mockResolvedValue({ data: {} })
+    mocks.revoke.mockResolvedValue({})
+    mocks.setActive.mockResolvedValue({})
     mocks.completeAgentSwitch.mockResolvedValue()
     mocks.prepareAgentSwitch.mockReturnValue({
       composer: false,
@@ -190,6 +189,7 @@ describe("AccountSwitcherDialog", () => {
     await waitFor(() => {
       expect(mocks.setActive).toHaveBeenCalledWith({
         sessionToken: "session-other",
+        fetchOptions: { throw: true },
       })
     })
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
@@ -214,6 +214,7 @@ describe("AccountSwitcherDialog", () => {
     await waitFor(() => {
       expect(mocks.revoke).toHaveBeenCalledWith({
         sessionToken: "session-other",
+        fetchOptions: { throw: true },
       })
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
@@ -247,9 +248,9 @@ describe("AccountSwitcherDialog", () => {
   })
 
   it("shows a safe retry state for provider failures", async () => {
-    mocks.listDeviceSessions.mockResolvedValueOnce({
-      error: { message: "private provider response" },
-    })
+    mocks.listDeviceSessions.mockRejectedValueOnce(
+      new Error("private provider response")
+    )
     renderDialog()
 
     expect(

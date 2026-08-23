@@ -10,7 +10,6 @@ import { and, eq } from "drizzle-orm"
 
 import { type AgentTransaction } from "../threads/repository"
 import {
-  normalizeStoredUpdateIssuePayload,
   safeStoredParse,
   storedCreateIssuePayloadModel,
   storedDeleteIssuePayloadModel,
@@ -34,7 +33,7 @@ export const parseStoredPayload = (action: ActionRow): StoredPayload => {
       kind: action.kind,
       value: safeStoredParse(
         storedUpdateIssuePayloadModel,
-        normalizeStoredUpdateIssuePayload(action.normalizedPayload)
+        action.normalizedPayload
       ),
     }
   }
