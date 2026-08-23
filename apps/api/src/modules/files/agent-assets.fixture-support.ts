@@ -13,7 +13,7 @@ import { createApp } from "../../app"
 import { resetFileStorageRuntimeForTest } from "./runtime"
 
 const migrationsFolder = new URL(
-  "../../../../../packages/db/drizzle",
+  "../../../../../packages/db/drizzle-v3",
   import.meta.url
 ).pathname
 
@@ -36,7 +36,7 @@ export const createFixture = async () => {
   databasePaths.push(databasePath)
   const client = createClient({ url: `file:${databasePath}` })
   clients.push(client)
-  const db: Db = drizzle(client, { schema })
+  const db: Db = drizzle({ client, relations: schema.relations })
   await migrate(db, { migrationsFolder })
 
   const now = new Date()

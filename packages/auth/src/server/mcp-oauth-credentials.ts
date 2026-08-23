@@ -61,6 +61,7 @@ export const listMcpOAuthCredentialFamilies = async (
         and(
           eq(oauthAccessToken.userId, userId),
           gt(oauthAccessToken.expiresAt, now),
+          isNull(oauthAccessToken.revoked),
           or(isNull(oauthClient.disabled), eq(oauthClient.disabled, false))
         )
       ),

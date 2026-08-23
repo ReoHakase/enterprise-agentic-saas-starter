@@ -9,7 +9,7 @@ describe("database migrations: Luna Agent profile", () => {
   it("installs the run defaults and versioned fallback price", async () => {
     const client = createClient({ url: "file::memory:" })
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const runColumns = await client.execute("pragma table_info(agent_runs)")
       const defaults = Object.fromEntries(
         runColumns.rows.map((column) => [column.name, column.dflt_value])

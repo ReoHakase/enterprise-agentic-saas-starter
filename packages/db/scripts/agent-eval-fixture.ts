@@ -81,7 +81,7 @@ const connect = () => {
     authToken: process.env.TURSO_AUTH_TOKEN,
     url: requireLocalTestDatabaseUrl(),
   })
-  return { client, database: drizzle(client) }
+  return { client, database: drizzle({ client }) }
 }
 
 const seed = async () => {

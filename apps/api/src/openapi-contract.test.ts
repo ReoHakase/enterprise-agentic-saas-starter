@@ -66,7 +66,7 @@ const placeholderPattern =
 const createOpenApiDocument = async (): Promise<JsonObject> => {
   const client = createClient({ url: "file::memory:" })
   try {
-    const app = createApp(drizzle(client, { schema }))
+    const app = createApp(drizzle({ client, relations: schema.relations }))
     const response = await app.handle(
       new Request("http://localhost/openapi/json")
     )

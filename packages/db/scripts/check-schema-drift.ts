@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 const packageDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
-const committedDirectory = join(packageDirectory, "drizzle")
+const committedDirectory = join(packageDirectory, "drizzle-v3")
 const drizzleKitEntrypoint = join(
   packageDirectory,
   "node_modules/drizzle-kit/bin.cjs"
@@ -29,7 +29,7 @@ const snapshotDirectory = async (directory: string) => {
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "db-schema-drift-"))
-const generatedDirectory = join(temporaryRoot, "drizzle")
+const generatedDirectory = join(temporaryRoot, "drizzle-v3")
 
 try {
   await cp(committedDirectory, generatedDirectory, { recursive: true })

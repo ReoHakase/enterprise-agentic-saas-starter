@@ -258,7 +258,7 @@ const createDatabase = async (): Promise<Db> => {
       completed_at integer
     );
   `)
-  const db = drizzle(client, { schema: dbSchema })
+  const db = drizzle({ client, relations: dbSchema.relations })
   const now = new Date("2026-07-22T00:00:00.000Z")
   await db.insert(user).values({
     id: "user-1",

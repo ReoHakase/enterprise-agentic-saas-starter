@@ -15,7 +15,7 @@ describe("database migrations: organization upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -55,7 +55,7 @@ describe("database migrations: organization upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const [membership, invitation, tables, indexes] = await Promise.all([
         client.execute("select role from member where id = 'owner-membership'"),

@@ -32,7 +32,7 @@ test("決定的GitHub emulatorで認証しsessionを永続化できる", async (
   )
   expect(authorizationUrl.searchParams.has("state")).toBe(true)
   expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
-    `${apiOrigin}/auth/oauth2/callback/github`
+    `${apiOrigin}/auth/callback/github`
   )
   await localUser.click()
 
@@ -73,9 +73,14 @@ test("決定的GitHub emulatorで認証しsessionを永続化できる", async (
     }
   )
   expect(accountsResponse.ok()).toBeTruthy()
-  expect(await accountsResponse.json()).toEqual(
-    expect.arrayContaining([expect.objectContaining({ providerId: "github" })])
-  )
+  expect(await accountsResponse.json()).toEqual([
+    expect.objectContaining({
+      providerId: "github",
+      issuer: "local:oauth:github",
+      accountId: expect.any(String),
+      userId: expect.any(String),
+    }),
+  ])
 
   const sessionCookie = (await context.cookies()).find((cookie) =>
     cookie.name.includes("session_token")
@@ -130,6 +135,20 @@ test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", as
       cookie: cookieHeader,
       origin: new URL(page.url()).origin,
     }
+
+    const accountsAfterRelogin = await context.request.get(
+      `${apiLoopbackOrigin}/auth/list-accounts`,
+      { headers: authenticatedHeaders }
+    )
+    expect(accountsAfterRelogin.ok()).toBeTruthy()
+    expect(await accountsAfterRelogin.json()).toEqual([
+      expect.objectContaining({
+        providerId: "github",
+        issuer: "local:oauth:github",
+        accountId: expect.any(String),
+        userId: expect.any(String),
+      }),
+    ])
 
     const generateOptions = page.waitForResponse(
       (response) =>

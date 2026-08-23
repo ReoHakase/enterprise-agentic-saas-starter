@@ -169,7 +169,7 @@ describe("Portless topology resolver", () => {
       CORS_ORIGIN: "https://stale.example.test",
       EMULATE_BASE_URL: "https://stale-emulator.localhost",
       GITHUB_OAUTH_CALLBACK_URL:
-        "https://api.stale.localhost/auth/oauth2/callback/github",
+        "https://api.stale.localhost/auth/callback/github",
       HOME: "/Users/example",
       MASTRA_STORAGE_AUTH_TOKEN: "remote-agent-token",
       MASTRA_STORAGE_URL: "libsql://remote-agent.example.test",
@@ -197,7 +197,7 @@ describe("Portless topology resolver", () => {
       GITHUB_OAUTH_EMULATOR_URL:
         "https://github.emulate.feature-auth.enterprise-agentic-saas.localhost:7443/emulate/github",
       GITHUB_OAUTH_CALLBACK_URL:
-        "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/oauth2/callback/github",
+        "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/callback/github",
       MASTRA_STORAGE_AUTH_TOKEN: "local-agent-storage",
       MASTRA_STORAGE_URL:
         "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
@@ -334,7 +334,7 @@ describe("Portless topology CLI", () => {
         PORTLESS_ARGUMENTS_FILE: argumentsFile,
         EMULATE_BASE_URL: "https://stale-emulator.localhost",
         GITHUB_OAUTH_CALLBACK_URL:
-          "https://api.stale.localhost/auth/oauth2/callback/github",
+          "https://api.stale.localhost/auth/callback/github",
         HOME: stubDirectory,
         MASTRA_STORAGE_AUTH_TOKEN: "remote-agent-token",
         MASTRA_STORAGE_URL: "libsql://remote-agent.example.test",
@@ -350,7 +350,7 @@ describe("Portless topology CLI", () => {
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443",
       arguments: ["alpha", "two words"],
       callbackUrl:
-        "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/oauth2/callback/github",
+        "https://api.feature-auth.enterprise-agentic-saas.localhost:7443/auth/callback/github",
       emulateBaseUrl: null,
       nodeExtraCaCerts: `${stubDirectory}/.portless/ca.pem`,
       storageToken: "local-agent-storage",

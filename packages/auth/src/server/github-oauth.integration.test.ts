@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm"
+import { migrate } from "drizzle-orm/libsql/migrator"
 import * as v from "valibot"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
@@ -12,6 +12,30 @@ const redirectResponseSchema = v.object({
   url: v.pipe(v.string(), v.url()),
   redirect: v.boolean(),
 })
+const oauthResourceManagementRequests = [
+  { method: "GET", path: "/admin/oauth2/resources" },
+  { method: "POST", path: "/admin/oauth2/resources" },
+  {
+    method: "GET",
+    path: "/admin/oauth2/resources/https%3A%2F%2Fresource.example.test",
+  },
+  {
+    method: "PATCH",
+    path: "/admin/oauth2/resources/https%3A%2F%2Fresource.example.test",
+  },
+  {
+    method: "DELETE",
+    path: "/admin/oauth2/resources/https%3A%2F%2Fresource.example.test",
+  },
+  {
+    method: "POST",
+    path: "/admin/oauth2/resources/https%3A%2F%2Fresource.example.test/clients/client-41",
+  },
+  {
+    method: "DELETE",
+    path: "/admin/oauth2/resources/https%3A%2F%2Fresource.example.test/clients/client-41",
+  },
+] as const
 
 let auth: AuthInstance
 let signedSessionCookie: string
@@ -69,53 +93,17 @@ beforeAll(async () => {
   vi.stubEnv("EMAIL_FROM", "noreply@example.com")
   vi.stubEnv("MAILPIT_URL", "")
 
-  const [authModule, databaseModule, schema] = await Promise.all([
-    import("../index"),
+  const [databaseModule, schema] = await Promise.all([
     import("@enterprise-agentic-saas/db"),
     import("@enterprise-agentic-saas/db/schema"),
   ])
-  auth = authModule.auth
+  await migrate(databaseModule.db, {
+    migrationsFolder: new URL("../../../db/drizzle-v3", import.meta.url)
+      .pathname,
+  })
 
-  await databaseModule.db.run(
-    sql.raw(`
-      CREATE TABLE user (
-        id TEXT PRIMARY KEY NOT NULL,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        email_verified INTEGER DEFAULT 0 NOT NULL,
-        image TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `)
-  )
-  await databaseModule.db.run(
-    sql.raw(`
-      CREATE TABLE session (
-        id TEXT PRIMARY KEY NOT NULL,
-        expires_at INTEGER NOT NULL,
-        token TEXT NOT NULL UNIQUE,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        ip_address TEXT,
-        user_agent TEXT,
-        user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
-        active_organization_id TEXT
-      )
-    `)
-  )
-  await databaseModule.db.run(
-    sql.raw(`
-      CREATE TABLE verification (
-        id TEXT PRIMARY KEY NOT NULL,
-        identifier TEXT NOT NULL,
-        value TEXT NOT NULL,
-        expires_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `)
-  )
+  const authModule = await import("../index")
+  auth = authModule.auth
 
   const now = new Date()
   await databaseModule.db.insert(schema.user).values({
@@ -171,7 +159,7 @@ describe("Better Auth GitHub emulator routing", () => {
       "enterprise-agentic-saas-local"
     )
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
-      "http://api.localhost/auth/oauth2/callback/github"
+      "http://api.localhost/auth/callback/github"
     )
     expect(authorizationUrl.searchParams.get("scope")).toContain("read:user")
     expect(authorizationUrl.searchParams.get("scope")).toContain("user:email")
@@ -195,8 +183,61 @@ describe("Better Auth GitHub emulator routing", () => {
       "/emulate/github/login/oauth/authorize"
     )
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
-      "http://api.localhost/auth/oauth2/callback/github"
+      "http://api.localhost/auth/callback/github"
     )
     expect(authorizationUrl.searchParams.get("code_challenge")).toBeTruthy()
+  })
+
+  it("does not expose the removed generic OAuth callback alias", async () => {
+    const legacyResponse = await auth.handler(
+      new Request(
+        "http://api.localhost/auth/oauth2/callback/github?code=test&state=test"
+      )
+    )
+    const standardResponse = await auth.handler(
+      new Request(
+        "http://api.localhost/auth/callback/github?code=test&state=test"
+      )
+    )
+
+    expect(legacyResponse.status).toBe(404)
+    expect(standardResponse.status).not.toBe(404)
+  })
+
+  it("fails closed for every OAuth resource management route", async () => {
+    const responses = await Promise.all(
+      oauthResourceManagementRequests.map(({ method, path }) =>
+        auth.handler(
+          new Request(`http://api.localhost/auth${path}`, {
+            method,
+            headers: {
+              "content-type": "application/json",
+              cookie: `better-auth.session_token=${signedSessionCookie}`,
+              origin: "http://app.localhost",
+            },
+            ...(method === "POST" || method === "PATCH" ? { body: "{}" } : {}),
+          })
+        )
+      )
+    )
+    const openApi = await auth.api.generateOpenAPISchema()
+
+    expect(responses.map(({ status }) => status)).toEqual(
+      oauthResourceManagementRequests.map(() => 404)
+    )
+    expect(auth.options.disabledPaths).toEqual(
+      expect.arrayContaining([
+        "/admin/oauth2/resources",
+        "/admin/oauth2/resources/:identifier",
+        "/admin/oauth2/resources/:identifier/clients/:client_id",
+      ])
+    )
+    expect(Object.keys(openApi.paths)).toEqual(
+      expect.not.arrayContaining([
+        "/admin/oauth2/resources",
+        "/admin/oauth2/resources/:identifier",
+        "/admin/oauth2/resources/:identifier/clients/:client_id",
+      ])
+    )
   })
 })

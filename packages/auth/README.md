@@ -22,7 +22,11 @@ Better Auth による認証・認可パッケージ。
 - `socialProviders.github` — productionおよびemulator未使用時のGitHub OAuth sign-in / account linking
 - `genericOAuth` — development/testで明示したlocal emulatorだけをGitHub providerとして登録
 
-local emulator使用時も既存clientの `signIn.social({ provider: "github" })` と `linkSocial({ provider: "github" })` を維持する。Better Auth 1.6.9はgeneric providerをcore social providerへ注入するため、`genericOAuthClient` は追加しない。callbackだけがlocal emulator時は `/auth/oauth2/callback/github`、通常のbuilt-in GitHub providerでは従来どおり `/auth/callback/github` になる。built-in providerとgeneric providerは同時登録しない。
+ローカルエミュレーター使用時も既存クライアントの`signIn.social({ provider: "github" })`と
+`linkSocial({ provider: "github" })`を維持し、`genericOAuthClient`は追加しない。Better Auth 1.7.1では
+Generic OAuthと組み込みGitHubプロバイダーが標準の`/auth/callback/github`を共有する。本番の外部
+GitHub OAuth Appは従来から同じ経路を登録しているため変更しない。組み込みプロバイダーとGeneric
+OAuthプロバイダーは同時登録せず、旧`/auth/oauth2/callback/github`の別名も追加しない。
 
 通常のsign-outは保持中のaccount sessionをすべてrevokeする。1つだけ外す場合はclientの `multiSession.revoke` を使う。organization所有権移管などの高リスク操作は15分以内に作成されたfresh sessionを要求する。
 
@@ -40,6 +44,19 @@ Better Auth organization pluginは、招待送信者向けの`invite-member`と�
 `organization`、`member`、`invitation`、`team`、`custom role`のほかの管理・参照エンドポイントは
 `disabledPaths`で404にし、テナント境界、新しいセッション、確認入力、監査が必要な操作と招待の
 一覧・取消は`apps/api`のルートへ集約する。
+
+OAuth Provider 1.7が追加する`/admin/oauth2/resources`配下のresource管理エンドポイントも
+`disabledPaths`とexact segment-prefix guardで404にする。resourceはmigrationとサーバー構成が所有し、
+認証済みsessionだけを根拠に作成、参照、更新、削除、OAuthクライアントとの関連付けを許可しない。
+
+MCPは環境ごとの単一URLを標準`resources`へ登録し、request hookでも完全一致を要求する。
+旧`validAudiences`は使わない。既存OAuthクライアントには環境固有resourceとの関連行がないため
+`enforcePerClientResources`を明示的に無効にし、resourceを増やさず再登録も要求しない。
+
+OAuth Provider 1.7はBetter Auth context初期化時にこのresourceをDBへ登録する。Cloudflare Workerの
+consumerはroot singleton entrypointをglobal scopeで評価せず、Auth mount、session、MCPの各request
+境界から標準ES moduleを遅延importし、context初期化の完了後に処理へ委譲する。Bun local serverと
+package testのsingleton contractは維持し、独自factoryやresource登録処理は追加しない。
 
 `auth.api.generateOpenAPISchema()`と標準`/auth/open-api/generate-schema`は、singletonの実plugin構成と
 `disabledPaths`を正本にする。`apps/api`は生成結果を結合、変換、補正せず、Scalarから独立した情報源として
@@ -85,12 +102,12 @@ emulator providerは `read:user` / `user:email`、PKCE、POST client authenticat
 
 ## Auth Schema
 
-core、passkey、organizationのschemaは`packages/db/src/schema/auth.generated.ts`にBetter Auth CLIで生成する（**手書き禁止**）。MCP OAuth Providerの4 tableは、CLIの全体再生成が既存のtenant固有複合・部分一意indexを除去するため、CLI出力と照合した`packages/db/src/schema/oauth-provider.ts`へ分離する。
+core、passkey、organizationのschemaは`packages/db/src/schema/auth.generated.ts`にBetter Auth CLIで生成する（**手書き禁止**）。MCP OAuth Providerのテーブルは、CLIの全体再生成が既存のtenant固有複合・部分一意indexを除去するため、CLI出力と照合した`packages/db/src/schema/oauth-provider.ts`へ分離する。
 
 plugin 構成を変更したら再生成する:
 
 ```sh
-bunx @better-auth/cli generate \
+bunx auth@1.7.1 generate \
   --config packages/auth/src/index.ts \
   --output /tmp/enterprise-agentic-saas-auth.generated.ts \
   --yes
@@ -117,7 +134,9 @@ bun run --cwd packages/auth lint
 bun run --cwd packages/auth test
 ```
 
-unit testはemulator URL・credential境界・profile mapping・非漏洩を検証する。integration testはBetter Authのcore `signIn.social` / `linkSocial` がgeneric GitHub providerへ解決され、callbackが `/auth/oauth2/callback/github` になることを実際のhandlerで検証する。
+単体テストはエミュレーターURL、認証情報境界、プロフィール対応付け、非漏洩を検証する。統合テストは
+Better Authの`signIn.social`と`linkSocial`がGeneric GitHubプロバイダーへ解決され、標準
+`/auth/callback/github`を使うことを実際のハンドラーで検証する。旧経路は成功させない。
 
 ## 入れないもの
 
