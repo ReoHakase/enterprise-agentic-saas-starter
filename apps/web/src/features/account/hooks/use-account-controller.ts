@@ -1,22 +1,11 @@
 "use client"
 
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { type PasskeyAuthClient, useAddPasskey } from "@better-auth-ui/react"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import {
-  completeSecurityMutation,
-  securityMutationErrorCode,
-  securityMutationErrorMessage,
-  type SecurityAuthCapabilities,
-} from "../security-client"
-
-type AddPasskey = NonNullable<
-  NonNullable<SecurityAuthCapabilities["passkey"]>["addPasskey"]
->
-
-export const securityMethodsKey = ["account", "security-methods"] as const
+import { safeAuthErrorCode, safeAuthErrorMessage } from "@/features/auth"
 
 const pendingSecurityActionKey = "enterprise-saas:pending-security-action"
 const pendingPasskeyAction = "account.passkey.add"
@@ -49,35 +38,27 @@ const consumePendingPasskeyAction = () => {
   }
 }
 
-export const useAccountController = (addPasskey: AddPasskey | undefined) => {
-  const queryClient = useQueryClient()
+export const useAccountController = (authClient: PasskeyAuthClient) => {
   const router = useRouter()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false)
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!addPasskey) throw new Error("Unavailable")
-      await completeSecurityMutation(
-        addPasskey({ name: "Enterprise Agentic SaaS" })
-      )
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: securityMethodsKey })
-      router.refresh()
+  const mutation = useAddPasskey(authClient, {
+    onSuccess: () => {
       toast.success("Passkey added")
     },
     onError: (error) => {
-      if (securityMutationErrorCode(error) === "SESSION_NOT_FRESH") {
+      if (safeAuthErrorCode(error) === "SESSION_NOT_FRESH") {
         setReauthenticationOpen(true)
         return
       }
-      toast.error(
-        securityMutationErrorMessage(error, passkeyRegistrationFallback)
-      )
+      toast.error(safeAuthErrorMessage(error, passkeyRegistrationFallback))
     },
   })
   const { mutate } = mutation
-  const register = useCallback(() => mutate(), [mutate])
+  const register = useCallback(
+    () => mutate({ name: "Enterprise Agentic SaaS" }),
+    [mutate]
+  )
   const continueReauthentication = useCallback(() => {
     markPasskeyReauthenticationPending()
     setReauthenticationOpen(false)
@@ -89,11 +70,14 @@ export const useAccountController = (addPasskey: AddPasskey | undefined) => {
     setReauthenticationOpen(open)
     if (!open) triggerRef.current?.focus({ preventScroll: true })
   }, [])
+  const resumePasskeyRegistration = useEffectEvent(() => {
+    mutate({ name: "Enterprise Agentic SaaS" })
+  })
 
   useEffect(() => {
-    if (!addPasskey || !consumePendingPasskeyAction()) return
-    mutate()
-  }, [addPasskey, mutate])
+    if (!consumePendingPasskeyAction()) return
+    resumePasskeyRegistration()
+  }, [])
 
   return {
     continueReauthentication,

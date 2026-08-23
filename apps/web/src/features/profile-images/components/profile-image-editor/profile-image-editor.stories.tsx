@@ -31,6 +31,7 @@ export const UserWithoutImage = meta.story({
   tags: ["theme-sensitive"],
   args: {
     subject: "user",
+    userId: "user-1",
     name: "Avery Stone",
     profileImage: null,
   },
@@ -74,6 +75,7 @@ export const ExistingImage = meta.story({
   },
   args: {
     subject: "user",
+    userId: "user-1",
     name: "Avery Stone",
     profileImage:
       "/files/profile-images/users/user_01K1AVERY00000000000000?v=profile_story",
@@ -117,6 +119,7 @@ export const RemovalFailure = meta.story({
   },
   args: {
     subject: "user",
+    userId: "user-1",
     name: "Avery Stone",
     profileImage:
       "/files/profile-images/users/user_01K1AVERY00000000000000?v=profile_story",

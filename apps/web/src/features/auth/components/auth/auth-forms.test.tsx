@@ -133,6 +133,10 @@ vi.mock("@better-auth-ui/react", () => {
         sendMagicLink: "Send magic link",
       },
     }),
+    useFetchOptions: () => ({
+      fetchOptions: undefined,
+      resetFetchOptions: vi.fn<() => void>(),
+    }),
     useSendVerificationEmail: () => ({
       mutate: vi.fn<(input: unknown) => void>(),
     }),

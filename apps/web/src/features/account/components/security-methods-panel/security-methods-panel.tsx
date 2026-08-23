@@ -1,6 +1,13 @@
 "use client"
 
-import { useAuth } from "@better-auth-ui/react"
+import {
+  useAuth,
+  useDeletePasskey,
+  useLinkSocial,
+  useListAccounts,
+  useListPasskeys,
+  useUnlinkAccount,
+} from "@better-auth-ui/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +29,6 @@ import {
   EmptyTitle,
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   KeyRoundIcon,
   RefreshCwIcon,
@@ -31,33 +37,26 @@ import {
   Trash2Icon,
   Unlink2Icon,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useCallback, useMemo } from "react"
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date/local-date"
-import { createAuthCallbackURL } from "@/features/auth"
+import {
+  createAuthCallbackURL,
+  requirePasskeyAuthClient,
+  safeAuthErrorMessage,
+} from "@/features/auth"
 
+import { useAccountController } from "../../hooks/use-account-controller"
 import {
-  securityMethodsKey,
-  useAccountController,
-} from "../../hooks/use-account-controller"
-import type { LinkedAccount, UserPasskey } from "../../schema"
-import {
-  completeSecurityMutation,
-  createSecurityAuthCapabilities,
-  hasSecurityMethodsCapability,
-  loadSecurityMethods,
-  securityMutationErrorMessage,
-} from "../../security-client"
+  parseLinkedAccounts,
+  parseUserPasskeys,
+  type LinkedAccount,
+  type UserPasskey,
+} from "../../schema"
 
 const securityMutationFallback =
   "The security method could not be updated. Try again."
-
-type SecurityMutation =
-  | { type: "link-github" }
-  | { type: "unlink-github"; accountId?: string }
-  | { type: "delete-passkey"; passkeyId: string }
 
 const GitHubMarkIcon = () => (
   <svg
@@ -76,89 +75,83 @@ const deletePasskeyTrigger = (
 )
 
 export const SecurityMethodsPanel = () => {
-  const { authClient } = useAuth()
-  const queryClient = useQueryClient()
-  const router = useRouter()
-  const capabilities = useMemo(
-    () => createSecurityAuthCapabilities(authClient),
-    [authClient]
+  const { authClient: authClientValue } = useAuth()
+  const authClient = useMemo(
+    () => requirePasskeyAuthClient(authClientValue),
+    [authClientValue]
   )
-  const available = hasSecurityMethodsCapability(capabilities)
-  const securityMethodsQuery = useQuery({
-    queryKey: [...securityMethodsKey, capabilities],
-    queryFn: () => loadSecurityMethods(capabilities),
-    enabled: available,
+  const accountsQuery = useListAccounts(authClient, {
     retry: false,
   })
-  const mutation = useMutation<unknown, Error, SecurityMutation>({
-    mutationFn: async (action) => {
-      if (action.type === "link-github") {
-        if (!capabilities.linkSocial) throw new Error("Unavailable")
-        await completeSecurityMutation(
-          capabilities.linkSocial({
-            provider: "github",
-            callbackURL: createAuthCallbackURL("/settings/account"),
-          })
-        )
-        return
+  const passkeysQuery = useListPasskeys(authClient, {
+    retry: false,
+  })
+  const securityMethods = useMemo(() => {
+    if (accountsQuery.data === undefined || passkeysQuery.data === undefined) {
+      return undefined
+    }
+    try {
+      return {
+        accounts: parseLinkedAccounts(accountsQuery.data),
+        passkeys: parseUserPasskeys(passkeysQuery.data),
       }
-      if (action.type === "unlink-github") {
-        if (!capabilities.unlinkAccount) throw new Error("Unavailable")
-        await completeSecurityMutation(
-          capabilities.unlinkAccount({
-            providerId: "github",
-            accountId: action.accountId,
-          })
-        )
-        return
-      }
-      if (!capabilities.passkey?.deletePasskey) throw new Error("Unavailable")
-      await completeSecurityMutation(
-        capabilities.passkey.deletePasskey({ id: action.passkeyId })
-      )
-    },
-    onSuccess: async (_, action) => {
-      await queryClient.invalidateQueries({ queryKey: securityMethodsKey })
-      router.refresh()
-      if (action.type !== "link-github") {
-        toast.success(
-          action.type === "unlink-github"
-            ? "GitHub account unlinked"
-            : "Passkey deleted"
-        )
-      }
-    },
+    } catch {
+      return null
+    }
+  }, [accountsQuery.data, passkeysQuery.data])
+  const linkGithubMutation = useLinkSocial(authClient, {
     onError: (error) => {
-      toast.error(securityMutationErrorMessage(error, securityMutationFallback))
+      toast.error(safeAuthErrorMessage(error, securityMutationFallback))
     },
   })
-  const { mutate } = mutation
-  const githubAccount = securityMethodsQuery.data?.accounts.find(
+  const unlinkGithubMutation = useUnlinkAccount(authClient, {
+    onSuccess: () => {
+      toast.success("GitHub account unlinked")
+    },
+    onError: (error) => {
+      toast.error(safeAuthErrorMessage(error, securityMutationFallback))
+    },
+  })
+  const deletePasskeyMutation = useDeletePasskey(authClient, {
+    onSuccess: () => {
+      toast.success("Passkey deleted")
+    },
+    onError: (error) => {
+      toast.error(safeAuthErrorMessage(error, securityMutationFallback))
+    },
+  })
+  const githubAccount = securityMethods?.accounts.find(
     (account) => account.providerId === "github"
   )
-  const { refetch } = securityMethodsQuery
-  const linkGithub = useCallback(
-    () => mutate({ type: "link-github" }),
-    [mutate]
-  )
-  const unlinkGithub = useCallback(
-    () =>
-      mutate({
-        type: "unlink-github",
-        accountId: githubAccount?.accountId,
-      }),
-    [githubAccount?.accountId, mutate]
-  )
-  const passkeyRegistration = useAccountController(
-    capabilities.passkey?.addPasskey
-  )
+  const linkGithub = useCallback(() => {
+    linkGithubMutation.mutate({
+      provider: "github",
+      callbackURL: createAuthCallbackURL("/settings/account"),
+    })
+  }, [linkGithubMutation])
+  const unlinkGithub = useCallback(() => {
+    if (githubAccount) {
+      unlinkGithubMutation.mutate({ accountId: githubAccount.accountId })
+    }
+  }, [githubAccount, unlinkGithubMutation])
+  const passkeyRegistration = useAccountController(authClient)
   const deletePasskey = useCallback(
-    (passkeyId: string) => mutate({ type: "delete-passkey", passkeyId }),
-    [mutate]
+    (passkeyId: string) => deletePasskeyMutation.mutate({ id: passkeyId }),
+    [deletePasskeyMutation]
   )
-  const retry = useCallback(() => void refetch(), [refetch])
+  const retry = useCallback(() => {
+    void Promise.all([accountsQuery.refetch(), passkeysQuery.refetch()])
+  }, [accountsQuery, passkeysQuery])
   const securityMutationPending =
-    mutation.isPending || passkeyRegistration.mutation.isPending
+    linkGithubMutation.isPending ||
+    unlinkGithubMutation.isPending ||
+    deletePasskeyMutation.isPending ||
+    passkeyRegistration.mutation.isPending
+  const securityMethodsError =
+    accountsQuery.isError || passkeysQuery.isError || securityMethods === null
+  const securityMethodsPending =
+    !securityMethodsError &&
+    (accountsQuery.isPending || passkeysQuery.isPending)
 
   return (
     <section
@@ -179,15 +172,8 @@ export const SecurityMethodsPanel = () => {
         </div>
       </div>
 
-      {!available ? (
-        <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-          Security methods are unavailable in this session.
-        </p>
-      ) : null}
-      {securityMethodsQuery.isPending && available ? (
-        <SecurityMethodsSkeleton />
-      ) : null}
-      {securityMethodsQuery.isError ? (
+      {securityMethodsPending ? <SecurityMethodsSkeleton /> : null}
+      {securityMethodsError ? (
         <Empty className="border" role="alert">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -204,14 +190,12 @@ export const SecurityMethodsPanel = () => {
           </EmptyHeader>
         </Empty>
       ) : null}
-      {securityMethodsQuery.data ? (
+      {securityMethods ? (
         <div className="grid gap-6">
           <GithubMethod
             account={githubAccount}
-            canLink={Boolean(capabilities.linkSocial)}
-            canUnlink={Boolean(capabilities.unlinkAccount)}
             pending={securityMutationPending}
-            pendingType={mutation.variables?.type}
+            unlinkPending={unlinkGithubMutation.isPending}
             onLink={linkGithub}
             onUnlink={unlinkGithub}
           />
@@ -226,22 +210,19 @@ export const SecurityMethodsPanel = () => {
               <Button
                 ref={passkeyRegistration.triggerRef}
                 variant="outline"
-                disabled={
-                  !capabilities.passkey?.addPasskey || securityMutationPending
-                }
+                disabled={securityMutationPending}
                 onClick={passkeyRegistration.register}
               >
                 <KeyRoundIcon data-icon="inline-start" aria-hidden="true" />
                 Add passkey
               </Button>
             </div>
-            {securityMethodsQuery.data.passkeys.length > 0 ? (
+            {securityMethods.passkeys.length > 0 ? (
               <div className="divide-y rounded-xl border">
-                {securityMethodsQuery.data.passkeys.map((passkey) => (
+                {securityMethods.passkeys.map((passkey) => (
                   <PasskeyRow
                     key={passkey.id}
                     passkey={passkey}
-                    canDelete={Boolean(capabilities.passkey?.deletePasskey)}
                     pending={securityMutationPending}
                     onDelete={deletePasskey}
                   />
@@ -266,18 +247,14 @@ export const SecurityMethodsPanel = () => {
 
 const GithubMethod = ({
   account,
-  canLink,
-  canUnlink,
   pending,
-  pendingType,
+  unlinkPending,
   onLink,
   onUnlink,
 }: {
   account?: LinkedAccount
-  canLink: boolean
-  canUnlink: boolean
   pending: boolean
-  pendingType?: SecurityMutation["type"]
+  unlinkPending: boolean
   onLink: () => void
   onUnlink: () => void
 }) => (
@@ -318,10 +295,7 @@ const GithubMethod = ({
     </div>
     {account ? (
       <AlertDialog>
-        <AlertDialogTrigger
-          render={unlinkGithubTrigger}
-          disabled={!canUnlink || pending}
-        >
+        <AlertDialogTrigger render={unlinkGithubTrigger} disabled={pending}>
           <Unlink2Icon data-icon="inline-start" aria-hidden="true" />
           Unlink
         </AlertDialogTrigger>
@@ -336,7 +310,7 @@ const GithubMethod = ({
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={pendingType === "unlink-github"}
+              disabled={unlinkPending}
               onClick={onUnlink}
             >
               Unlink GitHub
@@ -345,7 +319,7 @@ const GithubMethod = ({
         </AlertDialogContent>
       </AlertDialog>
     ) : (
-      <Button variant="outline" disabled={!canLink || pending} onClick={onLink}>
+      <Button variant="outline" disabled={pending} onClick={onLink}>
         <span data-icon="inline-start">
           <GitHubMarkIcon />
         </span>
@@ -357,12 +331,10 @@ const GithubMethod = ({
 
 const PasskeyRow = ({
   passkey,
-  canDelete,
   pending,
   onDelete,
 }: {
   passkey: UserPasskey
-  canDelete: boolean
   pending: boolean
   onDelete: (passkeyId: string) => void
 }) => {
@@ -398,10 +370,7 @@ const PasskeyRow = ({
         </p>
       </div>
       <AlertDialog>
-        <AlertDialogTrigger
-          render={deletePasskeyTrigger}
-          disabled={!canDelete || pending}
-        >
+        <AlertDialogTrigger render={deletePasskeyTrigger} disabled={pending}>
           <Trash2Icon data-icon="inline-start" aria-hidden="true" />
           Delete
         </AlertDialogTrigger>

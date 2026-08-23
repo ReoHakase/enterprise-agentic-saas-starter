@@ -89,7 +89,7 @@ const nestedAuthErrorSchema = v.object({
 })
 const directAuthErrorSchema = v.object({ code: errorCodeSchema })
 
-const errorCode = (error: unknown) => {
+export const safeAuthErrorCode = (error: unknown) => {
   try {
     const nestedResult = v.safeParse(nestedAuthErrorSchema, error)
     if (nestedResult.success) return nestedResult.output.error.code
@@ -110,7 +110,7 @@ const parseSafeAuthError = (
   error: unknown,
   fallback: string
 ): SafeAuthError => {
-  const code = errorCode(error)
+  const code = safeAuthErrorCode(error)
   if (code) {
     return { code, message: publicErrorMessages[code] }
   }

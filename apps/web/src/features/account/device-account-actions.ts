@@ -1,17 +1,20 @@
+import type { MultiSessionAuthClient } from "@better-auth-ui/react"
 import type { QueryClient } from "@tanstack/react-query"
 
 import { revokeAgentContext } from "@/features/agent"
-import { clearAuthenticatedQueryCache } from "@/features/auth"
+import {
+  clearAuthenticatedQueryCache,
+  requireMultiSessionAuthClient,
+} from "@/features/auth"
 import { apiClient } from "@/lib/api-client"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import {
-  completeMultiSessionAction,
-  readFreshCurrentDeviceSession,
-  readFreshDeviceAccountState,
-  type MultiSessionCapabilities,
-} from "./multi-session-client"
-import type { DeviceAccount, Me } from "./schema"
+  parseCurrentDeviceSession,
+  parseDeviceAccounts,
+  type DeviceAccount,
+  type Me,
+} from "./schema"
 
 export type AccountIdentityLifecycle = {
   onAbort?: () => void
@@ -28,15 +31,46 @@ export const resolveCurrentDeviceAccount = (
   return matches.length === 1 ? matches[0] : undefined
 }
 
+const freshStateError = () =>
+  new Error("Account state could not be verified. Reload and try again.")
+
+const readFreshCurrentDeviceSession = async (
+  authClient: MultiSessionAuthClient
+) => {
+  const result = await authClient.getSession({
+    fetchOptions: { throw: true },
+  })
+  return result === null || result === undefined
+    ? undefined
+    : parseCurrentDeviceSession(result)
+}
+
+const readFreshDeviceAccountState = async (
+  authClient: MultiSessionAuthClient
+) => {
+  const [currentSession, accountsResult] = await Promise.all([
+    readFreshCurrentDeviceSession(authClient),
+    authClient.multiSession.listDeviceSessions({
+      fetchOptions: { throw: true },
+    }),
+  ])
+  if (!currentSession) throw freshStateError()
+
+  return {
+    accounts: parseDeviceAccounts(accountsResult ?? []),
+    currentSession,
+  }
+}
+
 const verifyFreshIdentity = async ({
   accounts,
+  authClient,
   currentUserId,
-  multiSession,
   target,
 }: {
   accounts: DeviceAccount[]
+  authClient: MultiSessionAuthClient
   currentUserId: Me["user"]["id"]
-  multiSession: MultiSessionCapabilities
   target?: DeviceAccount
 }) => {
   const renderedCurrent = resolveCurrentDeviceAccount(accounts, currentUserId)
@@ -44,7 +78,7 @@ const verifyFreshIdentity = async ({
     throw new Error("Account state changed. Reload and try again.")
   }
 
-  const fresh = await readFreshDeviceAccountState(multiSession)
+  const fresh = await readFreshDeviceAccountState(authClient)
   const freshCurrent = resolveCurrentDeviceAccount(
     fresh.accounts,
     fresh.currentSession.user.id
@@ -98,100 +132,94 @@ const completeIdentityChange = async (
 export const switchDeviceAccount = async ({
   account,
   accounts,
+  authClient,
   currentUserId,
   lifecycle,
-  multiSession,
   queryClient,
 }: {
   account: DeviceAccount
   accounts: DeviceAccount[]
+  authClient: unknown
   currentUserId: Me["user"]["id"]
   lifecycle: AccountIdentityLifecycle
-  multiSession: MultiSessionCapabilities
   queryClient: QueryClient
 }) => {
-  if (!multiSession.setActive) {
-    throw new Error("Could not switch account. Try again.")
-  }
-
+  const multiSessionAuthClient = requireMultiSessionAuthClient(authClient)
   await verifyFreshIdentity({
     accounts,
+    authClient: multiSessionAuthClient,
     currentUserId,
-    multiSession,
     target: account,
   })
   await prepareIdentityChange(queryClient, lifecycle)
-  await completeMultiSessionAction(
-    multiSession.setActive({ sessionToken: account.session.token })
-  )
+  await multiSessionAuthClient.multiSession.setActive({
+    sessionToken: account.session.token,
+    fetchOptions: { throw: true },
+  })
   await completeIdentityChange(queryClient, lifecycle)
 }
 
 export const signOutCurrentDeviceAccount = async ({
   accounts,
+  authClient,
   currentUserId,
   lifecycle,
-  multiSession,
   queryClient,
 }: {
   accounts: DeviceAccount[]
+  authClient: unknown
   currentUserId: Me["user"]["id"]
   lifecycle: AccountIdentityLifecycle
-  multiSession: MultiSessionCapabilities
   queryClient: QueryClient
 }) => {
-  if (!multiSession.revoke) {
-    throw new Error("Could not sign out. Try again.")
-  }
-
+  const multiSessionAuthClient = requireMultiSessionAuthClient(authClient)
   const { currentAccount } = await verifyFreshIdentity({
     accounts,
+    authClient: multiSessionAuthClient,
     currentUserId,
-    multiSession,
   })
   await prepareIdentityChange(queryClient, lifecycle)
-  await completeMultiSessionAction(
-    multiSession.revoke({
-      sessionToken: currentAccount.session.token,
-    })
-  )
+  await multiSessionAuthClient.multiSession.revoke({
+    sessionToken: currentAccount.session.token,
+    fetchOptions: { throw: true },
+  })
   await completeIdentityChange(queryClient, lifecycle)
 }
 
 export const removeDeviceAccount = async ({
   account,
   accounts,
+  authClient,
   currentUserId,
-  multiSession,
 }: {
   account: DeviceAccount
   accounts: DeviceAccount[]
+  authClient: unknown
   currentUserId: Me["user"]["id"]
-  multiSession: MultiSessionCapabilities
 }) => {
-  if (!multiSession.revoke) {
-    throw new Error("Could not remove account. Try again.")
-  }
-
+  const multiSessionAuthClient = requireMultiSessionAuthClient(authClient)
   const { currentAccount } = await verifyFreshIdentity({
     accounts,
+    authClient: multiSessionAuthClient,
     currentUserId,
-    multiSession,
     target: account,
   })
   if (currentAccount.session.token === account.session.token) {
     throw new Error("Could not remove account. Try again.")
   }
 
-  await completeMultiSessionAction(
-    multiSession.revoke({ sessionToken: account.session.token })
-  )
+  await multiSessionAuthClient.multiSession.revoke({
+    sessionToken: account.session.token,
+    fetchOptions: { throw: true },
+  })
 
   // Better Auth verifies and revokes through separate requests. This post-check
   // contains stale local state, but only a future server-side conditional
   // revoke with an expected-current token can eliminate the residual ABA race.
   try {
-    const currentSession = await readFreshCurrentDeviceSession(multiSession)
+    const currentSession = await readFreshCurrentDeviceSession(
+      multiSessionAuthClient
+    )
     return (
       !currentSession ||
       currentSession.user.id !== currentUserId ||
