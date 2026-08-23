@@ -26,7 +26,8 @@ const authClient = {
   signOut: mocks.signOut,
 }
 
-vi.mock("@better-auth-ui/react", () => ({
+vi.mock("@better-auth-ui/react", async (importOriginal) => ({
+  ...(await importOriginal()),
   useAuth: () => ({ authClient }),
 }))
 
@@ -78,15 +79,13 @@ describe("useDeviceAccountsController", () => {
     vi.clearAllMocks()
     fetchAgent.mockResolvedValue(Response.json({ contextEpoch: 2 }))
     vi.stubGlobal("fetch", fetchAgent)
-    mocks.listDeviceSessions.mockResolvedValue({ data: deviceAccounts })
+    mocks.listDeviceSessions.mockResolvedValue(deviceAccounts)
     mocks.getSession.mockResolvedValue({
-      data: {
-        session: { token: "session-current" },
-        user: { id: "user-current" },
-      },
+      session: { token: "session-current" },
+      user: { id: "user-current" },
     })
-    mocks.revoke.mockResolvedValue({ data: {} })
-    mocks.setActive.mockResolvedValue({ data: {} })
+    mocks.revoke.mockResolvedValue({})
+    mocks.setActive.mockResolvedValue({})
   })
 
   afterEach(() => vi.unstubAllGlobals())
@@ -118,6 +117,7 @@ describe("useDeviceAccountsController", () => {
     )
     expect(mocks.revoke).toHaveBeenCalledWith({
       sessionToken: "session-current",
+      fetchOptions: { throw: true },
     })
     expect(mocks.signOut).not.toHaveBeenCalled()
     expect(fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
@@ -209,7 +209,7 @@ describe("useDeviceAccountsController", () => {
     queryClient.setQueryData(["private"], "current account")
     mocks.revoke
       .mockRejectedValueOnce(new Error("provider-secret"))
-      .mockResolvedValueOnce({ data: {} })
+      .mockResolvedValueOnce({})
     const { result } = renderHook(
       () =>
         useDeviceAccountsController({
@@ -253,16 +253,16 @@ describe("useDeviceAccountsController", () => {
     const onComplete = vi.fn<() => Promise<void>>().mockResolvedValue()
     mocks.getSession
       .mockResolvedValueOnce({
-        data: {
-          session: { token: "session-current" },
-          user: { id: "user-current" },
-        },
+        session: { token: "session-current" },
+        user: { id: "user-current" },
       })
       .mockResolvedValueOnce({
-        data: {
-          session: { token: "session-other" },
-          user: { id: "user-other" },
-        },
+        session: { token: "session-current" },
+        user: { id: "user-current" },
+      })
+      .mockResolvedValueOnce({
+        session: { token: "session-other" },
+        user: { id: "user-other" },
       })
     const { result } = renderHook(
       () =>

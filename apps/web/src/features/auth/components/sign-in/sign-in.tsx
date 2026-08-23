@@ -3,6 +3,7 @@
 import { authMutationKeys } from "@better-auth-ui/core"
 import {
   useAuth,
+  useFetchOptions,
   useSendVerificationEmail,
   useSignInEmail,
 } from "@better-auth-ui/react"
@@ -34,7 +35,6 @@ import { toast } from "sonner"
 import { safeAuthErrorMessage, createSignInFormSchema } from "@/features/auth"
 
 import { createAuthCallbackURL } from "../../callback-url"
-import { useFetchOptions } from "../../fetch-options"
 import { findCaptchaComponent } from "../../runtime-guards"
 import {
   AuthTextField,

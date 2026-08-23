@@ -1,3 +1,4 @@
+import { multiSessionQueryKeys } from "@better-auth-ui/core/plugins"
 import { FileUploadError } from "@enterprise-agentic-saas/api/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor } from "@testing-library/react"
@@ -5,7 +6,6 @@ import userEvent from "@testing-library/user-event"
 import { useCallback } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { accountKeys } from "@/features/account"
 import { httpError } from "@/test-support/http-error"
 
 import { ProfileImageEditor } from "./profile-image-editor"
@@ -81,6 +81,7 @@ const renderEditor = (
   props:
     | {
         subject: "user"
+        userId: string
         name: string
         profileImage: string | null
       }
@@ -89,7 +90,12 @@ const renderEditor = (
         organizationId: string
         name: string
         profileImage: string | null
-      } = { subject: "user", name: "Alex", profileImage: null }
+      } = {
+    subject: "user",
+    userId: "user-1",
+    name: "Alex",
+    profileImage: null,
+  }
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
@@ -291,7 +297,7 @@ describe("ProfileImageEditor", () => {
 
     await waitFor(() => {
       expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: accountKeys.deviceAccounts(),
+        queryKey: multiSessionQueryKeys.lists("user-1"),
       })
     })
   })
@@ -300,6 +306,7 @@ describe("ProfileImageEditor", () => {
     const actor = userEvent.setup()
     const queryClient = renderEditor({
       subject: "user",
+      userId: "user-1",
       name: "Alex",
       profileImage:
         "/files/profile-images/users/user-1?v=profile-image-user-1-1",
@@ -314,7 +321,7 @@ describe("ProfileImageEditor", () => {
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile image removed")
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: accountKeys.deviceAccounts(),
+      queryKey: multiSessionQueryKeys.lists("user-1"),
     })
   })
 
@@ -325,6 +332,7 @@ describe("ProfileImageEditor", () => {
     )
     renderEditor({
       subject: "user",
+      userId: "user-1",
       name: "Alex",
       profileImage:
         "/files/profile-images/users/user-1?v=profile-image-user-1-1",
@@ -351,6 +359,7 @@ describe("ProfileImageEditor", () => {
     )
     renderEditor({
       subject: "user",
+      userId: "user-1",
       name: "Alex",
       profileImage:
         "/files/profile-images/users/user-1?v=profile-image-user-1-1",
@@ -369,6 +378,7 @@ describe("ProfileImageEditor", () => {
   it("does not offer removal for an external fallback image", () => {
     renderEditor({
       subject: "user",
+      userId: "user-1",
       name: "Alex",
       profileImage: "https://avatars.githubusercontent.com/u/1?v=4",
     })

@@ -1,7 +1,7 @@
 "use client"
 
-import { useAuth } from "@better-auth-ui/react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAuth, useListDeviceSessions } from "@better-auth-ui/react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -9,6 +9,7 @@ import {
   hasOrganizationSwitchRisks,
   type OrganizationSwitchRisks,
 } from "@/features/agent"
+import { requireMultiSessionAuthClient } from "@/features/auth"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import { navigateAfterAccountSwitch } from "../account-switch-navigation"
@@ -19,12 +20,7 @@ import {
   switchDeviceAccount,
   type AccountIdentityLifecycle,
 } from "../device-account-actions"
-import {
-  createDeviceAccountsQueryFn,
-  createMultiSessionCapabilities,
-} from "../multi-session-client"
-import { accountKeys } from "../queries"
-import type { DeviceAccount, Me } from "../schema"
+import { parseDeviceAccounts, type DeviceAccount, type Me } from "../schema"
 
 type IdentityAction =
   | { kind: "switch"; account: DeviceAccount }
@@ -56,21 +52,31 @@ export const useDeviceAccountsController = ({
 }) => {
   const { authClient: authClientValue } = useAuth()
   const queryClient = useQueryClient()
-  const multiSession = useMemo(
-    () => createMultiSessionCapabilities(authClientValue),
+  const authClient = useMemo(
+    () => requireMultiSessionAuthClient(authClientValue),
     [authClientValue]
   )
   const [removeTarget, setRemoveTarget] = useState<DeviceAccount>()
   const [riskAction, setRiskAction] = useState<RiskAction>()
   const actionFenceRef = useRef(false)
-  const accountsQuery = useQuery({
-    queryKey: accountKeys.deviceAccountsFor(currentUser.id),
-    queryFn: createDeviceAccountsQueryFn(authClientValue),
+  const rawAccountsQuery = useListDeviceSessions(authClient, {
     enabled,
     retry: false,
   })
-  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data])
-  const { refetch: refetchAccounts } = accountsQuery
+  const parsedAccounts = useMemo(() => {
+    if (rawAccountsQuery.data === undefined) return undefined
+    try {
+      return parseDeviceAccounts(rawAccountsQuery.data)
+    } catch {
+      return null
+    }
+  }, [rawAccountsQuery.data])
+  const accounts = useMemo(() => parsedAccounts ?? [], [parsedAccounts])
+  const accountsQuery = {
+    isError: rawAccountsQuery.isError || parsedAccounts === null,
+    isPending: rawAccountsQuery.isPending,
+  }
+  const { refetch: refetchAccounts } = rawAccountsQuery
   const lifecycle = useMemo<AccountIdentityLifecycle>(
     () => ({
       onAbort: onAbortIdentityChange,
@@ -84,8 +90,8 @@ export const useDeviceAccountsController = ({
         const identityChanged = await removeDeviceAccount({
           account: action.account,
           accounts,
+          authClient,
           currentUserId: currentUser.id,
-          multiSession,
         })
         if (identityChanged) {
           lifecycle.onAbort?.()
@@ -107,18 +113,18 @@ export const useDeviceAccountsController = ({
         await switchDeviceAccount({
           account: action.account,
           accounts,
+          authClient,
           currentUserId: currentUser.id,
           lifecycle,
-          multiSession,
           queryClient,
         })
         return action
       }
       await signOutCurrentDeviceAccount({
         accounts,
+        authClient,
         currentUserId: currentUser.id,
         lifecycle,
-        multiSession,
         queryClient,
       })
       return action
@@ -131,9 +137,7 @@ export const useDeviceAccountsController = ({
           return
         }
         toast.success(`${action.account.user.email} was removed`)
-        await queryClient.invalidateQueries({
-          queryKey: accountKeys.deviceAccountsFor(currentUser.id),
-        })
+        await refetchAccounts()
         return
       }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { multiSessionQueryKeys } from "@better-auth-ui/core/plugins"
 import {
   PROFILE_IMAGE_SIZE,
   PROFILE_IMAGE_SOURCE_CONTENT_TYPE,
@@ -36,7 +37,6 @@ import {
 import { toast } from "sonner"
 
 import { UserProfileImage } from "@/components/user-identity/user-identity"
-import { accountKeys } from "@/features/account"
 import { consoleKeys, getConsoleApiErrorText } from "@/features/console"
 import { fileKeys, registerFileUpload } from "@/features/files"
 import { issueKeys } from "@/features/issues"
@@ -61,6 +61,7 @@ const maxSourceBytes = 10_000_000
 
 type UserProfileImageEditorProps = {
   subject: "user"
+  userId: string
   name: string
   profileImage: string | null
 }
@@ -254,6 +255,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
   const uploadControllerRef = useRef<AbortController | null>(null)
   const unregisterUploadRef = useRef<(() => boolean) | null>(null)
   const subject = props.subject
+  const userId = subject === "user" ? props.userId : ""
   const organizationId = subject === "organization" ? props.organizationId : ""
   const [source, setSource] = useState<File>()
   const [preparedUpload, setPreparedUpload] =
@@ -269,7 +271,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: consoleKeys.all }),
           queryClient.invalidateQueries({
-            queryKey: accountKeys.deviceAccounts(),
+            queryKey: multiSessionQueryKeys.lists(userId),
           }),
           queryClient.invalidateQueries({ queryKey: issueKeys.all }),
           queryClient.invalidateQueries({ queryKey: fileKeys.all }),
@@ -288,7 +290,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
     } finally {
       router.refresh()
     }
-  }, [organizationId, queryClient, router, subject])
+  }, [organizationId, queryClient, router, subject, userId])
 
   // refresh callbackでmutation後に影響を受ける全queryをinvalidateする。
   // oxlint-disable-next-line react-doctor/query-mutation-missing-invalidation

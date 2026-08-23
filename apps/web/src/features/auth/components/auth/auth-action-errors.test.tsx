@@ -59,7 +59,14 @@ vi.mock("@tanstack/react-query", async (importOriginal) => ({
 vi.mock("@better-auth-ui/react", () => ({
   providerIcons: {},
   useAuth: () => ({
-    authClient: { signIn: { passkey: mocks.passkey } },
+    authClient: {
+      passkey: {
+        addPasskey: vi.fn<() => void>(),
+        deletePasskey: vi.fn<() => void>(),
+        listUserPasskeys: vi.fn<() => void>(),
+      },
+      signIn: { passkey: mocks.passkey },
+    },
     basePaths: { auth: "/auth" },
     localization: { auth: { continueWith: "Continue with {{provider}}" } },
     navigate: mocks.navigate,

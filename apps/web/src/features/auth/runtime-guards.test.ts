@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
   formDataString,
   requireMagicLinkAuthClient,
+  requireMultiSessionAuthClient,
   requirePasskeyAuthClient,
 } from "./runtime-guards"
 
@@ -12,6 +13,7 @@ describe("authentication runtime guards", () => {
     const client = createAuthClientForBaseUrl("http://localhost:3001")
 
     expect(requireMagicLinkAuthClient(client)).toBe(client)
+    expect(requireMultiSessionAuthClient(client)).toBe(client)
     expect(requirePasskeyAuthClient(client)).toBe(client)
   })
 
@@ -21,6 +23,12 @@ describe("authentication runtime guards", () => {
     )
     expect(() => requirePasskeyAuthClient({ signIn: {} })).toThrow(
       "Passkey authentication is not configured"
+    )
+    expect(() =>
+      requirePasskeyAuthClient({ signIn: { passkey: () => undefined } })
+    ).toThrow("Passkey authentication is not configured")
+    expect(() => requireMultiSessionAuthClient({ multiSession: {} })).toThrow(
+      "Account switching is not configured"
     )
   })
 

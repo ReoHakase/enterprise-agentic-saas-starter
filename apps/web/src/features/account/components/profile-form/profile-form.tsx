@@ -100,6 +100,7 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
       </div>
       <ProfileImageEditor
         subject="user"
+        userId={user.id}
         name={user.name}
         profileImage={user.profileImage}
       />
