@@ -7,8 +7,7 @@
     ".": "./src/index.ts",
     "./development-seed": "./src/development/seed-fixtures.ts",
     "./local-development": "./src/development/local-database.ts",
-    "./schema": "./src/schema/index.ts",
-    "./write-transaction": "./src/client/write-transaction.ts"
+    "./schema": "./src/schema/index.ts"
   },
   "scripts": {
     "db:check": "bun run db:check:history && bun run db:check:drizzle && bun run db:check:schema-drift",
