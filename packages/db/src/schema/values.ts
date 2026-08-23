@@ -30,6 +30,38 @@ export const issueActivityKinds = [
 export type IssueActivityKind = (typeof issueActivityKinds)[number]
 export type IssueActivityValue = string | string[] | null
 
+export const auditActions = [
+  "organization.created",
+  "organization.updated",
+  "organization.member.role_updated",
+  "organization.owner.transferred",
+  "organization.member.removed",
+  "organization.invitation.created",
+  "organization.invitation.resent",
+  "organization.invitation.canceled",
+  "issue.created",
+  "issue.updated",
+  "issue.deleted",
+  "issue.comment.created",
+  "issue.comment.updated",
+  "issue.comment.deleted",
+  "file.uploaded",
+  "file.deleted",
+  "organization.profile_image.updated",
+  "organization.profile_image.deleted",
+] as const
+export type AuditAction = (typeof auditActions)[number]
+
+export const auditTargetTypes = [
+  "organization",
+  "member",
+  "invitation",
+  "issue",
+  "issue_comment",
+  "file",
+] as const
+export type AuditTargetType = (typeof auditTargetTypes)[number]
+
 export type AuditLogMetadata = Record<string, string | number | boolean | null>
 
 export const MAX_FILE_SIZE_BYTES = 20_000_000 as const
