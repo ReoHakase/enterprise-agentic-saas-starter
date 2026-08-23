@@ -15,6 +15,7 @@ last_reviewed: 2026-08-20
 - [システム境界](system-boundaries.md)
 - [品質強制](quality-enforcement.md)
 - [coding agentの作業手順](coding-agent-workflow.md)
+- [IssueとPull Requestの執筆契約](issue-pr-authoring.md)
 
 ## apps
 

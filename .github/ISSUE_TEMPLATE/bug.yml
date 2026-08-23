@@ -1,0 +1,142 @@
+name: 不具合
+description: 再現可能な不具合と修正後の要求振る舞いを記録する
+title: ""
+body:
+  - type: markdown
+    attributes:
+      value: |
+        期待する結果は要求振る舞いへGiven-When-Thenで書く
+        機密情報をlog、画像、動画へ含めない
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 不具合と利用者への影響を短く書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 発見経緯と、なぜ修正が必要かを書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: 実際の動作
+      description: 現在観測している結果を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: required_behavior
+    attributes:
+      label: 要求振る舞い
+      description: 修正後の規則をBRIEFなGiven-When-Thenで書く
+      placeholder: |
+        Scenario: 上限を超えるfileを拒否する
+        Given: file size上限が20,000,000 bytesである
+        When: 20,000,001 bytesのfileをuploadする
+        Then: fileを保存せずsize limit errorを返す
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 再現手順
+      description: 不具合を再現する最小操作を書く
+      placeholder: |
+        1. 対象の状態を準備する
+        2. 問題が起きる操作を行う
+        3. 実際の結果を確認する
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: OS、browser、commit、実行環境など再現に必要な条件を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 証拠
+      description: 機密情報を除いたlog、画像、動画、発生頻度を書く。ない場合は理由を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: 利用者、機能、data、安全性、発生頻度への影響を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_design
+    attributes:
+      label: テスト設計
+      description: 再現規則と回帰riskの所有層、代表case、上位配線、非自動化理由を書く
+      placeholder: |
+        | 規則またはリスク | 最低十分な所有層 | 代表シナリオ | 代表上位配線 | 自動化しない理由 |
+        | --- | --- | --- | --- | --- |
+        | file size上限 | A2 | 上限未満、上限ちょうど、上限超過 | A4のmultipart代表case | なし |
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_scope
+    attributes:
+      label: 非スコープ
+      description: この修正で扱わないことを書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: changed_files
+    attributes:
+      label: 変更ファイル
+      description: 変更予定pathをglobで書く。未確定なら推測せず、判断に必要な調査を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参照ドキュメント
+      description: 正本となる仕様、ADR、関連Issueを書く。ない場合は理由を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: 修正完了を第三者が判定できる条件を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 確認手順
+      description: 再現テスト、回帰テスト、必要な手動確認を書く。未確定なら判断に必要な調査を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk_rollback
+    attributes:
+      label: リスクと切り戻し
+      description: 修正の副作用、導入条件、安全な戻し方を書く
+    validations:
+      required: true

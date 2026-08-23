@@ -152,6 +152,15 @@ Controlsは手動探索と状態共有に使います。Controlsが表示され�
 
 `play`はstory render後の代表操作とassertionに使います。
 
+`args`または`props`だけで成立するloading、empty、error、pendingなど、静的W3状態のrender自体を
+文書化するnamed storyには、render結果を再確認するだけの`play`を置きません。操作のないgeometryや
+native renderingを実ブラウザーで検査する必要がある場合は、named storyの`args`、decorator、fixtureを
+同じ所有層の`*.browser.test.tsx`から再利用します。
+
+実QueryClient、`controller`、MSWのrequest完了後に初めてemptyまたはerrorへ到達する場合はW4です。
+request前後の状態遷移、cache、古いresponseの抑止を観測する`play`またはBrowser Modeテストは、
+静的状態を再確認するだけの`play`には含めません。
+
 置くもの:
 
 - 代表的なclick
@@ -172,6 +181,8 @@ Controlsは手動探索と状態共有に使います。Controlsが表示され�
 - 任意時間の`sleep`
 
 操作は`step`で意味単位に分け、Storybook UIからpause、resume、rewind、step実行できる形にします。
+`step`は利用者の意図を日本語常体・文末句読点なしで表し、シナリオの`When`または`Then`へ
+対応させます。個々のclickや内部component名をstep名の中心にしません。
 
 ## a11y
 

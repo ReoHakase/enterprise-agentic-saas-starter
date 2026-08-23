@@ -16,6 +16,8 @@ applies_to:
 
 Storybook interaction、Browser Mode、Playwrightで、利用者が観測できる契約を同じ方法で検証します。
 DOM実装、実行順、固定時間へ依存せず、失敗時に待っていた状態が分かるtestを書きます。
+シナリオのGiven-When-Then、BRIEF、所有層、test名とcommentの表記は
+[テストケース設計・記述規約](test-case-design.md)を正本とします。
 
 ## Locatorの優先順位
 
@@ -73,6 +75,10 @@ cleanupします。create/update/deleteを一つの`play`へ連結せず、独�
 E1はworkerごとにOAuth userと`storageState`を分け、scenarioごとにorganization、thread、Issueを
 namespace化します。OAuth/WebAuthnはserialを維持し、対象passkeyだけをsetupと`finally`で削除します。
 有料E2は1 worker、retry 0、artifact無効を維持し、明示承認なしに実行しません。
+
+同じcallback mappingやvisible textをW2とW3で再検査しません。W3はfocus、keyboard、layout、
+native renderingなど実ブラウザー固有の結果、W6は実Next.jsのURL、history、document scroll、
+route lifecycleを`Then`として所有します。上位層を進めるための最小locatorとloading観測は残せます。
 
 ## 並列実行とartifact
 

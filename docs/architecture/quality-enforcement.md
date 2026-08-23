@@ -160,6 +160,9 @@ YAML、TOMLは除外せず、未対応形式だけがstagedされてもhookをfa
 
 ## a11yとテスト規則
 
+テストケースのGiven-When-Then、BRIEF、所有層、ライブラリ境界、test名とcommentの表記は
+[テストケース設計・記述規約](../testing-strategy/common/test-case-design.md)を正本とします。
+
 Web/UI:
 
 - `jsx-a11y` correctnessをerror

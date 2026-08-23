@@ -1,0 +1,108 @@
+name: 作業・調査・大項目
+description: 機能追加、内部改善、文書、調査、大項目の作業契約を作成する
+title: ""
+body:
+  - type: markdown
+    attributes:
+      value: |
+        要求振る舞いはBRIEFなGiven-When-Thenで記述する
+        実装手順と実行結果は要求振る舞いへ混ぜない
+        調査または大項目で該当しない欄は空にせず理由を書く
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: このIssueで実現する成果を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: なぜ必要か、現在の問題と利用者への影響を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: required_behavior
+    attributes:
+      label: 要求振る舞い
+      description: 1規則につき1つのBRIEFなGiven-When-Thenを書く
+      placeholder: |
+        Scenario: 管理者が新しいmemberを招待する
+        Given: organizationの管理者として認証されている
+        When: 新しいmemberを招待する
+        Then: organizationへ未完了の招待が1件作成される
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_design
+    attributes:
+      label: テスト設計
+      description: 規則ごとの最低十分な所有層、代表case、上位配線、非自動化理由を書く
+      placeholder: |
+        | 規則またはリスク | 最低十分な所有層 | 代表シナリオ | 代表上位配線 | 自動化しない理由 |
+        | --- | --- | --- | --- | --- |
+        | 招待を作成する | AUTH2 | 管理者の正常系と権限拒否 | E1の代表招待journey | なし |
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_scope
+    attributes:
+      label: 非スコープ
+      description: このIssueで扱わないことを書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: changed_files
+    attributes:
+      label: 変更ファイル
+      description: 変更予定pathをglobで書く。未確定なら推測せず、判断に必要な調査を書く
+      placeholder: |
+        - `apps/api/src/modules/invitations/**`
+        - `apps/api/src/app.organization-membership.test.ts`
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参照ドキュメント
+      description: 正本となる仕様、ADR、外部仕様を書く。ない場合は理由を書く
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: 第三者が完了を判定できる条件をchecklistで書く
+      placeholder: |
+        - [ ] 管理者が有効な招待を作成できる
+        - [ ] 権限を持たないmemberは招待を作成できない
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 確認手順
+      description: 予定するcommandと手動確認を書く。未確定なら判断に必要な調査を書く
+      placeholder: |
+        - [ ] `bun run --cwd apps/api test`
+        - [ ] `bun run check`
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk_rollback
+    attributes:
+      label: リスクと切り戻し
+      description: 失敗時の影響、導入条件、安全な戻し方を書く
+    validations:
+      required: true

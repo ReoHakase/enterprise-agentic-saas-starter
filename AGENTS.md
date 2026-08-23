@@ -38,6 +38,13 @@
 
 ## 品質とtest
 
+- テストを追加または変更する前に、要求振る舞いをGiven-When-Thenで表し、最低十分な所有層と
+  上位層に残す固有の配線を決める。既存テストを統合または削除する場合も同様とする。詳細は
+  [`docs/testing-strategy/common/test-case-design.md`](docs/testing-strategy/common/test-case-design.md)と、
+  [`docs/testing-strategy/README.md`](docs/testing-strategy/README.md)から対象ワークスペースに対応する
+  テスト戦略文書を読む。
+- IssueとPRは`要求振る舞い`と`テスト設計`を分け、予定する確認と実行済みの結果を混ぜない。詳細は
+  [`docs/architecture/issue-pr-authoring.md`](docs/architecture/issue-pr-authoring.md)に従う。
 - `bun run test`: external cloud、real browser、paid model不要のunit/integration。
 - `bun run test:browser`: UI interactionとa11y。
 - `bun run test:e2e`: free E2E。
