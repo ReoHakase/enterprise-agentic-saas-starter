@@ -1,3 +1,7 @@
+import {
+  auditActions,
+  auditTargetTypes,
+} from "@enterprise-agentic-saas/db/schema"
 import * as v from "valibot"
 
 import {
@@ -6,35 +10,14 @@ import {
   positiveIntegerQueryModel,
 } from "../../models/common"
 
-const auditActionModel = v.picklist([
-  "organization.created",
-  "organization.updated",
-  "organization.member.role_updated",
-  "organization.owner.transferred",
-  "organization.member.removed",
-  "organization.invitation.created",
-  "organization.invitation.resent",
-  "organization.invitation.canceled",
-  "issue.created",
-  "issue.updated",
-  "issue.deleted",
-  "issue.comment.created",
-  "issue.comment.updated",
-  "issue.comment.deleted",
-])
+const auditActionModel = v.picklist(auditActions)
 
 const auditEventModel = v.object({
   id: v.string(),
   organizationId: v.string(),
   actorUserId: v.nullable(v.string()),
   action: auditActionModel,
-  targetType: v.picklist([
-    "organization",
-    "member",
-    "invitation",
-    "issue",
-    "issue_comment",
-  ]),
+  targetType: v.picklist(auditTargetTypes),
   targetId: v.nullable(v.string()),
   metadata: v.record(
     v.string(),
@@ -44,6 +27,7 @@ const auditEventModel = v.object({
 })
 
 export const auditEventListModel = v.array(auditEventModel)
+export type AuditEvent = v.InferOutput<typeof auditEventModel>
 
 export const listAuditEventsQueryModel = v.object({
   action: v.optional(auditActionModel),

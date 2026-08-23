@@ -11,12 +11,14 @@ import {
 
 import { organization, user } from "./auth.generated"
 import type {
+  AuditAction,
   IssueStatus,
   IssuePriority,
   IssueActivityField,
   IssueActivityKind,
   IssueActivityValue,
   AuditLogMetadata,
+  AuditTargetType,
 } from "./values"
 
 export const issues = sqliteTable(
@@ -167,8 +169,8 @@ export const auditLogs = sqliteTable(
     actorUserId: text("actor_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
-    action: text("action").notNull(),
-    targetType: text("target_type").notNull(),
+    action: text("action").$type<AuditAction>().notNull(),
+    targetType: text("target_type").$type<AuditTargetType>().notNull(),
     targetId: text("target_id"),
     metadata: text("metadata", { mode: "json" })
       .$type<AuditLogMetadata>()

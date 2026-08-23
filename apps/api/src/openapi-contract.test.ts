@@ -117,6 +117,64 @@ describe("app-owned OpenAPI consumer contract", () => {
     }
   })
 
+  it("documents the canonical audit action and target type enums", async () => {
+    // When: app-owned OpenAPI documentを生成する
+    const document = await createOpenApiDocument()
+    const paths = requiredObject(document.paths, "paths")
+    const path = requiredObject(
+      paths["/organizations/{organizationId}/audit-logs"],
+      "audit log path"
+    )
+    const operation = requiredObject(path.get, "audit log GET")
+    if (!Array.isArray(operation.parameters)) {
+      throw new TypeError("audit log GET parameters must be an array")
+    }
+    const actionParameter = operation.parameters.find(
+      (parameter) => isObject(parameter) && parameter.name === "action"
+    )
+    const actionParameterSchema = requiredObject(
+      requiredObject(actionParameter, "audit action parameter").schema,
+      "audit action parameter schema"
+    )
+    const responses = requiredObject(operation.responses, "audit responses")
+    const successResponse = requiredObject(responses["200"], "audit 200")
+    const content = requiredObject(successResponse.content, "audit 200 content")
+    const responseSchema = requiredObject(
+      requiredObject(content["application/json"], "audit JSON content").schema,
+      "audit response schema"
+    )
+    const itemSchema = requiredObject(
+      responseSchema.items,
+      "audit response item schema"
+    )
+    const properties = requiredObject(
+      itemSchema.properties,
+      "audit response properties"
+    )
+    const actionProperty = requiredObject(
+      properties.action,
+      "audit action property"
+    )
+    const targetTypeProperty = requiredObject(
+      properties.targetType,
+      "audit target type property"
+    )
+
+    // Then: queryとresponseがDB正本のenumを公開する
+    expect(
+      requiredStringArray(actionParameterSchema.enum, "audit query actions")
+    ).toEqual([...schema.auditActions])
+    expect(
+      requiredStringArray(actionProperty.enum, "audit response actions")
+    ).toEqual([...schema.auditActions])
+    expect(
+      requiredStringArray(
+        targetTypeProperty.enum,
+        "audit response target types"
+      )
+    ).toEqual([...schema.auditTargetTypes])
+  })
+
   it("documents every operation with English metadata and classifications", async () => {
     const document = await createOpenApiDocument()
     if (!Array.isArray(document.tags)) {

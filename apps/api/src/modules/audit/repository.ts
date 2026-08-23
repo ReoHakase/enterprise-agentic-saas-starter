@@ -1,33 +1,13 @@
 import type { Db } from "@enterprise-agentic-saas/db"
-import { auditLogs } from "@enterprise-agentic-saas/db/schema"
+import {
+  auditActions,
+  auditLogs,
+  auditTargetTypes,
+  type AuditAction,
+  type AuditTargetType,
+} from "@enterprise-agentic-saas/db/schema"
 import { and, desc, eq } from "drizzle-orm"
 
-import type { AuditAction, AuditEvent, AuditTargetType } from "./ports"
-
-const auditActions = [
-  "organization.created",
-  "organization.updated",
-  "organization.member.role_updated",
-  "organization.owner.transferred",
-  "organization.member.removed",
-  "organization.invitation.created",
-  "organization.invitation.resent",
-  "organization.invitation.canceled",
-  "issue.created",
-  "issue.updated",
-  "issue.deleted",
-  "issue.comment.created",
-  "issue.comment.updated",
-  "issue.comment.deleted",
-] as const
-
-const auditTargetTypes: AuditTargetType[] = [
-  "invitation",
-  "member",
-  "organization",
-  "issue",
-  "issue_comment",
-]
 const isAuditAction = (value: string): value is AuditAction =>
   auditActions.some((action) => action === value)
 
@@ -37,7 +17,7 @@ const isAuditTargetType = (value: string): value is AuditTargetType =>
 export const listAuditEvents = async (
   db: Db,
   input: { action?: AuditAction; limit: number; organizationId: string }
-): Promise<AuditEvent[]> => {
+) => {
   const conditions = [eq(auditLogs.organizationId, input.organizationId)]
   if (input.action) {
     conditions.push(eq(auditLogs.action, input.action))

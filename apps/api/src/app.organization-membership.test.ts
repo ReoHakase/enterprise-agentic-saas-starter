@@ -65,7 +65,7 @@ describe("organization deletion and membership transitions", () => {
       id: "audit_org_1",
       organizationId: "org_1",
       actorUserId: "user_1",
-      action: "organization.test",
+      action: "organization.updated",
       targetType: "organization",
       targetId: "org_1",
       metadata: {},
