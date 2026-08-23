@@ -24,7 +24,7 @@ describe("database migrations: upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -76,7 +76,7 @@ describe("database migrations: upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await client.execute({
         sql: "insert into agent_runs(id,organization_id,thread_id,root_run_id,session_id,user_id,context_epoch,client_message_id,status,scope,started_at,expires_at) values(?,?,?,?,?,?,?,?,?,?,?,?)",
         args: [
@@ -123,11 +123,11 @@ describe("database migrations: upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       const legacy = await seedLegacyUpdateActionScope(client, now)
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await assertLegacyUpdateActionCompatibility(client, legacy, now)
     } finally {
       client.close()
@@ -142,8 +142,8 @@ describe("database migrations: upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const objects = await client.execute(
         "select name, type, sql from sqlite_master where name in ('agent_action_assets_scope_insert','agent_action_assets_quota_classify_before','agent_assets_state_machine_update','storage_object_claims_promotion_update','agent_update_attachment_success_integrity') order by name"
@@ -190,8 +190,8 @@ describe("database migrations: upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const columns = await client.execute("pragma table_info(agent_runs)")
       expect(columns.rows.map(({ name }) => name)).toEqual(
@@ -235,7 +235,7 @@ describe("database migrations: upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -297,7 +297,7 @@ describe("database migrations: upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder: migrationTarget })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationTarget })
 
       const [thread, policy, permissionTable, actionTrigger] =
         await Promise.all([
@@ -335,7 +335,7 @@ describe("database migrations: Agent registry", () => {
       through: "0021_slippery_sabra",
     })
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -641,7 +641,7 @@ describe("database migrations: Agent registry", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const columns = await client.execute("pragma table_info(agent_threads)")
       expect(columns.rows.map(({ name }) => name)).toEqual([
@@ -698,7 +698,7 @@ describe("database migrations: retained control plane", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -725,7 +725,7 @@ describe("database migrations: retained control plane", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const contexts = await client.execute(
         "select session_id as sessionId,user_id as userId,context_epoch as contextEpoch,updated_at as updatedAt from agent_session_contexts"
@@ -751,7 +751,7 @@ describe("database migrations: retained control plane", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -838,8 +838,8 @@ describe("database migrations: retained control plane", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const [objects, files, claims, owners, usage, columns, foreignKeys] =
         await Promise.all([
@@ -945,7 +945,7 @@ describe("database migrations: retained control plane", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -982,8 +982,8 @@ describe("database migrations: retained control plane", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const [issue, tables, triggers, foreignKeys] = await Promise.all([
         client.execute(

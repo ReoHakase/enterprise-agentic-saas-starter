@@ -49,7 +49,7 @@ const createDatabase = async (): Promise<Db> => {
       completed_at integer
     );
   `)
-  return drizzle(client)
+  return drizzle({ client })
 }
 
 const bucket = (): ProfileImageCleanupBucket => ({

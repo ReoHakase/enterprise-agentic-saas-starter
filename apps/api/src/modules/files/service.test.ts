@@ -178,7 +178,7 @@ const createDatabase = async (): Promise<Db> => {
     );
     pragma foreign_keys = on;
   `)
-  const database: Db = drizzle(client)
+  const database: Db = drizzle({ client })
   await database.run(
     `insert into user (id, name, email, created_at, updated_at)
      values ('user-1', 'User One', 'user1@example.test', ${now.getTime()}, ${now.getTime()}),

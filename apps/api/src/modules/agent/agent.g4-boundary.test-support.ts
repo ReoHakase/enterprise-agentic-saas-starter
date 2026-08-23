@@ -5,7 +5,7 @@ import { join, resolve } from "node:path"
 import type { createAgentInternalApp } from "./internal-api"
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../../..")
-export const migrationsFolder = join(repositoryRoot, "packages/db/drizzle")
+export const migrationsFolder = join(repositoryRoot, "packages/db/drizzle-v3")
 const inheritedEnvironment = Object.fromEntries(
   ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "LC_ALL"].flatMap(
     (name) => {

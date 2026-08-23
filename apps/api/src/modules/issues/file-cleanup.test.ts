@@ -104,7 +104,7 @@ const createDatabase = async (): Promise<Db> => {
       created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
     );
   `)
-  return drizzle(client)
+  return drizzle({ client })
 }
 
 describe("issue file cleanup", () => {

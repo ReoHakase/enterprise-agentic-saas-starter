@@ -132,7 +132,7 @@ export const createLocalTopologyEnvironment = (
     CORS_ORIGIN: web.origin,
     DEV_SESSION_ID: sessionId,
     DEV_WORKTREE_ID: worktreeId,
-    GITHUB_OAUTH_CALLBACK_URL: `${api.origin}/auth/oauth2/callback/github`,
+    GITHUB_OAUTH_CALLBACK_URL: `${api.origin}/auth/callback/github`,
     GITHUB_OAUTH_EMULATOR_URL: `${githubEmulator.origin}/emulate/github`,
     MASTRA_STORAGE_AUTH_TOKEN: LOCAL_AGENT_STORAGE_TOKEN,
     MASTRA_STORAGE_URL: agentStorage.origin,

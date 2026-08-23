@@ -1,7 +1,7 @@
 import type { Client, InStatement, Transaction } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
 
-import * as schema from "../schema/index"
+import { relations } from "../schema/relations"
 import type { Db } from "./index"
 
 const toTransactionClient = (
@@ -44,7 +44,10 @@ export const withWriteTransaction = async <T>(
       database.$client,
       nativeTransaction
     )
-    const transactionDatabase = drizzle(transactionClient, { schema })
+    const transactionDatabase = drizzle({
+      client: transactionClient,
+      relations,
+    })
     const result = await operation(transactionDatabase)
     await nativeTransaction.commit()
     return result

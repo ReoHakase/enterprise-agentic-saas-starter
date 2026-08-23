@@ -13,7 +13,10 @@ describe("readiness endpoint", () => {
   const setup = () => {
     const client = createClient({ url: ":memory:" })
     closeClient = () => client.close()
-    return { app: createApp(drizzle(client, { schema })), client }
+    return {
+      app: createApp(drizzle({ client, relations: schema.relations })),
+      client,
+    }
   }
 
   it("reports ready only after a database round trip", async () => {

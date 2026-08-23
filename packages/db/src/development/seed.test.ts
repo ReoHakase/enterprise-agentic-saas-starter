@@ -16,7 +16,7 @@ import {
   selectDevelopmentFileFixturesForReconciliation,
 } from "./seed-fixtures"
 
-const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../../drizzle-v3", import.meta.url).pathname
 
 const readDevelopmentSeedSnapshot = async (connection: { url: string }) => {
   const client = createClient(connection)
@@ -28,7 +28,7 @@ const readDevelopmentSeedSnapshot = async (connection: { url: string }) => {
       organizations:
         "select id,name,slug,logo,created_at,metadata from organization order by id",
       accounts:
-        "select id,account_id,provider_id,user_id,created_at,updated_at from account order by id",
+        "select id,issuer,account_id,provider_id,user_id,created_at,updated_at from account order by id",
       members:
         "select id,organization_id,user_id,role,created_at from member order by id",
       invitations:
@@ -115,7 +115,7 @@ describe("file storage schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await insertTenantFixture(client)
       await insertPendingFile(client, {
         id: "file-a",
@@ -160,7 +160,7 @@ describe("file storage schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await insertTenantFixture(client)
 
       await expect(
@@ -318,7 +318,7 @@ describe("development file fixtures", () => {
     const client = createClient(connection)
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       client.close()
       await seedDevelopmentDatabase(connection)
 
@@ -362,7 +362,7 @@ describe("development file fixtures", () => {
       }))
       const seedConnection = async (connection: { url: string }) => {
         const client = createClient(connection)
-        await migrate(drizzle(client), { migrationsFolder })
+        await migrate(drizzle({ client }), { migrationsFolder })
         client.close()
         await seedDevelopmentDatabase(connection)
       }
@@ -408,7 +408,7 @@ describe("development file fixtures", () => {
     const client = createClient(connection)
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await client.execute({
         sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
         args: [

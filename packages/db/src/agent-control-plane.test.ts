@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
-const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../drizzle-v3", import.meta.url).pathname
 
 const insertControlPlaneFixture = async (
   client: ReturnType<typeof createClient>
@@ -104,7 +104,7 @@ describe("Agent control-plane schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertControlPlaneFixture(client)
       await insertRootRun(client, {
         id: "agent-run-a",
@@ -161,7 +161,7 @@ describe("Agent control-plane schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertControlPlaneFixture(client)
       await insertRootRun(client, {
         id: "agent-run-a",
@@ -299,7 +299,7 @@ describe("Agent control-plane schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertControlPlaneFixture(client)
       await insertRootRun(client, {
         id: "agent-run-a",

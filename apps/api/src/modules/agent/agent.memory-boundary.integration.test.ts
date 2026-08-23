@@ -35,7 +35,7 @@ vi.hoisted(() => {
 })
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../../..")
-const migrationsFolder = join(repositoryRoot, "packages/db/drizzle")
+const migrationsFolder = join(repositoryRoot, "packages/db/drizzle-v3")
 const inheritedEnvironment = Object.fromEntries(
   ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "LC_ALL"].flatMap(
     (name) => {
@@ -229,7 +229,7 @@ describe("Agent public API to private Memory boundary", () => {
     const agentDatabasePath = join(directory, "agent.db")
     vi.stubEnv("TURSO_DATABASE_URL", `file:${applicationDatabasePath}`)
     const client = createClient({ url: `file:${applicationDatabasePath}` })
-    const db = drizzle(client, { schema })
+    const db = drizzle({ client, relations: schema.relations })
     let internalServer: Server | undefined
     let agentHost: ChildProcess | undefined
 

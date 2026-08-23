@@ -104,7 +104,8 @@ export const createMcpOAuthProvider = ({
     loginPage: new URL("/oauth/organization", webAppOrigin).toString(),
     consentPage: new URL("/oauth/consent", webAppOrigin).toString(),
     scopes: [...MCP_OAUTH_SCOPES],
-    validAudiences: [resource],
+    resources: [resource],
+    enforcePerClientResources: false,
     grantTypes: ["authorization_code", "refresh_token"],
     allowDynamicClientRegistration: true,
     allowUnauthenticatedClientRegistration: true,
@@ -152,15 +153,11 @@ export const createMcpOAuthProvider = ({
         return organizationId ?? undefined
       },
     },
-    async customAccessTokenClaims({
-      referenceId,
-      resource: audience,
-      scopes,
-      user,
-    }) {
+    async customAccessTokenClaims({ referenceId, resources, scopes, user }) {
       requireMcpPermissionScope(scopes)
       if (
-        audience !== resource ||
+        resources?.length !== 1 ||
+        resources[0] !== resource ||
         !referenceId ||
         !user ||
         !(await hasMembership({

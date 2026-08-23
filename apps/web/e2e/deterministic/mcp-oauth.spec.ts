@@ -199,6 +199,7 @@ const registerClient = async (input: {
     `${input.apiOrigin}/auth/oauth2/register`,
     {
       data: {
+        application_type: "native",
         client_name: input.clientName,
         grant_types: ["authorization_code", "refresh_token"],
         redirect_uris: [input.redirectUri],
@@ -420,6 +421,12 @@ const authorizeClient = async (input: {
   return code
 }
 
+const createNativeRedirectUri = (webOrigin: string) => {
+  const redirectUri = new URL("/oauth/client-callback", webOrigin)
+  redirectUri.hostname = "127.0.0.1"
+  return redirectUri.toString()
+}
+
 const exchangeCode = async (input: {
   apiOrigin: string
   clientId: string
@@ -440,7 +447,6 @@ const exchangeCode = async (input: {
         redirect_uri: input.redirectUri,
         resource: input.resource,
       },
-      headers: { origin: new URL(input.redirectUri).origin },
     }
   )
   if (!response.ok()) {
@@ -527,7 +533,7 @@ test("OAuth MCPで公開contextとIssue attachment lifecycleを認可できる",
     slug: organizationSlug,
     webOrigin,
   })
-  const redirectUri = new URL("/oauth/client-callback", webOrigin).toString()
+  const redirectUri = createNativeRedirectUri(webOrigin)
   const resource = new URL("/mcp", apiPublicOrigin).toString()
   const scope = [
     "offline_access",
@@ -831,7 +837,7 @@ test("OAuth MCP consentは選択したscopeの部分集合だけを発行する"
     slug: organizationSlug,
     webOrigin,
   })
-  const redirectUri = new URL("/oauth/client-callback", webOrigin).toString()
+  const redirectUri = createNativeRedirectUri(webOrigin)
   const resource = new URL("/mcp", apiPublicOrigin).toString()
   const scope = "offline_access issues:read issues:create"
   const clientId = await registerClient({
@@ -854,6 +860,8 @@ test("OAuth MCP consentは選択したscopeの部分集合だけを発行する"
     scope,
     state: crypto.randomUUID(),
   })
+  const organizationAdminCookie = await cookieHeader(context)
+  await context.clearCookies()
   const accessToken = await exchangeCode({
     apiOrigin,
     clientId,
@@ -863,7 +871,6 @@ test("OAuth MCP consentは選択したscopeの部分集合だけを発行する"
     resource,
     verifier: pkce.verifier,
   })
-  const organizationAdminCookie = await cookieHeader(context)
   const client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
   const tools = await client.listTools()
   const toolNames = tools.tools.map(({ name }) => name)

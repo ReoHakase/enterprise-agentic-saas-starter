@@ -41,7 +41,7 @@ describe("database migrations: legacy issue upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const issues = await client.execute(
         "select id, number, status, creator_id as creatorId, labels from issues order by number"
@@ -78,7 +78,7 @@ describe("database migrations: legacy issue upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -151,7 +151,7 @@ describe("database migrations: legacy issue upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const comments = await client.execute(
         "select issue_id as issueId, body from issue_comments where id = 'legacy-comment'"
@@ -194,7 +194,7 @@ describe("database migrations: legacy issue upgrades", () => {
     })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder: migrationPrefix })
+      await migrate(drizzle({ client }), { migrationsFolder: migrationPrefix })
       const now = Date.now()
       await client.batch([
         {
@@ -352,8 +352,8 @@ describe("database migrations: legacy issue upgrades", () => {
         },
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const activities = await client.execute(
         `select id,

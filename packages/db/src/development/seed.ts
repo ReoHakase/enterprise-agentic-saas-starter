@@ -28,7 +28,7 @@ const createSeedDatabase = (connection: DatabaseConnectionOptions) => {
 
   return {
     client,
-    db: drizzle(client),
+    db: drizzle({ client }),
   }
 }
 
@@ -71,7 +71,7 @@ const seedRootEntities = async (
   await seed(
     tx,
     { organization: schema.organization, user: schema.user },
-    { seed: DEVELOPMENT_SEED }
+    { seed: DEVELOPMENT_SEED, version: "4" }
   ).refine((f) => ({
     user: {
       count: 18,
@@ -139,9 +139,10 @@ const insertAccounts = async (
   referenceDate: Date
 ) => {
   await tx.insert(schema.account).values(
-    users.map(({ id, email }) => ({
+    users.map(({ id }) => ({
       id: faker.string.uuid(),
-      accountId: email,
+      accountId: id,
+      issuer: "local:credential",
       providerId: "credential",
       userId: id,
       createdAt: referenceDate,

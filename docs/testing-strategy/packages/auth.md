@@ -2,7 +2,7 @@
 title: Authパッケージテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-23
 applies_to:
   - packages/auth/**
 related:
@@ -75,10 +75,17 @@ Better Authの実instanceと実DBを使います。DB adapterをfakeだけで済
 
 Better Authのtest utilityを使う場合は、production factoryと分離したtest-only auth factoryへ追加します。privileged helperをproduction configへ条件付きspreadしません。
 
+Better Auth 1.7.1とDrizzle `1.0.0-rc.4`の統合では、
+`@better-auth/drizzle-adapter/relations-v2`の標準`drizzleAdapter`を実libSQLへ接続します。
+旧`adapter`、Relations v1、旧コンストラクターを模倣した互換実装の挙動はテストしません。
+
 AUTH2が保証するもの:
 
 - server composition
 - schemaとadapterの整合
+- `defineRelationsPart`を統合したRelations v2設定
+- `user`と`session`に認証とOAuth Provider双方の`relations`フィールドが残ること
+- `credential`の`account`行が`local:credential`の`issuer`で作成、取得できること
 - session persistence
 - callbacks
 - plugin behaviour
@@ -95,6 +102,11 @@ API側A4/A5では、Auth packageをAPIへ正しくmountし、API middlewareやCO
 ## AUTH4: Auth OAuth連携統合テスト
 
 AUTH4はEmulateのGitHub serviceとのprovider contractを検査します。実browserによるlogin pageとnavigationはW6またはE1です。
+
+GitHub OAuthの成功シナリオでは、Better Auth 1.7が`account`行を`local:oauth:github`の`issuer`で
+作成、取得し、既存の`account`行へ正しく接続することも確認します。未知プロバイダーの既存データ
+補完や`(issuer, account_id)`の一意制約はDB3、ブラウザーを含むコールバックURLとログイン後の永続化は
+E1が所有します。
 
 ```text
 AUTH4
@@ -121,6 +133,34 @@ E1
 | full login journeyとpersistence | E1                             |
 | 本番相当の最終疎通              | E2                             |
 
+`issuer`制約、既存データ補完、OAuthデータ保持はDB3、Relations v2の`adapter`と`credential`の
+`issuer`はAUTH2、GitHubの`issuer`はAUTH4とE1が所有します。
+
+## Better Auth 1.7更新の必須シナリオ
+
+- Given Better Auth CLIの最終スキーマとRelations v2設定、When AUTH2を実行する、Then adapterが
+  実libSQLへ接続し、認証とOAuth Provider双方の`relations`フィールドを取得できる。
+- Given `credential`で登録する利用者、When `account`行を作成して再取得する、Then
+  `issuer = 'local:credential'`で同じ利用者に結び付く。
+- Given GitHubエミュレーターの利用者、When OAuth認可とコールバックを一巡する、Then
+  `issuer = 'local:oauth:github'`で`account`行を作成し、再ログイン時に重複させない。
+- Given 既存のOAuthクライアント、トークン、同意情報、コールバックURL、When DB3で移行したDBから
+  AUTH2とAUTH4を実行する、Then 既存設定を再登録せず代表的な認証経路が成功する。
+- Given OAuth Provider 1.7で追加されたresource管理ルート、When 未認証または認証済みsessionから
+  作成、一覧、取得、更新、削除、クライアントとの関連付けを要求する、Then `disabledPaths`と
+  exact segment-prefix guardにより全methodを404にし、Auth OpenAPIにも公開しない。
+- Given 1.7のresource関連行を持たない既存または新規OAuthクライアント、When 設定済みの単一MCP
+  resourceで認可を開始する、Then resource policyを通過し、`invalid_target`で拒否されない。
+- Given 有効期限内かつ必要なscopeを持つOAuth access token、When Better Authが`revoked`を設定する、
+  Then MCP access token検証は無効として扱い、credential一覧にも表示しない。
+- Given API Workerのmoduleを評価する、When Auth route、session、MCP metadata、access token検証をまだ
+  呼んでいない、Then `@enterprise-agentic-saas/auth`を読み込まず、Better Auth contextのresource登録を
+  global scopeで開始しない。各surfaceをrequestから呼ぶと同じ標準ES moduleを読み込み、既存の
+  singleton contextが完了するまで下流処理を開始せずに応答する。
+
+ライブラリ内部の全挙動を再テストせず、バージョン更新で変わった`adapter`、`relations`、
+アカウント識別子とリポジトリ固有の配線だけを残します。
+
 ## 実行
 
 ```sh
@@ -134,7 +174,14 @@ AUTH1からAUTH4は外部credentialなしで通常CIへ含めます。AUTH4がGi
 - Auth packageがserver、client、OAuth contractを独立して所有する
 - browser client entrypointへserver dependencyが混入しない
 - Better Authを実libSQLと統合検査する
+- Relations v2の標準`adapter`を使い、認証とOAuth Providerの`relations`フィールドを保持する
+- `credential`とGitHubの`issuer`を代表経路で検査する
 - cookie、CSRF、redirectを実HTTPで検査する
 - OAuth providerをemulatorで決定的に検査する
+- OAuthクライアント、トークン、同意情報、コールバックURLを再登録せず既存データを利用できる
+- OAuth resource管理ルートが認証済みsessionにも公開されない
+- Better Authが`revoked`を設定したOAuth access tokenを検証とcredential一覧の双方から除外する
+- 標準`resources`と単一resourceの互換設定で既存OAuthクライアントを継続利用できる
+- API WorkerがBetter Auth singletonをrequest境界まで遅延importし、context完了後に各処理へ委譲する
 - test utilityがproduction auth configへ混入しない
 - API、Web、E2Eとの責務境界が明確である

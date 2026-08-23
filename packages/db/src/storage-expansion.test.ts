@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { describe, expect, it } from "vitest"
 
-const migrationsFolder = new URL("../drizzle", import.meta.url).pathname
+const migrationsFolder = new URL("../drizzle-v3", import.meta.url).pathname
 
 const insertStorageFixture = async (
   client: ReturnType<typeof createClient>
@@ -161,7 +161,7 @@ describe("Agent storage expansion schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertStorageFixture(client)
       await client.batch([
         storageObjectStatement({ id: "storage-object-a", now }),
@@ -304,7 +304,7 @@ describe("Agent storage expansion schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertStorageFixture(client)
       await client.execute({
         ...storageObjectStatement({ id: "file-storage-object", now }),
@@ -404,7 +404,7 @@ describe("Agent storage expansion schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertStorageFixture(client)
       const assets = [
         { id: "count-1", sizeBytes: 1 },
@@ -513,7 +513,7 @@ describe("Agent storage expansion schema", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = await insertStorageFixture(client)
       await client.execute(
         storageObjectStatement({ id: "cleanup-object", now })

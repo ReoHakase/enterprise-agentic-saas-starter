@@ -8,7 +8,7 @@ import { migrationsFolder } from "./helpers"
 describe("database migrations: fresh", () => {
   it("migrates a fresh database to the current schema", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client)
+    const db = drizzle({ client })
 
     try {
       await migrate(db, { migrationsFolder })
@@ -67,7 +67,7 @@ describe("database migrations: fresh", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       await client.batch([
         {
           sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
@@ -201,7 +201,7 @@ describe("database migrations: fresh", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = Date.now()
       await client.batch([
         {
@@ -367,7 +367,7 @@ describe("database migrations: fresh", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const tables = await client.execute(
         "select name from sqlite_master where type = 'table'"
       )

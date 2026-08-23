@@ -43,7 +43,7 @@ vi.hoisted(() => {
   vi.stubEnv("GITHUB_OAUTH_EMULATOR_CLIENT_SECRET", "")
 })
 
-type TestDatabase = ReturnType<typeof drizzle<typeof schema>>
+type TestDatabase = ReturnType<typeof drizzle<typeof schema.relations>>
 
 const seedIdentity = async (db: TestDatabase, now: Date) => {
   await db.insert(schema.user).values({
@@ -84,7 +84,7 @@ describe("Agent Web search prompt-injection boundary", () => {
     const client = createClient({
       url: `file:${join(directory, "application.db")}`,
     })
-    const db = drizzle(client, { schema })
+    const db = drizzle({ client, relations: schema.relations })
     let internalServer:
       | Awaited<ReturnType<typeof startInternalApiServer>>["server"]
       | undefined

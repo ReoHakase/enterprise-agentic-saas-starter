@@ -8,6 +8,7 @@ import {
   developmentFileFixtures,
   getDevelopmentFileFixtureUrl,
 } from "@enterprise-agentic-saas/db/development-seed"
+import * as schema from "@enterprise-agentic-saas/db/schema"
 import { createClient } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
@@ -28,9 +29,12 @@ import {
 
 const fixture = developmentFileFixtures[0]
 if (!fixture) throw new Error("Development file fixture is required")
-const boundaryDatabase: Db = drizzle(createClient({ url: ":memory:" }))
+const boundaryDatabase: Db = drizzle({
+  client: createClient({ url: ":memory:" }),
+  relations: schema.relations,
+})
 const migrationsFolder = new URL(
-  "../../../../packages/db/drizzle",
+  "../../../../packages/db/drizzle-v3",
   import.meta.url
 ).pathname
 const token = "x".repeat(64)
@@ -149,7 +153,7 @@ const createFixtureDatabase = async (
 ) => {
   const directory = await mkdtemp(join(tmpdir(), "file-seed-handler-"))
   const client = createClient({ url: `file:${join(directory, "seed.db")}` })
-  await migrate(drizzle(client), { migrationsFolder })
+  await migrate(drizzle({ client }), { migrationsFolder })
   const now = Date.now()
   await client.batch([
     {
@@ -215,7 +219,7 @@ const createFixtureDatabase = async (
       args: [selectedFixture.organizationId, selectedFixture.sizeBytes, now],
     },
   ])
-  const database: Db = drizzle(client)
+  const database: Db = drizzle({ client })
   return {
     client,
     database,

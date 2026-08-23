@@ -139,7 +139,7 @@ describe("database migrations: invariants", () => {
         },
       ])
 
-      const db = drizzle(client)
+      const db = drizzle({ client })
       await migrate(db, { migrationsFolder })
 
       const repairedMemberships = await client.execute(
@@ -267,7 +267,7 @@ describe("database migrations: invariants", () => {
         })),
       ])
 
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
 
       const invitations = await client.execute(
         "select id, status from invitation order by id"
@@ -289,7 +289,7 @@ describe("database migrations: invariants", () => {
 describe("database migrations: tenant and concurrency invariants", () => {
   it("rejects a comment whose issue belongs to another tenant", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client)
+    const db = drizzle({ client })
 
     try {
       await migrate(db, { migrationsFolder })
@@ -326,7 +326,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
 
   it("rejects an activity event whose issue belongs to another tenant", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client)
+    const db = drizzle({ client })
 
     try {
       await migrate(db, { migrationsFolder })
@@ -372,7 +372,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
     const client = createClient({ url: "file::memory:" })
 
     try {
-      await migrate(drizzle(client), { migrationsFolder })
+      await migrate(drizzle({ client }), { migrationsFolder })
       const now = Date.now()
       await client.batch([
         {
@@ -441,7 +441,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
 
   it("allows expired pending history alongside a new active invitation", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client)
+    const db = drizzle({ client })
 
     try {
       await migrate(db, { migrationsFolder })
@@ -521,7 +521,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
 
   it("drops the pending invitation index without changing existing rows", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client)
+    const db = drizzle({ client })
     const previousMigrations = await createMigrationPrefix({
       through: "0027_nostalgic_sugar_man",
     })
@@ -592,7 +592,7 @@ describe("database migrations: tenant and concurrency invariants", () => {
     const contenderB = createClient(connection)
 
     try {
-      await migrate(drizzle(bootstrapClient), { migrationsFolder })
+      await migrate(drizzle({ client: bootstrapClient }), { migrationsFolder })
       const now = Date.now()
       await bootstrapClient.batch([
         {

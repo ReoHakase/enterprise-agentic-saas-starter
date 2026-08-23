@@ -356,7 +356,7 @@ export default defineConfig({
       "**/vitest.setup.*",
       "**/vitest.browser.setup.*",
       "**/tsconfig.json",
-      "**/drizzle/**",
+      "**/drizzle-v3/**",
       "**/src/schema/**",
       "**/drizzle.config.ts",
     ],

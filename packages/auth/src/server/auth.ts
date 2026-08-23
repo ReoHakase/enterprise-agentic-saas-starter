@@ -1,3 +1,4 @@
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider"
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
 import { passkey } from "@better-auth/passkey"
@@ -14,7 +15,6 @@ import {
   createRuntimeEmailSender,
 } from "@enterprise-agentic-saas/email/runtime"
 import { APIError, betterAuth, type BetterAuthPlugin } from "better-auth"
-import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { createAuthMiddleware } from "better-auth/api"
 import {
   genericOAuth,
@@ -90,6 +90,14 @@ const githubSocialProviders =
       }
     : {}
 
+const blockedOAuthResourceManagementPaths = [
+  "/admin/oauth2/resources",
+  "/admin/oauth2/resources/:identifier",
+  "/admin/oauth2/resources/:identifier/clients/:client_id",
+] as const
+const oauthResourceManagementBasePath = blockedOAuthResourceManagementPaths[0]
+const authBasePath = "/auth"
+
 // apps/api is the only organization management surface. Better Auth retains
 // the native single-recipient invitation endpoint and the recipient endpoints.
 export const blockedOrganizationPluginEndpoints = [
@@ -98,6 +106,7 @@ export const blockedOrganizationPluginEndpoints = [
   { method: "POST", path: "/organization/update" },
   { method: "POST", path: "/organization/delete" },
   { method: "GET", path: "/organization/get-full-organization" },
+  { method: "GET", path: "/organization/get-organization" },
   { method: "POST", path: "/organization/set-active" },
   { method: "GET", path: "/organization/list" },
   { method: "POST", path: "/organization/cancel-invitation" },
@@ -246,7 +255,7 @@ export const auth = betterAuth({
   appName: env.APP_NAME,
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
-  basePath: "/auth",
+  basePath: authBasePath,
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
   databaseHooks: createSessionOrganizationDatabaseHooks(db),
   logger: authLogger,
@@ -268,7 +277,10 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: env.TRUSTED_ORIGINS,
-  disabledPaths: blockedOrganizationPluginEndpoints.map(({ path }) => path),
+  disabledPaths: [
+    ...blockedOrganizationPluginEndpoints.map(({ path }) => path),
+    ...blockedOAuthResourceManagementPaths,
+  ],
   rateLimit: {
     enabled: process.env.NODE_ENV === "production",
     storage: "database",
@@ -285,6 +297,16 @@ export const auth = betterAuth({
       const requestPath = context.request
         ? new URL(context.request.url).pathname
         : undefined
+      const oauthResourceManagementPath = `${authBasePath}${oauthResourceManagementBasePath}`
+      if (
+        requestPath === oauthResourceManagementPath ||
+        requestPath?.startsWith(`${oauthResourceManagementPath}/`)
+      ) {
+        throw APIError.from("NOT_FOUND", {
+          code: "NOT_FOUND",
+          message: "Not Found",
+        })
+      }
       if (
         requestPath !== "/auth/oauth2/authorize" &&
         requestPath !== "/auth/oauth2/token"
@@ -293,7 +315,8 @@ export const auth = betterAuth({
       }
 
       const requestedResource =
-        requestPath === "/auth/oauth2/authorize"
+        requestPath === "/auth/oauth2/authorize" &&
+        context.request?.method === "GET"
           ? context.query?.resource
           : context.body?.resource
       const resources = Array.isArray(requestedResource)
@@ -370,6 +393,7 @@ export const verifyMcpOAuthAccessToken = async (
       and(
         eq(schema.oauthAccessToken.token, await hashMcpOAuthToken(token)),
         gt(schema.oauthAccessToken.expiresAt, now),
+        isNull(schema.oauthAccessToken.revoked),
         or(
           isNull(schema.oauthClient.disabled),
           eq(schema.oauthClient.disabled, false)

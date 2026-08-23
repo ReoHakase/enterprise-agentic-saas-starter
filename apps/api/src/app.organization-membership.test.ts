@@ -236,6 +236,7 @@ describe("organization deletion and membership transitions", () => {
       {
         id: "github-account-1",
         accountId: "private-github-account-1",
+        issuer: "local:oauth:github",
         providerId: "github",
         userId: "user_4",
         accessToken: "private-github-token-1",
@@ -245,6 +246,7 @@ describe("organization deletion and membership transitions", () => {
       {
         id: "github-account-2",
         accountId: "private-github-account-2",
+        issuer: "local:oauth:github",
         providerId: "github",
         userId: "user_4",
         accessToken: "private-github-token-2",
@@ -254,6 +256,7 @@ describe("organization deletion and membership transitions", () => {
       {
         id: "other-tenant-github-account",
         accountId: "private-other-tenant-account",
+        issuer: "local:oauth:github",
         providerId: "github",
         userId: "user_2",
         accessToken: "private-other-tenant-token",
@@ -262,7 +265,8 @@ describe("organization deletion and membership transitions", () => {
       },
       {
         id: "same-tenant-non-github-account",
-        accountId: "private-credential-account",
+        accountId: "user_3",
+        issuer: "local:credential",
         providerId: "credential",
         userId: "user_3",
         password: "private-password-hash",

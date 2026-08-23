@@ -137,7 +137,7 @@ const createAuthProfile = () => {
   const githubOrigin = "http://127.0.0.1:4101"
   const cookieDomain = "oauth-e2e.enterprise-agentic-saas.localhost"
   const databasePath = createOAuthDatabasePath(process.pid)
-  const callbackUrl = `${apiOrigin}/auth/oauth2/callback/github`
+  const callbackUrl = `${apiOrigin}/auth/callback/github`
   const stackEnvironment = {
     ...createInheritedPlaywrightEnvironment(),
     NODE_ENV: "development",

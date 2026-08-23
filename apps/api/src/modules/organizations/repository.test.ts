@@ -8,14 +8,14 @@ import { listInvitationsByOrganization } from "./invitation-repository"
 import { findOrganizationForUser } from "./repository"
 
 const migrationsFolder = new URL(
-  "../../../../../packages/db/drizzle",
+  "../../../../../packages/db/drizzle-v3",
   import.meta.url
 ).pathname
 
 describe("organization repository", () => {
   it("counts active invitations and omits invalid legacy rows from listings", async () => {
     const client = createClient({ url: "file::memory:" })
-    const db = drizzle(client, { schema })
+    const db = drizzle({ client, relations: schema.relations })
 
     try {
       await migrate(db, { migrationsFolder })

@@ -30,7 +30,7 @@ const createDatabase = async (): Promise<Db> => {
     );
   `)
 
-  return drizzle(client)
+  return drizzle({ client })
 }
 
 const insertJob = async (database: Db) => {
