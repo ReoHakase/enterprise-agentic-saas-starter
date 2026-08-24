@@ -1,22 +1,29 @@
+import type { AuditAction } from "@enterprise-agentic-saas/db/schema"
 import { Elysia } from "elysia"
 
 import { tenantErrorResponses } from "../../models/api"
 import type { AccessControlFactory } from "../authorization/public"
 import {
   auditEventListModel,
+  type AuditEvent,
   listAuditEventsQueryModel,
   organizationIdParamsModel,
 } from "./model"
-import type { AuditService } from "./service"
+
+type ListAuditEvents = (input: {
+  action?: AuditAction
+  limit: number
+  organizationId: string
+}) => Promise<AuditEvent[]>
 
 export const createAuditRoutes = (
-  service: AuditService,
+  listEvents: ListAuditEvents,
   createAccessControl: AccessControlFactory
 ) =>
   new Elysia({ name: "audit" }).use(createAccessControl()).get(
     "/organizations/:organizationId/audit-logs",
     ({ organizationAccess, query }) =>
-      service.listEvents({
+      listEvents({
         organizationId: organizationAccess.id,
         action: query.action,
         limit: query.limit ?? 50,
