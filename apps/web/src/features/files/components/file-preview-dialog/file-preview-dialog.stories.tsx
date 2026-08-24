@@ -1,39 +1,13 @@
 import { http, HttpResponse } from "msw"
-import { useCallback, useRef, useState } from "react"
 import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
-import { fictionalFiles, fictionalImageFile } from "../../test-support/fixtures"
-import { FilePreviewDialog } from "./file-preview-dialog"
-
-const PreviewExample = () => {
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(
-    fictionalImageFile.id
-  )
-  const closePreview = useCallback(() => setSelectedFileId(null), [])
-
-  return (
-    <>
-      <button ref={triggerRef} type="button">
-        Reopen file preview
-      </button>
-      <FilePreviewDialog
-        organizationId="org_01K1ACMECLOUD0000000000"
-        files={fictionalFiles}
-        selectedFileId={selectedFileId}
-        finalFocusRef={triggerRef}
-        onSelectFile={setSelectedFileId}
-        onClose={closePreview}
-      />
-    </>
-  )
-}
+import { FilePreviewDialogStoryFixture } from "./test-support/file-preview-dialog-story-fixture"
 
 const meta = preview.meta({
   title: "Web/Files/File Preview Dialog",
-  component: PreviewExample,
+  component: FilePreviewDialogStoryFixture,
   tags: ["autodocs"],
 })
 
@@ -52,10 +26,10 @@ export const ImageAndText = meta.story({
       )
     )
   },
-  play: async ({ canvas, canvasElement, step }) => {
+  play: async ({ canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Move between files with the keyboard", async () => {
+    await step("キーボードでファイル間を移動する", async () => {
       await expect(
         body.getByRole("dialog", { name: "tenant-architecture.png" })
       ).toBeInTheDocument()
@@ -64,8 +38,15 @@ export const ImageAndText = meta.story({
         body.getByRole("dialog", { name: "incident-runbook.txt" })
       ).toBeInTheDocument()
     })
+  },
+})
 
-    await step("Close and restore focus", async () => {
+export const ViewportGeometry = meta.story({})
+
+export const CloseFocusReturn = meta.story({
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await step("閉じてフォーカスを復元する", async () => {
       await userEvent.keyboard("{Escape}")
       await waitFor(() =>
         expect(

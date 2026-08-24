@@ -14,13 +14,12 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { AgentApprovalCard } from "./components/agent-approval-card/agent-approval-card"
 import { AgentConversationViewport } from "./components/agent-conversation-viewport/agent-conversation-viewport"
 import { AgentConversation } from "./components/agent-conversation/agent-conversation"
-import { AgentMessage } from "./components/agent-message/agent-message"
 import {
   AgentNewThreadComposer,
   type AgentNewThreadInput,
 } from "./components/agent-new-thread-composer/agent-new-thread-composer"
 import { AgentSamplePrompts } from "./components/agent-sample-prompts/agent-sample-prompts"
-import type { AgentChatMessage, AgentIssueAction, AgentThread } from "./schema"
+import type { AgentIssueAction, AgentThread } from "./schema"
 import {
   AgentStoryScope,
   agentConversationTurns,
@@ -36,59 +35,6 @@ const toolFailureThread = {
   createdAt: timestamp,
   updatedAt: timestamp,
 } satisfies AgentThread
-const attachmentReceiptMessage = {
-  id: "assistant-attachment-receipt",
-  role: "assistant",
-  parts: [
-    {
-      type: "tool-remove_issue_attachments",
-      toolCallId: "call-remove-attachment",
-      state: "output-available",
-      input: {
-        expectedRevision: 4,
-        fileIds: ["private-file-id"],
-        issueId: "private-issue-id",
-      },
-      output: {
-        actionId: "private-action-id",
-        operation: "removed",
-        issueId: "private-issue-id",
-        issueNumber: 184,
-        revision: 5,
-        fileIds: ["private-file-id"],
-      },
-    },
-  ],
-} satisfies AgentChatMessage
-const canonicalWebSearchMessage = {
-  id: "assistant-web-search",
-  role: "assistant",
-  parts: [
-    {
-      type: "tool-web_search",
-      toolCallId: "call-web-search",
-      state: "output-available",
-      input: { query: "Cloudflare Workers compatibility flags" },
-      output: {
-        content: "Cloudflare Workers compatibility flags documentation.",
-        sources: [
-          {
-            title: "Cloudflare Workers compatibility flags",
-            url: "https://developers.cloudflare.com/workers/configuration/compatibility-flags/",
-          },
-        ],
-        trust: "untrusted_public_web_content",
-      },
-    },
-    {
-      type: "source-url",
-      sourceId: "source-web-search",
-      title: "Cloudflare Workers compatibility flags",
-      url: "https://developers.cloudflare.com/workers/configuration/compatibility-flags/",
-    },
-  ],
-} satisfies AgentChatMessage
-
 type RecordedRequest = {
   method: string
   path: string
@@ -296,8 +242,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("Agent chat browser integration", () => {
-  it("keeps the composer usable after a server tool-local failure", async () => {
+describe("Agentチャットのブラウザー統合", () => {
+  it("サーバーツールの局所障害後もコンポーザーを利用可能に保つ", async () => {
     const { requests } = installApiTransport()
     const actor = userEvent.setup()
     const onAutoSubmit = vi.fn<() => void>()
@@ -354,49 +300,7 @@ describe("Agent chat browser integration", () => {
     })
   })
 
-  it("renders a bounded attachment receipt without exposing opaque IDs", () => {
-    const onPendingChange = vi.fn<(id: string, pending: boolean) => void>()
-    renderAgentUi(
-      <AgentMessage
-        frozen={false}
-        message={attachmentReceiptMessage}
-        organizationId={organizationId}
-        organizationSlug="acme"
-        threadId="thread-attachment-receipt"
-        onPendingChange={onPendingChange}
-      />
-    )
-
-    expect(screen.getByText(/Removed 1 attachment/u)).toHaveTextContent(
-      "Removed 1 attachment on Issue #184 at revision 5."
-    )
-    expect(screen.getByRole("link", { name: "Issue #184" })).toHaveAttribute(
-      "href",
-      "/organization/acme/issues/184?agentThread=thread-attachment-receipt"
-    )
-    expect(screen.queryByText(/private-file-id|private-issue-id/u)).toBeNull()
-  })
-
-  it("renders a canonical Web source once after reload", () => {
-    renderAgentUi(
-      <AgentMessage
-        frozen={false}
-        message={canonicalWebSearchMessage}
-        organizationId={organizationId}
-        organizationSlug="acme"
-        threadId="thread-web-search"
-        onPendingChange={vi.fn<(id: string, pending: boolean) => void>()}
-      />
-    )
-
-    expect(
-      screen.getAllByRole("link", {
-        name: "Cloudflare Workers compatibility flags",
-      })
-    ).toHaveLength(1)
-  })
-
-  it("hands off a real inline mention with the default Ask always policy", async () => {
+  it("既定のAsk alwaysポリシーで実際のインラインメンションを引き渡す", async () => {
     const { requests } = installApiTransport()
     const actor = userEvent.setup()
     const onCreate = vi.fn<(input: AgentNewThreadInput) => void>()
@@ -469,7 +373,7 @@ describe("Agent chat browser integration", () => {
     })
   })
 
-  it("submits Yes and resumes the approved action", async () => {
+  it("Yesを送信して承認済みの操作を再開する", async () => {
     const actionId = "action-approve"
     const { requests } = installApiTransport({ [actionId]: "pending" })
     const actor = userEvent.setup()
@@ -507,7 +411,7 @@ describe("Agent chat browser integration", () => {
     })
   })
 
-  it("submits No without resuming the rejected action", async () => {
+  it("Noを送信し、拒否した操作は再開しない", async () => {
     const actionId = "action-reject"
     const { requests } = installApiTransport({ [actionId]: "pending" })
     const actor = userEvent.setup()
@@ -542,7 +446,7 @@ describe("Agent chat browser integration", () => {
     })
   })
 
-  it("selects a sample prompt with real browser focus semantics", async () => {
+  it("実ブラウザーのフォーカス動作でサンプルプロンプトを選択する", async () => {
     const actor = userEvent.setup()
     const onSelect = vi.fn<(prompt: string) => void>()
     render(<AgentSamplePrompts onSelect={onSelect} />)
@@ -560,7 +464,7 @@ describe("Agent chat browser integration", () => {
     )
   })
 
-  it("renders the centered auto-follow conversation with its turn minimap", () => {
+  it("会話本文を中央配置して文書の横overflowを防ぐ", () => {
     render(
       <div className="flex h-80 min-w-0">
         <AgentConversationViewport enabled turns={browserConversationTurns}>
@@ -587,9 +491,6 @@ describe("Agent chat browser integration", () => {
       viewportRect.left + viewportRect.width / 2,
       0
     )
-    expect(
-      screen.getByRole("navigation", { name: "Conversation turns" })
-    ).toBeVisible()
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth
     )

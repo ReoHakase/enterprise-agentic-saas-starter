@@ -7,6 +7,7 @@ applies_to:
   - apps/web/**/*.stories.tsx
   - apps/web/**/*.browser.test.tsx
   - apps/web/e2e/**
+  - packages/ui/**/*.browser.test.tsx
   - packages/ui/**/*.stories.tsx
 ---
 

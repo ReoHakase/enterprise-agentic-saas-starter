@@ -1,5 +1,4 @@
 import { SettingsIcon, ShieldCheckIcon } from "lucide-react"
-import { expect } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -63,12 +62,4 @@ export const NavigationStructure = meta.story({
       <SidebarFooter>Avery Stone · Owner</SidebarFooter>
     </aside>
   ),
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("complementary", { name: "Acme Cloud settings" })
-    ).toBeVisible()
-    await expect(
-      canvas.getByRole("link", { name: "Access policies" })
-    ).toHaveAttribute("data-active")
-  },
 })

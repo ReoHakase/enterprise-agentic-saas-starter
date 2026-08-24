@@ -6,8 +6,8 @@ import {
   parseUserPasskeys,
 } from "./schema"
 
-describe("account display schemas", () => {
-  it("Given valid Better Auth sessions, when parsed, then maps the Web image field", () => {
+describe("アカウント表示スキーマ", () => {
+  it("有効なBetter AuthセッションのWeb画像フィールドを写像する", () => {
     expect(
       parseDeviceAccounts([
         {
@@ -34,30 +34,38 @@ describe("account display schemas", () => {
   })
 
   it.each([
-    ["an invalid email", "not-an-email", "user-1"],
-    ["a missing user ID", "reo@example.test", undefined],
-  ])(
-    "Given %s, when device accounts are parsed, then rejects the response",
-    (_case, email, id) => {
-      expect(() =>
-        parseDeviceAccounts([
-          {
-            session: { token: "session-1" },
-            user: { id, name: "Reo", email, image: null },
-          },
-        ])
-      ).toThrow("Invalid")
-    }
-  )
+    {
+      caseLabel: "無効なメールアドレス",
+      email: "not-an-email",
+      id: "user-1",
+    },
+    {
+      caseLabel: "利用者IDの欠落",
+      email: "reo@example.test",
+      id: undefined,
+    },
+  ])("デバイスアカウントに$caseLabelがある場合は拒否する", ({ email, id }) => {
+    expect(() =>
+      parseDeviceAccounts([
+        {
+          session: { token: "session-1" },
+          user: { id, name: "Reo", email, image: null },
+        },
+      ])
+    ).toThrow("Invalid")
+  })
 
-  it("Given missing security method IDs, when parsed, then rejects both provider shapes", () => {
+  it("連携アカウントIDがない場合はレスポンスを拒否する", () => {
     expect(() => parseLinkedAccounts([{ providerId: "github" }])).toThrow(
       "Invalid"
     )
+  })
+
+  it("パスキーIDがない場合はレスポンスを拒否する", () => {
     expect(() => parseUserPasskeys([{ name: "MacBook" }])).toThrow("Invalid")
   })
 
-  it("Given an unknown response shape, when parsed, then rejects the payload", () => {
+  it("未知のレスポンス形式を拒否する", () => {
     expect(() => parseDeviceAccounts({ accounts: [] })).toThrow("Invalid")
   })
 })

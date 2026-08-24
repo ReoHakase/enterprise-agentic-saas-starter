@@ -85,23 +85,18 @@ export const ComponentSet = meta.story({
       />
     </div>
   ),
-  play: async ({ canvas, canvasElement }) => {
-    const curl = canvas.getByRole("tab", { name: "cURL" })
-    curl.focus()
-    await userEvent.keyboard("{ArrowLeft}")
-    await expect(
-      canvas.getByRole("tab", { name: "TypeScript" })
-    ).toHaveAttribute("aria-selected", "true")
-
-    await userEvent.click(
-      canvas.getByRole("button", {
-        name: "Zoom documentation image",
-      })
-    )
-    await waitFor(() =>
-      expect(
-        within(canvasElement.ownerDocument.body).getByRole("dialog")
-      ).toBeVisible()
-    )
+  play: async ({ canvas, canvasElement, step }) => {
+    await step("documentation画像を拡大する", async () => {
+      await userEvent.click(
+        canvas.getByRole("button", {
+          name: "Zoom documentation image",
+        })
+      )
+      await waitFor(() =>
+        expect(
+          within(canvasElement.ownerDocument.body).getByRole("dialog")
+        ).toBeVisible()
+      )
+    })
   },
 })

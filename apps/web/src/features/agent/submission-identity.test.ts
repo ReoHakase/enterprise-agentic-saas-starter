@@ -6,8 +6,8 @@ import {
   shouldRetainAgentSubmission,
 } from "./submission-identity"
 
-describe("Agent chat submission identity", () => {
-  it("reuses one logical message id when the unchanged failed draft is retried", () => {
+describe("Agentチャットの送信ID", () => {
+  it("変更していない失敗済みドラフトの再試行では同じ論理メッセージIDを使う", () => {
     const createId = vi.fn<() => string>(() => "message-new")
 
     expect(
@@ -24,7 +24,7 @@ describe("Agent chat submission identity", () => {
     expect(createId).not.toHaveBeenCalled()
   })
 
-  it("allocates a new logical message id after the draft changes", () => {
+  it("ドラフト変更後は新しい論理メッセージIDを割り当てる", () => {
     const createId = vi.fn<() => string>(() => "message-new")
 
     expect(
@@ -42,13 +42,19 @@ describe("Agent chat submission identity", () => {
   })
 
   it.each([
-    { isAbort: false, isDisconnect: true, isError: false },
-    { isAbort: false, isDisconnect: false, isError: true },
-  ])("keeps retry identity after a disconnect or error", (outcome) => {
+    {
+      case: "切断",
+      outcome: { isAbort: false, isDisconnect: true, isError: false },
+    },
+    {
+      case: "エラー",
+      outcome: { isAbort: false, isDisconnect: false, isError: true },
+    },
+  ])("$case後も再試行IDを保持する", ({ outcome }) => {
     expect(shouldRetainAgentSubmission(outcome)).toBe(true)
   })
 
-  it("discards retry identity after an explicit abort", () => {
+  it("明示的な中止後は再試行IDを破棄する", () => {
     expect(
       shouldRetainAgentSubmission({
         isAbort: true,
@@ -58,7 +64,7 @@ describe("Agent chat submission identity", () => {
     ).toBe(false)
   })
 
-  it("clears retry identity only after a complete response", () => {
+  it("応答完了後だけ再試行IDを消去する", () => {
     expect(
       shouldRetainAgentSubmission({
         isAbort: false,
@@ -68,7 +74,7 @@ describe("Agent chat submission identity", () => {
     ).toBe(false)
   })
 
-  it("continues only a final step made entirely of completed UI tools", () => {
+  it("完了済みUI toolだけで構成された最終stepを自動継続する", () => {
     expect(
       shouldAutoContinueAgentClientTools({
         messages: [

@@ -24,15 +24,11 @@ export const Vertical = meta.story({
   tags: ["theme-sensitive"],
   args: { socialLayout: "vertical" },
   play: async ({ canvas, step }) => {
-    await step(
-      "Expose the configured provider by accessible name",
-      async () => {
-        const button = canvas.getByRole("button", { name: "GitHub" })
-        await userEvent.tab()
-        await expect(button).toHaveFocus()
-        await expect(button).toHaveTextContent("Continue with GitHub")
-      }
-    )
+    await step("Tabキーでソーシャル サインインへフォーカスを移す", async () => {
+      const button = canvas.getByRole("button", { name: "GitHub" })
+      await userEvent.tab()
+      await expect(button).toHaveFocus()
+    })
   },
 })
 
@@ -48,11 +44,14 @@ export const Pending = meta.story({
     return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, step }) => {
-    await step("Disable social sign-in during provider setup", async () => {
-      const button = canvas.getByRole("button", { name: "GitHub" })
-      await userEvent.click(button)
-      await expect(button).toBeDisabled()
-    })
+    await step(
+      "プロバイダーのセットアップ中にソーシャル サインインを無効にする",
+      async () => {
+        const button = canvas.getByRole("button", { name: "GitHub" })
+        await userEvent.click(button)
+        await expect(button).toBeDisabled()
+      }
+    )
   },
 })
 
@@ -65,7 +64,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Restore the provider action after a failure", async () => {
+    await step("失敗後にプロバイダー操作を再開可能にする", async () => {
       const button = canvas.getByRole("button", { name: "GitHub" })
       await userEvent.click(button)
       await expect(

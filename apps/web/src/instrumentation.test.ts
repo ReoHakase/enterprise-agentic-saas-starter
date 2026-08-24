@@ -58,8 +58,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
-describe("Next.js server OpenTelemetry registration", () => {
-  it("registers local traces and logs with resource identity once", async () => {
+describe("Next.js サーバー OpenTelemetry 登録", () => {
+  it("ローカルtrace・logをresource identity付きで1回だけ登録する", async () => {
     const { registerServerObservability } = await import("./instrumentation")
 
     expect(registerServerObservability()).toBe(true)
@@ -81,15 +81,15 @@ describe("Next.js server OpenTelemetry registration", () => {
   })
 
   it.each([
-    ["production", "production", "http://127.0.0.1:4318", "session-1"],
+    ["本番環境", "production", "http://127.0.0.1:4318", "session-1"],
     [
-      "remote endpoint",
+      "remote endpointの指定",
       "development",
       "https://remote.example.test",
       "session-1",
     ],
-    ["missing identity", "development", "http://127.0.0.1:4318", ""],
-  ])("stays disabled for %s", async (_, nodeEnv, endpoint, sessionId) => {
+    ["identityの欠落", "development", "http://127.0.0.1:4318", ""],
+  ])("%sでは無効のままにする", async (_, nodeEnv, endpoint, sessionId) => {
     vi.stubEnv("NODE_ENV", nodeEnv)
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = endpoint
     process.env.DEV_SESSION_ID = sessionId
@@ -99,7 +99,7 @@ describe("Next.js server OpenTelemetry registration", () => {
     expect(telemetry.sdk).not.toHaveBeenCalled()
   })
 
-  it("forwards the original request error with bounded Next.js context", async () => {
+  it("上限付きNext.js contextと元のリクエストエラーを転送する", async () => {
     const { onRequestError } = await import("./instrumentation")
     const error = new Error("server render failed")
 

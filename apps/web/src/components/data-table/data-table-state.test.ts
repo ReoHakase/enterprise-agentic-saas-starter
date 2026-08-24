@@ -8,8 +8,8 @@ import {
   toDataTablePageSize,
 } from "./data-table-state"
 
-describe("DataTable state", () => {
-  it("prunes selection to the current result page", () => {
+describe("DataTableの状態", () => {
+  it("選択状態を現在の結果ページに限定する", () => {
     expect(
       pruneRowSelection(
         { "issue-1": true, "issue-2": false, "issue-3": true },
@@ -18,22 +18,50 @@ describe("DataTable state", () => {
     ).toEqual({ "issue-1": true })
   })
 
-  it("builds bounded pagination windows at the start, middle, and end", () => {
-    expect(getPaginationWindow(0, 0)).toEqual([])
-    expect(getPaginationWindow(0, 2)).toEqual([0, 1])
-    expect(getPaginationWindow(0, 10)).toEqual([0, 1, 2, 3, 4])
-    expect(getPaginationWindow(5, 10)).toEqual([3, 4, 5, 6, 7])
-    expect(getPaginationWindow(9, 10)).toEqual([5, 6, 7, 8, 9])
+  it.each([
+    { caseLabel: "ページがない場合", current: 0, total: 0, expected: [] },
+    { caseLabel: "2ページだけの場合", current: 0, total: 2, expected: [0, 1] },
+    {
+      caseLabel: "先頭ページの場合",
+      current: 0,
+      total: 10,
+      expected: [0, 1, 2, 3, 4],
+    },
+    {
+      caseLabel: "中間ページの場合",
+      current: 5,
+      total: 10,
+      expected: [3, 4, 5, 6, 7],
+    },
+    {
+      caseLabel: "末尾ページの場合",
+      current: 9,
+      total: 10,
+      expected: [5, 6, 7, 8, 9],
+    },
+  ])(
+    "$caseLabelは範囲を制限したページ一覧を返す",
+    ({ current, expected, total }) => {
+      expect(getPaginationWindow(current, total)).toEqual(expected)
+    }
+  )
+
+  it.each([
+    { caseLabel: "20件", value: 20, expected: "20" },
+    { caseLabel: "50件", value: 50, expected: "50" },
+    { caseLabel: "100件", value: 100, expected: "100" },
+    { caseLabel: "未対応の10件", value: 10, expected: undefined },
+  ])("$caseLabelのページサイズを正規化する", ({ expected, value }) => {
+    expect(toDataTablePageSize(value)).toBe(expected)
   })
 
-  it("accepts only supported page sizes", () => {
-    expect(toDataTablePageSize(20)).toBe("20")
-    expect(toDataTablePageSize(50)).toBe("50")
-    expect(toDataTablePageSize(100)).toBe("100")
-    expect(toDataTablePageSize(10)).toBeUndefined()
+  it("版を含むユーザー別テーブルキーを構築する", () => {
+    expect(getDataTableStorageKey("user-1", "issues")).toBe(
+      "data-table:v1:user-1:issues"
+    )
   })
 
-  it("uses a versioned per-user table key and restores safe columns only", () => {
+  it("許可された任意列だけを復元する", () => {
     const storage = {
       getItem: () =>
         JSON.stringify({
@@ -43,9 +71,6 @@ describe("DataTable state", () => {
           actions: false,
         }),
     }
-    expect(getDataTableStorageKey("user-1", "issues")).toBe(
-      "data-table:v1:user-1:issues"
-    )
     expect(
       readColumnVisibility(
         storage,
@@ -54,24 +79,15 @@ describe("DataTable state", () => {
         ["title", "actions"]
       )
     ).toEqual({ status: false })
+  })
+
+  it.each([
+    { caseLabel: "保存値がない場合", value: null },
+    { caseLabel: "保存値が不正なJSONの場合", value: "{invalid" },
+    { caseLabel: "保存値が配列の場合", value: JSON.stringify(["status"]) },
+  ])("$caseLabelは空の表示状態を返す", ({ value }) => {
     expect(
-      readColumnVisibility({ getItem: () => null }, "ignored", ["status"], [])
-    ).toEqual({})
-    expect(
-      readColumnVisibility(
-        { getItem: () => "{invalid" },
-        "ignored",
-        ["status"],
-        []
-      )
-    ).toEqual({})
-    expect(
-      readColumnVisibility(
-        { getItem: () => JSON.stringify(["status"]) },
-        "ignored",
-        ["status"],
-        []
-      )
+      readColumnVisibility({ getItem: () => value }, "ignored", ["status"], [])
     ).toEqual({})
   })
 })

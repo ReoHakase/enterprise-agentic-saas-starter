@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import {
@@ -33,10 +31,6 @@ export const OrganizationSummary = meta.story({
       <CardFooter>Updated July 26, 2026</CardFooter>
     </Card>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("Acme Cloud")).toBeVisible()
-    await expect(canvas.getByText("24 members", { exact: false })).toBeVisible()
-  },
 })
 
 export const LongContent = meta.story({

@@ -94,7 +94,7 @@ const navigationEntry = (name: string): PerformanceEntry => ({
   toJSON: () => ({}),
 })
 
-describe("issue detail controller", () => {
+describe("Issue詳細controller", () => {
   beforeEach(() => {
     mocks.back.mockReset()
     mocks.getIssueTimeline.mockReset()
@@ -103,7 +103,7 @@ describe("issue detail controller", () => {
 
   afterEach(() => vi.restoreAllMocks())
 
-  it("refreshes the issue timeline after file state converges", async () => {
+  it("ファイル状態の確定後にIssue timelineを再取得する", async () => {
     const user = userEvent.setup()
     const navigationEntries = vi
       .spyOn(globalThis.performance, "getEntriesByType")

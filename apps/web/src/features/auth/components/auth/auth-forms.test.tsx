@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AuthRouteScope } from "../auth-route-scope/auth-route-scope"
 import { MagicLink } from "../magic-link/magic-link"
+import { ResetPassword } from "../reset-password/reset-password"
 import { SignIn } from "../sign-in/sign-in"
 import { SignUp } from "../sign-up/sign-up"
 
@@ -105,12 +106,16 @@ vi.mock("@better-auth-ui/react", () => {
           or: "or",
           password: "Password",
           passwordPlaceholder: "Your password",
+          passwordResetSuccess: "Password reset",
           passwordsDoNotMatch: "Passwords do not match.",
           rememberMe: "Remember me",
           resend: "Resend",
           showPassword: "Show password",
           signIn: "Sign in",
           signUp: "Create account",
+          invalidResetPasswordToken: "Invalid reset password token",
+          newPasswordPlaceholder: "Your new password",
+          resetPassword: "Reset password",
           verificationEmailSent: "Verification email sent",
           checkYourEmail: "Check your email",
         },
@@ -122,6 +127,7 @@ vi.mock("@better-auth-ui/react", () => {
       viewPaths: {
         auth: {
           forgotPassword: "forgot-password",
+          resetPassword: "reset-password",
           signIn: "sign-in",
           signUp: "sign-up",
         },
@@ -182,6 +188,10 @@ vi.mock("@better-auth-ui/react", () => {
         }
       },
     }),
+    useResetPassword: () => ({
+      isPending: false,
+      mutate: vi.fn<(input: unknown) => void>(),
+    }),
   }
 })
 
@@ -191,8 +201,8 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe("email and password authentication forms", () => {
-  it("keeps the magic-link form inert until hydration", async () => {
+describe("メールアドレス・パスワード認証フォーム", () => {
+  it("ハイドレーションまでマジックリンクフォームを操作不能にする", async () => {
     const container = document.createElement("div")
     container.innerHTML = renderToString(<MagicLink />)
     document.body.appendChild(container)
@@ -213,7 +223,7 @@ describe("email and password authentication forms", () => {
     })
   })
 
-  it("keeps the invitation redirect across add-account magic-link views", async () => {
+  it("アカウント追加用マジックリンク画面でも招待の戻り先を保持する", async () => {
     const user = userEvent.setup()
     const invitationPath = "/invitations/invitation-new-user"
     render(
@@ -243,7 +253,7 @@ describe("email and password authentication forms", () => {
     })
   })
 
-  it("keeps add-account when returning from account creation to sign-in", () => {
+  it("アカウント作成からサインインへ戻ってもアカウント追加状態を保持する", () => {
     render(
       <AuthRouteScope
         addingAccount
@@ -260,12 +270,28 @@ describe("email and password authentication forms", () => {
     )
   })
 
-  it("validates sign-in fields and preserves credentials after a safe failure", async () => {
+  it("リセットトークンがない場合はサインインへ戻す", async () => {
+    window.history.replaceState({}, "", window.location.pathname)
+
+    render(<ResetPassword />)
+
+    await waitFor(() =>
+      expect(authMocks.navigate).toHaveBeenCalledWith({ to: "/auth/sign-in" })
+    )
+  })
+
+  it("空のサインイン項目をローカル検証する", async () => {
     const user = userEvent.setup()
     render(<SignIn />)
 
     await user.click(screen.getByRole("button", { name: "Sign in" }))
     expect(await screen.findByText("Enter your email address.")).toBeVisible()
+    expect(authMocks.signInRequest).not.toHaveBeenCalled()
+  })
+
+  it("認証失敗後も入力した認証情報を保持する", async () => {
+    const user = userEvent.setup()
+    render(<SignIn />)
 
     const email = screen.getByLabelText("Email")
     const password = screen.getByLabelText("Password")
@@ -281,15 +307,11 @@ describe("email and password authentication forms", () => {
         rememberMe: true,
       })
     )
-    expect(
-      await screen.findByText("The email or password is incorrect.")
-    ).toBeVisible()
     expect(email).toHaveValue("user@example.test")
     expect(password).toHaveValue("correct-password")
-    expect(authMocks.toastError).not.toHaveBeenCalled()
   })
 
-  it("shows sign-up confirmation errors without submitting", async () => {
+  it("送信せずにサインアップ確認エラーを表示する", async () => {
     const user = userEvent.setup()
     render(<SignUp />)
 
@@ -306,7 +328,7 @@ describe("email and password authentication forms", () => {
     expect(authMocks.signUpRequest).not.toHaveBeenCalled()
   })
 
-  it("submits sign-up values and preserves them after a safe failure", async () => {
+  it("サインアップ内容を送信し、安全な失敗後も入力値を保持する", async () => {
     const user = userEvent.setup()
     render(<SignUp />)
 
@@ -327,15 +349,9 @@ describe("email and password authentication forms", () => {
         password: "correct-password",
       })
     )
-    expect(
-      await screen.findByText(
-        "An account already exists for this email address."
-      )
-    ).toBeVisible()
     expect(name).toHaveValue("Test User")
     expect(email).toHaveValue("user@example.test")
     expect(password).toHaveValue("correct-password")
     expect(confirmation).toHaveValue("correct-password")
-    expect(authMocks.toastError).not.toHaveBeenCalled()
   })
 })

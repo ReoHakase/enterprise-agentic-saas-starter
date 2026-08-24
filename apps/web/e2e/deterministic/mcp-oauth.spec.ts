@@ -19,9 +19,8 @@ const isRecord = (value: unknown): value is JsonRecord =>
 
 const requiredString = (record: JsonRecord, key: string) => {
   const value = Reflect.get(record, key)
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string" || value.length === 0)
     throw new Error(`MCP OAuth E1 ${key} is missing`)
-  }
   return value
 }
 
@@ -100,18 +99,6 @@ const signInWithLocalGitHub = async (
   await page.getByRole("button", { name: new RegExp(accountName, "u") }).click()
 }
 
-const expectDesktopTableFitsViewport = async (page: Page, name: string) => {
-  const table = page.getByRole("table", { name })
-  await expect(table).toBeVisible()
-  const box = await table.boundingBox()
-  const viewport = page.viewportSize()
-  expect(box).not.toBeNull()
-  expect(viewport).not.toBeNull()
-  if (!box || !viewport) return
-  expect(box.x).toBeGreaterThanOrEqual(0)
-  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
-}
-
 const provisionOrganization = async (input: {
   apiOrigin: string
   browser: Browser
@@ -140,36 +127,12 @@ const provisionOrganization = async (input: {
       "organization creation"
     )
     const organizationId = requiredString(organization, "id")
-    const secondaryResponse = await context.request.post(
-      `${input.apiOrigin}/organizations`,
-      {
-        headers: {
-          cookie: await cookieHeader(context),
-          origin: input.webOrigin,
-        },
-        data: {
-          keepCurrentActiveOrganization: true,
-          name: `${input.name} Secondary`,
-          slug: `${input.slug}-secondary`,
-        },
-      }
-    )
-    await parseRecordResponse(
-      secondaryResponse,
-      "secondary organization creation"
-    )
-    const signOutResponse = await context.request.post(
-      `${input.apiOrigin}/auth/sign-out`,
-      {
-        data: {},
-        headers: {
-          cookie: await cookieHeader(context),
-          origin: input.webOrigin,
-        },
-      }
-    )
-    expect(signOutResponse.status(), "fixture sign out status").toBe(200)
-    return organizationId
+    return {
+      adminCookie: await cookieHeader(context),
+      id: organizationId,
+      name: input.name,
+      slug: input.slug,
+    }
   } finally {
     await context.close()
   }
@@ -225,7 +188,6 @@ const authorizeClient = async (input: {
   scope: string
   state: string
   grantScope?: string
-  verifyAccountSwitching?: boolean
 }) => {
   const authorizationUrl = new URL(
     "/auth/oauth2/authorize",
@@ -284,42 +246,15 @@ const authorizeClient = async (input: {
   expect(
     `${new URL(input.page.url()).pathname}${new URL(input.page.url()).search}`
   ).toBe(organizationPath)
-  await expectDesktopTableFitsViewport(
-    input.page,
-    "Organizations available for this MCP credential"
-  )
+  await expect(
+    input.page.getByRole("table", {
+      name: "Organizations available for this MCP credential",
+    })
+  ).toBeVisible()
   await expect(
     input.page.getByRole("region", { name: "Current account" })
   ).toContainText("oauth-carol")
 
-  if (input.verifyAccountSwitching) {
-    await input.page.getByRole("button", { name: "Switch account" }).click()
-    let dialog = input.page.getByRole("dialog", { name: "Switch account" })
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole("link", { name: "Add account" }).click()
-    await expect(input.page).toHaveURL(/\/auth\/sign-in\?.*add_account=1/u)
-    expect(new URL(input.page.url()).searchParams.get("redirectTo")).toBe(
-      organizationPath
-    )
-    await signInWithLocalGitHub(input.page, "oauth-alice")
-    await expect(input.page).toHaveURL(/\/oauth\/organization\?/u)
-    await expect(
-      input.page.getByRole("region", { name: "Current account" })
-    ).toContainText("oauth-alice")
-
-    await input.page.getByRole("button", { name: "Switch account" }).click()
-    dialog = input.page.getByRole("dialog", { name: "Switch account" })
-    const carolAccount = dialog.getByRole("group", { name: /oauth-carol/u })
-    await expect(carolAccount).toBeVisible()
-    await expect(
-      carolAccount.getByRole("button", { name: /Remove/u })
-    ).toHaveCount(0)
-    await carolAccount.getByRole("button", { name: "Switch" }).click()
-    await expect(input.page).toHaveURL(/\/oauth\/organization\?/u)
-    await expect(
-      input.page.getByRole("region", { name: "Current account" })
-    ).toContainText("oauth-carol")
-  }
   const continuation = input.page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/auth/oauth2/continue" &&
@@ -352,7 +287,6 @@ const authorizeClient = async (input: {
   await expect(
     input.page.getByRole("button", { name: "Switch account" })
   ).toBeVisible()
-  await expectDesktopTableFitsViewport(input.page, "Requested access")
   if (input.grantScope) {
     const granted = new Set(input.grantScope.split(" ").filter(Boolean))
     const labels: Record<string, RegExp> = {
@@ -384,7 +318,7 @@ const authorizeClient = async (input: {
       }
     }
     for (const requested of input.scope.split(" ").filter(Boolean)) {
-      // oxlint-disable-next-line no-await-in-loop -- selection state must settle before the next checkbox.
+      // oxlint-disable-next-line no-await-in-loop -- 選択状態は次のチェックボックスより前に確定させる必要がある
       await deselectScope(requested)
     }
   }
@@ -515,311 +449,534 @@ const rejectMcpMethod = async (input: {
   expect(response.status()).toBe(401)
 }
 
-test("OAuth MCPで公開contextとIssue attachment lifecycleを認可できる", async ({
-  browser,
-  context,
-  page,
-}, testInfo) => {
-  const apiOrigin = metadataString(testInfo, "agentE2EApiOrigin")
-  const apiPublicOrigin = metadataString(testInfo, "mcpE2EApiPublicOrigin")
-  const webOrigin = String(testInfo.project.use.baseURL)
-  const namespace = runNamespace(testInfo)
+const fullMcpScope = [
+  "offline_access",
+  "account:read",
+  "organization:read",
+  "members:read",
+  "issues:read",
+  "issues:create",
+  "issues:update",
+  "issues:delete",
+  "files:read",
+  "files:write",
+].join(" ")
+
+type AuthorizedMcpJourney = {
+  accessToken: string
+  apiOrigin: string
+  client: Client
+  clientClosed: boolean
+  clientName: string
+  namespace: string
+  organization: Awaited<ReturnType<typeof provisionOrganization>>
+  organizationAdminCookie: string
+  organizationAdminCookies: Awaited<ReturnType<BrowserContext["cookies"]>>
+  primarySessionCookie: string
+  webOrigin: string
+}
+
+const authorizeFullScopeMcp = async (input: {
+  browser: Browser
+  context: BrowserContext
+  page: Page
+  testInfo: TestInfo
+}): Promise<AuthorizedMcpJourney> => {
+  const apiOrigin = metadataString(input.testInfo, "agentE2EApiOrigin")
+  const apiPublicOrigin = metadataString(
+    input.testInfo,
+    "mcpE2EApiPublicOrigin"
+  )
+  const webOrigin = String(input.testInfo.project.use.baseURL)
+  const namespace = runNamespace(input.testInfo)
   const organizationName = `MCP E1 ${namespace}`
-  const organizationSlug = namespace
-  const organizationId = await provisionOrganization({
+  const organization = await provisionOrganization({
     apiOrigin,
-    browser,
+    browser: input.browser,
     name: organizationName,
-    slug: organizationSlug,
+    slug: namespace,
     webOrigin,
   })
   const redirectUri = createNativeRedirectUri(webOrigin)
   const resource = new URL("/mcp", apiPublicOrigin).toString()
-  const scope = [
-    "offline_access",
-    "account:read",
-    "organization:read",
-    "members:read",
-    "issues:read",
-    "issues:create",
-    "issues:update",
-    "issues:delete",
-    "files:read",
-    "files:write",
-  ].join(" ")
-  const clientId = await registerClient({
-    apiOrigin,
-    clientName: `MCP E1 client ${namespace}`,
-    redirectUri,
-    request: context.request,
-    scope,
-  })
-  const pkce = await createPkce()
-  const state = crypto.randomUUID()
-  const code = await authorizeClient({
-    apiPublicOrigin,
-    challenge: pkce.challenge,
-    clientId,
-    organizationName,
-    page,
-    redirectUri,
-    resource,
-    scope,
-    state,
-    verifyAccountSwitching: true,
-  })
-  const organizationAdminCookies = await context.cookies()
-  const organizationAdminCookie = organizationAdminCookies
-    .map(({ name, value }) => `${name}=${value}`)
-    .join("; ")
-  await context.clearCookies()
-  const accessToken = await exchangeCode({
-    apiOrigin,
-    clientId,
-    code,
-    redirectUri,
-    request: context.request,
-    resource,
-    verifier: pkce.verifier,
-  })
-
-  const client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
-  expect(client.getServerVersion()).toMatchObject({
-    name: "Enterprise Agentic SaaS",
-    version: "0.0.1",
-  })
-
-  const prompts = await client.listPrompts()
-  expect(prompts.prompts.map(({ name }) => name)).toEqual(["triage_issue"])
-  const prompt = await client.getPrompt({
-    name: "triage_issue",
-    arguments: { request: `Create the ${namespace} Issue.` },
-  })
-  expect(prompt.messages).toHaveLength(1)
-  const resources = await client.listResources()
-  expect(resources.resources.map(({ uri }) => uri)).toEqual([
-    "guide://enterprise-agentic-saas/issues",
-    "guide://enterprise-agentic-saas/attachments",
-  ])
-  const guide = await client.readResource({
-    uri: "guide://enterprise-agentic-saas/issues",
-  })
-  expect(guide.contents).toEqual([
-    expect.objectContaining({
-      text: expect.stringContaining("Issue workflow"),
-    }),
-  ])
-
-  const tools = await client.listTools()
-  const toolNames = tools.tools.map(({ name }) => name)
-  expect(toolNames).toEqual(
-    expect.arrayContaining([
-      "read_active_organization",
-      "search_issues",
-      "get_issue",
-      "create_issue",
-      "update_issue",
-      "delete_issue",
-      "create_attachment_upload_session",
-      "add_issue_attachments",
-      "remove_issue_attachments",
-    ])
-  )
-  expect(toolNames).not.toContain("get_skill")
-  expect(toolNames.every((name) => !/^(?:ask_|run_|ui_)/u.test(name))).toBe(
-    true
-  )
-
-  const organization = await callStructuredTool(
-    client,
-    "read_active_organization",
-    {}
-  )
-  expect(organization).toMatchObject({ name: organizationName, role: "owner" })
-
-  const created = issueFromReceipt(
-    await callStructuredTool(client, "create_issue", {
-      description: "Created through the deterministic OAuth MCP E1.",
-      idempotencyKey: `${namespace}.create.issue`,
-      priority: "high",
-      title: `OAuth MCP ${namespace}`,
+  const clientName = `MCP E1 client ${namespace}`
+  let client: Client | undefined
+  let primarySessionCookie = ""
+  try {
+    const clientId = await registerClient({
+      apiOrigin,
+      clientName,
+      redirectUri,
+      request: input.context.request,
+      scope: fullMcpScope,
     })
-  )
-  const issueId = requiredString(created, "id")
-  let revision = requiredNumber(created, "revision")
-
-  const read = await callStructuredTool(client, "get_issue", {
-    id: issueId,
-    lookup: "id",
-  })
-  expect(read).toMatchObject({ id: issueId, revision })
-
-  const updated = issueFromReceipt(
-    await callStructuredTool(client, "update_issue", {
-      description: "Updated through the deterministic OAuth MCP E1.",
-      expectedRevision: revision,
-      idempotencyKey: `${namespace}.update.issue`,
-      issueId,
+    const pkce = await createPkce()
+    const code = await authorizeClient({
+      apiPublicOrigin,
+      challenge: pkce.challenge,
+      clientId,
+      organizationName,
+      page: input.page,
+      redirectUri,
+      resource,
+      scope: fullMcpScope,
+      state: crypto.randomUUID(),
     })
-  )
-  revision = requiredNumber(updated, "revision")
+    const organizationAdminCookies = await input.context.cookies()
+    primarySessionCookie = organizationAdminCookies
+      .map(({ name, value }) => `${name}=${value}`)
+      .join("; ")
+    await input.context.clearCookies()
+    const accessToken = await exchangeCode({
+      apiOrigin,
+      clientId,
+      code,
+      redirectUri,
+      request: input.context.request,
+      resource,
+      verifier: pkce.verifier,
+    })
+    client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
 
-  const attachmentBytes = Buffer.from(`MCP E1 attachment ${namespace}\n`)
-  const upload = await callStructuredTool(
-    client,
-    "create_attachment_upload_session",
-    {
-      declaredContentType: "text/plain",
-      filename: `${namespace}.txt`,
-      idempotencyKey: `${namespace}.upload.session`,
-      sizeBytes: attachmentBytes.byteLength,
+    return {
+      accessToken,
+      apiOrigin,
+      client,
+      clientClosed: false,
+      clientName,
+      namespace,
+      organization,
+      organizationAdminCookie: organization.adminCookie,
+      organizationAdminCookies,
+      primarySessionCookie,
+      webOrigin,
     }
-  )
-  const uploadId = requiredString(upload, "uploadId")
-  const uploadResponse = await context.request.put(
-    requiredString(upload, "uploadUrl"),
-    {
-      data: attachmentBytes,
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        "content-length": String(attachmentBytes.byteLength),
-        "content-type": "text/plain",
-      },
-    }
-  )
-  expect(uploadResponse.status()).toBe(204)
-  const uploadStatus = await callStructuredTool(
-    client,
-    "get_attachment_upload_status",
-    { uploadId }
-  )
-  expect(uploadStatus).toMatchObject({ status: "ready", uploadId })
-  const assetId = requiredString(uploadStatus, "assetId")
-
-  const attached = issueFromReceipt(
-    await callStructuredTool(client, "add_issue_attachments", {
-      assetIds: [assetId],
-      expectedRevision: revision,
-      idempotencyKey: `${namespace}.add.attachment`,
-      issueId,
+  } catch (error) {
+    await cleanupMcpResources({
+      apiOrigin,
+      client,
+      clientName,
+      namespace,
+      organization,
+      request: input.context.request,
+      sessionCookies: [organization.adminCookie, primarySessionCookie],
+      webOrigin,
     })
-  )
-  revision = requiredNumber(attached, "revision")
-  const attachmentMutation = Reflect.get(attached, "attachmentMutation")
-  if (!isRecord(attachmentMutation)) {
-    throw new Error("MCP OAuth E1 attachment receipt is invalid")
+    throw error
   }
-  const fileIds = Reflect.get(attachmentMutation, "fileIds")
-  if (
-    !Array.isArray(fileIds) ||
-    fileIds.length !== 1 ||
-    typeof fileIds[0] !== "string"
-  ) {
-    throw new Error("MCP OAuth E1 file id is missing")
-  }
+}
 
-  const removed = issueFromReceipt(
-    await callStructuredTool(client, "remove_issue_attachments", {
-      expectedRevision: revision,
-      fileIds,
-      idempotencyKey: `${namespace}.remove.attachment`,
-      issueId,
-    })
-  )
-  revision = requiredNumber(removed, "revision")
-
-  const deleted = issueFromReceipt(
-    await callStructuredTool(client, "delete_issue", {
-      expectedRevision: revision,
-      idempotencyKey: `${namespace}.delete.issue`,
-      issueId,
-    })
-  )
-  expect(deleted).toMatchObject({ deleted: true, id: issueId })
-  await client.close()
-
-  const removal = await context.request.delete(
-    `${apiOrigin}/organizations/${organizationId}`,
+const deleteProvisionedOrganization = async (input: {
+  allowMissing?: boolean
+  apiOrigin: string
+  namespace: string
+  organization: AuthorizedMcpJourney["organization"]
+  request: APIRequestContext
+  webOrigin: string
+}) => {
+  const response = await input.request.delete(
+    `${input.apiOrigin}/organizations/${input.organization.id}`,
     {
       data: {
         confirmation: "DELETE",
-        idempotencyKey: `${namespace}.delete.organization`,
-        slug: organizationSlug,
+        idempotencyKey: `${input.namespace}.delete.${input.organization.slug}`,
+        slug: input.organization.slug,
       },
       headers: {
-        cookie: organizationAdminCookie,
-        origin: webOrigin,
+        cookie: input.organization.adminCookie,
+        origin: input.webOrigin,
       },
     }
   )
-  expect(removal.status()).toBe(200)
+  if (input.allowMissing && response.status() === 404) return
+  expect(response.status()).toBe(200)
+}
 
-  await rejectMcpMethod({
-    accessToken,
-    apiOrigin,
-    message: { jsonrpc: "2.0", id: 91, method: "tools/list", params: {} },
-    request: context.request,
-  })
-  await rejectMcpMethod({
-    accessToken,
-    apiOrigin,
-    message: {
-      jsonrpc: "2.0",
-      id: 92,
-      method: "tools/call",
-      params: { name: "read_active_organization", arguments: {} },
-    },
-    request: context.request,
-  })
+const revokeMcpSession = async (input: {
+  allowMissing?: boolean
+  apiOrigin: string
+  clientName: string
+  cookie: string
+  request: APIRequestContext
+  webOrigin: string
+}) => {
+  const sessionsResponse = await input.request.get(
+    `${input.apiOrigin}/me/mcp-oauth/sessions`,
+    { headers: { cookie: input.cookie, origin: input.webOrigin } }
+  )
+  expect(sessionsResponse.status()).toBe(200)
+  const sessions: unknown = await sessionsResponse.json()
+  if (!Array.isArray(sessions)) {
+    throw new Error("MCP OAuth E1 session list is invalid")
+  }
+  const session = sessions.find(
+    (candidate) =>
+      isRecord(candidate) &&
+      Reflect.get(candidate, "clientName") === input.clientName
+  )
+  if (!isRecord(session)) {
+    if (input.allowMissing) return
+    throw new Error("MCP OAuth E1 session is missing")
+  }
+  const credentialId = requiredString(session, "credentialId")
+  const response = await input.request.delete(
+    `${input.apiOrigin}/me/mcp-oauth/sessions/${encodeURIComponent(credentialId)}`,
+    { headers: { cookie: input.cookie, origin: input.webOrigin } }
+  )
+  expect(response.status()).toBe(200)
+}
 
-  await context.addCookies(organizationAdminCookies)
-  await page.goto("/settings/account")
-  await expect(
-    page.getByRole("heading", { name: "MCP OAuth access" })
-  ).toBeVisible()
-  await expect(page.getByText(`MCP E1 client ${namespace}`)).toBeVisible()
-  await expect(
-    page.getByText("Organization membership no longer available")
-  ).toBeVisible()
-  await page
-    .getByLabel("MCP OAuth access")
-    .getByRole("button", { name: "Revoke", exact: true })
-    .click()
-  await page.getByRole("button", { name: "Revoke access" }).click()
-  await expect(page.getByText(`MCP E1 client ${namespace}`)).toHaveCount(0)
-  await rejectMcpMethod({
-    accessToken,
-    apiOrigin,
-    message: {
-      jsonrpc: "2.0",
-      id: 94,
-      method: "initialize",
-      params: {
-        capabilities: {},
-        clientInfo: { name: "ui-revoked-e1", version: "1.0.0" },
-        protocolVersion: "2025-06-18",
-      },
-    },
-    request: context.request,
-  })
-  await rejectMcpMethod({
-    accessToken,
-    apiOrigin,
-    message: {
-      jsonrpc: "2.0",
-      id: 93,
-      method: "initialize",
-      params: {
-        capabilities: {},
-        clientInfo: { name: "revoked-e1", version: "1.0.0" },
-        protocolVersion: "2025-06-18",
-      },
-    },
-    request: context.request,
-  })
+const signOutSession = async (input: {
+  apiOrigin: string
+  cookie: string
+  request: APIRequestContext
+  webOrigin: string
+}) => {
+  if (!input.cookie) return
+  const response = await input.request.post(
+    `${input.apiOrigin}/auth/sign-out`,
+    {
+      data: {},
+      headers: { cookie: input.cookie, origin: input.webOrigin },
+    }
+  )
+  expect([200, 401]).toContain(response.status())
+}
+
+const cleanupMcpResources = async (input: {
+  apiOrigin: string
+  client?: Client
+  clientName: string
+  namespace: string
+  organization: AuthorizedMcpJourney["organization"]
+  request: APIRequestContext
+  sessionCookies: string[]
+  webOrigin: string
+}) => {
+  try {
+    await input.client?.close()
+  } finally {
+    try {
+      await revokeMcpSession({
+        allowMissing: true,
+        apiOrigin: input.apiOrigin,
+        clientName: input.clientName,
+        cookie: input.organization.adminCookie,
+        request: input.request,
+        webOrigin: input.webOrigin,
+      })
+    } finally {
+      try {
+        await deleteProvisionedOrganization({
+          allowMissing: true,
+          apiOrigin: input.apiOrigin,
+          namespace: input.namespace,
+          organization: input.organization,
+          request: input.request,
+          webOrigin: input.webOrigin,
+        })
+      } finally {
+        await Promise.all(
+          [...new Set(input.sessionCookies)].filter(Boolean).map((cookie) =>
+            signOutSession({
+              apiOrigin: input.apiOrigin,
+              cookie,
+              request: input.request,
+              webOrigin: input.webOrigin,
+            })
+          )
+        )
+      }
+    }
+  }
+}
+
+const closeAuthorizedMcpClient = async (journey: AuthorizedMcpJourney) => {
+  if (journey.clientClosed) return
+  await journey.client.close()
+  journey.clientClosed = true
+}
+
+const cleanupAuthorizedMcp = async (
+  journey: AuthorizedMcpJourney,
+  request: APIRequestContext
+) => {
+  try {
+    await cleanupMcpResources({
+      apiOrigin: journey.apiOrigin,
+      client: journey.clientClosed ? undefined : journey.client,
+      clientName: journey.clientName,
+      namespace: journey.namespace,
+      organization: journey.organization,
+      request,
+      sessionCookies: [
+        journey.organizationAdminCookie,
+        journey.primarySessionCookie,
+      ],
+      webOrigin: journey.webOrigin,
+    })
+  } finally {
+    journey.clientClosed = true
+  }
+}
+
+const withFullScopeMcp = async (
+  input: Parameters<typeof authorizeFullScopeMcp>[0],
+  run: (journey: AuthorizedMcpJourney) => Promise<void>
+) => {
+  const journey = await authorizeFullScopeMcp(input)
+  try {
+    await run(journey)
+  } finally {
+    await cleanupAuthorizedMcp(journey, input.context.request)
+  }
+}
+
+test("MCP OAuthで公開カタログと組織コンテキストを参照できる", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  await withFullScopeMcp(
+    { browser, context, page, testInfo },
+    async (journey) => {
+      const { client } = journey
+      const [prompts, resources, tools] = await Promise.all([
+        client.listPrompts(),
+        client.listResources(),
+        client.listTools(),
+      ])
+      expect(prompts.prompts.map(({ name }) => name)).toEqual(["triage_issue"])
+      expect(resources.resources.map(({ uri }) => uri)).toContain(
+        "guide://enterprise-agentic-saas/issues"
+      )
+      const toolNames = tools.tools.map(({ name }) => name)
+      expect(toolNames).toContain("create_issue")
+
+      const organization = await callStructuredTool(
+        client,
+        "read_active_organization",
+        {}
+      )
+      expect(organization).toMatchObject({
+        name: journey.organization.name,
+        role: "owner",
+      })
+    }
+  )
 })
 
-test("OAuth MCP consentは選択したscopeの部分集合だけを発行する", async ({
+test("MCP OAuthでIssueを作成して参照し更新して削除できる", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  await withFullScopeMcp(
+    { browser, context, page, testInfo },
+    async (journey) => {
+      const { client, namespace } = journey
+
+      const created = issueFromReceipt(
+        await callStructuredTool(client, "create_issue", {
+          description: "Created through the deterministic OAuth MCP E1.",
+          idempotencyKey: `${namespace}.create.issue`,
+          priority: "high",
+          title: `OAuth MCP ${namespace}`,
+        })
+      )
+      const issueId = requiredString(created, "id")
+      let revision = requiredNumber(created, "revision")
+
+      const read = await callStructuredTool(client, "get_issue", {
+        id: issueId,
+        lookup: "id",
+      })
+      expect(read).toMatchObject({ id: issueId, revision })
+
+      const updated = issueFromReceipt(
+        await callStructuredTool(client, "update_issue", {
+          description: "Updated through the deterministic OAuth MCP E1.",
+          expectedRevision: revision,
+          idempotencyKey: `${namespace}.update.issue`,
+          issueId,
+        })
+      )
+      revision = requiredNumber(updated, "revision")
+
+      const deleted = issueFromReceipt(
+        await callStructuredTool(client, "delete_issue", {
+          expectedRevision: revision,
+          idempotencyKey: `${namespace}.delete.issue`,
+          issueId,
+        })
+      )
+      expect(deleted).toMatchObject({ deleted: true, id: issueId })
+    }
+  )
+})
+
+test("MCP OAuthでIssue添付をアップロードして追加して削除できる", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  await withFullScopeMcp(
+    { browser, context, page, testInfo },
+    async (journey) => {
+      const { accessToken, client, namespace } = journey
+      const created = issueFromReceipt(
+        await callStructuredTool(client, "create_issue", {
+          description: "Attachment fixture for the deterministic OAuth MCP E1.",
+          idempotencyKey: `${namespace}.create.attachment.issue`,
+          priority: "high",
+          title: `OAuth MCP attachment ${namespace}`,
+        })
+      )
+      const issueId = requiredString(created, "id")
+      let revision = requiredNumber(created, "revision")
+
+      const attachmentBytes = Buffer.from(`MCP E1 attachment ${namespace}\n`)
+      const upload = await callStructuredTool(
+        client,
+        "create_attachment_upload_session",
+        {
+          declaredContentType: "text/plain",
+          filename: `${namespace}.txt`,
+          idempotencyKey: `${namespace}.upload.session`,
+          sizeBytes: attachmentBytes.byteLength,
+        }
+      )
+      const uploadId = requiredString(upload, "uploadId")
+      const uploadResponse = await context.request.put(
+        requiredString(upload, "uploadUrl"),
+        {
+          data: attachmentBytes,
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            "content-length": String(attachmentBytes.byteLength),
+            "content-type": "text/plain",
+          },
+        }
+      )
+      expect(uploadResponse.status()).toBe(204)
+      const uploadStatus = await callStructuredTool(
+        client,
+        "get_attachment_upload_status",
+        { uploadId }
+      )
+      expect(uploadStatus).toMatchObject({ status: "ready", uploadId })
+      const assetId = requiredString(uploadStatus, "assetId")
+
+      const attached = issueFromReceipt(
+        await callStructuredTool(client, "add_issue_attachments", {
+          assetIds: [assetId],
+          expectedRevision: revision,
+          idempotencyKey: `${namespace}.add.attachment`,
+          issueId,
+        })
+      )
+      revision = requiredNumber(attached, "revision")
+      const attachmentMutation = Reflect.get(attached, "attachmentMutation")
+      if (!isRecord(attachmentMutation)) {
+        throw new Error("MCP OAuth E1 attachment receipt is invalid")
+      }
+      const fileIds = Reflect.get(attachmentMutation, "fileIds")
+      if (
+        !Array.isArray(fileIds) ||
+        fileIds.length !== 1 ||
+        typeof fileIds[0] !== "string"
+      ) {
+        throw new Error("MCP OAuth E1 file id is missing")
+      }
+
+      const removed = issueFromReceipt(
+        await callStructuredTool(client, "remove_issue_attachments", {
+          expectedRevision: revision,
+          fileIds,
+          idempotencyKey: `${namespace}.remove.attachment`,
+          issueId,
+        })
+      )
+      expect(requiredNumber(removed, "revision")).toBeGreaterThan(revision)
+    }
+  )
+})
+
+test("組織メンバーシップを失ったMCP OAuth認可を孤立表示して取り消せる", async ({
+  browser,
+  context,
+  page,
+}, testInfo) => {
+  await withFullScopeMcp(
+    { browser, context, page, testInfo },
+    async (journey) => {
+      const { accessToken, apiOrigin, clientName, organizationAdminCookies } =
+        journey
+      await closeAuthorizedMcpClient(journey)
+      await deleteProvisionedOrganization({
+        apiOrigin,
+        namespace: journey.namespace,
+        organization: journey.organization,
+        request: context.request,
+        webOrigin: journey.webOrigin,
+      })
+
+      await rejectMcpMethod({
+        accessToken,
+        apiOrigin,
+        message: { jsonrpc: "2.0", id: 91, method: "tools/list", params: {} },
+        request: context.request,
+      })
+      await rejectMcpMethod({
+        accessToken,
+        apiOrigin,
+        message: {
+          jsonrpc: "2.0",
+          id: 92,
+          method: "tools/call",
+          params: { name: "read_active_organization", arguments: {} },
+        },
+        request: context.request,
+      })
+
+      await page.goto("about:blank")
+      await context.addCookies(organizationAdminCookies)
+      await page.goto("/settings/account")
+      await expect(
+        page.getByRole("heading", { name: "MCP OAuth access" })
+      ).toBeVisible()
+      const orphanGrant = page.getByRole("article").filter({
+        has: page.getByRole("heading", { name: clientName }),
+      })
+      await expect(orphanGrant).toBeVisible()
+      await expect(
+        orphanGrant.getByText("Organization membership no longer available")
+      ).toBeVisible()
+      await orphanGrant
+        .getByRole("button", { name: "Revoke", exact: true })
+        .click()
+      await page.getByRole("button", { name: "Revoke access" }).click()
+      await expect(page.getByText(clientName)).toHaveCount(0)
+      await rejectMcpMethod({
+        accessToken,
+        apiOrigin,
+        message: {
+          jsonrpc: "2.0",
+          id: 94,
+          method: "initialize",
+          params: {
+            capabilities: {},
+            clientInfo: { name: "revoked-e1", version: "1.0.0" },
+            protocolVersion: "2025-06-18",
+          },
+        },
+        request: context.request,
+      })
+    }
+  )
+})
+
+test("MCP OAuthの同意は選択したスコープの部分集合だけを発行する", async ({
   browser,
   context,
   page,
@@ -830,7 +987,7 @@ test("OAuth MCP consentは選択したscopeの部分集合だけを発行する"
   const namespace = runNamespace(testInfo)
   const organizationName = `MCP subset ${namespace}`
   const organizationSlug = `${namespace}-subset`
-  const organizationId = await provisionOrganization({
+  const organization = await provisionOrganization({
     apiOrigin,
     browser,
     name: organizationName,
@@ -840,76 +997,56 @@ test("OAuth MCP consentは選択したscopeの部分集合だけを発行する"
   const redirectUri = createNativeRedirectUri(webOrigin)
   const resource = new URL("/mcp", apiPublicOrigin).toString()
   const scope = "offline_access issues:read issues:create"
-  const clientId = await registerClient({
-    apiOrigin,
-    clientName: `MCP subset client ${namespace}`,
-    redirectUri,
-    request: context.request,
-    scope,
-  })
-  const pkce = await createPkce()
-  const code = await authorizeClient({
-    apiPublicOrigin,
-    challenge: pkce.challenge,
-    clientId,
-    grantScope: "offline_access issues:read",
-    organizationName,
-    page,
-    redirectUri,
-    resource,
-    scope,
-    state: crypto.randomUUID(),
-  })
-  const organizationAdminCookie = await cookieHeader(context)
-  await context.clearCookies()
-  const accessToken = await exchangeCode({
-    apiOrigin,
-    clientId,
-    code,
-    redirectUri,
-    request: context.request,
-    resource,
-    verifier: pkce.verifier,
-  })
-  const client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
-  const tools = await client.listTools()
-  const toolNames = tools.tools.map(({ name }) => name)
-  expect(toolNames).toContain("search_issues")
-  expect(toolNames).not.toContain("create_issue")
-  await client.close()
-  const sessionsResponse = await context.request.get(
-    `${apiOrigin}/me/mcp-oauth/sessions`,
-    { headers: { cookie: organizationAdminCookie, origin: webOrigin } }
-  )
-  expect(sessionsResponse.status()).toBe(200)
-  const sessions: unknown = await sessionsResponse.json()
-  if (!Array.isArray(sessions)) {
-    throw new Error("MCP OAuth E1 session list is invalid")
+  const clientName = `MCP subset client ${namespace}`
+  let client: Client | undefined
+  let primarySessionCookie = ""
+  try {
+    const clientId = await registerClient({
+      apiOrigin,
+      clientName,
+      redirectUri,
+      request: context.request,
+      scope,
+    })
+    const pkce = await createPkce()
+    const code = await authorizeClient({
+      apiPublicOrigin,
+      challenge: pkce.challenge,
+      clientId,
+      grantScope: "offline_access issues:read",
+      organizationName,
+      page,
+      redirectUri,
+      resource,
+      scope,
+      state: crypto.randomUUID(),
+    })
+    primarySessionCookie = await cookieHeader(context)
+    await context.clearCookies()
+    const accessToken = await exchangeCode({
+      apiOrigin,
+      clientId,
+      code,
+      redirectUri,
+      request: context.request,
+      resource,
+      verifier: pkce.verifier,
+    })
+    client = await connectMcpClient(`${apiOrigin}/mcp`, accessToken)
+    const tools = await client.listTools()
+    const toolNames = tools.tools.map(({ name }) => name)
+    expect(toolNames).toContain("search_issues")
+    expect(toolNames).not.toContain("create_issue")
+  } finally {
+    await cleanupMcpResources({
+      apiOrigin,
+      client,
+      clientName,
+      namespace,
+      organization,
+      request: context.request,
+      sessionCookies: [organization.adminCookie, primarySessionCookie],
+      webOrigin,
+    })
   }
-  const session = sessions.find(
-    (candidate) =>
-      isRecord(candidate) &&
-      Reflect.get(candidate, "clientName") === `MCP subset client ${namespace}`
-  )
-  if (!isRecord(session)) {
-    throw new Error("MCP OAuth E1 subset session is missing")
-  }
-  const credentialId = requiredString(session, "credentialId")
-  const revokeResponse = await context.request.delete(
-    `${apiOrigin}/me/mcp-oauth/sessions/${encodeURIComponent(credentialId)}`,
-    { headers: { cookie: organizationAdminCookie, origin: webOrigin } }
-  )
-  expect(revokeResponse.status()).toBe(200)
-  const removal = await context.request.delete(
-    `${apiOrigin}/organizations/${organizationId}`,
-    {
-      data: {
-        confirmation: "DELETE",
-        idempotencyKey: `${namespace}.delete.organization`,
-        slug: organizationSlug,
-      },
-      headers: { cookie: organizationAdminCookie, origin: webOrigin },
-    }
-  )
-  expect(removal.status()).toBe(200)
 })

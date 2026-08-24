@@ -6,8 +6,8 @@ import { IssueDueDateTimeControl } from "./issue-metadata-controls"
 
 const initialDueDate = "2026-07-20T09:30:00.000Z"
 
-describe("IssueDueDateTimeControl", () => {
-  it("keeps a local draft and commits it once when the picker closes", async () => {
+describe("IssueDueDateTimeControlの契約", () => {
+  it("ローカルdraftを保持し、pickerを閉じたとき1回だけcommitする", async () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn<(value: string | null) => void>()
     const currentHour = new Date(initialDueDate).getHours()
@@ -45,10 +45,10 @@ describe("IssueDueDateTimeControl", () => {
     expect(new Date(String(nextValue)).getHours()).toBe(Number(nextHour))
   })
 
-  it("does not commit on an unchanged close or closed prop synchronization", async () => {
+  it("未変更のままpickerを閉じてもcommitしない", async () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn<(value: string | null) => void>()
-    const view = render(
+    render(
       <IssueDueDateTimeControl
         value={initialDueDate}
         ariaLabel="Issue due date and time"
@@ -61,6 +61,18 @@ describe("IssueDueDateTimeControl", () => {
     )
     await user.keyboard("{Escape}")
     expect(onValueChange).not.toHaveBeenCalled()
+  })
+
+  it("pickerが閉じている間のprops同期ではcommitしない", async () => {
+    const user = userEvent.setup()
+    const onValueChange = vi.fn<(value: string | null) => void>()
+    const view = render(
+      <IssueDueDateTimeControl
+        value={initialDueDate}
+        ariaLabel="Issue due date and time"
+        onValueChange={onValueChange}
+      />
+    )
 
     view.rerender(
       <IssueDueDateTimeControl
@@ -77,37 +89,7 @@ describe("IssueDueDateTimeControl", () => {
     expect(onValueChange).not.toHaveBeenCalled()
   })
 
-  it("commits the draft when an outside interaction closes the picker", async () => {
-    const user = userEvent.setup()
-    const onValueChange = vi.fn<(value: string | null) => void>()
-
-    render(
-      <>
-        <IssueDueDateTimeControl
-          value={initialDueDate}
-          ariaLabel="Issue due date and time"
-          onValueChange={onValueChange}
-        />
-        <button type="button">Outside</button>
-      </>
-    )
-
-    await user.click(
-      screen.getByRole("button", { name: "Issue due date and time" })
-    )
-    await user.click(screen.getByRole("combobox", { name: "Due minute" }))
-    await user.click(screen.getByRole("option", { name: "45" }))
-    expect(onValueChange).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole("button", { name: "Outside" }))
-
-    expect(onValueChange).toHaveBeenCalledOnce()
-    const nextValue = onValueChange.mock.calls[0]?.[0]
-    expect(nextValue).not.toBeNull()
-    expect(new Date(String(nextValue)).getMinutes()).toBe(45)
-  })
-
-  it("commits clearing once as the picker closes", async () => {
+  it("pickerを閉じるときclearを1回だけcommitする", async () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn<(value: string | null) => void>()
 

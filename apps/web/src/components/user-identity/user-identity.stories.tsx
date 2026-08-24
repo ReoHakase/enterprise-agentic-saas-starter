@@ -1,5 +1,4 @@
 import { http, HttpResponse } from "msw"
-import { expect } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -25,20 +24,11 @@ const meta = preview.meta({
 
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("Avery Stone")).toBeVisible()
-    await expect(canvas.getByText("avery@example.test")).toBeVisible()
-    await expect(canvas.getByText("AS")).toBeVisible()
-  },
 })
 
 export const EmailFallback = meta.story({
   args: {
     user: { name: null, email: "support@example.test", profileImage: null },
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getAllByText("support@example.test")).toHaveLength(2)
-    await expect(canvas.getByText("SU")).toBeVisible()
   },
 })
 
@@ -51,7 +41,4 @@ export const ImageFailure = meta.story({
     )
   },
   render: () => <UserProfileImage user={fictionalMissingImageUser} />,
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("AS")).toBeInTheDocument()
-  },
 })

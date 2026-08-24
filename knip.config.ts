@@ -159,10 +159,13 @@ const config: KnipConfig = {
       project: ["test-fixtures/**/*.{ts,tsx}"],
     },
     "packages/ui": {
+      entry: ["src/**/*.browser.test.{ts,tsx}"],
       project: [
         "src/**/*.{css,ts,tsx}!",
         "!src/**/*.stories.{ts,tsx}!",
         "!src/**/*.test.{ts,tsx}!",
+        "!src/test-support/**!",
+        "!src/components/**/test-support/**!",
       ],
       // Tailwind reads this package from the exported CSS `@source` directive.
       // Remove when Knip follows CSS dependency references.

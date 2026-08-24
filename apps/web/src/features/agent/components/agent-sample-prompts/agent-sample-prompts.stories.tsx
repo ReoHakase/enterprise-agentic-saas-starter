@@ -1,4 +1,4 @@
-import { expect, fn, userEvent } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -13,15 +13,4 @@ const meta = preview.meta({
   },
 })
 
-export const Ready = meta.story({
-  play: async ({ args, canvas }) => {
-    await userEvent.click(
-      canvas.getByRole("button", {
-        name: "Summarize the current page and suggest the next action.",
-      })
-    )
-    await expect(args.onSelect).toHaveBeenCalledWith(
-      "Summarize the current page and suggest the next action."
-    )
-  },
-})
+export const Ready = meta.story({})

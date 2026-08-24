@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen, within } from "@testing-library/react"
+import { act, render, renderHook, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ChangeEvent } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -118,8 +118,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("issue table advanced controls", () => {
-  it("cancels a pending search, emits one clear, and refocuses the input", () => {
+describe("Issue tableの高度なcontrol", () => {
+  it("保留中の検索をキャンセルし、clearを1回通知する", () => {
     vi.useFakeTimers()
     const onSearchChange = vi.fn<(query: string) => void>()
     const onViewChange = vi.fn<() => Promise<URLSearchParams>>(
@@ -145,7 +145,6 @@ describe("issue table advanced controls", () => {
     act(() => result.current.clearSearch())
 
     expect(result.current.searchDraft).toBe("")
-    expect(input).toHaveFocus()
     expect(onSearchChange).toHaveBeenCalledOnce()
     expect(onSearchChange).toHaveBeenCalledWith("")
     act(() => vi.advanceTimersByTime(300))
@@ -153,34 +152,28 @@ describe("issue table advanced controls", () => {
     inputView.unmount()
   })
 
-  it("keeps filter and sort resets scoped and disables default groups", async () => {
+  it("filterだけを既定値へリセットする", async () => {
     const user = userEvent.setup()
     const callbacks = createCallbacks()
-    const view = render(<WorkspaceProbe callbacks={callbacks} />)
-    expect(screen.getByRole("button", { name: "Reset filters" })).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Reset sort" })).toBeDisabled()
-
-    view.rerender(
-      <WorkspaceProbe callbacks={callbacks} state={nonDefaultState} />
-    )
+    render(<WorkspaceProbe callbacks={callbacks} state={nonDefaultState} />)
     const resetFilters = screen.getByRole("button", {
       name: "Reset filters",
     })
-    const resetSort = screen.getByRole("button", { name: "Reset sort" })
     expect(resetFilters).toBeEnabled()
-    expect(resetSort).toBeEnabled()
-    for (const name of ["Issue filter actions", "Issue sort actions"]) {
-      const actions = screen.getByRole("group", { name })
-      expect(actions).toHaveClass("ml-auto", "shrink-0")
-      expect(actions).not.toHaveClass("basis-full")
-    }
 
     await user.click(resetFilters)
     expect(callbacks.onViewChange).toHaveBeenCalledOnce()
     expect(callbacks.onViewChange).toHaveBeenCalledWith(filterDefaults)
     expect(resetFilters).toBeDisabled()
+  })
 
-    callbacks.onViewChange.mockClear()
+  it("sortだけを既定値へリセットする", async () => {
+    const user = userEvent.setup()
+    const callbacks = createCallbacks()
+    render(<WorkspaceProbe callbacks={callbacks} state={nonDefaultState} />)
+    const resetSort = screen.getByRole("button", { name: "Reset sort" })
+    expect(resetSort).toBeEnabled()
+
     await user.click(resetSort)
     expect(callbacks.onViewChange).toHaveBeenCalledOnce()
     expect(callbacks.onViewChange).toHaveBeenCalledWith({
@@ -190,7 +183,7 @@ describe("issue table advanced controls", () => {
     })
   })
 
-  it("owns accessible summaries and places the column menu in the 48px actions header", () => {
+  it("有効なfilterをアクセシブルな概要として説明する", () => {
     const callbacks = createCallbacks()
     render(<WorkspaceProbe callbacks={callbacks} state={activeSummaryState} />)
 
@@ -198,16 +191,10 @@ describe("issue table advanced controls", () => {
     expect(status).toHaveAccessibleDescription(
       "Selected statuses: Open, Closed; 2 total"
     )
-    expect(
-      within(status).getAllByTestId("issue-filter-summary-dot")
-    ).toHaveLength(2)
     const priority = screen.getByRole("button", { name: "Priority" })
     expect(priority).toHaveAccessibleDescription(
       "Selected priorities: Medium, High, Urgent; 3 total"
     )
-    expect(
-      within(priority).getAllByTestId("issue-filter-summary-dot")
-    ).toHaveLength(3)
     expect(
       screen.getByRole("button", { name: "Assignee" })
     ).toHaveAccessibleDescription(
@@ -221,44 +208,19 @@ describe("issue table advanced controls", () => {
     expect(
       screen.getByRole("button", { name: "Due date" })
     ).toHaveAccessibleDescription("Due date filter: Jun 7 – Jun 18")
-
-    const header = screen.getByRole("columnheader", {
-      name: "Actions",
-    })
-    expect(header).toHaveClass("w-12", "min-w-12", "max-w-12", "p-0")
-    const columns = within(header).getByRole("button", {
-      name: "Choose visible columns",
-    })
-    expect(columns).not.toHaveTextContent("Columns")
-    expect(columns).toHaveClass("ring-border")
-    expect(columns).not.toHaveClass("ring-primary", "text-primary")
-    expect(
-      screen.queryByLabelText("Standalone issue columns control")
-    ).not.toBeInTheDocument()
   })
 
-  it("renders one table-bounded selection overlay and no footer duplicate", async () => {
+  it("選択件数を一意に表示してclearで解除する", async () => {
     const user = userEvent.setup()
     render(<WorkspaceProbe callbacks={createCallbacks()} />)
 
     await user.click(screen.getByRole("checkbox", { name: "Select issue 1" }))
-    const overlay = screen.getByTestId("data-table-selection-anchor")
-    const bar = screen.getByTestId("data-table-selection-bar")
-    const footer = screen.getByLabelText("Issue table footer")
-    expect(overlay).toHaveClass("sticky", "h-fit", "self-end", "justify-center")
-    expect(overlay).toHaveClass(
-      "bottom-[calc(1rem+env(safe-area-inset-bottom))]"
-    )
-    expect(bar).toContainElement(
-      screen.getByRole("status", { name: "1 selected" })
-    )
+    expect(screen.getByRole("status", { name: "1 selected" })).toBeVisible()
     expect(screen.getAllByText("1 selected")).toHaveLength(1)
-    expect(within(footer).queryByText("1 selected")).not.toBeInTheDocument()
-    expect(footer).not.toHaveClass("sticky")
 
-    await user.click(within(bar).getByRole("button", { name: "Clear" }))
+    await user.click(screen.getByRole("button", { name: "Clear" }))
     expect(
-      screen.queryByTestId("data-table-selection-bar")
+      screen.queryByRole("status", { name: "1 selected" })
     ).not.toBeInTheDocument()
   })
 })

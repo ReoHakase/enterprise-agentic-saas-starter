@@ -100,22 +100,27 @@ const meta = preview
 
 export const InviteMember = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ args, canvas, canvasElement, step }) => {
-    const trigger = canvas.getByRole("button", { name: "Invite member" })
+  play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Validate the required email field", async () => {
-      await userEvent.click(trigger)
+    await step("Dialog overlayとcontentを同じportalへ配置する", async () => {
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Invite member" })
+      )
       await expectDialogOverlayContract(
         body.getByRole("dialog", { name: "Invite member" })
       )
-      await userEvent.click(
-        body.getByRole("button", { name: "Send invitation" })
-      )
-      await expect(body.getByRole("textbox", { name: "Email" })).toBeInvalid()
     })
+  },
+})
 
-    await step("Submit a valid fictional member", async () => {
+export const InviteMemberSubmitted = meta.story({
+  tags: ["theme-sensitive"],
+  play: async ({ args, canvas, canvasElement, step }) => {
+    const trigger = canvas.getByRole("button", { name: "Invite member" })
+    const body = within(canvasElement.ownerDocument.body)
+    await step("有効な架空メンバーを送信する", async () => {
+      await userEvent.click(trigger)
       await userEvent.type(
         body.getByRole("textbox", { name: "Email" }),
         "new-member@example.test"
@@ -131,14 +136,13 @@ export const InviteMember = meta.story({
 })
 
 export const Cancelled = meta.story({
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     const trigger = canvas.getByRole("button", { name: "Invite member" })
-    await userEvent.click(trigger)
     const body = within(canvasElement.ownerDocument.body)
-    await expectDialogOverlayContract(
-      body.getByRole("dialog", { name: "Invite member" })
-    )
-    await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-    await waitFor(() => expect(trigger).toHaveFocus())
+    await step("招待を取り消すとトリガーへフォーカスを戻す", async () => {
+      await userEvent.click(trigger)
+      await userEvent.click(await body.findByRole("button", { name: "Cancel" }))
+      await waitFor(() => expect(trigger).toHaveFocus())
+    })
   },
 })

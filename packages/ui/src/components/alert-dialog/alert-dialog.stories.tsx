@@ -112,30 +112,45 @@ const meta = preview.meta({
 })
 
 export const DeleteOrganization = meta.story({
-  play: async ({ args, canvas, canvasElement, step }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     const trigger = canvas.getByRole("button", {
       name: "Delete organization",
     })
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Cancel and restore focus", async () => {
+    await step("破壊的確認をoverlayへ表示する", async () => {
       await userEvent.click(trigger)
       const content = body.getByRole("alertdialog", {
         name: "Delete Acme Cloud?",
       })
       await expectAlertDialogOverlayContract(content)
-      await expect(content).toHaveAccessibleDescription(
-        "This permanently deletes organization data and cannot be undone."
-      )
+    })
+  },
+})
+
+export const DeleteOrganizationCancelled = meta.story({
+  play: async ({ canvas, canvasElement, step }) => {
+    const trigger = canvas.getByRole("button", {
+      name: "Delete organization",
+    })
+    const body = within(canvasElement.ownerDocument.body)
+
+    await step("キャンセルしてフォーカスを復元する", async () => {
+      await userEvent.click(trigger)
       await userEvent.click(body.getByRole("button", { name: "Cancel" }))
       await waitFor(() => expect(trigger).toHaveFocus())
     })
+  },
+})
 
-    await step("Confirm the destructive action", async () => {
+export const DeleteOrganizationConfirmed = meta.story({
+  play: async ({ args, canvas, canvasElement, step }) => {
+    const trigger = canvas.getByRole("button", {
+      name: "Delete organization",
+    })
+    const body = within(canvasElement.ownerDocument.body)
+    await step("破壊的操作を確認する", async () => {
       await userEvent.click(trigger)
-      await expectAlertDialogOverlayContract(
-        body.getByRole("alertdialog", { name: "Delete Acme Cloud?" })
-      )
       await userEvent.click(
         body.getByRole("button", { name: "Permanently delete" })
       )

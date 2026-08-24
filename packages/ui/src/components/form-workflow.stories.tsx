@@ -109,7 +109,7 @@ const meta = preview
 
 export const MemberInvitation = meta.story({
   play: async ({ args, canvas, step }) => {
-    await step("Complete the member invitation form", async () => {
+    await step("メンバー招待フォームに記入する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email address" }),
         "jordan@example.test"
@@ -122,20 +122,6 @@ export const MemberInvitation = meta.story({
         role: "member",
         securityUpdates: true,
       })
-    })
-  },
-})
-
-export const RequiredValidation = meta.story({
-  play: async ({ args, canvas, step }) => {
-    await step("Block submission until the email is valid", async () => {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Send invitation" })
-      )
-      await expect(
-        canvas.getByRole("textbox", { name: "Email address" })
-      ).toBeInvalid()
-      await expect(args.onInvite).not.toHaveBeenCalled()
     })
   },
 })

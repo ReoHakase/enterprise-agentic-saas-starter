@@ -18,10 +18,10 @@ const useVisibility = (userId: string) =>
     storageVersion: 2,
   })
 
-describe("useDataTableColumnVisibility", () => {
+describe("useDataTableColumnVisibilityの契約", () => {
   beforeEach(() => window.localStorage.clear())
 
-  it("restores, writes, and resets the current user's preference", async () => {
+  it("現在のユーザー設定を復元する", async () => {
     const key = getDataTableStorageKey("user-1", "issues", 2)
     window.localStorage.setItem(key, JSON.stringify({ status: false }))
     const { result } = renderHook(() => useVisibility("user-1"))
@@ -29,9 +29,25 @@ describe("useDataTableColumnVisibility", () => {
     await waitFor(() =>
       expect(result.current.columnVisibility).toEqual({ status: false })
     )
+  })
+
+  it("列の表示変更を現在のユーザー設定へ保存する", () => {
+    const key = getDataTableStorageKey("user-1", "issues", 2)
+    const { result } = renderHook(() => useVisibility("user-1"))
+
     act(() => result.current.onColumnVisibilityChange({ status: true }))
     expect(window.localStorage.getItem(key)).toBe(
       JSON.stringify({ status: true })
+    )
+  })
+
+  it("列の表示設定を初期値へ戻して保存値を削除する", async () => {
+    const key = getDataTableStorageKey("user-1", "issues", 2)
+    window.localStorage.setItem(key, JSON.stringify({ status: false }))
+    const { result } = renderHook(() => useVisibility("user-1"))
+
+    await waitFor(() =>
+      expect(result.current.columnVisibility).toEqual({ status: false })
     )
 
     act(() => result.current.resetColumnVisibility())
@@ -39,7 +55,7 @@ describe("useDataTableColumnVisibility", () => {
     expect(window.localStorage.getItem(key)).toBeNull()
   })
 
-  it("isolates preferences by authenticated user", async () => {
+  it("認証されたユーザーごとに設定を分離する", async () => {
     const userOneKey = getDataTableStorageKey("user-1", "issues", 2)
     const userTwoKey = getDataTableStorageKey("user-2", "issues", 2)
     window.localStorage.setItem(userOneKey, JSON.stringify({ status: false }))
@@ -61,7 +77,7 @@ describe("useDataTableColumnVisibility", () => {
     )
   })
 
-  it("ignores a prior storage version", async () => {
+  it("以前のストレージ版を無視する", async () => {
     const oldKey = getDataTableStorageKey("user-1", "issues")
     const currentKey = getDataTableStorageKey("user-1", "issues", 2)
     window.localStorage.setItem(oldKey, JSON.stringify({ status: false }))

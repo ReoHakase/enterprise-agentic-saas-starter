@@ -83,7 +83,7 @@ export const MobileNavigation = meta.story({
     })
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Open the mobile destination list", async () => {
+    await step("モバイル宛先リストを開く", async () => {
       await userEvent.click(trigger)
       const content = body.getByRole("dialog", {
         name: "Workspace navigation",
@@ -95,7 +95,7 @@ export const MobileNavigation = meta.story({
       ).toBeVisible()
     })
 
-    await step("Close and return focus", async () => {
+    await step("閉じてフォーカスを戻す", async () => {
       await userEvent.click(body.getByRole("button", { name: "Done" }))
       await waitFor(() => expect(trigger).toHaveFocus())
     })

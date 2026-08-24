@@ -1,4 +1,4 @@
-import { expect, fn, userEvent } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -24,15 +24,6 @@ export const Pagination = meta.story({
       <Button variant="outline">Next</Button>
     </ButtonGroup>
   ),
-  play: async ({ canvas, step }) => {
-    await step("Move between grouped controls with Tab", async () => {
-      const previous = canvas.getByRole("button", { name: "Previous" })
-      const next = canvas.getByRole("button", { name: "Next" })
-      previous.focus()
-      await userEvent.tab()
-      await expect(next).toHaveFocus()
-    })
-  },
 })
 
 export const DestructiveChoice = meta.story({

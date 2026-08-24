@@ -26,7 +26,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Focus the primary recovery field", async () => {
+    await step("復旧用の主要入力欄へフォーカスする", async () => {
       await userEvent.tab()
       await expect(canvas.getByRole("textbox", { name: "Email" })).toHaveFocus()
     })
@@ -42,7 +42,7 @@ export const Sent = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Confirm a privacy-preserving reset request", async () => {
+    await step("プライバシーを保つリセット受付を確認する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email" }),
         fictionalAuthUser.email
@@ -71,7 +71,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Show the stable reset request error", async () => {
+    await step("固定のリセット要求エラーを表示する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email" }),
         fictionalAuthUser.email

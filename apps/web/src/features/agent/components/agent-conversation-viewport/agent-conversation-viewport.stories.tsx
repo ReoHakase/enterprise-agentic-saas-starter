@@ -39,24 +39,13 @@ const meta = preview.meta({
 
 export const CenteredConversation = meta.story({
   render: () => <ConversationFixture />,
-  play: async ({ canvas }) => {
-    const viewport = canvas.getByTestId("agent-conversation-viewport")
-    await expect(viewport).toBeVisible()
-    const content = canvas.getByTestId("agent-conversation-content")
-    const viewportRect = viewport.getBoundingClientRect()
-    const contentRect = content.getBoundingClientRect()
-    expect(contentRect.width).toBeLessThanOrEqual(768)
-    expect(contentRect.left + contentRect.width / 2).toBeCloseTo(
-      viewportRect.left + viewportRect.width / 2,
-      0
-    )
-    await expect(
-      canvas.queryByRole("navigation", { name: "Conversation turns" })
-    ).toBeVisible()
-    const firstTurn = canvas.getByRole("button", {
-      name: /Jump to turn 1: Review the organization access policy/u,
+  play: async ({ canvas, step }) => {
+    await step("turn minimapから最初のturnへ移動する", async () => {
+      const firstTurn = canvas.getByRole("button", {
+        name: /Jump to turn 1: Review the organization access policy/u,
+      })
+      await userEvent.click(firstTurn)
+      await expect(firstTurn).toHaveAttribute("aria-current", "location")
     })
-    await userEvent.click(firstTurn)
-    await expect(firstTurn).toHaveAttribute("aria-current", "location")
   },
 })

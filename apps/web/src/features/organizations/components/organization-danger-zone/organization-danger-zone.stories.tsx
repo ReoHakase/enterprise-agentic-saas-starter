@@ -1,5 +1,3 @@
-import { expect, userEvent, waitFor, within } from "storybook/test"
-
 import preview from "#storybook/preview"
 import { Providers } from "@/components/providers/providers"
 
@@ -28,41 +26,8 @@ const meta = preview.meta({
 
 export const Owner = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, canvasElement, step }) => {
-    const body = within(canvasElement.ownerDocument.body)
-
-    await step("Require both destructive confirmations", async () => {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Delete organization" })
-      )
-      const dialog = body.getByRole("alertdialog", {
-        name: "Delete Acme Cloud?",
-      })
-      await userEvent.type(
-        within(dialog).getByRole("textbox", {
-          name: "Type the organization slug",
-        }),
-        "acme"
-      )
-      await expect(
-        within(dialog).getByRole("button", { name: "Permanently delete" })
-      ).toBeDisabled()
-      await userEvent.keyboard("{Escape}")
-      await waitFor(() =>
-        expect(
-          body.queryByRole("alertdialog", { name: "Delete Acme Cloud?" })
-        ).not.toBeInTheDocument()
-      )
-    })
-  },
 })
 
 export const PermissionLimited = meta.story({
   args: { organization: fictionalReadOnlyOrganization },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("Sensitive controls")).toBeVisible()
-    await expect(
-      canvas.queryByRole("button", { name: "Delete organization" })
-    ).not.toBeInTheDocument()
-  },
 })

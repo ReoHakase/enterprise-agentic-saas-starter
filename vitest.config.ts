@@ -224,6 +224,10 @@ const browserCoverageProjects: Record<
     workspace: "packages/ui",
     include: uiBrowserCoverageIncludes,
   },
+  "ui-browser": {
+    workspace: "packages/ui",
+    include: uiBrowserCoverageIncludes,
+  },
 }
 
 const prefixGlobs = (workspace: string, globs: string[]) =>
@@ -268,7 +272,7 @@ const coverageForSelectedProject = () => {
       enabled: true as const,
       provider: "v8" as const,
       reporter: ["text", "json-summary", "lcov", "html"] as const,
-      reportsDirectory: `${browserCoverage.workspace}/coverage/browser`,
+      reportsDirectory: `${browserCoverage.workspace}/coverage/browser/${selectedProject}`,
       include: prefixGlobs(browserCoverage.workspace, browserCoverage.include),
       exclude: prefixGlobs(browserCoverage.workspace, coverageExcludes),
     }
@@ -429,6 +433,22 @@ export default defineConfig({
         theme: "dark",
         web: false,
       }),
+      {
+        root: uiRoot,
+        plugins: [react()],
+        optimizeDeps: { include: uiOptimizeDeps },
+        test: {
+          name: "ui-browser",
+          include: ["src/**/*.browser.test.{ts,tsx}"],
+          setupFiles: [path.join(uiRoot, "vitest.browser.setup.ts")],
+          browser: {
+            enabled: true,
+            provider: playwright({}),
+            headless: true,
+            instances: [{ browser: "chromium" }],
+          },
+        },
+      },
     ],
   },
 })

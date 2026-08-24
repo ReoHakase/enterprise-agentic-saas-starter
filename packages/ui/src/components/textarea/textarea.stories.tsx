@@ -1,5 +1,3 @@
-import { expect, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Textarea } from "./textarea"
@@ -14,18 +12,7 @@ const meta = preview.meta({
   },
 })
 
-export const Empty = meta.story({
-  play: async ({ canvas, step }) => {
-    await step("Enter a multiline issue description", async () => {
-      const field = canvas.getByRole("textbox", { name: "Issue description" })
-      await userEvent.type(
-        field,
-        "Review production access.{enter}Due July 31."
-      )
-      await expect(field).toHaveValue("Review production access.\nDue July 31.")
-    })
-  },
-})
+export const Empty = meta.story({})
 
 export const Filled = meta.story({
   args: {

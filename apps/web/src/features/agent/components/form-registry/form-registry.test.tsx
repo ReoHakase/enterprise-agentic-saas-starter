@@ -56,7 +56,7 @@ const RegistryHarness = ({
   const patchWithoutRevision = useCallback(() => {
     void registry
       .patch(
-        // @ts-expect-error -- This runtime-boundary test intentionally bypasses the required revision.
+        // @ts-expect-error -- このruntime boundaryテストは必須revisionを意図的に省略する
         {
           organizationId: adapter.organizationId,
           formId: adapter.formId,
@@ -117,8 +117,8 @@ const AmbiguousRegistryHarness = () => {
   )
 }
 
-describe("Agent form registry", () => {
-  it("requires explicit confirmation before replacing a dirty Issue field", async () => {
+describe("Agent form registryの契約", () => {
+  it("未保存のIssueフィールドを置き換える前に明示確認を求める", async () => {
     const actor = userEvent.setup()
     const apply =
       vi.fn<(patch: { title?: string; description?: string }) => void>()
@@ -142,7 +142,7 @@ describe("Agent form registry", () => {
     expect(apply).toHaveBeenCalledWith({ title: "Agent title" })
   })
 
-  it("rejects a pending patch when organization switching freezes forms", async () => {
+  it("組織切替でフォームが凍結された場合は保留中のpatchを拒否する", async () => {
     const actor = userEvent.setup()
     const apply =
       vi.fn<(patch: { title?: string; description?: string }) => void>()
@@ -162,7 +162,7 @@ describe("Agent form registry", () => {
     expect(apply).not.toHaveBeenCalled()
   })
 
-  it("rejects a patch that bypasses the client schema without a revision", async () => {
+  it("revisionなしでclient schemaを迂回するpatchを拒否する", async () => {
     const actor = userEvent.setup()
     const apply =
       vi.fn<(patch: { title?: string; description?: string }) => void>()
@@ -179,7 +179,7 @@ describe("Agent form registry", () => {
     expect(apply).not.toHaveBeenCalled()
   })
 
-  it("rejects an implicit target when multiple Issue forms are mounted", async () => {
+  it("複数のIssueフォームがマウント中は暗黙の対象を拒否する", async () => {
     const actor = userEvent.setup()
     render(
       <AgentFormRegistryProvider>

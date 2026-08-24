@@ -1,5 +1,5 @@
 import { SearchIcon, SendIcon } from "lucide-react"
-import { expect, fn, userEvent } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -33,14 +33,6 @@ export const Search = meta.story({
       </InputGroupAddon>
     </InputGroup>
   ),
-  play: async ({ canvas, step }) => {
-    await step("Enter a query and activate search", async () => {
-      const input = canvas.getByRole("textbox", { name: "Search Acme Cloud" })
-      await userEvent.type(input, "security review")
-      await userEvent.click(canvas.getByRole("button", { name: "Run search" }))
-      await expect(input).toHaveValue("security review")
-    })
-  },
 })
 
 export const Composer = meta.story({

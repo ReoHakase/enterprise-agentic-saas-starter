@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest"
 
 import { MessageResponse } from "./message-response"
 
-describe("MessageResponse", () => {
-  it("renders app-relative Markdown links with Next Link semantics", () => {
+describe("MessageResponseの契約", () => {
+  it("Next Linkの動作でアプリ内相対Markdownリンクを描画する", () => {
     render(
       <MessageResponse>
         {"Open [Issue #10](/organization/acme/issues/10)."}
@@ -21,7 +21,7 @@ describe("MessageResponse", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("portals the link safety dialog outside the Markdown paragraph", async () => {
+  it("リンク安全確認ダイアログをMarkdown段落の外へportalする", async () => {
     const user = userEvent.setup()
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null)
 

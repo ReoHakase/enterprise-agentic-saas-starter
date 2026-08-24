@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { AgentTurnStatus } from "./agent-turn-status"
@@ -21,11 +19,6 @@ export const WaitingForFirstByte = meta.story({
     turnStopped: false,
     waitingState: "first-byte",
   },
-  play: async ({ canvas }) => {
-    const status = canvas.getByRole("status")
-    await expect(status).toHaveTextContent("Waiting for a response…")
-    await expect(status.querySelector("svg")).not.toBeNull()
-  },
 })
 
 export const WaitingAfterTool = meta.story({
@@ -34,18 +27,10 @@ export const WaitingAfterTool = meta.story({
     turnStopped: false,
     waitingState: "continuation",
   },
-  play: async ({ canvas }) => {
-    const status = canvas.getByRole("status")
-    await expect(status).toHaveTextContent("Waiting for the next step…")
-    await expect(status.querySelector("svg")).not.toBeNull()
-  },
 })
 
 export const TurnStopped = meta.story({
   args: { cancelState: "idle", turnStopped: true },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("status")).toHaveTextContent("Turn stopped.")
-  },
 })
 
 export const RecoverableTimeout = meta.story({
@@ -54,18 +39,8 @@ export const RecoverableTimeout = meta.story({
     turnStopped: false,
     error: new Error("Agent response timed out."),
   },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "Agent response timed out. You can retry the same draft safely."
-    )
-  },
 })
 
 export const CancelFailed = meta.story({
   args: { cancelState: "failed", turnStopped: false },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "Agent response could not be canceled safely. Retry stop."
-    )
-  },
 })

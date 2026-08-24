@@ -1,7 +1,7 @@
 import { test } from "../fixtures/test"
 import { runScriptedAgentIssueWriteApproval } from "./scripted-agent-issue-write-approval"
 
-test("scripted Agent issue-write-approval traverses the real stack", ({
+test("スクリプト化したAgentのIssue書き込み承認を実構成で検証する", ({
   agentScenario,
   context,
   page,

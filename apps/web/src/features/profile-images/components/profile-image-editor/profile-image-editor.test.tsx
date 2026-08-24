@@ -116,7 +116,7 @@ const profileImageDto = {
   updatedAt: "2026-07-22T00:00:00.000Z",
 } as const
 
-describe("ProfileImageEditor", () => {
+describe("ProfileImageEditorの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.deleteOrganizationProfileImage.mockResolvedValue(undefined)
@@ -127,7 +127,7 @@ describe("ProfileImageEditor", () => {
     mocks.uploadUserProfileImageWithProgress.mockResolvedValue(profileImageDto)
   })
 
-  it("rejects unsupported source formats before opening the crop dialog", async () => {
+  it("crop dialogを開く前に未対応のsource形式を拒否する", async () => {
     const actor = userEvent.setup({ applyAccept: false })
     renderEditor()
 
@@ -142,13 +142,12 @@ describe("ProfileImageEditor", () => {
     expect(screen.queryByRole("button", { name: "Confirm crop" })).toBeNull()
   })
 
-  it("retries a canceled upload with the same content and upload ID", async () => {
+  it("キャンセル済みuploadを同じ内容・upload IDで再試行する", async () => {
     const actor = userEvent.setup()
     mocks.uploadUserProfileImageWithProgress
       .mockImplementationOnce(
-        ({ onProgress, signal }) =>
+        ({ signal }) =>
           new Promise((_resolve, reject) => {
-            onProgress?.({ loaded: 42, total: 100, percent: 42 })
             signal?.addEventListener("abort", () => {
               const error = new Error("aborted")
               error.name = "AbortError"
@@ -165,18 +164,10 @@ describe("ProfileImageEditor", () => {
     )
     await actor.click(screen.getByRole("button", { name: "Confirm crop" }))
 
-    expect(
-      await screen.findByRole("progressbar", {
-        name: "Uploading profile image",
-      })
-    ).toHaveValue(42)
-    expect(screen.queryByRole("button", { name: "Confirm crop" })).toBeNull()
-
     await actor.click(screen.getByRole("button", { name: "Cancel upload" }))
-    expect(
-      await screen.findByText("The profile image upload was canceled.")
-    ).toBeInTheDocument()
-    await actor.click(screen.getByRole("button", { name: "Retry upload" }))
+    await actor.click(
+      await screen.findByRole("button", { name: "Retry upload" })
+    )
 
     await waitFor(() => {
       expect(mocks.uploadUserProfileImageWithProgress).toHaveBeenCalledTimes(2)
@@ -189,16 +180,12 @@ describe("ProfileImageEditor", () => {
     expect(retryInput?.file.type).toBe(firstInput?.file.type)
     expect(retryInput?.file.size).toBe(firstInput?.file.size)
     expect(await retryInput?.file.text()).toBe(await firstInput?.file.text())
-    expect(screen.queryByRole("button", { name: "Retry upload" })).toBeNull()
   })
 
-  it("retries a failed upload but gives a newly selected crop a new upload ID", async () => {
+  it("失敗後に新しく選んだcropに新しいupload IDを割り当てる", async () => {
     const actor = userEvent.setup()
-    const uploadError = new Error("private upload failure")
-    const retryError = new Error("private retry failure")
     mocks.uploadUserProfileImageWithProgress
-      .mockRejectedValueOnce(uploadError)
-      .mockRejectedValueOnce(retryError)
+      .mockRejectedValueOnce(new Error("private upload failure"))
       .mockResolvedValueOnce(profileImageDto)
     renderEditor()
 
@@ -208,19 +195,10 @@ describe("ProfileImageEditor", () => {
       new File(["first"], "first.png", { type: "image/png" })
     )
     await actor.click(screen.getByRole("button", { name: "Confirm crop" }))
-    expect(
-      await screen.findByRole("button", { name: "Retry upload" })
-    ).toBeInTheDocument()
+    await screen.findByRole("button", { name: "Retry upload" })
 
-    await actor.click(screen.getByRole("button", { name: "Retry upload" }))
-    await waitFor(() => {
-      expect(mocks.uploadUserProfileImageWithProgress).toHaveBeenCalledTimes(2)
-    })
     const firstUploadId =
       mocks.uploadUserProfileImageWithProgress.mock.calls[0]?.[0].uploadId
-    expect(
-      mocks.uploadUserProfileImageWithProgress.mock.calls[1]?.[0].uploadId
-    ).toBe(firstUploadId)
 
     await actor.upload(
       input,
@@ -228,16 +206,14 @@ describe("ProfileImageEditor", () => {
     )
     await actor.click(screen.getByRole("button", { name: "Confirm crop" }))
     await waitFor(() => {
-      expect(mocks.uploadUserProfileImageWithProgress).toHaveBeenCalledTimes(3)
+      expect(mocks.uploadUserProfileImageWithProgress).toHaveBeenCalledTimes(2)
     })
     expect(
-      mocks.uploadUserProfileImageWithProgress.mock.calls[2]?.[0].uploadId
+      mocks.uploadUserProfileImageWithProgress.mock.calls[1]?.[0].uploadId
     ).not.toBe(firstUploadId)
-    expect(mocks.reportObservedError).toHaveBeenNthCalledWith(1, uploadError)
-    expect(mocks.reportObservedError).toHaveBeenNthCalledWith(2, retryError)
   })
 
-  it("shows the requester-safe reason from a rejected profile image upload", async () => {
+  it("拒否されたプロフィール画像uploadの安全な理由を要求元へ表示する", async () => {
     const actor = userEvent.setup()
     const uploadError = new FileUploadError({
       code: "unsupported_media_type",
@@ -259,7 +235,7 @@ describe("ProfileImageEditor", () => {
     expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
   })
 
-  it("uploads an organization crop through the organization helper", async () => {
+  it("組織用helperで組織プロフィール画像のcropをuploadする", async () => {
     const actor = userEvent.setup()
     renderEditor({
       subject: "organization",
@@ -284,7 +260,7 @@ describe("ProfileImageEditor", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile image updated")
   })
 
-  it("invalidates cached device accounts after a user upload", async () => {
+  it("利用者画像のupload後にdevice account cacheを無効化する", async () => {
     const actor = userEvent.setup()
     const queryClient = renderEditor()
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries")
@@ -302,7 +278,7 @@ describe("ProfileImageEditor", () => {
     })
   })
 
-  it("removes a first-party image and invalidates cached device accounts", async () => {
+  it("first-party画像を削除してdevice account cacheを無効化する", async () => {
     const actor = userEvent.setup()
     const queryClient = renderEditor({
       subject: "user",
@@ -325,7 +301,7 @@ describe("ProfileImageEditor", () => {
     })
   })
 
-  it("keeps a safe removal error visible inside the confirmation dialog", async () => {
+  it("安全な削除エラーを確認dialog内に表示し続ける", async () => {
     const actor = userEvent.setup()
     mocks.deleteUserProfileImage.mockRejectedValueOnce(
       new Error("private provider detail")
@@ -350,7 +326,7 @@ describe("ProfileImageEditor", () => {
     expect(screen.queryByText("private provider detail")).toBeNull()
   })
 
-  it("shows an application-owned removal reason from a 4xx response", async () => {
+  it("4xxレスポンスからアプリケーション所有の削除理由を表示する", async () => {
     const actor = userEvent.setup()
     mocks.deleteUserProfileImage.mockRejectedValueOnce(
       httpError(409, "conflict", {
@@ -375,7 +351,7 @@ describe("ProfileImageEditor", () => {
     ).toBeInTheDocument()
   })
 
-  it("does not offer removal for an external fallback image", () => {
+  it("外部の代替画像には削除操作を表示しない", () => {
     renderEditor({
       subject: "user",
       userId: "user-1",

@@ -39,14 +39,20 @@ const PaginationProbe = () => {
   )
 }
 
-describe("DataTablePagination", () => {
-  it("changes pages and resets to the first page when page size changes", async () => {
+describe("DataTablePaginationの契約", () => {
+  it("次のページへ進む", async () => {
     const user = userEvent.setup()
     render(<PaginationProbe />)
 
     await user.click(screen.getByRole("button", { name: "Next" }))
     expect(screen.getByLabelText("Current page")).toHaveTextContent("2")
+  })
 
+  it("ページサイズ変更時に先頭ページへ戻す", async () => {
+    const user = userEvent.setup()
+    render(<PaginationProbe />)
+
+    await user.click(screen.getByRole("button", { name: "Next" }))
     await user.click(screen.getByRole("combobox", { name: "Members per page" }))
     await user.click(await screen.findByRole("option", { name: "50 / page" }))
     expect(screen.getByLabelText("Current page")).toHaveTextContent("1")

@@ -61,13 +61,13 @@ const renderSettings = () => {
   )
 }
 
-describe("OrganizationSettingsForm", () => {
+describe("OrganizationSettingsFormの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.updateOrganization.mockResolvedValue(organization)
   })
 
-  it("updates organization identity through a query mutation", async () => {
+  it("組織情報を更新して成功を通知する", async () => {
     const actor = userEvent.setup()
     mocks.updateOrganization.mockResolvedValue({
       ...organization,
@@ -89,7 +89,7 @@ describe("OrganizationSettingsForm", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization updated")
   })
 
-  it("shows fixed failure copy and retains the draft", async () => {
+  it("固定の失敗文言を表示してdraftを保持する", async () => {
     const actor = userEvent.setup()
     mocks.updateOrganization.mockRejectedValueOnce(httpError(409, "conflict"))
     renderSettings()
@@ -111,7 +111,7 @@ describe("OrganizationSettingsForm", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("presents a server-reserved slug as an API field error", async () => {
+  it("組織更新時にサーバー予約済みslugをAPIフィールドエラーとして表示する", async () => {
     const actor = userEvent.setup()
     mocks.updateOrganization.mockRejectedValueOnce(
       httpError(400, "validation_error", {
@@ -142,7 +142,7 @@ describe("OrganizationSettingsForm", () => {
     expect(screen.queryByText("Choose another slug.")).not.toBeInTheDocument()
   })
 
-  it("replaces the settings URL after a slug change", async () => {
+  it("slug変更後に設定URLを置き換える", async () => {
     const actor = userEvent.setup()
     mocks.updateOrganization.mockResolvedValueOnce({
       ...organization,

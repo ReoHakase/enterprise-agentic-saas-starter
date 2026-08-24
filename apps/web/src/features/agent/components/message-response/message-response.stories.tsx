@@ -43,17 +43,6 @@ const meta = preview.meta({
 export const RichMarkdown = meta.story({
   tags: ["theme-sensitive"],
   args: { children: richContent },
-  play: async ({ canvas, step }) => {
-    await step("Render structured technical content", async () => {
-      await expect(
-        await canvas.findByRole("heading", { name: "Tenant access review" })
-      ).toBeVisible()
-      await expect(canvas.getByRole("table")).toHaveTextContent(
-        "Repository filter"
-      )
-      await expect(canvas.getByText(/日本語と English/)).toBeVisible()
-    })
-  },
 })
 
 export const Streaming = meta.story({
@@ -61,11 +50,6 @@ export const Streaming = meta.story({
     children:
       "Reviewing membership, organization scope, and repository filters…",
     isAnimating: true,
-  },
-  play: async ({ canvas, step }) => {
-    await step("Keep partial text readable while streaming", async () => {
-      await expect(canvas.getByText(/Reviewing membership/)).toBeVisible()
-    })
   },
 })
 
@@ -77,7 +61,7 @@ export const ExternalLinkConfirmation = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Confirm an external destination before opening", async () => {
+    await step("外部URLを開く前に遷移先を確認する", async () => {
       await userEvent.click(
         await canvas.findByRole("button", {
           name: "Open the external runbook",

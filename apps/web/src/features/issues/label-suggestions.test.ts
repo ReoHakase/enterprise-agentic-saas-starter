@@ -20,8 +20,8 @@ const issue = (id: string, labels: string[]): Issue => ({
   updatedAt: "2026-07-17T00:00:00.000Z",
 })
 
-describe("deriveIssueLabelSuggestions", () => {
-  it("deduplicates organization labels without case sensitivity", () => {
+describe("deriveIssueLabelSuggestionsの契約", () => {
+  it("大文字と小文字を区別せずに組織ラベルの重複を排除する", () => {
     const labels = deriveIssueLabelSuggestions([
       issue("1", ["Backend", " urgent ", ""]),
       issue("2", ["backend", "Frontend", "URGENT"]),

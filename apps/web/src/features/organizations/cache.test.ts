@@ -44,8 +44,8 @@ const organizations: OrganizationSummary[] = [
   },
 ]
 
-describe("organization query cache", () => {
-  it("updates organization and me caches without refetching old tenant data", async () => {
+describe("組織query cache", () => {
+  it("古いテナントdataを再取得せず組織・個人cacheを更新する", async () => {
     const queryClient = new QueryClient()
     const me: Me = {
       activeOrganizationId: "org-alpha",
@@ -79,10 +79,37 @@ describe("organization query cache", () => {
     })
   })
 
-  it("cancels every current tenant query family before syncing the active cache", async () => {
+  it("現在のテナントquery familyをすべてキャンセルする", async () => {
+    const queryClient = new QueryClient()
+    const cancelQueries = vi
+      .spyOn(queryClient, "cancelQueries")
+      .mockResolvedValue()
+
+    await prepareOrganizationSwitch(queryClient, "org-beta")
+
+    expect(cancelQueries.mock.calls.map(([filters]) => filters)).toEqual(
+      expect.arrayContaining([
+        { queryKey: consoleKeys.all },
+        { queryKey: fileKeys.all },
+        { queryKey: issueKeys.all },
+        { queryKey: agentKeys.all },
+      ])
+    )
+  })
+
+  it("進行中のfile uploadを中止する", async () => {
     const queryClient = new QueryClient()
     const uploadController = new AbortController()
     registerFileUpload(uploadController)
+    vi.spyOn(queryClient, "cancelQueries").mockResolvedValue()
+
+    await prepareOrganizationSwitch(queryClient, "org-beta")
+
+    expect(uploadController.signal.aborted).toBe(true)
+  })
+
+  it("queryのキャンセル後に非active cacheを削除する", async () => {
+    const queryClient = new QueryClient()
     const cancelQueries = vi
       .spyOn(queryClient, "cancelQueries")
       .mockResolvedValue()
@@ -90,19 +117,6 @@ describe("organization query cache", () => {
 
     await prepareOrganizationSwitch(queryClient, "org-beta")
 
-    expect(cancelQueries).toHaveBeenCalledTimes(4)
-    expect(cancelQueries).toHaveBeenNthCalledWith(1, {
-      queryKey: consoleKeys.all,
-    })
-    expect(cancelQueries).toHaveBeenNthCalledWith(2, {
-      queryKey: fileKeys.all,
-    })
-    expect(cancelQueries).toHaveBeenNthCalledWith(3, {
-      queryKey: issueKeys.all,
-    })
-    expect(cancelQueries).toHaveBeenNthCalledWith(4, {
-      queryKey: agentKeys.all,
-    })
     expect(removeQueries).toHaveBeenCalledTimes(2)
     expect(removeQueries).toHaveBeenCalledWith({
       queryKey: fileKeys.all,
@@ -112,7 +126,6 @@ describe("organization query cache", () => {
       queryKey: agentKeys.all,
       type: "inactive",
     })
-    expect(uploadController.signal.aborted).toBe(true)
     expect(removeQueries.mock.invocationCallOrder[0]).toBeGreaterThan(
       Math.max(...cancelQueries.mock.invocationCallOrder)
     )

@@ -14,6 +14,7 @@ export default defineProject({
     name: "ui-unit",
     environment: "happy-dom",
     include: ["src/**/*.test.{ts,tsx}"],
+    exclude: ["**/*.browser.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
   },
 })

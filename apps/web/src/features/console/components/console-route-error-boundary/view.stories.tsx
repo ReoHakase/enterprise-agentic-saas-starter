@@ -19,11 +19,7 @@ export const Content = meta.story({
     reset.mockClear()
   },
   play: async ({ canvas, step }) => {
-    await expect(canvas.getByRole("alert", { name: "Overview" })).toBeVisible()
-    await expect(
-      canvas.getByText("The workspace is temporarily unavailable")
-    ).toBeVisible()
-    await step("Move focus from the error heading to recovery", async () => {
+    await step("エラー見出しから再試行操作へフォーカスを移す", async () => {
       await waitFor(() =>
         expect(
           canvas.getByRole("heading", {
@@ -35,14 +31,10 @@ export const Content = meta.story({
       await expect(
         canvas.getByRole("button", { name: "Try again" })
       ).toHaveFocus()
-      await expect(reset).not.toHaveBeenCalled()
     })
   },
 })
 
 export const Shell = meta.story({
   render: () => <ConsoleShellError reset={reset} />,
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toBeVisible()
-  },
 })

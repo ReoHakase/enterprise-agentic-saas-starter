@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { agentComposerDocumentToParts } from "../agent-composer-document/agent-composer-document"
 
-describe("AgentComposer document projection", () => {
-  it("preserves text and inline context references in document order", () => {
+describe("AgentComposerの文書projection", () => {
+  it("テキストとインラインcontext参照を文書順に保持する", () => {
     expect(
       agentComposerDocumentToParts({
         type: "doc",
@@ -57,7 +57,7 @@ describe("AgentComposer document projection", () => {
     ])
   })
 
-  it("drops malformed mention attributes instead of inventing identifiers", () => {
+  it("識別子を作成する代わりに、不正なメンション属性を削除する", () => {
     expect(
       agentComposerDocumentToParts({
         type: "doc",

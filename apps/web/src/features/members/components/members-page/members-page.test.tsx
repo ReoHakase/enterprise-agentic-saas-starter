@@ -85,12 +85,12 @@ const invitation = {
 const members = [member]
 const invitations = [invitation]
 
-describe("MembersPage", () => {
+describe("MembersPageの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it("renders server-seeded invitations without an intermediate loading state", () => {
+  it("中間の読み込み状態を挟まずサーバー初期値の招待を描画する", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     })
@@ -112,14 +112,11 @@ describe("MembersPage", () => {
       name: "Invitations for Acme",
     })
     expect(invitationsTable).toBeVisible()
-    expect(screen.getAllByTestId("data-table-root")).toHaveLength(2)
     expect(screen.getByText("member@example.com")).toBeVisible()
-    expect(screen.getByTestId("organization-role-member")).toBeVisible()
-    expect(screen.getByTestId("invitation-status-pending")).toBeVisible()
     expect(mocks.listInvitations).not.toHaveBeenCalled()
   })
 
-  it("keeps members usable when the initial invitation fetch fails", () => {
+  it("初回の招待取得が失敗してもメンバー一覧を利用可能に保つ", () => {
     mocks.listInvitations.mockImplementationOnce(
       () => new Promise(() => undefined)
     )
@@ -143,14 +140,13 @@ describe("MembersPage", () => {
       name: "Members of Acme",
     })
     expect(membersTable).toBeVisible()
-    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
     expect(
       screen.getByText("Invitations are temporarily unavailable.")
     ).toBeVisible()
     expect(screen.queryByText("Loading invitations")).not.toBeInTheDocument()
   })
 
-  it("clamps out-of-range member and invitation pages without updating URL state during mount", async () => {
+  it("mount中にURL状態を更新せず範囲外のメンバー・招待ページを補正する", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     })

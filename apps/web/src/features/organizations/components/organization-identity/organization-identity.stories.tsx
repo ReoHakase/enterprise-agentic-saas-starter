@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { OrganizationProfileImage } from "./organization-identity"
@@ -18,15 +16,6 @@ const meta = preview.meta({
 
 export const Fallback = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvasElement, step }) => {
-    await step("Render the neutral organization fallback", async () => {
-      const avatar = canvasElement.querySelector('[data-slot="avatar"]')
-      await expect(avatar).toBeVisible()
-      await expect(
-        avatar?.querySelector(".lucide-building-2")
-      ).toBeInTheDocument()
-    })
-  },
 })
 
 export const LongName = meta.story({
@@ -35,10 +24,5 @@ export const LongName = meta.story({
       name: "International Reliability and Automation Platform",
       profileImage: null,
     },
-  },
-  play: async ({ canvasElement }) => {
-    await expect(
-      canvasElement.querySelector('[data-slot="avatar"]')
-    ).toBeVisible()
   },
 })

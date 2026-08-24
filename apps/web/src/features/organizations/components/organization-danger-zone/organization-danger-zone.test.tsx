@@ -80,7 +80,7 @@ const renderDangerZone = (value = organization) => {
   )
 }
 
-describe("OrganizationDangerZone", () => {
+describe("OrganizationDangerZoneの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.deleteOrganization.mockResolvedValue({
@@ -90,7 +90,7 @@ describe("OrganizationDangerZone", () => {
     })
   })
 
-  it("requires both exact confirmations before an immediate deletion", async () => {
+  it("組織を即時削除するには2つの確認入力を完全一致させる", async () => {
     const user = userEvent.setup()
     renderDangerZone()
 
@@ -123,7 +123,7 @@ describe("OrganizationDangerZone", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization deleted")
   })
 
-  it("does not expose organization deletion to non-Owners", () => {
+  it("Owner以外には組織削除を表示しない", () => {
     renderDangerZone({
       ...organization,
       role: "admin",
@@ -140,7 +140,7 @@ describe("OrganizationDangerZone", () => {
     expect(screen.getByText(/Only the Owner/u)).toBeInTheDocument()
   })
 
-  it("keeps confirmations and offers reauthentication when the session is stale", async () => {
+  it("確認入力を保持し、セッションが古い場合は再認証を提示する", async () => {
     const user = userEvent.setup()
     mocks.deleteOrganization.mockRejectedValueOnce(
       httpError(403, "step_up_required")
@@ -170,7 +170,7 @@ describe("OrganizationDangerZone", () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
-  it("owns a server failure in the destructive dialog without a duplicate toast", async () => {
+  it("サーバー障害を破壊的dialog内で扱い、toastを重複させない", async () => {
     const user = userEvent.setup()
     mocks.deleteOrganization.mockRejectedValueOnce(
       httpError(500, "internal_error")

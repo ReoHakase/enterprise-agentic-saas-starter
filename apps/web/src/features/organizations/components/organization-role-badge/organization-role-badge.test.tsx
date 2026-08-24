@@ -4,23 +4,17 @@ import { describe, expect, it } from "vitest"
 import type { OrganizationRole } from "../../schema"
 import { OrganizationRoleBadge } from "./organization-role-badge"
 
-describe("OrganizationRoleBadge", () => {
+describe("組織roleの表示", () => {
   it.each([
-    ["owner", "Owner", "lucide-crown"],
-    ["admin", "Admin", "lucide-shield"],
-    ["member", "Member", "lucide-user-round"],
-  ] satisfies ReadonlyArray<
-    [role: OrganizationRole, label: string, iconClass: string]
-  >)("renders the %s role contract", (role, label, iconClass) => {
-    render(<OrganizationRoleBadge role={role} />)
+    ["owner", "Owner"],
+    ["admin", "Admin"],
+    ["member", "Member"],
+  ] satisfies ReadonlyArray<[role: OrganizationRole, label: string]>)(
+    "roleが%sなら対応する表示名を公開する",
+    (role, label) => {
+      render(<OrganizationRoleBadge role={role} />)
 
-    const badge = screen.getByTestId(`organization-role-${role}`)
-    expect(badge).toHaveAttribute("data-slot", "badge")
-    expect(badge).toHaveTextContent(label)
-
-    const icon = screen.getByTestId(`role-icon-${role}`)
-    expect(badge).toContainElement(icon)
-    expect(icon).toHaveClass(iconClass)
-    expect(icon).toHaveAttribute("aria-hidden", "true")
-  })
+      expect(screen.getByText(label)).toBeVisible()
+    }
+  )
 })

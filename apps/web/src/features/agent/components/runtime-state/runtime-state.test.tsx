@@ -57,8 +57,8 @@ const Harness = () => {
   )
 }
 
-describe("AgentRuntimeProvider", () => {
-  it("distinguishes disabled and unavailable image upload failures", () => {
+describe("AgentRuntimeProviderの契約", () => {
+  it("画像uploadが無効な場合は環境設定を案内する", () => {
     expect(
       getAgentImageUploadErrorText(
         new FileUploadError({
@@ -68,11 +68,17 @@ describe("AgentRuntimeProvider", () => {
         })
       )
     ).toContain("disabled in this environment")
+  })
+
+  it("画像uploadが利用不能な場合は再試行を案内する", () => {
     expect(
       getAgentImageUploadErrorText(
         new FileUploadError({ message: "Network error", status: 0 })
       )
     ).toContain("temporarily unavailable")
+  })
+
+  it("安全な画像uploadの4xx理由を保持する", () => {
     expect(
       getAgentImageUploadErrorText(
         new FileUploadError({
@@ -81,6 +87,9 @@ describe("AgentRuntimeProvider", () => {
         })
       )
     ).toBe("Choose an image smaller than 10 MB.")
+  })
+
+  it("未知の画像uploadエラーでは生の詳細を公開しない", () => {
     expect(
       getAgentImageUploadErrorText(
         new Error("DATABASE_URL=file:private-upload.db")
@@ -88,7 +97,7 @@ describe("AgentRuntimeProvider", () => {
     ).toBe("Image upload failed.")
   })
 
-  it("keeps a failed submission identity when the shell session unmounts", async () => {
+  it("shell sessionのアンマウント時も失敗した送信IDを保持する", async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },

@@ -24,7 +24,7 @@ const meta = preview.meta({
 
 export const SelectedDate = meta.story({
   play: async ({ canvas, step }) => {
-    await step("Choose a date with the keyboard", async () => {
+    await step("キーボードで日付を選択する", async () => {
       const selected = canvas.getByRole("button", { name: /Friday, July 24/ })
       selected.focus()
       await userEvent.keyboard("{ArrowRight}{Enter}")

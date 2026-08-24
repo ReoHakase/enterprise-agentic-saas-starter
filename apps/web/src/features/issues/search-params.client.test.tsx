@@ -45,8 +45,8 @@ const Probe = () => {
   )
 }
 
-describe("useIssueSearchState", () => {
-  it("updates canonical priority range keys while preserving the Agent thread", async () => {
+describe("useIssueSearchStateの契約", () => {
+  it("Agent スレッドを保持しながら正規の優先順位範囲キーを更新する", async () => {
     const user = userEvent.setup()
     const updates: UrlUpdateEvent[] = []
     currentSearchParams = new URLSearchParams("agentThread=thread-x")
@@ -84,9 +84,30 @@ describe("useIssueSearchState", () => {
         '"priorityFrom":"high","priorityTo":"urgent"'
       )
     )
+  })
+
+  it("Agent スレッドを保持しながら検索条件を初期化する", async () => {
+    const user = userEvent.setup()
+    const updates: UrlUpdateEvent[] = []
+    currentSearchParams = new URLSearchParams(
+      "priorityFrom=high&priorityTo=urgent&agentThread=thread-x"
+    )
+    const onUrlUpdate = vi.fn<(event: UrlUpdateEvent) => void>((event) => {
+      updates.push(event)
+      currentSearchParams = new URLSearchParams(event.searchParams)
+    })
+    render(
+      <NuqsTestingAdapter
+        searchParams={currentSearchParams}
+        hasMemory
+        onUrlUpdate={onUrlUpdate}
+      >
+        <Probe />
+      </NuqsTestingAdapter>
+    )
 
     await user.click(screen.getByRole("button", { name: "Reset query" }))
-    await waitFor(() => expect(updates).toHaveLength(2))
+    await waitFor(() => expect(updates).toHaveLength(1))
     const reset = updates.at(-1)?.searchParams
     expect(reset?.get("priorityFrom")).toBeNull()
     expect(reset?.get("priorityTo")).toBeNull()
@@ -100,7 +121,7 @@ describe("useIssueSearchState", () => {
     })
   })
 
-  it("clears only search and page in one nuqs update", async () => {
+  it("1 つの nuqs 更新で検索とページのみをクリアする", async () => {
     const user = userEvent.setup()
     const updates: UrlUpdateEvent[] = []
     currentSearchParams = new URLSearchParams(

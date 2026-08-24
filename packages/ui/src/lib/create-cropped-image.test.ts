@@ -46,7 +46,7 @@ type DrawImageMock = (
   eighth?: number
 ) => void
 
-describe("createCroppedImage", () => {
+describe("createCroppedImageの契約", () => {
   const createObjectUrl = vi.fn<(source: Blob) => string>(
     () => "blob:test-source"
   )
@@ -94,7 +94,7 @@ describe("createCroppedImage", () => {
     }
   })
 
-  it("crops the source and preserves the selected aspect ratio", async () => {
+  it("ソースをトリミングし、選択したアスペクト比を維持する", async () => {
     const source = new Blob(["source"], { type: "image/png" })
 
     const result = await createCroppedImage(
@@ -124,12 +124,18 @@ describe("createCroppedImage", () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:test-source")
   })
 
-  it("rejects invalid crop and output settings before decoding", async () => {
+  it("デコード前に無効なcrop寸法を拒否する", async () => {
     const source = new Blob(["source"], { type: "image/png" })
 
     await expect(
       createCroppedImage(source, { x: 0, y: 0, width: 0, height: 10 })
     ).rejects.toThrow("positive size")
+    expect(createObjectUrl).not.toHaveBeenCalled()
+  })
+
+  it("デコード前に範囲外の出力品質を拒否する", async () => {
+    const source = new Blob(["source"], { type: "image/png" })
+
     await expect(
       createCroppedImage(
         source,
@@ -140,7 +146,7 @@ describe("createCroppedImage", () => {
     expect(createObjectUrl).not.toHaveBeenCalled()
   })
 
-  it("revokes the source URL when encoding fails", async () => {
+  it("エンコード失敗時にソースURLを取り消す", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(
       (callback) => callback(null)
     )
@@ -156,7 +162,7 @@ describe("createCroppedImage", () => {
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:test-source")
   })
 
-  it("revokes the source URL when browser decoding fails", async () => {
+  it("ブラウザーのデコード失敗時にソースURLを取り消す", async () => {
     vi.stubGlobal("Image", FailingTestImage)
 
     await expect(
@@ -172,7 +178,7 @@ describe("createCroppedImage", () => {
     expect(drawImage).not.toHaveBeenCalled()
   })
 
-  it("rejects output dimensions that exceed the safe canvas limit", async () => {
+  it("安全なキャンバスの制限を超える出力サイズを拒否する", async () => {
     await expect(
       createCroppedImage(
         new Blob(["source"], { type: "image/png" }),

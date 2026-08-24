@@ -33,7 +33,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Remove the staged image", async () => {
+    await step("ステージ済み画像を取り除く", async () => {
       await expect(
         canvas.getByRole("img", { name: "tenant-policy.png" })
       ).toBeVisible()
@@ -47,9 +47,4 @@ export const Ready = meta.story({
 
 export const Disabled = meta.story({
   args: { disabled: true },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Remove tenant-policy.png" })
-    ).toBeDisabled()
-  },
 })

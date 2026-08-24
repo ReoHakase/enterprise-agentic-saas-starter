@@ -7,8 +7,8 @@ import {
   webkitMaxAttempts,
 } from "./run-nextjs-integration-webkit"
 
-describe("Next.js integration WebKit fresh-process fallback", () => {
-  it("retries the known internal error in a fresh process", async () => {
+describe("Next.js統合WebKitの新規プロセス代替実行", () => {
+  it("新しいプロセスで既知の内部エラーを再試行する", async () => {
     const runPlaywright = vi
       .fn<() => Promise<{ exitCode: number; output: string }>>()
       .mockResolvedValueOnce({
@@ -29,7 +29,7 @@ describe("Next.js integration WebKit fresh-process fallback", () => {
     expect(warn).toHaveBeenCalledOnce()
   })
 
-  it("stops at the configured attempt limit", async () => {
+  it("設定された試行制限で停止する", async () => {
     const runPlaywright = vi.fn<
       () => Promise<{ exitCode: number; output: string }>
     >(async () => ({
@@ -48,7 +48,7 @@ describe("Next.js integration WebKit fresh-process fallback", () => {
     expect(webkitMaxAttempts(undefined)).toBe(1)
   })
 
-  it("returns a non-target failure without retrying", async () => {
+  it("再試行せずにターゲット以外の失敗を返す", async () => {
     const runPlaywright = vi.fn<
       () => Promise<{ exitCode: number; output: string }>
     >(async () => ({

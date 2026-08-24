@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useCallback, useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -17,6 +17,13 @@ const julyPartialState = {
   ...defaultIssueSearchState,
   dueFrom: "2026-07-10",
   dueFromOffset: getLocalBoundaryOffset("2026-07-10"),
+} satisfies IssueSearchState
+const julySingleState = {
+  ...defaultIssueSearchState,
+  dueFrom: "2026-07-10",
+  dueTo: "2026-07-10",
+  dueFromOffset: getLocalBoundaryOffset("2026-07-10"),
+  dueToOffset: getLocalBoundaryOffset("2026-07-10", 1),
 } satisfies IssueSearchState
 const decemberDueToOnlyState = {
   ...defaultIssueSearchState,
@@ -59,8 +66,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("DueDateFilter local boundaries", () => {
-  it("formats date-only summaries without depending on the browser timezone", () => {
+describe("DueDateFilterのローカル境界", () => {
+  it("ブラウザーのタイムゾーンに依存せず日付だけの概要を整形する", () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 28, 12))
     const { rerender } = render(
@@ -123,7 +130,7 @@ describe("DueDateFilter local boundaries", () => {
     )
   })
 
-  it("renders only one range calendar in the popover", async () => {
+  it("popover内にrange calendarを1つだけ描画する", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 1, 12))
     const user = userEvent.setup()
@@ -141,27 +148,42 @@ describe("DueDateFilter local boundaries", () => {
     expect(screen.queryByLabelText("Due date to")).not.toBeInTheDocument()
   })
 
-  it("selects and clears one day, then selects a complete range", async () => {
+  it("1日だけを同日の範囲として選択する", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 1, 12))
     const user = userEvent.setup()
     render(<DueDateRequestProbe />)
 
     await user.click(screen.getByRole("button", { name: "Due date" }))
-    const july10 = screen.getByRole("button", { name: /Friday, July 10/u })
-    july10.focus()
-    await user.keyboard("{Enter}")
+    await user.click(screen.getByRole("button", { name: /Friday, July 10/u }))
     expect(getRequest()).toMatchObject({
       dueDateFrom: "2026-07-10",
       dueDateTo: "2026-07-10",
       dueDateFromOffsetMinutes: getLocalBoundaryOffset("2026-07-10"),
       dueDateToExclusiveOffsetMinutes: getLocalBoundaryOffset("2026-07-10", 1),
     })
-    await user.click(july10)
+  })
+
+  it("選択済みの同日範囲をclearする", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 6, 1, 12))
+    const user = userEvent.setup()
+    render(<DueDateRequestProbe initialState={julySingleState} />)
+
+    await user.click(screen.getByRole("button", { name: "Due date" }))
+    await user.click(screen.getByRole("button", { name: /Friday, July 10/u }))
     expect(getRequest()).not.toHaveProperty("dueDateFrom")
     expect(getRequest()).not.toHaveProperty("dueDateTo")
+  })
 
-    await user.click(july10)
+  it("開始日と終了日から完全な範囲を選択する", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 6, 1, 12))
+    const user = userEvent.setup()
+    render(<DueDateRequestProbe />)
+
+    await user.click(screen.getByRole("button", { name: "Due date" }))
+    await user.click(screen.getByRole("button", { name: /Friday, July 10/u }))
     await user.click(screen.getByRole("button", { name: /Tuesday, July 14/u }))
     expect(getRequest()).toMatchObject({
       dueDateFrom: "2026-07-10",
@@ -171,7 +193,7 @@ describe("DueDateFilter local boundaries", () => {
     })
   })
 
-  it("completes a partial range received through props", async () => {
+  it("propsで受け取った部分範囲を完成させる", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 1, 12))
     const user = userEvent.setup()
@@ -187,7 +209,7 @@ describe("DueDateFilter local boundaries", () => {
     })
   })
 
-  it("uses a dueTo-only date outside the current month as the range anchor", async () => {
+  it("当月外のdueToだけの日付を範囲anchorに使う", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 1, 12))
     const user = userEvent.setup()
@@ -212,7 +234,7 @@ describe("DueDateFilter local boundaries", () => {
     })
   })
 
-  it("uses each selected local boundary offset across a DST transition", async () => {
+  it("DST遷移をまたいで選択した各ローカル境界のoffsetを使う", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 2, 1, 12))
     vi.spyOn(Date.prototype, "getTimezoneOffset").mockImplementation(
@@ -235,23 +257,16 @@ describe("DueDateFilter local boundaries", () => {
     })
   })
 
-  it("applies once on close and returns keyboard focus to the trigger", async () => {
+  it("閉じるとき1回だけ適用する", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 6, 1, 12))
     const user = userEvent.setup()
     const onApply = vi.fn<() => void>()
     render(<DueDateRequestProbe onApply={onApply} />)
 
-    const trigger = screen.getByRole("button", { name: "Due date" })
-    await user.click(trigger)
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Go to the Previous Month" })
-      ).toHaveFocus()
-    )
+    await user.click(screen.getByRole("button", { name: "Due date" }))
     await user.keyboard("{Escape}")
 
-    await waitFor(() => expect(trigger).toHaveFocus())
     expect(onApply).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,4 +1,3 @@
-import { FILE_PREVIEW_WIDTHS } from "@enterprise-agentic-saas/api/client"
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
@@ -15,31 +14,46 @@ const file = {
   imageHeight: 300,
 }
 
-describe("authenticated file image", () => {
-  it("uses the single API width allowlist without context-specific mappings", () => {
-    expect(FILE_PREVIEW_WIDTHS).toEqual([360, 720, 1200, 2400])
-    expect(getFilePreviewCandidates(200)).toEqual([
-      { requestedWidth: 360, descriptorWidth: 200 },
-    ])
-    expect(getFilePreviewCandidates(500)).toEqual([
-      { requestedWidth: 360, descriptorWidth: 360 },
-      { requestedWidth: 720, descriptorWidth: 500 },
-    ])
-    expect(getFilePreviewCandidates(2_400)).toEqual([
-      { requestedWidth: 360, descriptorWidth: 360 },
-      { requestedWidth: 720, descriptorWidth: 720 },
-      { requestedWidth: 1200, descriptorWidth: 1200 },
-      { requestedWidth: 2400, descriptorWidth: 2400 },
-    ])
-    expect(getFilePreviewCandidates(3_200)).toEqual([
-      { requestedWidth: 360, descriptorWidth: 360 },
-      { requestedWidth: 720, descriptorWidth: 720 },
-      { requestedWidth: 1200, descriptorWidth: 1200 },
-      { requestedWidth: 2400, descriptorWidth: 2400 },
-    ])
+describe("AuthenticatedFileImageの契約", () => {
+  it.each([
+    {
+      caseLabel: "最小preview幅未満の画像",
+      width: 200,
+      expected: [{ requestedWidth: 360, descriptorWidth: 200 }],
+    },
+    {
+      caseLabel: "preview幅の間にある画像",
+      width: 500,
+      expected: [
+        { requestedWidth: 360, descriptorWidth: 360 },
+        { requestedWidth: 720, descriptorWidth: 500 },
+      ],
+    },
+    {
+      caseLabel: "最大preview幅と同じ画像",
+      width: 2_400,
+      expected: [
+        { requestedWidth: 360, descriptorWidth: 360 },
+        { requestedWidth: 720, descriptorWidth: 720 },
+        { requestedWidth: 1200, descriptorWidth: 1200 },
+        { requestedWidth: 2400, descriptorWidth: 2400 },
+      ],
+    },
+    {
+      caseLabel: "最大preview幅を超える画像",
+      width: 3_200,
+      expected: [
+        { requestedWidth: 360, descriptorWidth: 360 },
+        { requestedWidth: 720, descriptorWidth: 720 },
+        { requestedWidth: 1200, descriptorWidth: 1200 },
+        { requestedWidth: 2400, descriptorWidth: 2400 },
+      ],
+    },
+  ])("$caseLabelの候補をAPI共通widthから構築する", ({ expected, width }) => {
+    expect(getFilePreviewCandidates(width)).toEqual(expected)
   })
 
-  it("builds authenticated API sources and keeps sizes at the call site", () => {
+  it("認証付きAPIのsrcと呼び出し側の寸法をDOMへ反映する", () => {
     render(
       <AuthenticatedFileImage
         file={file}
@@ -55,6 +69,9 @@ describe("authenticated file image", () => {
     expect(image.getAttribute("src")).toContain(
       "/files/organizations/org%20alpha/file-1/preview/360"
     )
+  })
+
+  it("認証付きpreview URLからsrcsetを構築する", () => {
     expect(
       buildFileImageSourceSet(
         file,

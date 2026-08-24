@@ -17,8 +17,8 @@ import {
   SidebarMenuLinkButton,
 } from "@/components/navigation-link/navigation-link"
 
-describe("navigation link adapters", () => {
-  test("preserves the requested sidebar destination", () => {
+describe("NavigationLinkのadapter契約", () => {
+  test("要求されたサイドバーの遷移先を保持する", () => {
     render(
       <SidebarProvider>
         <SidebarMenu>
@@ -37,7 +37,7 @@ describe("navigation link adapters", () => {
     )
   })
 
-  test("preserves the requested menu destination", async () => {
+  test("要求されたメニューの遷移先を保持する", async () => {
     const user = userEvent.setup()
     render(
       <DropdownMenu>

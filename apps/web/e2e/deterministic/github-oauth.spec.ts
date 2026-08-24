@@ -9,7 +9,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 test.describe.configure({ mode: "serial" })
 
-test("決定的GitHub emulatorで認証しsessionを永続化できる", async ({
+test("決定的なGitHubエミュレーターで認証しセッションを永続化できる", async ({
   context,
   page,
 }) => {
@@ -101,7 +101,7 @@ test("決定的GitHub emulatorで認証しsessionを永続化できる", async (
   await expect(page.getByText("Create your first organization")).toBeVisible()
 })
 
-test("実WebAuthn ceremonyでpasskeyを登録・再読込・削除できる", async ({
+test("実際のWebAuthnセレモニーでパスキーを登録して再読込後に削除できる", async ({
   context,
   page,
 }) => {

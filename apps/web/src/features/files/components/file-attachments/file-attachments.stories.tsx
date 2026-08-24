@@ -14,6 +14,15 @@ const fileAttachmentArgs = {
   ownerId: "issue_01K1BILLING00000000000",
 } satisfies ComponentProps<typeof FileAttachments>
 
+const readyHandlers = () => [
+  http.get(listUrl, () =>
+    HttpResponse.json({ items: fictionalFiles, nextCursor: null })
+  ),
+  http.get("*/issues/:issueId/thumbnail", () =>
+    HttpResponse.json({ mode: "automatic", file: null })
+  ),
+]
+
 const meta = preview.meta({
   title: "Web/Files/File Attachments",
   component: FileAttachments,
@@ -24,39 +33,18 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   beforeEach({ msw }) {
-    msw.use(
-      http.get(listUrl, () =>
-        HttpResponse.json({ items: fictionalFiles, nextCursor: null })
-      ),
-      http.get("*/issues/:issueId/thumbnail", () =>
-        HttpResponse.json({ mode: "automatic", file: null })
-      )
-    )
+    msw.use(...readyHandlers())
+  },
+})
+
+export const DeleteCancellation = meta.story({
+  beforeEach({ msw }) {
+    msw.use(...readyHandlers())
   },
   play: async ({ canvas, canvasElement, step }) => {
-    const ownerBody = canvasElement.ownerDocument.body
-    const body = within(ownerBody)
-
-    await step("Preview an image and restore focus", async () => {
-      const trigger = await canvas.findByRole("button", {
-        name: "Preview image tenant-architecture.png",
-      })
-      await userEvent.click(trigger)
-      const previewDialog = body.getByRole("dialog", {
-        name: "tenant-architecture.png",
-      })
-      await expect(previewDialog).toBeInTheDocument()
-      await userEvent.keyboard("{Escape}")
-      await waitFor(() => expect(trigger).toHaveFocus())
-      await waitFor(() =>
-        expect(
-          body.queryByRole("dialog", { name: "tenant-architecture.png" })
-        ).not.toBeInTheDocument()
-      )
-    })
-
-    await step("Cancel a destructive deletion", async () => {
-      const deleteTrigger = canvas.getByRole("button", {
+    const body = within(canvasElement.ownerDocument.body)
+    await step("破壊的な削除をキャンセルする", async () => {
+      const deleteTrigger = await canvas.findByRole("button", {
         name: "Delete tenant-architecture.png",
       })
       await userEvent.click(deleteTrigger)
@@ -73,13 +61,7 @@ export const Ready = meta.story({
   },
 })
 
-export const Empty = meta.story({
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByText("No files attached yet.")
-    ).toBeVisible()
-  },
-})
+export const Empty = meta.story({})
 
 export const RetrySuccess = meta.story({
   beforeEach({ msw }) {
@@ -100,7 +82,7 @@ export const RetrySuccess = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Retry a failed attachment list", async () => {
+    await step("失敗した添付ファイル リストを再試行する", async () => {
       await expect(
         await canvas.findByText("Attachments could not be loaded.")
       ).toBeVisible()

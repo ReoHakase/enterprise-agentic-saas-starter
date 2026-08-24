@@ -22,8 +22,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("useBoundaryRetry", () => {
-  it("tries the mounted Next boundary before using the reload fallback", () => {
+describe("useBoundaryRetryの契約", () => {
+  it("再読み込みへ切り替える前に次のmount済み境界を試す", () => {
     const reset = vi.fn<() => void>()
     const { result } = renderHook(() => useBoundaryRetry(reset), {
       wrapper: ErrorBoundaryWrapper,
@@ -39,7 +39,7 @@ describe("useBoundaryRetry", () => {
     expect(browser.reload).toHaveBeenCalledOnce()
   })
 
-  it("cancels the reload when the error boundary recovers and unmounts", () => {
+  it("エラー境界が回復してアンマウントされたときにリロードをキャンセルする", () => {
     const reset = vi.fn<() => void>()
     const { result, unmount } = renderHook(() => useBoundaryRetry(reset), {
       wrapper: ErrorBoundaryWrapper,

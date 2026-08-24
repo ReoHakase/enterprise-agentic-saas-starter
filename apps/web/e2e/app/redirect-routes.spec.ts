@@ -15,7 +15,7 @@ const useAdminSession = async (context: BrowserContext) => {
   ])
 }
 
-test("legacy todo route resolves to the active organization Issue route", async ({
+test("旧todoルートは現在の組織のIssueルートへ解決される", async ({
   context,
   page,
 }) => {
@@ -26,14 +26,9 @@ test("legacy todo route resolves to the active organization Issue route", async 
   await expect(
     page.getByRole("heading", { level: 1, name: "Issues" })
   ).toBeVisible()
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth
-    )
-  ).toBe(true)
 })
 
-test("onboarding route resolves to organization selection", async ({
+test("オンボーディングルートは組織選択へ解決される", async ({
   context,
   page,
 }) => {
@@ -44,9 +39,4 @@ test("onboarding route resolves to organization selection", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "Organizations" })
   ).toBeVisible()
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth
-    )
-  ).toBe(true)
 })

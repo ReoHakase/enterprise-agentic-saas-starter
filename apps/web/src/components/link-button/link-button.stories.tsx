@@ -16,11 +16,12 @@ const meta = preview.meta({
 
 export const Primary = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas }) => {
-    const link = canvas.getByRole("link", { name: "Open account settings" })
-    await userEvent.tab()
-    await expect(link).toHaveFocus()
-    await expect(link).toHaveAttribute("href", "/settings/account")
+  play: async ({ canvas, step }) => {
+    await step("Tabキーでアカウント設定リンクへフォーカスを移す", async () => {
+      const link = canvas.getByRole("link", { name: "Open account settings" })
+      await userEvent.tab()
+      await expect(link).toHaveFocus()
+    })
   },
 })
 
@@ -29,10 +30,5 @@ export const Destructive = meta.story({
     href: "/settings/organizations",
     children: "Review deletion settings",
     variant: "destructive",
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("link", { name: "Review deletion settings" })
-    ).toBeVisible()
   },
 })

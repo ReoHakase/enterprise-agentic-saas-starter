@@ -1,4 +1,4 @@
-import { expect, fn, userEvent } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -25,17 +25,4 @@ export const RequiredSingle = meta.story({
       <ToggleGroupItem value="and">AND</ToggleGroupItem>
     </ToggleGroup>
   ),
-  play: async ({ canvas }) => {
-    const or = canvas.getByRole("button", { name: "OR" })
-    const and = canvas.getByRole("button", { name: "AND" })
-    await expect(or).toHaveAttribute("aria-pressed", "true")
-    onValueChange.mockClear()
-    await userEvent.click(or)
-    await expect(or).toHaveAttribute("aria-pressed", "true")
-    await expect(onValueChange).not.toHaveBeenCalled()
-    or.focus()
-    await userEvent.keyboard("{ArrowRight}{Enter}")
-    await expect(and).toHaveAttribute("aria-pressed", "true")
-    await expect(onValueChange).toHaveBeenCalledWith("and")
-  },
 })

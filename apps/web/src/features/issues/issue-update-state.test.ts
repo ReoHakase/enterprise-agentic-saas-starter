@@ -23,8 +23,8 @@ const currentIssue: Issue = {
   updatedAt: "2026-07-17T00:00:00.000Z",
 }
 
-describe("issue update state", () => {
-  it("merges only the fields included in a response's update", () => {
+describe("Issueの更新状態", () => {
+  it("応答の更新に含まれるフィールドのみをマージする", () => {
     const response: Issue = {
       ...currentIssue,
       status: "closed",
@@ -43,7 +43,7 @@ describe("issue update state", () => {
     })
   })
 
-  it("treats null and empty collection values as explicit updates", () => {
+  it("null および空のコレクション値を明示的な更新として扱う", () => {
     expect(
       getIssueUpdateFields({ assigneeId: null, dueDate: null, labels: [] })
     ).toEqual(["assigneeId", "labels", "dueDate"])

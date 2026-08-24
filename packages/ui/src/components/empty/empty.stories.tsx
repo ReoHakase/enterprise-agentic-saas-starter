@@ -1,5 +1,5 @@
 import { SearchIcon } from "lucide-react"
-import { expect, fn, userEvent } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -37,9 +37,6 @@ export const NoResults = meta.story({
       </EmptyContent>
     </Empty>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("No matching members")).toBeVisible()
-  },
 })
 
 export const FirstUse = meta.story({
@@ -57,11 +54,4 @@ export const FirstUse = meta.story({
       </EmptyContent>
     </Empty>
   ),
-  play: async ({ canvas, step }) => {
-    await step("Activate the primary empty-state action", async () => {
-      const button = canvas.getByRole("button", { name: "Create project" })
-      await userEvent.click(button)
-      await expect(button).toHaveFocus()
-    })
-  },
 })

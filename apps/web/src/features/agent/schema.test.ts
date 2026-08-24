@@ -8,8 +8,8 @@ import {
 } from "./schema"
 import { createPendingActionToolOutput } from "./test-support/pending-action-fixture"
 
-describe("agent public schemas", () => {
-  it("accepts only canonical pending action outputs", () => {
+describe("Agentの公開schema", () => {
+  it("正規の保留中のアクション出力のみを受け入れる", () => {
     const pending = createPendingActionToolOutput("action-1")
     expect(v.parse(pendingActionToolOutputSchema, pending)).toEqual(pending)
     expect(
@@ -20,7 +20,7 @@ describe("agent public schemas", () => {
     ).toBe(false)
   })
 
-  it("keeps automatic permission state server-authored", () => {
+  it("自動許可状態をサーバー起点のまま保持する", () => {
     expect(
       parseAgentApprovalPolicy({
         mode: "full_access",
@@ -47,7 +47,7 @@ describe("agent public schemas", () => {
     ).toThrow(/Invalid key/)
   })
 
-  it("restores metadata-only Issue image tool traces after reload", () => {
+  it("再読み込み後にmetadataだけのIssue画像tool traceを復元する", () => {
     const { messages } = parseAgentMessagePage({
       messages: [
         {

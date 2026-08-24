@@ -37,7 +37,7 @@ class BoundaryHarness extends Component<
   }
 
   componentDidCatch(_error: Error, _info: ErrorInfo) {
-    // The route boundary receives the captured value from Next.js in production.
+    // 本番ではroute boundaryがNext.jsからcapture済みの値を受け取る
   }
 
   render() {
@@ -51,8 +51,8 @@ class BoundaryHarness extends Component<
   }
 }
 
-describe("ConsoleRouteErrorBoundary", () => {
-  it("reports a thrown secret without exposing it to DOM or live regions", () => {
+describe("ConsoleRouteErrorBoundaryの契約", () => {
+  it("throwされた機密情報をDOMやlive regionへ公開せず報告する", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined)
 
     render(

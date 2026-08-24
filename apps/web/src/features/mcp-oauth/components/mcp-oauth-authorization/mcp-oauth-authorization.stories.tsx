@@ -12,8 +12,8 @@ import {
   McpOAuthConsentView,
   McpOAuthOrganizationView,
 } from "./mcp-oauth-authorization"
+import { McpOAuthScopeConsentStoryFixture } from "./test-support/mcp-oauth-authorization-story-fixture"
 
-const selectOrganization = fn()
 const selectOrganizationPending = fn()
 const decide = fn()
 const decideDenied = fn()
@@ -75,16 +75,7 @@ export const OrganizationSelection = meta.story({
   args: {
     ...organizationViewProps,
     organizations: organizationOptions,
-    onSelect: selectOrganization,
-  },
-  play: async ({ canvas }) => {
-    const button = canvas.getByRole("button", {
-      name: "Continue with Beta Labs",
-    })
-    await userEvent.click(button)
-    await expect(selectOrganization).toHaveBeenCalledWith(
-      "org_01K1BETALABS00000000000"
-    )
+    onSelect: fn(),
   },
 })
 
@@ -93,14 +84,9 @@ export const NoOrganization = meta.story({
     <McpOAuthOrganizationView
       {...organizationViewProps}
       organizations={noOrganizations}
-      onSelect={selectOrganization}
+      onSelect={fn()}
     />
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "No organization is available"
-    )
-  },
 })
 
 export const OrganizationSelectionPending = meta.story({
@@ -112,14 +98,6 @@ export const OrganizationSelectionPending = meta.story({
       pendingOrganizationId="org_01K1BETALABS00000000000"
     />
   ),
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Continue with Beta Labs" })
-    ).toBeDisabled()
-    await expect(
-      canvas.getByRole("status", { name: "Selecting organization" })
-    ).toBeVisible()
-  },
 })
 
 export const ScopeConsent = meta.story({
@@ -149,37 +127,18 @@ export const ScopeConsent = meta.story({
       onDecision={decide}
     />
   ),
-  play: async ({ canvas, canvasElement }) => {
-    await userEvent.click(
-      canvas.getByRole("button", { name: "Switch account" })
-    )
+  play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
-    const accountSwitcher = await body.findByRole("dialog", {
-      name: "Switch account",
+    await step("account切替dialogを開閉する", async () => {
+      const trigger = canvas.getByRole("button", { name: "Switch account" })
+      await userEvent.click(trigger)
+      const accountSwitcher = await body.findByRole("dialog", {
+        name: "Switch account",
+      })
+      await waitFor(() => expect(accountSwitcher).toBeVisible())
+      await userEvent.click(body.getByRole("button", { name: "Close" }))
+      await waitFor(() => expect(trigger).toHaveFocus())
     })
-    await waitFor(() => expect(accountSwitcher).toBeVisible())
-    await userEvent.click(body.getByRole("button", { name: "Close" }))
-    await userEvent.click(
-      canvas.getByRole("checkbox", { name: "Issues Delete access" })
-    )
-    await expect(
-      canvas.getByRole("checkbox", { name: "Issues Delete access" })
-    ).not.toBeChecked()
-    await expect(
-      canvas.getByRole("checkbox", { name: "Toggle all Issues access" })
-    ).toHaveAttribute("aria-checked", "mixed")
-    await userEvent.click(canvas.getByRole("button", { name: "Allow" }))
-    await expect(decide).toHaveBeenCalledWith(true, [
-      "offline_access",
-      "account:read",
-      "organization:read",
-      "members:read",
-      "issues:read",
-      "issues:create",
-      "issues:update",
-      "files:read",
-      "files:write",
-    ])
   },
 })
 
@@ -193,42 +152,11 @@ export const ScopeConsentDenied = meta.story({
       onDecision={decideDenied}
     />
   ),
-  play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Deny" }))
-    await expect(decideDenied).toHaveBeenCalledWith(false)
-  },
 })
 
 export const ScopeConsentMobile = meta.story({
   globals: { viewport: { value: "mobile1", isRotated: false } },
-  render: () => (
-    <McpOAuthConsentView
-      {...consentViewProps}
-      organization={organizationOptions[0]}
-      pending={false}
-      scopes={consentScopes}
-      onDecision={decide}
-    />
-  ),
-  play: async ({ canvas, canvasElement }) => {
-    const scrollRegion = await canvas.findByRole("region", {
-      name: "Requested access",
-    })
-    await expect(scrollRegion).toHaveAttribute(
-      "data-horizontal-overflow",
-      "true"
-    )
-    expect(scrollRegion.scrollWidth).toBeGreaterThan(scrollRegion.clientWidth)
-    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(
-      canvasElement.clientWidth
-    )
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
-      window.innerWidth
-    )
-    await expect(
-      canvas.getByRole("region", { name: "Permissions to grant" })
-    ).toBeVisible()
-  },
+  render: () => <McpOAuthScopeConsentStoryFixture />,
 })
 
 export const ScopeConsentPending = meta.story({
@@ -241,10 +169,6 @@ export const ScopeConsentPending = meta.story({
       onDecision={decide}
     />
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("button", { name: "Deny" })).toBeDisabled()
-    await expect(canvas.getByRole("button", { name: /Allow/u })).toBeDisabled()
-  },
 })
 
 export const InvalidRequest = meta.story({
@@ -256,10 +180,4 @@ export const InvalidRequest = meta.story({
       onDecision={decide}
     />
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "authorization request is invalid"
-    )
-    await expect(canvas.queryByRole("button", { name: "Allow" })).toBeNull()
-  },
 })

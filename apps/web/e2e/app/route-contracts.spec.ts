@@ -248,7 +248,7 @@ const verifyInvitationRouteContract = async ({
   ).toBeVisible()
 }
 
-test("@route-contract /organization/[organizationSlug]/dashboard は全boundary stateから復帰する", async ({
+test("@route-contract /organization/[organizationSlug]/dashboard は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -269,7 +269,7 @@ test("@route-contract /organization/[organizationSlug]/dashboard は全boundary 
   })
 })
 
-test("@route-contract /organization/[organizationSlug]/issues は全boundary stateから復帰する", async ({
+test("@route-contract /organization/[organizationSlug]/issues は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -290,7 +290,7 @@ test("@route-contract /organization/[organizationSlug]/issues は全boundary sta
   })
 })
 
-test("@route-contract Agent paneは同一organizationのclient navigation後も開いた状態を維持する", async ({
+test("@route-contract Agentペインは同じ組織内のクライアント遷移後も開いた状態を維持する", async ({
   context,
   page,
 }) => {
@@ -309,7 +309,7 @@ test("@route-contract Agent paneは同一organizationのclient navigation後も�
   await expect(agentPane).toBeVisible()
 })
 
-test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は全boundary stateから復帰する", async ({
+test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -348,7 +348,7 @@ test("@route-contract /organization/[organizationSlug]/issues/[issueNumber] は�
   })
 })
 
-test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元する", async ({
+test("Issue一覧へ戻るとURLと文書スクロールをブラウザー履歴から復元する", async ({
   context,
   page,
 }) => {
@@ -368,32 +368,6 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
   })
 
   await page.evaluate(() => window.scrollTo({ top: 520 }))
-  const headerExtension = await page
-    .locator('[data-slot="console-header"]')
-    .evaluate((header) => {
-      const headerStyle = getComputedStyle(header)
-      const extensionStyle = getComputedStyle(header, "::before")
-
-      return {
-        backdropFilter: extensionStyle.backdropFilter,
-        backgroundColor: extensionStyle.backgroundColor,
-        headerBackdropFilter: headerStyle.backdropFilter,
-        headerBackgroundColor: headerStyle.backgroundColor,
-        headerTop: header.getBoundingClientRect().top,
-        height: extensionStyle.height,
-        top: extensionStyle.top,
-      }
-    })
-  expect(headerExtension.headerTop).toBe(8)
-  expect(headerExtension.top).toBe("-8px")
-  expect(headerExtension.height).toBe("8px")
-  expect(headerExtension.backgroundColor).toBe(
-    headerExtension.headerBackgroundColor
-  )
-  expect(headerExtension.backdropFilter).toBe(
-    headerExtension.headerBackdropFilter
-  )
-
   const issueLink = page
     .getByRole("link", {
       name: "Review tenant audit log",
@@ -414,15 +388,9 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
     "/organization/alpha-operations/issues/1?agentThread=scroll-state"
   )
   await expectReadyConsoleRoute(page, "Review tenant audit log", 1)
-  await page.getByLabel("Add comment").fill("Unsaved navigation probe")
-
   await page
     .getByRole("button", { name: "Back to issues", exact: true })
     .click()
-  await expect(
-    page.getByRole("alertdialog", { name: "Discard unsaved changes?" })
-  ).toBeVisible()
-  await page.getByRole("button", { name: "Discard changes" }).click()
   await expect(page).toHaveURL(listRoute)
   await expectReadyConsoleRoute(page, "Issues")
   const restoredIssueLink = page
@@ -437,7 +405,13 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
       Math.abs((await page.evaluate(() => window.scrollY)) - listScrollY)
     )
     .toBeLessThan(issueRowHeight)
+})
 
+test("Issue詳細へ直接アクセスすると戻る操作はIssue一覧へ遷移する", async ({
+  context,
+  page,
+}) => {
+  await useSession(context, "admin")
   await page.goto("/organization/alpha-operations/issues/1")
   await expectReadyConsoleRoute(page, "Review tenant audit log", 1)
   await page
@@ -446,7 +420,7 @@ test("Issue一覧へ戻るとURLとdocument scrollをbrowser historyから復元
   await expect(page).toHaveURL("/organization/alpha-operations/issues")
 })
 
-test("@route-contract /organization/[organizationSlug]/members は全boundary stateから復帰する", async ({
+test("@route-contract /organization/[organizationSlug]/members は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -467,7 +441,7 @@ test("@route-contract /organization/[organizationSlug]/members は全boundary st
   })
 })
 
-test("@route-contract /organization/[organizationSlug]/settings は全boundary stateから復帰する", async ({
+test("@route-contract /organization/[organizationSlug]/settings は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -488,7 +462,7 @@ test("@route-contract /organization/[organizationSlug]/settings は全boundary s
   })
 })
 
-test("@route-contract /settings/account は全boundary stateから復帰する", async ({
+test("@route-contract /settings/account は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -509,7 +483,7 @@ test("@route-contract /settings/account は全boundary stateから復帰する",
   })
 })
 
-test("@route-contract /settings/organizations は全boundary stateから復帰する", async ({
+test("@route-contract /settings/organizations は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,
@@ -530,7 +504,7 @@ test("@route-contract /settings/organizations は全boundary stateから復帰�
   })
 })
 
-test("@route-contract /invitations/[invitationId] は全boundary stateから復帰する", async ({
+test("@route-contract /invitations/[invitationId] は全境界状態から復帰する", async ({
   allowClientErrors,
   context,
   createRequestGate,

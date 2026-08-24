@@ -21,8 +21,8 @@ import {
 
 const webWorkspace = resolve(import.meta.dirname, "../..")
 
-describe("Agent E2E environment", () => {
-  it("derives an isolated loopback topology from the run identifier", () => {
+describe("Agent E2E環境", () => {
+  it("実行識別子から分離したループバック構成を導出する", () => {
     const environment = createAgentE2EEnvironment(321)
 
     expect(environment.webOrigin).toMatch(
@@ -83,7 +83,7 @@ describe("Agent E2E environment", () => {
     expect(createAgentE2ETelemetryVariables(environment, false)).toEqual({})
   })
 
-  it("removes stack-owned state without deleting sibling runner artifacts", async () => {
+  it("別実行主体の生成物を残して対象構成の状態だけを削除する", async () => {
     const runId = process.pid * 10_000 + 321
     const environment = createAgentE2EEnvironment(runId)
     const nextMarker = join(environment.temporaryRoot, "next", "marker.txt")
@@ -110,7 +110,7 @@ describe("Agent E2E environment", () => {
     }
   })
 
-  it("removes the full runner root and its workspace-local Next build", async () => {
+  it("実行主体のルートとワークスペース固有のNext.jsビルドを削除する", async () => {
     const runId = process.pid * 10_000 + 322
     const environment = createAgentE2EEnvironment(runId)
     const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
@@ -136,7 +136,7 @@ describe("Agent E2E environment", () => {
     }
   })
 
-  it("waits for Playwright to stop its servers before full cleanup", async () => {
+  it("完全なクリーンアップの前にPlaywrightがサーバーを停止するまで待つ", async () => {
     const runId = process.pid * 10_000 + 323
     const environment = createAgentE2EEnvironment(runId)
     const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
@@ -185,7 +185,7 @@ describe("Agent E2E environment", () => {
     }
   })
 
-  it("keeps all three Luna canaries in the blocking full E2E suite", async () => {
+  it("必須の有料全構成E2Eに3件のLunaカナリアを残す", async () => {
     const [runnerSource, specSource] = await Promise.all([
       readFile(resolve(webWorkspace, "e2e/fixtures/run-full-e2e.ts"), "utf8"),
       readFile(resolve(webWorkspace, "e2e/full/real-agent.spec.ts"), "utf8"),
@@ -204,7 +204,7 @@ describe("Agent E2E environment", () => {
     })
   })
 
-  it("allows listing but rejects arguments that weaken the paid E2E gate", () => {
+  it("一覧取得は許可して有料E2Eの必須条件を弱める引数は拒否する", () => {
     expect(selectFullE2EPlaywrightArguments([])).toEqual([])
     expect(selectFullE2EPlaywrightArguments(["--list"])).toEqual(["--list"])
 
@@ -225,7 +225,7 @@ describe("Agent E2E environment", () => {
     }
   })
 
-  it("allowlists the paid Playwright environment and drops debug outputs", () => {
+  it("有料Playwrightの環境変数を許可対象に限定してデバッグ出力を除外する", () => {
     expect(
       createFullE2EPlaywrightEnvironment(
         {
@@ -255,7 +255,7 @@ describe("Agent E2E environment", () => {
     })
   })
 
-  it("propagates a blocking Playwright failure after full cleanup", async () => {
+  it("全クリーンアップ後に必須Playwright検査の失敗を伝播する", async () => {
     const runId = process.pid * 10_000 + 324
     const environment = createAgentE2EEnvironment(runId)
     const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
@@ -280,7 +280,7 @@ describe("Agent E2E environment", () => {
   })
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])(
-    "rejects an unsafe run identifier: %s",
+    "安全でない実行識別子を拒否する: %s",
     (runId) => {
       expect(() => parseAgentE2ERunId(runId)).toThrow(
         "Agent E2E requires a positive run identifier"
@@ -288,7 +288,7 @@ describe("Agent E2E environment", () => {
     }
   )
 
-  it("selects existing scripted and production Worker entrypoints", () => {
+  it("既存のテスト用Workerと本番Workerの起点を選択する", () => {
     expect(agentE2EWorkerEntrypoint(true)).toBe("src/mastra/e2e/worker.ts")
     expect(agentE2EWorkerEntrypoint(false)).toBe("src/mastra/worker.ts")
   })

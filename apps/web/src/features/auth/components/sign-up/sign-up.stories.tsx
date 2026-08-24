@@ -50,7 +50,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Complete realistic account details", async () => {
+    await step("アカウント情報を入力する", async () => {
       await fillAccount(canvas)
       await expect(
         canvas.getByRole("combobox", { name: "Department" })
@@ -58,29 +58,6 @@ export const Ready = meta.story({
       await expect(
         canvas.getByRole("button", { name: /^sign up$/i })
       ).toBeEnabled()
-    })
-  },
-})
-
-export const PasswordMismatch = meta.story({
-  play: async ({ canvas, step }) => {
-    await step("Report a confirmation mismatch", async () => {
-      await userEvent.type(
-        canvas.getByRole("textbox", { name: "Name" }),
-        fictionalAuthUser.name
-      )
-      await userEvent.type(
-        canvas.getByRole("textbox", { name: "Email" }),
-        fictionalAuthUser.email
-      )
-      await userEvent.type(canvas.getByLabelText("Password"), password)
-      await userEvent.type(
-        canvas.getByLabelText("Confirm password"),
-        "different-password"
-      )
-      await userEvent.click(canvas.getByRole("button", { name: /^sign up$/i }))
-      await expect(canvas.getByLabelText("Confirm password")).toBeInvalid()
-      await expect(canvas.getByText("Passwords do not match")).toBeVisible()
     })
   },
 })
@@ -97,7 +74,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Project provider failure to a stable message", async () => {
+    await step("プロバイダー障害を固定メッセージへ変換する", async () => {
       await fillAccount(canvas)
       await userEvent.click(canvas.getByRole("button", { name: /^sign up$/i }))
       await expect(
@@ -125,7 +102,7 @@ export const Success = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Navigate into the organization workspace", async () => {
+    await step("組織のワークスペースに移動する", async () => {
       await fillAccount(canvas)
       await userEvent.click(canvas.getByRole("button", { name: /^sign up$/i }))
       await waitFor(() =>

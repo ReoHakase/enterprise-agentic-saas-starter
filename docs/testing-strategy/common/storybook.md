@@ -244,6 +244,10 @@ request前後の状態遷移、cache、古いresponseの抑止を観測する`pl
 
 自動テストでは有限delayまたは制御可能なdeferred promiseを使います。無限loadingは目視専用storyにします。
 
+## 実行とcoverage report
+
+light、dark、通常のBrowser Modeは独立projectとして実行します。browser coverage reportはproject間で上書きせず、各projectを`<workspace>/coverage/browser/<project>/`へ分離して保存します。
+
 ## theme、viewport、animation
 
 - lightで全interactionとa11yを実行する

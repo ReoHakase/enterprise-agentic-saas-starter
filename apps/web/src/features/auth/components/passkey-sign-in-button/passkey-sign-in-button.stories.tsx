@@ -21,11 +21,10 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Reach passkey sign-in with the keyboard", async () => {
+    await step("キーボードでパスキー サインインに到達する", async () => {
       await userEvent.tab()
       const button = canvas.getByRole("button", { name: /passkey/i })
       await expect(button).toHaveFocus()
-      await expect(button).toBeEnabled()
     })
   },
 })

@@ -448,7 +448,10 @@ const openCanaryHarness = async (
   }
 }
 
-test("agent-canary-web-search-source", async ({ context, page }) => {
+test("agent-canary-web-search-sourceで公開情報源を確認する", async ({
+  context,
+  page,
+}) => {
   const harness = await openCanaryHarness(page, context.request)
   let agentShell = harness.agentShell
 
@@ -515,7 +518,10 @@ test("agent-canary-web-search-source", async ({ context, page }) => {
   ).toBeVisible({ timeout: 120_000 })
 })
 
-test("agent-canary-private-issue-read", async ({ context, page }) => {
+test("agent-canary-private-issue-readで非公開Issueを読み取る", async ({
+  context,
+  page,
+}) => {
   const harness = await openCanaryHarness(page, context.request)
   const issueTitle = `Urgent access regression ${harness.runSuffix}`
   const issue = await createSeedIssue(context.request, {
@@ -605,7 +611,10 @@ test("agent-canary-private-issue-read", async ({ context, page }) => {
     .toEqual({ canonicalIssueLinkMatches: true })
 })
 
-test("agent-canary-approved-issue-write", async ({ context, page }) => {
+test("agent-canary-approved-issue-writeで承認後だけIssueを書き込む", async ({
+  context,
+  page,
+}) => {
   const harness = await openCanaryHarness(page, context.request)
   const issueTitle = `Approved issue write ${harness.runSuffix}`
   const agentShell = harness.agentShell

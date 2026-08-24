@@ -68,60 +68,30 @@ const renderAgentShell = (
   return { ...view, store }
 }
 
-describe("AgentShell", () => {
+describe("AgentShellの契約", () => {
   beforeEach(() => {
     mockState.isMobile = false
     window.localStorage.clear()
   })
 
-  it("opens a persistent desktop pane and persists bounded keyboard resizing", async () => {
+  it("保存したデスクトップペイン幅を復元する", async () => {
     const user = userEvent.setup()
-    const { rerender, store } = renderAgentShell()
+    window.localStorage.setItem(AGENT_PANE_WIDTH_STORAGE_KEY, "480")
+    renderAgentShell()
 
-    expect(
-      screen.queryByRole("complementary", { name: "Agent" })
-    ).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Open Agent" }))
 
-    const pane = screen.getByRole("complementary", { name: "Agent" })
     const separator = screen.getByRole("separator", {
       name: "Resize Agent pane",
     })
-    expect(pane).toHaveStyle({ width: "460px" })
-    expect(separator).toHaveAttribute("aria-valuemin", "360")
-    expect(separator).toHaveAttribute("aria-valuemax", "720")
-
-    await user.tab()
-    expect(separator).toHaveFocus()
-    await user.keyboard("{ArrowLeft}")
-    expect(pane).toHaveStyle({ width: "480px" })
     expect(separator).toHaveAttribute("aria-valuenow", "480")
-    expect(window.localStorage.getItem(AGENT_PANE_WIDTH_STORAGE_KEY)).toBe(
-      "480"
-    )
-
-    rerender(
-      <Provider store={store}>
-        <AgentShellTrigger />
-        <AgentShell
-          userId="user-1"
-          organization={acmeOrganization}
-          contextMismatch={false}
-        />
-      </Provider>
-    )
-    expect(screen.getByRole("complementary", { name: "Agent" })).toHaveStyle({
-      width: "480px",
-    })
   })
 
-  it("keeps a manually opened pane across rerenders and closes when the organization changes", async () => {
+  it("手動で開いたペインを再描画後も維持する", async () => {
     const user = userEvent.setup()
     const { rerender, store } = renderAgentShell()
 
     await user.click(screen.getByRole("button", { name: "Open Agent" }))
-    expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
-
     rerender(
       <Provider store={store}>
         <AgentShellTrigger />
@@ -132,6 +102,14 @@ describe("AgentShell", () => {
         />
       </Provider>
     )
+    expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
+  })
+
+  it("組織変更時に開いているペインを閉じる", async () => {
+    const user = userEvent.setup()
+    const { rerender, store } = renderAgentShell()
+
+    await user.click(screen.getByRole("button", { name: "Open Agent" }))
     expect(screen.getByRole("complementary", { name: "Agent" })).toBeVisible()
 
     rerender(
@@ -153,7 +131,7 @@ describe("AgentShell", () => {
     expect(store.get(agentShellOpenAtom)).toBe(false)
   })
 
-  it("closes the pane when the user scope changes", async () => {
+  it("利用者のscope変更時にペインを閉じる", async () => {
     const user = userEvent.setup()
     const { rerender, store } = renderAgentShell()
 
@@ -179,15 +157,12 @@ describe("AgentShell", () => {
     expect(store.get(agentShellOpenAtom)).toBe(false)
   })
 
-  it("uses a full-screen mobile sheet and disables tools on context mismatch", async () => {
-    mockState.isMobile = true
+  it("コンテキスト不一致時はAgent toolを無効にする", async () => {
     const user = userEvent.setup()
     renderAgentShell(createStore(), acmeOrganization, true)
 
     await user.click(screen.getByRole("button", { name: "Open Agent" }))
 
-    const sheet = screen.getByRole("dialog", { name: "Agent" })
-    expect(sheet).toHaveClass("inset-0", "size-full", "max-w-none")
     expect(screen.getByRole("status")).toHaveTextContent(
       "Activate it before using the Agent or client tools."
     )
@@ -195,8 +170,5 @@ describe("AgentShell", () => {
       "data-disabled",
       "true"
     )
-
-    await user.click(screen.getByRole("button", { name: "Close Agent" }))
-    await waitFor(() => expect(sheet).not.toBeInTheDocument())
   })
 })

@@ -86,8 +86,8 @@ const continuationMessages: AgentChatMessage[] = [
   },
 ]
 
-describe("Agent chat transport", () => {
-  it("sends only the latest user text and asset IDs derived from its data part", () => {
+describe("Agentチャットtransport", () => {
+  it("最新の利用者テキストとdata part由来のasset IDだけを送信する", () => {
     expect(
       prepareAgentChatBody({
         threadId: "thread-1",
@@ -117,7 +117,7 @@ describe("Agent chat transport", () => {
     })
   })
 
-  it("sends only bounded client tool results for an automatic continuation", () => {
+  it("自動継続では許可されたclient tool結果だけを送信する", () => {
     expect(
       prepareAgentChatBody({
         threadId: "thread-1",
@@ -159,7 +159,7 @@ describe("Agent chat transport", () => {
     })
   })
 
-  it("rejects duplicate assets and incomplete or over-broad client results", () => {
+  it("重複したasset IDを拒否する", () => {
     expect(() =>
       prepareAgentChatBody({
         threadId: "thread-1",
@@ -179,7 +179,9 @@ describe("Agent chat transport", () => {
         timezone: "Asia/Tokyo",
       })
     ).toThrow("Invalid Agent asset")
+  })
 
+  it("許可されていないquery fieldを含むclient tool結果を拒否する", () => {
     const assistant = continuationMessages.at(-1)
     if (!assistant) throw new Error("Missing test assistant message")
     expect(() =>
@@ -216,7 +218,11 @@ describe("Agent chat transport", () => {
         timezone: "Asia/Tokyo",
       })
     ).toThrow(/agentThread/u)
+  })
 
+  it("未完了のclient tool結果を拒否する", () => {
+    const assistant = continuationMessages.at(-1)
+    if (!assistant) throw new Error("Missing test assistant message")
     expect(() =>
       prepareAgentChatBody({
         threadId: "thread-1",

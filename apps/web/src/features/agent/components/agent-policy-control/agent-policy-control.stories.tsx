@@ -36,7 +36,7 @@ export const AskAlways = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Select full access with the keyboard", async () => {
+    await step("キーボードでFull accessを選択する", async () => {
       const trigger = canvas.getByRole("combobox", {
         name: "Agent permission",
       })
@@ -55,11 +55,6 @@ export const AskAlways = meta.story({
 
 export const Disabled = meta.story({
   render: () => <PermissionExample disabled />,
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("combobox", { name: "Agent permission" })
-    ).toBeDisabled()
-  },
 })
 
 export const SavedPolicy = meta.story({
@@ -105,7 +100,7 @@ export const SavedPolicy = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Persist a thread-scoped permission", async () => {
+    await step("スレッド単位の権限を永続化する", async () => {
       const trigger = canvas.getByRole("combobox", {
         name: "Agent permission",
       })

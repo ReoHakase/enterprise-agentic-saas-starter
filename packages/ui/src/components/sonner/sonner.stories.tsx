@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-import { expect, userEvent, within } from "storybook/test"
+import { expect, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -9,7 +9,6 @@ import { Toaster } from "./sonner"
 const showSuccess = () =>
   toast.success("Invitation sent", {
     description: "jordan@example.test can now join Acme Cloud.",
-    testId: "invitation-success",
   })
 const showError = () =>
   toast.error("Invitation failed", {
@@ -39,16 +38,24 @@ const meta = preview.meta({
 export const Notifications = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Announce a successful invitation", async () => {
+    await step("招待成功を通知する", async () => {
       await userEvent.click(
         canvas.getByRole("button", { name: "Show success" })
       )
       const body = within(canvasElement.ownerDocument.body)
-      await expect(
-        await body.findByTestId("invitation-success")
-      ).toHaveTextContent("Invitation sent")
-      await expect(body.getByTestId("invitation-success")).toHaveTextContent(
-        "jordan@example.test can now join Acme Cloud."
+      await waitFor(() =>
+        expect(
+          body
+            .queryAllByText("Invitation sent")
+            .some((element) => element.checkVisibility())
+        ).toBe(true)
+      )
+      await waitFor(() =>
+        expect(
+          body
+            .queryAllByText("jordan@example.test can now join Acme Cloud.")
+            .some((element) => element.checkVisibility())
+        ).toBe(true)
       )
     })
   },

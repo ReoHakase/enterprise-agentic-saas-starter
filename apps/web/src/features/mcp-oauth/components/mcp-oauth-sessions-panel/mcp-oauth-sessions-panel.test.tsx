@@ -50,15 +50,14 @@ const renderPanel = () => {
   )
 }
 
-describe("McpOAuthSessionsPanel", () => {
+describe("McpOAuthSessionsPanelの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.listMcpOAuthSessions.mockResolvedValue(credentials)
     mocks.revokeMcpOAuthSession.mockResolvedValue({ id: "r_refresh_1" })
   })
 
-  it("shows linked organization, role, scopes, and revokes a credential family", async () => {
-    const actor = userEvent.setup()
+  it("紐付いた組織とroleとscopeを表示する", async () => {
     renderPanel()
 
     expect(await screen.findByText("Codex")).toBeInTheDocument()
@@ -67,8 +66,13 @@ describe("McpOAuthSessionsPanel", () => {
     expect(
       screen.getByRole("table", { name: "Requested access" })
     ).toHaveTextContent("Issues")
+  })
 
-    await actor.click(screen.getByRole("button", { name: "Revoke" }))
+  it("credential familyを取り消す", async () => {
+    const actor = userEvent.setup()
+    renderPanel()
+
+    await actor.click(await screen.findByRole("button", { name: "Revoke" }))
     await actor.click(screen.getByRole("button", { name: "Revoke access" }))
 
     await waitFor(() => {
@@ -77,7 +81,7 @@ describe("McpOAuthSessionsPanel", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("MCP access revoked")
   })
 
-  it("renders a retryable failure state", async () => {
+  it("再試行可能な失敗状態をレンダリングする", async () => {
     mocks.listMcpOAuthSessions.mockRejectedValueOnce(
       new Error("MCP API failed")
     )

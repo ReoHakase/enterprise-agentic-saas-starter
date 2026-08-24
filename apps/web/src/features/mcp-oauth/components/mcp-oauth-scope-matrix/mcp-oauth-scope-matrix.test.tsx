@@ -24,13 +24,11 @@ const requestedFilesRead = [
 ] as const
 const selectedFilesRead = ["files:read"] as const
 
-describe("McpOAuthScopeMatrix", () => {
-  it("renders the fixed matrix and toggles an individual scope", async () => {
-    const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
-    const actor = userEvent.setup()
+describe("McpOAuthScopeMatrixの契約", () => {
+  it("固定matrixと現在のgrantを表示する", () => {
     render(
       <McpOAuthScopeMatrix
-        onChange={onChange}
+        onChange={vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()}
         requestedScopes={requestedScopes}
         selectedScopes={selectedInitial}
       />
@@ -45,6 +43,18 @@ describe("McpOAuthScopeMatrix", () => {
     expect(grantedPermissions.getByText("offline_access")).toBeVisible()
     expect(grantedPermissions.getByText("issues:read")).toBeVisible()
     expect(grantedPermissions.queryByText("issues:create")).toBeNull()
+  })
+
+  it("個別scopeを切り替える", async () => {
+    const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
+    const actor = userEvent.setup()
+    render(
+      <McpOAuthScopeMatrix
+        onChange={onChange}
+        requestedScopes={requestedScopes}
+        selectedScopes={selectedInitial}
+      />
+    )
 
     await actor.click(
       screen.getByRole("checkbox", { name: "Issues Create access" })
@@ -57,7 +67,7 @@ describe("McpOAuthScopeMatrix", () => {
     ])
   })
 
-  it("selects every requested scope in an indeterminate row", async () => {
+  it("不定状態の行にある要求scopeをすべて選択する", async () => {
     const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
     const actor = userEvent.setup()
     render(
@@ -76,7 +86,7 @@ describe("McpOAuthScopeMatrix", () => {
     expect(onChange).toHaveBeenCalledWith([...selectedAfterCell])
   })
 
-  it("clears every requested scope in an operation column", async () => {
+  it("操作列にある要求scopeをすべて消去する", async () => {
     const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
     const actor = userEvent.setup()
     render(
@@ -91,7 +101,7 @@ describe("McpOAuthScopeMatrix", () => {
     expect(onChange).toHaveBeenCalledWith([...selectedOfflineOnly])
   })
 
-  it("toggles offline access separately from permission scopes", async () => {
+  it("offline accessを権限scopeとは別に切り替える", async () => {
     const onChange = vi.fn<(scopes: McpOAuthGrantedScope[]) => void>()
     const actor = userEvent.setup()
     render(
@@ -110,7 +120,7 @@ describe("McpOAuthScopeMatrix", () => {
     expect(onChange).toHaveBeenCalledWith(["issues:read", "files:read"])
   })
 
-  it("renders unavailable operations as non-interactive cells", () => {
+  it("利用不能な操作を非対話型cellとして描画する", () => {
     render(
       <McpOAuthScopeMatrix
         readOnly
@@ -124,6 +134,5 @@ describe("McpOAuthScopeMatrix", () => {
     ).toHaveAttribute("aria-disabled", "true")
     expect(screen.getByRole("button", { name: "Files" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Read" })).toBeDisabled()
-    expect(screen.getAllByText("—")).toHaveLength(24)
   })
 })

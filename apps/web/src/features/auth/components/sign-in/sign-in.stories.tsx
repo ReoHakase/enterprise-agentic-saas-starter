@@ -50,7 +50,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Complete the form with keyboard input", async () => {
+    await step("キーボードでフォームへ入力する", async () => {
       await userEvent.tab()
       await expect(canvas.getByRole("textbox", { name: "Email" })).toHaveFocus()
       await fillCredentials(canvas)
@@ -63,7 +63,7 @@ export const Ready = meta.story({
 
 export const InvalidInput = meta.story({
   play: async ({ canvas, step }) => {
-    await step("Reject malformed credentials", async () => {
+    await step("形式不正の認証情報を拒否する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email" }),
         "not-an-email"
@@ -91,7 +91,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Show the stable public failure message", async () => {
+    await step("固定の公開用エラーメッセージを表示する", async () => {
       await fillCredentials(canvas)
       await userEvent.click(canvas.getByRole("button", { name: /^sign in$/i }))
       await expect(
@@ -113,7 +113,7 @@ export const Success = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Navigate after a successful sign-in", async () => {
+    await step("サインイン成功後に遷移する", async () => {
       await fillCredentials(canvas)
       await userEvent.click(canvas.getByRole("button", { name: /^sign in$/i }))
       await waitFor(() =>
@@ -137,7 +137,7 @@ export const Submitting = meta.story({
     return () => responseGate.resolve(undefined)
   },
   play: async ({ canvas, step }) => {
-    await step("Disable the form while the request is pending", async () => {
+    await step("リクエストの保留中にフォームを無効にする", async () => {
       await fillCredentials(canvas)
       const submit = canvas.getByRole("button", { name: /^sign in$/i })
       await userEvent.click(submit)
@@ -158,11 +158,4 @@ export const Reauthentication = meta.story({
       </AuthStoryScope>
     ),
   ],
-  play: async ({ canvas, step }) => {
-    await step("Keep the scoped account navigation available", async () => {
-      await expect(
-        canvas.getByRole("link", { name: /continue with magic link/i })
-      ).toHaveAttribute("href", expect.stringContaining("reauth=1"))
-    })
-  },
 })

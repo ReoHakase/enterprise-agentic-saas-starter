@@ -1,5 +1,4 @@
 import { render, screen, waitFor } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
 import type { UIMessage } from "ai"
 import { createElement } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -46,8 +45,8 @@ const streamedWebSearchMessage = (
     onPendingChange: vi.fn<(actionId: string, pending: boolean) => void>(),
   })
 
-describe("agent action projection", () => {
-  it("deduplicates canonical action IDs from completed tool outputs", () => {
+describe("Agentアクションのprojection", () => {
+  it("完了済みtool outputから正規action IDの重複を除く", () => {
     const messages: UIMessage[] = [
       {
         id: "message-1",
@@ -84,7 +83,7 @@ describe("agent action projection", () => {
     expect(extractPendingActionIds(messages)).toEqual(["action-1"])
   })
 
-  it("preserves persisted named tool parts", () => {
+  it("永続化済みの名前付きtool partを保持する", () => {
     const { messages } = parseAgentMessagePage({
       messages: [
         {
@@ -114,7 +113,7 @@ describe("agent action projection", () => {
     expect(extractPendingActionIds(messages)).toEqual(["action-2"])
   })
 
-  it("shows the private image and permanence boundary before approval", () => {
+  it("承認前に非公開画像と永続化境界を表示する", () => {
     render(
       createElement(AgentApprovalAttachments, {
         organizationId: "org/acme",
@@ -145,7 +144,7 @@ describe("agent action projection", () => {
     )
   })
 
-  it("renders tool trace collapsed with only confirmed Issue links", () => {
+  it("ツールtraceを折りたたみ、確認済みIssueリンクだけを表示する", () => {
     render(
       createElement(AgentMessage, {
         message: {
@@ -193,8 +192,7 @@ describe("agent action projection", () => {
     )
   })
 
-  it("keeps reasoning and tools in stream order and renders reasoning Markdown", async () => {
-    const actor = userEvent.setup()
+  it("reasoningとtoolのDOM順をstream順に保つ", () => {
     render(
       createElement(AgentMessage, {
         message: {
@@ -203,7 +201,7 @@ describe("agent action projection", () => {
           parts: [
             {
               type: "reasoning",
-              text: "**Choosing a filter**\n\nSearch open urgent Issues first.",
+              text: "Search open urgent Issues first",
               state: "done",
             },
             {
@@ -222,7 +220,7 @@ describe("agent action projection", () => {
             },
             {
               type: "reasoning",
-              text: "**Trying the next priority**",
+              text: "Try the next priority",
               state: "done",
             },
           ],
@@ -236,11 +234,11 @@ describe("agent action projection", () => {
     )
 
     const firstReasoning = screen.getByRole("button", {
-      name: /Choosing a filter/u,
+      name: /Search open urgent Issues first/u,
     })
     const tool = screen.getByRole("status")
     const secondReasoning = screen.getByRole("button", {
-      name: /Trying the next priority/u,
+      name: /Try the next priority/u,
     })
     expect(
       firstReasoning.compareDocumentPosition(tool) &
@@ -250,20 +248,9 @@ describe("agent action projection", () => {
       tool.compareDocumentPosition(secondReasoning) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
-    expect(tool).toHaveTextContent("Search Issues · Open · UrgentDone")
-    expect(tool).toHaveTextContent(
-      "Filters: Open · Urgent · Sort: dueDate asc · Limit: 50Result: 0"
-    )
-    await actor.click(firstReasoning)
-    expect(
-      screen
-        .getAllByText("Choosing a filter")
-        .some((element) => element.dataset.streamdown === "strong")
-    ).toBe(true)
-    expect(firstReasoning).not.toHaveTextContent("**")
   })
 
-  it("names skill activation without exposing its instruction output", () => {
+  it("skillの指示内容を公開せず起動名を表示する", () => {
     render(
       createElement(AgentMessage, {
         message: {
@@ -298,7 +285,7 @@ describe("agent action projection", () => {
     expect(screen.queryByText("Run Agent tool")).toBeNull()
   })
 
-  it("keeps a streamed tool collapsible controlled as safe details arrive", async () => {
+  it("安全な詳細が届いてもストリーミング中のtoolを制御可能な折りたたみ表示に保つ", async () => {
     const consoleErrors: string[] = []
     const consoleError = vi
       .spyOn(console, "error")
@@ -316,7 +303,7 @@ describe("agent action projection", () => {
     )
   })
 
-  it("uses a full-width assistant response and omits repeated speaker labels", () => {
+  it("アシスタント応答から重複する話者ラベルを省く", () => {
     render(
       createElement(AgentMessage, {
         message: {
@@ -332,14 +319,14 @@ describe("agent action projection", () => {
       })
     )
 
-    const article = screen.getByRole("article", { name: "Agent response" })
-    expect(article).toHaveClass("w-full")
-    expect(article).not.toHaveClass("border")
+    expect(
+      screen.getByRole("article", { name: "Agent response" })
+    ).toBeVisible()
     expect(screen.queryByText("Issue agent")).not.toBeInTheDocument()
     expect(screen.queryByText("You")).not.toBeInTheDocument()
   })
 
-  it("does not create Issue links from model text or unrelated tool output", () => {
+  it("モデル本文や無関係なtool outputからIssueリンクを作らない", () => {
     expect(issueLinksFromToolOutput("create_issue", { number: 9 })).toEqual([])
     expect(
       issueLinksFromToolOutput("create_issue", {

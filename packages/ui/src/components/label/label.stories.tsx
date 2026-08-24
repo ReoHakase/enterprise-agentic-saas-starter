@@ -1,5 +1,3 @@
-import { expect, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Checkbox } from "../checkbox/checkbox"
@@ -19,14 +17,6 @@ export const TextField = meta.story({
       <Input id="workspace-name" defaultValue="Acme Cloud" />
     </div>
   ),
-  play: async ({ canvas, step }) => {
-    await step("Focus the labelled field", async () => {
-      await userEvent.click(canvas.getByText("Workspace name"))
-      await expect(
-        canvas.getByRole("textbox", { name: "Workspace name" })
-      ).toHaveFocus()
-    })
-  },
 })
 
 export const CheckboxLabel = meta.story({

@@ -35,35 +35,14 @@ export const UserWithoutImage = meta.story({
     name: "Avery Stone",
     profileImage: null,
   },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Choose image" })
-    ).toBeVisible()
-    await expect(
-      canvas.queryByRole("button", { name: "Remove" })
-    ).not.toBeInTheDocument()
-  },
 })
 
 export const OrganizationWithoutImage = meta.story({
-  beforeEach({ msw }) {
-    msw.use(
-      http.delete(
-        "*/files/profile-images/organizations/org-1",
-        () => new HttpResponse(null, { status: 204 })
-      )
-    )
-  },
   args: {
     subject: "organization",
     organizationId: "org-1",
     name: "Acme Cloud",
     profileImage: null,
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Choose image" })
-    ).toBeVisible()
   },
 })
 
@@ -83,22 +62,25 @@ export const ExistingImage = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Cancel profile image removal and restore focus", async () => {
-      const trigger = canvas.getByRole("button", { name: "Remove" })
-      await userEvent.click(trigger)
-      await expect(
-        body.getByRole("alertdialog", { name: "Remove profile image?" })
-      ).toBeInTheDocument()
-      await userEvent.keyboard("{Escape}")
-      await waitFor(() => expect(trigger).toHaveFocus())
-      await waitFor(() =>
-        expect(
-          body.queryByRole("alertdialog", {
-            name: "Remove profile image?",
-          })
-        ).not.toBeInTheDocument()
-      )
-    })
+    await step(
+      "プロフィール画像の削除をキャンセルし、フォーカスを復元する",
+      async () => {
+        const trigger = canvas.getByRole("button", { name: "Remove" })
+        await userEvent.click(trigger)
+        await expect(
+          body.getByRole("alertdialog", { name: "Remove profile image?" })
+        ).toBeInTheDocument()
+        await userEvent.keyboard("{Escape}")
+        await waitFor(() => expect(trigger).toHaveFocus())
+        await waitFor(() =>
+          expect(
+            body.queryByRole("alertdialog", {
+              name: "Remove profile image?",
+            })
+          ).not.toBeInTheDocument()
+        )
+      }
+    )
   },
 })
 
@@ -127,31 +109,26 @@ export const RemovalFailure = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step(
-      "Keep a safe failure inside the confirmation dialog",
-      async () => {
-        await userEvent.click(canvas.getByRole("button", { name: "Remove" }))
-        await userEvent.click(
-          body.getByRole("button", { name: "Remove image" })
+    await step("安全な失敗を確認ダイアログ内に保持する", async () => {
+      await userEvent.click(canvas.getByRole("button", { name: "Remove" }))
+      await userEvent.click(body.getByRole("button", { name: "Remove image" }))
+      const error = await body.findByRole("alert")
+      await waitFor(() =>
+        expect(error).toHaveTextContent(
+          "The profile image could not be removed. Try again. Try again. If the problem continues, contact support."
         )
-        const error = await body.findByRole("alert")
-        await waitFor(() =>
-          expect(error).toHaveTextContent(
-            "The profile image could not be removed. Try again. Try again. If the problem continues, contact support."
-          )
-        )
-        await expect(
-          body.getByRole("alertdialog", { name: "Remove profile image?" })
-        ).toBeInTheDocument()
-        await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-        await waitFor(() =>
-          expect(
-            body.queryByRole("alertdialog", {
-              name: "Remove profile image?",
-            })
-          ).not.toBeInTheDocument()
-        )
-      }
-    )
+      )
+      await expect(
+        body.getByRole("alertdialog", { name: "Remove profile image?" })
+      ).toBeInTheDocument()
+      await userEvent.click(body.getByRole("button", { name: "Cancel" }))
+      await waitFor(() =>
+        expect(
+          body.queryByRole("alertdialog", {
+            name: "Remove profile image?",
+          })
+        ).not.toBeInTheDocument()
+      )
+    })
   },
 })
