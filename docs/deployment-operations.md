@@ -168,14 +168,6 @@ Environment varsから渡し、実際のproduction deployは`Deploy production` 
 workflowは`production` Environmentのapprovalとconcurrency lock付きで進め、どのdeploy、inventory、drain、
 または自動smokeで失敗しても後続の破壊的操作へ進みません。
 
-Agent Workerの`exports`には旧`IssueAssistant` namespaceを永久削除する一時的な`deleted` tombstoneが
-あります。この変更では旧メッセージの書き出し、バックアップ、既存データ補完を行いません。本番
-バンドルから対象`class`が消えていることと、同一Cloudflareアカウントの他Workerから対象namespaceへの
-`binding`が0件であることをデプロイ直前に再取得します。個別に明示承認された`Deploy production`だけで
-適用し、Wranglerのreconciliation出力でnamespace削除とtombstoneの除去可能状態を確認します。削除済み
-namespaceはロールバックやTrashから復元できません。reconciliation完了後は#52でtombstoneとこの説明を
-除去します。
-
 ## Smoke checklist
 
 - `/health` が200。

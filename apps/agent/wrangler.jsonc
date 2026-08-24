@@ -8,12 +8,6 @@
   "upload_source_maps": true,
   "workers_dev": false,
   "preview_urls": false,
-  "exports": {
-    "IssueAssistant": {
-      "type": "durable-object",
-      "state": "deleted",
-    },
-  },
   "services": [
     {
       "binding": "AGENT_INTERNAL_API",
