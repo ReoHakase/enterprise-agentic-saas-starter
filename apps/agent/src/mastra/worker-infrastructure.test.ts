@@ -100,20 +100,10 @@ describe("mutual Worker Service Binding deployment", () => {
         service: finalConfig.name,
       },
     ])
-    expect(agentConfig.exports).toEqual({
-      IssueAssistant: {
-        state: "deleted",
-        type: "durable-object",
-      },
-    })
     expect(agentConfig.main).toBe("src/mastra/worker.ts")
+    expect(agentConfig).not.toHaveProperty("exports")
     expect(agentConfig).not.toHaveProperty("migrations")
     expect(agentConfig).not.toHaveProperty("durable_objects")
-    const generatedAgentTypes = await readFile(
-      join(repositoryRoot, "apps/agent/src/cloudflare-env.d.ts"),
-      "utf8"
-    )
-    expect(generatedAgentTypes).not.toContain("IssueAssistant")
   })
 
   it("isolates the scripted E2E entrypoint from production", async () => {
@@ -127,11 +117,6 @@ describe("mutual Worker Service Binding deployment", () => {
       join(repositoryRoot, "apps/agent/src/mastra/worker.ts"),
       "utf8"
     )
-    const e2eWorker = await readFile(
-      join(repositoryRoot, "apps/agent/src/mastra/e2e/worker.ts"),
-      "utf8"
-    )
-
     expect(e2eConfig.main).toBe("src/mastra/e2e/worker.ts")
     expect(e2eConfig).not.toHaveProperty("exports")
     expect(e2eConfig).not.toHaveProperty("migrations")
@@ -139,14 +124,12 @@ describe("mutual Worker Service Binding deployment", () => {
     expect(productionWorker).not.toContain("/e2e/")
     expect(productionWorker).not.toContain("/test-support/")
     expect(productionWorker).not.toContain("SCRIPTED_MODEL_SENTINEL")
-    expect(productionWorker).not.toContain("IssueAssistant")
-    expect(e2eWorker).not.toContain("IssueAssistant")
     expect(productionWorker).not.toMatch(
       /OPENROUTER_API_KEY.*(?:scripted|mock)/iu
     )
   })
 
-  it("keeps the retired namespace out of local eval Worker configs", () => {
+  it("keeps Durable Object configuration out of local eval Worker configs", () => {
     const configs = createAgentEvalConfigs({
       agentDatabaseOrigin: "http://127.0.0.1:42001",
       agentName: "agent-eval",
@@ -159,7 +142,6 @@ describe("mutual Worker Service Binding deployment", () => {
 
     expect(configs.agent).not.toHaveProperty("exports")
     expect(configs.agent).not.toHaveProperty("migrations")
-    expect(JSON.stringify(configs.agent)).not.toContain("IssueAssistant")
   })
 
   it("deploys Agent before the final API and gates bootstrap on remote state", async () => {

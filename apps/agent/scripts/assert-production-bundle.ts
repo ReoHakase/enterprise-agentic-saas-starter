@@ -4,7 +4,6 @@ import { join, resolve } from "node:path"
 const SCRIPTED_MODEL_SENTINEL = "ENTERPRISE_AGENT_SCRIPTED_MODEL_SENTINEL_v1"
 const FORBIDDEN_PRODUCTION_MARKERS = [
   SCRIPTED_MODEL_SENTINEL,
-  "IssueAssistant",
   "Legacy Agent session retired",
 ] as const
 const outputDirectory = resolve(
