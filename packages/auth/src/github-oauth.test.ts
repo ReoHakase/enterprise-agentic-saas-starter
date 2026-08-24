@@ -16,7 +16,7 @@ const profile = {
   avatar_url: "https://avatars.example.test/octocat.png",
 }
 
-describe("GitHub OAuth emulator URL", () => {
+describe("GitHub OAuthエミュレーターURL", () => {
   it.each([
     [
       "http://localhost:4001/emulate/github",
@@ -31,7 +31,7 @@ describe("GitHub OAuth emulator URL", () => {
       "http://127.42.0.1:4001/emulate/github",
     ],
     ["http://[::1]:4001/emulate/github", "http://[::1]:4001/emulate/github"],
-  ])("normalizes the local emulator base URL %s", (input, expected) => {
+  ])("ローカルエミュレーターの基準URLを正規化する %s", (input, expected) => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "development",
@@ -50,7 +50,7 @@ describe("GitHub OAuth emulator URL", () => {
     "http://localhost:4001/emulate/github/",
     "http://localhost:4001/emulate/github?token=secret",
     "http://localhost:4001/emulate/github#authorize",
-  ])("rejects the non-local or non-canonical URL %s", (input) => {
+  ])("ローカルでないURLまたは正規形でないURLを拒否する %s", (input) => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "development",
@@ -64,7 +64,7 @@ describe("GitHub OAuth emulator URL", () => {
   it.each([
     "http://user:RAW_EMULATOR_SECRET@localhost:4001/emulate/github",
     "http://localhost:4001/emulate/github?token=RAW_EMULATOR_TOKEN",
-  ])("does not retain rejected URL secrets in the thrown error", (input) => {
+  ])("拒否したURLの機密情報を例外へ残さない %s", (input) => {
     let thrown: unknown
     try {
       resolveGithubOAuthEnvironment({
@@ -85,8 +85,8 @@ describe("GitHub OAuth emulator URL", () => {
   })
 })
 
-describe("GitHub OAuth environment boundary", () => {
-  it("uses dedicated fake credentials and ignores real GitHub credentials", () => {
+describe("GitHub OAuthの環境境界", () => {
+  it("専用のfake認証情報を使い実GitHub認証情報を無視する", () => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "development",
@@ -102,7 +102,7 @@ describe("GitHub OAuth environment boundary", () => {
     })
   })
 
-  it("allows a paired emulator-only credential override", () => {
+  it("エミュレーター専用認証情報の組を上書きできる", () => {
     expect(
       resolveGithubOAuthEnvironment({
         runtime: "test",
@@ -117,7 +117,7 @@ describe("GitHub OAuth environment boundary", () => {
     })
   })
 
-  it("requires the real GitHub credential pair without the emulator", () => {
+  it("エミュレーターを使わない場合は実GitHub認証情報の組を要求する", () => {
     expect(() =>
       resolveGithubOAuthEnvironment({ runtime: "development" })
     ).toThrow(
@@ -125,7 +125,7 @@ describe("GitHub OAuth environment boundary", () => {
     )
   })
 
-  it("rejects a partial emulator credential override", () => {
+  it("片方だけのエミュレーター認証情報を拒否する", () => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "test",
@@ -137,7 +137,7 @@ describe("GitHub OAuth environment boundary", () => {
     )
   })
 
-  it("rejects the emulator in production even when its URL is local", () => {
+  it("URLがローカルでも本番ではエミュレーターを拒否する", () => {
     expect(() =>
       resolveGithubOAuthEnvironment({
         runtime: "production",
@@ -149,8 +149,8 @@ describe("GitHub OAuth environment boundary", () => {
   })
 })
 
-describe("GitHub OAuth user mapping", () => {
-  it("prefers the primary verified email and maps avatar_url", () => {
+describe("GitHub OAuth利用者情報の変換", () => {
+  it("検証済みの主メールを優先して画像URLを変換する", () => {
     expect(
       mapGithubOAuthUserInfo(profile, [
         {
@@ -173,7 +173,7 @@ describe("GitHub OAuth user mapping", () => {
     })
   })
 
-  it("falls back to the login and rejects accounts without a verified email", () => {
+  it("検証済みメールがない利用者を拒否する", () => {
     expect(
       mapGithubOAuthUserInfo({ ...profile, name: null }, [
         {
@@ -183,7 +183,9 @@ describe("GitHub OAuth user mapping", () => {
         },
       ])
     ).toBeNull()
+  })
 
+  it("表示名がない利用者にはログイン名を使う", () => {
     expect(
       mapGithubOAuthUserInfo({ ...profile, name: null }, [
         {
@@ -195,7 +197,7 @@ describe("GitHub OAuth user mapping", () => {
     ).toMatchObject({ name: "octocat" })
   })
 
-  it("fetches both GitHub endpoints without logging tokens or raw failures", async () => {
+  it("プロフィールとメールを取得してアクセストークンを認証ヘッダーに限定する", async () => {
     const accessToken = "LOCAL_OAUTH_ACCESS_TOKEN_NOT_FOR_LOGS"
     const responses = [
       new Response(JSON.stringify(profile), {
@@ -231,7 +233,10 @@ describe("GitHub OAuth user mapping", () => {
         `Bearer ${accessToken}`
       )
     }
+  })
 
+  it("GitHub取得失敗を公開せずログにも記録しない", async () => {
+    const accessToken = "LOCAL_OAUTH_ACCESS_TOKEN_NOT_FOR_LOGS"
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     try {

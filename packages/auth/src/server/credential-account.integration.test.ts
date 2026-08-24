@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
 import { expect, it } from "vitest"
 
-it("stores a fresh credential account with the Better Auth 1.7 issuer", async () => {
+it("認証情報で登録すると固定issuerのアカウント行を保存する", async () => {
   const client = createClient({ url: "file::memory:" })
 
   try {

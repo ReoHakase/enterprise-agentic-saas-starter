@@ -62,8 +62,8 @@ afterAll(async () => {
   await rm(databaseDirectory, { force: true, recursive: true })
 })
 
-describe("MCP OAuth opaque credentials", () => {
-  it("accepts only the configured resource on form-post authorization", async () => {
+describe("MCP OAuthのopaque認証情報", () => {
+  it("form POST認可では設定済みresourceだけを受理する", async () => {
     const authorize = (...resources: string[]) => {
       const body = new URLSearchParams({
         client_id: "missing-client",
@@ -99,7 +99,7 @@ describe("MCP OAuth opaque credentials", () => {
     })
   })
 
-  it("advances a registered client past the configured resource policy", async () => {
+  it("動的登録クライアントを設定済みresource方針の先へ進める", async () => {
     const redirectUri = "http://127.0.0.1/callback"
     const registrationResponse = await auth.handler(
       new Request("http://api.localhost/auth/oauth2/register", {
@@ -157,7 +157,7 @@ describe("MCP OAuth opaque credentials", () => {
     expect(oauthProviderPlugin?.options).not.toHaveProperty("validAudiences")
   })
 
-  it("verifies and immediately revokes an organization credential", async () => {
+  it("organization認証情報を検証して即時失効する", async () => {
     const [{ db }, schema] = await Promise.all([
       import("@enterprise-agentic-saas/db"),
       import("@enterprise-agentic-saas/db/schema"),
@@ -225,7 +225,7 @@ describe("MCP OAuth opaque credentials", () => {
     ).resolves.toBeNull()
   })
 
-  it("stops accepting and listing Better Auth soft-revoked access tokens", async () => {
+  it("Better Authでsoft revokeされたaccess tokenを検証と一覧から除外する", async () => {
     const [{ db }, schema] = await Promise.all([
       import("@enterprise-agentic-saas/db"),
       import("@enterprise-agentic-saas/db/schema"),
@@ -290,7 +290,7 @@ describe("MCP OAuth opaque credentials", () => {
     )
   })
 
-  it("lists safe credential families and revokes their token rows", async () => {
+  it("機密情報を含まない認証情報familyを一覧しtoken行を失効する", async () => {
     const [{ db }, schema] = await Promise.all([
       import("@enterprise-agentic-saas/db"),
       import("@enterprise-agentic-saas/db/schema"),
@@ -395,7 +395,7 @@ describe("MCP OAuth opaque credentials", () => {
     ).resolves.toBe(false)
   })
 
-  it("groups refresh rotation by client and organization when revoking", async () => {
+  it("refresh tokenのrotationをclientとorganization単位でまとめて失効する", async () => {
     const [{ db }, schema] = await Promise.all([
       import("@enterprise-agentic-saas/db"),
       import("@enterprise-agentic-saas/db/schema"),
