@@ -100,8 +100,8 @@ const apiHarness = (options: { issueDescription?: string } = {}) => {
   return { api, grants }
 }
 
-describe("createAgentReadHandlers", () => {
-  it("exposes only the six bounded read tools", () => {
+describe("createAgentReadHandlersの契約", () => {
+  it("有界なread tool六個だけを公開する", () => {
     const issueReadTools = createIssueReadTools(() => {
       throw new Error("unused")
     })
@@ -115,7 +115,7 @@ describe("createAgentReadHandlers", () => {
     ])
   })
 
-  it("injects only the run grant into every API capability", async () => {
+  it("全API capabilityへrun grantだけを注入する", async () => {
     const test = apiHarness()
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 
@@ -137,7 +137,7 @@ describe("createAgentReadHandlers", () => {
     expect(JSON.stringify(results)).not.toContain("private.example.test")
   })
 
-  it("connects the production get_issue registry to runtime capability injection", async () => {
+  it("本番get_issue registryをruntime capability注入へ接続する", async () => {
     const description = "x".repeat(50_000)
     const test = apiHarness({ issueDescription: description })
     const issueReadTools = createIssueReadTools(() => ({
@@ -166,7 +166,7 @@ describe("createAgentReadHandlers", () => {
     expect(result.description.endsWith("…")).toBe(true)
   })
 
-  it("fails closed when production get_issue has no runtime context", async () => {
+  it("本番get_issueにruntime contextがない場合は安全側に失敗する", async () => {
     const issueReadTools = createIssueReadTools(() => {
       throw new Error("Agent runtime capability is unavailable")
     })
@@ -185,7 +185,7 @@ describe("createAgentReadHandlers", () => {
     expect(String(caught)).toContain("Agent tool execution failed")
   })
 
-  it("bounds Issue descriptions returned by list search", async () => {
+  it("一覧検索で返すIssue descriptionを制限する", async () => {
     const test = apiHarness()
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
 
@@ -195,7 +195,7 @@ describe("createAgentReadHandlers", () => {
     expect(results[0]?.description.endsWith("…")).toBe(true)
   })
 
-  it("stops after the per-run read tool budget", async () => {
+  it("runごとのread tool budget到達後に停止する", async () => {
     const test = apiHarness()
     const handlers = createAgentReadHandlers(test.api, RUN_GRANT)
     await Promise.all(
@@ -208,7 +208,7 @@ describe("createAgentReadHandlers", () => {
     expect(test.grants).toHaveLength(20)
   })
 
-  it("replaces private HTTP errors with a fixed tool error", async () => {
+  it("private HTTP errorを固定tool errorへ置換する", async () => {
     const cause = new Error(`private error ${RUN_GRANT}`)
     const test = apiHarness()
     test.api.readAccountContext = () => Promise.reject(cause)
@@ -226,14 +226,14 @@ describe("createAgentReadHandlers", () => {
   })
 })
 
-describe("Issue attachment image sidecar", () => {
-  it("rejects malformed image metadata before reading a sidecar", () => {
+describe("Issue添付画像sidecar", () => {
+  it("sidecar読取前に不正な画像metadataを拒否する", () => {
     expect(() => issueAttachmentImageToModelOutput({})).toThrow(
       "Issue attachment image is unavailable"
     )
   })
 
-  it("keeps canonical output metadata-only and consumes the WeakMap sidecar once", async () => {
+  it("正規出力をmetadataだけに保ってWeakMap sidecarを一度消費する", async () => {
     const getIssueAttachmentImageForModel = vi.fn<
       AgentInternalGateway["getIssueAttachmentImageForModel"]
     >(
@@ -280,7 +280,7 @@ describe("Issue attachment image sidecar", () => {
     )
   })
 
-  it("shares the four-image run limit with current-message images", async () => {
+  it("四画像のrun上限を現在message画像と共有する", async () => {
     const getIssueAttachmentImageForModel = vi.fn<
       AgentInternalGateway["getIssueAttachmentImageForModel"]
     >(

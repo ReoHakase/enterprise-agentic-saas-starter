@@ -12,8 +12,8 @@ const environment = (storageUrl = ":memory:"): AgentRuntimeEnv => ({
   NODE_ENV: "test",
 })
 
-describe("Worker isolate composition", () => {
-  it("reuses one composition and fails closed for changed credentials", () => {
+describe("Worker isolate compositionの契約", () => {
+  it("一つのcompositionを再利用してcredential変更時は安全側に失敗する", () => {
     const first = getAgentIsolateComposition(environment())
     const second = getAgentIsolateComposition(environment())
     expect(second).toBe(first)

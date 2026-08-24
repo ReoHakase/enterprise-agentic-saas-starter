@@ -88,9 +88,9 @@ const createEnvironment = () => {
   }
 }
 
-describe("private Images Worker", () => {
+describe("private Images Workerの契約", () => {
   it.each([360, 720, 1200, 2400] as const)(
-    "conditionally reads R2 and applies the fixed %i px transform",
+    "R2を条件付きで読んで固定%i px transformを適用する",
     async (width) => {
       const fake = createEnvironment()
       const response = await handleImagePreviewRequest(
@@ -122,7 +122,7 @@ describe("private Images Worker", () => {
     }
   )
 
-  it("preserves the bounded temporary Agent asset TTL", async () => {
+  it("有界な一時Agent asset TTLを保持する", async () => {
     const fake = createEnvironment()
     const response = await handleImagePreviewRequest(
       previewRequest({
@@ -140,7 +140,7 @@ describe("private Images Worker", () => {
     )
   })
 
-  it("accepts a promoted file backed by the same storage object identity", async () => {
+  it("同じstorage object identityに裏付けられた昇格fileを受け入れる", async () => {
     const fake = createEnvironment()
     const promotedObjectKey =
       "organizations/org-1/storage-objects/storage-promoted-1"
@@ -159,67 +159,67 @@ describe("private Images Worker", () => {
   })
 
   it.each([
-    { name: "non-GET method", request: previewRequest({ method: "POST" }) },
-    { name: "missing path", request: new Request("https://images.internal/") },
+    { name: "GET以外のmethod", request: previewRequest({ method: "POST" }) },
+    { name: "path欠損", request: new Request("https://images.internal/") },
     {
-      name: "missing organization ID",
+      name: "組織ID欠損",
       request: previewRequest({ organizationId: "" }),
     },
     {
-      name: "missing resource ID",
+      name: "resource ID欠損",
       request: previewRequest({ resourceId: "" }),
     },
     {
-      name: "normalized traversal path",
+      name: "正規化済みtraversal path",
       request: previewRequest({ organizationId: "../other" }),
     },
     {
-      name: "decoded slash in organization ID",
+      name: "組織ID内のdecode済みslash",
       request: previewRequest({ organizationId: "%2F" }),
     },
     {
-      name: "malformed encoded organization ID",
+      name: "不正encode済み組織ID",
       request: previewRequest({ organizationId: "%" }),
     },
-    { name: "missing width", request: previewRequest({ width: "" }) },
-    { name: "noncanonical width", request: previewRequest({ width: "0360" }) },
-    { name: "unsupported width", request: previewRequest({ width: "361" }) },
+    { name: "width欠損", request: previewRequest({ width: "" }) },
+    { name: "非正規width", request: previewRequest({ width: "0360" }) },
+    { name: "未対応width", request: previewRequest({ width: "361" }) },
     {
-      name: "extra path segment",
+      name: "余分なpath segment",
       request: previewRequest({ trailingPath: "/extra" }),
     },
     {
-      name: "missing source ETag",
+      name: "source ETag欠損",
       request: previewRequest({ sourceEtag: null }),
     },
-    { name: "empty source ETag", request: previewRequest({ sourceEtag: "" }) },
+    { name: "空source ETag", request: previewRequest({ sourceEtag: "" }) },
     {
-      name: "control source ETag",
+      name: "制御文字付きsource ETag",
       request: previewRequest({ sourceEtag: "source\u0001etag" }),
     },
     {
-      name: "overlong source ETag",
+      name: "長すぎるsource ETag",
       request: previewRequest({ sourceEtag: "s".repeat(129) }),
     },
-    { name: "missing variant", request: previewRequest({ variant: null }) },
-    { name: "unknown variant", request: previewRequest({ variant: "future" }) },
-    { name: "extra query", request: previewRequest({ extraQuery: true }) },
-    { name: "missing TTL", request: previewRequest({ cacheTtl: null }) },
-    { name: "non-digit TTL", request: previewRequest({ cacheTtl: "abc" }) },
+    { name: "variant欠損", request: previewRequest({ variant: null }) },
+    { name: "未知variant", request: previewRequest({ variant: "future" }) },
+    { name: "余分なquery", request: previewRequest({ extraQuery: true }) },
+    { name: "TTL欠損", request: previewRequest({ cacheTtl: null }) },
+    { name: "数字以外のTTL", request: previewRequest({ cacheTtl: "abc" }) },
     {
-      name: "unsafe integer TTL",
+      name: "安全でない整数TTL",
       request: previewRequest({ cacheTtl: "9007199254740992" }),
     },
     {
-      name: "noncanonical TTL",
+      name: "非正規TTL",
       request: previewRequest({ cacheTtl: "02592000" }),
     },
     {
-      name: "wrong file TTL",
+      name: "誤ったfile TTL",
       request: previewRequest({ cacheTtl: "2591999" }),
     },
     {
-      name: "zero Agent TTL",
+      name: "零Agent TTL",
       request: previewRequest({
         cacheTtl: "0",
         objectKey: "organizations/org-1/storage-objects/storage-1",
@@ -228,7 +228,7 @@ describe("private Images Worker", () => {
       }),
     },
     {
-      name: "Agent TTL above three days",
+      name: "三日超過Agent TTL",
       request: previewRequest({
         cacheTtl: "259201",
         objectKey: "organizations/org-1/storage-objects/storage-1",
@@ -237,65 +237,59 @@ describe("private Images Worker", () => {
       }),
     },
     {
-      name: "missing object key",
+      name: "object key欠損",
       request: previewRequest({ objectKey: null }),
     },
-    { name: "empty object key", request: previewRequest({ objectKey: "" }) },
+    { name: "空object key", request: previewRequest({ objectKey: "" }) },
     {
-      name: "control object key",
+      name: "制御文字付きobject key",
       request: previewRequest({ objectKey: `organizations/org-1/\u0001` }),
     },
     {
-      name: "overlong object key",
+      name: "長すぎるobject key",
       request: previewRequest({ objectKey: "a".repeat(1025) }),
     },
     {
-      name: "wrong object organization",
+      name: "誤ったobject組織",
       request: previewRequest({
         objectKey: "organizations/org-2/files/issue/issue-1/file-1",
       }),
     },
     {
-      name: "wrong file object suffix",
+      name: "誤ったfile object suffix",
       request: previewRequest({
         objectKey: "organizations/org-1/files/issue/issue-1/other-file",
       }),
     },
     {
-      name: "wrong promoted storage object suffix",
+      name: "誤った昇格storage object suffix",
       request: previewRequest({
         objectKey: "organizations/org-1/storage-objects/other-storage",
         resourceId: "storage-promoted-1",
       }),
     },
     {
-      name: "wrong Agent object prefix",
+      name: "誤ったAgent object prefix",
       request: previewRequest({
         objectKey: "organizations/org-1/files/issue/issue-1/asset-1",
         resourceId: "asset-1",
         resourceKind: "agent-asset",
       }),
     },
-  ])(
-    "rejects invalid internal input before R2 access: $name",
-    async ({ request }) => {
-      const fake = createEnvironment()
-      const response = await handleImagePreviewRequest(
-        request,
-        fake.environment
-      )
+  ])("R2 access前に不正な内部入力を拒否する: $name", async ({ request }) => {
+    const fake = createEnvironment()
+    const response = await handleImagePreviewRequest(request, fake.environment)
 
-      expect(response.status).toBe(400)
-      expect(response.headers.get("cache-control")).toBe("no-store")
-      expect(response.headers.get("x-content-type-options")).toBe("nosniff")
-      expect(await response.text()).toBe("")
-      expect(fake.get).not.toHaveBeenCalled()
-      expect(fake.input).not.toHaveBeenCalled()
-    }
-  )
+    expect(response.status).toBe(400)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+    expect(await response.text()).toBe("")
+    expect(fake.get).not.toHaveBeenCalled()
+    expect(fake.input).not.toHaveBeenCalled()
+  })
 
   it.each([null, {}, { body: "not-a-stream" }])(
-    "returns a safe non-cacheable response for stale R2 metadata",
+    "stale R2 metadataへ安全かつcache不可のresponseを返す",
     async (stored) => {
       const fake = createEnvironment()
       fake.get.mockResolvedValueOnce(stored)
@@ -312,7 +306,7 @@ describe("private Images Worker", () => {
     }
   )
 
-  it("cancels and redacts a non-success transformed response", async () => {
+  it("失敗transform responseをcancelして秘匿する", async () => {
     const fake = createEnvironment()
     const transformed = new Response("provider detail", {
       status: 503,
@@ -335,7 +329,7 @@ describe("private Images Worker", () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
-  it("cancels and redacts a transformed response with the wrong content type", async () => {
+  it("誤content typeのtransform responseをcancelして秘匿する", async () => {
     const fake = createEnvironment()
     const transformed = new Response("private provider detail", {
       status: 200,
@@ -362,7 +356,7 @@ describe("private Images Worker", () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
-  it("redacts a bodyless transformed response", async () => {
+  it("bodyなしtransform responseを秘匿する", async () => {
     const fake = createEnvironment()
     fake.response.mockReturnValueOnce(
       new Response(null, {
@@ -382,7 +376,7 @@ describe("private Images Worker", () => {
     expect(await response.text()).toBe("")
   })
 
-  it("keeps provider rejection safe when response cancellation fails", async () => {
+  it("response cancel失敗時もprovider rejectを安全に保つ", async () => {
     const fake = createEnvironment()
     const transformed = new Response("provider detail", { status: 503 })
     const body = transformed.body
@@ -403,7 +397,7 @@ describe("private Images Worker", () => {
   })
 
   it.each([null, "not-a-number"])(
-    "omits a missing or invalid provider Content-Length: %s",
+    "欠損または不正provider Content-Length %sを除外する",
     async (contentLength) => {
       const fake = createEnvironment()
       const headers = new Headers({
@@ -426,7 +420,7 @@ describe("private Images Worker", () => {
     }
   )
 
-  it("redacts Images failures without logging request material", async () => {
+  it("request materialをlogせずImages失敗を秘匿する", async () => {
     const fake = createEnvironment()
     fake.output.mockRejectedValueOnce(new Error("provider payload"))
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined)
@@ -443,7 +437,7 @@ describe("private Images Worker", () => {
     log.mockRestore()
   })
 
-  it("redacts R2 failures without logging request material", async () => {
+  it("request materialをlogせずR2失敗を秘匿する", async () => {
     const fake = createEnvironment()
     fake.get.mockRejectedValueOnce(new Error("private object key"))
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined)
@@ -461,7 +455,7 @@ describe("private Images Worker", () => {
     log.mockRestore()
   })
 
-  it("changes the variant ETag when the source ETag changes", async () => {
+  it("source ETag変更時にvariant ETagを変更する", async () => {
     const fake = createEnvironment()
     const first = await handleImagePreviewRequest(
       previewRequest({ sourceEtag: "source-a" }),
@@ -475,7 +469,7 @@ describe("private Images Worker", () => {
     expect(first.headers.get("etag")).not.toBe(second.headers.get("etag"))
   })
 
-  it("models URL-keyed Service Binding reuse without emulating platform caching", async () => {
+  it("platform cacheを模倣せずURL key付きService Binding再利用をmodel化する", async () => {
     const fake = createEnvironment()
     const handler = vi.fn<typeof handleImagePreviewRequest>(
       handleImagePreviewRequest

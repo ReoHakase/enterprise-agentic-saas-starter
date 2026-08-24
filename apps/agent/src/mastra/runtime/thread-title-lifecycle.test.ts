@@ -47,8 +47,8 @@ const createInput = ({
 
 afterEach(() => vi.useRealTimers())
 
-describe("createThreadTitleLifecycle", () => {
-  it("skips memory work when this run cannot generate a title", async () => {
+describe("createThreadTitleLifecycleの契約", () => {
+  it("現在のrunでtitleを生成できない場合はmemory処理を省略する", async () => {
     const getThreadById = vi.fn<() => Promise<undefined>>()
     const { input, pending } = createInput({
       readMemory: createMemoryReader({ memory: { getThreadById } }),
@@ -61,15 +61,15 @@ describe("createThreadTitleLifecycle", () => {
   })
 
   it.each([
-    ["without memory", undefined],
+    ["memoryなし", undefined],
     [
-      "with an existing title",
+      "既存titleあり",
       {
         getThreadById: () =>
           Promise.resolve({ title: "Review Issue attachments" }),
       },
     ],
-  ] as const)("skips the lifecycle %s", async (_label, memory) => {
+  ] as const)("%sではlifecycleを省略する", async (_label, memory) => {
     const { input, pending } = createInput({
       readMemory: createMemoryReader({ memory }),
     })
@@ -78,7 +78,7 @@ describe("createThreadTitleLifecycle", () => {
     expect(pending).toHaveLength(0)
   })
 
-  it("reports a title-state lookup failure without failing the chat", async () => {
+  it("chatを失敗させずtitle stateのlookup失敗を報告する", async () => {
     const failure = new Error("memory unavailable")
     const { captureFailure, input, pending } = createInput({
       readMemory: createMemoryReader({ error: failure }),
@@ -89,7 +89,7 @@ describe("createThreadTitleLifecycle", () => {
     expect(pending).toHaveLength(0)
   })
 
-  it("keeps a blank title alive until Mastra confirms persistence", async () => {
+  it("Mastraが永続化を確認するまで空titleを生存させる", async () => {
     const { input, pending } = createInput({
       readMemory: createMemoryReader({
         memory: { getThreadById: () => Promise.resolve({ title: "" }) },
@@ -104,7 +104,7 @@ describe("createThreadTitleLifecycle", () => {
     await expect(Promise.all(pending)).resolves.toEqual([undefined])
   })
 
-  it("bounds the Worker lifetime when Mastra never generates a title", async () => {
+  it("Mastraがtitleを生成しない場合はWorker lifetimeを制限する", async () => {
     vi.useFakeTimers()
     const { input, pending } = createInput({
       readMemory: createMemoryReader({

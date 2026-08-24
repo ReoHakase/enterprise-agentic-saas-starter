@@ -38,8 +38,8 @@ const clientToolContinuation = (): AgentRuntimeChatInput => ({
   trigger: "client_tool_result",
 })
 
-describe("private Agent runtime request", () => {
-  it("accepts the exact canonical chat envelope", () => {
+describe("private Agent runtime requestの契約", () => {
+  it("正確な正規chat envelopeを受け入れる", () => {
     expect(parseAgentRuntimeChatInput(validInput())).toMatchObject({
       assetIds: ["asset_1"],
       clientMessageId: "message_1",
@@ -49,7 +49,7 @@ describe("private Agent runtime request", () => {
     })
   })
 
-  it("accepts only bounded, disjoint server-selected reusable assets", () => {
+  it("有界かつ互いに素なserver選択済み再利用assetだけを受け入れる", () => {
     const reusable = validInput()
     reusable.reusableAssets = [
       { id: "asset_previous", filename: "previous-image.webp" },
@@ -72,7 +72,7 @@ describe("private Agent runtime request", () => {
     expect(parseAgentRuntimeChatInput(continuation)).toBeUndefined()
   })
 
-  it("binds canonical mention order to the API-resolved context", () => {
+  it("正規mention順をAPI解決済みcontextへ束縛する", () => {
     const input = validInput()
     input.assetIds = []
     input.message = {
@@ -117,7 +117,7 @@ describe("private Agent runtime request", () => {
     expect(parseAgentRuntimeChatInput(input)).toBeUndefined()
   })
 
-  it("rejects browser-controlled history fields and mismatched current state", () => {
+  it("browser制御history fieldと不一致な現在stateを拒否する", () => {
     expect(
       parseAgentRuntimeChatInput({ ...validInput(), organizationId: "org_1" })
     ).toBeUndefined()
@@ -135,17 +135,21 @@ describe("private Agent runtime request", () => {
     ).toBeUndefined()
   })
 
-  it("rejects duplicate assets, unsafe URLs, and unbounded tool JSON", () => {
+  it("重複したcurrent asset idを拒否する", () => {
     const duplicateAssets = validInput()
     duplicateAssets.assetIds = ["asset_1", "asset_1"]
     expect(parseAgentRuntimeChatInput(duplicateAssets)).toBeUndefined()
+  })
 
+  it("browser制御history fieldを拒否する", () => {
     const assistantHistory = {
       ...validInput(),
       messages: [{ id: "assistant_1", role: "assistant", parts: [] }],
     }
     expect(parseAgentRuntimeChatInput(assistantHistory)).toBeUndefined()
+  })
 
+  it("client tool JSONを有界な値へ制限する", () => {
     const hugeToolInput = clientToolContinuation()
     hugeToolInput.message = {
       id: "assistant_1",
@@ -194,7 +198,7 @@ describe("private Agent runtime request", () => {
     expect(parseAgentRuntimeChatInput(tooManyItems)).toBeUndefined()
   })
 
-  it("accepts only the closed resume envelope", () => {
+  it("閉じたresume envelopeだけを受け入れる", () => {
     expect(
       parseAgentRuntimeResumeInput({
         actionId: "action_1",
@@ -210,7 +214,7 @@ describe("private Agent runtime request", () => {
     ).toBeUndefined()
   })
 
-  it("accepts a bounded server-authored client tool continuation", () => {
+  it("有界なserver作成client tool継続を受け入れる", () => {
     const continuation = validInput()
     continuation.assetIds = []
     continuation.clientMessageId =
@@ -235,7 +239,7 @@ describe("private Agent runtime request", () => {
     })
   })
 
-  it("reads bounded JSON only with the exact content type", async () => {
+  it("正確なcontent typeの場合だけ有界JSONを読む", async () => {
     await expect(
       readBoundedPrivateJson(
         new Request("https://agent.internal/chat", {

@@ -19,7 +19,7 @@ const publicResult = {
   text: "R2 documents its current platform limits.",
 }
 
-describe("public Web search boundary", () => {
+describe("公開Web検索境界", () => {
   const openRouterLikeToken = ["sk", "or", "v1"].join("-")
 
   it.each([
@@ -29,40 +29,37 @@ describe("public Web search boundary", () => {
     "Summarize private issue: unreleased customer pricing",
     "Read http://localhost:8787/internal",
     "line one\nline two",
-  ])(
-    "rejects private query before quota or provider forwarding: %s",
-    async (query) => {
-      const authorize =
-        vi.fn<
-          (query: string, operationId: string) => Promise<{ query: string }>
-        >()
-      const search =
-        vi.fn<
-          (
-            query: string,
-            abortSignal?: AbortSignal
-          ) => Promise<typeof publicResult>
-        >()
-      const consumeBudget = vi.fn<() => void>()
+  ])("private query%#をquota予約とprovider転送前に拒否する", async (query) => {
+    const authorize =
+      vi.fn<
+        (query: string, operationId: string) => Promise<{ query: string }>
+      >()
+    const search =
+      vi.fn<
+        (
+          query: string,
+          abortSignal?: AbortSignal
+        ) => Promise<typeof publicResult>
+      >()
+    const consumeBudget = vi.fn<() => void>()
 
-      await expect(
-        executePublicWebSearch(
-          { query },
-          {
-            authorize,
-            operationId: "call_private",
-            search,
-            consumeBudget,
-          }
-        )
-      ).rejects.toThrow("Web search accepts public information only")
-      expect(consumeBudget).not.toHaveBeenCalled()
-      expect(authorize).not.toHaveBeenCalled()
-      expect(search).not.toHaveBeenCalled()
-    }
-  )
+    await expect(
+      executePublicWebSearch(
+        { query },
+        {
+          authorize,
+          operationId: "call_private",
+          search,
+          consumeBudget,
+        }
+      )
+    ).rejects.toThrow("Web search accepts public information only")
+    expect(consumeBudget).not.toHaveBeenCalled()
+    expect(authorize).not.toHaveBeenCalled()
+    expect(search).not.toHaveBeenCalled()
+  })
 
-  it("does not reserve quota or invoke the provider when the server rejects a new private phrase", async () => {
+  it("serverが新しいprivate phraseを拒否した場合はquota予約もprovider呼出もしない", async () => {
     const authorize = vi.fn<
       (query: string, operationId: string) => Promise<{ query: string }>
     >(async () => {
@@ -94,7 +91,7 @@ describe("public Web search boundary", () => {
     expect(search).not.toHaveBeenCalled()
   })
 
-  it("uses a strict public-query shape", () => {
+  it("厳密な公開query shapeを使う", () => {
     expect(
       v.safeParse(publicWebSearchInputValueSchema, {
         query: "Cloudflare R2 object limits 2026",
@@ -108,7 +105,7 @@ describe("public Web search boundary", () => {
     ).toEqual({ query: "Cloudflare R2 object limits 2026" })
   })
 
-  it("reserves quota before invoking the isolated search agent", async () => {
+  it("分離済み検索agent呼出前にquotaを予約する", async () => {
     const events: string[] = []
     const result = await executePublicWebSearch(
       { query: "Cloudflare R2 object limits 2026" },
@@ -143,7 +140,7 @@ describe("public Web search boundary", () => {
     })
   })
 
-  it("forwards the server-guarded query", async () => {
+  it("server guard済みqueryを転送する", async () => {
     const search = vi.fn<
       (query: string, abortSignal?: AbortSignal) => Promise<typeof publicResult>
     >(async () => publicResult)
@@ -162,7 +159,7 @@ describe("public Web search boundary", () => {
   })
 
   it.each(["   ", "x", "x".repeat(201)])(
-    "rejects an invalid guarded query before reservation or provider forwarding",
+    "不正なguard済みquery%#を予約とprovider転送前に拒否する",
     async (guardedQuery) => {
       const search =
         vi.fn<
@@ -192,7 +189,7 @@ describe("public Web search boundary", () => {
     "Web search query requires a public-only restatement",
     "Web search private context is too large",
   ])(
-    "rejects a query denied by the server guard before reservation or provider forwarding: %s",
+    "server guardが拒否したquery%#を予約とprovider転送前に拒否する",
     async (guardMessage) => {
       const authorize = vi.fn<
         (query: string, operationId: string) => Promise<{ query: string }>
@@ -225,7 +222,7 @@ describe("public Web search boundary", () => {
     }
   )
 
-  it("returns only bounded public sources and labels prompt injection as untrusted", async () => {
+  it("有界な公開sourceだけを返してprompt injectionを未信頼と表示する", async () => {
     const result = await executePublicWebSearch(
       { query: "Cloudflare R2 limits" },
       {
@@ -270,7 +267,7 @@ describe("public Web search boundary", () => {
     ])
   })
 
-  it("removes every provider source query before returning tool output", async () => {
+  it("tool出力返却前に全provider source queryを除去する", async () => {
     const result = await executePublicWebSearch(
       { query: "Public source capability filtering" },
       {
@@ -327,7 +324,7 @@ describe("public Web search boundary", () => {
     expect(JSON.stringify(result)).not.toContain("PRIVATE_")
   })
 
-  it("rejects case-insensitive private trailing-dot hosts and canonicalizes public hosts", async () => {
+  it("大文字小文字を無視したprivate trailing-dot hostを拒否して公開hostを正規化する", async () => {
     const result = await executePublicWebSearch(
       { query: "Public host canonicalization" },
       {

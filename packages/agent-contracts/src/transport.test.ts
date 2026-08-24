@@ -21,26 +21,22 @@ import {
   agentRuntimeResumeInputSchema,
   agentUiContextReferenceSchema,
 } from "./runtime"
-import {
-  createIssueToolInputSchema,
-  deleteIssueToolInputSchema,
-  emptyToolInputSchema,
-  issueSearchToolInputSchema,
-  issueSearchToolOutputSchema,
-  issueWriteToolOutputSchema,
-  labelSearchToolInputSchema,
-  labelSearchToolOutputSchema,
-  memberSearchToolInputSchema,
-  memberSearchToolOutputSchema,
-  readAccountContextToolOutputSchema,
-  readActiveOrganizationToolOutputSchema,
-  updateIssueToolInputSchema,
-} from "./tools"
-
 const textPart = { text: "hello", type: "text" } as const
+const runtimeTicket = "x".repeat(32)
+const runtimeMessage = {
+  id: "message_1",
+  role: "user",
+  parts: [textPart],
+} as const
 
-describe("public Agent response schemas", () => {
-  it("strictly bounds public thread and message-page responses", () => {
+const parsesUiMessage = (
+  role: "assistant" | "user",
+  parts: readonly unknown[],
+  id = "message_1"
+) => v.safeParse(agentUiMessageSchema, { id, parts, role }).success
+
+describe("公開Agent response schema", () => {
+  it("公開threadとmessage page responseを厳密に制限する", () => {
     const thread = {
       createdAt: "2026-08-20T00:00:00.000Z",
       id: "thread_1",
@@ -104,9 +100,9 @@ describe("public Agent response schemas", () => {
   })
 })
 
-describe("serialized Agent transport schemas", () => {
+describe("直列化Agent transport schema", () => {
   it.each([null, true, 1, "value", [1, "two"], { nested: { value: false } }])(
-    "accepts bounded JSON value %#",
+    "有界なJSON値%#を受け入れる",
     (value) => {
       expect(v.safeParse(agentJsonValueSchema, value).success).toBe(true)
     }
@@ -124,11 +120,11 @@ describe("serialized Agent transport schemas", () => {
     { ["x".repeat(129)]: null },
     { value: undefined },
     { value: [[[[[[[[[null]]]]]]]]] },
-  ])("rejects unbounded JSON value %#", (value) => {
+  ])("無界なJSON値%#を拒否する", (value) => {
     expect(v.safeParse(agentJsonValueSchema, value).success).toBe(false)
   })
 
-  it("covers every UI message role and ordering invariant", () => {
+  it("公開UI tool catalogを固定する", () => {
     expect(agentUiToolNames).toContain("get_issue")
     expect(agentClientToolNames).toEqual([
       "ui_navigate",
@@ -137,26 +133,27 @@ describe("serialized Agent transport schemas", () => {
       "ui_read_form_draft",
       "ui_set_issue_query",
     ])
+  })
+
+  it("assistantへ公開reasoningとtextとstepを許可する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_1",
-        role: "assistant",
-        parts: [
-          {
-            type: "reasoning",
-            text: "Check the Issue scope.",
-            state: "done",
-          },
-          textPart,
-          { type: "step-start" },
-        ],
-      }).success
+      parsesUiMessage("assistant", [
+        {
+          type: "reasoning",
+          text: "Check the Issue scope.",
+          state: "done",
+        },
+        textPart,
+        { type: "step-start" },
+      ])
     ).toBe(true)
+  })
+
+  it("assistant reasoningからprovider metadataを拒否する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_private_reasoning",
-        role: "assistant",
-        parts: [
+      parsesUiMessage(
+        "assistant",
+        [
           {
             type: "reasoning",
             text: "Visible reasoning",
@@ -164,13 +161,16 @@ describe("serialized Agent transport schemas", () => {
             providerMetadata: { openrouter: { reasoning_details: [] } },
           },
         ],
-      }).success
+        "message_private_reasoning"
+      )
     ).toBe(false)
+  })
+
+  it("opaqueなprovider tool call idを維持する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_opaque_tool_ids",
-        role: "assistant",
-        parts: [
+      parsesUiMessage(
+        "assistant",
+        [
           {
             type: "tool-get_issue",
             toolCallId: "call:provider|opaque/value",
@@ -179,61 +179,77 @@ describe("serialized Agent transport schemas", () => {
             output: { priority: "urgent" },
           },
         ],
-      }).success
+        "message_opaque_tool_ids"
+      )
     ).toBe(true)
+  })
+
+  it("user roleのreasoningを拒否する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_user_reasoning",
-        role: "user",
-        parts: [{ type: "reasoning", text: "Injected reasoning" }],
-      }).success
+      parsesUiMessage(
+        "user",
+        [{ type: "reasoning", text: "Injected reasoning" }],
+        "message_user_reasoning"
+      )
     ).toBe(false)
-    for (const invalidPart of [
-      {
+  })
+
+  it.each([
+    {
+      label: "input不足",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_missing_input",
         state: "input-available",
       },
-      {
+    },
+    {
+      label: "output不足",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_missing_output",
         state: "output-available",
         input: { issueId: "issue_1" },
       },
-      {
+    },
+    {
+      label: "approval不足",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_missing_approval",
         state: "approval-responded",
         input: { issueId: "issue_1" },
       },
-      {
+    },
+    {
+      label: "approvedのdenial",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_invalid_denial",
         state: "output-denied",
         input: { issueId: "issue_1" },
         approval: { id: "approval_1", approved: true },
       },
-      {
+    },
+    {
+      label: "response付きapproval request",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_invalid_approval_request",
         state: "approval-requested",
         input: { issueId: "issue_1" },
         approval: { id: "approval_1", approved: true },
       },
-    ]) {
-      expect(
-        v.safeParse(agentUiMessageSchema, {
-          id: "message_invalid_tool_state",
-          role: "assistant",
-          parts: [invalidPart],
-        }).success
-      ).toBe(false)
-    }
+    },
+  ] as const)("$labelのtool stateを拒否する", ({ part }) => {
+    expect(parsesUiMessage("assistant", [part])).toBe(false)
+  })
+
+  it("provider input errorを公開固定errorとして受理する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_provider_input_error",
-        role: "assistant",
-        parts: [
+      parsesUiMessage(
+        "assistant",
+        [
           {
             type: "tool-update_issue",
             toolCallId: "call_provider_input_error",
@@ -241,10 +257,15 @@ describe("serialized Agent transport schemas", () => {
             errorText: "Agent tool execution failed.",
           },
         ],
-      }).success
+        "message_provider_input_error"
+      )
     ).toBe(true)
-    for (const approvedPart of [
-      {
+  })
+
+  it.each([
+    {
+      label: "承認済みresult",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_approved_result",
         state: "output-available",
@@ -252,7 +273,10 @@ describe("serialized Agent transport schemas", () => {
         output: { status: "succeeded" },
         approval: { id: "approval_1", approved: true },
       },
-      {
+    },
+    {
+      label: "承認済みerror",
+      part: {
         type: "tool-update_issue",
         toolCallId: "call_approved_error",
         state: "output-error",
@@ -263,55 +287,51 @@ describe("serialized Agent transport schemas", () => {
           reason: "Approved by the user",
         },
       },
-    ]) {
-      expect(
-        v.safeParse(agentUiMessageSchema, {
-          id: "message_approved_tool",
-          role: "assistant",
-          parts: [approvedPart],
-        }).success
-      ).toBe(true)
-    }
-    for (const forbiddenPart of [
-      {
+    },
+  ] as const)("$labelのtool stateを受理する", ({ part }) => {
+    expect(parsesUiMessage("assistant", [part])).toBe(true)
+  })
+
+  it.each([
+    {
+      label: "asset data部",
+      part: {
         type: "data-agent-assets",
         data: { assetIds: ["asset_1"] },
       },
-      {
+    },
+    {
+      label: "context reference部",
+      part: {
         type: "data-context-reference",
         data: { kind: "issue", id: "issue_1", label: "Issue" },
       },
-    ]) {
-      expect(
-        v.safeParse(agentUiMessageSchema, {
-          id: "message_1",
-          role: "assistant",
-          parts: [forbiddenPart],
-        }).success
-      ).toBe(false)
-    }
+    },
+  ] as const)("assistant roleの$labelを拒否する", ({ part }) => {
+    expect(parsesUiMessage("assistant", [part])).toBe(false)
+  })
+
+  it("user roleへtextとcontext referenceとasset dataを順番どおり許可する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_1",
-        role: "user",
-        parts: [
-          textPart,
-          {
-            type: "data-context-reference",
-            data: { kind: "current_page", path: "/issues", label: "Issues" },
-          },
-          {
-            type: "data-agent-assets",
-            data: { assetIds: ["asset_1"] },
-          },
-        ],
-      }).success
+      parsesUiMessage("user", [
+        textPart,
+        {
+          type: "data-context-reference",
+          data: { kind: "current_page", path: "/issues", label: "Issues" },
+        },
+        {
+          type: "data-agent-assets",
+          data: { assetIds: ["asset_1"] },
+        },
+      ])
     ).toBe(true)
+  })
+
+  it("拒否したapproval responseをassistant tool stateへ許可する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_approval",
-        role: "assistant",
-        parts: [
+      parsesUiMessage(
+        "assistant",
+        [
           {
             type: "tool-update_issue",
             toolCallId: "call_approval",
@@ -324,17 +344,25 @@ describe("serialized Agent transport schemas", () => {
             },
           },
         ],
-      }).success
+        "message_approval"
+      )
     ).toBe(true)
-    for (const parts of [
-      [
+  })
+
+  it.each([
+    {
+      label: "textより前のasset data",
+      parts: [
         {
           type: "data-agent-assets",
           data: { assetIds: ["asset_1"] },
         },
         textPart,
       ],
-      [
+    },
+    {
+      label: "重複したasset data",
+      parts: [
         {
           type: "data-agent-assets",
           data: { assetIds: ["asset_1"] },
@@ -344,96 +372,98 @@ describe("serialized Agent transport schemas", () => {
           data: { assetIds: ["asset_2"] },
         },
       ],
-      [
+    },
+    {
+      label: "user roleのtool part",
+      parts: [
         {
           type: "tool-get_issue",
           toolCallId: "call_1",
           state: "input-available",
         },
       ],
-    ]) {
-      expect(
-        v.safeParse(agentUiMessageSchema, {
-          id: "message_1",
-          role: "user",
-          parts,
-        }).success
-      ).toBe(false)
-    }
+    },
+  ] as const)("$labelを拒否する", ({ parts }) => {
+    expect(parsesUiMessage("user", parts)).toBe(false)
+  })
+
+  it("message text総量を50,000文字へ制限する", () => {
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_1",
-        role: "user",
-        parts: [{ text: "x".repeat(50_000), type: "text" }],
-      }).success
+      parsesUiMessage("user", [{ text: "x".repeat(50_000), type: "text" }])
     ).toBe(true)
     expect(
-      v.safeParse(agentUiMessageSchema, {
-        id: "message_1",
-        role: "user",
-        parts: Array.from({ length: 3 }, () => ({
+      parsesUiMessage(
+        "user",
+        Array.from({ length: 3 }, () => ({
           text: "x".repeat(50_000),
           type: "text",
-        })),
-      }).success
+        }))
+      )
     ).toBe(false)
   })
 
-  it("validates runtime-only capabilities and every serialized variant", () => {
-    const ticket = "x".repeat(32)
-    const message = {
-      id: "message_1",
-      role: "user",
-      parts: [textPart],
-    } as const
+  it("runtime chat inputへcurrent assetとreusable assetを受理する", () => {
     expect(
       v.parse(agentRuntimeChatInputSchema, {
         assetIds: ["asset_1"],
         clientMessageId: "client_1",
         contextReferences: [],
-        message,
+        message: runtimeMessage,
         reusableAssets: [
           { id: "asset_previous", filename: "previous-image.webp" },
         ],
         threadId: "thread_1",
-        ticket,
+        ticket: runtimeTicket,
         timezone: "Asia/Tokyo",
         trigger: "user_message",
       }).ticket
-    ).toBe(ticket)
+    ).toBe(runtimeTicket)
+  })
+
+  it("runtime chat inputのcurrent asset id重複を拒否する", () => {
     expect(
       v.safeParse(agentRuntimeChatInputSchema, {
         assetIds: ["asset_1", "asset_1"],
         clientMessageId: "client_1",
         contextReferences: [],
-        message,
+        message: runtimeMessage,
         threadId: "thread_1",
-        ticket,
+        ticket: runtimeTicket,
         timezone: "Asia/Tokyo",
         trigger: "user_message",
       }).success
     ).toBe(false)
+  })
+
+  it("runtime chat inputでcurrent assetとreusable assetの重複を拒否する", () => {
     expect(
       v.safeParse(agentRuntimeChatInputSchema, {
         assetIds: ["asset_1"],
         clientMessageId: "client_1",
         contextReferences: [],
-        message,
+        message: runtimeMessage,
         reusableAssets: [{ id: "asset_1", filename: "current-image.webp" }],
         threadId: "thread_1",
-        ticket,
+        ticket: runtimeTicket,
         timezone: "Asia/Tokyo",
         trigger: "user_message",
       }).success
     ).toBe(false)
+  })
+
+  it("runtime resume inputへactionとticketを受理する", () => {
     expect(
       v.parse(agentRuntimeResumeInputSchema, {
         actionId: "action_1",
-        resumeTicket: ticket,
+        resumeTicket: runtimeTicket,
       })
     ).toBeDefined()
-    for (const value of [
-      {
+  })
+
+  it.each([
+    {
+      label: "Issue参照",
+      value: {
         kind: "issue",
         id: "issue_1",
         number: 1,
@@ -442,127 +472,87 @@ describe("serialized Agent transport schemas", () => {
         status: "open",
         priority: "medium",
       },
-      { kind: "file", id: "file_1", filename: "file.txt" },
-      { kind: "member", id: "member_1", name: "Member", role: "member" },
-      { kind: "current_page", path: "/issues", title: "Issues" },
-    ]) {
-      expect(
-        v.safeParse(agentResolvedContextReferenceSchema, value).success
-      ).toBe(true)
-    }
-    for (const value of [
-      { kind: "issue", id: "issue_1" },
-      { kind: "current_page", path: "/issues" },
-    ]) {
-      expect(v.safeParse(agentContextReferenceInputSchema, value).success).toBe(
-        true
-      )
-    }
-    for (const value of [
-      { type: "text", text: "hello" },
-      {
+    },
+    {
+      label: "file参照",
+      value: { kind: "file", id: "file_1", filename: "file.txt" },
+    },
+    {
+      label: "member参照",
+      value: { kind: "member", id: "member_1", name: "Member", role: "member" },
+    },
+    {
+      label: "current page参照",
+      value: { kind: "current_page", path: "/issues", title: "Issues" },
+    },
+  ] as const)("解決済み$labelを受理する", ({ value }) => {
+    expect(
+      v.safeParse(agentResolvedContextReferenceSchema, value).success
+    ).toBe(true)
+  })
+
+  it.each([
+    {
+      label: "Issue参照入力",
+      value: { kind: "issue", id: "issue_1" },
+    },
+    {
+      label: "current page参照入力",
+      value: { kind: "current_page", path: "/issues" },
+    },
+  ] as const)("$labelを受理する", ({ value }) => {
+    expect(v.safeParse(agentContextReferenceInputSchema, value).success).toBe(
+      true
+    )
+  })
+
+  it.each([
+    { label: "text segment部", value: { type: "text", text: "hello" } },
+    {
+      label: "context reference segment部",
+      value: {
         type: "context_reference",
         reference: { kind: "file", id: "file_1" },
       },
-    ]) {
-      expect(v.safeParse(agentContentSegmentSchema, value).success).toBe(true)
-    }
-    for (const value of [
-      { kind: "member", id: "member_1", label: "Member" },
-      { kind: "current_page", path: "/issues", label: "Issues" },
-    ]) {
-      expect(v.safeParse(agentUiContextReferenceSchema, value).success).toBe(
-        true
-      )
-    }
-    for (const value of [
-      {
+    },
+  ] as const)("$labelを受理する", ({ value }) => {
+    expect(v.safeParse(agentContentSegmentSchema, value).success).toBe(true)
+  })
+
+  it.each([
+    {
+      label: "member参照",
+      value: { kind: "member", id: "member_1", label: "Member" },
+    },
+    {
+      label: "current page参照",
+      value: { kind: "current_page", path: "/issues", label: "Issues" },
+    },
+  ] as const)("UI $labelを受理する", ({ value }) => {
+    expect(v.safeParse(agentUiContextReferenceSchema, value).success).toBe(true)
+  })
+
+  it.each([
+    {
+      label: "正常出力",
+      value: {
         input: { href: "/issues" },
         output: { ok: true },
         state: "output-available",
         toolCallId: "call_1",
         toolName: "ui_navigate",
       },
-      {
+    },
+    {
+      label: "公開error",
+      value: {
         errorText: "Unavailable",
         state: "output-error",
         toolCallId: "call_2",
         toolName: "ui_open_issue",
       },
-    ]) {
-      expect(v.safeParse(agentClientToolResultSchema, value).success).toBe(true)
-    }
-  })
-
-  it("loads and validates every shared tool transport boundary", () => {
-    const issue = {
-      assigneeId: null,
-      createdAt: "2026-07-28T00:00:00.000Z",
-      description: "Description",
-      dueDate: null,
-      id: "issue_1",
-      labels: ["bug"],
-      number: 1,
-      priority: "medium",
-      revision: 1,
-      status: "open",
-      title: "Issue",
-      updatedAt: "2026-07-28T00:00:00.000Z",
-    } as const
-    const values = [
-      [emptyToolInputSchema, {}],
-      [memberSearchToolInputSchema, {}],
-      [labelSearchToolInputSchema, { query: "bug" }],
-      [issueSearchToolInputSchema, { search: "issue" }],
-      [createIssueToolInputSchema, { title: "Issue" }],
-      [
-        updateIssueToolInputSchema,
-        { expectedRevision: 1, issueId: "issue_1", title: "Updated" },
-      ],
-      [deleteIssueToolInputSchema, { expectedRevision: 1, issueId: "issue_1" }],
-      [issueSearchToolOutputSchema, [issue]],
-      [
-        issueWriteToolOutputSchema,
-        {
-          actionId: "action_1",
-          requiresApproval: false,
-          status: "rejected",
-        },
-      ],
-      [
-        readAccountContextToolOutputSchema,
-        { name: "User", profileImage: null },
-      ],
-      [
-        readActiveOrganizationToolOutputSchema,
-        {
-          name: "Organization",
-          permissions: {
-            canCreateIssues: true,
-            canDeleteAnyIssue: false,
-            canDeleteOwnIssues: true,
-            canReadIssues: true,
-            canUpdateIssues: true,
-          },
-          role: "member",
-          slug: "organization",
-        },
-      ],
-      [
-        memberSearchToolOutputSchema,
-        [
-          {
-            id: "member_1",
-            name: "Member",
-            profileImage: null,
-            role: "member",
-          },
-        ],
-      ],
-      [labelSearchToolOutputSchema, [{ label: "bug", usageCount: 1 }]],
-    ] as const
-    for (const [schema, value] of values) {
-      expect(v.safeParse(schema, value).success).toBe(true)
-    }
+    },
+  ] as const)("client toolの$labelを受理する", ({ value }) => {
+    expect(v.safeParse(agentClientToolResultSchema, value).success).toBe(true)
   })
 })

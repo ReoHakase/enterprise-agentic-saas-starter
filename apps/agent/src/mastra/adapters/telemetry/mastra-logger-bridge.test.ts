@@ -32,8 +32,8 @@ vi.mock("@opentelemetry/api-logs", () => ({
 
 import { connectMastraLoggerProvider } from "./mastra-logger-bridge"
 
-describe("Mastra logger bridge", () => {
-  it("preserves scope, context, timestamps, and severity", () => {
+describe("Mastra logger bridgeの契約", () => {
+  it("scopeとcontextとtimestampとseverityを保持する", () => {
     connectMastraLoggerProvider({
       AGENT_INTERNAL_API: JSON.parse("{}"),
       AGENT_RUNS_ENABLED: "1",

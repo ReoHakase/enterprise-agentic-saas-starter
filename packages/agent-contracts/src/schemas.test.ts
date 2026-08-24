@@ -21,6 +21,7 @@ import {
   agentRunResultSchema,
   agentSearchIssuesInputSchema,
   agentUpdateIssueActionInputSchema,
+  agentUsageRecordInputSchema,
   agentWebSearchAuthorizationSchema,
   getIssueToolInputSchema,
 } from "./schemas"
@@ -55,13 +56,73 @@ const attachmentReceipt = {
   revision: 2,
   fileIds: ["file_1"],
 } as const
+const connection = {
+  expiresAt: "2026-07-28T00:00:00.000Z",
+  grant: VALID_GRANT,
+  memoryResourceId: "resource_1",
+  organization: {
+    name: "Organization",
+    permissions: {
+      canCreateIssues: true,
+      canDeleteAnyIssue: false,
+      canDeleteOwnIssues: true,
+      canReadIssues: true,
+      canUpdateIssues: true,
+    },
+    role: "member",
+    slug: "organization",
+  },
+  thread: { id: "thread_1", title: "Thread" },
+  user: { name: "User", profileImage: null },
+} as const
+const run = {
+  attempt: 1,
+  expiresAt: "2026-07-28T00:00:00.000Z",
+  grant: VALID_GRANT,
+  rootRunId: "root_1",
+  runId: "run_1",
+  shouldGenerateTitle: false,
+} as const
+const chatRun = {
+  memoryResourceId: connection.memoryResourceId,
+  organization: connection.organization,
+  run,
+  thread: connection.thread,
+  user: connection.user,
+} as const
+const action = {
+  approvalMode: "manual",
+  completedAt: null,
+  expiresAt: "2026-07-28T00:00:00.000Z",
+  id: "action_1",
+  kind: "delete_issue",
+  preview: null,
+  previewState: "available",
+  requiresApproval: true,
+  status: "pending",
+} as const
+const usage = {
+  provider: "openrouter",
+  model: "model",
+  inputTokenCount: 1,
+  inputNoCacheTokenCount: 1,
+  cacheReadTokenCount: 0,
+  cacheWriteTokenCount: 0,
+  outputTokenCount: 1,
+  textOutputTokenCount: 1,
+  reasoningTokenCount: 0,
+  totalTokenCount: 2,
+  imageInputCount: 0,
+  durationMs: 1,
+  runEventId: "event_1",
+} as const
 
-describe("agent contract runtime schemas", () => {
-  it("accepts the bounded Issue contract", () => {
+describe("agent contract runtime schemaの契約", () => {
+  it("有界なIssue契約を受け入れる", () => {
     expect(v.parse(agentIssueSchema, issue)).toEqual(issue)
   })
 
-  it("rejects unknown fields instead of stripping them", () => {
+  it("未知fieldを除去せず拒否する", () => {
     expect(
       v.safeParse(agentIssueSchema, {
         ...issue,
@@ -89,7 +150,7 @@ describe("agent contract runtime schemas", () => {
     ).toBe(true)
   })
 
-  it("rejects fields from a different update operation", () => {
+  it("異なるupdate operationのfieldを拒否する", () => {
     expect(
       v.safeParse(agentUpdateIssueActionInputSchema, {
         operation: "add_attachments",
@@ -110,7 +171,7 @@ describe("agent contract runtime schemas", () => {
     ).toBe(false)
   })
 
-  it("keeps tenant and capability values out of business tool input", () => {
+  it("tenantとcapability値をbusiness tool入力から除外する", () => {
     expect(
       v.parse(getIssueToolInputSchema, { lookup: "id", id: "issue_1" })
     ).toEqual({ lookup: "id", id: "issue_1" })
@@ -123,7 +184,7 @@ describe("agent contract runtime schemas", () => {
     ).toBe(false)
   })
 
-  it("bounds attachment receipts without exposing storage details", () => {
+  it("storage詳細を公開せず添付receiptを制限する", () => {
     expect(
       v.parse(agentAttachmentMutationReceiptSchema, attachmentReceipt)
     ).toEqual(attachmentReceipt)
@@ -135,7 +196,7 @@ describe("agent contract runtime schemas", () => {
     ).toBe(false)
   })
 
-  it("bounds attachment mutation inputs and rejects duplicate or private fields", () => {
+  it("添付変更入力を制限して重複またはprivate fieldを拒否する", () => {
     expect(
       v.safeParse(addIssueAttachmentsToolInputSchema, {
         issueId: "issue_1",
@@ -167,7 +228,7 @@ describe("agent contract runtime schemas", () => {
     ).toBe(false)
   })
 
-  it("validates operation-specific attachment tool outputs", () => {
+  it("operation固有の添付tool出力を検証する", () => {
     const pendingPreview = {
       actionId: "action_1",
       expiresAt: "2026-07-28T01:00:00.000Z",
@@ -262,7 +323,7 @@ describe("agent contract runtime schemas", () => {
     }
   })
 
-  it("rejects duplicate attachment mutations in execution receipts", () => {
+  it("実行receipt内の重複添付変更を拒否する", () => {
     for (const operation of ["added", "removed"] as const) {
       const result = {
         actionId: "action_1",
@@ -290,10 +351,10 @@ describe("agent contract runtime schemas", () => {
   })
 
   it.each([
-    ["max-1", 99, true],
-    ["max", 100, true],
-    ["max+1", 101, false],
-  ])("enforces get_issue attachmentLimit at %s", (_label, limit, success) => {
+    ["上限未満", 99, true],
+    ["上限", 100, true],
+    ["上限超過", 101, false],
+  ])("get_issue attachmentLimitの%sを強制する", (_label, limit, success) => {
     expect(
       v.safeParse(getIssueToolInputSchema, {
         lookup: "number",
@@ -304,35 +365,32 @@ describe("agent contract runtime schemas", () => {
   })
 
   it.each([
-    ["max-1", 99, true],
-    ["max", 100, true],
-    ["max+1", 101, false],
-  ])(
-    "enforces get_issue attachment response count at %s",
-    (_label, count, success) => {
-      const attachments = Array.from({ length: count }, (_, index) => ({
-        id: `file_${index}`,
-        filename: `file-${index}.txt`,
-        sizeBytes: 1,
-        declaredContentType: "text/plain",
-        imageReadable: false,
-        textPreviewable: true,
-        dimensions: null,
-        uploaderName: "User",
-        createdAt: "2026-07-28T00:00:00.000Z",
-      }))
-      expect(
-        v.safeParse(agentIssueDetailSchema, {
-          ...issue,
-          attachments: { items: attachments, nextCursor: null },
-        }).success
-      ).toBe(success)
-    }
-  )
+    ["上限未満", 99, true],
+    ["上限", 100, true],
+    ["上限超過", 101, false],
+  ])("get_issue添付response件数の%sを強制する", (_label, count, success) => {
+    const attachments = Array.from({ length: count }, (_, index) => ({
+      id: `file_${index}`,
+      filename: `file-${index}.txt`,
+      sizeBytes: 1,
+      declaredContentType: "text/plain",
+      imageReadable: false,
+      textPreviewable: true,
+      dimensions: null,
+      uploaderName: "User",
+      createdAt: "2026-07-28T00:00:00.000Z",
+    }))
+    expect(
+      v.safeParse(agentIssueDetailSchema, {
+        ...issue,
+        attachments: { items: attachments, nextCursor: null },
+      }).success
+    ).toBe(success)
+  })
 })
 
-describe("agent contract response schemas", () => {
-  it("accepts both lookup variants and rejects mixed or malformed variants", () => {
+describe("agent contract response schemaの契約", () => {
+  it("両lookup variantを受け入れて混在または不正variantを拒否する", () => {
     expect(
       v.safeParse(getIssueToolInputSchema, {
         lookup: "id",
@@ -361,7 +419,7 @@ describe("agent contract response schemas", () => {
     ).toBe(false)
   })
 
-  it("keeps nullable fields distinct from omitted required fields", () => {
+  it("nullable fieldと省略済み必須fieldを区別する", () => {
     expect(v.safeParse(agentIssueSchema, issue).success).toBe(true)
     expect(
       v.safeParse(agentIssueSchema, {
@@ -383,7 +441,7 @@ describe("agent contract response schemas", () => {
     ).toBe(false)
   })
 
-  it("rejects malformed timestamps, identifiers, and oversized arrays", () => {
+  it("不正timestampとidentifierと過大arrayを拒否する", () => {
     expect(
       v.safeParse(agentIssueSchema, {
         ...issue,
@@ -420,98 +478,94 @@ describe("agent contract response schemas", () => {
     ).toBe(true)
   })
 
-  it("strictly validates connection, run, action, usage, and Issue detail responses", () => {
-    const connection = {
-      expiresAt: "2026-07-28T00:00:00.000Z",
-      grant: VALID_GRANT,
-      memoryResourceId: "resource_1",
-      organization: {
-        name: "Organization",
-        permissions: {
-          canCreateIssues: true,
-          canDeleteAnyIssue: false,
-          canDeleteOwnIssues: true,
-          canReadIssues: true,
-          canUpdateIssues: true,
-        },
-        role: "member",
-        slug: "organization",
-      },
-      thread: { id: "thread_1", title: "Thread" },
-      user: { name: "User", profileImage: null },
-    } as const
-    const run = {
-      attempt: 1,
-      expiresAt: "2026-07-28T00:00:00.000Z",
-      grant: VALID_GRANT,
-      rootRunId: "root_1",
-      runId: "run_1",
-      shouldGenerateTitle: false,
-    } as const
-    const action = {
-      approvalMode: "manual",
-      completedAt: null,
-      expiresAt: "2026-07-28T00:00:00.000Z",
-      id: "action_1",
-      kind: "delete_issue",
-      preview: null,
-      previewState: "available",
-      requiresApproval: true,
-      status: "pending",
-    } as const
-
+  it("connection responseを厳密に検証する", () => {
     expect(v.parse(agentConnectionSchema, connection)).toEqual(connection)
+    expect(
+      v.safeParse(agentConnectionSchema, {
+        ...connection,
+        privateUrl: "https://private.invalid",
+      }).success
+    ).toBe(false)
+  })
+
+  it("run grant responseを厳密に検証する", () => {
     expect(v.parse(agentRunGrantSchema, run)).toEqual(run)
     expect(
-      v.parse(agentChatRunSchema, {
-        memoryResourceId: connection.memoryResourceId,
-        organization: connection.organization,
-        run,
-        thread: connection.thread,
-        user: connection.user,
-      })
-    ).toEqual({
-      memoryResourceId: connection.memoryResourceId,
-      organization: connection.organization,
-      run,
-      thread: connection.thread,
-      user: connection.user,
-    })
+      v.safeParse(agentRunGrantSchema, { ...run, internalState: "private" })
+        .success
+    ).toBe(false)
+  })
+
+  it("chat run responseを厳密に検証する", () => {
+    expect(v.parse(agentChatRunSchema, chatRun)).toEqual(chatRun)
+    expect(
+      v.safeParse(agentChatRunSchema, {
+        ...chatRun,
+        privateUrl: "https://private.invalid",
+      }).success
+    ).toBe(false)
+  })
+
+  it("run liveness responseを厳密に検証する", () => {
     expect(v.parse(agentRunLivenessSchema, { live: true })).toEqual({
       live: true,
     })
-    expect(v.parse(agentIssueActionSchema, action)).toEqual(action)
     expect(
-      v.parse(agentIssueDetailSchema, {
-        ...issue,
-        attachments: { items: [], nextCursor: null },
-      })
-    ).toBeDefined()
-    for (const [schema, value] of [
-      [agentConnectionSchema, connection],
-      [agentRunGrantSchema, run],
-      [
-        agentChatRunSchema,
-        {
-          memoryResourceId: connection.memoryResourceId,
-          organization: connection.organization,
-          run,
-          thread: connection.thread,
-          user: connection.user,
-        },
-      ],
-      [agentRunLivenessSchema, { live: true }],
-      [agentIssueActionSchema, action],
-    ] as const) {
-      expect(
-        v.safeParse(schema, { ...value, privateUrl: "https://private.invalid" })
-          .success
-      ).toBe(false)
-    }
+      v.safeParse(agentRunLivenessSchema, {
+        live: true,
+        internalState: "private",
+      }).success
+    ).toBe(false)
   })
 
-  it("strictly validates public run, execution, and approval responses", () => {
+  it("Issue action responseを厳密に検証する", () => {
+    expect(v.parse(agentIssueActionSchema, action)).toEqual(action)
+    expect(
+      v.safeParse(agentIssueActionSchema, {
+        ...action,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("usage record inputを厳密に検証する", () => {
+    expect(v.parse(agentUsageRecordInputSchema, usage)).toEqual(usage)
+    expect(
+      v.safeParse(agentUsageRecordInputSchema, {
+        ...usage,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("Issue詳細responseを厳密に検証する", () => {
+    const detail = {
+      ...issue,
+      attachments: { items: [], nextCursor: null },
+    } as const
+
+    expect(v.parse(agentIssueDetailSchema, detail)).toEqual(detail)
+    expect(
+      v.safeParse(agentIssueDetailSchema, {
+        ...detail,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("公開run resultを厳密に検証する", () => {
     const runResult = { runId: "run_1", status: "completed" } as const
+
+    expect(v.parse(agentRunResultSchema, runResult)).toEqual(runResult)
+    expect(
+      v.safeParse(agentRunResultSchema, {
+        ...runResult,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("action execution resultを厳密に検証する", () => {
     const executionResult = {
       actionId: "action_1",
       issue: {
@@ -527,6 +581,19 @@ describe("agent contract response schemas", () => {
       kind: "update_issue",
       status: "succeeded",
     } as const
+
+    expect(v.parse(agentActionExecutionResultSchema, executionResult)).toEqual(
+      executionResult
+    )
+    expect(
+      v.safeParse(agentActionExecutionResultSchema, {
+        ...executionResult,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("approval policy responseを厳密に検証する", () => {
     const approval = {
       mode: "full_access",
       permissions: {
@@ -535,35 +602,37 @@ describe("agent contract response schemas", () => {
         updateIssue: true,
       },
     } as const
+
+    expect(v.parse(agentApprovalPolicySchema, approval)).toEqual(approval)
+    expect(
+      v.safeParse(agentApprovalPolicySchema, {
+        ...approval,
+        internalState: "private",
+      }).success
+    ).toBe(false)
+  })
+
+  it("context revocation responseを厳密に検証する", () => {
     const revocation = { contextEpoch: 2 } as const
 
-    expect(v.parse(agentRunResultSchema, runResult)).toEqual(runResult)
-    expect(v.parse(agentActionExecutionResultSchema, executionResult)).toEqual(
-      executionResult
-    )
-    expect(v.parse(agentApprovalPolicySchema, approval)).toEqual(approval)
     expect(v.parse(agentContextRevocationSchema, revocation)).toEqual(
       revocation
     )
-    for (const [schema, value] of [
-      [agentRunResultSchema, runResult],
-      [agentActionExecutionResultSchema, executionResult],
-      [agentApprovalPolicySchema, approval],
-      [agentContextRevocationSchema, revocation],
-    ] as const) {
-      expect(
-        v.safeParse(schema, { ...value, internalState: "private" }).success
-      ).toBe(false)
-    }
+    expect(
+      v.safeParse(agentContextRevocationSchema, {
+        ...revocation,
+        internalState: "private",
+      }).success
+    ).toBe(false)
   })
 
   it.each([
-    ["transport max", agentIssueDetailSchema, 50_000, true],
-    ["transport max+1", agentIssueDetailSchema, 50_001, false],
-    ["tool max", agentGetIssueToolOutputSchema, 20_000, true],
-    ["tool max+1", agentGetIssueToolOutputSchema, 20_001, false],
+    ["transport上限", agentIssueDetailSchema, 50_000, true],
+    ["transport上限超過", agentIssueDetailSchema, 50_001, false],
+    ["tool上限", agentGetIssueToolOutputSchema, 20_000, true],
+    ["tool上限超過", agentGetIssueToolOutputSchema, 20_001, false],
   ])(
-    "separates Issue description projection at %s",
+    "Issue description projectionを%sで分離する",
     (_label, schema, length, success) => {
       expect(
         v.safeParse(schema, {
@@ -575,7 +644,7 @@ describe("agent contract response schemas", () => {
     }
   )
 
-  it("matches canonical action and search input normalization", () => {
+  it("正規actionと検索入力の正規化に一致する", () => {
     expect(
       v.parse(agentCreateIssueActionInputSchema, {
         title: "  Issue  ",
@@ -631,13 +700,13 @@ describe("agent contract response schemas", () => {
   })
 
   it.each([
-    ["too short", "x".repeat(31), false],
-    ["minimum", "x".repeat(32), true],
-    ["maximum", "x".repeat(512), true],
-    ["too long", "x".repeat(513), false],
-    ["space", `${"x".repeat(31)} `, false],
-    ["control character", `${"x".repeat(31)}\n`, false],
-  ])("validates capability credentials at %s", (_label, token, success) => {
+    ["短すぎる値", "x".repeat(31), false],
+    ["最小値", "x".repeat(32), true],
+    ["最大値", "x".repeat(512), true],
+    ["長すぎる値", "x".repeat(513), false],
+    ["空白付き", `${"x".repeat(31)} `, false],
+    ["制御文字付き", `${"x".repeat(31)}\n`, false],
+  ])("capability credentialの%sを検証する", (_label, token, success) => {
     expect(
       v.safeParse(agentResumeTicketSchema, {
         ticket: token,
@@ -647,13 +716,13 @@ describe("agent contract response schemas", () => {
   })
 
   it.each([
-    ["whitespace only", "   ", null],
-    ["one character", "x", null],
-    ["trimmed minimum", "  xy  ", "xy"],
-    ["trimmed max-1", `  ${"x".repeat(199)}  `, "x".repeat(199)],
-    ["trimmed maximum", `  ${"x".repeat(200)}  `, "x".repeat(200)],
-    ["trimmed max+1", `  ${"x".repeat(201)}  `, null],
-  ])("validates guarded Web search query at %s", (_label, query, expected) => {
+    ["空白だけ", "   ", null],
+    ["一文字", "x", null],
+    ["trim後の最小値", "  xy  ", "xy"],
+    ["trim後の上限未満", `  ${"x".repeat(199)}  `, "x".repeat(199)],
+    ["trim後の上限", `  ${"x".repeat(200)}  `, "x".repeat(200)],
+    ["trim後の上限超過", `  ${"x".repeat(201)}  `, null],
+  ])("guard済みWeb検索queryの%sを検証する", (_label, query, expected) => {
     const result = v.safeParse(agentWebSearchAuthorizationSchema, {
       query,
       reserved: true,
@@ -663,7 +732,7 @@ describe("agent contract response schemas", () => {
     expect(result.success ? result.output.query : null).toBe(expected)
   })
 
-  it("strictly validates authorized Web search responses", () => {
+  it("認可済みWeb検索responseを厳密に検証する", () => {
     const authorization = {
       query: "release notes",
       reserved: true,

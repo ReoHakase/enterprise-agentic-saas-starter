@@ -39,8 +39,8 @@ const streamedModel = () =>
     }),
   })
 
-describe("withRunLiveness", () => {
-  it("asserts exactly before provider start and after stream completion", async () => {
+describe("withRunLivenessの契約", () => {
+  it("provider開始直前とstream完了後だけ生存を確認する", async () => {
     const assertLive = vi.fn<() => Promise<void>>().mockResolvedValue()
     const result = streamText({
       model: withRunLiveness(streamedModel(), assertLive),
@@ -53,7 +53,7 @@ describe("withRunLiveness", () => {
     expect(assertLive).toHaveBeenCalledTimes(2)
   })
 
-  it("does not start the provider when the first assertion fails", async () => {
+  it("最初の生存確認に失敗した場合はproviderを開始しない", async () => {
     const cause = new Error("revoked before provider")
     const model = streamedModel()
     const onError = vi.fn<(event: { error: unknown }) => void>()
@@ -72,7 +72,7 @@ describe("withRunLiveness", () => {
     expect(onError).toHaveBeenCalledWith({ error: cause })
   })
 
-  it("rejects completion when the second assertion fails", async () => {
+  it("二度目の生存確認に失敗した場合は完了を拒否する", async () => {
     const cause = new Error("revoked before completion")
     let callCount = 0
     const result = streamText({

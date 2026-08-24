@@ -7,10 +7,10 @@ vi.mock("ai", { spy: true })
 
 const mockedGenerateText = vi.mocked(generateText)
 
-describe("direct OpenRouter Web search adapter", () => {
+describe("直接OpenRouter Web検索adapter", () => {
   beforeEach(() => mockedGenerateText.mockReset())
 
-  it("serializes only the exact guarded query and projects flat URL sources", async () => {
+  it("guard済みqueryだけを直列化して平坦なURL sourceを投影する", async () => {
     mockedGenerateText.mockResolvedValue(
       JSON.parse(
         '{"finishReason":"stop","sources":[{"sourceType":"url","id":"source_1","url":"https://example.com/evidence","title":"Evidence"}],"text":"Summary"}'
@@ -42,7 +42,7 @@ describe("direct OpenRouter Web search adapter", () => {
     expect(options?.prompt).not.toMatch(/tenant|organization_id|issue_id/u)
   })
 
-  it("fails closed when OpenRouter returns no source evidence", async () => {
+  it("OpenRouterがsource evidenceを返さない場合は安全側に失敗する", async () => {
     mockedGenerateText.mockResolvedValue(
       JSON.parse('{"finishReason":"stop","sources":[],"text":"Summary"}')
     )

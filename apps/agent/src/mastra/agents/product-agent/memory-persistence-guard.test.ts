@@ -26,8 +26,8 @@ const recallMessages = async (
     })
   ).messages
 
-describe("Product Agent Memory persistence guard", () => {
-  it("removes only Mastra's transient model output copy", () => {
+describe("Product Agent Memory永続化guard", () => {
+  it("Mastraの一時model出力copyだけを除去する", () => {
     const parts: MastraMessagePart[] = JSON.parse(
       JSON.stringify([
         {
@@ -136,7 +136,7 @@ describe("Product Agent Memory persistence guard", () => {
     expect("processOutputStream" in productMemoryPersistenceGuard).toBe(false)
   })
 
-  it("keeps raw media in the current turn without persisting Mastra's copy", async () => {
+  it("Mastraのcopyを永続化せずraw mediaを現在turnに保持する", async () => {
     const storage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "memory-raw-media-persistence-guard"

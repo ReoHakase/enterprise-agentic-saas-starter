@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { normalizeAgentUsage } from "./normalize"
 
-describe("Agent usage normalization", () => {
-  it("treats reasoning as part of output without double counting", () => {
+describe("Agent usage正規化", () => {
+  it("reasoningを二重計上せず出力の一部として扱う", () => {
     expect(
       normalizeAgentUsage({
         usage: {
@@ -32,7 +32,7 @@ describe("Agent usage normalization", () => {
     })
   })
 
-  it("uses observed provider cost when available", () => {
+  it("観測済みprovider costがある場合はそれを使う", () => {
     expect(
       normalizeAgentUsage({
         usage: {
@@ -47,7 +47,7 @@ describe("Agent usage normalization", () => {
     ).toBe(1_234)
   })
 
-  it("sums observed OpenRouter cost across every model step", () => {
+  it("全model stepの観測済みOpenRouter costを合計する", () => {
     expect(
       normalizeAgentUsage({
         usage: {
@@ -67,16 +67,16 @@ describe("Agent usage normalization", () => {
 
   it.each([
     [
-      "missing",
+      "欠損",
       [
         { openrouter: { usage: { cost: 0.001 } } },
         { openrouter: { usage: {} } },
       ],
     ],
-    ["negative", [{ openrouter: { usage: { cost: -0.001 } } }]],
-    ["non-finite", [{ openrouter: { usage: { cost: Number.NaN } } }]],
+    ["負数", [{ openrouter: { usage: { cost: -0.001 } } }]],
+    ["非有限", [{ openrouter: { usage: { cost: Number.NaN } } }]],
   ])(
-    "falls back to estimated cost when a step cost is %s",
+    "step costが%sの場合は見積costへfallbackする",
     (_, stepProviderMetadata) => {
       expect(
         normalizeAgentUsage({

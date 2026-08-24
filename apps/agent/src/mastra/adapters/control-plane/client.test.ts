@@ -119,48 +119,33 @@ const harness = () => {
   return { gateway: createAgentInternalGateway(binding), requests }
 }
 
-describe("Agent internal HTTP gateway", () => {
-  it("uses ticket bodies only for connection/start/resume and bearer headers elsewhere", async () => {
+describe("Agent内部HTTP gateway", () => {
+  it("接続ticketをauthorization headerへ複製せずbodyへ送る", async () => {
     const test = harness()
-
     await test.gateway.consumeConnectionTicket({
       ticket: CONNECTION_TICKET,
       threadId: "thread_1",
     })
+    const [request] = await Promise.all(test.requests)
+
+    expect(request?.headers.authorization).toBeUndefined()
+    expect(JSON.parse(request?.body ?? "null")).toEqual({
+      threadId: "thread_1",
+      ticket: CONNECTION_TICKET,
+    })
+  })
+
+  it("chat開始へ既定triggerと空assetを送る", async () => {
+    const test = harness()
     await test.gateway.startChatRun({
       clientMessageId: "message_1",
       ticket: CONNECTION_TICKET,
       threadId: "thread_1",
     })
-    await test.gateway.searchIssues({
-      grant: RUN_GRANT,
-      limit: 20,
-      status: "open",
-    })
-    await test.gateway.resumeApprovedAction({
-      actionId: "action_1",
-      resumeTicket: RESUME_TICKET,
-    })
-    const image = await test.gateway.getAgentImageForModel({
-      assetId: "asset_1",
-      grant: RUN_GRANT,
-    })
-    const issueImage = await test.gateway.getIssueAttachmentImageForModel({
-      fileId: "file_1",
-      grant: RUN_GRANT,
-      issueId: "issue_1",
-    })
-    const requests = await Promise.all(test.requests)
+    const [request] = await Promise.all(test.requests)
 
-    expect(requests).toHaveLength(6)
-    expect(requests[0]?.headers.authorization).toBeUndefined()
-    expect(JSON.parse(requests[0]?.body ?? "null")).toEqual({
-      threadId: "thread_1",
-      ticket: CONNECTION_TICKET,
-    })
-
-    expect(requests[1]?.headers.authorization).toBeUndefined()
-    expect(JSON.parse(requests[1]?.body ?? "null")).toEqual({
+    expect(request?.headers.authorization).toBeUndefined()
+    expect(JSON.parse(request?.body ?? "null")).toEqual({
       assetIds: [],
       clientMessageId: "message_1",
       estimatedInputTokenCount: 0,
@@ -168,8 +153,18 @@ describe("Agent internal HTTP gateway", () => {
       ticket: CONNECTION_TICKET,
       trigger: "user_message",
     })
+  })
 
-    const issueUrl = new URL(requests[2]?.url ?? "")
+  it("認可済み検索のqueryからgrantと未定義値を除外する", async () => {
+    const test = harness()
+    await test.gateway.searchIssues({
+      grant: RUN_GRANT,
+      limit: 20,
+      status: "open",
+    })
+    const [request] = await Promise.all(test.requests)
+
+    const issueUrl = new URL(request?.url ?? "")
     expect(issueUrl.pathname).toBe("/internal/agent/issues")
     expect(Object.fromEntries(issueUrl.searchParams)).toEqual({
       limit: "20",
@@ -177,29 +172,57 @@ describe("Agent internal HTTP gateway", () => {
     })
     expect(issueUrl.search).not.toContain("grant")
     expect(issueUrl.search).not.toContain("undefined")
-    expect(requests[2]?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
-
-    expect(requests[3]?.headers.authorization).toBeUndefined()
-    expect(JSON.parse(requests[3]?.body ?? "null")).toEqual({
-      resumeTicket: RESUME_TICKET,
-    })
-    expect(new URL(requests[3]?.url ?? "").pathname).toBe(
-      "/internal/agent/actions/action_1/resume"
-    )
-
-    expect(requests[4]?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
-    expect(new URL(requests[4]?.url ?? "").pathname).toBe(
-      "/internal/agent/assets/asset_1/model"
-    )
-    expect(image.headers.get("content-type")).toBe("image/webp")
-    expect(requests[5]?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
-    expect(new URL(requests[5]?.url ?? "").pathname).toBe(
-      "/internal/agent/issues/issue_1/attachments/file_1/model"
-    )
-    expect(issueImage.headers.get("content-type")).toBe("image/webp")
+    expect(request?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
   })
 
-  it("does not copy private error bodies or grants into Agent errors", async () => {
+  it("resume ticketをaction pathのbodyへ送る", async () => {
+    const test = harness()
+    await test.gateway.resumeApprovedAction({
+      actionId: "action_1",
+      resumeTicket: RESUME_TICKET,
+    })
+    const [request] = await Promise.all(test.requests)
+
+    expect(request?.headers.authorization).toBeUndefined()
+    expect(JSON.parse(request?.body ?? "null")).toEqual({
+      resumeTicket: RESUME_TICKET,
+    })
+    expect(new URL(request?.url ?? "").pathname).toBe(
+      "/internal/agent/actions/action_1/resume"
+    )
+  })
+
+  it.each([
+    {
+      expectedPath: "/internal/agent/assets/asset_1/model",
+      invoke: (gateway: ReturnType<typeof harness>["gateway"]) =>
+        gateway.getAgentImageForModel({ assetId: "asset_1", grant: RUN_GRANT }),
+      label: "Agent asset画像",
+    },
+    {
+      expectedPath: "/internal/agent/issues/issue_1/attachments/file_1/model",
+      invoke: (gateway: ReturnType<typeof harness>["gateway"]) =>
+        gateway.getIssueAttachmentImageForModel({
+          fileId: "file_1",
+          grant: RUN_GRANT,
+          issueId: "issue_1",
+        }),
+      label: "Issue添付画像",
+    },
+  ])(
+    "$labelをBearer認可済みmodel routeから読む",
+    async ({ expectedPath, invoke }) => {
+      const test = harness()
+      const image = await invoke(test.gateway)
+      const [request] = await Promise.all(test.requests)
+
+      expect(request?.headers.authorization).toBe(`Bearer ${RUN_GRANT}`)
+      expect(new URL(request?.url ?? "").pathname).toBe(expectedPath)
+      expect(image.headers.get("content-type")).toBe("image/webp")
+    }
+  )
+
+  it("private error bodyとgrantをAgent errorへ複製しない", async () => {
     const binding: AgentInternalFetchBinding = {
       fetch: () =>
         Promise.resolve(
@@ -222,7 +245,7 @@ describe("Agent internal HTTP gateway", () => {
     expect(String(caught)).not.toContain(RUN_GRANT)
   })
 
-  it("preserves the original response stream failure as Error.cause", async () => {
+  it("元のresponse stream失敗をError.causeとして保持する", async () => {
     const cause = new Error("private response stream failure")
     const binding: AgentInternalFetchBinding = {
       fetch: () =>
@@ -253,186 +276,45 @@ describe("Agent internal HTTP gateway", () => {
   })
 })
 
-describe("Agent internal response contracts", () => {
-  it.each([
-    [
-      "account",
-      (gateway: AgentInternalGateway) =>
-        gateway.readAccountContext({ grant: RUN_GRANT }),
-    ],
-    [
-      "organization",
-      (gateway: AgentInternalGateway) =>
-        gateway.readActiveOrganization({ grant: RUN_GRANT }),
-    ],
-    [
-      "member",
-      (gateway: AgentInternalGateway) =>
-        gateway.searchOrganizationMembers({ grant: RUN_GRANT }),
-    ],
-    [
-      "Issue",
-      (gateway: AgentInternalGateway) =>
-        gateway.getIssue({
-          grant: RUN_GRANT,
-          lookup: "id",
-          id: "issue_1",
-        }),
-    ],
-    [
-      "connection",
-      (gateway: AgentInternalGateway) =>
-        gateway.consumeConnectionTicket({
-          ticket: CONNECTION_TICKET,
-          threadId: "thread_1",
-        }),
-    ],
-    [
-      "chat run",
-      (gateway: AgentInternalGateway) =>
-        gateway.startChatRun({
-          clientMessageId: "message_1",
-          ticket: CONNECTION_TICKET,
-          threadId: "thread_1",
-        }),
-    ],
-    [
-      "run liveness",
-      (gateway: AgentInternalGateway) =>
-        gateway.assertRunLive({ grant: RUN_GRANT }),
-    ],
-    [
-      "Web search authorization",
-      (gateway: AgentInternalGateway) =>
-        gateway.authorizeWebSearch({
-          grant: RUN_GRANT,
-          operationId: "operation_1",
-          query: "query",
-        }),
-    ],
-    [
-      "finalized run",
-      (gateway: AgentInternalGateway) =>
-        gateway.finalizeRun({ grant: RUN_GRANT, outcome: "completed" }),
-    ],
-    [
-      "Issue labels",
-      (gateway: AgentInternalGateway) =>
-        gateway.searchIssueLabels({ grant: RUN_GRANT, limit: 20 }),
-    ],
-    [
-      "Issue list",
-      (gateway: AgentInternalGateway) =>
-        gateway.searchIssues({ grant: RUN_GRANT, limit: 20 }),
-    ],
-    [
-      "prepared create action",
-      (gateway: AgentInternalGateway) =>
-        gateway.prepareCreateIssue({
-          grant: RUN_GRANT,
-          idempotencyKey: "idempotency_1",
-          issue: { title: "Issue" },
-          toolCallId: "tool_1",
-        }),
-    ],
-    [
-      "prepared update action",
-      (gateway: AgentInternalGateway) =>
-        gateway.prepareUpdateIssue({
-          grant: RUN_GRANT,
-          idempotencyKey: "idempotency_1",
-          issue: { expectedRevision: 1, issueId: "issue_1", title: "Issue" },
-          toolCallId: "tool_1",
-        }),
-    ],
-    [
-      "prepared delete action",
-      (gateway: AgentInternalGateway) =>
-        gateway.prepareDeleteIssue({
-          grant: RUN_GRANT,
-          idempotencyKey: "idempotency_1",
-          issue: { expectedRevision: 1, issueId: "issue_1" },
-          toolCallId: "tool_1",
-        }),
-    ],
-    [
-      "action",
-      (gateway: AgentInternalGateway) =>
-        gateway.executeApprovedAction({
-          actionId: "action_1",
-          grant: RUN_GRANT,
-        }),
-    ],
-    [
-      "resumed action",
-      (gateway: AgentInternalGateway) =>
-        gateway.resumeApprovedAction({
-          actionId: "action_1",
-          resumeTicket: RESUME_TICKET,
-        }),
-    ],
-    [
-      "finalized run with usage",
-      (gateway: AgentInternalGateway) =>
-        gateway.finalizeRun({
-          grant: RUN_GRANT,
-          outcome: "completed",
-          usage: {
-            provider: "openrouter",
-            model: "model",
-            inputTokenCount: 1,
-            inputNoCacheTokenCount: 1,
-            cacheReadTokenCount: 0,
-            cacheWriteTokenCount: 0,
-            outputTokenCount: 1,
-            textOutputTokenCount: 1,
-            reasoningTokenCount: 0,
-            totalTokenCount: 2,
-            imageInputCount: 0,
-            durationMs: 1,
-            runEventId: "event_1",
-          },
-        }),
-    ],
-  ])(
-    "rejects unknown or private fields in %s responses",
-    async (_name, invoke) => {
-      const privateValue = "https://private.invalid/resource"
-      const caughtValues = await Promise.all(
-        [{ privateUrl: privateValue }, { status: 42, type: "invalid" }].map(
-          async (body) => {
-            const binding: AgentInternalFetchBinding = {
-              fetch: () => Promise.resolve(Response.json(body)),
-            }
-            try {
-              await invoke(createAgentInternalGateway(binding))
-            } catch (error) {
-              return error
-            }
-            return undefined
+describe("Agent内部response契約", () => {
+  it("代表consumerで未知またはprivateなresponse fieldを拒否する", async () => {
+    const privateValue = "https://private.invalid/resource"
+    const caughtValues = await Promise.all(
+      [{ privateUrl: privateValue }, { status: 42, type: "invalid" }].map(
+        async (body) => {
+          const binding: AgentInternalFetchBinding = {
+            fetch: () => Promise.resolve(Response.json(body)),
           }
-        )
+          try {
+            await createAgentInternalGateway(binding).readAccountContext({
+              grant: RUN_GRANT,
+            })
+          } catch (error) {
+            return error
+          }
+          return undefined
+        }
       )
-      for (const caught of caughtValues) {
-        expect(caught).toBeInstanceOf(Error)
-        expect(String(caught)).toContain(
-          "Agent internal capability is unavailable"
-        )
-        expect(String(caught)).not.toContain(privateValue)
-        expect(String(caught)).not.toContain(RUN_GRANT)
-      }
+    )
+    for (const caught of caughtValues) {
+      expect(caught).toBeInstanceOf(Error)
+      expect(String(caught)).toContain(
+        "Agent internal capability is unavailable"
+      )
+      expect(String(caught)).not.toContain(privateValue)
+      expect(String(caught)).not.toContain(RUN_GRANT)
     }
-  )
+  })
 
   it.each([
     [
-      "account",
+      "アカウント",
       (gateway: AgentInternalGateway) =>
         gateway.readAccountContext({ grant: RUN_GRANT }),
       { name: "User", profileImage: null },
     ],
     [
-      "organization",
+      "組織",
       (gateway: AgentInternalGateway) =>
         gateway.readActiveOrganization({ grant: RUN_GRANT }),
       {
@@ -449,13 +331,13 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "member list",
+      "メンバー一覧",
       (gateway: AgentInternalGateway) =>
         gateway.searchOrganizationMembers({ grant: RUN_GRANT, limit: 20 }),
       [{ id: "member_1", name: "Member", profileImage: null, role: "member" }],
     ],
     [
-      "connection",
+      "接続",
       (gateway: AgentInternalGateway) =>
         gateway.consumeConnectionTicket({
           ticket: CONNECTION_TICKET,
@@ -482,7 +364,7 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "chat run",
+      "チャット実行",
       (gateway: AgentInternalGateway) =>
         gateway.startChatRun({
           clientMessageId: "message_1",
@@ -516,13 +398,13 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "run liveness",
+      "実行の生存状態",
       (gateway: AgentInternalGateway) =>
         gateway.assertRunLive({ grant: RUN_GRANT }),
       { live: true },
     ],
     [
-      "Web search authorization",
+      "Web検索認可",
       (gateway: AgentInternalGateway) =>
         gateway.authorizeWebSearch({
           grant: RUN_GRANT,
@@ -532,19 +414,19 @@ describe("Agent internal response contracts", () => {
       { query: "query", reserved: true, reused: false },
     ],
     [
-      "finalized run result",
+      "確定済み実行結果",
       (gateway: AgentInternalGateway) =>
         gateway.finalizeRun({ grant: RUN_GRANT, outcome: "completed" }),
       { runId: "run_1", status: "completed" },
     ],
     [
-      "Issue labels",
+      "Issueラベル",
       (gateway: AgentInternalGateway) =>
         gateway.searchIssueLabels({ grant: RUN_GRANT, limit: 20 }),
       [{ label: "bug", usageCount: 1 }],
     ],
     [
-      "Issue list",
+      "Issue一覧",
       (gateway: AgentInternalGateway) =>
         gateway.searchIssues({ grant: RUN_GRANT, limit: 20 }),
       [
@@ -565,7 +447,7 @@ describe("Agent internal response contracts", () => {
       ],
     ],
     [
-      "Issue detail",
+      "Issue詳細",
       (gateway: AgentInternalGateway) =>
         gateway.getIssue({
           grant: RUN_GRANT,
@@ -589,7 +471,7 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "action execution",
+      "操作実行",
       (gateway: AgentInternalGateway) =>
         gateway.executeApprovedAction({
           actionId: "action_1",
@@ -603,7 +485,7 @@ describe("Agent internal response contracts", () => {
       },
     ],
     [
-      "finalized usage",
+      "確定済み使用量",
       (gateway: AgentInternalGateway) =>
         gateway.finalizeRun({
           grant: RUN_GRANT,
@@ -626,53 +508,47 @@ describe("Agent internal response contracts", () => {
         }),
       { runId: "run_1", status: "completed" },
     ],
-  ])(
-    "accepts the endpoint-specific %s response",
-    async (_name, invoke, body) => {
-      const binding: AgentInternalFetchBinding = {
-        fetch: () => Promise.resolve(Response.json(body)),
-      }
-      await expect(
-        invoke(createAgentInternalGateway(binding))
-      ).resolves.toEqual(body)
+  ])("endpoint固有の%s responseを受け入れる", async (_name, invoke, body) => {
+    const binding: AgentInternalFetchBinding = {
+      fetch: () => Promise.resolve(Response.json(body)),
     }
-  )
+    await expect(invoke(createAgentInternalGateway(binding))).resolves.toEqual(
+      body
+    )
+  })
 })
 
-describe("Agent internal response bounds and control errors", () => {
+describe("Agent内部response上限とcontrol error", () => {
   it.each([
-    ["malformed JSON", new Response("{")],
+    ["不正なJSON", new Response("{")],
     [
-      "invalid UTF-8",
+      "不正なUTF-8",
       new Response(new Uint8Array([0xc3, 0x28]), {
         headers: { "content-type": "application/json" },
       }),
     ],
     [
-      "oversized declared body",
+      "宣言サイズ超過body",
       new Response("{}", {
         headers: { "content-length": String(16 * 1_024 * 1_024 + 1) },
       }),
     ],
     [
-      "oversized streamed body",
+      "streamサイズ超過body",
       new Response(JSON.stringify({ name: "x".repeat(16 * 1_024 * 1_024) })),
     ],
-  ])(
-    "fails closed for %s without exposing body data",
-    async (_name, response) => {
-      const binding: AgentInternalFetchBinding = {
-        fetch: () => Promise.resolve(response.clone()),
-      }
-      await expect(
-        createAgentInternalGateway(binding).readAccountContext({
-          grant: RUN_GRANT,
-        })
-      ).rejects.toThrow("Agent internal capability is unavailable")
+  ])("body dataを公開せず%sを安全側に失敗させる", async (_name, response) => {
+    const binding: AgentInternalFetchBinding = {
+      fetch: () => Promise.resolve(response.clone()),
     }
-  )
+    await expect(
+      createAgentInternalGateway(binding).readAccountContext({
+        grant: RUN_GRANT,
+      })
+    ).rejects.toThrow("Agent internal capability is unavailable")
+  })
 
-  it("accepts the largest valid Issue search projection below the transport bound", async () => {
+  it("transport上限未満の最大有効Issue検索projectionを受け入れる", async () => {
     const issues = Array.from({ length: 50 }, (_, index) => ({
       assigneeId: null,
       createdAt: "2026-07-28T00:00:00.000Z",
@@ -699,7 +575,7 @@ describe("Agent internal response bounds and control errors", () => {
     ).resolves.toHaveLength(50)
   })
 
-  it("accepts the exact declared transport maximum", async () => {
+  it("宣言済みtransport上限値を受け入れる", async () => {
     const binding: AgentInternalFetchBinding = {
       fetch: () =>
         Promise.resolve(
@@ -722,7 +598,7 @@ describe("Agent internal response bounds and control errors", () => {
     { status: 429 as const, retryAfter: 37, header: "37" },
     { status: 429 as const, retryAfter: 1, header: "unsafe" },
   ])(
-    "preserves only safe control metadata for internal $status responses",
+    "内部$status responseから安全なcontrol metadataだけを保持する",
     async ({ header, retryAfter, status }) => {
       const binding: AgentInternalFetchBinding = {
         fetch: () =>

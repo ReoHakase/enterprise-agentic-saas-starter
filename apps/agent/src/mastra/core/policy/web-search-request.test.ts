@@ -9,7 +9,7 @@ const userMessage = (text: string): AgentUiMessage => ({
   role: "user",
 })
 
-describe("explicit Web search request", () => {
+describe("明示的なWeb検索request", () => {
   it.each([
     [
       "Use public Web search and cite the official source.\nPublic-only Web query: official Cloudflare Workers CPU time limits",
@@ -17,11 +17,11 @@ describe("explicit Web search request", () => {
     [
       "公開情報をWeb検索してください。\n公開情報だけのWeb検索：Cloudflare Workers CPU time limits",
     ],
-  ])("requires Web search on the first step for %s", (text) => {
+  ])("明示的なWeb検索request%#では最初のstepにWeb検索を要求する", (text) => {
     expect(requiresWebSearchFirstStep([userMessage(text)])).toBe(true)
   })
 
-  it("requires both an explicit request and exactly one standalone query line", () => {
+  it("明示的requestと独立query一行の両方を要求する", () => {
     expect(
       requiresWebSearchFirstStep([
         userMessage(
@@ -45,7 +45,7 @@ describe("explicit Web search request", () => {
     ).toBe(false)
   })
 
-  it("uses only the latest user message and respects the eval allowlist", () => {
+  it("最新の利用者messageだけを使ってeval allowlistを尊重する", () => {
     const authorized = userMessage(
       "Use public Web search.\nPublic-only Web query: official source"
     )

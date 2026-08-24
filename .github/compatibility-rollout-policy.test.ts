@@ -5,7 +5,7 @@ import {
   requiresCompatibilityRollout,
 } from "./compatibility-rollout-policy"
 
-describe("compatibility rollout policy", () => {
+describe("compatibility rollout policyの契約", () => {
   it.each([
     {
       bootstrapRequired: true,
@@ -15,11 +15,11 @@ describe("compatibility rollout policy", () => {
       bootstrapRequired: false,
       staleWorkerSecretsFound: true,
     },
-  ])("requires isolation and drain for $#", (input) => {
+  ])("case $#でisolationとdrainを要求する", (input) => {
     expect(requiresCompatibilityRollout(input)).toBe(true)
   })
 
-  it("skips compatibility only for an already-clean current rollout", () => {
+  it("clean済みcurrent rolloutの場合だけcompatibilityを省略する", () => {
     expect(
       requiresCompatibilityRollout({
         bootstrapRequired: false,
@@ -28,7 +28,7 @@ describe("compatibility rollout policy", () => {
     ).toBe(false)
   })
 
-  it("allows a secret inventory 404 only for that same missing Worker", () => {
+  it("同じ欠損Workerに限ってsecret inventory 404を許可する", () => {
     expect(
       allowsMissingWorkerSecretInventory({
         inventoryStatus: 404,
@@ -49,7 +49,7 @@ describe("compatibility rollout policy", () => {
     ).toBe(false)
   })
 
-  it("does not confuse a forced bootstrap with either Worker being absent", () => {
+  it("強制bootstrapと各Worker欠損を混同しない", () => {
     const apiExists = true
     const agentExists = true
     expect(
@@ -72,7 +72,7 @@ describe("compatibility rollout policy", () => {
     ).toBe(false)
   })
 
-  it("keeps one missing Worker from authorizing the existing Worker's 404", () => {
+  it("一方のWorker欠損で既存Workerの404を許可しない", () => {
     expect(
       allowsMissingWorkerSecretInventory({
         inventoryStatus: 404,

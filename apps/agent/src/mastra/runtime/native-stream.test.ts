@@ -16,8 +16,8 @@ const readAll = async <Value>(stream: ReadableStream<Value>) => {
   return values
 }
 
-describe("native UIMessage stream privacy", () => {
-  it("preserves native tool/source state while recursively removing provider metadata", async () => {
+describe("native UIMessage streamのprivacy", () => {
+  it("native toolとsource stateを保ちながらprovider metadataを再帰的に除去する", async () => {
     const chunk = {
       type: "tool-output-available",
       toolCallId: "call_1",
@@ -64,7 +64,7 @@ describe("native UIMessage stream privacy", () => {
     expect(JSON.stringify(redacted)).not.toContain("array-provider-secret")
   })
 
-  it("projects only server timeout aborts to a bounded safe error", async () => {
+  it("server timeout abortだけを有界な安全errorへ投影する", async () => {
     await expect(
       readAll(
         projectServerTimeoutError(streamOf({ type: "abort" }), () => true)

@@ -22,8 +22,8 @@ const createSpan = (input: {
     ...input,
   })
 
-describe("AgentTraceErrorNormalizer", () => {
-  it("replaces raw errorInfo while preserving input and output", () => {
+describe("AgentTraceErrorNormalizerの契約", () => {
+  it("inputとoutputを保ちながらraw errorInfoを置換する", () => {
     const span = createSpan({
       attributes: { model: "kept-model" },
       errorInfo: {
@@ -61,7 +61,7 @@ describe("AgentTraceErrorNormalizer", () => {
     [SpanType.MEMORY_OPERATION, "memory_failed"],
     [SpanType.PROCESSOR_RUN, "processor_failed"],
     [SpanType.WORKFLOW_STEP, "workflow_failed"],
-  ])("uses the %s operation code", (type, code) => {
+  ])("%s operation codeを使う", (type, code) => {
     const span = createSpan({
       attributes: {},
       errorInfo: { message: "raw" },
@@ -75,7 +75,7 @@ describe("AgentTraceErrorNormalizer", () => {
   })
 
   it.each(["run_settlement_failed", "resume_storage_close_failed"])(
-    "preserves the existing fixed error code %s",
+    "既存の固定error code %sを保持する",
     (code) => {
       const span = createSpan({
         attributes: {},
@@ -93,7 +93,7 @@ describe("AgentTraceErrorNormalizer", () => {
     }
   )
 
-  it("does not preserve an unregistered provider error code", () => {
+  it("未登録provider error codeを保持しない", () => {
     const span = createSpan({
       attributes: {},
       errorInfo: { message: "raw" },
@@ -111,7 +111,7 @@ describe("AgentTraceErrorNormalizer", () => {
     })
   })
 
-  it("classifies generic storage spans without treating them as model errors", () => {
+  it("汎用storage spanをmodel error扱いせず分類する", () => {
     const span = createSpan({
       attributes: {},
       entityName: "LibSQL storage",

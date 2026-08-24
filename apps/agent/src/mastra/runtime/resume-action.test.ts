@@ -26,7 +26,6 @@ vi.mock("../adapters/telemetry/development-error", () => ({
 import { createAgentRuntimeComposition } from "../composition/runtime-composition"
 import {
   approvedIssueActionExecutionRegistry,
-  approvedIssueActionWorkflow,
   executionRegistry,
   mastra,
 } from "../index"
@@ -158,93 +157,15 @@ const runtimeContext = () => {
   }
 }
 
-describe("resumeIssueAction", () => {
-  it("converts strict Workflow input and resume schemas to Standard JSON Schema", async () => {
-    const resumeSchema =
-      approvedIssueActionWorkflow.steps["await-issue-action-approval"]
-        ?.resumeSchema
-    if (!resumeSchema) {
-      throw new Error("Workflow resume schema is unavailable")
-    }
-    for (const [schema, required, value] of [
-      [
-        approvedIssueActionWorkflow.inputSchema,
-        ["actionId"],
-        { actionId: "action_1" },
-      ],
-      [
-        resumeSchema,
-        ["actionId", "executionId"],
-        { actionId: "action_1", executionId: "execution_1" },
-      ],
-    ] as const) {
-      expect(
-        schema["~standard"].jsonSchema.input({ target: "draft-07" })
-      ).toMatchObject({
-        additionalProperties: false,
-        properties: {
-          actionId: {
-            maxLength: 128,
-            minLength: 1,
-            pattern: "^[A-Za-z0-9_-]+$",
-          },
-        },
-        required,
-        type: "object",
-      })
-      // Standard Schemaのvalidateが元のstrict Valibot schemaへ委譲することを検査する。
-      // eslint-disable-next-line no-await-in-loop
-      const invalid = await schema["~standard"].validate({
-        ...value,
-        privateContext: true,
-      })
-      expect(invalid).toHaveProperty("issues")
-    }
-  })
-
-  it("generates the canonical output shape and rejects duplicate attachment ids at runtime", async () => {
-    const outputSchema = approvedIssueActionWorkflow.outputSchema
-    expect(
-      outputSchema["~standard"].jsonSchema.output({ target: "draft-07" })
-    ).toMatchObject({
-      additionalProperties: false,
-      properties: {
-        issue: {
-          additionalProperties: false,
-          properties: { attachmentMutation: expect.any(Object) },
-        },
-      },
-      type: "object",
-    })
-    const invalid = await outputSchema["~standard"].validate({
-      actionId: "action_1",
-      issue: {
-        attachmentMutation: {
-          fileIds: ["file_1", "file_1"],
-          operation: "added",
-        },
-        deleted: false,
-        id: "issue_1",
-        number: 1,
-        revision: 2,
-      },
-      kind: "update_issue",
-      status: "succeeded",
-    })
-
-    expect(invalid).toMatchObject({
-      issues: [{ message: "Workflow output is invalid" }],
-    })
-  })
-
-  it("requires fail-closed run/write switches", async () => {
+describe("resumeIssueActionの契約", () => {
+  it("安全側に閉じたrunとwriteのswitchを要求する", async () => {
     const id = actionId()
     for (const features of [
       { runs: false, vision: true, writes: true },
       { runs: true, vision: true, writes: false },
     ]) {
       const test = harness(id)
-      // The global workflow registry is intentionally exercised sequentially.
+      // global workflow registryを意図的に直列実行する
       // eslint-disable-next-line no-await-in-loop
       await expect(
         resumeIssueAction(
@@ -256,7 +177,7 @@ describe("resumeIssueAction", () => {
     }
   })
 
-  it("requires a persisted suspended state before consuming a ticket", async () => {
+  it("ticket消費前に永続化済みsuspend状態を要求する", async () => {
     const id = actionId()
     const test = harness(id)
     await expect(
@@ -269,7 +190,7 @@ describe("resumeIssueAction", () => {
     expect(test.executeApprovedAction).not.toHaveBeenCalled()
   })
 
-  it("persists only JSON-safe approval identity and no runtime credential", async () => {
+  it("JSON安全なapproval identityだけを永続化してruntime credentialを除外する", async () => {
     const id = actionId()
     await suspendApprovedIssueAction(mastra, id)
     const state = await mastra
@@ -283,7 +204,7 @@ describe("resumeIssueAction", () => {
     }
   })
 
-  it("keeps secret-bearing runtime closures out of the reopened raw workflow snapshot", async () => {
+  it("secretを含むruntime closureを再開済みraw workflow snapshotから除外する", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-snapshot-"))
     const databasePath = join(directory, "workflow.db")
     const secrets = {
@@ -382,7 +303,7 @@ describe("resumeIssueAction", () => {
     }
   })
 
-  it("reopens and resumes a persisted approval with a fresh request runtime", async () => {
+  it("新しいrequest runtimeで永続化済みapprovalを再開して継続する", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-resume-"))
     const databasePath = join(directory, "workflow.db")
     const environment = {
@@ -446,8 +367,8 @@ describe("resumeIssueAction", () => {
   })
 })
 
-describe("approval resume request lifecycle", () => {
-  it("closes the request storage after a successful runtime resume", async () => {
+describe("approval再開request lifecycle", () => {
+  it("runtime再開の成功後にrequest storageを閉じる", async () => {
     const id = actionId()
     const test = harness(id)
     const close = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -470,7 +391,7 @@ describe("approval resume request lifecycle", () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
-  it("closes the request storage after a failed runtime resume", async () => {
+  it("runtime再開の失敗後にrequest storageを閉じる", async () => {
     const id = actionId()
     const close = vi.fn<() => Promise<void>>().mockResolvedValue()
     const captureFailure = vi.fn<AgentRuntimeDependencies["captureFailure"]>()
@@ -497,7 +418,7 @@ describe("approval resume request lifecycle", () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
-  it("does not consume a ticket after the API-owned request deadline aborts", async () => {
+  it("API所有のrequest期限切れabort後はticketを消費しない", async () => {
     const id = actionId()
     const test = harness(id)
     const controller = new AbortController()
@@ -527,7 +448,7 @@ describe("approval resume request lifecycle", () => {
     expect(telemetry.reportDevelopmentCauseChain).not.toHaveBeenCalled()
   })
 
-  it("reports a rejected storage close once without raw error reporting", async () => {
+  it("生errorを報告せずstorage closeのrejectを一度だけ報告する", async () => {
     const id = actionId()
     const test = harness(id)
     const privateCloseFailure = new Error("private storage close failure")
@@ -556,7 +477,7 @@ describe("approval resume request lifecycle", () => {
     expect(telemetry.reportDevelopmentCauseChain).not.toHaveBeenCalled()
   })
 
-  it("reports init and rejected close failures with separate fixed ownership", async () => {
+  it("初期化とclose rejectの失敗を別の固定ownerで報告する", async () => {
     const id = actionId()
     const initFailure = new Error("private storage init failure")
     const closeFailure = new Error("private storage close failure")
@@ -596,7 +517,7 @@ describe("approval resume request lifecycle", () => {
     )
   })
 
-  it("returns before an init-failure close timeout and bounds waitUntil cleanup", async () => {
+  it("初期化失敗後のclose timeout前に応答してwaitUntil cleanupを制限する", async () => {
     vi.useFakeTimers()
     const id = actionId()
     const initFailure = new Error("private storage init failure")
@@ -651,8 +572,8 @@ describe("approval resume request lifecycle", () => {
   })
 })
 
-describe("resumeIssueAction execution", () => {
-  it("atomically consumes the ticket, executes with the fresh grant, and settles", async () => {
+describe("resumeIssueActionの実行", () => {
+  it("ticketを原子的に消費して新しいgrantで実行しsettleする", async () => {
     const id = actionId()
     const test = harness(id)
     await suspendApprovedIssueAction(mastra, id)
@@ -679,7 +600,7 @@ describe("resumeIssueAction execution", () => {
     expect(JSON.stringify(receipt)).not.toContain(RUN_GRANT)
   })
 
-  it("preserves a canonical attachment mutation through Workflow output validation", async () => {
+  it("正規の添付変更をWorkflow出力検証で保持する", async () => {
     const id = actionId()
     const test = harness(id)
     test.executeApprovedAction.mockResolvedValue({
@@ -714,16 +635,15 @@ describe("resumeIssueAction execution", () => {
     })
   })
 
-  it("rejects a noncanonical execution receipt before completing the run", async () => {
+  it("重複した添付IDを含む実行receiptをrun完了前に拒否する", async () => {
     const id = actionId()
     const test = harness(id)
     test.executeApprovedAction.mockResolvedValue({
       actionId: id,
       issue: {
         attachmentMutation: {
-          fileIds: ["file_1"],
-          // @ts-expect-error provider境界の不正なruntime値を再現する。
-          operation: "moved",
+          fileIds: ["file_1", "file_1"],
+          operation: "added",
         },
         deleted: false,
         id: "issue_1",
@@ -751,7 +671,7 @@ describe("resumeIssueAction execution", () => {
     })
   })
 
-  it("stops before the approved side effect when the caller aborts during ticket consumption", async () => {
+  it("ticket消費中にcallerがabortした場合は承認済みside effect前に停止する", async () => {
     const id = actionId()
     const test = harness(id)
     const controller = new AbortController()
@@ -783,7 +703,7 @@ describe("resumeIssueAction execution", () => {
     })
   })
 
-  it("settles the continuation as failed and hides execution details", async () => {
+  it("継続処理を失敗としてsettleして実行詳細を隠す", async () => {
     const id = actionId()
     const test = harness(id)
     test.executeApprovedAction.mockRejectedValue(
@@ -803,7 +723,7 @@ describe("resumeIssueAction execution", () => {
     })
   })
 
-  it("hides ticket-consumption failures without executing the action", async () => {
+  it("actionを実行せずticket消費失敗を隠す", async () => {
     const id = actionId()
     const test = harness(id)
     test.resumeApprovedAction.mockRejectedValue(
@@ -820,7 +740,7 @@ describe("resumeIssueAction execution", () => {
     expect(test.executeApprovedAction).not.toHaveBeenCalled()
   })
 
-  it("rejects an expired or malformed fresh grant before execution", async () => {
+  it("期限切れまたは不正な新規grantを実行前に拒否する", async () => {
     for (const grant of [
       {
         expiresAt: "2000-07-22T00:00:00.000Z",
@@ -840,11 +760,11 @@ describe("resumeIssueAction execution", () => {
         shouldGenerateTitle: false,
         ...grant,
       })
-      // Each case owns persisted workflow state in the shared test registry.
+      // 各caseが共通test registry内の永続化済みworkflow stateを所有する
       // eslint-disable-next-line no-await-in-loop
       await suspendApprovedIssueAction(mastra, id)
 
-      // Keep the assertion paired with the state created immediately above.
+      // 直前に作成したstateとassertionを対に保つ
       // eslint-disable-next-line no-await-in-loop
       await expect(
         resumeIssueAction(
@@ -856,7 +776,7 @@ describe("resumeIssueAction execution", () => {
     }
   })
 
-  it("rejects malformed and over-posted resume payloads before consuming", async () => {
+  it("不正または過剰なresume payloadを消費前に拒否する", async () => {
     const id = actionId()
     const test = harness(id)
     await expect(

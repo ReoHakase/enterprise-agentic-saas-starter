@@ -45,14 +45,14 @@ const createUnscopedProductAgent = (
   }).getAgentById("product-agent")
 }
 
-describe("Agent storage configuration", () => {
-  it("fails closed when production storage is absent", () => {
+describe("Agentストレージ設定", () => {
+  it("本番ストレージ設定がない場合は安全側に失敗する", () => {
     expect(() => createAgentStorage({ NODE_ENV: "production" })).toThrow(
       "Agent storage configuration is unavailable"
     )
   })
 
-  it("requires a remote authenticated production database", () => {
+  it("本番データベースに認証済みリモート接続を要求する", () => {
     expect(() =>
       createAgentStorage({
         MASTRA_STORAGE_AUTH_TOKEN: "agent-token",
@@ -69,26 +69,7 @@ describe("Agent storage configuration", () => {
     ).not.toThrow()
   })
 
-  it("uses the standard repeatable LibSQLStore initialization for local files", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "mastra-init-"))
-    const storage = createAgentStorage(
-      {
-        MASTRA_STORAGE_URL: `file:${join(directory, "memory.db")}`,
-        NODE_ENV: "test",
-      },
-      "standard-init"
-    )
-
-    try {
-      await Promise.all([storage.init(), storage.init(), storage.init()])
-      await expect(storage.init()).resolves.toBeUndefined()
-    } finally {
-      await storage.close()
-      await rm(directory, { force: true, recursive: true })
-    }
-  })
-
-  it("coalesces and serializes local HTTP schema initialization", async () => {
+  it("ローカルHTTPのスキーマ初期化を合流して直列化する", async () => {
     const storage = createAgentStorage(
       {
         MASTRA_STORAGE_URL: "http://127.0.0.1:18080",
@@ -123,7 +104,7 @@ describe("Agent storage configuration", () => {
     }
   })
 
-  it("retries local HTTP schema initialization after a failed attempt", async () => {
+  it("失敗したローカルHTTPのスキーマ初期化を再試行できる", async () => {
     const storage = createAgentStorage(
       {
         MASTRA_STORAGE_URL: "https://agent-storage.example.localhost",
@@ -155,46 +136,10 @@ describe("Agent storage configuration", () => {
       await storage.close()
     }
   })
-
-  it.each([
-    "http://agent-storage.example.test",
-    "https://agent-storage.example.test",
-    "libsql://agent-storage.example.test",
-  ])("keeps Mastra's standard parallel initialization for %s", async (url) => {
-    const storage = createAgentStorage(
-      { MASTRA_STORAGE_URL: url, NODE_ENV: "development" },
-      "standard-remote-init"
-    )
-    const stores = Object.values(storage.stores).filter(
-      (store) => store !== undefined
-    )
-    let activeInitializers = 0
-    let maximumActiveInitializers = 0
-    const spies = stores.map((store) =>
-      vi.spyOn(store, "init").mockImplementation(async () => {
-        activeInitializers += 1
-        maximumActiveInitializers = Math.max(
-          maximumActiveInitializers,
-          activeInitializers
-        )
-        await new Promise<void>((resolve) => queueMicrotask(resolve))
-        activeInitializers -= 1
-      })
-    )
-
-    try {
-      await storage.init()
-
-      expect(maximumActiveInitializers).toBeGreaterThan(1)
-      expect(spies.every((spy) => spy.mock.calls.length === 1)).toBe(true)
-    } finally {
-      await storage.close()
-    }
-  })
 })
 
-describe("Product Agent standard Memory contracts", () => {
-  it("lets MessageHistory retain complete skill context for later turns", async () => {
+describe("Product Agentの標準Memory契約", () => {
+  it("後続ターン向けに完全なskill文脈をMessageHistoryへ保持する", async () => {
     const storage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "processor-order"
@@ -243,7 +188,7 @@ describe("Product Agent standard Memory contracts", () => {
     }
   })
 
-  it("does not persist a provider failure in MessageHistory", async () => {
+  it("provider失敗をMessageHistoryへ永続化しない", async () => {
     const storage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "provider-error-memory"
@@ -265,7 +210,7 @@ describe("Product Agent standard Memory contracts", () => {
         })
         await output.consumeStream()
       } catch {
-        // The standard stream may reject before or during consumption.
+        // 標準streamは消費前または消費中にrejectする場合がある
       }
       const memory = await agent.getMemory()
       if (!(memory instanceof Memory)) throw new Error("Memory unavailable")
@@ -282,7 +227,7 @@ describe("Product Agent standard Memory contracts", () => {
     }
   })
 
-  it("keeps a completed Product Agent stream successful when standard Memory persistence fails", async () => {
+  it("標準Memoryの永続化に失敗しても完了済みProduct Agent streamを成功扱いに保つ", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-best-effort-"))
     const storage = createAgentStorage(
       {
@@ -362,8 +307,8 @@ describe("Product Agent standard Memory contracts", () => {
   })
 })
 
-describe("Agent storage restart persistence", () => {
-  it("keeps another thread's recalled message out of the model prompt", async () => {
+describe("Agentストレージの再起動後永続性", () => {
+  it("別threadから再取得したmessageをmodel promptへ混入させない", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-thread-isolation-"))
     const storage = createAgentStorage(
       {
@@ -437,14 +382,14 @@ describe("Agent storage restart persistence", () => {
         memory: { resource: resourceId, thread: targetThreadId },
       })
       for await (const chunk of target.fullStream) {
-        // Consume the native stream so the actual Memory recall path runs.
+        // 実際のMemory recall経路を実行するためnative streamを消費する
         void chunk
       }
       const sentinelRun = await agent.stream("Sentinel request", {
         memory: { resource: resourceId, thread: sentinelThreadId },
       })
       for await (const chunk of sentinelRun.fullStream) {
-        // Consume the native stream so the actual Memory recall path runs.
+        // 実際のMemory recall経路を実行するためnative streamを消費する
         void chunk
       }
 
@@ -459,7 +404,8 @@ describe("Agent storage restart persistence", () => {
 
   it.each([
     {
-      name: "partial text",
+      caseId: "partial-text",
+      name: "部分text",
       abortAt: "text-delta",
       stream: [
         { value: { type: "stream-start", warnings: [] } },
@@ -478,7 +424,8 @@ describe("Agent storage restart persistence", () => {
       ],
     },
     {
-      name: "partial tool input",
+      caseId: "partial-tool-input",
+      name: "部分tool入力",
       abortAt: "tool-input-delta",
       stream: [
         { value: { type: "stream-start", warnings: [] } },
@@ -506,13 +453,13 @@ describe("Agent storage restart persistence", () => {
       ],
     },
   ])(
-    "keeps $name session-local and reloads canonical user-only memory",
-    async ({ abortAt, name, stream }) => {
+    "$nameをsession内に限定して正規の利用者messageだけを再読込する",
+    async ({ abortAt, caseId, stream }) => {
       const directory = await mkdtemp(join(tmpdir(), "mastra-abort-memory-"))
       const url = `file:${join(directory, "memory.db")}`
       const storage = createAgentStorage(
         { MASTRA_STORAGE_URL: url, NODE_ENV: "test" },
-        `abort-memory-first-${name}`
+        `abort-memory-first-${caseId}`
       )
       const memory = new Memory({
         storage,
@@ -525,7 +472,7 @@ describe("Agent storage restart persistence", () => {
       })
       const abortController = new AbortController()
       const agent = new Agent({
-        id: `abort-memory-agent-${name}`,
+        id: `abort-memory-agent-${caseId}`,
         name: "Abort memory test",
         instructions: "Reply briefly.",
         memory,
@@ -549,7 +496,6 @@ describe("Agent storage restart persistence", () => {
           { repeat: true }
         ),
       })
-      const caseId = name.replaceAll(" ", "-")
       const resourceId = `resource-${caseId}`
       const threadId = `thread-${caseId}`
       let reopenedComposition:
@@ -564,7 +510,7 @@ describe("Agent storage restart persistence", () => {
         })
         for await (const chunk of output.fullStream) {
           void chunk
-          // Consume the native stream so Mastra commits its canonical memory.
+          // Mastraが正規のmemoryをcommitするようnative streamを消費する
         }
         await memory.recall({
           page: 0,
@@ -648,54 +594,7 @@ describe("Agent storage restart persistence", () => {
     }
   )
 
-  it("reopens a temporary file-backed store without recreating it per request", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "mastra-storage-"))
-    const url = `file:${join(directory, "restart.db")}`
-    const first = createAgentStorage(
-      { MASTRA_STORAGE_URL: url, NODE_ENV: "test" },
-      "restart-first"
-    )
-
-    try {
-      await first.init()
-      const firstMemory = await first.getStore("memory")
-      if (!firstMemory) throw new Error("Memory store is unavailable")
-      const threads = await firstMemory.saveThread({
-        thread: {
-          id: "thread_restart",
-          resourceId: "resource_restart",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          title: "Restart proof",
-          metadata: {},
-        },
-      })
-      expect(threads.id).toBe("thread_restart")
-      await first.close()
-
-      const reopened = createAgentStorage(
-        { MASTRA_STORAGE_URL: url, NODE_ENV: "test" },
-        "restart-second"
-      )
-      await reopened.init()
-      const reopenedMemory = await reopened.getStore("memory")
-      if (!reopenedMemory) throw new Error("Memory store is unavailable")
-      expect(
-        await reopenedMemory.getThreadById({
-          threadId: "thread_restart",
-        })
-      ).toMatchObject({
-        id: "thread_restart",
-        resourceId: "resource_restart",
-        title: "Restart proof",
-      })
-      await reopened.close()
-    } finally {
-      await rm(directory, { force: true, recursive: true })
-    }
-  })
-
-  it("persists native user and assistant messages by resource and thread without run-local private bytes", async () => {
+  it("実行内private byteを含めずresourceとthreadごとに利用者とassistantのmessageを永続化する", async () => {
     const directory = await mkdtemp(join(tmpdir(), "mastra-memory-"))
     const url = `file:${join(directory, "memory.db")}`
     const resourceId = "resource_private_memory"

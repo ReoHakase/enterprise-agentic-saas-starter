@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { createAgentToolBudget } from "./tool"
 
-describe("createAgentToolBudget", () => {
-  it("shares the total call budget across read, write, and client tools", () => {
+describe("createAgentToolBudgetの契約", () => {
+  it("readとwriteとclient toolで総呼出budgetを共有する", () => {
     const budget = createAgentToolBudget({ calls: 3, writes: 2 })
     budget.consume("read")
     budget.consume("client")
@@ -12,7 +12,7 @@ describe("createAgentToolBudget", () => {
     expect(() => budget.consume("read")).toThrow("Agent tool limit reached")
   })
 
-  it("enforces the lower write-action budget without consuming a failed call", () => {
+  it("失敗呼出を消費せず小さいwrite action budgetを強制する", () => {
     const budget = createAgentToolBudget({ calls: 3, writes: 1 })
     budget.consume("write")
     expect(() => budget.consume("write")).toThrow(
@@ -23,7 +23,7 @@ describe("createAgentToolBudget", () => {
     expect(() => budget.consume("read")).toThrow("Agent tool limit reached")
   })
 
-  it("fails every tool kind closed after an action waits for approval", () => {
+  it("actionがapproval待ちになった後は全tool種別を安全側に失敗させる", () => {
     const budget = createAgentToolBudget()
     budget.consume("write")
     budget.suspendForApproval()

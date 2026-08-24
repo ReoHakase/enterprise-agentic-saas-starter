@@ -63,8 +63,8 @@ const local = {
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
 }
 
-describe("Agent Worker OpenTelemetry boundary", () => {
-  it("passes its resolver to instrument and configures fixed local export", () => {
+describe("Agent WorkerのOpenTelemetry境界", () => {
+  it("resolverをinstrumentへ渡して固定local exportを設定する", () => {
     workerSpies.withNextSpan.mockClear()
     expect(workerSpies.instrument).toHaveBeenCalledTimes(2)
     expect(workerSpies.instrument.mock.calls.map((call) => call[1])).toEqual([
@@ -94,7 +94,7 @@ describe("Agent Worker OpenTelemetry boundary", () => {
     })
   })
 
-  it("keeps production, remote and incomplete identities disabled", () => {
+  it("本番とremoteと不完全identityを無効のままにする", () => {
     workerSpies.withNextSpan.mockClear()
     for (const environment of [
       { ...local, NODE_ENV: "production" },
@@ -114,7 +114,7 @@ describe("Agent Worker OpenTelemetry boundary", () => {
     expect(workerSpies.withNextSpan).not.toHaveBeenCalled()
   })
 
-  it("prefers the API request identity for local Agent telemetry", () => {
+  it("local Agent telemetryではAPI request identityを優先する", () => {
     workerSpies.withNextSpan.mockClear()
     const request = new Request("https://agent.test/chat", {
       headers: {
@@ -138,7 +138,7 @@ describe("Agent Worker OpenTelemetry boundary", () => {
     })
   })
 
-  it("rejects malformed request identities and uses the process identity", () => {
+  it("不正なrequest identityを拒否してprocess identityを使う", () => {
     workerSpies.withNextSpan.mockClear()
     const request = new Request("https://agent.test/chat", {
       headers: {

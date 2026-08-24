@@ -26,8 +26,8 @@ const hungFetcher: Fetcher = (_input, init) =>
     )
   })
 
-describe("Mailpit development session", () => {
-  it("accepts only an explicit loopback HTTP endpoint", () => {
+describe("Mailpit開発session", () => {
+  it("明示したloopback HTTP endpointだけを受け入れる", () => {
     expect(parseMailpitDevelopmentSession(session)).toEqual(session)
     expect(() =>
       parseMailpitDevelopmentSession({
@@ -46,7 +46,7 @@ describe("Mailpit development session", () => {
     ).toThrow(/invalid/i)
   })
 
-  it("waits for the active local Mailpit endpoint", async () => {
+  it("稼働中local Mailpit endpointを待つ", async () => {
     const fetcher = vi.fn<Fetcher>(
       async () => new Response(JSON.stringify({ version: "local" }))
     )
@@ -63,7 +63,7 @@ describe("Mailpit development session", () => {
     )
   })
 
-  it("retries a stale session without exposing the fetch error", async () => {
+  it("fetch errorを公開せずstale sessionを再試行する", async () => {
     let attempts = 0
     const fetcher: Fetcher = async () => {
       attempts += 1
@@ -82,7 +82,7 @@ describe("Mailpit development session", () => {
     expect(attempts).toBe(2)
   })
 
-  it("aborts a hung endpoint at the bounded deadline", async () => {
+  it("応答しないendpointを有界な期限でabortする", async () => {
     await expect(
       waitForMailpitDevelopmentSession({
         fetcher: hungFetcher,

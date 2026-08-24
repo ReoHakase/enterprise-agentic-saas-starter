@@ -16,8 +16,8 @@ const loadSingleCurrentMessageImage = (response: Response) =>
     ["asset_1"]
   )
 
-describe("current-message model images", () => {
-  it("loads bounded WebP responses through the run grant", async () => {
+describe("現在messageのmodel画像", () => {
+  it("run grant経由で有界なWebP responseを読込む", async () => {
     const getAgentImageForModel = vi
       .fn<ImageApi["getAgentImageForModel"]>()
       .mockImplementation(({ assetId }) =>
@@ -51,7 +51,7 @@ describe("current-message model images", () => {
     })
   })
 
-  it("rejects non-WebP, declared overflow, and streamed overflow", async () => {
+  it("非WebPと宣言超過とstream超過を拒否する", async () => {
     await expect(
       loadSingleCurrentMessageImage(
         new Response(new Uint8Array([1]), {
@@ -117,7 +117,7 @@ describe("current-message model images", () => {
     ).rejects.toThrow("Agent image is unavailable")
   })
 
-  it("creates a run-local image context without duplicating user text", () => {
+  it("利用者textを複製せずrun local画像contextを作る", () => {
     const bytes = new Uint8Array([1, 2, 3])
 
     const result = createCurrentMessageImageContext(
@@ -141,7 +141,7 @@ describe("current-message model images", () => {
     expect(JSON.stringify(result)).not.toContain("base64")
   })
 
-  it("handles empty input and rejects inconsistent ephemeral image data", () => {
+  it("空入力を扱って不整合な一時画像dataを拒否する", () => {
     expect(createCurrentMessageImageContext([], [])).toEqual([])
     expect(() => createCurrentMessageImageContext(["asset_1"], [])).toThrow(
       "Agent image is unavailable"
@@ -160,7 +160,7 @@ describe("current-message model images", () => {
     ).toThrow("Agent image is unavailable")
   })
 
-  it("exposes only server-selected reusable asset metadata without bytes", () => {
+  it("server選択済み再利用asset metadataだけをbyteなしで公開する", () => {
     expect(
       createReusableAgentAssetContext([
         { id: "asset_previous", filename: "previous-image.webp" },
