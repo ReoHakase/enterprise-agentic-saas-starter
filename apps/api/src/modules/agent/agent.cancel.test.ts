@@ -10,8 +10,8 @@ import {
   issueAgentConnectionTicket,
 } from "./threads/repository"
 
-describe("public Agent run cancellation", () => {
-  it("commits cancellation without cross-request runtime I/O", async () => {
+describe("公開Agent run cancellationの契約", () => {
+  it("requestをまたぐruntime I/Oなしでcancellationをcommitする", async () => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -90,7 +90,7 @@ describe("public Agent run cancellation", () => {
     ).resolves.toMatchObject({ run: { attempt: 1 } })
   })
 
-  it("converges a real finish-versus-cancel race to one terminal status and one usage event", async () => {
+  it("実finish対cancel競合を1つのterminal statusとusage eventへ収束させる", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -162,81 +162,89 @@ describe("public Agent run cancellation", () => {
     expect(usageEvents).toHaveLength(1)
   })
 
-  it("never downgrades completed or failed runs and replays canceled runs", async () => {
+  it.each([
+    { label: "完了済み", outcome: "completed" },
+    { label: "失敗済み", outcome: "failed" },
+  ] as const)("$label runをcancelでdowngradeしない", async ({ outcome }) => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
       title: "Terminal cancel race",
       userId: "agent-user-a",
     })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
     const internal = createAgentInternalApi(db)
-    const start = async (clientMessageId: string) => {
-      const ticket = await issueAgentConnectionTicket(db, {
-        sessionId: "agent-session-a",
-        threadId: thread.id,
-        userId: "agent-user-a",
-      })
-      const chatRun = await internal.startChatRun({
-        clientMessageId,
-        threadId: thread.id,
-        ticket: ticket.ticket,
-      })
-      return chatRun.run
-    }
-
-    for (const outcome of ["completed", "failed"] as const) {
-      // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
-      const run = await start(`terminal-${outcome}`)
-      // oxlint-disable-next-line no-await-in-loop -- each terminal status needs an independent capability lifecycle.
-      await internal.finalizeRun({ grant: run.grant, outcome })
-      // oxlint-disable-next-line no-await-in-loop -- the public replay must observe the committed terminal status.
-      const response = await app.handle(
-        request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
-          method: "POST",
-        })
-      )
-      // oxlint-disable-next-line no-await-in-loop -- response bodies are consumed per terminal replay.
-      await expect(response.json()).resolves.toEqual({
-        runId: run.runId,
-        status: outcome,
-      })
-      // oxlint-disable-next-line no-await-in-loop -- a different internal terminal transition must conflict.
-      await expect(
-        internal.finalizeRun({ grant: run.grant, outcome: "canceled" })
-      ).rejects.toMatchObject({ code: "conflict" })
-      // oxlint-disable-next-line no-await-in-loop -- verify the cancel request did not downgrade the row.
-      const [stored] = await db
-        .select({ status: schema.agentRuns.status })
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.id, run.runId))
-      expect(stored?.status).toBe(outcome)
-    }
-
-    const canceled = await start("terminal-canceled")
-    await expect(
-      internal.finalizeRun({ grant: canceled.grant, outcome: "canceled" })
-    ).resolves.toEqual({
-      runId: canceled.runId,
-      status: "canceled",
+    const chatRun = await internal.startChatRun({
+      clientMessageId: `terminal-${outcome}`,
+      threadId: thread.id,
+      ticket: ticket.ticket,
     })
-    await expect(
-      internal.finalizeRun({ grant: canceled.grant, outcome: "canceled" })
-    ).resolves.toEqual({
-      runId: canceled.runId,
-      status: "canceled",
-    })
-    const replay = await app.handle(
-      request(`/agent/threads/${thread.id}/runs/${canceled.runId}/cancel`, {
+    const run = chatRun.run
+    await internal.finalizeRun({ grant: run.grant, outcome })
+
+    const response = await app.handle(
+      request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
         method: "POST",
       })
     )
+
+    await expect(response.json()).resolves.toEqual({
+      runId: run.runId,
+      status: outcome,
+    })
+    await expect(
+      internal.finalizeRun({ grant: run.grant, outcome: "canceled" })
+    ).rejects.toMatchObject({ code: "conflict" })
+    const [stored] = await db
+      .select({ status: schema.agentRuns.status })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, run.runId))
+    expect(stored?.status).toBe(outcome)
+  })
+
+  it("canceled runへのcancelを同じterminal結果へ収束させる", async () => {
+    const { app, db } = await createFixture()
+    const thread = await createAgentThreadForSession(db, {
+      sessionId: "agent-session-a",
+      title: "Canceled run replay",
+      userId: "agent-user-a",
+    })
+    const ticket = await issueAgentConnectionTicket(db, {
+      sessionId: "agent-session-a",
+      threadId: thread.id,
+      userId: "agent-user-a",
+    })
+    const internal = createAgentInternalApi(db)
+    const chatRun = await internal.startChatRun({
+      clientMessageId: "terminal-canceled",
+      threadId: thread.id,
+      ticket: ticket.ticket,
+    })
+    const run = chatRun.run
+    await expect(
+      internal.finalizeRun({ grant: run.grant, outcome: "canceled" })
+    ).resolves.toEqual({
+      runId: run.runId,
+      status: "canceled",
+    })
+
+    const replay = await app.handle(
+      request(`/agent/threads/${thread.id}/runs/${run.runId}/cancel`, {
+        method: "POST",
+      })
+    )
+
     expect(await replay.json()).toEqual({
-      runId: canceled.runId,
+      runId: run.runId,
       status: "canceled",
     })
   })
 
-  it("authorizes ownership, converges idempotently, and does not refund usage", async () => {
+  it("ownershipを認可して冪等に収束しusageをrefundしない", async () => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",

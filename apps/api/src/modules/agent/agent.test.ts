@@ -12,8 +12,8 @@ import {
 } from "./agent.test-support"
 import { configureAgentRuntime } from "./runtime"
 
-describe("Agent public control plane", () => {
-  it("fails closed when the unpaginated thread list exceeds its public bound", async () => {
+describe("Agent公開control plane", () => {
+  it("未paginationのthread一覧が公開上限を超えた場合はfail closedにする", async () => {
     const { app, db } = await createFixture()
     const now = new Date()
     await db.insert(schema.agentThreads).values(
@@ -35,80 +35,81 @@ describe("Agent public control plane", () => {
     })
   })
 
-  it("creates the initial thread permission in the thread transaction", async () => {
-    const { app, db } = await createFixture()
-    const fullAccessResponse = await app.handle(
-      request("/agent/threads", {
-        method: "POST",
-        body: { permissionMode: "full_access" },
-      })
-    )
-    expect(fullAccessResponse.status).toBe(201)
-    const fullAccessThread = v.parse(
-      agentThreadSchema,
-      await fullAccessResponse.json()
-    )
-    const defaultResponse = await app.handle(
-      request("/agent/threads", { method: "POST", body: {} })
-    )
-    expect(defaultResponse.status).toBe(201)
-    const defaultThread = v.parse(
-      agentThreadSchema,
-      await defaultResponse.json()
-    )
-    const otherSessionResponse = await app.handle(
-      request("/agent/threads", {
-        method: "POST",
-        body: { permissionMode: "full_access" },
-        userId: "agent-user-b",
-        sessionId: "agent-session-b",
-      })
-    )
-    expect(otherSessionResponse.status).toBe(201)
-    const otherSessionThread = v.parse(
-      agentThreadSchema,
-      await otherSessionResponse.json()
-    )
+  it.each([
+    {
+      body: { permissionMode: "full_access" },
+      expectedMode: "full_access",
+      expectedSessionId: "agent-session-a",
+      expectedUserId: "agent-user-a",
+      label: "明示したfull_access",
+      sessionId: undefined,
+      userId: undefined,
+    },
+    {
+      body: {},
+      expectedMode: "ask_always",
+      expectedSessionId: "agent-session-a",
+      expectedUserId: "agent-user-a",
+      label: "省略時のask_always",
+      sessionId: undefined,
+      userId: undefined,
+    },
+    {
+      body: { permissionMode: "full_access" },
+      expectedMode: "full_access",
+      expectedSessionId: "agent-session-b",
+      expectedUserId: "agent-user-b",
+      label: "別sessionのfull_access",
+      sessionId: "agent-session-b",
+      userId: "agent-user-b",
+    },
+  ] as const)(
+    "$labelをthread transaction内の初期permissionへ保存する",
+    async ({
+      body,
+      expectedMode,
+      expectedSessionId,
+      expectedUserId,
+      sessionId,
+      userId,
+    }) => {
+      const { app, db } = await createFixture()
+      const response = await app.handle(
+        request("/agent/threads", {
+          method: "POST",
+          body,
+          ...(sessionId ? { sessionId } : {}),
+          ...(userId ? { userId } : {}),
+        })
+      )
 
-    const permissions = await db
-      .select({
-        contextEpoch: schema.agentThreadPermissions.contextEpoch,
-        mode: schema.agentThreadPermissions.mode,
-        organizationId: schema.agentThreadPermissions.organizationId,
-        sessionId: schema.agentThreadPermissions.sessionId,
-        threadId: schema.agentThreadPermissions.threadId,
-        userId: schema.agentThreadPermissions.userId,
-      })
-      .from(schema.agentThreadPermissions)
-    expect(permissions).toEqual(
-      expect.arrayContaining([
+      expect(response.status).toBe(201)
+      const thread = v.parse(agentThreadSchema, await response.json())
+      const permissions = await db
+        .select({
+          contextEpoch: schema.agentThreadPermissions.contextEpoch,
+          mode: schema.agentThreadPermissions.mode,
+          organizationId: schema.agentThreadPermissions.organizationId,
+          sessionId: schema.agentThreadPermissions.sessionId,
+          threadId: schema.agentThreadPermissions.threadId,
+          userId: schema.agentThreadPermissions.userId,
+        })
+        .from(schema.agentThreadPermissions)
+      expect(permissions).toEqual([
         {
           contextEpoch: 1,
-          mode: "full_access",
+          mode: expectedMode,
           organizationId: "agent-org-a",
-          sessionId: "agent-session-a",
-          threadId: fullAccessThread.id,
-          userId: "agent-user-a",
-        },
-        {
-          contextEpoch: 1,
-          mode: "ask_always",
-          organizationId: "agent-org-a",
-          sessionId: "agent-session-a",
-          threadId: defaultThread.id,
-          userId: "agent-user-a",
-        },
-        {
-          contextEpoch: 1,
-          mode: "full_access",
-          organizationId: "agent-org-a",
-          sessionId: "agent-session-b",
-          threadId: otherSessionThread.id,
-          userId: "agent-user-b",
+          sessionId: expectedSessionId,
+          threadId: thread.id,
+          userId: expectedUserId,
         },
       ])
-    )
+    }
+  )
 
+  it("不正なpermission modeでthreadを作らない", async () => {
+    const { app, db } = await createFixture()
     const invalidResponse = await app.handle(
       request("/agent/threads", {
         method: "POST",
@@ -116,8 +117,11 @@ describe("Agent public control plane", () => {
       })
     )
     expect(invalidResponse.status).toBe(400)
-    expect(await db.select().from(schema.agentThreads)).toHaveLength(3)
+    expect(await db.select().from(schema.agentThreads)).toEqual([])
+  })
 
+  it("初期permission保存失敗時にthread transactionをrollbackする", async () => {
+    const { app, db } = await createFixture()
     await db.run(sql`
       create trigger fail_initial_agent_permission
       before insert on agent_thread_permissions
@@ -132,13 +136,11 @@ describe("Agent public control plane", () => {
       })
     )
     expect(failedResponse.status).toBe(500)
-    expect(await db.select().from(schema.agentThreads)).toHaveLength(3)
-    expect(await db.select().from(schema.agentThreadPermissions)).toHaveLength(
-      3
-    )
+    expect(await db.select().from(schema.agentThreads)).toEqual([])
+    expect(await db.select().from(schema.agentThreadPermissions)).toEqual([])
   })
 
-  it("requires the trusted CSRF Origin before preparing a private run", async () => {
+  it("private runのprepare前に信頼済みCSRF Originを要求する", async () => {
     const { app } = await createFixture()
     const inputs = configureAgentStreamCapture()
     const createdResponse = await app.handle(
@@ -167,7 +169,7 @@ describe("Agent public control plane", () => {
     expect(inputs).toEqual([])
   })
 
-  it("rejects the legacy Web-search digest suffix at the public boundary", async () => {
+  it("公開境界で旧Web検索digest suffixを拒否する", async () => {
     const { app } = await createFixture()
     const inputs = configureAgentStreamCapture()
     const createdResponse = await app.handle(
@@ -194,84 +196,77 @@ describe("Agent public control plane", () => {
     expect(inputs).toEqual([])
   })
 
-  it("forwards only bounded run control status and retry timing", async () => {
-    const { app } = await createFixture()
-    const createdResponse = await app.handle(
-      request("/agent/threads", { method: "POST", body: {} })
-    )
-    const thread = v.parse(agentThreadSchema, await createdResponse.json())
-    const privateBody = "private database detail sk-secret-value"
-    const runtimeResponses = [
-      { status: 409, retryAfter: "99999" },
-      { status: 429, retryAfter: "37" },
-    ]
-    const runtimeRequestIds: string[] = []
-    configureAgentRuntime({
-      fetch: (input) => {
-        if (!(input instanceof Request)) {
-          throw new TypeError("Expected an Agent runtime Request")
-        }
-        runtimeRequestIds.push(input.headers.get("x-request-id") ?? "")
-        const response = runtimeResponses.shift()
-        if (!response) throw new Error("Missing runtime response fixture")
-        return Promise.resolve(
-          new Response(privateBody, {
-            status: response.status,
-            headers: { "retry-after": response.retryAfter },
-          })
-        )
+  it.each([
+    {
+      expectedBody: {
+        error: "conflict",
+        message: "The request conflicts with the current state.",
       },
-    })
-
-    const conflict = await app.handle(
-      request("/agent/chat", {
-        method: "POST",
-        body: {
-          threadId: thread.id,
-          messageId: "message_control_conflict",
-          contentSegments: [{ type: "text", text: "Retry this message" }],
-          assetIds: [],
-          timezone: "Asia/Tokyo",
+      expectedRetryAfter: null,
+      label: "競合応答",
+      retryAfter: "99999",
+      status: 409,
+    },
+    {
+      expectedBody: {
+        error: "rate_limited",
+        message: "Too many requests. Try again later.",
+      },
+      expectedRetryAfter: "37",
+      label: "流量制限応答",
+      retryAfter: "37",
+      status: 429,
+    },
+  ] as const)(
+    "$labelへ上限付きrun control statusだけを転送する",
+    async ({ expectedBody, expectedRetryAfter, retryAfter, status }) => {
+      const { app } = await createFixture()
+      const createdResponse = await app.handle(
+        request("/agent/threads", { method: "POST", body: {} })
+      )
+      const thread = v.parse(agentThreadSchema, await createdResponse.json())
+      const privateBody = "private database detail sk-secret-value"
+      const runtimeRequestIds: string[] = []
+      configureAgentRuntime({
+        fetch: (input) => {
+          if (!(input instanceof Request)) {
+            throw new TypeError("Expected an Agent runtime Request")
+          }
+          runtimeRequestIds.push(input.headers.get("x-request-id") ?? "")
+          return Promise.resolve(
+            new Response(privateBody, {
+              status,
+              headers: { "retry-after": retryAfter },
+            })
+          )
         },
       })
-    )
-    expect(conflict.status).toBe(409)
-    expect(runtimeRequestIds[0]).toBe(conflict.headers.get("x-request-id"))
-    expect(conflict.headers.get("retry-after")).toBeNull()
-    const conflictBody = await conflict.json()
-    expect(conflictBody).toEqual({
-      error: "conflict",
-      message: "The request conflicts with the current state.",
-    })
 
-    const limited = await app.handle(
-      request("/agent/chat", {
-        method: "POST",
-        body: {
-          threadId: thread.id,
-          messageId: "message_control_limited",
-          contentSegments: [
-            { type: "text", text: "Try when capacity is ready" },
-          ],
-          assetIds: [],
-          timezone: "Asia/Tokyo",
-        },
-      })
-    )
-    expect(limited.status).toBe(429)
-    expect(runtimeRequestIds[1]).toBe(limited.headers.get("x-request-id"))
-    expect(limited.headers.get("retry-after")).toBe("37")
-    const limitedBody = await limited.json()
-    expect(limitedBody).toEqual({
-      error: "rate_limited",
-      message: "Too many requests. Try again later.",
-    })
-    expect(JSON.stringify([conflictBody, limitedBody])).not.toContain(
-      privateBody
-    )
-  })
+      const response = await app.handle(
+        request("/agent/chat", {
+          method: "POST",
+          body: {
+            threadId: thread.id,
+            messageId: `message_control_${status}`,
+            contentSegments: [{ type: "text", text: "Retry this message" }],
+            assetIds: [],
+            timezone: "Asia/Tokyo",
+          },
+        })
+      )
+      expect(response.status).toBe(status)
+      expect(runtimeRequestIds[0]).toBe(response.headers.get("x-request-id"))
+      expect(response.headers.get("retry-after")).toBe(expectedRetryAfter)
+      const body = await response.json()
+      expect(body).toEqual(expectedBody)
+      expect(JSON.stringify(body)).not.toContain(privateBody)
+    }
+  )
 
-  it("returns the same not-found response for other-owner and other-tenant threads", async () => {
+  it.each([
+    { label: "別owner", mode: "other-owner" },
+    { label: "別tenant", mode: "other-tenant" },
+  ] as const)("$labelのthread archiveへnot-foundを返す", async ({ mode }) => {
     const { app, db } = await createFixture()
 
     const createdResponse = await app.handle(
@@ -281,32 +276,36 @@ describe("Agent public control plane", () => {
     const created = v.parse(agentThreadSchema, await createdResponse.json())
     expect(created.title).toBe("New conversation")
 
-    const otherOwnerResponse = await app.handle(
-      request(`/agent/threads/${created.id}/archive`, {
-        method: "POST",
-        body: {},
-        userId: "agent-user-b",
-        sessionId: "agent-session-b",
+    if (mode === "other-tenant") {
+      await db.insert(schema.agentThreads).values({
+        id: "agent-thread-other-org",
+        organizationId: "agent-org-b",
+        ownerUserId: "agent-user-a",
       })
+    }
+    const response = await app.handle(
+      request(
+        `/agent/threads/${mode === "other-owner" ? created.id : "agent-thread-other-org"}/archive`,
+        {
+          method: "POST",
+          body: {},
+          ...(mode === "other-owner"
+            ? { userId: "agent-user-b", sessionId: "agent-session-b" }
+            : {}),
+        }
+      )
     )
-    expect(otherOwnerResponse.status).toBe(404)
 
-    await db.insert(schema.agentThreads).values({
-      id: "agent-thread-other-org",
-      organizationId: "agent-org-b",
-      ownerUserId: "agent-user-a",
-    })
-    const inactiveTenantResponse = await app.handle(
-      request("/agent/threads/agent-thread-other-org/archive", {
-        method: "POST",
-        body: {},
-      })
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({ error: "not_found" })
+  })
+
+  it("ownerがthreadをarchiveすると一覧から除外する", async () => {
+    const { app } = await createFixture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
     )
-    expect(inactiveTenantResponse.status).toBe(404)
-    expect(await inactiveTenantResponse.json()).toMatchObject({
-      error: "not_found",
-    })
-
+    const created = v.parse(agentThreadSchema, await createdResponse.json())
     const archivedResponse = await app.handle(
       request(`/agent/threads/${created.id}/archive`, {
         method: "POST",
@@ -321,7 +320,7 @@ describe("Agent public control plane", () => {
     expect(await listResponse.json()).toEqual([])
   })
 
-  it("accepts only the latest user message and keeps the private ticket off the response", async () => {
+  it("最新user messageだけを受理してprivate ticketをresponseへ含めない", async () => {
     const { app } = await createFixture()
     const inputs = configureAgentStreamCapture()
     const createdResponse = await app.handle(
@@ -424,7 +423,15 @@ describe("Agent public control plane", () => {
     expect(await threads.json()).toEqual([
       expect.objectContaining({ id: thread.id, title: "New conversation" }),
     ])
+  })
 
+  it("旧message bodyのoverpostingをruntime開始前に拒否する", async () => {
+    const { app } = await createFixture()
+    const inputs = configureAgentStreamCapture()
+    const createdResponse = await app.handle(
+      request("/agent/threads", { method: "POST", body: {} })
+    )
+    const thread = v.parse(agentThreadSchema, await createdResponse.json())
     const overposted = await app.handle(
       request("/agent/chat", {
         method: "POST",
@@ -442,10 +449,10 @@ describe("Agent public control plane", () => {
       })
     )
     expect(overposted.status).toBe(400)
-    expect(inputs).toHaveLength(1)
+    expect(inputs).toEqual([])
   })
 
-  it("rejects a cross-tenant inline mention before starting the runtime", async () => {
+  it("runtime開始前にテナントをまたぐinline mentionを拒否する", async () => {
     const { app } = await createFixture()
     const inputs = configureAgentStreamCapture()
     const createdResponse = await app.handle(

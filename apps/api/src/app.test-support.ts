@@ -3,7 +3,11 @@ import { createServer } from "node:http"
 import type { createApp } from "./app"
 import { env } from "./platform/env"
 
-export { createSeededDb, testDb } from "./app.test-database-support"
+export {
+  createMigratedDb,
+  createSeededDb,
+  testDb,
+} from "./app.test-database-support"
 
 export const authHeaders = (
   userId: string,

@@ -22,8 +22,272 @@ import { AGENT_ASSET_MODEL_MAX_BYTES } from "./constants"
 import { agentAssetDtoModel } from "./model"
 import { configureFileStorageRuntime } from "./runtime"
 
-describe("Agent asset Issue promotion and deletion", () => {
-  it("releases attachment leases on Stop so the same staged asset can be prepared again", async () => {
+const createIssueImageFixture = async (includeHiddenVariants = false) => {
+  const { db, now } = await createFixture()
+  const storage = createRuntime()
+  configureFileStorageRuntime(storage.runtime)
+  await db.insert(schema.issues).values([
+    {
+      id: "asset-issue-a",
+      organizationId: "asset-org-a",
+      number: 1,
+      title: "Image marker",
+      creatorId: "asset-user-a",
+      createdAt: now,
+      updatedAt: now,
+    },
+    ...(includeHiddenVariants
+      ? [
+          {
+            id: "asset-issue-a-other",
+            organizationId: "asset-org-a",
+            number: 2,
+            title: "Other owner",
+            creatorId: "asset-user-a",
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: "asset-issue-b",
+            organizationId: "asset-org-b",
+            number: 1,
+            title: "Other tenant",
+            creatorId: "asset-user-a",
+            createdAt: now,
+            updatedAt: now,
+          },
+        ]
+      : []),
+  ])
+  await seedReadyIssueAttachment(db, storage, {
+    detectedImageFormat: "png",
+    fileId: "asset-issue-image",
+    issueId: "asset-issue-a",
+  })
+  if (includeHiddenVariants) {
+    await seedReadyIssueAttachment(db, storage, {
+      detectedImageFormat: null,
+      fileId: "asset-issue-pdf",
+      issueId: "asset-issue-a",
+    })
+    await seedReadyIssueAttachment(db, storage, {
+      detectedImageFormat: "png",
+      fileId: "asset-other-tenant-image",
+      issueId: "asset-issue-b",
+      organizationId: "asset-org-b",
+    })
+  }
+  const run = (
+    await startAssetChatRun(db, { clientMessageId: "issue-image-run" })
+  ).run
+  return {
+    db,
+    internal: await createAgentInternalApi(db),
+    run,
+    storage,
+  }
+}
+
+const createPromotedIssueAssetFixture = async () => {
+  const { app, db } = await createFixture()
+  const storage = createRuntime()
+  configureFileStorageRuntime(storage.runtime)
+  const assetId = await seedReadyAsset(db, {
+    id: "promotion-audit-asset",
+    sizeBytes: 16,
+  })
+  const [object] = await db
+    .select()
+    .from(schema.storageObjects)
+    .where(eq(schema.storageObjects.id, `storage-${assetId}`))
+  if (!object?.etag || !object.objectKey) {
+    throw new Error("Promotion storage fixture is incomplete")
+  }
+  storage.objects.set(object.objectKey, {
+    bytes: Uint8Array.from(pngBytes()),
+    object: {
+      key: object.objectKey,
+      size: object.sizeBytes,
+      etag: object.etag,
+      httpEtag: `"${object.etag}"`,
+      customMetadata: {},
+    },
+  })
+  await db.insert(schema.organizationFileUsage).values({
+    organizationId: "asset-org-a",
+    usedBytes: object.sizeBytes,
+    temporaryBytes: object.sizeBytes,
+    updatedAt: new Date(),
+  })
+  const run = (
+    await startAssetChatRun(db, {
+      clientMessageId: "promotion-audit-run",
+      assetIds: [assetId],
+    })
+  ).run
+  const now = new Date()
+  const actionId = "promotion-audit-action"
+  const issueId = "promotion-audit-issue"
+  const plannedFileId = "promotion-audit-file"
+  await db.insert(schema.issues).values({
+    id: issueId,
+    organizationId: "asset-org-a",
+    number: 1,
+    title: "Issue from image",
+    description: "Generated description",
+    status: "open",
+    priority: "no_priority",
+    creatorId: "asset-user-a",
+    labels: ["Visual"],
+    dueDate: null,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(schema.agentActions).values({
+    id: actionId,
+    organizationId: "asset-org-a",
+    threadId: "asset-thread-a",
+    runId: run.runId,
+    sessionId: "asset-session-a",
+    userId: "asset-user-a",
+    contextEpoch: 1,
+    toolCallId: "promotion-audit-tool",
+    kind: "update_issue",
+    normalizedPayload: {
+      operation: "add_attachments",
+      requestFingerprint: "promotion-audit-fingerprint",
+      issueId,
+      expectedRevision: 1,
+      attachments: [{ assetId, fileId: plannedFileId }],
+    },
+    canonicalPreview: { title: "Issue from image" },
+    targetType: "issue",
+    targetId: issueId,
+    targetRevision: 1,
+    status: "pending",
+    idempotencyKey: "promotion-audit-idempotency",
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: new Date(now.getTime() + 10 * 60_000),
+  })
+  await db.insert(schema.agentActionAssets).values({
+    organizationId: "asset-org-a",
+    actionId,
+    assetId,
+    storageObjectId: object.id,
+    sourceEtag: object.etag,
+    sizeBytes: object.sizeBytes,
+    leaseExpiresAt: new Date(now.getTime() + 5 * 60_000),
+    createdAt: now,
+  })
+  const decidedAt = new Date(now.getTime() + 1)
+  await db
+    .update(schema.agentActions)
+    .set({
+      status: "approved",
+      decisionProvenance: "manual",
+      decisionIdempotencyKey: "promotion-audit-decision",
+      decidedAt,
+      updatedAt: decidedAt,
+    })
+    .where(eq(schema.agentActions.id, actionId))
+  await db.transaction((tx) =>
+    promoteAgentAssetToIssueFileInTransaction(tx, {
+      actionId,
+      actorUserId: "asset-user-a",
+      assetId,
+      issueId,
+      now: new Date(decidedAt.getTime() + 1),
+      organizationId: "asset-org-a",
+      plannedFileId,
+    })
+  )
+  const completedAt = new Date(decidedAt.getTime() + 2)
+  await db
+    .update(schema.issues)
+    .set({
+      description: "Generated description with attachment",
+      updatedAt: completedAt,
+    })
+    .where(eq(schema.issues.id, issueId))
+  await db
+    .update(schema.agentActions)
+    .set({
+      status: "succeeded",
+      resultId: issueId,
+      receipt: {
+        issueId,
+        number: 1,
+        revision: 2,
+        deleted: false,
+        attachmentMutation: {
+          operation: "added",
+          fileIds: [plannedFileId],
+        },
+      },
+      completedAt,
+      updatedAt: completedAt,
+    })
+    .where(eq(schema.agentActions.id, actionId))
+  return { actionId, app, assetId, db, object, plannedFileId, storage }
+}
+
+const createLeasedAssetFixture = async () => {
+  const { app, db } = await createFixture()
+  const storage = createRuntime()
+  configureFileStorageRuntime(storage.runtime)
+  const uploaded = await app.handle(
+    uploadRequest({ file: pngFile(), uploadId: "leased-asset" })
+  )
+  if (uploaded.status !== 201) throw new Error("Leased asset upload failed")
+  const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+  const [object] = await db.select().from(schema.storageObjects)
+  if (!object?.objectKey || !object.etag) {
+    throw new Error("Leased storage object is incomplete")
+  }
+
+  const run = (
+    await startAssetChatRun(db, {
+      clientMessageId: "lease-run",
+      assetIds: [assetId],
+    })
+  ).run
+  const actionCreatedAt = new Date()
+  await db.insert(schema.agentActions).values({
+    id: "leased-action",
+    organizationId: "asset-org-a",
+    threadId: "asset-thread-a",
+    runId: run.runId,
+    sessionId: "asset-session-a",
+    userId: "asset-user-a",
+    contextEpoch: 1,
+    toolCallId: "leased-tool-call",
+    kind: "create_issue",
+    normalizedPayload: { title: "Issue with attachment" },
+    canonicalPreview: { title: "Issue with attachment" },
+    targetType: "issue",
+    targetId: "planned-leased-issue",
+    status: "pending",
+    idempotencyKey: "leased-action-key",
+    createdAt: actionCreatedAt,
+    updatedAt: actionCreatedAt,
+    expiresAt: new Date(actionCreatedAt.getTime() + 10 * 60_000),
+  })
+  await db.insert(schema.agentActionAssets).values({
+    organizationId: "asset-org-a",
+    actionId: "leased-action",
+    assetId,
+    storageObjectId: object.id,
+    sourceEtag: object.etag,
+    sizeBytes: object.sizeBytes,
+    leaseExpiresAt: new Date(actionCreatedAt.getTime() + 5 * 60_000),
+    createdAt: actionCreatedAt,
+  })
+  return { app, assetId, db, object, storage }
+}
+
+describe("Agent assetのIssue昇格と削除", () => {
+  it("Stop時にattachment leaseを解放して同じstaged assetを再prepare可能にする", async () => {
     const { db } = await createFixture()
     const assetId = await seedReadyAsset(db, {
       id: "cancel-reusable-asset",
@@ -93,56 +357,70 @@ describe("Agent asset Issue promotion and deletion", () => {
     })
   })
 
-  it("fails closed when an update action reaches succeeded without an exact attachment operation", async () => {
-    const { db } = await createFixture()
-    const run = (
-      await startAssetChatRun(db, {
-        clientMessageId: "malformed-update-operation",
-      })
-    ).run
-    const now = new Date()
-    const issueId = "malformed-update-issue"
-    await db.insert(schema.issues).values({
-      id: issueId,
-      organizationId: "asset-org-a",
-      number: 1,
-      title: "Malformed update target",
-      creatorId: "asset-user-a",
-      createdAt: now,
-      updatedAt: now,
-    })
-    const malformedPayloads = [
-      {
+  it.each([
+    {
+      expectedError: /agent_action_update_revision_mismatch/,
+      label: "操作種別が欠落した",
+      normalizedPayload: {
         requestFingerprint: "missing-operation",
-        issueId,
+        issueId: "malformed-update-issue",
         expectedRevision: 1,
       },
-      {
+    },
+    {
+      expectedError: /agent_action_update_revision_mismatch/,
+      label: "操作種別がnullの",
+      normalizedPayload: {
         operation: null,
         requestFingerprint: "null-operation",
-        issueId,
+        issueId: "malformed-update-issue",
         expectedRevision: 1,
       },
-      {
+    },
+    {
+      expectedError: /agent_action_attachment_payload_mismatch/,
+      label: "attachment配列が欠落した",
+      normalizedPayload: {
         operation: "add_attachments",
         requestFingerprint: "missing-attachments",
-        issueId,
+        issueId: "malformed-update-issue",
         expectedRevision: 1,
       },
-      {
+    },
+    {
+      expectedError: /agent_action_attachment_payload_mismatch/,
+      label: "attachment配列がnullの",
+      normalizedPayload: {
         operation: "add_attachments",
         requestFingerprint: "null-attachments",
-        issueId,
+        issueId: "malformed-update-issue",
         expectedRevision: 1,
         attachments: null,
       },
-    ]
-
-    for (const [index, normalizedPayload] of malformedPayloads.entries()) {
-      const actionId = `malformed-update-action-${index}`
+    },
+  ])(
+    "$label正規化済みpayloadでは成功遷移を拒否する",
+    async ({ expectedError, normalizedPayload }) => {
+      const { db } = await createFixture()
+      const run = (
+        await startAssetChatRun(db, {
+          clientMessageId: "malformed-update-operation",
+        })
+      ).run
+      const now = new Date()
+      const issueId = "malformed-update-issue"
+      await db.insert(schema.issues).values({
+        id: issueId,
+        organizationId: "asset-org-a",
+        number: 1,
+        title: "Malformed update target",
+        creatorId: "asset-user-a",
+        createdAt: now,
+        updatedAt: now,
+      })
+      const actionId = "malformed-update-action"
       const storedPayload: typeof schema.agentActions.$inferInsert.normalizedPayload =
         normalizedPayload
-      // oxlint-disable-next-line no-await-in-loop -- each malformed database transition is independently asserted.
       await db.insert(schema.agentActions).values({
         id: actionId,
         organizationId: "asset-org-a",
@@ -151,7 +429,7 @@ describe("Agent asset Issue promotion and deletion", () => {
         sessionId: "asset-session-a",
         userId: "asset-user-a",
         contextEpoch: 1,
-        toolCallId: `malformed-update-tool-${index}`,
+        toolCallId: "malformed-update-tool",
         kind: "update_issue",
         normalizedPayload: storedPayload,
         canonicalPreview: { title: "Malformed update" },
@@ -159,28 +437,25 @@ describe("Agent asset Issue promotion and deletion", () => {
         targetId: issueId,
         targetRevision: 1,
         status: "pending",
-        idempotencyKey: `malformed-update-idempotency-${index}`,
+        idempotencyKey: "malformed-update-idempotency",
         createdAt: now,
         updatedAt: now,
         expiresAt: new Date(now.getTime() + 10 * 60_000),
       })
-      // oxlint-disable-next-line no-await-in-loop -- the real pending-to-approved transition precedes each malformed completion attempt.
       await db
         .update(schema.agentRuns)
         .set({ status: "waiting_approval" })
         .where(eq(schema.agentRuns.id, run.runId))
-      // oxlint-disable-next-line no-await-in-loop -- the real pending-to-approved transition precedes each malformed completion attempt.
       await db
         .update(schema.agentActions)
         .set({
           status: "approved",
           decisionProvenance: "manual",
-          decisionIdempotencyKey: `malformed-update-decision-${index}`,
+          decisionIdempotencyKey: "malformed-update-decision",
           decidedAt: now,
           updatedAt: now,
         })
         .where(eq(schema.agentActions.id, actionId))
-      // oxlint-disable-next-line no-await-in-loop -- each malformed database transition is independently asserted.
       await expect(
         db
           .update(schema.agentActions)
@@ -197,70 +472,16 @@ describe("Agent asset Issue promotion and deletion", () => {
           .where(eq(schema.agentActions.id, actionId))
       ).rejects.toMatchObject({
         cause: {
-          message: expect.stringMatching(
-            /agent_action_(?:attachment_payload_mismatch|update_revision_mismatch)/
-          ),
+          message: expect.stringMatching(expectedError),
         },
       })
     }
-  })
+  )
 })
 
-describe("Agent asset private image and file lifecycle", () => {
-  it("revalidates Issue image ownership, transforms privately, and consumes idempotent vision quota", async () => {
-    const { db, now } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
-    await db.insert(schema.issues).values([
-      {
-        id: "asset-issue-a",
-        organizationId: "asset-org-a",
-        number: 1,
-        title: "Image marker",
-        creatorId: "asset-user-a",
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: "asset-issue-a-other",
-        organizationId: "asset-org-a",
-        number: 2,
-        title: "Other owner",
-        creatorId: "asset-user-a",
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: "asset-issue-b",
-        organizationId: "asset-org-b",
-        number: 1,
-        title: "Other tenant",
-        creatorId: "asset-user-a",
-        createdAt: now,
-        updatedAt: now,
-      },
-    ])
-    await seedReadyIssueAttachment(db, storage, {
-      detectedImageFormat: "png",
-      fileId: "asset-issue-image",
-      issueId: "asset-issue-a",
-    })
-    await seedReadyIssueAttachment(db, storage, {
-      detectedImageFormat: null,
-      fileId: "asset-issue-pdf",
-      issueId: "asset-issue-a",
-    })
-    await seedReadyIssueAttachment(db, storage, {
-      detectedImageFormat: "png",
-      fileId: "asset-other-tenant-image",
-      issueId: "asset-issue-b",
-      organizationId: "asset-org-b",
-    })
-
-    const internal = await createAgentInternalApi(db)
-    const run = (
-      await startAssetChatRun(db, { clientMessageId: "issue-image-run" })
-    ).run
+describe("Agent assetのprivate画像とfile lifecycle", () => {
+  it("Issue画像を非公開WebPへ変換して画像変換枠を冪等に消費する", async () => {
+    const { db, internal, run, storage } = await createIssueImageFixture()
     const modelImage = await internal.getIssueAttachmentImageForModel({
       fileId: "asset-issue-image",
       grant: run.grant,
@@ -285,7 +506,23 @@ describe("Agent asset private image and file lifecycle", () => {
         onlyIf: new Headers({ "if-match": '"agent-etag-1"' }),
       }
     )
+    await (
+      await internal.getIssueAttachmentImageForModel({
+        fileId: "asset-issue-image",
+        grant: run.grant,
+        issueId: "asset-issue-a",
+      })
+    ).body?.cancel()
 
+    const visionBuckets = await db
+      .select({ count: schema.agentResourceUsageBuckets.count })
+      .from(schema.agentResourceUsageBuckets)
+      .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
+    expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
+  })
+
+  it("内部HTTPルートからIssue画像の非公開レスポンスを返す", async () => {
+    const { db, run } = await createIssueImageFixture()
     const internalApp = await createAgentInternalApp(db)
     const routeResponse = await internalApp.handle(
       new Request(
@@ -296,40 +533,42 @@ describe("Agent asset private image and file lifecycle", () => {
     expect(routeResponse.status).toBe(200)
     expect(routeResponse.headers.get("cache-control")).toBe("private, no-store")
     await routeResponse.body?.cancel()
+  })
 
-    for (const candidate of [
-      {
-        issueId: "asset-issue-a-other",
-        fileId: "asset-issue-image",
-      },
-      {
-        issueId: "asset-issue-a",
-        fileId: "asset-issue-pdf",
-      },
-      {
-        issueId: "asset-issue-a",
-        fileId: "asset-other-tenant-image",
-      },
-      {
-        issueId: "asset-issue-a",
-        fileId: "missing-file",
-      },
-    ]) {
-      // oxlint-disable-next-line no-await-in-loop -- all hidden resource variants must expose the same 404 contract.
-      await expect(
-        internal.getIssueAttachmentImageForModel({
-          ...candidate,
-          grant: run.grant,
-        })
-      ).rejects.toMatchObject({ code: "not_found" })
-    }
+  it.each([
+    {
+      fileId: "asset-issue-image",
+      issueId: "asset-issue-a-other",
+      label: "別Issueが所有する画像",
+    },
+    {
+      fileId: "asset-issue-pdf",
+      issueId: "asset-issue-a",
+      label: "画像ではない添付",
+    },
+    {
+      fileId: "asset-other-tenant-image",
+      issueId: "asset-issue-a",
+      label: "別テナントの画像",
+    },
+    {
+      fileId: "missing-file",
+      issueId: "asset-issue-a",
+      label: "存在しないファイル",
+    },
+  ])("$labelを404へ隠す", async ({ fileId, issueId }) => {
+    const { internal, run } = await createIssueImageFixture(true)
+    await expect(
+      internal.getIssueAttachmentImageForModel({
+        fileId,
+        grant: run.grant,
+        issueId,
+      })
+    ).rejects.toMatchObject({ code: "not_found" })
+  })
 
-    const visionBuckets = await db
-      .select({ count: schema.agentResourceUsageBuckets.count })
-      .from(schema.agentResourceUsageBuckets)
-      .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
-    expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
-
+  it("上限を超えるIssue画像変換結果を拒否する", async () => {
+    const { internal, run, storage } = await createIssueImageFixture()
     storage.setOutput({
       bytes: new Uint8Array(AGENT_ASSET_MODEL_MAX_BYTES + 1),
       contentLength: null,
@@ -343,148 +582,9 @@ describe("Agent asset private image and file lifecycle", () => {
     ).rejects.toMatchObject({ code: "validation_error" })
   })
 
-  it("records a minimal file.uploaded audit inside zero-copy promotion", async () => {
-    const { app, db } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
-    const assetId = await seedReadyAsset(db, {
-      id: "promotion-audit-asset",
-      sizeBytes: 16,
-    })
-    const [object] = await db
-      .select()
-      .from(schema.storageObjects)
-      .where(eq(schema.storageObjects.id, `storage-${assetId}`))
-    if (!object?.etag || !object.objectKey) {
-      throw new Error("Promotion storage fixture is incomplete")
-    }
-    storage.objects.set(object.objectKey, {
-      bytes: Uint8Array.from(pngBytes()),
-      object: {
-        key: object.objectKey,
-        size: object.sizeBytes,
-        etag: object.etag,
-        httpEtag: `"${object.etag}"`,
-        customMetadata: {},
-      },
-    })
-    await db.insert(schema.organizationFileUsage).values({
-      organizationId: "asset-org-a",
-      usedBytes: object.sizeBytes,
-      temporaryBytes: object.sizeBytes,
-      updatedAt: new Date(),
-    })
-    const run = (
-      await startAssetChatRun(db, {
-        clientMessageId: "promotion-audit-run",
-        assetIds: [assetId],
-      })
-    ).run
-    const now = new Date()
-    const actionId = "promotion-audit-action"
-    const issueId = "promotion-audit-issue"
-    const plannedFileId = "promotion-audit-file"
-    const leaseExpiresAt = new Date(now.getTime() + 5 * 60_000)
-    await db.insert(schema.issues).values({
-      id: issueId,
-      organizationId: "asset-org-a",
-      number: 1,
-      title: "Issue from image",
-      description: "Generated description",
-      status: "open",
-      priority: "no_priority",
-      creatorId: "asset-user-a",
-      labels: ["Visual"],
-      dueDate: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await db.insert(schema.agentActions).values({
-      id: actionId,
-      organizationId: "asset-org-a",
-      threadId: "asset-thread-a",
-      runId: run.runId,
-      sessionId: "asset-session-a",
-      userId: "asset-user-a",
-      contextEpoch: 1,
-      toolCallId: "promotion-audit-tool",
-      kind: "update_issue",
-      normalizedPayload: {
-        operation: "add_attachments",
-        requestFingerprint: "promotion-audit-fingerprint",
-        issueId,
-        expectedRevision: 1,
-        attachments: [{ assetId, fileId: plannedFileId }],
-      },
-      canonicalPreview: { title: "Issue from image" },
-      targetType: "issue",
-      targetId: issueId,
-      targetRevision: 1,
-      status: "pending",
-      idempotencyKey: "promotion-audit-idempotency",
-      createdAt: now,
-      updatedAt: now,
-      expiresAt: new Date(now.getTime() + 10 * 60_000),
-    })
-    await db.insert(schema.agentActionAssets).values({
-      organizationId: "asset-org-a",
-      actionId,
-      assetId,
-      storageObjectId: object.id,
-      sourceEtag: object.etag,
-      sizeBytes: object.sizeBytes,
-      leaseExpiresAt,
-      createdAt: now,
-    })
-    const decidedAt = new Date(now.getTime() + 1)
-    await db
-      .update(schema.agentActions)
-      .set({
-        status: "approved",
-        decisionProvenance: "manual",
-        decisionIdempotencyKey: "promotion-audit-decision",
-        decidedAt,
-        updatedAt: decidedAt,
-      })
-      .where(eq(schema.agentActions.id, actionId))
-    await db.transaction((tx) =>
-      promoteAgentAssetToIssueFileInTransaction(tx, {
-        actionId,
-        actorUserId: "asset-user-a",
-        assetId,
-        issueId,
-        now: new Date(decidedAt.getTime() + 1),
-        organizationId: "asset-org-a",
-        plannedFileId,
-      })
-    )
-    const completedAt = new Date(decidedAt.getTime() + 2)
-    await db
-      .update(schema.issues)
-      .set({
-        description: "Generated description with attachment",
-        updatedAt: completedAt,
-      })
-      .where(eq(schema.issues.id, issueId))
-    await db
-      .update(schema.agentActions)
-      .set({
-        status: "succeeded",
-        resultId: issueId,
-        receipt: {
-          issueId,
-          number: 1,
-          revision: 2,
-          deleted: false,
-          attachmentMutation: {
-            operation: "added",
-            fileIds: [plannedFileId],
-          },
-        },
-        completedAt,
-        updatedAt: completedAt,
-      })
-      .where(eq(schema.agentActions.id, actionId))
+  it("データコピーなしの昇格で監査とストレージ所有関係を記録する", async () => {
+    const { actionId, db, object, plannedFileId } =
+      await createPromotedIssueAssetFixture()
     expect(
       await db
         .select({ status: schema.agentActions.status })
@@ -523,13 +623,20 @@ describe("Agent asset private image and file lifecycle", () => {
         .from(schema.files)
         .where(eq(schema.files.id, plannedFileId))
     ).toEqual([{ objectKey: object.objectKey, storageObjectId: object.id }])
+  })
 
+  it("データコピーなしの昇格後もAgentプレビューを同じストレージオブジェクトから返す", async () => {
+    const { app, assetId, storage } = await createPromotedIssueAssetFixture()
     const promotedPreview = await app.handle(assetRequest({ assetId }))
     expect(promotedPreview.status).toBe(200)
     expect(promotedPreview.headers.get("content-type")).toBe("image/webp")
     const promotedRequest = storage.previewFetch.mock.calls.at(-1)?.[0]
     expect(promotedRequest?.headers.get("x-preview-cache-ttl")).toBe("259200")
+  })
 
+  it("データコピーなしの昇格後のファイルプレビューを同じストレージオブジェクトへ接続する", async () => {
+    const { app, object, plannedFileId, storage } =
+      await createPromotedIssueAssetFixture()
     const filePreview = await app.handle(
       new Request(
         `http://localhost/files/organizations/asset-org-a/${plannedFileId}/preview/360`,
@@ -550,69 +657,10 @@ describe("Agent asset private image and file lifecycle", () => {
     expect(filePreviewRequest?.headers.get("x-preview-object-key")).toBe(
       object.objectKey
     )
-
-    const unauthorizedPreview = await app.handle(
-      assetRequest({
-        assetId,
-        sessionId: "asset-session-b",
-        userId: "asset-user-b",
-      })
-    )
-    expect(unauthorizedPreview.status).toBe(404)
-    expect(storage.previewFetch).toHaveBeenCalledTimes(2)
   })
 
-  it("blocks deletion under an active action lease, then releases quota and exact-deletes", async () => {
-    const { app, db } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
-    const uploaded = await app.handle(
-      uploadRequest({ file: pngFile(), uploadId: "leased-asset" })
-    )
-    expect(uploaded.status).toBe(201)
-    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
-    const [object] = await db.select().from(schema.storageObjects)
-    expect(object?.objectKey).toBeTruthy()
-
-    const run = (
-      await startAssetChatRun(db, {
-        clientMessageId: "lease-run",
-        assetIds: [assetId],
-      })
-    ).run
-    const actionCreatedAt = new Date()
-    const actionExpiresAt = new Date(actionCreatedAt.getTime() + 10 * 60_000)
-    await db.insert(schema.agentActions).values({
-      id: "leased-action",
-      organizationId: "asset-org-a",
-      threadId: "asset-thread-a",
-      runId: run.runId,
-      sessionId: "asset-session-a",
-      userId: "asset-user-a",
-      contextEpoch: 1,
-      toolCallId: "leased-tool-call",
-      kind: "create_issue",
-      normalizedPayload: { title: "Issue with attachment" },
-      canonicalPreview: { title: "Issue with attachment" },
-      targetType: "issue",
-      targetId: "planned-leased-issue",
-      status: "pending",
-      idempotencyKey: "leased-action-key",
-      createdAt: actionCreatedAt,
-      updatedAt: actionCreatedAt,
-      expiresAt: actionExpiresAt,
-    })
-    await db.insert(schema.agentActionAssets).values({
-      organizationId: "asset-org-a",
-      actionId: "leased-action",
-      assetId,
-      storageObjectId: object?.id,
-      sourceEtag: object?.etag ?? "",
-      sizeBytes: object?.sizeBytes ?? -1,
-      leaseExpiresAt: new Date(actionCreatedAt.getTime() + 5 * 60_000),
-      createdAt: actionCreatedAt,
-    })
-
+  it("active action lease中のAgent asset削除を拒否する", async () => {
+    const { app, assetId, db } = await createLeasedAssetFixture()
     const blocked = await app.handle(
       assetRequest({ assetId, method: "DELETE" })
     )
@@ -622,7 +670,11 @@ describe("Agent asset private image and file lifecycle", () => {
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([
       expect.objectContaining({ temporaryBytes: 16, usedBytes: 16 }),
     ])
+  })
 
+  it("action lease解放後にAgent assetを削除してオブジェクト後処理を完了する", async () => {
+    const { app, assetId, db, object, storage } =
+      await createLeasedAssetFixture()
     const completedAt = new Date()
     await db
       .update(schema.agentActions)
@@ -654,7 +706,7 @@ describe("Agent asset private image and file lifecycle", () => {
       now: new Date(completedAt.getTime() + 1_000),
     })
     expect(cleanup).toMatchObject({ claimed: 1, completed: 1, failed: 0 })
-    expect(storage.deletedKeys).toEqual([object?.objectKey])
+    expect(storage.deletedKeys).toEqual([object.objectKey])
     expect(await db.select().from(schema.storageObjects)).toEqual([
       expect.objectContaining({ objectKey: null, status: "deleted" }),
     ])

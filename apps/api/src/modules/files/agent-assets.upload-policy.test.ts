@@ -1,5 +1,5 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 
@@ -35,29 +35,34 @@ import { configureFileStorageRuntime } from "./runtime"
 
 type CombinedImageScenario = {
   currentSizes: readonly number[]
-  name: string
+  id: string
+  label: string
   reusableSizes: readonly number[]
 }
 
 const successfulCombinedImageScenarios: readonly CombinedImageScenario[] = [
   {
     currentSizes: [1, 1],
-    name: "count below the limit",
+    id: "count-below-limit",
+    label: "件数が上限未満の場合",
     reusableSizes: [1],
   },
   {
     currentSizes: [1, 1, 1],
-    name: "count at the limit",
+    id: "count-at-limit",
+    label: "件数が上限と一致する場合",
     reusableSizes: [1],
   },
   {
     currentSizes: [10_000_000],
-    name: "bytes below the limit",
+    id: "bytes-below-limit",
+    label: "byte数が上限未満の場合",
     reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_001],
   },
   {
     currentSizes: [10_000_000],
-    name: "bytes at the limit",
+    id: "bytes-at-limit",
+    label: "byte数が上限と一致する場合",
     reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_000],
   },
 ]
@@ -65,12 +70,14 @@ const successfulCombinedImageScenarios: readonly CombinedImageScenario[] = [
 const rejectedCombinedImageScenarios: readonly CombinedImageScenario[] = [
   {
     currentSizes: [1, 1, 1],
-    name: "count above the limit",
+    id: "count-above-limit",
+    label: "件数が上限を超える場合",
     reusableSizes: [1, 1],
   },
   {
     currentSizes: [10_000_000, 1],
-    name: "bytes above the limit",
+    id: "bytes-above-limit",
+    label: "byte数が上限を超える場合",
     reusableSizes: [AGENT_RUN_ASSET_MAX_BYTES - 10_000_000],
   },
 ]
@@ -95,12 +102,12 @@ const seedSizedAssets = (
 
 const createCombinedImageScenario = async ({
   currentSizes,
-  name,
+  id,
   reusableSizes,
 }: CombinedImageScenario) => {
   const { db } = await createFixture()
   const internal = await createAgentInternalApi(db)
-  const slug = name.replaceAll(" ", "-")
+  const slug = id
   const reusableAssetIds = await seedSizedAssets(db, {
     prefix: `combined-${slug}-past`,
     sizes: reusableSizes,
@@ -160,8 +167,73 @@ const createCombinedImageScenario = async ({
   }
 }
 
-describe("Agent asset upload policy and scope", () => {
-  it("atomically rate-limits a new upload without consuming storage quota", async () => {
+const createModelImageFixture = async (id: string) => {
+  const { app, db } = await createFixture()
+  const storage = createRuntime()
+  configureFileStorageRuntime(storage.runtime)
+  const uploaded = await app.handle(
+    uploadRequest({ file: pngFile(), uploadId: `${id}-upload` })
+  )
+  const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+  const internal = await createAgentInternalApi(db)
+  const run = (
+    await startAssetChatRun(db, {
+      assetIds: [assetId],
+      clientMessageId: `${id}-run`,
+    })
+  ).run
+
+  return { assetId, db, internal, run, storage }
+}
+
+const seedReusableConversationAssets = async (
+  db: Parameters<typeof seedReadyAsset>[0],
+  internal: Awaited<ReturnType<typeof createAgentInternalApi>>,
+  count = 6
+) =>
+  Array.from({ length: count }).reduce<Promise<string[]>>(
+    async (pendingAssetIds, _, index) => {
+      const assetIds = await pendingAssetIds
+      const assetId = await seedReadyAsset(db, {
+        id: `conversation-asset-${index}`,
+        sizeBytes: 1,
+      })
+      const priorRun = (
+        await startAssetChatRun(db, {
+          assetIds: [assetId],
+          clientMessageId: `conversation-message-${index}`,
+        })
+      ).run
+      await internal.finalizeRun({
+        grant: priorRun.grant,
+        outcome: "completed",
+      })
+      return [...assetIds, assetId]
+    },
+    Promise.resolve([])
+  )
+
+const seedConversationTargetIssue = async (
+  db: Parameters<typeof seedReadyAsset>[0]
+) => {
+  const now = new Date()
+  await db.insert(schema.issues).values({
+    id: "conversation-target-issue",
+    organizationId: "asset-org-a",
+    number: 1,
+    title: "Conversation image target",
+    description: "",
+    status: "open",
+    priority: "no_priority",
+    creatorId: "asset-user-a",
+    labels: [],
+    createdAt: now,
+    updatedAt: now,
+  })
+}
+
+describe("Agent asset upload policyとscope", () => {
+  it("storage quotaをconsumeせず新規uploadを原子的にrate limitする", async () => {
     const { db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
@@ -173,7 +245,7 @@ describe("Agent asset upload policy and scope", () => {
         index < AGENT_ASSET_UPLOAD_USER_HOURLY_LIMIT;
         index += 1
       ) {
-        // oxlint-disable-next-line no-await-in-loop -- one bucket must deterministically reach its exact limit.
+        // oxlint-disable-next-line no-await-in-loop -- 1つのbucketを決定的に正確な上限へ到達させる
         await consumeAgentResourceLimitInTransaction(tx, {
           kind: "asset_upload",
           limitCount: AGENT_ASSET_UPLOAD_USER_HOURLY_LIMIT,
@@ -199,7 +271,7 @@ describe("Agent asset upload policy and scope", () => {
     ).toEqual([{ count: AGENT_ASSET_UPLOAD_USER_HOURLY_LIMIT }])
   })
 
-  it("purges expired usage buckets and operation ledgers from the scheduled lifecycle after grace", async () => {
+  it("猶予後のscheduled lifecycleで期限切れusage bucketとoperation ledgerを削除する", async () => {
     const { db } = await createFixture()
     const storage = createRuntime()
     const scheduledNow = new Date("2026-07-22T12:00:00.000Z")
@@ -258,58 +330,63 @@ describe("Agent asset upload policy and scope", () => {
     ).toEqual([{ operationId: "retained-operation" }])
   })
 
-  it("rejects Images signature/dimension metadata after PUT and durably queues exact cleanup", async () => {
-    const { db } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
+  it.each([
+    {
+      fileName: "format.png",
+      info: { format: "jpeg" },
+      label: "signatureと異なるformat metadata",
+      uploadId: "images-format-mismatch",
+    },
+    {
+      fileName: "dimensions.png",
+      info: { format: "png", width: AGENT_ASSET_MAX_DIMENSION + 1 },
+      label: "上限を超えるdimension metadata",
+      uploadId: "images-dimensions",
+    },
+  ] as const)(
+    "PUT後に$labelを拒否してexact cleanupを永続queueへ積む",
+    async ({ fileName, info, uploadId }) => {
+      const { db } = await createFixture()
+      const storage = createRuntime()
+      configureFileStorageRuntime(storage.runtime)
+      storage.setInfo(info)
 
-    storage.setInfo({ format: "jpeg" })
-    await expect(
-      uploadDirect(db, pngFile("format.png"), "images-format-mismatch")
-    ).rejects.toMatchObject({ code: "validation_error" })
+      await expect(
+        uploadDirect(db, pngFile(fileName), uploadId)
+      ).rejects.toMatchObject({ code: "validation_error" })
 
-    storage.setInfo({ format: "png", width: AGENT_ASSET_MAX_DIMENSION + 1 })
-    await expect(
-      uploadDirect(db, pngFile("dimensions.png"), "images-dimensions")
-    ).rejects.toMatchObject({ code: "validation_error" })
+      expect(storage.put).toHaveBeenCalledTimes(1)
+      const assets = await db.select().from(schema.agentAssets)
+      const objects = await db.select().from(schema.storageObjects)
+      const jobs = await db.select().from(schema.storageObjectCleanupJobs)
+      expect(assets).toEqual([
+        expect.objectContaining({ status: "expired", storageObjectId: null }),
+      ])
+      expect(objects).toEqual([expect.objectContaining({ status: "deleting" })])
+      expect(jobs).toHaveLength(1)
+      expect(
+        jobs[0]?.objectKey.endsWith(
+          `/storage-objects/${jobs[0]?.storageObjectId}`
+        )
+      ).toBe(true)
+      expect(await db.select().from(schema.storageObjectClaims)).toEqual([])
+      expect(await db.select().from(schema.organizationFileUsage)).toEqual([
+        expect.objectContaining({ temporaryBytes: 0, usedBytes: 0 }),
+      ])
+    }
+  )
 
-    expect(storage.put).toHaveBeenCalledTimes(2)
-    const assets = await db.select().from(schema.agentAssets)
-    const objects = await db.select().from(schema.storageObjects)
-    const jobs = await db.select().from(schema.storageObjectCleanupJobs)
-    expect(assets).toHaveLength(2)
-    expect(assets.every(({ status }) => status === "expired")).toBe(true)
-    expect(
-      assets.every(({ storageObjectId }) => storageObjectId === null)
-    ).toBe(true)
-    expect(objects.every(({ status }) => status === "deleting")).toBe(true)
-    expect(jobs).toHaveLength(2)
-    expect(
-      jobs.every(({ objectKey, storageObjectId }) =>
-        objectKey.endsWith(`/storage-objects/${storageObjectId}`)
-      )
-    ).toBe(true)
-    expect(await db.select().from(schema.storageObjectClaims)).toEqual([])
-    expect(await db.select().from(schema.organizationFileUsage)).toEqual([
-      expect.objectContaining({ temporaryBytes: 0, usedBytes: 0 }),
-    ])
-  })
-
-  it("hides other-owner/tenant assets and fails closed after organization or epoch changes", async () => {
-    const { app, db } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
-
-    const otherOwnerUpload = await app.handle(
-      uploadRequest({
+  it.each([
+    {
+      input: {
         file: pngFile(),
         threadId: "asset-thread-other-owner",
         uploadId: "other-owner-thread",
-      })
-    )
-    expect(otherOwnerUpload.status).toBe(404)
-    const otherTenantUpload = await app.handle(
-      uploadRequest({
+      },
+      label: "別ownerのthread",
+    },
+    {
+      input: {
         activeOrganizationId: "asset-org-b",
         file: pngFile(),
         organizationId: "asset-org-b",
@@ -317,33 +394,63 @@ describe("Agent asset upload policy and scope", () => {
         threadId: "asset-thread-b",
         uploadId: "other-tenant-thread",
         userId: "asset-user-b",
-      })
-    )
-    expect(otherTenantUpload.status).toBe(404)
+      },
+      label: "別tenantのthread",
+    },
+  ] as const)("$labelへのuploadを404で隠す", async ({ input }) => {
+    const { app } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+
+    const response = await app.handle(uploadRequest(input))
+
+    expect(response.status).toBe(404)
+    expect(storage.put).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      input: {
+        sessionId: "asset-session-b",
+        userId: "asset-user-b",
+      },
+      label: "別owner",
+    },
+    {
+      input: {
+        activeOrganizationId: "asset-org-b",
+        organizationId: "asset-org-b",
+        sessionId: "asset-session-a-org-b",
+      },
+      label: "別tenant",
+    },
+  ] as const)("$labelからのasset readを404で隠す", async ({ input }) => {
+    const { app } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
 
     const uploaded = await app.handle(
-      uploadRequest({ file: pngFile(), uploadId: "private-asset" })
+      uploadRequest({ file: pngFile(), uploadId: "private-asset-read" })
     )
     expect(uploaded.status).toBe(201)
     const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+    storage.previewFetch.mockClear()
 
-    const otherOwnerRead = await app.handle(
-      assetRequest({
-        assetId,
-        sessionId: "asset-session-b",
-        userId: "asset-user-b",
-      })
+    const response = await app.handle(assetRequest({ assetId, ...input }))
+
+    expect(response.status).toBe(404)
+    expect(storage.previewFetch).not.toHaveBeenCalled()
+  })
+
+  it("active organization変更後のasset readを409で拒否する", async () => {
+    const { app, db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+    const uploaded = await app.handle(
+      uploadRequest({ file: pngFile(), uploadId: "private-asset-switch" })
     )
-    const otherTenantRead = await app.handle(
-      assetRequest({
-        activeOrganizationId: "asset-org-b",
-        assetId,
-        organizationId: "asset-org-b",
-        sessionId: "asset-session-a-org-b",
-      })
-    )
-    expect(otherOwnerRead.status).toBe(404)
-    expect(otherTenantRead.status).toBe(404)
+    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+    storage.previewFetch.mockClear()
 
     await db
       .update(schema.session)
@@ -354,49 +461,48 @@ describe("Agent asset upload policy and scope", () => {
     expect(await switched.json()).toMatchObject({
       error: "active_organization_mismatch",
     })
+    expect(storage.previewFetch).not.toHaveBeenCalled()
+  })
 
+  it("context epoch変更後のasset readを401で拒否する", async () => {
+    const { app, db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+    const uploaded = await app.handle(
+      uploadRequest({ file: pngFile(), uploadId: "private-asset-epoch" })
+    )
+    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+    await db
+      .update(schema.session)
+      .set({ activeOrganizationId: "asset-org-b", updatedAt: new Date() })
+      .where(eq(schema.session.id, "asset-session-a"))
     await db
       .update(schema.session)
       .set({ activeOrganizationId: "asset-org-a", updatedAt: new Date() })
       .where(eq(schema.session.id, "asset-session-a"))
+    storage.previewFetch.mockClear()
     const epochInvalidated = await app.handle(assetRequest({ assetId }))
     expect(epochInvalidated.status).toBe(401)
     expect(storage.previewFetch).not.toHaveBeenCalled()
   })
 
-  it("binds only the selected run assets and fences model image output at WebP 4 MiB", async () => {
-    const { app, db } = await createFixture()
-    const storage = createRuntime()
-    configureFileStorageRuntime(storage.runtime)
-    const uploaded = await app.handle(
-      uploadRequest({ file: pngFile(), uploadId: "model-asset" })
-    )
-    expect(uploaded.status).toBe(201)
-    const uploadedAssetId = v.parse(
-      agentAssetDtoModel,
-      await uploaded.json()
-    ).id
-    const internal = await createAgentInternalApi(db)
-    const run = (
-      await startAssetChatRun(db, {
-        clientMessageId: "model-image-run",
-        assetIds: [uploadedAssetId],
-      })
-    ).run
+  it("選択run assetだけをbindingしてmodel画像をWebPへ変換する", async () => {
+    const { assetId, db, internal, run, storage } =
+      await createModelImageFixture("model-image-success")
     const bindings = await db
       .select()
       .from(schema.agentRunAssets)
       .where(eq(schema.agentRunAssets.runId, run.runId))
     expect(bindings).toEqual([
       expect.objectContaining({
-        assetId: uploadedAssetId,
+        assetId,
         sizeBytes: 16,
       }),
     ])
 
     const modelImage = await internal.getAgentImageForModel({
       grant: run.grant,
-      assetId: uploadedAssetId,
+      assetId,
     })
     expect(modelImage.status).toBe(200)
     expect(modelImage.headers.get("content-type")).toBe("image/webp")
@@ -414,7 +520,17 @@ describe("Agent asset upload policy and scope", () => {
       format: "image/webp",
       quality: 75,
     })
+    expect(
+      await db
+        .select({ count: schema.agentResourceUsageBuckets.count })
+        .from(schema.agentResourceUsageBuckets)
+        .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
+    ).toEqual([{ count: 1 }, { count: 1 }])
+  })
 
+  it("4 MiBを超えるmodel画像出力を拒否する", async () => {
+    const { assetId, internal, run, storage } =
+      await createModelImageFixture("model-image-size")
     storage.setOutput({
       bytes: new Uint8Array(AGENT_ASSET_MODEL_MAX_BYTES + 1),
       contentLength: null,
@@ -422,10 +538,15 @@ describe("Agent asset upload policy and scope", () => {
     await expect(
       internal.getAgentImageForModel({
         grant: run.grant,
-        assetId: uploadedAssetId,
+        assetId,
       })
     ).rejects.toMatchObject({ code: "validation_error" })
+  })
 
+  it("WebP以外のmodel画像出力を拒否する", async () => {
+    const { assetId, internal, run, storage } = await createModelImageFixture(
+      "model-image-content-type"
+    )
     storage.setOutput({
       bytes: new Uint8Array([1]),
       contentType: "image/png",
@@ -433,19 +554,17 @@ describe("Agent asset upload policy and scope", () => {
     await expect(
       internal.getAgentImageForModel({
         grant: run.grant,
-        assetId: uploadedAssetId,
+        assetId,
       })
     ).rejects.toMatchObject({ code: "service_unavailable" })
-    const visionBuckets = await db
-      .select({ count: schema.agentResourceUsageBuckets.count })
-      .from(schema.agentResourceUsageBuckets)
-      .where(eq(schema.agentResourceUsageBuckets.kind, "vision_transform"))
-    expect(visionBuckets).toEqual([{ count: 1 }, { count: 1 }])
-    await internal.finalizeRun({ grant: run.grant, outcome: "completed" })
+  })
 
+  it("上限を超える件数のrun assetを拒否する", async () => {
+    const { db } = await createFixture()
+    const internal = await createAgentInternalApi(db)
     const seededIds: string[] = []
     for (let index = 0; index < 5; index += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- libSQL has one writer; fixture order is intentional.
+      // oxlint-disable-next-line no-await-in-loop -- libSQLはwriterが1つでfixture順序を意図している
       const seededId = await seedReadyAsset(db, {
         id: `count-asset-${index}`,
         sizeBytes: 1,
@@ -465,10 +584,20 @@ describe("Agent asset upload policy and scope", () => {
         ticket: countTicket.ticket,
       })
     ).rejects.toMatchObject({ code: "validation_error" })
+    expect(
+      await db
+        .select()
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.clientMessageId, "too-many-assets"))
+    ).toEqual([])
+  })
 
+  it("上限を超える合計byte数のrun assetを拒否する", async () => {
+    const { db } = await createFixture()
+    const internal = await createAgentInternalApi(db)
     const largeIds: string[] = []
     for (let index = 0; index < 3; index += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- libSQL has one writer; fixture order is intentional.
+      // oxlint-disable-next-line no-await-in-loop -- libSQLはwriterが1つでfixture順序を意図している
       const seededId = await seedReadyAsset(db, {
         id: `large-asset-${index}`,
         sizeBytes: 7_000_000,
@@ -488,19 +617,18 @@ describe("Agent asset upload policy and scope", () => {
         ticket: byteTicket.ticket,
       })
     ).rejects.toMatchObject({ code: "validation_error" })
-    const failedRuns = await db
-      .select()
-      .from(schema.agentRuns)
-      .where(
-        sql`${schema.agentRuns.clientMessageId} in ('too-many-assets', 'too-many-bytes')`
-      )
-    expect(failedRuns).toEqual([])
+    expect(
+      await db
+        .select()
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.clientMessageId, "too-many-bytes"))
+    ).toEqual([])
   })
 })
 
-describe("Agent reusable asset boundaries", () => {
+describe("Agent reusable assetの境界", () => {
   it.each(successfulCombinedImageScenarios)(
-    "accepts the combined current and reusable image $name",
+    "currentとreusableを組み合わせた画像$labelを受理する",
     async (scenario) => {
       const { currentAssetIds, db, prepare, reusableAssetIds, runId } =
         await createCombinedImageScenario(scenario)
@@ -524,7 +652,7 @@ describe("Agent reusable asset boundaries", () => {
   )
 
   it.each(rejectedCombinedImageScenarios)(
-    "rejects the combined current and reusable image $name before action mutation",
+    "action mutation前にcurrentとreusableを組み合わせた画像$labelを拒否する",
     async (scenario) => {
       const { currentAssetIds, db, prepare, runId } =
         await createCombinedImageScenario(scenario)
@@ -544,39 +672,10 @@ describe("Agent reusable asset boundaries", () => {
     }
   )
 
-  it("lists every retained image from the same conversation and binds only the selected past image", async () => {
+  it("同じ会話の保持画像をすべて一覧する", async () => {
     const { db } = await createFixture()
     const internal = await createAgentInternalApi(db)
-    const assetIds = await Array.from({ length: 6 }).reduce<Promise<string[]>>(
-      async (pendingAssetIds, _, index) => {
-        const seededAssetIds = await pendingAssetIds
-        return [
-          ...seededAssetIds,
-          await seedReadyAsset(db, {
-            id: `conversation-asset-${index}`,
-            sizeBytes: 1,
-          }),
-        ]
-      },
-      Promise.resolve([])
-    )
-    await assetIds.reduce<Promise<void>>(
-      (previous, assetId, index) =>
-        previous.then(() =>
-          startAssetChatRun(db, {
-            assetIds: [assetId],
-            clientMessageId: `conversation-message-${index}`,
-          })
-            .then(({ run }) =>
-              internal.finalizeRun({
-                grant: run.grant,
-                outcome: "completed",
-              })
-            )
-            .then(() => undefined)
-        ),
-      Promise.resolve()
-    )
+    const assetIds = await seedReusableConversationAssets(db, internal)
 
     const reusable = await db.transaction((tx) =>
       listReusableAgentAssetsInTransaction(tx, {
@@ -595,21 +694,13 @@ describe("Agent reusable asset boundaries", () => {
     expect(reusable.map(({ id }) => id)).toEqual(
       expect.arrayContaining(assetIds)
     )
+  })
 
-    const now = new Date()
-    await db.insert(schema.issues).values({
-      id: "conversation-target-issue",
-      organizationId: "asset-org-a",
-      number: 1,
-      title: "Conversation image target",
-      description: "",
-      status: "open",
-      priority: "no_priority",
-      creatorId: "asset-user-a",
-      labels: [],
-      createdAt: now,
-      updatedAt: now,
-    })
+  it("選択した過去画像だけをcurrent runへbindingする", async () => {
+    const { db } = await createFixture()
+    const internal = await createAgentInternalApi(db)
+    const assetIds = await seedReusableConversationAssets(db, internal)
+    await seedConversationTargetIssue(db)
     const run = (
       await startAssetChatRun(db, {
         assetIds: [],
@@ -639,8 +730,31 @@ describe("Agent reusable asset boundaries", () => {
         .from(schema.agentRunAssets)
         .where(eq(schema.agentRunAssets.runId, run.runId))
     ).toEqual([{ assetId: assetIds[0] }])
+  })
 
-    expect(action.status).toBe("pending")
+  it("rejected actionのlease解放後に過去画像を再利用する", async () => {
+    const { db } = await createFixture()
+    const internal = await createAgentInternalApi(db)
+    const [assetId] = await seedReusableConversationAssets(db, internal, 1)
+    if (!assetId) throw new Error("Reusable asset fixture is missing")
+    await seedConversationTargetIssue(db)
+    const run = (
+      await startAssetChatRun(db, {
+        assetIds: [],
+        clientMessageId: "conversation-reject-message",
+      })
+    ).run
+    const action = await internal.prepareUpdateIssue({
+      grant: run.grant,
+      idempotencyKey: "conversation-reject-key",
+      issue: {
+        operation: "add_attachments",
+        attachmentAssetIds: [assetId],
+        expectedRevision: 1,
+        issueId: "conversation-target-issue",
+      },
+      toolCallId: "conversation-reject-call",
+    })
     await expect(
       decideAgentActionForSession(db, {
         actionId: action.id,
@@ -663,7 +777,7 @@ describe("Agent reusable asset boundaries", () => {
         idempotencyKey: "conversation-reuse-after-reject-key",
         issue: {
           operation: "add_attachments",
-          attachmentAssetIds: [assetIds[0] ?? ""],
+          attachmentAssetIds: [assetId],
           expectedRevision: 1,
           issueId: "conversation-target-issue",
         },
@@ -671,7 +785,7 @@ describe("Agent reusable asset boundaries", () => {
       })
     ).resolves.toMatchObject({
       preview: {
-        attachments: [expect.objectContaining({ assetId: assetIds[0] })],
+        attachments: [expect.objectContaining({ assetId })],
       },
       status: "pending",
     })

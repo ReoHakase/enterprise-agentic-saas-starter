@@ -1,33 +1,11 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { fileCleanupJobs } from "@enterprise-agentic-saas/db/schema"
-import { createClient } from "@libsql/client"
-import { drizzle } from "drizzle-orm/libsql"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { createMigratedDb } from "../../app.test-support"
 import { processFileCleanupJobs, type FileCleanupBucket } from "./cleanup-jobs"
 
 const now = new Date("2026-07-18T00:00:00.000Z")
-
-const createDatabase = async (): Promise<Db> => {
-  const client = createClient({ url: ":memory:" })
-  await client.executeMultiple(`
-    create table file_cleanup_jobs (
-      id text primary key not null,
-      organization_id text not null,
-      kind text not null,
-      object_key text,
-      prefix text,
-      status text default 'pending' not null,
-      attempts integer default 0 not null,
-      last_error_code text,
-      locked_at integer,
-      next_attempt_at integer,
-      created_at integer not null,
-      completed_at integer
-    );
-  `)
-  return drizzle({ client })
-}
 
 const bucket = (): FileCleanupBucket => ({
   delete: vi.fn<FileCleanupBucket["delete"]>().mockResolvedValue(undefined),
@@ -37,14 +15,14 @@ const bucket = (): FileCleanupBucket => ({
   }),
 })
 
-describe("file cleanup jobs", () => {
+describe("file cleanup jobの契約", () => {
   let database: Db
 
   beforeEach(async () => {
-    database = await createDatabase()
+    database = await createMigratedDb()
   })
 
-  it("deletes an exact immutable object and fences completion", async () => {
+  it("正確なimmutable objectを削除してcompletionをfenceする", async () => {
     await database.insert(fileCleanupJobs).values({
       id: "cleanup-1",
       organizationId: "org/acme",
@@ -67,7 +45,7 @@ describe("file cleanup jobs", () => {
     ])
   })
 
-  it("deletes every owner-prefix page and validates returned keys", async () => {
+  it("owner prefix配下の全pageを削除して返却keyを検証する", async () => {
     await database.insert(fileCleanupJobs).values({
       id: "cleanup-2",
       organizationId: "org/acme",
@@ -102,7 +80,7 @@ describe("file cleanup jobs", () => {
     ])
   })
 
-  it("never touches R2 for a corrupted cross-tenant target", async () => {
+  it("破損したcross-tenant targetではR2へ触れない", async () => {
     await database.insert(fileCleanupJobs).values({
       id: "cleanup-corrupt",
       organizationId: "org/acme",
@@ -128,7 +106,7 @@ describe("file cleanup jobs", () => {
     ])
   })
 
-  it("rejects noncanonical dot-segment targets inside the tenant prefix", async () => {
+  it("tenant prefix内の非canonical dot-segment targetを拒否する", async () => {
     await database.insert(fileCleanupJobs).values({
       id: "cleanup-dot-segment",
       organizationId: "org/acme",
@@ -145,7 +123,7 @@ describe("file cleanup jobs", () => {
     expect(storage.list).not.toHaveBeenCalled()
   })
 
-  it("stores only a stable error code and retries with backoff", async () => {
+  it("安定error codeだけを保存してbackoff付きで再試行する", async () => {
     await database.insert(fileCleanupJobs).values({
       id: "cleanup-failure",
       organizationId: "org/acme",

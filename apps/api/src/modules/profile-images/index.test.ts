@@ -1,10 +1,9 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import { createClient } from "@libsql/client"
 import { sql } from "drizzle-orm"
-import { drizzle } from "drizzle-orm/libsql"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createApp } from "../../app"
+import { createMigratedDb } from "../../app.test-support"
 import { env } from "../../platform/env"
 import {
   configureFileStorageRuntime,
@@ -105,99 +104,7 @@ const configureRuntime = () => {
 }
 
 const createDatabase = async () => {
-  const client = createClient({ url: "file::memory:?cache=shared" })
-  await client.executeMultiple(`
-    pragma foreign_keys = off;
-    drop table if exists profile_image_cleanup_jobs;
-    drop table if exists profile_images;
-    drop table if exists audit_logs;
-    drop table if exists session;
-    drop table if exists member;
-    drop table if exists organization;
-    drop table if exists user;
-    create table user (
-      id text primary key,
-      name text not null,
-      email text not null unique,
-      email_verified integer not null,
-      image text,
-      created_at integer not null,
-      updated_at integer not null
-    );
-    create table organization (
-      id text primary key,
-      name text not null,
-      slug text not null unique,
-      logo text,
-      created_at integer not null,
-      metadata text
-    );
-    create table member (
-      id text primary key,
-      organization_id text not null,
-      user_id text not null,
-      role text not null,
-      created_at integer not null
-    );
-    create table session (
-      id text primary key,
-      expires_at integer not null,
-      token text not null unique,
-      created_at integer not null,
-      updated_at integer not null,
-      ip_address text,
-      user_agent text,
-      user_id text not null,
-      active_organization_id text
-    );
-    create table audit_logs (
-      id text primary key,
-      organization_id text not null,
-      actor_user_id text,
-      action text not null,
-      target_type text not null,
-      target_id text,
-      metadata text not null default '{}',
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
-    );
-    create table profile_images (
-      id text primary key,
-      subject_type text not null,
-      subject_id text not null,
-      user_id text,
-      organization_id text,
-      upload_id text not null,
-      source_hash text not null,
-      version integer not null,
-      object_key text not null unique,
-      fallback_url text,
-      etag text,
-      status text not null default 'pending',
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
-    );
-    create unique index profile_images_subject_upload_uidx
-      on profile_images(subject_type, subject_id, upload_id);
-    create unique index profile_images_subject_version_uidx
-      on profile_images(subject_type, subject_id, version);
-    create unique index profile_images_subject_ready_uidx
-      on profile_images(subject_type, subject_id) where status = 'ready';
-    create table profile_image_cleanup_jobs (
-      id text primary key,
-      subject_type text not null,
-      subject_id text not null,
-      object_key text not null unique,
-      status text not null default 'pending',
-      attempts integer not null default 0,
-      last_error_code text,
-      locked_at integer,
-      next_attempt_at integer,
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      completed_at integer
-    );
-    pragma foreign_keys = on;
-  `)
-  const database = drizzle({ client, relations: schema.relations })
+  const database = await createMigratedDb()
   const now = new Date("2026-07-22T00:00:00.000Z")
   await database.insert(schema.user).values([
     {
@@ -312,11 +219,11 @@ const uploadRequest = (
   })
 }
 
-describe("profile image routes", () => {
+describe("プロフィール画像route", () => {
   beforeEach(() => configureRuntime())
   afterEach(() => resetFileStorageRuntimeForTest())
 
-  it("documents the dedicated routes and unified DTO", async () => {
+  it("専用routeと統一DTOを記載する", async () => {
     const app = createApp(await createDatabase())
     const response = await app.handle(
       new Request("http://localhost/openapi/json")
@@ -345,9 +252,8 @@ describe("profile image routes", () => {
     expect(appContract).not.toContain('"image":')
   })
 
-  it("uploads, serves conditionally, and deletes the current user image", async () => {
-    const database = await createDatabase()
-    const app = createApp(database)
+  it("現在userの画像をuploadして統一DTOを返す", async () => {
+    const app = createApp(await createDatabase())
     const upload = await app.handle(
       uploadRequest("/files/profile-images/users/me", {
         userId: "user-1",
@@ -363,7 +269,18 @@ describe("profile image routes", () => {
       width: 512,
       height: 512,
     })
+  })
 
+  it("user画像へETagが一致する場合は304を返す", async () => {
+    const app = createApp(await createDatabase())
+    const upload = await app.handle(
+      uploadRequest("/files/profile-images/users/me", {
+        userId: "user-1",
+        activeOrganizationId: "org-1",
+        uploadId: "upload-user-conditional",
+      })
+    )
+    expect(upload.status).toBe(201)
     const get = await app.handle(
       new Request("http://localhost/files/profile-images/users/user-1", {
         headers: headers("user-1", "org-1"),
@@ -381,20 +298,53 @@ describe("profile image routes", () => {
       })
     )
     expect(conditional.status).toBe(304)
+  })
 
-    const sameActiveOrganization = await app.handle(
-      new Request("http://localhost/files/profile-images/users/user-1", {
-        headers: headers("user-2", "org-1"),
+  it.each([
+    {
+      activeOrganizationId: "org-1",
+      label: "同じorganizationのuser",
+      userId: "user-2",
+    },
+    {
+      activeOrganizationId: "org-2",
+      label: "別organizationのuser",
+      userId: "user-3",
+    },
+  ] as const)(
+    "$labelへuser画像を配信する",
+    async ({ activeOrganizationId, userId }) => {
+      const app = createApp(await createDatabase())
+      const upload = await app.handle(
+        uploadRequest("/files/profile-images/users/me", {
+          userId: "user-1",
+          activeOrganizationId: "org-1",
+          uploadId: `upload-user-read-${userId}`,
+        })
+      )
+      expect(upload.status).toBe(201)
+
+      const response = await app.handle(
+        new Request("http://localhost/files/profile-images/users/user-1", {
+          headers: headers(userId, activeOrganizationId),
+        })
+      )
+
+      expect(response.status).toBe(200)
+    }
+  )
+
+  it("現在userの画像を削除してfallback URLを復元する", async () => {
+    const database = await createDatabase()
+    const app = createApp(database)
+    const upload = await app.handle(
+      uploadRequest("/files/profile-images/users/me", {
+        userId: "user-1",
+        activeOrganizationId: "org-1",
+        uploadId: "upload-user-delete",
       })
     )
-    expect(sameActiveOrganization.status).toBe(200)
-    const otherSignedInUser = await app.handle(
-      new Request("http://localhost/files/profile-images/users/user-1", {
-        headers: headers("user-3", "org-2"),
-      })
-    )
-    expect(otherSignedInUser.status).toBe(200)
-
+    expect(upload.status).toBe(201)
     const removed = await app.handle(
       new Request("http://localhost/files/profile-images/users/me", {
         method: "DELETE",
@@ -416,7 +366,7 @@ describe("profile image routes", () => {
     })
   })
 
-  it("enforces active owner mutation and membership-only reads", async () => {
+  it("ownerでないmemberのorganization画像mutationを拒否する", async () => {
     const app = createApp(await createDatabase())
     const forbidden = await app.handle(
       uploadRequest("/files/profile-images/organizations/org-1", {
@@ -426,7 +376,10 @@ describe("profile image routes", () => {
       })
     )
     expect(forbidden.status).toBe(403)
+  })
 
+  it("active ownerのorganization画像mutationを受理する", async () => {
+    const app = createApp(await createDatabase())
     const uploaded = await app.handle(
       uploadRequest("/files/profile-images/organizations/org-2", {
         userId: "user-3",
@@ -435,14 +388,10 @@ describe("profile image routes", () => {
       })
     )
     expect(uploaded.status).toBe(201)
+  })
 
-    const inactiveRead = await app.handle(
-      new Request("http://localhost/files/profile-images/organizations/org-2", {
-        headers: headers("user-3", "org-1"),
-      })
-    )
-    expect(inactiveRead.status).toBe(200)
-
+  it("active organizationが一致しないorganization画像mutationを拒否する", async () => {
+    const app = createApp(await createDatabase())
     const activeMismatch = await app.handle(
       uploadRequest("/files/profile-images/organizations/org-2", {
         userId: "user-3",
@@ -451,12 +400,42 @@ describe("profile image routes", () => {
       })
     )
     expect(activeMismatch.status).toBe(409)
-
-    const nonMember = await app.handle(
-      new Request("http://localhost/files/profile-images/organizations/org-2", {
-        headers: headers("user-2", "org-1"),
-      })
-    )
-    expect(nonMember.status).toBe(404)
   })
+
+  it.each([
+    {
+      activeOrganizationId: "org-1",
+      expectedStatus: 200,
+      label: "activeでないowner",
+      userId: "user-3",
+    },
+    {
+      activeOrganizationId: "org-1",
+      expectedStatus: 404,
+      label: "memberでない利用者",
+      userId: "user-2",
+    },
+  ] as const)(
+    "$labelによるorganization画像readへmembership境界を適用する",
+    async ({ activeOrganizationId, expectedStatus, userId }) => {
+      const app = createApp(await createDatabase())
+      const uploaded = await app.handle(
+        uploadRequest("/files/profile-images/organizations/org-2", {
+          userId: "user-3",
+          activeOrganizationId: "org-2",
+          uploadId: `upload-org-read-${userId}`,
+        })
+      )
+      expect(uploaded.status).toBe(201)
+
+      const response = await app.handle(
+        new Request(
+          "http://localhost/files/profile-images/organizations/org-2",
+          { headers: headers(userId, activeOrganizationId) }
+        )
+      )
+
+      expect(response.status).toBe(expectedStatus)
+    }
+  )
 })

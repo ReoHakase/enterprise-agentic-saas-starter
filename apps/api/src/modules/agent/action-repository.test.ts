@@ -14,8 +14,8 @@ import {
 } from "./actions/repository"
 import { issueAgentConnectionTicket } from "./threads/repository"
 
-describe("Agent Issue action protocol", () => {
-  it("does not expire another organization's action from a tenant request", async () => {
+describe("Agent Issue action protocolの契約", () => {
+  it("テナントrequestから別organizationのactionをexpireしない", async () => {
     const { db } = await createFixture()
     const now = new Date()
     await db.insert(schema.session).values({
@@ -65,7 +65,7 @@ describe("Agent Issue action protocol", () => {
     expect(afterSweep?.status).toBe("expired")
   })
 
-  it("loads an archived thread approval from a replacement session but keeps decision scope strict", async () => {
+  it("代替sessionからarchive済みthread approvalを取得しdecision scopeを厳密に保つ", async () => {
     const { app, db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "historical-approval-session",
@@ -140,7 +140,7 @@ describe("Agent Issue action protocol", () => {
     })
   })
 
-  it("converges parallel retries of the same manual decision", async () => {
+  it("同じmanual decisionの並列再試行を収束させる", async () => {
     const { app, db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "parallel-manual-decision",
@@ -176,7 +176,7 @@ describe("Agent Issue action protocol", () => {
     ])
   })
 
-  it("converges parallel retries of the same action preparation", async () => {
+  it("同じaction prepareの並列再試行を収束させる", async () => {
     const { db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "parallel-action-prepare",
@@ -206,7 +206,7 @@ describe("Agent Issue action protocol", () => {
     expect(root?.writeCount).toBe(1)
   })
 
-  it("converges parallel executions of the same approved action", async () => {
+  it("同じapproved actionの並列実行を収束させる", async () => {
     const { db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "parallel-approved-execution",
@@ -243,7 +243,7 @@ describe("Agent Issue action protocol", () => {
     ).toHaveLength(1)
   })
 
-  it("replays a succeeded write receipt across a failed-run retry", async () => {
+  it("失敗runの再試行で成功済みwrite receiptを再生する", async () => {
     const { db } = await createFixture()
     const first = await createRun(db, {
       clientMessageId: "retry-succeeded-write",
@@ -324,7 +324,7 @@ describe("Agent Issue action protocol", () => {
     expect(auditRows).toHaveLength(1)
   })
 
-  it("allocates distinct Issue numbers for parallel approved creates", async () => {
+  it("並列approved createへ異なるIssue番号を割り当てる", async () => {
     const { db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "parallel-approved-creates",

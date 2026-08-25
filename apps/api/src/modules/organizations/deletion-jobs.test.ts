@@ -1,9 +1,8 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import { organizationDeletionJobs } from "@enterprise-agentic-saas/db/schema"
-import { createClient } from "@libsql/client"
-import { drizzle } from "drizzle-orm/libsql"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { createMigratedDb } from "../../app.test-support"
 import {
   deleteOrganizationFiles,
   processOrganizationDeletionJobs,
@@ -11,27 +10,6 @@ import {
 } from "./deletion-jobs"
 
 const now = new Date("2026-07-14T00:00:00.000Z")
-
-const createDatabase = async (): Promise<Db> => {
-  const client = createClient({ url: ":memory:" })
-  await client.executeMultiple(`
-    create table organization_deletion_jobs (
-      id text primary key not null,
-      organization_id text not null,
-      requested_by_user_id text not null,
-      idempotency_key text not null,
-      status text default 'pending' not null,
-      attempts integer default 0 not null,
-      last_error_code text,
-      locked_at integer,
-      next_attempt_at integer,
-      requested_at integer not null,
-      completed_at integer
-    );
-  `)
-
-  return drizzle({ client })
-}
 
 const insertJob = async (database: Db) => {
   await database.insert(organizationDeletionJobs).values({
@@ -43,15 +21,15 @@ const insertJob = async (database: Db) => {
   })
 }
 
-describe("organization deletion file cleanup", () => {
+describe("organization削除時のfile cleanup", () => {
   let database: Db
 
   beforeEach(async () => {
-    database = await createDatabase()
+    database = await createMigratedDb()
     await insertJob(database)
   })
 
-  it("deletes every paginated object under only the tenant prefix", async () => {
+  it("tenant prefix配下だけの全pagination objectを削除する", async () => {
     const list = vi
       .fn<OrganizationFilesBucket["list"]>()
       .mockResolvedValueOnce({
@@ -80,7 +58,7 @@ describe("organization deletion file cleanup", () => {
     expect(remove).toHaveBeenNthCalledWith(2, ["organizations/org%2Facme/b"])
   })
 
-  it("fails closed when R2 truncates a page without a continuation cursor", async () => {
+  it("R2がcontinuation cursorなしでpageをtruncateした場合はfail closedにする", async () => {
     const bucket: OrganizationFilesBucket = {
       list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [],
@@ -96,7 +74,7 @@ describe("organization deletion file cleanup", () => {
     )
   })
 
-  it("never deletes an object outside the encoded tenant prefix", async () => {
+  it("encode済みtenant prefix外のobjectを削除しない", async () => {
     const remove = vi
       .fn<OrganizationFilesBucket["delete"]>()
       .mockResolvedValue(undefined)
@@ -114,7 +92,7 @@ describe("organization deletion file cleanup", () => {
     expect(remove).not.toHaveBeenCalled()
   })
 
-  it("marks a successful durable job completed", async () => {
+  it("成功したdurable jobをcompletedにする", async () => {
     const bucket: OrganizationFilesBucket = {
       list: vi.fn<OrganizationFilesBucket["list"]>().mockResolvedValue({
         objects: [],
@@ -141,7 +119,7 @@ describe("organization deletion file cleanup", () => {
     ])
   })
 
-  it("stores only a safe error code and schedules retry after R2 failure", async () => {
+  it("安全なerror codeだけを保存してR2失敗後のretryをscheduleする", async () => {
     const bucket: OrganizationFilesBucket = {
       list: vi
         .fn<OrganizationFilesBucket["list"]>()
@@ -184,7 +162,7 @@ describe("organization deletion file cleanup", () => {
     )
   })
 
-  it("reclaims a processing job only after its lease expires", async () => {
+  it("lease期限後だけprocessing jobをreclaimする", async () => {
     await database.update(organizationDeletionJobs).set({
       attempts: 1,
       lockedAt: new Date(now.getTime() - 5 * 60 * 1000 - 1),
@@ -210,7 +188,7 @@ describe("organization deletion file cleanup", () => {
     ])
   })
 
-  it("does not let an expired worker complete a lease claimed by a newer worker", async () => {
+  it("期限切れworkerに新しいworkerがclaimしたleaseをcompleteさせない", async () => {
     type ListResult = Awaited<ReturnType<OrganizationFilesBucket["list"]>>
     let resolveList: ((result: ListResult) => void) | undefined
     const pendingList = new Promise<ListResult>((resolve) => {
@@ -260,7 +238,7 @@ describe("organization deletion file cleanup", () => {
     ])
   })
 
-  it("does not let an expired worker fail a job completed by a newer worker", async () => {
+  it("期限切れworkerに新しいworkerがcompleteしたjobをfailさせない", async () => {
     let rejectList: ((reason: unknown) => void) | undefined
     const pendingList = new Promise<never>((_resolve, reject) => {
       rejectList = reject

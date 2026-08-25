@@ -6,8 +6,8 @@ import {
   summarizeProcessMemory,
 } from "./metrics"
 
-describe("upload memory smoke metrics", () => {
-  it("measures only workerd processes below the owned Wrangler tree", () => {
+describe("upload memory smokeの計測", () => {
+  it("所有Wrangler tree配下のworkerd processだけを計測する", () => {
     const rows = parseProcessRows(`
       100 1 10000 bun
       101 100 20000 node
@@ -24,7 +24,7 @@ describe("upload memory smoke metrics", () => {
     })
   })
 
-  it("requires bounded concurrent execution", () => {
+  it("上限付き同時実行を要求する", () => {
     expect(parseConcurrency(["--concurrency=8"], undefined)).toBe(8)
     expect(() => parseConcurrency(["--concurrency=1"], undefined)).toThrow(
       "concurrency must be an integer"

@@ -25,8 +25,8 @@ const expectedStatusByCode = {
   validation_error: 400,
 } as const satisfies Record<HttpErrorCode, number>
 
-describe("HttpError", () => {
-  it.each(httpErrorCodes)("maps %s to one fixed HTTP status", (code) => {
+describe("HttpErrorの契約", () => {
+  it.each(httpErrorCodes)("%sを固定HTTP statusへ写像する", (code) => {
     const error = new HttpError({ code })
 
     expect(error.code).toBe(code)
@@ -34,7 +34,7 @@ describe("HttpError", () => {
     expect(httpMessageByErrorCode[code]).toBeTruthy()
   })
 
-  it("keeps the cause and only explicitly public presentation metadata", () => {
+  it("causeと明示公開したpresentation metadataだけを維持する", () => {
     const cause = new Error("provider detail")
     const error = new HttpError({
       cause,
@@ -58,7 +58,7 @@ describe("HttpError", () => {
     expect(error).not.toHaveProperty("statusCode")
   })
 
-  it("ignores invalid retry metadata", () => {
+  it("不正なretry metadataを無視する", () => {
     expect(
       new HttpError({ code: "rate_limited", retryAfter: Number.NaN })
     ).toHaveProperty("retryAfter", undefined)

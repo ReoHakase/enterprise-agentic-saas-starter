@@ -13,100 +13,109 @@ import {
   issueAgentConnectionTicket,
 } from "./threads/repository"
 
-describe("Agent organization projections and grant revocation", () => {
-  it("returns only allowlisted account, organization, member, label, and issue projections", async () => {
-    const { db } = await createFixture()
-    const attachmentCreatedAt = new Date("2026-07-23T00:00:00.000Z")
-    await db.insert(schema.files).values([
-      {
-        id: "agent-file-image",
-        organizationId: "agent-org-a",
-        uploaderId: "agent-user-a",
-        uploadId: "agent-upload-image",
-        ownerType: "issue",
-        objectKey: "private/agent-file-image",
-        filename: "marker.jpeg",
-        sizeBytes: 1_024,
-        declaredContentType: "image/jpeg",
-        detectedImageFormat: "jpeg",
-        imageWidth: 640,
-        imageHeight: 480,
-        etag: "agent-file-image-etag",
-        status: "ready",
-        createdAt: attachmentCreatedAt,
-        updatedAt: attachmentCreatedAt,
-      },
-      {
-        id: "agent-file-pdf",
-        organizationId: "agent-org-a",
-        uploaderId: "agent-user-b",
-        uploadId: "agent-upload-pdf",
-        ownerType: "issue",
-        objectKey: "private/agent-file-pdf",
-        filename: "notes.pdf",
-        sizeBytes: 2_048,
-        declaredContentType: "application/pdf",
-        detectedImageFormat: null,
-        etag: "agent-file-pdf-etag",
-        status: "ready",
-        createdAt: new Date(attachmentCreatedAt.getTime() - 1_000),
-        updatedAt: attachmentCreatedAt,
-      },
-      {
-        id: "agent-file-pending",
-        organizationId: "agent-org-a",
-        uploaderId: "agent-user-a",
-        uploadId: "agent-upload-pending",
-        ownerType: "issue",
-        objectKey: "private/agent-file-pending",
-        filename: "pending.png",
-        sizeBytes: 512,
-        declaredContentType: "image/png",
-        detectedImageFormat: "png",
-        status: "pending",
-        createdAt: new Date(attachmentCreatedAt.getTime() + 1_000),
-        updatedAt: attachmentCreatedAt,
-      },
-    ])
-    await db.insert(schema.issueFileOwners).values([
-      {
-        fileId: "agent-file-image",
-        organizationId: "agent-org-a",
-        ownerType: "issue",
-        issueId: "agent-issue-a",
-      },
-      {
-        fileId: "agent-file-pdf",
-        organizationId: "agent-org-a",
-        ownerType: "issue",
-        issueId: "agent-issue-a",
-      },
-      {
-        fileId: "agent-file-pending",
-        organizationId: "agent-org-a",
-        ownerType: "issue",
-        issueId: "agent-issue-a",
-      },
-    ])
-    const thread = await createAgentThreadForSession(db, {
-      sessionId: "agent-session-a",
-      userId: "agent-user-a",
-      title: "Read tools",
-    })
-    const ticket = await issueAgentConnectionTicket(db, {
-      sessionId: "agent-session-a",
-      userId: "agent-user-a",
-      threadId: thread.id,
-    })
-    const internal = createAgentInternalApi(db)
-    const chatRun = await internal.startChatRun({
-      clientMessageId: "message-read-tools",
-      ticket: ticket.ticket,
-      threadId: thread.id,
-    })
-    const run = chatRun.run
+type AgentTestDb = Awaited<ReturnType<typeof createFixture>>["db"]
 
-    const [account, activeOrganization, members, labels, issues, issue] =
+const attachmentCreatedAt = new Date("2026-07-23T00:00:00.000Z")
+
+const seedIssueAttachmentProjection = async (db: AgentTestDb) => {
+  await db.insert(schema.files).values([
+    {
+      id: "agent-file-image",
+      organizationId: "agent-org-a",
+      uploaderId: "agent-user-a",
+      uploadId: "agent-upload-image",
+      ownerType: "issue",
+      objectKey: "private/agent-file-image",
+      filename: "marker.jpeg",
+      sizeBytes: 1_024,
+      declaredContentType: "image/jpeg",
+      detectedImageFormat: "jpeg",
+      imageWidth: 640,
+      imageHeight: 480,
+      etag: "agent-file-image-etag",
+      status: "ready",
+      createdAt: attachmentCreatedAt,
+      updatedAt: attachmentCreatedAt,
+    },
+    {
+      id: "agent-file-pdf",
+      organizationId: "agent-org-a",
+      uploaderId: "agent-user-b",
+      uploadId: "agent-upload-pdf",
+      ownerType: "issue",
+      objectKey: "private/agent-file-pdf",
+      filename: "notes.pdf",
+      sizeBytes: 2_048,
+      declaredContentType: "application/pdf",
+      detectedImageFormat: null,
+      etag: "agent-file-pdf-etag",
+      status: "ready",
+      createdAt: new Date(attachmentCreatedAt.getTime() - 1_000),
+      updatedAt: attachmentCreatedAt,
+    },
+    {
+      id: "agent-file-pending",
+      organizationId: "agent-org-a",
+      uploaderId: "agent-user-a",
+      uploadId: "agent-upload-pending",
+      ownerType: "issue",
+      objectKey: "private/agent-file-pending",
+      filename: "pending.png",
+      sizeBytes: 512,
+      declaredContentType: "image/png",
+      detectedImageFormat: "png",
+      status: "pending",
+      createdAt: new Date(attachmentCreatedAt.getTime() + 1_000),
+      updatedAt: attachmentCreatedAt,
+    },
+  ])
+  await db.insert(schema.issueFileOwners).values([
+    {
+      fileId: "agent-file-image",
+      organizationId: "agent-org-a",
+      ownerType: "issue",
+      issueId: "agent-issue-a",
+    },
+    {
+      fileId: "agent-file-pdf",
+      organizationId: "agent-org-a",
+      ownerType: "issue",
+      issueId: "agent-issue-a",
+    },
+    {
+      fileId: "agent-file-pending",
+      organizationId: "agent-org-a",
+      ownerType: "issue",
+      issueId: "agent-issue-a",
+    },
+  ])
+}
+
+const createReadRunFixture = async () => {
+  const { db } = await createFixture()
+  const thread = await createAgentThreadForSession(db, {
+    sessionId: "agent-session-a",
+    userId: "agent-user-a",
+    title: "Read tools",
+  })
+  const ticket = await issueAgentConnectionTicket(db, {
+    sessionId: "agent-session-a",
+    userId: "agent-user-a",
+    threadId: thread.id,
+  })
+  const internal = createAgentInternalApi(db)
+  const { run } = await internal.startChatRun({
+    clientMessageId: "message-read-tools",
+    ticket: ticket.ticket,
+    threadId: thread.id,
+  })
+  return { db, internal, run }
+}
+
+describe("Agent organization projectionとgrant失効", () => {
+  it("allowlist対象のaccountとorganizationとmemberとlabelとIssue一覧だけを返す", async () => {
+    const { internal, run } = await createReadRunFixture()
+    const [account, activeOrganization, members, labels, issues] =
       await Promise.all([
         internal.readAccountContext({ grant: run.grant }),
         internal.readActiveOrganization({ grant: run.grant }),
@@ -116,12 +125,6 @@ describe("Agent organization projections and grant revocation", () => {
         }),
         internal.searchIssueLabels({ grant: run.grant, query: "back" }),
         internal.searchIssues({ grant: run.grant, search: "boundary" }),
-        internal.getIssue({
-          attachmentLimit: 1,
-          grant: run.grant,
-          lookup: "number",
-          number: 1,
-        }),
       ])
 
     expect(account).toEqual({
@@ -140,6 +143,18 @@ describe("Agent organization projections and grant revocation", () => {
     expect(issues).toHaveLength(1)
     expect(issues[0]).not.toHaveProperty("organizationId")
     expect(issues[0]).not.toHaveProperty("creatorId")
+  })
+
+  it("Issue attachmentをpaginationしてprivate storage fieldを隠す", async () => {
+    const { db, internal, run } = await createReadRunFixture()
+    await seedIssueAttachmentProjection(db)
+
+    const issue = await internal.getIssue({
+      attachmentLimit: 1,
+      grant: run.grant,
+      lookup: "number",
+      number: 1,
+    })
     expect(issue).toMatchObject({ id: "agent-issue-a", number: 1 })
     expect(issue).not.toHaveProperty("organizationId")
     expect(issue.attachments.items).toEqual([
@@ -183,7 +198,10 @@ describe("Agent organization projections and grant revocation", () => {
         (attachment) => attachment.id === "agent-file-pending"
       )
     ).toBe(false)
+  })
 
+  it("別テナントのIssueをnot foundで隠す", async () => {
+    const { internal, run } = await createReadRunFixture()
     await expect(
       internal.getIssue({
         grant: run.grant,
@@ -191,7 +209,10 @@ describe("Agent organization projections and grant revocation", () => {
         id: "agent-issue-b",
       })
     ).rejects.toMatchObject({ code: "not_found" })
+  })
 
+  it("完了したrunのgrantを再利用させない", async () => {
+    const { internal, run } = await createReadRunFixture()
     await expect(
       internal.finalizeRun({ grant: run.grant, outcome: "completed" })
     ).resolves.toEqual({ runId: run.runId, status: "completed" })
@@ -200,7 +221,7 @@ describe("Agent organization projections and grant revocation", () => {
     ).rejects.toMatchObject({ code: "unauthorized" })
   })
 
-  it("invalidates old grants and runs in the organization-switch transaction", async () => {
+  it("古いgrantを無効化してorganization切替transaction内で実行する", async () => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -273,7 +294,7 @@ describe("Agent organization projections and grant revocation", () => {
     expect(repeatedContext).toEqual([{ contextEpoch: 2 }])
   })
 
-  it("revokes the target user's active context when their role changes", async () => {
+  it("対象userのrole変更時にactive contextを失効させる", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-b",
@@ -318,7 +339,20 @@ describe("Agent organization projections and grant revocation", () => {
     ).rejects.toMatchObject({ code: "unauthorized" })
   })
 
-  it("revokes both promoted and demoted users during ownership transfer", async () => {
+  it("ownerでないactorによるownership移譲を拒否する", async () => {
+    const { db } = await createFixture()
+
+    await expect(
+      transferOwnershipById(db, {
+        actorMemberId: "agent-member-a-1",
+        actorUserId: "agent-user-b",
+        organizationId: "agent-org-a",
+        targetMemberId: "agent-member-a-2",
+      })
+    ).resolves.toBe("actor_not_owner")
+  })
+
+  it("ownership移譲時に昇格userと降格userの両方を失効させる", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApi(db)
     const createRun = async (input: {
@@ -353,15 +387,6 @@ describe("Agent organization projections and grant revocation", () => {
       sessionId: "agent-session-b",
       userId: "agent-user-b",
     })
-
-    await expect(
-      transferOwnershipById(db, {
-        actorMemberId: "agent-member-a-1",
-        actorUserId: "agent-user-b",
-        organizationId: "agent-org-a",
-        targetMemberId: "agent-member-a-2",
-      })
-    ).resolves.toBe("actor_not_owner")
 
     await expect(
       transferOwnershipById(db, {

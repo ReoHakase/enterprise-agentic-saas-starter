@@ -36,8 +36,8 @@ const authorization = (
     findMembership: async () => (membership ? { id: "member_1", role } : null),
   })
 
-describe("MCP OAuth authentication", () => {
-  it("creates an organization-fixed principal from an active credential", async () => {
+describe("MCP OAuth authenticationの契約", () => {
+  it("active credentialからorganization固定principalを作る", async () => {
     const principal = await authenticateMcpRequest({
       authorization: authorization(),
       request: request("Bearer mcp_at_secret"),
@@ -57,27 +57,34 @@ describe("MCP OAuth authentication", () => {
     expect([...principal.scopes]).toEqual(["issues:read"])
   })
 
-  it.each(["owner", "admin", "member"] as const)(
-    "keeps the current membership role in the MCP principal (%s)",
-    async (role) => {
-      const principal = await authenticateMcpRequest({
-        authorization: authorization(true, role),
-        request: request("Bearer mcp_at_secret"),
-        resource: mcpOAuthResource,
-        verifyAccessToken: async () => credential(),
-      })
+  it.each([
+    { label: "owner権限", role: "owner" },
+    { label: "admin権限", role: "admin" },
+    { label: "member権限", role: "member" },
+  ] as const)("$labelをMCP principalへ維持する", async ({ role }) => {
+    const principal = await authenticateMcpRequest({
+      authorization: authorization(true, role),
+      request: request("Bearer mcp_at_secret"),
+      resource: mcpOAuthResource,
+      verifyAccessToken: async () => credential(),
+    })
 
-      expect(principal).toMatchObject({ role })
-    }
-  )
+    expect(principal).toMatchObject({ role })
+  })
 
   it.each([
-    undefined,
-    "Basic secret",
-    "Bearer",
-    "Bearer one two",
-    `Bearer ${"a".repeat(4097)}`,
-  ])("rejects a missing or malformed credential", async (header) => {
+    { header: undefined, label: "authorization header未設定" },
+    {
+      header: "Basic secret",
+      label: "Basic schemeのauthorization header",
+    },
+    { header: "Bearer", label: "Bearer token未設定" },
+    { header: "Bearer one two", label: "空白を含むBearer token" },
+    {
+      header: `Bearer ${"a".repeat(4097)}`,
+      label: "上限を超えるBearer token",
+    },
+  ])("$labelを拒否する", async ({ header }) => {
     const verifyAccessToken = vi.fn<VerifyMcpOAuthAccessToken>()
     await expect(
       authenticateMcpRequest({
@@ -91,11 +98,23 @@ describe("MCP OAuth authentication", () => {
   })
 
   it.each([
-    credential({ audience: "https://other.example.test/mcp" }),
-    credential({ expiresAt: new Date(0) }),
-    credential({ issuedAt: new Date(Date.now() + 120_000) }),
-    credential({ scopes: ["unknown:read"] }),
-  ])("rejects an invalid credential projection", async (value) => {
+    {
+      label: "audienceが一致しないcredential",
+      value: credential({ audience: "https://other.example.test/mcp" }),
+    },
+    {
+      label: "期限切れcredential",
+      value: credential({ expiresAt: new Date(0) }),
+    },
+    {
+      label: "未来に発行されたcredential",
+      value: credential({ issuedAt: new Date(Date.now() + 120_000) }),
+    },
+    {
+      label: "未知scopeを持つcredential",
+      value: credential({ scopes: ["unknown:read"] }),
+    },
+  ])("$labelを拒否する", async ({ value }) => {
     await expect(
       authenticateMcpRequest({
         authorization: authorization(),
@@ -106,7 +125,7 @@ describe("MCP OAuth authentication", () => {
     ).resolves.toBeNull()
   })
 
-  it("rejects a credential after organization membership is removed", async () => {
+  it("organization membership削除後のcredentialを拒否する", async () => {
     await expect(
       authenticateMcpRequest({
         authorization: authorization(false),

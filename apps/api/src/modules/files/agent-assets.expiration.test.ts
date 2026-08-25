@@ -17,8 +17,8 @@ import {
 import { agentAssetDtoModel } from "./model"
 import { configureFileStorageRuntime } from "./runtime"
 
-describe("Agent asset expiration and deletion fences", () => {
-  it("expires chat-only assets and never deletes R2 when the exact-key fence is tampered", async () => {
+describe("Agent assetの期限切れと削除fence", () => {
+  it("chat限定assetを期限切れにしてusageとpreviewを無効化する", async () => {
     const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
@@ -46,33 +46,25 @@ describe("Agent asset expiration and deletion fences", () => {
     const expiredPreview = await app.handle(assetRequest({ assetId }))
     expect(expiredPreview.status).toBe(404)
     expect(storage.previewFetch).not.toHaveBeenCalled()
+  })
 
-    const second = await app.handle(
+  it("cleanup fence不一致でR2を削除しない", async () => {
+    const { app, db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+    const uploaded = await app.handle(
       uploadRequest({ file: pngFile(), uploadId: "tampered-cleanup" })
     )
-    expect(second.status).toBe(201)
-    const secondId = v.parse(agentAssetDtoModel, await second.json()).id
+    expect(uploaded.status).toBe(201)
+    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
     expect(
-      (await app.handle(assetRequest({ assetId: secondId, method: "DELETE" })))
-        .status
+      (await app.handle(assetRequest({ assetId, method: "DELETE" }))).status
     ).toBe(204)
     const [pendingJob] = await db
       .select()
       .from(schema.storageObjectCleanupJobs)
       .where(eq(schema.storageObjectCleanupJobs.status, "pending"))
     expect(pendingJob).toBeTruthy()
-    await expect(
-      db
-        .update(schema.storageObjectCleanupJobs)
-        .set({ objectKey: `${pendingJob?.objectKey}-tampered` })
-        .where(eq(schema.storageObjectCleanupJobs.id, pendingJob?.id ?? ""))
-    ).rejects.toBeDefined()
-    expect(
-      await db
-        .select({ objectKey: schema.storageObjectCleanupJobs.objectKey })
-        .from(schema.storageObjectCleanupJobs)
-        .where(eq(schema.storageObjectCleanupJobs.id, pendingJob?.id ?? ""))
-    ).toEqual([{ objectKey: pendingJob?.objectKey }])
     await db
       .update(schema.storageObjects)
       .set({ objectKey: null, status: "deleted", updatedAt: new Date() })

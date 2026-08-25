@@ -223,8 +223,31 @@ const attestWebSearch = async (
     .where(eq(schema.agentRuns.id, input.runId))
 }
 
-describe("Agent billable resource reservations", () => {
-  it("atomically permits only one parallel model run", async () => {
+const createAttestedWebSearchRun = async (
+  db: FixtureDatabase,
+  input: {
+    clientMessageId: string
+    now: Date
+    organization: "a" | "b"
+    query: string
+  }
+) => {
+  const ticket = await createTicket(db, {
+    now: input.now,
+    organization: input.organization,
+  })
+  const run = await startChatRun(db, {
+    clientMessageId: input.clientMessageId,
+    now: input.now,
+    threadId: ticket.thread.id,
+    ticket: ticket.ticket.ticket,
+  })
+  await attestWebSearch(db, { query: input.query, runId: run.runId })
+  return run
+}
+
+describe("Agent課金resourceの予約", () => {
+  it("並列model runを原子的に1つだけ許可する", async () => {
     const { db, now } = await createFixture()
     const first = await createTicket(db, { now, organization: "a" })
     const second = await createTicket(db, {
@@ -271,7 +294,7 @@ describe("Agent billable resource reservations", () => {
     expect(firstBuckets).toEqual([{ count: 1 }, { count: 1 }])
   })
 
-  it("releases model concurrency after the active run expires", async () => {
+  it("active runの期限切れ後にmodel concurrencyを解放する", async () => {
     const { db, now } = await createFixture()
     const first = await createTicket(db, { now, organization: "a" })
     const firstRun = await startChatRun(db, {
@@ -301,7 +324,7 @@ describe("Agent billable resource reservations", () => {
     ).resolves.toMatchObject({ attempt: 1 })
   })
 
-  it("consumes model quota once for each same-run provider attempt", async () => {
+  it("同一runのprovider attemptごとにmodel quotaを1回consumeする", async () => {
     const { db, now } = await createFixture()
     const first = await createTicket(db, { now, organization: "a" })
     const run = await startChatRun(db, {
@@ -337,7 +360,7 @@ describe("Agent billable resource reservations", () => {
     expect(buckets).toEqual([{ count: 2 }, { count: 2 }])
   })
 
-  it("returns a window-derived 429 and rolls back the other model scope", async () => {
+  it("window由来の429を返して別model scopeをrollbackする", async () => {
     const { db, now } = await createFixture()
     const userWindow = utcUsageWindow(now, AGENT_USAGE_HOUR_MS)
     await seedFullBucket(db, {
@@ -372,7 +395,7 @@ describe("Agent billable resource reservations", () => {
     ])
   })
 
-  it("scopes the organization model quota to its tenant", async () => {
+  it("organization model quotaを対象テナントへscopeする", async () => {
     const { db, now } = await createFixture()
     const organizationWindow = utcUsageWindow(now, AGENT_USAGE_DAY_MS)
     await seedFullBucket(db, {
@@ -412,7 +435,7 @@ describe("Agent billable resource reservations", () => {
     ).resolves.toMatchObject({ attempt: 1 })
   })
 
-  it("does not oversubscribe the final Web search slot under concurrency", async () => {
+  it("同時実行時に最後のWeb検索slotを過剰予約しない", async () => {
     const { db, now } = await createFixture()
     const connection = await createTicket(db, { now, organization: "a" })
     const run = await startChatRun(db, {
@@ -483,52 +506,53 @@ describe("Agent billable resource reservations", () => {
     })
   })
 
-  it("reserves Web search idempotently, marks the run, and isolates tenant limits", async () => {
+  it("同じoperationのWeb検索予約を冪等に再利用する", async () => {
     const { db, now } = await createFixture()
-    const organizationA = await createTicket(db, {
+    const query = "Cloudflare R2 current limits"
+    const run = await createAttestedWebSearchRun(db, {
+      clientMessageId: "quota_web_idempotent",
       now,
       organization: "a",
+      query,
     })
-    const organizationB = await createTicket(db, {
-      now,
-      organization: "b",
-    })
-    const runA = await startChatRun(db, {
-      clientMessageId: "quota_web_a",
-      now,
-      threadId: organizationA.thread.id,
-      ticket: organizationA.ticket.ticket,
-    })
-    const runB = await startChatRun(db, {
-      clientMessageId: "quota_web_b",
-      now,
-      threadId: organizationB.thread.id,
-      ticket: organizationB.ticket.ticket,
-    })
-    const query = "Cloudflare R2 current limits"
-    await Promise.all([
-      attestWebSearch(db, { query, runId: runA.runId }),
-      attestWebSearch(db, { query, runId: runB.runId }),
-    ])
     const internal = createAgentInternalApi(db)
 
     await expect(
       internal.authorizeWebSearch({
-        grant: runA.grant,
+        grant: run.grant,
         operationId: "web_search_1",
         query,
       })
     ).resolves.toEqual({ query, reserved: true, reused: false })
     await expect(
       internal.authorizeWebSearch({
-        grant: runA.grant,
+        grant: run.grant,
         operationId: "web_search_1",
         query,
       })
     ).resolves.toEqual({ query, reserved: true, reused: true })
+  })
+
+  it("Web検索上限をtenantごとに分離する", async () => {
+    const { db, now } = await createFixture()
+    const query = "Cloudflare R2 current limits"
+    const runA = await createAttestedWebSearchRun(db, {
+      clientMessageId: "quota_web_a",
+      now,
+      organization: "a",
+      query,
+    })
+    const runB = await createAttestedWebSearchRun(db, {
+      clientMessageId: "quota_web_b",
+      now,
+      organization: "b",
+      query,
+    })
+    const internal = createAgentInternalApi(db)
+
     await Array.from(
-      { length: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT - 1 },
-      (_, index) => index + 2
+      { length: AGENT_WEB_SEARCH_USER_HOURLY_LIMIT },
+      (_, index) => index + 1
     ).reduce<Promise<void>>(
       (previous, index) =>
         previous.then(() =>
@@ -581,21 +605,34 @@ describe("Agent billable resource reservations", () => {
         { count: 1, organizationId: "quota-org-b" },
       ])
     )
+  })
+
+  it("Web検索予約時にrunへ利用時刻を記録する", async () => {
+    const { db, now } = await createFixture()
+    const query = "Cloudflare R2 current limits"
+    const run = await createAttestedWebSearchRun(db, {
+      clientMessageId: "quota_web_marker",
+      now,
+      organization: "a",
+      query,
+    })
+    await createAgentInternalApi(db).authorizeWebSearch({
+      grant: run.grant,
+      operationId: "web_search_marker",
+      query,
+    })
     const markedRuns = await db
       .select({
         id: schema.agentRuns.id,
         webSearchUsedAt: schema.agentRuns.webSearchUsedAt,
       })
       .from(schema.agentRuns)
-    expect(markedRuns).toEqual(
-      expect.arrayContaining([
-        { id: runA.runId, webSearchUsedAt: expect.any(Date) },
-        { id: runB.runId, webSearchUsedAt: expect.any(Date) },
-      ])
-    )
+    expect(markedRuns).toEqual([
+      { id: run.runId, webSearchUsedAt: expect.any(Date) },
+    ])
   })
 
-  it("propagates a bounded 429 through public chat without leaking the internal body", async () => {
+  it("内部bodyを漏らさず上限付き429を公開chatへ伝播する", async () => {
     const { db, now } = await createFixture()
     const liveNow = new Date()
     await db

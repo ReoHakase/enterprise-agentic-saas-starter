@@ -14,8 +14,8 @@ import { createApiClient } from "./client"
 import { HttpError } from "./errors/http-error"
 import { issueTimelinePageModel } from "./modules/issues/model"
 
-describe("Issue transport, pagination, and tenant contracts", () => {
-  it("paginates equal-timestamp timeline items without gaps or duplicates", async () => {
+describe("Issue transportとpaginationとテナント契約", () => {
+  it("同一時刻のtimelineを欠落や重複なくページ分割する", async () => {
     const db = await createSeededDb()
     const createdAt = new Date("2026-07-17T03:00:00.000Z")
     await db.insert(schema.issueActivityEvents).values([
@@ -126,7 +126,10 @@ describe("Issue transport, pagination, and tenant contracts", () => {
         (item) => item.type === "activity" && item.id === "shared-entry"
       )?.actor
     ).toEqual({ id: null, name: "Former member", profileImage: null })
+  })
 
+  it("不正なtimeline cursorを400で拒否する", async () => {
+    const app = createApp(await createSeededDb())
     const malformed = await app.handle(
       jsonRequest(
         "/issues/issue_1/timeline?organizationId=org_1&cursor=not-a-cursor",
@@ -139,7 +142,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     })
   })
 
-  it("keeps non-null date-time fields as strings over the real Eden HTTP transport", async () => {
+  it("非nullの日時fieldを実Eden HTTP transportで文字列として維持する", async () => {
     const app = createApp(await createSeededDb())
     const server = await startHttpServer(app)
 
@@ -166,7 +169,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     }
   })
 
-  it("returns a fixed validation code without reflecting invalid input", async () => {
+  it("不正な入力を反射せず固定validation codeを返す", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest("/issues", {
@@ -205,7 +208,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     })
   })
 
-  it("allocates unique organization-local numbers under concurrent creates", async () => {
+  it("同時作成時にorganization内で一意な番号を割り当てる", async () => {
     const app = createApp(await createSeededDb())
     const responses = await Promise.all(
       Array.from({ length: 5 }, (_, index) =>
@@ -227,7 +230,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     expect(new Set(numbers).size).toBe(5)
   })
 
-  it("does not attach a comment through a different tenant context", async () => {
+  it("異なるテナントcontextからcommentを追加しない", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
     const response = await app.handle(
@@ -243,7 +246,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     expect(await db.select().from(schema.issueComments)).toHaveLength(0)
   })
 
-  it("does not expose an author profile outside the comment tenant", async () => {
+  it("commentのテナント外へauthor profileを公開しない", async () => {
     const db = await createSeededDb()
     await db.insert(schema.issueComments).values({
       id: "comment_cross_tenant_author",
@@ -273,7 +276,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     ])
   })
 
-  it("does not leak secret-looking unknown errors", async () => {
+  it("secretらしい未知errorを漏らさない", async () => {
     const app = createApp(testDb()).get("/_test/boom", () => {
       throw new Error("TURSO_AUTH_TOKEN=super-secret-value")
     })
@@ -292,7 +295,7 @@ describe("Issue transport, pagination, and tenant contracts", () => {
     expect(JSON.stringify(body)).not.toContain("super-secret-value")
   })
 
-  it("keeps untrusted HttpError detail out of the HTTP response", async () => {
+  it("信頼できないHttpError detailをHTTP responseへ含めない", async () => {
     const error = new HttpError({ code: "validation_error" })
     Object.defineProperty(error, "detail", {
       value: {

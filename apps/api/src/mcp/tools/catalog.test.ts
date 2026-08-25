@@ -91,12 +91,14 @@ const expectSafeMcpFailure = async (
 }
 
 const invalidOutputCases: Array<{
+  label: string
   method: "get_issue" | "read_account_context"
   read: ReadApplication
   scope: McpPermissionScope
   secret: string
 }> = [
   {
+    label: "account contextの場合",
     method: "read_account_context",
     scope: "account:read",
     secret: "private-account-output-sentinel",
@@ -109,6 +111,7 @@ const invalidOutputCases: Array<{
     },
   },
   {
+    label: "Issue detailの場合",
     method: "get_issue",
     scope: "issues:read",
     secret: "private-issue-output-sentinel",
@@ -122,11 +125,11 @@ const invalidOutputCases: Array<{
   },
 ]
 
-describe("MCP catalog boundary validation", () => {
+describe("MCP catalogの境界validation", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it.each(invalidOutputCases)(
-    "maps invalid $method output to a safe MCP error",
+    "$labelの不正出力を安全なMCP errorへ写像する",
     async ({ method, read, scope, secret }) => {
       expect.hasAssertions()
       vi.mocked(createMcpReadApplication).mockReturnValue(read)
@@ -144,7 +147,7 @@ describe("MCP catalog boundary validation", () => {
     }
   )
 
-  it("rejects mixed and missing get_issue lookups before application execution", async () => {
+  it("application実行前に混在または不足したget_issue lookupを拒否する", async () => {
     const getIssue = vi.fn<ReadApplication["getIssue"]>(() => unavailable())
     vi.mocked(createMcpReadApplication).mockReturnValue({
       ...unavailableReadApplication,

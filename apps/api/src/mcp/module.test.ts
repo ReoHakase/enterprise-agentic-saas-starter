@@ -80,8 +80,8 @@ const mcpRequest = (
     body: JSON.stringify(message),
   })
 
-describe("OAuth-protected MCP routes", () => {
-  it("returns protected resource and authorization server metadata", async () => {
+describe("OAuthで保護したMCP route", () => {
+  it("protected resourceとauthorization serverのmetadataを返す", async () => {
     const app = createTestModule()
     const resource = await app.handle(
       new Request(
@@ -103,7 +103,7 @@ describe("OAuth-protected MCP routes", () => {
     await expect(server.json()).resolves.toEqual({ issuer: mcpOAuthIssuer })
   })
 
-  it("challenges unauthenticated requests with standard resource metadata", async () => {
+  it("未認証requestへ標準resource metadataでchallengeする", async () => {
     const response = await createTestModule().handle(mcpRequest())
     expect(response.status).toBe(401)
     expect(response.headers.get("www-authenticate")).toBe(
@@ -115,7 +115,7 @@ describe("OAuth-protected MCP routes", () => {
     })
   })
 
-  it("handles initialize for a currently authorized member", async () => {
+  it("現在認可済みのmemberからinitializeを処理する", async () => {
     const response = await createTestModule().handle(
       mcpRequest("Bearer mcp_at_secret")
     )
@@ -135,7 +135,7 @@ describe("OAuth-protected MCP routes", () => {
     })
   })
 
-  it("declines the optional SSE subscription for stateless transport", async () => {
+  it("stateless transportで任意SSE subscriptionを拒否する", async () => {
     const response = await createTestModule().handle(
       new Request("https://api.example.test/mcp", {
         headers: { authorization: "Bearer mcp_at_secret" },
@@ -146,7 +146,7 @@ describe("OAuth-protected MCP routes", () => {
     expect(response.headers.get("allow")).toBe("POST")
   })
 
-  it("lists only tools allowed by the current credential scope", async () => {
+  it("現在のcredential scopeで許可したtoolだけを一覧する", async () => {
     const response = await createTestModule().handle(
       mcpRequest("Bearer mcp_at_secret", {
         jsonrpc: "2.0",
@@ -163,9 +163,17 @@ describe("OAuth-protected MCP routes", () => {
   })
 
   it.each([
-    { membership: true, verifyAccessToken: async () => null },
-    { membership: false, verifyAccessToken: async () => activeCredential },
-  ])("rejects revoked credentials and membership loss", async (input) => {
+    {
+      label: "access tokenが失効している場合",
+      membership: true,
+      verifyAccessToken: async () => null,
+    },
+    {
+      label: "membershipを失っている場合",
+      membership: false,
+      verifyAccessToken: async () => activeCredential,
+    },
+  ])("$labelを拒否する", async ({ label: _label, ...input }) => {
     const response = await createTestModule(input).handle(
       mcpRequest("Bearer mcp_at_secret")
     )

@@ -154,6 +154,8 @@ validate
 通常caseは`file::memory:`、複数connection、WAL、locking、concurrencyはtemporary file DBを使います。
 
 Drizzle query builderをmockしません。本番と異なるfake DSLを検査しても、実SQL、binding、constraint、transactionを証明できないためです。
+複数moduleで共有するAPI統合fixtureも、コミット済みマイグレーションを一時file DBへ適用して公開DB
+schemaを接続します。本番tableを手書きDDLで部分的に再現しません。
 
 `packages/db`との境界:
 

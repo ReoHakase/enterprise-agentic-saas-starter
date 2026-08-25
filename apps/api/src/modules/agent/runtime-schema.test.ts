@@ -10,8 +10,8 @@ const runInput = (estimatedInputTokenCount: number) => ({
   ticket: "t".repeat(32),
 })
 
-describe("Agent runtime schema", () => {
-  it("keeps estimated input within the Luna context after output reserve", () => {
+describe("Agent runtime schemaの契約", () => {
+  it("出力reserve後の推定inputをLuna context内に保つ", () => {
     expect(
       v.safeParse(startAgentChatRunInputModel, runInput(1_045_904)).success
     ).toBe(true)

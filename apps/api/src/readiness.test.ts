@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { createApp } from "./app"
 
-describe("readiness endpoint", () => {
+describe("readiness endpointの契約", () => {
   let closeClient: (() => void) | undefined
 
   afterEach(() => closeClient?.())
@@ -19,7 +19,7 @@ describe("readiness endpoint", () => {
     }
   }
 
-  it("reports ready only after a database round trip", async () => {
+  it("database round trip成功後だけreadyを報告する", async () => {
     const { app } = setup()
     const response = await app.handle(new Request("http://localhost/ready"))
 
@@ -27,7 +27,7 @@ describe("readiness endpoint", () => {
     await expect(response.json()).resolves.toEqual({ status: "ready" })
   })
 
-  it("fails closed without exposing database details", async () => {
+  it("database詳細を公開せずfail closedにする", async () => {
     const { app, client } = setup()
     client.close()
     closeClient = undefined

@@ -12,7 +12,7 @@ import {
   type DevelopmentLease,
 } from "./development-lock"
 
-describe("development process lease", () => {
+describe("development process leaseの契約", () => {
   let databasePath = ""
   let directory = ""
 
@@ -33,7 +33,7 @@ describe("development process lease", () => {
       ...options,
     })
 
-  it("prevents two live local Worker owners", async () => {
+  it("稼働中のlocal Worker ownerを2つ同時に許可しない", async () => {
     const lease = await acquire()
 
     await expect(acquire()).rejects.toBeInstanceOf(DevelopmentLockBusyError)
@@ -42,7 +42,7 @@ describe("development process lease", () => {
     await replacement.release()
   })
 
-  it("serializes simultaneous acquisition attempts", async () => {
+  it("同時のlease取得を直列化する", async () => {
     const results = await Promise.allSettled([acquire(), acquire()])
     const fulfilled = results.filter(
       (result): result is PromiseFulfilledResult<DevelopmentLease> =>
@@ -57,7 +57,7 @@ describe("development process lease", () => {
     await fulfilled[0]?.value.release()
   })
 
-  it("waits through cross-client SQLite contention before reporting the live owner", async () => {
+  it("別clientとのSQLite競合を待って稼働中ownerを報告する", async () => {
     const lease = await acquire()
     const client = createClient({ url: pathToFileURL(databasePath).href })
     const transaction = await client.transaction("write")
@@ -72,7 +72,7 @@ describe("development process lease", () => {
     await lease.release()
   })
 
-  it("waits through cross-client SQLite contention while releasing", async () => {
+  it("lease解放中の別clientとのSQLite競合を待つ", async () => {
     const lease = await acquire()
     const client = createClient({ url: pathToFileURL(databasePath).href })
     const transaction = await client.transaction("write")
@@ -88,7 +88,7 @@ describe("development process lease", () => {
     await replacement.release()
   })
 
-  it("atomically replaces a lease left by a dead process", async () => {
+  it("終了済みprocessが残したleaseを原子的に置き換える", async () => {
     const stale = await acquire({ pid: 2_147_483_647 })
     const recovered = await acquire()
 
@@ -97,7 +97,7 @@ describe("development process lease", () => {
     await recovered.release()
   })
 
-  it("does not delete a replacement lease with an old token", async () => {
+  it("古いtokenで置換後のleaseを削除しない", async () => {
     const token = "original-token".repeat(4)
     const lease = await acquire({ token })
     const client = createClient({ url: pathToFileURL(databasePath).href })

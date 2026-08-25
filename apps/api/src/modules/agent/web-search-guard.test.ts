@@ -44,17 +44,19 @@ const createGuard = async (
   }
 }
 
-describe("Agent Web search server guard", () => {
+describe("Agent Web検索のserver guard", () => {
   it.each([
-    [
-      "Public-only Web query: Cloudflare R2 current limits",
-      "Cloudflare R2 current limits",
-    ],
-    [
-      "公開情報だけのWeb検索：Cloudflare R2 current limits",
-      "Cloudflare R2 current limits",
-    ],
-  ])("accepts the exact EN/JA attested query", async (line, query) => {
+    {
+      label: "英語のattestation",
+      line: "Public-only Web query: Cloudflare R2 current limits",
+      query: "Cloudflare R2 current limits",
+    },
+    {
+      label: "日本語のattestation",
+      line: "公開情報だけのWeb検索：Cloudflare R2 current limits",
+      query: "Cloudflare R2 current limits",
+    },
+  ])("$labelで正確なqueryを受理する", async ({ line, query }) => {
     const { authorize, grant } = await createGuard(line)
     const input = { grant, operationId: "web_exact_query", query }
     await expect(authorize(input)).resolves.toEqual({
@@ -69,21 +71,21 @@ describe("Agent Web search server guard", () => {
     })
   })
 
-  it("rejects hidden Unicode and private tenant values before reserving quota", async () => {
+  it.each([
+    {
+      label: "NUL文字を含むquery",
+      query: "Cloudflare R2\u0000 current limits",
+    },
+    {
+      label: "bidi format文字を含むquery",
+      query: "organization_id: org_\u2066privatevalue\u2069",
+    },
+  ] as const)("$labelをquota予約前に拒否する", async ({ query }) => {
     const { authorize, db, grant } = await createGuard()
-    const rejectedQueries = [
-      "Cloudflare R2\u0000 current limits",
-      "organization_id: org_\u2066privatevalue\u2069",
-      "Agent Org A current limits",
-      "Fix API boundary current limits",
-      "agent-a@example.test public profile",
-    ]
-    for (const [index, query] of rejectedQueries.entries()) {
-      // oxlint-disable-next-line no-await-in-loop -- one libSQL fixture transaction is intentionally reused.
-      await expect(
-        authorize({ grant, operationId: `rejected_web_${index}`, query })
-      ).rejects.toMatchObject({ code: "validation_error" })
-    }
+
+    await expect(
+      authorize({ grant, operationId: "rejected_static_query", query })
+    ).rejects.toMatchObject({ code: "validation_error" })
     const reservations = await db
       .select({ id: schema.agentResourceUsageBuckets.id })
       .from(schema.agentResourceUsageBuckets)
@@ -91,7 +93,24 @@ describe("Agent Web search server guard", () => {
     expect(reservations).toEqual([])
   })
 
-  it("binds authorization to the exact tenant thread message", async () => {
+  it.each([
+    { label: "organization名", query: "Agent Org A current limits" },
+    { label: "Issueのtitle", query: "Fix API boundary current limits" },
+    { label: "user名", query: "Agent User A public profile" },
+  ] as const)("DB由来の$labelをquota予約前に拒否する", async ({ query }) => {
+    const { authorize, db, grant } = await createGuard()
+
+    await expect(
+      authorize({ grant, operationId: "rejected_private_query", query })
+    ).rejects.toMatchObject({ code: "validation_error" })
+    const reservations = await db
+      .select({ id: schema.agentResourceUsageBuckets.id })
+      .from(schema.agentResourceUsageBuckets)
+      .where(eq(schema.agentResourceUsageBuckets.kind, "web_search"))
+    expect(reservations).toEqual([])
+  })
+
+  it("authorizationを正確なtenant thread messageへbindingする", async () => {
     const first = await createGuard(
       "Public-only Web query: Cloudflare R2 current limits"
     )
@@ -127,7 +146,7 @@ describe("Agent Web search server guard", () => {
     })
   })
 
-  it("rejects a forged legacy digest when no public-only line was attested", async () => {
+  it("public限定lineのattestがない偽造旧digestを拒否する", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -165,7 +184,7 @@ describe("Agent Web search server guard", () => {
     })
   })
 
-  it("fails closed when tenant Issue context exceeds its bound", async () => {
+  it("tenant Issue contextが上限を超えた場合はfail closedにする", async () => {
     const { authorize, db, grant } = await createGuard()
     const now = new Date()
     await db.insert(schema.issues).values(

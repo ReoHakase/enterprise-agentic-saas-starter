@@ -9,15 +9,15 @@ import {
   resolveWranglerInspectorPort,
 } from "./local-worker"
 
-describe("local Worker development configuration", () => {
-  it("starts API and the private Images Worker in one Wrangler session", () => {
+describe("local Workerのdevelopment設定", () => {
+  it("1つのWrangler sessionでAPIとprivate Images Workerを起動する", () => {
     expect(localWorkerConfigPaths).toEqual([
       "wrangler.jsonc",
       "../images/wrangler.jsonc",
     ])
   })
 
-  it("keeps the API supervisor in the dev path so Mailpit is injected", async () => {
+  it("Mailpitを注入するためAPI supervisorをdev経路に保つ", async () => {
     const packageJson: unknown = JSON.parse(
       await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8")
     )
@@ -34,7 +34,7 @@ describe("local Worker development configuration", () => {
     )
   })
 
-  it("binds MCP Inspector to the protected Portless browser origin", async () => {
+  it("MCP Inspectorを保護済みPortless browser originへbindingする", async () => {
     const packageJson: unknown = JSON.parse(
       await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8")
     )
@@ -77,14 +77,14 @@ describe("local Worker development configuration", () => {
     )
   })
 
-  it("lets the OS allocate an inspector port unless explicitly overridden", () => {
+  it("明示指定がなければOSにInspector portを割り当てさせる", () => {
     expect(resolveWranglerInspectorPort({})).toBe("0")
     expect(
       resolveWranglerInspectorPort({ WRANGLER_INSPECTOR_PORT: "9234" })
     ).toBe("9234")
   })
 
-  it("enables Agent image uploads by default only in the local supervisor", () => {
+  it("local supervisorだけでAgent画像uploadを既定有効にする", () => {
     expect(resolveDevelopmentAgentAssetUploadFlag({})).toBe("1")
     expect(
       resolveDevelopmentAgentAssetUploadFlag({
@@ -93,12 +93,14 @@ describe("local Worker development configuration", () => {
     ).toBe("0")
   })
 
-  it.each(["-1", "1.5", "invalid", "65536"])(
-    "rejects an invalid inspector port: %s",
-    (value) => {
-      expect(() =>
-        resolveWranglerInspectorPort({ WRANGLER_INSPECTOR_PORT: value })
-      ).toThrow("WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535")
-    }
-  )
+  it.each([
+    { label: "負数のInspector port", value: "-1" },
+    { label: "小数のInspector port", value: "1.5" },
+    { label: "数値でないInspector port", value: "invalid" },
+    { label: "上限を超えるInspector port", value: "65536" },
+  ])("$labelを拒否する", ({ value }) => {
+    expect(() =>
+      resolveWranglerInspectorPort({ WRANGLER_INSPECTOR_PORT: value })
+    ).toThrow("WRANGLER_INSPECTOR_PORT must be an integer from 0 to 65535")
+  })
 })

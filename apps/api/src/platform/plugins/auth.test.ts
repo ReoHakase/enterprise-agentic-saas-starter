@@ -32,7 +32,7 @@ vi.mock("@enterprise-agentic-saas/auth", () => {
 
 import { authPlugin, mcpAuth } from "./auth"
 
-describe("API Auth plugin", () => {
+describe("API Auth pluginの契約", () => {
   beforeEach(() => {
     authModule.getMcpProtectedResourceMetadata.mockClear()
     authModule.handle.mockClear()

@@ -11,11 +11,8 @@ import {
   uploadAgentAssetWithProgress,
   uploadFileWithProgress,
   uploadUserProfileImageWithProgress,
-  type AgentAssetDto,
   type CreateApiClientOptions,
   type FileUploadProgress,
-  type ProfileImageDto,
-  type TextFilePreviewDto,
 } from "./client"
 
 class SuccessfulXMLHttpRequest {
@@ -113,7 +110,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it("does not expose Eden date parsing as a consumer option", () => {
+it("Edenの日付変換を利用側の設定として公開しない", () => {
   type HasParseDate = "parseDate" extends keyof CreateApiClientOptions
     ? true
     : false
@@ -121,27 +118,8 @@ it("does not expose Eden date parsing as a consumer option", () => {
   expectTypeOf<HasParseDate>().toEqualTypeOf<false>()
 })
 
-describe("file client helpers", () => {
-  it("exports the Agent asset DTO through the client boundary", () => {
-    expectTypeOf<AgentAssetDto>().toEqualTypeOf<{
-      id: string
-      filename: string
-      sizeBytes: number
-      imageWidth: number
-      imageHeight: number
-      previewable: true
-      expiresAt: string
-    }>()
-  })
-
-  it("exports the text preview DTO through the client boundary", () => {
-    expectTypeOf<TextFilePreviewDto>().toEqualTypeOf<{
-      content: string
-      truncated: boolean
-    }>()
-  })
-
-  it("builds encoded download and preview URLs without persisting them", () => {
+describe("ファイルクライアント補助関数", () => {
+  it("識別子を符号化したダウンロードURLとプレビューURLを組み立てる", () => {
     expect(
       buildFileDownloadUrl("https://api.example.test/root/", {
         organizationId: "org/acme",
@@ -170,14 +148,7 @@ describe("file client helpers", () => {
     )
   })
 
-  it("exports the profile image DTO and builds stable subject URLs", () => {
-    expectTypeOf<ProfileImageDto>().toEqualTypeOf<{
-      id: string
-      profileImage: string
-      width: 512
-      height: 512
-      updatedAt: string
-    }>()
+  it("利用者とorganizationのプロフィール画像URLを安定して組み立てる", () => {
     expect(
       buildUserProfileImageUrl("https://api.example.test/root/", {
         revision: "revision/one",
@@ -196,7 +167,7 @@ describe("file client helpers", () => {
     )
   })
 
-  it("rejects an already-aborted XHR upload before creating a request", async () => {
+  it("中断済みのファイルuploadをXHR作成前に拒否する", async () => {
     const controller = new AbortController()
     controller.abort()
     await expect(
@@ -212,7 +183,7 @@ describe("file client helpers", () => {
     ).rejects.toMatchObject({ name: "AbortError" })
   })
 
-  it("rejects already-aborted profile image uploads before XHR", async () => {
+  it("中断済みのプロフィール画像uploadをXHR作成前に拒否する", async () => {
     const controller = new AbortController()
     controller.abort()
     const file = new File(["content"], "profile.png", { type: "image/png" })
@@ -235,7 +206,7 @@ describe("file client helpers", () => {
     ).rejects.toMatchObject({ name: "AbortError" })
   })
 
-  it("encapsulates credentialed profile image XHR URLs, form fields, and progress", async () => {
+  it("認証付きプロフィール画像uploadのURLとformと進捗を閉じ込める", async () => {
     vi.stubGlobal("XMLHttpRequest", SuccessfulXMLHttpRequest)
     const file = new File(["png"], "profile.png", { type: "image/png" })
     const onProgress = vi.fn<(progress: FileUploadProgress) => void>()
@@ -284,7 +255,7 @@ describe("file client helpers", () => {
     )
   })
 
-  it("encapsulates credentialed Agent asset upload and validates its DTO", async () => {
+  it("認証付きAgent asset uploadのURLと公開応答を検証する", async () => {
     vi.stubGlobal("XMLHttpRequest", SuccessfulXMLHttpRequest)
     const file = new File(["png"], "evidence.png", { type: "image/png" })
     SuccessfulXMLHttpRequest.nextResponse = {
@@ -318,7 +289,7 @@ describe("file client helpers", () => {
     })
   })
 
-  it("keeps upload errors typed without exposing transport internals", () => {
+  it("transport内部を公開せずupload errorを型付きで表す", () => {
     expect(
       new FileUploadError({
         message: "File upload failed",
@@ -334,7 +305,7 @@ describe("file client helpers", () => {
     })
   })
 
-  it("uses only the public 4xx upload message and hides 5xx detail", async () => {
+  it("4xxの公開messageだけを使い5xxの詳細を隠す", async () => {
     vi.stubGlobal("XMLHttpRequest", SuccessfulXMLHttpRequest)
 
     SuccessfulXMLHttpRequest.nextStatus = 415

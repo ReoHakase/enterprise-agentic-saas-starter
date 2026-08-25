@@ -5,87 +5,102 @@ import { describe, expect, it } from "vitest"
 import { createApp } from "./app"
 import { createSeededDb, jsonRequest } from "./app.test-support"
 
-describe("organization deletion and membership transitions", () => {
-  it("deletes a tenant atomically and replays only the exact deletion receipt", async () => {
-    const db = await createSeededDb()
-    const now = new Date()
-    await db.insert(schema.organization).values({
-      id: "org_3",
-      name: "Org Three",
-      slug: "org-three",
-      createdAt: now,
-    })
-    await db.insert(schema.member).values({
-      id: "member_org_3_owner",
-      userId: "user_1",
-      organizationId: "org_3",
-      role: "owner",
-      createdAt: now,
-    })
-    await db.insert(schema.session).values([
-      {
-        id: "session_org_1_member",
-        userId: "user_4",
-        token: "token_org_1_member",
-        expiresAt: new Date(now.getTime() + 60_000),
-        createdAt: now,
-        updatedAt: now,
-        activeOrganizationId: "org_1",
-      },
-      {
-        id: "session_org_2_owner",
-        userId: "user_2",
-        token: "token_org_2_owner",
-        expiresAt: new Date(now.getTime() + 60_000),
-        createdAt: now,
-        updatedAt: now,
-        activeOrganizationId: "org_2",
-      },
-    ])
-    await db.insert(schema.invitation).values({
-      id: "invitation_org_1",
-      organizationId: "org_1",
-      email: "pending@example.test",
-      role: "member",
-      status: "pending",
+const createOrganizationDeletionFixture = async () => {
+  const db = await createSeededDb()
+  const now = new Date()
+  await db.insert(schema.organization).values({
+    id: "org_3",
+    name: "Org Three",
+    slug: "org-three",
+    createdAt: now,
+  })
+  await db.insert(schema.member).values({
+    id: "member_org_3_owner",
+    userId: "user_1",
+    organizationId: "org_3",
+    role: "owner",
+    createdAt: now,
+  })
+  await db.insert(schema.session).values([
+    {
+      id: "session_org_1_member",
+      userId: "user_4",
+      token: "token_org_1_member",
       expiresAt: new Date(now.getTime() + 60_000),
       createdAt: now,
-      inviterId: "user_1",
-    })
-    await db.insert(schema.issueComments).values({
-      id: "comment_org_1",
-      issueId: "issue_1",
-      organizationId: "org_1",
-      authorId: "user_1",
-      body: "Delete with the tenant",
+      updatedAt: now,
+      activeOrganizationId: "org_1",
+    },
+    {
+      id: "session_org_2_owner",
+      userId: "user_2",
+      token: "token_org_2_owner",
+      expiresAt: new Date(now.getTime() + 60_000),
       createdAt: now,
       updatedAt: now,
-    })
-    await db.insert(schema.auditLogs).values({
-      id: "audit_org_1",
-      organizationId: "org_1",
-      actorUserId: "user_1",
-      action: "organization.updated",
-      targetType: "organization",
-      targetId: "org_1",
-      metadata: {},
-      createdAt: now,
-    })
+      activeOrganizationId: "org_2",
+    },
+  ])
+  await db.insert(schema.invitation).values({
+    id: "invitation_org_1",
+    organizationId: "org_1",
+    email: "pending@example.test",
+    role: "member",
+    status: "pending",
+    expiresAt: new Date(now.getTime() + 60_000),
+    createdAt: now,
+    inviterId: "user_1",
+  })
+  await db.insert(schema.issueComments).values({
+    id: "comment_org_1",
+    issueId: "issue_1",
+    organizationId: "org_1",
+    authorId: "user_1",
+    body: "Delete with the tenant",
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(schema.auditLogs).values({
+    id: "audit_org_1",
+    organizationId: "org_1",
+    actorUserId: "user_1",
+    action: "organization.updated",
+    targetType: "organization",
+    targetId: "org_1",
+    metadata: {},
+    createdAt: now,
+  })
 
-    const app = createApp(db)
-    const body = {
+  return {
+    app: createApp(db),
+    body: {
       slug: "org-one",
       confirmation: "DELETE",
       idempotencyKey: "delete_org_1_request_01",
-    }
-    const first = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        sessionId: "session_1",
-        body,
-      })
-    )
+    },
+    db,
+  }
+}
+
+type OrganizationDeletionFixture = Awaited<
+  ReturnType<typeof createOrganizationDeletionFixture>
+>
+
+const deleteOwnedOrganization = (fixture: OrganizationDeletionFixture) =>
+  fixture.app.handle(
+    jsonRequest("/organizations/org_1", {
+      method: "DELETE",
+      userId: "user_1",
+      sessionId: "session_1",
+      body: fixture.body,
+    })
+  )
+
+describe("organization削除とmembership遷移", () => {
+  it("テナント削除をcascadeしてsessionとcleanup jobを原子的に更新する", async () => {
+    const fixture = await createOrganizationDeletionFixture()
+    const { body, db } = fixture
+    const first = await deleteOwnedOrganization(fixture)
     expect(first.status).toBe(200)
     const receipt = await first.json()
     expect(receipt).toMatchObject({
@@ -137,71 +152,95 @@ describe("organization deletion and membership transitions", () => {
     })
     expect(JSON.stringify(jobs[0])).not.toContain("org-one")
     expect(JSON.stringify(jobs[0])).not.toContain("@example.test")
+  })
 
-    const staleReplay = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        fresh: false,
-        body,
-      })
-    )
-    expect(staleReplay.status).toBe(403)
-    expect(await staleReplay.json()).toMatchObject({
-      error: "step_up_required",
-    })
+  it("同じ削除keyへ同一receiptを再生する", async () => {
+    const fixture = await createOrganizationDeletionFixture()
+    const first = await deleteOwnedOrganization(fixture)
+    const receipt = await first.json()
 
-    const otherActorReplay = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_4",
-        body,
-      })
-    )
-    expect(otherActorReplay.status).toBe(404)
-
-    const replay = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        sessionId: "session_1",
-        body,
-      })
-    )
+    const replay = await deleteOwnedOrganization(fixture)
     expect(replay.status).toBe(200)
     expect(await replay.json()).toEqual(receipt)
+  })
 
-    const wrongKey = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        body: { ...body, idempotencyKey: "delete_org_1_request_02" },
-      })
-    )
-    expect(wrongKey.status).toBe(404)
+  it.each([
+    {
+      label: "freshnessを失ったowner",
+      expectedStatus: 403,
+      expectedError: "step_up_required",
+      userId: "user_1",
+      fresh: false,
+    },
+    {
+      label: "別actor",
+      expectedStatus: 404,
+      expectedError: "not_found",
+      userId: "user_4",
+      fresh: true,
+    },
+    {
+      label: "異なる削除key",
+      expectedStatus: 404,
+      expectedError: "not_found",
+      userId: "user_1",
+      fresh: true,
+      idempotencyKey: "delete_org_1_request_02",
+    },
+  ] as const)(
+    "$labelへ削除receiptを公開しない",
+    async ({
+      expectedError,
+      expectedStatus,
+      fresh,
+      idempotencyKey,
+      userId,
+    }) => {
+      const fixture = await createOrganizationDeletionFixture()
+      await deleteOwnedOrganization(fixture)
 
-    const collision = await app.handle(
+      const response = await fixture.app.handle(
+        jsonRequest("/organizations/org_1", {
+          method: "DELETE",
+          userId,
+          fresh,
+          body: {
+            ...fixture.body,
+            idempotencyKey: idempotencyKey ?? fixture.body.idempotencyKey,
+          },
+        })
+      )
+      expect(response.status).toBe(expectedStatus)
+      expect(await response.json()).toMatchObject({ error: expectedError })
+    }
+  )
+
+  it("別organizationで再利用した削除keyを拒否する", async () => {
+    const fixture = await createOrganizationDeletionFixture()
+    await deleteOwnedOrganization(fixture)
+
+    const collision = await fixture.app.handle(
       jsonRequest("/organizations/org_3", {
         method: "DELETE",
         userId: "user_1",
         activeOrganizationId: "org_3",
-        body: { ...body, slug: "org-three" },
+        body: { ...fixture.body, slug: "org-three" },
       })
     )
     expect(collision.status).toBe(409)
     expect(await collision.json()).toMatchObject({ error: "conflict" })
     expect(
-      await db
+      await fixture.db
         .select({ id: schema.organization.id })
         .from(schema.organization)
         .where(eq(schema.organization.id, "org_3"))
     ).toEqual([{ id: "org_3" }])
     expect(
-      await db.select().from(schema.organizationDeletionJobs)
+      await fixture.db.select().from(schema.organizationDeletionJobs)
     ).toHaveLength(1)
   })
 
-  it("returns 403 when an admin attempts an owner-only role change", async () => {
+  it("adminによるowner限定role変更へ403を返す", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest("/organizations/org_1/members/member_4", {
@@ -213,7 +252,7 @@ describe("organization deletion and membership transitions", () => {
     expect(response.status).toBe(403)
   })
 
-  it("returns the stable step-up contract for stale sessions", async () => {
+  it("古いsessionへ安定したstep-up契約を返す", async () => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest("/organizations/org_1/members/member_4", {
@@ -229,7 +268,7 @@ describe("organization deletion and membership transitions", () => {
     })
   })
 
-  it("projects linked login methods as booleans without multiplying or leaking member rows", async () => {
+  it("member rowを増殖や漏洩させず連携済みlogin methodをbooleanへ投影する", async () => {
     const db = await createSeededDb()
     const now = new Date()
     await db.insert(schema.account).values([
@@ -349,7 +388,7 @@ describe("organization deletion and membership transitions", () => {
     }
   })
 
-  it("transfers ownership atomically and keeps one owner", async () => {
+  it("誤ったconfirmationでownership移譲を拒否する", async () => {
     const db = await createSeededDb()
     const app = createApp(db)
     const wrong = await app.handle(
@@ -363,7 +402,11 @@ describe("organization deletion and membership transitions", () => {
     expect(await wrong.json()).toMatchObject({
       error: "confirmation_required",
     })
+  })
 
+  it("ownershipを原子的に移譲しownerを1人に保つ", async () => {
+    const db = await createSeededDb()
+    const app = createApp(db)
     const response = await app.handle(
       jsonRequest("/organizations/org_1/ownership-transfer", {
         method: "POST",
@@ -389,7 +432,7 @@ describe("organization deletion and membership transitions", () => {
     ).toBe(true)
   })
 
-  it("moves removed members' sessions to a valid alternate organization", async () => {
+  it("削除したmemberのsessionを有効な代替organizationへ移す", async () => {
     const db = await createSeededDb()
     const now = new Date()
     await db.insert(schema.session).values({

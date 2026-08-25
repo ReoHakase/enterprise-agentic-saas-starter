@@ -51,8 +51,8 @@ const createPorts = (overrides: Partial<UsersPorts> = {}): UsersPorts => ({
   ...overrides,
 })
 
-describe("users service MCP OAuth credential projection", () => {
-  it("joins current organization membership without exposing token values", async () => {
+describe("users serviceのMCP OAuth credential projection", () => {
+  it("token値を公開せず現在のorganization membershipをjoinする", async () => {
     const createdAt = new Date("2026-08-12T00:00:00.000Z")
     const ports = createPorts({
       listMcpOAuthCredentials: vi.fn<UsersPorts["listMcpOAuthCredentials"]>(
@@ -104,7 +104,7 @@ describe("users service MCP OAuth credential projection", () => {
     ])
   })
 
-  it("maps a missing credential to the existing not-found contract", async () => {
+  it("欠落credentialを既存not-found契約へ写像する", async () => {
     const service = createUsersService(
       createPorts({
         revokeMcpOAuthCredential: vi.fn<UsersPorts["revokeMcpOAuthCredential"]>(

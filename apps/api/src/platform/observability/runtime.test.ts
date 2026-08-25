@@ -28,8 +28,8 @@ afterEach(() => {
   configureObservability(noopRuntime())
 })
 
-describe("observability runtime failure containment", () => {
-  it("does not let telemetry side effects change application control flow", () => {
+describe("observability runtimeの失敗隔離", () => {
+  it("telemetry副作用にapplication制御flowを変えさせない", () => {
     const telemetryFailure = new Error("synthetic telemetry failure")
     configureObservability({
       captureException: () => {
@@ -84,7 +84,7 @@ describe("observability runtime failure containment", () => {
     expect(() => injectObservedRequestHeaders(new Headers())).not.toThrow()
   })
 
-  it("adds hierarchical logger scope and inherited attributes", () => {
+  it("階層的logger scopeと継承attributeを追加する", () => {
     const logEvent = vi.fn<ObservabilityRuntime["logEvent"]>()
     configureObservability({ ...noopRuntime(), logEvent })
 
@@ -101,7 +101,7 @@ describe("observability runtime failure containment", () => {
     })
   })
 
-  it("executes the application callback once inside a span", () => {
+  it("span内でapplication callbackを1回実行する", () => {
     const callback = vi.fn<() => string>(() => "application result")
     configureObservability(noopRuntime())
 
@@ -117,35 +117,35 @@ describe("observability runtime failure containment", () => {
     expect(callback).toHaveBeenCalledOnce()
   })
 
-  it.each(["before", "after"] as const)(
-    "contains a span adapter that throws %s the application callback",
-    (timing) => {
-      const callback = vi.fn<() => string>(() => "application result")
-      configureObservability({
-        ...noopRuntime(),
-        startSpan: (_options, run) => {
-          if (timing === "before") {
-            throw new Error("synthetic span setup failure")
-          }
-          run(spanLifecycle)
-          throw new Error("synthetic span completion failure")
+  it.each([
+    { label: "span開始前", timing: "before" },
+    { label: "application callback完了後", timing: "after" },
+  ] as const)("$labelに例外を投げるspan adapterを隔離する", ({ timing }) => {
+    const callback = vi.fn<() => string>(() => "application result")
+    configureObservability({
+      ...noopRuntime(),
+      startSpan: (_options, run) => {
+        if (timing === "before") {
+          throw new Error("synthetic span setup failure")
+        }
+        run(spanLifecycle)
+        throw new Error("synthetic span completion failure")
+      },
+    })
+
+    expect(
+      withObservedSpan(
+        {
+          name: "synthetic span",
+          op: "test",
         },
-      })
+        callback
+      )
+    ).toBe("application result")
+    expect(callback).toHaveBeenCalledOnce()
+  })
 
-      expect(
-        withObservedSpan(
-          {
-            name: "synthetic span",
-            op: "test",
-          },
-          callback
-        )
-      ).toBe("application result")
-      expect(callback).toHaveBeenCalledOnce()
-    }
-  )
-
-  it("preserves an application error thrown inside a span", () => {
+  it("span内で投げたapplication errorを維持する", () => {
     const applicationFailure = new Error("synthetic application failure")
     configureObservability({
       ...noopRuntime(),

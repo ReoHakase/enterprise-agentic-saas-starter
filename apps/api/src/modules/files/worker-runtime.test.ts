@@ -37,8 +37,8 @@ afterEach(() => {
   resetFileStorageRuntimeForTest()
 })
 
-describe("Cloudflare file runtime wiring", () => {
-  it("configures a fresh named RPC isolate with R2, Images, preview Service Binding, and an explicit upload flag", () => {
+describe("Cloudflare file runtimeの配線", () => {
+  it("新しいnamed RPC isolateへR2とImagesとpreview Service Bindingと明示upload flagを設定する", () => {
     const configured = configureFileStorageRuntimeFromWorkerEnvironment({
       AGENT_ASSET_UPLOAD_ENABLED: " 1 ",
       FILES: bucket,
@@ -55,17 +55,20 @@ describe("Cloudflare file runtime wiring", () => {
     })
   })
 
-  it.each([undefined, "", "0", "true", "yes"])(
-    "keeps upload fail-closed for %s",
-    (value) => {
-      const configured = configureFileStorageRuntimeFromWorkerEnvironment({
-        AGENT_ASSET_UPLOAD_ENABLED: value,
-        FILES: bucket,
-        IMAGE_PREVIEWS: previews,
-        IMAGES: images,
-      })
+  it.each([
+    { label: "設定値未定義", value: undefined },
+    { label: "空文字", value: "" },
+    { label: "文字列0", value: "0" },
+    { label: "文字列true", value: "true" },
+    { label: "文字列yes", value: "yes" },
+  ])("$labelではuploadをfail closedに保つ", ({ value }) => {
+    const configured = configureFileStorageRuntimeFromWorkerEnvironment({
+      AGENT_ASSET_UPLOAD_ENABLED: value,
+      FILES: bucket,
+      IMAGE_PREVIEWS: previews,
+      IMAGES: images,
+    })
 
-      expect(configured.agentAssetUploadEnabled).toBe(false)
-    }
-  )
+    expect(configured.agentAssetUploadEnabled).toBe(false)
+  })
 })

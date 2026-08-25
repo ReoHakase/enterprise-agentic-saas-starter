@@ -1,5 +1,6 @@
 import type { Db } from "@enterprise-agentic-saas/db"
 import {
+  agentSessionContexts,
   auditLogs,
   member,
   organization,
@@ -8,12 +9,10 @@ import {
   session,
   user,
 } from "@enterprise-agentic-saas/db/schema"
-import * as dbSchema from "@enterprise-agentic-saas/db/schema"
-import { createClient } from "@libsql/client"
 import { eq } from "drizzle-orm"
-import { drizzle } from "drizzle-orm/libsql"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { createMigratedDb } from "../../app.test-support"
 import {
   configureFileStorageRuntime,
   resetFileStorageRuntimeForTest,
@@ -60,7 +59,7 @@ const readStream = async (stream: ReadableStream<Uint8Array>) => {
   let size = 0
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- test R2 streamを最後まで読む。
+      // oxlint-disable-next-line no-await-in-loop -- test R2 streamを最後まで読む
       const result = await reader.read()
       if (result.done) break
       chunks.push(result.value)
@@ -166,99 +165,7 @@ const createRuntime = (onPut?: () => Promise<void>) => {
 }
 
 const createDatabase = async (): Promise<Db> => {
-  // libSQL transactionは別connectionを使うため、shared in-memory DBにする。
-  const client = createClient({ url: "file::memory:?cache=shared" })
-  await client.executeMultiple(`
-    pragma foreign_keys = on;
-    drop table if exists profile_image_cleanup_jobs;
-    drop table if exists profile_images;
-    drop table if exists audit_logs;
-    drop table if exists session;
-    drop table if exists member;
-    drop table if exists organization;
-    drop table if exists user;
-    create table user (
-      id text primary key,
-      name text not null,
-      email text not null unique,
-      email_verified integer not null,
-      image text,
-      created_at integer not null,
-      updated_at integer not null
-    );
-    create table organization (
-      id text primary key,
-      name text not null,
-      slug text not null unique,
-      logo text,
-      created_at integer not null,
-      metadata text
-    );
-    create table member (
-      id text primary key,
-      organization_id text not null,
-      user_id text not null,
-      role text not null,
-      created_at integer not null
-    );
-    create table session (
-      id text primary key,
-      expires_at integer not null,
-      token text not null unique,
-      created_at integer not null,
-      updated_at integer not null,
-      ip_address text,
-      user_agent text,
-      user_id text not null,
-      active_organization_id text
-    );
-    create table audit_logs (
-      id text primary key,
-      organization_id text not null,
-      actor_user_id text,
-      action text not null,
-      target_type text not null,
-      target_id text,
-      metadata text not null default '{}',
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
-    );
-    create table profile_images (
-      id text primary key,
-      subject_type text not null,
-      subject_id text not null,
-      user_id text references user(id) on delete cascade,
-      organization_id text references organization(id) on delete cascade,
-      upload_id text not null,
-      source_hash text not null,
-      version integer not null,
-      object_key text not null unique,
-      fallback_url text,
-      etag text,
-      status text not null default 'pending',
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      updated_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer))
-    );
-    create unique index profile_images_subject_upload_uidx
-      on profile_images(subject_type, subject_id, upload_id);
-    create unique index profile_images_subject_version_uidx
-      on profile_images(subject_type, subject_id, version);
-    create unique index profile_images_subject_ready_uidx
-      on profile_images(subject_type, subject_id) where status = 'ready';
-    create table profile_image_cleanup_jobs (
-      id text primary key,
-      subject_type text not null,
-      subject_id text not null,
-      object_key text not null unique,
-      status text not null default 'pending',
-      attempts integer not null default 0,
-      last_error_code text,
-      locked_at integer,
-      next_attempt_at integer,
-      created_at integer not null default (cast(unixepoch('subsecond') * 1000 as integer)),
-      completed_at integer
-    );
-  `)
-  const db = drizzle({ client, relations: dbSchema.relations })
+  const db = await createMigratedDb()
   const now = new Date("2026-07-22T00:00:00.000Z")
   await db.insert(user).values({
     id: "user-1",
@@ -292,6 +199,12 @@ const createDatabase = async (): Promise<Db> => {
     userId: "user-1",
     activeOrganizationId: "org-1",
   })
+  await db.insert(agentSessionContexts).values({
+    sessionId: "profile-session",
+    userId: "user-1",
+    contextEpoch: 1,
+    updatedAt: now,
+  })
   return db
 }
 
@@ -300,7 +213,7 @@ const pngFile = (marker = 1) =>
     type: "image/png",
   })
 
-describe("profile image service", () => {
+describe("プロフィール画像service", () => {
   let database: Db
 
   beforeEach(async () => {
@@ -311,7 +224,7 @@ describe("profile image service", () => {
     resetFileStorageRuntimeForTest()
   })
 
-  it("normalizes, stores, and idempotently retries a user profile image", async () => {
+  it("userプロフィール画像を正規化して保存し冪等に再試行する", async () => {
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
     const file = pngFile()
@@ -370,7 +283,7 @@ describe("profile image service", () => {
     ).rejects.toMatchObject({ code: "conflict" })
   })
 
-  it("materializes the Images response as a bounded Blob before R2 PUT", async () => {
+  it("R2 PUT前にImages responseを上限付きBlobとして実体化する", async () => {
     const storage = createRuntime()
     const providerResponse = new Response(
       streamOf(new Uint8Array([0x57, 0x45, 0x42, 0x50])),
@@ -406,14 +319,14 @@ describe("profile image service", () => {
     expect(storage.runtime.bucket.put).toHaveBeenCalledOnce()
   })
 
-  it("preserves the original fallback across replacements and restores it", async () => {
+  it("置換をまたいで元fallbackを維持して復元する", async () => {
     configureFileStorageRuntime(createRuntime().runtime)
     for (const [uploadId, marker] of [
       ["upload-1", 1],
       ["upload-2", 2],
     ] as const) {
       const file = pngFile(marker)
-      // oxlint-disable-next-line no-await-in-loop -- replacement順序をtestする。
+      // oxlint-disable-next-line no-await-in-loop -- replacement順序をtestする
       await uploadProfileImage(database, {
         actorUserId: "user-1",
         file,
@@ -507,7 +420,7 @@ describe("profile image service", () => {
     ])
   })
 
-  it("normalizes a legacy blank auth image fallback to null", async () => {
+  it("空の旧auth画像fallbackをnullへ正規化する", async () => {
     await database
       .update(user)
       .set({ image: "   " })
@@ -538,7 +451,7 @@ describe("profile image service", () => {
     ])
   })
 
-  it("uses monotonic versions so the latest organization upload wins", async () => {
+  it("最新organization uploadが勝つよう単調増加versionを使う", async () => {
     const subject = { type: "organization" as const, id: "org-1" }
     const firstId = "profile-1"
     const secondId = "profile-2"
@@ -608,7 +521,7 @@ describe("profile image service", () => {
     ).resolves.toEqual([{ action: "organization.profile_image.updated" }])
   })
 
-  it("reserves distinct monotonic versions for concurrent uploads", async () => {
+  it("同時uploadへ異なる単調増加versionを予約する", async () => {
     const subject = { type: "user" as const, id: "user-1" }
     const reservations = await Promise.all(
       [
@@ -631,7 +544,7 @@ describe("profile image service", () => {
     await expect(database.select().from(profileImages)).resolves.toHaveLength(2)
   })
 
-  it("revalidates organization role after R2 processing and cleans a rejected object", async () => {
+  it("R2処理後にorganization roleを再検証して拒否objectをcleanupする", async () => {
     const storage = createRuntime(async () => {
       await database
         .update(member)
@@ -662,7 +575,7 @@ describe("profile image service", () => {
     ).resolves.toEqual([{ logo: "https://images.example.test/org-1.png" }])
   })
 
-  it("revalidates the active session inside organization deletion", async () => {
+  it("organization削除内でactive sessionを再検証する", async () => {
     configureFileStorageRuntime(createRuntime().runtime)
     const file = pngFile()
     const uploaded = await uploadProfileImage(database, {
@@ -694,7 +607,7 @@ describe("profile image service", () => {
   })
 })
 
-describe("profile image service", () => {
+describe("プロフィール画像service", () => {
   let database: Db
 
   beforeEach(async () => {
@@ -705,7 +618,7 @@ describe("profile image service", () => {
     resetFileStorageRuntimeForTest()
   })
 
-  it("serves the private canonical WebP with ETag and 304", async () => {
+  it("private canonical WebPをETagと304付きで配信する", async () => {
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
     const file = pngFile()
@@ -740,7 +653,7 @@ describe("profile image service", () => {
     expect(notModified.status).toBe(304)
   })
 
-  it("rejects wrong dimensions before reserving metadata", async () => {
+  it("metadata予約前に不正dimensionを拒否する", async () => {
     const storage = createRuntime()
     storage.info.mockResolvedValue({
       format: "png",
@@ -763,7 +676,7 @@ describe("profile image service", () => {
     await expect(database.select().from(profileImages)).resolves.toHaveLength(0)
   })
 
-  it("rejects a declared PNG whose magic bytes do not match", async () => {
+  it("magic byteが一致しないPNG宣言を拒否する", async () => {
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
     const file = new File(
@@ -787,7 +700,7 @@ describe("profile image service", () => {
     await expect(database.select().from(profileImages)).resolves.toHaveLength(0)
   })
 
-  it("rejects a transformed response without an explicit WebP content type", async () => {
+  it("明示WebP content typeがない変換responseを拒否する", async () => {
     const storage = createRuntime()
     storage.input.mockImplementation(() => ({
       transform: () => ({
@@ -815,7 +728,7 @@ describe("profile image service", () => {
     ])
   })
 
-  it("rejects an oversized transformed response before R2 PUT", async () => {
+  it("R2 PUT前に上限超過の変換responseを拒否する", async () => {
     const storage = createRuntime()
     storage.input.mockImplementation(() => ({
       transform: () => ({
@@ -847,7 +760,7 @@ describe("profile image service", () => {
     expect(storage.runtime.bucket.put).not.toHaveBeenCalled()
   })
 
-  it("preserves provider errors and leaves no metadata before reservation", async () => {
+  it("provider errorを維持して予約前metadataを残さない", async () => {
     const storage = createRuntime()
     const raw = new Error("provider token and private image details")
     storage.info.mockRejectedValue(raw)

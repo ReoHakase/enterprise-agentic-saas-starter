@@ -133,7 +133,7 @@ describe("監査ログリポジトリ", () => {
       targetType: "organization",
     },
     {
-      label: "未知のtarget type",
+      label: "未知の対象種別",
       action: "organization.updated",
       targetType: "private_sentinel_target",
     },

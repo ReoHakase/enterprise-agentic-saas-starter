@@ -44,12 +44,12 @@ const previewInput = (fileId: string, width = "360") => ({
   width,
 })
 
-describe("generic file preview Service Binding boundary", () => {
-  it("accepts only four canonical widths and delegates opaque variants", async () => {
+describe("汎用file previewのService Binding境界", () => {
+  it("4つのcanonical widthだけを受理してopaque variantを委譲する", async () => {
     const { db, fileId, storage } = await setupPreviewFile("widths")
 
     for (const width of FILE_PREVIEW_WIDTHS) {
-      // oxlint-disable-next-line no-await-in-loop -- all allowed variants are individually asserted.
+      // oxlint-disable-next-line no-await-in-loop -- 許可variantを個別に検査する
       const response = await previewFile(
         db,
         previewInput(fileId, String(width))
@@ -80,29 +80,41 @@ describe("generic file preview Service Binding boundary", () => {
     expect(internalRequest.headers.get("x-preview-object-key")).toBe(
       `organizations/asset-org-a/files/issue/preview-issue-widths/${fileId}`
     )
+  })
+
+  it("canonicalでないpreview widthをprivate Worker呼出前に拒否する", async () => {
+    const { db, fileId, storage } = await setupPreviewFile("invalid-width")
+
     await expect(
       previewFile(db, previewInput(fileId, "0360"))
     ).rejects.toMatchObject({ code: "validation_error" })
-  })
-
-  it("rejects missing and deleted files before calling the private Worker", async () => {
-    const { db, fileId, storage } = await setupPreviewFile("deleted")
-    await expect(
-      previewFile(db, previewInput("missing-file"))
-    ).rejects.toMatchObject({ code: "not_found" })
-    await removeFile(db, {
-      actorRole: "owner",
-      actorUserId: "asset-user-a",
-      fileId,
-      organizationId: "asset-org-a",
-    })
-    await expect(previewFile(db, previewInput(fileId))).rejects.toMatchObject({
-      code: "not_found",
-    })
     expect(storage.previewFetch).not.toHaveBeenCalled()
   })
 
-  it("makes the same preview URL unreachable after real organization deletion", async () => {
+  it.each([
+    { kind: "missing", label: "存在しないfile" },
+    { kind: "deleted", label: "削除済みfile" },
+  ] as const)("$labelをprivate Worker呼出前に拒否する", async ({ kind }) => {
+    const { db, fileId, storage } = await setupPreviewFile(kind)
+    if (kind === "deleted") {
+      await removeFile(db, {
+        actorRole: "owner",
+        actorUserId: "asset-user-a",
+        fileId,
+        organizationId: "asset-org-a",
+      })
+    }
+
+    await expect(
+      previewFile(
+        db,
+        previewInput(kind === "missing" ? "missing-file" : fileId)
+      )
+    ).rejects.toMatchObject({ code: "not_found" })
+    expect(storage.previewFetch).not.toHaveBeenCalled()
+  })
+
+  it("実organization削除後に同じpreview URLを到達不能にする", async () => {
     const { app, fileId, storage } = await setupPreviewFile("org-delete")
     const previewUrl = `http://localhost/files/organizations/asset-org-a/${fileId}/preview/360`
     const previewRequest = () =>

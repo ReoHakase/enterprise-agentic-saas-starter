@@ -25,8 +25,8 @@ const MINIMAL_USAGE = {
   runEventId: "attempt_1",
 } as const
 
-describe("Agent Luna usage pricing", () => {
-  it("records the fallback calculation but prioritizes provider cost internally", async () => {
+describe("Agent Lunaのusage pricing", () => {
+  it("fallback計算を記録しつつ内部ではprovider costを優先する", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApi(db)
     const thread = await createAgentThreadForSession(db, {
@@ -108,7 +108,7 @@ describe("Agent Luna usage pricing", () => {
     expect(liveRunGrants).toEqual([])
   })
 
-  it("settles the run even when usage persistence fails", async () => {
+  it("usage永続化が失敗してもrunをsettleする", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApi(db)
     const thread = await createAgentThreadForSession(db, {
@@ -149,7 +149,7 @@ describe("Agent Luna usage pricing", () => {
     ).resolves.toEqual([{ status: "completed" }])
   })
 
-  it("preserves an approval wait when usage persistence fails", async () => {
+  it("usage永続化失敗時にapproval waitを維持する", async () => {
     const { db } = await createFixture()
     const internal = createAgentInternalApi(db)
     const thread = await createAgentThreadForSession(db, {

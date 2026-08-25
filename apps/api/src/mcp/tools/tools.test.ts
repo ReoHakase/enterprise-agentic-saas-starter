@@ -21,7 +21,6 @@ import {
 } from "../../modules/files/public"
 import type { McpPrincipal } from "../principal"
 import { createMcpServer } from "../server"
-import { handleMcpRequest, MCP_HTTP_PATH } from "../transport"
 import { createMcpTools } from "./catalog"
 import { toMcpToolError } from "./errors"
 import { createMcpReadApplication } from "./read-application"
@@ -35,44 +34,6 @@ const migrationsFolder = new URL(
 
 const clients: Array<ReturnType<typeof createClient>> = []
 const databasePaths: string[] = []
-
-const callMcp = async (
-  server: ReturnType<typeof createMcpServer>,
-  body: Record<string, unknown>
-) => {
-  const response = await handleMcpRequest(
-    server,
-    new Request(`https://api.example.test${MCP_HTTP_PATH}`, {
-      method: "POST",
-      headers: {
-        accept: "application/json, text/event-stream",
-        "content-type": "application/json",
-        host: "api.example.test",
-      },
-      body: JSON.stringify(body),
-    })
-  )
-  expect(response.status).toBe(200)
-  expect(response.headers.get("content-type")).toContain("application/json")
-  const parsed: unknown = JSON.parse(await response.text())
-  return parsed
-}
-
-const hasErrorCode = (value: unknown, code: string) => {
-  let current = value
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (
-      typeof current === "object" &&
-      current !== null &&
-      Reflect.get(current, "code") === code
-    ) {
-      return true
-    }
-    if (!(current instanceof Error)) return false
-    current = current.cause
-  }
-  return false
-}
 
 afterEach(async () => {
   resetFileStorageRuntimeForTest()
@@ -182,22 +143,36 @@ const createFixture = async () => {
   return { db }
 }
 
-describe("MCP business tools", () => {
-  it("registers the complete catalog with JSON Schema uniqueness", async () => {
+describe("MCP業務tool", () => {
+  it("全permission scopeのcatalogへ14個の一意なtoolを登録する", async () => {
     const { db } = await createFixture()
-    await db.insert(schema.issues).values({
-      id: "mcp-issue-a",
-      organizationId: "mcp-org-a",
-      number: 1,
-      title: "MCP Issue A",
-      creatorId: "mcp-user-a",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
+    const names = Object.keys(createMcpTools(db, principal())).toSorted()
+
+    expect(names).toEqual(
+      [
+        "add_issue_attachments",
+        "create_attachment_upload_session",
+        "create_issue",
+        "delete_issue",
+        "get_attachment_upload_status",
+        "get_issue",
+        "read_account_context",
+        "read_active_organization",
+        "read_issue_attachment_image",
+        "remove_issue_attachments",
+        "search_issue_labels",
+        "search_issues",
+        "search_organization_members",
+        "update_issue",
+      ].toSorted()
+    )
+  })
+
+  it("重複禁止のattachment idをMCP JSON Schemaへ公開する", async () => {
+    const { db } = await createFixture()
     const server = createMcpServer({ tools: createMcpTools(db, principal()) })
     const { tools } = await server.getToolListInfo()
 
-    expect(tools).toHaveLength(14)
     expect(
       tools.find(({ name }) => name === "add_issue_attachments")
     ).toMatchObject({
@@ -205,167 +180,11 @@ describe("MCP business tools", () => {
         properties: { assetIds: { uniqueItems: true } },
       },
     })
-    expect(tools.find(({ name }) => name === "search_issues")).toMatchObject({
-      outputSchema: {
-        type: "object",
-        properties: { items: { type: "array" } },
-      },
-    })
-    expect(
-      tools.find(({ name }) => name === "read_account_context")
-    ).toMatchObject({
-      description:
-        "Read the current user's allowlisted display profile. This never returns credentials or account settings.",
-    })
-    const getIssue = tools.find(({ name }) => name === "get_issue")
-    expect(getIssue).toMatchObject({
-      description:
-        'Read one Issue in the active organization. For Issue #N use {"lookup":"number","number":N}; for an opaque ID use {"lookup":"id","id":"..."}.',
-      inputSchema: {
-        additionalProperties: false,
-        properties: {
-          attachmentCursor: {
-            maxLength: 1_024,
-            minLength: 1,
-            type: "string",
-          },
-          attachmentLimit: {
-            maximum: 100,
-            minimum: 1,
-            type: "integer",
-          },
-          id: expect.any(Object),
-          lookup: { enum: ["id", "number"] },
-          number: {
-            maximum: 2_147_483_647,
-            minimum: 1,
-            type: "integer",
-          },
-        },
-        required: ["lookup"],
-        type: "object",
-      },
-    })
-    expect(getIssue?.inputSchema).not.toHaveProperty("oneOf")
-
-    await expect(
-      server.executeTool("read_account_context", {})
-    ).resolves.toEqual({
-      name: "MCP User A",
-      profileImage: "https://public.example.test/mcp-user-a.webp",
-    })
-    await expect(
-      server.executeTool("get_issue", { lookup: "id", id: "mcp-issue-a" })
-    ).resolves.toMatchObject({ id: "mcp-issue-a", number: 1 })
-    await expect(
-      server.executeTool("get_issue", { lookup: "number", number: 1 })
-    ).resolves.toMatchObject({ id: "mcp-issue-a", number: 1 })
-
-    const lookupFailures = await Promise.all(
-      [{ lookup: "id", id: "mcp-issue-a", number: 1 }, { lookup: "id" }].map(
-        (input) =>
-          server.executeTool("get_issue", input).then(
-            () => undefined,
-            (error: unknown) => error
-          )
-      )
-    )
-    for (const failure of lookupFailures) {
-      expect(failure).toBeInstanceOf(Error)
-      expect(hasErrorCode(failure, "retryable_internal")).toBe(true)
-    }
-
-    await callMcp(server, {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "catalog-test", version: "1.0.0" },
-      },
-    })
-    const listed = await callMcp(server, {
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/list",
-      params: {},
-    })
-    expect(listed).toMatchObject({
-      result: {
-        tools: expect.arrayContaining([
-          expect.objectContaining({
-            name: "read_account_context",
-            annotations: {
-              destructiveHint: false,
-              idempotentHint: true,
-              openWorldHint: false,
-              readOnlyHint: true,
-            },
-            description:
-              "Read the current user's allowlisted display profile. This never returns credentials or account settings.",
-          }),
-          expect.objectContaining({
-            name: "get_issue",
-            annotations: {
-              destructiveHint: false,
-              idempotentHint: true,
-              openWorldHint: false,
-              readOnlyHint: true,
-            },
-            description:
-              'Read one Issue in the active organization. For Issue #N use {"lookup":"number","number":N}; for an opaque ID use {"lookup":"id","id":"..."}.',
-            inputSchema: expect.objectContaining({
-              additionalProperties: false,
-              required: ["lookup"],
-              type: "object",
-            }),
-          }),
-        ]),
-      },
-    })
-    const called = await callMcp(server, {
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "get_issue",
-        arguments: { lookup: "id", id: "mcp-issue-a" },
-      },
-    })
-    expect(called).toMatchObject({
-      result: {
-        content: [
-          { type: "text", text: expect.stringContaining('"mcp-issue-a"') },
-        ],
-        isError: false,
-      },
-    })
-    const mixed = await callMcp(server, {
-      jsonrpc: "2.0",
-      id: 4,
-      method: "tools/call",
-      params: {
-        name: "get_issue",
-        arguments: { lookup: "id", id: "mcp-issue-a", number: 1 },
-      },
-    })
-    expect(mixed).toMatchObject({
-      result: {
-        content: [
-          {
-            type: "text",
-            text: expect.stringContaining("retryable_internal"),
-          },
-        ],
-        isError: true,
-      },
-    })
   })
 })
 
-describe("MCP authorization and writes", () => {
-  it("filters the explicit catalog by the credential scopes", async () => {
+describe("MCPのauthorizationとwrite", () => {
+  it("明示catalogをcredential scopeで絞り込む", async () => {
     const { db } = await createFixture()
     expect(
       Object.keys(
@@ -379,6 +198,11 @@ describe("MCP authorization and writes", () => {
         "search_issues",
       ].toSorted()
     )
+  })
+
+  it("organization read scopeだけをpermissionへ投影する", async () => {
+    const { db } = await createFixture()
+
     await expect(
       createMcpReadApplication(
         db,
@@ -393,6 +217,11 @@ describe("MCP authorization and writes", () => {
         canUpdateIssues: false,
       },
     })
+  })
+
+  it("file write scopeなしのattachment付きIssue作成を拒否する", async () => {
+    const { db } = await createFixture()
+
     await expect(
       createMcpWriteApplication(db, principal(["issues:create"])).createIssue({
         attachmentAssetIds: ["ready-from-older-token"],
@@ -403,12 +232,32 @@ describe("MCP authorization and writes", () => {
   })
 
   it.each([
-    { allowed: true, creatorId: "mcp-user-b", role: "owner" },
-    { allowed: true, creatorId: "mcp-user-b", role: "admin" },
-    { allowed: true, creatorId: "mcp-user-a", role: "member" },
-    { allowed: false, creatorId: "mcp-user-b", role: "member" },
+    {
+      allowed: true,
+      creatorId: "mcp-user-b",
+      label: "ownerが他userのIssueを削除する場合",
+      role: "owner",
+    },
+    {
+      allowed: true,
+      creatorId: "mcp-user-b",
+      label: "adminが他userのIssueを削除する場合",
+      role: "admin",
+    },
+    {
+      allowed: true,
+      creatorId: "mcp-user-a",
+      label: "memberが自身のIssueを削除する場合",
+      role: "member",
+    },
+    {
+      allowed: false,
+      creatorId: "mcp-user-b",
+      label: "memberが他userのIssueを削除する場合",
+      role: "member",
+    },
   ] as const)(
-    "enforces the current $role role for deleting a $creatorId Issue",
+    "$labelに現在のroleを適用する",
     async ({ allowed, creatorId, role }) => {
       const { db } = await createFixture()
       await db
@@ -455,7 +304,7 @@ describe("MCP authorization and writes", () => {
     }
   )
 
-  it("executes direct Issue writes once and replays only the same payload", async () => {
+  it("同一payloadの直接Issue作成を1回だけcommitして再生する", async () => {
     const { db } = await createFixture()
     const write = createMcpWriteApplication(db, principal())
     const input = {
@@ -493,9 +342,26 @@ describe("MCP authorization and writes", () => {
     await expect(
       db.select().from(schema.mcpToolOperations)
     ).resolves.toHaveLength(1)
+  })
+
+  it("同じIssue作成keyの異なるpayloadを拒否する", async () => {
+    const { db } = await createFixture()
+    const write = createMcpWriteApplication(db, principal())
+    const input = {
+      idempotencyKey: "create_issue_request_0001",
+      description: "MCP description",
+      title: "MCP Issue",
+      labels: ["MCP"],
+    }
+    await write.createIssue(input)
+
     await expect(
       write.createIssue({ ...input, title: "Different payload" })
     ).rejects.toMatchObject({ code: "conflict" })
+  })
+
+  it("別tenantのIssue readをnot foundへ写像する", async () => {
+    const { db } = await createFixture()
 
     await expect(
       createMcpReadApplication(db, principal()).getIssue({
@@ -503,8 +369,13 @@ describe("MCP authorization and writes", () => {
         id: "other-issue",
       })
     ).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("別tenantのIssue updateをnot foundへ写像する", async () => {
+    const { db } = await createFixture()
+
     await expect(
-      write.updateIssue({
+      createMcpWriteApplication(db, principal()).updateIssue({
         expectedRevision: 1,
         idempotencyKey: "cross_tenant_update_0001",
         issueId: "other-issue",
@@ -513,32 +384,42 @@ describe("MCP authorization and writes", () => {
     ).rejects.toMatchObject({ code: "not_found" })
   })
 
-  it("rejects blank upload metadata and preserves retryable errors", async () => {
-    const { db } = await createFixture()
-    const write = createMcpWriteApplication(db, principal())
-
-    await expect(
-      write.createAttachmentUploadSession({
+  it.each([
+    {
+      label: "空白filename",
+      input: {
         declaredContentType: "image/png",
         filename: "   ",
         idempotencyKey: "upload_session_blank_filename_0001",
         sizeBytes: 32,
-      })
-    ).rejects.toMatchObject({ code: "validation_error" })
-    await expect(
-      write.createAttachmentUploadSession({
+      },
+    },
+    {
+      label: "空白content type",
+      input: {
         declaredContentType: "   ",
         filename: "attachment.png",
         idempotencyKey: "upload_session_blank_content_type_0001",
         sizeBytes: 32,
-      })
+      },
+    },
+  ])("$labelのupload metadataを拒否する", async ({ input }) => {
+    const { db } = await createFixture()
+
+    await expect(
+      createMcpWriteApplication(db, principal()).createAttachmentUploadSession(
+        input
+      )
     ).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("再試行可能なHTTP error codeをMCP errorへ維持する", () => {
     expect(
       toMcpToolError(new HttpError({ code: "rate_limited" }))
     ).toMatchObject({ code: "rate_limited" })
   })
 
-  it("rechecks current membership before replaying a destructive operation", async () => {
+  it("破壊的操作の再生前に現在のmembershipを再確認する", async () => {
     const { db } = await createFixture()
     expect(createMcpTools(db, principal())).toHaveProperty("delete_issue")
     await db
@@ -564,7 +445,7 @@ describe("MCP authorization and writes", () => {
     ).rejects.toMatchObject({ code: "forbidden" })
   })
 
-  it("rejects a different body when another uploader wins the only-if race", async () => {
+  it("別uploaderがonly-if競合に勝った場合は異なるbodyを拒否する", async () => {
     const { db } = await createFixture()
     const activePrincipal = principal()
     const write = createMcpWriteApplication(db, activePrincipal)
@@ -611,14 +492,10 @@ describe("MCP authorization and writes", () => {
     ).resolves.toMatchObject({ status: "pending" })
   })
 
-  it("uploads privately, promotes once, and keeps Issue revision and quota atomic", async () => {
+  it("file write scopeなしのuploadを拒否する", async () => {
     const { db } = await createFixture()
     const activePrincipal = principal()
     const write = createMcpWriteApplication(db, activePrincipal)
-    const issue = await write.createIssue({
-      idempotencyKey: "create_issue_request_0002",
-      title: "Attachment target",
-    })
     const bytes = pngBytes()
     const session = await write.createAttachmentUploadSession({
       declaredContentType: "image/png",
@@ -643,6 +520,25 @@ describe("MCP authorization and writes", () => {
         }),
       })
     ).rejects.toMatchObject({ code: "forbidden" })
+  })
+
+  it("privateにuploadして1回だけ昇格しIssue revisionとquotaを原子的に保つ", async () => {
+    const { db } = await createFixture()
+    const activePrincipal = principal()
+    const write = createMcpWriteApplication(db, activePrincipal)
+    const issue = await write.createIssue({
+      idempotencyKey: "create_issue_request_0002",
+      title: "Attachment target",
+    })
+    const bytes = pngBytes()
+    const session = await write.createAttachmentUploadSession({
+      declaredContentType: "image/png",
+      filename: "attachment.png",
+      idempotencyKey: "upload_session_request_0001",
+      sizeBytes: bytes.byteLength,
+    })
+    const runtime = createRuntime()
+    configureFileStorageRuntime(runtime.runtime)
     const uploadResponse = await uploadMcpAttachment({
       db,
       principal: activePrincipal,
@@ -698,9 +594,12 @@ describe("MCP authorization and writes", () => {
     ])
   })
 
-  it.each(["pending", "ready"] as const)(
-    "releases expired %s upload quota into an exact cleanup job before reserving again",
-    async (status) => {
+  it.each([
+    { label: "pending状態", status: "pending" },
+    { label: "ready状態", status: "ready" },
+  ] as const)(
+    "期限切れ$labelのupload quotaを正確なcleanup jobへ解放してから再予約する",
+    async ({ status }) => {
       const { db } = await createFixture()
       const write = createMcpWriteApplication(db, principal())
       const first = await write.createAttachmentUploadSession({

@@ -6,8 +6,8 @@ import {
   publicAgentRuntimeGateResponse,
 } from "./maintenance"
 
-describe("Agent maintenance boundary", () => {
-  it("returns a stable unavailable response for every public Agent route", async () => {
+describe("Agent maintenance境界", () => {
+  it("すべての公開Agent routeへ安定したunavailable responseを返す", async () => {
     await Promise.all(
       [
         "/agent",
@@ -51,7 +51,7 @@ describe("Agent maintenance boundary", () => {
     }
   })
 
-  it("requires the exact enabled value and protects named entrypoints", async () => {
+  it("正確なenabled値を要求してnamed entrypointを保護する", async () => {
     expect(isAgentMaintenanceMode("1")).toBe(true)
     expect(isAgentMaintenanceMode("0")).toBe(false)
     expect(isAgentMaintenanceMode(undefined)).toBe(false)

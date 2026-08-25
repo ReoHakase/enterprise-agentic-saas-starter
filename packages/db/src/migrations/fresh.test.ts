@@ -1,7 +1,7 @@
 import { createClient } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { migrationsFolder } from "./helpers"
 
@@ -53,8 +53,163 @@ const baselineTriggerNames = [
   "storage_objects_update_state_machine",
 ] as const
 
-describe("database migrations: fresh", () => {
-  it("migrates a fresh database to the current schema", async () => {
+const insertProfileImageFixture = async (
+  client: ReturnType<typeof createClient>
+) => {
+  const now = Date.now()
+  await client.batch([
+    {
+      sql: "insert into user(id,name,email,email_verified,image,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      args: [
+        "profile-user",
+        "Profile User",
+        "profile-user@example.test",
+        1,
+        "https://images.example.test/user.png",
+        now,
+        now,
+      ],
+    },
+    {
+      sql: "insert into organization(id,name,slug,logo,created_at) values(?,?,?,?,?)",
+      args: [
+        "profile-org",
+        "Profile Org",
+        "profile-org",
+        "https://images.example.test/org.png",
+        now,
+      ],
+    },
+    {
+      sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,fallback_url,etag,status) values(?,?,?,?,?,?,?,?,?,?,?)",
+      args: [
+        "profile-image-user",
+        "user",
+        "profile-user",
+        "profile-user",
+        "upload-user",
+        "a".repeat(64),
+        1,
+        "users/profile-user/profile-images/profile-image-user.webp",
+        "https://images.example.test/user.png",
+        "etag-user",
+        "ready",
+      ],
+    },
+    {
+      sql: "insert into profile_image_cleanup_jobs(id,subject_type,subject_id,object_key) values(?,?,?,?)",
+      args: [
+        "profile-cleanup",
+        "user",
+        "profile-user",
+        "users/profile-user/profile-images/old.webp",
+      ],
+    },
+  ])
+}
+
+const insertIssueThumbnailFixture = async (
+  client: ReturnType<typeof createClient>
+) => {
+  await client.batch([
+    {
+      sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+      args: [
+        "thumbnail-user",
+        "Thumbnail User",
+        "thumbnail@example.test",
+        1,
+        1,
+        1,
+      ],
+    },
+    {
+      sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+      args: ["thumbnail-org", "Thumbnail Org", "thumbnail-org", 1],
+    },
+    {
+      sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      args: [
+        "thumbnail-issue-a",
+        "thumbnail-org",
+        1,
+        "Issue A",
+        "thumbnail-user",
+        1,
+        1,
+      ],
+    },
+    {
+      sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
+      args: [
+        "thumbnail-issue-b",
+        "thumbnail-org",
+        2,
+        "Issue B",
+        "thumbnail-user",
+        1,
+        1,
+      ],
+    },
+    {
+      sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      args: [
+        "thumbnail-file-a",
+        "thumbnail-org",
+        "thumbnail-user",
+        "thumbnail-upload-a",
+        "issue",
+        "thumbnail-object-a",
+        "a.png",
+        1,
+        "image/png",
+        "png",
+        1,
+        1,
+        "etag-a",
+        "ready",
+        1,
+        1,
+      ],
+    },
+    {
+      sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      args: [
+        "thumbnail-file-b",
+        "thumbnail-org",
+        "thumbnail-user",
+        "thumbnail-upload-b",
+        "issue",
+        "thumbnail-object-b",
+        "b.png",
+        1,
+        "image/png",
+        "png",
+        1,
+        1,
+        "etag-b",
+        "ready",
+        1,
+        1,
+      ],
+    },
+    {
+      sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+      args: ["thumbnail-file-a", "thumbnail-org", "issue", "thumbnail-issue-a"],
+    },
+    {
+      sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+      args: ["thumbnail-file-b", "thumbnail-org", "issue", "thumbnail-issue-b"],
+    },
+    {
+      sql: "insert into issue_thumbnail_selections(organization_id,issue_id,file_id) values(?,?,?)",
+      args: ["thumbnail-org", "thumbnail-issue-a", "thumbnail-file-a"],
+    },
+  ])
+}
+
+describe("新規DBのマイグレーション", () => {
+  it("新規DBをcurrent schemaへ移行する", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle({ client })
 
@@ -143,128 +298,34 @@ describe("database migrations: fresh", () => {
     }
   })
 
-  it("keeps Issue thumbnail selections tenant- and owner-bound", async () => {
-    const client = createClient({ url: "file::memory:" })
+  describe("Issue thumbnail選択の不変条件", () => {
+    let client: ReturnType<typeof createClient>
 
-    try {
+    beforeEach(async () => {
+      client = createClient({ url: "file::memory:" })
       await migrate(drizzle({ client }), { migrationsFolder })
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: [
-            "thumbnail-user",
-            "Thumbnail User",
-            "thumbnail@example.test",
-            1,
-            1,
-            1,
-          ],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["thumbnail-org", "Thumbnail Org", "thumbnail-org", 1],
-        },
-        {
-          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "thumbnail-issue-a",
-            "thumbnail-org",
-            1,
-            "Issue A",
-            "thumbnail-user",
-            1,
-            1,
-          ],
-        },
-        {
-          sql: "insert into issues(id,organization_id,number,title,creator_id,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "thumbnail-issue-b",
-            "thumbnail-org",
-            2,
-            "Issue B",
-            "thumbnail-user",
-            1,
-            1,
-          ],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "thumbnail-file-a",
-            "thumbnail-org",
-            "thumbnail-user",
-            "thumbnail-upload-a",
-            "issue",
-            "thumbnail-object-a",
-            "a.png",
-            1,
-            "image/png",
-            "png",
-            1,
-            1,
-            "etag-a",
-            "ready",
-            1,
-            1,
-          ],
-        },
-        {
-          sql: "insert into files(id,organization_id,uploader_id,upload_id,owner_type,object_key,filename,size_bytes,declared_content_type,detected_image_format,image_width,image_height,etag,status,created_at,updated_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "thumbnail-file-b",
-            "thumbnail-org",
-            "thumbnail-user",
-            "thumbnail-upload-b",
-            "issue",
-            "thumbnail-object-b",
-            "b.png",
-            1,
-            "image/png",
-            "png",
-            1,
-            1,
-            "etag-b",
-            "ready",
-            1,
-            1,
-          ],
-        },
-        {
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: [
-            "thumbnail-file-a",
-            "thumbnail-org",
-            "issue",
-            "thumbnail-issue-a",
-          ],
-        },
-        {
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: [
-            "thumbnail-file-b",
-            "thumbnail-org",
-            "issue",
-            "thumbnail-issue-b",
-          ],
-        },
-        {
-          sql: "insert into issue_thumbnail_selections(organization_id,issue_id,file_id) values(?,?,?)",
-          args: ["thumbnail-org", "thumbnail-issue-a", "thumbnail-file-a"],
-        },
-      ])
+      await insertIssueThumbnailFixture(client)
+    })
 
+    afterEach(() => {
+      client.close()
+    })
+
+    it("別Issueが所有するfileへの変更を拒否する", async () => {
       await expect(
         client.execute({
           sql: "update issue_thumbnail_selections set file_id = ? where organization_id = ? and issue_id = ?",
           args: ["thumbnail-file-b", "thumbnail-org", "thumbnail-issue-a"],
         })
       ).rejects.toThrow(/foreign key constraint failed/i)
+    })
 
+    it("thumbnail file削除時に選択をcascade削除する", async () => {
       await client.execute({
         sql: "delete from files where organization_id = ? and id = ?",
         args: ["thumbnail-org", "thumbnail-file-a"],
       })
+
       expect(
         (await client.execute("select file_id from issue_thumbnail_selections"))
           .rows
@@ -272,67 +333,23 @@ describe("database migrations: fresh", () => {
       expect((await client.execute("pragma foreign_key_check")).rows).toEqual(
         []
       )
-    } finally {
-      client.close()
-    }
+    })
   })
 
-  it("enforces profile image subject, idempotency, ready, and cleanup invariants", async () => {
-    const client = createClient({ url: "file::memory:" })
+  describe("プロフィール画像の不変条件", () => {
+    let client: ReturnType<typeof createClient>
 
-    try {
+    beforeEach(async () => {
+      client = createClient({ url: "file::memory:" })
       await migrate(drizzle({ client }), { migrationsFolder })
-      const now = Date.now()
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,image,created_at,updated_at) values(?,?,?,?,?,?,?)",
-          args: [
-            "profile-user",
-            "Profile User",
-            "profile-user@example.test",
-            1,
-            "https://images.example.test/user.png",
-            now,
-            now,
-          ],
-        },
-        {
-          sql: "insert into organization(id,name,slug,logo,created_at) values(?,?,?,?,?)",
-          args: [
-            "profile-org",
-            "Profile Org",
-            "profile-org",
-            "https://images.example.test/org.png",
-            now,
-          ],
-        },
-        {
-          sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,fallback_url,etag,status) values(?,?,?,?,?,?,?,?,?,?,?)",
-          args: [
-            "profile-image-user",
-            "user",
-            "profile-user",
-            "profile-user",
-            "upload-user",
-            "a".repeat(64),
-            1,
-            "users/profile-user/profile-images/profile-image-user.webp",
-            "https://images.example.test/user.png",
-            "etag-user",
-            "ready",
-          ],
-        },
-        {
-          sql: "insert into profile_image_cleanup_jobs(id,subject_type,subject_id,object_key) values(?,?,?,?)",
-          args: [
-            "profile-cleanup",
-            "user",
-            "profile-user",
-            "users/profile-user/profile-images/old.webp",
-          ],
-        },
-      ])
+      await insertProfileImageFixture(client)
+    })
 
+    afterEach(() => {
+      client.close()
+    })
+
+    it("subjectごとにready画像を1件へ限定する", async () => {
       await expect(
         client.execute({
           sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,etag,status) values(?,?,?,?,?,?,?,?,?,?)",
@@ -350,35 +367,38 @@ describe("database migrations: fresh", () => {
           ],
         })
       ).rejects.toThrow(/unique/i)
+    })
+
+    it.each([
+      {
+        case: "subject種別と異なるowner",
+        columns: "organization_id",
+        owner: "profile-org",
+      },
+      {
+        case: "ownerなし",
+        columns: "user_id",
+        owner: null,
+      },
+    ])("$caseのプロフィール画像を拒否する", async ({ columns, owner }) => {
       await expect(
         client.execute({
-          sql: "insert into profile_images(id,subject_type,subject_id,organization_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?,?)",
+          sql: `insert into profile_images(id,subject_type,subject_id,${columns},upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?,?)`,
           args: [
-            "profile-image-invalid-owner",
+            `profile-image-invalid-${columns}`,
             "user",
             "profile-user",
-            "profile-org",
-            "upload-invalid",
+            owner,
+            `upload-invalid-${columns}`,
             "c".repeat(64),
             2,
-            "users/profile-user/profile-images/invalid.webp",
+            `users/profile-user/profile-images/invalid-${columns}.webp`,
           ],
         })
       ).rejects.toThrow(/check constraint/i)
-      await expect(
-        client.execute({
-          sql: "insert into profile_images(id,subject_type,subject_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?)",
-          args: [
-            "profile-image-null-owner",
-            "user",
-            "profile-user",
-            "upload-null-owner",
-            "d".repeat(64),
-            2,
-            "users/profile-user/profile-images/null-owner.webp",
-          ],
-        })
-      ).rejects.toThrow(/check constraint/i)
+    })
+
+    it("ready画像へetagを必須にする", async () => {
       await expect(
         client.execute({
           sql: "insert into profile_images(id,subject_type,subject_id,organization_id,upload_id,source_hash,version,object_key,status) values(?,?,?,?,?,?,?,?,?)",
@@ -395,6 +415,9 @@ describe("database migrations: fresh", () => {
           ],
         })
       ).rejects.toThrow(/check constraint/i)
+    })
+
+    it("upload idを冪等性keyとして一意にする", async () => {
       await expect(
         client.execute({
           sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key) values(?,?,?,?,?,?,?,?)",
@@ -410,6 +433,9 @@ describe("database migrations: fresh", () => {
           ],
         })
       ).rejects.toThrow(/unique/i)
+    })
+
+    it("同じsubjectのsuperseded画像を履歴として保持する", async () => {
       await expect(
         client.execute({
           sql: "insert into profile_images(id,subject_type,subject_id,user_id,upload_id,source_hash,version,object_key,status) values(?,?,?,?,?,?,?,?,?)",
@@ -426,8 +452,11 @@ describe("database migrations: fresh", () => {
           ],
         })
       ).resolves.toBeDefined()
+    })
 
+    it("subject削除時に画像を削除してcleanup jobを保持する", async () => {
       await client.execute("delete from user where id = 'profile-user'")
+
       const [images, cleanup] = await Promise.all([
         client.execute(
           "select id from profile_images where subject_id = 'profile-user'"
@@ -438,8 +467,6 @@ describe("database migrations: fresh", () => {
       ])
       expect(images.rows).toHaveLength(0)
       expect(cleanup.rows).toHaveLength(1)
-    } finally {
-      client.close()
-    }
+    })
   })
 })

@@ -12,88 +12,91 @@ const migrationsFolder = new URL(
   import.meta.url
 ).pathname
 
-describe("organization repository", () => {
-  it("counts active invitations and omits invalid legacy rows from listings", async () => {
-    const client = createClient({ url: "file::memory:" })
-    const db = drizzle({ client, relations: schema.relations })
+const createRepositoryFixture = async () => {
+  const client = createClient({ url: "file::memory:" })
+  const db = drizzle({ client, relations: schema.relations })
+  await migrate(db, { migrationsFolder })
+  const now = new Date()
+  await db.insert(schema.user).values({
+    id: "user-1",
+    name: "Owner",
+    email: "owner@example.test",
+    emailVerified: true,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(schema.organization).values({
+    id: "organization-1",
+    name: "Organization",
+    slug: "organization",
+    createdAt: now,
+  })
+  await db.insert(schema.member).values({
+    id: "member-1",
+    organizationId: "organization-1",
+    userId: "user-1",
+    role: "owner",
+    createdAt: now,
+  })
+  await db.insert(schema.invitation).values([
+    {
+      id: "expired-pending",
+      organizationId: "organization-1",
+      email: "expired@example.test",
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(now.getTime() - 1),
+      createdAt: now,
+      inviterId: "user-1",
+    },
+    {
+      id: "active-pending",
+      organizationId: "organization-1",
+      email: "active@example.test",
+      role: "member",
+      status: "pending",
+      expiresAt: new Date(now.getTime() + 60_000),
+      createdAt: now,
+      inviterId: "user-1",
+    },
+    {
+      id: "accepted",
+      organizationId: "organization-1",
+      email: "accepted@example.test",
+      role: "member",
+      status: "accepted",
+      expiresAt: new Date(now.getTime() + 60_000),
+      createdAt: now,
+      inviterId: "user-1",
+    },
+    {
+      id: "legacy-owner",
+      organizationId: "organization-1",
+      email: "legacy-owner@example.test",
+      role: "owner",
+      status: "expired",
+      expiresAt: now,
+      createdAt: now,
+      inviterId: "user-1",
+    },
+    {
+      id: "legacy-null",
+      organizationId: "organization-1",
+      email: "legacy-null@example.test",
+      role: null,
+      status: "expired",
+      expiresAt: now,
+      createdAt: now,
+      inviterId: "user-1",
+    },
+  ])
+  return { client, db, now }
+}
 
+describe("organization repositoryの契約", () => {
+  it("active invitationだけをorganization件数へ反映する", async () => {
+    const { client, db } = await createRepositoryFixture()
     try {
-      await migrate(db, { migrationsFolder })
-      const now = new Date()
-      await db.insert(schema.user).values({
-        id: "user-1",
-        name: "Owner",
-        email: "owner@example.test",
-        emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
-      })
-      await db.insert(schema.organization).values({
-        id: "organization-1",
-        name: "Organization",
-        slug: "organization",
-        createdAt: now,
-      })
-      await db.insert(schema.member).values({
-        id: "member-1",
-        organizationId: "organization-1",
-        userId: "user-1",
-        role: "owner",
-        createdAt: now,
-      })
-      await db.insert(schema.invitation).values([
-        {
-          id: "expired-pending",
-          organizationId: "organization-1",
-          email: "expired@example.test",
-          role: "member",
-          status: "pending",
-          expiresAt: new Date(now.getTime() - 1),
-          createdAt: now,
-          inviterId: "user-1",
-        },
-        {
-          id: "active-pending",
-          organizationId: "organization-1",
-          email: "active@example.test",
-          role: "member",
-          status: "pending",
-          expiresAt: new Date(now.getTime() + 60_000),
-          createdAt: now,
-          inviterId: "user-1",
-        },
-        {
-          id: "accepted",
-          organizationId: "organization-1",
-          email: "accepted@example.test",
-          role: "member",
-          status: "accepted",
-          expiresAt: new Date(now.getTime() + 60_000),
-          createdAt: now,
-          inviterId: "user-1",
-        },
-        {
-          id: "legacy-owner",
-          organizationId: "organization-1",
-          email: "legacy-owner@example.test",
-          role: "owner",
-          status: "expired",
-          expiresAt: now,
-          createdAt: now,
-          inviterId: "user-1",
-        },
-        {
-          id: "legacy-null",
-          organizationId: "organization-1",
-          email: "legacy-null@example.test",
-          role: null,
-          status: "expired",
-          expiresAt: now,
-          createdAt: now,
-          inviterId: "user-1",
-        },
-      ])
-
       const organization = await findOrganizationForUser(db, {
         activeOrganizationId: "organization-1",
         organizationId: "organization-1",
@@ -104,7 +107,14 @@ describe("organization repository", () => {
         id: "organization-1",
         invitationCount: 1,
       })
+    } finally {
+      client.close()
+    }
+  })
 
+  it("legacy invitationを除外して期限切れ状態を投影する", async () => {
+    const { client, db, now } = await createRepositoryFixture()
+    try {
       const invitations = await listInvitationsByOrganization(
         db,
         "organization-1"

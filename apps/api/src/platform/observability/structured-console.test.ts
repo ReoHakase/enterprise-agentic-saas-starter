@@ -22,8 +22,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("structured local console", () => {
-  it("redacts before both terminal and OTLP logs", () => {
+describe("structured local consoleの契約", () => {
+  it("terminalとOTLPの両log出力前にマスキングする", () => {
     const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
     const logEvent = vi.fn<ObservabilityRuntime["logEvent"]>()
     const observed = withStructuredConsole(
@@ -49,7 +49,7 @@ describe("structured local console", () => {
     )
   })
 
-  it("continues to OTLP when terminal writing fails", () => {
+  it("terminal出力が失敗してもOTLPへ続行する", () => {
     vi.spyOn(console, "info").mockImplementation(() => {
       throw new Error("terminal unavailable")
     })
@@ -62,7 +62,7 @@ describe("structured local console", () => {
     expect(logEvent).toHaveBeenCalledOnce()
   })
 
-  it("contains OTLP failure after writing to the terminal", () => {
+  it("terminal出力後のOTLP失敗を隔離する", () => {
     const terminal = vi.spyOn(console, "debug").mockImplementation(() => {})
     const observed = withStructuredConsole(
       runtime({

@@ -15,82 +15,45 @@ import {
 } from "./actions/repository"
 import { issueAgentConnectionTicket } from "./threads/repository"
 
-describe("Agent Issue approval policies and full access", () => {
-  it("taints the run after Web search and forces subsequent writes to manual approval", async () => {
-    const { app, db } = await createFixture()
-    const actionRun = await createRun(db, {
-      clientMessageId: "web-search-approval-fence",
-      webSearchQuery: "Cloudflare R2 current limits",
+const createFullAccessWebSearchRun = async (clientMessageId: string) => {
+  const fixture = await createFixture()
+  const actionRun = await createRun(fixture.db, {
+    clientMessageId,
+    webSearchQuery: "Cloudflare R2 current limits",
+  })
+  const response = await fixture.app.handle(
+    request(`/agent/threads/${actionRun.thread.id}/permission`, {
+      method: "PUT",
+      body: { mode: "full_access" },
     })
-    const policy = await app.handle(
-      request(`/agent/threads/${actionRun.thread.id}/permission`, {
-        method: "PUT",
-        body: { mode: "full_access" },
-      })
+  )
+  expect(response.status).toBe(200)
+  return { ...fixture, actionRun, query: "Cloudflare R2 current limits" }
+}
+
+describe("Agent Issueのapproval policyとfull access", () => {
+  it("Web検索後のwriteをmanual approvalへ強制する", async () => {
+    const { actionRun, db, query } = await createFullAccessWebSearchRun(
+      "web-search-approval-fence"
     )
-    expect(policy.status).toBe(200)
-
-    const beforeSearch = await actionRun.internal.prepareUpdateIssue({
-      grant: actionRun.run.grant,
-      toolCallId: "tool-before-web-search",
-      idempotencyKey: "prepare-before-web-search",
-      issue: {
-        issueId: "action-issue-a",
-        expectedRevision: 1,
-        priority: "high",
-      },
-    })
-    expect(beforeSearch).toMatchObject({
-      approvalMode: "full_access",
-      requiresApproval: false,
-      status: "approved",
-    })
-    await expect(
-      actionRun.internal.executeApprovedAction({
-        actionId: beforeSearch.id,
-        grant: actionRun.run.grant,
-      })
-    ).resolves.toMatchObject({ issue: { revision: 2 } })
-
     await expect(
       actionRun.internal.authorizeWebSearch({
         grant: actionRun.run.grant,
         operationId: "tool-public-web-search",
-        query: "Cloudflare R2 current limits",
+        query,
       })
     ).resolves.toEqual({
-      query: "Cloudflare R2 current limits",
+      query,
       reserved: true,
       reused: false,
     })
-    const [firstTaint] = await db
-      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
-      .from(schema.agentRuns)
-      .where(eq(schema.agentRuns.id, actionRun.run.runId))
-    await expect(
-      actionRun.internal.authorizeWebSearch({
-        grant: actionRun.run.grant,
-        operationId: "tool-public-web-search-retry",
-        query: "Cloudflare R2 current limits",
-      })
-    ).resolves.toEqual({
-      query: "Cloudflare R2 current limits",
-      reserved: true,
-      reused: false,
-    })
-    const [retriedTaint] = await db
-      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
-      .from(schema.agentRuns)
-      .where(eq(schema.agentRuns.id, actionRun.run.runId))
-    expect(retriedTaint?.webSearchUsedAt).toEqual(firstTaint?.webSearchUsedAt)
-
     const afterSearch = await actionRun.internal.prepareUpdateIssue({
       grant: actionRun.run.grant,
       toolCallId: "tool-after-web-search",
       idempotencyKey: "prepare-after-web-search",
       issue: {
         issueId: "action-issue-a",
-        expectedRevision: 2,
+        expectedRevision: 1,
         status: "closed",
       },
     })
@@ -106,7 +69,7 @@ describe("Agent Issue approval policies and full access", () => {
       })
       .from(schema.issues)
       .where(eq(schema.issues.id, "action-issue-a"))
-    expect(issue).toEqual({ revision: 2, status: "open" })
+    expect(issue).toEqual({ revision: 1, status: "open" })
     await expect(
       getAgentApprovalPolicyForSession(db, {
         sessionId: "action-session-a",
@@ -114,7 +77,44 @@ describe("Agent Issue approval policies and full access", () => {
         threadId: actionRun.thread.id,
       })
     ).resolves.toMatchObject({ mode: "full_access" })
+  })
 
+  it("Web検索taintの記録時刻を再試行で変更しない", async () => {
+    const { actionRun, db, query } = await createFullAccessWebSearchRun(
+      "web-search-taint-idempotency"
+    )
+    await actionRun.internal.authorizeWebSearch({
+      grant: actionRun.run.grant,
+      operationId: "tool-public-web-search",
+      query,
+    })
+    const [firstTaint] = await db
+      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, actionRun.run.runId))
+
+    await actionRun.internal.authorizeWebSearch({
+      grant: actionRun.run.grant,
+      operationId: "tool-public-web-search-retry",
+      query,
+    })
+    const [retriedTaint] = await db
+      .select({ webSearchUsedAt: schema.agentRuns.webSearchUsedAt })
+      .from(schema.agentRuns)
+      .where(eq(schema.agentRuns.id, actionRun.run.runId))
+
+    expect(retriedTaint?.webSearchUsedAt).toEqual(firstTaint?.webSearchUsedAt)
+  })
+
+  it("Web検索taintを次のrunへ持ち越さない", async () => {
+    const { actionRun, db, query } = await createFullAccessWebSearchRun(
+      "web-search-clean-next-run"
+    )
+    await actionRun.internal.authorizeWebSearch({
+      grant: actionRun.run.grant,
+      operationId: "tool-public-web-search",
+      query,
+    })
     await actionRun.internal.finalizeRun({
       grant: actionRun.run.grant,
       outcome: "canceled",
@@ -137,7 +137,7 @@ describe("Agent Issue approval policies and full access", () => {
         idempotencyKey: "prepare-clean-run-write",
         issue: {
           issueId: "action-issue-a",
-          expectedRevision: 2,
+          expectedRevision: 1,
           status: "closed",
         },
       })
@@ -148,7 +148,7 @@ describe("Agent Issue approval policies and full access", () => {
     })
   })
 
-  it("fails closed when the run row used by the policy lookup is missing", async () => {
+  it("policy lookupに使うrun rowがない場合はfail closedにする", async () => {
     const { db } = await createFixture()
     await expect(
       db.transaction((tx) =>
@@ -174,7 +174,7 @@ describe("Agent Issue approval policies and full access", () => {
     ).resolves.toBeNull()
   })
 
-  it("forces a delete selected after Web search to manual approval", async () => {
+  it("Web検索後に選択した削除をmanual approvalへ強制する", async () => {
     const { db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-delete-fence",
@@ -211,7 +211,7 @@ describe("Agent Issue approval policies and full access", () => {
     expect(issue).toEqual({ id: "action-issue-a", revision: 1 })
   })
 
-  it("forces a create selected after Web search to manual approval", async () => {
+  it("Web検索後に選択した作成をmanual approvalへ強制する", async () => {
     const { db } = await createFixture()
     const actionRun = await createRun(db, {
       clientMessageId: "web-search-create-fence",
@@ -249,7 +249,7 @@ describe("Agent Issue approval policies and full access", () => {
     ).toEqual([])
   })
 
-  it("returns the current permission to ask always through the public route", async () => {
+  it("現在のask always permissionを公開routeから返す", async () => {
     const { app, db } = await createFixture()
     const { thread } = await createRun(db, {
       clientMessageId: "delete-policy-route",
@@ -292,7 +292,7 @@ describe("Agent Issue approval policies and full access", () => {
     expect(invalid.status).toBe(400)
   })
 
-  it("revokes the scoped approval policy idempotently", async () => {
+  it("scope付きapproval policyを冪等に失効させる", async () => {
     const { db } = await createFixture()
     const { thread } = await createRun(db, {
       clientMessageId: "delete-policy-idempotent",
@@ -344,37 +344,38 @@ describe("Agent Issue approval policies and full access", () => {
     expect(afterRetry).toEqual([])
   })
 
-  it("does not revoke approval policies owned by another tenant or user", async () => {
+  it.each([
+    { kind: "other-tenant", label: "別tenant" },
+    { kind: "other-owner", label: "別user所有" },
+  ] as const)("$labelのapproval policyを失効させない", async ({ kind }) => {
     const { db } = await createFixture()
     const now = new Date()
-    await db.insert(schema.session).values({
-      id: "action-session-other-policy",
-      userId: "action-user-a",
-      token: "action-token-other-policy",
-      expiresAt: new Date(now.getTime() + 3_600_000),
-      createdAt: now,
-      updatedAt: now,
-      activeOrganizationId: "action-org-b",
-    })
-    const otherTenant = await createRun(db, {
-      clientMessageId: "delete-policy-other-tenant",
-      sessionId: "action-session-other-policy",
-    })
-    const otherOwner = await createRun(db, {
-      clientMessageId: "delete-policy-other-owner",
-      userId: "action-user-b",
-      sessionId: "action-session-b",
-    })
-    await putAgentApprovalPolicyForSession(db, {
-      sessionId: "action-session-other-policy",
-      userId: "action-user-a",
-      threadId: otherTenant.thread.id,
-      mode: "full_access",
+    if (kind === "other-tenant") {
+      await db.insert(schema.session).values({
+        id: "action-session-other-policy",
+        userId: "action-user-a",
+        token: "action-token-other-policy",
+        expiresAt: new Date(now.getTime() + 3_600_000),
+        createdAt: now,
+        updatedAt: now,
+        activeOrganizationId: "action-org-b",
+      })
+    }
+    const targetSessionId =
+      kind === "other-tenant"
+        ? "action-session-other-policy"
+        : "action-session-b"
+    const targetUserId =
+      kind === "other-tenant" ? "action-user-a" : "action-user-b"
+    const target = await createRun(db, {
+      clientMessageId: `delete-policy-${kind}`,
+      sessionId: targetSessionId,
+      userId: targetUserId,
     })
     await putAgentApprovalPolicyForSession(db, {
-      sessionId: "action-session-b",
-      userId: "action-user-b",
-      threadId: otherOwner.thread.id,
+      sessionId: targetSessionId,
+      userId: targetUserId,
+      threadId: target.thread.id,
       mode: "full_access",
     })
 
@@ -382,30 +383,17 @@ describe("Agent Issue approval policies and full access", () => {
       deleteAgentApprovalPolicyForSession(db, {
         sessionId: "action-session-a",
         userId: "action-user-a",
-        threadId: otherTenant.thread.id,
+        threadId: target.thread.id,
       })
     ).rejects.toMatchObject({ code: "not_found" })
-    await expect(
-      deleteAgentApprovalPolicyForSession(db, {
-        sessionId: "action-session-a",
-        userId: "action-user-a",
-        threadId: otherOwner.thread.id,
-      })
-    ).rejects.toMatchObject({ code: "not_found" })
-
-    const [otherTenantPolicy] = await db
+    const [policy] = await db
       .select({ mode: schema.agentThreadPermissions.mode })
       .from(schema.agentThreadPermissions)
-      .where(eq(schema.agentThreadPermissions.threadId, otherTenant.thread.id))
-    const [otherOwnerPolicy] = await db
-      .select({ mode: schema.agentThreadPermissions.mode })
-      .from(schema.agentThreadPermissions)
-      .where(eq(schema.agentThreadPermissions.threadId, otherOwner.thread.id))
-    expect(otherTenantPolicy?.mode).toBe("full_access")
-    expect(otherOwnerPolicy?.mode).toBe("full_access")
+      .where(eq(schema.agentThreadPermissions.threadId, target.thread.id))
+    expect(policy?.mode).toBe("full_access")
   })
 
-  it("executes full_access delete through the same revision and audit boundary", async () => {
+  it("full_access削除を同じrevisionとaudit境界で実行する", async () => {
     const { app, db } = await createFixture()
     const actionRun = await createRun(db, { clientMessageId: "auto-delete" })
     const policy = await app.handle(

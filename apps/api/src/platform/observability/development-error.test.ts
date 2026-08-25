@@ -28,8 +28,8 @@ const capturedRecords = (error: unknown) => {
 const capturedMessage = (error: unknown) =>
   String(capturedRecords(error)[0]?.["exception.message"])
 
-describe("development error reporter", () => {
-  it("redacts credentials without removing ordinary provider text, URLs, or email", () => {
+describe("development error reporterの契約", () => {
+  it("通常のprovider textとURLとemailを除去せずcredentialをマスキングする", () => {
     const raw = [
       "provider rejected input for dev@example.test at https://example.test/help",
       "Authorization: Bearer provider-token",
@@ -67,7 +67,7 @@ describe("development error reporter", () => {
     })
   })
 
-  it("serializes cycles, BigInt, accessors, and hostile proxies without throwing", () => {
+  it("循環とBigIntとaccessorと敵対的proxyを例外なくserializeする", () => {
     const value: Record<string, unknown> = {
       count: 10n,
       symbol: Symbol("opaque"),
@@ -98,7 +98,7 @@ describe("development error reporter", () => {
     expect(capturedMessage(hostile)).toBe('"[unreadable-object]"')
   })
 
-  it("emits at most five redacted cause records with bounded text", () => {
+  it("上限付きtextでマスキング済みcause recordを最大5件出力する", () => {
     let cause: Error | undefined
     for (let index = 6; index >= 0; index -= 1) {
       const next = new Error(
@@ -139,7 +139,7 @@ describe("development error reporter", () => {
     }
   })
 
-  it("bounds a circular cause chain", () => {
+  it("循環cause chainへ上限を適用する", () => {
     const error = new Error("root")
     Object.defineProperty(error, "cause", { value: error })
 
@@ -149,7 +149,7 @@ describe("development error reporter", () => {
     expect(records[0]?.["exception.cause_truncated"]).toBe(true)
   })
 
-  it("isolates terminal and OTLP log sink failures", () => {
+  it("terminalとOTLP log sinkの失敗を隔離する", () => {
     const root = new Error("root", { cause: new Error("cause") })
     const terminal = vi.fn<(record: unknown) => void>(() => {
       throw new Error("terminal unavailable")

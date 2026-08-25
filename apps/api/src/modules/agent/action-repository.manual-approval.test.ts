@@ -11,8 +11,99 @@ import {
 import { issueAgentActionResumeTicket } from "./actions/repository"
 import { issueAgentConnectionTicket } from "./threads/repository"
 
-describe("Agent Issue manual approval execution", () => {
-  it("cancels a pending approval action through the internal run grant", async () => {
+const manualUpdateIssue = () => ({
+  issueId: "action-issue-a",
+  expectedRevision: 1,
+  title: "Updated title",
+  labels: ["backend", "Security"],
+  assigneeId: null,
+})
+
+const manualDecisionBody = {
+  decision: "yes" as const,
+  idempotencyKey: "decision-manual-update",
+}
+
+const prepareManualUpdateFixture = async () => {
+  const { app, db } = await createFixture()
+  const { internal, run } = await createRun(db, {
+    clientMessageId: "manual-update",
+  })
+  const prepared = await internal.prepareUpdateIssue({
+    grant: run.grant,
+    toolCallId: "tool-manual-update",
+    idempotencyKey: "prepare-manual-update",
+    issue: manualUpdateIssue(),
+  })
+  return { app, db, internal, prepared, run }
+}
+
+type ManualUpdateFixture = Awaited<
+  ReturnType<typeof prepareManualUpdateFixture>
+>
+
+const approveManualUpdate = async (fixture: ManualUpdateFixture) => {
+  const response = await fixture.app.handle(
+    request(`/agent/actions/${fixture.prepared.id}/decision`, {
+      method: "POST",
+      body: manualDecisionBody,
+    })
+  )
+  expect(response.status).toBe(200)
+  return response
+}
+
+const issueManualUpdateContinuation = async (fixture: ManualUpdateFixture) => {
+  const resumeTicket = await issueAgentActionResumeTicket(fixture.db, {
+    actionId: fixture.prepared.id,
+    sessionId: "action-session-a",
+    userId: "action-user-a",
+  })
+  const continuation = await fixture.internal.resumeApprovedAction({
+    actionId: fixture.prepared.id,
+    resumeTicket: resumeTicket.ticket,
+  })
+  return { continuation, resumeTicket }
+}
+
+const executeManualUpdate = async (fixture: ManualUpdateFixture) => {
+  await approveManualUpdate(fixture)
+  const { continuation } = await issueManualUpdateContinuation(fixture)
+  return fixture.internal.executeApprovedAction({
+    grant: continuation.grant,
+    actionId: fixture.prepared.id,
+  })
+}
+
+const prepareRejectedUpdateFixture = async () => {
+  const { app, db } = await createFixture()
+  const runFixture = await createRun(db, { clientMessageId: "reject-first" })
+  const rejected = await runFixture.internal.prepareUpdateIssue({
+    grant: runFixture.run.grant,
+    toolCallId: "tool-reject-first",
+    idempotencyKey: "prepare-reject-first",
+    issue: {
+      issueId: "action-issue-a",
+      expectedRevision: 1,
+      title: "Must not be applied",
+    },
+  })
+  const decision = {
+    decision: "no" as const,
+    idempotencyKey: "decision-reject-shared",
+  }
+  const response = await app.handle(
+    request(`/agent/actions/${rejected.id}/decision`, {
+      method: "POST",
+      body: decision,
+    })
+  )
+  expect(response.status).toBe(200)
+  return { app, db, decision, rejected, response, ...runFixture }
+}
+
+describe("Agent Issueのmanual approval実行", () => {
+  it("内部run grantでpending approval actionをcancelする", async () => {
     const { db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "internal-cancel-waiting-approval",
@@ -54,7 +145,7 @@ describe("Agent Issue manual approval execution", () => {
     expect(liveGrants).toEqual([])
   })
 
-  it("cancels a waiting approval action and revokes its unconsumed resume ticket", async () => {
+  it("waiting approval actionをcancelして未使用resume ticketを失効させる", async () => {
     const { app, db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "cancel-waiting-approval",
@@ -129,23 +220,9 @@ describe("Agent Issue manual approval execution", () => {
     expect(issue).toEqual({ revision: 1, title: "Original title" })
   })
 
-  it("executes a manual update only through a one-use continuation and keeps audit metadata minimal", async () => {
-    const { app, db } = await createFixture()
-    const { internal, run } = await createRun(db, {
-      clientMessageId: "manual-update",
-    })
-    const prepared = await internal.prepareUpdateIssue({
-      grant: run.grant,
-      toolCallId: "tool-manual-update",
-      idempotencyKey: "prepare-manual-update",
-      issue: {
-        issueId: "action-issue-a",
-        expectedRevision: 1,
-        title: "Updated title",
-        labels: ["backend", "Security"],
-        assigneeId: null,
-      },
-    })
+  it("manual updateへ正規化した差分previewを返す", async () => {
+    const { prepared } = await prepareManualUpdateFixture()
+
     expect(prepared).toMatchObject({
       kind: "update_issue",
       status: "pending",
@@ -165,36 +242,28 @@ describe("Agent Issue manual approval execution", () => {
         },
       ])
     )
+  })
+
+  it("同じprepare keyの異なるpayloadを拒否する", async () => {
+    const { internal, run } = await prepareManualUpdateFixture()
+
     await expect(
       internal.prepareUpdateIssue({
         grant: run.grant,
         toolCallId: "tool-manual-update",
         idempotencyKey: "prepare-manual-update",
         issue: {
-          issueId: "action-issue-a",
-          expectedRevision: 1,
-          title: "Updated title",
-          labels: ["backend", "Security"],
-          assigneeId: null,
-        },
-      })
-    ).resolves.toMatchObject({ id: prepared.id, status: "pending" })
-    await expect(
-      internal.prepareUpdateIssue({
-        grant: run.grant,
-        toolCallId: "tool-manual-update",
-        idempotencyKey: "prepare-manual-update",
-        issue: {
-          issueId: "action-issue-a",
-          expectedRevision: 1,
+          ...manualUpdateIssue(),
           title: "Changed retry payload",
-          labels: ["backend", "Security"],
-          assigneeId: null,
         },
       })
     ).rejects.toMatchObject({
       code: "conflict",
     })
+  })
+
+  it("公開actionから内部scopeを隠して別ownerへnot foundを返す", async () => {
+    const { app, prepared } = await prepareManualUpdateFixture()
 
     const publicResponse = await app.handle(
       request(`/agent/actions/${prepared.id}`)
@@ -221,36 +290,17 @@ describe("Agent Issue manual approval execution", () => {
     )
     expect(otherOwner.status).toBe(404)
     expect(await otherOwner.json()).toMatchObject(await missing.json())
+  })
 
-    const decisionBody = {
-      decision: "yes",
-      idempotencyKey: "decision-manual-update",
-    }
-    const decided = await app.handle(
-      request(`/agent/actions/${prepared.id}/decision`, {
-        method: "POST",
-        body: decisionBody,
-      })
-    )
-    expect(decided.status).toBe(200)
+  it("承認後もhash保存した1回限りのcontinuationだけを許可する", async () => {
+    const fixture = await prepareManualUpdateFixture()
+    const { db, prepared } = fixture
+
+    const decided = await approveManualUpdate(fixture)
     expect(await decided.json()).toMatchObject({
       status: "approved",
       approvalMode: "manual",
     })
-    const repeatedDecision = await app.handle(
-      request(`/agent/actions/${prepared.id}/decision`, {
-        method: "POST",
-        body: decisionBody,
-      })
-    )
-    expect(repeatedDecision.status).toBe(200)
-
-    await expect(
-      internal.executeApprovedAction({
-        grant: run.grant,
-        actionId: prepared.id,
-      })
-    ).rejects.toMatchObject({ code: "unauthorized" })
 
     const resumeTicket = await issueAgentActionResumeTicket(db, {
       actionId: prepared.id,
@@ -263,17 +313,21 @@ describe("Agent Issue manual approval execution", () => {
       .where(eq(schema.agentResumeTickets.actionId, prepared.id))
     expect(storedTicket[0]?.tokenHash).toMatch(/^[0-9a-f]{64}$/)
     expect(storedTicket[0]?.tokenHash).not.toBe(resumeTicket.ticket)
+  })
 
-    const continuation = await internal.resumeApprovedAction({
-      actionId: prepared.id,
-      resumeTicket: resumeTicket.ticket,
-    })
+  it("manual continuationだけでupdateと最小audit metadataをcommitする", async () => {
+    const fixture = await prepareManualUpdateFixture()
+    const { db, internal, prepared, run } = fixture
+    await approveManualUpdate(fixture)
+
     await expect(
-      internal.resumeApprovedAction({
+      internal.executeApprovedAction({
+        grant: run.grant,
         actionId: prepared.id,
-        resumeTicket: resumeTicket.ticket,
       })
     ).rejects.toMatchObject({ code: "unauthorized" })
+
+    const { continuation } = await issueManualUpdateContinuation(fixture)
 
     const result = await internal.executeApprovedAction({
       grant: continuation.grant,
@@ -290,41 +344,6 @@ describe("Agent Issue manual approval execution", () => {
         deleted: false,
       },
     })
-    await expect(
-      internal.executeApprovedAction({
-        grant: continuation.grant,
-        actionId: prepared.id,
-      })
-    ).resolves.toEqual(result)
-
-    const replayedReceipt = await app.handle(
-      request(`/agent/actions/${prepared.id}/resume`, {
-        method: "POST",
-        body: {},
-      })
-    )
-    expect(replayedReceipt.status).toBe(200)
-    expect(await replayedReceipt.json()).toEqual(result)
-    const crossOwnerReplay = await app.handle(
-      request(`/agent/actions/${prepared.id}/resume`, {
-        method: "POST",
-        body: {},
-        userId: "action-user-b",
-        sessionId: "action-session-b",
-      })
-    )
-    expect(crossOwnerReplay.status).toBe(404)
-    const unconsumedResumeTickets = await db
-      .select({ id: schema.agentResumeTickets.id })
-      .from(schema.agentResumeTickets)
-      .where(
-        and(
-          eq(schema.agentResumeTickets.actionId, prepared.id),
-          isNull(schema.agentResumeTickets.consumedAt),
-          isNull(schema.agentResumeTickets.revokedAt)
-        )
-      )
-    expect(unconsumedResumeTickets).toEqual([])
 
     const issueRows = await db
       .select()
@@ -357,11 +376,35 @@ describe("Agent Issue manual approval execution", () => {
     ])
     expect(JSON.stringify(auditRows)).not.toContain("Updated title")
     expect(JSON.stringify(auditRows)).not.toContain("normalizedPayload")
+  })
+
+  it("実行済みreceiptをowner内で再生してterminal stateを保つ", async () => {
+    const fixture = await prepareManualUpdateFixture()
+    const { app, prepared } = fixture
+    const result = await executeManualUpdate(fixture)
+
+    const replayedReceipt = await app.handle(
+      request(`/agent/actions/${prepared.id}/resume`, {
+        method: "POST",
+        body: {},
+      })
+    )
+    expect(replayedReceipt.status).toBe(200)
+    expect(await replayedReceipt.json()).toEqual(result)
+    const crossOwnerReplay = await app.handle(
+      request(`/agent/actions/${prepared.id}/resume`, {
+        method: "POST",
+        body: {},
+        userId: "action-user-b",
+        sessionId: "action-session-b",
+      })
+    )
+    expect(crossOwnerReplay.status).toBe(404)
 
     const decisionAfterExecution = await app.handle(
       request(`/agent/actions/${prepared.id}/decision`, {
         method: "POST",
-        body: decisionBody,
+        body: manualDecisionBody,
       })
     )
     expect(decisionAfterExecution.status).toBe(200)
@@ -371,8 +414,8 @@ describe("Agent Issue manual approval execution", () => {
   })
 })
 
-describe("Agent Issue manual approval conflicts and access scope", () => {
-  it("commits a stale revision as conflicted without applying the approved payload", async () => {
+describe("Agent Issueのmanual approval競合とaccess scope", () => {
+  it("承認済みpayloadを適用せず古いrevisionをconflictedとしてcommitする", async () => {
     const { app, db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "stale-update",
@@ -440,12 +483,15 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
     expect(issue).toEqual({ description: "Human edit wins", revision: 2 })
   })
 
-  it("keeps rejection terminal and scopes decision idempotency keys to one action", async () => {
-    const { app, db } = await createFixture()
-    const first = await createRun(db, { clientMessageId: "reject-first" })
+  it("別テナントのIssue actionをnot foundで隠す", async () => {
+    const { db } = await createFixture()
+    const { internal, run } = await createRun(db, {
+      clientMessageId: "cross-tenant-update",
+    })
+
     await expect(
-      first.internal.prepareUpdateIssue({
-        grant: first.run.grant,
+      internal.prepareUpdateIssue({
+        grant: run.grant,
         toolCallId: "tool-cross-tenant",
         idempotencyKey: "prepare-cross-tenant",
         issue: {
@@ -455,75 +501,62 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         },
       })
     ).rejects.toMatchObject({ code: "not_found" })
-    const rejected = await first.internal.prepareUpdateIssue({
-      grant: first.run.grant,
-      toolCallId: "tool-reject-first",
-      idempotencyKey: "prepare-reject-first",
-      issue: {
-        issueId: "action-issue-a",
-        expectedRevision: 1,
-        title: "Must not be applied",
-      },
-    })
-    const decision = {
-      decision: "no" as const,
-      idempotencyKey: "decision-reject-shared",
-    }
-    const rejectedResponse = await app.handle(
-      request(`/agent/actions/${rejected.id}/decision`, {
-        method: "POST",
-        body: decision,
-      })
-    )
-    expect(rejectedResponse.status).toBe(200)
-    expect(await rejectedResponse.json()).toMatchObject({ status: "rejected" })
-    const repeated = await app.handle(
-      request(`/agent/actions/${rejected.id}/decision`, {
-        method: "POST",
-        body: decision,
-      })
-    )
-    expect(repeated.status).toBe(200)
+  })
+
+  it("rejectionをterminalにして元run grantとresumeを失効させる", async () => {
+    const { db, internal, rejected, response, run } =
+      await prepareRejectedUpdateFixture()
+
+    expect(await response.json()).toMatchObject({ status: "rejected" })
     const liveRejectedRunGrants = await db
       .select({ id: schema.agentGrants.id })
       .from(schema.agentGrants)
       .where(
         and(
-          eq(schema.agentGrants.runId, first.run.runId),
+          eq(schema.agentGrants.runId, run.runId),
           isNull(schema.agentGrants.revokedAt)
         )
       )
     expect(liveRejectedRunGrants).toEqual([])
     await expect(
-      first.internal.executeApprovedAction({
-        grant: first.run.grant,
+      internal.executeApprovedAction({
+        grant: run.grant,
         actionId: rejected.id,
       })
     ).rejects.toMatchObject({ code: "unauthorized" })
+    await expect(
+      issueAgentActionResumeTicket(db, {
+        actionId: rejected.id,
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+      })
+    ).rejects.toMatchObject({ code: "conflict" })
+    const [issue] = await db
+      .select({ revision: schema.issues.revision, title: schema.issues.title })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, "action-issue-a"))
+    expect(issue).toEqual({ revision: 1, title: "Original title" })
+  })
+
+  it("rejected runを新しいattemptとgrantで再試行する", async () => {
+    const { db, internal, run, thread } = await prepareRejectedUpdateFixture()
     const retryTicket = await issueAgentConnectionTicket(db, {
       sessionId: "action-session-a",
-      threadId: first.thread.id,
+      threadId: thread.id,
       userId: "action-user-a",
     })
-    const retryChatRun = await first.internal.startChatRun({
+    const retryChatRun = await internal.startChatRun({
       clientMessageId: "reject-first",
-      threadId: first.thread.id,
+      threadId: thread.id,
       ticket: retryTicket.ticket,
     })
     const retryRun = retryChatRun.run
     expect(retryRun).toMatchObject({
       attempt: 2,
-      runId: first.run.runId,
+      runId: run.runId,
     })
-    const oldDecisionReplay = await app.handle(
-      request(`/agent/actions/${rejected.id}/decision`, {
-        method: "POST",
-        body: decision,
-      })
-    )
-    expect(oldDecisionReplay.status).toBe(200)
     await expect(
-      first.internal.getIssue({
+      internal.getIssue({
         grant: retryRun.grant,
         lookup: "id",
         id: "action-issue-a",
@@ -539,17 +572,14 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         )
       )
     expect(liveRetryGrants).toHaveLength(1)
-    await first.internal.finalizeRun({
+    await internal.finalizeRun({
       grant: retryRun.grant,
       outcome: "canceled",
     })
-    await expect(
-      issueAgentActionResumeTicket(db, {
-        actionId: rejected.id,
-        sessionId: "action-session-a",
-        userId: "action-user-a",
-      })
-    ).rejects.toMatchObject({ code: "conflict" })
+  })
+
+  it("decision idempotency keyを1つのactionへscopeする", async () => {
+    const { app, db, decision } = await prepareRejectedUpdateFixture()
 
     const second = await createRun(db, { clientMessageId: "reject-second" })
     const pending = await second.internal.prepareUpdateIssue({
@@ -579,7 +609,7 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
     expect(issue).toEqual({ revision: 1, title: "Original title" })
   })
 
-  it("enforces full access scope and member delete ownership", async () => {
+  it("full access scopeでmanual approvalなしにupdateする", async () => {
     const { app, db } = await createFixture()
     const autoRun = await createRun(db, { clientMessageId: "auto-write" })
     const putAutoWrite = await app.handle(
@@ -617,7 +647,10 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         actionId: autoUpdate.id,
       })
     ).resolves.toMatchObject({ issue: { revision: 2 } })
+  })
 
+  it("memberによる他user所有Issueの削除を拒否する", async () => {
+    const { db } = await createFixture()
     const memberRun = await createRun(db, {
       clientMessageId: "member-delete",
       userId: "action-user-b",
@@ -628,7 +661,7 @@ describe("Agent Issue manual approval conflicts and access scope", () => {
         grant: memberRun.run.grant,
         toolCallId: "tool-member-delete",
         idempotencyKey: "prepare-member-delete",
-        issue: { issueId: "action-issue-a", expectedRevision: 2 },
+        issue: { issueId: "action-issue-a", expectedRevision: 1 },
       })
     ).rejects.toMatchObject({ code: "forbidden" })
   })

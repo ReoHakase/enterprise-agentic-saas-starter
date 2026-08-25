@@ -27,25 +27,53 @@ const continuationBody = (revision: number) => ({
   timezone: "Asia/Tokyo",
 })
 
-describe("Agent public HTTP input schemas", () => {
-  it("bounds pagination before and after string conversion", () => {
-    expect(
-      v.parse(agentMessagePageQueryModel, {
-        page: String(Number.MAX_SAFE_INTEGER),
-        perPage: "100",
-      })
-    ).toEqual({ page: Number.MAX_SAFE_INTEGER, perPage: 100 })
-    for (const query of [
-      { page: String(Number.MAX_SAFE_INTEGER + 1), perPage: "100" },
-      { page: "9".repeat(10_000), perPage: "100" },
-      { page: "0", perPage: "101" },
-      { page: "0", perPage: "9".repeat(10_000) },
-    ]) {
-      expect(v.safeParse(agentMessagePageQueryModel, query).success).toBe(false)
-    }
+describe("Agent公開HTTP input schema", () => {
+  it.each([
+    {
+      expected: true,
+      label: "safe integer上限",
+      page: String(Number.MAX_SAFE_INTEGER),
+    },
+    {
+      expected: false,
+      label: "safe integer超過",
+      page: String(Number.MAX_SAFE_INTEGER + 1),
+    },
+    { expected: false, label: "過長な数値文字列", page: "9".repeat(10_000) },
+  ] as const)("$labelのpageを上限内だけ受理する", ({ expected, page }) => {
+    const result = v.safeParse(agentMessagePageQueryModel, {
+      page,
+      perPage: "100",
+    })
+    const expectedResult = expected
+      ? { output: { page: Number(page), perPage: 100 }, success: true }
+      : { success: false }
+    expect(result).toMatchObject(expectedResult)
   })
 
-  it("bounds every public Issue revision and number at the safe integer limit", () => {
+  it.each([
+    { expected: true, label: "上限", perPage: "100" },
+    { expected: false, label: "上限超過", perPage: "101" },
+    {
+      expected: false,
+      label: "過長な数値文字列",
+      perPage: "9".repeat(10_000),
+    },
+  ] as const)(
+    "$labelのperPageを上限内だけ受理する",
+    ({ expected, perPage }) => {
+      const result = v.safeParse(agentMessagePageQueryModel, {
+        page: "0",
+        perPage,
+      })
+      const expectedResult = expected
+        ? { output: { page: 0, perPage: Number(perPage) }, success: true }
+        : { success: false }
+      expect(result).toMatchObject(expectedResult)
+    }
+  )
+
+  it("公開Issue revisionをsafe integer上限へ収める", () => {
     expect(
       v.safeParse(agentChatBodyModel, continuationBody(Number.MAX_SAFE_INTEGER))
         .success
@@ -70,6 +98,16 @@ describe("Agent public HTTP input schemas", () => {
         title: "Title",
       }).success
     ).toBe(false)
+  })
+
+  it("公開Issue番号をsafe integer上限へ収める", () => {
+    expect(
+      v.safeParse(getAgentIssueInputModel, {
+        grant: "g".repeat(32),
+        lookup: "number",
+        number: Number.MAX_SAFE_INTEGER,
+      }).success
+    ).toBe(true)
     expect(
       v.safeParse(getAgentIssueInputModel, {
         grant: "g".repeat(32),

@@ -78,8 +78,8 @@ const seedIdentity = async (db: TestDatabase, now: Date) => {
   })
 }
 
-describe("Agent Web search prompt-injection boundary", () => {
-  it("taints the run before an injected write reaches the full-access policy", async () => {
+describe("Agent Web検索のprompt injection境界", () => {
+  it("注入されたwriteがfull-access policyへ届く前にrunをtaintする", async () => {
     const directory = await mkdtemp(join(tmpdir(), "agent-search-taint-g4-"))
     const client = createClient({
       url: `file:${join(directory, "application.db")}`,

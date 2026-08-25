@@ -107,10 +107,10 @@ vi.mock("./modules/profile-images/cleanup-jobs", () => ({
 
 import apiWorker, { AgentInternalApi, resolveWorkerOtelConfig } from "./worker"
 
-describe("Worker maintenance executable boundaries", () => {
+describe("Worker maintenanceの実行境界", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("returns 503 from the named Agent entrypoint before internal runtime setup", async () => {
+  it("内部runtime設定前にnamed Agent entrypointから503を返す", async () => {
     const entrypointContext: ConstructorParameters<typeof AgentInternalApi>[0] =
       Object.create(null)
     const maintenanceEnvironment: ConstructorParameters<
@@ -138,7 +138,7 @@ describe("Worker maintenance executable boundaries", () => {
     expect(boundarySpies.internalApi).not.toHaveBeenCalled()
   })
 
-  it("does not start or enqueue scheduled work during maintenance", () => {
+  it("maintenance中はscheduled workを開始もenqueueもしない", () => {
     const waitUntil = vi.fn<(promise: Promise<unknown>) => void>()
     const maintenanceEnvironment: ConstructorParameters<
       typeof AgentInternalApi
@@ -160,7 +160,7 @@ describe("Worker maintenance executable boundaries", () => {
     expect(boundarySpies.profileImageCleanup).not.toHaveBeenCalled()
   })
 
-  it("executes local telemetry identity resolution at default, named, and scheduled boundaries", async () => {
+  it("defaultとnamedとscheduledの各境界でlocal telemetry identityを解決する", async () => {
     const localEnvironment = Object.assign(Object.create(null), {
       AGENT_MAINTENANCE_MODE: "1",
       DEV_SESSION_ID: "session-1",
@@ -213,43 +213,56 @@ describe("Worker maintenance executable boundaries", () => {
     })
   })
 
-  it("keeps API exporters disabled for production, remote, or incomplete identities", () => {
-    for (const environment of [
-      {
+  it.each([
+    {
+      environment: {
         DEV_SESSION_ID: "session-1",
         DEV_WORKTREE_ID: "feature-auth",
         NODE_ENV: "test",
         OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
       },
-      {
+      label: "development以外の環境",
+    },
+    {
+      environment: {
         DEV_SESSION_ID: "session-1",
         DEV_WORKTREE_ID: "feature-auth",
         NODE_ENV: "development",
         OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318/",
       },
-      {
+      label: "canonicalでないendpoint",
+    },
+    {
+      environment: {
         DEV_SESSION_ID: "session-1",
         DEV_WORKTREE_ID: "feature-auth",
         NODE_ENV: "production",
         OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
       },
-      {
+      label: "production環境",
+    },
+    {
+      environment: {
         DEV_SESSION_ID: "session-1",
         DEV_WORKTREE_ID: "feature-auth",
         NODE_ENV: "development",
         OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.example.test",
       },
-      {
+      label: "remoteのendpoint",
+    },
+    {
+      environment: {
         DEV_SESSION_ID: "",
         DEV_WORKTREE_ID: "feature-auth",
         NODE_ENV: "development",
         OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
       },
-    ]) {
-      expect(resolveWorkerOtelConfig(environment)).toEqual({
-        service: { name: "enterprise-agentic-saas-api" },
-      })
-    }
+      label: "不足したdevelopment identity",
+    },
+  ] as const)("$labelではAPI exporterを無効に保つ", ({ environment }) => {
+    expect(resolveWorkerOtelConfig(environment)).toEqual({
+      service: { name: "enterprise-agentic-saas-api" },
+    })
     expect(boundarySpies.withNextSpan).not.toHaveBeenCalled()
   })
 })

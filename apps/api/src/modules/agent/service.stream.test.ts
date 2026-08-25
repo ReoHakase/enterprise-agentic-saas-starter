@@ -28,8 +28,8 @@ vi.mock("../../platform/observability/runtime", () => ({
 
 import { observeAgentRuntimeStream } from "./runtime-stream"
 
-describe("Agent runtime stream observability", () => {
-  it("reports the original post-response failure once with request correlation", async () => {
+describe("Agent runtime streamのobservability", () => {
+  it("response後の元failureをrequest correlation付きで1回報告する", async () => {
     const cause = new Error("provider stream sentinel")
     const completion = Promise.withResolvers<void>()
     void completion.promise.catch(() => undefined)
