@@ -110,7 +110,7 @@ const createAttachmentRun = async (
     title: "Attachment update",
   })
   for (const [index, assetId] of assetIds.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture rows preserve deterministic claim order.
+    // oxlint-disable-next-line no-await-in-loop -- fixture rowで決定的なclaim順序を維持する
     await seedReadyAsset(db, {
       assetId,
       storageObjectId: `storage-${index}-${assetId}`,
@@ -151,26 +151,39 @@ const createAttachmentRun = async (
   return { internal, run: chatRun.run, thread }
 }
 
-describe("Agent Issue attachment action transactions", () => {
-  it("adds and removes an attachment with one receipt, revision, owner, claim, usage, audit, and thumbnail lifecycle", async () => {
+const executeAttachmentAdd = async (db: FixtureDb, assetId: string) => {
+  const { internal, run } = await createAttachmentRun(db, [assetId])
+  const action = await internal.prepareUpdateIssue({
+    grant: run.grant,
+    toolCallId: "tool-add-attachment",
+    idempotencyKey: "prepare-add-attachment",
+    issue: {
+      operation: "add_attachments",
+      issueId: "action-issue-a",
+      expectedRevision: 1,
+      attachmentAssetIds: [assetId],
+    },
+  })
+  const result = await internal.executeApprovedAction({
+    grant: run.grant,
+    actionId: action.id,
+  })
+  const fileId = result.issue.attachmentMutation?.fileIds[0]
+  if (!fileId) throw new Error("Added attachment file id is missing")
+  return { action, fileId, internal, result, run }
+}
+
+describe("Agent Issue attachment actionのtransaction", () => {
+  it("attachment追加を1つのreceiptとrevisionとownerとclaimとusageとauditへ反映する", async () => {
     const { db } = await createFixture()
     const assetId = "attachment-asset-success"
-    const { internal, run } = await createAttachmentRun(db, [assetId])
-    const addedAction = await internal.prepareUpdateIssue({
-      grant: run.grant,
-      toolCallId: "tool-add-attachment",
-      idempotencyKey: "prepare-add-attachment",
-      issue: {
-        operation: "add_attachments",
-        issueId: "action-issue-a",
-        expectedRevision: 1,
-        attachmentAssetIds: [assetId],
-      },
-    })
-    const added = await internal.executeApprovedAction({
-      grant: run.grant,
-      actionId: addedAction.id,
-    })
+    const {
+      action,
+      fileId,
+      internal,
+      result: added,
+      run,
+    } = await executeAttachmentAdd(db, assetId)
     expect(added.issue).toMatchObject({
       revision: 2,
       attachmentMutation: { operation: "added" },
@@ -178,11 +191,9 @@ describe("Agent Issue attachment action transactions", () => {
     await expect(
       internal.executeApprovedAction({
         grant: run.grant,
-        actionId: addedAction.id,
+        actionId: action.id,
       })
     ).resolves.toEqual(added)
-    const fileId = added.issue.attachmentMutation?.fileIds[0]
-    expect(fileId).toBeTypeOf("string")
     const [owner] = await db
       .select()
       .from(schema.issueFileOwners)
@@ -221,7 +232,14 @@ describe("Agent Issue attachment action transactions", () => {
       mode: "automatic",
       file: { id: fileId },
     })
+  })
 
+  it("attachment削除をrevisionとfileとusageとauditとthumbnailへ反映する", async () => {
+    const { db } = await createFixture()
+    const { fileId, internal, run } = await executeAttachmentAdd(
+      db,
+      "attachment-asset-remove"
+    )
     const removedAction = await internal.prepareUpdateIssue({
       grant: run.grant,
       toolCallId: "tool-remove-attachment",
@@ -230,7 +248,7 @@ describe("Agent Issue attachment action transactions", () => {
         operation: "remove_attachments",
         issueId: "action-issue-a",
         expectedRevision: 2,
-        attachmentFileIds: [fileId ?? ""],
+        attachmentFileIds: [fileId],
       },
     })
     const removed = await internal.executeApprovedAction({
@@ -245,10 +263,7 @@ describe("Agent Issue attachment action transactions", () => {
       attachmentMutation: { operation: "removed", fileIds: [fileId] },
     })
     expect(
-      await db
-        .select()
-        .from(schema.files)
-        .where(eq(schema.files.id, fileId ?? ""))
+      await db.select().from(schema.files).where(eq(schema.files.id, fileId))
     ).toEqual([])
     expect(
       await findEffectiveIssueThumbnail(db, {
@@ -273,7 +288,7 @@ describe("Agent Issue attachment action transactions", () => {
     expect(audits).toHaveLength(2)
   })
 
-  it("rejects stale revision and a file owned by another Issue without mutation", async () => {
+  it("古いrevisionのattachment追加をmutationなしで拒否する", async () => {
     const { db } = await createFixture()
     const assetId = "attachment-asset-stale"
     const { internal, run } = await createAttachmentRun(db, [assetId])
@@ -308,7 +323,11 @@ describe("Agent Issue attachment action transactions", () => {
         .from(schema.files)
         .where(eq(schema.files.organizationId, "action-org-a"))
     ).toEqual([])
+  })
 
+  it("別Issue所有fileのattachment削除を拒否する", async () => {
+    const { db } = await createFixture()
+    const { internal, run } = await createAttachmentRun(db, [])
     await db.insert(schema.issues).values({
       id: "action-issue-second",
       organizationId: "action-org-a",
@@ -358,7 +377,7 @@ describe("Agent Issue attachment action transactions", () => {
     ).rejects.toMatchObject({ code: "not_found" })
   })
 
-  it("does not disclose or attach another tenant's staged asset", async () => {
+  it("別テナントのstaged assetを公開も添付もしない", async () => {
     const { db } = await createFixture()
     const otherThreadId = "action-org-b-asset-thread"
     await db.insert(schema.agentThreads).values({
@@ -412,7 +431,7 @@ describe("Agent Issue attachment action transactions", () => {
     ).toEqual([])
   })
 
-  it("rolls back the first promotion when the second file insert fails", async () => {
+  it("2つ目のfile insert失敗時に1つ目のpromotionをrollbackする", async () => {
     const { db } = await createFixture()
     const assetIds = ["attachment-asset-first", "attachment-asset-second"]
     const { internal, run } = await createAttachmentRun(db, assetIds)
@@ -495,7 +514,7 @@ describe("Agent Issue attachment action transactions", () => {
     expect(assets).toEqual([{ status: "ready" }, { status: "ready" }])
   })
 
-  it("forces attachment add and remove selected after Web search to manual approval", async () => {
+  it("Web検索後に選択したattachment追加をmanual approvalへ強制する", async () => {
     const addFixture = await createFixture()
     const addAssetId = "attachment-asset-search-taint-add"
     const query = "Cloudflare R2 current limits"
@@ -524,9 +543,12 @@ describe("Agent Issue attachment action transactions", () => {
     })
     expect(await addFixture.db.select().from(schema.files)).toEqual([])
     expect(await addFixture.db.select().from(schema.auditLogs)).toEqual([])
+  })
 
+  it("Web検索後に選択したattachment削除をmanual approvalへ強制する", async () => {
     const removeFixture = await createFixture()
     const removeAssetId = "attachment-asset-search-taint-remove"
+    const query = "Cloudflare R2 current limits"
     const removeRun = await createAttachmentRun(
       removeFixture.db,
       [removeAssetId],

@@ -11,8 +11,8 @@ import {
 } from "../development/reset"
 import { seedDevelopmentDatabase } from "../development/seed"
 
-describe("database migrations: lifecycle", () => {
-  it("refuses development seed against a remote Turso database", async () => {
+describe("DBマイグレーションのlifecycle", () => {
+  it("remote Turso DBへの開発seedを拒否する", async () => {
     await expect(
       seedDevelopmentDatabase({
         url: "libsql://production-example.turso.io",
@@ -26,7 +26,7 @@ describe("database migrations: lifecycle", () => {
     ).rejects.toThrow(/restricted to file: databases and localhost/i)
   })
 
-  it("refuses development seed and reset in production even for a local URL", async () => {
+  it("local URLでもproductionの開発seedとresetを拒否する", async () => {
     const previousNodeEnvironment = process.env.NODE_ENV
     process.env.NODE_ENV = "production"
     try {
@@ -45,7 +45,7 @@ describe("database migrations: lifecycle", () => {
     }
   })
 
-  it("rebuilds a local file database from migrations before seeding", async () => {
+  it("seed前にマイグレーションからlocal file DBを再構築する", async () => {
     const directory = await mkdtemp(join(tmpdir(), "enterprise-saas-db-reset-"))
     const databasePath = join(directory, "reset.db")
     const connection = { url: `file:${databasePath}` }

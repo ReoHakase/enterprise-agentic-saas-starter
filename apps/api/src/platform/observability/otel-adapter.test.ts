@@ -113,8 +113,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("OpenTelemetry observability adapter", () => {
-  it("keeps fixed E2 failure telemetry without reporting raw causes", () => {
+describe("OpenTelemetry observability adapterの契約", () => {
+  it("raw causeを報告せず固定E2 failure telemetryを維持する", () => {
     const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
     const runtime = createOtelObservabilityRuntime("api", resource, false)
     runtime.captureException(new Error("provider body must stay out of E2"), {
@@ -135,7 +135,7 @@ describe("OpenTelemetry observability adapter", () => {
     terminal.mockRestore()
   })
 
-  it("keeps trace failures fixed while local raw detail goes only to logs", () => {
+  it("local raw detailをlogだけへ送りtrace failureを固定する", () => {
     const terminal = vi.spyOn(console, "error").mockImplementation(() => {})
     const runtime = createOtelObservabilityRuntime("api", resource)
     runtime.setRequestContext({
@@ -210,7 +210,7 @@ describe("OpenTelemetry observability adapter", () => {
     terminal.mockRestore()
   })
 
-  it("ends synchronous, asynchronous, and failed spans", async () => {
+  it("同期と非同期と失敗したspanを終了する", async () => {
     const runtime = createOtelObservabilityRuntime("api", resource)
 
     expect(
@@ -257,7 +257,7 @@ describe("OpenTelemetry observability adapter", () => {
     )
   })
 
-  it("keeps a span open for a cross-realm style thenable", async () => {
+  it("cross-realm形式のthenable完了までspanを開く", async () => {
     const runtime = createOtelObservabilityRuntime("api", resource)
     const crossRealmPromise: Promise<string> = runInNewContext(
       "Promise.resolve('done')"
@@ -276,7 +276,7 @@ describe("OpenTelemetry observability adapter", () => {
     await vi.waitFor(() => expect(telemetry.span.end).toHaveBeenCalledOnce())
   })
 
-  it("keeps a span open until deferred stream completion", async () => {
+  it("遅延stream完了までspanを開く", async () => {
     const waitUntil = vi.fn<(completion: Promise<unknown>) => void>()
     const runtime = createOtelObservabilityRuntime("api", resource)
     let complete: (() => void) | undefined
@@ -304,7 +304,7 @@ describe("OpenTelemetry observability adapter", () => {
     expect(telemetry.span.end).toHaveBeenCalledWith(expect.any(Number))
   })
 
-  it("injects local correlation headers only when resource values exist", () => {
+  it("resource valueがある場合だけlocal correlation headerを注入する", () => {
     const localHeaders = new Headers()
     createOtelObservabilityRuntime("api", resource).injectRequestHeaders(
       localHeaders
@@ -317,7 +317,7 @@ describe("OpenTelemetry observability adapter", () => {
     expect([...remoteHeaders]).toEqual([])
   })
 
-  it("contains absent active spans and disables raw logs without local identity", () => {
+  it("active span欠如を封じ込めlocal identityなしではraw logを無効にする", () => {
     telemetry.activeSpan = undefined
     const runtime = createOtelObservabilityRuntime("api")
 

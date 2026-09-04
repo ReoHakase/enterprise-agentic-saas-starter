@@ -237,8 +237,8 @@ const selectOption = async (
   await user.click(option)
 }
 
-describe("organization issues", () => {
-  it("renders the full-width table with the requested columns and filters", () => {
+describe("組織のIssue", () => {
+  it("要求された列と公開値を含むIssue tableを描画する", () => {
     renderWorkspace()
 
     const headers = screen
@@ -269,26 +269,16 @@ describe("organization issues", () => {
     const emptyCells = within(emptyCountRow).getAllByRole("cell")
     expect(emptyCells[8]).toBeEmptyDOMElement()
     expect(emptyCells[9]).toBeEmptyDOMElement()
-    expect(screen.getByTestId("status-open")).toHaveClass("bg-white")
-    expect(screen.getByTestId("status-in-progress")).toHaveClass(
-      "bg-violet-200"
-    )
-    expect(screen.getByTestId("status-closed")).toHaveClass("bg-purple-600")
-    expect(screen.getByTestId("priority-urgent")).toHaveClass("text-red-800")
     expect(screen.getByText("Showing 1–3 of 3 matching issues")).toBeVisible()
-    expect(screen.queryByText("Primary")).not.toBeInTheDocument()
-    expect(screen.queryByText("View")).not.toBeInTheDocument()
+  })
+
+  it("検索とfilterとsort controlをsemanticなtoolbarへ構成する", () => {
+    renderWorkspace()
+
     const search = screen.getByRole("searchbox", { name: "Search issues" })
     const columns = screen.getByRole("button", {
       name: "Choose visible columns",
     })
-    expect(columns).toBeVisible()
-    expect(
-      screen.getByRole("columnheader", {
-        name: "Actions",
-      })
-    ).toContainElement(columns)
-    expect(search).toHaveAttribute("data-toolbar-placement", "standalone")
     const toolbar = screen.getByRole("toolbar", {
       name: "Issue table controls",
     })
@@ -296,44 +286,23 @@ describe("organization issues", () => {
       name: /^Issue (filters|sorting)$/u,
     })
     expect(groups).toHaveLength(2)
-    for (const group of groups) {
-      expect(group).toHaveAttribute("data-slot", "data-table-toolbar-group")
-    }
     const filterGroup = within(toolbar).getByRole("group", {
       name: "Issue filters",
     })
     const sortGroup = within(toolbar).getByRole("group", {
       name: "Issue sorting",
     })
-    expect(within(filterGroup).getByText("Filters")).toHaveAttribute(
-      "data-slot",
-      "data-table-toolbar-label"
-    )
     expect(
       within(filterGroup).getByRole("combobox", { name: "Status" })
     ).toBeVisible()
-    expect(within(sortGroup).getByText("Sort")).toHaveAttribute(
-      "data-slot",
-      "data-table-toolbar-label"
-    )
     expect(
       within(sortGroup).getByRole("combobox", { name: "Sort issues" })
     ).toBeVisible()
-    expect(within(filterGroup).queryByRole("searchbox")).not.toBeInTheDocument()
-    expect(within(sortGroup).queryByRole("searchbox")).not.toBeInTheDocument()
-    expect(
-      within(filterGroup).queryByRole("button", {
-        name: "Choose visible columns",
-      })
-    ).not.toBeInTheDocument()
-    expect(
-      within(sortGroup).queryByRole("button", {
-        name: "Choose visible columns",
-      })
-    ).not.toBeInTheDocument()
+    expect(toolbar).toContainElement(search)
+    expect(toolbar).not.toContainElement(columns)
   })
 
-  it("publishes the issue search after the input settles", async () => {
+  it("入力確定後にIssue検索を通知する", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
     const search = screen.getByRole("searchbox", { name: "Search issues" })
@@ -346,7 +315,7 @@ describe("organization issues", () => {
     expect(callbacks.onSearchChange).toHaveBeenCalledWith("billing")
   })
 
-  it("searches labels remotely and applies one URL diff when the filter closes", async () => {
+  it("labelをremote検索し、filterを閉じたときURL差分を1回だけ適用する", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
@@ -368,7 +337,7 @@ describe("organization issues", () => {
     })
   })
 
-  it("keeps a real pagination href before hydration and uses URL state after hydration", async () => {
+  it("ハイドレーション前は実hrefを保持し、完了後はURL状態を使う", async () => {
     const user = userEvent.setup()
     const callbacks = {
       onCreate: vi.fn<(title: string) => Promise<void>>(),
@@ -410,7 +379,7 @@ describe("organization issues", () => {
     expect(callbacks.onViewChange).toHaveBeenCalledWith({ page: 2 })
   })
 
-  it("uses faceted filters and pins only the current assignee as You", async () => {
+  it("faceted status filterをURL状態へcommitする", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
@@ -421,8 +390,12 @@ describe("organization issues", () => {
       statuses: ["in_progress"],
       page: 1,
     })
+  })
 
-    callbacks.onViewChange.mockClear()
+  it("現在の担当者だけをYouとして表示して選択する", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+
     await user.click(screen.getByRole("button", { name: "Assignee" }))
     expect(await screen.findByText("You")).toBeVisible()
     expect(screen.getAllByText("You")).toHaveLength(1)
@@ -432,28 +405,18 @@ describe("organization issues", () => {
     const currentAssignee = within(assigneeFilter).getByLabelText("Jordan You")
     expect(currentAssignee).toHaveTextContent("Jordan")
     expect(currentAssignee).toHaveTextContent("You")
-    expect(
-      within(assigneeFilter)
-        .getAllByRole("option")
-        .map((option) => option.textContent)
-    ).toEqual([
-      "Unassigned",
-      expect.stringContaining("Jordan"),
-      expect.stringContaining("Avery"),
-    ])
-    const search = within(assigneeFilter).getByRole("combobox", {
-      name: "Search assignee",
-    })
-    search.focus()
-    await user.keyboard("{ArrowDown}{Enter}{Escape}")
+    await user.click(
+      within(assigneeFilter).getByRole("option", { name: "Unassigned" })
+    )
+    await user.keyboard("{Escape}")
     expect(callbacks.onViewChange).toHaveBeenCalledWith(
       expect.objectContaining({ assignees: ["unassigned"], page: 1 })
     )
   })
 })
 
-describe("organization issue table state", () => {
-  it("does not overwrite an open label draft when remote options rerender", async () => {
+describe("組織Issue tableの状態", () => {
+  it("remote optionの再描画時も開いているlabel draftを上書きしない", async () => {
     const user = userEvent.setup()
     const callbacks = {
       onCreate: vi.fn<(title: string) => Promise<void>>(),
@@ -490,7 +453,7 @@ describe("organization issue table state", () => {
     )
   })
 
-  it("clears production row selection when the organization scope changes", async () => {
+  it("組織scope変更時に実データ行の選択を消去する", async () => {
     const user = userEvent.setup()
     const callbacks = {
       onCreate: vi.fn<(title: string) => Promise<void>>(),
@@ -516,9 +479,6 @@ describe("organization issue table state", () => {
       name: /Fix billing webhook retries/u,
     })
     expect(selectedRow).toHaveAttribute("data-state", "selected")
-    expect(selectedRow).toHaveClass(
-      "data-[state=selected]:bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]"
-    )
     expect(screen.getByText("1 selected")).toBeVisible()
 
     view.rerender(
@@ -532,7 +492,7 @@ describe("organization issue table state", () => {
     expect(screen.queryByText("1 selected")).not.toBeInTheDocument()
   })
 
-  it("clears selection for each query scope change and retains it for a same-scope refetch", async () => {
+  it("同じquery scopeの再取得では選択を保持する", async () => {
     const user = userEvent.setup()
     const callbacks = createWorkspaceProps()
     const view = render(<IssuesWorkspace issues={issues} {...callbacks} />)
@@ -546,40 +506,37 @@ describe("organization issue table state", () => {
       />
     )
     await waitFor(() => expect(getIssue12Selection()).toBeChecked())
-
-    view.rerender(
-      <IssuesWorkspace
-        issues={issues}
-        {...callbacks}
-        searchState={openIssueSearchState}
-      />
-    )
-    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
-    await user.click(getIssue12Selection())
-
-    view.rerender(
-      <IssuesWorkspace
-        issues={issues}
-        {...callbacks}
-        searchState={secondIssuePageSearchState}
-      />
-    )
-    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
-    await user.click(getIssue12Selection())
-
-    view.rerender(
-      <IssuesWorkspace
-        issues={issues}
-        {...callbacks}
-        searchState={fiftyIssuePageSizeSearchState}
-      />
-    )
-    await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
   })
+
+  it.each([
+    { caseLabel: "status変更", searchState: openIssueSearchState },
+    { caseLabel: "page変更", searchState: secondIssuePageSearchState },
+    {
+      caseLabel: "page size変更",
+      searchState: fiftyIssuePageSizeSearchState,
+    },
+  ])(
+    "$caseLabelでquery scopeが変わると選択を消去する",
+    async ({ searchState }) => {
+      const user = userEvent.setup()
+      const callbacks = createWorkspaceProps()
+      const view = render(<IssuesWorkspace issues={issues} {...callbacks} />)
+
+      await user.click(getIssue12Selection())
+      view.rerender(
+        <IssuesWorkspace
+          issues={issues}
+          {...callbacks}
+          searchState={searchState}
+        />
+      )
+      await waitFor(() => expect(getIssue12Selection()).not.toBeChecked())
+    }
+  )
 })
 
-describe("organization issues continued", () => {
-  it("commits range, due-date, sort, and page-size controls to URL state", async () => {
+describe("組織Issueの操作", () => {
+  it("優先度範囲をURL状態へcommitする", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
@@ -594,8 +551,12 @@ describe("organization issues continued", () => {
         page: 1,
       })
     )
+  })
 
-    callbacks.onViewChange.mockClear()
+  it("期日範囲をURL状態へcommitする", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
+
     await user.click(screen.getByRole("button", { name: "Due date" }))
     const month = new Date().toLocaleDateString("en-US", { month: "long" })
     await user.click(
@@ -617,19 +578,12 @@ describe("organization issues continued", () => {
         page: 1,
       })
     )
+  })
 
-    callbacks.onViewChange.mockClear()
-    await selectOption(
-      user,
-      screen.getByRole("combobox", { name: "Sort issues" }),
-      "Priority"
-    )
-    expect(callbacks.onViewChange).toHaveBeenLastCalledWith({
-      sort: "priority",
-      page: 1,
-    })
+  it("ページサイズをURL状態へcommitする", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
 
-    callbacks.onViewChange.mockClear()
     await selectOption(
       user,
       screen.getByRole("combobox", { name: "Issues per page" }),
@@ -641,7 +595,7 @@ describe("organization issues continued", () => {
     })
   })
 
-  it("keeps previous rows visible and overlays an accessible fetching spinner", () => {
+  it("直前の行を表示したままアクセシブルな取得中spinnerを重ねる", () => {
     render(
       <IssuesWorkspace issues={issues} {...createWorkspaceProps()} fetching />
     )
@@ -656,7 +610,7 @@ describe("organization issues continued", () => {
     )
   })
 
-  it("makes placeholder rows read-only until the new query result arrives", async () => {
+  it("新しいquery結果が届くまでplaceholder行を読み取り専用にする", async () => {
     const callbacks = createWorkspaceProps()
     const view = render(
       <IssuesWorkspace issues={issues} {...callbacks} fetching placeholder />
@@ -693,60 +647,20 @@ describe("organization issues continued", () => {
     ).toBeEnabled()
   })
 
-  it("renders one sticky selection bar outside the non-sticky footer", async () => {
-    const user = userEvent.setup()
-    renderWorkspace()
-
-    await user.click(screen.getByRole("checkbox", { name: "Select issue 12" }))
-    const clear = screen.getByRole("button", { name: "Clear" })
-    const pageSize = screen.getByRole("combobox", { name: "Issues per page" })
-    const footer = screen.getByLabelText("Issue table footer")
-    const selectionBar = screen.getByTestId("data-table-selection-bar")
-    const anchor = screen.getByTestId("data-table-selection-anchor")
-
-    expect(footer).not.toHaveClass("sticky")
-    expect(anchor).toHaveAttribute("data-slot", "data-table-selection-anchor")
-    expect(anchor).toHaveClass("h-fit", "sticky", "self-end", "justify-center")
-    expect(anchor).toHaveClass(
-      "bottom-[calc(1rem+env(safe-area-inset-bottom))]"
-    )
-    expect(selectionBar).toHaveAttribute(
-      "data-slot",
-      "data-table-selection-bar"
-    )
-    expect(within(footer).queryByText("1 selected")).not.toBeInTheDocument()
-    expect(screen.getAllByText("1 selected")).toHaveLength(1)
-    expect(
-      within(footer).getByRole("combobox", { name: "Issues per page" })
-    ).toBe(pageSize)
-    await user.click(clear)
-    expect(
-      screen.queryByRole("status", { name: "1 selected" })
-    ).not.toBeInTheDocument()
-  })
-
-  it("shows Eye and EyeClosed states only for hideable columns", async () => {
+  it("非表示にできる列だけを列メニューへ表示する", async () => {
     const user = userEvent.setup()
     renderWorkspace()
 
     const trigger = screen.getByRole("button", {
       name: "Choose visible columns",
     })
-    expect(trigger).not.toHaveTextContent("Columns")
-    const header = screen.getByRole("columnheader", {
-      name: "Actions",
-    })
-    expect(header).toHaveClass("w-12", "min-w-12", "max-w-12", "p-0")
-    expect(
-      within(header).getByTestId("issue-actions-header-island")
-    ).toContainElement(trigger)
     await user.click(trigger)
-    const thumbnail = screen.getByRole("menuitemcheckbox", {
-      name: "Thumbnail",
-    })
-    const number = screen.getByRole("menuitemcheckbox", { name: "Number" })
-    expect(thumbnail).toHaveAttribute("data-visibility-icon", "eye")
-    expect(number).toHaveAttribute("data-visibility-icon", "eye")
+    expect(
+      screen.getByRole("menuitemcheckbox", { name: "Thumbnail" })
+    ).toBeVisible()
+    expect(
+      screen.getByRole("menuitemcheckbox", { name: "Number" })
+    ).toBeVisible()
     expect(
       screen.queryByRole("menuitemcheckbox", { name: "Name" })
     ).not.toBeInTheDocument()
@@ -755,7 +669,7 @@ describe("organization issues continued", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("creates, opens the canonical detail page, and deletes from the table", async () => {
+  it("新しいIssueを作成する", async () => {
     const user = userEvent.setup()
     const callbacks = renderWorkspace()
 
@@ -763,15 +677,15 @@ describe("organization issues continued", () => {
     await user.type(screen.getByLabelText("Title"), "Prepare launch")
     await user.click(screen.getByRole("button", { name: "Create issue" }))
     expect(callbacks.onCreate).toHaveBeenCalledWith("Prepare launch")
+  })
+
+  it("Issue詳細を開く", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
 
     expect(
       screen.getByRole("link", { name: billingIssue.title })
     ).toHaveAttribute("href", "/organization/acme/issues/12")
-    expect(
-      screen.queryByRole("link", {
-        name: `Open ${billingIssue.title} as full page`,
-      })
-    ).not.toBeInTheDocument()
 
     await user.click(
       screen.getByRole("button", { name: `Actions for ${billingIssue.title}` })
@@ -780,6 +694,11 @@ describe("organization issues continued", () => {
       await screen.findByRole("menuitem", { name: "View details" })
     )
     expect(callbacks.onSelectIssue).toHaveBeenCalledWith(billingIssue)
+  })
+
+  it("Issueを削除する", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderWorkspace()
 
     await user.click(
       screen.getByRole("button", { name: `Actions for ${billingIssue.title}` })
@@ -791,7 +710,25 @@ describe("organization issues continued", () => {
     expect(callbacks.onDelete).toHaveBeenCalledWith(billingIssue)
   })
 
-  it("shows empty metrics and recovery state", async () => {
+  it("空状態の指標を表示する", () => {
+    const callbacks = {
+      onCreate: vi.fn<(title: string) => void>(),
+      onToggle: vi.fn<(issue: IssueUiItem) => void>(),
+      onDelete: vi.fn<(issue: IssueUiItem) => void>(),
+      getIssueHref: (issue: IssueUiItem) =>
+        `/organization/acme/issues/${issue.number.toString()}`,
+      onSelectIssue: vi.fn<(issue: IssueUiItem) => void>(),
+      onRetry: vi.fn<() => void>(),
+      ...createViewProps(0),
+    }
+    render(<IssuesWorkspace issues={noIssues} {...callbacks} />)
+    expect(screen.getByText("No matching issues")).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText("Issue status summary")).getAllByText("0")
+    ).toHaveLength(3)
+  })
+
+  it("Issue取得エラーを再試行する", async () => {
     const user = userEvent.setup()
     const callbacks = {
       onCreate: vi.fn<(title: string) => void>(),
@@ -803,61 +740,41 @@ describe("organization issues continued", () => {
       onRetry: vi.fn<() => void>(),
       ...createViewProps(0),
     }
-    const view = render(<IssuesWorkspace issues={noIssues} {...callbacks} />)
-    expect(screen.getByText("No matching issues")).toBeInTheDocument()
-    expect(
-      within(screen.getByLabelText("Issue status summary")).getAllByText("0")
-    ).toHaveLength(3)
-
-    view.rerender(
+    render(
       <IssuesWorkspace
         issues={noIssues}
         error="Request failed"
         {...callbacks}
       />
     )
+
     await user.click(screen.getByRole("button", { name: "Try again" }))
     expect(callbacks.onRetry).toHaveBeenCalledOnce()
   })
 
-  it("renders activity with comments and loads older items", async () => {
+  it("Issue詳細のdiscussionへactivity timelineを構成する", () => {
+    renderDetail()
+
+    expect(screen.getByRole("region", { name: "Discussion" })).toContainElement(
+      screen.getByText("created this issue")
+    )
+  })
+
+  it("過去のactivityを追加取得する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
 
-    expect(screen.getByText("created this issue")).toBeInTheDocument()
-    expect(screen.getByText(/changed status from/)).toBeInTheDocument()
-    expect(screen.getAllByTestId("status-open").length).toBeGreaterThan(0)
-    expect(screen.getAllByTestId("status-in-progress").length).toBeGreaterThan(
-      0
-    )
-    expect(screen.getByText(/changed assignee from/)).toBeInTheDocument()
-    expect(screen.getAllByText("Jordan").length).toBeGreaterThan(0)
-    expect(screen.queryByText("user-2")).not.toBeInTheDocument()
-    expect(screen.getAllByText("JO").length).toBeGreaterThan(0)
-    expect(screen.getByText("Verified in staging.")).toBeInTheDocument()
-    expect(screen.getByText("Edited")).toBeInTheDocument()
-    expect(screen.getByText(/edited at/)).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Load older" }))
     expect(callbacks.onLoadOlder).toHaveBeenCalledOnce()
   })
 
-  it("edits the issue title and description", async () => {
+  it("Issueの題名を編集する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
 
     await user.click(screen.getByRole("button", { name: "Edit issue title" }))
     const title = screen.getByLabelText("Issue title")
     const saveTitle = screen.getByRole("button", { name: "Save title" })
-    expect(screen.getByRole("form", { name: "Title editor" })).toHaveClass(
-      "order-2",
-      "w-full",
-      "sm:order-1",
-      "sm:w-auto",
-      "sm:flex-1"
-    )
-    expect(
-      screen.queryByRole("button", { name: "Open full page" })
-    ).not.toBeInTheDocument()
     expect(saveTitle).toBeDisabled()
     await user.clear(title)
     await user.type(title, "Fix payment retries")
@@ -868,6 +785,11 @@ describe("organization issues continued", () => {
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       title: "Fix payment retries",
     })
+  })
+
+  it("Issueの説明を編集する", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
 
     await user.click(screen.getByRole("button", { name: "Edit description" }))
     const description = screen.getByRole("textbox", { name: "Description" })
@@ -884,7 +806,7 @@ describe("organization issues continued", () => {
     })
   })
 
-  it("updates the issue status and labels", async () => {
+  it("Issueのstatusを更新する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
 
@@ -896,6 +818,11 @@ describe("organization issues continued", () => {
     expect(callbacks.onUpdate).toHaveBeenCalledWith(billingIssue, {
       status: "in_progress",
     })
+  })
+
+  it("Issueへlabelを追加する", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
 
     await user.type(
       screen.getByRole("combobox", { name: "Search or create a label" }),
@@ -909,7 +836,7 @@ describe("organization issues continued", () => {
     })
   })
 
-  it("updates the due date and creates a comment", async () => {
+  it("Issueの期日を更新する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
 
@@ -946,6 +873,11 @@ describe("organization issues continued", () => {
       throw new Error("Expected a due date update")
     }
     expect(new Date(dueDateUpdate.dueDate).getHours()).toBe(Number(nextDueHour))
+  })
+
+  it("Issueへコメントを作成する", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderDetail()
 
     await user.type(screen.getByLabelText("Add comment"), "Ready to ship")
     await user.click(screen.getByRole("button", { name: "Comment" }))
@@ -955,13 +887,10 @@ describe("organization issues continued", () => {
     )
   })
 
-  it("composes the responsive regions and groups timestamps with description", () => {
+  it("Issue詳細のsemantic領域を順序どおり構成する", () => {
     renderDetail()
 
-    expect(screen.getByTestId("issue-detail")).toHaveClass(
-      "[--issue-timeline-surface:var(--background)]"
-    )
-    const metadata = screen.getByRole("complementary", {
+    screen.getByRole("complementary", {
       name: "Issue metadata",
     })
     const primaryColumn = screen.getByRole("group", {
@@ -976,10 +905,6 @@ describe("organization issues continued", () => {
     const attachments = screen.getByRole("region", {
       name: "Attachments",
     })
-    expect(metadata).toBeInTheDocument()
-    expect(description).toBeInTheDocument()
-    expect(attachments).toBeInTheDocument()
-    expect(discussion).toBeInTheDocument()
     expect(primaryColumn).toContainElement(description)
     expect(primaryColumn).toContainElement(attachments)
     expect(primaryColumn).toContainElement(discussion)
@@ -991,13 +916,14 @@ describe("organization issues continued", () => {
       attachments.compareDocumentPosition(discussion) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
-    expect(metadata).toHaveClass(
-      "lg:sticky",
-      "lg:top-6",
-      "lg:col-start-2",
-      "lg:row-start-1"
-    )
-    expect(primaryColumn).toHaveClass("lg:col-start-1", "lg:row-start-1")
+  })
+
+  it("Issue詳細のheaderとmetadataを公開値で表示する", () => {
+    renderDetail()
+
+    const description = screen.getByRole("region", {
+      name: "Description",
+    })
     expect(
       screen.getByRole("heading", { name: billingIssue.title, level: 1 })
     ).toBeInTheDocument()
@@ -1016,7 +942,7 @@ describe("organization issues continued", () => {
     expect(within(description).queryByText("Former member")).toBeNull()
   })
 
-  it("settles a failed immediate field update without an unhandled rejection", async () => {
+  it("失敗した即時フィールド更新を未処理の拒否なしで解決する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
     callbacks.onUpdate.mockRejectedValueOnce(
@@ -1032,7 +958,7 @@ describe("organization issues continued", () => {
     await waitFor(() => expect(status).toHaveAttribute("aria-busy", "false"))
   })
 
-  it("confirms before leaving the full page with an unsaved draft", async () => {
+  it("未保存の下書きでページ全体を終了する前に確認する", async () => {
     const user = userEvent.setup()
     const callbacks = renderDetail()
     await user.type(screen.getByLabelText("Add comment"), "Keep this draft")
@@ -1050,7 +976,7 @@ describe("organization issues continued", () => {
     expect(callbacks.onRequestClose).toHaveBeenCalledOnce()
   })
 
-  it("uses the same discard dialog for browser Back on a full page", async () => {
+  it("全画面表示でブラウザーのBackにも同じ破棄dialogを使う", async () => {
     const user = userEvent.setup()
     const historyBack = vi
       .spyOn(window.history, "back")

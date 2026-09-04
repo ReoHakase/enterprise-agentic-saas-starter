@@ -8,6 +8,8 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 ## 必読文書
 
 - [テスト戦略](../../../docs/testing-strategy/README.md)
+- [テストケース設計・記述規約](../../../docs/testing-strategy/common/test-case-design.md)
+- [Browser test記述規約](../../../docs/testing-strategy/common/browser-test-writing.md)
 - [Webテスト](../../../docs/testing-strategy/apps/web.md)
 - [統合E2E](../../../docs/testing-strategy/e2e.md)
 - [製品Agentのrelease gate](../../../docs/agent/testing.md)
@@ -15,7 +17,7 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 
 ## Workflow
 
-1. 最も低い決定的なテスト層とブラウザーが必要な境界を変更前に決める。
+1. 要求をGiven-When-Thenで表し、最も低い決定的なテスト層とブラウザーが必要な境界を変更前に決める。
 2. 一般UIとmock transportはW3、W4、W6へ置き、auth/session/cookie/Origin/CORS/CSRF、OAuth、
    実Worker/API/DBの最終配線はE1へ置く。
 3. Emulateのprovider suiteは`test:e2e`内のE1 profileに集約し、独立root scriptを追加しない。
@@ -25,6 +27,8 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
    Chromiumを最大3 workers、代表WebKitを別processで単独実行する。
 7. Agent behavior変更はbrowserless G5を先に実行し、release candidateだけE2 canaryを実行する。
 8. paid runnerが起動したchild processとtmp resourceだけを終了時にcleanupする。
+9. W6、E1、E2にはURL、history、cookie、workspace間配線などその層だけが失敗させられる代表caseだけを
+   置き、下位層の分岐を再検査しない。
 
 ## Validation
 

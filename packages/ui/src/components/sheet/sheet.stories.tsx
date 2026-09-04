@@ -54,7 +54,7 @@ export const OrganizationSettings = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const trigger = canvas.getByRole("button", { name: "Open settings" })
     const body = within(canvasElement.ownerDocument.body)
-    await step("Open settings and close with the button", async () => {
+    await step("設定を開いてボタンで閉じる", async () => {
       await userEvent.click(trigger)
       await waitFor(() =>
         expect(

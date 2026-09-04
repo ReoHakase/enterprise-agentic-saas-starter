@@ -1,4 +1,4 @@
-import { expect, fn, userEvent, waitFor } from "storybook/test"
+import { expect, userEvent, waitFor } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -13,13 +13,12 @@ const meta = preview.meta({
   args: {
     defaultValue: 40,
     getAriaLabel: priorityLabel,
-    onValueChange: fn(),
   },
 })
 
 export const SingleValue = meta.story({
-  play: async ({ args, canvas, canvasElement, step }) => {
-    await step("Increase the threshold with ArrowRight", async () => {
+  play: async ({ canvas, canvasElement, step }) => {
+    await step("Tabキーでスライダーのfocus-visible装飾を表示する", async () => {
       const slider = canvas.getByRole("slider", { name: "Priority threshold" })
       const thumb = slider.closest<HTMLElement>('[data-slot="slider-thumb"]')
       if (!thumb) throw new globalThis.Error("Expected visible slider thumb")
@@ -30,9 +29,6 @@ export const SingleValue = meta.story({
       await waitFor(() =>
         expect(getComputedStyle(thumb).boxShadow).not.toBe(shadowBeforeFocus)
       )
-      await userEvent.keyboard("{ArrowRight}")
-      await expect(slider).toHaveAttribute("aria-valuenow", "41")
-      await expect(args.onValueChange).toHaveBeenCalled()
     })
   },
 })

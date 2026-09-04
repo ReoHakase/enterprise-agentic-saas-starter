@@ -11,8 +11,8 @@ const assistantMessage = (
   parts,
 })
 
-describe("getAgentWaitingState", () => {
-  it("waits for the first visible stream part after submission or headers", () => {
+describe("getAgentWaitingStateの契約", () => {
+  it("送信またはheader受信後は最初の可視stream partを待つ", () => {
     expect(getAgentWaitingState("submitted", [])).toBe("first-byte")
     expect(getAgentWaitingState("streaming", [])).toBe("first-byte")
     expect(
@@ -22,7 +22,7 @@ describe("getAgentWaitingState", () => {
     ).toBe("first-byte")
   })
 
-  it("does not duplicate the progress UI of an active part", () => {
+  it("処理中partの進捗UIを重複表示しない", () => {
     expect(
       getAgentWaitingState("streaming", [
         assistantMessage([
@@ -45,7 +45,7 @@ describe("getAgentWaitingState", () => {
     ).toBeUndefined()
   })
 
-  it("shows continuation progress after a tool result until the next part", () => {
+  it("tool result受信後から次のpartまで継続中の進捗を表示する", () => {
     expect(
       getAgentWaitingState("streaming", [
         assistantMessage([

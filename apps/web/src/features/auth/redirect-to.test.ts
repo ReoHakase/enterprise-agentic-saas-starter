@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { sanitizeAuthRedirectTo } from "./redirect-to"
 
-describe("sanitizeAuthRedirectTo", () => {
+describe("sanitizeAuthRedirectToの契約", () => {
   it.each([
     "https://evil.example/phish",
     "//evil.example/phish",
@@ -11,11 +11,11 @@ describe("sanitizeAuthRedirectTo", () => {
     "/%252f%252fevil.example/phish",
     "/%5cevil.example/phish",
     "/%00dashboard",
-  ])("rejects non-local redirect %s", (redirectTo) => {
+  ])("外部へのredirectToを拒否する: %s", (redirectTo) => {
     expect(sanitizeAuthRedirectTo(redirectTo)).toBe("/dashboard")
   })
 
-  it("keeps a local path with query and hash", () => {
+  it("queryとhashを含むローカルパスを保持する", () => {
     expect(
       sanitizeAuthRedirectTo(
         "/organization/acme-operations/members?tab=pending#invite"
@@ -23,7 +23,7 @@ describe("sanitizeAuthRedirectTo", () => {
     ).toBe("/organization/acme-operations/members?tab=pending#invite")
   })
 
-  it("uses a configurable fallback for a missing value", () => {
+  it("値がない場合は設定された代替遷移先を使う", () => {
     expect(sanitizeAuthRedirectTo(undefined, "/settings/account")).toBe(
       "/settings/account"
     )

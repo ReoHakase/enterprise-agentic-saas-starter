@@ -7,8 +7,8 @@ import {
   parseWorkerSecretInventory,
 } from "./worker-secret-policy"
 
-describe("Worker secret inventory policy", () => {
-  it("rejects only the cross-database secrets for each Worker", () => {
+describe("Worker secret inventory policyの契約", () => {
+  it("各Workerのcross-database secretだけを拒否する", () => {
     const inventory = [
       "MASTRA_STORAGE_AUTH_TOKEN",
       "MASTRA_STORAGE_URL",
@@ -30,7 +30,7 @@ describe("Worker secret inventory policy", () => {
     ).not.toThrow()
   })
 
-  it("fails closed for malformed Cloudflare inventory responses", () => {
+  it("不正Cloudflare inventory responseを安全側に失敗させる", () => {
     expect(() =>
       parseWorkerSecretInventory({ success: false, result: [] })
     ).toThrow("inventory is invalid")
@@ -39,7 +39,7 @@ describe("Worker secret inventory policy", () => {
     ).toThrow("entry is invalid")
   })
 
-  it("rejects forbidden secrets that appear after the initial inventory", () => {
+  it("初回inventory後に現れた禁止secretを拒否する", () => {
     expect(() =>
       assertNoNewStaleWorkerSecrets(
         "api",

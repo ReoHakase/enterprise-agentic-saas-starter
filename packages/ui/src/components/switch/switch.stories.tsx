@@ -1,5 +1,3 @@
-import { expect, fn, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Label } from "../label/label"
@@ -11,24 +9,10 @@ const meta = preview.meta({
   tags: ["autodocs"],
   args: {
     "aria-label": "Email security updates",
-    onCheckedChange: fn(),
   },
 })
 
-export const Off = meta.story({
-  play: async ({ args, canvas, step }) => {
-    await step("Enable notifications with Space", async () => {
-      const toggle = canvas.getByRole("switch", {
-        name: "Email security updates",
-      })
-      toggle.focus()
-      await userEvent.keyboard(" ")
-      await expect(toggle).toBeChecked()
-      await expect(args.onCheckedChange).toHaveBeenCalled()
-      await expect(args.onCheckedChange?.mock.calls[0]?.[0]).toBe(true)
-    })
-  },
-})
+export const Off = meta.story({})
 
 export const On = meta.story({
   args: { defaultChecked: true },

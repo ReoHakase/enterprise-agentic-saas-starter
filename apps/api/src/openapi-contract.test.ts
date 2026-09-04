@@ -77,8 +77,8 @@ const createOpenApiDocument = async (): Promise<JsonObject> => {
   }
 }
 
-describe("app-owned OpenAPI consumer contract", () => {
-  it("does not merge Better Auth paths or components", async () => {
+describe("application所有OpenAPIのconsumer契約", () => {
+  it("Better Authのpathやcomponentを結合しない", async () => {
     const document = await createOpenApiDocument()
     const paths = requiredObject(document.paths, "paths")
     const components = requiredObject(document.components, "components")
@@ -94,7 +94,7 @@ describe("app-owned OpenAPI consumer contract", () => {
     expect(Object.keys(securitySchemes)).toEqual(["sessionCookie"])
   })
 
-  it("documents the maintenance response on every public Agent operation", async () => {
+  it("すべての公開Agent operationへmaintenance responseを記載する", async () => {
     const document = await createOpenApiDocument()
     const paths = requiredObject(document.paths, "paths")
 
@@ -117,7 +117,7 @@ describe("app-owned OpenAPI consumer contract", () => {
     }
   })
 
-  it("documents the canonical audit action and target type enums", async () => {
+  it("正本のaudit actionとtarget type enumを記載する", async () => {
     // When: app-owned OpenAPI documentを生成する
     const document = await createOpenApiDocument()
     const paths = requiredObject(document.paths, "paths")
@@ -175,7 +175,7 @@ describe("app-owned OpenAPI consumer contract", () => {
     ).toEqual([...schema.auditTargetTypes])
   })
 
-  it("documents every operation with English metadata and classifications", async () => {
+  it("すべてのoperationへ英語metadataと分類を記載する", async () => {
     const document = await createOpenApiDocument()
     if (!Array.isArray(document.tags)) {
       throw new TypeError("tags must be an array")

@@ -30,8 +30,8 @@ const resetObservability = () => {
   observability.recordHttpStatus.mockClear()
 }
 
-describe("errorPlugin", () => {
-  it("treats response validation as an observed internal defect", async () => {
+describe("errorPluginの契約", () => {
+  it("response validation失敗を観測対象の内部欠陥として扱う", async () => {
     resetObservability()
     const secret = "TURSO_AUTH_TOKEN=private-response-value"
     const responseModel = v.object({ status: v.literal("ok") })
@@ -73,7 +73,7 @@ describe("errorPlugin", () => {
     })
   })
 
-  it("captures the original 5xx cause and exposes retry metadata only as a header", async () => {
+  it("元の5xx causeをcaptureしてretry metadataをheaderだけへ公開する", async () => {
     resetObservability()
     const cause = new Error("TURSO_AUTH_TOKEN=private-dependency-value")
     const app = new Elysia()
@@ -110,7 +110,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException.mock.calls[0]?.[0]).toBe(cause)
   })
 
-  it("does not capture expected 4xx errors", async () => {
+  it("想定内の4xx errorをcaptureしない", async () => {
     resetObservability()
     const app = new Elysia()
       .use(requestIdPlugin)
@@ -134,7 +134,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it("returns an explicitly public message and bounded field errors for 4xx", async () => {
+  it("4xxへ明示公開messageと上限付きfield errorを返す", async () => {
     resetObservability()
     const app = new Elysia()
       .use(requestIdPlugin)
@@ -161,7 +161,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it("projects request validation to safe field paths without echoing values", async () => {
+  it("値を反射せずrequest validationを安全なfield pathへ投影する", async () => {
     resetObservability()
     const secret = "token=private-input-value"
     const app = new Elysia()
@@ -191,7 +191,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it("treats malformed JSON as an expected validation failure", async () => {
+  it("不正なJSONを想定内のvalidation failureとして扱う", async () => {
     resetObservability()
     const app = new Elysia()
       .use(requestIdPlugin)
@@ -220,7 +220,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it("does not invent an undefined field path for root validation", async () => {
+  it("root validationへ未定義のfield pathを作らない", async () => {
     resetObservability()
     const app = new Elysia()
       .use(requestIdPlugin)
@@ -245,7 +245,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException).not.toHaveBeenCalled()
   })
 
-  it("returns a bounded response while preserving a hostile unknown for capture", () => {
+  it("敵対的unknownをcapture用に維持し上限付きresponseを返す", () => {
     const hostile = new Proxy(
       {},
       {
@@ -265,7 +265,7 @@ describe("errorPlugin", () => {
     expect(projection.capture?.value).toBe(hostile)
   })
 
-  it("captures an unknown thrown value exactly once without wrapping it", async () => {
+  it("投げられたunknown値をwrapせず正確に1回captureする", async () => {
     resetObservability()
     const thrown = { detail: "DATABASE_URL=private-integration-value" }
     const app = new Elysia()
@@ -290,7 +290,7 @@ describe("errorPlugin", () => {
     expect(observability.captureException.mock.calls[0]?.[0]).toBe(thrown)
   })
 
-  it("does not confuse an undefined unknown with the no-capture sentinel", () => {
+  it("undefinedのunknownとno-capture sentinelを混同しない", () => {
     const projection = projectErrorForResponse("UNKNOWN", undefined)
 
     expect(projection.body).toEqual({

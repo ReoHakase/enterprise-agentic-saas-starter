@@ -68,7 +68,7 @@ const freshAuthClient = ({
   },
 })
 
-describe("device account actions", () => {
+describe("デバイスアカウントのアクション", () => {
   const fetchAgent = vi.fn<typeof fetch>()
 
   beforeEach(() => {
@@ -79,7 +79,7 @@ describe("device account actions", () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it("switches only after revoking and fencing the old identity", async () => {
+  it("古い認証状態を取り消し、競合を防いでから切り替える", async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(["private"], "old account")
     const cancelQueries = vi.spyOn(queryClient, "cancelQueries")
@@ -121,7 +121,7 @@ describe("device account actions", () => {
     })
   })
 
-  it("signs out only the uniquely resolved current session", async () => {
+  it("一意に解決された現在のセッションのみをサインアウトする", async () => {
     const queryClient = new QueryClient()
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
@@ -141,7 +141,7 @@ describe("device account actions", () => {
     })
   })
 
-  it("fails closed when the current session token is ambiguous", async () => {
+  it("現在のセッショントークンを一意に特定できない場合は拒否する", async () => {
     const queryClient = new QueryClient()
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
@@ -164,7 +164,7 @@ describe("device account actions", () => {
     expect(revoke).not.toHaveBeenCalled()
   })
 
-  it("does not clear identity state when removing a non-current account", async () => {
+  it("現在以外のアカウントを削除しても認証状態を消去しない", async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(["private"], "current account")
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
@@ -185,7 +185,7 @@ describe("device account actions", () => {
     expect(queryClient.getQueryData(["private"])).toBe("current account")
   })
 
-  it("leaves the old account cache intact when activation fails", async () => {
+  it("アクティベーションが失敗した場合でも古いアカウントのキャッシュをそのまま残す", async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(["private"], "old account")
     const complete = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -208,7 +208,7 @@ describe("device account actions", () => {
     expect(queryClient.getQueryData(["private"])).toBe("old account")
   })
 
-  it("rejects sign-out before Agent revoke when another tab changed the active session", async () => {
+  it("別タブで有効セッションが変わった場合はAgentを取り消す前にサインアウトを拒否する", async () => {
     const queryClient = new QueryClient()
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 
@@ -229,7 +229,7 @@ describe("device account actions", () => {
     expect(revoke).not.toHaveBeenCalled()
   })
 
-  it("never removes an account that became current in another tab", async () => {
+  it("別のタブで現在になったアカウントは決して削除しない", async () => {
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 
     await expect(
@@ -248,7 +248,7 @@ describe("device account actions", () => {
     expect(revoke).not.toHaveBeenCalled()
   })
 
-  it("reports an identity change when the active token changes during removal", async () => {
+  it("削除中にアクティブなトークンが変更されたときにアイデンティティの変更を報告する", async () => {
     const revoke = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
     revoke.mockResolvedValue({ data: {} })
     const authClient = freshAuthClient({ revoke })
@@ -276,7 +276,7 @@ describe("device account actions", () => {
     expect(getSession).toHaveBeenCalledTimes(2)
   })
 
-  it("rejects a stale switch target before revoking the old Agent context", async () => {
+  it("古いAgentコンテキストを取り消す前に期限切れの切替先を拒否する", async () => {
     const queryClient = new QueryClient()
     const setActive = vi.fn<(input: SessionMutationInput) => Promise<unknown>>()
 

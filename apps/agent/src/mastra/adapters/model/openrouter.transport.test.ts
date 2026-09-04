@@ -10,8 +10,8 @@ type FetchCall = (
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe("Product Agent OpenRouter transport", () => {
-  it("sends Luna xhigh reasoning without excluding the returned reasoning", async () => {
+describe("Product AgentのOpenRouter transport", () => {
+  it("返却reasoningを除外せずLuna xhigh reasoningを送る", async () => {
     const fetchMock = vi.fn<FetchCall>(async () =>
       Response.json({
         choices: [

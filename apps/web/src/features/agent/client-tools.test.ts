@@ -61,7 +61,7 @@ const dependencies = () => {
   }
 }
 
-describe("agent client tools", () => {
+describe("Agent client toolの契約", () => {
   afterEach(() => vi.useRealTimers())
 
   it.each([
@@ -75,7 +75,7 @@ describe("agent client tools", () => {
       input: { issueNumber: 42 },
       href: "/organization/acme/issues/42?agentThread=thread-1",
     },
-  ])("defers $toolName until its tool output is returned", async (testCase) => {
+  ])("ツール出力が返されるまで $toolName を延期する", async (testCase) => {
     vi.useFakeTimers()
     const deps = dependencies()
 
@@ -88,7 +88,7 @@ describe("agent client tools", () => {
     expect(deps.navigate).toHaveBeenCalledWith(testCase.href)
   })
 
-  it("merges a partial query, resets page, and navigates to canonical Issues", async () => {
+  it("部分的なqueryを統合し、ページをリセットして正規のIssueへ遷移する", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
     const expectedQuery = {
@@ -119,7 +119,7 @@ describe("agent client tools", () => {
     )
   })
 
-  it("removes filter defaults while preserving the Agent thread", async () => {
+  it("Agent スレッドを保持しながらフィルターのデフォルトを削除する", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
     deps.issueSearchState = {
@@ -150,7 +150,7 @@ describe("agent client tools", () => {
     )
   })
 
-  it("clears advanced query state that the legacy tool cannot represent", async () => {
+  it("従来のツールでは表現できない高度なクエリ状態をクリアする", async () => {
     vi.useFakeTimers()
     const deps = dependencies()
     deps.issueSearchState = {
@@ -188,7 +188,7 @@ describe("agent client tools", () => {
     )
   })
 
-  it("rejects arbitrary tools and operation targets", async () => {
+  it("未許可のツールや操作対象を拒否する", async () => {
     const deps = dependencies()
     await expect(executeAgentClientTool("ui_eval", {}, deps)).rejects.toThrow(
       "not allowlisted"
@@ -216,7 +216,7 @@ describe("agent client tools", () => {
     ).rejects.toThrow("Invalid input")
   })
 
-  it("patches only an exact form and epoch read from the mounted registry", async () => {
+  it("マウント済みregistryから取得した完全一致のフォームとepochだけにpatchを適用する", async () => {
     const deps = dependencies()
 
     await executeAgentClientTool(
@@ -241,7 +241,7 @@ describe("agent client tools", () => {
     )
   })
 
-  it("fails closed while the organization switch barrier is frozen", async () => {
+  it("組織切替barrierが凍結中は失敗時に拒否する", async () => {
     await expect(
       executeAgentClientTool(
         "ui_navigate",

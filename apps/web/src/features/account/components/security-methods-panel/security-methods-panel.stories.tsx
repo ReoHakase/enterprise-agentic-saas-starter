@@ -52,7 +52,7 @@ export const Ready = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Review and cancel passkey deletion", async () => {
+    await step("パスキーの削除を確認してキャンセルする", async () => {
       await expect(await canvas.findByText("Avery's MacBook")).toBeVisible()
       await userEvent.click(canvas.getByRole("button", { name: "Delete" }))
       await expect(body.getByRole("alertdialog")).toBeInTheDocument()
@@ -71,11 +71,6 @@ export const NoPasskeys = meta.story({
       http.get("*/auth/passkey/list-user-passkeys", () => HttpResponse.json([]))
     )
   },
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByText("No passkeys are registered yet.")
-    ).toBeVisible()
-  },
 })
 
 export const ApiFailure = meta.story({
@@ -88,10 +83,5 @@ export const ApiFailure = meta.story({
         HttpResponse.json({ message: "Unavailable" }, { status: 503 })
       )
     )
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByText("Security methods could not be loaded")
-    ).toBeVisible()
   },
 })

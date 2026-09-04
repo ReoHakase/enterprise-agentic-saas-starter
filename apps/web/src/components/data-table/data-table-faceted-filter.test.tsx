@@ -51,8 +51,8 @@ const renderMember = (
   </span>
 )
 
-describe("DataTableFacetedFilter", () => {
-  it("keeps only caller-pinned options above filtered regular options", async () => {
+describe("DataTableFacetedFilterの契約", () => {
+  it("絞り込まれた通常オプションより上に呼び出し側が固定したオプションだけを表示する", async () => {
     const user = userEvent.setup()
     const onValuesChange = vi.fn<(values: string[]) => void>()
     render(
@@ -82,7 +82,7 @@ describe("DataTableFacetedFilter", () => {
     expect(within(filter).queryByText("Jordan")).not.toBeInTheDocument()
   })
 
-  it("does not invent a pinned section for ordinary label options", async () => {
+  it("通常のラベルオプション用に固定セクションを作成しない", async () => {
     const user = userEvent.setup()
     const onValuesChange = vi.fn<(values: string[]) => void>()
     render(
@@ -107,7 +107,7 @@ describe("DataTableFacetedFilter", () => {
     expect(within(filter).queryByText("bug")).not.toBeInTheDocument()
   })
 
-  it("renders a caller summary for active values instead of the default count", () => {
+  it("既定の件数ではなく有効値に対する呼び出し側の概要を表示する", () => {
     render(
       <DataTableFacetedFilter
         label="Labels"

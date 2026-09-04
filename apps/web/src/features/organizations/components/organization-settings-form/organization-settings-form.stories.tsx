@@ -26,7 +26,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Validate the organization slug locally", async () => {
+    await step("組織slugをローカル検証する", async () => {
       const slug = canvas.getByRole("textbox", { name: "Slug" })
       await userEvent.clear(slug)
       await userEvent.type(slug, "Invalid Slug")
@@ -48,12 +48,5 @@ export const LongIdentity = meta.story({
       name: "Acme International Platform Reliability and Automation",
       slug: "acme-international-platform-reliability",
     },
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("heading", {
-        name: "Acme International Platform Reliability and Automation",
-      })
-    ).toBeVisible()
   },
 })

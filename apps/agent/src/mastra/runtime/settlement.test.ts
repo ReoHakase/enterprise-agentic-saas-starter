@@ -19,12 +19,12 @@ const harness = (failure: false | Error = false) => {
   return { api, calls }
 }
 
-describe("createRunSettlement", () => {
+describe("createRunSettlementの契約", () => {
   it.each([
     ["complete", "completed"],
     ["fail", "failed"],
     ["cancel", "canceled"],
-  ] as const)("settles %s once", async (method, expected) => {
+  ] as const)("実行結果%#を一度だけsettleする", async (method, expected) => {
     const test = harness()
     const settlement = createRunSettlement(test.api, RUN_GRANT)
 
@@ -35,7 +35,7 @@ describe("createRunSettlement", () => {
     expect(first).toBe(method === "complete" ? "completed" : undefined)
   })
 
-  it("swallows internal API details so grant and provider errors cannot escape", async () => {
+  it("grantとprovider errorを漏らさないよう内部API詳細を隠す", async () => {
     const cause = new Error(`private ${RUN_GRANT}`)
     const test = harness(cause)
     const reportFailure = vi.fn<(cause: unknown) => void>()
@@ -48,7 +48,7 @@ describe("createRunSettlement", () => {
     expect(reportFailure).toHaveBeenCalledWith(cause)
   })
 
-  it("does not let failure reporting replace settlement failure handling", async () => {
+  it("失敗報告にsettlement失敗処理を置換させない", async () => {
     const test = harness(new Error("settlement failed"))
     const settlement = createRunSettlement(test.api, RUN_GRANT, () => {
       throw new Error("reporting failed")
@@ -58,7 +58,7 @@ describe("createRunSettlement", () => {
     expect(test.calls).toEqual([`failed:${RUN_GRANT}`])
   })
 
-  it("records final usage while preserving approval waiting", async () => {
+  it("approval待ちを保ちながら最終usageを記録する", async () => {
     const test = harness()
     const settlement = createRunSettlement(test.api, RUN_GRANT)
 
@@ -70,7 +70,7 @@ describe("createRunSettlement", () => {
     expect(test.calls).toEqual([`waiting_approval:${RUN_GRANT}`])
   })
 
-  it("cannot be moved into approval waiting after it has settled", async () => {
+  it("settle後はapproval待ちへ移行できない", async () => {
     const test = harness()
     const settlement = createRunSettlement(test.api, RUN_GRANT)
     await settlement.complete()

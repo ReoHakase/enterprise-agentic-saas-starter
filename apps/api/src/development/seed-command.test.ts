@@ -82,8 +82,8 @@ const createServices = (
   return { events, services }
 }
 
-describe("development DB and R2 seed command", () => {
-  it("reuses a healthy Worker without starting or stopping dev services", async () => {
+describe("development DBとR2のseed command", () => {
+  it("正常なWorkerをdev serviceの起動停止なしで再利用する", async () => {
     const { events, services } = createServices({
       findActiveSession: vi.fn<
         DevelopmentSeedCommandServices["findActiveSession"]
@@ -106,7 +106,7 @@ describe("development DB and R2 seed command", () => {
     ])
   })
 
-  it("temporarily starts missing services and stops only owned processes", async () => {
+  it("不足serviceを一時起動して所有processだけを停止する", async () => {
     const { events, services } = createServices({
       ensureDatabaseRunning: vi.fn<
         DevelopmentSeedCommandServices["ensureDatabaseRunning"]
@@ -154,7 +154,7 @@ describe("development DB and R2 seed command", () => {
     ])
   })
 
-  it("leaves an already-running local database alive", async () => {
+  it("起動済みlocal databaseを稼働させたままにする", async () => {
     const { events, services } = createServices()
 
     await expect(
@@ -169,7 +169,7 @@ describe("development DB and R2 seed command", () => {
     ])
   })
 
-  it("waits for a concurrently starting normal dev Worker", async () => {
+  it("同時起動中の通常dev Workerを待つ", async () => {
     const findActiveSession =
       vi.fn<DevelopmentSeedCommandServices["findActiveSession"]>()
     findActiveSession.mockResolvedValueOnce(undefined)
@@ -190,7 +190,7 @@ describe("development DB and R2 seed command", () => {
     expect(services.startWorker).not.toHaveBeenCalled()
   })
 
-  it("cleans up all owned services after reconcile failure", async () => {
+  it("reconcile失敗後に所有serviceをすべて片付ける", async () => {
     const { events, services } = createServices({
       ensureDatabaseRunning: vi.fn<
         DevelopmentSeedCommandServices["ensureDatabaseRunning"]
@@ -217,7 +217,7 @@ describe("development DB and R2 seed command", () => {
     ])
   })
 
-  it("rejects unsafe configuration before acquiring a lease", async () => {
+  it("lease取得前に安全でない設定を拒否する", async () => {
     const { services } = createServices({
       assertSafeConfiguration: vi.fn<
         DevelopmentSeedCommandServices["assertSafeConfiguration"]

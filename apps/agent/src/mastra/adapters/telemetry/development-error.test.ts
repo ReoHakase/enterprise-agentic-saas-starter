@@ -23,8 +23,8 @@ const capturedRecords = (cause: unknown, label = "product-model") => {
 const capturedMessage = (cause: unknown) =>
   String(capturedRecords(cause)[0]?.["exception.message"])
 
-describe("development provider error reporting", () => {
-  it("redacts credentials while retaining provider text, ordinary URLs, and email", () => {
+describe("開発時provider error報告", () => {
+  it("provider textと通常URLとemailを保ちながらcredentialを秘匿する", () => {
     const raw = [
       "provider rejected dev@example.test at https://example.test/help",
       "Authorization: Bearer provider-token",
@@ -48,7 +48,7 @@ describe("development provider error reporting", () => {
     )
   })
 
-  it("serializes cycles, BigInt, symbols, accessors, and hostile proxies", () => {
+  it("循環とBigIntとsymbolとaccessorと敵対的proxyを直列化する", () => {
     const value: Record<string, unknown> = {
       count: 10n,
       symbol: Symbol("opaque"),
@@ -73,7 +73,7 @@ describe("development provider error reporting", () => {
     expect(capturedMessage(hostile)).toBe('"[unreadable-object]"')
   })
 
-  it("emits at most five bounded, redacted cause records", () => {
+  it("有界かつ秘匿済みのcause recordを最大五件出力する", () => {
     let cause: Error | undefined
     for (let index = 6; index >= 0; index -= 1) {
       cause = new Error(
@@ -104,7 +104,7 @@ describe("development provider error reporting", () => {
     }
   })
 
-  it("isolates sinks and stays disabled outside fixed local development", () => {
+  it("一方のsink失敗から他方のsinkを分離する", () => {
     const consoleError = vi.fn<(record: unknown) => void>(() => {
       throw new Error("terminal unavailable")
     })
@@ -127,20 +127,37 @@ describe("development provider error reporting", () => {
       1,
       expect.objectContaining({ "app.error.code": "model_failed" })
     )
+  })
 
-    for (const environment of [
-      { ...local, NODE_ENV: "test" },
-      { ...local, AGENT_E2E_RUN_ID: "101" },
-      { ...local, AGENT_EVAL_ALLOWED_TOOLS: "web_search" },
-      { ...local, OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.test" },
-      { ...local, DEV_SESSION_ID: "" },
-    ]) {
-      reportDevelopmentCauseChain(environment, "hidden", new Error("raw"), {
-        consoleError,
-        logError,
-      })
-    }
-    expect(consoleError).toHaveBeenCalledTimes(2)
-    expect(logError).toHaveBeenCalledTimes(2)
+  it.each([
+    { environment: { ...local, NODE_ENV: "test" }, label: "test環境" },
+    {
+      environment: { ...local, AGENT_E2E_RUN_ID: "101" },
+      label: "E2E実行",
+    },
+    {
+      environment: { ...local, AGENT_EVAL_ALLOWED_TOOLS: "web_search" },
+      label: "eval実行",
+    },
+    {
+      environment: {
+        ...local,
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.test",
+      },
+      label: "遠隔OTLP endpoint",
+    },
+    {
+      environment: { ...local, DEV_SESSION_ID: "" },
+      label: "開発identity欠損",
+    },
+  ])("$labelではcause chain報告を無効にする", ({ environment }) => {
+    const consoleError = vi.fn<(record: unknown) => void>()
+    const logError = vi.fn<(record: unknown) => void>()
+    reportDevelopmentCauseChain(environment, "hidden", new Error("raw"), {
+      consoleError,
+      logError,
+    })
+    expect(consoleError).not.toHaveBeenCalled()
+    expect(logError).not.toHaveBeenCalled()
   })
 })

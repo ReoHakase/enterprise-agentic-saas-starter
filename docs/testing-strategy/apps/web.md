@@ -117,8 +117,8 @@ model
 | ------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------- | -------------------- | ---------- |
 | **Webロジック単体テスト (W1)**             | 単体                | <ul><li>reducer、state machine、view model、query keyを入力と期待結果で確認する</li><li>form schema、URL、search parameter、error responseの変換を境界値ごとに確認する</li><li>dirty guard、submission identity、upload中の遷移判断を確認する</li><li>Reactをrenderせず、framework非依存の規則を網羅する</li></ul>                                                                                                                                                     | pure function、Valibot schema、serialisable model                                                | clock、ID、randomだけを固定する                              | `apps/web/src/features/**/model.ts`、`model/**`、`schema.ts`、`src/lib/shared/**`、pure formatter、query-key factory | Vitest Node                                     | 極めて速い | なし                 | 非常に多い |
 | **Web DOMコンポーネント統合テスト (W2)**   | 統合                | <ul><li>propsまたはView modelから利用者に見えるDOMが描画されることを確認する</li><li>入力、submit、callback、controlled state、field errorを確認する</li><li>`aria-invalid`、`aria-describedby`、accessible role/nameを確認する</li><li>controllerとfake portを接続し、通知や重複処理のownerを確認する</li><li>layout measurementやnative focus trapはここで断定しない</li></ul>                                                                                       | React component、Testing Library、happy-dom、component hook                                      | API port、navigation、notification、clock、browser-only API  | `apps/web/src/components/**/*.test.tsx`、`src/features/**/components/**/*.test.tsx`、controller hook test            | Vitest + Testing Library + happy-dom            | 速い       | なし                 | 厚くする   |
-| **Web Storybookブラウザー統合テスト (W3)** | 統合                | <ul><li>componentのloading、empty、error、ready、pending、disabled、destructive状態を実browserで描画する</li><li>keyboard、focus order、focus return、dialog、popover、menu、pointer eventを確認する</li><li>`play`で代表操作と利用者から観測できる結果を確認する</li><li>a11y addonでrendered DOMの自動検査を行う</li><li>Controlsでpublic propsを変更し、手動探索できる状態カタログを維持する</li></ul>                                                              | Storybook、実Chromium、React、CSS、component、decorator、a11y addon                              | props、callback、必要なprovider。HTTPが不要ならMSWを使わない | `apps/web/src/**/*.stories.tsx`、`apps/web/.storybook/**`、story fixture                                             | Storybook Vitest addon + Chromium               | 中         | なし                 | 多い       |
-| **Web機能ブラウザー統合テスト (W4)**       | 統合                | <ul><li>実QueryClient、controller、複数componentを接続してfeature全体の状態を確認する</li><li>mutation後のcache更新、optimistic/pending、rollbackを確認する</li><li>MSWでsuccess、empty、400、404、409、500、network error、retryを再現する</li><li>Agent fake transportでstream、approval、abort、disconnect、resumeを確認する</li><li>SuspenseとError Boundaryのfallback、reset、retryを確認する</li></ul>                                                           | 実browser、React、QueryClient、controller hook、AI SDK UI、複数component                         | HTTPはMSW、Agent transport、navigation、notification、clock  | `apps/web/src/features/*/*.browser.test.tsx`、connected feature story、feature `test-support/fixtures.ts`            | Vitest Browser ModeまたはStorybook Vitest addon | 中から遅い | なし                 | 必要な範囲 |
+| **Web Storybookブラウザー統合テスト (W3)** | 統合                | <ul><li>componentのloading、empty、error、ready、pending、disabled、destructive状態を実browserで描画する</li><li>keyboard、focus order、focus return、dialog、popover、menu、pointer eventを確認する</li><li>`play`で代表操作と利用者から観測できる結果を確認する</li><li>a11y addonでrendered DOMの自動検査を行う</li><li>Controlsでpublic propsを変更し、手動探索できる状態カタログを維持する</li></ul>                                                              | Storybook、実Chromium、React、CSS、component、decorator、a11y addon                              | props、callback、必要なprovider。HTTPが不要ならMSWを使わない | `apps/web/src/**/*.stories.tsx`、story fixtureを再利用するW3 `*.browser.test.tsx`、`apps/web/.storybook/**`          | Storybook Vitest addonまたはVitest Browser Mode | 中         | なし                 | 多い       |
+| **Web機能ブラウザー統合テスト (W4)**       | 統合                | <ul><li>実QueryClient、controller、複数componentを接続してfeature全体の状態を確認する</li><li>mutation後のcache更新、optimistic/pending、rollbackを確認する</li><li>MSWでsuccess、empty、400、404、409、500、network error、retryを再現する</li><li>Agent fake transportでstream、approval、abort、disconnect、resumeを確認する</li><li>SuspenseとError Boundaryのfallback、reset、retryを確認する</li></ul>                                                           | 実browser、React、QueryClient、controller hook、AI SDK UI、複数component                         | HTTPはMSW、Agent transport、navigation、notification、clock  | connected featureの`*.browser.test.tsx`、connected feature story、feature `test-support/fixtures.ts`                 | Vitest Browser ModeまたはStorybook Vitest addon | 中から遅い | なし                 | 必要な範囲 |
 | **Webサーバー統合テスト (W5)**             | 統合                | <ul><li>server-side Eden adapterがcookie、header、status、typed errorを正しく変換することを確認する</li><li>session response、slugからinternal ID、not-found、redirect、prefetch inputを確認する</li><li>serialisation、cache policy、server-only境界を確認する</li><li>純粋な判断を抽出した場合もW5のfixtureと責務の中で検査する</li><li>async RSCそのものを無理にVitestでrenderしない</li></ul>                                                                      | server loader、Eden client contract、Request/Response、server adapter、必要に応じElysia test app | remote API、real OAuth、production cookie、external provider | `apps/web/src/lib/server/**`、`src/features/*/server.ts`から到達するloader、server adapter、session parser           | Vitest Node、必要に応じephemeral Elysia app     | 中から遅い | なし                 | 必要な範囲 |
 | **Webアプリケーション統合テスト (W6)**     | 統合                | <ul><li>実Next.js serverと実browserでApp Router、layout、page、RSC shellを確認する</li><li>middleware、cookie、hard reload、browser history、actual URLを確認する</li><li>一覧から正規詳細ルートへの全画面遷移と戻る操作で、一覧URLとdocumentのスクロール位置が復元されることを確認する</li><li>`loading.tsx`、`error.tsx`、`not-found.tsx`がroute lifecycleで機能することを確認する</li><li>API、Agent、DB、Authは決定的に差し替え、Webの責務だけを検査する</li></ul> | 実Next.js application server、実Chromium、実RSC、routing、middleware、cookie jar                 | API、Agent stream、external service、DB、Auth backend        | `apps/web/src/app/**`、`middleware.ts`、top-level providers、`apps/web/e2e/app/**`                                   | Playwright                                      | 遅い       | なし                 | 少数       |
 
@@ -147,18 +147,21 @@ assertionはimplementation detailではなく次を使います。
 - label
 - visible text
 - disabled state
-- focusable state
+- role、disabled、`tabIndex`など静的なfocus可能性
 - callbackに渡されたpublic value
 
 DataTableでは、選択行のsemantic state、結果と同じgrid領域でtable終端に拘束されるsticky selection bar、
 非sticky footerの左右領域、query更新中も直前行が残ること、
-Comboboxの矢印・決定・Escape、Priority rangeのsingletonとinclusive境界、ToggleGroupの単一必須選択、
-toolbarの単独controlとgroup構成、検索clearのdebounce取消・即時1回更新・focus return、filter/sort Resetの
+Comboboxの選択値、Priority rangeのsingletonとinclusive境界、ToggleGroupの単一必須選択、
+toolbarの単独controlとgroup構成、検索clearのdebounce取消・即時1回更新、filter/sort Resetの
 独立scopeとdisabled state、active filter summaryのaccessible description、sortのlabel・icon mapping、
 `Match any` / `Match all`、期日の1か月range Calendarによる部分範囲・完成範囲・選択解除、
 Actions header内の列表示Eye/EyeClosedをこの層で固定します。
 
 内部state名、private class、component instance、CSS selectorだけに固定しません。
+矢印キー、Escape、roving tabindex、menuを閉じた後のfocus returnなど、実ブラウザーのkeyboardとfocusの
+結果はW3が所有します。W2はその操作が生むpublic valueとsemantic stateだけを所有し、同じfocus結果を
+再検査しません。W2で`activeElement`、focus移動、focus returnを成功条件にしません。
 
 ## W3: Web Storybookブラウザー統合テスト
 
@@ -304,7 +307,8 @@ project名はroot Test Projectsで一意にし、全scriptがroot configと対�
 - W2がcomponent testの中心である
 - focus、keyboard、a11yを実browserで検査する
 - MSWをAPI契約の唯一の証明にしない
-- `.browser.test.tsx`がfeature integrationに限定される
+- `.browser.test.tsx`を接尾辞で層へ固定せず、story fixtureを再利用するcomponent固有結果はW3、
+  実QueryClient、controller、MSWを接続するfeature結果はW4として分類する
 - W5を内部処理種別で公開分割しない
 - Web内で閉じる実Next.js browser testをW6が所有する
 - W6がAPI、Agent、DB、Authをmockし、Web責務だけを検査する
@@ -321,13 +325,18 @@ project名はroot Test Projectsで一意にし、全scriptがroot configと対�
 - W2: `Table<TData>` rendererへlink、button、select、menuなど任意のinteractive cellを渡し、row selectionと
   eventが交差しないこと、pinned optionの検索・描画、利用者別列表示のwrite/restore/resetをcomponent testで
   固定する
-- W3: `Default`、`InteractiveCells`、`Selectable`、`HorizontalOverflow`、`Mobile`のnamed storyで
-  keyboard、focus、indeterminate、table内だけの横scrollを検査する
+- W3: `Default`、`InteractiveCells`、`Selectable`、`HorizontalOverflow`、`Mobile`をnamed storyとして
+  文書化する。keyboardとfocusは意味のある`play`、indeterminateのnative renderingとtable内だけの
+  横scrollはstory fixtureを再利用するW3 browser testで検査する。選択値とsemantic stateはW2が所有する
 - IssuesのW3では`SearchClearAndKeyboard`、`ActiveFilterSummaries`、`PinnedHeaderAndSelectionBar`と
-  mobile storyで検索clear、6px dot、avatar/label/date summary、48px headerと32px row action、列pin、
+  mobile storyを状態fixtureとして文書化する。検索clear後のfocus returnは意味のある`play`、6px dot、
+  avatar/label/date summaryの配置、48px headerと
+  32px row action、列pin、
   selection anchor自身のsticky bottom・viewport下端・table拘束・safe area、document横overflowなしを固定する。
-  active summaryは各triggerのaccessible descriptionとして全選択値を通知し、期日は固定clockで
-  current year内の省略形と非current/cross-yearの年表示を固定する。
+  操作のないgeometryとnative renderingは、これらのstory fixtureを再利用するW3 browser testで検査する。
+  active summaryのaccessible descriptionとlabel/icon mappingはW2が所有し、W3で同じ文字列と
+  callback payloadを再検査しない。期日は固定clockでcurrent year内の省略形と非current/cross-yearの
+  年表示をW2で固定する。
   toolbar controlの寸法、sortのfocus return、検索可能filterのinsetと全幅mode、期日popoverの
   viewport margin・短い画面での内部scrollも同じW3で検査する
 - Organizations、Members、Invitations、Sessionsは同じrendererを使うことをW2で確認し、既存のsort、
@@ -335,8 +344,9 @@ project名はroot Test Projectsで一意にし、全scriptがroot configと対�
   document全体の横overflowなしを確認する
 - Members画面はW1で主表のprefixなしkeyとInvitationsの`inv_*` keyを固定し、同一nuqs adapter上で一方の
   filter、page、page size更新が他方の検索・filter・paginationを維持することを確認する。W3では両表の
-  検索clear、filter、sort、group別reset、page size、ページ移動を操作し、既存のmember/invitation actionと
-  同居できることを確認する
+  検索clear、filter、sort、group別reset、page size、ページ移動のkeyboard、focus、menu、横scrollを
+  確認し、exact callback payloadとURL keyはW1またはW2だけで固定する。W3は既存のmember/invitation
+  actionと同居できることを実ブラウザーで確認する
 - W4: Issuesの実QueryClient、nuqs、MSW接続で複合filterのclose時一括反映、selection、pagination、
   column visibility、remote label更新中のdraft維持を検査する。絞り込みの編集中はGETを送らず、閉じた時に
   1回だけ送ること、遅い旧label検索が新しい結果を上書きしないこと、query key変更中は直前行とspinnerを
@@ -346,5 +356,5 @@ URL searchのdebounceは固定sleepでなくobservableなcallbackを待ち、cle
 timer後の二重更新がないことと`q`/page以外の維持を検査します。popoverやmenuのportalは
 `canvasElement.ownerDocument.body`から検査します。期日filterはDST遷移と、現在が夏で選択範囲が冬のcaseを
 固定し、Calendar操作から生成したAPI requestの2つのoffsetを検査します。外部URL由来の部分範囲の完成、
-同日・複数日の完成範囲、選択解除、close時の1回だけの適用とfocus return、外部URLの逆転範囲をrequestへ
-送らず空範囲へ戻すことも固定します。
+同日・複数日の完成範囲、選択解除、close時の1回だけの適用、外部URLの逆転範囲をrequestへ送らず
+空範囲へ戻すことはW1、W2、W4の最低十分な層で固定します。close後のfocus returnはW3だけで固定します。

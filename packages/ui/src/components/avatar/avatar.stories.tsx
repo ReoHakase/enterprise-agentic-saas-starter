@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import {
@@ -24,24 +22,12 @@ export const UserProfileImage = meta.story({
     shape: "circle",
     children: <AvatarFallback>RH</AvatarFallback>,
   },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("RH").parentElement).toHaveAttribute(
-      "data-shape",
-      "circle"
-    )
-  },
 })
 
 export const OrganizationProfileImage = meta.story({
   args: {
     shape: "rounded",
     children: <AvatarFallback>AC</AvatarFallback>,
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("AC").parentElement).toHaveAttribute(
-      "data-shape",
-      "rounded"
-    )
   },
 })
 

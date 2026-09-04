@@ -18,8 +18,8 @@ const runtimeWith = (
   fetch: FilePreviewBinding["fetch"]
 ): Pick<FileStorageRuntime, "previews"> => ({ previews: { fetch } })
 
-describe("image preview Service Binding adapter", () => {
-  it("maps binding failure to a safe provider error", async () => {
+describe("画像previewのService Binding adapter", () => {
+  it("binding失敗を安全なprovider errorへ写像する", async () => {
     const fetch = vi.fn<FilePreviewBinding["fetch"]>(async () => {
       throw new Error("private provider detail")
     })
@@ -29,7 +29,7 @@ describe("image preview Service Binding adapter", () => {
     ).rejects.toMatchObject({ code: "service_unavailable" })
   })
 
-  it("rejects an invalid internal response without exposing its body", async () => {
+  it("bodyを公開せず不正な内部responseを拒否する", async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode("private provider detail"))
@@ -54,7 +54,7 @@ describe("image preview Service Binding adapter", () => {
     expect(cancel).toHaveBeenCalledOnce()
   })
 
-  it("rejects a bodyless 200 response", async () => {
+  it("bodyのない200 responseを拒否する", async () => {
     const fetch = vi.fn<FilePreviewBinding["fetch"]>(
       async () =>
         new Response(null, {
@@ -72,7 +72,7 @@ describe("image preview Service Binding adapter", () => {
 
   it.each([
     {
-      name: "wrong content type",
+      name: "content typeが異なる場合",
       response: () =>
         new Response("provider detail", {
           status: 200,
@@ -83,7 +83,7 @@ describe("image preview Service Binding adapter", () => {
         }),
     },
     {
-      name: "missing ETag",
+      name: "ETagがない場合",
       response: () =>
         new Response("provider detail", {
           status: 200,
@@ -91,7 +91,7 @@ describe("image preview Service Binding adapter", () => {
         }),
     },
     {
-      name: "malformed ETag",
+      name: "ETagが不正な場合",
       response: () =>
         new Response("provider detail", {
           status: 200,
@@ -101,7 +101,7 @@ describe("image preview Service Binding adapter", () => {
           },
         }),
     },
-  ])("rejects a 200 response with $name", async ({ response }) => {
+  ])("$nameを持つ200 responseを拒否する", async ({ response }) => {
     const internalResponse = response()
     const body = internalResponse.body
     if (!body) throw new Error("Expected the provider response body")

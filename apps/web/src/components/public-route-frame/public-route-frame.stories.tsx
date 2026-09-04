@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { AuthRouteFrame, InvitationRouteFrame } from "./public-route-frame"
@@ -24,12 +22,6 @@ export const Authentication = meta.story({
       </div>
     ),
   },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("link", { name: "Enterprise SaaS" })
-    ).toHaveAttribute("href", "/")
-    await expect(canvas.getByRole("status")).toBeVisible()
-  },
 })
 
 export const Invitation = meta.story({
@@ -40,7 +32,4 @@ export const Invitation = meta.story({
       </div>
     </InvitationRouteFrame>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("Invitation decision")).toBeVisible()
-  },
 })

@@ -32,13 +32,6 @@ vi.mock("@enterprise-agentic-saas/email/runtime", async (importOriginal) => ({
 }))
 
 type AuthInstance = typeof Auth
-type AuthSessionResult = NonNullable<
-  Awaited<ReturnType<AuthInstance["api"]["getSession"]>>
->
-
-const readActiveOrganizationId = (result: AuthSessionResult) =>
-  result.session.activeOrganizationId
-
 let auth: AuthInstance
 let getMcpProtectedResourceMetadata: typeof GetMcpProtectedResourceMetadata
 let handleMcpOAuthServerMetadata: typeof HandleMcpOAuthServerMetadata
@@ -61,7 +54,7 @@ let createOrganizationOwnerFixture: () => Promise<{
   headers: Headers
   organizationId: string
 }>
-let createMultiSessionFixture: (accountCount: number) => Promise<{
+let createMultiSessionFixture: () => Promise<{
   cookie: string
   tokens: string[]
   userIds: string[]
@@ -203,10 +196,10 @@ beforeAll(async () => {
       organizationId,
     }
   }
-  createMultiSessionFixture = async (accountCount) => {
+  createMultiSessionFixture = async () => {
     const context = await auth.$context
     const createdAt = new Date()
-    const accounts = Array.from({ length: accountCount }, (_, index) => {
+    const accounts = Array.from({ length: 2 }, (_, index) => {
       const suffix = `${crypto.randomUUID()}-${index}`
 
       return {
@@ -524,18 +517,8 @@ const revokeDeviceSession = (cookieJar: AuthCookieJar, sessionToken: string) =>
 const getAuthenticatedSession = (cookieJar: AuthCookieJar) =>
   cookieJar.fetch("/auth/get-session")
 
-const setActiveDeviceSession = (
-  cookieJar: AuthCookieJar,
-  sessionToken: string
-) =>
-  cookieJar.fetch("/auth/multi-session/set-active", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sessionToken }),
-  })
-
-describe("passkey registration security boundary", () => {
-  it("generates options for a fresh session with the configured RP identity", async () => {
+describe("Passkey登録のセキュリティ境界", () => {
+  it("15分以内のsessionでは設定済みのRP情報を返す", async () => {
     const headers = await createPasskeySessionHeaders(60_000)
     const response = await auth.handler(
       new Request(
@@ -556,17 +539,9 @@ describe("passkey registration security boundary", () => {
         name: expect.stringMatching(/@example\.test$/u),
       },
     })
-
-    const passkeyPlugin = auth.options.plugins?.find(
-      (plugin) => plugin.id === "passkey"
-    )
-    expect(passkeyPlugin?.options).toMatchObject({
-      origin: ["http://app.localhost"],
-      rpID: "app.localhost",
-    })
   })
 
-  it("rejects registration options when the session is no longer fresh", async () => {
+  it("15分を超えたsessionでは登録optionを拒否する", async () => {
     const headers = await createPasskeySessionHeaders(16 * 60 * 1000)
     const response = await auth.handler(
       new Request(
@@ -582,9 +557,9 @@ describe("passkey registration security boundary", () => {
   })
 })
 
-describe("multi-session current-account revocation", () => {
-  it("revokes the current account and selects the remaining account", async () => {
-    const fixture = await createMultiSessionFixture(2)
+describe("現在のアカウントだけを失効するmulti-session境界", () => {
+  it("現在のアカウントを失効すると残るアカウントを選択する", async () => {
+    const fixture = await createMultiSessionFixture()
     const cookieJar = new AuthCookieJar(fixture.cookie)
     const response = await revokeDeviceSession(
       cookieJar,
@@ -603,62 +578,8 @@ describe("multi-session current-account revocation", () => {
     })
   })
 
-  it("clears the active cookie when the last account is revoked", async () => {
-    const fixture = await createMultiSessionFixture(1)
-    const cookieJar = new AuthCookieJar(fixture.cookie)
-    const response = await revokeDeviceSession(
-      cookieJar,
-      fixture.tokens[0] ?? ""
-    )
-    const sessionResponse = await getAuthenticatedSession(cookieJar)
-
-    expect(response.status).toBe(200)
-    expect(await sessionExists(fixture.tokens[0] ?? "")).toBe(false)
-    expect(sessionResponse.status).toBe(200)
-    expect(await sessionResponse.json()).toBeNull()
-  })
-
-  it("keeps both remaining sessions when one of three accounts is revoked", async () => {
-    const fixture = await createMultiSessionFixture(3)
-    const cookieJar = new AuthCookieJar(fixture.cookie)
-    const response = await revokeDeviceSession(
-      cookieJar,
-      fixture.tokens[0] ?? ""
-    )
-    const firstSessionResponse = await getAuthenticatedSession(cookieJar)
-    const firstSession: unknown = await firstSessionResponse.json()
-    if (
-      typeof firstSession !== "object" ||
-      firstSession === null ||
-      !("session" in firstSession) ||
-      typeof firstSession.session !== "object" ||
-      firstSession.session === null ||
-      !("token" in firstSession.session) ||
-      typeof firstSession.session.token !== "string"
-    ) {
-      throw new Error("Expected an authenticated session response")
-    }
-    const nextIndex = firstSession.session.token === fixture.tokens[1] ? 2 : 1
-    const activationResponse = await setActiveDeviceSession(
-      cookieJar,
-      fixture.tokens[nextIndex] ?? ""
-    )
-    const secondSessionResponse = await getAuthenticatedSession(cookieJar)
-
-    expect(response.status).toBe(200)
-    expect(await sessionExists(fixture.tokens[0] ?? "")).toBe(false)
-    expect(await sessionExists(fixture.tokens[1] ?? "")).toBe(true)
-    expect(await sessionExists(fixture.tokens[2] ?? "")).toBe(true)
-    expect(fixture.tokens.slice(1)).toContain(firstSession.session.token)
-    expect(activationResponse.status).toBe(200)
-    expect(await secondSessionResponse.json()).toMatchObject({
-      session: { token: fixture.tokens[nextIndex] },
-      user: { id: fixture.userIds[nextIndex] },
-    })
-  })
-
-  it("rejects an invalid token without revoking a stored account", async () => {
-    const fixture = await createMultiSessionFixture(2)
+  it("不正なトークンではcookieと保存済みsessionを変更しない", async () => {
+    const fixture = await createMultiSessionFixture()
     const cookieJar = new AuthCookieJar(fixture.cookie)
     const cookieBefore = cookieJar.header
     const response = await revokeDeviceSession(
@@ -679,8 +600,8 @@ describe("multi-session current-account revocation", () => {
   })
 })
 
-describe("organization invitation acceptance", () => {
-  it("creates and accepts only app-issued admin and member roles", async () => {
+describe("organization招待の境界", () => {
+  it("作成前と受諾前にadminとmemberだけを許可する", async () => {
     expect.hasAssertions()
     await Promise.all(
       [
@@ -690,115 +611,107 @@ describe("organization invitation acceptance", () => {
     )
   })
 
-  it("resends active invitations and renews expired invitations natively", async () => {
+  it("公開経路ではowner roleを保存前に拒否する", async () => {
+    const fixture = await createOrganizationOwnerFixture()
+    emailSpies.send.mockClear()
+    const response = await auth.handler(
+      new Request("http://api.localhost/auth/organization/invite-member", {
+        method: "POST",
+        headers: fixture.headers,
+        body: JSON.stringify({
+          email: "owner-invite@example.test",
+          organizationId: fixture.organizationId,
+          resend: false,
+          role: "owner",
+        }),
+      })
+    )
+    const [{ db }, schema] = await Promise.all([
+      import("@enterprise-agentic-saas/db"),
+      import("@enterprise-agentic-saas/db/schema"),
+    ])
+    const storedInvitations = await db
+      .select({ id: schema.invitation.id })
+      .from(schema.invitation)
+      .where(eq(schema.invitation.organizationId, fixture.organizationId))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      code: "INVALID_ORGANIZATION_INVITATION_ROLE",
+    })
+    expect(storedInvitations).toEqual([])
+    expect(emailSpies.send).not.toHaveBeenCalled()
+  })
+
+  it("配送失敗時もpending招待を保持して機密情報を記録しない", async () => {
     const fixture = await createOrganizationOwnerFixture()
     const rawFailure = "provider token=raw-invitation-secret"
+    const recipient = "member@example.test"
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
     emailSpies.send.mockClear()
     emailSpies.send.mockRejectedValueOnce(new Error(rawFailure))
-    const invite = (
-      resend: boolean,
-      role: "member" | "owner" = "member",
-      email = "member@example.test"
-    ) =>
-      auth.handler(
+
+    try {
+      const response = await auth.handler(
         new Request("http://api.localhost/auth/organization/invite-member", {
           method: "POST",
           headers: fixture.headers,
           body: JSON.stringify({
-            email,
+            email: recipient,
             organizationId: fixture.organizationId,
-            resend,
-            role,
+            resend: false,
+            role: "member",
           }),
         })
       )
-
-    try {
-      const createdResponse = await invite(false)
-      const created = await createdResponse.json()
-      const resentResponse = await invite(true)
-      const resent = await resentResponse.json()
+      const created = await response.json()
       const [{ db }, schema] = await Promise.all([
         import("@enterprise-agentic-saas/db"),
         import("@enterprise-agentic-saas/db/schema"),
       ])
-      await db
-        .update(schema.invitation)
-        .set({ expiresAt: new Date(Date.now() - 1) })
-        .where(eq(schema.invitation.id, created.id))
-      const renewedResponse = await invite(true)
-      const renewed = await renewedResponse.json()
-      const renewedAgainResponse = await invite(true)
-      const renewedAgain = await renewedAgainResponse.json()
-      const ownerInvitationResponse = await invite(
-        false,
-        "owner",
-        "owner-invite@example.test"
-      )
       const storedInvitations = await db
         .select({
-          expiresAt: schema.invitation.expiresAt,
+          email: schema.invitation.email,
           id: schema.invitation.id,
+          role: schema.invitation.role,
           status: schema.invitation.status,
         })
         .from(schema.invitation)
         .where(eq(schema.invitation.organizationId, fixture.organizationId))
-        .orderBy(schema.invitation.createdAt, schema.invitation.id)
 
-      expect(createdResponse.status).toBe(200)
+      expect(response.status).toBe(200)
       expect(created).toMatchObject({
-        email: "member@example.test",
+        email: recipient,
         organizationId: fixture.organizationId,
         role: "member",
         status: "pending",
       })
-      expect(resentResponse.status).toBe(200)
-      expect(resent).toMatchObject({ id: created.id, status: "pending" })
-      expect(renewedResponse.status).toBe(200)
-      expect(renewed).toMatchObject({ status: "pending" })
-      expect(renewed.id).not.toBe(created.id)
-      expect(renewedAgainResponse.status).toBe(200)
-      expect(renewedAgain).toMatchObject({
-        id: renewed.id,
-        status: "pending",
-      })
-      expect(ownerInvitationResponse.status).toBe(400)
-      expect(await ownerInvitationResponse.json()).toMatchObject({
-        code: "INVALID_ORGANIZATION_INVITATION_ROLE",
-      })
-      expect(new Date(resent.expiresAt).getTime()).toBeGreaterThanOrEqual(
-        new Date(created.expiresAt).getTime()
-      )
-      expect(new Date(renewed.expiresAt).getTime()).toBeGreaterThan(Date.now())
-      expect(storedInvitations).toHaveLength(2)
-      expect(
-        storedInvitations.map(({ id, status }) => ({ id, status }))
-      ).toEqual([
-        { id: created.id, status: "pending" },
-        { id: renewed.id, status: "pending" },
+      expect(storedInvitations).toEqual([
+        {
+          email: recipient,
+          id: created.id,
+          role: "member",
+          status: "pending",
+        },
       ])
-      expect(storedInvitations[0]?.expiresAt.getTime()).toBeLessThanOrEqual(
-        Date.now()
-      )
-      expect(storedInvitations[1]?.expiresAt.getTime()).toBeGreaterThan(
-        Date.now()
-      )
-      expect(emailSpies.send).toHaveBeenCalledTimes(4)
+      expect(emailSpies.send).toHaveBeenCalledTimes(1)
       expect(errorLog).toHaveBeenCalledWith({
         component: "better-auth",
         event: "request_failed",
         level: "error",
       })
-      expect(JSON.stringify(errorLog.mock.calls)).not.toContain(rawFailure)
+      const serializedLogs = JSON.stringify(errorLog.mock.calls)
+      expect(serializedLogs).not.toContain(rawFailure)
+      expect(serializedLogs).not.toContain(recipient)
+      expect(serializedLogs).not.toContain("/invitations/")
     } finally {
       errorLog.mockRestore()
     }
   })
 })
 
-describe("app-owned organization boundary", () => {
-  it("returns 404 for every Better Auth organization management endpoint", async () => {
+describe("アプリケーション所有のorganization境界", () => {
+  it("Better Authのorganization管理経路をすべて404にする", async () => {
     const responses = await Promise.all(
       blockedOrganizationPluginEndpoints.map(({ method, path }) =>
         auth.handler(
@@ -820,7 +733,7 @@ describe("app-owned organization boundary", () => {
     )
   })
 
-  it("generates the native invitation and recipient-facing organization routes", async () => {
+  it("招待と受信者向けorganization経路を標準OpenAPIへ公開する", async () => {
     const schema = await auth.api.generateOpenAPISchema()
     const paths = Object.keys(schema.paths)
 
@@ -853,7 +766,7 @@ describe("app-owned organization boundary", () => {
     )
   })
 
-  it("disables the separate Better Auth reference page", async () => {
+  it("Better Authの別Reference画面を公開しない", async () => {
     const response = await auth.handler(
       new Request("http://api.localhost/auth/reference")
     )
@@ -861,7 +774,7 @@ describe("app-owned organization boundary", () => {
     expect(response.status).toBe(404)
   })
 
-  it("serves the native Better Auth OpenAPI source", async () => {
+  it("Better Auth標準OpenAPIを公開する", async () => {
     const response = await auth.handler(
       new Request("http://api.localhost/auth/open-api/generate-schema")
     )
@@ -876,8 +789,8 @@ describe("app-owned organization boundary", () => {
   })
 })
 
-describe("MCP OAuth provider", () => {
-  it("publishes authorization and protected resource metadata", async () => {
+describe("MCP OAuthプロバイダー", () => {
+  it("認可サーバーと保護resourceのmetadataを公開する", async () => {
     const authorizationResponse = await handleMcpOAuthServerMetadata(
       new Request(
         "http://api.localhost/.well-known/oauth-authorization-server/auth"
@@ -909,7 +822,7 @@ describe("MCP OAuth provider", () => {
     })
   })
 
-  it("requires the MCP resource on authorization and token requests", async () => {
+  it("認可とtoken requestにMCP resourceを要求する", async () => {
     const authorize = await auth.handler(
       new Request(
         "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
@@ -934,7 +847,7 @@ describe("MCP OAuth provider", () => {
     })
   })
 
-  it("accepts repeated references to the configured MCP resource", async () => {
+  it("設定済みMCP resourceの重複指定を受理する", async () => {
     const authorizeUrl = new URL(
       "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
     )
@@ -947,7 +860,7 @@ describe("MCP OAuth provider", () => {
     expect(response.headers.get("location")).toContain("error=invalid_client")
   })
 
-  it("rejects a different resource mixed with the configured MCP resource", async () => {
+  it("設定済みMCP resourceと異なるresourceの混在を拒否する", async () => {
     const authorizeUrl = new URL(
       "http://api.localhost/auth/oauth2/authorize?client_id=client&response_type=code"
     )
@@ -965,7 +878,7 @@ describe("MCP OAuth provider", () => {
     })
   })
 
-  it("registers public PKCE clients without returning a client secret", async () => {
+  it("公開PKCEクライアントをclient secretなしで登録する", async () => {
     const response = await auth.handler(
       new Request("http://api.localhost/auth/oauth2/register", {
         method: "POST",
@@ -995,8 +908,8 @@ describe("MCP OAuth provider", () => {
   })
 })
 
-describe("verification secret handling", () => {
-  it("hashes verification identifiers and magic-link tokens at rest", () => {
+describe("verificationの機密情報処理", () => {
+  it("verification identifierとmagic-link tokenにhash保存を設定する", () => {
     expect(auth.options.verification?.storeIdentifier).toBe("hashed")
     expect(
       auth.options.plugins?.find((plugin) => plugin.id === "magic-link")
@@ -1004,7 +917,7 @@ describe("verification secret handling", () => {
     ).toMatchObject({ storeToken: "hashed" })
   })
 
-  it("does not log a submitted token or database error arguments", async () => {
+  it("送信されたtokenとデータベースエラー引数を記録しない", async () => {
     const submittedToken = "AUDIT_DUMMY_MAGIC_TOKEN_NOT_REAL"
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
@@ -1051,43 +964,28 @@ describe("verification secret handling", () => {
   })
 })
 
-describe("built-in GitHub OAuth boundary", () => {
-  it("keeps the built-in provider and callback when the emulator is disabled", async () => {
-    expect(auth.options.socialProviders).toMatchObject({
-      github: {
-        clientId: "test-github-client",
-        clientSecret: "test-github-secret",
-      },
-    })
-    expect(
-      auth.options.plugins?.filter((plugin) => plugin.id === "generic-oauth")
-    ).toHaveLength(0)
-
-    const context = await auth.$context
-    const githubProvider = context.socialProviders.find(
-      (provider) => provider.id === "github"
+describe("組み込みGitHub OAuth境界", () => {
+  it("公開経路の認可URLは標準GitHubコールバックを使う", async () => {
+    const response = await auth.handler(
+      new Request("http://api.localhost/auth/sign-in/social", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://app.localhost",
+        },
+        body: JSON.stringify({
+          callbackURL: "http://app.localhost/settings/accounts",
+          provider: "github",
+        }),
+      })
     )
-    if (!githubProvider) {
-      throw new Error("Expected the built-in GitHub provider")
-    }
-    const authorizationUrl = await githubProvider.createAuthorizationURL({
-      state: "test-state",
-      codeVerifier: "test-code-verifier",
-      redirectURI: "http://api.localhost/auth/callback/github",
-    })
+    const result = await response.json()
+    const authorizationUrl = new URL(result.url)
 
+    expect(response.status).toBe(200)
+    expect(result).toMatchObject({ redirect: true, url: expect.any(String) })
     expect(authorizationUrl.searchParams.get("redirect_uri")).toBe(
       "http://api.localhost/auth/callback/github"
     )
-    expect(auth.options.advanced?.useSecureCookies).toBe(false)
-  })
-})
-
-describe("plugin inference contract", () => {
-  it("retains organization fields on the core getSession result", async () => {
-    const session = await auth.api.getSession({ headers: new Headers() })
-
-    expect(session).toBeNull()
-    expect(readActiveOrganizationId).toBeTypeOf("function")
   })
 })

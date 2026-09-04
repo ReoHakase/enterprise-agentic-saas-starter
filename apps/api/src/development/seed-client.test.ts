@@ -11,13 +11,13 @@ type FetchCall = (
   init?: RequestInit
 ) => Promise<Response>
 
-describe("development file seed client", () => {
+describe("development file seed clientの契約", () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
-  it("checks readiness through the authenticated development boundary", async () => {
+  it("認証済みdevelopment境界でreadinessを確認する", async () => {
     const fetcher = vi.fn<FetchCall>(
       async () => new Response(null, { status: 204 })
     )
@@ -38,7 +38,7 @@ describe("development file seed client", () => {
     ).toBe(`Bearer ${"x".repeat(64)}`)
   })
 
-  it("does not accept an unowned or unreachable development session", async () => {
+  it("所有していないまたは到達不能なdevelopment sessionを受理しない", async () => {
     await expect(
       checkDevelopmentFileSeedSession({
         endpoint: "http://127.0.0.1:8787",
@@ -57,7 +57,7 @@ describe("development file seed client", () => {
     ).resolves.toBe(false)
   })
 
-  it("reconciles every committed fixture through the loopback endpoint", async () => {
+  it("commit済みfixtureをloopback endpoint経由でreconcileする", async () => {
     const fetchMock = vi.fn<FetchCall>(
       async (_url: Request | URL | string, _init?: RequestInit) =>
         new Response(null, { status: 204 })
@@ -84,7 +84,7 @@ describe("development file seed client", () => {
     ).toBe(true)
   })
 
-  it("aborts a hung request at the configured deadline", async () => {
+  it("停止したrequestを設定済み期限で中断する", async () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       "fetch",
@@ -115,7 +115,7 @@ describe("development file seed client", () => {
     )
   })
 
-  it("retries only the failing fixture and stops persistent 503s", async () => {
+  it("失敗したfixtureだけを再試行し継続する503で停止する", async () => {
     const failedFixture = developmentFileFixtures[2]
     if (!failedFixture) throw new Error("A third fixture is required")
     const fetchMock = vi.fn<FetchCall>(
@@ -151,7 +151,7 @@ describe("development file seed client", () => {
     expect(callsByFixture.has(developmentFileFixtures[3]?.id ?? "")).toBe(false)
   })
 
-  it("continues from a fixture after a transient 503", async () => {
+  it("一時的な503の後に対象fixtureから再開する", async () => {
     const retriedFixture = developmentFileFixtures[2]
     if (!retriedFixture) throw new Error("A third fixture is required")
     let failuresRemaining = 1
@@ -178,7 +178,7 @@ describe("development file seed client", () => {
     expect(fetchMock).toHaveBeenCalledTimes(developmentFileFixtures.length + 1)
   })
 
-  it("does not retry terminal HTTP responses", async () => {
+  it("terminal HTTP responseを再試行しない", async () => {
     const fetchMock = vi.fn<FetchCall>(
       async () => new Response(null, { status: 409 })
     )

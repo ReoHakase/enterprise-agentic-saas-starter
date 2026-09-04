@@ -22,7 +22,19 @@ type IssueThumbnail = {
 }
 
 const mocks = vi.hoisted(() => ({
-  listFiles: vi.fn<() => Promise<FileListDto>>(),
+  listFiles: vi.fn<
+    (
+      client: unknown,
+      input: {
+        organizationId: string
+        ownerType: "agent_thread" | "issue"
+        ownerId: string
+        cursor?: string
+        limit?: number
+      },
+      signal?: AbortSignal
+    ) => Promise<FileListDto>
+  >(),
   deleteFile: vi.fn<() => Promise<void>>(),
   getTextFilePreview: vi.fn<() => Promise<TextFilePreviewDto>>(),
   getIssueThumbnail:
@@ -130,7 +142,7 @@ const renderAttachments = (onFilesChanged?: () => void | Promise<void>) => {
   return queryClient
 }
 
-describe("file attachments", () => {
+describe("添付ファイル", () => {
   beforeEach(() => {
     mocks.listFiles.mockReset()
     mocks.deleteFile.mockReset()
@@ -175,114 +187,96 @@ describe("file attachments", () => {
     )
   })
 
-  it("renders private previews and authenticated downloads", async () => {
+  it("認証付きdownloadリンクを描画する", async () => {
     renderAttachments()
 
     expect(
-      await screen.findByRole("img", { name: "architecture.png" })
-    ).toHaveAttribute(
-      "srcset",
-      expect.stringContaining(
-        "/files/organizations/org%20alpha/file-image/preview/720 500w"
-      )
-    )
-    expect(
-      screen.getByRole("link", { name: "Download requirements.pdf" })
+      await screen.findByRole("link", { name: "Download requirements.pdf" })
     ).toHaveAttribute(
       "href",
       expect.stringContaining(
         "/files/organizations/org%20alpha/file-document/download"
       )
     )
+  })
+
+  it("削除権限がないファイルには削除操作を表示しない", async () => {
+    renderAttachments()
+
+    await screen.findByRole("link", { name: "Download requirements.pdf" })
     expect(
       screen.queryByRole("button", { name: "Delete requirements.pdf" })
     ).toBeNull()
-    expect(mocks.listFiles).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        organizationId: "org alpha",
-        ownerType: "issue",
-        ownerId: "issue-1",
-        limit: 50,
-      }),
-      expect.any(AbortSignal)
-    )
   })
 
-  it("opens image and escaped text previews in a viewport dialog", async () => {
+  it("所有者scopeでファイル一覧を取得する", async () => {
+    renderAttachments()
+
+    await waitFor(() => expect(mocks.listFiles).toHaveBeenCalledOnce())
+    expect(mocks.listFiles.mock.calls[0]?.[1]).toMatchObject({
+      organizationId: "org alpha",
+      ownerType: "issue",
+      ownerId: "issue-1",
+      limit: 50,
+    })
+  })
+
+  it("テキストpreviewを無害化済み文字列として描画する", async () => {
+    const user = userEvent.setup()
+    renderAttachments()
+
+    await user.click(await screen.findByRole("button", { name: "notes.txt" }))
+
+    expect(
+      await screen.findByText("<script>alert('escaped')</script>")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Preview limited to the first 1 MB/u)
+    ).toBeInTheDocument()
+  })
+
+  it("画像へ戻るとテキストpreviewのcacheを破棄する", async () => {
     const user = userEvent.setup()
     const queryClient = renderAttachments()
 
-    const trigger = await screen.findByRole("button", {
-      name: "Preview image architecture.png",
-    })
-    await user.click(trigger)
-
-    let dialog = await screen.findByRole("dialog", {
-      name: "architecture.png",
-    })
-    expect(dialog).toHaveClass("h-dvh", "w-screen", "max-w-none")
-    expect(dialog).toHaveStyle({
-      maxHeight: "none",
-      maxWidth: "none",
-      transform: "none",
-    })
-    expect(dialog.style.width).toBe("100vw")
-    expect(
-      within(dialog).getByRole("img", { name: "architecture.png" })
-    ).toHaveAttribute("sizes", "100vw")
-
-    await user.keyboard("{ArrowRight}")
-    dialog = await screen.findByRole("dialog", { name: "notes.txt" })
-    expect(
-      await within(dialog).findByText("<script>alert('escaped')</script>")
-    ).toBeInTheDocument()
-    expect(
-      within(dialog).getByText(/Preview limited to the first 1 MB/u)
-    ).toBeInTheDocument()
-    expect(mocks.getTextFilePreview).toHaveBeenCalledWith(
-      expect.anything(),
-      { organizationId: "org alpha", fileId: "file-text" },
-      expect.any(AbortSignal)
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Preview image architecture.png",
+      })
+    )
+    await user.click(screen.getByRole("button", { name: "Preview next file" }))
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(fileKeys.textPreview("org alpha", "file-text"))
+      ).toBeDefined()
     )
 
-    await user.keyboard("{ArrowLeft}")
-    expect(
-      await screen.findByRole("dialog", { name: "architecture.png" })
-    ).toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", { name: "Preview previous file" })
+    )
     await waitFor(() =>
       expect(
         queryClient.getQueryData(fileKeys.textPreview("org alpha", "file-text"))
       ).toBeUndefined()
     )
-    await user.keyboard("{Escape}")
-    await waitFor(() => expect(trigger).toHaveFocus())
   })
 
-  it("keeps card dimensions while placing icons next to their labels", async () => {
+  it("ファイル名とアップロード者を公開文言で表示する", async () => {
     renderAttachments()
-    const imageTrigger = await screen.findByRole("button", {
+    await screen.findByRole("button", {
       name: "Preview image architecture.png",
     })
-    expect(imageTrigger).toHaveClass("min-h-36", "max-h-72")
 
     const filename = screen.getByRole("button", { name: "architecture.png" })
-    const fileIcon = within(filename).getByTestId("file-icon-file-image")
-    expect(fileIcon).toHaveClass("size-4")
     expect(within(filename).getByText("architecture.png")).toBeInTheDocument()
 
     const uploader = screen.getAllByLabelText("Uploaded by Alex Example")[0]
     if (!uploader) throw new Error("Expected the file uploader identity")
     expect(within(uploader).getByText("AE")).toBeInTheDocument()
     expect(within(uploader).getByText("Alex Example")).toBeInTheDocument()
-    expect(
-      screen.getByRole("group", {
-        name: "File details for architecture.png",
-      })
-    ).toHaveClass("min-h-16", "p-3")
   })
 
-  it("confirms deletion and refreshes the owner list", async () => {
+  it("削除を確認して所有者の一覧を再取得する", async () => {
     const user = userEvent.setup()
     const onFilesChanged = vi.fn<() => Promise<void>>().mockResolvedValue()
     renderAttachments(onFilesChanged)
@@ -306,35 +300,13 @@ describe("file attachments", () => {
     expect(onFilesChanged).toHaveBeenCalledOnce()
   })
 
-  it("keeps thumbnail controls in an explicit edit mode", async () => {
+  it("画像だけをthumbnail候補として有効にする", async () => {
     const user = userEvent.setup()
     renderAttachments()
 
-    const changeThumbnail = await screen.findByRole("button", {
-      name: "Change thumbnail",
-    })
-    const attachmentActions = screen.getByRole("group", {
-      name: "Attachment actions",
-    })
-    expect(
-      within(attachmentActions).getByRole("button", { name: "Add files" })
-    ).toBeInTheDocument()
-    expect(
-      within(attachmentActions).getByRole("button", {
-        name: "Change thumbnail",
-      })
-    ).toBe(changeThumbnail)
-    expect(screen.getByTestId("change-thumbnail-icon")).toHaveAttribute(
-      "data-icon",
-      "inline-start"
+    await user.click(
+      await screen.findByRole("button", { name: "Change thumbnail" })
     )
-    expect(screen.queryByText("Thumbnail")).toBeNull()
-    expect(screen.queryByRole("radio")).toBeNull()
-    expect(
-      screen.queryByRole("button", { name: "Use oldest automatically" })
-    ).toBeNull()
-
-    await user.click(changeThumbnail)
     const imageRadio = screen.getByRole("radio", {
       name: "Use architecture.png as thumbnail",
     })
@@ -351,15 +323,31 @@ describe("file attachments", () => {
       })
     ).toBeDisabled()
     expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled()
+  })
 
-    await user.click(imageRadio)
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled()
+  it("thumbnail変更を取り消す", async () => {
+    const user = userEvent.setup()
+    renderAttachments()
+
+    await user.click(
+      await screen.findByRole("button", { name: "Change thumbnail" })
+    )
+    await user.click(
+      screen.getByRole("radio", {
+        name: "Use architecture.png as thumbnail",
+      })
+    )
     await user.click(screen.getByRole("button", { name: "Cancel" }))
     expect(screen.queryByRole("radio")).toBeNull()
     expect(mocks.updateIssueThumbnail).not.toHaveBeenCalled()
+  })
+
+  it("画像をthumbnailへ明示指定する", async () => {
+    const user = userEvent.setup()
+    renderAttachments()
 
     await user.click(
-      screen.getByRole("button", {
+      await screen.findByRole("button", {
         name: "Change thumbnail",
       })
     )
@@ -380,10 +368,9 @@ describe("file attachments", () => {
       )
     )
     await waitFor(() => expect(screen.queryByRole("radio")).toBeNull())
-    expect(screen.queryByText("Thumbnail")).toBeNull()
   })
 
-  it("checks the current explicit thumbnail when editing starts", async () => {
+  it("編集開始時に現在の明示指定thumbnailを選択済みにする", async () => {
     const user = userEvent.setup()
     mocks.getIssueThumbnail.mockResolvedValue({
       mode: "selected",

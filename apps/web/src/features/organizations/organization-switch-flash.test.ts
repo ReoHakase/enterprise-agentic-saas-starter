@@ -14,8 +14,8 @@ const createStorage = () => {
   }
 }
 
-describe("organization switch flash", () => {
-  it("consumes a queued tenant-switch notification exactly once", () => {
+describe("組織切替通知", () => {
+  it("待機中のテナント切替通知を1回だけ消費する", () => {
     const storage = createStorage()
 
     queueOrganizationSwitchFlash(storage)
@@ -24,7 +24,7 @@ describe("organization switch flash", () => {
     expect(consumeOrganizationSwitchFlash(storage)).toBe(false)
   })
 
-  it("does not block tenant navigation when storage is unavailable", () => {
+  it("storage利用不能時もテナントへの遷移を妨げない", () => {
     const storage = {
       getItem: () => {
         throw new Error("blocked")

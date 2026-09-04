@@ -36,7 +36,7 @@ const meta = preview.meta({
 
 export const ContextUsage = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Open and dismiss with Escape", async () => {
+    await step("開いてEscapeキーで閉じる", async () => {
       const trigger = canvas.getByRole("button", { name: "Context usage" })
       await userEvent.click(trigger)
       const body = within(canvasElement.ownerDocument.body)

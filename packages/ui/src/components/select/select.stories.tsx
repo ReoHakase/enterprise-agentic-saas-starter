@@ -51,7 +51,7 @@ const RoleSelect = ({ disabled = false }: { disabled?: boolean }) => (
 export const Role = meta.story({
   render: () => <RoleSelect />,
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Select an administrator role", async () => {
+    await step("管理者の役割を選択する", async () => {
       const trigger = canvas.getByRole("combobox", {
         name: "Organization role",
       })

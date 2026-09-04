@@ -71,8 +71,8 @@ vi.mock("../agent-composer/agent-composer", async () => {
   }
 })
 
-describe("AgentNewThreadComposer", () => {
-  it("fills a sample prompt without creating a thread", async () => {
+describe("AgentNewThreadComposerの契約", () => {
+  it("スレッドを作らずサンプルプロンプトを入力する", async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn<(input: AgentNewThreadInput) => void>()
     render(
@@ -99,7 +99,7 @@ describe("AgentNewThreadComposer", () => {
     ).toHaveTextContent("Ask always")
   })
 
-  it("keeps permission and inline mention data in the first thread handoff", async () => {
+  it("最初のスレッド引き渡しで権限とインラインメンションdataを保持する", async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn<(input: AgentNewThreadInput) => void>()
     render(

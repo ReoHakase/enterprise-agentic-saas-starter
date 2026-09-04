@@ -166,8 +166,8 @@ const assertReasoningToTextCompletes = async () => {
   })
 }
 
-describe("native runtime SSE privacy", () => {
-  it("keeps Mastra title persistence alive without delaying the response stream", async () => {
+describe("native runtime SSEのprivacy", () => {
+  it("response streamを遅延させずMastra title永続化を生存させる", async () => {
     let forwardedTitleCallback:
       | ((title: string) => void | Promise<void>)
       | undefined
@@ -232,7 +232,7 @@ describe("native runtime SSE privacy", () => {
     expect(forwardedTitleCallback).toBeTypeOf("function")
   })
 
-  it("reports a provider startup failure to the local raw boundary exactly once", async () => {
+  it("provider起動失敗をlocal raw境界へ一度だけ報告する", async () => {
     const providerFailure = new Error("MODEL_START_EXACTLY_ONCE")
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<() => Promise<never>>(() =>
@@ -287,7 +287,7 @@ describe("native runtime SSE privacy", () => {
     }
   })
 
-  it("emits run identity before provider startup and cancels from the request signal", async () => {
+  it("provider起動前にrun identityを出力してrequest signalからcancelする", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<
       (
@@ -353,7 +353,7 @@ describe("native runtime SSE privacy", () => {
     expect(body).not.toContain("Model response failed")
   })
 
-  it("settles an observed abort before usage and releases its execution last", async () => {
+  it("観測済みabortをusage前にsettleして最後にexecutionを解放する", async () => {
     vi.useFakeTimers()
     const order: string[] = []
     class OrderedExecutionRegistry extends ProductAgentExecutionRegistry {
@@ -426,7 +426,7 @@ describe("native runtime SSE privacy", () => {
     expect(order).toEqual(["finalize:canceled", "release"])
   })
 
-  it("bounds image-loading stalls behind the already-emitted run identity", async () => {
+  it("出力済みrun identity後の画像読込stallを制限する", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<() => void>()
     const mastra = createFakeMastra(stream)
@@ -471,7 +471,7 @@ describe("native runtime SSE privacy", () => {
     expect(body).not.toContain('"type":"error"')
   })
 
-  it("projects a provider stall at the total deadline as a recoverable timeout", async () => {
+  it("総期限でのprovider stallを回復可能timeoutとして投影する", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const stream = vi.fn<() => Promise<never>>(
       () => new Promise(() => undefined)
@@ -512,7 +512,7 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("enforces the 270 second total timeout despite visible reasoning progress", async () => {
+  it("reasoning進行が見えても二百七十秒の総timeoutを強制する", async () => {
     const { composition, executionRegistry, mastra } = createModelRuntime([
       {
         parts: [],
@@ -567,12 +567,12 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("completes when visible reasoning hands off to text within the total deadline", async () => {
+  it("総期限内にreasoningからtextへ移行した場合は完了する", async () => {
     expect.hasAssertions()
     await assertReasoningToTextCompletes()
   })
 
-  it("settles an earlier user abort as cancel even when the provider reports an error", async () => {
+  it("providerがerrorを報告しても先行する利用者abortをcancelとしてsettleする", async () => {
     const { composition, executionRegistry, mastra } = createModelRuntime([
       {
         parts: [],
@@ -619,7 +619,7 @@ describe("native runtime SSE privacy", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it("redacts provider metadata on the actual SSE response path", async () => {
+  it("実際のSSE response経路でprovider metadataを秘匿する", async () => {
     const pending: Promise<unknown>[] = []
     const response = await handleAgentRuntimeRequest(
       chatRequest(),

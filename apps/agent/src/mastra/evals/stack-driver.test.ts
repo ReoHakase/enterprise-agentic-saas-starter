@@ -29,8 +29,8 @@ const successEvents = (assistantUrl: string) => [
   },
 ]
 
-describe("assertWebSearchEvidence", () => {
-  it("accepts a citation from the bounded successful tool output", () => {
+describe("assertWebSearchEvidenceの契約", () => {
+  it("有界な成功tool出力からcitationを受け入れる", () => {
     expect(() =>
       assertWebSearchEvidence(
         successEvents("https://developers.cloudflare.com/workers/")
@@ -38,7 +38,7 @@ describe("assertWebSearchEvidence", () => {
     ).not.toThrow()
   })
 
-  it("uses the final output when a tool state is updated", () => {
+  it("tool state更新時は最終出力を使う", () => {
     expect(() =>
       assertWebSearchEvidence([
         {
@@ -55,7 +55,7 @@ describe("assertWebSearchEvidence", () => {
     ).not.toThrow()
   })
 
-  it("rejects tool-output-error without accepting assistant text", () => {
+  it("assistant textを受け入れずtool-output-errorを拒否する", () => {
     expect(() =>
       assertWebSearchEvidence([
         {
@@ -77,7 +77,7 @@ describe("assertWebSearchEvidence", () => {
     ).toThrow("tool failed")
   })
 
-  it("distinguishes missing, malformed, empty, and unbounded source output", () => {
+  it("欠損と不正と空と無界のsource出力を区別する", () => {
     const input = {
       type: "tool-input-available",
       toolCallId: "call_search",
@@ -121,7 +121,7 @@ describe("assertWebSearchEvidence", () => {
     ).toThrow("exceeded its source bound")
   })
 
-  it("rejects a hallucinated citation outside the returned source set", () => {
+  it("返却source集合外の幻覚citationを拒否する", () => {
     expect(() =>
       assertWebSearchEvidence(successEvents("https://example.com/invented"))
     ).toThrow("was not returned by tool")

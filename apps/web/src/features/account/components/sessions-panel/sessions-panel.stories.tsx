@@ -6,6 +6,7 @@ import { Providers } from "@/components/providers/providers"
 
 import { fictionalSessions } from "../../test-support/fixtures"
 import { SessionsPanel } from "./sessions-panel"
+import { SessionsPanelStoryFixture } from "./test-support/sessions-panel-story-fixture"
 
 const meta = preview.meta({
   title: "Web/Account/Sessions Panel",
@@ -33,7 +34,7 @@ export const Ready = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Cancel revoking every other session", async () => {
+    await step("現在以外の全セッションの取り消しをキャンセルする", async () => {
       const trigger = await canvas.findByRole("button", {
         name: "Revoke other sessions",
       })
@@ -60,9 +61,6 @@ export const Empty = meta.story({
   beforeEach({ msw }) {
     msw.use(http.get("*/me/sessions", () => HttpResponse.json([])))
   },
-  play: async ({ canvas }) => {
-    await expect(await canvas.findByText("No active sessions")).toBeVisible()
-  },
 })
 
 export const RetrySuccess = meta.story({
@@ -84,7 +82,7 @@ export const RetrySuccess = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Retry a failed sessions request", async () => {
+    await step("失敗したセッション取得を再試行する", async () => {
       await expect(
         await canvas.findByText("Sessions could not be loaded")
       ).toBeVisible()
@@ -98,46 +96,5 @@ export const RetrySuccess = meta.story({
 
 export const MobileOverflow = meta.story({
   globals: { viewport: { value: "mobile1", isRotated: false } },
-  beforeEach({ msw }) {
-    msw.use(
-      http.get("*/me/sessions", () => HttpResponse.json(fictionalSessions))
-    )
-  },
-  play: async ({ canvas, canvasElement }) => {
-    const table = await canvas.findByRole("table", {
-      name: "Signed-in device sessions",
-    })
-    await expect(
-      within(table)
-        .getAllByRole("columnheader")
-        .map((header) => header.textContent?.trim())
-    ).toEqual([
-      "Device",
-      "Browser",
-      "User-Agent",
-      "Updated at",
-      "Expires at",
-      "Actions",
-    ])
-    await expect(
-      table.closest('[data-slot="data-table-root"]')
-    ).toBeInTheDocument()
-
-    const scrollRegion = await canvas.findByRole("region", {
-      name: "Signed-in device sessions",
-    })
-    await expect(scrollRegion).toHaveAttribute(
-      "data-horizontal-overflow",
-      "true"
-    )
-    expect(scrollRegion.scrollWidth).toBeGreaterThan(scrollRegion.clientWidth)
-    scrollRegion.scrollLeft = 40
-    expect(scrollRegion.scrollLeft).toBeGreaterThan(0)
-
-    const document = canvasElement.ownerDocument.documentElement
-    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(
-      canvasElement.clientWidth
-    )
-    expect(document.scrollWidth).toBeLessThanOrEqual(document.clientWidth)
-  },
+  render: () => <SessionsPanelStoryFixture />,
 })

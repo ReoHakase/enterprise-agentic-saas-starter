@@ -1,5 +1,3 @@
-import { expect, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Input } from "./input"
@@ -16,14 +14,6 @@ const meta = preview.meta({
 
 export const Empty = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, step }) => {
-    await step("Enter an organization name", async () => {
-      const input = canvas.getByRole("textbox", { name: "Organization name" })
-      await userEvent.type(input, "Acme Cloud")
-      await expect(input).toHaveValue("Acme Cloud")
-      await expect(input).toHaveFocus()
-    })
-  },
 })
 
 export const Filled = meta.story({

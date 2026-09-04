@@ -45,7 +45,7 @@ export const Ready = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Switch to the requested organization", async () => {
+    await step("要求された組織に切り替える", async () => {
       await userEvent.click(
         canvas.getByRole("button", { name: "Switch and continue" })
       )

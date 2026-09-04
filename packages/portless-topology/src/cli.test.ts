@@ -98,7 +98,7 @@ afterEach(async () => {
   )
 })
 
-describe("Portless topology resolver", () => {
+describe("Portless topology resolverの契約", () => {
   it.each([
     [
       "https://enterprise-agentic-saas.localhost",
@@ -112,7 +112,7 @@ describe("Portless topology resolver", () => {
       "http://feature-auth.enterprise-agentic-saas.localhost:7443",
       "feature-auth.enterprise-agentic-saas.localhost",
     ],
-  ])("resolves all public services from %s", (baseOrigin, webHostname) => {
+  ])("%sから全公開serviceを解決する", (baseOrigin, webHostname) => {
     for (const [logicalName, servicePrefix] of publicServices) {
       const service = resolvePortlessService(baseOrigin, logicalName)
       expect(service.origin).toBe(
@@ -124,7 +124,7 @@ describe("Portless topology resolver", () => {
     }
   })
 
-  it("preserves a multi-label service prefix to the left of the worktree namespace", () => {
+  it("複数labelのservice prefixをworktree namespaceの左側に保持する", () => {
     expect(
       resolvePortlessService(
         "https://feature-auth.enterprise-agentic-saas.localhost",
@@ -144,7 +144,7 @@ describe("Portless topology resolver", () => {
     "https://api.enterprise-agentic-saas.localhost",
     "api.enterprise-agentic-saas.localhost",
     "api enterprise-agentic-saas",
-  ])("rejects invalid logical input %j", (logicalName) => {
+  ])("不正なlogical入力%jを拒否する", (logicalName) => {
     expect(() =>
       resolvePortlessService(
         "https://enterprise-agentic-saas.localhost",
@@ -157,13 +157,13 @@ describe("Portless topology resolver", () => {
     "",
     "enterprise-agentic-saas.localhost",
     "https://enterprise-agentic-saas.localhost/path",
-  ])("rejects invalid base origin %j", (baseOrigin) => {
+  ])("不正なbase origin %jを拒否する", (baseOrigin) => {
     expect(() =>
       resolvePortlessService(baseOrigin, "enterprise-agentic-saas")
     ).toThrow(/Portless/u)
   })
 
-  it("creates the shared local topology without exposing or changing secrets", () => {
+  it("secretを公開も変更もせず共通local topologyを作る", () => {
     const source = {
       BETTER_AUTH_SECRET: "keep-this-secret",
       CORS_ORIGIN: "https://stale.example.test",
@@ -223,7 +223,7 @@ describe("Portless topology resolver", () => {
     expect(source.TURSO_AUTH_TOKEN).toBe("must-not-reach-local-turso")
   })
 
-  it("preserves an explicit Node certificate bundle", () => {
+  it("明示したNode certificate bundleを保持する", () => {
     expect(
       createLocalTopologyEnvironment(
         "https://enterprise-agentic-saas.localhost",
@@ -235,7 +235,7 @@ describe("Portless topology resolver", () => {
     ).toMatchObject({ NODE_EXTRA_CA_CERTS: "/tmp/custom-ca.pem" })
   })
 
-  it("uses main as the root checkout worktree identity", () => {
+  it("root checkoutのworktree identityにmainを使う", () => {
     expect(
       createLocalTopologyEnvironment(
         "https://enterprise-agentic-saas.localhost",
@@ -248,7 +248,7 @@ describe("Portless topology resolver", () => {
     })
   })
 
-  it("preserves an existing development session across nested topology wrappers", () => {
+  it("入れ子topology wrapper間で既存development sessionを保持する", () => {
     const createSessionId = vi.fn<() => string>(() => "new-session")
     expect(
       createLocalTopologyEnvironment(
@@ -267,8 +267,8 @@ describe("Portless topology resolver", () => {
   })
 })
 
-describe("Portless topology CLI", () => {
-  it("uses the direct named form and preserves command argv", async () => {
+describe("Portless topology CLIの契約", () => {
+  it("直接named formを使ってcommand argvを保持する", async () => {
     const stubDirectory = await createPortlessStub(
       "https://feature-auth.enterprise-agentic-saas.localhost:7443"
     )
@@ -301,7 +301,7 @@ describe("Portless topology CLI", () => {
     ])
   })
 
-  it("executes an unproxied command with topology env, argv, and exit code", async () => {
+  it("proxyなしcommandをtopology envとargvとexit code付きで実行する", async () => {
     const stubDirectory = await createPortlessStub(
       "https://feature-auth.enterprise-agentic-saas.localhost:7443"
     )
@@ -360,7 +360,7 @@ describe("Portless topology CLI", () => {
     })
   })
 
-  it("keeps one session id through root exec and nested service run", async () => {
+  it("root execと入れ子service runで一つのsession IDを保つ", async () => {
     const stubDirectory = await createPortlessStub(
       "https://feature-auth.enterprise-agentic-saas.localhost"
     )
@@ -392,7 +392,7 @@ describe("Portless topology CLI", () => {
     })
   })
 
-  it("returns the child exit code and rejects an empty command", async () => {
+  it("child exit codeを返して空commandを拒否する", async () => {
     const stubDirectory = await createPortlessStub(
       "https://enterprise-agentic-saas.localhost"
     )
@@ -429,7 +429,7 @@ describe("Portless topology CLI", () => {
     expect(emptyExec.stderr).toContain("Specify a command after `--`.")
   })
 
-  it("cleans readiness polling when the wrapped process exits before ready", async () => {
+  it("wrapper対象processがready前に終了した場合はreadiness pollingを片付ける", async () => {
     const stubDirectory = await createPortlessStub(
       "https://enterprise-agentic-saas.localhost"
     )
@@ -467,7 +467,7 @@ describe("Portless topology CLI", () => {
   it.each([
     ["SIGINT", 41],
     ["SIGTERM", 42],
-  ] as const)("forwards %s to the Portless child", async (signal, exitCode) => {
+  ] as const)("%sをPortless childへ転送する", async (signal, exitCode) => {
     const stubDirectory = await createPortlessStub(
       "https://enterprise-agentic-saas.localhost"
     )
@@ -499,7 +499,7 @@ describe("Portless topology CLI", () => {
             clearTimeout(deadline)
             child.kill(signal)
           } catch {
-            // The child has not reached its signal handler yet.
+            // childはまだsignal handlerへ到達していない
           }
         }, 10)
         const deadline = setTimeout(() => {

@@ -37,8 +37,8 @@ const organizations: OrganizationSummary[] = [
   },
 ]
 
-describe("resolveOrganizationRouteContext", () => {
-  it("uses the active organization outside an organization route", () => {
+describe("resolveOrganizationRouteContextの契約", () => {
+  it("組織ルート外では有効な組織を使う", () => {
     expect(
       resolveOrganizationRouteContext("/settings/organizations", organizations)
     ).toMatchObject({
@@ -48,7 +48,7 @@ describe("resolveOrganizationRouteContext", () => {
     })
   })
 
-  it("freezes tenant tools on a known inactive organization route", () => {
+  it("既知の無効な組織ルートではテナントtoolを凍結する", () => {
     expect(
       resolveOrganizationRouteContext(
         "/organization/beta/issues",
@@ -61,7 +61,7 @@ describe("resolveOrganizationRouteContext", () => {
     })
   })
 
-  it("fails closed for an unknown organization slug", () => {
+  it("未知の組織slugでは拒否する", () => {
     expect(
       resolveOrganizationRouteContext(
         "/organization/not-a-member/issues",

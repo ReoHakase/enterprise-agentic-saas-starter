@@ -33,8 +33,8 @@ const readJsonc = async (path: string) => {
   })
 }
 
-describe("Mastra Studio development configuration", () => {
-  it("uses the Portless browser origin for Studio API requests", async () => {
+describe("Mastra Studio開発設定", () => {
+  it("Studio API requestにPortless browser originを使う", async () => {
     const packageJson = await readJsonc(
       join(repositoryRoot, "apps/agent/package.json")
     )
@@ -52,8 +52,8 @@ describe("Mastra Studio development configuration", () => {
   })
 })
 
-describe("mutual Worker Service Binding deployment", () => {
-  it("keeps the bootstrap API config identical except for outbound services", async () => {
+describe("相互Worker Service Binding配置", () => {
+  it("outbound service以外のbootstrap API設定を同一に保つ", async () => {
     const finalConfig = await readJsonc(
       join(repositoryRoot, "apps/api/wrangler.jsonc")
     )
@@ -106,7 +106,7 @@ describe("mutual Worker Service Binding deployment", () => {
     expect(agentConfig).not.toHaveProperty("durable_objects")
   })
 
-  it("isolates the scripted E2E entrypoint from production", async () => {
+  it("scripted E2E entrypointを本番から分離する", async () => {
     const productionConfig = await readJsonc(
       join(repositoryRoot, "apps/agent/wrangler.jsonc")
     )
@@ -129,7 +129,7 @@ describe("mutual Worker Service Binding deployment", () => {
     )
   })
 
-  it("keeps Durable Object configuration out of local eval Worker configs", () => {
+  it("Durable Object設定をlocal eval Worker設定から除外する", () => {
     const configs = createAgentEvalConfigs({
       agentDatabaseOrigin: "http://127.0.0.1:42001",
       agentName: "agent-eval",
@@ -144,7 +144,7 @@ describe("mutual Worker Service Binding deployment", () => {
     expect(configs.agent).not.toHaveProperty("migrations")
   })
 
-  it("deploys Agent before the final API and gates bootstrap on remote state", async () => {
+  it("最終APIより先にAgentを配置してremote stateでbootstrapを制御する", async () => {
     const workflow = await readFile(
       join(repositoryRoot, ".github/workflows/deploy.yml"),
       "utf8"

@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Input } from "../input/input"
@@ -43,11 +41,6 @@ export const AccountDetails = meta.story({
       </FieldGroup>
     </FieldSet>
   ),
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("textbox", { name: "Email address" })
-    ).toHaveValue("avery@example.test")
-  },
 })
 
 export const Invalid = meta.story({

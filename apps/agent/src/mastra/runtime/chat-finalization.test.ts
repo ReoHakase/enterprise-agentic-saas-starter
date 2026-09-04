@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 
 import { createRunFinalizer } from "./chat-finalization"
 
-describe("createRunFinalizer", () => {
-  it("preserves the finalization cause at the observability boundary", async () => {
+describe("createRunFinalizerの契約", () => {
+  it("observability境界でfinalization causeを保持する", async () => {
     const cause = new Error("private settlement failure")
     const reportFailure = vi.fn<(cause: unknown) => void>()
     const captureFailure = vi.fn<(code: string) => void>()

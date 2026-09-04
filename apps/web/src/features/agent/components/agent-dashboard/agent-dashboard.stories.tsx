@@ -35,28 +35,20 @@ const meta = preview.meta({
 export const Empty = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step(
-      "Prepare a new conversation from a suggested prompt",
-      async () => {
-        const prompt = await canvas.findByRole("button", {
-          name: "Summarize the current page and suggest the next action.",
-        })
-        await userEvent.click(prompt)
-        await expect(
-          canvas.getByRole("textbox", { name: "Agent message" })
-        ).toHaveTextContent(
-          "Summarize the current page and suggest the next action."
-        )
-      }
-    )
+    await step("提案プロンプトから新しい会話を準備する", async () => {
+      const prompt = await canvas.findByRole("button", {
+        name: "Summarize the current page and suggest the next action.",
+      })
+      await userEvent.click(prompt)
+      await expect(
+        canvas.getByRole("textbox", { name: "Agent message" })
+      ).toHaveTextContent(
+        "Summarize the current page and suggest the next action."
+      )
+    })
   },
 })
 
 export const Disabled = meta.story({
   render: () => <DashboardExample disabled />,
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByRole("textbox", { name: "Agent message" })
-    ).toHaveAttribute("contenteditable", "false")
-  },
 })

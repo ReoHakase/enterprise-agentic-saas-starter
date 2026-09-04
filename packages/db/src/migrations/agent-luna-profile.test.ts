@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest"
 
 import { migrationsFolder } from "./helpers"
 
-describe("database migrations: Luna Agent profile", () => {
-  it("installs the run defaults and versioned fallback price", async () => {
+describe("DBマイグレーションのLuna Agent profile", () => {
+  it("runの既定値とversion付きfallback価格を導入する", async () => {
     const client = createClient({ url: "file::memory:" })
     try {
       await migrate(drizzle({ client }), { migrationsFolder })

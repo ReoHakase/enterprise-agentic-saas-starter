@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { classifyAgentEvalFailure } from "./failure"
 
-describe("Agent eval failure classification", () => {
+describe("Agent eval失敗分類", () => {
   it.each([
     ["Agent eval service readiness timed out", "stack_infrastructure"],
     ["Agent eval database readiness timed out", "stack_database"],
@@ -126,11 +126,11 @@ describe("Agent eval failure classification", () => {
       "usage_model_mismatch",
     ],
     ["Agent eval agent-stack-read usage was estimated", "usage_estimated"],
-  ] as const)("classifies %s without exposing the cause", (message, code) => {
+  ] as const)("既知のeval失敗%#をcause非公開で分類する", (message, code) => {
     expect(classifyAgentEvalFailure(new Error(message))).toBe(code)
   })
 
-  it("does not reflect unknown provider errors", () => {
+  it("未知のprovider errorを反映しない", () => {
     expect(
       classifyAgentEvalFailure(
         new Error("provider response contained private request details")

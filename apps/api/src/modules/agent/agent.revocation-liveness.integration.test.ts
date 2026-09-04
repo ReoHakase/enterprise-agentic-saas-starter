@@ -135,10 +135,17 @@ const readProductModelCalls = async (
   return { count: value.count, prompts: value.prompts }
 }
 
-describe("Agent external revocation liveness", () => {
-  it.each(["survive", "restart", "tool-race"] as const)(
-    "blocks revoked continuation and keeps Memory free when the host %s",
-    async (hostOutcome) => {
+describe("Agent外部失効のliveness", () => {
+  it.each([
+    { hostOutcome: "survive", label: "hostを維持した場合" },
+    { hostOutcome: "restart", label: "hostを再起動した場合" },
+    {
+      hostOutcome: "tool-race",
+      label: "tool実行と失効が競合した場合",
+    },
+  ] as const)(
+    "$labelでも失効済みcontinuationを阻止してMemoryを空に保つ",
+    async ({ hostOutcome }) => {
       const directory = await mkdtemp(join(tmpdir(), "agent-revocation-g4-"))
       const applicationPath = join(directory, "application.db")
       const agentPath = join(directory, "agent.db")

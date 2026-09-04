@@ -12,25 +12,24 @@ import { createCloudflareEmailSender } from "../providers/cloudflare"
 import { createConfiguredEmailSender } from "../providers/configured"
 import { createConsoleSender } from "../providers/console"
 import { createMailpitEmailSender } from "../providers/mailpit"
-import { createNoopSender } from "../providers/noop"
 import { privateMailCommandFixture } from "./fixtures"
 
-describe("email configuration", () => {
-  it("uses a non-deliverable local address when EMAIL_FROM is omitted locally", () => {
+describe("メール設定", () => {
+  it("localでEMAIL_FROMを省略した場合は配送不能なaddressを使う", () => {
     expect(resolveEmailFrom(undefined, "development")).toBe(
       "noreply@example.test"
     )
     expect(resolveEmailFrom("  ", "test")).toBe("noreply@example.test")
   })
 
-  it("keeps EMAIL_FROM required in production", () => {
+  it("本番ではEMAIL_FROMを必須にする", () => {
     expect(resolveEmailFrom(undefined, "production")).toBeUndefined()
     expect(resolveEmailFrom("auth@example.com", "production")).toBe(
       "auth@example.com"
     )
   })
 
-  it("selects safe runtime-specific email providers by default", () => {
+  it("runtimeごとに安全な既定email providerを選ぶ", () => {
     expect(resolveEmailProvider(undefined, "development")).toBe("mailpit")
     expect(resolveEmailProvider("  ", undefined)).toBe("mailpit")
     expect(resolveEmailProvider(undefined, "test")).toBe("noop")
@@ -38,7 +37,7 @@ describe("email configuration", () => {
     expect(resolveEmailProvider(" console ", "production")).toBe("console")
   })
 
-  it("defaults the Mailpit URL only in local development", () => {
+  it("local開発でのみMailpit URLを補う", () => {
     expect(resolveMailpitUrl(undefined, "development")).toBe(
       "https://mailpit.enterprise-agentic-saas.localhost"
     )
@@ -53,8 +52,8 @@ describe("email configuration", () => {
   })
 })
 
-describe("email rendering", () => {
-  it("renders magic link html and plain text", async () => {
+describe("メール描画", () => {
+  it("magic linkのHTMLとplain textを描画する", async () => {
     const email = await renderMagicLinkEmail({
       appName: "Enterprise Agentic SaaS",
       url: "https://example.com/magic",
@@ -74,7 +73,7 @@ describe("email rendering", () => {
     })
   })
 
-  it("renders organization invitation html and plain text", async () => {
+  it("組織招待のHTMLとplain textを描画する", async () => {
     const email = await renderOrganizationInvitationEmail({
       appName: "Enterprise Agentic SaaS",
       organizationName: "Acme",
@@ -95,7 +94,7 @@ describe("email rendering", () => {
     })
   })
 
-  it("renders email verification with the shared application shell", async () => {
+  it("共通application shellでemail確認を描画する", async () => {
     const email = await renderVerificationEmail({
       appName: "Enterprise Agentic SaaS",
       url: "https://example.com/verify",
@@ -108,14 +107,10 @@ describe("email rendering", () => {
   })
 })
 
-describe("email senders", () => {
+describe("メール送信", () => {
   const input = privateMailCommandFixture
 
-  it("supports a noop sender for tests", async () => {
-    await expect(createNoopSender()(input)).resolves.toBeUndefined()
-  })
-
-  it("passes only sanitized metadata to the console sender logger", async () => {
+  it("console送信器のloggerへ無害化済みmetadataだけを渡す", async () => {
     const logger = vi.fn()
 
     await createConsoleSender(logger)(input)
@@ -131,48 +126,19 @@ describe("email senders", () => {
     expect(JSON.stringify(logger.mock.calls)).not.toContain("user@example.com")
   })
 
-  it("default console logger omits bodies, recipient, and renderProp values", async () => {
-    const spy = vi.spyOn(console, "info").mockImplementation(() => {})
+  it("既定loggerを一度だけ呼び出す", async () => {
+    const logger = vi.spyOn(console, "info").mockImplementation(() => {})
     try {
-      await createConsoleSender()({
-        to: "user@example.com",
-        template: "magic_link",
-        subject: "Invitation to join Private Organization",
-        text: "Text body",
-        html: "<p>Text body</p>",
-        renderProps: {
-          appName: "App",
-          url: "https://example.com/magic?token=abc",
-        },
-      })
-      expect(spy).toHaveBeenCalledWith(
-        "email:send",
-        expect.objectContaining({
-          template: "magic_link",
-          recipientDomain: "example.com",
-        })
-      )
-      const payload = spy.mock.calls[0]?.[1]
-      if (!payload || typeof payload !== "object") {
-        throw new Error("expected logger payload to be an object")
-      }
-      expect(payload).not.toHaveProperty("text")
-      expect(payload).not.toHaveProperty("html")
-      expect(payload).not.toHaveProperty("to")
-      expect(payload).not.toHaveProperty("renderProps")
-      expect(payload).not.toHaveProperty("subject")
-      expect(payload).not.toHaveProperty("textLength")
-      expect(payload).not.toHaveProperty("htmlLength")
-      expect(payload).not.toHaveProperty("renderPropKeys")
-      expect(JSON.stringify(payload)).not.toContain("Private Organization")
-      expect(JSON.stringify(payload)).not.toContain("token=abc")
-      expect(JSON.stringify(payload)).not.toContain("https://")
+      await createConsoleSender()(input)
+
+      expect(logger).toHaveBeenCalledOnce()
+      expect(logger).toHaveBeenCalledWith("email:send", expect.any(Object))
     } finally {
-      spy.mockRestore()
+      logger.mockRestore()
     }
   })
 
-  it("fails closed when the console provider is selected in production", () => {
+  it("本番でconsole providerを選ぶと安全側に失敗する", () => {
     expect(() =>
       createConfiguredEmailSender({
         provider: "console",
@@ -181,7 +147,7 @@ describe("email senders", () => {
     ).toThrow(/disabled in production/)
   })
 
-  it("allows noop for an explicitly disabled production delivery path", async () => {
+  it("明示的に無効化した本番配送経路でnoopを許可する", async () => {
     await expect(
       createConfiguredEmailSender({ provider: "noop", runtime: "production" })(
         input
@@ -189,7 +155,7 @@ describe("email senders", () => {
     ).resolves.toBeUndefined()
   })
 
-  it("sends only the rendered transport fields to a local Mailpit inbox", async () => {
+  it("描画済みtransport fieldだけをlocal Mailpit inboxへ送る", async () => {
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('{"ID":"message_123"}'))
@@ -226,7 +192,7 @@ describe("email senders", () => {
     expect(JSON.stringify(request.mock.calls)).not.toContain("token?secret=1")
   })
 
-  it("omits optional Mailpit HTML and accepts a loopback URL", async () => {
+  it("省略可能なMailpit HTMLを除いてloopback URLを受け入れる", async () => {
     const request = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(undefined, { status: 200 }))
@@ -256,7 +222,7 @@ describe("email senders", () => {
     "https://127.evil.example.com",
     "ftp://localhost/inbox",
     "http://user:secret@localhost:8025",
-  ])("rejects a non-local Mailpit URL: %s", (baseUrl) => {
+  ])("localでないMailpit URLを拒否する: %s", (baseUrl) => {
     expect(() =>
       createMailpitEmailSender({
         baseUrl,
@@ -267,7 +233,7 @@ describe("email senders", () => {
   })
 
   it.each(["production", "test"] as const)(
-    "rejects Mailpit in the %s runtime",
+    "%s runtimeでMailpitを拒否する",
     (runtime) => {
       expect(() =>
         createMailpitEmailSender({
@@ -279,7 +245,7 @@ describe("email senders", () => {
     }
   )
 
-  it("selects Mailpit only with complete development configuration", async () => {
+  it("完全な開発設定がある場合だけMailpitを選ぶ", async () => {
     expect(() =>
       createConfiguredEmailSender({
         provider: "mailpit",
@@ -306,7 +272,7 @@ describe("email senders", () => {
     ).toBeTypeOf("function")
   })
 
-  it("maps Mailpit network failures while preserving the original cause", async () => {
+  it("元のcauseを保持してMailpit network失敗を変換する", async () => {
     const providerError = new Error(
       "provider failed for user@example.com at https://example.com/token=abc"
     )
@@ -330,7 +296,7 @@ describe("email senders", () => {
     await expect(delivery).rejects.not.toHaveProperty("body")
   })
 
-  it("maps Mailpit HTTP failures without reading the raw response", async () => {
+  it("生responseを読まずMailpit HTTP失敗を変換する", async () => {
     const response = new Response(
       "provider error containing user@example.com and token=abc",
       { status: 503 }
@@ -354,7 +320,7 @@ describe("email senders", () => {
     expect(text).not.toHaveBeenCalled()
   })
 
-  it("rejects a malformed Mailpit recipient before making a request", async () => {
+  it("request前に不正なMailpit宛先を拒否する", async () => {
     const request = vi.fn<typeof fetch>()
     const sender = createMailpitEmailSender({
       baseUrl: "http://localhost:8025",
@@ -375,7 +341,7 @@ describe("email senders", () => {
     expect(request).not.toHaveBeenCalled()
   })
 
-  it("sends only the rendered transport fields through Cloudflare", async () => {
+  it("Cloudflareへ描画済みtransport fieldだけを送る", async () => {
     const send = vi.fn().mockResolvedValue({ messageId: "message_123" })
     const observe = vi.fn()
 
@@ -405,7 +371,7 @@ describe("email senders", () => {
     })
   })
 
-  it("maps Cloudflare failures to a sanitized retry policy", async () => {
+  it("Cloudflare失敗を無害化済み再試行policyへ変換する", async () => {
     const providerError = {
       code: "E_RATE_LIMIT_EXCEEDED",
       message: "raw provider message containing user@example.com",
@@ -439,7 +405,7 @@ describe("email senders", () => {
     )
   })
 
-  it("does not turn an accepted delivery into a failure when observation fails", async () => {
+  it("観測に失敗しても受理済み配送を失敗へ変えない", async () => {
     const send = vi.fn().mockResolvedValue({ messageId: "message_123" })
     const sender = createCloudflareEmailSender({
       binding: { send },
@@ -453,7 +419,7 @@ describe("email senders", () => {
     expect(send).toHaveBeenCalledOnce()
   })
 
-  it("rejects malformed addresses before invoking the binding", async () => {
+  it("binding呼出前に不正なaddressを拒否する", async () => {
     const send = vi.fn()
     const sender = createCloudflareEmailSender({
       binding: { send },

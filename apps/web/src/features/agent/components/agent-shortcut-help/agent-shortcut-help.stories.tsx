@@ -30,7 +30,7 @@ export const Open = meta.story({
   play: async ({ canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Review and close the keyboard reference", async () => {
+    await step("キーボードショートカット一覧を確認して閉じる", async () => {
       await waitFor(() =>
         expect(
           body.getByRole("alertdialog", { name: "Agent shortcuts" })

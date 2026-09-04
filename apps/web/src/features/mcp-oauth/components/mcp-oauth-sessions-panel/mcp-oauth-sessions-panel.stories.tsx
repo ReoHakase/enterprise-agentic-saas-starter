@@ -45,32 +45,29 @@ export const Ready = meta.story({
       )
     )
   },
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
-    await expect(await canvas.findByText("Codex local")).toBeVisible()
-    await expect(
-      canvas.getByRole("checkbox", { name: "Issues Read access" })
-    ).toHaveAttribute("aria-disabled", "true")
-    await expect(canvas.getByRole("button", { name: "Issues" })).toBeDisabled()
-    await userEvent.click(canvas.getByRole("button", { name: "Revoke" }))
-    await expect(
-      body.getByRole("alertdialog", { name: "Revoke MCP access?" })
-    ).toBeInTheDocument()
-    await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-    await waitFor(() =>
-      expect(
-        body.queryByRole("alertdialog", { name: "Revoke MCP access?" })
-      ).not.toBeInTheDocument()
-    )
+    await step("MCP accessのrevokeをcancelする", async () => {
+      await canvas.findByText("Codex local")
+      const trigger = canvas.getByRole("button", { name: "Revoke" })
+      await userEvent.click(trigger)
+      await expect(
+        body.getByRole("alertdialog", { name: "Revoke MCP access?" })
+      ).toBeInTheDocument()
+      await userEvent.click(body.getByRole("button", { name: "Cancel" }))
+      await waitFor(() =>
+        expect(
+          body.queryByRole("alertdialog", { name: "Revoke MCP access?" })
+        ).not.toBeInTheDocument()
+      )
+      await waitFor(() => expect(trigger).toHaveFocus())
+    })
   },
 })
 
 export const Empty = meta.story({
   beforeEach({ msw }) {
     msw.use(http.get("*/me/mcp-oauth/sessions", () => HttpResponse.json([])))
-  },
-  play: async ({ canvas }) => {
-    await expect(await canvas.findByText("No MCP access grants")).toBeVisible()
   },
 })
 
@@ -89,11 +86,13 @@ export const RetrySuccess = meta.story({
       })
     )
   },
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByText("MCP access could not be loaded")
-    ).toBeVisible()
-    await userEvent.click(canvas.getByRole("button", { name: "Try again" }))
-    await expect(await canvas.findByText("Codex local")).toBeVisible()
+  play: async ({ canvas, step }) => {
+    await step("失敗したMCP access取得を再試行する", async () => {
+      await expect(
+        await canvas.findByText("MCP access could not be loaded")
+      ).toBeVisible()
+      await userEvent.click(canvas.getByRole("button", { name: "Try again" }))
+      await expect(await canvas.findByText("Codex local")).toBeVisible()
+    })
   },
 })

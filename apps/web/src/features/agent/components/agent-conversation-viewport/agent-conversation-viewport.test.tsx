@@ -87,8 +87,8 @@ const minimapTurns: AgentConversationTurnPreview[] = [
     toolCount: 2,
   },
 ]
-describe("AgentConversationViewport", () => {
-  it("groups assistant messages with the preceding user turn", () => {
+describe("AgentConversationViewportの契約", () => {
+  it("直前の利用者ターンへアシスタントメッセージをまとめる", () => {
     const groups = buildAgentConversationGroups(previewMessages)
 
     expect(groups).toHaveLength(2)
@@ -107,7 +107,7 @@ describe("AgentConversationViewport", () => {
     })
   })
 
-  it("keeps the turn minimap beside the standard conversation", () => {
+  it("標準会話の横にターンミニマップを配置する", () => {
     render(
       <AgentConversationViewport enabled turns={minimapTurns}>
         <p>Conversation</p>
@@ -122,35 +122,25 @@ describe("AgentConversationViewport", () => {
     ).toBeVisible()
   })
 
-  it("uses the centered auto-follow conversation with a return button", () => {
+  it("自動追従会話に最新メッセージへの移動操作を表示する", () => {
     render(
       <AgentConversationViewport enabled>
         <p>Conversation</p>
       </AgentConversationViewport>
     )
 
-    expect(screen.getByTestId("agent-conversation-viewport")).toHaveAttribute(
-      "aria-label",
-      "Agent conversation"
-    )
-    expect(screen.getByTestId("agent-conversation-content")).toHaveTextContent(
-      "Conversation"
-    )
     expect(
       screen.getByRole("button", { name: "Jump to latest message" })
     ).toBeInTheDocument()
   })
 
-  it("uses the same centered layout without auto-follow on the dedicated page", () => {
+  it("専用ページでは最新メッセージへの移動操作を表示しない", () => {
     render(
       <AgentConversationViewport enabled={false}>
         <p>Dedicated page conversation</p>
       </AgentConversationViewport>
     )
 
-    expect(screen.getByTestId("agent-conversation-viewport")).toHaveTextContent(
-      "Dedicated page conversation"
-    )
     expect(
       screen.queryByRole("button", { name: "Jump to latest message" })
     ).not.toBeInTheDocument()

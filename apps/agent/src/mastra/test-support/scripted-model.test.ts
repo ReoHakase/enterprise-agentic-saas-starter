@@ -48,8 +48,8 @@ const createRuntimeContext = (
   return requestContext
 }
 
-describe("standard scripted model", () => {
-  it("only resolves an unscoped model when Studio access is explicitly enabled", async () => {
+describe("標準scripted model", () => {
+  it("Studio accessが明示的に有効な場合だけunscoped modelを解決する", async () => {
     const executionRegistry = new ProductAgentExecutionRegistry()
     const createAgent = (allowUnscopedModel: boolean) =>
       createProductAgent({
@@ -83,7 +83,7 @@ describe("standard scripted model", () => {
     expect(studioAgent.listTools()).toEqual({})
   })
 
-  it("drives the real Agent factory, schema, and read executor in order", async () => {
+  it("実際のAgent factoryとschemaとread executorを順に駆動する", async () => {
     const calls: unknown[] = []
     const binding: AgentInternalFetchBinding = {
       fetch: async (input, init) => {
@@ -140,22 +140,27 @@ describe("standard scripted model", () => {
     expect(productModel.modelId).toContain(SCRIPTED_MODEL_SENTINEL)
   })
 
-  it("exposes explicit malformed stream chunks and honors abort during delay", async () => {
+  it("明示した不正stream chunkをそのまま公開する", async () => {
     const malformed = { privateFixturePart: true }
     const model = createScriptedModel([
       {
         parts: [],
         stream: [{ value: malformed }],
       },
-      {
-        delayMs: 10_000,
-        parts: [{ type: "text", text: "too late" }],
-      },
     ])
     const streamOptions: Parameters<typeof model.doStream>[0] = { prompt: [] }
     const streamed = await model.doStream(streamOptions)
     const chunks = await Array.fromAsync(streamed.stream)
     expect(chunks).toEqual([malformed])
+  })
+
+  it("delay中の生成をabort理由で中断する", async () => {
+    const model = createScriptedModel([
+      {
+        delayMs: 10_000,
+        parts: [{ type: "text", text: "too late" }],
+      },
+    ])
 
     const abort = new AbortController()
     const generateOptions: Parameters<typeof model.doGenerate>[0] = {
@@ -167,7 +172,7 @@ describe("standard scripted model", () => {
     await expect(pending).rejects.toMatchObject({ name: "AbortError" })
   })
 
-  it("resolves a step from the current call options without shared cursor state", async () => {
+  it("共通cursor stateなしで現在のcall optionからstepを解決する", async () => {
     const model = createScriptedModel((options) => ({
       parts: [
         {

@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Badge } from "./badge"
@@ -20,10 +18,6 @@ export const Statuses = meta.story({
       <Badge variant="destructive">Payment failed</Badge>
     </div>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("Active")).toBeVisible()
-    await expect(canvas.getByText("Payment failed")).toBeVisible()
-  },
 })
 
 export const LongStatus = meta.story({

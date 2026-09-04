@@ -9,8 +9,8 @@ import { createAgentInternalApi } from "./internal-api"
 import { configureAgentRuntime } from "./runtime"
 import { createAgentThreadForSession } from "./threads/repository"
 
-describe("Agent client tool continuation", () => {
-  it("rejects a malformed native tool state from private Memory history", async () => {
+describe("Agent client tool continuationの契約", () => {
+  it("private Memory履歴の不正なnative tool stateを拒否する", async () => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -49,7 +49,7 @@ describe("Agent client tool continuation", () => {
     ).toBe(503)
   })
 
-  it("accepts bounded native approval states from the private Memory history boundary", async () => {
+  it("private Memory履歴境界から上限付きnative approval stateを受理する", async () => {
     const { app, db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -144,7 +144,7 @@ describe("Agent client tool continuation", () => {
     })
   })
 
-  it("continues only the last persisted allowlisted client tool call", async () => {
+  it("最後に永続化したallowlist対象client tool callだけを継続する", async () => {
     const { app, db } = await createFixture()
     const inputs = configureAgentStreamCapture()
     const thread = await createAgentThreadForSession(db, {

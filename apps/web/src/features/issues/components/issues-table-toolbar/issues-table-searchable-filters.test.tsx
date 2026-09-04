@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useCallback, useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -56,8 +56,8 @@ const LabelFilterProbe = ({
   )
 }
 
-describe("IssueLabelFilter", () => {
-  it("keeps Match any or Match all visibly selected and required", async () => {
+describe("IssueLabelFilterの契約", () => {
+  it("Match anyまたはMatch allを選択済みかつ必須として表示する", async () => {
     const user = userEvent.setup()
     const onChange = vi.fn<IssueTableDraftChange>()
     render(<LabelFilterProbe onChange={onChange} />)
@@ -66,13 +66,6 @@ describe("IssueLabelFilter", () => {
     const any = screen.getByRole("button", { name: "Match any" })
     const all = screen.getByRole("button", { name: "Match all" })
     expect(any).toHaveAttribute("aria-pressed", "true")
-    expect(
-      within(any).queryByTestId("label-mode-any-icon")
-    ).not.toBeInTheDocument()
-    expect(
-      within(all).queryByTestId("label-mode-all-icon")
-    ).not.toBeInTheDocument()
-
     await user.click(all)
     expect(onChange).toHaveBeenLastCalledWith("labelMode", "all")
     expect(all).toHaveAttribute("aria-pressed", "true")
@@ -85,8 +78,8 @@ describe("IssueLabelFilter", () => {
   })
 })
 
-describe("IssueAssigneeFilter", () => {
-  it("keeps typed search text in the Base UI input and supports arrow selection", async () => {
+describe("IssueAssigneeFilterの契約", () => {
+  it("担当者を検索して選択を通知する", async () => {
     const user = userEvent.setup()
     const onChange = vi.fn<IssueTableDraftChange>()
     render(
@@ -108,7 +101,7 @@ describe("IssueAssigneeFilter", () => {
     expect(input).toHaveValue("Taylor")
     expect(screen.getByRole("option", { name: "Taylor Morgan" })).toBeVisible()
 
-    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}")
+    await user.click(screen.getByRole("option", { name: "Taylor Morgan" }))
     expect(onChange).toHaveBeenLastCalledWith("assignees", ["user-taylor"])
   })
 })

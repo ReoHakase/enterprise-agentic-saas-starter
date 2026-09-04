@@ -167,6 +167,10 @@ coverage/
     lcov.info
     index.html
   browser/
+    <project>/
+      coverage-summary.json
+      lcov.info
+      index.html
 ```
 
 CIではworkspace別artifactを保存し、root summaryで失敗workspaceを明示します。外部coverage SaaSは必須にせず、導入する場合もrepository内thresholdを正本とします。

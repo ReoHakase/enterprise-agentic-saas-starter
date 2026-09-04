@@ -246,10 +246,10 @@ const resetControllerMocks = () => {
   })
 }
 
-describe("useAgentController Stop lifecycle", () => {
+describe("useAgentControllerのStopライフサイクル", () => {
   beforeEach(resetControllerMocks)
 
-  it("handles three Stop cycles without deleting partial output", async () => {
+  it("部分出力を削除せず3回のStopサイクルを処理する", async () => {
     const { result, rerender } = renderController()
 
     act(() => observeRunMetadata(rerender, "run_1"))
@@ -304,7 +304,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(result.current.turnStopped).toBe(true)
   })
 
-  it("keeps the stream open for a run identity after an early Stop request", async () => {
+  it("早期Stop要求後も実行IDに対するstreamを開いたままにする", async () => {
     const { result, rerender } = renderController()
 
     let stopPromise: Promise<boolean> | undefined
@@ -331,7 +331,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(result.current.turnStopped).toBe(true)
   })
 
-  it("does not reuse settled message metadata for the next early Stop", async () => {
+  it("確定済みメッセージのmetadataを次の早期Stopへ再利用しない", async () => {
     const previousAssistant = {
       id: "assistant-previous",
       metadata: { runId: "run_previous" },
@@ -388,7 +388,7 @@ describe("useAgentController Stop lifecycle", () => {
     })
   })
 
-  it("deduplicates same-microtask Stop calls before React rerenders", async () => {
+  it("同一microtask内のStop呼び出しをReactの再描画前に重複排除する", async () => {
     let resolveCancel:
       | ((value: { runId: string; status: AgentRunStatus }) => void)
       | undefined
@@ -415,7 +415,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(mocks.stop).toHaveBeenCalledOnce()
   })
 
-  it("cancels an approval-waiting run even when chat transport is ready", async () => {
+  it("chat transportがreadyでも承認待ちの実行をキャンセルする", async () => {
     mocks.status = "ready"
     mocks.messages = [
       {
@@ -444,7 +444,7 @@ describe("useAgentController Stop lifecycle", () => {
     })
   })
 
-  it("settles Stop after local abort without waiting for query refetch", async () => {
+  it("queryの再取得を待たずローカル中止後にStopを完了する", async () => {
     const invalidate = vi
       .spyOn(QueryClient.prototype, "invalidateQueries")
       .mockImplementation(() => new Promise(() => undefined))
@@ -458,7 +458,7 @@ describe("useAgentController Stop lifecycle", () => {
     invalidate.mockRestore()
   })
 
-  it("waits for authoritative cancel and allows the next send after a non-canceled terminal", async () => {
+  it("サーバー確定のキャンセル結果を待ち、未キャンセルの終了通知後は次の送信を許可する", async () => {
     let resolveCancel:
       | ((value: { runId: string; status: AgentRunStatus }) => void)
       | undefined
@@ -515,7 +515,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(mocks.sendMessage).toHaveBeenCalledOnce()
   })
 
-  it("keeps transport cancel failures retryable", async () => {
+  it("transportのキャンセル失敗を再試行可能に保つ", async () => {
     const { result, rerender } = renderController()
     act(() => observeRunMetadata(rerender, "run_retry"))
     mocks.cancelAgentRun.mockRejectedValueOnce(new Error("network failure"))
@@ -533,7 +533,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(mocks.cancelAgentRun).toHaveBeenCalledTimes(2)
   })
 
-  it("fails closed when an early Stop aborts without a run identity", async () => {
+  it("実行IDがない早期Stopの中止時は失敗として拒否する", async () => {
     let resolveStop: (() => void) | undefined
     mocks.stop.mockImplementationOnce(
       () =>
@@ -574,7 +574,7 @@ describe("useAgentController Stop lifecycle", () => {
     expect(result.current.turnStopped).toBe(false)
   })
 
-  it("bounds an early Stop when no run identity or terminal callback arrives", async () => {
+  it("実行IDも完了コールバックも届かない早期Stopを有限時間で終了する", async () => {
     vi.useFakeTimers()
     mocks.status = "ready"
     let composerText = "retry after early Stop timeout"
@@ -622,7 +622,7 @@ describe("useAgentController Stop lifecycle", () => {
     }
   })
 
-  it("reuses the submission after a no-run terminal disconnect fails closed", async () => {
+  it("実行なしの終了通知による切断を拒否した後も送信IDを再利用する", async () => {
     mocks.status = "ready"
     let composerText = "retry after early disconnect"
     const composer = createComposer(
@@ -666,10 +666,10 @@ describe("useAgentController Stop lifecycle", () => {
   })
 })
 
-describe("useAgentController Stop submission recovery", () => {
+describe("useAgentControllerのStop送信復旧", () => {
   beforeEach(resetControllerMocks)
 
-  it("uses a fresh submission identity after each of three Stop cycles", async () => {
+  it("3回のStopサイクルごとに新しい送信IDを使う", async () => {
     mocks.status = "ready"
     let composerText = "message 1"
     const composer = createComposer(() => composerText)
@@ -678,15 +678,15 @@ describe("useAgentController Stop submission recovery", () => {
 
     for (const [index, runId] of ["run_1", "run_2", "run_3"].entries()) {
       composerText = `message ${index + 1}`
-      // oxlint-disable-next-line no-await-in-loop -- each send must establish its own pending identity before Stop.
+      // oxlint-disable-next-line no-await-in-loop -- 各送信はStopより前に固有のpending identityを確立する必要がある
       await act(async () => {
         await result.current.submitMessage(submitEvent())
       })
       mocks.status = "streaming"
       rerender()
-      // oxlint-disable-next-line no-await-in-loop -- run identity arrives after the corresponding submission.
+      // oxlint-disable-next-line no-await-in-loop -- run identityは対応するsubmissionの後に到着する
       act(() => observeRunMetadata(rerender, runId))
-      // oxlint-disable-next-line no-await-in-loop -- cancellation must settle before the next submission.
+      // oxlint-disable-next-line no-await-in-loop -- cancellationは次のsubmissionより前に確定させる必要がある
       await act(async () => {
         await expect(result.current.stopCurrentTurn()).resolves.toBe(true)
       })
@@ -732,7 +732,7 @@ describe("useAgentController Stop submission recovery", () => {
       turnStopped: false,
     },
   ] as const)(
-    "applies $status Stop semantics to the draft and submission identity",
+    "$statusのStop規則をドラフトと送信IDへ適用する",
     async ({
       retainsSubmission,
       restoresDraft,
@@ -790,7 +790,7 @@ describe("useAgentController Stop submission recovery", () => {
     }
   )
 
-  it("retains the draft and submission identity until a failed cancel retry is canceled", async () => {
+  it("失敗したキャンセルの再試行が成功するまでドラフトと送信IDを保持する", async () => {
     mocks.status = "ready"
     let composerText = "retry transport failure"
     const composer = createComposer(
@@ -828,7 +828,7 @@ describe("useAgentController Stop submission recovery", () => {
     expect(mocks.sendMessage.mock.calls[1]?.[0].id).not.toBe(initialId)
   })
 
-  it("preserves a newer composer draft when stopping an earlier submission", async () => {
+  it("以前の送信を停止するとき新しいコンポーザードラフトを保持する", async () => {
     mocks.status = "ready"
     let composerText = "original submission"
     const composer = createComposer(() => composerText)
@@ -852,7 +852,7 @@ describe("useAgentController Stop submission recovery", () => {
     })
   })
 
-  it("does not echo server-owned tool results through addToolOutput", async () => {
+  it("addToolOutput経由でサーバー所有のtool resultを送り返さない", async () => {
     renderController()
 
     await act(async () => {
@@ -872,7 +872,7 @@ describe("useAgentController Stop submission recovery", () => {
     expect(mocks.addToolOutput).not.toHaveBeenCalled()
   })
 
-  it("keeps raw client tool failures out of AI SDK history", async () => {
+  it("生のclient tool失敗をAI SDK履歴へ残さない", async () => {
     const error = new Error("DATABASE_URL=file:private-client-tool.db")
     mocks.patchForm.mockRejectedValueOnce(error)
     renderController()
@@ -905,7 +905,7 @@ describe("useAgentController Stop submission recovery", () => {
     )
   })
 
-  it("invalidates Issue queries after a successful attachment mutation turn", async () => {
+  it("添付ファイルmutationの成功後にIssue queryを無効化する", async () => {
     const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries")
     const attachmentMessage = {
       id: "assistant-attachment-finish",
@@ -946,7 +946,7 @@ describe("useAgentController Stop submission recovery", () => {
     invalidate.mockRestore()
   })
 
-  it("refreshes a new thread title until Mastra persists it", async () => {
+  it("Mastraが永続化するまで新しいスレッドタイトルを再取得する", async () => {
     vi.useFakeTimers()
     let title = "New conversation"
     const invalidate = vi

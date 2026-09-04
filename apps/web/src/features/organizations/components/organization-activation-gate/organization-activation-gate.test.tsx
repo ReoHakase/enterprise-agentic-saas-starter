@@ -69,7 +69,7 @@ const createWrapper = () => {
   )
 }
 
-describe("OrganizationActivationGate", () => {
+describe("OrganizationActivationGateの契約", () => {
   beforeEach(() => {
     mocks.events.length = 0
     vi.clearAllMocks()
@@ -82,7 +82,7 @@ describe("OrganizationActivationGate", () => {
     })
   })
 
-  it("keeps streams, uploads, and drafts until server activation succeeds", async () => {
+  it("サーバー側の有効化成功までstream・upload・draftを保持する", async () => {
     const actor = userEvent.setup()
     let resolveActivation: ((value: unknown) => void) | undefined
     mocks.activateOrganization.mockImplementation(
@@ -124,7 +124,7 @@ describe("OrganizationActivationGate", () => {
     ])
   })
 
-  it("preserves local state when server activation fails", async () => {
+  it("サーバー側の有効化失敗時もローカル状態を保持する", async () => {
     const actor = userEvent.setup()
     mocks.activateOrganization.mockRejectedValue(new Error("unavailable"))
     render(

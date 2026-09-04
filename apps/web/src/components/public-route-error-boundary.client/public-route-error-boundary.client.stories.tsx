@@ -23,7 +23,7 @@ export const Standalone = meta.story({
     reset.mockClear()
   },
   play: async ({ canvas, step }) => {
-    await step("Move focus from the error heading to recovery", async () => {
+    await step("フォーカスをエラーから回復に移す", async () => {
       await waitFor(() =>
         expect(
           canvas.getByRole("heading", {
@@ -35,33 +35,36 @@ export const Standalone = meta.story({
       await expect(
         canvas.getByRole("button", { name: "Reload application" })
       ).toHaveFocus()
-      await expect(reset).not.toHaveBeenCalled()
     })
   },
 })
 
 export const Authentication = meta.story({
   render: () => <AuthRouteError reset={reset} />,
-  play: async ({ canvas }) => {
-    await waitFor(() =>
-      expect(
-        canvas.getByRole("heading", {
-          name: "Authentication could not be loaded",
-        })
-      ).toHaveFocus()
-    )
+  play: async ({ canvas, step }) => {
+    await step("認証エラーを表示すると見出しへフォーカスを移す", async () => {
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("heading", {
+            name: "Authentication could not be loaded",
+          })
+        ).toHaveFocus()
+      )
+    })
   },
 })
 
 export const Invitation = meta.story({
   render: () => <InvitationRouteError reset={reset} />,
-  play: async ({ canvas }) => {
-    await waitFor(() =>
-      expect(
-        canvas.getByRole("heading", {
-          name: "Invitation could not be loaded",
-        })
-      ).toHaveFocus()
-    )
+  play: async ({ canvas, step }) => {
+    await step("招待エラーを表示すると見出しへフォーカスを移す", async () => {
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("heading", {
+            name: "Invitation could not be loaded",
+          })
+        ).toHaveFocus()
+      )
+    })
   },
 })

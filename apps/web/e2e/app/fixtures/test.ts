@@ -186,10 +186,10 @@ export const test = base.extend<ClientDiagnosticsFixtures>({
   },
   assertNoClientErrors: [
     async ({ clientErrorPolicy, page }, use) => {
-      // Next/Turbopack development can emit an invalid RSC timing interval
-      // during redirects and error-boundary recovery. Suppress only that
-      // framework-owned measurement; product timing and every other browser
-      // error remain visible to this fixture.
+      // Next/Turbopack developmentはredirectやerror boundaryの復旧中に
+      // 不正なRSC timing intervalを出力する場合がある
+      // framework所有のmeasurementだけを抑止し
+      // 製品のtimingとその他すべてのbrowser errorはこのfixtureで可視に保つ
       // https://github.com/vercel/next.js/issues/86060
       await page.addInitScript(() => {
         const originalMeasure: Performance["measure"] =

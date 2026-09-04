@@ -26,8 +26,8 @@ const readConfig = async (fileName: string): Promise<WranglerConfig> => {
   return config
 }
 
-describe("API Worker Wrangler configuration", () => {
-  it("disables Workers Caching for production and bootstrap", async () => {
+describe("API WorkerのWrangler設定", () => {
+  it("productionとbootstrapでWorkers Cachingを無効にする", async () => {
     const [production, bootstrap] = await Promise.all([
       readConfig("wrangler.jsonc"),
       readConfig("wrangler.bootstrap.jsonc"),
@@ -37,7 +37,7 @@ describe("API Worker Wrangler configuration", () => {
     expect(bootstrap.cache).toEqual({ enabled: false })
   })
 
-  it("binds the private Images Worker in both deployment phases", async () => {
+  it("両deployment段階でprivate Images Workerをbindingする", async () => {
     const [production, bootstrap] = await Promise.all([
       readConfig("wrangler.jsonc"),
       readConfig("wrangler.bootstrap.jsonc"),
@@ -51,7 +51,7 @@ describe("API Worker Wrangler configuration", () => {
     expect(bootstrap.services).toEqual([imagesBinding])
   })
 
-  it("keeps bootstrap identical except for the Agent RPC binding", async () => {
+  it("Agent RPC binding以外のbootstrap設定をproductionと一致させる", async () => {
     const [production, bootstrap] = await Promise.all([
       readConfig("wrangler.jsonc"),
       readConfig("wrangler.bootstrap.jsonc"),

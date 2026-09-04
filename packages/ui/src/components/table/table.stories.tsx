@@ -1,4 +1,4 @@
-import { expect } from "storybook/test"
+import { expect, userEvent } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -57,12 +57,6 @@ export const Members = meta.story({
       </Table>
     </div>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("table")).toHaveAccessibleName(
-      "Acme Cloud members as of July 26, 2026"
-    )
-    await expect(canvas.getByText("avery@example.test")).toBeVisible()
-  },
 })
 
 export const Empty = meta.story({
@@ -87,7 +81,7 @@ export const Empty = meta.story({
 export const HorizontalOverflow = meta.story({
   render: () => (
     <div className="w-72 overflow-auto">
-      <Table className="min-w-3xl">
+      <Table className="min-w-3xl" scrollLabel="Audit requests">
         <TableHeader>
           <TableRow>
             <TableHead>Request</TableHead>
@@ -107,4 +101,14 @@ export const HorizontalOverflow = meta.story({
       </Table>
     </div>
   ),
+  play: async ({ canvas, canvasElement, step }) => {
+    await step("横overflow領域へTabキーでフォーカスする", async () => {
+      const region = await canvas.findByRole("region", {
+        name: "Audit requests",
+      })
+      canvasElement.ownerDocument.body.focus()
+      await userEvent.tab()
+      await expect(region).toHaveFocus()
+    })
+  },
 })

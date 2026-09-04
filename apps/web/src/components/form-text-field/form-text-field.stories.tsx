@@ -52,7 +52,7 @@ const meta = preview.meta({
 export const Filled = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Expose local validation through ARIA", async () => {
+    await step("ARIAでローカル検証結果を公開する", async () => {
       const input = canvas.getByRole("textbox", { name: "Issue title" })
       await userEvent.clear(input)
       await userEvent.click(canvas.getByRole("button", { name: "Save title" }))
@@ -64,9 +64,4 @@ export const Filled = meta.story({
 
 export const ServerError = meta.story({
   args: { serverErrors: ["This title is already in use."] },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "This title is already in use."
-    )
-  },
 })

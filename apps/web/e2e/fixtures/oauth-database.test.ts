@@ -25,17 +25,22 @@ afterEach(async () => {
   )
 })
 
-describe("OAuth E2E database boundary", () => {
-  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    "invalid process id %sを拒否する",
-    (processId) => {
-      expect(() => createOAuthDatabasePath(processId)).toThrow(
-        "OAuth E2E requires a positive process identifier"
-      )
-    }
-  )
+describe("OAuth E2Eデータベース境界", () => {
+  it.each([
+    { caseLabel: "ゼロ", processId: 0 },
+    { caseLabel: "負数", processId: -1 },
+    { caseLabel: "小数", processId: 1.5 },
+    {
+      caseLabel: "安全な整数の上限超過",
+      processId: Number.MAX_SAFE_INTEGER + 1,
+    },
+  ])("$caseLabelのプロセスIDを拒否する", ({ processId }) => {
+    expect(() => createOAuthDatabasePath(processId)).toThrow(
+      "OAuth E2E requires a positive process identifier"
+    )
+  })
 
-  it("tmpdir外のdatabase pathを拒否する", async () => {
+  it("一時ディレクトリ外のデータベースパスを拒否する", async () => {
     const outsidePath = join(
       dirname(tmpdir()),
       "enterprise-agentic-saas-oauth-e2e-123.db"
@@ -46,7 +51,7 @@ describe("OAuth E2E database boundary", () => {
     )
   })
 
-  it("固定pattern以外のdatabase pathを拒否する", async () => {
+  it("固定パターン外のデータベースパスを拒否する", async () => {
     await expect(
       removeOAuthDatabaseFiles(join(tmpdir(), "oauth-e2e.db"))
     ).rejects.toThrow(
@@ -54,25 +59,31 @@ describe("OAuth E2E database boundary", () => {
     )
   })
 
-  it("file以外と不正なdatabase URLを拒否する", () => {
+  it("file以外のデータベースURLを拒否する", () => {
     expect(() =>
       parseOAuthDatabaseUrl("https://example.test/database.db")
     ).toThrow("OAuth E2E requires a valid file database URL")
+  })
+
+  it("形式不正のデータベースURLを拒否する", () => {
     expect(() => parseOAuthDatabaseUrl("not a URL")).toThrow(
       "OAuth E2E requires a valid file database URL"
     )
   })
 
-  it("run固有のDB、WAL、SHMだけを削除する", async () => {
+  it("fileデータベースURLを実行固有pathへ変換する", () => {
+    expect(parseOAuthDatabaseUrl(pathToFileURL(databasePath).href)).toBe(
+      databasePath
+    )
+  })
+
+  it("実行固有のDB、WAL、SHMだけを削除する", async () => {
     await Promise.all(
       [...databaseFiles, unrelatedFile].map((path) =>
         writeFile(path, "fixture")
       )
     )
 
-    expect(parseOAuthDatabaseUrl(pathToFileURL(databasePath).href)).toBe(
-      databasePath
-    )
     await removeOAuthDatabaseFiles(databasePath)
 
     await Promise.all(

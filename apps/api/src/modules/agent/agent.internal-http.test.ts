@@ -28,8 +28,50 @@ const privateRequest = (
     })
   )
 
-describe("Agent private HTTP boundary", () => {
-  it("uses a Request-only Service Binding fetch boundary", async () => {
+const createStrictBoundaryFixture = async () => {
+  const { db } = await createFixture()
+  const app = createAgentInternalApp(db)
+  const thread = await createAgentThreadForSession(db, {
+    sessionId: "agent-session-a",
+    title: "Strict boundary",
+    userId: "agent-user-a",
+  })
+  const ticket = await issueAgentConnectionTicket(db, {
+    sessionId: "agent-session-a",
+    threadId: thread.id,
+    userId: "agent-user-a",
+  })
+  return { app, thread, ticket }
+}
+
+const startRunAndReadGrant = async (
+  app: ReturnType<typeof createAgentInternalApp>,
+  threadId: string,
+  ticket: string
+) => {
+  const started = await privateRequest(app, "/internal/agent/runs/start", {
+    body: {
+      assetIds: [],
+      clientMessageId: "message_http",
+      estimatedInputTokenCount: 10,
+      threadId,
+      ticket,
+      trigger: "user_message",
+    },
+  })
+  const chatRun: unknown = await started.json()
+  const run =
+    chatRun && typeof chatRun === "object"
+      ? Reflect.get(chatRun, "run")
+      : undefined
+  const grant =
+    run && typeof run === "object" ? Reflect.get(run, "grant") : undefined
+  if (typeof grant !== "string") throw new Error("Missing run grant")
+  return grant
+}
+
+describe("Agent private HTTP境界", () => {
+  it("RequestだけのService Binding fetch境界を使う", async () => {
     const { db } = await createFixture()
     const app = createAgentInternalApp(db)
     const thread = await createAgentThreadForSession(db, {
@@ -66,19 +108,8 @@ describe("Agent private HTTP boundary", () => {
     })
   })
 
-  it("rejects overposting, body grants, and malformed bearer headers", async () => {
-    const { db } = await createFixture()
-    const app = createAgentInternalApp(db)
-    const thread = await createAgentThreadForSession(db, {
-      sessionId: "agent-session-a",
-      title: "Strict boundary",
-      userId: "agent-user-a",
-    })
-    const ticket = await issueAgentConnectionTicket(db, {
-      sessionId: "agent-session-a",
-      threadId: thread.id,
-      userId: "agent-user-a",
-    })
+  it("connection consumeのoverpostingを拒否する", async () => {
+    const { app, thread, ticket } = await createStrictBoundaryFixture()
     expect(
       (
         await privateRequest(app, "/internal/agent/connections/consume", {
@@ -90,32 +121,30 @@ describe("Agent private HTTP boundary", () => {
         })
       ).status
     ).toBe(400)
-    const body = {
-      assetIds: [],
-      clientMessageId: "message_http",
-      estimatedInputTokenCount: 10,
-      threadId: thread.id,
-      ticket: ticket.ticket,
-      trigger: "user_message",
-    }
+  })
+
+  it("run startのoverpostingを拒否する", async () => {
+    const { app, thread, ticket } = await createStrictBoundaryFixture()
     expect(
       (
         await privateRequest(app, "/internal/agent/runs/start", {
-          body: { ...body, grant: "overposted" },
+          body: {
+            assetIds: [],
+            clientMessageId: "message_http",
+            estimatedInputTokenCount: 10,
+            grant: "overposted",
+            threadId: thread.id,
+            ticket: ticket.ticket,
+            trigger: "user_message",
+          },
         })
       ).status
     ).toBe(400)
-    const started = await privateRequest(app, "/internal/agent/runs/start", {
-      body,
-    })
-    const chatRun: unknown = await started.json()
-    const run =
-      chatRun && typeof chatRun === "object"
-        ? Reflect.get(chatRun, "run")
-        : undefined
-    const grant =
-      run && typeof run === "object" ? Reflect.get(run, "grant") : undefined
-    if (typeof grant !== "string") throw new Error("Missing run grant")
+  })
+
+  it("lowercase bearer headerを拒否する", async () => {
+    const { app, thread, ticket } = await createStrictBoundaryFixture()
+    const grant = await startRunAndReadGrant(app, thread.id, ticket.ticket)
     expect(
       (
         await privateRequest(app, "/internal/agent/runs/live", {
@@ -124,6 +153,11 @@ describe("Agent private HTTP boundary", () => {
         })
       ).status
     ).toBe(401)
+  })
+
+  it("認可grantのbody送信を拒否する", async () => {
+    const { app, thread, ticket } = await createStrictBoundaryFixture()
+    const grant = await startRunAndReadGrant(app, thread.id, ticket.ticket)
     expect(
       (
         await privateRequest(app, "/internal/agent/runs/live", {
@@ -134,7 +168,7 @@ describe("Agent private HTTP boundary", () => {
     ).toBe(400)
   })
 
-  it("requires authorization on every protected private route", async () => {
+  it("保護したprivate routeすべてでauthorizationを要求する", async () => {
     const { db } = await createFixture()
     const app = createAgentInternalApp(db)
     const requests = [
@@ -163,7 +197,7 @@ describe("Agent private HTTP boundary", () => {
     )
   })
 
-  it("does not expose superseded run and action endpoints", async () => {
+  it("廃止済みrunとaction endpointを公開しない", async () => {
     const { db } = await createFixture()
     const app = createAgentInternalApp(db)
     const thread = await createAgentThreadForSession(db, {

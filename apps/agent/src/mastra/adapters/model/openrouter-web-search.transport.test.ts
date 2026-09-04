@@ -44,8 +44,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("direct OpenRouter Web search transport", () => {
-  it("sends one bounded required-search request with only the guarded query", async () => {
+describe("直接OpenRouter Web検索transport", () => {
+  it("guard済みqueryだけを含む有界な必須検索requestを一件送る", async () => {
     const fetchMock = vi.fn<FetchCall>(async () =>
       Response.json(providerResponse)
     )
@@ -95,7 +95,7 @@ describe("direct OpenRouter Web search transport", () => {
     expect(JSON.stringify(body)).not.toMatch(/organization_id|issue_id|tenant/u)
   })
 
-  it("forwards caller abort to the provider request", async () => {
+  it("callerのabortをprovider requestへ転送する", async () => {
     const fetchMock = vi.fn<FetchCall>(
       (_input, init) =>
         new Promise((_resolve, reject) => {
@@ -120,7 +120,7 @@ describe("direct OpenRouter Web search transport", () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it("aborts the actual provider request at the 25 second search boundary", async () => {
+  it("二十五秒の検索境界で実際のprovider requestをabortする", async () => {
     const providerAbort = vi.fn<() => void>()
     const fetchMock = vi.fn<FetchCall>(
       (_input, init) =>

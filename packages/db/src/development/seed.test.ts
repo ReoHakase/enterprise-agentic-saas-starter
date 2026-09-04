@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { createClient } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { seedDevelopmentDatabase } from "./seed"
 import {
@@ -110,146 +110,163 @@ const insertPendingFile = (
     ],
   })
 
-describe("file storage schema", () => {
-  it("keeps file ownership inside the same tenant and scopes upload idempotency", async () => {
-    const client = createClient({ url: "file::memory:" })
+describe("file storageのschema", () => {
+  let client: ReturnType<typeof createClient>
 
-    try {
-      await migrate(drizzle({ client }), { migrationsFolder })
-      await insertTenantFixture(client)
-      await insertPendingFile(client, {
-        id: "file-a",
-        organizationId: "file-org-a",
-        uploadId: "upload-shared",
-        objectKey: "organizations/file-org-a/files/issue/file-issue-a/file-a",
-      })
-      await client.execute({
-        sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-        args: ["file-a", "file-org-a", "issue", "file-issue-a"],
-      })
-
-      await expect(
-        insertPendingFile(client, {
-          id: "file-a-duplicate-upload",
-          organizationId: "file-org-a",
-          uploadId: "upload-shared",
-          objectKey:
-            "organizations/file-org-a/files/issue/file-issue-a/file-a-duplicate-upload",
-        })
-      ).rejects.toThrow(/unique/i)
-      await expect(
-        insertPendingFile(client, {
-          id: "file-b",
-          organizationId: "file-org-b",
-          uploadId: "upload-shared",
-          objectKey: "organizations/file-org-b/files/issue/file-issue-b/file-b",
-        })
-      ).resolves.toBeDefined()
-      await expect(
-        client.execute({
-          sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
-          args: ["file-b", "file-org-b", "issue", "file-issue-a"],
-        })
-      ).rejects.toThrow(/foreign key/i)
-    } finally {
-      client.close()
-    }
+  beforeEach(async () => {
+    client = createClient({ url: "file::memory:" })
+    await migrate(drizzle({ client }), { migrationsFolder })
+    await insertTenantFixture(client)
   })
 
-  it("enforces file, quota, and durable cleanup job invariants", async () => {
-    const client = createClient({ url: "file::memory:" })
+  afterEach(() => {
+    client.close()
+  })
 
-    try {
-      await migrate(drizzle({ client }), { migrationsFolder })
-      await insertTenantFixture(client)
+  it("upload idをtenant内で一意にする", async () => {
+    await insertPendingFile(client, {
+      id: "file-a",
+      organizationId: "file-org-a",
+      uploadId: "upload-shared",
+      objectKey: "organizations/file-org-a/files/issue/file-issue-a/file-a",
+    })
 
-      await expect(
-        insertPendingFile(client, {
-          id: "oversized-file",
-          organizationId: "file-org-a",
-          uploadId: "oversized-upload",
-          objectKey:
-            "organizations/file-org-a/files/issue/file-issue-a/oversized-file",
-          sizeBytes: 20_000_001,
-        })
-      ).rejects.toThrow(/check constraint/i)
-      await expect(
-        insertPendingFile(client, {
-          id: "invalid-owner-file",
-          organizationId: "file-org-a",
-          uploadId: "invalid-owner-upload",
-          objectKey:
-            "organizations/file-org-a/files/issue/file-issue-a/invalid-owner-file",
-          ownerType: "project",
-        })
-      ).rejects.toThrow(/check constraint/i)
-      await expect(
-        client.execute({
-          sql: "insert into organization_file_usage(organization_id,used_bytes) values(?,?)",
-          args: ["file-org-a", 1_073_741_825],
-        })
-      ).rejects.toThrow(/check constraint/i)
+    await expect(
+      insertPendingFile(client, {
+        id: "file-a-duplicate-upload",
+        organizationId: "file-org-a",
+        uploadId: "upload-shared",
+        objectKey:
+          "organizations/file-org-a/files/issue/file-issue-a/file-a-duplicate-upload",
+      })
+    ).rejects.toThrow(/unique/i)
+    await expect(
+      insertPendingFile(client, {
+        id: "file-b",
+        organizationId: "file-org-b",
+        uploadId: "upload-shared",
+        objectKey: "organizations/file-org-b/files/issue/file-issue-b/file-b",
+      })
+    ).resolves.toBeDefined()
+  })
 
-      await client.batch([
-        {
-          sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key) values(?,?,?,?)",
-          args: [
-            "cleanup-exact",
-            "file-org-a",
-            "exact",
-            "organizations/file-org-a/files/issue/file-issue-a/file-a",
-          ],
-        },
-        {
-          sql: "insert into file_cleanup_jobs(id,organization_id,kind,prefix) values(?,?,?,?)",
-          args: [
-            "cleanup-prefix",
-            "file-org-a",
-            "owner_prefix",
-            "organizations/file-org-a/files/issue/file-issue-a/",
-          ],
-        },
-      ])
-      await expect(
-        client.execute({
-          sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key,prefix) values(?,?,?,?,?)",
-          args: [
-            "cleanup-invalid-target",
-            "file-org-a",
-            "exact",
-            "object-key",
-            "prefix/",
-          ],
-        })
-      ).rejects.toThrow(/check constraint/i)
-      await expect(
-        client.execute({
-          sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key) values(?,?,?,?)",
-          args: [
-            "cleanup-duplicate",
-            "file-org-a",
-            "exact",
-            "organizations/file-org-a/files/issue/file-issue-a/file-a",
-          ],
-        })
-      ).rejects.toThrow(/unique/i)
+  it("file ownerを同じtenantのIssueへ限定する", async () => {
+    await insertPendingFile(client, {
+      id: "file-b",
+      organizationId: "file-org-b",
+      uploadId: "upload-b",
+      objectKey: "organizations/file-org-b/files/issue/file-issue-b/file-b",
+    })
 
-      await client.execute("delete from organization where id = 'file-org-a'")
-      const cleanupJobs = await client.execute(
-        "select id from file_cleanup_jobs order by id"
-      )
-      expect(cleanupJobs.rows).toMatchObject([
-        { id: "cleanup-exact" },
-        { id: "cleanup-prefix" },
-      ])
-    } finally {
-      client.close()
-    }
+    await expect(
+      client.execute({
+        sql: "insert into issue_file_owners(file_id,organization_id,owner_type,issue_id) values(?,?,?,?)",
+        args: ["file-b", "file-org-b", "issue", "file-issue-a"],
+      })
+    ).rejects.toThrow(/foreign key/i)
+  })
+
+  it("20MBを超えるfileを拒否する", async () => {
+    await expect(
+      insertPendingFile(client, {
+        id: "oversized-file",
+        organizationId: "file-org-a",
+        uploadId: "oversized-upload",
+        objectKey:
+          "organizations/file-org-a/files/issue/file-issue-a/oversized-file",
+        sizeBytes: 20_000_001,
+      })
+    ).rejects.toThrow(/check constraint/i)
+  })
+
+  it("未対応のfile owner種別を拒否する", async () => {
+    await expect(
+      insertPendingFile(client, {
+        id: "invalid-owner-file",
+        organizationId: "file-org-a",
+        uploadId: "invalid-owner-upload",
+        objectKey:
+          "organizations/file-org-a/files/issue/file-issue-a/invalid-owner-file",
+        ownerType: "project",
+      })
+    ).rejects.toThrow(/check constraint/i)
+  })
+
+  it("organizationのfile使用量を1GiB以下に制限する", async () => {
+    await expect(
+      client.execute({
+        sql: "insert into organization_file_usage(organization_id,used_bytes) values(?,?)",
+        args: ["file-org-a", 1_073_741_825],
+      })
+    ).rejects.toThrow(/check constraint/i)
+  })
+
+  it("cleanup jobの対象をobject keyかprefixの一方に限定する", async () => {
+    await expect(
+      client.execute({
+        sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key,prefix) values(?,?,?,?,?)",
+        args: [
+          "cleanup-invalid-target",
+          "file-org-a",
+          "exact",
+          "object-key",
+          "prefix/",
+        ],
+      })
+    ).rejects.toThrow(/check constraint/i)
+  })
+
+  it("同じcleanup対象のjobを重複作成できない", async () => {
+    const objectKey = "organizations/file-org-a/files/issue/file-issue-a/file-a"
+    await client.execute({
+      sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key) values(?,?,?,?)",
+      args: ["cleanup-exact", "file-org-a", "exact", objectKey],
+    })
+
+    await expect(
+      client.execute({
+        sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key) values(?,?,?,?)",
+        args: ["cleanup-duplicate", "file-org-a", "exact", objectKey],
+      })
+    ).rejects.toThrow(/unique/i)
+  })
+
+  it("tenant削除後もfile cleanup jobを保持する", async () => {
+    await client.batch([
+      {
+        sql: "insert into file_cleanup_jobs(id,organization_id,kind,object_key) values(?,?,?,?)",
+        args: [
+          "cleanup-exact",
+          "file-org-a",
+          "exact",
+          "organizations/file-org-a/files/issue/file-issue-a/file-a",
+        ],
+      },
+      {
+        sql: "insert into file_cleanup_jobs(id,organization_id,kind,prefix) values(?,?,?,?)",
+        args: [
+          "cleanup-prefix",
+          "file-org-a",
+          "owner_prefix",
+          "organizations/file-org-a/files/issue/file-issue-a/",
+        ],
+      },
+    ])
+
+    await client.execute("delete from organization where id = 'file-org-a'")
+
+    const cleanupJobs = await client.execute(
+      "select id from file_cleanup_jobs order by id"
+    )
+    expect(cleanupJobs.rows).toMatchObject([
+      { id: "cleanup-exact" },
+      { id: "cleanup-prefix" },
+    ])
   })
 })
 
-describe("development file fixtures", () => {
-  it("matches committed bytes, paths, digests, and tenant key layout", async () => {
+describe("開発用file fixture", () => {
+  it("commit済みbyteとpathとdigestとtenant key構造を一致させる", async () => {
     expect(
       new Set(developmentFileFixtures.map((file) => file.organizationId)).size
     ).toBe(2)
@@ -278,7 +295,7 @@ describe("development file fixtures", () => {
     )
   })
 
-  it("reconciles only existing manifest rows and rejects drift", () => {
+  it("既存manifest rowだけを整合させて差異を拒否する", () => {
     const fixture = developmentFileFixtures[0]
     if (!fixture) throw new Error("Development fixture manifest is empty")
     const row = {
@@ -309,7 +326,7 @@ describe("development file fixtures", () => {
     ).toThrow(/does not match the committed manifest/i)
   })
 
-  it("does not recreate a deleted seed file during a normal rerun", async () => {
+  it("通常の再実行では削除済みseed fileを再作成しない", async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "enterprise-saas-file-seed-")
     )
@@ -350,7 +367,7 @@ describe("development file fixtures", () => {
     }
   })
 
-  it("produces identical rows with deterministic user profile images in two fresh local databases", async () => {
+  it("2つの新規local DBへ決定的なプロフィール画像と同一rowを作る", async () => {
     const directories = await Promise.all([
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-a-")),
       mkdtemp(join(tmpdir(), "enterprise-saas-file-seed-b-")),
@@ -400,7 +417,7 @@ describe("development file fixtures", () => {
     }
   })
 
-  it("rolls back generated roots when a later anchor insert fails", async () => {
+  it("後続anchorのinsert失敗時に生成したrootをrollbackする", async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "enterprise-saas-file-seed-rollback-")
     )

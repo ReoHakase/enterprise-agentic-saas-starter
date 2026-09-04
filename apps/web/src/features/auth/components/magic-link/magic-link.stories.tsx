@@ -26,7 +26,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Validate the email before sending", async () => {
+    await step("送信前にメールを検証する", async () => {
       const email = canvas.getByRole("textbox", { name: "Email" })
       await userEvent.type(email, "invalid")
       await userEvent.click(
@@ -46,7 +46,7 @@ export const Sent = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Show the deterministic delivery confirmation", async () => {
+    await step("決定的な送信確認を表示する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email" }),
         fictionalAuthUser.email
@@ -75,7 +75,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Show a public request failure", async () => {
+    await step("公開用のリクエスト失敗を表示する", async () => {
       await userEvent.type(
         canvas.getByRole("textbox", { name: "Email" }),
         fictionalAuthUser.email

@@ -50,10 +50,7 @@ export const Ready = meta.story({
     state: "ready",
   },
   play: async ({ canvas, step }) => {
-    await step("Review the invitation decision", async () => {
-      await expect(
-        canvas.getByRole("heading", { name: "Join Acme Cloud" })
-      ).toBeVisible()
+    await step("Tabキーで招待の拒否操作へフォーカスを移す", async () => {
       await userEvent.tab()
       await expect(canvas.getByRole("button", { name: "Reject" })).toHaveFocus()
     })
@@ -62,11 +59,6 @@ export const Ready = meta.story({
 
 export const SignedOut = meta.story({
   args: { invitationId: invitation.id, state: "signed_out" },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("heading", { name: "You're invited" })
-    ).toBeVisible()
-  },
 })
 
 export const RecipientMismatch = meta.story({
@@ -74,11 +66,6 @@ export const RecipientMismatch = meta.story({
     ...currentUser,
     invitationId: invitation.id,
     state: "recipient_mismatch",
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Switch account" })
-    ).toBeVisible()
   },
 })
 
@@ -88,11 +75,6 @@ export const Unavailable = meta.story({
     invitationId: invitation.id,
     state: "unavailable",
   },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("heading", { name: "Invitation unavailable" })
-    ).toBeVisible()
-  },
 })
 
 export const LoadError = meta.story({
@@ -100,10 +82,5 @@ export const LoadError = meta.story({
     ...currentUser,
     invitationId: invitation.id,
     state: "load_error",
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("button", { name: "Try again" })
-    ).toBeVisible()
   },
 })

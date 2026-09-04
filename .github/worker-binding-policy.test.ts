@@ -8,8 +8,8 @@ import {
   parseWorkerBindingInventory,
 } from "./worker-binding-policy"
 
-describe("Worker binding inventory policy", () => {
-  it("accepts a valid compatibility API inventory without AGENT_RUNTIME", () => {
+describe("Worker binding inventory policyの契約", () => {
+  it("AGENT_RUNTIMEなしの有効なcompatibility API inventoryを受け入れる", () => {
     const inventory = parseWorkerBindingInventory({
       success: true,
       result: {
@@ -49,7 +49,7 @@ describe("Worker binding inventory policy", () => {
     expect(() => assertImagePreviewBinding(inventory)).not.toThrow()
   })
 
-  it("requires the runtime binding and disabled maintenance in the final API", () => {
+  it("最終APIでruntime bindingと無効maintenanceを要求する", () => {
     expect(() =>
       assertFinalAgentBindings([
         {
@@ -77,10 +77,13 @@ describe("Worker binding inventory policy", () => {
   })
 
   it.each([
-    ["missing", []],
-    ["plain text", [{ name: "AGENT_RUNTIME", text: "x", type: "plain_text" }]],
+    ["欠損", []],
     [
-      "wrong service",
+      "plain text指定",
+      [{ name: "AGENT_RUNTIME", text: "x", type: "plain_text" }],
+    ],
+    [
+      "誤service",
       [
         {
           entrypoint: "AgentRuntime",
@@ -91,7 +94,7 @@ describe("Worker binding inventory policy", () => {
       ],
     ],
     [
-      "wrong entrypoint",
+      "誤entrypoint",
       [
         {
           entrypoint: "WrongRuntime",
@@ -102,7 +105,7 @@ describe("Worker binding inventory policy", () => {
       ],
     ],
     [
-      "duplicate",
+      "重複",
       [
         {
           entrypoint: "AgentRuntime",
@@ -118,7 +121,7 @@ describe("Worker binding inventory policy", () => {
         },
       ],
     ],
-  ])("rejects a %s final runtime binding", (_name, runtimeBindings) => {
+  ])("%sの最終runtime bindingを拒否する", (_name, runtimeBindings) => {
     expect(() =>
       assertFinalAgentBindings([
         ...runtimeBindings,
@@ -131,7 +134,7 @@ describe("Worker binding inventory policy", () => {
     ).toThrow("expected AGENT_RUNTIME")
   })
 
-  it("rejects compatibility runtime bindings and malformed Cloudflare responses", () => {
+  it("compatibility runtime bindingと不正Cloudflare responseを拒否する", () => {
     expect(() =>
       assertAgentRuntimeBindingAbsent([
         { name: "FILES" },
@@ -159,7 +162,7 @@ describe("Worker binding inventory policy", () => {
   })
 
   it.each([
-    { inventory: [], name: "missing" },
+    { inventory: [], name: "欠損" },
     {
       inventory: [
         {
@@ -168,7 +171,7 @@ describe("Worker binding inventory policy", () => {
           type: "service",
         },
       ],
-      name: "wrong service",
+      name: "誤service",
     },
     {
       inventory: [
@@ -179,9 +182,9 @@ describe("Worker binding inventory policy", () => {
           type: "service",
         },
       ],
-      name: "custom entrypoint",
+      name: "custom entrypoint指定",
     },
-  ])("rejects an invalid private Images binding: $name", ({ inventory }) => {
+  ])("不正なprivate Images bindingを拒否する: $name", ({ inventory }) => {
     expect(() => assertImagePreviewBinding(inventory)).toThrow(
       "expected IMAGE_PREVIEWS"
     )

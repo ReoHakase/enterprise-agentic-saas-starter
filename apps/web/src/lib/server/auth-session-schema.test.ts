@@ -16,12 +16,12 @@ const session = {
   },
 }
 
-describe("parseSession", () => {
-  it("preserves an authenticated user's optional profile image", () => {
+describe("parseSessionの契約", () => {
+  it("認証済み利用者の任意プロフィール画像を保持する", () => {
     expect(parseSession(session)?.user.image).toBe(session.user.image)
   })
 
-  it("fails closed for an invalid profile image value", () => {
+  it("無効なプロフィール画像値を拒否する", () => {
     expect(
       parseSession({
         ...session,

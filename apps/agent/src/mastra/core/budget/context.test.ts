@@ -2,28 +2,25 @@ import { describe, expect, it } from "vitest"
 
 import { estimateAgentContextBudget } from "./context"
 
-describe("estimateAgentContextBudget", () => {
+describe("estimateAgentContextBudgetの契約", () => {
   it.each([
     [0, "normal"],
     [704, "notice"],
     [858, "warning"],
     [960, "critical"],
-  ] as const)(
-    "projects attachment pressure %i as %s",
-    (attachmentCount, level) => {
-      const budget = estimateAgentContextBudget({
-        attachmentCount,
-        messages: [],
-      })
+  ] as const)("添付pressure %iを%sとして算出する", (attachmentCount, level) => {
+    const budget = estimateAgentContextBudget({
+      attachmentCount,
+      messages: [],
+    })
 
-      expect(budget.level).toBe(level)
-      expect(budget.contextWindowTokens).toBe(1_050_000)
-      expect(budget.reservedOutputTokens).toBe(4_096)
-      expect(budget.observedInputTokens).toBeNull()
-    }
-  )
+    expect(budget.level).toBe(level)
+    expect(budget.contextWindowTokens).toBe(1_050_000)
+    expect(budget.reservedOutputTokens).toBe(4_096)
+    expect(budget.observedInputTokens).toBeNull()
+  })
 
-  it("separates history, page context, and attachment estimates", () => {
+  it("historyとpage contextと添付の見積を分離する", () => {
     const budget = estimateAgentContextBudget({
       attachmentCount: 2,
       messages: [

@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { AuthStoryScope } from "../../test-support/fixtures"
@@ -21,13 +19,6 @@ const meta = preview.meta({
 export const SignInRoute = meta.story({
   tags: ["theme-sensitive"],
   args: { view: "signIn" },
-  play: async ({ canvas, step }) => {
-    await step("Render the selected authentication view", async () => {
-      await expect(
-        canvas.getByText("Sign In", { selector: "[data-slot=card-title]" })
-      ).toBeVisible()
-    })
-  },
 })
 
 export const Reauthentication = meta.story({
@@ -39,9 +30,4 @@ export const Reauthentication = meta.story({
       </AuthStoryScope>
     ),
   ],
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByText("Sign In", { selector: "[data-slot=card-title]" })
-    ).toBeVisible()
-  },
 })

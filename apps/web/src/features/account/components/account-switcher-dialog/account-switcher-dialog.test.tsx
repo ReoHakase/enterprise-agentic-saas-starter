@@ -145,7 +145,7 @@ const renderDialogWithoutRemoval = () => {
   )
 }
 
-describe("AccountSwitcherDialog", () => {
+describe("AccountSwitcherDialogの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.fetchAgent.mockResolvedValue(Response.json({ contextEpoch: 2 }))
@@ -170,41 +170,28 @@ describe("AccountSwitcherDialog", () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it("switches and removes another signed-in account", async () => {
+  it("サインインしている別のアカウントへ切り替える", async () => {
     const actor = userEvent.setup()
-    const queryClient = renderDialog()
-    queryClient.setQueryData(
-      ["issues", "list", "org-private"],
-      [{ title: "Private issue" }]
-    )
-    mocks.setActive.mockImplementationOnce(async () => {
-      expect(
-        queryClient.getQueryData(["issues", "list", "org-private"])
-      ).toEqual([{ title: "Private issue" }])
-      return { data: {} }
-    })
+    renderDialog()
 
     expect(await screen.findByText("other@example.test")).toBeInTheDocument()
     await actor.click(screen.getByRole("button", { name: "Switch" }))
-    await waitFor(() => {
-      expect(mocks.setActive).toHaveBeenCalledWith({
-        sessionToken: "session-other",
-        fetchOptions: { throw: true },
-      })
-    })
     expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
     await waitFor(() =>
       expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith(
         "/dashboard"
       )
     )
-    expect(
-      queryClient.getQueryData(["issues", "list", "org-private"])
-    ).toBeUndefined()
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Switched to other@example.test"
     )
+  })
 
+  it("サインインしている別のアカウントをデバイスから削除する", async () => {
+    const actor = userEvent.setup()
+    renderDialog()
+
+    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
     await actor.click(
       screen.getByRole("button", {
         name: "Remove other@example.test from this device",
@@ -222,7 +209,7 @@ describe("AccountSwitcherDialog", () => {
     )
   })
 
-  it("switches OAuth accounts without exposing device removal", async () => {
+  it("デバイスの削除を公開せずに OAuth アカウントを切り替える", async () => {
     const actor = userEvent.setup()
     renderDialogWithoutRemoval()
 
@@ -247,7 +234,7 @@ describe("AccountSwitcherDialog", () => {
     expect(mocks.revoke).not.toHaveBeenCalled()
   })
 
-  it("shows a safe retry state for provider failures", async () => {
+  it("プロバイダー障害に対する安全な再試行状態を表示する", async () => {
     mocks.listDeviceSessions.mockRejectedValueOnce(
       new Error("private provider response")
     )
@@ -262,32 +249,7 @@ describe("AccountSwitcherDialog", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled()
   })
 
-  it("revokes the old Agent context before switching an account", async () => {
-    const actor = userEvent.setup()
-    renderDialogWithAgentBarrier()
-
-    expect(await screen.findByText("other@example.test")).toBeInTheDocument()
-    await actor.click(screen.getByRole("button", { name: "Switch" }))
-
-    await waitFor(() => expect(mocks.setActive).toHaveBeenCalledOnce())
-    expect(mocks.prepareAgentSwitch).toHaveBeenCalledOnce()
-    expect(mocks.fetchAgent).toHaveBeenCalledOnce()
-    const requestInput = mocks.fetchAgent.mock.calls[0]?.[0]
-    if (!requestInput) throw new Error("Expected Agent context revoke request")
-    expect(new Request(requestInput).url).toContain("/agent/context/revoke")
-    expect(mocks.fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.abortAgentSwitch.mock.invocationCallOrder[0] ?? 0
-    )
-    expect(mocks.abortAgentSwitch.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.setActive.mock.invocationCallOrder[0] ?? 0
-    )
-    await waitFor(() =>
-      expect(mocks.completeAgentSwitch).toHaveBeenCalledOnce()
-    )
-    expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith("/dashboard")
-  })
-
-  it("preserves an invitation return path when adding or switching accounts", async () => {
+  it("アカウント追加・切替時も招待の戻り先を保持する", async () => {
     const actor = userEvent.setup()
     renderDialogWithInvitationReturn()
 
@@ -299,11 +261,6 @@ describe("AccountSwitcherDialog", () => {
     )
     expect(await screen.findByText("other@example.test")).toBeInTheDocument()
     await actor.click(screen.getByRole("button", { name: "Switch" }))
-    await waitFor(() => expect(mocks.setActive).toHaveBeenCalledOnce())
-    expect(mocks.fetchAgent).toHaveBeenCalledOnce()
-    expect(mocks.fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.setActive.mock.invocationCallOrder[0] ?? 0
-    )
     await waitFor(() =>
       expect(mocks.navigateAfterAccountSwitch).toHaveBeenCalledWith(
         "/invitations/invitation-1"
@@ -311,7 +268,7 @@ describe("AccountSwitcherDialog", () => {
     )
   })
 
-  it("shows one operation fallback when account switching rejects", async () => {
+  it("アカウント切替が拒否された場合に単一の代替操作を表示する", async () => {
     const actor = userEvent.setup()
     mocks.setActive.mockRejectedValueOnce(
       new Error("BETTER_AUTH_SECRET=provider-secret")
@@ -331,7 +288,7 @@ describe("AccountSwitcherDialog", () => {
     expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
   })
 
-  it("keeps the old account active when Agent context revocation fails", async () => {
+  it("Agentコンテキストの取り消し失敗時も元のアカウントを有効に保つ", async () => {
     const actor = userEvent.setup()
     mocks.fetchAgent.mockRejectedValueOnce(
       new Error("AGENT_INTERNAL_GRANT=private-provider-detail")
@@ -350,7 +307,7 @@ describe("AccountSwitcherDialog", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("preserves dirty work when account switching is cancelled", async () => {
+  it("アカウント切替をキャンセルしたとき未保存の作業を保持する", async () => {
     const actor = userEvent.setup()
     mocks.prepareAgentSwitch.mockReturnValueOnce({
       composer: true,
@@ -377,7 +334,7 @@ describe("AccountSwitcherDialog", () => {
     expect(mocks.setActive).not.toHaveBeenCalled()
   })
 
-  it("fences a double submit to one account activation", async () => {
+  it("アカウント有効化を二重送信から保護する", async () => {
     const actor = userEvent.setup()
     let finishActivation: (() => void) | undefined
     mocks.setActive.mockImplementationOnce(

@@ -48,3 +48,4 @@ last_reviewed: 2026-08-20
 - [ADR-013 固定ローカル環境の生エラーをLogsだけへ保存する](ADR-013-local-raw-errors-in-logs-only.md)
 - [ADR-014 pre-commitのVitest Test Projects選択](ADR-014-local-related-vitest-hook.md)
 - [ADR-015 Agent toolとMCP toolを各runtimeが所有する](ADR-015-runtime-owned-agent-and-mcp-tools.md)
+- [ADR-016 テストと作業契約を自然言語のGiven-When-Thenへ統一する](ADR-016-natural-language-given-when-then.md)

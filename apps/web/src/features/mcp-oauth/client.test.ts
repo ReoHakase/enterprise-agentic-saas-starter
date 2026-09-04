@@ -14,8 +14,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("MCP OAuth client capabilities", () => {
-  it("continues post-login selection and follows the provider redirect", async () => {
+describe("MCP OAuth クライアント機能", () => {
+  it("ログイン後に選択を再開し、プロバイダーのredirectへ進む", async () => {
     const assign = vi
       .spyOn(window.location, "assign")
       .mockImplementation(() => undefined)
@@ -30,7 +30,7 @@ describe("MCP OAuth client capabilities", () => {
     expect(assign).toHaveBeenCalledWith("https://client.example.test/callback")
   })
 
-  it("sends only the accepted space-separated scopes", async () => {
+  it("許可された空白区切りscopeだけを送信する", async () => {
     vi.spyOn(window.location, "assign").mockImplementation(() => undefined)
     const consent = vi.fn<ConsentOAuth>(async () => ({
       data: { redirect: true, url: "https://client.example.test/callback" },
@@ -48,7 +48,7 @@ describe("MCP OAuth client capabilities", () => {
     })
   })
 
-  it("does not project provider errors into the thrown message", async () => {
+  it("throwするError.messageへプロバイダーエラーを転記しない", async () => {
     const consent = vi.fn<ConsentOAuth>(async () => ({
       data: null,
       error: { message: "raw provider detail" },

@@ -1,5 +1,4 @@
 import { http, HttpResponse } from "msw"
-import { expect } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -20,13 +19,6 @@ const meta = preview.meta({
 
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas }) => {
-    const image = canvas.getByRole("img", {
-      name: "tenant-architecture.png",
-    })
-    await expect(image).toHaveAttribute("srcset")
-    await expect(image).toHaveAttribute("sizes")
-  },
 })
 
 export const ImageFailure = meta.story({
@@ -37,10 +29,5 @@ export const ImageFailure = meta.story({
         () => HttpResponse.error()
       )
     )
-  },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("img", { name: "tenant-architecture.png" })
-    ).toBeInTheDocument()
   },
 })

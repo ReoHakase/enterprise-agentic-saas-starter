@@ -33,8 +33,8 @@ const expectPublicProjection = (value: unknown) => {
   }
 }
 
-describe("public MCP prompts and resources", () => {
-  it("publishes one bounded external workflow prompt", async () => {
+describe("公開MCP promptとresource", () => {
+  it("上限付きexternal workflow promptを1つ公開する", async () => {
     const prompts = await publicMcpPrompts.listPrompts({ extra: requestExtra })
     const messages = await publicMcpPrompts.getPromptMessages?.({
       name: "triage_issue",
@@ -57,7 +57,7 @@ describe("public MCP prompts and resources", () => {
     expectPublicProjection({ prompts, messages })
   })
 
-  it("publishes only fixed read-only guides", async () => {
+  it("固定read-only guideだけを公開する", async () => {
     const resources = await publicMcpResources.listResources({
       extra: requestExtra,
     })
@@ -87,7 +87,7 @@ describe("public MCP prompts and resources", () => {
     expectPublicProjection({ resources, contents })
   })
 
-  it("rejects unknown and malformed requests without adding fallback tools", async () => {
+  it("fallback toolを追加せず未知または不正なrequestを拒否する", async () => {
     await expect(
       publicMcpPrompts.getPromptMessages?.({
         name: "missing",
@@ -114,7 +114,7 @@ describe("public MCP prompts and resources", () => {
     )
   })
 
-  it("does not echo credentials or private URLs from prompt arguments", async () => {
+  it("prompt引数のcredentialやprivate URLを反射しない", async () => {
     const messages = await publicMcpPrompts.getPromptMessages?.({
       name: "triage_issue",
       args: {

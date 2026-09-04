@@ -11,7 +11,7 @@ applies_to:
 
 ## 責務
 
-Turso/libSQL client、Drizzle schema、migration、development DB tooling、DB test supportを所有します。business repositoryやpermission ruleは所有しません。
+Turso/libSQL client、Drizzle schema、migration、development DB toolingを所有します。business repositoryやpermission ruleは所有しません。
 
 ## 目標構造
 
@@ -28,9 +28,7 @@ packages/db/
       helpers.ts
       fresh.test.ts
       invariants.test.ts
-      concurrency.test.ts
       lifecycle.test.ts
-    test-support/
 ```
 
 ## 公開entrypoint
@@ -45,8 +43,8 @@ runtime/sourceから他workspaceへ依存しません。共有TypeScript config�
 `devDependency`として利用できますが、source importやproduction dependencyにしません。
 schemaからclient、development、fakerをimportしません。
 `schema/**`はDrizzle schemaとpure DB contractだけを所有し、environment、network、seed、
-business permission、client connectionを参照しません。`development/**`と`test-support/**`は
-production entrypointから到達不能にし、development用途は明示subpathだけで公開します。
+business permission、client connectionを参照しません。`development/**`はproduction entrypointから
+到達不能にし、development用途は明示subpathだけで公開します。
 
 ## repositoryとの境界
 

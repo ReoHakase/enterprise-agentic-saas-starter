@@ -11,6 +11,10 @@ import { resolveAndPersistActiveOrganizationId } from "./modules/users/repositor
 type OrganizationsApplication = ReturnType<
   typeof createOrganizationsApplication
 >
+type TestDb = Awaited<ReturnType<typeof createSeededDb>>
+type DeleteOrganizationInput = Parameters<
+  OrganizationsApplication["service"]["deleteOrganization"]
+>[0]
 
 const deleteOrganization = (
   db: Parameters<typeof createOrganizationsApplication>[0],
@@ -23,8 +27,31 @@ const deleteOrganization = (
     createAuthorizationModule(db).authorization
   ).service.deleteOrganization(input)
 
-describe("organization context, creation, and deletion guards", () => {
-  it("preserves recent valid organization context but requires a choice when ambiguous", async () => {
+const serviceDeletionInput = {
+  confirmation: "DELETE",
+  idempotencyKey: "delete_org_1_service_01",
+  organizationId: "org_1",
+  slug: "org-one",
+} as const
+
+const freshServiceSession = () => ({
+  activeOrganizationId: "org_1",
+  createdAt: new Date(),
+  id: "session_1",
+})
+
+const expectOrganizationDeletionNotScheduled = async (db: TestDb) => {
+  expect(
+    await db
+      .select({ id: schema.organization.id })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, "org_1"))
+  ).toEqual([{ id: "org_1" }])
+  expect(await db.select().from(schema.organizationDeletionJobs)).toEqual([])
+}
+
+describe("organization contextと作成と削除guard", () => {
+  it("最近の有効なorganization contextを新しいsessionへ引き継ぐ", async () => {
     const db = await createSeededDb()
     const now = new Date()
     await db.insert(schema.session).values([
@@ -55,7 +82,11 @@ describe("organization context, creation, and deletion guards", () => {
         activeOrganizationId: null,
       })
     ).resolves.toBe("org_2")
+  })
 
+  it("有効なorganization contextが曖昧な場合は利用者の選択を要求する", async () => {
+    const db = await createSeededDb()
+    const now = new Date()
     await db.delete(schema.session).where(eq(schema.session.userId, "user_5"))
     await db.insert(schema.session).values({
       id: "session_user5_ambiguous",
@@ -66,6 +97,7 @@ describe("organization context, creation, and deletion guards", () => {
       updatedAt: now,
       activeOrganizationId: null,
     })
+
     await expect(
       resolveAndPersistActiveOrganizationId(db, {
         sessionId: "session_user5_ambiguous",
@@ -73,7 +105,6 @@ describe("organization context, creation, and deletion guards", () => {
         activeOrganizationId: null,
       })
     ).resolves.toBeNull()
-
     const [ambiguousSession] = await db
       .select({ updatedAt: schema.session.updatedAt })
       .from(schema.session)
@@ -88,88 +119,95 @@ describe("organization context, creation, and deletion guards", () => {
     expect(ambiguousAgentContexts).toEqual([])
   })
 
-  it("keeps organization slug and tenant rules server-owned", async () => {
+  it.each([
+    {
+      body: { name: "Invalid", slug: "!!!" },
+      label: "利用できない文字を含むslug",
+      method: "POST",
+      path: "/organizations",
+    },
+    {
+      body: { name: "Reserved", slug: "auth" },
+      label: "予約済みslugによる作成",
+      method: "POST",
+      path: "/organizations",
+    },
+    {
+      body: { name: "Too Long", slug: "x".repeat(49) },
+      label: "上限を超えるslug",
+      method: "POST",
+      path: "/organizations",
+    },
+    {
+      body: { slug: "auth" },
+      label: "予約済みslugへの更新",
+      method: "PATCH",
+      path: "/organizations/org_1",
+    },
+  ] as const)("$labelを拒否する", async ({ body, method, path }) => {
     const app = createApp(await createSeededDb())
-    const createWithSlug = (slug: string) =>
-      app.handle(
-        jsonRequest("/organizations", {
-          method: "POST",
-          userId: "user_1",
-          body: { name: "Invalid", slug },
-        })
-      )
+    const response = await app.handle(
+      jsonRequest(path, { body, method, userId: "user_1" })
+    )
 
-    const [invalidCharacters, reservedCreate, excessiveLength] =
-      await Promise.all([
-        createWithSlug("!!!"),
-        createWithSlug("auth"),
-        createWithSlug("x".repeat(49)),
-      ])
-    expect([
-      invalidCharacters.status,
-      reservedCreate.status,
-      excessiveLength.status,
-    ]).toEqual([400, 400, 400])
-    expect(await reservedCreate.json()).toMatchObject({
-      error: "validation_error",
-      fieldErrors: { slug: ["Choose another slug."] },
-    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ error: "validation_error" })
+  })
 
-    const formerlyReservedCreate = await app.handle(
+  it("旧予約語のinvitationsをorganization slugとして受理する", async () => {
+    const app = createApp(await createSeededDb())
+    const response = await app.handle(
       jsonRequest("/organizations", {
         method: "POST",
         userId: "user_1",
         body: { name: "Invitation Operations", slug: "invitations" },
       })
     )
-    expect(formerlyReservedCreate.status).toBe(201)
-    expect(await formerlyReservedCreate.json()).toMatchObject({
-      slug: "invitations",
-    })
 
-    const normalizedCreate = await app.handle(
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({ slug: "invitations" })
+  })
+
+  it("organization slugをserverで正規化する", async () => {
+    const app = createApp(await createSeededDb())
+    const response = await app.handle(
       jsonRequest("/organizations", {
         method: "POST",
         userId: "user_1",
         body: { name: "My Team", slug: " My Team " },
       })
     )
-    expect(normalizedCreate.status).toBe(201)
-    expect(await normalizedCreate.json()).toMatchObject({ slug: "my-team" })
 
-    const duplicateCreate = await app.handle(
-      jsonRequest("/organizations", {
-        method: "POST",
-        userId: "user_1",
-        body: { name: "Duplicate", slug: "org-one" },
-      })
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({ slug: "my-team" })
+  })
+
+  it.each([
+    {
+      body: { name: "Duplicate", slug: "org-one" },
+      label: "organization作成",
+      method: "POST",
+      path: "/organizations",
+    },
+    {
+      body: { slug: "org-two" },
+      label: "organization更新",
+      method: "PATCH",
+      path: "/organizations/org_1",
+    },
+  ] as const)("$labelで重複slugを拒否する", async ({ body, method, path }) => {
+    const app = createApp(await createSeededDb())
+    const response = await app.handle(
+      jsonRequest(path, { body, method, userId: "user_1" })
     )
-    expect(duplicateCreate.status).toBe(409)
-    expect(await duplicateCreate.json()).toMatchObject({ error: "conflict" })
 
-    const duplicateUpdate = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "PATCH",
-        userId: "user_1",
-        body: { slug: "org-two" },
-      })
-    )
-    expect(duplicateUpdate.status).toBe(409)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ error: "conflict" })
+  })
 
-    const reservedUpdate = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "PATCH",
-        userId: "user_1",
-        body: { slug: "auth" },
-      })
-    )
-    expect(reservedUpdate.status).toBe(400)
-    expect(await reservedUpdate.json()).toMatchObject({
-      error: "validation_error",
-      fieldErrors: { slug: ["Choose another slug."] },
-    })
-
-    const otherTenantUpdate = await app.handle(
+  it("別tenantのorganization slugを更新できない", async () => {
+    const app = createApp(await createSeededDb())
+    const response = await app.handle(
       jsonRequest("/organizations/org_2", {
         method: "PATCH",
         userId: "user_1",
@@ -177,190 +215,245 @@ describe("organization context, creation, and deletion guards", () => {
         body: { slug: "other-team" },
       })
     )
-    expect(otherTenantUpdate.status).toBe(404)
+
+    expect(response.status).toBe(404)
   })
 
-  it("rejects unsafe organization deletion attempts with field-level recovery contracts", async () => {
-    const app = createApp(await createSeededDb())
-    const validBody = {
-      slug: "org-one",
-      confirmation: "DELETE",
-      idempotencyKey: "delete_org_1_request_01",
-    }
-
-    const admin = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_3",
-        body: validBody,
-      })
-    )
-    expect(admin.status).toBe(403)
-    expect(await admin.json()).toMatchObject({ error: "forbidden" })
-
-    const stale = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        fresh: false,
-        body: validBody,
-      })
-    )
-    expect(stale.status).toBe(403)
-    expect(await stale.json()).toMatchObject({ error: "step_up_required" })
-
-    const wrongSlug = await app.handle(
-      jsonRequest("/organizations/org_1", {
-        method: "DELETE",
-        userId: "user_1",
-        sessionId: "session_1",
-        body: { ...validBody, slug: "org-two" },
-      })
-    )
-    expect(wrongSlug.status).toBe(400)
-    expect(await wrongSlug.json()).toMatchObject({
-      error: "confirmation_required",
-    })
-
-    const invalidBodies = [
-      { ...validBody, confirmation: "delete" },
-      { ...validBody, idempotencyKey: "short" },
-    ]
-    const invalidResponses = await Promise.all(
-      invalidBodies.map((body) =>
-        app.handle(
-          jsonRequest("/organizations/org_1", {
-            method: "DELETE",
-            userId: "user_1",
-            body,
-          })
-        )
-      )
-    )
-    expect(invalidResponses.map((response) => response.status)).toEqual([
-      400, 400,
-    ])
-    const [invalidConfirmation, invalidKey] = await Promise.all(
-      invalidResponses.map((response) => response.json())
-    )
-    expect(invalidConfirmation).toMatchObject({ error: "validation_error" })
-    expect(invalidKey).toMatchObject({ error: "validation_error" })
-
-    const otherTenant = await app.handle(
-      jsonRequest("/organizations/org_2", {
-        method: "DELETE",
-        userId: "user_1",
-        activeOrganizationId: "org_2",
-        body: { ...validBody, slug: "org-two" },
-      })
-    )
-    expect(otherTenant.status).toBe(404)
-    expect(await otherTenant.json()).toMatchObject({ error: "not_found" })
-  })
-
-  it("keeps organization deletion authorization defensive in the service", async () => {
-    const db = await createSeededDb()
-    const freshSession = {
-      id: "session_1",
-      activeOrganizationId: "org_1",
-      createdAt: new Date(),
-    }
-    const input = {
-      organizationId: "org_1",
-      slug: "org-one",
-      confirmation: "DELETE",
-      idempotencyKey: "delete_org_1_service_01",
-    }
-
-    await expect(
-      deleteOrganization(db, {
-        ...input,
-        userId: "user_3",
-        session: freshSession,
-      })
-    ).rejects.toMatchObject({ code: "forbidden" })
-    await expect(
-      deleteOrganization(db, {
-        ...input,
-        userId: "user_1",
-        session: { ...freshSession, activeOrganizationId: "org_2" },
-      })
-    ).rejects.toMatchObject({
-      code: "active_organization_mismatch",
-    })
-    await expect(
-      deleteOrganization(db, {
-        ...input,
-        userId: "user_1",
-        session: { ...freshSession, createdAt: new Date(0) },
-      })
-    ).rejects.toMatchObject({ code: "step_up_required" })
-    await expect(
-      deleteOrganization(db, {
-        ...input,
-        userId: "user_1",
-        session: freshSession,
-        confirmation: "delete",
-      })
-    ).rejects.toMatchObject({ code: "confirmation_required" })
-    await expect(
-      deleteOrganization(db, {
-        ...input,
-        userId: "user_1",
-        session: freshSession,
+  it.each([
+    {
+      activeOrganizationId: undefined,
+      body: {
+        confirmation: "DELETE",
+        idempotencyKey: "delete_org_1_request_01",
+        slug: "org-one",
+      },
+      expectedError: "forbidden",
+      expectedStatus: 403,
+      fresh: undefined,
+      label: "adminによる削除",
+      path: "/organizations/org_1",
+      sessionId: undefined,
+      userId: "user_3",
+    },
+    {
+      activeOrganizationId: undefined,
+      body: {
+        confirmation: "DELETE",
+        idempotencyKey: "delete_org_1_request_01",
+        slug: "org-one",
+      },
+      expectedError: "step_up_required",
+      expectedStatus: 403,
+      fresh: false,
+      label: "freshでないsessionによる削除",
+      path: "/organizations/org_1",
+      sessionId: undefined,
+      userId: "user_1",
+    },
+    {
+      activeOrganizationId: undefined,
+      body: {
+        confirmation: "DELETE",
+        idempotencyKey: "delete_org_1_request_01",
         slug: "org-two",
-      })
-    ).rejects.toMatchObject({ code: "confirmation_required" })
+      },
+      expectedError: "confirmation_required",
+      expectedStatus: 400,
+      fresh: undefined,
+      label: "一致しないslugによる削除",
+      path: "/organizations/org_1",
+      sessionId: "session_1",
+      userId: "user_1",
+    },
+    {
+      activeOrganizationId: undefined,
+      body: {
+        confirmation: "delete",
+        idempotencyKey: "delete_org_1_request_01",
+        slug: "org-one",
+      },
+      expectedError: "validation_error",
+      expectedStatus: 400,
+      fresh: undefined,
+      label: "不正なconfirmationによる削除",
+      path: "/organizations/org_1",
+      sessionId: undefined,
+      userId: "user_1",
+    },
+    {
+      activeOrganizationId: undefined,
+      body: {
+        confirmation: "DELETE",
+        idempotencyKey: "short",
+        slug: "org-one",
+      },
+      expectedError: "validation_error",
+      expectedStatus: 400,
+      fresh: undefined,
+      label: "不正なidempotency keyによる削除",
+      path: "/organizations/org_1",
+      sessionId: undefined,
+      userId: "user_1",
+    },
+    {
+      activeOrganizationId: "org_2",
+      body: {
+        confirmation: "DELETE",
+        idempotencyKey: "delete_org_1_request_01",
+        slug: "org-two",
+      },
+      expectedError: "not_found",
+      expectedStatus: 404,
+      fresh: undefined,
+      label: "別tenantのorganization削除",
+      path: "/organizations/org_2",
+      sessionId: undefined,
+      userId: "user_1",
+    },
+  ] as const)(
+    "$labelを拒否する",
+    async ({
+      activeOrganizationId,
+      body,
+      expectedError,
+      expectedStatus,
+      fresh,
+      path,
+      sessionId,
+      userId,
+    }) => {
+      const app = createApp(await createSeededDb())
+      const response = await app.handle(
+        jsonRequest(path, {
+          method: "DELETE",
+          userId,
+          body,
+          ...(activeOrganizationId ? { activeOrganizationId } : {}),
+          ...(fresh === undefined ? {} : { fresh }),
+          ...(sessionId ? { sessionId } : {}),
+        })
+      )
 
-    await db
-      .update(schema.member)
-      .set({ role: "admin" })
-      .where(eq(schema.member.id, "member_1"))
-    await expect(
-      deleteOrganization(db, {
-        ...input,
+      expect(response.status).toBe(expectedStatus)
+      expect(await response.json()).toMatchObject({ error: expectedError })
+    }
+  )
+
+  it.each([
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session,
+        userId: "user_3",
+      }),
+      expectedCode: "forbidden",
+      label: "ownerでない利用者",
+      prepare: undefined,
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session: { ...session, activeOrganizationId: "org_2" },
         userId: "user_1",
-        session: freshSession,
-      })
-    ).rejects.toMatchObject({ code: "forbidden" })
-    await db
-      .update(schema.member)
-      .set({ role: "owner" })
-      .where(eq(schema.member.id, "member_1"))
-
-    await db
-      .update(schema.session)
-      .set({ expiresAt: new Date(0) })
-      .where(eq(schema.session.id, "session_1"))
-    await expect(
-      deleteOrganization(db, {
-        ...input,
+      }),
+      expectedCode: "active_organization_mismatch",
+      label: "別のactive organizationを持つsession",
+      prepare: undefined,
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session: { ...session, createdAt: new Date(0) },
         userId: "user_1",
-        session: freshSession,
-      })
-    ).rejects.toMatchObject({ code: "active_organization_mismatch" })
-
-    await db
-      .update(schema.session)
-      .set({
-        activeOrganizationId: "org_2",
-        expiresAt: new Date(Date.now() + 60_000),
-      })
-      .where(eq(schema.session.id, "session_1"))
-    await expect(
-      deleteOrganization(db, {
-        ...input,
+      }),
+      expectedCode: "step_up_required",
+      label: "freshでないsession",
+      prepare: undefined,
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        confirmation: "delete",
+        session,
         userId: "user_1",
-        session: freshSession,
-      })
-    ).rejects.toMatchObject({ code: "active_organization_mismatch" })
+      }),
+      expectedCode: "confirmation_required",
+      label: "一致しないconfirmation",
+      prepare: undefined,
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session,
+        slug: "org-two",
+        userId: "user_1",
+      }),
+      expectedCode: "confirmation_required",
+      label: "一致しないslug",
+      prepare: undefined,
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session,
+        userId: "user_1",
+      }),
+      expectedCode: "forbidden",
+      label: "永続化されたowner roleを失った利用者",
+      prepare: (db: TestDb) =>
+        db
+          .update(schema.member)
+          .set({ role: "admin" })
+          .where(eq(schema.member.id, "member_1")),
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session,
+        userId: "user_1",
+      }),
+      expectedCode: "active_organization_mismatch",
+      label: "期限切れとして永続化されたsession",
+      prepare: (db: TestDb) =>
+        db
+          .update(schema.session)
+          .set({ expiresAt: new Date(0) })
+          .where(eq(schema.session.id, "session_1")),
+    },
+    {
+      buildInput: (session: ReturnType<typeof freshServiceSession>) => ({
+        ...serviceDeletionInput,
+        session,
+        userId: "user_1",
+      }),
+      expectedCode: "active_organization_mismatch",
+      label: "別のactive organizationへ更新されたsession",
+      prepare: (db: TestDb) =>
+        db
+          .update(schema.session)
+          .set({
+            activeOrganizationId: "org_2",
+            expiresAt: new Date(Date.now() + 60_000),
+          })
+          .where(eq(schema.session.id, "session_1")),
+    },
+  ] satisfies ReadonlyArray<{
+    buildInput: (
+      session: ReturnType<typeof freshServiceSession>
+    ) => DeleteOrganizationInput
+    expectedCode: string
+    label: string
+    prepare: ((db: TestDb) => Promise<unknown>) | undefined
+  }>)(
+    "$labelではserviceからorganizationを削除しない",
+    async ({ buildInput, expectedCode, prepare }) => {
+      const db = await createSeededDb()
+      if (prepare) await prepare(db)
 
-    expect(
-      await db
-        .select({ id: schema.organization.id })
-        .from(schema.organization)
-        .where(eq(schema.organization.id, "org_1"))
-    ).toEqual([{ id: "org_1" }])
-    expect(await db.select().from(schema.organizationDeletionJobs)).toEqual([])
-  })
+      await expect(
+        deleteOrganization(db, buildInput(freshServiceSession()))
+      ).rejects.toMatchObject({ code: expectedCode })
+      await expectOrganizationDeletionNotScheduled(db)
+    }
+  )
 })

@@ -13,8 +13,8 @@ import {
   resumeAgentApprovedAction,
 } from "./actions/repository"
 
-describe("Agent Issue organization context and resume tickets", () => {
-  it("rotates the Agent context when creating and activating a replacement organization", async () => {
+describe("Agent Issueのorganization contextとresume ticket", () => {
+  it("代替organizationの作成とactivate時にAgent contextをrotateする", async () => {
     const { db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "create-replacement-organization",
@@ -51,7 +51,7 @@ describe("Agent Issue organization context and resume tickets", () => {
     ).rejects.toMatchObject({ code: "unauthorized" })
   })
 
-  it("expires a resume ticket atomically and permits only one parallel consumer", async () => {
+  it("resume ticketを原子的にexpireして並列consumerを1つだけ許可する", async () => {
     const { app, db } = await createFixture()
     const { internal, run } = await createRun(db, {
       clientMessageId: "resume-race",

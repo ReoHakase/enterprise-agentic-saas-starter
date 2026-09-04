@@ -1,12 +1,137 @@
 import * as schema from "@enterprise-agentic-saas/db/schema"
-import { eq, sql } from "drizzle-orm"
 import { describe, expect, it } from "vitest"
 
 import { createApp } from "./app"
 import { createSeededDb, jsonRequest } from "./app.test-support"
 
-describe("Issue queries, mutations, and profile images", () => {
-  it("returns stable server-filtered Issue pages with a caller-selected size", async () => {
+const createIssueFilterFixture = async () => {
+  const db = await createSeededDb()
+  const now = new Date()
+  const tomorrow = new Date(now)
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+  const nextMonth = new Date(now)
+  nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1)
+  await db.insert(schema.issues).values([
+    {
+      id: "filter-low",
+      organizationId: "org_1",
+      number: 2,
+      title: "100% literal low",
+      status: "open",
+      priority: "low",
+      assigneeId: "user_4",
+      creatorId: "user_1",
+      labels: ["Bug", "Alpha"],
+      dueDate: tomorrow,
+    },
+    {
+      id: "filter-medium",
+      organizationId: "org_1",
+      number: 3,
+      title: "1000 literal medium",
+      status: "in_progress",
+      priority: "medium",
+      creatorId: "user_1",
+      labels: ["bug", "Security"],
+      dueDate: null,
+    },
+    {
+      id: "filter-urgent",
+      organizationId: "org_1",
+      number: 4,
+      title: "Urgent closed",
+      status: "closed",
+      priority: "urgent",
+      assigneeId: "user_5",
+      creatorId: "user_1",
+      labels: ["Security", "Ops"],
+      dueDate: nextMonth,
+    },
+    {
+      id: "filter-other-tenant",
+      organizationId: "org_2",
+      number: 1,
+      title: "Other tenant secret",
+      status: "open",
+      priority: "low",
+      creatorId: "user_2",
+      labels: ["Secret", "Bug"],
+    },
+  ])
+  return { app: createApp(db), tomorrow }
+}
+
+const issueIds = async (response: Response) =>
+  (await response.json()).items.map((item: { id: string }) => item.id)
+
+const createIssueSortFixture = async () => {
+  const db = await createSeededDb()
+  await db.insert(schema.issues).values([
+    {
+      id: "sort-open-low",
+      organizationId: "org_1",
+      number: 51,
+      title: "sort-probe open low",
+      description: "literal_value",
+      status: "open",
+      priority: "low",
+      creatorId: "user_1",
+    },
+    {
+      id: "sort-open-high",
+      organizationId: "org_1",
+      number: 52,
+      title: "sort-probe open high",
+      description: "literalXvalue",
+      status: "open",
+      priority: "high",
+      creatorId: "user_1",
+    },
+    {
+      id: "sort-progress",
+      organizationId: "org_1",
+      number: 53,
+      title: "sort-probe progress",
+      status: "in_progress",
+      priority: "medium",
+      creatorId: "user_1",
+    },
+    {
+      id: "sort-open-low-later",
+      organizationId: "org_1",
+      number: 55,
+      title: "sort-probe open low later",
+      status: "open",
+      priority: "low",
+      creatorId: "user_1",
+    },
+    {
+      id: "sort-closed",
+      organizationId: "org_1",
+      number: 54,
+      title: "sort-probe closed",
+      status: "closed",
+      priority: "urgent",
+      creatorId: "user_1",
+    },
+  ])
+  const app = createApp(db)
+  const titles = async (query: string) => {
+    const response = await app.handle(
+      jsonRequest(
+        `/issues?organizationId=org_1&search=sort-probe&${query}&pageSize=20`,
+        { userId: "user_1" }
+      )
+    )
+    return (await response.json()).items.map(
+      (item: { title: string }) => item.title
+    )
+  }
+  return { app, titles }
+}
+
+describe("Issue一覧queryとlabel候補", () => {
+  it("呼出側が選んだ件数で安定したserver絞り込み済みIssue pageを返す", async () => {
     const db = await createSeededDb()
     const now = new Date("2026-07-22T00:00:00.000Z")
     await db.insert(schema.issues).values(
@@ -45,148 +170,105 @@ describe("Issue queries, mutations, and profile images", () => {
     })
   })
 
-  it("applies multi-value, range, due-date, literal wildcard, and tenant-safe label filters", async () => {
-    const db = await createSeededDb()
-    const app = createApp(db)
-    const now = new Date()
-    const tomorrow = new Date(now)
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
-    const nextMonth = new Date(now)
-    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1)
-    await db.insert(schema.issues).values([
-      {
-        id: "filter-low",
-        organizationId: "org_1",
-        number: 2,
-        title: "100% literal low",
-        status: "open",
-        priority: "low",
-        assigneeId: "user_4",
-        creatorId: "user_1",
-        labels: ["Bug", "Alpha"],
-        dueDate: tomorrow,
-      },
-      {
-        id: "filter-medium",
-        organizationId: "org_1",
-        number: 3,
-        title: "1000 literal medium",
-        status: "in_progress",
-        priority: "medium",
-        creatorId: "user_1",
-        labels: ["bug", "Security"],
-        dueDate: null,
-      },
-      {
-        id: "filter-urgent",
-        organizationId: "org_1",
-        number: 4,
-        title: "Urgent closed",
-        status: "closed",
-        priority: "urgent",
-        assigneeId: "user_5",
-        creatorId: "user_1",
-        labels: ["Security", "Ops"],
-        dueDate: nextMonth,
-      },
-      {
-        id: "filter-other-tenant",
-        organizationId: "org_2",
-        number: 1,
-        title: "Other tenant secret",
-        status: "open",
-        priority: "low",
-        creatorId: "user_2",
-        labels: ["Secret", "Bug"],
-      },
-    ])
-
-    const multi = await app.handle(
+  it("複数のstatusとpriority範囲とassignee条件を同時に適用する", async () => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest(
         "/issues?organizationId=org_1&statuses=open&statuses=in_progress&priorityFrom=low&priorityTo=medium&assigneeIds=user_4&assigneeIds=unassigned&labels=bug&labels=security&labelMode=any&sortBy=priority&sortDirection=asc&pageSize=50",
         { userId: "user_1" }
       )
     )
-    expect(multi.status).toBe(200)
-    expect(
-      (await multi.json()).items.map((item: { id: string }) => item.id)
-    ).toEqual(["filter-low", "filter-medium"])
 
-    const labelsAll = await app.handle(
+    expect(response.status).toBe(200)
+    await expect(issueIds(response)).resolves.toEqual([
+      "filter-low",
+      "filter-medium",
+    ])
+  })
+
+  it("labelをすべて含むIssueだけを返す", async () => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest(
         "/issues?organizationId=org_1&labels=bug&labels=security&labelMode=all&pageSize=20",
         { userId: "user_1" }
       )
     )
-    expect(
-      (await labelsAll.json()).items.map((item: { id: string }) => item.id)
-    ).toEqual(["filter-medium"])
 
-    const legacyPreset = await app.handle(
+    await expect(issueIds(response)).resolves.toEqual(["filter-medium"])
+  })
+
+  it("旧dueDatePreset queryを拒否する", async () => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest(
         "/issues?organizationId=org_1&dueDatePreset=no_due&pageSize=20",
         { userId: "user_1" }
       )
     )
-    expect(legacyPreset.status).toBe(400)
 
-    const invalidDateRanges = await Promise.all(
-      ["2026-02-29", "2026-02-31"].map((invalidDate) =>
-        app.handle(
-          jsonRequest(
-            `/issues?organizationId=org_1&dueDateFrom=${invalidDate}&pageSize=20`,
-            { userId: "user_1" }
-          )
-        )
-      )
-    )
-    for (const invalidDateRange of invalidDateRanges) {
-      expect(invalidDateRange.status).toBe(400)
-    }
-    const leapDayRange = await app.handle(
+    expect(response.status).toBe(400)
+  })
+
+  it.each([
+    { date: "2026-02-29", expectedStatus: 400, label: "平年の2月29日" },
+    { date: "2026-02-31", expectedStatus: 400, label: "存在しない2月31日" },
+    { date: "2028-02-29", expectedStatus: 200, label: "閏年の2月29日" },
+  ])("$labelを期日境界として検証する", async ({ date, expectedStatus }) => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest(
-        "/issues?organizationId=org_1&dueDateFrom=2028-02-29&pageSize=20",
+        `/issues?organizationId=org_1&dueDateFrom=${date}&pageSize=20`,
         { userId: "user_1" }
       )
     )
-    expect(leapDayRange.status).toBe(200)
 
-    const dateRange = await app.handle(
+    expect(response.status).toBe(expectedStatus)
+  })
+
+  it("同じ開始日と終了日で期日範囲を絞り込む", async () => {
+    const { app, tomorrow } = await createIssueFilterFixture()
+    const date = tomorrow.toISOString().slice(0, 10)
+    const response = await app.handle(
       jsonRequest(
-        `/issues?organizationId=org_1&dueDateFrom=${tomorrow.toISOString().slice(0, 10)}&dueDateTo=${tomorrow.toISOString().slice(0, 10)}&pageSize=20`,
+        `/issues?organizationId=org_1&dueDateFrom=${date}&dueDateTo=${date}&pageSize=20`,
         { userId: "user_1" }
       )
     )
-    expect(
-      (await dateRange.json()).items.map((item: { id: string }) => item.id)
-    ).toEqual(["filter-low"])
 
-    const literalWildcard = await app.handle(
+    await expect(issueIds(response)).resolves.toEqual(["filter-low"])
+  })
+
+  it("検索内のpercent記号をwildcardではなく文字として扱う", async () => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest(
         "/issues?organizationId=org_1&search=%25&sortBy=number&sortDirection=asc&pageSize=20",
         { userId: "user_1" }
       )
     )
     expect(
-      (await literalWildcard.json()).items.map(
-        (item: { title: string }) => item.title
-      )
+      (await response.json()).items.map((item: { title: string }) => item.title)
     ).toEqual(["100% literal low"])
+  })
 
-    const labelOptions = await app.handle(
+  it("label候補を大文字小文字なしで検索して別tenantを除外する", async () => {
+    const { app } = await createIssueFilterFixture()
+    const response = await app.handle(
       jsonRequest("/issues/labels?organizationId=org_1&search=b", {
         userId: "user_1",
       })
     )
-    expect(labelOptions.status).toBe(200)
-    const labelOptionsBody = await labelOptions.json()
-    expect(labelOptionsBody).toEqual({
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toEqual({
       items: ["backend", "Bug"],
     })
-    expect(JSON.stringify(labelOptionsBody)).not.toContain("Secret")
+    expect(JSON.stringify(body)).not.toContain("Secret")
   })
 
-  it("protects Issue label options with tenant membership and active organization", async () => {
+  it("Issue label候補をテナント所属とactive organizationで保護する", async () => {
     const app = createApp(await createSeededDb())
 
     const otherTenant = await app.handle(
@@ -213,8 +295,8 @@ describe("Issue queries, mutations, and profile images", () => {
   })
 })
 
-describe("Issue list filter boundaries", () => {
-  it("uses local-day UTC boundaries for displayed date filters", async () => {
+describe("Issue一覧filterの境界", () => {
+  it("表示した日付filterへlocal dayのUTC境界を使う", async () => {
     const db = await createSeededDb()
     await db.insert(schema.issues).values([
       {
@@ -286,7 +368,7 @@ describe("Issue list filter boundaries", () => {
     ).resolves.toContain("local-after")
   })
 
-  it("applies independent UTC boundaries across a DST transition", async () => {
+  it("DST遷移をまたぐ開始日と終了日へ独立したUTC境界を適用する", async () => {
     const db = await createSeededDb()
     await db.insert(schema.issues).values([
       {
@@ -344,7 +426,7 @@ describe("Issue list filter boundaries", () => {
     ).toEqual(["dst-end", "dst-start"])
   })
 
-  it("applies frontend-resolved due shortcuts as date-only ranges", async () => {
+  it("frontendで解決した期日shortcutを日付範囲として適用する", async () => {
     const today = new Date()
     today.setUTCHours(0, 0, 0, 0)
     const addDays = (days: number, hours = 0) => {
@@ -424,7 +506,7 @@ describe("Issue list filter boundaries", () => {
     ).resolves.toEqual(["preset-day-six", "preset-earlier-today"])
   })
 
-  it("accepts the canonical Web array limits without validation failure", async () => {
+  it("Web正本の配列上限をvalidation errorなしで受理する", async () => {
     const query = new URLSearchParams({
       organizationId: "org_1",
       pageSize: "20",
@@ -444,9 +526,17 @@ describe("Issue list filter boundaries", () => {
   })
 
   it.each([
-    ["dueDateFromOffsetMinutes", "841"],
-    ["dueDateToExclusiveOffsetMinutes", "-841"],
-  ])("rejects an out-of-range %s", async (key, value) => {
+    {
+      key: "dueDateFromOffsetMinutes",
+      label: "開始offsetが上限を超える場合",
+      value: "841",
+    },
+    {
+      key: "dueDateToExclusiveOffsetMinutes",
+      label: "終了offsetが下限を下回る場合",
+      value: "-841",
+    },
+  ])("$labelを拒否する", async ({ key, value }) => {
     const app = createApp(await createSeededDb())
     const response = await app.handle(
       jsonRequest(
@@ -458,70 +548,8 @@ describe("Issue list filter boundaries", () => {
     expect(response.status).toBe(400)
   })
 
-  it("sorts statuses semantically and keeps rank ties deterministic in both directions", async () => {
-    const db = await createSeededDb()
-    await db.insert(schema.issues).values([
-      {
-        id: "sort-open-low",
-        organizationId: "org_1",
-        number: 51,
-        title: "sort-probe open low",
-        description: "literal_value",
-        status: "open",
-        priority: "low",
-        creatorId: "user_1",
-      },
-      {
-        id: "sort-open-high",
-        organizationId: "org_1",
-        number: 52,
-        title: "sort-probe open high",
-        description: "literalXvalue",
-        status: "open",
-        priority: "high",
-        creatorId: "user_1",
-      },
-      {
-        id: "sort-progress",
-        organizationId: "org_1",
-        number: 53,
-        title: "sort-probe progress",
-        status: "in_progress",
-        priority: "medium",
-        creatorId: "user_1",
-      },
-      {
-        id: "sort-open-low-later",
-        organizationId: "org_1",
-        number: 55,
-        title: "sort-probe open low later",
-        status: "open",
-        priority: "low",
-        creatorId: "user_1",
-      },
-      {
-        id: "sort-closed",
-        organizationId: "org_1",
-        number: 54,
-        title: "sort-probe closed",
-        status: "closed",
-        priority: "urgent",
-        creatorId: "user_1",
-      },
-    ])
-    const app = createApp(db)
-    const titles = async (query: string) => {
-      const response = await app.handle(
-        jsonRequest(
-          `/issues?organizationId=org_1&search=sort-probe&${query}&pageSize=20`,
-          { userId: "user_1" }
-        )
-      )
-      return (await response.json()).items.map(
-        (item: { title: string }) => item.title
-      )
-    }
-
+  it("statusを意味順に並べ同順位を昇順と降順で決定的に保つ", async () => {
+    const { titles } = await createIssueSortFixture()
     await expect(titles("sortBy=status&sortDirection=asc")).resolves.toEqual([
       "sort-probe open low",
       "sort-probe open high",
@@ -536,6 +564,10 @@ describe("Issue list filter boundaries", () => {
       "sort-probe open high",
       "sort-probe open low",
     ])
+  })
+
+  it("priorityを意味順に並べ同順位を昇順と降順で決定的に保つ", async () => {
+    const { titles } = await createIssueSortFixture()
     await expect(titles("sortBy=priority&sortDirection=asc")).resolves.toEqual([
       "sort-probe open low",
       "sort-probe open low later",
@@ -552,7 +584,10 @@ describe("Issue list filter boundaries", () => {
         "sort-probe open low",
       ]
     )
+  })
 
+  it("検索文字列のunderscoreをwildcardではなくliteralとして扱う", async () => {
+    const { app } = await createIssueSortFixture()
     const literalUnderscore = await app.handle(
       jsonRequest("/issues?organizationId=org_1&search=_&pageSize=20", {
         userId: "user_1",
@@ -577,7 +612,7 @@ describe("Issue list filter boundaries", () => {
     ).toEqual(["sort-open-low"])
   })
 
-  it("returns the deterministic first 50 case-insensitive labels with prefix matches first", async () => {
+  it("大文字小文字を区別しないlabelをprefix一致優先で決定的な先頭50件として返す", async () => {
     const db = await createSeededDb()
     await db.insert(schema.issues).values(
       Array.from({ length: 52 }, (_, index) => ({
@@ -617,383 +652,5 @@ describe("Issue list filter boundaries", () => {
           left.localeCompare(right, "en-US", { sensitivity: "base" })
         ),
     ])
-  })
-})
-
-describe("Issue mutations, summaries, and profile images", () => {
-  it("returns Issue summaries and selects or resets an authenticated thumbnail", async () => {
-    const db = await createSeededDb()
-    const app = createApp(db)
-    const oldest = new Date("2026-07-20T00:00:00.000Z")
-    const newer = new Date("2026-07-21T00:00:00.000Z")
-    await db.insert(schema.issues).values({
-      id: "thumbnail-other-issue",
-      organizationId: "org_1",
-      number: 2,
-      title: "Other thumbnail owner",
-      creatorId: "user_1",
-      createdAt: oldest,
-      updatedAt: oldest,
-    })
-    await db.insert(schema.files).values([
-      {
-        id: "thumbnail-oldest",
-        organizationId: "org_1",
-        uploaderId: "user_1",
-        uploadId: "thumbnail-upload-oldest",
-        ownerType: "issue",
-        objectKey: "thumbnail/object-oldest",
-        filename: "oldest.png",
-        sizeBytes: 100,
-        declaredContentType: "image/png",
-        detectedImageFormat: "png",
-        imageWidth: 640,
-        imageHeight: 480,
-        etag: "etag-oldest",
-        status: "ready",
-        createdAt: oldest,
-        updatedAt: oldest,
-      },
-      {
-        id: "thumbnail-newer",
-        organizationId: "org_1",
-        uploaderId: "user_1",
-        uploadId: "thumbnail-upload-newer",
-        ownerType: "issue",
-        objectKey: "thumbnail/object-newer",
-        filename: "newer.jpg",
-        sizeBytes: 120,
-        declaredContentType: "image/jpeg",
-        detectedImageFormat: "jpeg",
-        imageWidth: 800,
-        imageHeight: 800,
-        etag: "etag-newer",
-        status: "ready",
-        createdAt: newer,
-        updatedAt: newer,
-      },
-      {
-        id: "thumbnail-avif",
-        organizationId: "org_1",
-        uploaderId: "user_1",
-        uploadId: "thumbnail-upload-avif",
-        ownerType: "issue",
-        objectKey: "thumbnail/object-avif",
-        filename: "unsupported.avif",
-        sizeBytes: 80,
-        declaredContentType: "image/avif",
-        detectedImageFormat: "avif",
-        imageWidth: 320,
-        imageHeight: 320,
-        etag: "etag-avif",
-        status: "ready",
-        createdAt: newer,
-        updatedAt: newer,
-      },
-      {
-        id: "thumbnail-other-owner",
-        organizationId: "org_1",
-        uploaderId: "user_1",
-        uploadId: "thumbnail-upload-other",
-        ownerType: "issue",
-        objectKey: "thumbnail/object-other",
-        filename: "other.png",
-        sizeBytes: 90,
-        declaredContentType: "image/png",
-        detectedImageFormat: "png",
-        imageWidth: 400,
-        imageHeight: 400,
-        etag: "etag-other",
-        status: "ready",
-        createdAt: newer,
-        updatedAt: newer,
-      },
-    ])
-    await db.insert(schema.issueFileOwners).values([
-      {
-        fileId: "thumbnail-oldest",
-        organizationId: "org_1",
-        issueId: "issue_1",
-      },
-      {
-        fileId: "thumbnail-newer",
-        organizationId: "org_1",
-        issueId: "issue_1",
-      },
-      {
-        fileId: "thumbnail-avif",
-        organizationId: "org_1",
-        issueId: "issue_1",
-      },
-      {
-        fileId: "thumbnail-other-owner",
-        organizationId: "org_1",
-        issueId: "thumbnail-other-issue",
-      },
-    ])
-    await db.insert(schema.issueComments).values([
-      {
-        id: "thumbnail-comment-1",
-        organizationId: "org_1",
-        issueId: "issue_1",
-        authorId: "user_1",
-        body: "First",
-      },
-      {
-        id: "thumbnail-comment-2",
-        organizationId: "org_1",
-        issueId: "issue_1",
-        authorId: "user_1",
-        body: "Second",
-      },
-    ])
-
-    const listResponse = await app.handle(
-      jsonRequest(
-        "/issues?organizationId=org_1&sortBy=number&sortDirection=asc",
-        { userId: "user_1" }
-      )
-    )
-    expect(listResponse.status).toBe(200)
-    expect(await listResponse.json()).toMatchObject({
-      items: [
-        expect.objectContaining({
-          id: "issue_1",
-          attachmentCount: 3,
-          commentCount: 2,
-          thumbnail: expect.objectContaining({
-            id: "thumbnail-oldest",
-            filename: "oldest.png",
-          }),
-        }),
-        expect.objectContaining({
-          id: "thumbnail-other-issue",
-          attachmentCount: 1,
-          commentCount: 0,
-        }),
-      ],
-    })
-
-    const automatic = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail?organizationId=org_1", {
-        userId: "user_1",
-      })
-    )
-    expect(automatic.status).toBe(200)
-    expect(await automatic.json()).toMatchObject({
-      mode: "automatic",
-      file: { id: "thumbnail-oldest" },
-    })
-
-    const select = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail", {
-        method: "PUT",
-        userId: "user_1",
-        body: { organizationId: "org_1", fileId: "thumbnail-newer" },
-      })
-    )
-    expect(select.status).toBe(200)
-    expect(await select.json()).toMatchObject({
-      mode: "selected",
-      file: { id: "thumbnail-newer" },
-    })
-
-    const afterSelect = await db
-      .select({ revision: schema.issues.revision })
-      .from(schema.issues)
-      .where(eq(schema.issues.id, "issue_1"))
-    expect(afterSelect[0]?.revision).toBe(2)
-    const auditsAfterSelect = await db
-      .select()
-      .from(schema.auditLogs)
-      .where(
-        sql`${schema.auditLogs.targetId} = 'issue_1' and ${schema.auditLogs.action} = 'issue.updated'`
-      )
-    expect(auditsAfterSelect).toHaveLength(1)
-
-    const noOp = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail", {
-        method: "PUT",
-        userId: "user_1",
-        body: { organizationId: "org_1", fileId: "thumbnail-newer" },
-      })
-    )
-    expect(noOp.status).toBe(200)
-    const afterNoOp = await db
-      .select({ revision: schema.issues.revision })
-      .from(schema.issues)
-      .where(eq(schema.issues.id, "issue_1"))
-    expect(afterNoOp[0]?.revision).toBe(2)
-
-    const wrongOwner = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail", {
-        method: "PUT",
-        userId: "user_1",
-        body: {
-          organizationId: "org_1",
-          fileId: "thumbnail-other-owner",
-        },
-      })
-    )
-    expect(wrongOwner.status).toBe(404)
-    const unsupported = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail", {
-        method: "PUT",
-        userId: "user_1",
-        body: { organizationId: "org_1", fileId: "thumbnail-avif" },
-      })
-    )
-    expect(unsupported.status).toBe(400)
-
-    const reset = await app.handle(
-      jsonRequest("/issues/issue_1/thumbnail", {
-        method: "PUT",
-        userId: "user_1",
-        body: { organizationId: "org_1", fileId: null },
-      })
-    )
-    expect(reset.status).toBe(200)
-    expect(await reset.json()).toMatchObject({
-      mode: "automatic",
-      file: { id: "thumbnail-oldest" },
-    })
-    const afterReset = await db
-      .select({ revision: schema.issues.revision })
-      .from(schema.issues)
-      .where(eq(schema.issues.id, "issue_1"))
-    expect(afterReset[0]?.revision).toBe(3)
-  })
-})
-
-describe("Issue lifecycle operations", () => {
-  it("creates, filters, updates, loads, and comments on an issue", async () => {
-    const db = await createSeededDb()
-    const app = createApp(db)
-    const createResponse = await app.handle(
-      jsonRequest("/issues", {
-        method: "POST",
-        userId: "user_1",
-        body: {
-          organizationId: "org_1",
-          title: " Login bug ",
-          description: "OAuth callback fails",
-          priority: "urgent",
-          assigneeId: "user_4",
-          labels: ["bug", "auth"],
-          dueDate: "2026-08-15T10:30:00.000Z",
-        },
-      })
-    )
-    expect(createResponse.status).toBe(201)
-    const created = await createResponse.json()
-    expect(created).toMatchObject({
-      number: 2,
-      title: "Login bug",
-      dueDate: "2026-08-15T10:30:00.000Z",
-    })
-    expect(typeof created.dueDate).toBe("string")
-
-    const storedIssue = await db
-      .select({ dueDate: schema.issues.dueDate })
-      .from(schema.issues)
-      .where(eq(schema.issues.id, created.id))
-    expect(storedIssue[0]?.dueDate?.toISOString()).toBe(
-      "2026-08-15T10:30:00.000Z"
-    )
-
-    const filtered = await app.handle(
-      jsonRequest(
-        "/issues?organizationId=org_1&search=OAuth&priorityFrom=urgent&priorityTo=urgent&labels=auth&sortBy=number&sortDirection=asc",
-        { userId: "user_1" }
-      )
-    )
-    expect(await filtered.json()).toMatchObject({
-      items: [expect.objectContaining({ id: created.id })],
-      page: 1,
-      pageSize: 20,
-      total: 1,
-    })
-
-    const update = await app.handle(
-      jsonRequest(`/issues/${created.id}`, {
-        method: "PATCH",
-        userId: "user_1",
-        body: { organizationId: "org_1", status: "in_progress" },
-      })
-    )
-    expect(await update.json()).toMatchObject({ status: "in_progress" })
-
-    const detail = await app.handle(
-      jsonRequest(`/issues/${created.id}?organizationId=org_1`, {
-        userId: "user_1",
-      })
-    )
-    expect(detail.status).toBe(200)
-    expect((await detail.json()).dueDate).toBe("2026-08-15T10:30:00.000Z")
-
-    const comment = await app.handle(
-      jsonRequest(`/issues/${created.id}/comments`, {
-        method: "POST",
-        userId: "user_4",
-        body: { organizationId: "org_1", body: "I can reproduce this." },
-      })
-    )
-    expect(comment.status).toBe(201)
-    expect(await comment.json()).toMatchObject({
-      authorId: "user_4",
-      author: { id: "user_4", name: "User 4", profileImage: null },
-    })
-
-    const byNumber = await app.handle(
-      jsonRequest(`/issues/by-number/${created.number}?organizationId=org_1`, {
-        userId: "user_1",
-      })
-    )
-    expect(byNumber.status).toBe(200)
-    expect(await byNumber.json()).toMatchObject({ id: created.id, number: 2 })
-
-    const timeline = await app.handle(
-      jsonRequest(`/issues/${created.id}/timeline?organizationId=org_1`, {
-        userId: "user_1",
-      })
-    )
-    expect(timeline.status).toBe(200)
-    const timelineBody = await timeline.json()
-    expect(timelineBody.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "activity", kind: "created" }),
-        expect.objectContaining({
-          type: "activity",
-          kind: "field_changed",
-          field: "status",
-          fromValue: "open",
-          toValue: "in_progress",
-        }),
-        expect.objectContaining({
-          type: "comment",
-          body: "I can reproduce this.",
-        }),
-      ])
-    )
-    expect(
-      timelineBody.items.filter(
-        (item: { type: string }) => item.type === "comment"
-      )
-    ).toHaveLength(1)
-
-    const audit = await app.handle(
-      jsonRequest("/organizations/org_1/audit-logs?limit=100", {
-        userId: "user_3",
-      })
-    )
-    expect(
-      (await audit.json()).map((event: { action: string }) => event.action)
-    ).toEqual(
-      expect.arrayContaining([
-        "issue.created",
-        "issue.updated",
-        "issue.comment.created",
-      ])
-    )
   })
 })

@@ -11,7 +11,7 @@ const request = (path: string) => {
   })
 }
 
-describe("GitHub Next.js emulator route", () => {
+describe("GitHub Next.js emulator routeの契約", () => {
   it("GitHubだけを/emulate/github以下で公開する", async () => {
     const response = await request("/emulate/github/meta")
     const unsupported = await request("/emulate/google/meta")

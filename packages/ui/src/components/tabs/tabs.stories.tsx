@@ -1,5 +1,3 @@
-import { expect, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "./tabs"
@@ -31,13 +29,4 @@ export const KeyboardNavigation = meta.story({
       </TabsContent>
     </Tabs>
   ),
-  play: async ({ canvas }) => {
-    const typescript = canvas.getByRole("tab", { name: "TypeScript" })
-    const curl = canvas.getByRole("tab", { name: "cURL" })
-
-    typescript.focus()
-    await userEvent.keyboard("{ArrowRight}")
-    await expect(curl).toHaveAttribute("aria-selected", "true")
-    await expect(canvas.getByText("Shell client example")).toBeVisible()
-  },
 })

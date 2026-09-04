@@ -5,8 +5,8 @@ import {
   assertRepositoryLocalTursoUrl,
 } from "./local-database"
 
-describe("local database safety boundaries", () => {
-  it("accepts local development database URLs and rejects remote file hosts", () => {
+describe("local DBの安全境界", () => {
+  it("local開発DBのURLを許可してremote file hostを拒否する", () => {
     expect(() => assertLocalDatabaseUrl("file::memory:")).not.toThrow()
     expect(() =>
       assertLocalDatabaseUrl("https://db.example.localhost")
@@ -16,7 +16,7 @@ describe("local database safety boundaries", () => {
     ).toThrow(/restricted to file: databases and localhost/i)
   })
 
-  it("only coordinates reset for the repository-managed Portless Turso", () => {
+  it("repository管理のPortless Tursoだけをreset対象として調整する", () => {
     expect(() =>
       assertRepositoryLocalTursoUrl(
         "https://db.enterprise-agentic-saas.localhost"

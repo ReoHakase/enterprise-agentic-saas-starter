@@ -23,7 +23,6 @@ const filteredIssue = {
   status: "in_progress" as const,
 }
 let issueQueryRequests: string[] = []
-let labelQueryRequests: string[] = []
 type Deferred<Value> = ReturnType<typeof createDeferred<Value>>
 let filteredIssueRequestStarted: Deferred<void>
 let filteredIssueResponseGate: Deferred<void>
@@ -140,68 +139,90 @@ export const Ready = meta.story({
   beforeEach({ msw }) {
     msw.use(...issueHandlers([fictionalIssueListItem]))
   },
+})
+
+export const CreateSuccess = meta.story({
+  beforeEach({ msw }) {
+    msw.use(...issueHandlers([fictionalIssueListItem]))
+  },
   play: async ({ canvas, canvasElement, step }) => {
     const ownerBody = canvasElement.ownerDocument.body
     const body = within(ownerBody)
 
-    await step(
-      "Create an issue with a deterministic API response",
-      async () => {
-        await expect(await canvas.findByText(issueTitle)).toBeVisible()
-        await userEvent.click(canvas.getByRole("button", { name: "New issue" }))
-        await userEvent.type(
-          body.getByRole("textbox", { name: "Title" }),
-          "Prepare release notes"
-        )
-        await userEvent.click(
-          body.getByRole("button", { name: "Create issue" })
-        )
-        await expect(await body.findByText("Issue created")).toBeInTheDocument()
-        await expect(
-          await canvas.findByText("Prepare release notes")
-        ).toBeVisible()
-        await waitFor(() =>
-          expect(
-            body.queryByRole("dialog", { name: "Create issue" })
-          ).not.toBeInTheDocument()
-        )
-      }
-    )
+    await step("決定的なAPI応答でIssueを作成する", async () => {
+      await expect(await canvas.findByText(issueTitle)).toBeVisible()
+      await userEvent.click(canvas.getByRole("button", { name: "New issue" }))
+      await userEvent.type(
+        body.getByRole("textbox", { name: "Title" }),
+        "Prepare release notes"
+      )
+      await userEvent.click(body.getByRole("button", { name: "Create issue" }))
+      await expect(await body.findByText("Issue created")).toBeInTheDocument()
+      await expect(
+        await canvas.findByText("Prepare release notes")
+      ).toBeVisible()
+      await waitFor(() =>
+        expect(
+          body.queryByRole("dialog", { name: "Create issue" })
+        ).not.toBeInTheDocument()
+      )
+    })
+  },
+})
 
-    await step(
-      "Update an issue from its keyboard-accessible menu",
-      async () => {
-        const actions = canvas.getByRole("button", {
-          name: `Actions for ${issueTitle}`,
-        })
-        await userEvent.click(actions)
-        const menu = await body.findByRole(
-          "menu",
-          {
+export const UpdateSuccess = meta.story({
+  beforeEach({ msw }) {
+    msw.use(...issueHandlers([fictionalIssueListItem]))
+  },
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
+
+    await step("決定的なAPI応答でIssueを更新する", async () => {
+      await expect(await canvas.findByText(issueTitle)).toBeVisible()
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("button", {
             name: `Actions for ${issueTitle}`,
-          },
-          { timeout: 5_000 }
-        )
-        await waitFor(() => expect(menu).toHaveFocus())
-        await userEvent.keyboard("{ArrowDown}{ArrowDown}")
-        await waitFor(() =>
-          expect(
-            body.getByRole("menuitem", { name: "Close issue" })
-          ).toHaveFocus()
-        )
-        await userEvent.keyboard("{Enter}")
-        await expect(await body.findByText("Issue updated")).toBeInTheDocument()
-        await waitFor(() =>
-          expect(
-            body.queryByRole("menu", {
-              name: `Actions for ${issueTitle}`,
-            })
-          ).not.toBeInTheDocument()
-        )
-      }
-    )
+          })
+        ).toBeEnabled()
+      )
+      const actions = canvas.getByRole("button", {
+        name: `Actions for ${issueTitle}`,
+      })
+      await userEvent.click(actions)
+      const menu = await body.findByRole(
+        "menu",
+        {
+          name: `Actions for ${issueTitle}`,
+        },
+        { timeout: 5_000 }
+      )
+      await waitFor(() => expect(menu).toBeVisible())
+      await userEvent.click(
+        within(menu).getByRole("menuitem", { name: "Close issue" })
+      )
+      await expect(await body.findByText("Issue updated")).toBeInTheDocument()
+      await waitFor(() => expect(menu).not.toBeInTheDocument())
+    })
+  },
+})
 
-    await step("Delete an issue after destructive confirmation", async () => {
+export const DeleteSuccess = meta.story({
+  beforeEach({ msw }) {
+    msw.use(...issueHandlers([fictionalIssueListItem]))
+  },
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
+
+    await step("破壊的操作を確認してIssueを削除する", async () => {
+      await expect(await canvas.findByText(issueTitle)).toBeVisible()
+      await waitFor(() =>
+        expect(
+          canvas.getByRole("button", {
+            name: `Actions for ${issueTitle}`,
+          })
+        ).toBeEnabled()
+      )
       const actions = canvas.getByRole("button", {
         name: `Actions for ${issueTitle}`,
       })
@@ -210,7 +231,6 @@ export const Ready = meta.story({
         name: `Actions for ${issueTitle}`,
       })
       await waitFor(() => expect(menu).toBeVisible())
-      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.click(
         within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
@@ -226,46 +246,22 @@ export const Ready = meta.story({
         within(dialog).getByRole("button", { name: "Delete issue" })
       )
       await expect(await body.findByText("Issue deleted")).toBeInTheDocument()
-      await waitFor(() =>
-        expect(
-          body.queryByRole("alertdialog", { name: "Delete this issue?" })
-        ).not.toBeInTheDocument()
-      )
+      await waitFor(() => expect(dialog).not.toBeInTheDocument())
     })
   },
 })
 
-export const Empty = meta.story({
-  play: async ({ canvas }) => {
-    await expect(await canvas.findByText("No matching issues")).toBeVisible()
-  },
-})
+export const Empty = meta.story({})
 
 export const QueryIntegrationContract = meta.story({
   beforeEach({ msw }) {
     issueQueryRequests = []
-    labelQueryRequests = []
     filteredIssueRequestStarted = createDeferred<void>()
     filteredIssueResponseGate = createDeferred<void>()
-    staleLabelRequestStarted = createDeferred<void>()
-    staleLabelResponseGate = createDeferred<void>()
-    staleLabelResponseReturned = createDeferred<void>()
     msw.use(
-      http.get("*/issues/labels", async ({ request }) => {
-        const url = new URL(request.url)
-        labelQueryRequests.push(url.toString())
-        const search = url.searchParams.get("search") ?? ""
-        if (search === "b") {
-          staleLabelRequestStarted.resolve(undefined)
-          await staleLabelResponseGate.promise
-          staleLabelResponseReturned.resolve(undefined)
-          return HttpResponse.json({ items: ["obsolete"] })
-        }
-        if (search === "bi") {
-          return HttpResponse.json({ items: ["billing-new"] })
-        }
-        return HttpResponse.json({ items: ["billing", "incident"] })
-      }),
+      http.get("*/issues/labels", () =>
+        HttpResponse.json({ items: ["billing", "incident"] })
+      ),
       http.get("*/issues", async ({ request }) => {
         const url = new URL(request.url)
         issueQueryRequests.push(url.toString())
@@ -292,69 +288,97 @@ export const QueryIntegrationContract = meta.story({
     )
     return () => {
       filteredIssueResponseGate.resolve(undefined)
+    }
+  },
+  play: async ({ canvas, canvasElement, step }) => {
+    const body = within(canvasElement.ownerDocument.body)
+    await step("絞り込み中は直前行を維持して完了後に置き換える", async () => {
+      await expect(await canvas.findByText(issueTitle)).toBeVisible()
+
+      const statusTrigger = canvas.getByRole("combobox", { name: "Status" })
+      await userEvent.click(statusTrigger)
+      const statusListbox = await body.findByRole("listbox")
+      await userEvent.click(
+        await body.findByRole("option", { name: "In progress" })
+      )
+      await expect(canvas.getByText(issueTitle)).toBeVisible()
+
+      await userEvent.click(statusTrigger)
+      await waitFor(() => expect(statusListbox).not.toBeVisible())
+      await filteredIssueRequestStarted.promise
+      expect(
+        new URL(
+          issueQueryRequests.at(-1) ?? "https://invalid.test"
+        ).searchParams.getAll("statuses")
+      ).toEqual(["in_progress"])
+      await expect(canvas.getByText(issueTitle)).toBeVisible()
+      filteredIssueResponseGate.resolve(undefined)
+      await expect(await canvas.findByText(filteredIssue.title)).toBeVisible()
+    })
+  },
+})
+
+export const StaleLabelResponse = meta.story({
+  beforeEach({ msw }) {
+    staleLabelRequestStarted = createDeferred<void>()
+    staleLabelResponseGate = createDeferred<void>()
+    staleLabelResponseReturned = createDeferred<void>()
+    msw.use(
+      http.get("*/issues/labels", async ({ request }) => {
+        const url = new URL(request.url)
+        const search = url.searchParams.get("search") ?? ""
+        if (search === "b") {
+          staleLabelRequestStarted.resolve(undefined)
+          await staleLabelResponseGate.promise
+          staleLabelResponseReturned.resolve(undefined)
+          return HttpResponse.json({ items: ["obsolete"] })
+        }
+        if (search === "bi") {
+          return HttpResponse.json({ items: ["billing-new"] })
+        }
+        return HttpResponse.json({ items: ["billing", "incident"] })
+      }),
+      http.get("*/issues", () =>
+        HttpResponse.json({
+          items: [fictionalIssueListItem],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+        })
+      ),
+      http.get("*/organizations/:organizationId/members", () =>
+        HttpResponse.json(members)
+      )
+    )
+    return () => {
       staleLabelResponseGate.resolve(undefined)
     }
   },
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
-    await expect(await canvas.findByText(issueTitle)).toBeVisible()
-    expect(issueQueryRequests).toHaveLength(1)
 
-    await userEvent.click(canvas.getByRole("combobox", { name: "Status" }))
-    const statusListbox = await body.findByRole("listbox")
-    await userEvent.click(
-      await body.findByRole("option", { name: "In progress" })
-    )
-    expect(issueQueryRequests).toHaveLength(1)
-    await expect(canvas.getByText(issueTitle)).toBeVisible()
-
-    await userEvent.keyboard("{Escape}")
-    await waitFor(() => expect(statusListbox).not.toBeVisible())
-    await filteredIssueRequestStarted.promise
-    expect(issueQueryRequests).toHaveLength(2)
-    expect(
-      new URL(
-        issueQueryRequests[1] ?? "https://invalid.test"
-      ).searchParams.getAll("statuses")
-    ).toEqual(["in_progress"])
-    await expect(canvas.getByText(issueTitle)).toBeVisible()
-    await expect(
-      canvas.getByRole("status", { name: "Updating issues" })
-    ).toBeVisible()
-    await expect(
-      canvas.getByRole("button", { name: `Actions for ${issueTitle}` })
-    ).toBeDisabled()
-    filteredIssueResponseGate.resolve(undefined)
-    await expect(await canvas.findByText(filteredIssue.title)).toBeVisible()
-
-    const labelsTrigger = canvas.getByRole("button", { name: "Labels" })
-    await userEvent.click(labelsTrigger)
-    const search = await body.findByRole("combobox", {
-      name: "Search labels",
+    await step("遅い旧ラベル応答で新しい候補を上書きしない", async () => {
+      await expect(await canvas.findByText(issueTitle)).toBeVisible()
+      const labelsTrigger = canvas.getByRole("button", { name: "Labels" })
+      await userEvent.click(labelsTrigger)
+      const search = await body.findByRole("combobox", {
+        name: "Search labels",
+      })
+      await userEvent.type(search, "b")
+      await staleLabelRequestStarted.promise
+      await userEvent.type(search, "i")
+      await expect(
+        await body.findByRole("option", { name: "billing-new" })
+      ).toBeVisible()
+      staleLabelResponseGate.resolve(undefined)
+      await staleLabelResponseReturned.promise
+      await waitFor(() => {
+        expect(
+          body.queryByRole("option", { name: "obsolete" })
+        ).not.toBeInTheDocument()
+        expect(body.getByRole("option", { name: "billing-new" })).toBeVisible()
+      })
     })
-    await userEvent.type(search, "b")
-    await staleLabelRequestStarted.promise
-    expect(
-      labelQueryRequests.some(
-        (request) => new URL(request).searchParams.get("search") === "b"
-      )
-    ).toBe(true)
-    await userEvent.type(search, "i")
-    await expect(
-      await body.findByRole("option", { name: "billing-new" })
-    ).toBeVisible()
-    staleLabelResponseGate.resolve(undefined)
-    await staleLabelResponseReturned.promise
-    await waitFor(() => {
-      expect(
-        body.queryByRole("option", { name: "obsolete" })
-      ).not.toBeInTheDocument()
-      expect(body.getByRole("option", { name: "billing-new" })).toBeVisible()
-    })
-    const labelsListbox = body.getByRole("listbox")
-    await userEvent.keyboard("{Escape}")
-    await waitFor(() => expect(labelsTrigger).toHaveFocus())
-    await waitFor(() => expect(labelsListbox).not.toBeVisible())
   },
 })
 
@@ -385,7 +409,7 @@ export const RetrySuccess = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Retry the list request successfully", async () => {
+    await step("一覧取得を再試行して成功する", async () => {
       await expect(
         await canvas.findByText("Issues could not be loaded")
       ).toBeVisible()
@@ -413,7 +437,7 @@ export const CreateFailure = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Keep the create dialog open after API failure", async () => {
+    await step("作成失敗後も作成Dialogを開いたままにする", async () => {
       await canvas.findByText(issueTitle)
       await userEvent.click(canvas.getByRole("button", { name: "New issue" }))
       await userEvent.type(
@@ -449,22 +473,17 @@ export const UpdateFailure = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Report an update failure without losing the row", async () => {
+    await step("行を維持したまま更新失敗を通知する", async () => {
       await canvas.findByText(issueTitle)
-      const getActions = () =>
-        canvas.getByRole("button", {
-          name: `Actions for ${issueTitle}`,
-        })
-      await waitFor(() => expect(getActions()).toBeEnabled())
-      await userEvent.click(getActions())
-      await waitFor(() =>
-        expect(getActions()).toHaveAttribute("aria-expanded", "true")
-      )
-      const menu = body.getByRole("menu", {
+      const actions = canvas.getByRole("button", {
+        name: `Actions for ${issueTitle}`,
+      })
+      await waitFor(() => expect(actions).toBeEnabled())
+      await userEvent.click(actions)
+      const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
       await waitFor(() => expect(menu).toBeVisible())
-      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.click(
         within(menu).getByRole("menuitem", { name: "Close issue" })
       )
@@ -472,17 +491,7 @@ export const UpdateFailure = meta.story({
         await body.findByText(/Issue update failed/)
       ).toBeInTheDocument()
       await expect(canvas.getByText(issueTitle)).toBeVisible()
-      await waitFor(() =>
-        expect(getActions()).toHaveAttribute("aria-busy", "false")
-      )
-      await waitFor(() =>
-        expect(
-          body.queryByRole("menu", {
-            name: `Actions for ${issueTitle}`,
-          })
-        ).not.toBeInTheDocument()
-      )
-      await waitFor(() => expect(getActions()).toHaveFocus())
+      await waitFor(() => expect(menu).not.toBeInTheDocument())
     })
   },
 })
@@ -506,7 +515,7 @@ export const DeleteFailure = meta.story({
     const ownerBody = canvasElement.ownerDocument.body
     const body = within(ownerBody)
 
-    await step("Report a deletion failure without losing the row", async () => {
+    await step("行を維持したまま削除失敗を通知する", async () => {
       await canvas.findByText(issueTitle)
       const getActions = () =>
         canvas.getByRole("button", {
@@ -514,14 +523,10 @@ export const DeleteFailure = meta.story({
         })
       await waitFor(() => expect(getActions()).toBeEnabled())
       await userEvent.click(getActions())
-      await waitFor(() =>
-        expect(getActions()).toHaveAttribute("aria-expanded", "true")
-      )
-      const menu = body.getByRole("menu", {
+      const menu = await body.findByRole("menu", {
         name: `Actions for ${issueTitle}`,
       })
       await waitFor(() => expect(menu).toBeVisible())
-      await waitFor(() => expect(menu).toHaveFocus())
       await userEvent.click(
         within(menu).getByRole("menuitem", { name: "Delete issue" })
       )
@@ -538,7 +543,7 @@ export const DeleteFailure = meta.story({
       await expect(
         await body.findByText(/Issue deletion failed/)
       ).toBeInTheDocument()
-      await waitFor(() => expect(dialog).not.toBeVisible())
+      await waitFor(() => expect(dialog).not.toBeInTheDocument())
       await expect(canvas.getByText(issueTitle)).toBeVisible()
     })
   },

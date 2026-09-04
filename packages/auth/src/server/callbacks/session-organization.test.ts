@@ -83,8 +83,8 @@ const resolveInitialActiveOrganizationId = async (userId: string) => {
   return result.data.activeOrganizationId
 }
 
-describe("new-session organization bootstrap", () => {
-  it("preserves the most recent non-expired organization that is still a membership", async () => {
+describe("新規sessionのorganization初期値", () => {
+  it("現在も所属する最新の未失効organizationを引き継ぐ", async () => {
     await insertMembership("member-1", "user-1", "org-1")
     await insertMembership("member-2", "user-1", "org-2")
     await insertSession({
@@ -105,7 +105,7 @@ describe("new-session organization bootstrap", () => {
     )
   })
 
-  it("ignores stale and expired session context", async () => {
+  it("所属を失ったorganizationと失効済みsessionを無視する", async () => {
     await insertMembership("member-1", "user-1", "org-1")
     await insertSession({
       id: "session-stale-membership",
@@ -126,7 +126,7 @@ describe("new-session organization bootstrap", () => {
     )
   })
 
-  it("requires an explicit choice when multiple memberships have no prior context", async () => {
+  it("履歴がなく複数organizationへ所属する場合は明示選択を要求する", async () => {
     await insertMembership("member-1", "user-1", "org-1")
     await insertMembership("member-2", "user-1", "org-2")
 
@@ -135,7 +135,7 @@ describe("new-session organization bootstrap", () => {
     ).resolves.toBeNull()
   })
 
-  it("writes the resolved value into Better Auth session create data", async () => {
+  it("解決したorganizationをBetter Authのsession作成データへ加える", async () => {
     await insertMembership("member-1", "user-1", "org-1")
     const hooks = createSessionOrganizationDatabaseHooks(database)
 

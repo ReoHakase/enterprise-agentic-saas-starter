@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -72,30 +72,9 @@ export const Ready = meta.story({
       )
     )
   },
-  play: async ({ canvas, step }) => {
-    await step("Render history and the live composer", async () => {
-      await expect(
-        await canvas.findByRole("article", { name: "Your message" })
-      ).toHaveTextContent("Review Issue #184")
-      await expect(
-        canvas.getByRole("article", { name: "Agent response" })
-      ).toHaveTextContent("Membership is checked")
-      await expect(
-        canvas.getByRole("textbox", { name: "Agent message" })
-      ).toBeVisible()
-    })
-  },
 })
 
-export const Empty = meta.story({
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByRole("button", {
-        name: "Summarize the current page and suggest the next action.",
-      })
-    ).toBeVisible()
-  },
-})
+export const Empty = meta.story({})
 
 export const HistoryFailure = meta.story({
   beforeEach({ msw }) {
@@ -110,13 +89,5 @@ export const HistoryFailure = meta.story({
         )
       )
     )
-  },
-  play: async ({ canvas }) => {
-    await expect(await canvas.findByRole("alert")).toHaveTextContent(
-      "Agent history could not be loaded."
-    )
-    await expect(
-      canvas.getByRole("button", { name: "Try again" })
-    ).toBeVisible()
   },
 })

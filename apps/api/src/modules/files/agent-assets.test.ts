@@ -27,8 +27,8 @@ import {
 import { agentAssetDtoModel } from "./model"
 import { configureFileStorageRuntime } from "./runtime"
 
-describe("Agent staged image API and lifecycle", () => {
-  it("uploads one private Standard object and returns only an opaque DTO", async () => {
+describe("Agent staged画像APIとlifecycle", () => {
+  it("private Standard objectを1つuploadしてopaque DTOだけを返す", async () => {
     const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
@@ -111,7 +111,7 @@ describe("Agent staged image API and lifecycle", () => {
     })
   })
 
-  it("fails closed before DB or R2 work when Agent asset upload is not explicitly enabled", async () => {
+  it("Agent asset uploadが明示有効でない場合はDBやR2処理前にfail closedにする", async () => {
     const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime({
@@ -134,42 +134,77 @@ describe("Agent staged image API and lifecycle", () => {
     expect(await db.select().from(schema.agentResourceUsageBuckets)).toEqual([])
   })
 
-  it("authorizes before calling the private preview Worker and supports ETag revalidation", async () => {
-    const { app, db } = await createFixture()
+  it.each([
+    { guard: "unauthenticated", label: "未認証request", status: 401 },
+    { guard: "other-owner", label: "別ownerのrequest", status: 404 },
+    {
+      guard: "revoked-membership",
+      label: "membership失効後のrequest",
+      status: 404,
+    },
+  ] as const)(
+    "$labelをpreview Worker呼出前に拒否する",
+    async ({ guard, status }) => {
+      const { app, db } = await createFixture()
+      const storage = createRuntime()
+      configureFileStorageRuntime(storage.runtime)
+      const uploaded = await app.handle(
+        uploadRequest({ file: pngFile(), uploadId: `preview-${guard}` })
+      )
+      const uploadedAsset = v.parse(agentAssetDtoModel, await uploaded.json())
+      const assetId = uploadedAsset.id
+      if (guard === "revoked-membership") {
+        await db
+          .delete(schema.member)
+          .where(eq(schema.member.id, "asset-member-a-a"))
+      }
+      const request =
+        guard === "unauthenticated"
+          ? new Request(
+              `http://localhost/files/organizations/asset-org-a/agent-assets/${assetId}/preview/720`
+            )
+          : assetRequest({
+              assetId,
+              ...(guard === "other-owner"
+                ? {
+                    sessionId: "asset-session-b",
+                    userId: "asset-user-b",
+                  }
+                : {}),
+            })
+
+      const response = await app.handle(request)
+
+      expect(response.status).toBe(status)
+      expect(storage.previewFetch).not.toHaveBeenCalled()
+    }
+  )
+
+  it("認可済みpreviewをprivate responseと内部object keyへ投影する", async () => {
+    const { app } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
     const uploaded = await app.handle(
-      uploadRequest({ file: pngFile(), uploadId: "preview-cache" })
+      uploadRequest({ file: pngFile(), uploadId: "preview-response" })
     )
     const uploadedAsset = v.parse(agentAssetDtoModel, await uploaded.json())
-    const assetId = uploadedAsset.id
-
-    const unauthenticated = await app.handle(
-      new Request(
-        `http://localhost/files/organizations/asset-org-a/agent-assets/${assetId}/preview/720`
-      )
-    )
-    expect(unauthenticated.status).toBe(401)
-    expect(storage.previewFetch).not.toHaveBeenCalled()
-
     const fixedNow = new Date(uploadedAsset.expiresAt).getTime() - 321_000
     const dateNow = vi.spyOn(Date, "now").mockReturnValue(fixedNow)
-    const first = await (async () => {
+
+    const response = await (async () => {
       try {
-        return await app.handle(assetRequest({ assetId }))
+        return await app.handle(assetRequest({ assetId: uploadedAsset.id }))
       } finally {
         dateNow.mockRestore()
       }
     })()
 
-    expect(first.status).toBe(200)
-    expect(first.headers.get("cache-control")).toBe("private, no-cache")
-    expect(first.headers.get("content-type")).toBe("image/webp")
-    const etag = first.headers.get("etag")
-    expect(etag).toMatch(/^"[0-9a-f]{64}"$/u)
-    if (!etag) throw new Error("Preview ETag is missing")
-    expect(first.headers.get("set-cookie")).toBeNull()
-    expect(first.headers.get("x-internal-cache")).toBeNull()
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("private, no-cache")
+    expect(response.headers.get("content-type")).toBe("image/webp")
+    expect(response.headers.get("etag")).toMatch(/^"[0-9a-f]{64}"$/u)
+    expect(response.headers.get("set-cookie")).toBeNull()
+    expect(response.headers.get("x-internal-cache")).toBeNull()
     expect(storage.previewFetch).toHaveBeenCalledTimes(1)
     expect(storage.images.input).not.toHaveBeenCalled()
 
@@ -177,7 +212,7 @@ describe("Agent staged image API and lifecycle", () => {
     if (!internalRequest) throw new Error("Preview request is missing")
     expect(internalRequest.url).toMatch(
       new RegExp(
-        `^https://images\\.internal/v1/previews/agent-asset/asset-org-a/${assetId}/720\\?source=agent-etag-1&variant=webp%3Aq75%3Aanim0%3Av1$`,
+        `^https://images\\.internal/v1/previews/agent-asset/asset-org-a/${uploadedAsset.id}/720\\?source=agent-etag-1&variant=webp%3Aq75%3Aanim0%3Av1$`,
         "u"
       )
     )
@@ -186,38 +221,31 @@ describe("Agent staged image API and lifecycle", () => {
       /^organizations\/asset-org-a\/storage-objects\/[0-9a-f-]{36}$/u
     )
     expect(internalRequest.headers.get("x-preview-cache-ttl")).toBe("321")
+  })
 
-    const cached = await app.handle(assetRequest({ assetId }))
-    expect(cached.status).toBe(200)
-    expect(cached.headers.get("etag")).toBe(etag)
-    expect(storage.previewFetch).toHaveBeenCalledTimes(2)
-    expect(storage.images.input).not.toHaveBeenCalled()
+  it("一致するETagでpreviewを304へ再検証する", async () => {
+    const { app } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
+    const uploaded = await app.handle(
+      uploadRequest({ file: pngFile(), uploadId: "preview-revalidation" })
+    )
+    const assetId = v.parse(agentAssetDtoModel, await uploaded.json()).id
+    const first = await app.handle(assetRequest({ assetId }))
+    const etag = first.headers.get("etag")
+    if (!etag) throw new Error("Preview ETag is missing")
 
     const revalidated = await app.handle(
       assetRequest({ assetId, ifNoneMatch: etag })
     )
+
+    expect(first.status).toBe(200)
     expect(revalidated.status).toBe(304)
-    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
-
-    const unauthorized = await app.handle(
-      assetRequest({
-        assetId,
-        sessionId: "asset-session-b",
-        userId: "asset-user-b",
-      })
-    )
-    expect(unauthorized.status).toBe(404)
-    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
-
-    await db
-      .delete(schema.member)
-      .where(eq(schema.member.id, "asset-member-a-a"))
-    const membershipRevoked = await app.handle(assetRequest({ assetId }))
-    expect(membershipRevoked.status).toBe(404)
-    expect(storage.previewFetch).toHaveBeenCalledTimes(3)
+    expect(revalidated.headers.get("etag")).toBe(etag)
+    expect(storage.previewFetch).toHaveBeenCalledTimes(2)
   })
 
-  it("converges an identical upload retry and conflicts changed bytes", async () => {
+  it("同一upload再試行を収束し変更byteは競合させる", async () => {
     const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
@@ -265,7 +293,7 @@ describe("Agent staged image API and lifecycle", () => {
     expect(storage.put).toHaveBeenCalledTimes(1)
   })
 
-  it("revalidates live scope for a ready finalize retry and never cleans a concurrently finalized asset", async () => {
+  it("finalize再試行でactive organizationを再検証する", async () => {
     const { app, db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
@@ -281,13 +309,7 @@ describe("Agent staged image API and lifecycle", () => {
       .select()
       .from(schema.storageObjects)
       .where(eq(schema.storageObjects.id, asset?.storageObjectId ?? "missing"))
-    const [claim] = await db
-      .select()
-      .from(schema.storageObjectClaims)
-      .where(
-        eq(schema.storageObjectClaims.storageObjectId, object?.id ?? "missing")
-      )
-    if (!asset || !object || !claim || !object.etag) {
+    if (!asset || !object || !object.etag) {
       throw new Error("Ready asset fixture is incomplete")
     }
 
@@ -312,11 +334,12 @@ describe("Agent staged image API and lifecycle", () => {
         .from(schema.agentAssets)
         .where(eq(schema.agentAssets.id, assetId))
     ).toEqual([{ status: "ready" }])
+  })
 
-    await db
-      .update(schema.session)
-      .set({ activeOrganizationId: "asset-org-a", updatedAt: new Date() })
-      .where(eq(schema.session.id, "asset-session-a"))
+  it("stale pending snapshotで同時確定済みassetをcleanupしない", async () => {
+    const { app, db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
     const concurrentlyFinalized = await app.handle(
       uploadRequest({ file: pngFile(), uploadId: "concurrent-finalize" })
     )
@@ -384,14 +407,14 @@ describe("Agent staged image API and lifecycle", () => {
         .from(schema.storageObjects)
         .where(eq(schema.storageObjects.id, concurrentlyFinalizedObject.id))
     ).toEqual([{ status: "ready" }])
-    expect(await db.select().from(schema.storageObjectClaims)).toHaveLength(2)
+    expect(await db.select().from(schema.storageObjectClaims)).toHaveLength(1)
     expect(await db.select().from(schema.storageObjectCleanupJobs)).toEqual([])
     expect(await db.select().from(schema.organizationFileUsage)).toEqual([
-      expect.objectContaining({ temporaryBytes: 32, usedBytes: 32 }),
+      expect.objectContaining({ temporaryBytes: 16, usedBytes: 16 }),
     ])
   })
 
-  it("enforces the organization ready cap again inside finalization", async () => {
+  it("finalization内でorganization ready上限を再適用する", async () => {
     const { db } = await createFixture()
     await seedReadyAssetBatch(db, {
       count: AGENT_ASSET_MAX_READY_PER_ORGANIZATION - 1,
@@ -464,31 +487,47 @@ describe("Agent staged image API and lifecycle", () => {
     ).toEqual([{ status: "pending" }])
   })
 
-  it("rejects MIME, signature, unsupported, oversize, and quota violations before R2", async () => {
+  it.each([
+    {
+      createFile: () => pngFile("mismatch.jpg", { type: "image/jpeg" }),
+      label: "MIMEとsignatureの不一致",
+    },
+    {
+      createFile: () =>
+        new File(["not-an-image"], "fake.png", { type: "image/png" }),
+      label: "不正な画像signature",
+    },
+    {
+      createFile: () =>
+        new File(
+          [new Uint8Array([0, 0, 0, 24]), "ftyp", "avif"],
+          "unsupported.avif",
+          { type: "image/avif" }
+        ),
+      label: "未対応の画像形式",
+    },
+    {
+      createFile: () =>
+        pngFile("too-large.png", { size: AGENT_ASSET_MAX_BYTES + 1 }),
+      label: "上限を超えるfile size",
+    },
+  ])("$labelをR2書込前に拒否する", async ({ createFile }) => {
     const { db } = await createFixture()
     const storage = createRuntime()
     configureFileStorageRuntime(storage.runtime)
 
-    const invalid = [
-      pngFile("mismatch.jpg", { type: "image/jpeg" }),
-      new File(["not-an-image"], "fake.png", { type: "image/png" }),
-      new File(
-        [new Uint8Array([0, 0, 0, 24]), "ftyp", "avif"],
-        "unsupported.avif",
-        { type: "image/avif" }
-      ),
-      pngFile("too-large.png", { size: AGENT_ASSET_MAX_BYTES + 1 }),
-    ]
-    for (const [index, file] of invalid.entries()) {
-      // oxlint-disable-next-line no-await-in-loop -- each rejected case must leave the same DB/R2 baseline.
-      await expect(
-        uploadDirect(db, file, `invalid-${index}`)
-      ).rejects.toMatchObject({ code: "validation_error" })
-    }
+    await expect(
+      uploadDirect(db, createFile(), "invalid-input")
+    ).rejects.toMatchObject({ code: "validation_error" })
     expect(storage.put).not.toHaveBeenCalled()
     expect(await db.select().from(schema.storageObjects)).toEqual([])
     expect(await db.select().from(schema.agentAssets)).toEqual([])
+  })
 
+  it("organization quota超過をR2書込前に拒否してusageを保つ", async () => {
+    const { db } = await createFixture()
+    const storage = createRuntime()
+    configureFileStorageRuntime(storage.runtime)
     const quotaFile = pngFile("quota.png")
     await db.insert(schema.organizationFileUsage).values({
       organizationId: "asset-org-a",

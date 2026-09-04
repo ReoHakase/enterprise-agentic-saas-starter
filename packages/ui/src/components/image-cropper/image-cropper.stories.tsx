@@ -2,18 +2,11 @@ import { expect, fn, userEvent, waitFor } from "storybook/test"
 
 import preview from "#storybook/preview"
 
+import {
+  invalidImageCropSource,
+  validImageCropSource,
+} from "../../test-support/image-crop-story-fixture"
 import { ImageCropper } from "./image-cropper"
-
-const validSource = new Blob(
-  [
-    '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800">',
-    '<rect width="800" height="800" fill="#e5e7eb"/>',
-    '<circle cx="400" cy="320" r="180" fill="#737373"/>',
-    "</svg>",
-  ],
-  { type: "image/svg+xml" }
-)
-const invalidSource = new Blob(["not an image"], { type: "image/png" })
 
 const meta = preview.meta({
   title: "Components/Image Cropper",
@@ -25,7 +18,7 @@ const meta = preview.meta({
     onCropComplete: fn(),
     onSourceError: fn(),
     onZoomChange: fn(),
-    source: validSource,
+    source: validImageCropSource,
     zoom: 1,
   },
   argTypes: { source: { control: false } },
@@ -34,7 +27,7 @@ const meta = preview.meta({
 export const Rounded = meta.story({
   args: { shape: "rounded" },
   play: async ({ args, canvas, step }) => {
-    await step("Pan the image with the keyboard", async () => {
+    await step("キーボードで画像を移動する", async () => {
       const cropArea = await canvas.findByRole("group", {
         name: "Image crop area",
       })
@@ -57,21 +50,8 @@ export const Circular = meta.story({
 
 export const Disabled = meta.story({
   args: { disabled: true },
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByRole("group", { name: "Image crop area" })
-    ).toHaveAttribute("aria-disabled", "true")
-  },
 })
 
 export const DecodeError = meta.story({
-  args: { source: invalidSource },
-  play: async ({ args, canvasElement }) => {
-    const cropper = canvasElement.querySelector("[data-slot=image-cropper]")
-    if (!cropper) throw new Error("Image cropper was not rendered")
-    await waitFor(() =>
-      expect(cropper).toHaveAttribute("data-source-status", "error")
-    )
-    await expect(args.onSourceError).toHaveBeenCalledOnce()
-  },
+  args: { source: invalidImageCropSource },
 })

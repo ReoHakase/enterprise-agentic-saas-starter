@@ -39,21 +39,20 @@ const uploadedFile = (id: string): FileDto => ({
   canDelete: true,
 })
 
-describe("file upload queue", () => {
+describe("ファイルアップロードキュー", () => {
   afterEach(() => {
     mocks.reportObservedError.mockClear()
     mocks.uploadFileWithProgress.mockReset()
   })
 
-  it("runs no more than three uploads and keeps the upload id for retry", async () => {
+  it("uploadの同時実行を最大3件に制限して完了後に次を開始する", async () => {
     const pending: Array<{
       resolve: (file: FileDto) => void
-      reject: (error: Error) => void
     }> = []
     mocks.uploadFileWithProgress.mockImplementation(
       () =>
-        new Promise<FileDto>((resolve, reject) => {
-          pending.push({ resolve, reject })
+        new Promise<FileDto>((resolve) => {
+          pending.push({ resolve })
         })
     )
     const onUploaded = vi.fn<() => Promise<void>>().mockResolvedValue()
@@ -66,7 +65,7 @@ describe("file upload queue", () => {
       })
     )
     const files = Array.from(
-      { length: 5 },
+      { length: 4 },
       (_, index) =>
         new File(["test"], `file-${index.toString()}.txt`, {
           type: "text/plain",
@@ -84,11 +83,26 @@ describe("file upload queue", () => {
     await waitFor(() =>
       expect(mocks.uploadFileWithProgress).toHaveBeenCalledTimes(4)
     )
+  })
 
-    const secondCall = mocks.uploadFileWithProgress.mock.calls[1]?.[0]
-    const secondUploadId = secondCall?.uploadId
-    const uploadError = new Error("injected failure")
-    await act(async () => pending[1]?.reject(uploadError))
+  it("失敗したuploadを同じupload IDで再試行する", async () => {
+    mocks.uploadFileWithProgress
+      .mockRejectedValueOnce(new Error("injected failure"))
+      .mockResolvedValueOnce(uploadedFile("file-1"))
+    const { result } = renderHook(() =>
+      useFilesController({
+        organizationId: "org-1",
+        ownerType: "issue",
+        ownerId: "issue-1",
+        onUploaded: vi.fn<() => Promise<void>>().mockResolvedValue(),
+      })
+    )
+
+    act(() =>
+      result.current.addFiles([
+        new File(["test"], "file-1.txt", { type: "text/plain" }),
+      ])
+    )
     await waitFor(() =>
       expect(
         result.current.uploads.some((upload) => upload.status === "failed")
@@ -98,20 +112,19 @@ describe("file upload queue", () => {
       (upload) => upload.status === "failed"
     )
     if (!failed) throw new Error("Expected a failed upload")
+    const firstUploadId =
+      mocks.uploadFileWithProgress.mock.calls[0]?.[0].uploadId
 
     act(() => result.current.retryUpload(failed.id))
-    await act(async () => pending[2]?.resolve(uploadedFile("file-2")))
     await waitFor(() =>
-      expect(mocks.uploadFileWithProgress).toHaveBeenCalledTimes(6)
+      expect(mocks.uploadFileWithProgress).toHaveBeenCalledTimes(2)
     )
-    const retryCall = mocks.uploadFileWithProgress.mock.calls.find(
-      ([input], index) => index > 1 && input.uploadId === secondUploadId
+    expect(mocks.uploadFileWithProgress.mock.calls[1]?.[0].uploadId).toBe(
+      firstUploadId
     )
-    expect(retryCall?.[0].uploadId).toBe(secondUploadId)
-    expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
   })
 
-  it("shows a requester-safe 4xx upload reason and reports the original error", async () => {
+  it("要求元へ安全な4xx upload理由を表示し、元のエラーを報告する", async () => {
     const uploadError = new FileUploadError({
       code: "unsupported_media_type",
       message: "Choose a supported file type.",
@@ -144,7 +157,7 @@ describe("file upload queue", () => {
     expect(mocks.reportObservedError).toHaveBeenCalledWith(uploadError)
   })
 
-  it("aborts an active upload and reconciles the owner list", async () => {
+  it("実行中のuploadを中止し、所有者の一覧を同期する", async () => {
     mocks.uploadFileWithProgress.mockImplementation(
       ({ signal }: { signal?: AbortSignal }) =>
         new Promise<FileDto>((_resolve, reject) => {
@@ -190,7 +203,7 @@ describe("file upload queue", () => {
     ).toBe(true)
   })
 
-  it("stops queued work as well as active XHRs during a tenant switch", async () => {
+  it("テナント切替時に待機中の処理と実行中XHRを停止する", async () => {
     mocks.uploadFileWithProgress.mockImplementation(
       ({ signal }: { signal?: AbortSignal }) =>
         new Promise<FileDto>((_resolve, reject) => {

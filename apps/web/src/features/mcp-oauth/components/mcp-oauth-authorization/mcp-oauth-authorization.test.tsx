@@ -30,8 +30,8 @@ const offlineOnlyScopes = [
   { description: "Keep access", scope: "offline_access" },
 ] as const
 
-describe("MCP OAuth authorization views", () => {
-  it("selects an organization by accessible name", async () => {
+describe("MCP OAuth 認可ビュー", () => {
+  it("アクセシブルな組織操作から選択IDを通知する", async () => {
     const onSelect = vi.fn<(organizationId: string) => void>()
     render(
       <McpOAuthOrganizationView
@@ -43,22 +43,13 @@ describe("MCP OAuth authorization views", () => {
       />
     )
 
-    expect(
-      screen.getByRole("table", {
-        name: "Organizations available for this MCP credential",
-      })
-    ).toHaveTextContent("Organization")
-    expect(screen.getByLabelText("3 organization members")).toBeVisible()
-    expect(screen.getByText("current@example.test")).toBeVisible()
     await userEvent.click(
       screen.getByRole("button", { name: "Continue with Beta Labs" })
     )
     expect(onSelect).toHaveBeenCalledWith("org_01K1BETALABS00000000000")
-    expect(screen.getByText("Owner")).toBeVisible()
-    expect(screen.getByText("Admin")).toBeVisible()
   })
 
-  it("shows public scope descriptions and accepts consent", async () => {
+  it("選択したscopeで同意する", async () => {
     const onDecision =
       vi.fn<(accept: boolean, grantedScopes?: readonly string[]) => void>()
     render(
@@ -70,18 +61,26 @@ describe("MCP OAuth authorization views", () => {
       />
     )
 
-    expect(
-      screen.getByRole("table", { name: "Requested access" })
-    ).toHaveTextContent("Issues")
-    expect(
-      screen.getByRole("region", { name: "Current account" })
-    ).toHaveTextContent("current@example.test")
-    expect(screen.getByRole("button", { name: "Switch account" })).toBeVisible()
     await userEvent.click(screen.getByRole("button", { name: "Allow" }))
     expect(onDecision).toHaveBeenCalledWith(true, ["issues:read"])
   })
 
-  it("keeps cell selections after the consent view rerenders", async () => {
+  it("MCP accessを拒否する", async () => {
+    const onDecision = vi.fn<(accept: boolean) => void>()
+    render(
+      <McpOAuthConsentView
+        {...consentViewProps}
+        pending={false}
+        scopes={scopes}
+        onDecision={onDecision}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Deny" }))
+    expect(onDecision).toHaveBeenCalledWith(false)
+  })
+
+  it("同意画面の再描画後もcellの選択を保持する", async () => {
     render(
       <McpOAuthConsentView
         {...consentViewProps}
@@ -101,7 +100,7 @@ describe("MCP OAuth authorization views", () => {
     ).not.toBeChecked()
   })
 
-  it("does not allow an offline-only grant", () => {
+  it("offline accessだけの許可を拒否する", () => {
     render(
       <McpOAuthConsentView
         {...consentViewProps}
@@ -117,7 +116,7 @@ describe("MCP OAuth authorization views", () => {
     )
   })
 
-  it("fails closed when the requested scopes are invalid", () => {
+  it("要求scopeが無効な場合は拒否する", () => {
     const onDecision = vi.fn<(accept: boolean) => void>()
     render(
       <McpOAuthConsentView

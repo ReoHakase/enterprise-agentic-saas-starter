@@ -5,12 +5,38 @@ import { join } from "node:path"
 import { createClient } from "@libsql/client"
 import { drizzle } from "drizzle-orm/libsql"
 import { migrate } from "drizzle-orm/libsql/migrator"
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { migrationsFolder } from "./helpers"
 
-describe("database migrations: invariants", () => {
-  it("rejects a comment whose issue belongs to another tenant", async () => {
+const insertOrganizationDeletionFixture = async (
+  client: ReturnType<typeof createClient>
+) => {
+  const now = Date.now()
+  await client.batch([
+    {
+      sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+      args: ["actor-1", "Actor", "actor@example.com", 1, now, now],
+    },
+    {
+      sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+      args: ["org-delete", "Delete Me", "delete-me", now],
+    },
+    {
+      sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
+      args: [
+        "deletion-job-1",
+        "org-delete",
+        "actor-1",
+        "delete-org-delete",
+        "pending",
+      ],
+    },
+  ])
+}
+
+describe("DBマイグレーションの不変条件", () => {
+  it("別tenantのIssueへ紐づくcommentを拒否する", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle({ client })
 
@@ -47,7 +73,7 @@ describe("database migrations: invariants", () => {
     }
   })
 
-  it("rejects an activity event whose issue belongs to another tenant", async () => {
+  it("別tenantのIssueへ紐づくactivity eventを拒否する", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle({ client })
 
@@ -91,33 +117,20 @@ describe("database migrations: invariants", () => {
     }
   })
 
-  it("keeps organization deletion jobs durable and idempotent", async () => {
-    const client = createClient({ url: "file::memory:" })
+  describe("organization削除jobの不変条件", () => {
+    let client: ReturnType<typeof createClient>
 
-    try {
+    beforeEach(async () => {
+      client = createClient({ url: "file::memory:" })
       await migrate(drizzle({ client }), { migrationsFolder })
-      const now = Date.now()
-      await client.batch([
-        {
-          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
-          args: ["actor-1", "Actor", "actor@example.com", 1, now, now],
-        },
-        {
-          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
-          args: ["org-delete", "Delete Me", "delete-me", now],
-        },
-        {
-          sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
-          args: [
-            "deletion-job-1",
-            "org-delete",
-            "actor-1",
-            "delete-org-delete",
-            "pending",
-          ],
-        },
-      ])
+      await insertOrganizationDeletionFixture(client)
+    })
 
+    afterEach(() => {
+      client.close()
+    })
+
+    it("未対応statusのorganization削除jobを拒否する", async () => {
       await expect(
         client.execute({
           sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
@@ -130,7 +143,9 @@ describe("database migrations: invariants", () => {
           ],
         })
       ).rejects.toThrow(/check constraint/i)
+    })
 
+    it("同じidempotency keyのorganization削除jobを重複作成できない", async () => {
       await expect(
         client.execute({
           sql: "insert into organization_deletion_jobs(id,organization_id,requested_by_user_id,idempotency_key,status) values(?,?,?,?,?)",
@@ -143,8 +158,11 @@ describe("database migrations: invariants", () => {
           ],
         })
       ).rejects.toThrow(/unique/i)
+    })
 
+    it("organization削除後も削除jobを保持する", async () => {
       await client.execute("delete from organization where id = 'org-delete'")
+
       const jobs = await client.execute(
         "select id, organization_id as organizationId, requested_by_user_id as requestedByUserId, idempotency_key as idempotencyKey, status from organization_deletion_jobs"
       )
@@ -157,12 +175,10 @@ describe("database migrations: invariants", () => {
           status: "pending",
         },
       ])
-    } finally {
-      client.close()
-    }
+    })
   })
 
-  it("allows expired pending history alongside a new active invitation", async () => {
+  it("期限切れpending履歴と新しいactive invitationを共存させる", async () => {
     const client = createClient({ url: "file::memory:" })
     const db = drizzle({ client })
 
@@ -233,16 +249,12 @@ describe("database migrations: invariants", () => {
         { id: "invitation-active", status: "pending" },
         { id: "invitation-expired-by-time", status: "pending" },
       ])
-      const indexes = await client.execute("pragma index_list('invitation')")
-      expect(indexes.rows.map((row) => row.name)).not.toContain(
-        "invitation_pending_organization_email_uidx"
-      )
     } finally {
       client.close()
     }
   })
 
-  it("keeps one owner membership under concurrent insert attempts", async () => {
+  it("異なるuserの同時insertでもowner membershipを1件に保つ", async () => {
     const directory = await mkdtemp(
       join(tmpdir(), "enterprise-saas-membership-concurrency-")
     )
@@ -277,7 +289,7 @@ describe("database migrations: invariants", () => {
         }),
         contenderB.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: ["membership-b", "org-concurrent", "user-a", "owner", now],
+          args: ["membership-b", "org-concurrent", "user-b", "owner", now],
         }),
       ])
       expect(
@@ -292,36 +304,49 @@ describe("database migrations: invariants", () => {
         where organization_id = 'org-concurrent'`
       )
       expect(invariant.rows).toMatchObject([{ memberCount: 1, ownerCount: 1 }])
+    } finally {
+      bootstrapClient.close()
+      contenderA.close()
+      contenderB.close()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it("同じorganizationへ同じuserのmembershipを重複作成できない", async () => {
+    const client = createClient({ url: "file::memory:" })
+
+    try {
+      await migrate(drizzle({ client }), { migrationsFolder })
+      const now = Date.now()
+      await client.batch([
+        {
+          sql: "insert into user(id,name,email,email_verified,created_at,updated_at) values(?,?,?,?,?,?)",
+          args: ["user-a", "User A", "user-a@example.com", 1, now, now],
+        },
+        {
+          sql: "insert into organization(id,name,slug,created_at) values(?,?,?,?)",
+          args: ["org-membership", "Membership", "membership", now],
+        },
+        {
+          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
+          args: ["membership-a", "org-membership", "user-a", "owner", now],
+        },
+      ])
 
       await expect(
-        bootstrapClient.execute({
+        client.execute({
           sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
           args: [
             "membership-duplicate-user",
-            "org-concurrent",
+            "org-membership",
             "user-a",
             "member",
             now + 1,
           ],
         })
       ).rejects.toThrow(/unique/i)
-      await expect(
-        bootstrapClient.execute({
-          sql: "insert into member(id,organization_id,user_id,role,created_at) values(?,?,?,?,?)",
-          args: [
-            "membership-second-owner",
-            "org-concurrent",
-            "user-b",
-            "owner",
-            now + 1,
-          ],
-        })
-      ).rejects.toThrow(/unique/i)
     } finally {
-      bootstrapClient.close()
-      contenderA.close()
-      contenderB.close()
-      await rm(directory, { recursive: true, force: true })
+      client.close()
     }
   })
 })

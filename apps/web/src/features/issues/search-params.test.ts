@@ -19,44 +19,74 @@ const loadIssueSearchParams = createLoader(issueSearchParsers, {
   urlKeys: issueSearchUrlKeys,
 })
 
-describe("issue search params", () => {
-  it("uses unprefixed URL keys by default and supports two prefixed namespaces", () => {
+describe("Issue検索parameter", () => {
+  it("prefixなしでは公開URL keyを使う", () => {
     const defaultParams = createIssueTableSearchParams()
-    const organizationParams = createIssueTableSearchParams("org")
-    const projectParams = createIssueTableSearchParams("project")
 
     expect(defaultParams.urlKeys.q).toBe("q")
-    expect(organizationParams.urlKeys.q).toBe("org_q")
-    expect(projectParams.urlKeys.q).toBe("project_q")
-    expect(
-      organizationParams.serialize({
-        q: "billing",
-        statuses: ["open", "closed"],
-      })
-    ).toBe("?org_q=billing&org_status=open&org_status=closed")
-    expect(
-      projectParams.serialize({ q: "release", statuses: ["in_progress"] })
-    ).toBe("?project_q=release&project_status=in_progress")
   })
 
-  it("normalizes invalid, duplicate, and unordered URL values", () => {
-    const parsed = normalizeIssueSearchState(
-      loadIssueSearchParams(
-        "?status=closed&status=open&status=closed&status=deleted&priorityFrom=urgent&priorityTo=low&assignee=user-2&assignee=user-2&label=Bug&label=bug&dueFrom=2026-08-10&dueTo=2026-08-01&pageSize=25&page=100001"
-      )
-    )
+  it.each([
+    {
+      caseLabel: "組織table",
+      prefix: "org",
+      state: { q: "billing", statuses: ["open", "closed"] },
+      expected: "?org_q=billing&org_status=open&org_status=closed",
+    },
+    {
+      caseLabel: "プロジェクトtable",
+      prefix: "project",
+      state: { q: "release", statuses: ["in_progress"] },
+      expected: "?project_q=release&project_status=in_progress",
+    },
+  ])("$caseLabelではprefix付きURL keyを使う", ({ expected, prefix, state }) => {
+    const params = createIssueTableSearchParams(prefix)
+
+    expect(params.urlKeys.q).toBe(`${prefix}_q`)
+    expect(params.serialize(state)).toBe(expected)
+  })
+
+  it.each([
+    {
+      caseLabel: "status集合",
+      query: "?status=closed&status=open&status=closed&status=deleted",
+      expected: { statuses: ["open", "closed"] },
+    },
+    {
+      caseLabel: "逆転したpriority範囲",
+      query: "?priorityFrom=urgent&priorityTo=low",
+      expected: { priorityFrom: "low", priorityTo: "urgent" },
+    },
+    {
+      caseLabel: "重複したassignee集合",
+      query: "?assignee=user-2&assignee=user-2",
+      expected: { assignees: ["user-2"] },
+    },
+    {
+      caseLabel: "大文字小文字が重複したlabel集合",
+      query: "?label=Bug&label=bug",
+      expected: { labels: ["Bug"] },
+    },
+    {
+      caseLabel: "上限を超えるpage",
+      query: "?page=100001",
+      expected: {},
+    },
+    {
+      caseLabel: "未対応のpage size",
+      query: "?pageSize=25",
+      expected: {},
+    },
+  ])("$caseLabelを正規化する", ({ expected, query }) => {
+    const parsed = normalizeIssueSearchState(loadIssueSearchParams(query))
 
     expect(parsed).toEqual({
       ...defaultIssueSearchState,
-      statuses: ["open", "closed"],
-      priorityFrom: "low",
-      priorityTo: "urgent",
-      assignees: ["user-2"],
-      labels: ["Bug"],
+      ...expected,
     })
   })
 
-  it("rejects a reversed URL due range instead of detaching boundary offsets", () => {
+  it("境界offsetを分離せず逆転したURL期日範囲を拒否する", () => {
     const source = new URLSearchParams(
       "dueFrom=2026-03-09&dueTo=2026-03-07&dueFromOffset=240&dueToOffset=300&due=next_7_days"
     )
@@ -76,7 +106,7 @@ describe("issue search params", () => {
     )
   })
 
-  it("ignores legacy named due params and never serializes them", () => {
+  it("旧形式の名前付きdue parameterを無視してserializeしない", () => {
     const parsed = normalizeIssueSearchState(
       loadIssueSearchParams("?due=overdue")
     )
@@ -88,7 +118,7 @@ describe("issue search params", () => {
     expect(issueSearchUrlKeys).not.toHaveProperty("duePreset")
   })
 
-  it("ignores the removed singular priority key", () => {
+  it("削除された単一の優先順位キーを無視する", () => {
     const source = new URLSearchParams("priority=urgent")
     const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
 
@@ -97,7 +127,7 @@ describe("issue search params", () => {
     expect(toIssueListRequest("org-1", parsed).priorityFrom).toBeUndefined()
   })
 
-  it("uses the same normalized values for the API request and query key", () => {
+  it("APIリクエストとquery keyに同じ正規化済み値を使う", () => {
     const parsed = normalizeIssueSearchState(
       loadIssueSearchParams(
         "?q=%20billing%20&status=closed&status=open&priorityFrom=high&priorityTo=low&assignee=unassigned&assignee=user-2&label=bug&label=security&labelMode=all&due=overdue&sort=number&dir=asc&page=3&pageSize=50&agentThread=thread-9"
@@ -137,7 +167,7 @@ describe("issue search params", () => {
     })
   })
 
-  it("sends displayed local date bounds with their validated timezone offset", () => {
+  it("表示したローカル日付境界を検証済みtimezone offset付きで送信する", () => {
     const state = {
       ...defaultIssueSearchState,
       dueFrom: "2026-07-27",
@@ -175,38 +205,39 @@ describe("issue search params", () => {
         dueToOffset: -480,
       },
     })
-    const removed = new URLSearchParams(
+  })
+
+  it("廃止済みdueOffsetを無視する", () => {
+    const source = new URLSearchParams(
       "dueFrom=2026-07-27&dueTo=2026-08-02&dueOffset=-540"
     )
     expect(
-      normalizeIssueSearchState(loadIssueSearchParams(removed))
-    ).toMatchObject({
-      dueFromOffset: 0,
-      dueToOffset: 0,
-    })
-    const invalid = new URLSearchParams(
-      "dueFrom=2026-07-27&dueTo=2026-08-02&dueFromOffset=900&dueToOffset=-900"
-    )
-    expect(
-      normalizeIssueSearchState(loadIssueSearchParams(invalid))
+      normalizeIssueSearchState(loadIssueSearchParams(source))
     ).toMatchObject({
       dueFromOffset: 0,
       dueToOffset: 0,
     })
   })
 
-  it("bounds canonical assignee and label arrays before building the API request", () => {
+  it("範囲外のtimezone offsetを拒否する", () => {
+    const source = new URLSearchParams(
+      "dueFrom=2026-07-27&dueTo=2026-08-02&dueFromOffset=900&dueToOffset=-900"
+    )
+    expect(
+      normalizeIssueSearchState(loadIssueSearchParams(source))
+    ).toMatchObject({
+      dueFromOffset: 0,
+      dueToOffset: 0,
+    })
+  })
+
+  it("APIリクエスト構築前にassignee配列を50件へ制限する", () => {
     const assignees = Array.from(
       { length: 51 },
       (_, index) => `user-${(50 - index).toString().padStart(2, "0")}`
     )
-    const labels = Array.from(
-      { length: 21 },
-      (_, index) => `label-${(20 - index).toString().padStart(2, "0")}`
-    )
     const source = new URLSearchParams()
     for (const assignee of assignees) source.append("assignee", assignee)
-    for (const label of labels) source.append("label", label)
     const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
     const request = toIssueListRequest("org-1", parsed)
 
@@ -217,6 +248,25 @@ describe("issue search params", () => {
         (_, index) => `user-${index.toString().padStart(2, "0")}`
       )
     )
+    const serialized = new URLSearchParams(
+      serializeIssueSearchParams({
+        ...defaultIssueSearchState,
+        assignees,
+      })
+    )
+    expect(serialized.getAll("assignee")).toHaveLength(50)
+  })
+
+  it("APIリクエスト構築前にlabel配列を20件へ制限する", () => {
+    const labels = Array.from(
+      { length: 21 },
+      (_, index) => `label-${(20 - index).toString().padStart(2, "0")}`
+    )
+    const source = new URLSearchParams()
+    for (const label of labels) source.append("label", label)
+    const parsed = normalizeIssueSearchState(loadIssueSearchParams(source))
+    const request = toIssueListRequest("org-1", parsed)
+
     expect(request.labels).toHaveLength(20)
     expect(request.labels).toEqual(
       Array.from(
@@ -227,18 +277,19 @@ describe("issue search params", () => {
     const serialized = new URLSearchParams(
       serializeIssueSearchParams({
         ...defaultIssueSearchState,
-        assignees,
         labels,
       })
     )
-    expect(serialized.getAll("assignee")).toHaveLength(50)
     expect(serialized.getAll("label")).toHaveLength(20)
   })
 
-  it("omits defaults and preserves the private Agent thread on reset", () => {
+  it("デフォルト状態はIssue一覧URLへqueryを追加しない", () => {
     expect(serializeIssueSearchParams("/issues", defaultIssueSearchState)).toBe(
       "/issues"
     )
+  })
+
+  it("table状態をリセットしてもAgent threadを保持する", () => {
     const current = {
       ...defaultIssueSearchState,
       statuses: ["open"],
@@ -252,6 +303,9 @@ describe("issue search params", () => {
       ...defaultIssueSearchState,
       agentThread: "thread-9",
     })
+  })
+
+  it("別featureのURLへAgent threadを追加する", () => {
     expect(withAgentThreadHref("/organization/acme/members", "thread-9")).toBe(
       "/organization/acme/members?agentThread=thread-9"
     )

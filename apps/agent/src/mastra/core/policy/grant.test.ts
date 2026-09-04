@@ -26,8 +26,8 @@ const connection = (): AgentConnection => ({
   thread: { id: "thread_1", title: "Thread" },
 })
 
-describe("private connection grants", () => {
-  it("accepts only canonical future opaque grants", () => {
+describe("private接続grant", () => {
+  it("正規かつ未来期限のopaque grantだけを受け入れる", () => {
     expect(isActiveOpaqueGrant(GRANT, connection().expiresAt, NOW)).toBe(true)
     expect(isActiveOpaqueGrant("short", connection().expiresAt, NOW)).toBe(
       false
@@ -39,7 +39,7 @@ describe("private connection grants", () => {
     expect(isActiveOpaqueGrant(GRANT, "2026-07-22T00:01:00Z", NOW)).toBe(false)
   })
 
-  it("binds the capability to the exact valid thread", () => {
+  it("capabilityを正確な有効threadへ束縛する", () => {
     expect(toLiveConnectionGrant(connection(), "thread_1", NOW)).toEqual({
       grant: GRANT,
       expiresAt: "2026-07-22T00:01:00.000Z",

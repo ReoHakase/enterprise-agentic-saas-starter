@@ -5,7 +5,7 @@ import { setRequiredAuthEnvironment } from "../test-support/environment"
 const setRequiredEnv = (mailpitUrl: string) =>
   setRequiredAuthEnvironment({ mailpitUrl })
 
-describe("authentication email environment", () => {
+describe("認証メールの環境設定", () => {
   beforeEach(() => {
     vi.resetModules()
   })
@@ -14,7 +14,7 @@ describe("authentication email environment", () => {
     vi.unstubAllEnvs()
   })
 
-  it("accepts the same configurable Mailpit endpoint as the API", async () => {
+  it("APIと同じ変更可能なMailpit URLを受理する", async () => {
     setRequiredEnv(" https://mailpit.enterprise-agentic-saas.localhost ")
 
     const { env } = await import("./env")
@@ -25,7 +25,7 @@ describe("authentication email environment", () => {
     )
   })
 
-  it("uses Mailpit without requiring copied local environment files", async () => {
+  it("ローカル環境ファイルを複製せずMailpitの既定値を使う", async () => {
     setRequiredEnv("")
     vi.stubEnv("EMAIL_PROVIDER", "")
     vi.stubEnv("EMAIL_FROM", "")
@@ -43,7 +43,7 @@ describe("authentication email environment", () => {
     ["test", "noop"],
     ["production", "cloudflare"],
   ] as const)(
-    "uses the %s runtime default provider %s",
+    "%sランタイムでは%sプロバイダーを既定にする",
     async (nodeEnv, expectedProvider) => {
       setRequiredEnv("")
       vi.stubEnv("NODE_ENV", nodeEnv)
@@ -56,7 +56,7 @@ describe("authentication email environment", () => {
     }
   )
 
-  it("rejects a malformed Mailpit endpoint before auth initialization", async () => {
+  it("認証初期化前に不正なMailpit URLを拒否する", async () => {
     setRequiredEnv("not-a-url")
     const consoleError = vi
       .spyOn(console, "error")
@@ -71,7 +71,7 @@ describe("authentication email environment", () => {
     }
   })
 
-  it("uses emulator-only defaults without reading real GitHub credentials", async () => {
+  it("実GitHub認証情報を読まずエミュレーター専用の既定値を使う", async () => {
     setRequiredEnv("")
     vi.stubEnv(
       "GITHUB_OAUTH_EMULATOR_URL",
@@ -98,7 +98,7 @@ describe("authentication email environment", () => {
     "http://localhost:4001/emulate/gitlab",
     "http://user:secret@localhost:4001",
     "http://localhost:4001?token=secret",
-  ])("rejects the unsafe emulator URL %s", async (emulatorUrl) => {
+  ])("安全でないエミュレーターURLを拒否する %s", async (emulatorUrl) => {
     setRequiredEnv("")
     vi.stubEnv("GITHUB_OAUTH_EMULATOR_URL", emulatorUrl)
 
@@ -107,7 +107,7 @@ describe("authentication email environment", () => {
     )
   })
 
-  it("fails closed when the emulator is configured in production", async () => {
+  it("本番でエミュレーターが設定された場合は起動を拒否する", async () => {
     setRequiredEnv("")
     vi.stubEnv("NODE_ENV", "production")
     vi.stubEnv(
@@ -120,7 +120,7 @@ describe("authentication email environment", () => {
     )
   })
 
-  it("requires HTTPS for the production Better Auth origin", async () => {
+  it("本番のBetter Auth originにHTTPSを要求する", async () => {
     setRequiredEnv("")
     vi.stubEnv("NODE_ENV", "production")
     vi.stubEnv("BETTER_AUTH_URL", "http://api.example.test")

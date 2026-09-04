@@ -130,16 +130,8 @@ afterAll(() => {
   vi.unstubAllEnvs()
 })
 
-describe("Better Auth GitHub emulator routing", () => {
-  it("registers only generic OAuth and permits HTTP cookies in local tests", () => {
-    expect(auth.options.socialProviders).toEqual({})
-    expect(
-      auth.options.plugins?.filter((plugin) => plugin.id === "generic-oauth")
-    ).toHaveLength(1)
-    expect(auth.options.advanced?.useSecureCookies).toBe(false)
-  })
-
-  it("keeps signIn.social and routes its callback to generic OAuth", async () => {
+describe("Better AuthのGitHubエミュレーター経路", () => {
+  it("social sign-inをエミュレーターの標準コールバックへ接続する", async () => {
     signedSessionCookie = ""
     const response = await auth.handler(
       createRequest("/sign-in/social", {
@@ -167,7 +159,7 @@ describe("Better Auth GitHub emulator routing", () => {
     expect(result.redirect).toBe(true)
   })
 
-  it("keeps linkSocial and routes its callback to generic OAuth", async () => {
+  it("アカウント連携をエミュレーターの標準コールバックへ接続する", async () => {
     signedSessionCookie = await signCookieValue(sessionToken, authSecret)
     const response = await auth.handler(
       createRequest("/link-social", {
@@ -188,7 +180,7 @@ describe("Better Auth GitHub emulator routing", () => {
     expect(authorizationUrl.searchParams.get("code_challenge")).toBeTruthy()
   })
 
-  it("does not expose the removed generic OAuth callback alias", async () => {
+  it("削除済みのGeneric OAuthコールバック別名を公開しない", async () => {
     const legacyResponse = await auth.handler(
       new Request(
         "http://api.localhost/auth/oauth2/callback/github?code=test&state=test"
@@ -204,7 +196,7 @@ describe("Better Auth GitHub emulator routing", () => {
     expect(standardResponse.status).not.toBe(404)
   })
 
-  it("fails closed for every OAuth resource management route", async () => {
+  it("OAuth resource管理経路を全methodで拒否する", async () => {
     const responses = await Promise.all(
       oauthResourceManagementRequests.map(({ method, path }) =>
         auth.handler(

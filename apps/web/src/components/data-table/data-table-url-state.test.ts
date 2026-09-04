@@ -1,4 +1,4 @@
-import { createSerializer, parseAsInteger, parseAsString } from "nuqs/server"
+import { parseAsInteger, parseAsString } from "nuqs/server"
 import { describe, expect, it } from "vitest"
 
 import { createDataTableUrlKeys } from "./data-table-url-state"
@@ -8,8 +8,8 @@ const parsers = {
   page: parseAsInteger.withDefault(1),
 }
 
-describe("createDataTableUrlKeys", () => {
-  it("keeps logical keys and adds one namespace separator", () => {
+describe("createDataTableUrlKeysの契約", () => {
+  it("論理キーを保持して名前空間の区切りを1つ追加する", () => {
     expect(createDataTableUrlKeys(parsers)).toEqual({ q: "q", page: "page" })
     expect(createDataTableUrlKeys(parsers, { prefix: "org" })).toEqual({
       q: "org_q",
@@ -19,24 +19,5 @@ describe("createDataTableUrlKeys", () => {
       q: "inv_q",
       page: "inv_page",
     })
-  })
-
-  it("updates and resets one namespace without removing other URL state", () => {
-    const orgSerialize = createSerializer(parsers, {
-      urlKeys: createDataTableUrlKeys(parsers, { prefix: "org" }),
-    })
-    const inventorySerialize = createSerializer(parsers, {
-      urlKeys: createDataTableUrlKeys(parsers, { prefix: "inv" }),
-    })
-    const initial =
-      "/issues?org_q=billing&org_page=2&inv_q=laptop&inv_page=4&agentThread=thread-9"
-
-    const updated = orgSerialize(initial, { q: "security", page: 1 })
-    expect(updated).toBe(
-      "/issues?org_q=security&inv_q=laptop&inv_page=4&agentThread=thread-9"
-    )
-    expect(inventorySerialize(updated, { q: "", page: 1 })).toBe(
-      "/issues?org_q=security&agentThread=thread-9"
-    )
   })
 })

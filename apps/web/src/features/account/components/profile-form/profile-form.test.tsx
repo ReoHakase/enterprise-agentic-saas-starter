@@ -41,13 +41,13 @@ const renderProfile = () => {
   )
 }
 
-describe("ProfileForm", () => {
+describe("ProfileFormの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.updateMe.mockResolvedValue(user)
   })
 
-  it("updates the display name and refreshes the server view", async () => {
+  it("表示名を更新してサーバー側の表示を再取得する", async () => {
     const actor = userEvent.setup()
     mocks.updateMe.mockResolvedValue({ ...user, name: "Reo" })
     renderProfile()
@@ -65,7 +65,7 @@ describe("ProfileForm", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile updated")
   })
 
-  it("keeps input and displays the public field error", async () => {
+  it("入力を保持して公開可能なフィールドエラーを表示する", async () => {
     const actor = userEvent.setup()
     mocks.updateMe.mockRejectedValueOnce(
       httpError(400, "validation_error", {
@@ -94,7 +94,7 @@ describe("ProfileForm", () => {
     expect(name).toHaveAttribute("aria-invalid", "false")
   })
 
-  it("keeps an unknown failure at form level without exposing its message", async () => {
+  it("未知のエラーは詳細を公開せずフォーム全体のエラーとして保持する", async () => {
     const actor = userEvent.setup()
     mocks.updateMe.mockRejectedValueOnce(
       new Error("libsql://secret-token@private.example.test")

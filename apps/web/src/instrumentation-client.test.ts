@@ -93,8 +93,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
-describe("browser OpenTelemetry registration", () => {
-  it("registers local traces, logs, identity, and browser instrumentation once", async () => {
+describe("ブラウザーのOpenTelemetry登録", () => {
+  it("ローカルtrace・log・identityとブラウザーinstrumentationを1回だけ登録する", async () => {
     const { registerClientObservability } =
       await import("./instrumentation-client")
 
@@ -119,24 +119,24 @@ describe("browser OpenTelemetry registration", () => {
 
   it.each([
     [
-      "production",
+      "本番環境",
       "production",
       "https://otel.enterprise-agentic-saas.localhost",
       "session-1",
     ],
     [
-      "remote endpoint",
+      "remote endpointの指定",
       "development",
       "https://remote.example.test",
       "session-1",
     ],
     [
-      "missing identity",
+      "identityの欠落",
       "development",
       "https://otel.enterprise-agentic-saas.localhost",
       "",
     ],
-  ])("stays disabled for %s", async (_, nodeEnv, endpoint, sessionId) => {
+  ])("%sでは無効のままにする", async (_, nodeEnv, endpoint, sessionId) => {
     vi.stubEnv("NODE_ENV", nodeEnv)
     telemetry.clientEnv.NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT = endpoint
     telemetry.clientEnv.NEXT_PUBLIC_DEV_SESSION_ID = sessionId

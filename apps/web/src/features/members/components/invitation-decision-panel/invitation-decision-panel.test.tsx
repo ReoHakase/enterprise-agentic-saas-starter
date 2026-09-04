@@ -88,13 +88,13 @@ const renderPanel = (panel: React.ReactNode) => {
   )
 }
 
-describe("InvitationDecisionPanel", () => {
+describe("InvitationDecisionPanelの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.decideInvitation.mockResolvedValue(undefined)
   })
 
-  it("offers account creation and sign-in while preserving the invitation return path", () => {
+  it("招待の戻り先を保持しつつアカウント作成・サインインを提示する", () => {
     renderPanel(
       <InvitationDecisionPanel invitationId="invitation-1" state="signed_out" />
     )
@@ -111,7 +111,7 @@ describe("InvitationDecisionPanel", () => {
     )
   })
 
-  it("blocks a mismatched account and offers switch or add-account paths", async () => {
+  it("一致しないアカウントを拒否し、切替・追加経路を提示する", async () => {
     const actor = userEvent.setup()
     renderPanel(
       <InvitationDecisionPanel
@@ -137,7 +137,7 @@ describe("InvitationDecisionPanel", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("Device accounts")
   })
 
-  it("keeps invitation decisions inert until hydration", async () => {
+  it("ハイドレーションまで招待への判断操作を無効にする", async () => {
     const container = document.createElement("div")
     const panel = (
       <QueryClientProvider client={new QueryClient()}>
@@ -175,7 +175,7 @@ describe("InvitationDecisionPanel", () => {
     })
   })
 
-  it("shows organization context and accepts only from the matching account", async () => {
+  it("組織contextを表示し、一致するアカウントからだけ承諾する", async () => {
     const actor = userEvent.setup()
     renderPanel(
       <InvitationDecisionPanel
@@ -207,7 +207,7 @@ describe("InvitationDecisionPanel", () => {
     expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
-  it("returns to sign-in with the invitation path when the session expires during acceptance", async () => {
+  it("承諾中にセッションが切れた場合は招待の戻り先付きでサインインへ戻す", async () => {
     const actor = userEvent.setup()
     mocks.decideInvitation.mockRejectedValueOnce(
       Object.assign(new Error("session expired"), { status: 401 })
@@ -239,7 +239,7 @@ describe("InvitationDecisionPanel", () => {
     expect(mocks.replace).not.toHaveBeenCalled()
   })
 
-  it("explains terminal invitations without exposing an accept action", () => {
+  it("承諾操作を表示せず終了済みの招待を説明する", () => {
     renderPanel(
       <InvitationDecisionPanel
         currentUserEmail={currentUser.email}
@@ -257,7 +257,7 @@ describe("InvitationDecisionPanel", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("offers a safe retry for transient invitation lookup failures", async () => {
+  it("一時的な招待取得失敗に安全な再試行を提示する", async () => {
     const actor = userEvent.setup()
     renderPanel(
       <InvitationDecisionPanel

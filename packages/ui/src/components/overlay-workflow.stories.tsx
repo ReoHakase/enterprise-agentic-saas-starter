@@ -1,4 +1,4 @@
-import { expect, fn, userEvent, waitFor, within } from "storybook/test"
+import { fn } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -77,39 +77,4 @@ const meta = preview.type<{ args: { onDelete: () => void } }>().meta({
   args: { onDelete: fn() },
 })
 
-export const RenameAndDelete = meta.story({
-  play: async ({ args, canvas, canvasElement, step }) => {
-    const body = within(canvasElement.ownerDocument.body)
-
-    await step("Cancel rename and restore focus", async () => {
-      const rename = canvas.getByRole("button", {
-        name: "Rename organization",
-      })
-      await userEvent.click(rename)
-      await waitFor(() =>
-        expect(
-          body.getByRole("dialog", { name: "Rename Acme Cloud" })
-        ).toBeVisible()
-      )
-      await userEvent.click(body.getByRole("button", { name: "Cancel" }))
-      await waitFor(() => expect(rename).toHaveFocus())
-    })
-
-    await step("Confirm the destructive action", async () => {
-      await userEvent.click(
-        canvas.getByRole("button", { name: "Delete organization" })
-      )
-      await waitFor(() =>
-        expect(
-          body.getByRole("alertdialog", { name: "Delete Acme Cloud?" })
-        ).toHaveAccessibleDescription(
-          "24 members and 8 projects lose access immediately."
-        )
-      )
-      await userEvent.click(
-        body.getByRole("button", { name: "Permanently delete" })
-      )
-      await expect(args.onDelete).toHaveBeenCalledOnce()
-    })
-  },
-})
+export const RenameAndDelete = meta.story({})

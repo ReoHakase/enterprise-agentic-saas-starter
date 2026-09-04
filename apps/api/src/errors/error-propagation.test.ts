@@ -5,8 +5,8 @@ import { insertOrganizationWithOwner } from "../modules/organizations/repository
 import { findUserProfile } from "../modules/users/repository"
 import { HttpError } from "./http-error"
 
-describe("repository error propagation", () => {
-  it("preserves an unknown error instance for the terminal handler", async () => {
+describe("repository errorの伝播", () => {
+  it("terminal handlerへ未知error instanceを維持する", async () => {
     const cause = new Error("database sentinel")
     const db = testDb()
     vi.spyOn(db, "select").mockImplementation(() => {
@@ -16,7 +16,7 @@ describe("repository error propagation", () => {
     await expect(findUserProfile(db, "user-1")).rejects.toBe(cause)
   })
 
-  it("wraps a recognized constraint once and retains its exact cause", async () => {
+  it("認識済みconstraintを1回だけwrapして同一causeを維持する", async () => {
     const cause = new Error("UNIQUE constraint failed: organization.slug")
     const db = testDb()
     vi.spyOn(db, "transaction").mockImplementation(async () => {

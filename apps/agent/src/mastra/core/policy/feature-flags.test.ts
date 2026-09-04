@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { readAgentFeatureSwitches } from "./feature-flags"
 
-describe("readAgentFeatureSwitches", () => {
-  it("fails closed when switches are absent or malformed", () => {
+describe("readAgentFeatureSwitchesの契約", () => {
+  it("switchがないか不正な場合は安全側に失敗する", () => {
     expect(readAgentFeatureSwitches({})).toEqual({
       runs: false,
       vision: false,
@@ -18,7 +18,7 @@ describe("readAgentFeatureSwitches", () => {
     ).toEqual({ runs: false, vision: false, writes: false })
   })
 
-  it("enables only the explicit numeric flag", () => {
+  it("明示した数値flagだけを有効にする", () => {
     expect(
       readAgentFeatureSwitches({
         AGENT_RUNS_ENABLED: "1",

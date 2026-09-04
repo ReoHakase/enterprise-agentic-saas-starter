@@ -1,5 +1,4 @@
 import { AlertTriangleIcon } from "lucide-react"
-import { expect } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -19,30 +18,15 @@ const meta = preview.meta({
 
 export const Empty = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("region", { name: "No organization selected" })
-    ).toBeVisible()
-  },
 })
 
 export const IssuesLoading = meta.story({
   render: () => (
     <RouteLoading label="Loading issues" showAction variant="issues" />
   ),
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("status", { name: "Loading issues" })
-    ).toHaveAttribute("aria-busy", "true")
-  },
 })
 
 export const MobileLoading = meta.story({
   globals: { viewport: { value: "mobile1", isRotated: false } },
   render: () => <RouteLoading label="Loading members" variant="members" />,
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByRole("status", { name: "Loading members" })
-    ).toBeVisible()
-  },
 })

@@ -35,7 +35,7 @@ const invalidChatContexts: ReadonlyArray<{
 }> = [
   {
     code: "unauthorized",
-    label: "expired session",
+    label: "期限切れsession",
     mutate: (db) =>
       db
         .update(schema.session)
@@ -44,13 +44,13 @@ const invalidChatContexts: ReadonlyArray<{
   },
   {
     code: "not_found",
-    label: "revoked membership",
+    label: "失効membership",
     mutate: (db) =>
       db.delete(schema.member).where(eq(schema.member.id, "agent-member-a-1")),
   },
   {
     code: "unauthorized",
-    label: "different active organization",
+    label: "異なるactive organization",
     mutate: (db) =>
       db
         .update(schema.session)
@@ -59,14 +59,14 @@ const invalidChatContexts: ReadonlyArray<{
   },
   {
     code: "unauthorized",
-    label: "different thread",
+    label: "異なるthread",
     mutate: () => Promise.resolve(),
     threadId: "different-thread",
   },
 ]
 
-describe("Agent ticket and execution lifecycle", () => {
-  it("atomically consumes a ticket and starts exactly one chat run", async () => {
+describe("Agent ticketと実行lifecycle", () => {
+  it("ticketを原子的にconsumeしてchat runを正確に1つ開始する", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -112,7 +112,7 @@ describe("Agent ticket and execution lifecycle", () => {
   })
 
   it.each(invalidChatContexts)(
-    "rejects $label without consuming the connection ticket",
+    "connection ticketをconsumeせず$labelを拒否する",
     async ({ code, mutate, threadId: requestedThreadId }) => {
       const { db } = await createFixture()
       const thread = await createAgentThreadForSession(db, {
@@ -138,7 +138,7 @@ describe("Agent ticket and execution lifecycle", () => {
     }
   )
 
-  it("rolls back ticket consumption when asset binding rejects the run", async () => {
+  it("asset bindingがrunを拒否した場合にticket消費をrollbackする", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -161,7 +161,7 @@ describe("Agent ticket and execution lifecycle", () => {
     })
   })
 
-  it("rolls back ticket consumption when run persistence fails", async () => {
+  it("run永続化失敗時にticket消費をrollbackする", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -190,7 +190,7 @@ describe("Agent ticket and execution lifecycle", () => {
     })
   })
 
-  it("rolls back ticket consumption when model quota rejects the run", async () => {
+  it("model quotaがrunを拒否した場合にticket消費をrollbackする", async () => {
     const { db } = await createFixture()
     const now = new Date()
     const window = utcUsageWindow(now, AGENT_USAGE_HOUR_MS)
@@ -236,7 +236,7 @@ describe("Agent ticket and execution lifecycle", () => {
     })
   })
 
-  it("creates one execution lease for concurrent starts of one message", async () => {
+  it("1 messageの同時startへexecution leaseを1つ作る", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",
@@ -282,7 +282,7 @@ describe("Agent ticket and execution lifecycle", () => {
     expect(runs).toEqual([{ attempt: 1, id: expect.any(String) }])
   })
 
-  it("retries a failed logical run with a fresh attempt and grant", async () => {
+  it("失敗したlogical runを新しいattemptとgrantで再試行する", async () => {
     const { db } = await createFixture()
     const thread = await createAgentThreadForSession(db, {
       sessionId: "agent-session-a",

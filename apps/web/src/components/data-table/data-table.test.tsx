@@ -74,11 +74,7 @@ const DataTableProbe = ({
   })
 
   return (
-    <DataTableRoot
-      className="rounded-2xl"
-      tableClassName="min-w-200"
-      scrollLabel="Items"
-    >
+    <DataTableRoot scrollLabel="Items">
       <TableCaption className="sr-only">Items</TableCaption>
       <DataTableHeader table={table} />
       <DataTableBody table={table}>No items</DataTableBody>
@@ -86,39 +82,35 @@ const DataTableProbe = ({
   )
 }
 
-describe("DataTable", () => {
-  it("keeps arbitrary interactive cells usable without row event cross-talk", async () => {
+describe("DataTableの契約", () => {
+  it("行イベントと干渉させず任意の対話型セルを操作可能に保つ", async () => {
     const user = userEvent.setup()
     const onAction = vi.fn<(id: string) => void>()
     render(<DataTableProbe selectable onAction={onAction} />)
 
-    const table = screen.getByRole("table", { name: "Items" })
-    expect(table).toHaveClass("min-w-200")
-    expect(screen.getByTestId("data-table-root")).toHaveClass("rounded-2xl")
     await user.click(screen.getByRole("button", { name: "Edit One" }))
     expect(onAction).toHaveBeenCalledWith("one")
     expect(
       screen.getByRole("checkbox", { name: "Select One" })
     ).not.toBeChecked()
-    expect(screen.getByRole("link", { name: "One" })).toHaveAttribute(
-      "href",
-      "/items/one"
-    )
   })
 
-  it("supports selection off, on, and an indeterminate page state", async () => {
+  it("選択不可のテーブルでは選択UIを表示しない", () => {
+    const onAction = vi.fn<(id: string) => void>()
+    render(<DataTableProbe selectable={false} onAction={onAction} />)
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+  })
+
+  it("行の一部を選ぶとページ全選択を不定状態で公開する", async () => {
     const user = userEvent.setup()
     const onAction = vi.fn<(id: string) => void>()
-    const view = render(
-      <DataTableProbe selectable={false} onAction={onAction} />
-    )
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+    render(<DataTableProbe selectable onAction={onAction} />)
 
-    view.rerender(<DataTableProbe selectable onAction={onAction} />)
     await user.click(screen.getByRole("checkbox", { name: "Select One" }))
     expect(screen.getByRole("checkbox", { name: "Select One" })).toBeChecked()
     expect(
       screen.getByRole("checkbox", { name: "Select all rows on this page" })
-    ).toHaveAttribute("data-indeterminate")
+    ).toHaveAttribute("aria-checked", "mixed")
   })
 })

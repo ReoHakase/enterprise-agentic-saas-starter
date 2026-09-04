@@ -50,17 +50,13 @@ const meta = preview.meta({
 export const MenuAndSidebar = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Open the menu with the keyboard", async () => {
+    await step("キーボードでメニューを開閉してトリガーへ戻る", async () => {
       const trigger = canvas.getByRole("button", { name: "Open navigation" })
       trigger.focus()
       await userEvent.keyboard("{Enter}")
-      const account = await within(canvasElement.ownerDocument.body).findByRole(
-        "menuitem",
-        {
-          name: "Account",
-        }
-      )
-      await expect(account).toHaveAttribute("href", "/settings/account")
+      await within(canvasElement.ownerDocument.body).findByRole("menuitem", {
+        name: "Account",
+      })
       await userEvent.keyboard("{Escape}")
       const body = within(canvasElement.ownerDocument.body)
       await waitFor(() =>

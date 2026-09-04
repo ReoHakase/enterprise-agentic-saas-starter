@@ -28,8 +28,8 @@ const activeOrganization = {
   },
 } satisfies OrganizationSummary
 
-describe("ConsoleNavigation", () => {
-  it("shows workspace routes without a dedicated Agent link", () => {
+describe("コンソールナビゲーション", () => {
+  it("専用Agentリンクを持たないワークスペースルートを表示する", () => {
     render(
       <SidebarProvider>
         <ConsoleNavigation

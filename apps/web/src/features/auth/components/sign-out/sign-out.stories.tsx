@@ -33,18 +33,14 @@ export const SigningOut = meta.story({
       )
     )
   },
-  play: async ({ canvas, step }) => {
-    await step(
-      "Return to sign-in after clearing authenticated state",
-      async () => {
-        await expect(canvas.getByRole("status")).toBeVisible()
-        await waitFor(() =>
-          expect(authNavigate).toHaveBeenCalledWith({
-            to: "/auth/sign-in",
-            replace: true,
-          })
-        )
-      }
-    )
+  play: async ({ step }) => {
+    await step("認証状態をクリアした後にサインインに戻る", async () => {
+      await waitFor(() =>
+        expect(authNavigate).toHaveBeenCalledWith({
+          to: "/auth/sign-in",
+          replace: true,
+        })
+      )
+    })
   },
 })

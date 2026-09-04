@@ -39,8 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe("Agent failure capture", () => {
-  it("keeps traces raw-free and correlates the fixed local log", () => {
+describe("Agent失敗capture", () => {
+  it("traceからraw dataを除外して固定local logを関連付ける", () => {
     createAgentFailureCapture(local)("model_failed")
 
     expect(telemetry.setAttribute).toHaveBeenCalledWith(
@@ -64,7 +64,7 @@ describe("Agent failure capture", () => {
     })
   })
 
-  it("observes resume storage cleanup with only its fixed code", () => {
+  it("固定codeだけでresume storage cleanupを観測する", () => {
     createAgentFailureCapture(local)("resume_storage_close_failed")
 
     expect(telemetry.setAttribute).toHaveBeenCalledWith(
@@ -87,7 +87,7 @@ describe("Agent failure capture", () => {
     )
   })
 
-  it("does not let span or log sink failures replace the application failure", () => {
+  it("spanまたはlog sink失敗にapplication失敗を置換させない", () => {
     telemetry.setAttribute.mockImplementationOnce(() => {
       throw new Error("span unavailable")
     })
@@ -99,7 +99,7 @@ describe("Agent failure capture", () => {
     expect(telemetry.setStatus).toHaveBeenCalledWith({ code: 2 })
   })
 
-  it("does not emit local logs outside the fixed local endpoint", () => {
+  it("固定local endpoint外ではlocal logを出力しない", () => {
     createAgentFailureCapture({
       ...local,
       OTEL_EXPORTER_OTLP_ENDPOINT: "https://remote.example.test",

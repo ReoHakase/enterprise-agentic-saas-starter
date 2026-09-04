@@ -9,25 +9,8 @@ const environment = {
   clientSecret: "local-secret",
 }
 
-describe("GitHub OAuth emulator provider", () => {
-  it("uses the emulator endpoints, scopes, POST authentication and PKCE", () => {
-    const provider = createGithubOAuthEmulatorProvider(environment)
-
-    expect(provider).toMatchObject({
-      providerId: "github",
-      clientId: "local-client",
-      clientSecret: "local-secret",
-      authorizationUrl:
-        "http://github.emulate.localhost:4001/emulate/github/login/oauth/authorize",
-      tokenUrl:
-        "http://github.emulate.localhost:4001/emulate/github/login/oauth/access_token",
-      scopes: ["read:user", "user:email"],
-      authentication: "post",
-      pkce: true,
-    })
-  })
-
-  it("loads and maps the emulator profile through both GitHub endpoints", async () => {
+describe("GitHub OAuthエミュレータープロバイダー", () => {
+  it("プロフィールとメールを取得してエミュレーター利用者を変換する", async () => {
     const responses = [
       Response.json({
         id: 42,

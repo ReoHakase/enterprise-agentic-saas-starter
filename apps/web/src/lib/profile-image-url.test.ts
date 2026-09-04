@@ -7,8 +7,8 @@ import {
 
 const apiBaseUrl = "https://api.enterprise-agentic-saas.example"
 
-describe("profile image URL boundary", () => {
-  it("allows the deterministic DiceBear URL used by development seed", () => {
+describe("プロフィール画像 URL 境界", () => {
+  it("開発用初期データで使う決定的なDiceBear URLを許可する", () => {
     const profileImageUrl =
       "https://api.dicebear.com/10.x/lorelei/svg?seed=10000000-0000-4000-8000-000000000001"
 
@@ -18,7 +18,7 @@ describe("profile image URL boundary", () => {
     expect(isFirstPartyProfileImageUrl(profileImageUrl, apiBaseUrl)).toBe(false)
   })
 
-  it("resolves and identifies a first-party profile image route", () => {
+  it("first-partyプロフィール画像ルートを解決・識別する", () => {
     const profileImagePath =
       "/files/profile-images/users/user-1?v=profile-image-user-1-2"
     expect(getSafeProfileImageUrl(profileImagePath, apiBaseUrl)).toBe(
@@ -31,7 +31,7 @@ describe("profile image URL boundary", () => {
     "http://127.0.0.1:3001",
     "http://api.enterprise-agentic-saas.localhost:3001",
   ])(
-    "allows a first-party profile image on a local HTTP API: %s",
+    "ローカルHTTP API %sでfirst-partyプロフィール画像を許可する",
     (baseUrl) => {
       const profileImagePath = "/files/profile-images/users/user-1"
       expect(getSafeProfileImageUrl(profileImagePath, baseUrl)).toBe(
@@ -41,7 +41,7 @@ describe("profile image URL boundary", () => {
     }
   )
 
-  it("rejects a first-party profile image on a non-local HTTP API", () => {
+  it("非ローカルHTTP APIではfirst-partyプロフィール画像を拒否する", () => {
     const baseUrl = "http://api.example.test"
     const profileImagePath = "/files/profile-images/users/user-1"
     expect(getSafeProfileImageUrl(profileImagePath, baseUrl)).toBeUndefined()
@@ -54,11 +54,11 @@ describe("profile image URL boundary", () => {
     "https://avatars.example.test/user-id.png",
     "https://api.enterprise-agentic-saas.example/files/organizations/org-1",
     "not-a-url",
-  ])("rejects an unsafe profile image URL: %s", (profileImageUrl) => {
+  ])("安全でないプロフィール画像URLを拒否する: %s", (profileImageUrl) => {
     expect(getSafeProfileImageUrl(profileImageUrl, apiBaseUrl)).toBeUndefined()
   })
 
-  it("rejects credentials embedded in the API base URL", () => {
+  it("API ベース URL に埋め込まれた認証情報を拒否する", () => {
     const credentialedBaseUrl =
       "https://user:password@api.enterprise-agentic-saas.example"
     const profileImagePath = "/files/profile-images/users/user-1"

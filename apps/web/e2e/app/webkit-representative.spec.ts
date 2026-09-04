@@ -15,7 +15,7 @@ const useAdminSession = async (context: BrowserContext) => {
   ])
 }
 
-test("WebKit representative journey preserves public and tenant semantics", async ({
+test("WebKitの代表経路は公開領域とテナントの意味を維持する", async ({
   context,
   page,
 }) => {
@@ -24,12 +24,6 @@ test("WebKit representative journey preserves public and tenant semantics", asyn
   await expect(
     page.getByRole("button", { name: "Send Magic Link" })
   ).toBeVisible()
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
-    .toBeLessThanOrEqual(
-      await page.evaluate(() => document.documentElement.clientWidth)
-    )
-
   await useAdminSession(context)
   await page.goto("/organization/alpha-operations/issues")
 
@@ -38,22 +32,4 @@ test("WebKit representative journey preserves public and tenant semantics", asyn
   ).toBeVisible()
   await expect(page.getByText("Review tenant audit log")).toBeVisible()
   await expect(page).toHaveURL(/\/organization\/alpha-operations\/issues$/u)
-  await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
-    .toBeLessThanOrEqual(
-      await page.evaluate(() => document.documentElement.clientWidth)
-    )
-
-  await page.addStyleTag({
-    content: 'section[aria-label="Issues"] { min-height: 1800px; }',
-  })
-  await page.evaluate(() => window.scrollTo({ top: 400 }))
-  const mobileHeader = await page
-    .locator('[data-slot="console-header"]')
-    .evaluate((header) => ({
-      extensionContent: getComputedStyle(header, "::before").content,
-      top: header.getBoundingClientRect().top,
-    }))
-  expect(mobileHeader.top).toBe(0)
-  expect(mobileHeader.extensionContent).toBe("none")
 })

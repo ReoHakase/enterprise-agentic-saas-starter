@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { errorPlugin } from "./error"
 import { requestIdPlugin, trustedRequestId } from "./request-id"
 
-describe("trustedRequestId", () => {
+describe("trustedRequestIdの契約", () => {
   it("安全なcorrelation idを維持する", () => {
     expect(trustedRequestId("req_01.test:api")).toBe("req_01.test:api")
   })

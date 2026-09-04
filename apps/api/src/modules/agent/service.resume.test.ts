@@ -74,8 +74,8 @@ const useFakeAbortSignalTimeout = () =>
     return controller.signal
   })
 
-describe("Agent action resume transport", () => {
-  it("aborts a stalled Agent runtime before the resume ticket expires", async () => {
+describe("Agent action resume transportの契約", () => {
+  it("resume ticket期限前に停止したAgent runtimeを中断する", async () => {
     vi.useFakeTimers()
     const timeout = useFakeAbortSignalTimeout()
     const runtime = stalledRuntime()
@@ -101,7 +101,7 @@ describe("Agent action resume transport", () => {
     expect(timeout).toHaveBeenCalledWith(50_000)
   })
 
-  it("forwards caller cancellation without exposing its cause", async () => {
+  it("causeを公開せずcaller cancellationを転送する", async () => {
     const runtime = stalledRuntime()
     const service = createAgentService(createPorts(runtime.fetchAgentRuntime))
     const controller = new AbortController()

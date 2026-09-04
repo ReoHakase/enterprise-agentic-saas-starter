@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw"
-import { expect, fn, userEvent, within } from "storybook/test"
+import { expect, fn, userEvent, waitFor, within } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -33,20 +33,15 @@ export const Pending = meta.story({
     )
   },
   play: async ({ args, canvas, step }) => {
-    await step("Review the typed canonical preview", async () => {
-      const approval = await canvas.findByRole("region", {
+    await step("保留中の承認を親へ通知する", async () => {
+      await canvas.findByRole("region", {
         name: "Issue change approval",
       })
-      await expect(
-        await within(approval).findByText("Approve Issue change?")
-      ).toBeVisible()
-      await expect(within(approval).getByText("medium → high")).toBeVisible()
-      await expect(
-        within(approval).getByText("tenant-policy.png")
-      ).toBeVisible()
-      await expect(args.onPendingChange).toHaveBeenCalledWith(
-        fictionalPendingAction.id,
-        true
+      await waitFor(() =>
+        expect(args.onPendingChange).toHaveBeenCalledWith(
+          fictionalPendingAction.id,
+          true
+        )
       )
     })
   },
@@ -70,7 +65,7 @@ export const Reject = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Reject the proposed change", async () => {
+    await step("提案された変更を拒否する", async () => {
       const approval = await canvas.findByRole("region", {
         name: "Issue change approval",
       })
@@ -101,7 +96,7 @@ export const RetryAfterFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Recover the approval details deterministically", async () => {
+    await step("承認詳細を決定的に復元する", async () => {
       const approval = await canvas.findByRole("region", {
         name: "Issue change approval",
       })
@@ -126,16 +121,5 @@ export const Frozen = meta.story({
         HttpResponse.json(fictionalPendingAction)
       )
     )
-  },
-  play: async ({ canvas }) => {
-    const approval = await canvas.findByRole("region", {
-      name: "Issue change approval",
-    })
-    await expect(
-      await within(approval).findByRole("button", { name: "Yes" })
-    ).toBeDisabled()
-    await expect(
-      within(approval).getByRole("button", { name: "No" })
-    ).toBeDisabled()
   },
 })

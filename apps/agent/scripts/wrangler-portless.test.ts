@@ -12,8 +12,8 @@ const localEnvironment = {
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
 }
 
-describe("Agent Wrangler Portless launcher", () => {
-  it("passes the worktree storage origin and local token to Wrangler", () => {
+describe("Agent Wrangler Portless起動器", () => {
+  it("worktreeのstorage originとlocal tokenをWranglerへ渡す", () => {
     expect(createWranglerArguments(localEnvironment)).toEqual([
       "dev",
       "--port",
@@ -37,7 +37,7 @@ describe("Agent Wrangler Portless launcher", () => {
     ])
   })
 
-  it("accepts an explicit inspector port", () => {
+  it("明示したinspector portを受け入れる", () => {
     expect(
       createWranglerArguments({
         ...localEnvironment,
@@ -70,7 +70,7 @@ describe("Agent Wrangler Portless launcher", () => {
       },
       "OTEL_EXPORTER_OTLP_ENDPOINT must be http://127.0.0.1:4318",
     ],
-  ])("rejects unsafe environment input", (environment, message) => {
+  ])("安全でないenvironment入力を拒否する", (environment, message) => {
     expect(() => createWranglerArguments(environment)).toThrow(message)
   })
 })

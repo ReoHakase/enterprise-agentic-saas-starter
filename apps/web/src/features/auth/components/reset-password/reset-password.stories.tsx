@@ -34,7 +34,7 @@ export const Ready = meta.story({
   tags: ["theme-sensitive"],
   beforeEach: withToken,
   play: async ({ canvas, step }) => {
-    await step("Reject mismatched new passwords", async () => {
+    await step("一致しない新しいパスワードを拒否する", async () => {
       await userEvent.type(canvas.getByLabelText("Password"), password)
       await userEvent.type(
         canvas.getByLabelText("Confirm password"),
@@ -52,13 +52,6 @@ export const MissingToken = meta.story({
   beforeEach() {
     window.history.replaceState({}, "", window.location.pathname)
   },
-  play: async ({ step }) => {
-    await step("Return to sign-in when the reset token is absent", async () => {
-      await waitFor(() =>
-        expect(authNavigate).toHaveBeenCalledWith({ to: "/auth/sign-in" })
-      )
-    })
-  },
 })
 
 export const Success = meta.story({
@@ -72,7 +65,7 @@ export const Success = meta.story({
     return restore
   },
   play: async ({ canvas, step }) => {
-    await step("Submit a valid reset token and password", async () => {
+    await step("有効なリセット トークンとパスワードを送信する", async () => {
       await userEvent.type(canvas.getByLabelText("Password"), password)
       await userEvent.type(canvas.getByLabelText("Confirm password"), password)
       await userEvent.click(

@@ -15,8 +15,8 @@ type WranglerConfig = {
   workers_dev?: unknown
 }
 
-describe("Images Worker Wrangler configuration", () => {
-  it("is private and enables caching only with the required bindings", async () => {
+describe("Images WorkerのWrangler設定", () => {
+  it("privateを維持して必須bindingがある場合だけcacheを有効にする", async () => {
     const path = resolve(import.meta.dirname, "../wrangler.jsonc")
     const parsed = parseConfigFileTextToJson(path, await readFile(path, "utf8"))
     if (parsed.error) throw new Error("Failed to parse wrangler.jsonc")

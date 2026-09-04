@@ -13,8 +13,8 @@ import {
   shouldRetryConsoleQuery,
 } from "./error"
 
-describe("console API error presentation", () => {
-  it("reads the native public status and code without wrapping the error", () => {
+describe("コンソール API エラー表示", () => {
+  it("エラーを包み直さずnativeのstatusとcodeを読み取る", () => {
     const error = httpError(403, "step_up_required", {
       message: "Recent authentication is required.",
     })
@@ -25,7 +25,7 @@ describe("console API error presentation", () => {
     ).toBe("Recent authentication is required.")
   })
 
-  it("uses fixed action copy for server failures", () => {
+  it("サーバー障害には固定の操作文言を使う", () => {
     expect(
       presentConsoleApiError(
         httpError(500, "internal_error"),
@@ -38,7 +38,7 @@ describe("console API error presentation", () => {
     })
   })
 
-  it("never presents an arbitrary Error message", () => {
+  it("未検証のError.messageを表示しない", () => {
     expect(
       presentConsoleApiError(
         new Error("libsql://token@private.example.test"),
@@ -51,7 +51,7 @@ describe("console API error presentation", () => {
     })
   })
 
-  it("presents only bounded public field errors from a 4xx response", () => {
+  it("4xxレスポンスから上限付きの公開可能なフィールドエラーだけを表示する", () => {
     const error = httpError(400, "validation_error", {
       fieldErrors: {
         __proto__: ["unsafe"],
@@ -70,7 +70,7 @@ describe("console API error presentation", () => {
     )
   })
 
-  it("does not present server-controlled details for a 5xx response", () => {
+  it("5xxレスポンスではサーバー指定の詳細を表示しない", () => {
     const error = httpError(500, "internal_error", {
       fieldErrors: { token: ["private"] },
       message: "provider token=private",
@@ -83,7 +83,7 @@ describe("console API error presentation", () => {
     })
   })
 
-  it("presents only the bounded message carried by the XHR upload adapter", () => {
+  it("XHR upload adapterが渡す上限付きメッセージだけを表示する", () => {
     expect(
       presentConsoleApiError(
         new FileUploadError({
@@ -106,7 +106,7 @@ describe("console API error presentation", () => {
     ).toBe("Upload failed")
   })
 
-  it("handles throwing property access without replacing the error", () => {
+  it("エラーを置き換えずにプロパティ アクセスのスローを処理する", () => {
     const error = new Proxy(new Error("provider detail"), {
       get() {
         throw new Error("getter failed")
@@ -119,7 +119,7 @@ describe("console API error presentation", () => {
     )
   })
 
-  it("clears only the edited local field state", () => {
+  it("編集されたローカルフィールドのみを不変更新でクリアする", () => {
     const fieldErrors = {
       name: ["Choose another name."],
       slug: ["Choose another slug."],
@@ -129,16 +129,22 @@ describe("console API error presentation", () => {
 
     expect(nextFieldErrors).toEqual({ slug: ["Choose another slug."] })
     expect(fieldErrors).toHaveProperty("name")
-    expect(clearConsoleApiFieldError(nextFieldErrors, "missing")).toBe(
-      nextFieldErrors
-    )
-    expect(hasConsoleApiFieldError(nextFieldErrors, ["name", "slug"])).toBe(
-      true
-    )
-    expect(hasConsoleApiFieldError(nextFieldErrors, ["name"])).toBe(false)
   })
 
-  it("retries network and server failures once but never retries API 4xx", () => {
+  it("指定フィールドがなければ同じエラー状態を返す", () => {
+    const fieldErrors = { slug: ["Choose another slug."] }
+
+    expect(clearConsoleApiFieldError(fieldErrors, "missing")).toBe(fieldErrors)
+  })
+
+  it("指定フィールドに公開可能なエラーが残るか判定する", () => {
+    const fieldErrors = { slug: ["Choose another slug."] }
+
+    expect(hasConsoleApiFieldError(fieldErrors, ["name", "slug"])).toBe(true)
+    expect(hasConsoleApiFieldError(fieldErrors, ["name"])).toBe(false)
+  })
+
+  it("network・server障害は1回再試行し、API 4xxは再試行しない", () => {
     const badRequest = httpError(400, "validation_error")
     const unavailable = httpError(503, "service_unavailable")
 

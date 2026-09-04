@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { projectAgentE2EHistory } from "./agent-e2e-projection"
 
-describe("paid Agent E2E history projection", () => {
+describe("有料Agent E2E履歴の表示用変換", () => {
   it.each([
     "providerMetadata",
     "callProviderMetadata",
@@ -12,7 +12,7 @@ describe("paid Agent E2E history projection", () => {
     "rawBody",
     "rawResponse",
     "responseText",
-  ])("detects the private provider field %s", (key) => {
+  ])("プロバイダーの非公開フィールド%sを検出する", (key) => {
     const projection = projectAgentE2EHistory(
       { nested: { [key]: "PRIVATE_PROVIDER_SENTINEL" } },
       true
@@ -25,7 +25,7 @@ describe("paid Agent E2E history projection", () => {
     })
   })
 
-  it("bounds cyclic input without serializing it", () => {
+  it("循環入力をシリアル化せずに制限する", () => {
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
 
@@ -35,7 +35,7 @@ describe("paid Agent E2E history projection", () => {
     })
   })
 
-  it("projects persisted assistant text and public sources without copying either", () => {
+  it("保存済みアシスタント本文と公開情報源を複製せずに表示用変換する", () => {
     const projection = projectAgentE2EHistory(
       {
         messages: [
@@ -64,7 +64,7 @@ describe("paid Agent E2E history projection", () => {
     expect(JSON.stringify(projection)).not.toContain("example.com")
   })
 
-  it("projects the expected get_issue priority without copying private output", () => {
+  it("非公開出力を複製せずに期待するget_issue優先度を表示用変換する", () => {
     const projection = projectAgentE2EHistory(
       {
         messages: [
@@ -104,7 +104,7 @@ describe("paid Agent E2E history projection", () => {
     expect(JSON.stringify(projection)).not.toMatch(/PRIVATE_(?:ISSUE|TOOL)_/u)
   })
 
-  it("does not accept a non-urgent get_issue output", () => {
+  it("緊急でないget_issue出力は受け入れない", () => {
     expect(
       projectAgentE2EHistory(
         {
@@ -122,7 +122,7 @@ describe("paid Agent E2E history projection", () => {
     })
   })
 
-  it("distinguishes an incomplete get_issue call from a missing part", () => {
+  it("不完全なget_issue呼び出しと欠落している部分を区別する", () => {
     expect(
       projectAgentE2EHistory(
         {

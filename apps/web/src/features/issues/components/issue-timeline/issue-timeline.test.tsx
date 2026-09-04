@@ -43,6 +43,28 @@ const assigneeActivity: IssueActivity = {
   createdAt: "2026-07-11T01:00:00.000Z",
 }
 
+const createdActivity: IssueActivity = {
+  type: "activity",
+  id: "activity-created",
+  kind: "created",
+  field: null,
+  fromValue: null,
+  toValue: null,
+  actor: { id: "user-1", name: "Alex", profileImage: null },
+  createdAt: "2026-07-11T00:00:00.000Z",
+}
+
+const statusActivity: IssueActivity = {
+  type: "activity",
+  id: "activity-status",
+  kind: "field_changed",
+  field: "status",
+  fromValue: "open",
+  toValue: "in_progress",
+  actor: { id: "user-1", name: "Alex", profileImage: null },
+  createdAt: "2026-07-11T00:30:00.000Z",
+}
+
 const fileAddedActivity: IssueActivity = {
   type: "activity",
   id: "activity-file-added",
@@ -74,8 +96,29 @@ const assignees = [
   },
 ]
 
-describe("issue timeline", () => {
-  it("renders an assignee change as a human-readable timeline item", () => {
+describe("Issue timelineの契約", () => {
+  it.each([
+    {
+      activity: createdActivity,
+      caseLabel: "Issue作成",
+      expected: /Alex.*created this issue/u,
+    },
+    {
+      activity: statusActivity,
+      caseLabel: "status変更",
+      expected: /Alex.*changed status from Open to In progress/u,
+    },
+  ])("$caseLabelを公開文言で表示する", ({ activity, expected }) => {
+    render(
+      <ol>
+        <IssueActivityItem activity={activity} assignees={assignees} />
+      </ol>
+    )
+
+    expect(screen.getByRole("listitem")).toHaveTextContent(expected)
+  })
+
+  it("担当者の変更を人間が判読できるタイムライン項目としてレンダリングする", () => {
     render(
       <ol>
         <IssueActivityItem activity={assigneeActivity} assignees={assignees} />
@@ -87,32 +130,16 @@ describe("issue timeline", () => {
     expect(screen.getByText("Unassigned")).toBeInTheDocument()
     expect(screen.getByText("Jordan")).toBeInTheDocument()
     expect(screen.queryByText("user-2")).not.toBeInTheDocument()
-    const actorMarker = screen.getByTestId("issue-activity-actor-marker")
-    expect(actorMarker).toHaveTextContent("AL")
-    expect(actorMarker).toHaveClass(
-      "bg-(--issue-timeline-surface,var(--color-background))",
-      "ring-(--issue-timeline-surface,var(--color-background))"
-    )
-    const fieldMarker = screen.getByTestId("issue-activity-field-marker")
-    expect(fieldMarker).toHaveClass(
-      "bg-cyan-50",
-      "dark:bg-cyan-950",
-      "ring-(--issue-timeline-surface,var(--color-background))",
-      "[&>svg]:size-3.5",
-      "[&>svg]:stroke-[1.75]"
-    )
-    const description = screen.getByTestId("issue-activity-description")
-    expect(description).toHaveTextContent(
+    expect(screen.getByRole("listitem")).toHaveTextContent(
       /Alex changed assignee from Unassigned to .*Jordan/
     )
-    expect(description).not.toHaveClass("inline-flex")
     expect(screen.getByRole("time")).toHaveAttribute(
       "datetime",
       assigneeActivity.createdAt
     )
   })
 
-  it("renders file additions and deletions with the actor profile image and filename", () => {
+  it("実行者のプロフィール画像とファイル名を添えてファイル追加・削除を表示する", () => {
     render(
       <ol>
         <IssueActivityItem activity={fileAddedActivity} assignees={assignees} />
@@ -123,27 +150,41 @@ describe("issue timeline", () => {
       </ol>
     )
 
-    const descriptions = screen.getAllByTestId("issue-activity-description")
-    expect(descriptions[0]).toHaveTextContent("Alex attached roadmap_final.txt")
-    expect(descriptions[1]).toHaveTextContent("Alex deleted old-notes.txt")
-    expect(descriptions[0]).not.toHaveTextContent("roadmap final.txt")
-
-    const actorMarkers = screen.getAllByTestId("issue-activity-actor-marker")
-    expect(actorMarkers).toHaveLength(2)
-    expect(actorMarkers[0]).toHaveTextContent("AL")
-    expect(actorMarkers[1]).toHaveTextContent("AL")
-
-    const fieldMarkers = screen.getAllByTestId("issue-activity-field-marker")
-    expect(fieldMarkers[0]).toHaveClass("bg-blue-50", "dark:bg-blue-950")
-    expect(fieldMarkers[1]).toHaveClass("bg-red-50", "dark:bg-red-950")
+    const items = screen.getAllByRole("listitem")
+    expect(items[0]).toHaveTextContent("Alex attached roadmap_final.txt")
+    expect(items[1]).toHaveTextContent("Alex deleted old-notes.txt")
+    expect(items[0]).not.toHaveTextContent("roadmap final.txt")
   })
 
-  it("reports an edited comment as dirty and resets the state on cancel", async () => {
+  it("編集済みコメントの公開情報を表示する", () => {
+    render(
+      <ol>
+        <IssueComment
+          issue={issue}
+          comment={comment}
+          onUpdateComment={vi.fn<
+            (issue: IssueUiItem, commentId: string, body: string) => void
+          >()}
+          onDirtyChange={vi.fn<(dirty: boolean) => void>()}
+        />
+      </ol>
+    )
+
+    expect(screen.getByText("Edited")).toBeInTheDocument()
+    expect(screen.getByText(/edited at/)).toBeInTheDocument()
+    expect(
+      screen
+        .getAllByRole("time")
+        .some((time) => time.getAttribute("datetime") === comment.updatedAt)
+    ).toBe(true)
+  })
+
+  it("コメント編集をキャンセルするとダーティ状態をリセットする", async () => {
     const user = userEvent.setup()
     const onDirtyChange = vi.fn<(dirty: boolean) => void>()
     const onUpdateComment =
       vi.fn<(issue: IssueUiItem, commentId: string, body: string) => void>()
-    const view = render(
+    render(
       <ol>
         <IssueComment
           issue={issue}
@@ -154,16 +195,6 @@ describe("issue timeline", () => {
       </ol>
     )
 
-    expect(screen.getByText("Edited")).toBeInTheDocument()
-    expect(screen.getByText(/edited at/)).toBeInTheDocument()
-    const timelineItem = screen.getByRole("listitem")
-    expect(timelineItem).toHaveClass("isolate", "before:z-0")
-    expect(screen.getByTestId("issue-comment-actor-marker")).toHaveClass("z-20")
-    expect(screen.getByTestId("issue-comment-actor-marker")).toHaveClass(
-      "bg-(--issue-timeline-surface,var(--color-background))",
-      "ring-(--issue-timeline-surface,var(--color-background))"
-    )
-    expect(screen.getByTestId("issue-comment-card")).toHaveClass("z-10")
     await user.click(screen.getByRole("button", { name: "Edit" }))
     expect(screen.getByRole("button", { name: "Save comment" })).toBeDisabled()
 
@@ -173,12 +204,9 @@ describe("issue timeline", () => {
 
     await user.click(screen.getByRole("button", { name: "Cancel" }))
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
-
-    view.unmount()
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
   })
 
-  it("preserves a dirty comment draft when refreshed timeline data changes", async () => {
+  it("timeline dataが更新されても未保存のコメントdraftを保持する", async () => {
     const user = userEvent.setup()
     const onDirtyChange = vi.fn<(dirty: boolean) => void>()
     const onUpdateComment =

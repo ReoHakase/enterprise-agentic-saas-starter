@@ -45,10 +45,10 @@ const createInput = (): RuntimeSwitchInput => ({
   uploadsRef: { current: new Map() },
 })
 
-describe("useAgentRuntimeSwitches", () => {
+describe("useAgentRuntimeSwitchesの契約", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("awaits authoritative Stop before a thread switch and preserves the session on failure", async () => {
+  it("権威あるStopの完了を待ってからスレッドを切り替え、失敗時はセッションを保持する", async () => {
     let settleStop: ((settled: boolean) => void) | undefined
     const stop = vi
       .fn<() => Promise<boolean>>()
@@ -102,7 +102,7 @@ describe("useAgentRuntimeSwitches", () => {
     expect(input.stopThreadUploads).toHaveBeenCalledWith("thread_1")
   })
 
-  it("uses server context revocation for organization switch without issuing Stop", () => {
+  it("Stopを呼び出さず組織切替ではサーバーコンテキストを取り消す", () => {
     const stop = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
     const abortTransport = vi.fn<() => void>()
     const close = vi.fn<() => void>()
@@ -127,7 +127,7 @@ describe("useAgentRuntimeSwitches", () => {
     expect(input.contextFenceRef.current).toBe(1)
   })
 
-  it("leaves a pending approval with its thread during a normal switch", async () => {
+  it("通常の切替では保留中の承認をスレッドに残す", async () => {
     const stop = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
     const close = vi.fn<() => void>()
     const input = createInput()
@@ -154,7 +154,7 @@ describe("useAgentRuntimeSwitches", () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
-  it("does not translate pane unmount into Stop", () => {
+  it("ペインのアンマウントをStopへ変換しない", () => {
     const stop = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
     const close = vi.fn<() => void>()
     const input = createInput()

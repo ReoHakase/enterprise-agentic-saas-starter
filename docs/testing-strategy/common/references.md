@@ -18,6 +18,15 @@ last_reviewed: 2026-07-26
 - Kent C. Dodds, Write tests. Not too many. Mostly integration.
   - https://kentcdodds.com/blog/write-tests
 
+## BDDとテストケース設計
+
+- Seb Rose, Keep your scenarios BRIEF
+  - https://cucumber.io/blog/bdd/keep-your-scenarios-brief/
+- UIのテストへGiven-When-Thenを適用する考察
+  - https://zenn.dev/m10maeda/articles/gwt-might-feel-more-natural-than-3a-for-ui-testing
+- Testing Library guiding principles
+  - https://testing-library.com/docs/guiding-principles/
+
 ## Storybook
 
 - Next.js with Vite
@@ -48,6 +57,10 @@ last_reviewed: 2026-07-26
 
 ## Vitest
 
+- Test API
+  - https://vitest.dev/api/test
+- Mocking
+  - https://vitest.dev/guide/mocking.html
 - Browser Mode
   - https://vitest.dev/guide/browser/
 - Component testing

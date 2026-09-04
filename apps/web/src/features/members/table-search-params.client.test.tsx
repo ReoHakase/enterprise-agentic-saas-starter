@@ -63,8 +63,56 @@ const Probe = () => {
   )
 }
 
-describe("member and invitation table search state", () => {
-  it("keeps the unprefixed member and inv-prefixed invitation namespaces isolated", async () => {
+describe("メンバーと招待テーブルの検索状態", () => {
+  it("prefixなしのメンバーとinv prefixの招待検索語を読み分ける", () => {
+    render(
+      <NuqsTestingAdapter searchParams="q=alice&inv_q=bob">
+        <Probe />
+      </NuqsTestingAdapter>
+    )
+
+    expect(screen.getByLabelText("member search")).toHaveTextContent("alice")
+    expect(screen.getByLabelText("invitation search")).toHaveTextContent("bob")
+  })
+
+  it.each([
+    {
+      caseLabel: "メンバーfilterを招待の名前空間から分離する",
+      action: "Filter members",
+      expected: { roles: "admin", inv_q: "bob" },
+      absent: ["inv_roles"],
+    },
+    {
+      caseLabel: "招待filterをメンバーの名前空間から分離する",
+      action: "Filter invitations",
+      expected: { inv_statuses: "pending", q: "alice" },
+      absent: ["statuses"],
+    },
+    {
+      caseLabel: "メンバーsortを招待の名前空間から分離する",
+      action: "Sort members",
+      expected: { sort: "role", dir: "desc", inv_q: "bob" },
+      absent: ["inv_sort", "inv_dir"],
+    },
+    {
+      caseLabel: "招待sortをメンバーの名前空間から分離する",
+      action: "Sort invitations",
+      expected: { inv_sort: "email", inv_dir: "asc", q: "alice" },
+      absent: ["sort", "dir"],
+    },
+    {
+      caseLabel: "メンバーpaginationを招待の名前空間から分離する",
+      action: "Paginate members",
+      expected: { page: "2", pageSize: "50", inv_q: "bob" },
+      absent: ["inv_page", "inv_pageSize"],
+    },
+    {
+      caseLabel: "招待paginationをメンバーの名前空間から分離する",
+      action: "Paginate invitations",
+      expected: { inv_page: "3", inv_pageSize: "100", q: "alice" },
+      absent: ["page", "pageSize"],
+    },
+  ])("$caseLabel", async ({ action, absent, expected }) => {
     const user = userEvent.setup()
     const updates: UrlUpdateEvent[] = []
     const onUrlUpdate = vi.fn<(event: UrlUpdateEvent) => void>((event) => {
@@ -81,50 +129,12 @@ describe("member and invitation table search state", () => {
       </NuqsTestingAdapter>
     )
 
-    expect(screen.getByLabelText("member search")).toHaveTextContent("alice")
-    expect(screen.getByLabelText("invitation search")).toHaveTextContent("bob")
-
-    await user.click(screen.getByRole("button", { name: "Filter members" }))
+    await user.click(screen.getByRole("button", { name: action }))
     await waitFor(() => expect(updates).toHaveLength(1))
-    expect(updates[0]?.searchParams.get("roles")).toBe("admin")
-    expect(updates[0]?.searchParams.get("inv_q")).toBe("bob")
-    expect(updates[0]?.searchParams.get("inv_roles")).toBeNull()
-
-    await user.click(screen.getByRole("button", { name: "Filter invitations" }))
-    await waitFor(() => expect(updates).toHaveLength(2))
-    const finalSearchParams = updates[1]?.searchParams
-    expect(finalSearchParams?.get("roles")).toBe("admin")
-    expect(finalSearchParams?.get("inv_statuses")).toBe("pending")
-    expect(finalSearchParams?.get("q")).toBe("alice")
-
-    await user.click(screen.getByRole("button", { name: "Sort members" }))
-    await waitFor(() => expect(updates).toHaveLength(3))
-    expect(updates[2]?.searchParams.get("sort")).toBe("role")
-    expect(updates[2]?.searchParams.get("dir")).toBe("desc")
-    expect(updates[2]?.searchParams.get("inv_sort")).toBeNull()
-
-    await user.click(screen.getByRole("button", { name: "Sort invitations" }))
-    await waitFor(() => expect(updates).toHaveLength(4))
-    const sortedSearchParams = updates[3]?.searchParams
-    expect(sortedSearchParams?.get("sort")).toBe("role")
-    expect(sortedSearchParams?.get("dir")).toBe("desc")
-    expect(sortedSearchParams?.get("inv_sort")).toBe("email")
-    expect(sortedSearchParams?.get("inv_dir")).toBe("asc")
-
-    await user.click(screen.getByRole("button", { name: "Paginate members" }))
-    await waitFor(() => expect(updates).toHaveLength(5))
-    expect(updates[4]?.searchParams.get("page")).toBe("2")
-    expect(updates[4]?.searchParams.get("pageSize")).toBe("50")
-    expect(updates[4]?.searchParams.get("inv_page")).toBeNull()
-
-    await user.click(
-      screen.getByRole("button", { name: "Paginate invitations" })
-    )
-    await waitFor(() => expect(updates).toHaveLength(6))
-    const paginatedSearchParams = updates[5]?.searchParams
-    expect(paginatedSearchParams?.get("page")).toBe("2")
-    expect(paginatedSearchParams?.get("pageSize")).toBe("50")
-    expect(paginatedSearchParams?.get("inv_page")).toBe("3")
-    expect(paginatedSearchParams?.get("inv_pageSize")).toBe("100")
+    const searchParams = updates[0]?.searchParams
+    for (const [key, value] of Object.entries(expected)) {
+      expect(searchParams?.get(key)).toBe(value)
+    }
+    for (const key of absent) expect(searchParams?.get(key)).toBeNull()
   })
 })

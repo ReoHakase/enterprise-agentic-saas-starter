@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { parseMcpOAuthStoredScopes } from "./mcp-oauth"
 
-describe("parseMcpOAuthStoredScopes", () => {
+describe("保存済みMCP OAuth scopeの解析", () => {
   it.each([
     [["issues:read", "files:write"]],
     ['["issues:read","files:write"]'],
-  ])("accepts SQLite and Turso JSON representations", (input) => {
+  ])("SQLiteとTursoのJSON表現を受理する", (input) => {
     expect(parseMcpOAuthStoredScopes(input)).toEqual([
       "issues:read",
       "files:write",
@@ -20,7 +20,7 @@ describe("parseMcpOAuthStoredScopes", () => {
     '["issues:read",42]',
     '["issues:read","private:raw"]',
     "x".repeat(4097),
-  ])("rejects malformed or unsupported stored scopes", (input) => {
+  ])("不正または未対応の保存済みscopeを拒否する", (input) => {
     expect(parseMcpOAuthStoredScopes(input)).toBeNull()
   })
 })

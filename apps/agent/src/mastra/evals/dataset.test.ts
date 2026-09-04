@@ -15,8 +15,8 @@ const readDataset = async () => {
   return value
 }
 
-describe("Agent eval dataset", () => {
-  it("parses the direct stack cases", async () => {
+describe("Agent eval datasetの契約", () => {
+  it("直接stack caseをparseする", async () => {
     const dataset = parseAgentEvalDataset(await readDataset())
     expect(dataset.cases.map((item) => [item.id, item.trials])).toEqual([
       ["agent-stack-read", 3],
@@ -30,7 +30,7 @@ describe("Agent eval dataset", () => {
     ])
   })
 
-  it("rejects duplicate case IDs", async () => {
+  it("重複case IDを拒否する", async () => {
     const raw = await readDataset()
     if (!raw || typeof raw !== "object") throw new Error("Missing dataset")
     const cases = Reflect.get(raw, "cases")
@@ -39,7 +39,7 @@ describe("Agent eval dataset", () => {
     expect(() => parseAgentEvalDataset(raw)).toThrow("duplicate")
   })
 
-  it("passes selected paid eval case IDs through the root task", async () => {
+  it("選択した有料eval case IDをroot task経由で渡す", async () => {
     const turbo: unknown = JSON.parse(
       await readFile(
         resolve(import.meta.dirname, "../../../../../turbo.json"),

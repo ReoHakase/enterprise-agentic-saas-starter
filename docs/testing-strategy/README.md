@@ -42,6 +42,12 @@ API、Web、Agent、DB、認証、UI、メールでは、適切な実行環境�
 
 Testing Trophy分類は、静的、単体、統合、E2Eという横断的な補助分類として併記します。
 
+テストを追加、変更、統合または削除するときは、共通の
+[テストケース設計・記述規約](./common/test-case-design.md)に加え、対象ワークスペースに対応する
+下記のアプリまたはパッケージ別文書を必ず読みます。複数ワークスペースの配線を変更する場合は
+各文書を読み、全構成の配線を扱う場合は[E2E](./e2e.md)も読みます。文書一覧は単なる参考索引ではなく、
+所有層を決めるためのroutingです。
+
 ### 統合テストを中心にする
 
 Testing Trophyでは、複数の本番単位を接続し、利用者から観測できる振る舞いを検証する統合テストを最も厚くします。
@@ -149,6 +155,7 @@ E2E
 ### 共通
 
 - [静的検査](./common/static-analysis.md)
+- [Given-When-Thenによるテストケース設計・記述規約](./common/test-case-design.md)
 - [Browser test記述規約](./common/browser-test-writing.md)
 - [Storybookとブラウザーコンポーネントテスト](./common/storybook.md)
 - [テストデータとfixture](./common/test-data-and-fixtures.md)

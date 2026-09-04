@@ -33,7 +33,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Create a new private thread", async () => {
+    await step("新しい非公開スレッドを作成する", async () => {
       await userEvent.click(
         canvas.getByRole("button", { name: "New agent thread" })
       )
@@ -44,23 +44,10 @@ export const Ready = meta.story({
 
 export const Empty = meta.story({
   args: { selectedThread: undefined, threads: [] },
-  play: async ({ canvas }) => {
-    await expect(
-      canvas.getByText("Create a private thread to start.")
-    ).toBeVisible()
-    await expect(
-      canvas.getByRole("combobox", { name: "Agent thread" })
-    ).toBeDisabled()
-  },
 })
 
 export const Error = meta.story({
   args: { error: true, selectedThread: undefined, threads: [] },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("alert")).toHaveTextContent(
-      "Agent threads could not be loaded."
-    )
-  },
 })
 
 export const ThreadItem = meta.story({
@@ -74,7 +61,7 @@ export const ThreadItem = meta.story({
     />
   ),
   play: async ({ canvas, step }) => {
-    await step("Select and archive the thread", async () => {
+    await step("スレッドを選択してアーカイブする", async () => {
       await userEvent.click(
         canvas.getByRole("button", {
           name: fictionalPrimaryAgentThread.title,

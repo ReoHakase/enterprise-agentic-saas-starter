@@ -16,7 +16,7 @@ related:
 ## 目的
 
 `packages/db`は、libSQLクライアント、Drizzleスキーマ、マイグレーション、開発用初期データ投入と
-リセット、DBテスト支援を所有します。
+リセットを所有します。
 
 業務serviceや業務repositoryは所有しません。それらは`apps/api`のmoduleが所有し、A3で検査します。
 DB packageでは、現在のスキーマ、空のデータベースへ適用する単一の基準マイグレーション、制約、
@@ -54,11 +54,7 @@ packages/db/
       helpers.ts
       fresh.test.ts
       invariants.test.ts
-      concurrency.test.ts
       lifecycle.test.ts
-
-    test-support/
-      create-test-database.ts
 ```
 
 このfile構成は推奨例です。テスト層を一つのtest fileと同一視しません。一つの層を複数fileへ分けても
@@ -133,6 +129,7 @@ DB2は現在のスキーマそのもののcontractを検査します。マイグ
 - 同じidempotency keyを重複作成できない
 - cleanup jobが必要な再試行状態を失わない
 - cascadeの範囲が過大でない
+- Better AuthとOAuthが同じテーブルへ定義するRelations v2の関連を実queryで同時に取得できる
 - リポジトリ所有のトリガーが意図した状態遷移と不変条件を強制する
 - `pragma foreign_key_check`が空になる
 

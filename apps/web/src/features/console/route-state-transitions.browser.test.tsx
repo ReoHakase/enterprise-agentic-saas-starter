@@ -41,8 +41,8 @@ const RouteStateHarness = () => {
   )
 }
 
-describe("route state transitions", () => {
-  it("preserves shell geometry, focuses errors, and retries in one browser run", async () => {
+describe("ルート状態の遷移", () => {
+  it("shellのgeometryを維持し、エラーへフォーカスして同じブラウザー実行内で再試行する", async () => {
     const actor = userEvent.setup()
     render(<RouteStateHarness />)
 

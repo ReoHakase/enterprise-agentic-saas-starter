@@ -27,7 +27,7 @@ const meta = preview.meta({
 export const Ready = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Validate a blank display name", async () => {
+    await step("空白の表示名を検証する", async () => {
       const name = canvas.getByRole("textbox", { name: "Display name" })
       await userEvent.clear(name)
       await userEvent.click(
@@ -56,7 +56,7 @@ export const Saved = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Save an edited profile", async () => {
+    await step("編集したプロフィールを保存する", async () => {
       const name = canvas.getByRole("textbox", { name: "Display name" })
       await userEvent.clear(name)
       await userEvent.type(name, "Avery Quinn")
@@ -80,14 +80,20 @@ export const Saving = meta.story({
       })
     )
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, step }) => {
     const name = canvas.getByRole("textbox", { name: "Display name" })
-    await userEvent.clear(name)
-    await userEvent.type(name, "Avery Pending")
-    await userEvent.click(canvas.getByRole("button", { name: "Save profile" }))
-    await expect(
-      canvas.getByRole("button", { name: "Save profile" })
-    ).toBeDisabled()
+    await step("表示名を変更して保存する", async () => {
+      await userEvent.clear(name)
+      await userEvent.type(name, "Avery Pending")
+      await userEvent.click(
+        canvas.getByRole("button", { name: "Save profile" })
+      )
+    })
+    await step("保存中は再送信を無効にする", async () => {
+      await expect(
+        canvas.getByRole("button", { name: "Save profile" })
+      ).toBeDisabled()
+    })
   },
 })
 
@@ -106,7 +112,7 @@ export const ApiFailure = meta.story({
     )
   },
   play: async ({ canvas, step }) => {
-    await step("Keep a safe API failure in the form", async () => {
+    await step("安全なAPIエラーをフォーム内に保持する", async () => {
       const name = canvas.getByRole("textbox", { name: "Display name" })
       await userEvent.clear(name)
       await userEvent.type(name, "Avery Failure")

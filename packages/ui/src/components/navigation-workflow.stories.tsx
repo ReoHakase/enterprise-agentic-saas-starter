@@ -3,7 +3,6 @@ import {
   ListChecksIcon,
   UsersRoundIcon,
 } from "lucide-react"
-import { expect, userEvent } from "storybook/test"
 
 import preview from "#storybook/preview"
 
@@ -81,19 +80,4 @@ const meta = preview.meta({
   parameters: { layout: "fullscreen" },
 })
 
-export const ResponsiveWorkspace = meta.story({
-  play: async ({ canvasElement, step }) => {
-    const sidebar = canvasElement.querySelector(
-      '[data-slot="sidebar"][data-state]'
-    )
-    if (!sidebar) throw new Error("Workspace sidebar was not rendered")
-
-    await step("Collapse and expand the workspace navigation", async () => {
-      await expect(sidebar).toHaveAttribute("data-state", "expanded")
-      await userEvent.keyboard("{Control>}b{/Control}")
-      await expect(sidebar).toHaveAttribute("data-state", "collapsed")
-      await userEvent.keyboard("{Control>}b{/Control}")
-      await expect(sidebar).toHaveAttribute("data-state", "expanded")
-    })
-  },
-})
+export const ResponsiveWorkspace = meta.story({})

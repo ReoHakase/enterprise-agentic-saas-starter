@@ -9,14 +9,14 @@ const userMessage = (text: string): AgentUiMessage => ({
   role: "user",
 })
 
-describe("Product Agent generation options", () => {
+describe("Product Agent生成option", () => {
   it.each([
     ["Explain the current Issue.", false],
     [
       "Use public Web search.\nPublic-only Web query: official Cloudflare Workers limits",
       true,
     ],
-  ])("preserves product reasoning for %s", (text, expectsForcedSearch) => {
+  ])("入力%#でproduct reasoningを保持する", (text, expectsForcedSearch) => {
     const options = productGenerationWebSearchOptions(
       [userMessage(text)],
       ["web_search"]
@@ -26,7 +26,7 @@ describe("Product Agent generation options", () => {
     expect("prepareStep" in options).toBe(expectsForcedSearch)
   })
 
-  it("forces the guarded Web search only on the first step", () => {
+  it("guard済みWeb検索を最初のstepだけで強制する", () => {
     const options = productGenerationWebSearchOptions(
       [
         userMessage(

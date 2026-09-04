@@ -42,8 +42,8 @@ beforeEach(() => {
   developmentReporter.enabled = false
 })
 
-describe("Web observed error reporting", () => {
-  it("marks the active span without copying raw error detail into it", () => {
+describe("Webで観測したエラーの報告", () => {
+  it("生のエラー詳細を転記せず有効spanをmarkする", () => {
     reportObservedError(new Error("provider failed with visible quota details"))
 
     expect(telemetry.recordException).not.toHaveBeenCalled()
@@ -55,7 +55,7 @@ describe("Web observed error reporting", () => {
     expect(telemetry.setStatus).toHaveBeenCalledWith({ code: 2 })
   })
 
-  it("normalizes an unregistered provider error code", () => {
+  it("未登録プロバイダーのerror codeを正規化する", () => {
     const error = Object.assign(new Error("provider failed"), {
       code: "provider-private-code",
       status: 500,
@@ -71,7 +71,7 @@ describe("Web observed error reporting", () => {
     })
   })
 
-  it("does not capture expected 4xx errors", () => {
+  it("予想される 4xx エラーをキャプチャしない", () => {
     const error = Object.assign(new Error("forbidden"), { status: 403 })
 
     reportObservedError(error)
@@ -79,16 +79,19 @@ describe("Web observed error reporting", () => {
     expect(telemetry.setStatus).not.toHaveBeenCalled()
   })
 
-  it.each([{ error: { status: 401 } }, { error: { statusCode: 403 } }])(
-    "does not capture Better Auth nested 4xx errors",
-    (error) => {
-      reportObservedError(error)
+  it.each([
+    { case: "statusフィールド", input: { error: { status: 401 } } },
+    { case: "statusCodeフィールド", input: { error: { statusCode: 403 } } },
+  ])(
+    "$caseを持つBetter Authのネストした4xxエラーをcaptureしない",
+    ({ input }) => {
+      reportObservedError(input)
 
       expect(telemetry.setStatus).not.toHaveBeenCalled()
     }
   )
 
-  it("captures the same Error object once", () => {
+  it("同じError objectを1回だけcaptureする", () => {
     const error = new Error("failed")
 
     reportObservedError(error)
@@ -97,7 +100,7 @@ describe("Web observed error reporting", () => {
     expect(telemetry.setStatus).toHaveBeenCalledOnce()
   })
 
-  it("does not consume identity before a reporting context exists", () => {
+  it("報告contextができる前にエラー識別情報を消費しない", () => {
     const error = new Error("failed")
     telemetry.activeSpan = false
     reportObservedError(error)
@@ -108,7 +111,7 @@ describe("Web observed error reporting", () => {
     expect(telemetry.setStatus).toHaveBeenCalledOnce()
   })
 
-  it("keeps the original Error and semantic request context for local logs", () => {
+  it("ローカルlogに元のErrorと意味のあるrequest contextを保持する", () => {
     developmentReporter.enabled = true
     const error = Object.assign(new Error("provider unavailable"), {
       requestId: "request-1",
@@ -140,7 +143,7 @@ describe("Web observed error reporting", () => {
     expect(telemetry.recordException).not.toHaveBeenCalled()
   })
 
-  it("does not let telemetry failures replace the UI error flow", () => {
+  it("telemetry障害でUIのエラー処理を置き換えない", () => {
     developmentReporter.enabled = true
     telemetry.setAttributes.mockImplementationOnce(() => {
       throw new Error("span unavailable")
@@ -155,7 +158,7 @@ describe("Web observed error reporting", () => {
     expect(telemetry.setStatus).toHaveBeenCalledWith({ code: 2 })
   })
 
-  it("still reports to fixed local logs when the trace API is unavailable", () => {
+  it("trace APIが利用不能でも固定ローカルlogへ報告する", () => {
     developmentReporter.enabled = true
     telemetry.throwOnGetActiveSpan = true
     const error = new Error("application failure")

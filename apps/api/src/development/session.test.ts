@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { parseDevelopmentSeedSession } from "./session"
 
-describe("development seed session", () => {
-  it("accepts only an explicit local supervisor session", () => {
+describe("development seed sessionの契約", () => {
+  it("明示したlocal supervisor sessionだけを受理する", () => {
     const valid = {
       endpoint: "http://127.0.0.1:8787",
       mode: "local",

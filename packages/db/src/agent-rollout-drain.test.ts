@@ -21,32 +21,43 @@ const drained: AgentDrainState = {
   activeTickets: 0,
 }
 
-describe("Agent rollout drain", () => {
-  it("counts only unexpired capabilities and runs and accepts a fresh database", async () => {
+const createControlPlaneSchema = (client: ReturnType<typeof createClient>) =>
+  client.executeMultiple(`
+    create table agent_connection_tickets (
+      consumed_at integer,
+      revoked_at integer,
+      expires_at integer not null
+    );
+    create table agent_grants (
+      kind text not null,
+      revoked_at integer,
+      expires_at integer not null
+    );
+    create table agent_resume_tickets (
+      consumed_at integer,
+      revoked_at integer,
+      expires_at integer not null
+    );
+    create table agent_runs (
+      status text not null,
+      expires_at integer not null
+    );
+  `)
+
+describe("Agent rolloutのdrain", () => {
+  it("control-plane tableがない新規DBをdrain済みとして受け入れる", async () => {
     const client = createClient({ url: ":memory:" })
     try {
       await expect(readAgentDrainState(client)).resolves.toEqual(drained)
-      await client.executeMultiple(`
-        create table agent_connection_tickets (
-          consumed_at integer,
-          revoked_at integer,
-          expires_at integer not null
-        );
-        create table agent_grants (
-          kind text not null,
-          revoked_at integer,
-          expires_at integer not null
-        );
-        create table agent_resume_tickets (
-          consumed_at integer,
-          revoked_at integer,
-          expires_at integer not null
-        );
-        create table agent_runs (
-          status text not null,
-          expires_at integer not null
-        );
-      `)
+    } finally {
+      client.close()
+    }
+  })
+
+  it("期限内のcapabilityとrunだけをdrain対象として数える", async () => {
+    const client = createClient({ url: ":memory:" })
+    try {
+      await createControlPlaneSchema(client)
       const expired = Date.now() - 60_000
       const live = Date.now() + 60_000
       await client.batch([
@@ -74,7 +85,7 @@ describe("Agent rollout drain", () => {
     }
   })
 
-  it("fails closed for a partially migrated control-plane schema", async () => {
+  it("control-plane schemaの移行が不完全なら失敗時に拒否する", async () => {
     const client = createClient({ url: ":memory:" })
     try {
       await client.execute(
@@ -88,7 +99,7 @@ describe("Agent rollout drain", () => {
     }
   })
 
-  it("waits until every live capability and run is gone", async () => {
+  it("有効なcapabilityとrunがすべて消えるまで待機する", async () => {
     let current = 0
     const readState = vi
       .fn<(now: Date) => Promise<AgentDrainState>>()
@@ -113,7 +124,7 @@ describe("Agent rollout drain", () => {
     expect(isAgentDrainComplete(drained)).toBe(true)
   })
 
-  it("fails closed when the bounded drain deadline is reached", async () => {
+  it("drainの期限へ達したら失敗時に拒否する", async () => {
     let current = 0
     await expect(
       waitForAgentDrain({
@@ -129,7 +140,7 @@ describe("Agent rollout drain", () => {
     ).rejects.toThrow("timed out: tickets=1, grants=2, resumeTickets=1, runs=2")
   })
 
-  it("bounds a state read that never settles", async () => {
+  it("完了しないstate読取を期限内で打ち切る", async () => {
     await expect(
       waitForAgentDrain({
         intervalMs: 5,
@@ -142,7 +153,7 @@ describe("Agent rollout drain", () => {
     ).rejects.toThrow("state read timed out")
   })
 
-  it("requires a continuous empty window and resets it for a late producer", async () => {
+  it("連続した空期間を要求して遅延producerで計測をやり直す", async () => {
     let current = 0
     const readState = vi
       .fn<(now: Date) => Promise<AgentDrainState>>()
@@ -167,7 +178,7 @@ describe("Agent rollout drain", () => {
     expect(current).toBe(15)
   })
 
-  it("does not accept an initially empty database before the grace window", async () => {
+  it("初期状態が空でも猶予期間より前には受け入れない", async () => {
     let current = 0
     const readState = vi.fn<(now: Date) => Promise<AgentDrainState>>(
       async () => drained

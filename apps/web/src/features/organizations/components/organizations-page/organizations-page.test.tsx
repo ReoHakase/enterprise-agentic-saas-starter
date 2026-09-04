@@ -115,7 +115,7 @@ const renderOrganizations = (
   )
 }
 
-describe("OrganizationsPage", () => {
+describe("OrganizationsPageの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.beginOrganizationSwitch.mockReturnValue({})
@@ -135,40 +135,7 @@ describe("OrganizationsPage", () => {
     })
   })
 
-  it("renders the shared role badge for every organization role", () => {
-    renderOrganizations([
-      ...organizations,
-      {
-        id: "org-gamma",
-        name: "Gamma",
-        slug: "gamma",
-        role: "member",
-        active: false,
-        profileImage: null,
-        memberCount: 1,
-        memberProfileImages: [],
-        permissions,
-      },
-    ])
-
-    expect(screen.getByTestId("organization-role-owner")).toHaveTextContent(
-      "Owner"
-    )
-    expect(screen.getByTestId("organization-role-admin")).toHaveTextContent(
-      "Admin"
-    )
-    expect(screen.getByTestId("organization-role-member")).toHaveTextContent(
-      "Member"
-    )
-    expect(
-      screen
-        .getAllByRole("columnheader")
-        .map((header) => header.textContent?.trim())
-    ).toEqual(["Organization", "Slug", "Members", "Your role", "Actions"])
-    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
-  })
-
-  it("switches the active tenant from the organization table", async () => {
+  it("組織tableから有効テナントを切り替える", async () => {
     const actor = userEvent.setup()
     let finishActivation: ((value: unknown) => void) | undefined
     mocks.activateOrganization.mockImplementationOnce(
@@ -198,7 +165,7 @@ describe("OrganizationsPage", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization switched")
   })
 
-  it("uses organization slugs in member and settings URLs", () => {
+  it("メンバー・設定URLに組織slugを使う", () => {
     renderOrganizations()
 
     expect(
@@ -209,7 +176,7 @@ describe("OrganizationsPage", () => {
     ).toHaveAttribute("href", "/organization/acme/settings")
   })
 
-  it("keeps an existing invitations slug reachable after the public route move", () => {
+  it("公開ルート移動後も既存のinvitations slugへ到達可能に保つ", () => {
     renderOrganizations([
       {
         id: "org-invitations",
@@ -232,7 +199,7 @@ describe("OrganizationsPage", () => {
     ).toHaveAttribute("href", "/organization/invitations/settings")
   })
 
-  it("activates an inactive tenant before opening its slug route", async () => {
+  it("slugルートを開く前に無効テナントを有効化する", async () => {
     const actor = userEvent.setup()
     renderOrganizations()
 
@@ -258,7 +225,7 @@ describe("OrganizationsPage", () => {
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
   })
 
-  it("keeps risky local Agent work until the user confirms the switch", async () => {
+  it("利用者が切替を確認するまで危険なローカルAgent作業を保持する", async () => {
     const actor = userEvent.setup()
     mocks.hasOrganizationSwitchRisks.mockReturnValue(true)
     renderOrganizations()
@@ -280,7 +247,7 @@ describe("OrganizationsPage", () => {
     expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
   })
 
-  it("keeps create input and renders fixed failure copy", async () => {
+  it("組織作成の入力値を保持し、固定の失敗文言を表示する", async () => {
     const actor = userEvent.setup()
     mocks.createOrganization.mockRejectedValueOnce(httpError(409, "conflict"))
     renderOrganizations()
@@ -308,7 +275,7 @@ describe("OrganizationsPage", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("presents a server-reserved slug as an API field error", async () => {
+  it("組織作成時にサーバー予約済みslugをAPIフィールドエラーとして表示する", async () => {
     const actor = userEvent.setup()
     mocks.createOrganization.mockRejectedValueOnce(
       httpError(400, "validation_error", {
@@ -344,7 +311,7 @@ describe("OrganizationsPage", () => {
     expect(screen.queryByText("Choose another slug.")).not.toBeInTheDocument()
   })
 
-  it("shows fixed recovery copy when switching fails", async () => {
+  it("切替失敗時に固定の復旧文言を表示する", async () => {
     const actor = userEvent.setup()
     mocks.activateOrganization.mockRejectedValueOnce(
       httpError(503, "service_unavailable")

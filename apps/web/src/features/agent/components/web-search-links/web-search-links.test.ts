@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { webSearchLinksFromToolOutput } from "./web-search-links"
 
-describe("Web search links", () => {
-  it("returns only bounded public HTTP sources from Web search output", () => {
+describe("Web 検索リンク", () => {
+  it("Web検索結果から許可された公開HTTP情報源だけを返す", () => {
     expect(
       webSearchLinksFromToolOutput("web_search", {
         sources: [
@@ -29,27 +29,35 @@ describe("Web search links", () => {
     ])
   })
 
-  it("rejects other tools and malformed or unbounded output", () => {
-    expect(
-      webSearchLinksFromToolOutput("search_issues", {
+  it.each([
+    {
+      caseLabel: "Web検索以外のtool",
+      toolName: "search_issues",
+      output: {
         sources: [
           {
             title: "Public source",
             url: "https://example.com/",
           },
         ],
-      })
-    ).toEqual([])
-    expect(
-      webSearchLinksFromToolOutput("web_search", { sources: "bad" })
-    ).toEqual([])
-    expect(
-      webSearchLinksFromToolOutput("web_search", {
+      },
+    },
+    {
+      caseLabel: "配列でないsources",
+      toolName: "web_search",
+      output: { sources: "bad" },
+    },
+    {
+      caseLabel: "上限を超えるsources",
+      toolName: "web_search",
+      output: {
         sources: Array.from({ length: 6 }, (_, index) => ({
           title: `Source ${index}`,
           url: `https://example.com/${index}`,
         })),
-      })
-    ).toEqual([])
+      },
+    },
+  ])("$caseLabelのoutputを拒否する", ({ output, toolName }) => {
+    expect(webSearchLinksFromToolOutput(toolName, output)).toEqual([])
   })
 })

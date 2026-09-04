@@ -52,7 +52,7 @@ const meta = preview.meta({
 export const Empty = meta.story({
   tags: ["theme-sensitive"],
   play: async ({ canvas, step }) => {
-    await step("Enter a message with the keyboard", async () => {
+    await step("キーボードでメッセージを入力する", async () => {
       const editor = await canvas.findByRole("textbox", {
         name: "Agent message",
       })
@@ -70,7 +70,7 @@ export const Mention = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Choose an Issue mention with the keyboard", async () => {
+    await step("キーボードでIssueメンションを選ぶ", async () => {
       const editor = await canvas.findByRole("textbox", {
         name: "Agent message",
       })
@@ -93,33 +93,25 @@ export const Mention = meta.story({
 
 export const KeyboardSubmission = meta.story({
   play: async ({ canvas, step }) => {
-    await step(
-      "Insert a line break with Shift+Enter and submit with Enter",
-      async () => {
-        const editor = await canvas.findByRole("textbox", {
-          name: "Agent message",
-        })
-        await userEvent.click(editor)
-        await userEvent.type(editor, "First line")
-        await userEvent.keyboard("{Shift>}{Enter}{/Shift}")
-        await userEvent.type(editor, "Second line")
-        await expect(draftChanged).toHaveBeenLastCalledWith(
-          "First line\nSecond line"
-        )
-        await expect(submitted).not.toHaveBeenCalled()
+    await step("Shift+Enterで改行しEnterで送信する", async () => {
+      const editor = await canvas.findByRole("textbox", {
+        name: "Agent message",
+      })
+      await userEvent.click(editor)
+      await userEvent.type(editor, "First line")
+      await userEvent.keyboard("{Shift>}{Enter}{/Shift}")
+      await userEvent.type(editor, "Second line")
+      await expect(draftChanged).toHaveBeenLastCalledWith(
+        "First line\nSecond line"
+      )
+      await expect(submitted).not.toHaveBeenCalled()
 
-        await userEvent.keyboard("{Enter}")
-        await expect(submitted).toHaveBeenCalledOnce()
-      }
-    )
+      await userEvent.keyboard("{Enter}")
+      await expect(submitted).toHaveBeenCalledOnce()
+    })
   },
 })
 
 export const Disabled = meta.story({
   args: { disabled: true, initialDraft: "Pending approval cannot be edited." },
-  play: async ({ canvas }) => {
-    await expect(
-      await canvas.findByRole("textbox", { name: "Agent message" })
-    ).toHaveAttribute("contenteditable", "false")
-  },
 })

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { describeSessionClient } from "./user-agent"
 
-describe("describeSessionClient", () => {
-  it("describes the device, browser, OS, engine, and raw User-Agent", () => {
+describe("describeSessionClientの契約", () => {
+  it("デバイス・ブラウザー・OS・エンジンと生のUser-Agentを説明する", () => {
     const userAgent =
       "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1"
 
@@ -17,7 +17,7 @@ describe("describeSessionClient", () => {
     })
   })
 
-  it("returns explicit unknown values when no User-Agent was recorded", () => {
+  it("User-Agentが記録されていない場合は明示的な不明値を返す", () => {
     expect(describeSessionClient(null)).toEqual({
       browser: "Unknown browser",
       device: "Unknown device",

@@ -18,8 +18,9 @@ last_reviewed: 2026-08-01
 7. [テスト戦略](testing-strategy/README.md)
 8. 製品Agentを変更する場合は[製品Agent仕様](agent/README.md)
 9. [coding agentの作業手順](architecture/coding-agent-workflow.md)
-10. [ADR](decisions/README.md)
-11. 必要な[active exec plan](exec-plans/README.md)
+10. IssueまたはPRを扱う場合は[IssueとPull Requestの執筆契約](architecture/issue-pr-authoring.md)
+11. [ADR](decisions/README.md)
+12. 必要な[active exec plan](exec-plans/README.md)
 
 ## 変更作業の開始順序
 

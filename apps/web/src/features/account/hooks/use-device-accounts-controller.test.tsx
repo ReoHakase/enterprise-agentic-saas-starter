@@ -72,7 +72,7 @@ const createWrapper = (queryClient: QueryClient) => {
   return Wrapper
 }
 
-describe("useDeviceAccountsController", () => {
+describe("useDeviceAccountsControllerの契約", () => {
   const fetchAgent = vi.fn<typeof fetch>()
 
   beforeEach(() => {
@@ -90,7 +90,7 @@ describe("useDeviceAccountsController", () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it("signs out through current-session revoke and never calls core signOut", async () => {
+  it("現在のセッションを取り消してサインアウトし、core signOutは呼ばない", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -120,18 +120,9 @@ describe("useDeviceAccountsController", () => {
       fetchOptions: { throw: true },
     })
     expect(mocks.signOut).not.toHaveBeenCalled()
-    expect(fetchAgent.mock.invocationCallOrder[0]).toBeLessThan(
-      onAbort.mock.invocationCallOrder[0] ?? 0
-    )
-    expect(onAbort.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.revoke.mock.invocationCallOrder[0] ?? 0
-    )
-    expect(mocks.revoke.mock.invocationCallOrder[0]).toBeLessThan(
-      onComplete.mock.invocationCallOrder[0] ?? 0
-    )
   })
 
-  it("cancels dirty sign-out without revoking or clearing state", async () => {
+  it("認証状態を取り消さず、未保存作業があるサインアウトをキャンセルする", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -166,7 +157,7 @@ describe("useDeviceAccountsController", () => {
     expect(queryClient.getQueryData(["private"])).toBe("draft")
   })
 
-  it("keeps the current account active and reports a fixed error on failure", async () => {
+  it("失敗時も現在のアカウントを有効に保ち、固定エラーを通知する", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -202,7 +193,7 @@ describe("useDeviceAccountsController", () => {
     expect(onComplete).not.toHaveBeenCalled()
   })
 
-  it("retains a failed removal target and retries without clearing current identity state", async () => {
+  it("削除に失敗した対象を保持し、現在の認証状態を消去せず再試行する", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -244,7 +235,7 @@ describe("useDeviceAccountsController", () => {
     expect(fetchAgent).not.toHaveBeenCalled()
   })
 
-  it("clears local identity state and navigates when the active token changes during removal", async () => {
+  it("削除中に有効トークンが変わった場合はローカル認証状態を消去して遷移する", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })

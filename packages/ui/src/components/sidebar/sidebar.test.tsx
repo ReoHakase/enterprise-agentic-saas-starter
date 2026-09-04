@@ -6,7 +6,7 @@ import { SidebarProvider, SidebarTrigger, useSidebar } from "./sidebar"
 
 vi.mock("@enterprise-agentic-saas/ui/hooks/use-mobile", () => ({
   MOBILE_BREAKPOINT: 768,
-  // Reproduce the hydration window before the mobile media-query effect commits.
+  // モバイルのメディアクエリ判定が確定する前のhydration状態を再現する
   useIsMobile: () => false,
 }))
 
@@ -38,8 +38,8 @@ afterEach(() => {
   })
 })
 
-describe("SidebarProvider", () => {
-  it("routes the first mobile interaction to the drawer before detection settles", async () => {
+describe("SidebarProviderの契約", () => {
+  it("検出が安定する前の最初のモバイル操作をドロワーへ送る", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,
@@ -52,7 +52,7 @@ describe("SidebarProvider", () => {
     expect(screen.getByText("desktop:true mobile:true")).toBeInTheDocument()
   })
 
-  it("keeps desktop interactions on the persistent sidebar", async () => {
+  it("デスクトップのインタラクションを永続的なサイドバーに維持する", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1280,

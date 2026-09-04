@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest"
 import { createAgentStorage } from "../storage"
 import { createProductAgentComposition } from "./create-product-agent"
 
-describe("Product Agent composition", () => {
-  it("only enables the tool-free unscoped model at the Studio entrypoint", async () => {
+describe("Product Agent compositionの契約", () => {
+  it("Studio entrypointだけでtoolなしunscoped modelを有効にする", async () => {
     const studioStorage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "studio-composition"
@@ -49,7 +49,7 @@ describe("Product Agent composition", () => {
     }
   })
 
-  it("keeps an explicit Studio option scoped to development", async () => {
+  it("明示的なStudio optionを開発環境だけに限定する", async () => {
     const storage = createAgentStorage(
       { MASTRA_STORAGE_URL: ":memory:", NODE_ENV: "test" },
       "production-studio-option"

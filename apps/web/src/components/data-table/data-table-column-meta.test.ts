@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { getDataTableColumnMeta } from "./data-table-column-meta"
 
-describe("DataTable column metadata", () => {
-  it("accepts only the supported string fields", () => {
+describe("DataTableの列メタデータ", () => {
+  it("サポートされている文字列フィールドのみを受け入れる", () => {
     expect(getDataTableColumnMeta(null)).toEqual({})
     expect(getDataTableColumnMeta("invalid")).toEqual({})
     expect(

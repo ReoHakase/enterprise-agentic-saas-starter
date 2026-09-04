@@ -53,8 +53,8 @@ const tools = (
   ...overrides,
 })
 
-describe("local observability lifecycle", () => {
-  it("checks the fixed loopback endpoints and browser aliases", async () => {
+describe("local observability lifecycleの契約", () => {
+  it("固定loopback endpointとbrowser aliasを確認する", async () => {
     const dependencies = tools()
 
     await checkObservability(dependencies)
@@ -63,7 +63,7 @@ describe("local observability lifecycle", () => {
     expect(dependencies.fetch).toHaveBeenCalledTimes(3)
   })
 
-  it("fails with a manual recovery command when the stack is unavailable", async () => {
+  it("stackが利用不能な場合は手動復旧command付きで失敗する", async () => {
     const dependencies = tools({
       fetch: vi.fn(async () => {
         throw new Error("connection refused")
@@ -76,7 +76,7 @@ describe("local observability lifecycle", () => {
     expect(dependencies.run).toHaveBeenCalledWith(["portless", "list"])
   })
 
-  it("starts the one compose project and registers both aliases", async () => {
+  it("単一compose projectを起動して両aliasを登録する", async () => {
     const dependencies = tools()
 
     await upObservability(dependencies)
@@ -110,7 +110,7 @@ describe("local observability lifecycle", () => {
     ])
   })
 
-  it("removes both aliases and preserves the named volume", async () => {
+  it("両aliasを除去してnamed volumeを保持する", async () => {
     const dependencies = tools()
 
     await downObservability(dependencies)
@@ -137,7 +137,7 @@ describe("local observability lifecycle", () => {
   })
 })
 
-it("keeps the root collector config limited to LGTM wiring and local filtering", async () => {
+it("root collector設定をLGTM wiringとlocal filteringだけに制限する", async () => {
   const config = await readFile(
     resolve(import.meta.dirname, "../otelcol.observability.yaml"),
     "utf8"
@@ -171,7 +171,7 @@ it("keeps the root collector config limited to LGTM wiring and local filtering",
   expect(config).not.toContain('delete_matching_keys(attributes, "(?i)^url')
 })
 
-it("keeps all local Loki streams for seven days before compactor deletion", async () => {
+it("全local Loki streamをcompactor削除前に七日間保持する", async () => {
   const compose = await readFile(COMPOSE_FILE, "utf8")
 
   expect(compose).toContain("--compactor.retention-enabled=true")

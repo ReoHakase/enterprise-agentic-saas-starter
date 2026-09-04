@@ -32,7 +32,7 @@ const meta = preview.meta({
 
 export const KeyboardFocus = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Reveal the description from keyboard focus", async () => {
+    await step("キーボードフォーカスで説明を表示する", async () => {
       const trigger = canvas.getByRole("button", { name: "Context" })
       await userEvent.tab()
       await expect(trigger).toHaveFocus()

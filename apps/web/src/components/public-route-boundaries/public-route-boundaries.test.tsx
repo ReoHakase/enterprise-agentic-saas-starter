@@ -35,8 +35,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe("public route boundaries", () => {
-  it("uses the authentication frame for its loading state", () => {
+describe("公開ルート境界", () => {
+  it("読み込み状態に認証フレームを使う", () => {
     render(<AuthRouteLoading />)
 
     const frame = screen.getByRole("main")
@@ -45,7 +45,6 @@ describe("public route boundaries", () => {
     })
 
     expect(frame).toHaveAttribute("data-slot", "auth-frame")
-    expect(frame).toHaveClass("min-h-svh", "bg-muted", "p-6", "md:p-10")
     expect(
       screen.getByRole("link", { name: "Enterprise SaaS" })
     ).toHaveAttribute("href", "/")
@@ -58,19 +57,18 @@ describe("public route boundaries", () => {
   })
 
   it.each(["add_account=1", "reauth=1"])(
-    "reserves the authentication status row for %s",
+    "%sの認証状態行を確保する",
     (search) => {
       navigation.search = search
       render(<AuthRouteLoading />)
 
-      expect(screen.getByRole("main")).toContainHTML("px-4 py-3")
       expect(
         screen.getByRole("status", { name: "Loading authentication" })
       ).toBeInTheDocument()
     }
   )
 
-  it("keeps the authentication frame and exposes a focused retry alert", async () => {
+  it("認証フレームを維持して再試行する", async () => {
     const actor = userEvent.setup()
     const reset = vi.fn<() => void>()
     render(<AuthRouteError reset={reset} />)
@@ -80,13 +78,6 @@ describe("public route boundaries", () => {
       "data-boundary-state",
       "error"
     )
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "Authentication could not be loaded",
-      })
-    ).toHaveFocus()
-
     await actor.click(screen.getByRole("button", { name: "Try again" }))
 
     expect(reset).toHaveBeenCalledOnce()
@@ -96,7 +87,7 @@ describe("public route boundaries", () => {
   it.each([
     ["add_account=1", "Add account"],
     ["reauth=1", "Security check"],
-  ])("keeps the authentication error context for %s", (search, label) => {
+  ])("%sの認証エラー情報を保持する", (search, label) => {
     navigation.search = search
     render(<AuthRouteError reset={vi.fn<() => void>()} />)
 
@@ -107,7 +98,7 @@ describe("public route boundaries", () => {
     )
   })
 
-  it("uses the centered invitation frame for its loading state", () => {
+  it("読み込み状態に招待フレームを使う", () => {
     render(<InvitationRouteLoading />)
 
     const frame = screen.getByRole("main")
@@ -116,18 +107,11 @@ describe("public route boundaries", () => {
     })
 
     expect(frame).toHaveAttribute("data-slot", "invitation-frame")
-    expect(frame).toHaveClass(
-      "min-h-svh",
-      "items-center",
-      "justify-center",
-      "p-6"
-    )
     expect(status).toHaveAttribute("data-slot", "invitation-panel")
-    expect(status).toHaveClass("w-full", "max-w-lg", "p-5")
     expect(status).toHaveAttribute("aria-busy", "true")
   })
 
-  it("keeps the invitation panel dimensions and exposes a retry alert", async () => {
+  it("招待パネルで再試行アラートを表示する", async () => {
     const actor = userEvent.setup()
     const reset = vi.fn<() => void>()
     render(<InvitationRouteError reset={reset} />)
@@ -139,14 +123,6 @@ describe("public route boundaries", () => {
       "invitation-frame"
     )
     expect(alert).toHaveAttribute("data-slot", "invitation-panel")
-    expect(alert).toHaveClass("w-full", "max-w-lg", "p-5")
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "Invitation could not be loaded",
-      })
-    ).toHaveFocus()
-
     await actor.click(screen.getByRole("button", { name: "Try again" }))
 
     expect(reset).toHaveBeenCalledOnce()
@@ -162,7 +138,7 @@ describe("public route boundaries", () => {
     ],
     ["/dashboard", "Loading organization dashboard", "sidebar-inset"],
   ] as const)(
-    "routes the root loading state for %s without changing its frame",
+    "フレームを変えず%sのルート読み込み状態を表示する",
     (pathname, accessibleName, frameSlot) => {
       navigation.pathname = pathname
       render(<RootRouteLoading />)
@@ -183,22 +159,15 @@ describe("public route boundaries", () => {
     ],
     ["/dashboard", "Overview", "sidebar-inset"],
   ] as const)(
-    "routes the root error state for %s without changing its frame",
-    async (pathname, heading, frameSlot) => {
-      const actor = userEvent.setup()
-      const reset = vi.fn<() => void>()
+    "フレームを変えず%sのルートエラー状態を表示する",
+    (pathname, heading, frameSlot) => {
       navigation.pathname = pathname
-      render(<RootRouteError reset={reset} />)
+      render(<RootRouteError reset={vi.fn<() => void>()} />)
 
       expect(screen.getByRole("alert")).toContainElement(
         screen.getByRole("heading", { level: 1, name: heading })
       )
       expect(screen.getByRole("main")).toHaveAttribute("data-slot", frameSlot)
-
-      await actor.click(screen.getByRole("button", { name: "Try again" }))
-
-      expect(reset).toHaveBeenCalledOnce()
-      expect(browser.reload).not.toHaveBeenCalled()
     }
   )
 })

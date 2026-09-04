@@ -53,7 +53,7 @@ const meta = preview.meta({
 
 export const WorkspaceActions = meta.story({
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Navigate the menu with the keyboard", async () => {
+    await step("キーボードでメニューを移動する", async () => {
       const trigger = canvas.getByRole("button", { name: "Workspace actions" })
       trigger.focus()
       await userEvent.keyboard("{Enter}")

@@ -46,8 +46,8 @@ const capturedRecords = (cause: unknown) => captureReport(cause).records
 const capturedMessage = (cause: unknown) =>
   String(capturedRecords(cause)[0]?.["exception.message"])
 
-describe("Web development error reporting", () => {
-  it("redacts credentials while retaining provider text, URLs, and email", () => {
+describe("Web開発エラーの報告", () => {
+  it("プロバイダー本文・URL・メールアドレスを保ちつつ認証情報を除去する", () => {
     const raw = [
       "provider rejected dev@example.test at https://example.test/help",
       "Authorization: Bearer provider-token",
@@ -71,7 +71,7 @@ describe("Web development error reporting", () => {
     )
   })
 
-  it("serializes cycles, BigInt, symbols, accessors, and hostile proxies", () => {
+  it("サイクル、BigInt、シンボル、アクセサー、および敵対的なプロキシをシリアル化する", () => {
     const value: Record<string, unknown> = {
       count: 10n,
       symbol: Symbol("opaque"),
@@ -96,7 +96,7 @@ describe("Web development error reporting", () => {
     expect(capturedMessage(hostile)).toBe('"[unreadable-object]"')
   })
 
-  it("emits at most five bounded, redacted cause records", () => {
+  it("上限5件の機密除去済みcauseレコードを出力する", () => {
     let cause: Error | undefined
     for (let index = 6; index >= 0; index -= 1) {
       cause = new Error(
@@ -126,7 +126,7 @@ describe("Web development error reporting", () => {
     }
   })
 
-  it("prints one sanitized Error tree with the original stack and safe context", () => {
+  it("元のstackと安全なcontextを含む無害化済みError treeを1つ出力する", () => {
     const nested = new TypeError("provider token=nested-secret")
     Object.defineProperty(nested, "stack", {
       configurable: true,
@@ -172,7 +172,7 @@ describe("Web development error reporting", () => {
     expect(records).toHaveLength(2)
   })
 
-  it("projects non-Errors and cycles without exposing reporter stack frames", () => {
+  it("報告処理のstack frameを公開せず非Errorと循環参照をprojectionする", () => {
     const value: Record<string, unknown> = { message: "plain failure" }
     value.cause = value
 
@@ -188,7 +188,7 @@ describe("Web development error reporting", () => {
     expect(records[0]?.["exception.cause_truncated"]).toBe(true)
   })
 
-  it("isolates sinks and rejects non-local, server, and test gates", () => {
+  it("sinkを分離し、非ローカル・サーバー・テスト環境では拒否する", () => {
     const consoleError = vi.fn<
       (error: Error, context: Record<string, number | string>) => void
     >(() => {
@@ -235,7 +235,7 @@ describe("Web development error reporting", () => {
     expect(logError).toHaveBeenCalledTimes(2)
   })
 
-  it("uses the instrumentation service name and supplied HTTP context", () => {
+  it("instrumentationのservice名と指定HTTP contextを使う", () => {
     const logError = vi.fn<(record: unknown) => void>()
 
     reportDevelopmentCauseChain(

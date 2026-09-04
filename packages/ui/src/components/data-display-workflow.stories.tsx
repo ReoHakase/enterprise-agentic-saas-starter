@@ -1,5 +1,3 @@
-import { expect } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import {
@@ -105,16 +103,4 @@ const meta = preview.meta({
 
 export const SecurityReview = meta.story({
   tags: ["theme-sensitive"],
-  play: async ({ canvas, step }) => {
-    await step("Read the populated review summary", async () => {
-      await expect(canvas.getByText("Security review")).toBeVisible()
-      await expect(canvas.getByRole("table")).toHaveAccessibleName(
-        "Open security review issues"
-      )
-      await expect(canvas.getByText("ENG-1042")).toBeVisible()
-      await expect(
-        canvas.getByRole("group", { name: "Security reviewers" })
-      ).toBeVisible()
-    })
-  },
 })

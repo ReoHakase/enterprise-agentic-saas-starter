@@ -17,14 +17,20 @@ const passwordOptions = {
   passwordsDoNotMatchMessage: "Passwords do not match.",
 }
 
-describe("authentication form schemas", () => {
-  it("normalizes email input and rejects invalid credentials", () => {
+describe("認証フォームのスキーマ", () => {
+  it("マジックリンクのメールアドレス前後を除去する", () => {
     expect(
       v.parse(magicLinkFormSchema, { email: "  user@example.test  " })
     ).toEqual({ email: "user@example.test" })
+  })
+
+  it("パスワード再設定では不正なメールアドレスを拒否する", () => {
     expect(
       v.safeParse(forgotPasswordFormSchema, { email: "invalid" }).success
     ).toBe(false)
+  })
+
+  it("サインインでは最小文字数未満のパスワードを拒否する", () => {
     expect(
       v.safeParse(createSignInFormSchema(8, 128), {
         email: "user@example.test",
@@ -34,7 +40,7 @@ describe("authentication form schemas", () => {
     ).toBe(false)
   })
 
-  it("forwards password confirmation errors to the confirmation field", () => {
+  it("サインアップのパスワード不一致を確認用フィールドへ割り当てる", () => {
     const signUpResult = v.safeParse(
       createSignUpFormSchema({ ...passwordOptions, requireName: true }),
       {
@@ -44,6 +50,15 @@ describe("authentication form schemas", () => {
         confirmPassword: "different-password",
       }
     )
+
+    expect(signUpResult.success).toBe(false)
+    const signUpMessages = signUpResult.success
+      ? undefined
+      : v.flatten(signUpResult.issues).nested?.confirmPassword
+    expect(signUpMessages).toContain("Passwords do not match.")
+  })
+
+  it("パスワード再設定の不一致を確認用フィールドへ割り当てる", () => {
     const resetResult = v.safeParse(
       createResetPasswordFormSchema(passwordOptions),
       {
@@ -52,84 +67,84 @@ describe("authentication form schemas", () => {
       }
     )
 
-    expect(signUpResult.success).toBe(false)
     expect(resetResult.success).toBe(false)
-    const signUpMessages = signUpResult.success
-      ? undefined
-      : v.flatten(signUpResult.issues).nested?.confirmPassword
     const resetMessages = resetResult.success
       ? undefined
       : v.flatten(resetResult.issues).nested?.confirmPassword
-    expect(signUpMessages).toContain("Passwords do not match.")
     expect(resetMessages).toContain("Passwords do not match.")
   })
 
-  it("never exposes an unknown provider error message", () => {
-    expect(
-      safeAuthErrorMessage(
-        { error: { code: "INTERNAL_ERROR", message: "database secret" } },
-        "Try again safely."
-      )
-    ).toBe("Try again safely.")
-    expect(
-      safeAuthErrorMessage(
-        { error: { code: "INVALID_EMAIL_OR_PASSWORD" } },
-        "fallback"
-      )
-    ).toBe("The email or password is incorrect.")
-    expect(
-      safeAuthErrorMessage(
-        {
-          code: "INVITATION_NOT_FOUND",
-          message: "SELECT token FROM invitation",
+  it.each([
+    {
+      caseLabel: "未知の内部エラー",
+      input: { error: { code: "INTERNAL_ERROR", message: "database secret" } },
+      fallback: "Try again safely.",
+      expected: "Try again safely.",
+    },
+    {
+      caseLabel: "認証情報の不一致",
+      input: { error: { code: "INVALID_EMAIL_OR_PASSWORD" } },
+      fallback: "fallback",
+      expected: "The email or password is incorrect.",
+    },
+    {
+      caseLabel: "存在しない招待",
+      input: {
+        code: "INVITATION_NOT_FOUND",
+        message: "SELECT token FROM invitation",
+      },
+      fallback: "fallback",
+      expected: "This invitation is no longer available.",
+    },
+    {
+      caseLabel: "小文字表記の内部エラー",
+      input: {
+        error: {
+          code: "internal_error",
+          message: "BETTER_AUTH_SECRET=do-not-render",
         },
-        "fallback"
-      )
-    ).toBe("This invitation is no longer available.")
-    expect(
-      safeAuthErrorMessage(
-        {
-          error: {
-            code: "internal_error",
-            message: "BETTER_AUTH_SECRET=do-not-render",
-          },
+      },
+      fallback: "Operation failed safely.",
+      expected: "Operation failed safely.",
+    },
+    {
+      caseLabel: "キャンセルされたパスキー登録",
+      input: {
+        error: {
+          code: "ERROR_CEREMONY_ABORTED",
+          message: "raw WebAuthn error",
         },
-        "Operation failed safely."
-      )
-    ).toBe("Operation failed safely.")
-    expect(
-      safeAuthErrorMessage(
-        {
-          error: {
-            code: "ERROR_CEREMONY_ABORTED",
-            message: "raw WebAuthn error",
-          },
+      },
+      fallback: "fallback",
+      expected: "Passkey registration was cancelled.",
+    },
+    {
+      caseLabel: "登録済みのパスキー",
+      input: {
+        error: {
+          code: "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
+          message: "raw authenticator metadata",
         },
-        "fallback"
-      )
-    ).toBe("Passkey registration was cancelled.")
-    expect(
-      safeAuthErrorMessage(
-        {
-          error: {
-            code: "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
-            message: "raw authenticator metadata",
-          },
+      },
+      fallback: "fallback",
+      expected: "That passkey is already registered.",
+    },
+    {
+      caseLabel: "送信済みの組織招待",
+      input: {
+        status: 400,
+        error: {
+          code: "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
+          message: "provider-owned invitation detail",
         },
-        "fallback"
-      )
-    ).toBe("That passkey is already registered.")
-    expect(
-      safeAuthErrorMessage(
-        {
-          status: 400,
-          error: {
-            code: "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
-            message: "provider-owned invitation detail",
-          },
-        },
-        "fallback"
-      )
-    ).toBe("An invitation is already pending for this email address.")
-  })
+      },
+      fallback: "fallback",
+      expected: "An invitation is already pending for this email address.",
+    },
+  ])(
+    "$caseLabelでは安全な認証エラー文言を返す",
+    ({ expected, fallback, input }) => {
+      expect(safeAuthErrorMessage(input, fallback)).toBe(expected)
+    }
+  )
 })

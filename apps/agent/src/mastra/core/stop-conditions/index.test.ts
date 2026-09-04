@@ -13,8 +13,8 @@ const pendingResult = {
   toolName: "create_issue",
 }
 
-describe("stopOnPendingIssueAction", () => {
-  it("stops immediately after a canonical pending Issue mutation", () => {
+describe("stopOnPendingIssueActionの契約", () => {
+  it("正規のpending Issue変更直後に停止する", () => {
     expect(
       stopOnPendingIssueAction({
         steps: [{ toolResults: [pendingResult] }],
@@ -23,7 +23,7 @@ describe("stopOnPendingIssueAction", () => {
   })
 
   it.each(["add_issue_attachments", "remove_issue_attachments"])(
-    "stops after a pending %s action before another model step",
+    "pending %s action後かつ次のmodel step前に停止する",
     (toolName) => {
       expect(
         stopOnPendingIssueAction({
@@ -98,7 +98,7 @@ describe("stopOnPendingIssueAction", () => {
       ],
     },
     { steps: [{ toolResults: [null] }] },
-  ])("does not stop for non-canonical result %#", ({ steps }) => {
+  ])("非正規結果%#では停止しない", ({ steps }) => {
     expect(stopOnPendingIssueAction({ steps })).toBe(false)
   })
 })

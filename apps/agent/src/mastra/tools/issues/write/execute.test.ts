@@ -93,8 +93,37 @@ const harness = (status: AgentIssueAction["status"] = "pending") => {
   }
 }
 
-describe("action identity", () => {
-  it("is stable across provider calls in one root run and changes across logical writes", async () => {
+const mutationHarness = () => {
+  const prepareUpdateIssue = vi
+    .fn<WriteApi["prepareUpdateIssue"]>()
+    .mockResolvedValue(terminalAction("update_issue"))
+  const prepareDeleteIssue = vi
+    .fn<WriteApi["prepareDeleteIssue"]>()
+    .mockResolvedValue(terminalAction("delete_issue"))
+  const consume = vi.fn<(kind: "client" | "read" | "write") => void>()
+  const handlers = createAgentWriteHandlers(
+    {
+      executeApprovedAction: () => Promise.reject(new Error("not used")),
+      prepareCreateIssue: () => Promise.reject(new Error("not used")),
+      prepareDeleteIssue,
+      prepareUpdateIssue,
+    },
+    RUN_GRANT,
+    {
+      consume,
+      suspendForApproval: vi.fn<() => void>(),
+    },
+    {
+      holdForApproval: vi.fn<() => void>(),
+      suspendAction: async () => undefined,
+    },
+    ROOT_RUN_ID
+  )
+  return { consume, handlers, prepareDeleteIssue, prepareUpdateIssue }
+}
+
+describe("action identityの契約", () => {
+  it("一つのroot run内のprovider呼出間で安定しlogical writeごとに変わる", async () => {
     const identityFor = async (
       issue: { labels?: string[]; title: string },
       toolCallId: string,
@@ -150,7 +179,7 @@ describe("action identity", () => {
     expect(first.idempotencyKey).not.toBe(changedScope.idempotencyKey)
   })
 
-  it("hashes a provider tool ID that is unsafe for the internal API", async () => {
+  it("内部APIに安全でないprovider tool IDをhash化する", async () => {
     const test = harness()
     const handlers = createAgentWriteHandlers(
       test.api,
@@ -170,8 +199,8 @@ describe("action identity", () => {
   })
 })
 
-describe("createAgentWriteHandlers", () => {
-  it("returns only a safe canonical pending preview and holds settlement", async () => {
+describe("createAgentWriteHandlersの契約", () => {
+  it("安全な正規pending previewだけを返してsettlementを保留する", async () => {
     const test = harness("pending")
     const result = await test.handlers.createIssue(
       { attachmentAssetIds: [], title: "Issue" },
@@ -198,7 +227,7 @@ describe("createAgentWriteHandlers", () => {
     expect(JSON.stringify(result)).not.toContain(RUN_GRANT)
   })
 
-  it("suspends the shared tool control after a pending mutation", async () => {
+  it("pending変更後に共通tool controlをsuspendする", async () => {
     const test = harness("pending")
     const budget = createAgentToolBudget()
     const handlers = createAgentWriteHandlers(
@@ -222,7 +251,7 @@ describe("createAgentWriteHandlers", () => {
     expect(test.prepared).toHaveLength(1)
   })
 
-  it("normalizes duplicates and whitespace before prepare", async () => {
+  it("prepare前に重複と空白を正規化する", async () => {
     const test = harness("pending")
     await test.handlers.createIssue(
       {
@@ -242,7 +271,7 @@ describe("createAgentWriteHandlers", () => {
     })
   })
 
-  it("normalizes an empty model assignee to an unassigned Issue", async () => {
+  it("空のmodel assigneeを未割当Issueへ正規化する", async () => {
     const parsed = {
       assigneeId: "",
       title: "Issue",
@@ -258,7 +287,7 @@ describe("createAgentWriteHandlers", () => {
     })
   })
 
-  it("executes an auto-approved action immediately and returns a minimal receipt", async () => {
+  it("自動承認actionを即時実行して最小receiptを返す", async () => {
     const test = harness("approved")
 
     await expect(
@@ -276,7 +305,7 @@ describe("createAgentWriteHandlers", () => {
     expect(test.holdForApproval).not.toHaveBeenCalled()
   })
 
-  it("sanitizes every pending preview value without forwarding extra data", async () => {
+  it("余分なdataを転送せず全pending preview値を無害化する", async () => {
     const test = harness("pending")
     test.api.prepareCreateIssue = () =>
       Promise.resolve({
@@ -347,7 +376,7 @@ describe("createAgentWriteHandlers", () => {
     })
   })
 
-  it("returns terminal state without execution and retries succeeded actions by receipt", async () => {
+  it("実行せずterminal stateを返して成功済みactionをreceiptで再試行する", async () => {
     const rejected = harness("rejected")
     await expect(
       rejected.handlers.createIssue({ title: "Issue" }, "call_1")
@@ -363,28 +392,36 @@ describe("createAgentWriteHandlers", () => {
     expect(succeeded.executeApprovedAction).toHaveBeenCalledOnce()
   })
 
-  it("rejects invalid internal action and receipt projections", async () => {
+  it("pending actionの不正なIDを拒否する", async () => {
     const invalidId = harness("pending")
     invalidId.api.prepareCreateIssue = () =>
       Promise.resolve({ ...action("pending"), id: "unsafe/id" })
     await expect(
       invalidId.handlers.createIssue({ title: "Issue" }, "call_1")
     ).rejects.toThrow("Issue write capability is unavailable")
+  })
 
+  it("pending actionの異なるkindを拒否する", async () => {
     const wrongKind = harness("pending")
     wrongKind.api.prepareCreateIssue = () =>
       Promise.resolve({ ...action("pending"), kind: "update_issue" })
     await expect(
       wrongKind.handlers.createIssue({ title: "Issue" }, "call_1")
     ).rejects.toThrow("Issue write capability is unavailable")
+  })
 
+  it("pending actionの欠損previewを拒否する", async () => {
     const missingPreview = harness("pending")
     missingPreview.api.prepareCreateIssue = () =>
       Promise.resolve({ ...action("pending"), preview: null })
     await expect(
       missingPreview.handlers.createIssue({ title: "Issue" }, "call_1")
     ).rejects.toThrow("Issue write capability is unavailable")
+    expect(missingPreview.holdForApproval).not.toHaveBeenCalled()
+    expect(missingPreview.suspendForApproval).not.toHaveBeenCalled()
+  })
 
+  it("pending actionの不正なpreviewを承認保留前に拒否する", async () => {
     const malformedPreview = harness("pending")
     malformedPreview.api.prepareCreateIssue = () => {
       const malformed = action("pending")
@@ -398,7 +435,9 @@ describe("createAgentWriteHandlers", () => {
     ).rejects.toThrow("Issue write capability is unavailable")
     expect(malformedPreview.holdForApproval).not.toHaveBeenCalled()
     expect(malformedPreview.suspendForApproval).not.toHaveBeenCalled()
+  })
 
+  it("成功receiptの不正なIssue番号を拒否する", () => {
     expect(() =>
       toSafeActionReceipt({
         actionId: "action_1",
@@ -409,7 +448,7 @@ describe("createAgentWriteHandlers", () => {
     ).toThrow("Issue write capability is unavailable")
   })
 
-  it("replaces internal failures with a fixed error", async () => {
+  it("内部失敗を固定errorへ置換する", async () => {
     const test = harness("pending")
     const cause = new Error(`private ${RUN_GRANT}`)
     test.api.prepareCreateIssue = () => Promise.reject(cause)
@@ -427,35 +466,11 @@ describe("createAgentWriteHandlers", () => {
     expect(String(failure)).not.toContain(RUN_GRANT)
   })
 
-  it("routes normalized update, attachment, and delete payloads through the production handlers", async () => {
-    const prepareUpdateIssue = vi
-      .fn<WriteApi["prepareUpdateIssue"]>()
-      .mockResolvedValue(terminalAction("update_issue"))
-    const prepareDeleteIssue = vi
-      .fn<WriteApi["prepareDeleteIssue"]>()
-      .mockResolvedValue(terminalAction("delete_issue"))
-    const consume = vi.fn<(kind: "client" | "read" | "write") => void>()
-    const handlers = createAgentWriteHandlers(
-      {
-        executeApprovedAction: () => Promise.reject(new Error("not used")),
-        prepareCreateIssue: () => Promise.reject(new Error("not used")),
-        prepareDeleteIssue,
-        prepareUpdateIssue,
-      },
-      RUN_GRANT,
-      {
-        consume,
-        suspendForApproval: vi.fn<() => void>(),
-      },
-      {
-        holdForApproval: vi.fn<() => void>(),
-        suspendAction: async () => undefined,
-      },
-      ROOT_RUN_ID
-    )
+  it("Issue更新payloadを正規化してwrite budgetを消費する", async () => {
+    const test = mutationHarness()
 
     await expect(
-      handlers.updateIssue(
+      test.handlers.updateIssue(
         {
           assigneeId: " ",
           expectedRevision: 1,
@@ -466,34 +481,7 @@ describe("createAgentWriteHandlers", () => {
         "call_update"
       )
     ).resolves.toMatchObject({ status: "rejected" })
-    await expect(
-      handlers.deleteIssue(
-        { expectedRevision: 1, issueId: " issue_1 " },
-        "call_delete"
-      )
-    ).resolves.toMatchObject({ status: "rejected" })
-    await expect(
-      handlers.addIssueAttachments(
-        {
-          assetIds: ["asset_1", "asset_1"],
-          expectedRevision: 1,
-          issueId: " issue_1 ",
-        },
-        "call_add_attachments"
-      )
-    ).resolves.toMatchObject({ status: "rejected" })
-    await expect(
-      handlers.removeIssueAttachments(
-        {
-          expectedRevision: 1,
-          fileIds: ["file_1", "file_1"],
-          issueId: " issue_1 ",
-        },
-        "call_remove_attachments"
-      )
-    ).resolves.toMatchObject({ status: "rejected" })
-
-    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+    expect(test.prepareUpdateIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         issue: {
           assigneeId: null,
@@ -505,13 +493,43 @@ describe("createAgentWriteHandlers", () => {
         toolCallId: "call_update",
       })
     )
-    expect(prepareDeleteIssue).toHaveBeenCalledWith(
+    expect(test.consume).toHaveBeenCalledOnce()
+    expect(test.consume).toHaveBeenCalledWith("write")
+  })
+
+  it("Issue削除payloadを正規化してwrite budgetを消費する", async () => {
+    const test = mutationHarness()
+
+    await expect(
+      test.handlers.deleteIssue(
+        { expectedRevision: 1, issueId: " issue_1 " },
+        "call_delete"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
+    expect(test.prepareDeleteIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         issue: { expectedRevision: 1, issueId: "issue_1" },
         toolCallId: "call_delete",
       })
     )
-    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+    expect(test.consume).toHaveBeenCalledOnce()
+    expect(test.consume).toHaveBeenCalledWith("write")
+  })
+
+  it("添付追加payloadを正規化してwrite budgetを消費する", async () => {
+    const test = mutationHarness()
+
+    await expect(
+      test.handlers.addIssueAttachments(
+        {
+          assetIds: ["asset_1", "asset_1"],
+          expectedRevision: 1,
+          issueId: " issue_1 ",
+        },
+        "call_add_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
+    expect(test.prepareUpdateIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         issue: {
           attachmentAssetIds: ["asset_1"],
@@ -522,7 +540,25 @@ describe("createAgentWriteHandlers", () => {
         toolCallId: "call_add_attachments",
       })
     )
-    expect(prepareUpdateIssue).toHaveBeenCalledWith(
+    expect(test.consume).toHaveBeenCalledOnce()
+    expect(test.consume).toHaveBeenCalledWith("write")
+  })
+
+  it("添付削除payloadを正規化してwrite budgetを消費する", async () => {
+    const test = mutationHarness()
+
+    await expect(
+      test.handlers.removeIssueAttachments(
+        {
+          expectedRevision: 1,
+          fileIds: ["file_1", "file_1"],
+          issueId: " issue_1 ",
+        },
+        "call_remove_attachments"
+      )
+    ).resolves.toMatchObject({ status: "rejected" })
+
+    expect(test.prepareUpdateIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         issue: {
           attachmentFileIds: ["file_1"],
@@ -533,12 +569,13 @@ describe("createAgentWriteHandlers", () => {
         toolCallId: "call_remove_attachments",
       })
     )
-    expect(consume).toHaveBeenCalledTimes(4)
+    expect(test.consume).toHaveBeenCalledOnce()
+    expect(test.consume).toHaveBeenCalledWith("write")
   })
 })
 
-describe("Issue write tool registry", () => {
-  it("defines only the five server-side Issue mutation tools", () => {
+describe("Issue write tool registryの契約", () => {
+  it("server側Issue変更toolを五つだけ定義する", () => {
     const issueWriteTools = createIssueWriteTools(() => {
       throw new Error("unused")
     })

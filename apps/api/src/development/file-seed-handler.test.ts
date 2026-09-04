@@ -261,8 +261,8 @@ const request = (origin = "http://127.0.0.1:8787") =>
     }
   )
 
-describe("development file seed boundary", () => {
-  it("accepts only local database URL shapes", () => {
+describe("development file seedの境界", () => {
+  it("local databaseのURL形式だけを受理する", () => {
     expect(isLocalDatabaseUrl("file:/tmp/development.db")).toBe(true)
     expect(isLocalDatabaseUrl("file://storage.example.com/shared.db")).toBe(
       false
@@ -273,7 +273,7 @@ describe("development file seed boundary", () => {
     expect(isLocalDatabaseUrl(undefined)).toBe(false)
   })
 
-  it("stays unavailable outside development, loopback, and local Turso", async () => {
+  it("developmentとloopbackとlocal Turso以外では利用不能に保つ", async () => {
     const boundaryToken = "x".repeat(64)
 
     const responses = await Promise.all([
@@ -301,7 +301,7 @@ describe("development file seed boundary", () => {
     expect(responses.map((item) => item?.status)).toEqual([404, 404, 404])
   })
 
-  it("requires the per-process token before touching storage", async () => {
+  it("storageへ触れる前にprocess固有tokenを要求する", async () => {
     const result = await handleDevelopmentFileSeedRequest(
       boundaryDatabase,
       request(),
@@ -317,7 +317,7 @@ describe("development file seed boundary", () => {
     expect(result?.headers.get("cache-control")).toBe("no-store")
   })
 
-  it("ignores unrelated paths so the regular app owns its 404", async () => {
+  it("無関係なpathを無視して通常appに404を所有させる", async () => {
     const result = await handleDevelopmentFileSeedRequest(
       boundaryDatabase,
       new Request("http://127.0.0.1:8787/health"),
@@ -328,10 +328,10 @@ describe("development file seed boundary", () => {
   })
 })
 
-describe("development file seed reconcile", () => {
+describe("development file seedのreconcile", () => {
   afterEach(() => resetFileStorageRuntimeForTest())
 
-  it("proves the session token and migrated database before seed", async () => {
+  it("seed前にsession tokenとmigration済みdatabaseを検証する", async () => {
     const selectedFixture = developmentFileFixtures.find(
       (candidate) => candidate.key === "text"
     )
@@ -362,7 +362,7 @@ describe("development file seed reconcile", () => {
     }
   })
 
-  it("converges pending, ready, missing, and deleted fixture states", async () => {
+  it("pendingとreadyとmissingとdeletedのfixture stateを収束させる", async () => {
     const selectedFixture = developmentFileFixtures.find(
       (candidate) => candidate.key === "text"
     )
@@ -455,7 +455,7 @@ describe("development file seed reconcile", () => {
     }
   })
 
-  it("keeps an uploaded object and pending row when DB finalization fails", async () => {
+  it("DB確定失敗時にupload済みobjectとpending rowを維持する", async () => {
     const selectedFixture = developmentFileFixtures.find(
       (candidate) => candidate.key === "wideJpeg"
     )
@@ -519,7 +519,7 @@ describe("development file seed reconcile", () => {
     }
   })
 
-  it("reconciles the download-only AVIF fixture without Images.info", async () => {
+  it("Images.infoなしでdownload限定AVIF fixtureをreconcileする", async () => {
     const selectedFixture = developmentFileFixtures.find(
       (candidate) => candidate.key === "avif"
     )

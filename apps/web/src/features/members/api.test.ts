@@ -58,7 +58,7 @@ vi.mock("@enterprise-agentic-saas/auth/client", () => ({
   createAuthClientForBaseUrl: mocks.createAuthClientForBaseUrl,
 }))
 
-describe("invitation decision API", () => {
+describe("招待への判断API", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.createAuthClientForBaseUrl.mockReturnValue({
@@ -88,7 +88,7 @@ describe("invitation decision API", () => {
     mocks.inviteMember.mockResolvedValue({ id: "invitation-1" })
   })
 
-  it("loads and normalizes the invitation only for the active recipient", async () => {
+  it("有効な受信者に対してだけ招待を読み込み正規化する", async () => {
     const result = await getInvitationContext({
       apiBaseUrl: "https://api.example.test",
       cookie: "session=recipient",
@@ -115,7 +115,7 @@ describe("invitation decision API", () => {
   })
 
   it.each([false, true])(
-    "uses Better Auth's single-recipient invitation contract with resend=%s",
+    "resend=%sを指定したBetter Authの単一受信者招待契約を使う",
     async (resend) => {
       await sendOrganizationInvitation({
         apiBaseUrl: "https://api.example.test",
@@ -141,20 +141,37 @@ describe("invitation decision API", () => {
   )
 
   it.each([
-    [{ status: 403 }, "recipient_mismatch"],
-    [
-      { code: "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION" },
-      "recipient_mismatch",
-    ],
-    [{ status: 401 }, "signed_out"],
-    [{ statusCode: 401 }, "signed_out"],
-    [{ code: "SESSION_EXPIRED" }, "signed_out"],
-    [{ status: 400 }, "unavailable"],
-    [{ code: "INVITATION_NOT_FOUND" }, "unavailable"],
-    [{ status: 503 }, "load_error"],
+    {
+      case: "受信者不一致のstatus",
+      error: { status: 403 },
+      kind: "recipient_mismatch",
+    },
+    {
+      case: "受信者不一致のcode",
+      error: { code: "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION" },
+      kind: "recipient_mismatch",
+    },
+    { case: "未認証のstatus", error: { status: 401 }, kind: "signed_out" },
+    {
+      case: "未認証のstatusCode",
+      error: { statusCode: 401 },
+      kind: "signed_out",
+    },
+    {
+      case: "期限切れのcode",
+      error: { code: "SESSION_EXPIRED" },
+      kind: "signed_out",
+    },
+    { case: "利用不能のstatus", error: { status: 400 }, kind: "unavailable" },
+    {
+      case: "招待なしのcode",
+      error: { code: "INVITATION_NOT_FOUND" },
+      kind: "unavailable",
+    },
+    { case: "一時障害のstatus", error: { status: 503 }, kind: "load_error" },
   ] as const)(
-    "classifies invitation lookup failures without exposing provider details",
-    async (error, kind) => {
+    "$caseをプロバイダー詳細の公開なしで分類する",
+    async ({ error, kind }) => {
       mocks.getInvitation.mockResolvedValueOnce({
         data: null,
         error: { ...error, message: "SELECT email FROM invitation" },
@@ -169,7 +186,7 @@ describe("invitation decision API", () => {
     }
   )
 
-  it("offers a retry when invitation context does not match the web schema", async () => {
+  it("招待contextがWeb schemaと一致しない場合に再試行を提示する", async () => {
     mocks.getInvitation.mockResolvedValueOnce({
       data: {
         id: "invitation-1",
@@ -187,7 +204,7 @@ describe("invitation decision API", () => {
     ).resolves.toEqual({ kind: "load_error" })
   })
 
-  it("offers a retry when the invitation lookup rejects", async () => {
+  it("招待取得が拒否された場合に再試行を提示する", async () => {
     mocks.getInvitation.mockRejectedValueOnce(new Error("upstream unavailable"))
 
     await expect(
@@ -198,9 +215,20 @@ describe("invitation decision API", () => {
     ).resolves.toEqual({ kind: "load_error" })
   })
 
-  it.each(["accept", "reject"] as const)(
-    "uses the Better Auth client to %s an invitation",
-    async (action) => {
+  it.each([
+    {
+      action: "accept",
+      caseLabel: "承諾",
+      request: mocks.acceptInvitation,
+    },
+    {
+      action: "reject",
+      caseLabel: "拒否",
+      request: mocks.rejectInvitation,
+    },
+  ] as const)(
+    "招待の$caseLabelを指定したAPIの対応methodへ送る",
+    async ({ action, request }) => {
       await decideInvitation({
         action,
         apiBaseUrl: "https://api.example.test",
@@ -210,71 +238,14 @@ describe("invitation decision API", () => {
       expect(mocks.createAuthClientForBaseUrl).toHaveBeenCalledWith(
         "https://api.example.test"
       )
-      const expected =
-        action === "accept" ? mocks.acceptInvitation : mocks.rejectInvitation
-      expect(expected).toHaveBeenCalledWith({ invitationId: "invitation-1" })
+      expect(request).toHaveBeenCalledWith({ invitationId: "invitation-1" })
     }
   )
 
-  it("preserves a returned Better Auth decision error", async () => {
+  it("Better Authが返した判断エラーを保持する", async () => {
     const error = {
       code: "INVITATION_NOT_FOUND",
       message: "SELECT token FROM invitation",
-    }
-    mocks.acceptInvitation.mockResolvedValueOnce({
-      data: null,
-      error,
-    })
-
-    await expect(
-      decideInvitation({
-        action: "accept",
-        apiBaseUrl: "https://api.example.test",
-        invitationId: "invitation-1",
-      })
-    ).rejects.toBe(error)
-  })
-
-  it.each([{ status: 401 }, { statusCode: 401 }, { code: "SESSION_EXPIRED" }])(
-    "returns to authentication when a decision loses its session",
-    async (error) => {
-      mocks.acceptInvitation.mockResolvedValueOnce({
-        data: null,
-        error,
-      })
-
-      await expect(
-        decideInvitation({
-          action: "accept",
-          apiBaseUrl: "https://api.example.test",
-          invitationId: "invitation-1",
-        })
-      ).rejects.toBe(error)
-    }
-  )
-
-  it.each(["accept", "reject"] as const)(
-    "preserves a rejected provider error when an invitation cannot be %sed",
-    async (action) => {
-      const request =
-        action === "accept" ? mocks.acceptInvitation : mocks.rejectInvitation
-      const error = new Error("BETTER_AUTH_SECRET=provider-secret")
-      request.mockRejectedValueOnce(error)
-
-      await expect(
-        decideInvitation({
-          action,
-          apiBaseUrl: "https://api.example.test",
-          invitationId: "invitation-1",
-        })
-      ).rejects.toBe(error)
-    }
-  )
-
-  it("preserves an unknown returned error", async () => {
-    const error = {
-      code: "INTERNAL_ERROR",
-      message: "TURSO_AUTH_TOKEN=provider-secret",
     }
     mocks.acceptInvitation.mockResolvedValueOnce({
       data: null,

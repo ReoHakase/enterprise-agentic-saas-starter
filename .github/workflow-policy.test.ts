@@ -26,8 +26,8 @@ const listFiles = async (
   ).flat()
 }
 
-describe("repository quality configuration", () => {
-  test("pins every remote GitHub Action to a full commit SHA", async () => {
+describe("repository品質設定", () => {
+  test("全remote GitHub Actionを完全commit SHAへ固定する", async () => {
     const files = await listFiles(".github", /\.ya?ml$/)
     const findings: string[] = []
     const contents = await Promise.all(
@@ -52,7 +52,7 @@ describe("repository quality configuration", () => {
     expect(findings).toEqual([])
   })
 
-  test("isolates, drains, and removes stale secrets before destructive migrations", async () => {
+  test("破壊的migration前に分離してdrainしstale secretを除去する", async () => {
     const workflow = await readFile(".github/workflows/deploy.yml", "utf8")
     const inventoryAt = workflow.indexOf(
       "Inspect cross-database Worker secret inventory"
@@ -134,7 +134,7 @@ describe("repository quality configuration", () => {
     expect(workflow).not.toContain("cleanup_allowed=")
   })
 
-  test("deploys the private Images Worker before either API binding consumer", async () => {
+  test("各API binding consumerより先にprivate Images Workerを配置する", async () => {
     const workflow = await readFile(".github/workflows/deploy.yml", "utf8")
     const buildImagesAt = workflow.indexOf("Build private Images Worker")
     const deployImagesAt = workflow.indexOf(

@@ -64,7 +64,7 @@ const renderSessions = () => {
   )
 }
 
-describe("SessionsPanel", () => {
+describe("SessionsPanelの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.listSessions.mockResolvedValue(sessions)
@@ -72,23 +72,31 @@ describe("SessionsPanel", () => {
     mocks.revokeOtherSessions.mockResolvedValue({})
   })
 
-  it("lists recognizable devices and revokes a selected session", async () => {
-    const actor = userEvent.setup()
+  it("代表セッションの公開情報を一覧表示する", async () => {
     renderSessions()
 
     expect(await screen.findByText("Apple Mac")).toBeInTheDocument()
     expect(screen.getByText("Safari 18.5")).toBeInTheDocument()
-    expect(screen.getByText("Windows PC")).toBeInTheDocument()
-    expect(screen.getByText("Chrome 140.0.0.0")).toBeInTheDocument()
     expect(screen.getByText("Updated at")).toBeInTheDocument()
     expect(screen.getByText("Expires at")).toBeInTheDocument()
-    expect(screen.getByTestId("data-table-root")).toBeInTheDocument()
     expect(screen.getByText(macUserAgent)).toBeInTheDocument()
+  })
+
+  it("IP addressを一覧へ公開しない", async () => {
+    renderSessions()
+
+    await screen.findByText("Apple Mac")
     expect(screen.queryByText("127.0.0.2")).not.toBeInTheDocument()
     expect(
       screen.queryByRole("columnheader", { name: "IP address" })
     ).not.toBeInTheDocument()
-    await actor.click(screen.getByRole("button", { name: "Revoke" }))
+  })
+
+  it("選択したセッションを取り消す", async () => {
+    const actor = userEvent.setup()
+    renderSessions()
+
+    await actor.click(await screen.findByRole("button", { name: "Revoke" }))
     await actor.click(screen.getByRole("button", { name: "Revoke session" }))
 
     await waitFor(() => {
@@ -97,7 +105,7 @@ describe("SessionsPanel", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Session revoked")
   })
 
-  it("renders a retryable failure state", async () => {
+  it("再試行可能な失敗状態をレンダリングする", async () => {
     mocks.listSessions.mockRejectedValueOnce(new Error("Session API failed"))
     renderSessions()
 

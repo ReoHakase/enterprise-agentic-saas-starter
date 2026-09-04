@@ -222,8 +222,8 @@ const readNotFound = async (
   return body.error
 }
 
-describe("Agent public API to private Memory boundary", () => {
-  it("keeps separate durable Memory behind real auth, routes, and Worker boundaries", async () => {
+describe("Agent公開APIからprivate Memoryへの境界", () => {
+  it("実authとrouteとWorker境界の内側へ分離したdurable Memoryを保つ", async () => {
     const directory = await mkdtemp(join(tmpdir(), "agent-g4-boundary-"))
     const applicationDatabasePath = join(directory, "application.db")
     const agentDatabasePath = join(directory, "agent.db")

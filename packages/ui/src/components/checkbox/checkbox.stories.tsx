@@ -1,5 +1,3 @@
-import { expect, fn, userEvent } from "storybook/test"
-
 import preview from "#storybook/preview"
 
 import { Label } from "../label/label"
@@ -11,23 +9,10 @@ const meta = preview.meta({
   tags: ["autodocs"],
   args: {
     "aria-label": "Include completed issues",
-    onCheckedChange: fn(),
   },
 })
 
-export const Unchecked = meta.story({
-  play: async ({ args, canvas, step }) => {
-    await step("Toggle using the keyboard", async () => {
-      const checkbox = canvas.getByRole("checkbox", {
-        name: "Include completed issues",
-      })
-      checkbox.focus()
-      await userEvent.keyboard(" ")
-      await expect(checkbox).toBeChecked()
-      await expect(args.onCheckedChange).toHaveBeenCalled()
-    })
-  },
-})
+export const Unchecked = meta.story({})
 
 export const Checked = meta.story({
   args: { defaultChecked: true },

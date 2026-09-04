@@ -9,8 +9,8 @@ import {
   resolveMcpOAuthLoginRedirect,
 } from "./query"
 
-describe("MCP OAuth scope query", () => {
-  it("projects allowlisted scopes into public descriptions", () => {
+describe("MCP OAuth scope queryの契約", () => {
+  it("allowlist済みscopeを公開説明へprojectionする", () => {
     expect(
       parseMcpOAuthScopes("issues:read files:write offline_access issues:read")
     ).toEqual([
@@ -23,7 +23,7 @@ describe("MCP OAuth scope query", () => {
     ])
   })
 
-  it("keeps the public scope labels aligned with the OAuth contract", () => {
+  it("公開scopeのlabelをOAuth契約と一致させる", () => {
     const summaries = parseMcpOAuthScopes(
       [...MCP_PERMISSION_SCOPES, "offline_access"].join(" ")
     )
@@ -35,7 +35,7 @@ describe("MCP OAuth scope query", () => {
     ])
   })
 
-  it("derives every matrix cell from the OAuth permission contract", () => {
+  it("OAuth権限契約からmatrixの全cellを導出する", () => {
     const matrixScopes = mcpOAuthScopeMatrixRows.flatMap(({ scopes }) =>
       Object.values(scopes)
     )
@@ -44,16 +44,19 @@ describe("MCP OAuth scope query", () => {
     expect(new Set(matrixScopes)).toEqual(new Set(MCP_PERMISSION_SCOPES))
   })
 
-  it.each([undefined, [], ["issues:read"], "", "issues:read private:raw"])(
-    "rejects missing, repeated-query, empty, and unknown input",
-    (input) => {
-      expect(parseMcpOAuthScopes(input)).toBeNull()
-    }
-  )
+  it.each([
+    { case: "値の欠落", input: undefined },
+    { case: "空の配列", input: [] },
+    { case: "配列形式", input: ["issues:read"] },
+    { case: "空文字列", input: "" },
+    { case: "未知のscope", input: "issues:read private:raw" },
+  ])("$caseのscope入力を拒否する", ({ input }) => {
+    expect(parseMcpOAuthScopes(input)).toBeNull()
+  })
 })
 
-describe("MCP OAuth login redirect", () => {
-  it("preserves the signed OAuth route when another account is added", () => {
+describe("MCP OAuth ログインリダイレクト", () => {
+  it("別アカウント追加時も署名済みOAuthルートを保持する", () => {
     expect(
       createMcpOAuthAddAccountHref(
         "/oauth/organization?client_id=client_1&sig=signed-query"
@@ -63,7 +66,7 @@ describe("MCP OAuth login redirect", () => {
     )
   })
 
-  it("preserves repeated query values for a local OAuth route", () => {
+  it("ローカルOAuthルートの重複query値を保持する", () => {
     expect(
       createMcpOAuthRoutePath("/oauth/organization", {
         ba_param: ["client_id", "state"],
@@ -74,7 +77,7 @@ describe("MCP OAuth login redirect", () => {
     )
   })
 
-  it("preserves a signed authorization query on the local organization page", () => {
+  it("署名済み認可queryをローカル組織ページで保持する", () => {
     const redirect = resolveMcpOAuthLoginRedirect({
       client_id: "client_1",
       exp: "1785726000",
@@ -91,15 +94,18 @@ describe("MCP OAuth login redirect", () => {
   })
 
   it.each([
-    {},
+    { case: "queryの欠落", query: {} },
     {
-      client_id: "client_1",
-      exp: "1785726000",
-      redirect_uri: "http://127.0.0.1/callback",
-      response_type: "token",
-      sig: "signed-query",
+      case: "response_typeの不一致",
+      query: {
+        client_id: "client_1",
+        exp: "1785726000",
+        redirect_uri: "http://127.0.0.1/callback",
+        response_type: "token",
+        sig: "signed-query",
+      },
     },
-  ])("ignores a non-authorization query", (query) => {
+  ])("$caseでは認可用でないqueryを無視する", ({ query }) => {
     expect(resolveMcpOAuthLoginRedirect(query)).toBeNull()
   })
 })

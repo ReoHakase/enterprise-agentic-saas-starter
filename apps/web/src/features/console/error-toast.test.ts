@@ -13,10 +13,10 @@ vi.mock("sonner", () => ({
   toast: { error: mocks.toastError },
 }))
 
-describe("console API error toast", () => {
+describe("コンソール API エラー トースト", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("renders only fixed action and recovery copy", () => {
+  it("固定の操作文言と復旧文言だけを表示する", () => {
     showConsoleApiErrorToast(
       httpError(500, "internal_error"),
       "The session could not be revoked."

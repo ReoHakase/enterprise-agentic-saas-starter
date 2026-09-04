@@ -1,7 +1,7 @@
 import { test } from "../fixtures/test"
 import { runScriptedAgentCancel } from "./scripted-agent-cancel"
 
-test("scripted Agent cancel traverses the real stack", ({
+test("スクリプト化したAgentのキャンセルを実構成で検証する", ({
   agentScenario,
   context,
   page,

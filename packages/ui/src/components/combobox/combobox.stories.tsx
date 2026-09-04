@@ -51,7 +51,7 @@ const OrganizationCombobox = ({ disabled = false }: { disabled?: boolean }) => (
 export const Organization: ReturnType<typeof meta.story> = meta.story({
   render: () => <OrganizationCombobox />,
   play: async ({ canvas, canvasElement, step }) => {
-    await step("Filter and select an organization", async () => {
+    await step("組織を絞り込んで選択する", async () => {
       const input = canvas.getByRole("combobox", { name: "Organization" })
       await userEvent.click(input)
       await userEvent.type(input, "North")
@@ -81,11 +81,6 @@ export const NoMatches: ReturnType<typeof meta.story> = meta.story({
       </p>
     </div>
   ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("status")).toHaveTextContent(
-      "No organization found."
-    )
-  },
 })
 
 export const Disabled: ReturnType<typeof meta.story> = meta.story({

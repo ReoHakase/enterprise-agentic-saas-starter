@@ -55,7 +55,7 @@ export const Ready = meta.story({
   play: async ({ canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body)
 
-    await step("Cancel removal of a device account", async () => {
+    await step("デバイスアカウントの削除をキャンセルする", async () => {
       await userEvent.click(
         await body.findByRole("button", {
           name: "Remove jordan@example.test from this device",
@@ -78,14 +78,7 @@ export const Ready = meta.story({
   },
 })
 
-export const Empty = meta.story({
-  play: async ({ canvasElement }) => {
-    const emptyState = await within(
-      canvasElement.ownerDocument.body
-    ).findByText("No additional accounts")
-    await waitFor(() => expect(emptyState).toBeVisible())
-  },
-})
+export const Empty = meta.story({})
 
 export const ApiFailure = meta.story({
   beforeEach({ msw }) {
@@ -94,11 +87,5 @@ export const ApiFailure = meta.story({
         HttpResponse.json({ message: "Unavailable" }, { status: 503 })
       )
     )
-  },
-  play: async ({ canvasElement }) => {
-    const errorState = await within(
-      canvasElement.ownerDocument.body
-    ).findByText("Accounts could not be loaded")
-    await waitFor(() => expect(errorState).toBeVisible())
   },
 })

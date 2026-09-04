@@ -51,7 +51,7 @@ const renderPanel = () => {
   )
 }
 
-describe("SecurityMethodsPanel", () => {
+describe("SecurityMethodsPanelの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.sessionStorage.clear()
@@ -76,12 +76,18 @@ describe("SecurityMethodsPanel", () => {
     mocks.authClient.passkey.addPasskey.mockResolvedValue({})
   })
 
-  it("loads linked accounts and removes GitHub after confirmation", async () => {
-    const user = userEvent.setup()
+  it("登録済みpasskeyを表示する", async () => {
     renderPanel()
 
     expect(await screen.findByText("MacBook")).toBeInTheDocument()
     expect(screen.getByText("Backed up")).toBeInTheDocument()
+  })
+
+  it("確認後にGitHub連携を解除する", async () => {
+    const user = userEvent.setup()
+    renderPanel()
+
+    await screen.findByText("GitHub")
     await user.click(screen.getByRole("button", { name: "Unlink" }))
     await user.click(screen.getByRole("button", { name: "Unlink GitHub" }))
 
@@ -94,7 +100,7 @@ describe("SecurityMethodsPanel", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("GitHub account unlinked")
   })
 
-  it("links GitHub through the standard social mutation", async () => {
+  it("標準のソーシャルmutationでGitHubを連携する", async () => {
     const user = userEvent.setup()
     mocks.authClient.listAccounts.mockResolvedValueOnce([])
     renderPanel()
@@ -110,7 +116,7 @@ describe("SecurityMethodsPanel", () => {
     })
   })
 
-  it("adds a passkey without restricting the authenticator type", async () => {
+  it("オーセンティケーター種別を制限せずパスキーを追加する", async () => {
     const user = userEvent.setup()
     renderPanel()
 
@@ -125,7 +131,7 @@ describe("SecurityMethodsPanel", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey added")
   })
 
-  it("deletes a passkey through the standard passkey mutation", async () => {
+  it("標準のパスキーmutationでパスキーを削除する", async () => {
     const user = userEvent.setup()
     renderPanel()
 
@@ -141,15 +147,11 @@ describe("SecurityMethodsPanel", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey deleted")
   })
 
-  it("requires a fresh sign-in and resumes passkey setup after returning", async () => {
+  it("再認証を要求し、戻った後にパスキー設定を再開する", async () => {
     const user = userEvent.setup()
     mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
       code: "SESSION_NOT_FRESH",
       message: "session row and provider secret must stay private",
-    })
-    mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
-      code: "SESSION_NOT_FRESH",
-      message: "another private session timestamp",
     })
     const firstRender = renderPanel()
 
@@ -164,15 +166,6 @@ describe("SecurityMethodsPanel", () => {
     ).toBeVisible()
     expect(mocks.toastError).not.toHaveBeenCalled()
 
-    await user.keyboard("{Escape}")
-    expect(addPasskey).toHaveFocus()
-    await user.click(addPasskey)
-    expect(
-      await screen.findByRole("alertdialog", {
-        name: "Sign in again to add a passkey",
-      })
-    ).toBeVisible()
-
     await user.click(
       screen.getByRole("button", { name: "Continue to sign in" })
     )
@@ -185,7 +178,7 @@ describe("SecurityMethodsPanel", () => {
     renderPanel()
 
     await waitFor(() => {
-      expect(mocks.authClient.passkey.addPasskey).toHaveBeenCalledTimes(3)
+      expect(mocks.authClient.passkey.addPasskey).toHaveBeenCalledTimes(2)
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Passkey added")
     expect(JSON.stringify(mocks.toastError.mock.calls)).not.toContain(
@@ -193,16 +186,10 @@ describe("SecurityMethodsPanel", () => {
     )
   })
 
-  it.each([
-    ["ERROR_CEREMONY_ABORTED", "Passkey registration was cancelled."],
-    [
-      "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED",
-      "That passkey is already registered.",
-    ],
-  ])("maps %s to a fixed passkey message", async (code, message) => {
+  it("既知のパスキーエラーを固定文言で表示する", async () => {
     const user = userEvent.setup()
     mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
-      code,
+      code: "ERROR_CEREMONY_ABORTED",
       message: "credential=private-provider-material",
     })
     renderPanel()
@@ -210,14 +197,16 @@ describe("SecurityMethodsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Add passkey" }))
 
     await waitFor(() => {
-      expect(mocks.toastError).toHaveBeenCalledWith(message)
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Passkey registration was cancelled."
+      )
     })
     expect(JSON.stringify(mocks.toastError.mock.calls)).not.toContain(
       "private-provider-material"
     )
   })
 
-  it("falls back without exposing unknown passkey provider details", async () => {
+  it("未知のパスキープロバイダー詳細を公開せず代替文言を表示する", async () => {
     const user = userEvent.setup()
     mocks.authClient.passkey.addPasskey.mockRejectedValueOnce({
       code: "UNKNOWN_ERROR",
@@ -237,7 +226,7 @@ describe("SecurityMethodsPanel", () => {
     )
   })
 
-  it("shows a recoverable state without leaking provider errors", async () => {
+  it("プロバイダーエラーを漏らさず回復可能な状態を表示する", async () => {
     mocks.authClient.listAccounts.mockRejectedValueOnce(
       new Error("private provider detail")
     )

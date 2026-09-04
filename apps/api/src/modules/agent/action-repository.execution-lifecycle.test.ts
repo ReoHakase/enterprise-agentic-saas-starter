@@ -24,233 +24,288 @@ import {
   issueAgentConnectionTicket,
 } from "./threads/repository"
 
-describe("Agent Issue action execution lifecycle", () => {
-  it("promotes a run-bound image without copying bytes and releases v2 storage on Issue delete", async () => {
-    const { db } = await createFixture()
-    const now = new Date()
-    const thread = await createAgentThreadForSession(db, {
-      sessionId: "action-session-a",
-      userId: "action-user-a",
-      title: "Attachment action",
-      now,
-    })
-    const ticket = await issueAgentConnectionTicket(db, {
-      sessionId: "action-session-a",
-      userId: "action-user-a",
-      threadId: thread.id,
-      now,
-    })
-    const storageObjectId = "action-storage-image"
-    const assetId = "action-asset-image"
-    const objectKey = agentAssetObjectKey({
-      organizationId: "action-org-a",
-      storageObjectId,
-    })
-    await db.insert(schema.organizationFileUsage).values({
-      organizationId: "action-org-a",
-      usedBytes: 128,
-      temporaryBytes: 128,
-      updatedAt: now,
-    })
-    await db.insert(schema.storageObjects).values({
-      id: storageObjectId,
-      organizationId: "action-org-a",
-      uploaderId: "action-user-a",
-      uploadId: "action-upload-image",
-      objectKey,
-      sizeBytes: 128,
-      declaredContentType: "image/png",
-      detectedImageFormat: "png",
-      imageWidth: 16,
-      imageHeight: 16,
-      status: "pending",
-      keyVersion: 2,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await db.insert(schema.agentAssets).values({
-      id: assetId,
-      organizationId: "action-org-a",
-      threadId: thread.id,
-      sessionId: "action-session-a",
-      contextEpoch: 1,
-      uploaderId: "action-user-a",
-      storageObjectId,
-      filename: "screenshot.png",
-      status: "pending",
-      expiresAt: new Date(now.getTime() + 72 * 60 * 60 * 1000),
-      createdAt: now,
-      updatedAt: now,
-    })
-    await db.insert(schema.storageObjectClaims).values({
-      storageObjectId,
-      organizationId: "action-org-a",
-      holderType: "agent_asset",
-      holderId: assetId,
-      revision: 1,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await db
-      .update(schema.storageObjects)
-      .set({ etag: "action-image-etag", status: "ready", updatedAt: now })
-      .where(eq(schema.storageObjects.id, storageObjectId))
-    await db
-      .update(schema.agentAssets)
-      .set({ status: "ready", updatedAt: now })
-      .where(eq(schema.agentAssets.id, assetId))
+const createRunBoundImageFixture = async () => {
+  const { db } = await createFixture()
+  const now = new Date()
+  const thread = await createAgentThreadForSession(db, {
+    sessionId: "action-session-a",
+    userId: "action-user-a",
+    title: "Attachment action",
+    now,
+  })
+  const ticket = await issueAgentConnectionTicket(db, {
+    sessionId: "action-session-a",
+    userId: "action-user-a",
+    threadId: thread.id,
+    now,
+  })
+  const storageObjectId = "action-storage-image"
+  const assetId = "action-asset-image"
+  const objectKey = agentAssetObjectKey({
+    organizationId: "action-org-a",
+    storageObjectId,
+  })
+  await db.insert(schema.organizationFileUsage).values({
+    organizationId: "action-org-a",
+    usedBytes: 128,
+    temporaryBytes: 128,
+    updatedAt: now,
+  })
+  await db.insert(schema.storageObjects).values({
+    id: storageObjectId,
+    organizationId: "action-org-a",
+    uploaderId: "action-user-a",
+    uploadId: "action-upload-image",
+    objectKey,
+    sizeBytes: 128,
+    declaredContentType: "image/png",
+    detectedImageFormat: "png",
+    imageWidth: 16,
+    imageHeight: 16,
+    status: "pending",
+    keyVersion: 2,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(schema.agentAssets).values({
+    id: assetId,
+    organizationId: "action-org-a",
+    threadId: thread.id,
+    sessionId: "action-session-a",
+    contextEpoch: 1,
+    uploaderId: "action-user-a",
+    storageObjectId,
+    filename: "screenshot.png",
+    status: "pending",
+    expiresAt: new Date(now.getTime() + 72 * 60 * 60 * 1000),
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db.insert(schema.storageObjectClaims).values({
+    storageObjectId,
+    organizationId: "action-org-a",
+    holderType: "agent_asset",
+    holderId: assetId,
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
+  })
+  await db
+    .update(schema.storageObjects)
+    .set({ etag: "action-image-etag", status: "ready", updatedAt: now })
+    .where(eq(schema.storageObjects.id, storageObjectId))
+  await db
+    .update(schema.agentAssets)
+    .set({ status: "ready", updatedAt: now })
+    .where(eq(schema.agentAssets.id, assetId))
 
-    const internal = createAgentInternalApi(db)
-    const chatRun = await internal.startChatRun({
-      clientMessageId: "attachment-create",
-      assetIds: [assetId],
-      ticket: ticket.ticket,
-      threadId: thread.id,
-    })
-    const run = chatRun.run
-    await putAgentApprovalPolicyForSession(db, {
-      sessionId: "action-session-a",
-      userId: "action-user-a",
-      threadId: thread.id,
-      mode: "full_access",
-    })
-    const createAction = await internal.prepareCreateIssue({
-      grant: run.grant,
-      toolCallId: "tool-create-with-image",
-      idempotencyKey: "prepare-create-with-image",
-      issue: {
-        title: "Issue from screenshot",
-        description: "Generated image description",
-        labels: ["Visual"],
-        attachmentAssetIds: [assetId],
-      },
-    })
-    expect(createAction.preview?.attachments).toEqual([
+  const internal = createAgentInternalApi(db)
+  const { run } = await internal.startChatRun({
+    clientMessageId: "attachment-create",
+    assetIds: [assetId],
+    ticket: ticket.ticket,
+    threadId: thread.id,
+  })
+  await putAgentApprovalPolicyForSession(db, {
+    sessionId: "action-session-a",
+    userId: "action-user-a",
+    threadId: thread.id,
+    mode: "full_access",
+  })
+  return {
+    assetId,
+    db,
+    internal,
+    now,
+    objectKey,
+    run,
+    storageObjectId,
+    thread,
+  }
+}
+
+type RunBoundImageFixture = Awaited<
+  ReturnType<typeof createRunBoundImageFixture>
+>
+
+const prepareRunBoundImageIssue = (fixture: RunBoundImageFixture) =>
+  fixture.internal.prepareCreateIssue({
+    grant: fixture.run.grant,
+    toolCallId: "tool-create-with-image",
+    idempotencyKey: "prepare-create-with-image",
+    issue: {
+      title: "Issue from screenshot",
+      description: "Generated image description",
+      labels: ["Visual"],
+      attachmentAssetIds: [fixture.assetId],
+    },
+  })
+
+const promoteRunBoundImage = async (fixture: RunBoundImageFixture) => {
+  const action = await prepareRunBoundImageIssue(fixture)
+  const created = await fixture.internal.executeApprovedAction({
+    grant: fixture.run.grant,
+    actionId: action.id,
+  })
+  return { action, created }
+}
+
+describe("Agent Issue actionの実行lifecycle", () => {
+  it("run-bound画像をbyte複製せずIssue fileへ昇格する", async () => {
+    const fixture = await createRunBoundImageFixture()
+    const { action } = await promoteRunBoundImage(fixture)
+
+    expect(action.preview?.attachments).toEqual([
       {
         source: "asset",
-        assetId,
+        assetId: fixture.assetId,
         filename: "screenshot.png",
         sizeBytes: 128,
       },
     ])
-    await expect(
-      internal.prepareCreateIssue({
-        grant: run.grant,
-        toolCallId: "tool-create-with-leased-image",
-        idempotencyKey: "prepare-create-with-leased-image",
-        issue: {
-          title: "Second issue from screenshot",
-          attachmentAssetIds: [assetId],
-        },
-      })
-    ).rejects.toMatchObject({
-      code: "conflict",
-    })
-    const created = await internal.executeApprovedAction({
-      grant: run.grant,
-      actionId: createAction.id,
-    })
-    const [file] = await db
+    const [file] = await fixture.db
       .select()
       .from(schema.files)
-      .where(eq(schema.files.storageObjectId, storageObjectId))
+      .where(eq(schema.files.storageObjectId, fixture.storageObjectId))
     expect(file).toMatchObject({
       filename: "screenshot.png",
-      objectKey,
+      objectKey: fixture.objectKey,
       status: "ready",
     })
-    const [promotedAsset] = await db
+    const [promotedAsset] = await fixture.db
       .select()
       .from(schema.agentAssets)
-      .where(eq(schema.agentAssets.id, assetId))
+      .where(eq(schema.agentAssets.id, fixture.assetId))
     expect(promotedAsset).toMatchObject({
       promotedFileId: file?.id,
       status: "promoted",
       storageObjectId: null,
     })
-    const [promotedClaim] = await db
+    const [promotedClaim] = await fixture.db
       .select()
       .from(schema.storageObjectClaims)
-      .where(eq(schema.storageObjectClaims.storageObjectId, storageObjectId))
+      .where(
+        eq(schema.storageObjectClaims.storageObjectId, fixture.storageObjectId)
+      )
     expect(promotedClaim).toMatchObject({
       holderId: file?.id,
       holderType: "file",
       revision: 3,
     })
-    const promotedPreview = await findPreviewableAgentAssetForSession(db, {
-      assetId,
-      organizationId: "action-org-a",
-      sessionId: "action-session-a",
-      userId: "action-user-a",
-      now,
-    })
-    expect(promotedPreview).toMatchObject({
-      asset: { id: assetId, status: "promoted" },
-      storage: { id: storageObjectId, status: "ready" },
-      claim: { holderId: file?.id, holderType: "file" },
-    })
-    await expect(
-      findPreviewableAgentAssetForSession(db, {
-        assetId,
-        organizationId: "action-org-a",
-        sessionId: "action-session-b",
-        userId: "action-user-b",
-        now,
-      })
-    ).rejects.toMatchObject({ code: "not_found" })
-    const [promotedUsage] = await db
+    const [promotedUsage] = await fixture.db
       .select()
       .from(schema.organizationFileUsage)
       .where(eq(schema.organizationFileUsage.organizationId, "action-org-a"))
     expect(promotedUsage).toMatchObject({ usedBytes: 128, temporaryBytes: 0 })
+  })
 
-    await putAgentApprovalPolicyForSession(db, {
+  it("lease済みassetを2つ目のIssue actionへ予約しない", async () => {
+    const fixture = await createRunBoundImageFixture()
+    await prepareRunBoundImageIssue(fixture)
+
+    await expect(
+      fixture.internal.prepareCreateIssue({
+        grant: fixture.run.grant,
+        toolCallId: "tool-create-with-leased-image",
+        idempotencyKey: "prepare-create-with-leased-image",
+        issue: {
+          title: "Second issue from screenshot",
+          attachmentAssetIds: [fixture.assetId],
+        },
+      })
+    ).rejects.toMatchObject({
+      code: "conflict",
+    })
+  })
+
+  it("昇格済みassetを別sessionへ公開しない", async () => {
+    const fixture = await createRunBoundImageFixture()
+    await promoteRunBoundImage(fixture)
+
+    const promotedPreview = await findPreviewableAgentAssetForSession(
+      fixture.db,
+      {
+        assetId: fixture.assetId,
+        organizationId: "action-org-a",
+        sessionId: "action-session-a",
+        userId: "action-user-a",
+        now: fixture.now,
+      }
+    )
+    expect(promotedPreview).toMatchObject({
+      asset: { id: fixture.assetId, status: "promoted" },
+      storage: { id: fixture.storageObjectId, status: "ready" },
+      claim: { holderType: "file" },
+    })
+    await expect(
+      findPreviewableAgentAssetForSession(fixture.db, {
+        assetId: fixture.assetId,
+        organizationId: "action-org-a",
+        sessionId: "action-session-b",
+        userId: "action-user-b",
+        now: fixture.now,
+      })
+    ).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("Issue削除時にv2 storageとquotaを解放してcleanupをqueueへ積む", async () => {
+    const fixture = await createRunBoundImageFixture()
+    const { created } = await promoteRunBoundImage(fixture)
+    await putAgentApprovalPolicyForSession(fixture.db, {
       sessionId: "action-session-a",
       userId: "action-user-a",
-      threadId: thread.id,
+      threadId: fixture.thread.id,
       mode: "full_access",
     })
-    const deleteAction = await internal.prepareDeleteIssue({
-      grant: run.grant,
+    const deleteAction = await fixture.internal.prepareDeleteIssue({
+      grant: fixture.run.grant,
       toolCallId: "tool-delete-with-image",
       idempotencyKey: "prepare-delete-with-image",
       issue: { issueId: created.issue.id, expectedRevision: 1 },
     })
-    await internal.executeApprovedAction({
-      grant: run.grant,
+    await fixture.internal.executeApprovedAction({
+      grant: fixture.run.grant,
       actionId: deleteAction.id,
     })
     expect(
-      await db
+      await fixture.db
         .select()
         .from(schema.storageObjectClaims)
-        .where(eq(schema.storageObjectClaims.storageObjectId, storageObjectId))
+        .where(
+          eq(
+            schema.storageObjectClaims.storageObjectId,
+            fixture.storageObjectId
+          )
+        )
     ).toEqual([])
-    const [releasedStorage] = await db
+    const [releasedStorage] = await fixture.db
       .select()
       .from(schema.storageObjects)
-      .where(eq(schema.storageObjects.id, storageObjectId))
+      .where(eq(schema.storageObjects.id, fixture.storageObjectId))
     expect(releasedStorage).toMatchObject({
       cleanupRevision: 1,
-      objectKey,
+      objectKey: fixture.objectKey,
       status: "deleting",
     })
     expect(
-      await db
+      await fixture.db
         .select()
         .from(schema.storageObjectCleanupJobs)
         .where(
-          eq(schema.storageObjectCleanupJobs.storageObjectId, storageObjectId)
+          eq(
+            schema.storageObjectCleanupJobs.storageObjectId,
+            fixture.storageObjectId
+          )
         )
     ).toHaveLength(1)
-    const [releasedUsage] = await db
+    const [releasedUsage] = await fixture.db
       .select()
       .from(schema.organizationFileUsage)
       .where(eq(schema.organizationFileUsage.organizationId, "action-org-a"))
     expect(releasedUsage).toMatchObject({ usedBytes: 0, temporaryBytes: 0 })
   })
 
-  it("counts idempotent preparations once and enforces the root write limit", async () => {
+  it("冪等なprepareを1回数えてroot write上限を適用する", async () => {
     const { db } = await createFixture()
     const actionRun = await createRun(db, { clientMessageId: "write-limit" })
     await putAgentApprovalPolicyForSession(db, {
@@ -262,7 +317,7 @@ describe("Agent Issue action execution lifecycle", () => {
     const prepared = []
     for (let index = 0; index < 5; index += 1) {
       prepared.push(
-        // oxlint-disable-next-line no-await-in-loop -- root counterの順序と境界を検証する。
+        // oxlint-disable-next-line no-await-in-loop -- root counterの順序と境界を検証する
         await actionRun.internal.prepareCreateIssue({
           grant: actionRun.run.grant,
           toolCallId: `tool-write-limit-${index}`,
@@ -295,7 +350,7 @@ describe("Agent Issue action execution lifecycle", () => {
     expect(root?.writeCount).toBe(5)
   })
 
-  it("rolls back a transient execute failure and retries the same action exactly once", async () => {
+  it("一時的なexecute失敗をrollbackして同じactionを正確に1回再試行する", async () => {
     const { client, db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "transient-create",
@@ -365,7 +420,7 @@ describe("Agent Issue action execution lifecycle", () => {
     ).toHaveLength(1)
   })
 
-  it("revokes approved actions, policies, resume tickets, and leases on organization switch", async () => {
+  it("organization切替時にapproved actionとpolicyとresume ticketとleaseを失効させる", async () => {
     const { app, db } = await createFixture()
     const { internal, run, thread } = await createRun(db, {
       clientMessageId: "switch-action",
