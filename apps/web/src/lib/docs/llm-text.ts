@@ -1,4 +1,4 @@
-import type { source } from "@/lib/docs/source"
+import type { source } from "@/lib/docs/source.server"
 
 type DocsPage = (typeof source)["$inferPage"]
 

@@ -2,7 +2,7 @@
 title: Local development
 status: accepted
 implementation: active
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-05
 ---
 
 # ローカル開発
@@ -81,7 +81,8 @@ workerdにはそのinstanceのdirect loopback HTTP URLを渡します。別workt
 このCLI packageは[Portless issue #372](https://github.com/vercel-labs/portless/issues/372)が解決する
 までのリポジトリ固有の暫定措置であり、generic shared packageへ拡張しません。削除する変更では
 `resolve`と`run`をnative Portlessへ置換し、`exec`が組み立てる`APP_BASE_URL`、
-`API_PUBLIC_URL`、`NEXT_PUBLIC_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、
+`API_PUBLIC_URL`、`VITE_API_BASE_URL`、`VITE_DEV_SESSION_ID`、`VITE_DEV_WORKTREE_ID`、
+`VITE_OTEL_EXPORTER_OTLP_ENDPOINT`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、
 `TRUSTED_ORIGINS`、`CORS_ORIGIN`、`TURSO_DATABASE_URL`、`GITHUB_OAUTH_EMULATOR_URL`、
 `GITHUB_OAUTH_CALLBACK_URL`、`MASTRA_STORAGE_URL`、`MASTRA_STORAGE_AUTH_TOKEN`とstaleな
 `EMULATE_BASE_URL`/`TURSO_AUTH_TOKEN`除去を、Portlessに依存しない永続的なlocal environment経路へ
@@ -91,7 +92,10 @@ Portless CA、token除去、child argv、終了コード、`SIGINT`/`SIGTERM`転
 package、全consumerのdevelopment dependency、品質設定、文書、lockfile entryを同じ変更から
 削除します。
 
-`.env*` と `.dev.vars` の実値はcommitしません。共有するkeyだけを `.env.example` / `.dev.vars.example` に置きます。
+`.env*` と `.dev.vars` の実値はcommitしません。WebのVite configはPortlessから受けた
+`API_PUBLIC_URL`、`VITE_API_BASE_URL`、local telemetry識別子とendpoint、test判定だけを
+Cloudflare Worker varsへ渡します。親processの環境変数全体を取り込む設定は使わず、認証情報と
+database tokenをWorkerへ複製しません。その他のworkspaceで共有するkeyは`.env.example`へ置きます。
 
 `EMAIL_FROM`はlocal/testでは省略でき、省略時は配送不能な`noreply@example.test`へ安全にfallbackします。productionではCloudflare Email Sendingで検証済みsenderを必須にし、未設定のまま起動しません。
 
@@ -179,7 +183,16 @@ Web版のOAuth callbackは
 `bun run dev:db`にはStorybookを含めません。main checkoutでは上記の固定URLを利用でき、
 linked worktreeでは`bun run portless-topology resolve`の出力を正本にします。
 
-Webは`next dev --turbopack`をそのまま起動するため、Next.jsのFast RefreshとTurbopackによる再buildを利用できます。APIは`wrangler.jsonc`をprimary、`../images/wrangler.jsonc`をauxiliaryにした`wrangler dev --local --persist-to apps/api/.wrangler/state`で両方のsourceを直接watchします。WranglerがService Bindingとlocal R2 stateを同じsessionへ合成し、source変更時に対象Worker isolateを再起動します。Bunの状態保持型HMRではないためprocess内memoryは引き継ぎませんが、local Turso、R2、Mailpitはdiskへ永続化され、API reload後もdataを維持します。`src/dev.ts` supervisorや起動時envを変更した場合だけ`bun run dev`を再起動します。Next/OpenNextやWorkerのbuild済みJSを実行する構成ではありません。
+WebはCloudflare Vite plugin、TanStack Start plugin、React pluginを組み込んだ`vite dev`を直接起動し、
+Vite HMRでルート、共有UI、機能コンポーネントを更新します。`wrangler.jsonc`の本番Worker設定と
+Cloudflare Vite pluginの`ssr`環境を開発、ビルド、プレビューで共有し、別の開発専用サーバー実装を
+置きません。APIは`wrangler.jsonc`をprimary、`../images/wrangler.jsonc`をauxiliaryにした
+`wrangler dev --local --persist-to apps/api/.wrangler/state`で両方のソースを直接監視します。Wranglerが
+Service BindingとローカルR2状態を同じセッションへ合成し、ソース変更時に対象Worker isolateを
+再起動します。Bunの状態保持型HMRではないためプロセス内メモリーは引き継ぎませんが、ローカルの
+Turso、R2、Mailpitはディスクへ永続化され、APIの再読み込み後もデータを維持します。APIの
+`src/dev.ts`監督処理、Webの`vite.config.ts`、起動時の環境変数を変更した場合だけ`bun run dev`を
+再起動します。日常の開発でビルド済みのWebまたはWorkerのJavaScriptを実行する構成ではありません。
 
 Wranglerを既定経路にすることで、Elysiaのルートを編集しながら`FILES` R2、`IMAGES`、
 `IMAGE_PREVIEWS`、`EMAIL` bindingを利用できます。APIのWorkers Cachingはローカルでも無効で、認可後に

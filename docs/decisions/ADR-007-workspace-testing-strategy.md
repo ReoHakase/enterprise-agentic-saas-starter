@@ -41,7 +41,7 @@ VRTは方針だけをacceptedとし、実装を延期します。
 StorybookとPlaywrightでは、利用者が観測できる状態を同期条件にします。
 
 - ロケーターはARIA roleと`accessible name`、label、名前付き領域内の表示文字列、alt・placeholderの
-  順に選ぶ。DOM構造やCSS classへの依存は、描画領域の寸法とNext.jsのルート遷移を検証する
+  順に選ぶ。DOM構造やCSS classへの依存は、描画領域の寸法とTanStack Routerのルート遷移を検証する
   専用ヘルパーだけに閉じる。
 - ポータルはstoryの`canvasElement.ownerDocument.body`から検索し、表示中の`dialog`やmenuを
   document全体から名前で特定する。
@@ -62,7 +62,7 @@ StorybookとPlaywrightでは、利用者が観測できる状態を同期条件�
 
 ## 理由
 
-各workspaceが自身の公開契約と実行環境を所有し、最も小さく決定的な層へ回帰を置けます。ブラウザー、実Next.js、全workspace、実モデルという費用境界を明示すると、日常検証から有料testを分離しながら、release時の最終配線も維持できます。
+各workspaceが自身の公開契約と実行環境を所有し、最も小さく決定的な層へ回帰を置けます。ブラウザー、実際のTanStack Startアプリ、全workspace、実モデルという費用境界を明示すると、日常検証から有料testを分離しながら、release時の最終配線も維持できます。
 
 ## 検討した代替案
 

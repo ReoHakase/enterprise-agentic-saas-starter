@@ -6,7 +6,7 @@ import {
   type Page,
 } from "@playwright/test"
 
-import { nextjsIntegrationEnvironment } from "./environment"
+import { tanStackStartIntegrationEnvironment } from "./environment"
 
 type ClientDiagnosticsFixtures = {
   allowClientErrors: (...patterns: RegExp[]) => void
@@ -29,10 +29,7 @@ export type CreateRequestGate = (
   method?: string
 ) => Promise<RequestGate>
 
-const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
-
-export const productionServerComponentRenderError =
-  /An error occurred in the Server Components render\. The specific message is omitted in production builds/
+const mockApiUrl = tanStackStartIntegrationEnvironment.apiOrigin
 
 const hashTestId = (value: string) => {
   let hash = 2_166_136_261
@@ -80,7 +77,7 @@ const watchClientErrors = (page: Page) => {
 export const test = base.extend<ClientDiagnosticsFixtures>({
   e2eNamespace: [
     async ({ context, request }, use, testInfo) => {
-      if (!testInfo.project.name.startsWith("nextjs-integration-")) {
+      if (!testInfo.project.name.startsWith("tanstack-start-integration-")) {
         await use("external-stack")
         return
       }
@@ -186,44 +183,6 @@ export const test = base.extend<ClientDiagnosticsFixtures>({
   },
   assertNoClientErrors: [
     async ({ clientErrorPolicy, page }, use) => {
-      // Next/Turbopack developmentはredirectやerror boundaryの復旧中に
-      // 不正なRSC timing intervalを出力する場合がある
-      // framework所有のmeasurementだけを抑止し
-      // 製品のtimingとその他すべてのbrowser errorはこのfixtureで可視に保つ
-      // https://github.com/vercel/next.js/issues/86060
-      await page.addInitScript(() => {
-        const originalMeasure: Performance["measure"] =
-          window.performance.measure.bind(window.performance)
-
-        Object.defineProperty(window.performance, "measure", {
-          configurable: true,
-          value: (
-            measurementName: string,
-            startOrMeasureOptions?: string | PerformanceMeasureOptions,
-            endMark?: string
-          ) => {
-            try {
-              return typeof startOrMeasureOptions === "object"
-                ? originalMeasure(measurementName, startOrMeasureOptions)
-                : originalMeasure(
-                    measurementName,
-                    startOrMeasureOptions,
-                    endMark
-                  )
-            } catch (error) {
-              if (
-                measurementName.startsWith("\u200b") &&
-                error instanceof Error &&
-                error.message.includes("cannot have a negative time stamp")
-              ) {
-                return undefined
-              }
-              throw error
-            }
-          },
-        })
-      })
-
       const errors = watchClientErrors(page)
 
       await use()

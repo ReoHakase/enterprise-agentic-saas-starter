@@ -8,7 +8,7 @@ import { httpError } from "@/test-support/http-error"
 import { ProfileForm } from "./profile-form"
 
 const mocks = vi.hoisted(() => ({
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   updateMe: vi.fn<(input: { name: string }) => Promise<unknown>>(),
 }))
@@ -17,8 +17,8 @@ vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: { updateMe: mocks.updateMe },
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({
@@ -61,7 +61,7 @@ describe("ProfileFormの契約", () => {
       expect(mocks.updateMe).toHaveBeenCalledOnce()
     })
     expect(mocks.updateMe.mock.calls[0]?.[0]).toEqual({ name: "Reo" })
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.routerInvalidate).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Profile updated")
   })
 

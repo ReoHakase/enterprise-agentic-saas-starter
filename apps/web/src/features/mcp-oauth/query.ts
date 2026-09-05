@@ -88,6 +88,24 @@ const isMcpPermissionScope = (scope: string): scope is McpPermissionScope =>
 
 export type McpOAuthSearchParams = Record<string, string | string[] | undefined>
 
+export const parseMcpOAuthSearchParams = (
+  search: string
+): McpOAuthSearchParams => {
+  const query: McpOAuthSearchParams = {}
+
+  for (const [key, value] of new URLSearchParams(search)) {
+    const current = query[key]
+    query[key] =
+      current === undefined
+        ? value
+        : typeof current === "string"
+          ? [current, value]
+          : [...current, value]
+  }
+
+  return query
+}
+
 const serializeMcpOAuthSearchParams = (query: McpOAuthSearchParams) => {
   const searchParams = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
@@ -100,7 +118,7 @@ const serializeMcpOAuthSearchParams = (query: McpOAuthSearchParams) => {
   return searchParams
 }
 
-export const createMcpOAuthRoutePath = (
+const createMcpOAuthRoutePath = (
   pathname: "/oauth/consent" | "/oauth/organization",
   query: McpOAuthSearchParams
 ) => {
@@ -114,7 +132,10 @@ export const createMcpOAuthAddAccountHref = (returnTo: string) => {
   return `/auth/sign-in?${query.toString()}`
 }
 
-export const resolveMcpOAuthLoginRedirect = (query: McpOAuthSearchParams) => {
+export const resolveMcpOAuthLoginRedirect = (
+  query: McpOAuthSearchParams,
+  rawSearch?: string
+) => {
   if (
     query.response_type !== "code" ||
     typeof query.client_id !== "string" ||
@@ -123,6 +144,11 @@ export const resolveMcpOAuthLoginRedirect = (query: McpOAuthSearchParams) => {
     typeof query.sig !== "string"
   ) {
     return null
+  }
+
+  if (rawSearch) {
+    const search = rawSearch.startsWith("?") ? rawSearch : `?${rawSearch}`
+    return `/oauth/organization${search}`
   }
 
   return createMcpOAuthRoutePath("/oauth/organization", query)

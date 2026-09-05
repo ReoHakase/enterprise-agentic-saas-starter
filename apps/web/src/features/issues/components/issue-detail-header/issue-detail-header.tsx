@@ -10,7 +10,7 @@ import { ArrowLeftIcon, PencilIcon, XIcon } from "lucide-react"
 import { useMemo } from "react"
 
 import { selectSubmitState } from "../form-types"
-import { issueNumber } from "../issue-utils/issue-utils"
+import { issueNumber } from "../issue-utils/issue-values"
 import type { IssueUiItem } from "../types"
 import type { IssueDetailNavigationState } from "../use-issue-detail-navigation/use-issue-detail-navigation"
 import type { IssueTitleFormState } from "../use-issue-title-form/use-issue-title-form"

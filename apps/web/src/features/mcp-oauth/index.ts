@@ -4,7 +4,7 @@ export {
 } from "./components/mcp-oauth-controller/mcp-oauth-controller"
 export {
   createMcpOAuthAddAccountHref,
-  createMcpOAuthRoutePath,
+  parseMcpOAuthSearchParams,
   parseMcpOAuthScopes,
   resolveMcpOAuthLoginRedirect,
 } from "./query"

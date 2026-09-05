@@ -8,7 +8,7 @@ declare module "@better-auth-ui/core" {
   interface AuthConfig {
     /**
      * React component used to render internal navigation links.
-     * Typically TanStack Router's `Link` or Next.js's `Link`.
+     * Typically TanStack Router's `Link`.
      */
     Link: ComponentType<
       PropsWithChildren<{

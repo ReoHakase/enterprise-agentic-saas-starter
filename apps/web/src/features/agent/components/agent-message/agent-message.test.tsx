@@ -1,8 +1,17 @@
 import { render, screen } from "@testing-library/react"
+import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import type { AgentChatMessage } from "../../schema"
 import { AgentMessage } from "./agent-message"
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+}))
 
 const renderMessage = (message: AgentChatMessage, threadId: string) =>
   render(

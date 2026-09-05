@@ -1,18 +1,18 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { usePathname } from "next/navigation"
+import { useLocation } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { membersQueryOptions } from "@/features/console"
 import { issuesQueryOptions } from "@/features/issues"
-import { useIssueSearchState } from "@/features/issues/search-params.client"
+import { useIssueSearchState } from "@/features/issues/use-issue-search-state"
 import { apiClient } from "@/lib/api-client"
 
 import type { AgentMentionValue } from "../components/agent-composer/agent-composer"
 
 export const useAgentMentionCandidates = (organizationId: string) => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const { state: issueSearchState } = useIssueSearchState()
   const issuesQuery = useQuery(
     issuesQueryOptions(

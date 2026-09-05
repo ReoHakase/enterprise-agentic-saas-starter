@@ -53,9 +53,17 @@ export const createAgentStackEnvironment = ({
   GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
   GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
   GITHUB_OAUTH_CALLBACK_URL: `${environment.apiOrigin}/auth/callback/github`,
-  NEXT_TELEMETRY_DISABLED: "1",
-  NEXT_PUBLIC_BROWSER_TEST: "true",
+  VITE_BROWSER_TEST: "true",
 })
+
+export const createTanStackStartPreviewCommand = ({
+  buildDirectory,
+  port,
+}: {
+  buildDirectory: string
+  port: number
+}) =>
+  `vite build --outDir ${buildDirectory} && vite preview --outDir ${buildDirectory} --host 0.0.0.0 --port ${port} --strictPort`
 
 export const desktopChromium = {
   ...devices["Desktop Chrome"],

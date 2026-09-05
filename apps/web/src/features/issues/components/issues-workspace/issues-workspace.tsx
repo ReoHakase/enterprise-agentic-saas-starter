@@ -1,6 +1,6 @@
 "use client"
 
-import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
+import { emptyAssigneeOptions } from "../issue-utils/issue-values"
 import { IssuesTable } from "../issues-table/issues-table"
 import type { IssuesWorkspaceProps } from "../types"
 

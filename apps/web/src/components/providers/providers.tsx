@@ -3,23 +3,16 @@
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
 import { Toaster } from "@enterprise-agentic-saas/ui/components/sonner"
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
-import {
-  MutationCache,
-  QueryCache,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "@tanstack/react-router"
 import { Provider as JotaiProvider } from "jotai"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { NuqsAdapter } from "nuqs/adapters/next/app"
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router"
 import { useCallback, useState, type PropsWithChildren } from "react"
 
+import { NavigationLinkBridge } from "@/components/navigation-link/navigation-link"
 import { ThemeProvider } from "@/components/theme-provider/theme-provider"
 import { AuthProvider, magicLinkPlugin } from "@/features/auth"
-import { shouldRetryConsoleQuery } from "@/features/console"
-import { clientEnv } from "@/lib/env.client"
-import { reportObservedError } from "@/lib/report-observed-error"
+import { clientEnv } from "@/lib/env"
 
 const authBasePaths = {
   auth: "/auth",
@@ -31,62 +24,44 @@ const socialProviders: Array<"github"> = ["github"]
 const emailAndPassword = { enabled: false } as const
 const authPlugins = [magicLinkPlugin()]
 
-const createQueryClient = () =>
-  new QueryClient({
-    mutationCache: new MutationCache({
-      onError: (error) => reportObservedError(error),
-    }),
-    queryCache: new QueryCache({
-      onError: (error) => reportObservedError(error),
-    }),
-    defaultOptions: {
-      queries: {
-        retry: shouldRetryConsoleQuery,
-        staleTime: 30_000,
-      },
-    },
-  })
-
 export const Providers = ({ children }: PropsWithChildren) => {
   const router = useRouter()
-  const [queryClient] = useState(createQueryClient)
+  const queryClient = useQueryClient()
   const [authClient] = useState(() =>
-    createAuthClientForBaseUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL)
+    createAuthClientForBaseUrl(clientEnv.VITE_API_BASE_URL)
   )
   const navigate = useCallback(
     ({ to, replace }: { to: string; replace?: boolean }) => {
       if (replace) {
-        router.replace(to)
+        void router.navigate({ replace: true, to })
         return
       }
 
-      router.push(to)
+      void router.navigate({ to })
     },
     [router]
   )
 
   return (
     <NuqsAdapter>
-      <QueryClientProvider client={queryClient}>
-        <JotaiProvider>
-          <AuthProvider
-            authClient={authClient}
-            baseURL={clientEnv.NEXT_PUBLIC_API_BASE_URL}
-            basePaths={authBasePaths}
-            queryClient={queryClient}
-            socialProviders={socialProviders}
-            emailAndPassword={emailAndPassword}
-            plugins={authPlugins}
-            Link={Link}
-            navigate={navigate}
-          >
-            <ThemeProvider>
-              <TooltipProvider delay={350}>{children}</TooltipProvider>
-            </ThemeProvider>
-            <Toaster />
-          </AuthProvider>
-        </JotaiProvider>
-      </QueryClientProvider>
+      <JotaiProvider>
+        <AuthProvider
+          authClient={authClient}
+          baseURL={clientEnv.VITE_API_BASE_URL}
+          basePaths={authBasePaths}
+          queryClient={queryClient}
+          socialProviders={socialProviders}
+          emailAndPassword={emailAndPassword}
+          plugins={authPlugins}
+          Link={NavigationLinkBridge}
+          navigate={navigate}
+        >
+          <ThemeProvider>
+            <TooltipProvider delay={350}>{children}</TooltipProvider>
+          </ThemeProvider>
+          <Toaster />
+        </AuthProvider>
+      </JotaiProvider>
     </NuqsAdapter>
   )
 }

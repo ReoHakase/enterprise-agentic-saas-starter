@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@tanstack/react-router"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -318,10 +318,12 @@ export const IssueDetailController = ({
   })
   const close = useCallback(() => {
     if (canReturnThroughBrowserHistory(canonicalHref)) {
-      router.back()
+      router.history.back()
       return
     }
-    router.push(canonicalHref.slice(0, canonicalHref.lastIndexOf("/")))
+    void router.navigate({
+      href: canonicalHref.slice(0, canonicalHref.lastIndexOf("/")),
+    })
   }, [canonicalHref, router])
   const loadOlder = useCallback(() => {
     if (nextCursor) loadOlderPage(nextCursor)

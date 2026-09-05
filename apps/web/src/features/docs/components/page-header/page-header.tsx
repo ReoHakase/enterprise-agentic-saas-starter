@@ -1,8 +1,10 @@
-import type { ImageProps } from "next/image"
 import type { ReactNode } from "react"
 
 import { Icon } from "../icon/icon"
-import { ZoomableImage } from "../zoomable-image/zoomable-image"
+import {
+  ZoomableImage,
+  type DocsImageSource,
+} from "../zoomable-image/zoomable-image"
 
 export const PageHeader = ({
   title,
@@ -14,7 +16,7 @@ export const PageHeader = ({
   coverImageWidth,
 }: {
   coverImageHeight?: number
-  coverImageSrc?: ImageProps["src"]
+  coverImageSrc?: DocsImageSource
   coverImageWidth?: number
   description?: string
   icon?: string

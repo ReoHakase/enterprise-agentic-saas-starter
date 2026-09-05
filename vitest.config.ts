@@ -1,8 +1,8 @@
-import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin"
+import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { playwright } from "@vitest/browser-playwright"
 import {
@@ -233,17 +233,18 @@ const browserCoverageProjects: Record<
 const prefixGlobs = (workspace: string, globs: string[]) =>
   globs.map((glob) => `${workspace}/${glob}`)
 
+const selectedProjects = process.argv.flatMap((argument, index, arguments_) => {
+  if (argument.startsWith("--project=")) {
+    return [argument.slice("--project=".length)]
+  }
+  return argument === "--project" && arguments_[index + 1]
+    ? [arguments_[index + 1]]
+    : []
+})
+const shouldLoadProject = (name: string) =>
+  selectedProjects.length === 0 || selectedProjects.includes(name)
+
 const coverageForSelectedProject = () => {
-  const selectedProjects = process.argv.flatMap(
-    (argument, index, arguments_) => {
-      if (argument.startsWith("--project=")) {
-        return [argument.slice("--project=".length)]
-      }
-      return argument === "--project" && arguments_[index + 1]
-        ? [arguments_[index + 1]]
-        : []
-    }
-  )
   const selectedProject =
     selectedProjects.length === 1 ? selectedProjects[0] : undefined
   const nodeCoverage = selectedProject
@@ -281,22 +282,10 @@ const coverageForSelectedProject = () => {
   return { enabled: false as const, provider: "v8" as const }
 }
 
-const webRequire = createRequire(path.join(webRoot, "package.json"))
 const webStorybookAliases = {
   "next-themes": path.join(
     webRoot,
     "src/test-support/storybook/next-themes.tsx"
-  ),
-  "nuqs/adapters/next/app": path.join(
-    webRoot,
-    "src/test-support/storybook/nuqs-next-app.ts"
-  ),
-}
-const webBrowserAliases = {
-  ...webStorybookAliases,
-  "next/link": webRequire.resolve("@storybook/nextjs-vite/link.mock"),
-  "next/navigation": webRequire.resolve(
-    "@storybook/nextjs-vite/navigation.mock"
   ),
 }
 const uiOptimizeDeps = [
@@ -304,7 +293,9 @@ const uiOptimizeDeps = [
   "@base-ui/react/drawer",
   "@base-ui/react/toggle",
   "@base-ui/react/toggle-group",
+  "@testing-library/dom",
 ]
+const webBrowserPlugins = () => [react(), tailwindcss()]
 
 const storybookProject = ({
   name,
@@ -320,7 +311,7 @@ const storybookProject = ({
   root: projectRoot,
   ...(web ? {} : { optimizeDeps: { include: uiOptimizeDeps } }),
   plugins: [
-    ...(web ? [react()] : []),
+    ...(web ? webBrowserPlugins() : []),
     storybookTest({
       configDir: path.join(projectRoot, ".storybook"),
       initialGlobals: { theme },
@@ -379,76 +370,94 @@ export default defineConfig({
       },
       "apps/*/vitest.config.ts",
       "packages/*/vitest.config.ts",
-      storybookProject({
-        name: "web-storybook-light",
-        projectRoot: webRoot,
-        theme: "light",
-        web: true,
-      }),
-      storybookProject({
-        name: "web-storybook-dark",
-        projectRoot: webRoot,
-        theme: "dark",
-        web: true,
-      }),
-      {
-        root: webRoot,
-        plugins: [react()],
-        optimizeDeps: {
-          include: [
-            "@storybook/nextjs-vite/link.mock",
-            "@storybook/nextjs-vite/navigation.mock",
-          ],
-        },
-        define: { "process.env": "{}" },
-        resolve: {
-          alias: {
-            "@": path.join(webRoot, "src"),
-            ...webBrowserAliases,
-          },
-        },
-        test: {
-          name: "web-browser",
-          include: [
-            "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
-          ],
-          setupFiles: [path.join(webRoot, "vitest.browser.setup.ts")],
-          browser: {
-            enabled: true,
-            provider: playwright({}),
-            headless: true,
-            instances: [{ browser: "chromium" }],
-          },
-        },
-      },
-      storybookProject({
-        name: "ui-storybook-light",
-        projectRoot: uiRoot,
-        theme: "light",
-        web: false,
-      }),
-      storybookProject({
-        name: "ui-storybook-dark",
-        projectRoot: uiRoot,
-        theme: "dark",
-        web: false,
-      }),
-      {
-        root: uiRoot,
-        plugins: [react()],
-        optimizeDeps: { include: uiOptimizeDeps },
-        test: {
-          name: "ui-browser",
-          include: ["src/**/*.browser.test.{ts,tsx}"],
-          setupFiles: [path.join(uiRoot, "vitest.browser.setup.ts")],
-          browser: {
-            enabled: true,
-            provider: playwright({}),
-            headless: true,
-            instances: [{ browser: "chromium" }],
-          },
-        },
-      },
+      ...(shouldLoadProject("web-storybook-light")
+        ? [
+            storybookProject({
+              name: "web-storybook-light",
+              projectRoot: webRoot,
+              theme: "light",
+              web: true,
+            }),
+          ]
+        : []),
+      ...(shouldLoadProject("web-storybook-dark")
+        ? [
+            storybookProject({
+              name: "web-storybook-dark",
+              projectRoot: webRoot,
+              theme: "dark",
+              web: true,
+            }),
+          ]
+        : []),
+      ...(shouldLoadProject("web-browser")
+        ? [
+            {
+              root: webRoot,
+              plugins: webBrowserPlugins(),
+              define: { "process.env": "{}" },
+              resolve: {
+                alias: {
+                  "@": path.join(webRoot, "src"),
+                  ...webStorybookAliases,
+                },
+              },
+              test: {
+                name: "web-browser",
+                include: [
+                  "src/{components,features,hooks,lib}/**/*.browser.test.{ts,tsx}",
+                ],
+                setupFiles: [path.join(webRoot, "vitest.browser.setup.ts")],
+                browser: {
+                  enabled: true,
+                  provider: playwright({}),
+                  headless: true,
+                  instances: [{ browser: "chromium" }],
+                },
+              },
+            },
+          ]
+        : []),
+      ...(shouldLoadProject("ui-storybook-light")
+        ? [
+            storybookProject({
+              name: "ui-storybook-light",
+              projectRoot: uiRoot,
+              theme: "light",
+              web: false,
+            }),
+          ]
+        : []),
+      ...(shouldLoadProject("ui-storybook-dark")
+        ? [
+            storybookProject({
+              name: "ui-storybook-dark",
+              projectRoot: uiRoot,
+              theme: "dark",
+              web: false,
+            }),
+          ]
+        : []),
+      ...(shouldLoadProject("ui-browser")
+        ? [
+            {
+              root: uiRoot,
+              plugins: [react()],
+              optimizeDeps: { include: uiOptimizeDeps },
+              test: {
+                name: "ui-browser",
+                include: ["src/**/*.browser.test.{ts,tsx}"],
+                setupFiles: [path.join(uiRoot, "vitest.browser.setup.ts")],
+                browser: {
+                  enabled: true,
+                  provider: playwright({}),
+                  headless: true,
+                  instances: [{ browser: "chromium" }],
+                },
+              },
+            },
+          ]
+        : []),
     ],
   },
 })

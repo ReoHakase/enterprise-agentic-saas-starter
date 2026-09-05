@@ -2,7 +2,7 @@
 title: 認証付きfile storage運用
 status: accepted
 implementation: active
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-05
 ---
 
 # 認証付きfile storage運用
@@ -75,7 +75,7 @@ headerを再構築します。
 旧API Cache APIの項目は新しい経路から参照しません。remote cacheの削除はこの変更へ含めず、既存TTLで
 失効させます。PRとCloudflare dry-runはremote stateを変更しません。
 
-productionではWebとAPIを同じregistrable domain配下、例えば`app.example.com`と`api.example.com`へ配置します。`AUTH_COOKIE_DOMAIN=.example.com`、Web originを含む`TRUSTED_ORIGINS` / `CORS_ORIGIN`、Web側の`API_PUBLIC_URL` / `NEXT_PUBLIC_API_BASE_URL`を同じAPI originへ揃えてください。別の親domainへ分離するとcredential付きsession cookieを共有できません。
+productionではWebとAPIを同じregistrable domain配下、例えば`app.example.com`と`api.example.com`へ配置します。`AUTH_COOKIE_DOMAIN=.example.com`、Web originを含む`TRUSTED_ORIGINS` / `CORS_ORIGIN`、Web側の`API_PUBLIC_URL` / `VITE_API_BASE_URL`を同じAPI originへ揃えてください。別の親domainへ分離するとcredential付きsession cookieを共有できません。
 
 ## 制限と保存形式
 
@@ -91,7 +91,9 @@ R2 keyは`organizations/{organizationId}/files/{ownerType}/{ownerId}/{fileId}`�
 
 profile image keyは`users/{userId}/profile-images/{profileImageId}.webp`または`organizations/{organizationId}/profile-images/{profileImageId}.webp`です。`profile_images`にはobject keyと状態、upload ID、source hash、ETag、削除時に戻す以前のprovider画像URLを保存します。ready確定時だけBetter Auth列をfirst-partyの安定したrelative routeとopaqueなrevision query（`?v={profileImageId}`）へ更新します。object keyを公開せず、置換時はbrowserの`src`を確実に変えます。generic `files` tableにbrowser URLを保存しない原則は変わりません。
 
-previewはR2へ保存したraw imageからImages bindingでWebPへ変換します。OpenNextやNext `<Image>`がprivate R2 originalを自動で最適化する構成ではありません。認証付きsourceへNext optimizerを通さず、Webの`AuthenticatedFileImage`がAPI preview URLからnative `srcset`を組み立てます。
+previewはR2へ保存したraw imageからImages bindingでWebPへ変換します。TanStack Startまたは公開画像用の
+Unpicがprivate R2 originalを自動で最適化する構成ではありません。認証付きsourceを公開画像の
+最適化経路へ通さず、Webの`AuthenticatedFileImage`がAPI preview URLからnative `srcset`を組み立てます。
 
 AVIFはmagic bytesで形式だけを検出し、Cloudflare Imagesの`info()`へ渡しません。v1では常に`previewable: false`、`imageWidth: null`、`imageHeight: null`としてdownloadだけを提供します。local/remote Images実装差へ依存してAVIFのmetadataを確定しません。
 
@@ -107,10 +109,10 @@ Issue詳細の全画面ページにviewport viewerを表示します。画像は
 bun run dev
 ```
 
-このcommandはmigrationを適用し、Webを`next dev --turbopack`、APIをprimary、Images Workerをauxiliaryと
-する1つの`wrangler dev` multi-config sessionでsource watchします。両Workerは同じlocal R2 stateとService
-Bindingを使います。build済みartifactは使いません。DB seed、R2 fixture reconcile、testは日常のdev起動へ
-混ぜません。
+このcommandはmigrationを適用し、WebをCloudflare Vite plugin付きの`vite dev`、APIをprimary、
+Images Workerをauxiliaryとする1つの`wrangler dev` multi-config sessionでソースを監視します。
+APIとImagesの両Workerは同じローカルR2状態とService Bindingを使います。ビルド済みの成果物は
+使いません。DB seed、R2 fixture reconcile、testは日常の開発起動へ混ぜません。
 
 fixtureが必要なときだけ、full devの起動前または起動中に次を明示実行します。
 

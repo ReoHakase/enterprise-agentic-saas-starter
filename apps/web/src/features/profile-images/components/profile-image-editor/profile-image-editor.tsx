@@ -23,8 +23,8 @@ import { FieldError } from "@enterprise-agentic-saas/ui/components/field"
 import { ImageCropDialog } from "@enterprise-agentic-saas/ui/components/image-crop-dialog"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "@tanstack/react-router"
 import { ImagePlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
-import { useRouter } from "next/navigation"
 import {
   type ChangeEvent,
   type MouseEvent,
@@ -42,7 +42,7 @@ import { fileKeys, registerFileUpload } from "@/features/files"
 import { issueKeys } from "@/features/issues"
 import { OrganizationProfileImage } from "@/features/organizations"
 import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { isFirstPartyProfileImageUrl } from "@/lib/profile-image-url"
 import { reportObservedError } from "@/lib/report-observed-error"
 
@@ -288,7 +288,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         ])
       }
     } finally {
-      router.refresh()
+      void router.invalidate()
     }
   }, [organizationId, queryClient, router, subject, userId])
 
@@ -307,7 +307,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
         await refreshProfileImages()
       } catch (error) {
         reportObservedError(error)
-        // Deletion is authoritative. Normal query retry or the RSC refresh
+        // Deletion is authoritative. Normal query retry or route invalidation
         // will reconcile a cache refresh that failed afterward.
       }
       toast.success("Profile image removed")
@@ -350,7 +350,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
       try {
         if (subject === "user") {
           await uploadUserProfileImageWithProgress({
-            baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+            baseUrl: clientEnv.VITE_API_BASE_URL,
             uploadId: prepared.uploadId,
             file,
             signal: controller.signal,
@@ -358,7 +358,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
           })
         } else {
           await uploadOrganizationProfileImageWithProgress({
-            baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+            baseUrl: clientEnv.VITE_API_BASE_URL,
             organizationId,
             uploadId: prepared.uploadId,
             file,
@@ -373,7 +373,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
           await refreshProfileImages()
         } catch (error) {
           reportObservedError(error)
-          // Upload is authoritative. Normal query retry or the RSC refresh
+          // Upload is authoritative. Normal query retry or route invalidation
           // will reconcile a cache refresh that failed afterward.
         }
         toast.success("Profile image updated")
@@ -462,7 +462,7 @@ export const ProfileImageEditor = (props: ProfileImageEditorProps) => {
   const busy = uploadProgress !== undefined || removePending
   const hasUploadedProfileImage = isFirstPartyProfileImageUrl(
     props.profileImage,
-    clientEnv.NEXT_PUBLIC_API_BASE_URL
+    clientEnv.VITE_API_BASE_URL
   )
 
   return (

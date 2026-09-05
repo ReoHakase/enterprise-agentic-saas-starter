@@ -4,7 +4,7 @@ import { useEffect } from "react"
 
 import { reportObservedError } from "@/lib/report-observed-error"
 
-import { ConsoleContentError } from "./view"
+import { ConsoleContentError, ConsoleShellError } from "./view"
 
 type ConsoleRouteErrorBoundaryProps = {
   error: Error & { digest?: string }
@@ -20,4 +20,15 @@ export const ConsoleRouteErrorBoundary = ({
   }, [error])
 
   return <ConsoleContentError reset={reset} />
+}
+
+export const ConsoleShellErrorBoundary = ({
+  error,
+  reset,
+}: ConsoleRouteErrorBoundaryProps) => {
+  useEffect(() => {
+    reportObservedError(error)
+  }, [error])
+
+  return <ConsoleShellError reset={reset} />
 }

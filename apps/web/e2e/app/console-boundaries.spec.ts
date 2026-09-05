@@ -1,13 +1,10 @@
 import type { BrowserContext, Page } from "@playwright/test"
 
-import { nextjsIntegrationEnvironment } from "./fixtures/environment"
-import {
-  expect,
-  productionServerComponentRenderError,
-  test,
-} from "./fixtures/test"
+import { tanStackStartIntegrationEnvironment } from "./fixtures/environment"
+import { expect, test } from "./fixtures/test"
 
-const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
+const mockApiUrl = tanStackStartIntegrationEnvironment.apiOrigin
+const privateServerFunctionError = "client_secret=browser-private-sentinel"
 
 const useAdminSession = async (context: BrowserContext) => {
   await context.addCookies([
@@ -31,20 +28,45 @@ const navigateFromConsoleSidebar = async (page: Page, label: string) => {
     .click({ noWaitAfter: true })
 }
 
+const openDocsThroughConsoleNavigation = async (
+  context: BrowserContext,
+  page: Page
+) => {
+  await useAdminSession(context)
+  await page.goto("/dashboard")
+  await expect(
+    page.getByRole("heading", { name: "Overview", level: 1 })
+  ).toBeVisible()
+  await page.getByRole("link", { name: "Documentation", exact: true }).click()
+  await expect(page).toHaveURL(/\/docs$/u)
+  await expect(
+    page.locator('[data-docs-shell][data-boundary-state="ready"]')
+  ).toBeVisible()
+}
+
+const openHydratedDocs = async (context: BrowserContext, page: Page) => {
+  await useAdminSession(context)
+  await page.goto("/docs")
+  await page
+    .getByRole("button", { name: "Search Documentation", exact: true })
+    .click()
+  const searchInput = page.getByRole("combobox", {
+    name: "Search Documentation",
+    exact: true,
+  })
+  await expect(searchInput).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(searchInput).toBeHidden()
+}
+
 test("コンソールのサイドバーから公開ドキュメントへ遷移する", async ({
   context,
   page,
 }) => {
-  await useAdminSession(context)
-  await page.goto("/dashboard")
+  // Given: 認証済みconsoleを表示する
+  await openDocsThroughConsoleNavigation(context, page)
 
-  const documentationLink = page.getByRole("link", {
-    name: "Documentation",
-    exact: true,
-  })
-  await expect(documentationLink).toHaveAttribute("href", "/docs")
-  await documentationLink.click()
-
+  // Then: Documentationリンクのclient navigationでpublic routeだけを表示する
   await expect(page).toHaveURL(/\/docs$/u)
   await expect(page.locator("[data-console-shell]")).toHaveCount(0)
 })
@@ -54,12 +76,16 @@ test("コンソールの読み込み状態から実画面へ復帰する", async
   createRequestGate,
   page,
 }) => {
-  await useAdminSession(context)
+  // Given: 認証済みのbrowserをpublic routeで起動し、親console loaderを待機させる
+  await openHydratedDocs(context, page)
   const requestGate = await createRequestGate("/me")
 
-  const navigation = page.goto("/dashboard?boundary-state=loading")
+  // When: DocumentationのOpen Appリンクでconsole routeへ移る
+  await page.getByRole("link", { name: "Open App", exact: true }).click()
   try {
     await requestGate.waitUntilRequested()
+
+    // Then: 親loaderの完了前はconsole shellのpendingComponentを表示する
     await expect(
       page.locator('[data-console-shell][data-boundary-state="loading"]')
     ).toBeVisible()
@@ -67,7 +93,7 @@ test("コンソールの読み込み状態から実画面へ復帰する", async
     await requestGate.release()
   }
 
-  await navigation
+  // Then: loader完了後は正規dashboardへ解決してready shellを表示する
   await expect(
     page.getByRole("heading", { name: "Overview", level: 1 })
   ).toBeVisible()
@@ -108,32 +134,66 @@ test("Issueへの遷移中に読み込み状態を経て対象routeへ復帰す�
 test("コンソールのError Boundaryを再試行して復帰する", async ({
   allowClientErrors,
   context,
+  e2eNamespace,
   page,
 }) => {
+  // Given: 認証済みのbrowserをpublic routeで起動し、親console loaderの通常retryまで失敗させる
   allowClientErrors(
-    /Injected console boundary outage/,
-    /Failed to load resource.*503/,
-    productionServerComponentRenderError
+    /Failed to load resource.*500/,
+    /The service is temporarily unavailable\./
   )
-  await useAdminSession(context)
-  const faultResponse = await context.request.post(
-    `${mockApiUrl}/__e2e/faults`,
-    {
-      data: {
-        path: "/me",
-        method: "GET",
-        status: 503,
-        code: "service_unavailable",
-        message: "Injected console boundary outage",
-      },
-    }
+  const browserErrors: string[] = []
+  const serverFunctionBodies: Array<Promise<string>> = []
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(message.text())
+  })
+  page.on("response", (response) => {
+    const url = new URL(response.url())
+    if (response.status() === 500 && url.pathname.startsWith("/_serverFn/"))
+      serverFunctionBodies.push(response.text())
+  })
+  await openHydratedDocs(context, page)
+  const faultResponses = await Promise.all(
+    Array.from({ length: 2 }, () =>
+      context.request.post(`${mockApiUrl}/__e2e/faults`, {
+        data: {
+          path: "/me",
+          method: "GET",
+          status: 503,
+          code: "service_unavailable",
+          message: privateServerFunctionError,
+        },
+        headers: { "x-e2e-namespace": e2eNamespace },
+      })
+    )
   )
-  expect(faultResponse.status()).toBe(201)
+  for (const response of faultResponses) expect(response.status()).toBe(201)
 
-  await page.goto("/dashboard?boundary-state=error")
+  // When: DocumentationのOpen Appリンクでconsole routeへ移る
+  await page.getByRole("link", { name: "Open App", exact: true }).click()
+
+  // Then: 親routeのerrorComponentを表示し、再試行でready shellへ復帰する
   await expect(
     page.locator('[data-console-shell][data-boundary-state="error"]')
   ).toBeVisible()
+  await expect.poll(() => serverFunctionBodies.length).toBeGreaterThan(0)
+  const serializedFailures = (await Promise.all(serverFunctionBodies)).join(
+    "\n"
+  )
+  expect(serializedFailures).toContain(
+    "The service is temporarily unavailable."
+  )
+  expect(serializedFailures).not.toContain(privateServerFunctionError)
+  expect(browserErrors.join("\n")).toContain(
+    "The service is temporarily unavailable."
+  )
+  expect(browserErrors.join("\n")).not.toContain(privateServerFunctionError)
+  const remainingFaults = await context.request.get(
+    `${mockApiUrl}/__e2e/faults`,
+    { headers: { "x-e2e-namespace": e2eNamespace } }
+  )
+  expect(remainingFaults.ok()).toBeTruthy()
+  expect(await remainingFaults.json()).toEqual([])
   await page.getByRole("button", { name: "Try again" }).click()
 
   await expect(

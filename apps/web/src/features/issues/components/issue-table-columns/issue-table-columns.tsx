@@ -18,7 +18,7 @@ import {
   IssueTitleCell,
   SortableIssueHeader,
 } from "../issue-inline-controls/issue-inline-controls"
-import { getIssueStatus } from "../issue-utils/issue-utils"
+import { getIssueStatus } from "../issue-utils/issue-values"
 import type {
   AsyncAction,
   IssueAssigneeOption,

@@ -5,7 +5,6 @@ import preview from "#storybook/preview"
 import { ConsoleRouteErrorBoundary } from "../console-route-error-boundary/client"
 import {
   AccountSettingsRouteSkeleton,
-  ConsoleRouteSkeleton,
   DashboardRouteSkeleton,
   IssuesRouteSkeleton,
   MembersRouteSkeleton,
@@ -22,10 +21,6 @@ const meta = preview.meta({
 })
 
 export const Dashboard = meta.story({})
-
-export const GenericConsoleRoute = meta.story({
-  render: () => <ConsoleRouteSkeleton />,
-})
 
 export const Issues = meta.story({
   render: () => <IssuesRouteSkeleton />,

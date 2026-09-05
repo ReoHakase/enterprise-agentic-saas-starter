@@ -21,8 +21,8 @@ import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "@tanstack/react-router"
 import { PlusIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
 import {
   type ChangeEvent,
   type FormEvent,
@@ -70,7 +70,7 @@ const OrganizationCreateAction = () => {
       })
       setOpen(false)
       slugEditedRef.current = false
-      router.refresh()
+      void router.invalidate()
       toast.success("Organization created")
     },
   })

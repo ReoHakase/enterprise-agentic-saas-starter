@@ -2,7 +2,7 @@
 title: CIとテスト実行契約
 status: accepted
 implementation: active
-last_reviewed: 2026-08-13
+last_reviewed: 2026-09-05
 applies_to:
   - package.json
   - turbo.json
@@ -23,10 +23,12 @@ applies_to:
 リポジトリルートの公開テストスクリプトとPR・`main`のテストは全件実行を維持します。ローカルの
 pre-commitだけは、ADR-014に従ってLefthookの単一コマンドからstaged fileをリポジトリルートの
 Vitest `related --run`へ渡します。
-既存のroot `vitest.config.ts`は唯一の`defineConfig`としてTest Projectsを常時定義し、各Node
-ワークスペースとWeb/UIの単体テストを登録します。`apps/**`と`packages/**`のVitest configは公式構成に
-従って単一projectを`defineProject`で定義し、rootがconfig pathとして参照します。Browser Mode、
-Storybook、global coverage、`forceRerunTriggers`はrootが所有します。新しいconfigや選択scriptは追加しません。
+既存のroot `vitest.config.ts`は唯一の`defineConfig`として各NodeワークスペースとWeb/UIの単体テストを
+常時登録します。`apps/**`と`packages/**`のVitest configは公式構成に従って単一projectを
+`defineProject`で定義し、rootがconfig pathとして参照します。Browser ModeとStorybookのinline
+projectは、CLIの`--project`で選択した対象だけを読み込み、WebとUIで異なるVite plugin、alias、
+Storybook設定を同じprocessへ混在させません。global coverageと`forceRerunTriggers`はrootが所有します。
+新しいconfigや選択scriptは追加しません。
 各workspace scriptはroot configと一意なproject名を明示し、cwdによるconfig探索へ依存しません。
 各projectの依存グラフからワークスペースをまたぐ静的`import`を追跡します。
 設定、マニフェスト、setup、`tsconfig.json`、DBトリガーはリポジトリルートの
@@ -116,7 +118,7 @@ deploy target固有のCloudflare dry-runも別jobとして維持します。
   独立jobとして並列実行し、`Browser · Web components`で集約する
 - Storybookの各テーマ内は`fileParallelism: false`、`maxWorkers: 1`を維持する
 - static buildのfontはlocal assetまたは固定system stackを使い、外部font APIへ依存しない
-- `Browser · Next.js integration`で実Next.jsと差し替え済みdownstreamの統合を検査する
+- `Browser · TanStack Start integration`で実TanStack Startと差し替え済みdownstreamの統合を検査する
 - pinned Chromium、WebKit install
 - laneごとに一意なfailure artifact
 

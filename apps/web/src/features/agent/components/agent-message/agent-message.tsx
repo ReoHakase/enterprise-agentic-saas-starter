@@ -20,7 +20,7 @@ import { CheckIcon, CopyIcon } from "lucide-react"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { AgentChatMessage } from "../../schema"
@@ -70,13 +70,11 @@ const AgentAssetPart = ({
     {assetIds.map((assetId) => {
       const asset = assets?.find((candidate) => candidate.id === assetId)
       return (
-        // The authenticated API image must bypass the Next optimizer.
-        // oxlint-disable react-doctor/nextjs-no-img-element
-        // eslint-disable-next-line @next/next/no-img-element
+        // The authenticated API image must bypass external image transformation.
         <img
           key={assetId}
           className="max-h-56 w-full rounded-lg object-cover"
-          src={buildAgentAssetPreviewUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
+          src={buildAgentAssetPreviewUrl(clientEnv.VITE_API_BASE_URL, {
             organizationId,
             assetId,
             width: FILE_PREVIEW_WIDTHS[1],
@@ -85,7 +83,6 @@ const AgentAssetPart = ({
           height={asset?.imageHeight}
           alt={asset?.filename ?? "Attached image"}
         />
-        // oxlint-enable react-doctor/nextjs-no-img-element
       )
     })}
   </div>

@@ -2,7 +2,7 @@
 title: Given-When-Thenによるテストケース設計・記述規約
 status: accepted
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-09-05
 applies_to:
   - apps/**/*.test.*
   - apps/**/*.spec.*
@@ -156,14 +156,14 @@ table-driven testは位置だけでなく意味が分かるnamed object rowを�
 
 所有層はファイル名やランナーではなく、SUT、接続する実物、観測結果でシナリオごとに決めます。
 同じコンポーネントを使っていても、DOM mappingを観測するW2、実ブラウザーのfocusを観測するW3、
-Next.jsのroute lifecycleを観測するW6は異なる失敗原因を持ちます。
+TanStack Startのルートライフサイクルを観測するW6は異なる失敗原因を持ちます。
 
 上位層には、次のようにその層だけが失敗させられる代表配線を残します。
 
-- HTTP serialization、middleware、cookie、Origin
+- HTTPの直列化、middleware、サーバー関数、Cookie、Origin
 - SQL constraintと実トランザクション
 - provider mappingとWorker binding
-- focus、keyboard、layout、URL、history、RSC
+- フォーカス、キーボード、レイアウト、URL、履歴、SSR
 - ワークスペース間の最終配線
 
 上位層を進めるための最小locatorやloading観測は重複に含めません。同じ失敗原因を再証明する
@@ -214,7 +214,7 @@ thin glueとして自動テストを追加しないのは、分岐、変換、�
 
 ### Playwright
 
-- W6は実Next.jsのroute、URL、history、document scroll、RSC lifecycleだけを所有します
+- W6は実TanStack Startのルート、URL、履歴、documentのスクロール、SSRのライフサイクルだけを所有します
 - E1とE2はワークスペース間の最終配線だけを所有し、下位層の全分岐を再検査しません
 - loginやnavigationなどのtechnical actionを列挙せず、利用者が達成するjourneyを`When`にします
 - locator、非同期同期、geometry helperの例外は[Browser test記述規約](browser-test-writing.md)に従います

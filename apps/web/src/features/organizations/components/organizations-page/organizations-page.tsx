@@ -19,8 +19,8 @@ import {
 } from "@enterprise-agentic-saas/ui/components/empty"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "@tanstack/react-router"
 import { Building2Icon, SettingsIcon, UsersRoundIcon } from "lucide-react"
-import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -51,7 +51,6 @@ export const OrganizationsPage = ({
 }) => {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const pathname = usePathname()
   const agentRuntime = useAgentRuntimeState()
   const [pendingOrganizationSwitch, setPendingOrganizationSwitch] = useState<{
     organizationId: string
@@ -71,7 +70,7 @@ export const OrganizationsPage = ({
       if (input.redirectTo) {
         // A client transition retains the shared ConsoleShell and can keep the
         // previous tenant's `me` and Agent props. Crossing tenant routes must
-        // discard the complete React/RSC tree.
+        // discard the complete route/component tree.
         navigateAfterOrganizationSwitch(
           globalThis.sessionStorage,
           globalThis.location,
@@ -80,9 +79,8 @@ export const OrganizationsPage = ({
         return
       }
       // Active organization changed, so every tenant-scoped query value,
-      // including agentThread, must be discarded before the refresh.
-      router.replace(pathname)
-      router.refresh()
+      // including agentThread, must be discarded before route data reloads.
+      void router.invalidate()
       toast.success("Organization switched")
     },
     onError: (error) => {

@@ -1,6 +1,5 @@
 import { defineConfig } from "oxlint"
 import {
-  NEXTJS_RULES,
   RECOMMENDED_RULES,
   TANSTACK_QUERY_RULES,
 } from "oxlint-plugin-react-doctor"
@@ -8,6 +7,7 @@ import {
 import rootConfig, {
   createBudgetOverrides,
   lintIgnorePatterns,
+  tanstackWebJsPlugins,
   workspaceBoundaryRule,
 } from "../../oxlint.config.ts"
 
@@ -31,14 +31,13 @@ export default defineConfig({
     "oxc",
     "vitest",
     "jsx-a11y",
-    "nextjs",
     "react",
     "react-perf",
   ],
   jsPlugins: [
     "oxlint-tailwindcss",
     { name: "react-doctor", specifier: "oxlint-plugin-react-doctor" },
-    { name: "query", specifier: "@tanstack/eslint-plugin-query" },
+    ...tanstackWebJsPlugins,
     { name: "storybook", specifier: "eslint-plugin-storybook" },
     { name: "testing-library", specifier: "eslint-plugin-testing-library" },
     { name: "playwright", specifier: "eslint-plugin-playwright" },
@@ -46,7 +45,6 @@ export default defineConfig({
   rules: {
     ...workspaceBoundaryRule("web", featureApiBoundary),
     ...RECOMMENDED_RULES,
-    ...NEXTJS_RULES,
     ...TANSTACK_QUERY_RULES,
     // React Compilerは導入しないため、手動memo化の整理を要求する提案ruleは適用しない。
     "react-doctor/react-compiler-no-manual-memoization": "off",
@@ -63,13 +61,6 @@ export default defineConfig({
     "react-perf/jsx-no-new-array-as-prop": "error",
     "react-perf/jsx-no-new-function-as-prop": "error",
     "react-perf/jsx-no-new-object-as-prop": "error",
-    "query/exhaustive-deps": "error",
-    "query/infinite-query-property-order": "error",
-    "query/mutation-property-order": "error",
-    "query/no-rest-destructuring": "warn",
-    "query/no-unstable-deps": "error",
-    "query/no-void-query-fn": "error",
-    "query/stable-query-client": "error",
     "tailwindcss/enforce-canonical": "warn",
     "tailwindcss/enforce-shorthand": "warn",
     // class orderはroot oxfmt.config.tsのsortTailwindcssを単一の正本にする。
@@ -83,6 +74,20 @@ export default defineConfig({
     "tailwindcss/no-unnecessary-whitespace": "error",
   },
   overrides: [
+    {
+      files: ["src/router.tsx"],
+      rules: {
+        // TanStack RouterのRegister module augmentationはdeclaration mergingにinterfaceが必要。
+        "typescript/consistent-type-definitions": "off",
+      },
+    },
+    {
+      files: ["src/routes/**/*.{ts,tsx}"],
+      rules: {
+        // `_splat`はTanStack Routerがfile route parameterへ割り当てる公開property名。
+        "no-underscore-dangle": ["error", { allow: ["_splat"] }],
+      },
+    },
     {
       files: ["src/lib/browser/**/*.{ts,tsx}", "src/lib/server/**/*.{ts,tsx}"],
       rules: {
@@ -211,7 +216,7 @@ export default defineConfig({
         "src/lib/server/**/*.{ts,tsx}",
         "**/*.config.{js,mjs,cjs,ts,mts,cts}",
       ],
-      react: ["src/{app,components,features,hooks}/**/*.{jsx,tsx}"],
+      react: ["src/{routes,components,features,hooks}/**/*.{jsx,tsx}"],
       testReact: true,
     }),
   ],
@@ -219,9 +224,6 @@ export default defineConfig({
     browser: true,
   },
   settings: {
-    next: {
-      rootDir: ".",
-    },
     react: {
       version: "19.2.8",
     },

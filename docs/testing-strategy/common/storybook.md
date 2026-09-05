@@ -2,7 +2,7 @@
 title: Storybookとブラウザーコンポーネントテスト仕様
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-09-05
 applies_to:
   - apps/web/**
   - packages/ui/**
@@ -22,21 +22,25 @@ Storybookは単一のテスト層ではありません。storyは、状態カタ
 
 - `@storybook/react-vite`を使う
 - domain非依存のprimitive、pattern、generic hookを対象にする
-- API client、React Query、Next.js route、auth session、tenant logicを持ち込まない
+- APIクライアント、TanStack Query、アプリケーションルート、認証セッション、テナント処理を持ち込まない
 - MSWが必要になるcomponentは、原則として`apps/web`へ置くべきか再検討する
 
 ### `apps/web`
 
-- `@storybook/nextjs-vite`を使う
+- `@storybook/react-vite`を使う
 - feature固有component、QueryClient、Agent UI、認証状態の表示を対象にする
-- Next.js navigation mock、QueryClient、theme、locale、notification、auth fixtureをdecoratorで提供する
+- TanStack Routerのメモリー履歴、QueryClient、テーマ、言語、通知、認証フィクスチャをdecoratorで提供する
 - HTTP状態はMSW、Agent streamはfake transportを優先する
 
 二つのStorybookを分離し、必要ならcompositionまたはStorybook MCPで横断的に参照します。
 
 UI Storybookは既存の`@fontsource-variable`、Web Storybookは`.storybook/preview.css`の固定system font
-stackを使います。Web Storybookから製品用の`next/font/google`をimportせず、static buildとbrowser
-testをGoogle Fontsの可用性から分離します。製品のNext.js font設定はこのテスト用CSSへ置き換えません。
+stackを使います。静的ビルドとブラウザーテストを外部フォント配信の可用性から分離します。製品で
+自己配信する`@fontsource-variable`の設定は、このテスト用CSSへ置き換えません。
+
+Webの製品Vite、Storybook static/dev、root VitestのWeb StorybookとBrowser Modeは、いずれも公式
+`@tailwindcss/vite` pluginで共有stylesheetを変換します。Web向けinline projectを選択時だけ読み込み、
+UI StorybookのVite構成へTailwind pluginやWeb aliasを混在させません。
 
 ## CSF Next
 
@@ -63,9 +67,9 @@ CSF Nextの`defineMain`、`definePreview`、`preview.meta`、`meta.story`を採�
 | UI primitive                 | `packages/ui/src/components/**`                                          | UI2、UI3              | props、variant、disabled、destructive、ARIA、keyboard、focus、theme | app domain、API、route                |
 | UI複合pattern                | `packages/ui/src/patterns/**`                                            | UI2、UI3、必要ならUI4 | 複数primitiveの協調、dialog、menu、form、focus return               | API、QueryClient、tenant              |
 | Web表示専用component         | `apps/web/src/features/**/components/**`                                 | W2、W3                | loading、empty、error、ready、callback、代表操作                    | query cache、route lifecycle          |
-| Web接続済みfeature           | `src/features/**/components/<screen>/client.tsx`、controller composition | W4                    | QueryClient、mutation、MSW、stream、retry、複数component            | 実Next.js route、middleware           |
-| routeから切り出したPage View | `src/features/**/components/**`                                          | W3またはW4            | page相当の表示、代表操作、responsive state                          | RSC、cookie、browser history          |
-| 実page、layout、middleware   | `apps/web/src/app/**`、`middleware.ts`                                   | W5、W6                | 原則storyへ直接入れない                                             | server判断はW5、実route lifecycleはW6 |
+| Web接続済みfeature           | `src/features/**/components/<screen>/client.tsx`、controller composition | W4                    | QueryClient、mutation、MSW、stream、retry、複数component            | 実TanStack Start route                |
+| routeから切り出したPage View | `src/features/**/components/**`                                          | W3またはW4            | page相当の表示、代表操作、responsive state                          | loader、Cookie、ブラウザー履歴        |
+| 実routeとrouter              | `apps/web/src/routes/**`、`src/router.tsx`                               | W5、W6                | 原則storyへ直接入れない                                             | server判断はW5、実route lifecycleはW6 |
 | 全構成journey                | `apps/web/e2e/**`                                                        | E1、E2                | Storybook対象外                                                     | Web、API、Agent、DB/Authの全配線      |
 
 ### 同じcomponentでも接続範囲で分類が変わる例
@@ -77,7 +81,7 @@ IssueCardへargsでissueを渡す
 IssuePanelがQueryClientとMSWでissueを取得する
   W4
 
-実Next.js routeがURLからissueNumberを解決する
+実TanStack StartルートがURLからissueNumberを解決する
   W6
 
 実APIとDBからissueを取得する
@@ -105,8 +109,8 @@ IssuePanelがQueryClientとMSWでissueを取得する
 
 ### storyを作らない
 
-- 薄い`page.tsx`、`layout.tsx`
-- middleware
+- 薄い`src/routes/**`
+- `src/router.tsx`
 - pure server loader
 - redirect decision
 - API adapter
@@ -127,7 +131,7 @@ component-name/
   fixtures.ts
 ```
 
-画面責務を持つWeb componentは`components/<screen>/{client,server,view,...}.tsx`へ分割し、feature rootへ本番`.tsx`を置きません。private subcomponentはpublicな親story内で実物が描画・操作される場合、個別storyを要求しません。
+画面責務を持つWeb componentは`components/<screen>/{client,view,...}.tsx`へ分割し、feature rootへ本番`.tsx`を置きません。private subcomponentはpublicな親story内で実物が描画・操作される場合、個別storyを要求しません。サーバー関数は`server.ts`へ置き、Storybookの対象にしません。
 
 `packages/ui`で複数directoryの公開componentを組み合わせ、form、overlay、data display、
 navigation等の利用例を検証するstoryに限り、`packages/ui/src/components/*.stories.tsx`へ置けます。
@@ -226,21 +230,22 @@ request前後の状態遷移、cache、古いresponseの抑止を観測する`pl
 
 ## Suspense、Error Boundary、通信状態
 
-| 状態                  | 表現                                     | 分類 | 自動実行               |
-| --------------------- | ---------------------------------------- | ---- | ---------------------- |
-| propsによるloading    | `loading` propまたはView model           | W3   | する                   |
-| Query loading         | 実QueryClient + MSW finite delay         | W4   | する                   |
-| empty                 | `200`と空collection                      | W4   | する                   |
-| validation error      | typed `400`または`422`                   | W4   | する                   |
-| not found             | typed `404`                              | W4   | する                   |
-| conflict              | typed `409`                              | W4   | する                   |
-| server error          | typed `500`                              | W4   | する                   |
-| network error         | `HttpResponse.error()`                   | W4   | する                   |
-| retry success         | 最初は失敗、次は成功するstateful handler | W4   | する                   |
-| Error Boundary reset  | `QueryErrorResetBoundary`とretry操作     | W4   | する                   |
-| infinite loading      | infinite delay                           | W4   | manual tagで自動対象外 |
-| Next.js `loading.tsx` | 実route lifecycle                        | W6   | 代表routeだけ          |
-| Next.js `error.tsx`   | 実route lifecycle                        | W6   | 代表routeだけ          |
+| 状態                 | 表現                                     | 分類 | 自動実行               |
+| -------------------- | ---------------------------------------- | ---- | ---------------------- |
+| propsによるloading   | `loading` propまたはView model           | W3   | する                   |
+| Query loading        | 実QueryClient + MSW finite delay         | W4   | する                   |
+| empty                | `200`と空collection                      | W4   | する                   |
+| validation error     | typed `400`または`422`                   | W4   | する                   |
+| not found            | typed `404`                              | W4   | する                   |
+| conflict             | typed `409`                              | W4   | する                   |
+| server error         | typed `500`                              | W4   | する                   |
+| network error        | `HttpResponse.error()`                   | W4   | する                   |
+| retry success        | 最初は失敗、次は成功するstateful handler | W4   | する                   |
+| Error Boundary reset | `QueryErrorResetBoundary`とretry操作     | W4   | する                   |
+| infinite loading     | infinite delay                           | W4   | manual tagで自動対象外 |
+| `pendingComponent`   | 実route lifecycle                        | W6   | 代表routeだけ          |
+| `errorComponent`     | 実route lifecycle                        | W6   | 代表routeだけ          |
+| `notFoundComponent`  | 実route lifecycle                        | W6   | 代表routeだけ          |
 
 自動テストでは有限delayまたは制御可能なdeferred promiseを使います。無限loadingは目視専用storyにします。
 

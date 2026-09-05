@@ -1,6 +1,6 @@
 # @enterprise-agentic-saas/ui
 
-shadcn/uiのBase UI実装、共通style、hookを提供するReact DOM packageです。Next.js page/layoutやfeature data fetchingは置きません。
+shadcn/uiのBase UI実装、共通スタイル、hookを提供するReact DOMパッケージです。TanStack Startのルート構成や機能固有のデータ取得は置きません。
 
 ## Entrypoints
 
@@ -29,4 +29,4 @@ bun run --cwd packages/ui test:browser
 - component interactionはTesting Libraryまたはstoryの `play` で検証する。
 - Storybook Vitest browser testはlight/dark両方を実行する。
 - a11y violationはwarningではなくtest failureにする。
-- Next.jsを必要とするcompositionは `apps/web` 側でtestする。
+- TanStack Start固有の構成は`apps/web`側でテストする。

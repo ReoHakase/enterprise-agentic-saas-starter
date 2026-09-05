@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { httpError } from "@/test-support/http-error"
@@ -9,8 +10,8 @@ import type { OrganizationDetail } from "../../schema"
 import { OrganizationSettingsForm } from "./organization-settings-form"
 
 const mocks = vi.hoisted(() => ({
-  refresh: vi.fn<() => void>(),
-  replace: vi.fn<(href: string) => void>(),
+  routerInvalidate: vi.fn<() => void>(),
+  routerNavigate: vi.fn<(input: { replace?: boolean; to: string }) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   updateOrganization:
     vi.fn<(organizationId: string, input: unknown) => Promise<unknown>>(),
@@ -20,8 +21,16 @@ vi.mock("@/lib/browser/console-api", () => ({
   browserConsoleApi: { updateOrganization: mocks.updateOrganization },
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useRouter: () => ({
+    invalidate: mocks.routerInvalidate,
+    navigate: mocks.routerNavigate,
+  }),
 }))
 
 vi.mock("sonner", () => ({
@@ -86,6 +95,7 @@ describe("OrganizationSettingsFormの契約", () => {
         slug: organization.slug,
       })
     })
+    expect(mocks.routerInvalidate).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization updated")
   })
 
@@ -156,10 +166,11 @@ describe("OrganizationSettingsFormの契約", () => {
     await actor.click(screen.getByRole("button", { name: "Save changes" }))
 
     await waitFor(() => {
-      expect(mocks.replace).toHaveBeenCalledWith(
-        "/organization/acme-operations/settings"
-      )
+      expect(mocks.routerNavigate).toHaveBeenCalledWith({
+        replace: true,
+        to: "/organization/acme-operations/settings",
+      })
     })
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.routerInvalidate).not.toHaveBeenCalled()
   })
 })

@@ -8,10 +8,10 @@
       ]
     },
     "build": {
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**"]
     },
     "build:cloudflare": {
-      "outputs": [".open-next/**"]
+      "outputs": ["dist/**"]
     }
   }
 }

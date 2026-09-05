@@ -27,7 +27,7 @@
     "**/*.config.*",
     "**/scripts/**",
     "**/generated/**",
-    "**/dist/**",
-    "**/.next/**"
+    "**/routeTree.gen.ts",
+    "**/dist/**"
   ]
 }

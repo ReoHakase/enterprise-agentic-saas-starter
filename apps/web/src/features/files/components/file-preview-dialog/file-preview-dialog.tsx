@@ -36,7 +36,7 @@ import {
 import { LocalDate } from "@/components/local-date/local-date"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import { formatFileSize } from "../../format"
 import { textFilePreviewQueryOptions } from "../../queries"
@@ -183,7 +183,7 @@ export const FilePreviewDialog = ({
   }, [file, handleKeyDown])
 
   const downloadUrl = file
-    ? buildFileDownloadUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
+    ? buildFileDownloadUrl(clientEnv.VITE_API_BASE_URL, {
         organizationId,
         fileId: file.id,
       })

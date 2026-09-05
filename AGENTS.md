@@ -28,7 +28,7 @@
 
 ## source境界
 
-- WebはNext.js compositionとdomain UI、APIはHTTP・authorization・transaction・DB adapterを所有する。
+- WebはTanStack Startのルート構成とドメインUI、APIはHTTP・authorization・transaction・DB adapterを所有する。
 - Agentの手書きruntimeは`apps/agent/src/mastra/**`へ置く。
 - UI packageはdomain-independent UI、DB packageはschema・migration・client・development toolingだけを所有する。
 - workspace間importは`package.json#exports`で公開したentrypointだけを使う。

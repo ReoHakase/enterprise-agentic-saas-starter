@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { NuqsAdapter } from "nuqs/adapters/next/app"
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router"
 import { useState } from "react"
 
 import {

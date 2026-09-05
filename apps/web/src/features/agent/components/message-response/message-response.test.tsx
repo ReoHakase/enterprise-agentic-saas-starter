@@ -1,11 +1,20 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import { MessageResponse } from "./message-response"
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+}))
+
 describe("MessageResponseの契約", () => {
-  it("Next Linkの動作でアプリ内相対Markdownリンクを描画する", () => {
+  it("TanStack Router Linkでアプリ内相対Markdownリンクを描画する", () => {
     render(
       <MessageResponse>
         {"Open [Issue #10](/organization/acme/issues/10)."}

@@ -44,19 +44,20 @@ const organizations: OrganizationSummary[] = [
   },
 ]
 
+const me: Me = {
+  activeOrganizationId: "org-alpha",
+  organizations,
+  user: {
+    id: "user-1",
+    name: "User",
+    email: "user@example.test",
+    profileImage: null,
+  },
+}
+
 describe("組織query cache", () => {
   it("古いテナントdataを再取得せず組織・個人cacheを更新する", async () => {
     const queryClient = new QueryClient()
-    const me: Me = {
-      activeOrganizationId: "org-alpha",
-      organizations,
-      user: {
-        id: "user-1",
-        name: "User",
-        email: "user@example.test",
-        profileImage: null,
-      },
-    }
     queryClient.setQueryData(consoleKeys.organizations(), organizations)
     queryClient.setQueryData(consoleKeys.me(), me)
 
@@ -71,6 +72,28 @@ describe("組織query cache", () => {
       { id: "org-beta", active: true },
     ])
     expect(queryClient.getQueryData<Me>(consoleKeys.me())).toMatchObject({
+      activeOrganizationId: "org-beta",
+      organizations: [
+        { id: "org-alpha", active: false },
+        { id: "org-beta", active: true },
+      ],
+    })
+  })
+
+  it("route別の個人cacheも切替先組織へ更新する", async () => {
+    // Given: console route固有のredirect先をsuffixに持つme queryがある。
+    const queryClient = new QueryClient()
+    const routeMeKey = [
+      ...consoleKeys.me(),
+      "/organization/beta/dashboard",
+    ] as const
+    queryClient.setQueryData(routeMeKey, me)
+
+    // When: active organizationを切り替える。
+    await prepareOrganizationSwitch(queryClient, "org-beta")
+
+    // Then: 同じprefixのroute別cacheも旧tenantを保持しない。
+    expect(queryClient.getQueryData<Me>(routeMeKey)).toMatchObject({
       activeOrganizationId: "org-beta",
       organizations: [
         { id: "org-alpha", active: false },

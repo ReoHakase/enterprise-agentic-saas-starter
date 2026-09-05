@@ -94,6 +94,15 @@ context、stack、cause、request ID、retry情報を本文へ含めません。
 この公開データは生エラーを保存するLogs契約とは別の面です。WebはEdenが投げた元のErrorを再包装せず、
 表示時だけ4xxの`message`と`fieldErrors`を読み取ります。
 
+TanStack Startのサーバー関数はglobal function middlewareで失敗原因を報告した後、redirect、not found、
+`Response`以外をcauseのない固定5xx `Error`へ置換します。framework標準handlerが行うconsole出力と
+Seroval直列化へproviderのmessage、stack、causeを渡しません。`src/start.ts`を置くとframeworkの暗黙CSRF
+middlewareが外れるため、同じglobal設定でserver functionだけを対象に公式`createCsrfMiddleware`を
+明示します。
+
+署名済みOAuth queryをloader dataへ保持する認証routeは`Cache-Control: no-store`を返し、期限内の署名、
+state、redirect先をbrowser cacheへ保存しません。
+
 Lokiの全`stream`は168時間の保持期間とします。compactorによる物理削除には遅延があるため、168時間を
 超えた直後の削除は保証しません。既存の永続ボリュームでは、7日を超えたログが不可逆に削除される場合が
 あります。TempoとPrometheusの保持期間は変更しません。

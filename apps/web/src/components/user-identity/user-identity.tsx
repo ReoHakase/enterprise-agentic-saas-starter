@@ -5,7 +5,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/avatar"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { getSafeProfileImageUrl } from "@/lib/profile-image-url"
 
 export type UserIdentityValue = {
@@ -39,7 +39,7 @@ export const UserProfileImage = ({
     <AvatarImage
       src={getSafeProfileImageUrl(
         user.profileImage,
-        clientEnv.NEXT_PUBLIC_API_BASE_URL
+        clientEnv.VITE_API_BASE_URL
       )}
       alt={user.name?.trim() || user.email?.trim() || "User"}
     />

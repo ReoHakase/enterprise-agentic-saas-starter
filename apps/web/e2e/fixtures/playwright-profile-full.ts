@@ -6,6 +6,7 @@ import {
 } from "./agent-e2e-environment"
 import {
   createAgentStackEnvironment,
+  createTanStackStartPreviewCommand,
   desktopChromium,
 } from "./playwright-profile-environment"
 
@@ -92,7 +93,10 @@ export const createFullPlaywrightProfile = (): PlaywrightTestConfig => {
               },
             },
             {
-              command: `next build && next start --hostname 0.0.0.0 --port ${environment.webPort}`,
+              command: createTanStackStartPreviewCommand({
+                buildDirectory: environment.webBuildDirectory,
+                port: environment.webPort,
+              }),
               url: `http://127.0.0.1:${environment.webPort}/auth/sign-in`,
               reuseExistingServer: false,
               timeout: 180_000,
@@ -100,8 +104,7 @@ export const createFullPlaywrightProfile = (): PlaywrightTestConfig => {
                 ...commonEnvironment,
                 NODE_ENV: "production",
                 API_PUBLIC_URL: environment.apiLoopbackOrigin,
-                NEXT_DIST_DIR: environment.nextDistDirectory,
-                NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,
+                VITE_API_BASE_URL: environment.apiOrigin,
               },
             },
           ]

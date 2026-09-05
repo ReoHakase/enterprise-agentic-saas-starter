@@ -12,8 +12,8 @@ if (!document.doctype) {
     document.documentElement
   )
 }
-// happy-dom leaves compatMode undefined even with a doctype. Browser documents
-// for this Next.js app are standards mode, which KaTeX requires.
+// happy-dom leaves compatMode undefined even with a doctype. Production browser
+// documents use standards mode, which KaTeX requires.
 Object.defineProperty(document, "compatMode", {
   configurable: true,
   value: "CSS1Compat",

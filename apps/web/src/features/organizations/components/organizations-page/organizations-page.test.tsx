@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { httpError } from "@/test-support/http-error"
@@ -18,8 +19,7 @@ const mocks = vi.hoisted(() => ({
   listOrganizations: vi.fn<() => Promise<unknown>>(),
   navigateAfterOrganizationSwitch: vi.fn<(href: string) => void>(),
   prepareOrganizationSwitch: vi.fn<() => Promise<void>>(),
-  replace: vi.fn<(href: string) => void>(),
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => void>(),
   toastError:
     vi.fn<(message: string, options?: { description?: string }) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
@@ -54,12 +54,13 @@ vi.mock("../../cache", () => ({
   prepareOrganizationSwitch: mocks.prepareOrganizationSwitch,
 }))
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/settings/organizations",
-  useRouter: () => ({
-    replace: mocks.replace,
-    refresh: mocks.refresh,
-  }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({
@@ -158,10 +159,7 @@ describe("OrganizationsPageの契約", () => {
       expect(mocks.completeOrganizationSwitch).toHaveBeenCalledOnce()
     )
     expect(screen.getByRole("button", { name: "Active" })).toBeDisabled()
-    await waitFor(() =>
-      expect(mocks.replace).toHaveBeenCalledWith("/settings/organizations")
-    )
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.routerInvalidate).toHaveBeenCalledOnce()
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization switched")
   })
 
@@ -220,8 +218,7 @@ describe("OrganizationsPageの契約", () => {
         "/organization/beta/members"
       )
     )
-    expect(mocks.replace).not.toHaveBeenCalled()
-    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.routerInvalidate).not.toHaveBeenCalled()
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
   })
 

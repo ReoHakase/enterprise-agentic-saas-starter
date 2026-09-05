@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event"
 import { useCallback, useEffect, useState } from "react"
 import { describe, expect, it } from "vitest"
 
+import { TestRouterProvider } from "@/test-support/tanstack-router"
+
 import { ConsoleContentError } from "./components/console-route-error-boundary/view"
 import { DashboardRouteSkeleton } from "./components/console-route-skeletons/console-route-skeletons"
 
@@ -44,9 +46,13 @@ const RouteStateHarness = () => {
 describe("ルート状態の遷移", () => {
   it("shellのgeometryを維持し、エラーへフォーカスして同じブラウザー実行内で再試行する", async () => {
     const actor = userEvent.setup()
-    render(<RouteStateHarness />)
+    render(
+      <TestRouterProvider>
+        <RouteStateHarness />
+      </TestRouterProvider>
+    )
 
-    const loading = screen.getByRole("status", {
+    const loading = await screen.findByRole("status", {
       name: "Loading organization dashboard",
     })
     const loadingWidth = loading.getBoundingClientRect().width

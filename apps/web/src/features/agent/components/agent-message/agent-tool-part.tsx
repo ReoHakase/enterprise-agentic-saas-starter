@@ -5,8 +5,8 @@ import {
   ToolContent,
   ToolHeader,
 } from "@enterprise-agentic-saas/ui/components/ai-elements/tool"
+import { Link } from "@tanstack/react-router"
 import { getToolName, type DynamicToolUIPart, type ToolUIPart } from "ai"
-import Link from "next/link"
 import { useEffect, useState } from "react"
 import * as v from "valibot"
 
@@ -116,7 +116,7 @@ export const AgentToolPart = ({
               {issueLinks.map((issue) => (
                 <Link
                   key={issue.number}
-                  href={withAgentThreadHref(
+                  to={withAgentThreadHref(
                     `/organization/${organizationSlug}/issues/${issue.number}`,
                     threadId
                   )}
@@ -135,7 +135,7 @@ export const AgentToolPart = ({
               {attachmentReceipt.output.fileIds.length} attachment
               {attachmentReceipt.output.fileIds.length === 1 ? "" : "s"} on{" "}
               <Link
-                href={withAgentThreadHref(
+                to={withAgentThreadHref(
                   `/organization/${organizationSlug}/issues/${attachmentReceipt.output.issueNumber}`,
                   threadId
                 )}

@@ -2,7 +2,7 @@
 title: テスト戦略参考資料
 status: accepted
 implementation: not-applicable
-last_reviewed: 2026-07-26
+last_reviewed: 2026-09-05
 ---
 
 # テスト戦略参考資料
@@ -29,8 +29,8 @@ last_reviewed: 2026-07-26
 
 ## Storybook
 
-- Next.js with Vite
-  - https://storybook.js.org/docs/get-started/frameworks/nextjs-vite
+- React with Vite
+  - https://storybook.js.org/docs/get-started/frameworks/react-vite
 - CSF Next
   - https://storybook.js.org/docs/api/csf/csf-next
 - Args
@@ -81,6 +81,17 @@ last_reviewed: 2026-07-26
 
 - Suspense
   - https://tanstack.com/query/latest/docs/framework/react/guides/suspense
+
+## TanStack StartとCloudflare Workers
+
+- TanStack Startの実行モデル
+  - https://tanstack.com/start/latest/docs/framework/react/guide/execution-model
+- TanStack Startのサーバー関数
+  - https://tanstack.com/start/latest/docs/framework/react/guide/server-functions
+- TanStack Routerと外部データ取得
+  - https://tanstack.com/router/latest/docs/guide/external-data-loading
+- Cloudflare Vite plugin
+  - https://developers.cloudflare.com/workers/vite-plugin/
 
 ## Better Auth
 

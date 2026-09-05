@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@tanstack/react-router"
 import { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -19,8 +19,8 @@ import {
   issuesQueryOptions,
 } from "../../queries"
 import type { IssueListItem } from "../../schema"
-import { useIssueSearchState } from "../../search-params.client"
 import { withAgentThreadHref } from "../../search-params.shared"
+import { useIssueSearchState } from "../../use-issue-search-state"
 import { IssuesWorkspace } from "../issues-workspace/issues-workspace"
 import {
   type IssueAssigneeOption,
@@ -40,7 +40,7 @@ export const IssuesDashboard = ({
   organizationSlug,
   currentUserId = "anonymous",
 }: IssuesDashboardProps) => {
-  const router = useRouter()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { state: searchState, setSearch, setDiscrete } = useIssueSearchState()
   const [busyIssueId, setBusyIssueId] = useState<string>()
@@ -153,14 +153,14 @@ export const IssuesDashboard = ({
   )
   const handleSelect = useCallback(
     (issue: IssueUiItem) => {
-      router.push(
-        withAgentThreadHref(
+      void navigate({
+        href: withAgentThreadHref(
           `/organization/${organizationSlug}/issues/${issue.number.toString()}`,
           searchState.agentThread
-        )
-      )
+        ),
+      })
     },
-    [organizationSlug, router, searchState.agentThread]
+    [navigate, organizationSlug, searchState.agentThread]
   )
   const getIssueHref = useCallback(
     (issue: IssueUiItem) =>

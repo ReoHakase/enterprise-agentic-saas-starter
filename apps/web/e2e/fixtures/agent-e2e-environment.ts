@@ -69,7 +69,7 @@ export const createAgentE2EEnvironment = (input: string | number) => {
     cookieDomain,
     temporaryRoot,
     stackRoot,
-    nextDistDirectory: `.next-e2e-full-${runId}`,
+    webBuildDirectory: `dist/e2e-full-${runId}`,
     applicationDatabasePath: join(stackRoot, "application.db"),
     agentStoragePath: join(stackRoot, "agent-storage.db"),
     wranglerStatePath: join(stackRoot, "wrangler-state"),

@@ -18,7 +18,7 @@ env:
   APP_NAME: Enterprise Agentic SaaS
   APP_BASE_URL: https://app.example.test
   API_PUBLIC_URL: https://api.example.test
-  NEXT_PUBLIC_API_BASE_URL: https://api.example.test
+  VITE_API_BASE_URL: https://api.example.test
   BETTER_AUTH_URL: https://api.example.test
   BETTER_AUTH_SECRET: ci-only-secret-at-least-32-characters
   AUTH_COOKIE_DOMAIN: example.test
@@ -256,8 +256,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  browser-nextjs-integration:
-    name: Browser · Next.js integration
+  browser-tanstack-start-integration:
+    name: Browser · TanStack Start integration
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -272,23 +272,23 @@ jobs:
         working-directory: apps/web
         run: bunx playwright install --with-deps chromium webkit
 
-      - name: Build Next.js integration application
+      - name: Build TanStack Start integration application
         run: bun run --cwd apps/web build:test:browser:app
 
-      - name: Run Next.js integration in Chromium
+      - name: Run TanStack Start integration in Chromium
         run: bun run --cwd apps/web test:browser:app:chromium
 
-      - name: Run representative Next.js integration in WebKit
+      - name: Run representative TanStack Start integration in WebKit
         run: bun run --cwd apps/web test:browser:app:webkit
 
-      - name: Upload Next.js integration failures
+      - name: Upload TanStack Start integration failures
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: browser-nextjs-integration-failures
+          name: browser-tanstack-start-integration-failures
           path: |
-            apps/web/playwright-report/app-integration
-            apps/web/test-results/app-integration
+            apps/web/playwright-report/tanstack-start-integration
+            apps/web/test-results/tanstack-start-integration
           if-no-files-found: ignore
           retention-days: 7
 
@@ -298,7 +298,7 @@ jobs:
     needs:
       - browser-web-components
       - browser-ui-components
-      - browser-nextjs-integration
+      - browser-tanstack-start-integration
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -306,12 +306,12 @@ jobs:
       - name: Verify browser lanes
         env:
           UI_COMPONENTS: ${{ needs.browser-ui-components.result }}
-          NEXTJS_INTEGRATION: ${{ needs.browser-nextjs-integration.result }}
+          TANSTACK_START_INTEGRATION: ${{ needs.browser-tanstack-start-integration.result }}
           WEB_COMPONENTS: ${{ needs.browser-web-components.result }}
         run: |
           test "$WEB_COMPONENTS" = success
           test "$UI_COMPONENTS" = success
-          test "$NEXTJS_INTEGRATION" = success
+          test "$TANSTACK_START_INTEGRATION" = success
 
   free-e2e-profiles:
     name: Free E2E · ${{ matrix.name }}

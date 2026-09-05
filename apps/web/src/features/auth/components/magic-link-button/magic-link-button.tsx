@@ -11,10 +11,8 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useIsMutating } from "@tanstack/react-query"
 import { Lock, Mail } from "lucide-react"
 
-import {
-  createScopedAuthViewHref,
-  useAuthRouteState,
-} from "../auth-route-scope/auth-route-scope"
+import { createScopedAuthViewHref } from "../auth-route-scope/auth-route-href"
+import { useAuthRouteState } from "../auth-route-scope/auth-route-scope"
 
 export type MagicLinkButtonProps = {
   /** @remarks `AuthView` */

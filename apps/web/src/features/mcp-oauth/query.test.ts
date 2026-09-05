@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest"
 
 import {
   createMcpOAuthAddAccountHref,
-  createMcpOAuthRoutePath,
   mcpOAuthScopeMatrixRows,
+  parseMcpOAuthSearchParams,
   parseMcpOAuthScopes,
   resolveMcpOAuthLoginRedirect,
 } from "./query"
@@ -56,6 +56,24 @@ describe("MCP OAuth scope queryの契約", () => {
 })
 
 describe("MCP OAuth ログインリダイレクト", () => {
+  it("raw queryの数値様文字列と重複値をそのまま保持する", () => {
+    const rawSearch =
+      "?response_type=code&client_id=client_1&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&exp=0001785726000&sig=signed-query&ba_param=client_id&ba_param=state"
+    const query = parseMcpOAuthSearchParams(rawSearch)
+
+    expect(query).toEqual({
+      ba_param: ["client_id", "state"],
+      client_id: "client_1",
+      exp: "0001785726000",
+      redirect_uri: "http://127.0.0.1/callback",
+      response_type: "code",
+      sig: "signed-query",
+    })
+    expect(resolveMcpOAuthLoginRedirect(query, rawSearch)).toBe(
+      `/oauth/organization${rawSearch}`
+    )
+  })
+
   it("別アカウント追加時も署名済みOAuthルートを保持する", () => {
     expect(
       createMcpOAuthAddAccountHref(
@@ -68,12 +86,16 @@ describe("MCP OAuth ログインリダイレクト", () => {
 
   it("ローカルOAuthルートの重複query値を保持する", () => {
     expect(
-      createMcpOAuthRoutePath("/oauth/organization", {
+      resolveMcpOAuthLoginRedirect({
         ba_param: ["client_id", "state"],
         client_id: "client_1",
+        exp: "1785726000",
+        redirect_uri: "http://127.0.0.1/callback",
+        response_type: "code",
+        sig: "signed-query",
       })
     ).toBe(
-      "/oauth/organization?ba_param=client_id&ba_param=state&client_id=client_1"
+      "/oauth/organization?ba_param=client_id&ba_param=state&client_id=client_1&exp=1785726000&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&sig=signed-query"
     )
   })
 

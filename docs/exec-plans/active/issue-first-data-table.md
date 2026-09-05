@@ -69,7 +69,7 @@ Organizations、Members、Invitations、Sessionsへ展開し、feature固有の�
 - [x] toolbar、sort、検索可能filter、期日popoverのresponsive UXを実装した
 - [x] Organizations、Members、Invitations、Sessionsを共通rendererへ移行した
 - [x] MembersとInvitationsへ検索、絞り込み、sort、共通paginationと独立したURL namespaceを追加した
-- [ ] 必須検査を全て通した
+- [x] 必須検査を全て通した
 
 ## 判断記録
 
@@ -80,7 +80,7 @@ Organizations、Members、Invitations、Sessionsへ展開し、feature固有の�
 | 2026-07-27 | label候補はdistinct nameだけを返す                                   | popularityや利用件数を新しいdomain ruleにしないため             |
 | 2026-07-27 | Statusは複数選択、Priorityは順序付きinclusive rangeにする            | 非連続statusとpriority順序をそれぞれ正しく表現するため          |
 | 2026-07-27 | query更新中は直前行を保持してspinnerを重ねる                         | 結果0件へのflashとtable layout shiftを避けるため                |
-| 2026-07-27 | client query hookをserver-safe barrelから分離する                    | Server Componentのproduction build graphを守るため              |
+| 2026-07-27 | client query hookをserver-safe barrelから分離する                    | client-only依存をserver build graphへ混入させないため           |
 | 2026-07-27 | sticky cellは透明のまま、操作部だけ半透明surfaceとblurで保護する     | 横scroll下の文字を抑えつつ行の選択色と連続させるため            |
 | 2026-07-27 | 期日はWebのrange Calendarで選び、日付とoffsetだけをAPIへ送る         | UI状態をtransportから除き、非UTC環境でもSQLの日界を合わせるため |
 | 2026-07-27 | placeholder行は表示を維持しつつmutation操作を無効化する              | 古い行へ新しいquery scopeの更新を適用しないため                 |
@@ -97,17 +97,17 @@ Organizations、Members、Invitations、Sessionsへ展開し、feature固有の�
 
 ## 検証証跡
 
-| command                    | 結果   | 証跡                                                                                                                      |
-| -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Web unit全体               | 成功   | 91 files、416 tests。Members/InvitationsのURL namespace分離、検索、filter、sort、paginationと既存action回帰を含む         |
-| API unit・実libSQL全体     | 成功   | 55 files、331 tests                                                                                                       |
-| Web/API/UI lint・typecheck | 成功   | warningなし                                                                                                               |
-| `bun run check`            | 成功   | final current diffで再実行。static、format、typecheck、全workspace unit・integrationが成功                                |
-| `bun run test:browser`     | 成功   | exact commandがexit 0。UI Storybook 99、Web light 197・dark 78、Web browser 7、Chromium app 17、WebKit representative 1   |
-| `bun run test:e2e`         | 成功   | 3 tests                                                                                                                   |
-| `bun run build:storybook`  | 成功   | UI/Web static build成功                                                                                                   |
-| Web `next build`           | 成功   | `test:browser`のproduction app buildで全routeを生成                                                                       |
-| `bun run build:cloudflare` | 未完了 | API・Agent primary・Agent E2Eのdry-runとWeb OpenNext bundleは生成成功。Wranglerが終了表示後も停滞し、再実行は明示承認待ち |
+| command                    | 結果 | 証跡                                                                                                                    |
+| -------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------- |
+| Web unit全体               | 成功 | 91 files、416 tests。Members/InvitationsのURL namespace分離、検索、filter、sort、paginationと既存action回帰を含む       |
+| API unit・実libSQL全体     | 成功 | 55 files、331 tests                                                                                                     |
+| Web/API/UI lint・typecheck | 成功 | warningなし                                                                                                             |
+| `bun run check`            | 成功 | final current diffで再実行。static、format、typecheck、全workspace unit・integrationが成功                              |
+| `bun run test:browser`     | 成功 | exact commandがexit 0。UI Storybook 99、Web light 197・dark 78、Web browser 7、Chromium app 17、WebKit representative 1 |
+| `bun run test:e2e`         | 成功 | 3 tests                                                                                                                 |
+| `bun run build:storybook`  | 成功 | UI/Web static build成功                                                                                                 |
+| Web production build       | 成功 | `test:browser`のTanStack Start production app buildで全routeを生成                                                      |
+| `bun run build:cloudflare` | 成功 | API・Agent primary・Agent E2E・Images・WebのWrangler dry-runが成功。deployは未実施                                      |
 
 ## リスクとrollback
 

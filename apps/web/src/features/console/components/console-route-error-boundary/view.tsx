@@ -1,8 +1,8 @@
 "use client"
 
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import { useLocation } from "@tanstack/react-router"
 import { RefreshCwIcon, TriangleAlertIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
 import { useEffect, useId, useRef } from "react"
 
 import { AppState } from "@/components/app-state/app-state"
@@ -23,7 +23,7 @@ export const ConsoleShellError = ({ reset }: { reset: () => void }) => (
 )
 
 export const ConsoleContentError = ({ reset }: { reset: () => void }) => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const presentation = getConsoleErrorPresentation(pathname)
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)

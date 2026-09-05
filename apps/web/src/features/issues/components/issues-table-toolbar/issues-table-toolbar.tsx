@@ -49,12 +49,11 @@ import { DataTableInclusiveRange } from "@/components/data-table/data-table-incl
 
 import type { IssueSearchPatch, IssueSearchState } from "../../search-params"
 import { CreateIssueDialog } from "../create-issue-dialog/create-issue-dialog"
+import { PriorityBadge, StatusBadge } from "../issue-utils/issue-utils"
 import {
   issueStatusOptions,
   priorityOptions,
-  PriorityBadge,
-  StatusBadge,
-} from "../issue-utils/issue-utils"
+} from "../issue-utils/issue-values"
 import { IssuesTableSortControls } from "../issues-table-sort-controls/issues-table-sort-controls"
 import type { AsyncAction, IssueAssigneeOption, IssueUiItem } from "../types"
 import {
@@ -70,7 +69,7 @@ const statusFilterIcon = <CircleDotIcon aria-hidden="true" />
 type DraftChange = IssueTableDraftChange
 import { DueDateFilter } from "./issues-table-due-date-filter"
 
-export const issuesTableToolbar = ({
+export const IssuesTableToolbar = ({
   organizationId,
   currentUserId,
   pending,

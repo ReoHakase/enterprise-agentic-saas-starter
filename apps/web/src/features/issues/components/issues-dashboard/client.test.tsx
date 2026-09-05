@@ -26,7 +26,7 @@ type DashboardMocks = {
   >
   listIssues: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<unknown>>>
   listMembers: ReturnType<typeof vi.fn<() => Promise<unknown>>>
-  push: ReturnType<typeof vi.fn<(href: string) => void>>
+  routerNavigate: ReturnType<typeof vi.fn<(input: { href: string }) => void>>
   setDiscrete: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<void>>>
   setSearch: ReturnType<
     typeof vi.fn<(input: { q: string; page: number }) => Promise<void>>
@@ -48,7 +48,7 @@ const mocks = vi.hoisted<DashboardMocks>(() => ({
   listIssueLabels: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   listIssues: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   listMembers: vi.fn<() => Promise<unknown>>(),
-  push: vi.fn<(href: string) => void>(),
+  routerNavigate: vi.fn<(input: { href: string }) => void>(),
   setDiscrete: vi.fn<(...args: unknown[]) => Promise<void>>(),
   setSearch: vi.fn<(input: { q: string; page: number }) => Promise<void>>(),
   showConsoleApiErrorToast: vi.fn<(error: unknown, fallback: string) => void>(),
@@ -67,8 +67,8 @@ vi.mock("@/features/console", () => ({
 
 vi.mock("@/lib/api-client", () => ({ apiClient: {} }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push }),
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocks.routerNavigate,
 }))
 
 vi.mock("sonner", () => ({
@@ -83,7 +83,7 @@ vi.mock("../../api", () => ({
   updateIssue: mocks.updateIssue,
 }))
 
-vi.mock("../../search-params.client", () => ({
+vi.mock("../../use-issue-search-state", () => ({
   useIssueSearchState: () => ({
     state: {
       agentThread: "thread-7",
@@ -262,7 +262,7 @@ describe("IssuesDashboardのWorkspace境界", () => {
     props.onSelectIssue(issue)
 
     const href = `/organization/acme-cloud/issues/${issue.number.toString()}?agentThread=thread-7`
-    expect(mocks.push).toHaveBeenCalledWith(href)
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({ href })
     expect(props.getIssueHref(issue)).toBe(href)
   })
 

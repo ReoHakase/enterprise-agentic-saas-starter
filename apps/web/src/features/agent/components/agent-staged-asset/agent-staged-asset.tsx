@@ -29,7 +29,6 @@ export const AgentStagedAsset = ({
   return (
     <div className="relative overflow-hidden rounded-xl border">
       {/* Local Blob URL is ephemeral and revoked after send/remove/switch. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         className="size-20 object-cover"
         src={item.blobUrl}

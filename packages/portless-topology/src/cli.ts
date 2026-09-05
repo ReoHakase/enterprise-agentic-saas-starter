@@ -136,10 +136,10 @@ export const createLocalTopologyEnvironment = (
     GITHUB_OAUTH_EMULATOR_URL: `${githubEmulator.origin}/emulate/github`,
     MASTRA_STORAGE_AUTH_TOKEN: LOCAL_AGENT_STORAGE_TOKEN,
     MASTRA_STORAGE_URL: agentStorage.origin,
-    NEXT_PUBLIC_API_BASE_URL: api.origin,
-    NEXT_PUBLIC_DEV_SESSION_ID: sessionId,
-    NEXT_PUBLIC_DEV_WORKTREE_ID: worktreeId,
-    NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT: LOCAL_BROWSER_OTLP_HTTP_ENDPOINT,
+    VITE_API_BASE_URL: api.origin,
+    VITE_DEV_SESSION_ID: sessionId,
+    VITE_DEV_WORKTREE_ID: worktreeId,
+    VITE_OTEL_EXPORTER_OTLP_ENDPOINT: LOCAL_BROWSER_OTLP_HTTP_ENDPOINT,
     ...(environment.NODE_EXTRA_CA_CERTS?.trim() || !portlessCaCertificate
       ? {}
       : { NODE_EXTRA_CA_CERTS: portlessCaCertificate }),

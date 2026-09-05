@@ -1,6 +1,6 @@
 import { act, render, renderHook, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { ChangeEvent } from "react"
+import type { ChangeEvent, ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
@@ -77,8 +77,22 @@ const filterDefaults = {
   page: 1,
 } as const
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/organization/acme/issues",
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    preload: _preload,
+    to,
+    ...props
+  }: ComponentProps<"a"> & { preload?: boolean; to?: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string }) => unknown
+  }) => select({ pathname: "/organization/acme/issues" }),
 }))
 
 const createCallbacks = () => ({

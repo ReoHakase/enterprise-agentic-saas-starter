@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import type { IssueTimelineItem } from "../../schema"
@@ -104,9 +105,22 @@ const createViewProps = (total: number) => ({
   ),
 })
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/organization/acme/issues",
-  useRouter: () => ({ back: vi.fn<() => void>() }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    preload: _preload,
+    to,
+    ...props
+  }: ComponentProps<"a"> & { preload?: boolean; to?: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string }) => unknown
+  }) => select({ pathname: "/organization/acme/issues" }),
 }))
 
 vi.mock("@/features/files", async (importOriginal) => {

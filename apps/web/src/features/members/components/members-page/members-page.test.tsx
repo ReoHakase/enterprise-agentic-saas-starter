@@ -9,9 +9,7 @@ const mocks = vi.hoisted(() => ({
   listInvitations: vi.fn<(organizationId: string) => Promise<unknown>>(),
   listMembers: vi.fn<(organizationId: string) => Promise<unknown>>(),
   noop: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  push: vi.fn<(href: string) => void>(),
-  refresh: vi.fn<() => void>(),
-  replace: vi.fn<(href: string) => void>(),
+  routerInvalidate: vi.fn<() => void>(),
 }))
 
 vi.mock("@/lib/browser/console-api", () => ({
@@ -26,12 +24,8 @@ vi.mock("@/lib/browser/console-api", () => ({
   },
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: mocks.push,
-    refresh: mocks.refresh,
-    replace: mocks.replace,
-  }),
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 const organization = {

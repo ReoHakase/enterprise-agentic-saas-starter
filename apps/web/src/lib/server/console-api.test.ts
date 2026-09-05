@@ -13,10 +13,6 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("server-only", () => ({}))
-vi.mock("react", () => ({
-  cache: (factory: () => Promise<unknown>) => factory,
-}))
 vi.mock("@/features/console/api", () => ({
   createConsoleApi: mocks.createConsoleApi,
 }))

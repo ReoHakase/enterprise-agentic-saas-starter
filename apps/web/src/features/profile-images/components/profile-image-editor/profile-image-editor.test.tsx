@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   deleteOrganizationProfileImage:
     vi.fn<(client?: unknown, organizationId?: string) => Promise<void>>(),
   deleteUserProfileImage: vi.fn<(client?: unknown) => Promise<void>>(),
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => void>(),
   reportObservedError: vi.fn<(error: unknown) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
   uploadOrganizationProfileImageWithProgress:
@@ -65,8 +65,8 @@ vi.mock("../../api", () => ({
   deleteUserProfileImage: mocks.deleteUserProfileImage,
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({

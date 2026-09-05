@@ -13,6 +13,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/dropdown-menu"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
+import { Link } from "@tanstack/react-router"
 import type { Column } from "@tanstack/react-table"
 import {
   ArrowDownIcon,
@@ -23,7 +24,6 @@ import {
   EllipsisIcon,
   Trash2Icon,
 } from "lucide-react"
-import Link from "next/link"
 import { useCallback } from "react"
 
 import {
@@ -33,7 +33,7 @@ import {
   IssueStatusControl,
 } from "../issue-metadata-controls/issue-metadata-controls"
 import { useIssueMutationState } from "../issue-table-state/issue-table-state"
-import { getIssueStatus, safelyRunAction } from "../issue-utils/issue-utils"
+import { getIssueStatus, safelyRunAction } from "../issue-utils/issue-values"
 import type {
   AsyncAction,
   IssueAssigneeOption,
@@ -85,7 +85,7 @@ export const IssueTitleCell = ({
 }) => (
   <div className="flex max-w-xl min-w-72 flex-col items-start gap-1">
     <Link
-      href={href}
+      to={href}
       className="h-auto min-w-0 text-left text-sm font-medium whitespace-normal text-primary underline-offset-4 hover:underline"
     >
       {issue.title}

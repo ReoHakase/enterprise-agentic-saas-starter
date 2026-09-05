@@ -23,8 +23,10 @@ description: enterprise-agentic-saas-starterのPlaywright E2E、auth/OAuth、ten
 3. Emulateのprovider suiteは`test:e2e`内のE1 profileに集約し、独立root scriptを追加しない。
 4. run/worker/test/organization/user/DB/R2をnamespace化し、共有resetを作らない。
 5. setupは対象がloginそのものでない限りAPI fixtureを使う。
-6. free E2EのWebはprofile固有のproduction buildを`next start`で起動する。E1はbuildを共有し、
-   Chromiumを最大3 workers、代表WebKitを別processで単独実行する。
+6. 無料E2EのWebはprofile固有の本番用`vite build`を`vite preview`で起動する。E1はビルドを共有し、
+   Chromiumを最大3 workersで実行する。W6もCloudflare Vite pluginの`ssr` Worker環境を含む同じ
+   TanStack Startのビルドとプレビュー経路を使い、代表WebKitを別processで単独実行する。
+   generic Node previewや開発サーバーへ縮退しない。
 7. Agent behavior変更はbrowserless G5を先に実行し、release candidateだけE2 canaryを実行する。
 8. paid runnerが起動したchild processとtmp resourceだけを終了時にcleanupする。
 9. W6、E1、E2にはURL、history、cookie、workspace間配線などその層だけが失敗させられる代表caseだけを

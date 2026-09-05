@@ -5,7 +5,7 @@ import type { ReactNode } from "react"
 import { Icon } from "../icon/icon"
 
 export type BreadcrumbItem = {
-  icon?: string
+  icon?: ReactNode
   name: ReactNode
   url?: string
 }
@@ -29,12 +29,12 @@ export const Breadcrumb = ({ items }: { items: BreadcrumbItem[] }) => (
             href={item.url}
             className="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:text-foreground"
           >
-            <Icon icon={item.icon} className="size-3.5" />
+            <BreadcrumbIcon icon={item.icon} />
             <span>{item.name}</span>
           </FumaLink>
         ) : (
           <span className="flex items-center gap-1.5 px-1 py-0.5 text-foreground">
-            <Icon icon={item.icon} className="size-3.5" />
+            <BreadcrumbIcon icon={item.icon} />
             <span>{item.name}</span>
           </span>
         )}
@@ -42,3 +42,10 @@ export const Breadcrumb = ({ items }: { items: BreadcrumbItem[] }) => (
     ))}
   </nav>
 )
+
+const BreadcrumbIcon = ({ icon }: { icon?: ReactNode }) =>
+  typeof icon === "string" ? (
+    <Icon icon={icon} className="size-3.5" />
+  ) : (
+    <span className="[&>svg]:size-3.5">{icon}</span>
+  )

@@ -1,8 +1,8 @@
 "use client"
 
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
+import { useLocation } from "@tanstack/react-router"
 import type { Table as ReactTable } from "@tanstack/react-table"
-import { usePathname } from "next/navigation"
 import type { MouseEvent } from "react"
 
 import { DataTableFooter } from "@/components/data-table/data-table"
@@ -26,7 +26,7 @@ export const IssuesTablePagination = ({
   searchState: IssueSearchState
   total: number
 }) => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const isHydrated = useIsHydrated()
   const pageCount = Math.max(table.getPageCount(), 1)
   const pageIndex = table.getState().pagination.pageIndex
@@ -140,7 +140,7 @@ const PageLink = ({
       variant={active ? "default" : "outline"}
       size="sm"
       href={href}
-      prefetch={false}
+      preload={false}
       onClick={onClick}
       className={className}
       aria-current={active ? "page" : undefined}

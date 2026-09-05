@@ -17,10 +17,8 @@ import {
   AgentComposer,
   type AgentComposerSnapshot,
 } from "../agent-composer/agent-composer"
-import {
-  AgentConversationViewport,
-  buildAgentConversationGroups,
-} from "../agent-conversation-viewport/agent-conversation-viewport"
+import { buildAgentConversationGroups } from "../agent-conversation-viewport/agent-conversation-groups"
+import { AgentConversationViewport } from "../agent-conversation-viewport/agent-conversation-viewport"
 import { AgentMessage } from "../agent-message/agent-message"
 import { AgentPolicyControl } from "../agent-policy-control/agent-policy-control"
 import { AgentSamplePrompts } from "../agent-sample-prompts/agent-sample-prompts"

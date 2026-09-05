@@ -19,8 +19,8 @@ import {
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { ShieldAlertIcon, Trash2Icon } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { type FormEvent, useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -111,7 +111,7 @@ export const OrganizationDangerZone = ({
 }: {
   organization: OrganizationDetail
 }) => {
-  const router = useRouter()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [submitError, setSubmitError] = useState<string>()
@@ -158,8 +158,7 @@ export const OrganizationDangerZone = ({
           queryKey: consoleKeys.organizations(),
         })
         toast.success("Organization deleted")
-        router.replace("/settings/organizations")
-        router.refresh()
+        void navigate({ replace: true, to: "/settings/organizations" })
       } catch (error) {
         if (isStepUpRequiredError(error)) {
           setFieldErrors({})

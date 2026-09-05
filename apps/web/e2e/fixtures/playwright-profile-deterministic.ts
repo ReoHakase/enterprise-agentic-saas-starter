@@ -8,6 +8,7 @@ import { createOAuthDatabasePath } from "./oauth-database"
 import {
   createAgentStackEnvironment,
   createInheritedPlaywrightEnvironment,
+  createTanStackStartPreviewCommand,
   desktopChromium,
 } from "./playwright-profile-environment"
 
@@ -27,6 +28,7 @@ const parseDeterministicE2EProfile = (
 
 const createAgentProfile = (runId: number) => {
   const environment = createAgentE2EEnvironment(runId)
+  const webBuildDirectory = `dist/e2e-deterministic-agent-${runId}`
   const stackEnvironment = createAgentStackEnvironment({
     appName: "Enterprise Agentic SaaS Deterministic E2E",
     environment,
@@ -103,7 +105,10 @@ const createAgentProfile = (runId: number) => {
       },
     },
     {
-      command: `next build && next start --hostname 0.0.0.0 --port ${environment.webPort}`,
+      command: createTanStackStartPreviewCommand({
+        buildDirectory: webBuildDirectory,
+        port: environment.webPort,
+      }),
       url: `http://127.0.0.1:${environment.webPort}/auth/sign-in`,
       reuseExistingServer: false,
       timeout: 180_000,
@@ -111,8 +116,7 @@ const createAgentProfile = (runId: number) => {
         ...stackEnvironment,
         NODE_ENV: "production",
         API_PUBLIC_URL: environment.apiLoopbackOrigin,
-        NEXT_DIST_DIR: ".next-e2e-deterministic-agent",
-        NEXT_PUBLIC_API_BASE_URL: environment.apiOrigin,
+        VITE_API_BASE_URL: environment.apiOrigin,
       },
     },
   ] satisfies NonNullable<PlaywrightTestConfig["webServer"]>
@@ -137,6 +141,7 @@ const createAuthProfile = () => {
   const githubOrigin = "http://127.0.0.1:4101"
   const cookieDomain = "oauth-e2e.enterprise-agentic-saas.localhost"
   const databasePath = createOAuthDatabasePath(process.pid)
+  const webBuildDirectory = `dist/e2e-deterministic-oauth-${process.pid}`
   const callbackUrl = `${apiOrigin}/auth/callback/github`
   const stackEnvironment = {
     ...createInheritedPlaywrightEnvironment(),
@@ -161,8 +166,7 @@ const createAuthProfile = () => {
     GITHUB_OAUTH_EMULATOR_CLIENT_ID: "enterprise-agentic-saas-local",
     GITHUB_OAUTH_EMULATOR_CLIENT_SECRET: "enterprise-agentic-saas-local-secret",
     GITHUB_OAUTH_CALLBACK_URL: callbackUrl,
-    NEXT_TELEMETRY_DISABLED: "1",
-    NEXT_PUBLIC_BROWSER_TEST: "true",
+    VITE_BROWSER_TEST: "true",
   }
   const projects = [
     {
@@ -201,7 +205,10 @@ const createAuthProfile = () => {
       },
     },
     {
-      command: "next build && next start --hostname 0.0.0.0 --port 3100",
+      command: createTanStackStartPreviewCommand({
+        buildDirectory: webBuildDirectory,
+        port: 3100,
+      }),
       url: "http://127.0.0.1:3100/auth/sign-in",
       reuseExistingServer: false,
       timeout: 180_000,
@@ -209,8 +216,7 @@ const createAuthProfile = () => {
         ...stackEnvironment,
         NODE_ENV: "production",
         API_PUBLIC_URL: apiLoopbackOrigin,
-        NEXT_DIST_DIR: ".next-e2e-deterministic-oauth",
-        NEXT_PUBLIC_API_BASE_URL: apiOrigin,
+        VITE_API_BASE_URL: apiOrigin,
       },
     },
   ] satisfies NonNullable<PlaywrightTestConfig["webServer"]>

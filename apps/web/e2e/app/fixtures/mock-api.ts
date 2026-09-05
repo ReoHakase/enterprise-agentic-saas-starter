@@ -17,7 +17,7 @@ type RequestGateRule = OneShotRule & {
   waitUntilReleased: Promise<void>
 }
 
-import { nextjsIntegrationEnvironment } from "./environment"
+import { tanStackStartIntegrationEnvironment } from "./environment"
 
 const fixedNow = "2026-07-14T09:00:00.000Z"
 const expiresAt = "2026-08-14T09:00:00.000Z"
@@ -25,7 +25,7 @@ const corsHeaders = {
   "access-control-allow-credentials": "true",
   "access-control-allow-headers": "content-type,x-e2e-namespace",
   "access-control-allow-methods": "GET,OPTIONS,POST",
-  "access-control-allow-origin": nextjsIntegrationEnvironment.webOrigin,
+  "access-control-allow-origin": tanStackStartIntegrationEnvironment.webOrigin,
   vary: "Origin",
 }
 
@@ -90,6 +90,12 @@ const invitation = {
   expiresAt,
   createdAt: "2026-07-13T09:00:00.000Z",
 }
+
+const routeContractInvitationIds = new Set([
+  invitation.id,
+  `${invitation.id}-loading`,
+  `${invitation.id}-error`,
+])
 
 const issue = {
   id: "issue-a-1",
@@ -321,9 +327,11 @@ const handleAuthRequest = (
     if (!sessionKey) {
       return betterAuthError("UNAUTHORIZED", "Sign in required", 401)
     }
+    const invitationId = url.searchParams.get("id")
     if (
       sessionKey !== "new-user" ||
-      url.searchParams.get("id") !== invitation.id
+      !invitationId ||
+      !routeContractInvitationIds.has(invitationId)
     ) {
       return betterAuthError(
         "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION",
@@ -332,7 +340,7 @@ const handleAuthRequest = (
       )
     }
     return json({
-      id: invitation.id,
+      id: invitationId,
       organizationId: organization.id,
       organizationName: organization.name,
       organizationSlug: organization.slug,
@@ -502,11 +510,11 @@ const handleRequest = async (request: Request) => {
 }
 
 Bun.serve({
-  port: nextjsIntegrationEnvironment.apiPort,
+  port: tanStackStartIntegrationEnvironment.apiPort,
   hostname: "127.0.0.1",
   fetch: handleRequest,
 })
 
 console.log(
-  `Next.js integration fixture API listening on ${nextjsIntegrationEnvironment.apiOrigin}`
+  `TanStack Start integration fixture API listening on ${tanStackStartIntegrationEnvironment.apiOrigin}`
 )

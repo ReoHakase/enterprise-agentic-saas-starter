@@ -28,7 +28,7 @@ const cacheActiveOrganization = (
         ? markActiveOrganization(organizations, organizationId)
         : organizations
   )
-  queryClient.setQueryData<Me>(consoleKeys.me(), (me) =>
+  queryClient.setQueriesData<Me>({ queryKey: consoleKeys.me() }, (me) =>
     me
       ? {
           ...me,

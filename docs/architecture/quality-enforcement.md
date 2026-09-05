@@ -2,7 +2,7 @@
 title: 品質強制
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-09-05
 applies_to:
   - oxlint.config.ts
   - apps/*/oxlint.config.ts
@@ -108,13 +108,16 @@ focused/disabled testの規則は緩めません。
 
 Oxlintのprofileは次の順に適用し、後のoverrideを優先します。
 
-| 順序 | profile                           | selector                                                                                                                                                                                                                                                  |
-| ---: | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/cloudflare-env.d.ts`、`**/{storybook-static,playwright-report,test-results}/**` |
-|    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                               |
-|    2 | React                             | `apps/web/src/{app,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                      |
-|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`src/lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                              |
-|    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                       |
+| 順序 | profile                           | selector                                                                                                                                                                                                                                                              |
+| ---: | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    0 | lint対象外                        | `**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.turbo}/**`、`**/.next-*/**`、`**/generated/**`、`**/*.generated.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/routeTree.gen.ts`、`**/cloudflare-env.d.ts`、`**/{storybook-static,playwright-report,test-results}/**` |
+|    1 | production core（default）        | 除外後の`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`。他profileに一致しないsourceは必ずここへ入る                                                                                                                                                                           |
+|    2 | React                             | `apps/web/src/{routes,components,features,hooks}/**/*.{jsx,tsx}`、`packages/ui/src/**/*.{jsx,tsx}`、`packages/email/src/**/*.{jsx,tsx}`                                                                                                                               |
+|    2 | adapter / transport               | APIのroute、repository、platform、entrypoint、Agentのadapterとcomposition root、Webの`src/lib/server/**`とconfig、Emulate、Auth、Email runtime/provider/development。正確なglobは各workspaceの`oxlint.config.ts`を正本にする                                          |
+|    3 | test / story / E2E / code fixture | `**/*.{test,spec}.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`、`**/*.stories.{js,jsx,ts,tsx}`、`**/{test,tests,testing,__tests__,e2e,test-support,fixtures,__fixtures__}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`                                                                   |
+
+`.next`と`.next-*`はNext.js adapterである`apps/emulate`の生成物だけを対象として維持します。Webの
+生成物は`dist`であり、`.open-next`を除外へ残しません。
 
 `fixture data`はlint対象外、実行されるcode fixtureは最後のtest profileです。root
 `oxlint.config.ts`は`lintIgnorePatterns`、`createBudgetOverrides`、`workspaceBoundaryRule`を
@@ -131,7 +134,7 @@ root default config内部を正本にし、別moduleやresolverへ複製しま�
 - `import/no-namespace`: 原則禁止し、`node:*`、Valibot、Vitestのmatcher登録、
   Drizzleへ渡すDB schemaだけを許可
 - `typescript/no-require-imports`
-- side-effect importはCSS、`server-only`、test setup等のallowlistだけ
+- side-effect importはCSS、自己配信font、`server-only`、test setup等のallowlistだけ
 
 `import/no-namespace`の例外は、namespaceとして公開される外部APIと、Drizzleがtableとrelationの
 集合をobjectとして受け取る境界に限定します。設定値は`node:*`、`valibot`、
@@ -242,8 +245,8 @@ production TypeScript/TSXのcopy-pasteを検出します。
     "**/*.config.*",
     "**/scripts/**",
     "**/generated/**",
-    "**/dist/**",
-    "**/.next/**"
+    "**/routeTree.gen.ts",
+    "**/dist/**"
   ]
 }
 ```
@@ -292,7 +295,7 @@ Cloudflare dry-run
 
 - `Static analysis`: format、Oxlint、Knip full/strict、jscpd、DB履歴とschema drift
 - `Quality`: typecheck、unit・integration test、workspace buildを独立laneで並列実行して集約する
-- `Browser`: Storybookのlight/dark、Browser Mode、static build、UI components、Next.js integrationを
+- `Browser`: Storybookのlight/dark、Browser Mode、static build、UI components、TanStack Start integrationを
   独立laneで実行して集約する
 - `Free E2E`: Agent profileを3ワーカー、OAuth・WebAuthnを含むAuth profileを1ワーカーで実行して集約する
 - `Cloudflare dry-run`: Web/API/Images/Agent production bundle
@@ -336,7 +339,7 @@ Ruleを目的ではなく責務境界のsignalとして扱い、意味のないh
 - jscpd threshold以下
 - exported browser componentにnamed storyがあり、Storybook/Browser Mode testが成功する
 - client側の`<Suspense>`、Skeleton、Error Boundaryを対象component testで検証する
-- async Server Component routeの`loading.tsx`、`error.tsx`、Playwright W6に欠落がない
+- 非同期`loader`を持つルートの境界設定とPlaywright W6に欠落がない
 - jscpdがproduction sourceだけをscanする
 - broad ignoreとbaseline fileがない
 - `bun run check`がlocal/CIで成功する

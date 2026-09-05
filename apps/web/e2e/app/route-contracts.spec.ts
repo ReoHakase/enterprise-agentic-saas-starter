@@ -1,19 +1,24 @@
-import type { BrowserContext, Page } from "@playwright/test"
+import type { BrowserContext, Page, Route } from "@playwright/test"
 
-import { nextjsIntegrationEnvironment } from "./fixtures/environment"
-import {
-  expect,
-  productionServerComponentRenderError,
-  test,
-} from "./fixtures/test"
+import { tanStackStartIntegrationEnvironment } from "./fixtures/environment"
+import { expect, test } from "./fixtures/test"
 import type { CreateRequestGate } from "./fixtures/test"
 
-const mockApiUrl = nextjsIntegrationEnvironment.apiOrigin
+const mockApiUrl = tanStackStartIntegrationEnvironment.apiOrigin
+const signedOAuthSearch =
+  "response_type=code&client_id=client_1&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&exp=0001785726000&sig=signed-query&ba_param=client_id&ba_param=state"
+const interceptedServerFunctionError =
+  /^console\.error: Error: \[object Object\]\n\s+at Object\.deserialize \([^)]*\/assets\/createServerFn-[^)]+\)/u
+const publicServerFunctionError = /The service is temporarily unavailable\./u
+const serverFunctionPattern = "**/_serverFn/**"
 
 type AllowClientErrors = (...patterns: RegExp[]) => void
 
+const noop: () => void = () => undefined
+
 type ConsoleRouteContract = {
   assertReady?: (page: Page) => Promise<void>
+  faultCount?: number
   heading: string
   headingLevel?: number
   navigationLabel?: string
@@ -39,23 +44,48 @@ const useSession = async (
   ])
 }
 
-const withBoundaryQuery = (route: string, state: string) =>
-  `${route}${route.includes("?") ? "&" : "?"}route-contract=${state}`
+const withBoundaryInvitation = (route: string, state: string) =>
+  `${route}-${state}`
 
 const createRequestFault = async (
   context: BrowserContext,
-  requestPath: string
+  requestPath: string,
+  count = 1
 ) => {
-  const response = await context.request.post(`${mockApiUrl}/__e2e/faults`, {
-    data: {
-      path: requestPath,
-      method: "GET",
-      status: 503,
-      code: "service_unavailable",
-      message: "Injected route contract outage",
-    },
-  })
-  expect(response.status()).toBe(201)
+  const responses = await Promise.all(
+    Array.from({ length: count }, () =>
+      context.request.post(`${mockApiUrl}/__e2e/faults`, {
+        data: {
+          path: requestPath,
+          method: "GET",
+          status: 503,
+          code: "service_unavailable",
+          message: "Injected route contract outage",
+        },
+      })
+    )
+  )
+  for (const response of responses) {
+    expect(response.status()).toBe(201)
+  }
+}
+
+const navigateThroughBrowserHistory = async (page: Page, href: string) => {
+  await page.evaluate((nextHref) => {
+    window.history.pushState(window.history.state, "", nextHref)
+  }, href)
+}
+
+const isDocsNavigationRequest = (route: Route) => {
+  const request = route.request()
+  const url = new URL(request.url())
+
+  return (
+    request.method() === "GET" &&
+    request.headers()["x-tsr-serverfn"] === "true" &&
+    url.pathname.startsWith("/_serverFn/") &&
+    url.search.length === 0
+  )
 }
 
 const expectConsoleShellReady = async (page: Page) => {
@@ -100,20 +130,6 @@ const navigateToContract = async (
     .click()
 }
 
-const blockRoutePrefetches = async (page: Page) => {
-  await page.route("**/*", async (route) => {
-    const headers = route.request().headers()
-    if (
-      headers["next-router-prefetch"] === "1" ||
-      headers.purpose === "prefetch"
-    ) {
-      await route.abort()
-      return
-    }
-    await route.continue()
-  })
-}
-
 const openReadySourceRoute = async (
   page: Page,
   contract: ConsoleRouteContract
@@ -140,14 +156,8 @@ const verifyConsoleRouteContract = async ({
   page: Page
   contract: ConsoleRouteContract
 }) => {
-  allowClientErrors(
-    /Injected route contract outage/,
-    /Failed to load resource.*503/,
-    /Failed to load resource: net::ERR_FAILED .*\?_rsc=/,
-    productionServerComponentRenderError
-  )
+  allowClientErrors(/Failed to load resource.*500/, publicServerFunctionError)
   await useSession(context, "admin")
-  await blockRoutePrefetches(page)
 
   await openReadySourceRoute(page, contract)
   const requestGate = await createRequestGate(contract.requestPath)
@@ -169,7 +179,7 @@ const verifyConsoleRouteContract = async ({
   await expect(page).toHaveURL(new RegExp(`${contract.route}$`, "u"))
 
   await openReadySourceRoute(page, contract)
-  await createRequestFault(context, contract.requestPath)
+  await createRequestFault(context, contract.requestPath, contract.faultCount)
   const errorNavigation = navigateToContract(page, contract)
   await expectConsoleShellReady(page)
   await expect(
@@ -197,12 +207,7 @@ const verifyInvitationRouteContract = async ({
   page: Page
   route: string
 }) => {
-  allowClientErrors(
-    /Injected route contract outage/,
-    /Session request failed with status 503/,
-    /Failed to load resource.*503/,
-    productionServerComponentRenderError
-  )
+  allowClientErrors(/Failed to load resource.*500/, publicServerFunctionError)
   await useSession(context, "new-user")
 
   await page.goto(route)
@@ -212,9 +217,11 @@ const verifyInvitationRouteContract = async ({
     )
   ).toBeVisible()
 
-  await page.goto("about:blank")
   const requestGate = await createRequestGate("/auth/get-session")
-  const loadingNavigation = page.goto(withBoundaryQuery(route, "loading"))
+  await navigateThroughBrowserHistory(
+    page,
+    withBoundaryInvitation(route, "loading")
+  )
   try {
     await requestGate.waitUntilRequested()
     await expect(
@@ -225,16 +232,17 @@ const verifyInvitationRouteContract = async ({
   } finally {
     await requestGate.release()
   }
-  await loadingNavigation
   await expect(
     page.locator(
       '[data-route-boundary="true"][data-boundary-state="ready"]:visible'
     )
   ).toBeVisible()
 
-  await page.goto("about:blank")
   await createRequestFault(context, "/auth/get-session")
-  await page.goto(withBoundaryQuery(route, "error"))
+  await navigateThroughBrowserHistory(
+    page,
+    withBoundaryInvitation(route, "error")
+  )
   await expect(
     page.locator(
       '[data-route-boundary="true"][data-boundary-state="error"]:visible'
@@ -247,6 +255,149 @@ const verifyInvitationRouteContract = async ({
     )
   ).toBeVisible()
 }
+
+test("認証routeは署名済みOAuth queryの文字列と重複値をそのまま引き継ぐ", async ({
+  page,
+}) => {
+  // Given: 数値様文字列と重複値を含む署名済みOAuth queryを用意する
+  const expectedRedirectTo = `/oauth/organization?${signedOAuthSearch}`
+
+  // When: OAuth providerから認証routeを開く
+  const response = await page.goto(`/auth/sign-in?${signedOAuthSearch}`)
+
+  // Then: browser cacheへ保存せず、認証画面内の遷移先には元のqueryが保持される
+  expect(response?.headers()["cache-control"]).toBe("no-store")
+  const signUpHref = await page
+    .getByRole("link", { name: "Sign Up", exact: true })
+    .getAttribute("href")
+  expect(signUpHref).not.toBeNull()
+  expect(
+    new URL(
+      signUpHref ?? "/",
+      tanStackStartIntegrationEnvironment.webOrigin
+    ).searchParams.get("redirectTo")
+  ).toBe(expectedRedirectTo)
+})
+
+test("旧招待URLはqueryを保持した307で正規URLへ移す", async ({ request }) => {
+  // When: query付きの旧招待URLへ直接requestする
+  const response = await request.get(
+    "/organization/invitations/invitation-new-user?source=legacy&campaign=mail",
+    { maxRedirects: 0 }
+  )
+
+  // Then: queryを保持した正規URLを307で返す
+  expect(response.status()).toBe(307)
+  expect(response.headers().location).toBe(
+    "/invitations/invitation-new-user?source=legacy&campaign=mail"
+  )
+  expect(response.headers()["content-security-policy"]).toContain(
+    "connect-src 'self'"
+  )
+  expect(response.headers()["referrer-policy"]).toBe("same-origin")
+})
+
+test("@route-contract /docs 親loaderはshell内の全境界状態から復帰する", async ({
+  allowClientErrors,
+  context,
+  page,
+}) => {
+  // Given: consoleから公開docsへクライアント遷移できる
+  allowClientErrors(
+    /Injected docs navigation outage/u,
+    /Failed to load resource.*503/u,
+    interceptedServerFunctionError
+  )
+  await useSession(context, "admin")
+  await page.goto("/organization/alpha-operations/dashboard")
+  await expectReadyConsoleRoute(page, "Overview")
+
+  let markNavigationRequested = noop
+  let releaseNavigation = noop
+  const navigationRequested = new Promise<void>((resolve) => {
+    markNavigationRequested = resolve
+  })
+  const navigationReleased = new Promise<void>((resolve) => {
+    releaseNavigation = resolve
+  })
+  const loadingHandler = async (route: Route) => {
+    if (!isDocsNavigationRequest(route)) {
+      await route.continue()
+      return
+    }
+
+    markNavigationRequested()
+    await navigationReleased
+    await route.continue()
+  }
+  await page.route(serverFunctionPattern, loadingHandler)
+
+  // When: docs親loaderのrequestを保留する
+  const loadingNavigation = page
+    .getByRole("link", { name: "Documentation", exact: true })
+    .click()
+  try {
+    await navigationRequested
+
+    // Then: docs shellを維持したloading境界を表示する
+    await expect(
+      page.locator('[data-docs-shell][data-boundary-state="loading"]:visible')
+    ).toBeVisible()
+    releaseNavigation()
+    await loadingNavigation
+    await expect(
+      page.locator('[data-docs-shell][data-boundary-state="ready"]:visible')
+    ).toBeVisible()
+    await expect(page.locator("[data-docs-page]:visible")).toBeVisible()
+  } finally {
+    releaseNavigation()
+    await page.unroute(serverFunctionPattern, loadingHandler)
+  }
+
+  // Given: 同じ親loaderが一度だけ失敗する
+  await page.goto("/organization/alpha-operations/dashboard")
+  await expectReadyConsoleRoute(page, "Overview")
+  const faultHandler = async (route: Route) => {
+    if (!isDocsNavigationRequest(route)) {
+      await route.continue()
+      return
+    }
+
+    await route.fulfill({
+      body: "Injected docs navigation outage",
+      contentType: "text/plain",
+      status: 503,
+    })
+  }
+  await page.route(serverFunctionPattern, faultHandler)
+
+  // When: docsへ遷移する
+  await page.getByRole("link", { name: "Documentation", exact: true }).click()
+  try {
+    // Then: docs shellを維持したerror境界を表示する
+    await expect(
+      page.locator('[data-docs-shell][data-boundary-state="error"]:visible')
+    ).toBeVisible()
+    await expect(
+      page.getByRole("heading", {
+        name: "Documentation could not be loaded",
+        exact: true,
+      })
+    ).toBeVisible()
+  } finally {
+    await page.unroute(serverFunctionPattern, faultHandler)
+  }
+
+  // When: 障害を解除してretryする
+  await page.getByRole("button", { name: "Try again", exact: true }).click()
+
+  // Then: readyなdocs shellへ復帰する
+  await expect(
+    page.locator('[data-docs-shell][data-boundary-state="ready"]:visible')
+  ).toBeVisible()
+  await expect(page.locator("[data-docs-page]:visible")).toBeVisible()
+  await expect(page).toHaveURL(/\/docs$/u)
+})
 
 test("@route-contract /organization/[organizationSlug]/dashboard は全境界状態から復帰する", async ({
   allowClientErrors,
@@ -281,6 +432,7 @@ test("@route-contract /organization/[organizationSlug]/issues は全境界状態
     createRequestGate,
     page,
     contract: {
+      faultCount: 2,
       heading: "Issues",
       navigationLabel: "Issues",
       requestPath: "/me",
@@ -376,7 +528,12 @@ test("Issue一覧へ戻るとURLと文書スクロールをブラウザー履歴
     .first()
   await expect(issueLink).toBeVisible()
   await issueLink.scrollIntoViewIfNeeded()
-  const listScrollY = await page.evaluate(() => window.scrollY)
+  const listScrollY = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        requestAnimationFrame(() => resolve(window.scrollY))
+      })
+  )
   const issueRowHeight = await issueLink.evaluate(
     (link) => link.closest("tr")?.getBoundingClientRect().height ?? 0
   )
@@ -434,7 +591,7 @@ test("@route-contract /organization/[organizationSlug]/members は全境界状�
     contract: {
       heading: "Members",
       navigationLabel: "Members",
-      requestPath: "/organizations",
+      requestPath: "/organizations/org-a",
       route: "/organization/alpha-operations/members",
       sourceRoute: "/settings/account",
     },
@@ -455,7 +612,7 @@ test("@route-contract /organization/[organizationSlug]/settings は全境界状�
     contract: {
       heading: "Organization settings",
       navigationLabel: "Organization settings",
-      requestPath: "/organizations",
+      requestPath: "/organizations/org-a",
       route: "/organization/alpha-operations/settings",
       sourceRoute: "/organization/alpha-operations/members",
     },
@@ -474,6 +631,7 @@ test("@route-contract /settings/account は全境界状態から復帰する", a
     createRequestGate,
     page,
     contract: {
+      faultCount: 2,
       heading: "Account settings",
       navigationLabel: "Account",
       requestPath: "/me",
@@ -495,6 +653,7 @@ test("@route-contract /settings/organizations は全境界状態から復帰す�
     createRequestGate,
     page,
     contract: {
+      faultCount: 2,
       heading: "Organizations",
       navigationLabel: "Organizations",
       requestPath: "/me",

@@ -1,6 +1,47 @@
 import { expect, test } from "./fixtures/test"
 
 test.describe("公開ドキュメント", () => {
+  for (const { caseLabel, route } of [
+    { caseLabel: "HTML document", route: "/docs" },
+    { caseLabel: "LLM index", route: "/llms.txt" },
+    { caseLabel: "LLM全文", route: "/llms-full.txt" },
+    { caseLabel: "root Markdown表現", route: "/docs.md" },
+    { caseLabel: "Markdown表現", route: "/docs/developers/mcp.md" },
+    { caseLabel: "検索API", route: "/api/search?query=MCP" },
+  ] as const) {
+    test(`${caseLabel}に共通security headerを付与する`, async ({ request }) => {
+      // When: 公開routeへ直接requestする
+      const response = await request.get(route)
+
+      // Then: documentとserver handlerで同じsecurity headerを返す
+      expect(response.headers()["content-security-policy"]).toContain(
+        "connect-src 'self'"
+      )
+      expect(response.headers()["referrer-policy"]).toBe("same-origin")
+    })
+  }
+
+  for (const { caseLabel, route } of [
+    { caseLabel: "LLM index", route: "/llms.txt" },
+    { caseLabel: "LLM全文", route: "/llms-full.txt" },
+    { caseLabel: "root Markdown表現", route: "/docs.md" },
+    { caseLabel: "Markdown表現", route: "/docs/developers/mcp.md" },
+    { caseLabel: "検索API", route: "/api/search?query=MCP" },
+  ] as const) {
+    test(`${caseLabel}をGET専用endpointとして公開する`, async ({ request }) => {
+      // Given: GET専用の公開endpointがある
+      const expectedAllow = "GET, HEAD, OPTIONS"
+
+      // When: 非対応methodでrequestする
+      const postResponse = await request.fetch(route, { method: "POST" })
+
+      // Then: app SSRへfallthroughせず405と許可methodを返す
+      expect(postResponse.status()).toBe(405)
+      expect(postResponse.headers().allow).toBe(expectedAllow)
+      expect(await postResponse.text()).toBe("Method Not Allowed")
+    })
+  }
+
   test("認証やコンソールshellなしで表示する", async ({ page }) => {
     await page.goto("/docs")
 
@@ -51,7 +92,7 @@ test.describe("公開ドキュメント", () => {
 
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
       "content",
-      /\/docs\/opengraph-image(?:-[^/]+)?\.png(?:\?.*)?$/u
+      new URL("/docs/opengraph-image.png", page.url()).href
     )
     await expect(
       page.locator('meta[property="og:image:width"]')
@@ -62,8 +103,12 @@ test.describe("公開ドキュメント", () => {
   })
 
   test("存在しない公開ドキュメントrouteをnot-foundへ変換する", async ({
+    allowClientErrors,
     page,
   }) => {
+    allowClientErrors(
+      /Failed to load resource: .*404 .*\/docs\/not-a-real-page/u
+    )
     await page.goto("/docs/not-a-real-page")
 
     await expect(
@@ -135,6 +180,15 @@ test.describe("公開ドキュメント", () => {
   test("明示的なMarkdown表現だけをMarkdownとして提供する", async ({
     request,
   }) => {
+    const rootMarkdownResponse = await request.get("/docs.md")
+    expect(rootMarkdownResponse.ok()).toBe(true)
+    expect(rootMarkdownResponse.headers()["content-type"]).toContain(
+      "text/markdown"
+    )
+    expect(await rootMarkdownResponse.text()).toContain(
+      "# Documentation (/docs)"
+    )
+
     const markdownResponse = await request.get("/docs/developers/mcp.md")
     expect(markdownResponse.ok()).toBe(true)
     expect(markdownResponse.headers()["content-type"]).toContain(
@@ -150,5 +204,8 @@ test.describe("公開ドキュメント", () => {
     })
     expect(htmlResponse.ok()).toBe(true)
     expect(htmlResponse.headers()["content-type"]).toContain("text/html")
+
+    const emptySplatResponse = await request.get("/docs/.md")
+    expect(emptySplatResponse.status()).toBe(404)
   })
 })

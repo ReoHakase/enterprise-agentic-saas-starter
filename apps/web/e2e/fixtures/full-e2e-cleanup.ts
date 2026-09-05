@@ -12,17 +12,18 @@ export const removeFullE2EArtifacts = async (
 ) => {
   const environment = createAgentE2EEnvironment(runId)
   const webWorkspace = resolve(webWorkspaceInput)
-  const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
+  const webBuildRoot = resolve(webWorkspace, "dist")
+  const webBuildPath = resolve(webWorkspace, environment.webBuildDirectory)
   if (
-    dirname(nextDistPath) !== webWorkspace ||
-    basename(nextDistPath) !== environment.nextDistDirectory ||
-    !/^\.next-e2e-full-[1-9][0-9]*$/u.test(environment.nextDistDirectory)
+    dirname(webBuildPath) !== webBuildRoot ||
+    !/^e2e-full-[1-9][0-9]*$/u.test(basename(webBuildPath)) ||
+    environment.webBuildDirectory !== `dist/e2e-full-${runId}`
   ) {
-    throw new Error("Full E2E Next path is outside its workspace boundary")
+    throw new Error("Full E2E Web build is outside its workspace boundary")
   }
   await Promise.all([
     removeAgentE2EArtifacts(runId),
-    rm(nextDistPath, {
+    rm(webBuildPath, {
       force: true,
       maxRetries: 5,
       recursive: true,

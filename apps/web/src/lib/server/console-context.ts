@@ -1,10 +1,7 @@
-import "server-only"
-import { cache } from "react"
-
 import { verifySession } from "@/lib/server/auth"
 import { createServerConsoleApi } from "@/lib/server/console-api"
 
-export const getConsoleContext = cache(async (loginRedirectTo?: string) => {
+export const getConsoleContext = async (loginRedirectTo?: string) => {
   const [session, api] = await Promise.all([
     verifySession(loginRedirectTo),
     createServerConsoleApi(),
@@ -12,4 +9,4 @@ export const getConsoleContext = cache(async (loginRedirectTo?: string) => {
   const me = await api.getMe()
 
   return { api, me, session }
-})
+}

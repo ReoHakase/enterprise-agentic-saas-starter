@@ -47,6 +47,7 @@ last_reviewed: 2026-08-01
 
 ### 完了
 
+- [WebのTanStack Start移行とCloudflare Workers・Vite HMR標準化](completed/PLAN-2026-042-tanstack-start-migration.md)
 - [Next devエラー可視化とBetter Auth招待再送修正](completed/PLAN-2026-032-development-error-and-invitation-resend.md)
 - [CIクリティカルパス短縮](completed/PLAN-2026-031-ci-critical-path-optimization.md)
 - [coding agent設定のNix集約](completed/nix-managed-agent-config.md)

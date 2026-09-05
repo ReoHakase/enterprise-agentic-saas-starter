@@ -34,12 +34,10 @@ import { AdditionalField } from "../additional-field/additional-field"
 import {
   AuthPasswordField,
   AuthTextField,
-  selectCanSubmit,
 } from "../auth-form-field/auth-form-field"
-import {
-  createScopedAuthViewHref,
-  useAuthRouteState,
-} from "../auth-route-scope/auth-route-scope"
+import { selectCanSubmit } from "../auth-form-field/form-selectors"
+import { createScopedAuthViewHref } from "../auth-route-scope/auth-route-href"
+import { useAuthRouteState } from "../auth-route-scope/auth-route-scope"
 import {
   ProviderButtons,
   type SocialLayout,

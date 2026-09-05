@@ -17,8 +17,6 @@ export default defineConfig({
   ignorePatterns: [
     ".next/**",
     "**/.next/**",
-    ".open-next/**",
-    "**/.open-next/**",
     ".agents/skills/**",
     "**/.agents/skills/**",
     ".turbo/**",
@@ -37,6 +35,7 @@ export default defineConfig({
     "**/test-results/**",
     "playwright-report/**",
     "**/playwright-report/**",
+    "**/routeTree.gen.ts",
     "**/next-env.d.ts",
   ],
 })

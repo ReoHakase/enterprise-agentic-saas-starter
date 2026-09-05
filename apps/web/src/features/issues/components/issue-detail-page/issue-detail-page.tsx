@@ -6,7 +6,7 @@ import {
   type IssueDetailProps,
 } from "../issue-detail-types"
 import { issueDiscardDialog as IssueDiscardDialog } from "../issue-discard-dialog/issue-discard-dialog"
-import { emptyAssigneeOptions } from "../issue-utils/issue-utils"
+import { emptyAssigneeOptions } from "../issue-utils/issue-values"
 import { useIssueAgentForm } from "../use-issue-agent-form/use-issue-agent-form"
 import { useIssueCommentDirtyState } from "../use-issue-comment-dirty-state/use-issue-comment-dirty-state"
 import { useIssueCommentForm } from "../use-issue-comment-form/use-issue-comment-form"

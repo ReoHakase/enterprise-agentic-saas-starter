@@ -12,7 +12,7 @@ import type { IssueDetailProps } from "../issue-detail-types"
 import {
   getActionErrorMessage,
   getActionFieldError,
-} from "../issue-utils/issue-utils"
+} from "../issue-utils/issue-values"
 import type { IssueUiItem } from "../types"
 
 export const useIssueCommentForm = ({

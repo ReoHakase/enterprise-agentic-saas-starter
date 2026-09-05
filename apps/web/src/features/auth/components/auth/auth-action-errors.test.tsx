@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => ({
   clearQueryCache: vi.fn<() => void>(),
   navigate: vi.fn<(input: { replace?: boolean; to: string }) => void>(),
   passkey: vi.fn<(input: unknown) => Promise<void>>(),
-  push: vi.fn<(to: string) => void>(),
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => Promise<void>>(),
+  routerNavigate: vi.fn<(input: { replace?: boolean; to: string }) => void>(),
   reportObservedError: vi.fn<(error: unknown) => void>(),
   signOut: vi.fn<() => void>(),
   socialSignIn: vi.fn<(input: unknown) => void>(),
@@ -43,8 +43,9 @@ vi.mock("@/lib/report-observed-error", () => ({
   reportObservedError: mocks.reportObservedError,
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocks.routerNavigate,
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
@@ -92,6 +93,7 @@ describe("認証アクションエラー", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.cancelQueries.mockResolvedValue()
+    mocks.routerInvalidate.mockResolvedValue()
     mocks.passkey.mockImplementation(async (input) => {
       if (typeof input !== "object" || input === null) {
         throw new Error("Expected passkey input")
@@ -186,9 +188,9 @@ describe("認証アクションエラー", () => {
     )
 
     await waitFor(() =>
-      expect(mocks.push).toHaveBeenCalledWith(
-        "/invitations/invitation-new-user"
-      )
+      expect(mocks.routerNavigate).toHaveBeenCalledWith({
+        to: "/invitations/invitation-new-user",
+      })
     )
   })
 

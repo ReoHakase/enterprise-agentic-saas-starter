@@ -2,7 +2,7 @@
 title: Webテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-08-21
+last_reviewed: 2026-09-05
 applies_to:
   - apps/web/**
 related:
@@ -16,9 +16,11 @@ related:
 
 ## 目的
 
-Webでは、純粋な状態処理、DOM上のcomponent振る舞い、実ブラウザーのcomponent contract、feature integration、server module、実Next.js application lifecycleを分離して検証します。
+Webでは、純粋な状態処理、DOM上のコンポーネントの振る舞い、実ブラウザーのコンポーネント契約、
+機能統合、サーバーモジュール、実TanStack Startアプリケーションのライフサイクルを分離して検証します。
 
-細かな表示状態と操作をE2Eへ集めず、W1からW5へ下げます。実Next.js server、RSC、middleware、cookie、browser historyが必要なものだけをW6へ残します。
+細かな表示状態と操作をE2Eへ集めず、W1からW5へ下げます。実TanStack Startサーバー、ルートの
+`loader`、サーバー関数、Cookie、ブラウザー履歴が必要なものだけをW6へ残します。
 
 ## コード構造との対応
 
@@ -27,7 +29,8 @@ Webでは、純粋な状態処理、DOM上のcomponent振る舞い、実ブラ�
 ```text
 apps/web/
   src/
-    app/
+    routes/
+      __root.tsx
     components/
       <component>/
         <component>.tsx
@@ -48,7 +51,6 @@ apps/web/
         components/
           <screen>/
             client.tsx
-            server.tsx
             view.tsx
             view.test.tsx
             view.stories.tsx
@@ -58,7 +60,7 @@ apps/web/
             <component>.stories.tsx
         <feature>.browser.test.tsx
     lib/
-      client/
+      browser/
       server/
       shared/
   e2e/
@@ -67,8 +69,8 @@ apps/web/
 依存方向:
 
 ```text
-app
-  → feature browser-safe index.tsまたはserver-only server.ts
+routes
+  → featureのブラウザー用index.tsまたはサーバー用server.ts
   → app-wide components
   → lib/server
 
@@ -99,13 +101,13 @@ model
 - API packageのserver内部またはschemaへのdeep import
 - 別featureのprivate file import
 - `*.public.ts`によるsymbol単位の公開
-- featureからapp routeをimport
-- Client Componentからserver-only moduleをimport
+- 機能から`routes/**`を`import`
+- ブラウザーコンポーネントからサーバー実装を`import`
 - feature rootへ本番`.tsx`を置く
-- Web modelからReact、Next.js、Query、notificationをimport
+- WebのmodelからReact、TanStack Query、TanStack Router、通知を`import`
 
-`index.ts`はbrowser-safeな公開面、`server.ts`は先頭で`server-only`をimportするserver専用公開面です。
-別featureのUIとServer Componentはこの二入口を使います。例外として、実行時検証だけを共有する`adapter`は
+`index.ts`はブラウザーから利用できる公開面、`server.ts`はサーバー側の合成処理から利用する公開面です。
+別機能のUIとサーバー関数はこの2つの入口を使います。例外として、実行時検証だけを共有する`adapter`は
 データだけの`schema.ts`を、`src/lib/browser/**`と`src/lib/server/**`の合成処理はクライアント生成用の
 `api.ts`を利用できます。`schema.ts`と`api.ts`はコンポーネント、Query、router、ブラウザー固有または
 サーバー固有のモジュールへ依存させず、この例外を非公開コンポーネントや補助関数へ広げません。
@@ -113,18 +115,19 @@ model
 
 ## テスト層
 
-| 名前                                       | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 実物として使うもの                                                                               | 差し替えるもの                                               | 対象コード/ファイル                                                                                                  | Test Runner                                     | 実行速度   | CI時間課金以外の費用 | 量         |
-| ------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------- | -------------------- | ---------- |
-| **Webロジック単体テスト (W1)**             | 単体                | <ul><li>reducer、state machine、view model、query keyを入力と期待結果で確認する</li><li>form schema、URL、search parameter、error responseの変換を境界値ごとに確認する</li><li>dirty guard、submission identity、upload中の遷移判断を確認する</li><li>Reactをrenderせず、framework非依存の規則を網羅する</li></ul>                                                                                                                                                     | pure function、Valibot schema、serialisable model                                                | clock、ID、randomだけを固定する                              | `apps/web/src/features/**/model.ts`、`model/**`、`schema.ts`、`src/lib/shared/**`、pure formatter、query-key factory | Vitest Node                                     | 極めて速い | なし                 | 非常に多い |
-| **Web DOMコンポーネント統合テスト (W2)**   | 統合                | <ul><li>propsまたはView modelから利用者に見えるDOMが描画されることを確認する</li><li>入力、submit、callback、controlled state、field errorを確認する</li><li>`aria-invalid`、`aria-describedby`、accessible role/nameを確認する</li><li>controllerとfake portを接続し、通知や重複処理のownerを確認する</li><li>layout measurementやnative focus trapはここで断定しない</li></ul>                                                                                       | React component、Testing Library、happy-dom、component hook                                      | API port、navigation、notification、clock、browser-only API  | `apps/web/src/components/**/*.test.tsx`、`src/features/**/components/**/*.test.tsx`、controller hook test            | Vitest + Testing Library + happy-dom            | 速い       | なし                 | 厚くする   |
-| **Web Storybookブラウザー統合テスト (W3)** | 統合                | <ul><li>componentのloading、empty、error、ready、pending、disabled、destructive状態を実browserで描画する</li><li>keyboard、focus order、focus return、dialog、popover、menu、pointer eventを確認する</li><li>`play`で代表操作と利用者から観測できる結果を確認する</li><li>a11y addonでrendered DOMの自動検査を行う</li><li>Controlsでpublic propsを変更し、手動探索できる状態カタログを維持する</li></ul>                                                              | Storybook、実Chromium、React、CSS、component、decorator、a11y addon                              | props、callback、必要なprovider。HTTPが不要ならMSWを使わない | `apps/web/src/**/*.stories.tsx`、story fixtureを再利用するW3 `*.browser.test.tsx`、`apps/web/.storybook/**`          | Storybook Vitest addonまたはVitest Browser Mode | 中         | なし                 | 多い       |
-| **Web機能ブラウザー統合テスト (W4)**       | 統合                | <ul><li>実QueryClient、controller、複数componentを接続してfeature全体の状態を確認する</li><li>mutation後のcache更新、optimistic/pending、rollbackを確認する</li><li>MSWでsuccess、empty、400、404、409、500、network error、retryを再現する</li><li>Agent fake transportでstream、approval、abort、disconnect、resumeを確認する</li><li>SuspenseとError Boundaryのfallback、reset、retryを確認する</li></ul>                                                           | 実browser、React、QueryClient、controller hook、AI SDK UI、複数component                         | HTTPはMSW、Agent transport、navigation、notification、clock  | connected featureの`*.browser.test.tsx`、connected feature story、feature `test-support/fixtures.ts`                 | Vitest Browser ModeまたはStorybook Vitest addon | 中から遅い | なし                 | 必要な範囲 |
-| **Webサーバー統合テスト (W5)**             | 統合                | <ul><li>server-side Eden adapterがcookie、header、status、typed errorを正しく変換することを確認する</li><li>session response、slugからinternal ID、not-found、redirect、prefetch inputを確認する</li><li>serialisation、cache policy、server-only境界を確認する</li><li>純粋な判断を抽出した場合もW5のfixtureと責務の中で検査する</li><li>async RSCそのものを無理にVitestでrenderしない</li></ul>                                                                      | server loader、Eden client contract、Request/Response、server adapter、必要に応じElysia test app | remote API、real OAuth、production cookie、external provider | `apps/web/src/lib/server/**`、`src/features/*/server.ts`から到達するloader、server adapter、session parser           | Vitest Node、必要に応じephemeral Elysia app     | 中から遅い | なし                 | 必要な範囲 |
-| **Webアプリケーション統合テスト (W6)**     | 統合                | <ul><li>実Next.js serverと実browserでApp Router、layout、page、RSC shellを確認する</li><li>middleware、cookie、hard reload、browser history、actual URLを確認する</li><li>一覧から正規詳細ルートへの全画面遷移と戻る操作で、一覧URLとdocumentのスクロール位置が復元されることを確認する</li><li>`loading.tsx`、`error.tsx`、`not-found.tsx`がroute lifecycleで機能することを確認する</li><li>API、Agent、DB、Authは決定的に差し替え、Webの責務だけを検査する</li></ul> | 実Next.js application server、実Chromium、実RSC、routing、middleware、cookie jar                 | API、Agent stream、external service、DB、Auth backend        | `apps/web/src/app/**`、`middleware.ts`、top-level providers、`apps/web/e2e/app/**`                                   | Playwright                                      | 遅い       | なし                 | 少数       |
+| 名前                                       | Testing Trophy 分類 | テスト内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 実物として使うもの                                                                                                      | 差し替えるもの                                               | 対象コード/ファイル                                                                                                  | Test Runner                                     | 実行速度   | CI時間課金以外の費用 | 量         |
+| ------------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------- | -------------------- | ---------- |
+| **Webロジック単体テスト (W1)**             | 単体                | <ul><li>reducer、state machine、view model、query keyを入力と期待結果で確認する</li><li>form schema、URL、search parameter、error responseの変換を境界値ごとに確認する</li><li>dirty guard、submission identity、upload中の遷移判断を確認する</li><li>Reactをrenderせず、framework非依存の規則を網羅する</li></ul>                                                                                                                                                                                                                                       | pure function、Valibot schema、serialisable model                                                                       | clock、ID、randomだけを固定する                              | `apps/web/src/features/**/model.ts`、`model/**`、`schema.ts`、`src/lib/shared/**`、pure formatter、query-key factory | Vitest Node                                     | 極めて速い | なし                 | 非常に多い |
+| **Web DOMコンポーネント統合テスト (W2)**   | 統合                | <ul><li>propsまたはView modelから利用者に見えるDOMが描画されることを確認する</li><li>入力、submit、callback、controlled state、field errorを確認する</li><li>`aria-invalid`、`aria-describedby`、accessible role/nameを確認する</li><li>controllerとfake portを接続し、通知や重複処理のownerを確認する</li><li>layout measurementやnative focus trapはここで断定しない</li></ul>                                                                                                                                                                         | React component、Testing Library、happy-dom、component hook                                                             | API port、navigation、notification、clock、browser-only API  | `apps/web/src/components/**/*.test.tsx`、`src/features/**/components/**/*.test.tsx`、controller hook test            | Vitest + Testing Library + happy-dom            | 速い       | なし                 | 厚くする   |
+| **Web Storybookブラウザー統合テスト (W3)** | 統合                | <ul><li>componentのloading、empty、error、ready、pending、disabled、destructive状態を実browserで描画する</li><li>keyboard、focus order、focus return、dialog、popover、menu、pointer eventを確認する</li><li>`play`で代表操作と利用者から観測できる結果を確認する</li><li>a11y addonでrendered DOMの自動検査を行う</li><li>Controlsでpublic propsを変更し、手動探索できる状態カタログを維持する</li></ul>                                                                                                                                                | Storybook、実Chromium、React、CSS、component、decorator、a11y addon                                                     | props、callback、必要なprovider。HTTPが不要ならMSWを使わない | `apps/web/src/**/*.stories.tsx`、story fixtureを再利用するW3 `*.browser.test.tsx`、`apps/web/.storybook/**`          | Storybook Vitest addonまたはVitest Browser Mode | 中         | なし                 | 多い       |
+| **Web機能ブラウザー統合テスト (W4)**       | 統合                | <ul><li>実QueryClient、controller、複数componentを接続してfeature全体の状態を確認する</li><li>mutation後のcache更新、optimistic/pending、rollbackを確認する</li><li>MSWでsuccess、empty、400、404、409、500、network error、retryを再現する</li><li>Agent fake transportでstream、approval、abort、disconnect、resumeを確認する</li><li>SuspenseとError Boundaryのfallback、reset、retryを確認する</li></ul>                                                                                                                                             | 実browser、React、QueryClient、controller hook、AI SDK UI、複数component                                                | HTTPはMSW、Agent transport、navigation、notification、clock  | connected featureの`*.browser.test.tsx`、connected feature story、feature `test-support/fixtures.ts`                 | Vitest Browser ModeまたはStorybook Vitest addon | 中から遅い | なし                 | 必要な範囲 |
+| **Webサーバー統合テスト (W5)**             | 統合                | <ul><li>サーバー側のEden `adapter`がCookie、header、status、型付きエラーを正しく変換することを確認する</li><li>セッション応答、slugから内部ID、404、redirect、`loader`入力を確認する</li><li>直列化、キャッシュ方針、サーバー境界を確認する</li><li>純粋な判断を抽出した場合もW5のフィクスチャと責務の中で検査する</li><li>TanStack Startの実行器そのものをVitestで再実装しない</li></ul>                                                                                                                                                                | サーバー関数、Edenクライアント契約、Request/Response、サーバー`adapter`、必要に応じElysia test app                      | remote API、real OAuth、production Cookie、外部プロバイダー  | `apps/web/src/lib/server/**`、`src/features/*/server.ts`から到達するサーバー関数、`adapter`、session parser          | Vitest Node、必要に応じephemeral Elysia app     | 中から遅い | なし                 | 必要な範囲 |
+| **Webアプリケーション統合テスト (W6)**     | 統合                | <ul><li>Cloudflare Vite pluginの`ssr` Worker環境を含む実Vite previewと実ブラウザーでTanStack Start、TanStack Router、ルートの`loader`、SSRを確認する</li><li>サーバー関数、Cookie、再読み込み、ブラウザー履歴、実URLを確認する</li><li>一覧から正規詳細ルートへの全画面遷移と戻る操作で、一覧URLとdocumentのスクロール位置が復元されることを確認する</li><li>`pendingComponent`、`errorComponent`、`notFoundComponent`がルートのライフサイクルで機能することを確認する</li><li>API、Agent、DB、Authは決定的に差し替え、Webの責務だけを検査する</li></ul> | production用にビルドしたTanStack Start、Cloudflare Vite plugin、Vite preview、実Chromium、SSR、ルーティング、Cookie jar | API、Agentストリーム、外部サービス、DB、Auth backend         | `apps/web/src/routes/**`、`src/router.tsx`、最上位のprovider、`apps/web/e2e/app/**`                                  | Playwright                                      | 遅い       | なし                 | 少数       |
 
 ## W1: Webロジック単体テスト
 
-W1はDOMとframework globalを使いません。React、Next.js、TanStack Query、browser APIをimportしないよう、lint境界を設定します。
+W1はDOMとフレームワークのグローバル値を使いません。React、TanStack Query、TanStack Router、
+ブラウザーAPIを`import`しないよう、静的検査の境界を設定します。
 
 特に次はW1へ下げます。
 
@@ -197,7 +200,7 @@ features/agent/
   agent-chat.browser.test.tsx
 ```
 
-W4でもNext.js dev serverは起動しません。route lifecycleが必要ならW6です。
+W4でもViteの開発サーバーは起動しません。ルートのライフサイクルが必要ならW6です。
 
 ### MSWとEden型
 
@@ -234,18 +237,20 @@ redirect decisionのような純粋処理も、Eden adapterのような統合処
 
 W5へ置くもの:
 
-- server-side API client
+- サーバー側のAPIクライアント
 - auth session response parser
 - redirect、not-found decision
 - slug解決
-- prefetch inputとserver/browserで共有するquery key
+- `loader`入力とサーバー、ブラウザーで共有する`queryKey`
 - cache key、cache policy、注入clientがquery keyへ入らないこと
 - serialisation boundary
+- global function middlewareによる固定5xx公開エラー、制御フロー維持、server functionのCSRF拒否
 
 W6へ残すもの:
 
-- async RSC composition
-- middleware
+- `loader`、サーバー関数、ルートコンポーネントの接続
+- 実server function RPC responseとブラウザーconsoleへ生エラーが露出しないこと
+- ルート単位の待機、エラー、404
 - 一覧から詳細へのルート遷移
 - cookie lifecycle
 - hard reload
@@ -254,7 +259,7 @@ W6へ残すもの:
 ## W6: Webアプリケーション統合テスト
 
 W6はPlaywrightを使いますが、Web内で閉じるためE2Eではありません。
-CI、Playwright project、artifact、利用者向けログでは責務が分かる`Next.js integration`という名称を
+CI、Playwrightのproject、成果物、利用者向けログでは責務が分かる`TanStack Start integration`という名称を
 使い、W6は文書上のテスト分類名としてだけ使います。
 
 W6でdownstreamを差し替える理由:
@@ -264,7 +269,8 @@ W6でdownstreamを差し替える理由:
 - permissionやDB atomicityをmockで証明したと誤認しない
 - E1のcritical journeyを増やさない
 
-W6からW3/W4へ下げられるものは下げます。W6はroute、RSC、middleware、cookieへ限定します。
+W6からW3/W4へ下げられるものは下げます。W6はCloudflare Vite pluginの`ssr` Worker環境で生成した
+実ルート、SSR、サーバー関数、Cookieへ限定し、generic Node previewへ置き換えません。
 
 ## Storybookの粒度
 
@@ -277,7 +283,7 @@ Web固有の判断:
 | argsだけで描画するfeature View                | W3         |
 | QueryClient、MSW、controllerを接続するfeature | W4         |
 | routeから切り出したPage View                  | W3またはW4 |
-| `page.tsx`、`layout.tsx`、middleware          | W5またはW6 |
+| `src/routes/**`、`src/router.tsx`             | W5またはW6 |
 | WebからDBまでの全構成                         | E1またはE2 |
 
 ## `packages/ui`との責務分担
@@ -310,9 +316,9 @@ project名はroot Test Projectsで一意にし、全scriptがroot configと対�
 - `.browser.test.tsx`を接尾辞で層へ固定せず、story fixtureを再利用するcomponent固有結果はW3、
   実QueryClient、controller、MSWを接続するfeature結果はW4として分類する
 - W5を内部処理種別で公開分割しない
-- Web内で閉じる実Next.js browser testをW6が所有する
+- Web内で閉じる実TanStack StartブラウザーテストをW6が所有する
 - W6がAPI、Agent、DB、Authをmockし、Web責務だけを検査する
-- async RSC、middleware、cookie、browser historyだけがW6へ残る
+- 実ルート、SSR、サーバー関数、Cookie、ブラウザー履歴だけがW6へ残る
 
 ## DataTableの検査層
 

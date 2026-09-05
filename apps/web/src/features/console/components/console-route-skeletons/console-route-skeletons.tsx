@@ -1,7 +1,5 @@
 import { RouteLoading } from "@/components/app-state/app-state"
 
-export const ConsoleRouteSkeleton = () => <RouteLoading />
-
 export const DashboardRouteSkeleton = () => (
   <RouteLoading
     label="Loading organization dashboard"

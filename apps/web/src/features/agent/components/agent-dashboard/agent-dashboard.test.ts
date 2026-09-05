@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import type { UIMessage } from "ai"
-import { createElement } from "react"
+import { createElement, type ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import { extractPendingActionIds } from "../../pending-action-ids"
@@ -9,6 +9,11 @@ import { createPendingActionToolOutput } from "../../test-support/pending-action
 import { AgentApprovalAttachments } from "../agent-approval-attachments/agent-approval-attachments"
 import { AgentMessage } from "../agent-message/agent-message"
 import { issueLinksFromToolOutput } from "../issue-links-from-tool-output/issue-links-from-tool-output"
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) =>
+    createElement("a", { ...props, href: to }, children),
+}))
 
 const streamedWebSearchMessage = (
   state: "input-available" | "output-available"

@@ -2,7 +2,7 @@
 title: UIパッケージテスト戦略
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-09-05
 applies_to:
   - packages/ui/**
 related:
@@ -17,7 +17,9 @@ related:
 
 `packages/ui`は、domain非依存のReact DOM primitive、domain非依存pattern、generic hook、style、token、Storybookを所有します。
 
-Issue、Organization、Product Agentなどのdomain concept、API client、React Query、Next.js route、auth session、tenant logicを持ち込みません。これらを必要とするcomponentは`apps/web/src/features`が所有します。
+Issue、Organization、Product Agentなどのdomain concept、API client、React Query、TanStack Startの
+ルート、認証セッション、テナントロジックを持ち込みません。これらを必要とするコンポーネントは
+`apps/web/src/features`が所有します。
 
 ## コード構造との対応
 
@@ -168,7 +170,7 @@ UI package固有の要点:
 | generic table、generic empty state pattern     | UI package   |
 | IssueCard、OrganizationSwitcher、AgentMessage  | Web          |
 | QueryClient、MSW、useChatを含むfeature         | Web W4       |
-| Next.js route、RSC、middleware                 | Web W5/W6    |
+| TanStack Startのroute、loader、server function | Web W5/W6    |
 | package componentをfeatureで正しく組み合わせる | Web W2からW4 |
 
 Web側でUI primitiveの全variantを再検査しません。featureに必要な代表compositionだけを確認します。
