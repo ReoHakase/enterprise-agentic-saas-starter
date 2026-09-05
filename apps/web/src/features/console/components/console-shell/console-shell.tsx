@@ -26,8 +26,8 @@ import {
 } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useLocation, useRouter } from "@tanstack/react-router"
 import { BlocksIcon, BookOpenIcon } from "lucide-react"
-import { usePathname, useRouter } from "next/navigation"
 import {
   Suspense,
   type RefObject,
@@ -55,7 +55,7 @@ import {
   AgentShellTrigger,
 } from "@/features/agent"
 import { withAgentThreadHref } from "@/features/issues"
-import { useIssueSearchState } from "@/features/issues/search-params.client"
+import { useIssueSearchState } from "@/features/issues/use-issue-search-state"
 import {
   consumeOrganizationSwitchFlash,
   prepareOrganizationSwitch,
@@ -78,11 +78,13 @@ import {
   userMenu as UserMenu,
 } from "../console-shell-controls/console-shell-controls"
 import {
-  consoleNavigation as ConsoleNavigation,
-  consoleRouteEffects as ConsoleRouteEffects,
-  mobileSidebarClose as MobileSidebarClose,
-  navigationFallback,
+  ConsoleNavigation,
+  ConsoleRouteEffects,
+  MobileSidebarClose,
+  NavigationFallback,
 } from "../console-shell-navigation/console-shell-navigation"
+
+const navigationFallback = <NavigationFallback />
 
 type ConsoleShellProps = {
   me: Me
@@ -111,7 +113,7 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
   const queryClient = useQueryClient()
   const agentRuntime = useAgentRuntimeState()
   const { state: issueSearchState } = useIssueSearchState()
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const contentRef = useRef<HTMLDivElement>(null)
   const accountActionReturnFocusRef = useRef<HTMLButtonElement>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
@@ -142,12 +144,12 @@ const ConsoleShellContent = ({ me, children }: ConsoleShellProps) => {
       const nextPathname = nextOrganization
         ? rewriteOrganizationSwitchPathname(pathname, nextOrganization.slug)
         : pathname
-      // usePathname excludes the search string, so this also clears every
+      // The selected pathname excludes the search string, so this also clears every
       // tenant query parameter, including agentThread. A client navigation
       // preserves shared layouts and can retain the previous tenant's `me`
-      // props, so crossing tenant paths must discard the full React/RSC tree.
+      // props, so crossing tenant paths must discard the full route/component tree.
       if (nextPathname === pathname) {
-        router.refresh()
+        void router.invalidate()
         toast.success("Organization switched")
       } else {
         queueOrganizationSwitchFlash(globalThis.sessionStorage)

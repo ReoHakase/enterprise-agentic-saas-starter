@@ -2,7 +2,7 @@
 title: テスト戦略仕様書
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-09-05
 applies_to:
   - apps/**
   - packages/**
@@ -85,12 +85,13 @@ Testing Trophyでは、複数の本番単位を接続し、利用者から観測
 
 ### Web内で閉じる全画面テストはW6とする
 
-実Next.jsと実ブラウザーを使っていても、API、Agent、DB、認証を差し替えてWeb内に閉じるテストはE2Eではありません。`Webアプリケーション統合テスト (W6)`としてWebが所有します。
+実TanStack Startと実ブラウザーを使っていても、API、Agent、DB、認証を差し替えてWeb内に閉じる
+テストはE2Eではありません。`Webアプリケーション統合テスト (W6)`としてWebが所有します。
 
 Playwrightはランナーであり、テスト分類ではありません。
 
 ```text
-Playwright + Next.js + downstream mock
+Playwright + TanStack Start + downstream mock
   Webアプリケーション統合テスト
 
 Playwright + Web + API + Agent + DB/Auth
@@ -144,7 +145,7 @@ E2E
 2. 純粋関数または小さなserviceへ規則を分離できるか確認する
 3. 実DB、実HTTP、実DOM、台本付きモデルを使う軽量統合で証明する
 4. 実ブラウザーが必要な場合だけStorybookまたはBrowser Modeへ上げる
-5. 実Next.jsのroute lifecycleが必要な場合だけW6へ上げる
+5. 実TanStack Startのルートライフサイクルが必要な場合だけW6へ上げる
 6. workspace間の全配線だけをE1へ置く
 7. 実モデルと本番相当adapterが必要な最終疎通だけをE2へ置く
 

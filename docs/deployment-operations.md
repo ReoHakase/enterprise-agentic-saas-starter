@@ -2,20 +2,20 @@
 title: Cloudflare deploymentと運用
 status: accepted
 implementation: active
-last_reviewed: 2026-08-24
+last_reviewed: 2026-09-05
 ---
 
 # Cloudflareデプロイと運用
 
 ## 対象
 
-- `apps/web`: OpenNext Cloudflare Worker + Assets + R2 incremental cache
+- `apps/web`: TanStack Start + Cloudflare Vite pluginによるCloudflare Worker + Assets
 - `apps/api`: Elysia Cloudflare Worker + private R2 file storage + Images binding
 - `apps/images`: private image preview Worker + private R2 + Images binding + Workers Caching
 - `apps/agent`: private Mastra Worker。model、skills、tools、workflow、AI SDK streamだけを担当し、DB/R2/Authへ直接触れない
 - Database: Turso/libSQL（Cloudflare外の唯一のprimary data store）
 
-設定の正本は `apps/web/wrangler.jsonc`、`apps/web/open-next.config.ts`、`apps/api/wrangler.jsonc`、
+設定の正本は `apps/web/vite.config.ts`、`apps/web/wrangler.jsonc`、`apps/api/wrangler.jsonc`、
 `apps/images/wrangler.jsonc`、`apps/agent/wrangler.jsonc` です。通信方向はBrowser→Web/API、
 API→Images Service Binding、API→Agent named runtime、Agent→API named private `/internal/agent/*`です。
 BrowserはImages WorkerとAgent Workerへ直接接続しません。
@@ -24,7 +24,6 @@ BrowserはImages WorkerとAgent Workerへ直接接続しません。
 
 ```sh
 bunx wrangler login
-bunx wrangler r2 bucket create enterprise-agentic-saas-web-cache
 bunx wrangler r2 bucket create enterprise-agentic-saas-attachments
 ```
 
@@ -47,7 +46,13 @@ Cloudflare dashboardまたはIaCでAPI Workerへ次を設定します。
 
 Agent Workerへはvarsとして`AGENT_RUNS_ENABLED`、`AGENT_VISION_ENABLED`、`AGENT_WRITES_ENABLED`、`NODE_ENV=production`、secretとして`OPENROUTER_API_KEY`を設定します。production remote telemetryは未構成です。
 
-Web buildには`API_PUBLIC_URL`と`NEXT_PUBLIC_API_BASE_URL`を同じAPI originとして渡します。`NEXT_PUBLIC_AGENT_BASE_URL`は設定しません。file preview/download/Agent chatはBetter Auth cookieを使うAPI routeなので、Web/APIは同じregistrable domain配下に置き、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、credential付き`CORS_ORIGIN`を揃えます。R2、Images Worker、Agent専用domainは不要です。
+Webのビルドには`API_PUBLIC_URL`と`VITE_API_BASE_URL`を同じAPIオリジンとして渡します。
+`VITE_AGENT_BASE_URL`は設定しません。file preview/download/Agent chatはBetter Auth Cookieを使う
+APIルートなので、WebとAPIは同じ登録可能ドメイン配下に置き、`AUTH_COOKIE_DOMAIN`、
+`TRUSTED_ORIGINS`、認証情報付き`CORS_ORIGIN`を揃えます。R2、Images Worker、Agent専用ドメインは
+不要です。`VITE_*`はブラウザーのバンドルへ公開されるため、シークレットを設定しません。
+Cloudflare Vite pluginへはWebのVite configがAPI originと実行判定だけを明示的な許可リストで渡します。
+親processの環境変数全体を取り込まず、API、Auth、DBのsecretはWeb Worker varsへ設定しません。
 
 `keep_vars: true`は既存のdashboard varsを残しますが、GitHub ActionsのdeployはreleaseとAgent feature flagを毎回明示します。環境ごとの全設定一覧はIaC/secret managerでも管理し、dashboardだけを唯一の記録にしません。
 
@@ -82,10 +87,11 @@ GitHub `production` Environmentでは、少なくとも次を登録します。
 - vars: `APP_NAME`、`APP_BASE_URL`、`API_PUBLIC_URL`、`AUTH_COOKIE_DOMAIN`、`EMAIL_PROVIDER=cloudflare`、`EMAIL_FROM`、4つのAgent flag
 - secrets: `BETTER_AUTH_SECRET`、`OAUTH_GITHUB_CLIENT_ID`、`OAUTH_GITHUB_CLIENT_SECRET`、`TURSO_DATABASE_URL`、`TURSO_AUTH_TOKEN`、`OPENROUTER_API_KEY`、`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`
 
-workflowはsecretをjob全体のenvへ置かず、validation、migration、各deployの必要stepだけへ渡します。runtime
-secretを持つWeb/API/Agentの3 Workerは`umask 077`で作った一時JSONへ書き、WebのOpenNext経由を含む
-`wrangler deploy --secrets-file`でcodeと同じversionへ加算的に注入し、step終了時に必ず削除します。Images
-Workerへruntime secretを渡しません。値をCLI引数、`echo`、`GITHUB_OUTPUT`、artifactへ渡しません。
+workflowはsecretをjob全体のenvへ置かず、validation、migration、各deployの必要stepだけへ渡します。
+runtime secretを持つAPIとAgentの2 Workerは`umask 077`で作った一時JSONへ書き、
+`wrangler deploy --secrets-file`でコードと同じversionへ加算的に注入し、step終了時に必ず削除します。
+WebとImages Workerへruntime secretを渡しません。値をCLI引数、`echo`、`GITHUB_OUTPUT`、artifactへ
+渡しません。
 `--secrets-file`に含めなかった既存secretは保持されるため、secret削除は別の明示手順で行います。
 
 production telemetry backendは未構成です。local OTLP endpointと`DEV_*`をproduction deployへ注入しません。
@@ -135,9 +141,15 @@ package commandは`apps/web/cloudflare-env.d.ts`を生成しますが、producti
 `AGENT_RUNTIME`、Agentの`AGENT_INTERNAL_API`、3つのAgent feature flagがtypeへ反映されない状態でdeploy
 しません。
 
-API WorkerはElysia Cloudflare adapter、Images Workerはmodule Worker、WebはOpenNext、AgentはMastraと
-Cloudflare named entrypointを使います。Bun/Next buildだけをrelease判定にせず、4 Worker全ての
-Cloudflare dry-runを通します。
+Webは`vite build`でCloudflare Workerと静的Assetsを`dist/`へ生成し、その出力を`wrangler deploy`へ
+渡します。`apps/web/wrangler.jsonc#main`は、TanStack Startの標準handlerへ可観測性を接続する
+`./src/server.ts`を指します。
+AssetsのディレクトリとbindingはCloudflare Vite pluginが生成するため、`wrangler.jsonc`へ手書きで
+重複させません。
+
+API WorkerはElysia Cloudflare adapter、Images Workerはmodule Worker、WebはTanStack Startの
+サーバー入口とCloudflare Vite plugin、AgentはMastraとCloudflare named entrypointを使います。
+通常のワークスペースビルドだけをリリース判定にせず、4 Worker全てのCloudflare dry-runを通します。
 
 ## Deploy順序
 
@@ -185,7 +197,7 @@ workflowは`production` Environmentのapprovalとconcurrency lock付きで進め
 - 4つの許可幅だけがpreviewでき、original downloadがattachment、Range/conditional response、`nosniff`を満たす。
 - user/org profile imageが512x512 WebPとしてprivate R2から配信され、ETag/304、`private, no-cache`、`nosniff`、same-site CORPを満たす。userは円、organizationは角丸四角で表示される。
 - memberがorganization設定やrole elevationを実行できない。
-- Web asset、R2 cache、4 Workerのlogにsecret、prompt、raw image、filename、object key、provider raw errorが出ていない。
+- Web Assets、private R2、4 Workerのlogにsecret、prompt、raw image、filename、object key、provider raw errorが出ていない。
 - production remote telemetryが未構成であり、local endpointとrich telemetry envがdeploy設定へ含まれない。
 - Cloudflare Emailのmagic link、verification、organization invitationが検証済みsenderから届き、delivery failureがsanitized eventになる。
 - test organization削除でtenant rowとactive sessionが即時に消え、jobが残り、cron後に対象R2 prefixだけが削除される。同一key retryは同じreceipt、別keyは404、別organizationへのkey再利用は409になる。
@@ -200,5 +212,5 @@ Wrangler configのWorkers Observabilityはplatform診断用です。application�
 - Images障害: `IMAGE_PREVIEWS` targetを残したままprotocol互換なImages versionへ戻す。Images Worker自体を廃止するrollbackでは、先に`IMAGE_PREVIEWS`へ依存しないAPI versionをdeployし、bindingを外したことをremote inventoryで確認してからImages Workerを除去する。
 - code: 依存を外すためWeb→Agent→APIの逆順でCloudflare Workersの直前versionへrollbackする。APIを先に戻して新Agentから旧APIへcallさせない。
 - migration: destructive downgrade SQLを即実行しない。forward fixを基本とし、必要ならbackupから別DBへrestoreして切り替える。
-- web cache: schema/API incompatibilityがある場合はR2 incremental cache prefixを更新して古いcacheと分離する。
+- Web障害: 直前のWorker versionへ戻し、静的Assetsとサーバー入口を同じversionへ揃える。
 - incident後: audit/log/traceの機密情報を確認し、原因と再発防止を関連repo-local skillへ反映する。

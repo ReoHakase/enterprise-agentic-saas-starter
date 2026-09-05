@@ -6,8 +6,11 @@ import {
   within,
 } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it } from "vitest"
 import { page } from "vitest/browser"
+
+import { TestRouterProvider } from "@/test-support/tanstack-router"
 
 import { fictionalIssueView } from "../../test-support/fixtures"
 import {
@@ -18,9 +21,9 @@ import {
   getIssueControlSurfaces,
   getIssueResultsScope,
   getVisibleDirectControlRowCenters,
-  IssuesWorkspaceStoryFixture,
   tallIssueViews,
-} from "../../test-support/issues-workspace-story-fixture"
+} from "../../test-support/issues-workspace-story-data"
+import { IssuesWorkspaceStoryFixture } from "../../test-support/issues-workspace-story-fixture"
 
 afterEach(() => {
   cleanup()
@@ -45,10 +48,21 @@ const getToolbarGroups = () => {
   return { filterGroup, sortGroup }
 }
 
+const renderIssuesWorkspace = async (
+  props: ComponentProps<typeof IssuesWorkspaceStoryFixture> = {}
+) => {
+  render(
+    <TestRouterProvider>
+      <IssuesWorkspaceStoryFixture {...props} />
+    </TestRouterProvider>
+  )
+  await screen.findByRole("searchbox", { name: "Search issues" })
+}
+
 describe("IssuesWorkspaceの実ブラウザー配置", () => {
   it("広い表示領域では検索行の下にfilterとsortを横並びにする", async () => {
     await page.viewport(2048, 900)
-    render(<IssuesWorkspaceStoryFixture />)
+    await renderIssuesWorkspace()
 
     const search = screen.getByRole("searchbox", { name: "Search issues" })
     const { filterGroup, sortGroup } = getToolbarGroups()
@@ -81,7 +95,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("中間の表示領域ではfilterの下にsortを折り返す", async () => {
     await page.viewport(1024, 900)
-    render(<IssuesWorkspaceStoryFixture />)
+    await renderIssuesWorkspace()
 
     const { filterGroup, sortGroup } = getToolbarGroups()
     expect(sortGroup.getBoundingClientRect().top).toBeGreaterThan(
@@ -98,7 +112,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("有効なfilter要約をtrigger内で同じ高さに揃える", async () => {
     await page.viewport(1024, 900)
-    render(<IssuesWorkspaceStoryFixture searchState={activeIssueSearchState} />)
+    await renderIssuesWorkspace({ searchState: activeIssueSearchState })
 
     const dots = screen.getAllByTestId("issue-filter-summary-dot")
     expect(dots).toHaveLength(5)
@@ -131,7 +145,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("横スクロール中も選択と行操作のsurfaceを表示領域へ固定する", async () => {
     await page.viewport(1024, 768)
-    render(<IssuesWorkspaceStoryFixture />)
+    await renderIssuesWorkspace()
     const user = userEvent.setup()
 
     const scrollRegion = screen.getByRole("region", {
@@ -182,7 +196,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("操作列のheaderと行操作を横スクロール中も同じ位置へ固定する", async () => {
     await page.viewport(1024, 768)
-    render(<IssuesWorkspaceStoryFixture issues={tallIssueViews} total={42} />)
+    await renderIssuesWorkspace({ issues: tallIssueViews, total: 42 })
 
     const scrollRegion = screen.getByRole("region", {
       name: "Organization issues",
@@ -212,7 +226,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("選択barを表示領域へ固定しtableの末尾で停止する", async () => {
     await page.viewport(1024, 600)
-    render(<IssuesWorkspaceStoryFixture issues={tallIssueViews} total={42} />)
+    await renderIssuesWorkspace({ issues: tallIssueViews, total: 42 })
     const user = userEvent.setup()
 
     await user.click(
@@ -257,7 +271,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("モバイルではtoolbarを折り返してtableのoverflowをpageへ漏らさない", async () => {
     await page.viewport(390, 844)
-    render(<IssuesWorkspaceStoryFixture />)
+    await renderIssuesWorkspace()
 
     const { filterGroup, sortGroup } = getToolbarGroups()
     expect(
@@ -280,7 +294,7 @@ describe("IssuesWorkspaceの実ブラウザー配置", () => {
 
   it("モバイルでは選択barをsafe area内かつtable内へ収める", async () => {
     await page.viewport(390, 844)
-    render(<IssuesWorkspaceStoryFixture />)
+    await renderIssuesWorkspace()
     const user = userEvent.setup()
 
     await user.click(

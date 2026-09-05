@@ -42,7 +42,7 @@ import {
 import {
   InvitationMutationContext,
   type InvitationMutationState,
-} from "./invitation-actions"
+} from "./invitation-mutation-context"
 import {
   countMatchingInvitations,
   useInvitationTableColumns,

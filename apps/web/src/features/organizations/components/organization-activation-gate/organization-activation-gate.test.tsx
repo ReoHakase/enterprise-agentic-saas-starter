@@ -16,14 +16,12 @@ const mocks = vi.hoisted(() => ({
   cancelOrganizationSwitch: vi.fn<() => void>(),
   completeOrganizationSwitch: vi.fn<() => Promise<void>>(),
   prepareOrganizationSwitch: vi.fn<() => Promise<void>>(),
-  replace: vi.fn<(href: string) => void>(),
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => void>(),
   showError: vi.fn<() => void>(),
 }))
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/organization/target/dashboard",
-  useRouter: () => ({ replace: mocks.replace, refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({

@@ -2,7 +2,7 @@
 title: Observability
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-05
 ---
 
 # Observability
@@ -17,17 +17,20 @@ repository固有の基盤はrootの3 fileだけです。
 - `otelcol.observability.yaml`: OTLP、Loki、Tempo、Prometheus、spanmetrics、認証material除去
 - `scripts/observability.ts`: `check`、`up`、`down`
 
-`tooling`やobservability専用packageは作りません。runtimeは既存のNext.js instrumentation、API Worker、Agent Worker、Mastra compositionへ直接設定します。
+`tooling`や可観測性専用パッケージは作りません。ブラウザーはTanStack Startのルート入口から
+`instrumentation-client.ts`を明示的に初期化し、Web Worker、API Worker、Agent Workerは既存の
+Worker計測、Mastraは`composition root`へ直接設定します。Web Workerの`src/server.ts`はTanStack Startの
+標準handlerを`@inference-net/otel-cf-workers`で包むだけにし、ルーティングを複製しません。
 
-| Runtime         | integration                                       | signal                             |
-| --------------- | ------------------------------------------------- | ---------------------------------- |
-| Next.js browser | OpenTelemetry Web SDK                             | navigation/fetch trace、log        |
-| Next.js server  | OpenTelemetry Node SDK                            | server trace、log                  |
-| Elysia Worker   | `@inference-net/otel-cf-workers`                  | HTTP trace、structured log         |
-| Agent Worker    | Worker OTel + Mastra `Observability`/`OtelBridge` | Agent/model/tool trace、log        |
-| collector       | `spanmetrics` connector                           | span count、duration、error metric |
+| Runtime                | integration                                       | signal                             |
+| ---------------------- | ------------------------------------------------- | ---------------------------------- |
+| TanStack Start browser | OpenTelemetry Web SDK                             | navigation/fetch trace、log        |
+| Web Worker             | `@inference-net/otel-cf-workers`                  | HTTP trace、structured log         |
+| Elysia Worker          | `@inference-net/otel-cf-workers`                  | HTTP trace、structured log         |
+| Agent Worker           | Worker OTel + Mastra `Observability`/`OtelBridge` | Agent/model/tool trace、log        |
+| collector              | `spanmetrics` connector                           | span count、duration、error metric |
 
-`packages/portless-topology`は最上位の起動で`DEV_SESSION_ID`を生成し、入れ子の`exec -> run`では同じIDを継承します。全runtimeへ`service.name`、`dev.worktree.id`、`dev.session.id`を付けます。LGTMはworktreeごとに分けず、全checkoutで一つを共有します。この絞り込みはsecurity isolationではありません。
+`packages/portless-topology`は最上位の起動で`DEV_SESSION_ID`を生成し、入れ子の`exec -> run`では同じIDを継承します。Webのブラウザーには`VITE_DEV_SESSION_ID`、`VITE_DEV_WORKTREE_ID`、`VITE_OTEL_EXPORTER_OTLP_ENDPOINT`として公開します。全runtimeへ`service.name`、`dev.worktree.id`、`dev.session.id`を付けます。LGTMはworktreeごとに分けず、全checkoutで一つを共有します。この絞り込みはsecurity isolationではありません。
 
 Elysiaは全レスポンスについてルート、HTTP method、status、所要時間、request IDを構造化ログへ出し、例外は有効なspanと同じtrace IDへ関連付けます。チャットではWebがrequest、response header、first byte、stream完了を、APIがrequest準備とAgent Worker呼び出しを、Agent Workerがresponse streamを記録します。Mastraの計測は自動検出任せではなく、Agent Workerで`Observability`と`OtelBridge`を明示的に組み込み、Agent、モデル、ツールのspanを外側のWorker spanへ接続します。
 
@@ -70,7 +73,7 @@ levelは次の基準で使います。
 - browser OTLP: `https://otel.enterprise-agentic-saas.localhost`
 - collector health: `http://127.0.0.1:13133/ready`
 
-browserはPortless HTTPS aliasへ直接送信し、Next.js relayを作りません。
+ブラウザーはPortless HTTPS aliasへ直接送信し、Web Workerの中継ルートを作りません。
 
 ```sh
 # Docker/OrbStackとPortless proxyは利用者が先に起動する
@@ -101,6 +104,13 @@ localではprompt、completion、Issue本文、business payload、tool input/out
 CollectorはLogsを認証情報除去、`batch`、Lokiの順に処理します。Tracesは認証情報除去、生の
 `error.*`・`exception.*`・status messageとexception eventの除去、`batch`、Tempo・spanmetricsの順です。
 Lokiの全streamは168時間保持し、compactorとdelete delay後に物理削除します。
+
+WebはCollectorへ送る前にも、browserのdocument load/fetch、resource fetch、送信fetch spanをoriginと
+pathnameへ限定し、Workerの全spanから`url.query`を削除して`url.full`をoriginとpathnameへ
+限定します。これによりOAuth callbackやTanStack StartのGET server functionへ入る
+percent-encode済みの署名付きqueryもtraceへ保存しません。Cloudflare標準のInvocation Logsとtraceにも
+Web Workerの`observability.redact_query_string`を適用し、アプリ内OTelを迂回するrequest URLからqueryを
+除去します。route遷移spanは`url.path`だけを記録します。
 
 - `Authorization`、Cookie
 - API key、token、secret、password、credential

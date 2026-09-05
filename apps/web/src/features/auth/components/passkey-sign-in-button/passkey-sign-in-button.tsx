@@ -4,8 +4,8 @@ import { useAuth } from "@better-auth-ui/react"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useRouter } from "@tanstack/react-router"
 import { KeyRoundIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -23,6 +23,7 @@ export function PasskeySignInButton() {
   const authRoute = useAuthRouteState()
   const redirectTo = authRoute?.redirectTo ?? defaultRedirectTo
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const router = useRouter()
   const [pending, setPending] = useState(false)
 
@@ -34,12 +35,12 @@ export function PasskeySignInButton() {
       await requirePasskeyAuthClient(authClient).signIn.passkey({
         fetchOptions: {
           onSuccess: () => {
-            router.push(redirectTo)
+            void navigate({ to: redirectTo })
           },
           onError: ({ error }) => {
             errorPresented = true
             reportObservedError(error)
-            router.refresh()
+            void router.invalidate()
             toast.error(safeAuthErrorMessage(error, passkeySignInFallback))
           },
         },
@@ -47,13 +48,13 @@ export function PasskeySignInButton() {
     } catch (error) {
       reportObservedError(error)
       if (!errorPresented) {
-        router.refresh()
+        void router.invalidate()
         toast.error(passkeySignInFallback)
       }
     } finally {
       setPending(false)
     }
-  }, [authClient, queryClient, redirectTo, router])
+  }, [authClient, navigate, queryClient, redirectTo, router])
 
   return (
     <Button

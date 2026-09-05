@@ -1,1 +1,0 @@
-Abstract connected nodes and layered panels on a dark background for Enterprise SaaS documentation.

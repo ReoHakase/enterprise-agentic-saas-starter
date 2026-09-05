@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { useIssueSearchState } from "@/features/issues/search-params.client"
+import { useIssueSearchState } from "@/features/issues/use-issue-search-state"
 import { apiClient } from "@/lib/api-client"
 import { reportObservedError } from "@/lib/report-observed-error"
 
@@ -21,10 +21,10 @@ import {
 import type { AgentNewThreadInput } from "../agent-new-thread-composer/agent-new-thread-composer"
 import { getAgentImageUploadErrorText } from "../runtime-state-types/runtime-state-types"
 import {
-  hasBlockingThreadSwitchRisks,
   useAgentRuntimeState,
   type AgentThreadSwitchRisks,
 } from "../runtime-state/runtime-state"
+import { hasBlockingThreadSwitchRisks } from "../runtime-state/runtime-state-risks"
 
 const emptyAgentThreads: AgentThread[] = []
 

@@ -9,8 +9,12 @@ import {
 import { ConsoleShellSkeleton } from "../console-route-suspense/console-route-suspense"
 import { ConsoleContentError, ConsoleShellError } from "./view"
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard",
+vi.mock("@tanstack/react-router", () => ({
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string }) => unknown
+  }) => select({ pathname: "/dashboard" }),
 }))
 
 const browser = vi.hoisted(() => ({ reload: vi.fn<() => void>() }))

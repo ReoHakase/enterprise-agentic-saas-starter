@@ -9,7 +9,7 @@ import {
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { type AnyFieldApi, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@tanstack/react-router"
 import { type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -55,9 +55,13 @@ export const OrganizationSettingsForm = ({
         queryKey: consoleKeys.organizations(),
       })
       if (updated.slug !== organization.slug) {
-        router.replace(`/organization/${updated.slug}/settings`)
+        void router.navigate({
+          replace: true,
+          to: `/organization/${updated.slug}/settings`,
+        })
+      } else {
+        void router.invalidate()
       }
-      router.refresh()
       toast.success("Organization updated")
     },
   })

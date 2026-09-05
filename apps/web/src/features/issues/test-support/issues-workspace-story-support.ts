@@ -46,6 +46,6 @@ export const verifySearchableAssigneeKeyboard = async ({
   await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Enter}")
   await expect(input).toHaveAttribute("aria-activedescendant", target.id)
   await userEvent.keyboard("{Escape}{Escape}")
-  await waitFor(() => expect(trigger).toHaveFocus())
-  await waitFor(() => expect(content).not.toBeVisible())
+  await waitFor(() => expect(content).not.toBeInTheDocument())
+  await expect(trigger).toHaveFocus()
 }

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import { type InvitationContext } from "../../api"
 import { InvitationDecisionPanel } from "./invitation-decision-panel"
@@ -18,8 +18,8 @@ const mocks = vi.hoisted(() => ({
         invitationId: string
       }) => Promise<void>
     >(),
-  refresh: vi.fn<() => void>(),
-  replace: vi.fn<(path: string) => void>(),
+  routerInvalidate: vi.fn<() => Promise<void>>(),
+  routerNavigate: vi.fn<(input: { replace?: boolean; to: string }) => void>(),
   toastError: vi.fn<(message: string) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
@@ -46,8 +46,18 @@ vi.mock("@/features/account", async (importOriginal) => {
   }
 })
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh, replace: mocks.replace }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    to,
+    ...props
+  }: React.ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useNavigate: () => mocks.routerNavigate,
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({
@@ -92,6 +102,7 @@ describe("InvitationDecisionPanelの契約", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.decideInvitation.mockResolvedValue(undefined)
+    mocks.routerInvalidate.mockResolvedValue()
   })
 
   it("招待の戻り先を保持しつつアカウント作成・サインインを提示する", () => {
@@ -198,13 +209,16 @@ describe("InvitationDecisionPanelの契約", () => {
     await waitFor(() => {
       expect(mocks.decideInvitation).toHaveBeenCalledWith({
         action: "accept",
-        apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+        apiBaseUrl: clientEnv.VITE_API_BASE_URL,
         invitationId: "invitation-1",
       })
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Invitation accepted")
-    expect(mocks.replace).toHaveBeenCalledWith("/dashboard")
-    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({
+      replace: true,
+      to: "/dashboard",
+    })
+    expect(mocks.routerInvalidate).not.toHaveBeenCalled()
   })
 
   it("承諾中にセッションが切れた場合は招待の戻り先付きでサインインへ戻す", async () => {
@@ -236,7 +250,7 @@ describe("InvitationDecisionPanelの契約", () => {
     expect(
       screen.queryByRole("button", { name: "Accept invitation" })
     ).not.toBeInTheDocument()
-    expect(mocks.replace).not.toHaveBeenCalled()
+    expect(mocks.routerNavigate).not.toHaveBeenCalled()
   })
 
   it("承諾操作を表示せず終了済みの招待を説明する", () => {
@@ -277,6 +291,6 @@ describe("InvitationDecisionPanelの契約", () => {
 
     await actor.click(screen.getByRole("button", { name: "Try again" }))
 
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.routerInvalidate).toHaveBeenCalledOnce()
   })
 })

@@ -7,8 +7,8 @@ import { boundaryReloadFallbackMs } from "./boundary-retry-timing"
 let pendingReloadTimer: number | undefined
 
 /**
- * Let the Next.js boundary recover in place first. If an error boundary is
- * still mounted after the retry window, reload so the RSC request is rebuilt.
+ * Let the route boundary recover in place first. If an error boundary is
+ * still mounted after the retry window, reload so the route request is rebuilt.
  * The DOM check also avoids reloading when reset() recovered or navigation
  * moved the user to another healthy page.
  */

@@ -40,7 +40,7 @@ type CancelInvitation = (
 ) => Promise<unknown>
 const mocks = vi.hoisted(() => ({
   cancelInvitation: vi.fn<CancelInvitation>(),
-  refresh: vi.fn<() => void>(),
+  routerInvalidate: vi.fn<() => void>(),
   removeMember: vi.fn<RemoveMember>(),
   sendOrganizationInvitation: vi.fn<SendOrganizationInvitation>(),
   toastError: vi.fn<(message: string, options?: unknown) => void>(),
@@ -62,8 +62,8 @@ vi.mock("../../api", () => ({
   sendOrganizationInvitation: mocks.sendOrganizationInvitation,
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useRouter: () => ({ invalidate: mocks.routerInvalidate }),
 }))
 
 vi.mock("sonner", () => ({

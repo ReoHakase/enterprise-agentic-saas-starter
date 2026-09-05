@@ -3,7 +3,7 @@ import addonA11y from "@storybook/addon-a11y"
 import addonDocs from "@storybook/addon-docs"
 import addonThemes, { withThemeByClassName } from "@storybook/addon-themes"
 import addonVitest from "@storybook/addon-vitest"
-import { definePreview } from "@storybook/nextjs-vite"
+import { definePreview } from "@storybook/react-vite"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import addonMsw from "msw-storybook-addon"
 import { setupWorker } from "msw/browser"
@@ -13,6 +13,7 @@ import "@enterprise-agentic-saas/ui/globals.css"
 import "./preview.css"
 
 import { storybookApiHandlers } from "../src/test-support/storybook/api-handlers"
+import { TestRouterProvider } from "../src/test-support/tanstack-router"
 
 const WithQueryClient = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
@@ -43,8 +44,7 @@ const isStorybookInternalRequest = (request: Request) => {
     url.pathname.startsWith("/@") ||
     url.pathname.startsWith("/sb-") ||
     url.pathname.startsWith("/node_modules/") ||
-    url.pathname.startsWith("/src/") ||
-    url.pathname.startsWith("/_next/static/")
+    url.pathname.startsWith("/src/")
   )
 }
 
@@ -74,15 +74,20 @@ export default definePreview({
   },
   decorators: [
     (Story, context) => (
-      <WithQueryClient key={context.id}>
-        <div
-          className="min-h-64 bg-background p-6 text-foreground"
-          data-storybook-content-root
-        >
-          <Story />
-        </div>
-        {context.parameters.disableGlobalToaster ? null : <Toaster />}
-      </WithQueryClient>
+      <TestRouterProvider
+        key={context.id}
+        initialEntry={context.parameters.routerInitialEntry ?? "/dashboard"}
+      >
+        <WithQueryClient>
+          <div
+            className="min-h-64 bg-background p-6 text-foreground"
+            data-storybook-content-root
+          >
+            <Story />
+          </div>
+          {context.parameters.disableGlobalToaster ? null : <Toaster />}
+        </WithQueryClient>
+      </TestRouterProvider>
     ),
     withThemeByClassName({
       themes: {
@@ -103,11 +108,5 @@ export default definePreview({
       },
     },
     layout: "fullscreen",
-    nextjs: {
-      appDirectory: true,
-      navigation: {
-        pathname: "/dashboard",
-      },
-    },
   },
 })

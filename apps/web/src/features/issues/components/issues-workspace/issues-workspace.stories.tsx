@@ -10,9 +10,9 @@ import {
 } from "../../test-support/fixtures"
 import {
   activeIssueSearchState,
-  IssuesWorkspaceStoryFixture,
   tallIssueViews,
-} from "../../test-support/issues-workspace-story-fixture"
+} from "../../test-support/issues-workspace-story-data"
+import { IssuesWorkspaceStoryFixture } from "../../test-support/issues-workspace-story-fixture"
 import {
   additionalIssueAssignee,
   issueWorkspaceViewportOptions,
@@ -321,7 +321,7 @@ export const SearchableFilterLayout = meta.story({
         0
       )
       await userEvent.click(trigger)
-      await waitFor(() => expect(content).not.toBeVisible())
+      await waitFor(() => expect(content).not.toBeInTheDocument())
     })
   },
 })
@@ -348,8 +348,8 @@ export const SearchableLabelKeyboard = meta.story({
         billing.id
       )
       await userEvent.keyboard("{Escape}{Escape}")
-      await waitFor(() => expect(trigger).toHaveFocus())
-      await waitFor(() => expect(content).not.toBeVisible())
+      await waitFor(() => expect(content).not.toBeInTheDocument())
+      await expect(trigger).toHaveFocus()
     })
   },
 })
@@ -359,7 +359,10 @@ export const LabelMatchModeKeyboard = meta.story({
     await step("ラベル一致方法をroving focusで移動する", async () => {
       const ownerBody = within(canvasElement.ownerDocument.body)
       await userEvent.click(canvas.getByRole("button", { name: "Labels" }))
-      const labelSearch = await ownerBody.findByRole("combobox", {
+      const content = await ownerBody.findByRole("dialog", {
+        name: "Labels filter",
+      })
+      const labelSearch = within(content).getByRole("combobox", {
         name: "Search labels",
       })
       await waitFor(() => expect(labelSearch).toHaveFocus())
@@ -370,9 +373,7 @@ export const LabelMatchModeKeyboard = meta.story({
       await userEvent.keyboard("{ArrowRight}")
       await waitFor(() => expect(all).toHaveFocus())
       await userEvent.keyboard("{Escape}")
-      await waitFor(() =>
-        expect(ownerBody.queryByRole("dialog")).not.toBeInTheDocument()
-      )
+      await waitFor(() => expect(content).not.toBeInTheDocument())
     })
   },
 })
@@ -414,7 +415,7 @@ export const DueDateDesktopLayout = meta.story({
           0
         )
         await userEvent.click(trigger)
-        await waitFor(() => expect(content).not.toBeVisible())
+        await waitFor(() => expect(content).not.toBeInTheDocument())
       }
     )
   },
@@ -458,7 +459,7 @@ export const DueDateMobileViewport = meta.story({
         0
       )
       await userEvent.click(trigger)
-      await waitFor(() => expect(content).not.toBeVisible())
+      await waitFor(() => expect(content).not.toBeInTheDocument())
     })
   },
 })

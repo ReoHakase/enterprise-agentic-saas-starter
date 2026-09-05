@@ -8,5 +8,5 @@ export default {
   },
 } satisfies ExportedHandler<FixtureEnvironment>
 
-// @ts-expect-error Node globals must not leak into the Worker config.
-process.cwd()
+// @ts-expect-error Browser document globals must not leak into the Worker config.
+document.title

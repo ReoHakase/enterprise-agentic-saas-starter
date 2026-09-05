@@ -1,7 +1,7 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { defineMain } from "@storybook/nextjs-vite/node"
+import { defineMain } from "@storybook/react-vite/node"
 import { mergeConfig } from "vite"
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -18,7 +18,7 @@ const getPortlessClientPort = () => {
 }
 
 export default defineMain({
-  stories: ["../src/{app,components,features}/**/*.stories.@(ts|tsx)"],
+  stories: ["../src/{components,features}/**/*.stories.@(ts|tsx)"],
   staticDirs: ["./public"],
   addons: [
     "@storybook/addon-a11y",
@@ -27,8 +27,12 @@ export default defineMain({
     "@storybook/addon-vitest",
   ],
   framework: {
-    name: "@storybook/nextjs-vite",
-    options: {},
+    name: "@storybook/react-vite",
+    options: {
+      builder: {
+        viteConfigPath: ".storybook/vite.config.ts",
+      },
+    },
   },
   docs: {
     defaultName: "Documentation",
@@ -56,10 +60,6 @@ export default defineMain({
           "next-themes": path.join(
             workspace,
             "src/test-support/storybook/next-themes.tsx"
-          ),
-          "nuqs/adapters/next/app": path.join(
-            workspace,
-            "src/test-support/storybook/nuqs-next-app.ts"
           ),
         },
       },

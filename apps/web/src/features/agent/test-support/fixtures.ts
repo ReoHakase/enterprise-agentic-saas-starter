@@ -1,6 +1,6 @@
 import { TooltipProvider } from "@enterprise-agentic-saas/ui/components/tooltip"
 import { Provider as JotaiProvider } from "jotai"
-import { NuqsAdapter } from "nuqs/adapters/next/app"
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router"
 import { createElement, type ReactElement, type ReactNode } from "react"
 
 import { AgentFormRegistryProvider } from "../components/form-registry/form-registry"

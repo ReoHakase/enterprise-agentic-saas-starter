@@ -1,4 +1,3 @@
-import { createLoader } from "nuqs/server"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -6,18 +5,13 @@ import {
   createIssueTableSearchParams,
   defaultIssueSearchState,
   issueListQueryKeyState,
-  issueSearchParsers,
-  issueSearchUrlKeys,
+  loadIssueSearchParams,
   normalizeIssueSearchState,
   serializeIssueSearchParams,
   toIssueListRequest,
   withAgentThreadHref,
   type IssueSearchState,
 } from "./search-params"
-
-const loadIssueSearchParams = createLoader(issueSearchParsers, {
-  urlKeys: issueSearchUrlKeys,
-})
 
 describe("Issue検索parameter", () => {
   it("prefixなしでは公開URL keyを使う", () => {
@@ -115,7 +109,6 @@ describe("Issue検索parameter", () => {
     )
     const serialized = serializeIssueSearchParams(parsed)
     expect(serialized).not.toContain("due=")
-    expect(issueSearchUrlKeys).not.toHaveProperty("duePreset")
   })
 
   it("削除された単一の優先順位キーを無視する", () => {

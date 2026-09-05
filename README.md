@@ -32,7 +32,7 @@ Service Bindingだけを認証・認可の根拠にしません。
 ```text
 ブラウザー
   └─ Web Worker
-       Next.js / Agent UI
+       TanStack Start / Agent UI
        └─ 認証付きHTTP
           API Worker
           Better Auth / 認可 / DB / R2 / 使用量
@@ -51,19 +51,19 @@ Agent WorkerはTurso, Better Auth, R2, Webを直接参照しません。APIが�
 
 ## 🧰 技術構成
 
-| 領域         | 採用技術                                                                                     |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| ランタイム   | Bun `1.3.13`, Cloudflare Workers                                                             |
-| モノレポ     | Bun workspaces, Turborepo                                                                    |
-| Web          | Next.js `16`, React `19`, Tailwind CSS `4`, shadcn/Base UI, TanStack Query/Form/Table, Jotai |
-| API          | Elysia, Eden, Valibot Standard Schema, envin                                                 |
-| Agent        | Mastra, Vercel AI SDK, OpenRouter, Cloudflare Service Binding                                |
-| 認証         | Better Auth, マジックリンク, パスキー, 組織プラグイン, GitHub OAuth                          |
-| データベース | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                       |
-| ファイル     | Cloudflare R2, Images, Workers Cache                                                         |
-| メール       | React Email, Mailpit, Cloudflare Email Sending                                               |
-| 可観測性     | OpenTelemetry, Grafana LGTM, Grafana MCP                                                     |
-| 品質         | Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwright                                    |
+| 領域         | 採用技術                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| ランタイム   | Bun `1.3.13`, Cloudflare Workers                                                                             |
+| モノレポ     | Bun workspaces, Turborepo                                                                                    |
+| Web          | TanStack Start `1`, Vite `8`, React `19`, Tailwind CSS `4`, shadcn/Base UI, TanStack Query/Form/Table, Jotai |
+| API          | Elysia, Eden, Valibot Standard Schema, envin                                                                 |
+| Agent        | Mastra, Vercel AI SDK, OpenRouter, Cloudflare Service Binding                                                |
+| 認証         | Better Auth, マジックリンク, パスキー, 組織プラグイン, GitHub OAuth                                          |
+| データベース | Turso/libSQL, Drizzle ORM, Drizzle Kit                                                                       |
+| ファイル     | Cloudflare R2, Images, Workers Cache                                                                         |
+| メール       | React Email, Mailpit, Cloudflare Email Sending                                                               |
+| 可観測性     | OpenTelemetry, Grafana LGTM, Grafana MCP                                                                     |
+| 品質         | Oxlint, Oxfmt, Knip, jscpd, Vitest, Storybook, Playwright                                                    |
 
 依存関係の版はルートの`workspaces.catalog`で固定しています。外部依存には`catalog:`、
 リポジトリ内の依存には`workspace:*`を使います。
@@ -72,7 +72,7 @@ Agent WorkerはTurso, Better Auth, R2, Webを直接参照しません。APIが�
 
 ```text
 apps/
-  web/                 Next.js, ドメインUI, Agent UI
+  web/                 TanStack Start, Cloudflare Workers, ドメインUI, Agent UI
   api/                 公開API, 非公開Agent制御面, 認可, 業務トランザクション
   agent/               Mastra Agent, モデル, ツール, ストリーム
   emulate/             ローカルとE2E用の外部サービスemulator
@@ -283,7 +283,7 @@ bun run build
 | コマンド                  | 対象                                                 | 外部費用    |
 | ------------------------- | ---------------------------------------------------- | ----------- |
 | `bun run test`            | Node, happy-dom, libSQL, Elysia, 決定的なAgentテスト | なし        |
-| `bun run test:browser`    | Storybook, Vitest Browser Mode                       | なし        |
+| `bun run test:browser`    | Storybook, Vitest Browser Mode, TanStack Start W6    | なし        |
 | `bun run test:e2e`        | Web, API, Agent, DB, 認証を接続する無料E2E           | なし        |
 | `bun run test:eval:agent` | ブラウザーを使わない実モデル評価                     | LLM料金あり |
 | `bun run test:e2e:full`   | 実モデルを含む完全E2EのE2                            | LLM料金あり |

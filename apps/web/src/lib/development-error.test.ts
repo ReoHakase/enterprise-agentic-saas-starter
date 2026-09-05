@@ -247,7 +247,7 @@ describe("Web開発エラーの報告", () => {
       new Error("server failure"),
       {
         "app.error.code": "service_unavailable",
-        "app.operation": "next.request",
+        "app.operation": "web.request",
         "app.outcome": "failure",
         "http.request.method": "POST",
         "http.response.status_code": 503,
@@ -266,7 +266,7 @@ describe("Web開発エラーの報告", () => {
     expect(logError).toHaveBeenCalledWith(
       expect.objectContaining({
         "app.error.code": "service_unavailable",
-        "app.operation": "next.request",
+        "app.operation": "web.request",
         "app.outcome": "failure",
         "http.request.method": "POST",
         "http.response.status_code": 503,

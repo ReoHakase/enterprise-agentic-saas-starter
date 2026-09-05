@@ -7,7 +7,7 @@ main checkoutとlinked worktreeで同じ規則から解決する、非公開のC
 ```sh
 portless-topology resolve enterprise-agentic-saas
 portless-topology resolve api.enterprise-agentic-saas
-portless-topology run enterprise-agentic-saas -- next dev
+portless-topology run enterprise-agentic-saas -- vite dev
 portless-topology exec -- turbo run dev
 ```
 
@@ -32,10 +32,11 @@ CLIは`portless get enterprise-agentic-saas`だけからnamespaceを取得し、
 3. native経路でchildのargv、終了コード、`SIGINT`、`SIGTERM`の転送が同等であることを確認する。
 
 削除時の実Portless smokeは全hostnameだけでなく、`APP_BASE_URL`、`API_PUBLIC_URL`、
-`NEXT_PUBLIC_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、
+`VITE_API_BASE_URL`、`BETTER_AUTH_URL`、`AUTH_COOKIE_DOMAIN`、`TRUSTED_ORIGINS`、
 `CORS_ORIGIN`、`TURSO_DATABASE_URL`、`GITHUB_OAUTH_EMULATOR_URL`、
 `GITHUB_OAUTH_CALLBACK_URL`、`MASTRA_STORAGE_URL`、`MASTRA_STORAGE_AUTH_TOKEN`、stale
-token/environment除去、`NODE_EXTRA_CA_CERTS`、child exit/signal parityをmain checkoutとlinked
+token/environment除去、`VITE_DEV_SESSION_ID`、`VITE_DEV_WORKTREE_ID`、
+`VITE_OTEL_EXPORTER_OTLP_ENDPOINT`、`NODE_EXTRA_CA_CERTS`、child exit/signal parityをmain checkoutとlinked
 worktreeの両方で検証します。すべて通った時点で次を同じ変更から削除します。
 
 - このworkspace

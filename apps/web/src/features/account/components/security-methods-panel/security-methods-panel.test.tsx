@@ -18,8 +18,7 @@ const mocks = vi.hoisted(() => ({
     },
     signIn: { passkey: vi.fn<() => void>() },
   },
-  refresh: vi.fn<() => void>(),
-  push: vi.fn<(href: string) => void>(),
+  routerNavigate: vi.fn<(input: { href: string }) => void>(),
   toastError: vi.fn<(message: string) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
@@ -29,8 +28,8 @@ vi.mock("@better-auth-ui/react", async (importOriginal) => ({
   useAuth: () => ({ authClient: mocks.authClient }),
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocks.routerNavigate,
 }))
 
 vi.mock("sonner", () => ({
@@ -169,9 +168,9 @@ describe("SecurityMethodsPanelの契約", () => {
     await user.click(
       screen.getByRole("button", { name: "Continue to sign in" })
     )
-    expect(mocks.push).toHaveBeenCalledWith(
-      "/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account"
-    )
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({
+      href: "/auth/sign-in?reauth=1&action=account.passkey.add&redirectTo=/settings/account",
+    })
 
     firstRender.unmount()
     mocks.authClient.passkey.addPasskey.mockResolvedValueOnce({})

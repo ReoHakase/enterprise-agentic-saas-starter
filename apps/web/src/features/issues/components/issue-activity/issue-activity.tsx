@@ -21,12 +21,8 @@ import { LocalDate } from "@/components/local-date/local-date"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
 
 import type { IssueActivity } from "../../schema"
-import {
-  isIssuePriority,
-  isIssueStatus,
-  PriorityBadge,
-  StatusBadge,
-} from "../issue-utils/issue-utils"
+import { PriorityBadge, StatusBadge } from "../issue-utils/issue-utils"
+import { isIssuePriority, isIssueStatus } from "../issue-utils/issue-values"
 import type { IssueAssigneeOption } from "../types"
 
 const fieldLabels: Record<NonNullable<IssueActivity["field"]>, string> = {

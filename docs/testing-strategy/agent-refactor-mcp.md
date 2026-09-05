@@ -2,7 +2,7 @@
 title: AgentリファクタとMCP導入テスト戦略
 status: proposed
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-09-05
 applies_to:
   - apps/agent/**
   - apps/api/src/modules/agent/**
@@ -264,7 +264,7 @@ compatibility flagは構成test、Agentの直接`Request.signal` abortはG3/G4�
 実物:
 
 - Chromium
-- Next.js
+- TanStack Start
 - API Worker
 - Agent Worker
 - Service Binding
@@ -290,8 +290,8 @@ promptとtool schemaを読んでV3のtext、tool call、usage、stream chunkを�
 
 Mastra Agent、dynamic tool resolver、Memory、Storage、Workflow、approval suspension/resume、stream
 projection、API authorization、transaction、Application/Agent DB、Service Binding、local R2/Images、
-SSE、production Next.js build、Chromiumはmockしません。このためE1はtool選択を決定的にしつつ、
-approval後の別request resumeやasset claim/promotionまでの統合を回帰検査できます。自然言語からの
+SSE、本番用TanStack Startビルド、Viteプレビュー、Chromiumはmockしません。このためE1はtool選択を
+決定的にしつつ、approval後の別request resumeやasset claim/promotionまでの統合を回帰検査できます。自然言語からの
 通常のtool選択品質はE1の責務にせず、G5と標準E2で測ります。同じthreadの過去画像から指定画像を選ぶ
 経路と、画像の追加、読取、削除、再利用は決定的E1とAPI契約が最終配線まで所有します。
 

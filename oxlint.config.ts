@@ -29,10 +29,11 @@ type BudgetProfileOptions = {
 const executableExtensions = "{js,jsx,mjs,cjs,ts,tsx,mts,cts}"
 
 export const lintIgnorePatterns = [
-  "**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.open-next,.turbo}/**",
+  "**/{node_modules,dist,coverage,.next,.wrangler,.mastra,.turbo}/**",
   "**/.next-*/**",
   "**/generated/**",
   `**/*.generated.${executableExtensions}`,
+  "**/routeTree.gen.ts",
   "**/cloudflare-env.d.ts",
   "**/storybook-static/**",
   "**/playwright-report/**",
@@ -132,6 +133,7 @@ const commonImportRules: Rules = {
     {
       allow: [
         "**/*.css",
+        "@fontsource-variable/*",
         "server-only",
         "client-only",
         "**/{setup,instrumentation}.{js,jsx,ts,tsx}",
@@ -140,6 +142,22 @@ const commonImportRules: Rules = {
   ],
   "typescript/no-require-imports": "error",
 }
+
+export const tanstackWebRules: Rules = {
+  "query/exhaustive-deps": "error",
+  "query/infinite-query-property-order": "error",
+  "query/mutation-property-order": "error",
+  "query/no-rest-destructuring": "warn",
+  "query/no-unstable-deps": "error",
+  "query/no-void-query-fn": "error",
+  "query/stable-query-client": "error",
+  "router/create-route-property-order": "error",
+}
+
+export const tanstackWebJsPlugins = [
+  { name: "query", specifier: "@tanstack/eslint-plugin-query" },
+  { name: "router", specifier: "@tanstack/eslint-plugin-router" },
+]
 
 export const createBudgetOverrides = ({
   adapter = [],
@@ -226,6 +244,7 @@ export const workspaceBoundaryRule = (
 
 export default defineConfig({
   plugins: ["import", "node", "promise", "typescript", "unicorn", "oxc"],
+  jsPlugins: tanstackWebJsPlugins,
   categories: {
     correctness: "error",
     suspicious: "error",
@@ -239,6 +258,7 @@ export default defineConfig({
   rules: {
     ...productionBudgets,
     ...commonImportRules,
+    ...tanstackWebRules,
     eqeqeq: ["error", "always", { null: "ignore" }],
     "func-style": ["error", "expression"],
     "arrow-body-style": ["error", "as-needed"],

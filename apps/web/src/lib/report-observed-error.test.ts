@@ -1,3 +1,4 @@
+import { redirect } from "@tanstack/react-router"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const telemetry = vi.hoisted(() => ({
@@ -43,6 +44,18 @@ beforeEach(() => {
 })
 
 describe("Webで観測したエラーの報告", () => {
+  it("Given Router redirect, When Query cacheが報告する, Then failureとして記録しない", () => {
+    developmentReporter.enabled = true
+
+    reportObservedError(
+      redirect({ href: "/auth/sign-in?redirectTo=%2Fdashboard" })
+    )
+
+    expect(telemetry.setAttributes).not.toHaveBeenCalled()
+    expect(telemetry.setStatus).not.toHaveBeenCalled()
+    expect(developmentReporter.report).not.toHaveBeenCalled()
+  })
+
   it("生のエラー詳細を転記せず有効spanをmarkする", () => {
     reportObservedError(new Error("provider failed with visible quota details"))
 

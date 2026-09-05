@@ -37,7 +37,7 @@ const emitChatEvent = (
   attributes: ChatTelemetryAttributes,
   severityNumber = SeverityNumber.INFO
 ) => {
-  if (process.env.NODE_ENV !== "development") return
+  if (import.meta.env.MODE !== "development") return
   const eventAttributes = definedAttributes({
     ...attributes,
     "event.name": message,
@@ -255,7 +255,7 @@ export const createAgentChatTransport = (input: {
   new DefaultChatTransport<AgentChatMessage>({
     api: agentChatUrl(input.apiBaseUrl),
     credentials: "include",
-    ...(process.env.NODE_ENV === "development"
+    ...(import.meta.env.MODE === "development"
       ? { fetch: createObservedChatFetch(input.threadId) }
       : {}),
     prepareSendMessagesRequest: ({ messages }) => ({

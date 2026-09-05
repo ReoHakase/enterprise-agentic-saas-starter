@@ -41,7 +41,7 @@ export const NavigationCards = ({ tree }: { tree: Root }) => {
 type NavigationCard = {
   description?: string
   icon?: ReactNode
-  name: string
+  name: ReactNode
   url: string
 }
 
@@ -53,7 +53,7 @@ const getCards = (tree: Root): NavigationCard[] => {
       cards.push({
         description: getDescription(node.description ?? node.index.description),
         icon: node.icon ?? node.index.icon,
-        name: String(node.name),
+        name: node.name,
         url: node.index.url,
       })
       continue
@@ -63,7 +63,7 @@ const getCards = (tree: Root): NavigationCard[] => {
       cards.push({
         description: getDescription(node.description),
         icon: node.icon,
-        name: String(node.name),
+        name: node.name,
         url: node.url,
       })
     }

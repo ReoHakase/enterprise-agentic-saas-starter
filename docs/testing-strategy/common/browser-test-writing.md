@@ -2,7 +2,7 @@
 title: Browser test記述規約
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-05
 applies_to:
   - apps/web/**/*.stories.tsx
   - apps/web/**/*.browser.test.tsx
@@ -51,7 +51,7 @@ Base UIのfocus guard、private属性、途中状態の`aria-expanded`を同期�
 
 Tailwind classやicon classは機能契約としてassertしません。geometryが仕様の場合だけ、名前付き専用helper
 内でnarrow selector、bounding box、computed styleを使えます。座標比較は±1 CSS pxを許容し、
-なぜsemantic assertionでは不足するかをhelperへ記録します。Next.js route lifecycleを観測するhelperも
+なぜsemantic assertionでは不足するかをhelperへ記録します。TanStack Startのルートライフサイクルを観測するhelperも
 同じ境界へ閉じます。
 
 ## 制御可能な非同期fixture
@@ -78,8 +78,9 @@ namespace化します。OAuth/WebAuthnはserialを維持し、対象passkeyだ�
 有料E2は1 worker、retry 0、artifact無効を維持し、明示承認なしに実行しません。
 
 同じcallback mappingやvisible textをW2とW3で再検査しません。W3はfocus、keyboard、layout、
-native renderingなど実ブラウザー固有の結果、W6は実Next.jsのURL、history、document scroll、
-route lifecycleを`Then`として所有します。上位層を進めるための最小locatorとloading観測は残せます。
+native renderingなど実ブラウザー固有の結果、W6は実TanStack StartのURL、履歴、documentの
+スクロール、ルートライフサイクルを`Then`として所有します。上位層を進めるための最小locatorと
+待機状態の観測は残せます。
 
 ## 並列実行とartifact
 

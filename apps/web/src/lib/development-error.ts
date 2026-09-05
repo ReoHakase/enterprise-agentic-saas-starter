@@ -166,6 +166,18 @@ const typeOf = (value: unknown): string => {
 
 type DevelopmentCauseRecord = Record<string, boolean | number | string>
 
+type DevelopmentCauseLogSink = (
+  record: Readonly<DevelopmentCauseRecord>
+) => void
+
+let serverDevelopmentCauseLogSink: DevelopmentCauseLogSink | undefined
+
+export const configureServerDevelopmentCauseLogSink = (
+  sink: DevelopmentCauseLogSink
+): void => {
+  serverDevelopmentCauseLogSink = sink
+}
+
 export type DevelopmentErrorAttributes = {
   "app.error.code": string
   "app.operation": string
@@ -262,6 +274,13 @@ const defaultDependencies: ReporterDependencies = {
     console.error(error, context)
   },
   logError(record) {
+    if (
+      record["service.name"] === "enterprise-agentic-saas-web-server" &&
+      serverDevelopmentCauseLogSink
+    ) {
+      serverDevelopmentCauseLogSink(record)
+      return
+    }
     const serviceName = record["service.name"]
     logs
       .getLogger(

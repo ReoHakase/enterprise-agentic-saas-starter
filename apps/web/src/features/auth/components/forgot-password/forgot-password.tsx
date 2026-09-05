@@ -28,10 +28,8 @@ import { toast } from "sonner"
 import { safeAuthErrorMessage, forgotPasswordFormSchema } from "@/features/auth"
 
 import { findCaptchaComponent } from "../../runtime-guards"
-import {
-  AuthTextField,
-  selectCanSubmit,
-} from "../auth-form-field/auth-form-field"
+import { AuthTextField } from "../auth-form-field/auth-form-field"
+import { selectCanSubmit } from "../auth-form-field/form-selectors"
 
 export type ForgotPasswordProps = {
   className?: string

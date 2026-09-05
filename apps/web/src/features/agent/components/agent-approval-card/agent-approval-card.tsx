@@ -9,8 +9,8 @@ import {
   CardTitle,
 } from "@enterprise-agentic-saas/ui/components/card"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { Link } from "@tanstack/react-router"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { LocalDate } from "@/components/local-date/local-date"
@@ -38,6 +38,13 @@ export const AgentApprovalCard = ({
   const queryClient = useQueryClient()
   const [executionIssue, setExecutionIssue] =
     useState<Awaited<ReturnType<typeof resumeAgentAction>>["issue"]>()
+  const executionIssueLinkParams = useMemo(
+    () => ({
+      issueNumber: executionIssue?.number.toString() ?? "",
+      organizationSlug,
+    }),
+    [executionIssue?.number, organizationSlug]
+  )
   const actionQuery = useQuery(
     agentActionQueryOptions(apiClient, organizationId, actionId)
   )
@@ -176,7 +183,8 @@ export const AgentApprovalCard = ({
         ) : null}
         {executionIssue && !executionIssue.deleted ? (
           <Link
-            href={`/organization/${organizationSlug}/issues/${executionIssue.number}`}
+            to="/organization/$organizationSlug/issues/$issueNumber"
+            params={executionIssueLinkParams}
             className="block text-sm text-blue-600 underline underline-offset-2"
           >
             Open Issue #{executionIssue.number}

@@ -1,35 +1,13 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "enterprise-agentic-saas-web",
-  "main": ".open-next/worker.js",
-  "compatibility_date": "2026-07-13",
+  "main": "./src/server.ts",
+  "compatibility_date": "2026-09-04",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "keep_vars": true,
   "upload_source_maps": true,
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS",
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "enterprise-agentic-saas-web",
-    },
-  ],
-  "r2_buckets": [
-    {
-      "binding": "NEXT_INC_CACHE_R2_BUCKET",
-      "bucket_name": "enterprise-agentic-saas-web-cache",
-    },
-  ],
-  "images": {
-    "binding": "IMAGES",
-  },
-  "vars": {
-    "NEXTJS_ENV": "production",
-    "NEXT_INC_CACHE_R2_PREFIX": "incremental-cache",
-  },
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
   },
 }

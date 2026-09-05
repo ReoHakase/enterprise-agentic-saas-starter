@@ -1,27 +1,16 @@
 {
-  "extends": "@enterprise-agentic-saas/typescript-config/nextjs.json",
+  "extends": "@enterprise-agentic-saas/typescript-config/react-library.json",
   "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
+      "collections/*": ["./.source/*"],
       "@enterprise-agentic-saas/ui/*": ["../../packages/ui/src/*"]
     },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "types": ["vite/client"]
   },
-  "include": [
-    "next-env.d.ts",
-    "next.config.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "oxlint.config.ts",
-    "cloudflare-env.d.ts",
-    ".open-next"
-  ]
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "oxlint.config.ts", "dist", "storybook-static"]
 }

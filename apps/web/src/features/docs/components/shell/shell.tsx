@@ -21,15 +21,21 @@ import { Search, type SearchPage } from "../search/search"
 import { Sidebar } from "../sidebar/sidebar"
 
 export const Shell = ({
+  boundaryState = "ready",
   children,
   pages,
   tree,
 }: {
+  boundaryState?: "error" | "loading" | "ready"
   children: ReactNode
   pages: SearchPage[]
   tree: Root
 }) => (
-  <SidebarProvider open data-docs-shell="true">
+  <SidebarProvider
+    open
+    data-docs-shell="true"
+    data-boundary-state={boundaryState}
+  >
     <UiSidebar collapsible="offcanvas" variant="inset">
       <SidebarHeader className="gap-3">
         <SidebarMenu>

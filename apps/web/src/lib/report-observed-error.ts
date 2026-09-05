@@ -1,4 +1,5 @@
 import { SpanStatusCode, trace } from "@opentelemetry/api"
+import { isRedirect } from "@tanstack/react-router"
 
 import {
   isDevelopmentCauseReportingEnabled,
@@ -7,7 +8,7 @@ import {
   type DevelopmentErrorAttributes,
   type ReporterEnvironment,
 } from "./development-error"
-import { clientEnv } from "./env.client"
+import { clientEnv } from "./env"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
@@ -35,6 +36,14 @@ const isHttpStatus = (value: unknown): value is number =>
   Number.isInteger(value) &&
   value >= 100 &&
   value <= 599
+
+const isRouterRedirect = (error: unknown): boolean => {
+  try {
+    return isRedirect(error)
+  } catch {
+    return false
+  }
+}
 
 export type ObservedErrorContext = {
   errorCode?: string
@@ -135,24 +144,36 @@ const observedErrorAttributes = (
 
 const reporterEnvironment = (): ReporterEnvironment => {
   const isBrowser = typeof window !== "undefined"
+  const processEnvironment =
+    !isBrowser && typeof process !== "undefined" ? process.env : undefined
+  const serverEnvironment = {
+    endpoint: processEnvironment?.OTEL_EXPORTER_OTLP_ENDPOINT,
+    isTest:
+      processEnvironment?.NODE_ENV === "test" ||
+      processEnvironment?.VITEST === "true" ||
+      processEnvironment?.PLAYWRIGHT_TEST === "true",
+    nodeEnv: processEnvironment?.NODE_ENV,
+    sessionId: processEnvironment?.DEV_SESSION_ID,
+    worktreeId: processEnvironment?.DEV_WORKTREE_ID,
+  }
   return {
     endpoint: isBrowser
-      ? clientEnv.NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT
-      : process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+      ? clientEnv.VITE_OTEL_EXPORTER_OTLP_ENDPOINT
+      : serverEnvironment.endpoint,
     isBrowser,
     isTest:
-      process.env.NODE_ENV === "test" ||
-      process.env.VITEST === "true" ||
+      import.meta.env.MODE === "test" ||
+      import.meta.env.VITEST === "true" ||
       (isBrowser
-        ? clientEnv.NEXT_PUBLIC_BROWSER_TEST === "true"
-        : process.env.PLAYWRIGHT_TEST === "true"),
-    nodeEnv: process.env.NODE_ENV,
+        ? clientEnv.VITE_BROWSER_TEST === "true"
+        : serverEnvironment.isTest),
+    nodeEnv: isBrowser ? import.meta.env.MODE : serverEnvironment.nodeEnv,
     sessionId: isBrowser
-      ? clientEnv.NEXT_PUBLIC_DEV_SESSION_ID
-      : process.env.DEV_SESSION_ID,
+      ? clientEnv.VITE_DEV_SESSION_ID
+      : serverEnvironment.sessionId,
     worktreeId: isBrowser
-      ? clientEnv.NEXT_PUBLIC_DEV_WORKTREE_ID
-      : process.env.DEV_WORKTREE_ID,
+      ? clientEnv.VITE_DEV_WORKTREE_ID
+      : serverEnvironment.worktreeId,
   }
 }
 
@@ -160,6 +181,8 @@ export const reportObservedError = (
   error: unknown,
   context: ObservedErrorContext = {}
 ): void => {
+  if (isRouterRedirect(error)) return
+
   const attributes = observedErrorAttributes(error, context)
   const status = attributes["http.response.status_code"]
   if (status !== undefined && status >= 400 && status < 500) return

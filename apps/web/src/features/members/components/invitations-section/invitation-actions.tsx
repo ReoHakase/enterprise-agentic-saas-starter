@@ -13,25 +13,15 @@ import {
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { MailPlusIcon, RefreshCwIcon } from "lucide-react"
-import { createContext, useCallback, useContext, type MouseEvent } from "react"
+import { useCallback, useContext, type MouseEvent } from "react"
 
 import type { OrganizationInvitation } from "../../schema"
+import { InvitationMutationContext } from "./invitation-mutation-context"
 
 const cancelInvitationTrigger = (
   <Button variant="ghost" size="xs">
     Cancel
   </Button>
-)
-
-export type InvitationMutationState = {
-  busyInvitationId?: string
-  pending: boolean
-}
-
-export const InvitationMutationContext = createContext<InvitationMutationState>(
-  {
-    pending: false,
-  }
 )
 
 export const InvitationActions = ({

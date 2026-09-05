@@ -1,7 +1,11 @@
 import type { AdditionalField } from "@better-auth-ui/core"
 import { createAuthClientForBaseUrl } from "@enterprise-agentic-saas/auth/client"
-import Link from "next/link"
-import { createElement, type ReactNode } from "react"
+import {
+  createElement,
+  type ComponentProps,
+  type PropsWithChildren,
+  type ReactNode,
+} from "react"
 import { fn } from "storybook/test"
 
 import { AuthProvider } from "../components/auth-provider/auth-provider"
@@ -11,6 +15,18 @@ import { magicLinkPlugin } from "../magic-link-plugin"
 export const authApiBaseUrl = "https://api.example.test"
 const authRedirectTo = "/organization/acme/dashboard"
 export const authNavigate = fn()
+
+const StoryLink = ({
+  href,
+  prefetch,
+  to,
+  ...props
+}: PropsWithChildren<
+  ComponentProps<"a"> & { href: string; prefetch?: boolean; to?: string }
+>) => {
+  void prefetch
+  return createElement("a", { ...props, href: to ?? href })
+}
 
 const authBasePaths = {
   auth: "/auth",
@@ -74,7 +90,7 @@ export const AuthStoryScope = ({
       baseURL: authApiBaseUrl,
       basePaths: authBasePaths,
       emailAndPassword: emailAndPasswordConfig,
-      Link,
+      Link: StoryLink,
       navigate: authNavigate,
       plugins: [magicLinkPlugin()],
       redirectTo: authRedirectTo,

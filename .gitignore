@@ -37,13 +37,12 @@ test-results/
 .vercel
 
 # Build Outputs
-.open-next/
 .source/
 .mastra/
 .wrangler/
 storybook-static/
+.tanstack/
 .next/
-.next-browser/
 .next-e2e-*/
 .next-e2e-full-*/
 .vitest-attachments/

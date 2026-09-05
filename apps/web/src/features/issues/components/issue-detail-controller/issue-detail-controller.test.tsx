@@ -9,15 +9,15 @@ import type { Issue, IssueTimelinePage } from "../../schema"
 import type { IssueAssigneeOption } from "../types"
 
 const mocks = vi.hoisted(() => ({
-  back: vi.fn<() => void>(),
   getIssueTimeline: vi.fn<() => Promise<IssueTimelinePage>>(),
-  push: vi.fn<(href: string) => void>(),
+  historyBack: vi.fn<() => void>(),
+  routerNavigate: vi.fn<(input: { href: string }) => void>(),
 }))
 
-vi.mock("next/navigation", () => ({
+vi.mock("@tanstack/react-router", () => ({
   useRouter: () => ({
-    back: mocks.back,
-    push: mocks.push,
+    history: { back: mocks.historyBack },
+    navigate: mocks.routerNavigate,
   }),
 }))
 
@@ -96,9 +96,9 @@ const navigationEntry = (name: string): PerformanceEntry => ({
 
 describe("Issue詳細controller", () => {
   beforeEach(() => {
-    mocks.back.mockReset()
     mocks.getIssueTimeline.mockReset()
-    mocks.push.mockReset()
+    mocks.historyBack.mockReset()
+    mocks.routerNavigate.mockReset()
   })
 
   afterEach(() => vi.restoreAllMocks())
@@ -150,12 +150,14 @@ describe("Issue詳細controller", () => {
     })
 
     await user.click(screen.getByRole("button", { name: "Back to issues" }))
-    expect(mocks.back).toHaveBeenCalledOnce()
+    expect(mocks.historyBack).toHaveBeenCalledOnce()
 
     navigationEntries.mockReturnValue([
       navigationEntry("http://localhost/organization/acme/issues/1"),
     ])
     await user.click(screen.getByRole("button", { name: "Back to issues" }))
-    expect(mocks.push).toHaveBeenCalledWith("/organization/acme/issues")
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({
+      href: "/organization/acme/issues",
+    })
   })
 })

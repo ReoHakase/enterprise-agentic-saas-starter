@@ -10,6 +10,7 @@ import {
   useSidebar,
 } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
+import { useLocation } from "@tanstack/react-router"
 import {
   Building2Icon,
   LayoutDashboardIcon,
@@ -20,7 +21,6 @@ import {
   XIcon,
   type LucideIcon,
 } from "lucide-react"
-import { usePathname } from "next/navigation"
 import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react"
 
 import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
@@ -42,7 +42,7 @@ const accountNavigation: NavigationItem[] = [
   { href: "/settings/account", label: "Account", icon: UserCircleIcon },
 ]
 
-const ConsoleRouteEffects = ({
+export const ConsoleRouteEffects = ({
   contentRef,
   pathname,
 }: {
@@ -73,7 +73,7 @@ const ConsoleRouteEffects = ({
   return null
 }
 
-const MobileSidebarClose = () => {
+export const MobileSidebarClose = () => {
   const { isMobile, setOpenMobile } = useSidebar()
   const closeNavigation = useCallback(
     () => setOpenMobile(false),
@@ -97,7 +97,7 @@ const MobileSidebarClose = () => {
   )
 }
 
-const NavigationFallback = () => (
+export const NavigationFallback = () => (
   <SidebarGroup>
     <SidebarGroupLabel>Workspace</SidebarGroupLabel>
     <SidebarGroupContent>
@@ -119,16 +119,14 @@ const NavigationFallback = () => (
   </SidebarGroup>
 )
 
-const navigationFallback = <NavigationFallback />
-
-const ConsoleNavigation = ({
+export const ConsoleNavigation = ({
   activeOrganization,
   agentThread,
 }: {
   activeOrganization?: OrganizationSummary
   agentThread: string
 }) => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const workspaceNavigation = useMemo<NavigationItem[]>(
     () =>
       activeOrganization
@@ -256,11 +254,4 @@ const NavigationMenuItem = ({
       </SidebarMenuLinkButton>
     </SidebarMenuItem>
   )
-}
-
-export {
-  ConsoleNavigation as consoleNavigation,
-  ConsoleRouteEffects as consoleRouteEffects,
-  MobileSidebarClose as mobileSidebarClose,
-  navigationFallback,
 }

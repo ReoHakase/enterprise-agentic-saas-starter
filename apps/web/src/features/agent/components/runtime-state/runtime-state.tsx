@@ -15,8 +15,6 @@ import {
   type AgentRuntimeState,
   type AgentSessionLifecycle,
   type AgentThreadRuntimeState,
-  type AgentThreadSwitchRisks,
-  type OrganizationSwitchRisks,
 } from "../runtime-state-types/runtime-state-types"
 import { useAgentDraftStore } from "../use-agent-draft-store/use-agent-draft-store"
 import { useAgentRuntimeSwitches } from "../use-agent-runtime-switches/use-agent-runtime-switches"
@@ -181,9 +179,3 @@ export const useAgentThreadRuntimeState = (
     ]
   )
 }
-
-export const hasOrganizationSwitchRisks = (risks: OrganizationSwitchRisks) =>
-  Object.values(risks).some(Boolean)
-
-export const hasBlockingThreadSwitchRisks = (risks: AgentThreadSwitchRisks) =>
-  risks.uploads || risks.activeTurn || risks.pendingApprovals

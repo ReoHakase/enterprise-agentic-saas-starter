@@ -15,8 +15,8 @@ import { cjk } from "@streamdown/cjk"
 import { code } from "@streamdown/code"
 import { math } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
+import { Link } from "@tanstack/react-router"
 import { CopyIcon, ExternalLinkIcon } from "lucide-react"
-import Link from "next/link"
 import type { ComponentProps } from "react"
 import { memo, useCallback, useState } from "react"
 import { toast } from "sonner"
@@ -124,7 +124,7 @@ const MessageMarkdownLink = ({
         {...props}
         className={linkClassName}
         data-streamdown="link"
-        href={href}
+        to={href}
       >
         {children}
       </Link>

@@ -87,10 +87,12 @@ const config: KnipConfig = {
         "e2e/fixtures/agent-stack.ts",
         "e2e/fixtures/oauth-api.ts",
         "src/features/auth/auth-plugin.ts!",
-        "open-next.config.ts",
+        "src/router.tsx!",
+        "source.config.ts!",
       ],
       project: [
-        "src/{app,components,features,hooks,lib}/**/*.{ts,tsx}!",
+        "src/{routes,components,features,hooks,lib}/**/*.{ts,tsx}!",
+        "src/instrumentation-client.ts!",
         "!**/*.test.{ts,tsx}!",
         "!**/*.stories.{ts,tsx}!",
         "!src/features/**/test-support/**!",
@@ -99,6 +101,9 @@ const config: KnipConfig = {
         config: ["playwright.config.ts"],
       },
       storybook: true,
+      wrangler: {
+        config: ["wrangler.jsonc"],
+      },
     },
     "packages/agent-contracts": {
       project: ["src/**/*.ts!", "!src/**/*.test.ts!"],

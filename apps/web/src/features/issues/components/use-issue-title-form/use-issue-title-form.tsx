@@ -16,7 +16,7 @@ import { issueTitleFormSchema } from "../../schema"
 import { type StringFieldApi, type SubmitSelection } from "../form-types"
 import { TitleEditorField } from "../issue-detail-editor-fields/issue-detail-editor-fields"
 import type { IssueDetailProps } from "../issue-detail-types"
-import { getActionErrorMessage } from "../issue-utils/issue-utils"
+import { getActionErrorMessage } from "../issue-utils/issue-values"
 import type { IssueUiItem } from "../types"
 
 export const useIssueTitleForm = ({

@@ -1,5 +1,0 @@
-NEXTJS_ENV=development
-NEXT_INC_CACHE_R2_PREFIX=incremental-cache
-
-# Root `bun run dev` injects DEV_* and local OTLP endpoints. Production remote
-# telemetry remains intentionally unconfigured.

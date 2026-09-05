@@ -1,6 +1,6 @@
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
+import { Link } from "@tanstack/react-router"
 import { BlocksIcon } from "lucide-react"
-import Link from "next/link"
 import type { ReactNode } from "react"
 
 export type AuthRouteFrameSize = "default" | "oauth"
@@ -25,8 +25,8 @@ export const AuthRouteFrame = ({
       )}
     >
       <Link
-        href="/"
-        prefetch={false}
+        to="/"
+        preload={false}
         className="flex items-center gap-2 self-center font-medium"
       >
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">

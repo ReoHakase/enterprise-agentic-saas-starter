@@ -2,7 +2,7 @@
 title: 命名とlayer
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-09-05
 ---
 
 # 命名とlayer
@@ -64,7 +64,7 @@ transport -> application -> domain
              outbound port <- adapter <- DB/provider/browser
 ```
 
-この向きにする理由は、applicationがDrizzle、provider SDK、Next routerの選択へ依存せず、
+この向きにする理由は、applicationがDrizzle、provider SDK、TanStack Routerの選択へ依存せず、
 同じuse caseをfake portでdeterministicに検証できるようにするためです。adapter側にinterfaceを
 置いてapplicationへ逆輸入する方式は、外側が内側の契約を所有するため採用しません。
 
@@ -90,7 +90,7 @@ transport -> application -> domain
 
 禁止:
 
-- React、Next.js
+- React、TanStack Start、TanStack Router
 - Elysia
 - Drizzle、libSQL
 - `fetch`
@@ -165,7 +165,7 @@ implementation、failure taxonomy、call order、security invariantのいずれ�
 | `EmailSender`      | Cloudflare Email implementation |
 | `LanguageModel`    | OpenRouter implementation       |
 | `NotificationPort` | Sonner implementation           |
-| `NavigationPort`   | Next.js router implementation   |
+| `NavigationPort`   | TanStack Router implementation  |
 
 adapterは外側のSDK errorを内側のerror taxonomyへ変換します。raw provider errorをapplicationへ漏らしません。
 
@@ -208,7 +208,7 @@ ownerがfeature/moduleにあるcodeはowner側へ残します。
 
 ## controllerとview
 
-WebのClient Componentでside effectと表示を分ける必要がある場合に使います。
+Webのブラウザーコンポーネントでside effectと表示を分ける必要がある場合に使います。
 
 - `controller`: Query、mutation、router、chat transport、state transitionを接続する
 - `view`: propsとしてstateとactionを受け、DOM、interaction、a11yを所有する
@@ -227,13 +227,14 @@ export const FeatureClient = () => {
 - hookが100行budgetを超える
 - UIとside effectの変更頻度が異なる
 
-`boundary.tsx`という曖昧な名前は原則使いません。`*.client.tsx`、`*.server.tsx`、`*-provider.tsx`、`*-error-boundary.tsx`のように境界の種類を名前へ出します。
+`boundary.tsx`という曖昧な名前は原則使いません。`*.client.tsx`、`*.server.ts`、
+`*-provider.tsx`、`*-error-boundary.tsx`のように境界の種類を名前へ出します。
 
 ## composition root
 
 `composition root`はportとadapterを接続する唯一の場所です。
 
-- Web: `*.server.tsx`、`*.client.tsx`、provider
+- Web: `src/server.ts`、`src/router.tsx`、`src/routes/__root.tsx`、provider
 - API: `module.ts`、`app.ts`
 - Agent: `src/mastra/composition/**`、`worker.ts`
 

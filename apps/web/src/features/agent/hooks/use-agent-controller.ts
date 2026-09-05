@@ -4,14 +4,14 @@ import { useChat, type UseChatHelpers } from "@ai-sdk/react"
 import { agentClientToolNames } from "@enterprise-agentic-saas/agent-contracts"
 import { useHotkeys } from "@tanstack/react-hotkeys"
 import { type QueryClient, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import type { ChatOnFinishCallback, ChatOnToolCallCallback } from "ai"
-import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { issueKeys } from "@/features/issues"
-import { useIssueSearchState } from "@/features/issues/search-params.client"
-import { clientEnv } from "@/lib/env.client"
+import { useIssueSearchState } from "@/features/issues/use-issue-search-state"
+import { clientEnv } from "@/lib/env"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import { createAgentChatTransport } from "../chat-transport"
@@ -123,7 +123,7 @@ const useAgentToolCall = ({
   disabled: boolean
   formRegistry: ReturnType<typeof useAgentFormRegistry>
   issueSearchState: ReturnType<typeof useIssueSearchState>["state"]
-  navigate: ReturnType<typeof useRouter>["push"]
+  navigate: (href: string) => void
   organizationId: string
   organizationSlug: string
   runtime: AgentThreadRuntime
@@ -285,7 +285,11 @@ export const useAgentController = ({
   onAutoSubmit: () => void
 }) => {
   const queryClient = useQueryClient()
-  const router = useRouter()
+  const navigate = useNavigate()
+  const navigateToHref = useCallback(
+    (href: string) => void navigate({ href }),
+    [navigate]
+  )
   const formRegistry = useAgentFormRegistry()
   const { state: issueSearchState } = useIssueSearchState()
   const runtime = useAgentThreadRuntimeState(thread.id)
@@ -300,7 +304,7 @@ export const useAgentController = ({
   const transport = useMemo(
     () =>
       createAgentChatTransport({
-        apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+        apiBaseUrl: clientEnv.VITE_API_BASE_URL,
         threadId: thread.id,
       }),
     [thread.id]
@@ -318,7 +322,7 @@ export const useAgentController = ({
     disabled,
     formRegistry,
     issueSearchState,
-    navigate: router.push,
+    navigate: navigateToHref,
     organizationId,
     organizationSlug,
     runtime,

@@ -12,7 +12,7 @@ import { Input } from "@enterprise-agentic-saas/ui/components/input"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@tanstack/react-router"
 import { type ChangeEvent, type FormEvent, useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -46,7 +46,7 @@ export const ProfileForm = ({ user }: { user: UserProfile }) => {
     mutationFn: (input: { name: string }) => browserConsoleApi.updateMe(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: consoleKeys.me() })
-      router.refresh()
+      void router.invalidate()
       toast.success("Profile updated")
     },
   })

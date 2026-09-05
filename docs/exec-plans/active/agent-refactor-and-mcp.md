@@ -348,7 +348,7 @@ Browser Mode、Cloudflare build、DB整合、`bun run check`のrequired gateは�
 ### 3.2 Observability
 
 - [x] Mastra observabilityをambient OpenTelemetryへbridgeする
-- [x] Next.js、Elysia、Mastraのlocal signalを共有LGTMへ送る
+- [x] TanStack Start、Elysia、Mastraのlocal signalを共有LGTMへ送る
 - [x] worktree/session/service attributeを全local signalへ付ける
 - [x] localではprompt、completion、business/tool/provider payloadを保持し、認証materialだけをredactする
 - [x] `bun run dev`をreadiness-onlyにし、Docker lifecycleを明示commandへ分離する

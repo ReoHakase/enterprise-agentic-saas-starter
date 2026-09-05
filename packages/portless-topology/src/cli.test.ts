@@ -201,11 +201,11 @@ describe("Portless topology resolverの契約", () => {
       MASTRA_STORAGE_AUTH_TOKEN: "local-agent-storage",
       MASTRA_STORAGE_URL:
         "https://agent-storage.feature-auth.enterprise-agentic-saas.localhost:7443",
-      NEXT_PUBLIC_API_BASE_URL:
+      VITE_API_BASE_URL:
         "https://api.feature-auth.enterprise-agentic-saas.localhost:7443",
-      NEXT_PUBLIC_DEV_SESSION_ID: "session-123",
-      NEXT_PUBLIC_DEV_WORKTREE_ID: "feature-auth",
-      NEXT_PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT:
+      VITE_DEV_SESSION_ID: "session-123",
+      VITE_DEV_WORKTREE_ID: "feature-auth",
+      VITE_OTEL_EXPORTER_OTLP_ENDPOINT:
         "https://otel.enterprise-agentic-saas.localhost",
       NODE_EXTRA_CA_CERTS: "/Users/example/.portless/ca.pem",
       TRUSTED_ORIGINS:
@@ -255,13 +255,13 @@ describe("Portless topology resolverの契約", () => {
         "https://feature-auth.enterprise-agentic-saas.localhost",
         {
           DEV_SESSION_ID: " parent-session ",
-          NEXT_PUBLIC_DEV_SESSION_ID: "stale-browser-session",
+          VITE_DEV_SESSION_ID: "stale-browser-session",
         },
         createSessionId
       )
     ).toMatchObject({
       DEV_SESSION_ID: "parent-session",
-      NEXT_PUBLIC_DEV_SESSION_ID: "parent-session",
+      VITE_DEV_SESSION_ID: "parent-session",
     })
     expect(createSessionId).not.toHaveBeenCalled()
   })
@@ -375,11 +375,11 @@ describe("Portless topology CLIの契約", () => {
         "--",
         "bun",
         "-e",
-        "process.stdout.write(`${process.env.DEV_SESSION_ID}:${process.env.NEXT_PUBLIC_DEV_SESSION_ID}`)",
+        "process.stdout.write(`${process.env.DEV_SESSION_ID}:${process.env.VITE_DEV_SESSION_ID}`)",
       ],
       {
         DEV_SESSION_ID: "root-session",
-        NEXT_PUBLIC_DEV_SESSION_ID: "stale-session",
+        VITE_DEV_SESSION_ID: "stale-session",
         PATH: `${stubDirectory}:${process.env.PATH ?? ""}`,
         PORTLESS_ARGUMENTS_FILE: argumentsFile,
       }

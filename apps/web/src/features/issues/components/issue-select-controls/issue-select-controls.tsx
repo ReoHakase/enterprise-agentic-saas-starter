@@ -17,15 +17,17 @@ import type { ControlStateProps } from "../issue-metadata-control-types"
 import {
   AllIssuePrioritiesBadge,
   AllIssueStatusesBadge,
+  PriorityBadge,
+  StatusBadge,
+} from "../issue-utils/issue-utils"
+import {
   isIssuePriority,
   isIssueStatus,
   issueStatusOptions,
-  PriorityBadge,
   priorityFilterOptions,
   priorityOptions,
   statusOptions,
-  StatusBadge,
-} from "../issue-utils/issue-utils"
+} from "../issue-utils/issue-values"
 import type { IssueAssigneeOption, IssuePriority, IssueStatus } from "../types"
 
 export const IssueStatusControl = ({

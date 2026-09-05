@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { getConsoleApiErrorText } from "@/features/console"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import type { FileOwnerType } from "../api"
@@ -89,7 +89,7 @@ export const useFilesController = ({
       })
 
       void uploadFileWithProgress({
-        baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+        baseUrl: clientEnv.VITE_API_BASE_URL,
         organizationId,
         ownerType,
         ownerId,

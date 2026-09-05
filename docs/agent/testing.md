@@ -2,7 +2,7 @@
 title: 製品Agentのtestとrelease gate
 status: accepted
 implementation: active
-last_reviewed: 2026-08-01
+last_reviewed: 2026-09-05
 ---
 
 # Testとrelease gate
@@ -12,7 +12,7 @@ last_reviewed: 2026-08-01
 Agent releaseは次の3層を分離します。
 
 1. deterministic core: G1-G4でschema、tenant、capability、query guard、idempotency、stream projection
-2. browser feature integration: W3、W4、W6とE1でUI state、Server Component、cookie、Worker/Service Binding配線
+2. browser feature integration: W3、W4、W6とE1でUI state、TanStack Startのルートライフサイクル、Cookie、Worker/Service Binding配線
 3. probabilistic verification: G5は全指定caseを独立stateで3/3、E2は固定canaryを各1回完了すること
 
 LLMの回答文面一致はassertしません。tool call、tool inputの安全性、DB state、canonical stream part、approval state、Issue link、usage eventをassertします。
@@ -69,8 +69,9 @@ LLMの回答文面一致はassertしません。tool call、tool inputの安全�
 - 全shortcut、IME、upload、modal、既存shortcut競合
 
 pane state、shortcut、focus、approval UI、stream part表示はStorybook/Browser Modeで検証します。
-Web内のServer Component、cookie、reloadはW6、API/Agent Workerを含む最終配線はE1へ残します。mockは
-network/transport boundaryに置き、production hook、parser、controller、componentを差し替えません。
+Web内の`loader`、サーバー関数、Cookie、再読み込みはW6、API/Agent Workerを含む最終配線はE1へ
+残します。mockはnetwork/transport boundaryに置き、production hook、parser、controller、componentを
+差し替えません。
 
 ## Browserless paid eval
 

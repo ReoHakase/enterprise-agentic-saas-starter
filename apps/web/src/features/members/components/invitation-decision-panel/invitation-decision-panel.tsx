@@ -4,6 +4,7 @@ import { Badge } from "@enterprise-agentic-saas/ui/components/badge"
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useRouter } from "@tanstack/react-router"
 import {
   CircleUserRoundIcon,
   MailCheckIcon,
@@ -11,7 +12,6 @@ import {
   RefreshCwIcon,
   UserPlusIcon,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 
@@ -23,7 +23,7 @@ import { createInvitationPath } from "@/features/auth"
 import { consoleKeys } from "@/features/console"
 import { roleLabel } from "@/features/organizations"
 import { useIsHydrated } from "@/hooks/use-is-hydrated"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import {
   decideInvitation,
@@ -91,6 +91,7 @@ const panelClassName =
 export const InvitationDecisionPanel = (
   props: InvitationDecisionPanelProps
 ) => {
+  const navigate = useNavigate()
   const router = useRouter()
   const queryClient = useQueryClient()
   const isHydrated = useIsHydrated()
@@ -116,19 +117,20 @@ export const InvitationDecisionPanel = (
     mutationFn: (action: "accept" | "reject") =>
       decideInvitation({
         action,
-        apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+        apiBaseUrl: clientEnv.VITE_API_BASE_URL,
         invitationId: props.invitationId,
       }),
     onSuccess: (_, action) => {
-      // The destination route fetches fresh RSC data. Do not let a refetch of
+      // The destination route fetches fresh loader data. Do not let a refetch of
       // the outgoing invitation page race the route replacement.
       void queryClient.invalidateQueries({ queryKey: consoleKeys.all })
       toast.success(
         action === "accept" ? "Invitation accepted" : "Invitation rejected"
       )
-      router.replace(
-        action === "accept" ? "/dashboard" : "/settings/organizations"
-      )
+      void navigate({
+        replace: true,
+        to: action === "accept" ? "/dashboard" : "/settings/organizations",
+      })
     },
   })
   const { isPending, mutate } = mutation
@@ -138,7 +140,9 @@ export const InvitationDecisionPanel = (
     () => setAccountSwitcherOpen(true),
     []
   )
-  const retryInvitation = useCallback(() => router.refresh(), [router])
+  const retryInvitation = useCallback(() => {
+    void router.invalidate()
+  }, [router])
   const sessionExpired =
     mutation.isError && isInvitationAuthenticationError(mutation.error)
 

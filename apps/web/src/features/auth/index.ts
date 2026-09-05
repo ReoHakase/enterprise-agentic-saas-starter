@@ -7,6 +7,7 @@ export { createInvitationPath } from "./invitation-path"
 export { magicLinkPlugin } from "./magic-link-plugin"
 export { clearAuthenticatedQueryCache } from "./query-cache"
 export { sanitizeAuthRedirectTo } from "./redirect-to"
+export { resolveAuthRouteView } from "./route-view"
 export {
   requireMultiSessionAuthClient,
   requirePasskeyAuthClient,

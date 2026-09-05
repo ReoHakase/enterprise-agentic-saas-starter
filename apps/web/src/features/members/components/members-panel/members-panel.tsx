@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@tanstack/react-router"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -15,7 +15,7 @@ import type {
   OrganizationRole,
 } from "@/features/organizations"
 import { browserConsoleApi } from "@/lib/browser/console-api"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import { sendOrganizationInvitation } from "../../api"
 import type {
@@ -85,7 +85,7 @@ const runMemberMutation = async (
   }
   if (input.type === "invite") {
     await sendOrganizationInvitation({
-      apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+      apiBaseUrl: clientEnv.VITE_API_BASE_URL,
       email: input.email,
       organizationId,
       role: input.role,
@@ -102,7 +102,7 @@ const runMemberMutation = async (
   }
   if (input.type === "resend-invitation") {
     await sendOrganizationInvitation({
-      apiBaseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+      apiBaseUrl: clientEnv.VITE_API_BASE_URL,
       email: input.email,
       organizationId,
       resend: true,
@@ -189,7 +189,7 @@ export const MembersPanel = ({
           queryKey: consoleKeys.invitations(organization.id),
         }),
       ])
-      router.refresh()
+      void router.invalidate()
       toast.success(mutationSuccessMessage(outcome))
     },
     [organization.id, queryClient, router]

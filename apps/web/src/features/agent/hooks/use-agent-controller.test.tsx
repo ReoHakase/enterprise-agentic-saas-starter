@@ -83,8 +83,8 @@ vi.mock("@ai-sdk/react", () => ({
 vi.mock("@tanstack/react-hotkeys", () => ({
   useHotkeys: vi.fn<() => void>(),
 }))
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn<(href: string) => void>() }),
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn<(input: { href: string }) => void>(),
 }))
 vi.mock("../api", () => ({ cancelAgentRun: mocks.cancelAgentRun }))
 vi.mock("./use-agent-mention-candidates", () => ({
@@ -99,7 +99,7 @@ vi.mock("../components/form-registry/form-registry", () => ({
 vi.mock("@/features/issues", () => ({
   issueKeys: { all: ["issues"] },
 }))
-vi.mock("@/features/issues/search-params.client", () => ({
+vi.mock("@/features/issues/use-issue-search-state", () => ({
   useIssueSearchState: () => ({ state: {} }),
 }))
 vi.mock("@/lib/report-observed-error", () => ({

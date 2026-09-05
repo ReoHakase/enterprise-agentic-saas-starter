@@ -1,12 +1,10 @@
-"use client"
-
 import {
   Card,
   CardContent,
   CardHeader,
 } from "@enterprise-agentic-saas/ui/components/card"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
-import { usePathname, useSearchParams } from "next/navigation"
+import { useLocation } from "@tanstack/react-router"
 
 import {
   AuthRouteFrame,
@@ -20,8 +18,9 @@ export const AuthRouteLoading = ({
 }: {
   frameSize?: AuthRouteFrameSize
 } = {}) => {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const location = useLocation()
+  const pathname = location.pathname
+  const searchParams = new URLSearchParams(location.searchStr)
   const creatingAccount = pathname === "/auth/sign-up"
   const addingAccount = searchParams.get("add_account") === "1"
   const reauthenticating = searchParams.get("reauth") === "1"
@@ -90,7 +89,7 @@ export const InvitationRouteLoading = () => (
 )
 
 export const RootRouteLoading = () => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
 
   if (isConsolePath(pathname)) {
     return <ConsoleShellSkeleton />

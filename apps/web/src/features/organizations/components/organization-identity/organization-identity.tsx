@@ -10,7 +10,7 @@ import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { Building2Icon, CheckIcon } from "lucide-react"
 
 import { UserProfileImage } from "@/components/user-identity/user-identity"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { getSafeProfileImageUrl } from "@/lib/profile-image-url"
 
 import type { OrganizationSummary } from "../../schema"
@@ -32,7 +32,7 @@ export const OrganizationProfileImage = ({
     <AvatarImage
       src={getSafeProfileImageUrl(
         organization.profileImage,
-        clientEnv.NEXT_PUBLIC_API_BASE_URL
+        clientEnv.VITE_API_BASE_URL
       )}
       alt={organization.name?.trim() || "Organization"}
     />

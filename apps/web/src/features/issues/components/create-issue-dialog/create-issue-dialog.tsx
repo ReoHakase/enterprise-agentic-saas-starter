@@ -31,7 +31,7 @@ import {
 import {
   getActionErrorMessage,
   getActionFieldError,
-} from "../issue-utils/issue-utils"
+} from "../issue-utils/issue-values"
 import { CreateIssueTitleField } from "../text-form-fields/text-form-fields"
 import type { AsyncAction } from "../types"
 

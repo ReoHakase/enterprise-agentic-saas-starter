@@ -1,7 +1,7 @@
 "use client"
 
 import { type PasskeyAuthClient, useAddPasskey } from "@better-auth-ui/react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 
@@ -39,7 +39,7 @@ const consumePendingPasskeyAction = () => {
 }
 
 export const useAccountController = (authClient: PasskeyAuthClient) => {
-  const router = useRouter()
+  const navigate = useNavigate()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [reauthenticationOpen, setReauthenticationOpen] = useState(false)
   const mutation = useAddPasskey(authClient, {
@@ -62,10 +62,10 @@ export const useAccountController = (authClient: PasskeyAuthClient) => {
   const continueReauthentication = useCallback(() => {
     markPasskeyReauthenticationPending()
     setReauthenticationOpen(false)
-    router.push(
-      `/auth/sign-in?reauth=1&action=${pendingPasskeyAction}&redirectTo=/settings/account`
-    )
-  }, [router])
+    void navigate({
+      href: `/auth/sign-in?reauth=1&action=${pendingPasskeyAction}&redirectTo=/settings/account`,
+    })
+  }, [navigate])
   const handleReauthenticationOpenChange = useCallback((open: boolean) => {
     setReauthenticationOpen(open)
     if (!open) triggerRef.current?.focus({ preventScroll: true })

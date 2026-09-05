@@ -2,7 +2,7 @@ import { uploadAgentAssetWithProgress } from "@enterprise-agentic-saas/api/clien
 import { useCallback, useRef } from "react"
 
 import { apiClient } from "@/lib/api-client"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 import { reportObservedError } from "@/lib/report-observed-error"
 
 import { deleteAgentAsset } from "../../api"
@@ -101,7 +101,7 @@ export const useAgentRuntimeUploads = ({
           }))
           try {
             const asset = await uploadAgentAssetWithProgress({
-              baseUrl: clientEnv.NEXT_PUBLIC_API_BASE_URL,
+              baseUrl: clientEnv.VITE_API_BASE_URL,
               organizationId,
               threadId,
               uploadId: crypto.randomUUID(),

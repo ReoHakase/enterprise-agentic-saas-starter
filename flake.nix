@@ -231,7 +231,7 @@
               pkgs.jq
             ];
 
-            # Wrangler/OpenNext/Playwright/Storybookはroot catalogで固定し、
+            # Wrangler/Vite/Playwright/Storybookはroot catalogで固定し、
             # Bun workspaceから実行する。flake側でversion sourceを重ねない。
 
             # dev shell: Portless の local CA を Node/Bun 系 tooling に渡す。

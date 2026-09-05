@@ -8,9 +8,20 @@ import {
   DialogTrigger,
 } from "@enterprise-agentic-saas/ui/components/dialog"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
+import { Image } from "@unpic/react"
 import { ZoomInIcon } from "lucide-react"
-import Image, { type ImageProps } from "next/image"
 import type { ComponentProps } from "react"
+
+type StaticImageData = {
+  height?: number
+  src: string
+  width?: number
+}
+
+export type DocsImageSource =
+  | string
+  | StaticImageData
+  | { default: StaticImageData }
 
 const zoomTriggerRender = (
   <button
@@ -33,11 +44,12 @@ export const ZoomableImage = ({
   width,
 }: ComponentProps<"img"> & {
   preload?: boolean
-  staticSrc?: ImageProps["src"]
+  staticSrc?: DocsImageSource
 }) => {
   const imageSrc = staticSrc ?? src
   if (!isImageSource(imageSrc)) return null
 
+  const imageUrl = getImageUrl(imageSrc)
   const label = alt ? `Zoom image: ${alt}` : "Zoom documentation image"
   const imageHeight = resolveDimension(
     height,
@@ -57,10 +69,10 @@ export const ZoomableImage = ({
             "block h-auto w-full object-cover transition-transform duration-300 group-hover:scale-[1.01]",
             className
           )}
+          fetchPriority={preload ? "high" : undefined}
           height={imageHeight}
-          loading={preload ? undefined : loading}
-          preload={preload}
-          src={imageSrc}
+          loading={preload ? "eager" : loading}
+          src={imageUrl}
           title={title}
           width={imageWidth}
         />
@@ -80,7 +92,7 @@ export const ZoomableImage = ({
           alt={alt}
           className="mx-auto block max-h-[calc(100svh-3rem)] w-auto rounded-2xl object-contain"
           height={imageHeight}
-          src={imageSrc}
+          src={imageUrl}
           title={title}
           width={imageWidth}
         />
@@ -89,22 +101,25 @@ export const ZoomableImage = ({
   )
 }
 
-const isImageSource = (value: unknown): value is ImageProps["src"] =>
+const isImageSource = (value: unknown): value is DocsImageSource =>
   typeof value === "string" ||
   (typeof value === "object" &&
     value !== null &&
     ("src" in value || "default" in value))
 
-const getStaticImageData = (src: ImageProps["src"]) => {
+const getStaticImageData = (src: DocsImageSource) => {
   if (typeof src === "string") return undefined
   if ("default" in src) return src.default
   return src
 }
 
-const getIntrinsicHeight = (src: ImageProps["src"]): number | undefined =>
+const getImageUrl = (src: DocsImageSource): string =>
+  typeof src === "string" ? src : (getStaticImageData(src)?.src ?? "")
+
+const getIntrinsicHeight = (src: DocsImageSource): number | undefined =>
   getStaticImageData(src)?.height
 
-const getIntrinsicWidth = (src: ImageProps["src"]): number | undefined =>
+const getIntrinsicWidth = (src: DocsImageSource): number | undefined =>
   getStaticImageData(src)?.width
 
 const resolveDimension = (

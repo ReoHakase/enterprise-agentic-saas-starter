@@ -7,9 +7,11 @@ import {
   within,
 } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { NuqsAdapter } from "nuqs/adapters/next/app"
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+
+import { TestRouterProvider } from "@/test-support/tanstack-router"
 
 import { AgentApprovalCard } from "./components/agent-approval-card/agent-approval-card"
 import { AgentConversationViewport } from "./components/agent-conversation-viewport/agent-conversation-viewport"
@@ -231,9 +233,13 @@ const renderAgentUi = (children: ReactNode) => {
     },
   })
   return render(
-    <NuqsAdapter>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </NuqsAdapter>
+    <TestRouterProvider>
+      <NuqsAdapter>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </NuqsAdapter>
+    </TestRouterProvider>
   )
 }
 
@@ -314,7 +320,7 @@ describe("Agentチャットのブラウザー統合", () => {
     )
 
     expect(
-      screen.getByRole("combobox", { name: "Agent permission" })
+      await screen.findByRole("combobox", { name: "Agent permission" })
     ).toHaveTextContent("Ask always")
     await waitFor(() => {
       expect(requests.map(({ path }) => path)).toEqual(

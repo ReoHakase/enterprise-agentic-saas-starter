@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 
-import { ConsoleRouteErrorBoundary } from "./client"
+import { ConsoleRouteErrorBoundary, ConsoleShellErrorBoundary } from "./client"
 
 const reportObservedError = vi.hoisted(() => vi.fn<(error: unknown) => void>())
 const reset = vi.fn<() => void>()
@@ -11,8 +11,12 @@ vi.mock("@/lib/report-observed-error", () => ({
   reportObservedError,
 }))
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/organization/acme/issues",
+vi.mock("@tanstack/react-router", () => ({
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string }) => unknown
+  }) => select({ pathname: "/organization/acme/issues" }),
 }))
 
 const privateSentinel =
@@ -37,7 +41,7 @@ class BoundaryHarness extends Component<
   }
 
   componentDidCatch(_error: Error, _info: ErrorInfo) {
-    // 本番ではroute boundaryがNext.jsからcapture済みの値を受け取る
+    // 本番ではTanStack Routerのroute boundaryがcapture済みの値を受け取る
   }
 
   render() {
@@ -65,6 +69,24 @@ describe("ConsoleRouteErrorBoundaryの契約", () => {
     expect(alert).toHaveTextContent("The workspace is temporarily unavailable")
     expect(alert).not.toHaveTextContent(privateSentinel)
     expect(document.body).not.toHaveTextContent(privateSentinel)
+    expect(reportObservedError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: privateSentinel })
+    )
+  })
+
+  it("親loaderの失敗を機密情報なしのConsole shell内で報告する", () => {
+    render(
+      <ConsoleShellErrorBoundary
+        error={new Error(privateSentinel)}
+        reset={reset}
+      />
+    )
+
+    expect(screen.getByRole("main")).toHaveAttribute(
+      "data-slot",
+      "sidebar-inset"
+    )
+    expect(screen.getByRole("alert")).not.toHaveTextContent(privateSentinel)
     expect(reportObservedError).toHaveBeenCalledWith(
       expect.objectContaining({ message: privateSentinel })
     )

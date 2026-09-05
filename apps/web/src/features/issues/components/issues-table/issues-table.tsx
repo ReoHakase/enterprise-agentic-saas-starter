@@ -6,10 +6,10 @@ import { DataTableSelectionBar } from "@/components/data-table/data-table"
 
 import { issueDeleteDialog as IssueDeleteDialog } from "../issue-delete-dialog/issue-delete-dialog"
 import { IssueMetrics } from "../issue-metrics/issue-metrics"
-import { safelyRunAction } from "../issue-utils/issue-utils"
+import { safelyRunAction } from "../issue-utils/issue-values"
 import { issuesTableContent as IssuesTableContent } from "../issues-table-content/issues-table-content"
 import { IssuesTablePagination } from "../issues-table-pagination/issues-table-pagination"
-import { issuesTableToolbar as IssuesTableToolbar } from "../issues-table-toolbar/issues-table-toolbar"
+import { IssuesTableToolbar } from "../issues-table-toolbar/issues-table-toolbar"
 import type { IssuesTableProps } from "../issues-table-types"
 import type { IssueUiItem } from "../types"
 import {

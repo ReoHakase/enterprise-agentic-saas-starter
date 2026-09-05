@@ -2,7 +2,7 @@
 title: packages/uiの設計
 status: accepted
 implementation: active
-last_reviewed: 2026-07-26
+last_reviewed: 2026-09-05
 applies_to:
   - packages/ui/**
 ---
@@ -38,9 +38,9 @@ packages/ui/src/
 
 矢印は`importer -> dependency`です。複合componentはcomponent/hook/lib、componentはhook/lib、hookはlibを
 importできます。primitiveから複合component、hookからcomponent、libからReact layerへの
-逆依存は禁止します。Next.js、TanStack Query、product feature、API client、server-only module、
-Node builtin、app alias、domain typeをimportしません。test/storyだけで使うfixtureはproduction
-exportへ含めません。
+逆依存は禁止します。TanStack Start、TanStack Router、TanStack Query、product feature、API client、
+server-only module、Node builtin、app alias、domain typeをimportしません。test/storyだけで使うfixtureは
+production exportへ含めません。
 
 ## 公開entrypoint
 
@@ -87,7 +87,7 @@ VRTは現時点で実施しません。
 ## 受入条件
 
 - domain用語を持つcomponentがない
-- Next.js/API/Query importがない
+- TanStack Start、TanStack Router、API、Queryのimportがない
 - primitiveから複合componentへの逆依存がない
 - private helperがpublic exportされない
 - public componentと主要patternに実componentを描画するstoryがある

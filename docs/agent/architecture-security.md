@@ -2,7 +2,7 @@
 title: 製品Agentのarchitectureとsecurity
 status: accepted
 implementation: active
-last_reviewed: 2026-08-23
+last_reviewed: 2026-09-05
 ---
 
 # Architectureとsecurity
@@ -13,7 +13,7 @@ last_reviewed: 2026-08-23
 
 ```text
 Browser
-  └─ Web Worker: Next.js / Agent Shell / AI SDK UI
+  └─ Web Worker: TanStack Start / TanStack Router / Agent Shell / AI SDK UI
        └─ credentialed HTTP
           API Worker: Better Auth / Origin / tenant / DB / R2 / usage
             ├─ private AGENT_RUNTIME Service Binding

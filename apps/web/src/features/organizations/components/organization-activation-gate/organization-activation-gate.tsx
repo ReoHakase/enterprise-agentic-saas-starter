@@ -12,8 +12,8 @@ import {
 import { Button } from "@enterprise-agentic-saas/ui/components/button"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "@tanstack/react-router"
 import { Building2Icon } from "lucide-react"
-import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useState } from "react"
 import { toast } from "sonner"
 
@@ -36,7 +36,6 @@ export const OrganizationActivationGate = ({
 }) => {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const pathname = usePathname()
   const agentRuntime = useAgentRuntimeState()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const mutation = useMutation({
@@ -45,8 +44,7 @@ export const OrganizationActivationGate = ({
       await agentRuntime.completeOrganizationSwitch()
       await prepareOrganizationSwitch(queryClient, organizationId)
       toast.success("Organization switched")
-      router.replace(pathname)
-      router.refresh()
+      void router.invalidate()
     },
     onError: (error) => {
       agentRuntime.cancelOrganizationSwitch()

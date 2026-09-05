@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { AgentChatMessage } from "../../schema"
 import {
-  AgentConversationViewport,
   buildAgentConversationGroups,
   type AgentConversationTurnPreview,
-} from "./agent-conversation-viewport"
+} from "./agent-conversation-groups"
+import { AgentConversationViewport } from "./agent-conversation-viewport"
 
 vi.mock(
   "@enterprise-agentic-saas/ui/components/ai-elements/conversation",

@@ -10,7 +10,7 @@ import {
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useCallback, useEffect, useState } from "react"
 
-import type { AgentConversationTurnPreview } from "./agent-conversation-viewport"
+import type { AgentConversationTurnPreview } from "./agent-conversation-groups"
 
 const turnElementsFor = (viewport: HTMLElement) => [
   ...viewport.querySelectorAll<HTMLElement>("[data-agent-turn-id]"),

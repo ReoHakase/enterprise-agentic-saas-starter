@@ -61,7 +61,7 @@ describe("Agent E2E環境", () => {
     expect(environment.applicationDatabaseAuthToken).not.toBe(
       environment.agentStorageAuthToken
     )
-    expect(environment.nextDistDirectory).toBe(".next-e2e-full-321")
+    expect(environment.webBuildDirectory).toBe("dist/e2e-full-321")
     expect(environment.telemetrySessionId).toBe("agent-e2e-321")
     expect(environment.telemetryWorktreeId).toBe("agent-e2e")
     expect(
@@ -86,22 +86,26 @@ describe("Agent E2E環境", () => {
   it("別実行主体の生成物を残して対象構成の状態だけを削除する", async () => {
     const runId = process.pid * 10_000 + 321
     const environment = createAgentE2EEnvironment(runId)
-    const nextMarker = join(environment.temporaryRoot, "next", "marker.txt")
+    const unownedMarker = join(
+      environment.temporaryRoot,
+      "unowned",
+      "marker.txt"
+    )
 
     await removeAgentE2EArtifacts(runId)
     try {
       await Promise.all([
         mkdir(environment.stackRoot, { recursive: true }),
-        mkdir(join(environment.temporaryRoot, "next"), { recursive: true }),
+        mkdir(join(environment.temporaryRoot, "unowned"), { recursive: true }),
       ])
       await Promise.all([
         writeFile(join(environment.stackRoot, "owned.txt"), "stack"),
-        writeFile(nextMarker, "next"),
+        writeFile(unownedMarker, "unowned"),
       ])
 
       await removeAgentE2EStackArtifacts(runId)
 
-      await expect(readFile(nextMarker, "utf8")).resolves.toBe("next")
+      await expect(readFile(unownedMarker, "utf8")).resolves.toBe("unowned")
       await expect(
         readFile(join(environment.stackRoot, "owned.txt"), "utf8")
       ).rejects.toMatchObject({ code: "ENOENT" })
@@ -110,14 +114,14 @@ describe("Agent E2E環境", () => {
     }
   })
 
-  it("実行主体のルートとワークスペース固有のNext.jsビルドを削除する", async () => {
+  it("実行主体のルートとワークスペース固有のWebビルドを削除する", async () => {
     const runId = process.pid * 10_000 + 322
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
+    const webBuildPath = resolve(webWorkspace, environment.webBuildDirectory)
 
     await Promise.all([
       mkdir(environment.stackRoot, { recursive: true }),
-      mkdir(nextDistPath, { recursive: true }),
+      mkdir(webBuildPath, { recursive: true }),
     ])
     try {
       await removeFullE2EArtifacts(runId, webWorkspace)
@@ -125,13 +129,13 @@ describe("Agent E2E環境", () => {
       await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
         code: "ENOENT",
       })
-      await expect(access(nextDistPath)).rejects.toMatchObject({
+      await expect(access(webBuildPath)).rejects.toMatchObject({
         code: "ENOENT",
       })
     } finally {
       await Promise.all([
         removeAgentE2EArtifacts(runId),
-        rm(nextDistPath, { force: true, recursive: true }),
+        rm(webBuildPath, { force: true, recursive: true }),
       ])
     }
   })
@@ -139,7 +143,7 @@ describe("Agent E2E環境", () => {
   it("完全なクリーンアップの前にPlaywrightがサーバーを停止するまで待つ", async () => {
     const runId = process.pid * 10_000 + 323
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
+    const webBuildPath = resolve(webWorkspace, environment.webBuildDirectory)
     let finishPlaywright: (() => void) | undefined
     let markPlaywrightStarted: (() => void) | undefined
     const playwrightStarted = new Promise<void>((resolveStarted) => {
@@ -151,7 +155,7 @@ describe("Agent E2E環境", () => {
 
     await Promise.all([
       mkdir(environment.stackRoot, { recursive: true }),
-      mkdir(nextDistPath, { recursive: true }),
+      mkdir(webBuildPath, { recursive: true }),
     ])
     try {
       const command = runFullE2ECommand({
@@ -166,21 +170,21 @@ describe("Agent E2E環境", () => {
       await playwrightStarted
 
       await access(environment.temporaryRoot)
-      await access(nextDistPath)
+      await access(webBuildPath)
 
       finishPlaywright?.()
       await expect(command).resolves.toBe(0)
       await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
         code: "ENOENT",
       })
-      await expect(access(nextDistPath)).rejects.toMatchObject({
+      await expect(access(webBuildPath)).rejects.toMatchObject({
         code: "ENOENT",
       })
     } finally {
       finishPlaywright?.()
       await Promise.all([
         removeAgentE2EArtifacts(runId),
-        rm(nextDistPath, { force: true, recursive: true }),
+        rm(webBuildPath, { force: true, recursive: true }),
       ])
     }
   })
@@ -258,11 +262,11 @@ describe("Agent E2E環境", () => {
   it("全クリーンアップ後に必須Playwright検査の失敗を伝播する", async () => {
     const runId = process.pid * 10_000 + 324
     const environment = createAgentE2EEnvironment(runId)
-    const nextDistPath = resolve(webWorkspace, environment.nextDistDirectory)
+    const webBuildPath = resolve(webWorkspace, environment.webBuildDirectory)
 
     await Promise.all([
       mkdir(environment.stackRoot, { recursive: true }),
-      mkdir(nextDistPath, { recursive: true }),
+      mkdir(webBuildPath, { recursive: true }),
     ])
     const command = runFullE2ECommand({
       runId,
@@ -274,7 +278,7 @@ describe("Agent E2E環境", () => {
     await expect(access(environment.temporaryRoot)).rejects.toMatchObject({
       code: "ENOENT",
     })
-    await expect(access(nextDistPath)).rejects.toMatchObject({
+    await expect(access(webBuildPath)).rejects.toMatchObject({
       code: "ENOENT",
     })
   })

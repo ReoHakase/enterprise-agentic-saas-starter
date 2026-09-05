@@ -9,8 +9,8 @@ export {
 } from "./components/agent-shell/agent-shell"
 export {
   AgentRuntimeProvider,
-  hasOrganizationSwitchRisks,
   useAgentRuntimeState,
   type OrganizationSwitchRisks,
 } from "./components/runtime-state/runtime-state"
+export { hasOrganizationSwitchRisks } from "./components/runtime-state/runtime-state-risks"
 export { agentKeys } from "./queries"

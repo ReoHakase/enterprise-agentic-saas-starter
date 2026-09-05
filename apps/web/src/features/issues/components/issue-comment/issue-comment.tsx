@@ -44,7 +44,7 @@ import {
   getActionErrorMessage,
   getActionFieldError,
   safelyRunAction,
-} from "../issue-utils/issue-utils"
+} from "../issue-utils/issue-values"
 import { CommentBodyFormField } from "../text-form-fields/text-form-fields"
 import type { AsyncAction, IssueCommentUiItem, IssueUiItem } from "../types"
 

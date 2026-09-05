@@ -16,7 +16,7 @@ import {
 } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { Skeleton } from "@enterprise-agentic-saas/ui/components/skeleton"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
-import { usePathname } from "next/navigation"
+import { useLocation } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { RouteLoading } from "@/components/app-state/app-state"
@@ -36,7 +36,7 @@ type ConsoleBoundaryShellProps = {
 }
 
 export const ConsoleShellSkeleton = () => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
   const presentation = getConsoleLoadingPresentation(pathname)
 
   return (

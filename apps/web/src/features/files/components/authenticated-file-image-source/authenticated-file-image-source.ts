@@ -4,7 +4,7 @@ import {
   type FileDto,
 } from "@enterprise-agentic-saas/api/client"
 
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 type PreviewCandidate = {
   requestedWidth: (typeof FILE_PREVIEW_WIDTHS)[number]
@@ -35,7 +35,7 @@ export const getFilePreviewCandidates = (
 export const buildFileImageSourceSet = (
   file: Pick<FileDto, "id" | "imageWidth">,
   organizationId: string,
-  baseUrl = clientEnv.NEXT_PUBLIC_API_BASE_URL
+  baseUrl = clientEnv.VITE_API_BASE_URL
 ) =>
   getFilePreviewCandidates(file.imageWidth)
     .map(

@@ -1,13 +1,23 @@
 import { SidebarProvider } from "@enterprise-agentic-saas/ui/components/sidebar"
 import { render, screen } from "@testing-library/react"
+import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 
 import type { OrganizationSummary } from "@/features/organizations"
 
-import { consoleNavigation as ConsoleNavigation } from "./console-shell-navigation"
+import { ConsoleNavigation } from "./console-shell-navigation"
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/organization/acme/dashboard",
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useLocation: ({
+    select,
+  }: {
+    select: (location: { pathname: string }) => unknown
+  }) => select({ pathname: "/organization/acme/dashboard" }),
 }))
 
 const activeOrganization = {

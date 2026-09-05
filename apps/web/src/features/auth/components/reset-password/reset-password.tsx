@@ -31,10 +31,8 @@ import {
   createResetPasswordFormSchema,
 } from "@/features/auth"
 
-import {
-  AuthPasswordField,
-  selectCanSubmit,
-} from "../auth-form-field/auth-form-field"
+import { AuthPasswordField } from "../auth-form-field/auth-form-field"
+import { selectCanSubmit } from "../auth-form-field/form-selectors"
 
 export type ResetPasswordProps = {
   className?: string

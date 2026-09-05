@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   AuthRouteError,
   InvitationRouteError,
   RootRouteError,
-} from "../public-route-error-boundary.client/public-route-error-boundary.client"
+} from "../public-route-error-boundary/public-route-error-boundary"
 import {
   AuthRouteLoading,
   InvitationRouteLoading,
@@ -19,9 +20,26 @@ const navigation = vi.hoisted(() => ({
 }))
 const browser = vi.hoisted(() => ({ reload: vi.fn<() => void>() }))
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => navigation.pathname,
-  useSearchParams: () => new URLSearchParams(navigation.search),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    preload: _preload,
+    to,
+    ...props
+  }: ComponentProps<"a"> & { preload?: unknown; to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useLocation: (options?: {
+    select?: (location: { pathname: string; searchStr: string }) => unknown
+  }) => {
+    const location = {
+      pathname: navigation.pathname,
+      searchStr: navigation.search ? `?${navigation.search}` : "",
+    }
+    return options?.select ? options.select(location) : location
+  },
 }))
 
 beforeEach(() => {

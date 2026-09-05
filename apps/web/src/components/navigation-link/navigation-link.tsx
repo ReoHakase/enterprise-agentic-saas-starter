@@ -2,31 +2,36 @@
 
 import { DropdownMenuItem } from "@enterprise-agentic-saas/ui/components/dropdown-menu"
 import { SidebarMenuButton } from "@enterprise-agentic-saas/ui/components/sidebar"
-import Link from "next/link"
+import { Link } from "@tanstack/react-router"
 import type { ComponentProps } from "react"
 
-type LinkHref = ComponentProps<typeof Link>["href"]
+type LinkHref = string
 
-type NavigationLinkBridgeProps = Omit<ComponentProps<typeof Link>, "href"> & {
+type NavigationLinkBridgeProps = Omit<ComponentProps<"a">, "href"> & {
   href?: LinkHref
   nativeButton?: boolean
+  prefetch?: boolean
+  preload?: ComponentProps<typeof Link>["preload"]
 }
 
-const NavigationLinkBridge = ({
+export const NavigationLinkBridge = ({
   href,
   nativeButton: _nativeButton,
+  prefetch,
   ...props
 }: NavigationLinkBridgeProps) => {
   if (!href) {
     throw new Error("NavigationLinkBridge requires an href")
   }
 
-  return <Link href={href} {...props} />
+  const preload = prefetch === false ? false : props.preload
+
+  return <Link to={href} {...props} preload={preload} />
 }
 
 // The element intentionally has no `href`: Base UI merges call-site props into
 // this bridge, and a placeholder href on the element would win that merge.
-const nextLinkRender = <NavigationLinkBridge />
+const routerLinkRender = <NavigationLinkBridge />
 
 type DropdownMenuLinkItemProps = Omit<
   ComponentProps<typeof DropdownMenuItem>,
@@ -43,7 +48,7 @@ export const DropdownMenuLinkItem = ({
     ...props,
     href,
     nativeButton: false,
-    render: nextLinkRender,
+    render: routerLinkRender,
   }
 
   return <DropdownMenuItem {...linkProps} />
@@ -64,7 +69,7 @@ export const SidebarMenuLinkButton = ({
     ...props,
     href,
     nativeButton: false,
-    render: nextLinkRender,
+    render: routerLinkRender,
   }
 
   return <SidebarMenuButton {...linkProps} />

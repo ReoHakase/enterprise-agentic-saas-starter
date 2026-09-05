@@ -11,28 +11,21 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@enterprise-agentic-saas/ui/components/sidebar"
+import { useLocation } from "@tanstack/react-router"
 import type { Node, Root } from "fumadocs-core/page-tree"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import type { ComponentProps, ReactNode } from "react"
+import type { ReactNode } from "react"
 
-import { SidebarMenuLinkButton } from "@/components/navigation-link/navigation-link"
+import {
+  NavigationLinkBridge,
+  SidebarMenuLinkButton,
+} from "@/components/navigation-link/navigation-link"
 
-type NavigationLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
-  href?: ComponentProps<typeof Link>["href"]
-}
-
-const NavigationLink = ({ href, ...props }: NavigationLinkProps) => {
-  if (!href) throw new Error("NavigationLink requires an href")
-  return <Link href={href} {...props} />
-}
-
-const nextLinkRender = <NavigationLink />
+const nextLinkRender = <NavigationLinkBridge />
 const menuLabelRender = <div />
 const subMenuLabelRender = <div />
 
 export const Sidebar = ({ tree }: { tree: Root }) => {
-  const pathname = usePathname()
+  const pathname = useLocation({ select: (location) => location.pathname })
 
   return (
     <nav aria-label="Documentation navigation" data-docs-sidebar>

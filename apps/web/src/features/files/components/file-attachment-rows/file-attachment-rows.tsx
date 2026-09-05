@@ -21,7 +21,7 @@ import { useCallback, type MouseEvent } from "react"
 
 import { LocalDate } from "@/components/local-date/local-date"
 import { UserProfileImage } from "@/components/user-identity/user-identity"
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import { formatFileSize } from "../../format"
 import type { PendingFileUpload } from "../../hooks/use-files-controller"
@@ -126,7 +126,7 @@ const FileRow = ({
     [file.id, onSelectThumbnail]
   )
   const canPreview = file.previewable || file.textPreviewable
-  const downloadUrl = buildFileDownloadUrl(clientEnv.NEXT_PUBLIC_API_BASE_URL, {
+  const downloadUrl = buildFileDownloadUrl(clientEnv.VITE_API_BASE_URL, {
     organizationId,
     fileId: file.id,
   })

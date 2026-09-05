@@ -5,7 +5,7 @@ import {
   FILE_PREVIEW_WIDTHS,
 } from "@enterprise-agentic-saas/api/client"
 
-import { clientEnv } from "@/lib/env.client"
+import { clientEnv } from "@/lib/env"
 
 import type { AgentIssueAction } from "../../schema"
 
@@ -50,24 +50,18 @@ export const AgentApprovalAttachments = ({
             className="overflow-hidden rounded-md border bg-muted/30"
           >
             {attachment.source === "asset" ? (
-              // This authenticated private image must bypass the Next optimizer.
-              // oxlint-disable react-doctor/nextjs-no-img-element
-              // eslint-disable-next-line @next/next/no-img-element
+              // This authenticated private image must bypass external image transformation.
               <img
                 className="max-h-64 w-full object-contain"
-                src={buildAgentAssetPreviewUrl(
-                  clientEnv.NEXT_PUBLIC_API_BASE_URL,
-                  {
-                    organizationId,
-                    assetId: attachment.assetId,
-                    width: FILE_PREVIEW_WIDTHS[1],
-                  }
-                )}
+                src={buildAgentAssetPreviewUrl(clientEnv.VITE_API_BASE_URL, {
+                  organizationId,
+                  assetId: attachment.assetId,
+                  width: FILE_PREVIEW_WIDTHS[1],
+                })}
                 alt={`Attachment preview: ${attachment.filename}`}
                 loading="lazy"
               />
-            ) : // oxlint-enable react-doctor/nextjs-no-img-element
-            null}
+            ) : null}
             <figcaption className="border-t px-2 py-1.5 text-xs">
               <span className="block truncate">{attachment.filename}</span>
               <span className="text-muted-foreground">

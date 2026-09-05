@@ -1,5 +1,6 @@
 import {
   createMultiParser,
+  createLoader,
   createParser,
   createSerializer,
   parseAsInteger,
@@ -175,10 +176,14 @@ export const issueSearchParsers = {
   agentThread: agentThreadParser,
 }
 
-export const issueSearchUrlKeys = {
+const issueSearchUrlKeys = {
   ...issueTableSearchParams.urlKeys,
   agentThread: "agentThread",
 } satisfies UrlKeys<typeof issueSearchParsers>
+
+export const loadIssueSearchParams = createLoader(issueSearchParsers, {
+  urlKeys: issueSearchUrlKeys,
+})
 
 export type IssueSearchState = inferParserType<typeof issueSearchParsers>
 

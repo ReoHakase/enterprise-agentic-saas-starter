@@ -2,7 +2,7 @@
 title: システム境界とworkspace依存
 status: accepted
 implementation: active
-last_reviewed: 2026-08-20
+last_reviewed: 2026-09-05
 ---
 
 # システム境界とworkspace依存
@@ -192,10 +192,10 @@ public entrypoint、`package.json#exports`、文字列としてのOxlint規則�
 
 ## browserとside-effect import
 
-browser entrypointではNode builtin、`next/headers`、`next/server`、`server-only`、server adapterを
-禁止します。Oxlintは`"use client"`というfile内容をselectorにできないため、`*.client.tsx`、
-client専用directory、browser package entrypointという配置規約で対象を決め、Next.js/TypeScriptの
-buildとcode reviewでserver edgeがないことを確認します。
+ブラウザーの入口ではNode.js組み込みモジュール、サーバー環境変数、サーバー側の`adapter`を
+禁止します。OxlintはTanStack Startがサーバーとブラウザーへ分割した実体を解析しないため、
+`*.client.tsx`、クライアント専用ディレクトリ、ブラウザーパッケージの入口という配置規約で対象を
+決め、ViteとTypeScriptのビルド、コードレビューでサーバー側の辺がないことを確認します。
 
 side-effect importは次の狭いallowlistだけを許可します。
 

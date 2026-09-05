@@ -4,7 +4,7 @@ import { useAuth, useSignOut } from "@better-auth-ui/react"
 import { Spinner } from "@enterprise-agentic-saas/ui/components/spinner"
 import { cn } from "@enterprise-agentic-saas/ui/lib/utils"
 import { useQueryClient } from "@tanstack/react-query"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@tanstack/react-router"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 
@@ -29,7 +29,7 @@ export function SignOut({ className }: SignOutProps) {
 
   const { mutate: signOut } = useSignOut(authClient, {
     onError: (error) => {
-      router.refresh()
+      void router.invalidate()
       toast.error(safeAuthErrorMessage(error, "Sign out failed. Try again."))
 
       navigate({

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { httpError } from "@/test-support/http-error"
@@ -23,8 +24,7 @@ type DeleteOrganization = (
 
 const mocks = vi.hoisted(() => ({
   deleteOrganization: vi.fn<DeleteOrganization>(),
-  refresh: vi.fn<() => void>(),
-  replace: vi.fn<(href: string) => void>(),
+  routerNavigate: vi.fn<(input: { replace?: boolean; to: string }) => void>(),
   toastError: vi.fn<(message: string) => void>(),
   toastSuccess: vi.fn<(message: string) => void>(),
 }))
@@ -35,11 +35,13 @@ vi.mock("@/lib/browser/console-api", () => ({
   },
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    refresh: mocks.refresh,
-    replace: mocks.replace,
-  }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
+  useNavigate: () => mocks.routerNavigate,
 }))
 
 vi.mock("sonner", () => ({
@@ -119,7 +121,10 @@ describe("OrganizationDangerZoneの契約", () => {
         })
       )
     })
-    expect(mocks.replace).toHaveBeenCalledWith("/settings/organizations")
+    expect(mocks.routerNavigate).toHaveBeenCalledWith({
+      replace: true,
+      to: "/settings/organizations",
+    })
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Organization deleted")
   })
 

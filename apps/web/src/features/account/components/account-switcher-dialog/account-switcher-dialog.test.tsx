@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ComponentProps } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { OrganizationSwitchRisks } from "@/features/agent"
@@ -17,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   completeAgentSwitch: vi.fn<() => Promise<void>>(),
   fetchAgent: vi.fn<typeof fetch>(),
   prepareAgentSwitch: vi.fn<() => OrganizationSwitchRisks>(),
-  refresh: vi.fn<() => void>(),
   revoke: vi.fn<(input: { sessionToken: string }) => Promise<unknown>>(),
   setActive: vi.fn<(input: { sessionToken: string }) => Promise<unknown>>(),
   toastError: vi.fn<(message: string) => void>(),
@@ -42,8 +42,12 @@ vi.mock("../../account-switch-navigation", () => ({
   navigateAfterAccountSwitch: mocks.navigateAfterAccountSwitch,
 }))
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children, to, ...props }: ComponentProps<"a"> & { to: string }) => (
+    <a {...props} href={to}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock("sonner", () => ({
@@ -284,7 +288,7 @@ describe("AccountSwitcherDialogの契約", () => {
     expect(mocks.toastError).toHaveBeenCalledWith(
       "Could not switch account. Try again."
     )
-    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.navigateAfterAccountSwitch).not.toHaveBeenCalled()
     expect(screen.queryByText(/provider-secret/u)).not.toBeInTheDocument()
   })
 
@@ -301,7 +305,6 @@ describe("AccountSwitcherDialogの契約", () => {
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
     expect(mocks.setActive).not.toHaveBeenCalled()
     expect(mocks.navigateAfterAccountSwitch).not.toHaveBeenCalled()
-    expect(mocks.refresh).not.toHaveBeenCalled()
     expect(
       screen.queryByText(/private-provider-detail/u)
     ).not.toBeInTheDocument()

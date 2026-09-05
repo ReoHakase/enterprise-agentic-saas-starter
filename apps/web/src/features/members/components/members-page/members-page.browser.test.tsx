@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { page } from "vitest/browser"
 
+import { TestRouterProvider } from "@/test-support/tanstack-router"
+
 import { MembersPageStoryFixture } from "./test-support/members-page-story-fixture"
 
 afterEach(cleanup)
@@ -9,7 +11,11 @@ afterEach(cleanup)
 describe("MembersPageの実ブラウザー配置", () => {
   it("モバイルではメンバー表と招待表を個別に横スクロールできる", async () => {
     await page.viewport(390, 844)
-    render(<MembersPageStoryFixture />)
+    render(
+      <TestRouterProvider>
+        <MembersPageStoryFixture />
+      </TestRouterProvider>
+    )
 
     const scrollRegions = await Promise.all([
       screen.findByRole("region", { name: "Members of Acme Cloud" }),

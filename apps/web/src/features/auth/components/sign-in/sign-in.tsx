@@ -36,14 +36,10 @@ import { safeAuthErrorMessage, createSignInFormSchema } from "@/features/auth"
 
 import { createAuthCallbackURL } from "../../callback-url"
 import { findCaptchaComponent } from "../../runtime-guards"
-import {
-  AuthTextField,
-  selectCanSubmit,
-} from "../auth-form-field/auth-form-field"
-import {
-  createScopedAuthViewHref,
-  useAuthRouteState,
-} from "../auth-route-scope/auth-route-scope"
+import { AuthTextField } from "../auth-form-field/auth-form-field"
+import { selectCanSubmit } from "../auth-form-field/form-selectors"
+import { createScopedAuthViewHref } from "../auth-route-scope/auth-route-href"
+import { useAuthRouteState } from "../auth-route-scope/auth-route-scope"
 import { PasskeySignInButton } from "../passkey-sign-in-button/passkey-sign-in-button"
 import {
   ProviderButtons,

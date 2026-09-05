@@ -138,6 +138,3 @@ export const AuthPasswordField = ({
     </Field>
   )
 }
-
-export const selectCanSubmit = (state: { canSubmit: boolean }) =>
-  state.canSubmit
